@@ -37,20 +37,8 @@ import '../../../sessions/common/theme.js';
 test('CSS variable manifest matches registered colors and sizes', async () => {
 	const path = join(process.cwd(), 'build/lib/stylelint/ash-known-variables.json');
 	const variables = JSON.parse(await readFile(path, 'utf8'));
-	assert.deepEqual(
-		variables.colors,
-		Colors.getColors()
-			.map(({ id }) => colorCssVariable(id))
-			.sort(),
-		'Run pnpm stylelint:update and review the manifest.',
-	);
-	assert.deepEqual(
-		variables.sizes,
-		Sizes.getSizes()
-			.map(({ id }) => asCssVariableName(id))
-			.sort(),
-		'Run pnpm stylelint:update and review the manifest.',
-	);
+	assert.deepEqual(variables.colors, Colors.getColors().map(({ id }) => colorCssVariable(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
+	assert.deepEqual(variables.sizes, Sizes.getSizes().map(({ id }) => asCssVariableName(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
 });
 
 test('CSS isolates intentional color samples', async () => {
@@ -84,7 +72,7 @@ function rawColorLines(source: string): number[] {
 	// Black alpha stops describe mask coverage without choosing a painted theme color.
 	// Other literal colors, including other mask colors, still require review.
 	const painted = source.replace(/\b(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration => declaration.replace(/\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/gu, color => ' '.repeat(color.length)));
-	return painted.split(/\r?\n/).flatMap((line, index) => (/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []));
+	return painted.split(/\r?\n/).flatMap((line, index) => /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []);
 }
 
 test('presentation scan skips nested .build output while retaining source CSS', async () => {
@@ -108,8 +96,8 @@ async function presentationFiles(directory: string): Promise<string[]> {
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
 		if (entry.isDirectory() && entry.name === '.build') continue;
 		const path = join(directory, entry.name);
-		if (entry.isDirectory()) result.push(...(await presentationFiles(path)));
-		else if (entry.name.endsWith('.css') || (entry.name.endsWith('.ts') && !path.includes('/test/'))) result.push(path);
+		if (entry.isDirectory()) result.push(...await presentationFiles(path));
+		else if (entry.name.endsWith('.css') || entry.name.endsWith('.ts') && !path.includes('/test/')) result.push(path);
 	}
 	return result;
 }

@@ -30,9 +30,7 @@ test('text model large-file policy validates dimensions', () => {
 
 test('TextModel bounds whole-document reads while keeping snapshots available', () => {
 	class HeapLimitedTextModel extends TextModel {
-		override isTooLargeForHeapOperation(): boolean {
-			return true;
-		}
+		override isTooLargeForHeapOperation(): boolean { return true; }
 	}
 	using model = new HeapLimitedTextModel('alpha\nbeta');
 	assert.throws(() => model.getValue(), /heap memory limits/);

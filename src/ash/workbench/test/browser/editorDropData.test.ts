@@ -6,7 +6,7 @@ import { extractExternalEditorInputs } from '../../browser/parts/editor/editorDr
 
 test('external editor drop data preserves URIs and snapshots browser files', async () => {
 	const dataTransfer = {
-		getData: (type: string) => (type === 'text/uri-list' ? '# resources\nfile:///C:/project/main.ts\n' : ''),
+		getData: (type: string) => type === 'text/uri-list' ? '# resources\nfile:///C:/project/main.ts\n' : '',
 		files: [{ name: 'notes.txt', type: 'text/plain', text: async () => 'dropped notes' }],
 	} as unknown as DataTransfer;
 

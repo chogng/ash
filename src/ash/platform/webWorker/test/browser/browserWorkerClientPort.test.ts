@@ -41,9 +41,7 @@ suite('Browser Worker service', () => {
 
 	test('Promise Worker preserves queued message order and terminates after disposal', async () => {
 		let resolve!: (worker: Worker) => void;
-		const pending = new Promise<Worker>(done => {
-			resolve = done;
-		});
+		const pending = new Promise<Worker>(done => { resolve = done; });
 		const port = new BrowserWorkerClientPort(pending);
 		port.send({ order: 1 });
 		port.send({ order: 2 });
@@ -60,9 +58,7 @@ suite('Browser Worker service', () => {
 
 	test('a Worker created after its owner was disposed is terminated without sending queued data', async () => {
 		let resolve!: (worker: Worker) => void;
-		const pending = new Promise<Worker>(done => {
-			resolve = done;
-		});
+		const pending = new Promise<Worker>(done => { resolve = done; });
 		const port = new BrowserWorkerClientPort(pending);
 		port.send({ abandoned: true });
 		port.dispose();
@@ -75,7 +71,7 @@ suite('Browser Worker service', () => {
 
 	test('asynchronous Worker creation failure rejects its pending client requests', async () => {
 		const { WebWorkerClient } = await import('../../../../base/common/worker/webWorker.js');
-		using client = new WebWorkerClient<{ $ready(): void }>(new BrowserWorkerClientPort(Promise.reject(new Error('Worker startup failed'))));
+		using client = new WebWorkerClient<{ $ready(): void; }>(new BrowserWorkerClientPort(Promise.reject(new Error('Worker startup failed'))));
 		await assert.rejects(client.proxy.$ready(), /Worker startup failed/);
 		assert.throws(() => client.proxy, /Worker startup failed/);
 	});
@@ -84,7 +80,7 @@ suite('Browser Worker service', () => {
 
 	class TestWorker {
 		private readonly listeners = new Map<WorkerEventType, Set<(event: never) => void>>();
-		public readonly sent: { readonly message: unknown; readonly transfer: readonly Transferable[] }[] = [];
+		public readonly sent: { readonly message: unknown; readonly transfer: readonly Transferable[]; }[] = [];
 		public terminationCount = 0;
 
 		public addEventListener(type: WorkerEventType, listener: (event: never) => void): void {
@@ -110,41 +106,20 @@ suite('Browser Worker service', () => {
 		}
 	}
 
+
 	test('Worker service resolves deferred locations and owns the client returned for an existing Worker', async () => {
 		const service = new WebWorkerService();
 		let resolved = 0;
-		const descriptor = new WebWorkerDescriptor({
-			label: 'calculator',
-			esmModuleLocation: () => {
-				resolved++;
-				return URI.parse('https://ash.example/worker.js');
-			},
-		});
+		const descriptor = new WebWorkerDescriptor({ label: 'calculator', esmModuleLocation: () => { resolved++; return URI.parse('https://ash.example/worker.js'); } });
 		assert.equal(resolved, 0);
 		assert.equal(service.getWorkerUrl(descriptor), 'https://ash.example/worker.js');
 		assert.equal(resolved, 1);
-		assert.equal(
-			service.getWorkerUrl(
-				new WebWorkerDescriptor({
-					label: 'bundled',
-					esmModuleLocationBundler: new URL('https://ash.example/bundled.js'),
-				}),
-			),
-			'https://ash.example/bundled.js',
-		);
+		assert.equal(service.getWorkerUrl(new WebWorkerDescriptor({ label: 'bundled', esmModuleLocationBundler: new URL('https://ash.example/bundled.js') })), 'https://ash.example/bundled.js');
 		const worker = new TestWorker();
-		const client = service.createWorkerClient<{ $double(value: number): number }>(worker as unknown as Worker);
+		const client = service.createWorkerClient<{ $double(value: number): number; }>(worker as unknown as Worker);
 		const result = client.proxy.$double(4);
 		const request = worker.sent[0]!.message as Record<string, unknown>;
-		worker.fire('message', {
-			data: {
-				protocol: request.protocol,
-				version: request.version,
-				kind: 'result',
-				requestId: request.requestId,
-				result: 8,
-			},
-		});
+		worker.fire('message', { data: { protocol: request.protocol, version: request.version, kind: 'result', requestId: request.requestId, result: 8 } });
 		assert.equal(await result, 8);
 		client.dispose();
 		assert.equal(worker.terminationCount, 1);
@@ -154,24 +129,10 @@ suite('Browser Worker service', () => {
 		const worker = new TestWorker();
 		let overrides = 0;
 		const service = new StandaloneWebWorkerService(() => ({
-			getWorker: (module, label) => {
-				assert.equal(module, 'workerMain.js');
-				assert.equal(label, 'editor');
-				overrides++;
-				return Promise.resolve(worker as unknown as Worker);
-			},
-			getWorkerUrl: () => {
-				throw new Error('Worker URL must not override a supplied host Worker');
-			},
+			getWorker: (module, label) => { assert.equal(module, 'workerMain.js'); assert.equal(label, 'editor'); overrides++; return Promise.resolve(worker as unknown as Worker); },
+			getWorkerUrl: () => { throw new Error('Worker URL must not override a supplied host Worker'); },
 		}));
-		const client = service.createWorkerClient(
-			new WebWorkerDescriptor({
-				label: 'editor',
-				createWorker: () => {
-					throw new Error('Bundled fallback must not run');
-				},
-			}),
-		);
+		const client = service.createWorkerClient(new WebWorkerDescriptor({ label: 'editor', createWorker: () => { throw new Error('Bundled fallback must not run'); } }));
 		client.dispose();
 		await Promise.resolve();
 		assert.equal(worker.terminationCount, 1);
@@ -182,18 +143,8 @@ suite('Browser Worker service', () => {
 	});
 
 	test('Standalone host URL resolution overrides a descriptor module location', () => {
-		const service = new StandaloneWebWorkerService(() => ({
-			getWorkerUrl: () => 'https://host.example/custom-worker.js',
-		}));
-		assert.equal(
-			service.getWorkerUrl(
-				new WebWorkerDescriptor({
-					label: 'editor',
-					esmModuleLocation: URI.parse('https://ash.example/default.js'),
-				}),
-			),
-			'https://host.example/custom-worker.js',
-		);
+		const service = new StandaloneWebWorkerService(() => ({ getWorkerUrl: () => 'https://host.example/custom-worker.js' }));
+		assert.equal(service.getWorkerUrl(new WebWorkerDescriptor({ label: 'editor', esmModuleLocation: URI.parse('https://ash.example/default.js') })), 'https://host.example/custom-worker.js');
 	});
 
 	test('production Diff factory requires the Worker service and starts one Worker with its first provider', async () => {
@@ -201,16 +152,13 @@ suite('Browser Worker service', () => {
 		assert.throws(() => services.createInstance(WorkerBasedDiffProviderFactoryService), /IWebWorkerService/);
 		const worker = new TestWorker();
 		let created = 0;
-		services.registerInstance(
-			IWebWorkerService,
-			new (class extends WebWorkerService {
-				protected override _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
-					assert.equal(descriptor.label, 'ash-editor-diff');
-					created++;
-					return Promise.resolve(worker as unknown as Worker);
-				}
-			})(),
-		);
+		services.registerInstance(IWebWorkerService, new class extends WebWorkerService {
+			protected override _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
+				assert.equal(descriptor.label, 'ash-editor-diff');
+				created++;
+				return Promise.resolve(worker as unknown as Worker);
+			}
+		}());
 		using factory = services.createInstance(WorkerBasedDiffProviderFactoryService);
 		assert.equal(created, 0);
 		using provider = factory.createDiffProvider();
@@ -222,4 +170,5 @@ suite('Browser Worker service', () => {
 		await Promise.resolve();
 		assert.equal(worker.terminationCount, 1);
 	});
+
 });

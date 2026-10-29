@@ -81,7 +81,9 @@ export class SmartSnippetInserter {
 
 			if (token.offset + token.length < desiredOffset || (currentState === InsertionState.Invalid && lastValidOffset < 0)) continue;
 			const acceptedState = (currentState === InsertionState.Invalid ? lastValidState : currentState) as InsertionState;
-			const acceptedOffset = currentState === InsertionState.Invalid ? lastValidOffset : isSafeToken ? token.offset + token.length : token.offset;
+			const acceptedOffset = currentState === InsertionState.Invalid
+				? lastValidOffset
+				: isSafeToken ? token.offset + token.length : token.offset;
 			if (acceptedState === InsertionState.AfterObject) {
 				return Object.freeze({ position: model.positionAt(acceptedOffset), prepend: ',', append: '' });
 			}

@@ -8,13 +8,7 @@ import { JSDOM } from 'jsdom';
 import { SuggestModel } from '../../browser/suggestModel.js';
 import { LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-import {
-	LanguageCompletionTriggerKind,
-	type LanguageCompletionProvider,
-	type LanguageCompletionProviderRequest,
-	type LanguageCompletionProviderResult,
-	LanguageCompletionItemKind,
-} from '../../../../common/languages.js';
+import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind } from '../../../../common/languages.js';
 
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -46,18 +40,15 @@ test('Explicit invocation requests providers through the completion service', as
 
 test('A registered trigger character requests after the text transaction', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
-	using fixture = createFixture(
-		{
-			id: 'member',
-			languageIds: ['typescript'],
-			triggerCharacters: ['.'],
-			provideCompletions: request => {
-				requests.push(request);
-				return completionResult(request, 'method', true);
-			},
+	using fixture = createFixture({
+		id: 'member',
+		languageIds: ['typescript'],
+		triggerCharacters: ['.'],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, 'method', true);
 		},
-		'obj',
-	);
+	}, 'obj');
 	const event = beforeInputEvent(fixture.dom.window, '.');
 	fixture.input.element.dispatchEvent(event);
 	await waitFor(() => fixture.session.state !== undefined);
@@ -66,32 +57,34 @@ test('A registered trigger character requests after the text transaction', async
 	assert.equal(fixture.model.getText(), 'obj.');
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
-	assert.equal(requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter ? requests[0]!.context.triggerCharacter : undefined, '.');
-	assert.equal(Position.compare(requests[0]!.position, new Position(0 + 1, 4 + 1)), 0);
+	assert.equal(
+		requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter
+			? requests[0]!.context.triggerCharacter
+			: undefined,
+		'.',
+	);
+	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (4) + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), 'obj.');
 });
 
 test('An auto-closed trigger character requests from the caret inside its pair', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
-	using fixture = createFixture(
-		{
-			id: 'call',
-			languageIds: ['typescript'],
-			triggerCharacters: ['('],
-			provideCompletions: request => {
-				requests.push(request);
-				return completionResult(request, 'argument');
-			},
+	using fixture = createFixture({
+		id: 'call',
+		languageIds: ['typescript'],
+		triggerCharacters: ['('],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, 'argument');
 		},
-		'call',
-	);
+	}, 'call');
 
 	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, '('));
 	await waitFor(() => fixture.session.state !== undefined);
 
 	assert.equal(fixture.model.getText(), 'call()');
 	assert.equal(requests.length, 1);
-	assert.equal(Position.compare(requests[0]!.position, new Position(0 + 1, 5 + 1)), 0);
+	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (5) + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), 'call()');
 });
 
@@ -112,11 +105,11 @@ test('Typing after an incomplete result retriggers all providers at the new vers
 	await waitFor(() => fixture.session.state?.requestId === 2);
 
 	assert.equal(fixture.model.getText(), 'cont');
-	assert.deepEqual(
-		requests.map(request => request.context.kind),
-		[LanguageCompletionTriggerKind.Invoke, LanguageCompletionTriggerKind.IncompleteRefresh],
-	);
-	assert.equal(Position.compare(requests[1]!.position, new Position(0 + 1, 4 + 1)), 0);
+	assert.deepEqual(requests.map(request => request.context.kind), [
+		LanguageCompletionTriggerKind.Invoke,
+		LanguageCompletionTriggerKind.IncompleteRefresh,
+	]);
+	assert.equal(Position.compare(requests[1]!.position, new Position((0) + 1, (4) + 1)), 0);
 	assert.equal(requests[1]!.snapshot.getText(), 'cont');
 	assert.equal(fixture.session.state!.selectedItem!.label, 'continue');
 });
@@ -161,7 +154,7 @@ test('Completion request wiring rejects a same-model session from another servic
 		contributions: [],
 	});
 	const viewport = editor.view;
-	editor.setPosition(new Position(0 + 1, 3 + 1));
+	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(firstService.results, editor);
 	using languages = new LanguageService();
 
@@ -193,7 +186,7 @@ function createFixture(provider: LanguageCompletionProvider, text = 'con'): Trig
 		contributions: [],
 	});
 	const viewport = editor.view;
-	editor.setPosition(new Position(0 + 1, text.length + 1));
+	editor.setPosition(new Position((0) + 1, (text.length) + 1));
 	const session = new SuggestModel(service.results, editor);
 	const languages = new LanguageService();
 	viewport.layout({ width: 300, height: 40 });
@@ -223,15 +216,16 @@ function createFixture(provider: LanguageCompletionProvider, text = 'con'): Trig
 
 function completionResult(request: LanguageCompletionProviderRequest, label: string, isIncomplete = false): LanguageCompletionProviderResult {
 	return {
-		items: [
-			{
-				id: label,
-				label,
-				kind: LanguageCompletionItemKind.Keyword,
-				range: Range.fromPositions(new Position(request.position.lineNumber, 1), request.position),
-				insertText: label,
-			},
-		],
+		items: [{
+			id: label,
+			label,
+			kind: LanguageCompletionItemKind.Keyword,
+			range: Range.fromPositions(
+				new Position(request.position.lineNumber, 1),
+				request.position,
+			),
+			insertText: label,
+		}],
 		isIncomplete,
 	};
 }

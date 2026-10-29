@@ -9,41 +9,11 @@ import { WellDefinedPrefixTree } from '../../../../base/common/prefixTree.js';
 import { equals } from '../../../../base/common/objects.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { ConfigurationModel, ConfigurationModelParser, UserSettings } from '../../../../platform/configuration/common/configurationModels.js';
-import {
-	ConfigurationTarget,
-	isConfigurationOverrides,
-	isConfigurationUpdateOverrides,
-	type IConfigurationChange,
-	type IConfigurationChangeEvent,
-	type IConfigurationData,
-	type IConfigurationModel,
-	type IConfigurationOverrides,
-	type IConfigurationService,
-	type IConfigurationUpdateOptions,
-	type IConfigurationUpdateOverrides,
-	type IConfigurationValue,
-} from '../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IRegisteredConfiguration,
-	ConfigurationScope,
-	keyFromOverrideIdentifiers,
-	overrideIdentifiersFromKey,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationTarget, isConfigurationOverrides, isConfigurationUpdateOverrides, type IConfigurationChange, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationModel, type IConfigurationOverrides, type IConfigurationService, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../../platform/configuration/common/configuration.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration, ConfigurationScope, keyFromOverrideIdentifiers, overrideIdentifiersFromKey } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ILogService, NullLoggerService } from '../../../../platform/log/common/log.js';
-import {
-	WorkbenchState,
-	workbenchStateFromWorkspace,
-	workspaceFromIdentifier,
-	type IAnyWorkspaceIdentifier,
-	type IWorkspace,
-	type IWorkspaceChangeEvent,
-	type IWorkspaceFoldersChangeEvent,
-	type IWorkspaceContextService,
-	type IWorkspaceFolder,
-} from '../../../../platform/workspace/common/workspace.js';
+import { WorkbenchState, workbenchStateFromWorkspace, workspaceFromIdentifier, type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceChangeEvent, type IWorkspaceFoldersChangeEvent, type IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { dirname } from '../../../../base/common/resources.js';
@@ -82,17 +52,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private defaultConfiguration = ConfigurationModel.createEmptyModel(configurationModelLog);
 	private userConfiguration = this.defaultConfiguration;
 	private effectiveConfiguration = this.defaultConfiguration;
-	private consolidated:
-		| {
-				base: ConfigurationModel;
-				workspace: ConfigurationModel;
-				policy: ConfigurationModel;
-				model: ConfigurationModel;
-		  }
-		| undefined;
+	private consolidated: { base: ConfigurationModel; workspace: ConfigurationModel; policy: ConfigurationModel; model: ConfigurationModel; } | undefined;
 	private workspaceConfiguration = this.defaultConfiguration;
 	private policyConfiguration = this.defaultConfiguration;
-	private readonly folderConfigurations = new Map<string, { root: URI; resource: FolderConfiguration; model: ConfigurationModel }>();
+	private readonly folderConfigurations = new Map<string, { root: URI; resource: FolderConfiguration; model: ConfigurationModel; }>();
 	private readonly workspaceResources = this._register(new DisposableStore());
 	private workspaceResource: WorkspaceConfiguration | FolderConfiguration | undefined;
 	private workspaceInitialized = false;
@@ -133,20 +96,14 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			this.document = new ConfigurationModel(initial.contents, initial.keys, initial.overrides, initial.raw, configurationModelLog);
 		}
 		this.rebuildValues();
-		this._register(
-			this.registry.onDidUpdateConfiguration(event => {
-				const previous = this.state();
-				this.rebuildValues();
-				this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.state(), ConfigurationTarget.DEFAULT));
-			}),
-		);
-		this._register(
-			this.userSettings.onDidChange(() => {
-				void this.reloadUserConfiguration().catch(error => {
-					if (!this.stopped) this.onError(error);
-				});
-			}),
-		);
+		this._register(this.registry.onDidUpdateConfiguration(event => {
+			const previous = this.state();
+			this.rebuildValues();
+			this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.state(), ConfigurationTarget.DEFAULT));
+		}));
+		this._register(this.userSettings.onDidChange(() => {
+			void this.reloadUserConfiguration().catch(error => { if (!this.stopped) this.onError(error); });
+		}));
 	}
 
 	getWorkspace(): IWorkspace {
@@ -193,13 +150,11 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const workspace = this;
 		this.workingCopies = workingCopies;
 		const policy = this._register(new PolicyConfiguration(this.registry, policies, configurationModelLog, this.onError));
-		this._register(
-			policy.onDidChangeConfiguration(model => {
-				const previous = this.state();
-				this.policyConfiguration = model;
-				this.fireLayerChange(previous, ConfigurationTarget.DEFAULT);
-			}),
-		);
+		this._register(policy.onDidChangeConfiguration(model => {
+			const previous = this.state();
+			this.policyConfiguration = model;
+			this.fireLayerChange(previous, ConfigurationTarget.DEFAULT);
+		}));
 		const loadWorkspace = (): Promise<void> => {
 			const previous = this.state();
 			this.workspaceResources.clear();
@@ -223,23 +178,15 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			if (current.configuration) {
 				for (const folder of current.folders) {
 					const resource = this.workspaceResources.add(new FolderConfiguration(URI.joinPath(folder.uri, '.vscode', 'settings.json'), files, reportError));
-					this.folderConfigurations.set(folder.uri.toString(), {
-						root: folder.uri,
-						resource,
-						model: ConfigurationModel.createEmptyModel(configurationModelLog),
-					});
+					this.folderConfigurations.set(folder.uri.toString(), { root: folder.uri, resource, model: ConfigurationModel.createEmptyModel(configurationModelLog) });
 					this.workspaceResources.add(resource.onDidUpdateConfiguration(() => this.updateWorkspaceModels(ConfigurationTarget.WORKSPACE_FOLDER)));
 				}
 			}
 			this.fireLayerChange(previous, ConfigurationTarget.WORKSPACE);
 			const resources = [this.workspaceResource, ...[...this.folderConfigurations.values()].map(folder => folder.resource)].filter(resource => resource !== undefined);
-			return Promise.all(resources.map(resource => resource.loadConfiguration().catch(reportError))).then(() => {});
+			return Promise.all(resources.map(resource => resource.loadConfiguration().catch(reportError))).then(() => { });
 		};
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				this.workspaceLoad = loadWorkspace();
-			}),
-		);
+		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceLoad = loadWorkspace(); }));
 		this.workspaceLoad = loadWorkspace();
 		await Promise.all([this.workspaceLoad, policy.initialize(), this.reloadUserConfiguration()]);
 		await this.waitForWorkspace();
@@ -291,11 +238,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			if (target === ConfigurationTarget.WORKSPACE || target === ConfigurationTarget.WORKSPACE_FOLDER) throw new Error(`Unable to write ${key} to target ${target}.`);
 		}
 		if (this.policyConfiguration.getValue(key) !== undefined) throw new Error(localize('configuration.policyReadOnly', 'Setting {0} is controlled by administrator policy.', key));
-		if (target !== undefined && ![ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(target))
-			throw new Error(`Unable to write ${key} to target ${target}.`);
-		if (identifiers.length && configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
-			throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key));
-		}
+		if (target !== undefined && ![ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(target)) throw new Error(`Unable to write ${key} to target ${target}.`);
+		if (identifiers.length && configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) { throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)); }
 		const parsed = value === undefined ? undefined : configuration.parse(value);
 		let serialized = parsed === undefined ? undefined : configuration.serialize(parsed);
 		if (serialized === undefined && value !== undefined) throw new TypeError(`Configuration key '${key}' did not serialize to JSON`);
@@ -308,7 +252,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			...(inspection.workspaceValue === undefined ? [] : [ConfigurationTarget.WORKSPACE]),
 			...(inspection.userValue === undefined ? [] : [ConfigurationTarget.USER_LOCAL]),
 		];
-		const targets = target === undefined ? (value === undefined ? defined : [defined[0] ?? ConfigurationTarget.USER_LOCAL]) : [target];
+		const targets = target === undefined ? value === undefined ? defined : [defined[0] ?? ConfigurationTarget.USER_LOCAL] : [target];
 		const matchesDefault = identifiers.length
 			? identifiers.every(identifier => equals(parsed, this.defaultConfiguration.override(identifier).getValue(key)))
 			: equals(parsed, this.defaultConfiguration.getValue(key));
@@ -316,9 +260,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		// Resolve all resources and validate all scopes before any removal crosses multiple targets.
 		const writes = targets.map(target => {
 			this.validateTargetScope(configuration, target);
-			const resource = target === ConfigurationTarget.WORKSPACE ? this.workspaceResource : target === ConfigurationTarget.WORKSPACE_FOLDER ? this.folderResource(overrides?.resource) : undefined;
-			if ((target === ConfigurationTarget.WORKSPACE || target === ConfigurationTarget.WORKSPACE_FOLDER) && !resource)
-				throw new Error(localize('configuration.missingTarget', 'No settings resource is available for target {0}.', target));
+			const resource = target === ConfigurationTarget.WORKSPACE ? this.workspaceResource
+				: target === ConfigurationTarget.WORKSPACE_FOLDER ? this.folderResource(overrides?.resource) : undefined;
+			if ((target === ConfigurationTarget.WORKSPACE || target === ConfigurationTarget.WORKSPACE_FOLDER) && !resource) throw new Error(localize('configuration.missingTarget', 'No settings resource is available for target {0}.', target));
 			return { resource, settingsResource: resource?.resource ?? this.settingsResource };
 		});
 		if (!_options?.handleDirtyFile) {
@@ -338,7 +282,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			const transform = (source: string): string => editSetting(source, key, serialized, identifiers);
 			if (resource) {
 				await resource.write(transform);
-			} else await this.writeUserSetting(transform);
+			}
+			else await this.writeUserSetting(transform);
 		}
 	}
 
@@ -348,26 +293,25 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const defaultValue = (overrides?.overrideIdentifier ? this.defaultConfiguration.override(overrides.overrideIdentifier) : this.defaultConfiguration).getValue<Readonly<T>>(key);
 		const base = this.userConfiguration.getValue<Readonly<T>>(key);
 		const hasBase = base !== undefined;
-		const override = overrides?.overrideIdentifier ? this.userConfiguration.getOverrideValue<Readonly<T>>(key, overrides.overrideIdentifier) : undefined;
+		const override = overrides?.overrideIdentifier
+			? this.userConfiguration.getOverrideValue<Readonly<T>>(key, overrides.overrideIdentifier) : undefined;
 		const hasOverride = override !== undefined;
-		const userLocalValue = overrides?.overrideIdentifier ? this.userConfiguration.override(overrides.overrideIdentifier).getValue<Readonly<T>>(key) : base;
+		const userLocalValue = overrides?.overrideIdentifier
+			? this.userConfiguration.override(overrides.overrideIdentifier).getValue<Readonly<T>>(key) : base;
 		const overrideEntries = this.userConfiguration.overrides
 			.filter(block => block.keys.includes(key))
-			.map(block =>
-				Object.freeze({
-					identifiers: [...block.identifiers],
-					value: new ConfigurationModel(block.contents, block.keys, [], undefined, configurationModelLog).getValue<Readonly<T>>(key)!,
-				}),
-			);
+			.map(block => Object.freeze({
+				identifiers: [...block.identifiers],
+				value: new ConfigurationModel(block.contents, block.keys, [], undefined, configurationModelLog).getValue<Readonly<T>>(key)!,
+			}));
 		const overrideIdentifiers = [...new Set(overrideEntries.flatMap(entry => entry.identifiers))];
-		const userLocal =
-			hasBase || hasOverride || overrideEntries.length > 0
-				? Object.freeze({
-						...(hasBase ? { value: base } : {}),
-						...(hasOverride ? { override } : {}),
-						...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
-					})
-				: undefined;
+		const userLocal = hasBase || hasOverride || overrideEntries.length > 0
+			? Object.freeze({
+				...(hasBase ? { value: base } : {}),
+				...(hasOverride ? { override } : {}),
+				...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
+			})
+			: undefined;
 		return Object.freeze({
 			defaultValue,
 			...(userLocalValue === undefined ? {} : { userValue: userLocalValue, userLocalValue }),
@@ -376,20 +320,14 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			...(userLocal === undefined ? {} : { user: userLocal, userLocal }),
 			...inspectModel<T>('workspace', this.workspaceConfiguration, key, overrides),
 			...inspectModel<T>('workspaceFolder', this.folderModel(overrides?.resource), key, overrides),
-			...(this.policyConfiguration.getValue(key) === undefined
-				? {}
-				: {
-						policyValue: this.policyConfiguration.getValue<Readonly<T>>(key),
-						policy: { value: this.policyConfiguration.getValue<Readonly<T>>(key) },
-					}),
+			...(this.policyConfiguration.getValue(key) === undefined ? {} : { policyValue: this.policyConfiguration.getValue<Readonly<T>>(key), policy: { value: this.policyConfiguration.getValue<Readonly<T>>(key) } }),
 			...configurationOverrideIdentifiers(key, [this.userConfiguration, this.workspaceConfiguration, this.folderModel(overrides?.resource)], overrideIdentifiers),
 		});
 	}
 
 	async reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void> {
 		await this.waitForWorkspace();
-		if (!this.workspaceInitialized && (target === ConfigurationTarget.WORKSPACE || target === ConfigurationTarget.WORKSPACE_FOLDER || typeof target === 'object'))
-			throw new Error(`Unable to reload workbench configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`);
+		if (!this.workspaceInitialized && (target === ConfigurationTarget.WORKSPACE || target === ConfigurationTarget.WORKSPACE_FOLDER || typeof target === 'object')) throw new Error(`Unable to reload workbench configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`);
 		if (target === undefined || target === ConfigurationTarget.USER || target === ConfigurationTarget.USER_LOCAL) await this.reloadUserConfiguration();
 		if (target === undefined || target === ConfigurationTarget.DEFAULT) {
 			const previous = this.state();
@@ -399,11 +337,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		if (target === undefined || target === ConfigurationTarget.WORKSPACE) await this.workspaceResource?.loadConfiguration();
 		if (target === undefined || target === ConfigurationTarget.WORKSPACE_FOLDER) await Promise.all([...this.folderConfigurations.values()].map(folder => folder.resource.loadConfiguration()));
 		if (typeof target === 'object') await this.folderResource(target.uri)?.loadConfiguration();
-		else if (
-			target !== undefined &&
-			![ConfigurationTarget.DEFAULT, ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(target)
-		)
-			throw new Error(`Unable to reload workbench configuration target ${target}.`);
+		else if (target !== undefined && ![ConfigurationTarget.DEFAULT, ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(target)) throw new Error(`Unable to reload workbench configuration target ${target}.`);
 	}
 
 	private async reloadUserConfiguration(): Promise<void> {
@@ -413,8 +347,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			const output = await migrateSettings(file.content, this.onError);
 			if (this.stopped) return;
 			if (output !== file.content) {
-				if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty))
-					throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
+				if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
 				this.parseResourceSource(output);
 				await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
 			}
@@ -434,14 +367,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		}
 	}
 
-	keys(): {
-		default: string[];
-		policy: string[];
-		user: string[];
-		workspace: string[];
-		workspaceFolder: string[];
-		memory?: string[];
-	} {
+	keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory?: string[]; } {
 		return {
 			default: [...this.registry.getConfigurations()],
 			policy: this.policyConfiguration.keys,
@@ -454,9 +380,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 
 	private resolveSection(section: string, overrides?: IConfigurationOverrides): unknown {
 		if (overrides === undefined) {
-			const base = this.effectiveConfiguration,
-				workspace = this.workspaceConfiguration,
-				policy = this.policyConfiguration;
+			const base = this.effectiveConfiguration, workspace = this.workspaceConfiguration, policy = this.policyConfiguration;
 			// Layers are immutable snapshots. Reuse their combined read model until
 			// an owner replaces a layer, including reads made inside change events.
 			if (!this.consolidated || this.consolidated.base !== base || this.consolidated.workspace !== workspace || this.consolidated.policy !== policy) {
@@ -561,12 +485,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			if (!setting) return candidate;
 			if (!supportsTarget(setting, target)) return undefined;
 			if (language && setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) return undefined;
-			try {
-				return setting.parse(candidate);
-			} catch (error) {
-				this.onError(error);
-				return undefined;
-			}
+			try { return setting.parse(candidate); }
+			catch (error) { this.onError(error); return undefined; }
 		};
 		for (const [key, candidate] of Object.entries(configurationValues(document))) {
 			const value = parse(key, candidate, false);
@@ -585,13 +505,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 
 	private state(): ConfigurationState {
 		return {
-			base: this.effectiveConfiguration,
-			workspace: this.workspaceConfiguration,
-			policy: this.policyConfiguration,
-			folders: [...this.folderConfigurations.values()].map(folder => ({
-				root: folder.root,
-				model: folder.model,
-			})),
+			base: this.effectiveConfiguration, workspace: this.workspaceConfiguration, policy: this.policyConfiguration,
+			folders: [...this.folderConfigurations.values()].map(folder => ({ root: folder.root, model: folder.model })),
 		};
 	}
 
@@ -605,23 +520,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private fireLayerChange(previous: ConfigurationState, target: ConfigurationTarget): void {
 		if (this.stopped) return;
 		const current = this.state();
-		const models = [
-			previous.base,
-			previous.workspace,
-			previous.policy,
-			...previous.folders.map(folder => folder.model),
-			current.base,
-			current.workspace,
-			current.policy,
-			...current.folders.map(folder => folder.model),
-		];
+		const models = [previous.base, previous.workspace, previous.policy, ...previous.folders.map(folder => folder.model), current.base, current.workspace, current.policy, ...current.folders.map(folder => folder.model)];
 		const resources = [undefined, ...previous.folders.map(folder => folder.root), ...current.folders.map(folder => folder.root)];
 		const identifiers = [...new Set(models.flatMap(model => model.overrides.flatMap(block => block.identifiers)))];
-		const changed = (key: string, identifier?: string): boolean =>
-			resources.some(
-				resource =>
-					!equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })),
-			);
+		const changed = (key: string, identifier?: string): boolean => resources.some(resource => !equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })));
 		const keys = [...new Set(models.flatMap(model => model.keys))].filter(key => changed(key) || identifiers.some(identifier => changed(key, identifier)));
 		const overrides: [string, string[]][] = identifiers.map(identifier => [identifier, keys.filter(key => changed(key, identifier))]);
 		if (keys.length) this.changeEmitter.fire(configurationChangeEvent({ keys, overrides: overrides.filter(([, keys]) => keys.length) }, previous, current, target));
@@ -630,9 +532,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private folderResource(resource: URI | null | undefined): FolderConfiguration | undefined {
 		if (!resource) return undefined;
 		const root = this.getWorkspaceFolder(resource)?.uri;
-		return root
-			? (this.folderConfigurations.get(root.toString())?.resource ?? (this.getWorkbenchState() === WorkbenchState.FOLDER ? (this.workspaceResource as FolderConfiguration) : undefined))
-			: undefined;
+		return root ? this.folderConfigurations.get(root.toString())?.resource
+			?? (this.getWorkbenchState() === WorkbenchState.FOLDER ? this.workspaceResource as FolderConfiguration : undefined) : undefined;
 	}
 
 	private folderModel(resource: URI | null | undefined): ConfigurationModel {
@@ -674,13 +575,11 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private parseResourceSource(source: string): ConfigurationModel {
 		const document = parseSettings(source);
 		for (const [key, value] of Object.entries(configurationValues(document))) this.validateRegisteredValue(key, value);
-		for (const entry of configurationOverrideValues(document))
-			for (const [key, value] of Object.entries(entry.values)) {
-				const configuration = this.registry.getConfiguration(key);
-				if (configuration?.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE)
-					throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key));
-				this.validateRegisteredValue(key, value);
-			}
+		for (const entry of configurationOverrideValues(document)) for (const [key, value] of Object.entries(entry.values)) {
+			const configuration = this.registry.getConfiguration(key);
+			if (configuration?.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key));
+			this.validateRegisteredValue(key, value);
+		}
 		return document;
 	}
 
@@ -693,6 +592,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			throw new TypeError(`Invalid configuration value for '${key}': ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
+
 }
 
 function configurationChangeEvent(
@@ -725,7 +625,7 @@ interface ConfigurationState {
 	readonly base: ConfigurationModel;
 	readonly workspace: ConfigurationModel;
 	readonly policy: ConfigurationModel;
-	readonly folders: readonly { root: URI; model: ConfigurationModel }[];
+	readonly folders: readonly { root: URI; model: ConfigurationModel; }[];
 }
 
 function matchingFolder(state: ConfigurationState, resource: URI | null | undefined) {
@@ -743,37 +643,22 @@ function resolveConfiguration(state: ConfigurationState, section: string, overri
 function supportsTarget(setting: IRegisteredConfiguration, target: ConfigurationTarget): boolean {
 	if (target !== ConfigurationTarget.WORKSPACE && target !== ConfigurationTarget.WORKSPACE_FOLDER) return true;
 	const scope = setting.scope ?? ConfigurationScope.WINDOW;
-	return (
-		scope === ConfigurationScope.RESOURCE ||
-		scope === ConfigurationScope.LANGUAGE_OVERRIDABLE ||
-		scope === ConfigurationScope.MACHINE_OVERRIDABLE ||
-		(target === ConfigurationTarget.WORKSPACE && scope === ConfigurationScope.WINDOW)
-	);
+	return scope === ConfigurationScope.RESOURCE || scope === ConfigurationScope.LANGUAGE_OVERRIDABLE || scope === ConfigurationScope.MACHINE_OVERRIDABLE
+		|| target === ConfigurationTarget.WORKSPACE && scope === ConfigurationScope.WINDOW;
 }
 
 function inspectModel<T>(name: 'workspace' | 'workspaceFolder', model: ConfigurationModel, key: string, overrides?: IConfigurationOverrides): Record<string, unknown> {
 	const value = model.getValue<Readonly<T>>(key);
 	const override = overrides?.overrideIdentifier ? model.getOverrideValue<Readonly<T>>(key, overrides.overrideIdentifier) : undefined;
 	const effective = overrides?.overrideIdentifier ? model.override(overrides.overrideIdentifier).getValue<Readonly<T>>(key) : value;
-	const blocks = model.overrides
-		.filter(block => block.keys.includes(key))
-		.map(block => ({
-			identifiers: block.identifiers,
-			value: new ConfigurationModel(block.contents, block.keys, [], undefined, configurationModelLog).getValue(key),
-		}));
-	return effective === undefined && blocks.length === 0
-		? {}
-		: {
-				...(effective === undefined ? {} : { [`${name}Value`]: effective }),
-				[name]: {
-					...(value === undefined ? {} : { value }),
-					...(override === undefined ? {} : { override }),
-					...(blocks.length ? { overrides: blocks } : {}),
-				},
-			};
+	const blocks = model.overrides.filter(block => block.keys.includes(key)).map(block => ({ identifiers: block.identifiers, value: new ConfigurationModel(block.contents, block.keys, [], undefined, configurationModelLog).getValue(key) }));
+	return effective === undefined && blocks.length === 0 ? {} : {
+		...(effective === undefined ? {} : { [`${name}Value`]: effective }),
+		[name]: { ...(value === undefined ? {} : { value }), ...(override === undefined ? {} : { override }), ...(blocks.length ? { overrides: blocks } : {}) },
+	};
 }
 
-function configurationOverrideIdentifiers(key: string, models: ConfigurationModel[], initial: string[]): { overrideIdentifiers?: string[] } {
+function configurationOverrideIdentifiers(key: string, models: ConfigurationModel[], initial: string[]): { overrideIdentifiers?: string[]; } {
 	const identifiers = [...new Set([...initial, ...models.flatMap(model => model.overrides.filter(block => block.keys.includes(key)).flatMap(block => block.identifiers))])];
 	return identifiers.length ? { overrideIdentifiers: identifiers } : {};
 }
@@ -809,14 +694,9 @@ function changedConfiguration(previous: ConfigurationModel, next: ConfigurationM
 
 function overrideMap(document: ConfigurationModel): Map<string, Readonly<Record<string, unknown>>> {
 	const blocks = configurationOverrideValues(document);
-	const model = configurationModel(
-		new Map(),
-		blocks.map(block => ({
-			key: block.key,
-			identifiers: block.identifiers,
-			values: new Map(Object.entries(block.values)),
-		})),
-	);
+	const model = configurationModel(new Map(), blocks.map(block => ({
+		key: block.key, identifiers: block.identifiers, values: new Map(Object.entries(block.values)),
+	})));
 	const result = new Map<string, Readonly<Record<string, unknown>>>();
 	for (const identifier of new Set(blocks.flatMap(block => [...block.identifiers]))) {
 		const keys = new Set(blocks.filter(block => block.identifiers.includes(identifier)).flatMap(block => Object.keys(block.values)));
@@ -868,10 +748,7 @@ function parseUpdateArguments(arg3: unknown, arg4: unknown): ParsedUpdateArgumen
 		if (isConfigurationUpdateOverrides(arg3)) {
 			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifiers };
 		} else if (isConfigurationOverrides(arg3)) {
-			overrides = {
-				resource: arg3.resource,
-				overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined,
-			};
+			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined };
 		} else {
 			throw new TypeError('Configuration update overrides are invalid');
 		}
@@ -910,38 +787,34 @@ function configurationValues(model: ConfigurationModel): Readonly<Record<string,
 }
 
 function configurationOverrideValues(model: ConfigurationModel) {
-	return model.keys
-		.filter(key => key.startsWith('['))
-		.map(key => ({
-			key,
-			identifiers: overrideIdentifiersFromKey(key),
-			values: model.contents[key] as Record<string, unknown>,
-		}));
+	return model.keys.filter(key => key.startsWith('[')).map(key => ({
+		key, identifiers: overrideIdentifiersFromKey(key), values: model.contents[key] as Record<string, unknown>,
+	}));
 }
 
 function sameWorkspace(left: IWorkspace, right: IWorkspace): boolean {
-	return (
-		left.id === right.id &&
+	return left.id === right.id &&
 		left.configuration?.toString() === right.configuration?.toString() &&
 		left.name === right.name &&
 		left.remoteAuthority === right.remoteAuthority &&
 		left.folders.length === right.folders.length &&
 		left.folders.every((folder, index) => {
 			const candidate = right.folders[index];
-			return candidate !== undefined && folder.id === candidate.id && folder.uri.toString() === candidate.uri.toString() && folder.name === candidate.name && folder.index === candidate.index;
-		})
-	);
+			return candidate !== undefined &&
+				folder.id === candidate.id &&
+				folder.uri.toString() === candidate.uri.toString() &&
+				folder.name === candidate.name &&
+				folder.index === candidate.index;
+		});
 }
 
 function indexWorkspaceFolders(workspace: IWorkspace): TernarySearchTree<URI, IWorkspaceFolder> {
-	const index = TernarySearchTree.forUris<IWorkspaceFolder>(
-		resource => {
-			// Drive and UNC roots retain Windows casing semantics on every renderer OS.
-			const comparison = resource.scheme === 'file' && (resource.authority || /^\/[a-z]:($|\/)/i.test(resource.path)) ? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
-			return comparison.ignorePathCasing(resource);
-		},
-		() => true,
-	);
+	const index = TernarySearchTree.forUris<IWorkspaceFolder>(resource => {
+		// Drive and UNC roots retain Windows casing semantics on every renderer OS.
+		const comparison = resource.scheme === 'file' && (resource.authority || /^\/[a-z]:($|\/)/i.test(resource.path))
+			? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
+		return comparison.ignorePathCasing(resource);
+	}, () => true);
 	const ranked = [...workspace.folders].sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length);
 	for (const folder of ranked) {
 		// Membership ignores decorations on the candidate, never on a root. Keep
@@ -955,7 +828,9 @@ function indexWorkspaceFolders(workspace: IWorkspace): TernarySearchTree<URI, IW
 	return index;
 }
 
-function resolveWorkspace(workspace: IAnyWorkspaceIdentifier | IWorkspace): IWorkspace {
+function resolveWorkspace(
+	workspace: IAnyWorkspaceIdentifier | IWorkspace,
+): IWorkspace {
 	if (!('folders' in workspace)) return workspaceFromIdentifier(workspace);
 	const folders: readonly IWorkspaceFolder[] = Object.freeze(workspace.folders.map(folder => Object.freeze({ ...folder })));
 	return Object.freeze({ ...workspace, folders });

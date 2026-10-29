@@ -15,7 +15,7 @@ export interface ScenarioContext {
 	readonly code: PlaywrightDriver;
 	readonly workbench: Workbench;
 	readonly page: Page;
-	skip(reason: string, options?: { readonly needs?: StepBlocker }): never;
+	skip(reason: string, options?: { readonly needs?: StepBlocker; }): never;
 }
 
 export interface ScenarioStep {
@@ -48,39 +48,19 @@ export interface ScenarioBlocker {
 }
 
 class SkipStep extends Error {
-	constructor(
-		reason: string,
-		readonly needs?: StepBlocker,
-	) {
-		super(reason);
-	}
+	constructor(reason: string, readonly needs?: StepBlocker) { super(reason); }
 }
 
 const defaultStepPauseMs = 1_000;
 const commandLine = process.argv.slice(2);
 const options = parseRunnerOptions(commandLine);
 
-export async function runScenario(scenario: Scenario): Promise<{
-	readonly runPath: string;
-	readonly outcome: 'passed' | 'failed' | 'aborted';
-	readonly blockers: readonly ScenarioBlocker[];
-}> {
+export async function runScenario(scenario: Scenario): Promise<{ readonly runPath: string; readonly outcome: 'passed' | 'failed' | 'aborted'; readonly blockers: readonly ScenarioBlocker[]; }> {
 	checkVideoTooling();
 	validateScenario(scenario);
 	const applications = new ApplicationService(options);
 	const evidence = new EvidenceService(applications);
-	const runPath = await evidence.start(
-		scenario.id,
-		scenario.title,
-		scenario.source,
-		scenario.scenarioPath,
-		scenario.workspacePath,
-		scenario.userSettings,
-		scenario.extraArgs,
-		scenario.externalCodexHome,
-		scenario.profileFixturePath,
-		scenario.startupTimeout,
-	);
+	const runPath = await evidence.start(scenario.id, scenario.title, scenario.source, scenario.scenarioPath, scenario.workspacePath, scenario.userSettings, scenario.extraArgs, scenario.externalCodexHome, scenario.profileFixturePath, scenario.startupTimeout);
 	console.log(`Evidence run: ${runPath}`);
 	const blockers: ScenarioBlocker[] = [];
 	let outcome: 'passed' | 'failed' | 'aborted' = 'passed';
@@ -98,9 +78,7 @@ export async function runScenario(scenario: Scenario): Promise<{
 				code: running.driver,
 				workbench: running.workbench,
 				page: running.page,
-				skip: (reason, skipOptions) => {
-					throw new SkipStep(reason, skipOptions?.needs);
-				},
+				skip: (reason, skipOptions) => { throw new SkipStep(reason, skipOptions?.needs); },
 			};
 			try {
 				const details = await step.run(context);
@@ -131,7 +109,9 @@ export async function runScenario(scenario: Scenario): Promise<{
 	tryRenderChapters(runPath);
 	console.log(`Report: ${report}`);
 	for (const blocker of blockers) {
-		console.log(blocker.needs === 'human' ? `Needs a person: ${blocker.id} ${blocker.title} - ${blocker.reason}` : `Needs harness support: ${blocker.id} ${blocker.title} - ${blocker.reason}`);
+		console.log(blocker.needs === 'human'
+			? `Needs a person: ${blocker.id} ${blocker.title} - ${blocker.reason}`
+			: `Needs harness support: ${blocker.id} ${blocker.title} - ${blocker.reason}`);
 	}
 	return { runPath, outcome, blockers };
 }
@@ -152,7 +132,7 @@ function validateScenario(scenario: Scenario): void {
 }
 
 async function loadScenario(path: string): Promise<Scenario> {
-	const loaded = (await import(pathToFileURL(path).href)) as { default?: Scenario } & Partial<Scenario>;
+	const loaded = await import(pathToFileURL(path).href) as { default?: Scenario; } & Partial<Scenario>;
 	return (loaded.default ?? loaded) as Scenario;
 }
 
@@ -177,25 +157,15 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 		// A separate worker lets cancellation terminate even a step whose promise
 		// never settles. Its launchers share the supervisor's resource registry.
 		await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
-			process.exitCode = (
-				await run.command(process.execPath, [process.argv[1], ...commandLine], {
-					...environment,
-					ASH_SCENARIO_WORKER: '1',
-				})
-			).code;
+			process.exitCode = (await run.command(process.execPath, [process.argv[1], ...commandLine], { ...environment, ASH_SCENARIO_WORKER: '1' })).code;
 		});
 	} else {
-		await loadScenario(resolve(scenarioArgument))
-			.then(runScenario)
-			.then(
-				result => {
-					console.log(`Outcome: ${result.outcome}`);
-					process.exit(result.outcome === 'passed' ? 0 : 1);
-				},
-				error => {
-					console.error(error instanceof Error ? (error.stack ?? error.message) : error);
-					process.exit(1);
-				},
-			);
+		await loadScenario(resolve(scenarioArgument)).then(runScenario).then(result => {
+			console.log(`Outcome: ${result.outcome}`);
+			process.exit(result.outcome === 'passed' ? 0 : 1);
+		}, error => {
+			console.error(error instanceof Error ? error.stack ?? error.message : error);
+			process.exit(1);
+		});
 	}
 }

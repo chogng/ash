@@ -1,8 +1,12 @@
-import { ILabelService, type ResourceLabelFormatter, type IFormatterChangeEvent, type IUriLabelOptions } from '../../../../platform/label/common/label.js';
+import {
+	ILabelService, type ResourceLabelFormatter, type IFormatterChangeEvent, type IUriLabelOptions,
+} from '../../../../platform/label/common/label.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { getRemoteWorkspacePath, isWindowsRemotePath } from '../../../../platform/remote/common/remote.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { getPathLabel, normalizeDriveLetter, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider } from '../../../../base/common/labels.js';
+import {
+	getPathLabel, normalizeDriveLetter, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider,
+} from '../../../../base/common/labels.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -34,10 +38,10 @@ export class LabelService extends Disposable implements ILabelService {
 
 		const relative: IRelativePathProvider | undefined = options.relative
 			? {
-					noPrefix: options.noPrefix,
-					getWorkspace: () => this.workspaceContextService.getWorkspace(),
-					getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
-				}
+				noPrefix: options.noPrefix,
+				getWorkspace: () => this.workspaceContextService.getWorkspace(),
+				getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
+			}
 			: undefined;
 		const home = this.paths.resolvedUserHome;
 		const userHome = home?.scheme === resource.scheme && home.authority === resource.authority && !resource.path.startsWith('/@browser/') ? home : undefined;
@@ -57,19 +61,16 @@ export class LabelService extends Disposable implements ILabelService {
 		if (!formatter) return formatted;
 		const path = label.split(pathSeparator).join('/');
 		const replacements = { path, scheme: resource.scheme, authority: resource.authority };
-		return formatter.formatting.label.replace(/\$\{(path|scheme|authority)\}/g, (_match, key: keyof typeof replacements) => replacements[key]).replaceAll('/', separator);
+		return formatter.formatting.label
+			.replace(/\$\{(path|scheme|authority)\}/g, (_match, key: keyof typeof replacements) => replacements[key])
+			.replaceAll('/', separator);
 	}
 
 	getUriBasenameLabel(resource: URI): string {
 		const formatter = this.formatters.get(resource.scheme)?.find(candidate => !candidate.authority || candidate.authority === resource.authority);
 		if (formatter) {
 			const label = this.getUriLabel(resource);
-			return (
-				label
-					.split(formatter.formatting.separator || this.getSeparator(resource.scheme, resource.authority))
-					.filter(Boolean)
-					.at(-1) ?? label
-			);
+			return label.split(formatter.formatting.separator || this.getSeparator(resource.scheme, resource.authority)).filter(Boolean).at(-1) ?? label;
 		}
 		return basename(resource) || resource.authority || resource.toString();
 	}
@@ -91,18 +92,14 @@ export class LabelService extends Disposable implements ILabelService {
 		if (resource && (resource.scheme !== Schemas.file || resource.path.startsWith('/@browser/'))) {
 			return OperatingSystem.Linux;
 		}
-		return this.host.hasAppServer ? (this.host.appServer.operatingSystem ?? OperatingSystem.Linux) : operatingSystem;
+		return this.host.hasAppServer ? this.host.appServer.operatingSystem ?? OperatingSystem.Linux : operatingSystem;
 	}
 
 	registerFormatter(formatter: ResourceLabelFormatter): IDisposable {
-		if (
-			!formatter ||
-			typeof formatter !== 'object' ||
-			typeof formatter.scheme !== 'string' ||
-			formatter.scheme.length === 0 ||
-			typeof formatter.formatting?.label !== 'string' ||
-			!['/', '\\', ''].includes(formatter.formatting.separator)
-		) {
+		if (!formatter || typeof formatter !== 'object'
+			|| typeof formatter.scheme !== 'string' || formatter.scheme.length === 0
+			|| typeof formatter.formatting?.label !== 'string'
+			|| !['/', '\\', ''].includes(formatter.formatting.separator)) {
 			throw new TypeError('Label formatter must provide a scheme, label and separator');
 		}
 		const entries = this.formatters.get(formatter.scheme) ?? [];

@@ -29,11 +29,9 @@ class ProgressFixture extends Disposable {
 	readonly views = { getViewProgressIndicator: (id: string) => this.indicators.get(id) } as IViewsService;
 	readonly descriptors = {
 		getViewContainerById: (id: string) => this.containers.get(id) ?? null,
-		getViewDescriptorById: (id: string) => (this.registeredViews.has(id) ? { id } : null),
+		getViewDescriptorById: (id: string) => this.registeredViews.has(id) ? { id } : null,
 	} as IViewDescriptorService;
-	readonly panes = {
-		getProgressIndicator: (id: string) => this.indicators.get(id),
-	} as unknown as IPaneCompositePartService;
+	readonly panes = { getProgressIndicator: (id: string) => this.indicators.get(id) } as unknown as IPaneCompositePartService;
 	readonly progress: ProgressService;
 	constructor() {
 		super();
@@ -50,28 +48,12 @@ class ProgressFixture extends Disposable {
 for (const location of ['view', 'container', ProgressLocation.Explorer, ProgressLocation.Scm, ProgressLocation.Extensions]) {
 	test(`view progress routes ${location} without a notification and follows the producer`, async () => {
 		using fixture = new ProgressFixture();
-		const id =
-			typeof location === 'string'
-				? location
-				: location === ProgressLocation.Explorer
-					? WorkbenchViewContainerId.Sidebar
-					: location === ProgressLocation.Scm
-						? WorkbenchViewContainerId.SourceControl
-						: 'ash.extensions';
+		const id = typeof location === 'string' ? location : location === ProgressLocation.Explorer ? WorkbenchViewContainerId.Sidebar : location === ProgressLocation.Scm ? WorkbenchViewContainerId.SourceControl : 'ash.extensions';
 		if (location === 'view') fixture.registeredViews.add(id);
 		else fixture.containers.set(id, { id, title: id, location: ViewContainerLocation.Sidebar });
 		const steps: unknown[] = [];
-		const runner: IProgressRunner = {
-			total: total => steps.push({ total }),
-			worked: worked => steps.push({ worked }),
-			done: () => steps.push('done'),
-		};
-		fixture.indicators.set(id, {
-			show: (total: true | number, delay?: number) => {
-				steps.push({ show: total, delay });
-				return runner;
-			},
-		} as IProgressIndicator);
+		const runner: IProgressRunner = { total: total => steps.push({ total }), worked: worked => steps.push({ worked }), done: () => steps.push('done') };
+		fixture.indicators.set(id, { show: (total: true | number, delay?: number) => { steps.push({ show: total, delay }); return runner; } } as IProgressIndicator);
 		const completion = new DeferredPromise<string>();
 		let reporter: IProgress<IProgressStep> | undefined;
 		const pending = fixture.progress.withProgress({ location, delay: 150 }, progress => {
@@ -100,26 +82,9 @@ test('view progress cleans up on synchronous errors, rejection and service dispo
 	using fixture = new ProgressFixture();
 	fixture.registeredViews.add('view');
 	let finished = 0;
-	fixture.indicators.set('view', {
-		show: () => ({
-			done: () => {
-				finished++;
-			},
-			total() {},
-			worked() {},
-		}),
-		showWhile: async () => {},
-	});
-	await assert.rejects(
-		fixture.progress.withProgress({ location: 'view' }, () => {
-			throw new Error('sync');
-		}),
-		/sync/,
-	);
-	await assert.rejects(
-		fixture.progress.withProgress({ location: 'view' }, () => Promise.reject(new Error('async'))),
-		/async/,
-	);
+	fixture.indicators.set('view', { show: () => ({ done: () => { finished++; }, total() { }, worked() { } }), showWhile: async () => { } });
+	await assert.rejects(fixture.progress.withProgress({ location: 'view' }, () => { throw new Error('sync'); }), /sync/);
+	await assert.rejects(fixture.progress.withProgress({ location: 'view' }, () => Promise.reject(new Error('async'))), /async/);
 	const completion = new DeferredPromise<void>();
 	const pending = fixture.progress.withProgress({ location: 'view' }, () => completion.p);
 	fixture.progress.dispose();
@@ -149,16 +114,8 @@ test("notification cancellation requests once while the producer's Promise stays
 	const completion = new DeferredPromise<string>();
 	let cancellations = 0;
 	let settled = false;
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Git', cancellable: 'Stop' },
-		() => completion.p,
-		() => {
-			cancellations++;
-		},
-	);
-	void pending.then(() => {
-		settled = true;
-	});
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Git', cancellable: 'Stop' }, () => completion.p, () => { cancellations++; });
+	void pending.then(() => { settled = true; });
 	const action = fixture.notifications.model.getNotifications()[0]!.actions!.primary![0]!;
 	assert.equal(action.label, 'Stop');
 	await action.run();
@@ -173,9 +130,7 @@ test("notification cancellation requests once while the producer's Promise stays
 test('window progress activates its command and resumes earlier work after the latest task', async () => {
 	using fixture = new ProgressFixture();
 	let reveals = 0;
-	using command = fixture.registry.register('test.log', () => {
-		reveals++;
-	});
+	using command = fixture.registry.register('test.log', () => { reveals++; });
 	const first = new DeferredPromise<void>();
 	const second = new DeferredPromise<void>();
 	let report!: IProgress<IProgressStep>;
@@ -224,12 +179,8 @@ test('a task at its numeric total cannot hide unfinished window progress while i
 		progress.report({ message: '1/2', increment: 50 });
 		return scanning.p;
 	});
-	void first.then(() => {
-		indexingSettled = true;
-	});
-	void second.then(() => {
-		scanningSettled = true;
-	});
+	void first.then(() => { indexingSettled = true; });
+	void second.then(() => { scanningSettled = true; });
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Roots Scanned: 1/2');
 	scan.report({ message: '2/2', increment: 50 });
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Indexing: crate-a');
@@ -258,20 +209,11 @@ test('silent notification progress retains history and exposes a window entry', 
 
 test('task failure and service disposal release presentations without settling the producer', async () => {
 	using fixture = new ProgressFixture();
-	await assert.rejects(
-		fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Loading' }, () => Promise.reject(new Error('operation failed'))),
-		/operation failed/,
-	);
+	await assert.rejects(fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Loading' }, () => Promise.reject(new Error('operation failed'))), /operation failed/);
 	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	const completion = new DeferredPromise<void>();
 	let cancellations = 0;
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Indexing', cancellable: true },
-		() => completion.p,
-		() => {
-			cancellations++;
-		},
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Indexing', cancellable: true }, () => completion.p, () => { cancellations++; });
 	fixture.progress.dispose();
 	assert.equal(cancellations, 1);
 	assert.equal(completion.isSettled, false);
@@ -295,20 +237,8 @@ test('a failing cancellation callback does not retain other progress presentatio
 	const first = new DeferredPromise<void>();
 	const second = new DeferredPromise<void>();
 	let cancellations = 0;
-	const pendingFirst = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'First' },
-		() => first.p,
-		() => {
-			throw new Error('Cancellation callback failed');
-		},
-	);
-	const pendingSecond = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Second' },
-		() => second.p,
-		() => {
-			cancellations++;
-		},
-	);
+	const pendingFirst = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'First' }, () => first.p, () => { throw new Error('Cancellation callback failed'); });
+	const pendingSecond = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Second' }, () => second.p, () => { cancellations++; });
 	assert.throws(() => fixture.progress.dispose(), AggregateError);
 	assert.equal(cancellations, 1);
 	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
@@ -317,41 +247,37 @@ test('a failing cancellation callback does not retain other progress presentatio
 	await Promise.all([pendingFirst, pendingSecond]);
 });
 
-for (const early of [false, true])
-	test(`commandless Window progress ${early ? 'finishes before' : 'uses'} the silent-notification delay`, async () => {
-		mock.timers.enable({ apis: ['setTimeout'] });
-		try {
-			using fixture = new ProgressFixture();
-			let opens = 0;
-			using command = fixture.registry.register('notifications.showList', () => {
-				opens++;
-			});
-			const completion = new DeferredPromise<void>();
-			const pending = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Loading workspace' }, () => completion.p);
-			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
-			if (early) {
-				await completion.complete(undefined);
-				await pending;
-			}
-			mock.timers.tick(149);
+
+for (const early of [false, true]) test(`commandless Window progress ${early ? 'finishes before' : 'uses'} the silent-notification delay`, async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		using fixture = new ProgressFixture();
+		let opens = 0;
+		using command = fixture.registry.register('notifications.showList', () => { opens++; });
+		const completion = new DeferredPromise<void>();
+		const pending = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Loading workspace' }, () => completion.p);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
+		if (early) {
+			await completion.complete(undefined);
+			await pending;
+		}
+		mock.timers.tick(149);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
+		assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
+		mock.timers.tick(1);
+		if (early) {
 			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 			assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
-			mock.timers.tick(1);
-			if (early) {
-				assert.deepEqual(fixture.notifications.model.getNotifications(), []);
-				assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
-			} else {
-				assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
-				await fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
-				assert.equal(opens, 1);
-				await completion.complete(undefined);
-				await pending;
-				assert.deepEqual(fixture.notifications.model.getNotifications(), []);
-			}
-		} finally {
-			mock.timers.reset();
+		} else {
+			assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
+			await fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
+			assert.equal(opens, 1);
+			await completion.complete(undefined);
+			await pending;
+			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 		}
-	});
+	} finally { mock.timers.reset(); }
+});
 
 test('hidden notification progress moves to the status bar and follows visibility without ending the task', async () => {
 	using fixture = new ProgressFixture();

@@ -6,20 +6,12 @@ import { BackupError, type IBackupContent, type IBackupRecord, type IBackupServi
 
 /** Uses the renderer's existing connection; backups survive that connection's lifetime. */
 export class AppServerBackupService implements IBackupService {
-	constructor(
-		private readonly client: AppServerProtocolClient,
-		private readonly clientId: string,
-	) {}
+	constructor(private readonly client: AppServerProtocolClient, private readonly clientId: string) { }
 
 	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> {
 		await this.client.whenReady();
 		const result = await this.client.request(APP_SERVER_METHODS['backup/workspaces'], { clientId: this.clientId }).catch(explain);
-		return result.workspaces.map(workspace => ({
-			id: workspace.id,
-			folders: workspace.folders.map(folder => URI.parse(folder)),
-			...(workspace.configuration ? { configuration: URI.parse(workspace.configuration) } : {}),
-			...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
-		}));
+		return result.workspaces.map(workspace => ({ id: workspace.id, folders: workspace.folders.map(folder => URI.parse(folder)), ...(workspace.configuration ? { configuration: URI.parse(workspace.configuration) } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) }));
 	}
 
 	async list(workspaceId: string): Promise<readonly IBackupRecord[]> {
@@ -48,51 +40,26 @@ export class AppServerBackupService implements IBackupService {
 		// Development replacement can overlap window shutdown. Wait before sending;
 		// a write whose reply was lost must still fail rather than be replayed.
 		await this.client.whenReady();
-		return revive(
-			await this.client
-				.request(APP_SERVER_METHODS['backup/write'], {
-					clientId: this.clientId,
-					workspace: {
-						id: workspace.id,
-						folders: workspace.folders.map(folder => folder.toString()),
-						configuration: workspace.configuration?.toString() ?? null,
-						remoteAuthority: workspace.remoteAuthority ?? null,
-					},
-					content: { ...content, resource: content.resource.toString() },
-					expectedRevision: expectedRevision ?? null,
-				})
-				.catch(explain),
-		);
+		return revive(await this.client.request(APP_SERVER_METHODS['backup/write'], {
+			clientId: this.clientId,
+			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
+			content: { ...content, resource: content.resource.toString() }, expectedRevision: expectedRevision ?? null,
+		}).catch(explain));
 	}
 
 	async move(sourceWorkspaceId: string, workspace: IBackupWorkspace, backups: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]> {
 		await this.client.whenReady();
-		const result = await this.client
-			.request(APP_SERVER_METHODS['backup/move'], {
-				clientId: this.clientId,
-				sourceWorkspaceId,
-				workspace: {
-					id: workspace.id,
-					folders: workspace.folders.map(folder => folder.toString()),
-					configuration: workspace.configuration?.toString() ?? null,
-					remoteAuthority: workspace.remoteAuthority ?? null,
-				},
-				backups: backups.map(backup => ({ resource: backup.resource.toString(), revision: backup.revision })),
-			})
-			.catch(explain);
+		const result = await this.client.request(APP_SERVER_METHODS['backup/move'], {
+			clientId: this.clientId, sourceWorkspaceId,
+			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
+			backups: backups.map(backup => ({ resource: backup.resource.toString(), revision: backup.revision })),
+		}).catch(explain);
 		return result.backups.map(backup => ({ resource: URI.parse(backup.resource), revision: backup.revision }));
 	}
 
 	async discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void> {
 		await this.client.whenReady();
-		await this.client
-			.request(APP_SERVER_METHODS['backup/discard'], {
-				clientId: this.clientId,
-				workspaceId,
-				resource: resource.toString(),
-				expectedRevision,
-			})
-			.catch(explain);
+		await this.client.request(APP_SERVER_METHODS['backup/discard'], { clientId: this.clientId, workspaceId, resource: resource.toString(), expectedRevision }).catch(explain);
 	}
 }
 
@@ -103,12 +70,9 @@ function revive(record: BackupRecordDto): IBackupRecord {
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {
-			case 'BackupRevisionConflict':
-				throw new BackupError('conflict');
-			case 'BackupUnavailable':
-				throw new BackupError('unavailable');
-			case 'BackupOperationFailed':
-				throw new BackupError('failed');
+			case 'BackupRevisionConflict': throw new BackupError('conflict');
+			case 'BackupUnavailable': throw new BackupError('unavailable');
+			case 'BackupOperationFailed': throw new BackupError('failed');
 		}
 	}
 	throw error;

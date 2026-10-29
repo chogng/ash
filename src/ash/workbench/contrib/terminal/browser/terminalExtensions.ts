@@ -14,9 +14,7 @@ const contributions = new Map<string, ITerminalContributionDescription>();
 
 /** Registers a feature once; each instance creates it through its own service scope. */
 export function registerTerminalContribution(id: string, ctor: Constructor<ITerminalContribution>): void {
-	if (contributions.has(id)) {
-		throw new Error(`Terminal contribution already registered: ${id}`);
-	}
+	if (contributions.has(id)) { throw new Error(`Terminal contribution already registered: ${id}`); }
 	contributions.set(id, { id, ctor });
 }
 

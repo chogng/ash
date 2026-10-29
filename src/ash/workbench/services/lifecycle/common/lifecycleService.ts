@@ -4,16 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { handleVetos } from '../../../../platform/lifecycle/common/lifecycle.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../platform/storage/common/storage.js';
-import {
-	LifecyclePhase,
-	StartupKind,
-	ShutdownVetoError,
-	type IBeforeShutdownErrorEvent,
-	type IBeforeShutdownEvent,
-	type ILifecycleService,
-	type IWillShutdownEvent,
-	type ShutdownReason,
-} from './lifecycle.js';
+import { LifecyclePhase, StartupKind, ShutdownVetoError, type IBeforeShutdownErrorEvent, type IBeforeShutdownEvent, type ILifecycleService, type IWillShutdownEvent, type ShutdownReason } from './lifecycle.js';
 
 /** Owns window startup progress and shutdown coordination independently of its host. */
 export abstract class AbstractLifecycleService extends Disposable implements ILifecycleService {
@@ -23,14 +14,14 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	private readonly willShutdownEmitter = this._register(new Emitter<IWillShutdownEvent>());
 	private readonly didShutdownErrorEmitter = this._register(new Emitter<ShutdownReason>());
 	private readonly didShutdownEmitter = this._register(new Emitter<ShutdownReason>());
-	private readonly phaseWaiters = new Map<LifecyclePhase, { readonly promise: Promise<void>; readonly resolve: () => void }>();
+	private readonly phaseWaiters = new Map<LifecyclePhase, { readonly promise: Promise<void>; readonly resolve: () => void; }>();
 	private _phase = LifecyclePhase.Starting;
 	private _willShutdown = false;
 	private shutdownPromise: Promise<void> | undefined;
 	private shutdownReason: ShutdownReason | undefined;
 	private readonly shutdownDiagnostics = this._register(new IntervalTimer());
 	/** Diagnostic ownership only: entries disappear as the actual participant promises settle. */
-	private readonly pendingShutdownOperations = new Map<Promise<unknown>, { readonly phase: 'veto' | 'join' | 'final'; readonly label: string }>();
+	private readonly pendingShutdownOperations = new Map<Promise<unknown>, { readonly phase: 'veto' | 'join' | 'final'; readonly label: string; }>();
 
 	public readonly onBeforeShutdown = this.beforeShutdownEmitter.event;
 	public readonly onBeforeShutdownError = this.beforeShutdownErrorEmitter.event;
@@ -56,20 +47,16 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		this.startupKind = startupKind ?? resolvedKind;
 		storageService.remove('lifecycle.lastShutdownReason', StorageScope.WORKSPACE);
 		this.logService.trace('lifecycle', `Window startup kind: ${StartupKind[this.startupKind]}`);
-		this._register(
-			storageService.onWillSaveState(event => {
-				if (event.reason === WillSaveStateReason.SHUTDOWN) {
-					storageService.store('lifecycle.lastShutdownReason', this.shutdownReason, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-				}
-			}),
-		);
+		this._register(storageService.onWillSaveState(event => {
+			if (event.reason === WillSaveStateReason.SHUTDOWN) {
+				storageService.store('lifecycle.lastShutdownReason', this.shutdownReason, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			}
+		}));
 		this._register(toDisposable(() => this.phaseWaiters.clear()));
 		this._register(toDisposable(() => this.pendingShutdownOperations.clear()));
 	}
 
-	public get phase(): LifecyclePhase {
-		return this._phase;
-	}
+	public get phase(): LifecyclePhase { return this._phase; }
 
 	public set phase(value: LifecyclePhase) {
 		this.assertNotDisposed();
@@ -90,9 +77,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		}
 	}
 
-	public get willShutdown(): boolean {
-		return this._willShutdown;
-	}
+	public get willShutdown(): boolean { return this._willShutdown; }
 
 	public when(phase: LifecyclePhase): Promise<void> {
 		this.assertNotDisposed();
@@ -102,9 +87,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		let waiter = this.phaseWaiters.get(phase);
 		if (!waiter) {
 			let resolve!: () => void;
-			const promise = new Promise<void>(complete => {
-				resolve = complete;
-			});
+			const promise = new Promise<void>(complete => { resolve = complete; });
 			waiter = { promise, resolve };
 			this.phaseWaiters.set(phase, waiter);
 		}
@@ -119,43 +102,32 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		let resolve!: () => void;
 		let reject!: (error: unknown) => void;
 		// Publish the promise before firing events because participants may request shutdown again.
-		this.shutdownPromise = new Promise<void>((complete, fail) => {
-			resolve = complete;
-			reject = fail;
-		});
+		this.shutdownPromise = new Promise<void>((complete, fail) => { resolve = complete; reject = fail; });
 		const started = performance.now();
 		this.shutdownDiagnostics.cancelAndSet(() => {
 			this.logService.warn('lifecycle', 'Window shutdown is still waiting', {
-				reason,
-				elapsedMs: performance.now() - started,
-				pending: [...this.pendingShutdownOperations.values()],
+				reason, elapsedMs: performance.now() - started, pending: [...this.pendingShutdownOperations.values()],
 			});
 		}, 10_000);
 		const finishDiagnostics = (): void => {
 			this.shutdownDiagnostics.cancel();
 			this.pendingShutdownOperations.clear();
 		};
-		void this.beginShutdown(reason).then(
-			() => {
-				finishDiagnostics();
-				resolve();
-			},
-			error => {
-				finishDiagnostics();
-				const joinedShutdown = this._willShutdown;
-				this._willShutdown = false;
-				this.shutdownReason = undefined;
-				this.shutdownPromise = undefined;
-				this.storageService.remove('lifecycle.lastShutdownReason', StorageScope.WORKSPACE);
-				if (joinedShutdown) this.didShutdownErrorEmitter.fire(reason);
-				reject(error);
-			},
-		);
+		void this.beginShutdown(reason).then(() => { finishDiagnostics(); resolve(); }, error => {
+			finishDiagnostics();
+			const joinedShutdown = this._willShutdown;
+			this._willShutdown = false;
+			this.shutdownReason = undefined;
+			this.shutdownPromise = undefined;
+			this.storageService.remove('lifecycle.lastShutdownReason', StorageScope.WORKSPACE);
+			if (joinedShutdown) this.didShutdownErrorEmitter.fire(reason);
+			reject(error);
+		});
 		return this.shutdownPromise;
 	}
 
 	private async beginShutdown(reason: ShutdownReason): Promise<void> {
-		const vetos: { readonly id: string; readonly value: boolean | Promise<boolean> }[] = [];
+		const vetos: { readonly id: string; readonly value: boolean | Promise<boolean>; }[] = [];
 		let accepting = true;
 		this.beforeShutdownEmitter.fire({
 			reason,
@@ -176,11 +148,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		this._willShutdown = true;
 		this.shutdownReason = reason;
 		this.logService.trace('lifecycle', `Window shutdown: ${reason}`);
-		const operations: {
-			readonly label: string;
-			readonly operation: Promise<unknown> | (() => Promise<unknown>);
-			readonly isCurrent?: () => boolean;
-		}[] = [];
+		const operations: { readonly label: string; readonly operation: Promise<unknown> | (() => Promise<unknown>); readonly isCurrent?: () => boolean; }[] = [];
 		accepting = true;
 		this.willShutdownEmitter.fire({
 			reason,
@@ -200,26 +168,11 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		for (const phase of [operations.filter(candidate => typeof candidate.operation !== 'function'), operations.filter(candidate => typeof candidate.operation === 'function')]) {
 			let pending = phase;
 			do {
-				const results = await Promise.allSettled(
-					pending.map(candidate =>
-						this.trackShutdownOperation(
-							typeof candidate.operation === 'function' ? Promise.resolve().then(candidate.operation) : candidate.operation,
-							typeof candidate.operation === 'function' ? 'final' : 'join',
-							candidate.label,
-						),
-					),
-				);
-				failures.push(
-					...results.flatMap((result, index) =>
-						result.status === 'rejected'
-							? [
-									new Error(`Shutdown participant '${pending[index]!.label}' failed`, {
-										cause: result.reason,
-									}),
-								]
-							: [],
-					),
-				);
+				const results = await Promise.allSettled(pending.map(candidate => this.trackShutdownOperation(
+					typeof candidate.operation === 'function' ? Promise.resolve().then(candidate.operation) : candidate.operation,
+					typeof candidate.operation === 'function' ? 'final' : 'join', candidate.label,
+				)));
+				failures.push(...results.flatMap((result, index) => result.status === 'rejected' ? [new Error(`Shutdown participant '${pending[index]!.label}' failed`, { cause: result.reason })] : []));
 				if (failures.length > 0) break;
 				// Check synchronously with completion: a promise observer can edit after its write resolves.
 				pending = phase.filter(candidate => typeof candidate.operation === 'function' && candidate.isCurrent && !candidate.isCurrent());
@@ -233,35 +186,25 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	}
 
 	private trackShutdownOperation<T>(operation: Promise<T>, phase: 'veto' | 'join' | 'final', label: string): Promise<T> {
-		const tracked = operation.then(
-			value => {
-				this.pendingShutdownOperations.delete(tracked);
-				return value;
-			},
-			error => {
-				this.pendingShutdownOperations.delete(tracked);
-				throw error;
-			},
-		);
+		const tracked = operation.then(value => {
+			this.pendingShutdownOperations.delete(tracked);
+			return value;
+		}, error => {
+			this.pendingShutdownOperations.delete(tracked);
+			throw error;
+		});
 		this.pendingShutdownOperations.set(tracked, { phase, label });
 		return tracked;
 	}
 
-	private async handleBeforeShutdown(reason: ShutdownReason, vetos: readonly { readonly id: string; readonly value: boolean | Promise<boolean> }[]): Promise<void> {
+	private async handleBeforeShutdown(reason: ShutdownReason, vetos: readonly { readonly id: string; readonly value: boolean | Promise<boolean>; }[]): Promise<void> {
 		const errors: Error[] = [];
-		const isVetoed = await handleVetos(
-			vetos.map(({ id, value }) =>
-				typeof value === 'boolean'
-					? value
-					: this.trackShutdownOperation(value, 'veto', id).catch(error => {
-							throw new Error(`Shutdown veto '${id}' failed`, { cause: error });
-						}),
-			),
-			error => {
-				errors.push(error);
-				this.beforeShutdownErrorEmitter.fire({ reason, error });
-			},
-		);
+		const isVetoed = await handleVetos(vetos.map(({ id, value }) => typeof value === 'boolean' ? value : this.trackShutdownOperation(value, 'veto', id).catch(error => {
+			throw new Error(`Shutdown veto '${id}' failed`, { cause: error });
+		})), error => {
+			errors.push(error);
+			this.beforeShutdownErrorEmitter.fire({ reason, error });
+		});
 		if (!isVetoed) {
 			return;
 		}

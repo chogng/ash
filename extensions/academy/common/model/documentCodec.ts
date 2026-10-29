@@ -4,12 +4,7 @@ import type { DocumentNode } from './document.js';
 import type { DocumentPlugin } from './documentPlugin.js';
 import { DocumentTextModel } from './documentTextModel.js';
 import { deserializeDocument, serializeDocument, documentToPlainText } from './documentSerialization.js';
-import {
-	deserializeDocumentTransaction,
-	serializeDocumentTransaction,
-	DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT,
-	DOCUMENT_TRANSACTION_SERIALIZATION_VERSION,
-} from './documentTransactionSerialization.js';
+import { deserializeDocumentTransaction, serializeDocumentTransaction, DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT, DOCUMENT_TRANSACTION_SERIALIZATION_VERSION } from './documentTransactionSerialization.js';
 
 /** Versioned Academy persistence and collaboration formats, independent of host transport. */
 export const documentCodec = Object.freeze({
@@ -38,18 +33,9 @@ export function bindDocumentCodec(schema: DocumentSchema, plugins?: readonly Doc
 		serialize: document => documentCodec.serialize(document, schema),
 		deserialize: value => documentCodec.deserialize(value, schema),
 		validate: document => schema.validate(document),
-		serializeTransaction: transaction =>
-			documentCodec.serializeTransaction(
-				deserializeDocumentTransaction(
-					{
-						format: DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT,
-						version: DOCUMENT_TRANSACTION_SERIALIZATION_VERSION,
-						transaction,
-					},
-					schema,
-				),
-				schema,
-			),
+		serializeTransaction: transaction => documentCodec.serializeTransaction(deserializeDocumentTransaction({
+			format: DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT, version: DOCUMENT_TRANSACTION_SERIALIZATION_VERSION, transaction,
+		}, schema), schema),
 		deserializeTransaction: value => documentCodec.deserializeTransaction(value, schema),
 		toPlainText: document => documentCodec.toPlainText(document, schema),
 	});

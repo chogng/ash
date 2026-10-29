@@ -46,7 +46,7 @@ export class UntitledTextEditorModel extends EditorModel implements IUntitledTex
 	}
 
 	public get textEditorModel(): ITextModel | null {
-		return this.isDisposed() ? null : (this.reference?.model ?? null);
+		return this.isDisposed() ? null : this.reference?.model ?? null;
 	}
 
 	public override resolve(): Promise<void> {

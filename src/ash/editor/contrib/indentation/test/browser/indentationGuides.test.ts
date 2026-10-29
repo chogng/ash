@@ -15,10 +15,7 @@ test('Indentation guides use visual tab stops and the model indentation unit', (
 
 test('Blank-line guides follow the language off-side rule', () => {
 	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel('root\n    child\n\nroot', {
-		languageId: 'guide-test',
-		languageConfigurationService: configurations,
-	});
+	using model = new TextModel('root\n    child\n\nroot', { languageId: 'guide-test', languageConfigurationService: configurations });
 	assert.deepEqual(model.guides.getLinesIndentGuides(1, 4), [0, 1, 1, 0]);
 	using registration = configurations.register('guide-test', { folding: { offSide: true } });
 	assert.deepEqual(model.guides.getLinesIndentGuides(1, 4), [0, 1, 0, 0]);

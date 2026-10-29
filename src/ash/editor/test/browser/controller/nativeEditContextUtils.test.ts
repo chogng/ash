@@ -25,14 +25,12 @@ test('edit-context factory owns browser object construction and reports missing 
 		readonly text = '';
 		readonly selectionStart = 0;
 		readonly selectionEnd = 0;
-		constructor(readonly options?: EditContextInit) {
-			super();
-		}
-		updateText(): void {}
-		updateSelection(): void {}
-		updateControlBounds(): void {}
-		updateSelectionBounds(): void {}
-		updateCharacterBounds(): void {}
+		constructor(readonly options?: EditContextInit) { super(); }
+		updateText(): void { }
+		updateSelection(): void { }
+		updateControlBounds(): void { }
+		updateSelectionBounds(): void { }
+		updateCharacterBounds(): void { }
 	}
 	const options = { text: 'draft', selectionStart: 1, selectionEnd: 1 };
 	const instance = EditContext.create({ EditContext: TestEditContext } as unknown as Window, options);
@@ -47,9 +45,7 @@ test('focus tracker validates the active element and keeps pause transitions sil
 	const changes: boolean[] = [];
 	const traces: string[] = [];
 	class RecordingLogService extends NullLoggerService {
-		override trace(message: string): void {
-			traces.push(message);
-		}
+		override trace(message: string): void { traces.push(message); }
 	}
 	using tracker = new FocusTracker(new RecordingLogService(), input, focused => changes.push(focused));
 

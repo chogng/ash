@@ -22,27 +22,21 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 		super();
 		const channel = mainProcess.getChannel(METERED_CONNECTION_CHANNEL);
 		let observedChanges = 0;
-		this._register(
-			channel.listen<unknown>(MeteredConnectionCommand.OnDidChangeIsConnectionMetered)(value => {
-				observedChanges++;
-				this.acceptState(value);
-			}),
-		);
+		this._register(channel.listen<unknown>(MeteredConnectionCommand.OnDidChangeIsConnectionMetered)(value => {
+			observedChanges++;
+			this.acceptState(value);
+		}));
 		const connection = connectionProvider();
 		const report = (): Promise<void> => {
 			// Slow links do not establish billing status. Only explicit browser
 			// signals participate in auto mode; the setting provides an override.
 			const value = connection?.saveData === true || connection?.metered === true;
-			this.observationQueue = this.observationQueue
-				.catch(() => {})
-				.then(async () => {
-					if (!this.isDisposed) await channel.call(MeteredConnectionCommand.SetIsBrowserConnectionMetered, value);
-				});
+			this.observationQueue = this.observationQueue.catch(() => { }).then(async () => {
+				if (!this.isDisposed) await channel.call(MeteredConnectionCommand.SetIsBrowserConnectionMetered, value);
+			});
 			return this.observationQueue;
 		};
-		const changed = () => {
-			void report().catch(error => console.error('Could not report network state', error));
-		};
+		const changed = () => { void report().catch(error => console.error('Could not report network state', error)); };
 		if (connection) this._register(addDisposableListener(connection, 'change', changed));
 		this.whenConnectionStateInitialized = report().then(async () => {
 			if (this.isDisposed) return;
@@ -54,9 +48,7 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 		void this.whenConnectionStateInitialized.catch(error => console.error('Could not initialize network state', error));
 	}
 
-	get isConnectionMetered(): boolean {
-		return this.metered;
-	}
+	get isConnectionMetered(): boolean { return this.metered; }
 
 	private acceptState(value: unknown): void {
 		if (typeof value !== 'boolean') throw new TypeError('Invalid metered connection state');
@@ -66,4 +58,6 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 	}
 }
 
-registerSingleton(IMeteredConnectionService, new SyncDescriptor(ElectronMeteredConnectionService, [() => (navigator as NavigatorWithConnection).connection], true));
+registerSingleton(IMeteredConnectionService, new SyncDescriptor(ElectronMeteredConnectionService, [
+	() => (navigator as NavigatorWithConnection).connection,
+], true));

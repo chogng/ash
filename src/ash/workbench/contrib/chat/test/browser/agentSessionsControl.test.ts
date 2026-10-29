@@ -14,30 +14,12 @@ test('Agent Sessions keeps visible rows through catalog updates and translates i
 	const changed = new Emitter<void>();
 	const opened: string[] = [];
 	let items: readonly IAgentSessionListItem[] = [
-		{
-			id: 'draft:one',
-			title: 'Draft One',
-			description: 'Draft',
-			kind: 'draft',
-			active: false,
-			getActions: () => [],
-			open: () => opened.push('draft:one'),
-		},
-		{
-			id: 'session:one',
-			title: 'First Session',
-			description: '',
-			kind: 'session',
-			active: true,
-			getActions: () => [],
-			open: () => opened.push('session:one'),
-		},
+		{ id: 'draft:one', title: 'Draft One', description: 'Draft', kind: 'draft', active: false, getActions: () => [], open: () => opened.push('draft:one') },
+		{ id: 'session:one', title: 'First Session', description: '', kind: 'session', active: true, getActions: () => [], open: () => opened.push('session:one') },
 	];
 	const model: IAgentSessionsModel = {
 		onDidChange: changed.event,
-		get items() {
-			return items;
-		},
+		get items() { return items; },
 		state: 'ready',
 		error: undefined,
 	};
@@ -45,14 +27,9 @@ test('Agent Sessions keeps visible rows through catalog updates and translates i
 	assert.ok(chinese);
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
-		using control = new AgentSessionsControl(document.window.document.body, model, {
-			showContextMenu() {},
-		} as unknown as IContextMenuService);
+		using control = new AgentSessionsControl(document.window.document.body, model, { showContextMenu() { } } as unknown as IContextMenuService);
 		assert.equal(control.domNode.querySelector<HTMLInputElement>('input')?.placeholder, '搜索会话');
-		assert.deepEqual(
-			[...control.domNode.querySelectorAll('h3')].map(heading => heading.textContent),
-			['草稿', '会话'],
-		);
+		assert.deepEqual([...control.domNode.querySelectorAll('h3')].map(heading => heading.textContent), ['草稿', '会话']);
 		const firstRow = control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row[aria-current="page"]');
 		assert.equal(firstRow?.title, 'First Session');
 		const search = control.domNode.querySelector<HTMLInputElement>('input');
@@ -77,37 +54,19 @@ test('Agent Sessions keeps visible rows through catalog updates and translates i
 	}
 });
 
+
 test('Agent Sessions exposes the captured row menu by pointer and keyboard and retains grouped rows', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using changed = new Emitter<void>();
 	let menu: IContextMenuDelegate | undefined;
 	const invoked: string[] = [];
 	let item: IAgentSessionListItem = {
-		id: 'background',
-		title: 'Background',
-		description: '',
-		kind: 'session',
-		active: false,
-		open: () => invoked.push('open'),
-		getActions: () => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => invoked.push('rename') }],
+		id: 'background', title: 'Background', description: '', kind: 'session', active: false,
+		open: () => invoked.push('open'), getActions: () => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => invoked.push('rename') }]
 	};
 	try {
-		using control = new AgentSessionsControl(
-			dom.window.document.body,
-			{
-				onDidChange: changed.event,
-				get items() {
-					return [item];
-				},
-				state: 'ready',
-				error: undefined,
-			},
-			{
-				showContextMenu: (value: IContextMenuDelegate) => {
-					menu = value;
-				},
-			} as IContextMenuService,
-		);
+		using control = new AgentSessionsControl(dom.window.document.body, { onDidChange: changed.event, get items() { return [item]; }, state: 'ready', error: undefined },
+			{ showContextMenu: (value: IContextMenuDelegate) => { menu = value; } } as IContextMenuService);
 		const row = control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row')!;
 		const more = control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-more')!;
 		more.click();
@@ -126,7 +85,5 @@ test('Agent Sessions exposes the captured row menu by pointer and keyboard and r
 		changed.fire();
 		assert.equal(control.domNode.querySelector('[data-section="group:group"] .ash-agent-session-row'), row);
 		assert.equal(control.domNode.querySelector('h3')?.textContent, 'Shared group');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });

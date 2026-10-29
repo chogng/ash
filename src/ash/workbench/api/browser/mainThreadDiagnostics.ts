@@ -10,19 +10,10 @@ export class MainThreadDiagnostics extends Disposable {
 	private readonly collections = this._register(new DisposableMap<string, IDisposable>());
 	private sources = new Set<string>();
 
-	constructor(
-		@IMarkerService private readonly markers: IMarkerService,
-		@IFileTextModelService private readonly models: IFileTextModelService,
-	) {
-		super();
-	}
+	constructor(@IMarkerService private readonly markers: IMarkerService, @IFileTextModelService private readonly models: IFileTextModelService) { super(); }
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
-		this.sources = new Set(
-			snapshot.extensions
-				.filter(runtime => runtime.lifecycle === 'ready' && runtime.incarnation !== undefined)
-				.map(runtime => JSON.stringify([runtime.id, runtime.activationGeneration, runtime.incarnation])),
-		);
+		this.sources = new Set(snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && runtime.incarnation !== undefined).map(runtime => JSON.stringify([runtime.id, runtime.activationGeneration, runtime.incarnation])));
 		for (const key of this.collections.keys()) {
 			const [source] = JSON.parse(key) as [string, string];
 			if (!this.sources.has(source)) this.collections.deleteAndDispose(key);
@@ -46,12 +37,7 @@ export class MainThreadDiagnostics extends Disposable {
 			}
 			for (const diagnostic of entry.diagnostics) {
 				const { start, end } = diagnostic;
-				if (
-					[start.line, start.character, end.line, end.character].some(value => !Number.isSafeInteger(value) || value < 0) ||
-					start.line > end.line ||
-					(start.line === end.line && start.character > end.character)
-				)
-					throw new TypeError('Invalid diagnostic UTF-16 range');
+				if ([start.line, start.character, end.line, end.character].some(value => !Number.isSafeInteger(value) || value < 0) || start.line > end.line || start.line === end.line && start.character > end.character) throw new TypeError('Invalid diagnostic UTF-16 range');
 				if (typeof diagnostic.message !== 'string' || !diagnostic.message.trim()) throw new TypeError('Diagnostic message must not be empty');
 				values.push({
 					resource,
@@ -80,8 +66,7 @@ export class MainThreadDiagnostics extends Disposable {
 		}
 		const isNew = !this.collections.has(key);
 		if (isNew) {
-			if ([...this.collections.keys()].filter(value => (JSON.parse(value) as [string, string])[0] === identity).length >= 128)
-				throw new RangeError('Extension diagnostic collection quota exceeded');
+			if ([...this.collections.keys()].filter(value => (JSON.parse(value) as [string, string])[0] === identity).length >= 128) throw new RangeError('Extension diagnostic collection quota exceeded');
 		}
 		if (merge) {
 			const retained = this.markers.read({ owner }).filter(marker => !resources.has(marker.resource.toString())).length;
@@ -97,33 +82,19 @@ export class MainThreadDiagnostics extends Disposable {
 				const resource = URI.parse(entry.uri);
 				this.markers.changeOne(owner, resource, byResource.get(resource.toString()) ?? []);
 			}
-		} else {
-			this.markers.changeAll(owner, values);
-		}
-		if (isNew)
-			this.collections.set(
-				key,
-				toDisposable(() => this.markers.changeAll(owner, [])),
-			);
+		} else { this.markers.changeAll(owner, values); }
+		if (isNew) this.collections.set(key, toDisposable(() => this.markers.changeAll(owner, [])));
 	}
 
-	public clear(): void {
-		this.collections.clearAndDisposeAll();
-		this.sources.clear();
-	}
+	public clear(): void { this.collections.clearAndDisposeAll(); this.sources.clear(); }
 }
 
 function diagnosticSeverity(value: ExtensionDiagnosticEntry['diagnostics'][number]['severity']): MarkerSeverity {
 	switch (value) {
-		case 'error':
-			return MarkerSeverity.Error;
-		case 'warning':
-			return MarkerSeverity.Warning;
-		case 'information':
-			return MarkerSeverity.Info;
-		case 'hint':
-			return MarkerSeverity.Hint;
-		default:
-			throw new TypeError('Unknown diagnostic severity');
+		case 'error': return MarkerSeverity.Error;
+		case 'warning': return MarkerSeverity.Warning;
+		case 'information': return MarkerSeverity.Info;
+		case 'hint': return MarkerSeverity.Hint;
+		default: throw new TypeError('Unknown diagnostic severity');
 	}
 }

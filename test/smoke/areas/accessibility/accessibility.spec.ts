@@ -49,22 +49,14 @@ test('accessible view help returns to the reading position before returning to n
 	await expect(text).toHaveValue(/Choose how Ash enables screen reader optimization/u);
 	await text.press('Home');
 	await text.press('ArrowRight');
-	const selection = await text.evaluate(element => ({
-		start: (element as HTMLTextAreaElement).selectionStart,
-		end: (element as HTMLTextAreaElement).selectionEnd,
-	}));
+	const selection = await text.evaluate(element => ({ start: (element as HTMLTextAreaElement).selectionStart, end: (element as HTMLTextAreaElement).selectionEnd }));
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 	await expect(help.getByRole('textbox')).toHaveValue(/Escape returns to the content/u);
 	await page.keyboard.press('Escape');
 	await expect(help).toHaveCount(0);
 	await expect(text).toBeFocused();
-	expect(
-		await text.evaluate(element => ({
-			start: (element as HTMLTextAreaElement).selectionStart,
-			end: (element as HTMLTextAreaElement).selectionEnd,
-		})),
-	).toEqual(selection);
+	expect(await text.evaluate(element => ({ start: (element as HTMLTextAreaElement).selectionStart, end: (element as HTMLTextAreaElement).selectionEnd }))).toEqual(selection);
 	await page.keyboard.press('Escape');
 	await expect(view).toHaveCount(0);
 	await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toBeVisible();
@@ -97,13 +89,7 @@ test('unfocused view dimming follows keyboard focus and preserves the focused hi
 	await settings.input.press('ControlOrMeta+A');
 	await settings.input.evaluate(element => {
 		const clipboardData = new DataTransfer();
-		clipboardData.setData(
-			'text/plain',
-			JSON.stringify({
-				'accessibility.dimUnfocused.enabled': true,
-				'accessibility.dimUnfocused.opacity': 0.4,
-			}),
-		);
+		clipboardData.setData('text/plain', JSON.stringify({ 'accessibility.dimUnfocused.enabled': true, 'accessibility.dimUnfocused.opacity': 0.4 }));
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	});
 	await settings.waitForEditorContents(contents => JSON.parse(contents)['accessibility.dimUnfocused.enabled'] === true);

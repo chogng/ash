@@ -28,11 +28,7 @@ export class DesignEditorPage extends Disposable {
 	}
 
 	public create(parent: HTMLElement): void {
-		this.editor = this._register(
-			this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) =>
-				createDesignEditorContributions(context, this.instantiationService),
-			),
-		);
+		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, this.instantiationService)));
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
 		this.editor.initialize();
@@ -44,26 +40,15 @@ export class DesignEditorPage extends Disposable {
 		updateRestoring();
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)));
 		// Desktop drains saves through the lifecycle. Browser unload only prompts for manual-save modes.
-		this._register(
-			addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {
-				if (!this.workingCopy.automaticallySaves && this.workingCopy.isDirty && !this.lifecycle.willShutdown) {
-					event.preventDefault();
-					event.returnValue = '';
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(getWindow(this.domNode), 'pagehide', () => {
-				if (this.workingCopy.automaticallySaves) {
-					void this.workingCopy.flushAutoSave();
-				}
-			}),
-		);
+		this._register(addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {
+			if (!this.workingCopy.automaticallySaves && this.workingCopy.isDirty && !this.lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
+		}));
+		this._register(addDisposableListener(getWindow(this.domNode), 'pagehide', () => {
+			if (this.workingCopy.automaticallySaves) { void this.workingCopy.flushAutoSave(); }
+		}));
 	}
 
-	public clearInput(): void {
-		this.setVisible(false);
-	}
+	public clearInput(): void { this.setVisible(false); }
 	public setVisible(visibility: boolean): void {
 		const visible = visibility;
 		this.editor.setVisible(visible);
@@ -75,16 +60,8 @@ export class DesignEditorPage extends Disposable {
 		super.disposeCore();
 		this.domNode?.remove();
 	}
-	public focus(): void {
-		this.editor.focus();
-	}
-	public layout(dimension: IDimension): void {
-		this.editor.layout(dimension);
-	}
-	public async save(): Promise<void> {
-		await this.workingCopy.save(new AbortController().signal);
-	}
-	public async saveAs(resource: URI): Promise<void> {
-		await this.workingCopy.saveAs(resource, new AbortController().signal);
-	}
+	public focus(): void { this.editor.focus(); }
+	public layout(dimension: IDimension): void { this.editor.layout(dimension); }
+	public async save(): Promise<void> { await this.workingCopy.save(new AbortController().signal); }
+	public async saveAs(resource: URI): Promise<void> { await this.workingCopy.saveAs(resource, new AbortController().signal); }
 }

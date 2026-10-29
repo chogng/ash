@@ -14,23 +14,17 @@ import { DetailedLineRangeMapping } from '../../../common/diff/rangeMapping.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { DiffTestPort } from './diffTestPort.js';
 
-const options: IDocumentDiffProviderOptions = {
-	ignoreTrimWhitespace: false,
-	maxComputationTimeMs: 0,
-	computeMoves: false,
-};
+const options: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 suite('Frontend diff Worker', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('first provider prepares one Worker and factory disposal releases an unused client', () => {
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(
-			new TestWebWorkerService(() => {
-				const port = new DiffTestPort();
-				ports.push(port);
-				return port;
-			}),
-		);
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = new DiffTestPort();
+			ports.push(port);
+			return port;
+		}));
 		assert.equal(ports.length, 0);
 		using first = factory.createDiffProvider();
 		using second = factory.createDiffProvider();
@@ -44,13 +38,11 @@ suite('Frontend diff Worker', () => {
 	test('a Worker that fails during preparation is replaced on the first computation', async () => {
 		using failures = new Emitter<unknown>();
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(
-			new TestWebWorkerService(() => {
-				const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
-				ports.push(port);
-				return port;
-			}),
-		);
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
+			ports.push(port);
+			return port;
+		}));
 		using provider = factory.createDiffProvider();
 		failures.fire(new Error('Preparation failed'));
 		using original = new TextModel('old');
@@ -62,13 +54,11 @@ suite('Frontend diff Worker', () => {
 	test('shared Worker failure rejects pending work and allows the next comparison to recover', async () => {
 		using failures = new Emitter<unknown>();
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(
-			new TestWebWorkerService(() => {
-				const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
-				ports.push(port);
-				return port;
-			}),
-		);
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
+			ports.push(port);
+			return port;
+		}));
 		using provider = factory.createDiffProvider();
 		using original = new TextModel('old');
 		using modified = new TextModel('new');
@@ -82,13 +72,11 @@ suite('Frontend diff Worker', () => {
 	});
 	test('factory reuses its Worker across disposed providers while cancelling only their own requests', async () => {
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(
-			new TestWebWorkerService(() => {
-				const port = new DiffTestPort();
-				ports.push(port);
-				return port;
-			}),
-		);
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = new DiffTestPort();
+			ports.push(port);
+			return port;
+		}));
 		using first = factory.createDiffProvider();
 		using second = factory.createDiffProvider();
 		using original = new TextModel('old');
@@ -114,37 +102,25 @@ suite('Frontend diff Worker', () => {
 	});
 	test('uses the same frontend provider for concurrent comparisons', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
-		const [first, second] = await Promise.all([compute(service, 'before 😀 after', 'before 🤖 after'), compute(service, 'same\n', 'same')]);
+		const [first, second] = await Promise.all([
+			compute(service, 'before 😀 after', 'before 🤖 after'),
+			compute(service, 'same\n', 'same'),
+		]);
 		assert.equal(first.identical, false);
 		assert.equal(first.quitEarly, false);
-		assert.deepEqual(
-			first.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn]),
-			[[8, 10]],
-		);
+		assert.deepEqual(first.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn]), [[8, 10]]);
 		assert.ok(first.changes[0] instanceof DetailedLineRangeMapping);
 		assert.equal(first.changes[0]!.flip().original.startLineNumber, 1);
-		assert.deepEqual(
-			second.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber]),
-			[[2, 3, 2]],
-		);
+		assert.deepEqual(second.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber]), [[2, 3, 2]]);
 	});
 
 	test('applies provider options while keeping whitespace-only changes non-identical', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
-		const ignoredWhitespace = await compute(service, '  same  ', 'same', {
-			...options,
-			ignoreTrimWhitespace: true,
-		});
+		const ignoredWhitespace = await compute(service, '  same  ', 'same', { ...options, ignoreTrimWhitespace: true });
 		assert.deepEqual(ignoredWhitespace.changes, []);
 		assert.equal(ignoredWhitespace.identical, false);
-		const moved = await compute(service, 'move\nstay one\nstay two', 'stay one\nstay two\nmove', {
-			...options,
-			computeMoves: true,
-		});
-		assert.deepEqual(
-			moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]),
-			[[1, 3]],
-		);
+		const moved = await compute(service, 'move\nstay one\nstay two', 'stay one\nstay two\nmove', { ...options, computeMoves: true });
+		assert.deepEqual(moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]), [[1, 3]]);
 	});
 
 	test('compares logical lines when document line endings differ', async () => {
@@ -154,14 +130,18 @@ suite('Frontend diff Worker', () => {
 
 		const changed = await compute(service, 'first\r\nold\r\nlast', 'first\nnew\nlast');
 		assert.equal(changed.identical, false);
-		assert.deepEqual(
-			changed.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber, change.modified.endLineNumberExclusive]),
-			[[2, 3, 2, 3]],
-		);
-		assert.deepEqual(
-			changed.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn, change.modifiedRange.startColumn, change.modifiedRange.endColumn]),
-			[[1, 4, 1, 4]],
-		);
+		assert.deepEqual(changed.changes.map(change => [
+			change.original.startLineNumber,
+			change.original.endLineNumberExclusive,
+			change.modified.startLineNumber,
+			change.modified.endLineNumberExclusive,
+		]), [[2, 3, 2, 3]]);
+		assert.deepEqual(changed.changes[0]!.innerChanges?.map(change => [
+			change.originalRange.startColumn,
+			change.originalRange.endColumn,
+			change.modifiedRange.startColumn,
+			change.modifiedRange.endColumn,
+		]), [[1, 4, 1, 4]]);
 	});
 
 	test('cancels one comparison without discarding a newer result', async () => {
@@ -183,20 +163,12 @@ suite('Frontend diff Worker', () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		const block = ['function load(input) {', '  return parse(input);', '}'];
 		const stay = Array.from({ length: 5 }, (_, index) => `stay ${index}`);
-		const result = await compute(
-			service,
-			['head', ...block, ...stay, 'tail'].join('\n'),
-			['head', ...stay, ...block.map(line => line.replace('parse(input)', 'parse(updated)')), 'tail'].join('\n'),
-			{ ...options, computeMoves: true },
-		);
-		assert.deepEqual(
-			result.moves.map(move => ({
-				original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
-				modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
-				changes: move.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
-			})),
-			[{ original: [2, 5], modified: [7, 10], changes: [[3, 8]] }],
-		);
+		const result = await compute(service, ['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...block.map(line => line.replace('parse(input)', 'parse(updated)')), 'tail'].join('\n'), { ...options, computeMoves: true });
+		assert.deepEqual(result.moves.map(move => ({
+			original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+			modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
+			changes: move.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
+		})), [{ original: [2, 5], modified: [7, 10], changes: [[3, 8]] }]);
 		assert.ok(result.moves[0]!.changes[0] instanceof DetailedLineRangeMapping);
 	});
 
@@ -214,20 +186,14 @@ suite('Frontend diff Worker', () => {
 	});
 
 	test('an already cancelled call never creates a Worker', async () => {
-		using service = new WorkerDiffComputationService(() => {
-			throw new Error('must not start');
-		});
+		using service = new WorkerDiffComputationService(() => { throw new Error('must not start'); });
 		using original = new TextModel('');
 		using modified = new TextModel('');
-		await assert.rejects(service.computeDiff(original, modified, options, CancellationToken.Cancelled), {
-			name: 'CancellationError',
-		});
+		await assert.rejects(service.computeDiff(original, modified, options, CancellationToken.Cancelled), { name: 'CancellationError' });
 	});
 
 	test('identical documents return the standard empty result without creating a Worker', async () => {
-		using service = new WorkerDiffComputationService(() => {
-			throw new Error('must not start');
-		});
+		using service = new WorkerDiffComputationService(() => { throw new Error('must not start'); });
 		const result = await compute(service, 'same', 'same');
 		assert.deepEqual(result, { identical: true, quitEarly: false, changes: [], moves: [] });
 	});
@@ -235,8 +201,7 @@ suite('Frontend diff Worker', () => {
 	test('rejects malformed Worker options and keeps independent requests usable', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		await assert.rejects(compute(service, 'old', 'new', { ...options, maxComputationTimeMs: Number.NaN }), {
-			name: 'WebWorkerRemoteError',
-			message: 'Invalid editor diff request',
+			name: 'WebWorkerRemoteError', message: 'Invalid editor diff request',
 		});
 		const next = await compute(service, '', '');
 		assert.deepEqual(next.changes, []);
@@ -244,39 +209,18 @@ suite('Frontend diff Worker', () => {
 	});
 
 	test('rejects out-of-range standard mappings returned by a Worker', () => {
-		assert.throws(
-			() =>
-				readDiffResult(
-					{
-						changes: [
-							{
-								original: { startLineNumber: 1, endLineNumberExclusive: 2 },
-								modified: { startLineNumber: 1, endLineNumberExclusive: 2 },
-								innerChanges: [
-									{
-										originalRange: {
-											startLineNumber: 1,
-											startColumn: 1,
-											endLineNumber: 1,
-											endColumn: 10,
-										},
-										modifiedRange: {
-											startLineNumber: 1,
-											startColumn: 1,
-											endLineNumber: 1,
-											endColumn: 4,
-										},
-									},
-								],
-							},
-						],
-						moves: [],
-						hitTimeout: false,
-					},
-					request('old', 'new'),
-				),
-			/Invalid editor diff text range/,
-		);
+		assert.throws(() => readDiffResult({
+			changes: [{
+				original: { startLineNumber: 1, endLineNumberExclusive: 2 },
+				modified: { startLineNumber: 1, endLineNumberExclusive: 2 },
+				innerChanges: [{
+					originalRange: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 10 },
+					modifiedRange: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 4 },
+				}],
+			}],
+			moves: [],
+			hitTimeout: false,
+		}, request('old', 'new')), /Invalid editor diff text range/);
 	});
 
 	test('publishes only the latest unsaved TextModel versions', async () => {
@@ -296,10 +240,7 @@ suite('Frontend diff Worker', () => {
 		});
 		assert.equal(model.state.modifiedVersion, modified.version);
 		assert.equal(modified.getText(), 'current 😀');
-		assert.deepEqual(
-			Array.from(model.diff!.rows).map(row => row.kind),
-			['modified'],
-		);
+		assert.deepEqual(Array.from(model.diff!.rows).map(row => row.kind), ['modified']);
 	});
 });
 

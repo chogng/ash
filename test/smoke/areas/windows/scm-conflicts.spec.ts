@@ -36,9 +36,7 @@ test('SCM opens a three-way merge editor and stages the saved manual resolution'
 	await expect(group.content.getByRole('heading', { name: 'Base' })).toBeVisible();
 	await expect(group.content.locator('.ash-merge-inline-actions')).toHaveCount(4);
 	await page.getByRole('button', { name: 'Use Columns' }).click();
-	const columnPositions = await Promise.all(
-		['.ash-merge-input-current', '.ash-merge-result', '.ash-merge-input-incoming'].map(selector => group.content.locator(selector).evaluate(node => node.getBoundingClientRect().left)),
-	);
+	const columnPositions = await Promise.all(['.ash-merge-input-current', '.ash-merge-result', '.ash-merge-input-incoming'].map(selector => group.content.locator(selector).evaluate(node => node.getBoundingClientRect().left)));
 	expect(columnPositions[0]).toBeLessThan(columnPositions[1]);
 	expect(columnPositions[1]).toBeLessThan(columnPositions[2]);
 	await page.getByRole('button', { name: 'Use Stacked Layout' }).click();
@@ -85,7 +83,7 @@ test('SCM accepts an incoming conflict block and completes the merge', { tag: ['
 	await page.getByRole('button', { name: 'Complete Merge' }).click();
 	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
-	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 2;\n');
+	expect((await readFile(testWorkspace.file, 'utf8'))).toBe('const value = 2;\n');
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 2;\n');
 });
 
@@ -199,12 +197,7 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await writeFile(testWorkspace.file, `${currentLines.join('\n')}\n`);
 	await run('git', ['add', 'main.ts'], { cwd });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Long main'], { cwd });
-	await run('git', ['merge', 'topic'], { cwd }).then(
-		() => {
-			throw new Error('Expected text conflict');
-		},
-		() => undefined,
-	);
+	await run('git', ['merge', 'topic'], { cwd }).then(() => { throw new Error('Expected text conflict'); }, () => undefined);
 
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
@@ -217,48 +210,33 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		await expect(editor).toBeVisible();
 		expect(await editor.evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThan(0);
 	}
-	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => {
-		node.scrollTop = 600;
-		node.dispatchEvent(new Event('scroll'));
-	});
+	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => { node.scrollTop = 600; node.dispatchEvent(new Event('scroll')); });
 	await expect.poll(async () => Promise.all(editors.map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)))).toEqual([600, 600, 600]);
 	await page.getByRole('button', { name: 'Show Base' }).click();
 	const baseEditor = group.content.locator('.ash-merge-input-base .stanza-editor');
 	await expect(baseEditor).toBeVisible();
 	await expect.poll(async () => baseEditor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)).toBe(600);
 	await page.getByRole('button', { name: 'Conflict 1' }).click();
-	const alignedTops = await Promise.all(
-		['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector =>
-			group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
-				const editor = node.closest('.stanza-editor')!;
-				return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
-			}),
-		),
-	);
+	const alignedTops = await Promise.all(['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector => group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
+		const editor = node.closest('.stanza-editor')!;
+		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+	})));
 	expect(Math.max(...alignedTops) - Math.min(...alignedTops)).toBeLessThan(2);
 	const pairedLines = [
 		['base', 'const middle = 1;'],
 		['current', 'const middle = 1;'],
 		['incoming', 'const middle = 2;'],
 	] as const;
-	const pairedTops = await Promise.all(
-		pairedLines.map(([side, content]) =>
-			group.content.locator(`.ash-merge-input-${side} .view-line`, { hasText: content }).evaluate(node => {
-				const editor = node.closest('.stanza-editor')!;
-				return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
-			}),
-		),
-	);
+	const pairedTops = await Promise.all(pairedLines.map(([side, content]) => group.content.locator(`.ash-merge-input-${side} .view-line`, { hasText: content }).evaluate(node => {
+		const editor = node.closest('.stanza-editor')!;
+		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+	})));
 	expect(Math.max(...pairedTops) - Math.min(...pairedTops)).toBeLessThan(2);
 	const readActionTopSpread = async (): Promise<number> => {
-		const tops = await Promise.all(
-			['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector =>
-				group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
-					const editor = node.closest('.stanza-editor')!;
-					return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
-				}),
-			),
-		);
+		const tops = await Promise.all(['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector => group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
+			const editor = node.closest('.stanza-editor')!;
+			return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+		})));
 		return Math.max(...tops) - Math.min(...tops);
 	};
 	await group.content.locator('.ash-merge-result-editor .stanza-editor-input').focus();
@@ -285,12 +263,10 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		node.scrollTop += line.getBoundingClientRect().top - node.getBoundingClientRect().top + 8;
 		node.dispatchEvent(new Event('scroll'));
 	});
-	await expect
-		.poll(async () => {
-			const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)));
-			return Math.max(...scrollTops) - Math.min(...scrollTops);
-		})
-		.toBeLessThan(2);
+	await expect.poll(async () => {
+		const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)));
+		return Math.max(...scrollTops) - Math.min(...scrollTops);
+	}).toBeLessThan(2);
 	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate((node, scrollTop) => {
 		node.scrollTop = scrollTop;
 		node.dispatchEvent(new Event('scroll'));
@@ -299,17 +275,13 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]').getByRole('button', { name: 'Accept Current' }).click();
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 2 conflicts resolved');
 	await page.getByRole('button', { name: 'Conflict 1' }).click();
-	const resolvedLines = await Promise.all(
-		[
-			group.content.locator('.ash-merge-input-current .view-line', { hasText: 'const middle = 1;' }),
-			group.content.locator('.ash-merge-result-editor .view-line', { hasText: 'const middle = 1;' }),
-		].map(line =>
-			line.evaluate(node => {
-				const editor = node.closest('.stanza-editor')!;
-				return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
-			}),
-		),
-	);
+	const resolvedLines = await Promise.all([
+		group.content.locator('.ash-merge-input-current .view-line', { hasText: 'const middle = 1;' }),
+		group.content.locator('.ash-merge-result-editor .view-line', { hasText: 'const middle = 1;' }),
+	].map(line => line.evaluate(node => {
+		const editor = node.closest('.stanza-editor')!;
+		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
+	})));
 	expect(Math.abs(resolvedLines[0] - resolvedLines[1])).toBeLessThan(2);
 	await page.getByRole('button', { name: 'Next Unresolved' }).click();
 	await expect(group.content.locator('.ash-merge-hunk').nth(1)).toHaveClass(/active/);
@@ -332,7 +304,7 @@ test('SCM resolves a non-text result by choosing the whole current file', { tag:
 	await page.getByRole('button', { name: 'Use Current File' }).click();
 	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
-	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
+	expect((await readFile(testWorkspace.file, 'utf8'))).toBe('const value = 3;\n');
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 3;\n');
 });
 
@@ -342,12 +314,7 @@ test('SCM can keep a deleted side of a modify/delete conflict', { tag: ['@electr
 	await run('git', ['rm', 'main.ts'], { cwd: testWorkspace.directory });
 	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Delete file'], { cwd: testWorkspace.directory });
 	await run('git', ['switch', 'main'], { cwd: testWorkspace.directory });
-	await run('git', ['merge', 'topic'], { cwd: testWorkspace.directory }).then(
-		() => {
-			throw new Error('Expected modify/delete conflict');
-		},
-		() => undefined,
-	);
+	await run('git', ['merge', 'topic'], { cwd: testWorkspace.directory }).then(() => { throw new Error('Expected modify/delete conflict'); }, () => undefined);
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();

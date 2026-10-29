@@ -13,17 +13,13 @@ export class SessionsModernUIContribution extends Disposable {
 	) {
 		super();
 		this.update();
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(SessionsConfiguration.layoutStyle)) this.update();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				container.removeAttribute('data-layout-style');
-				container.classList.remove('modern-ui');
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.layoutStyle)) this.update();
+		}));
+		this._register(toDisposable(() => {
+			container.removeAttribute('data-layout-style');
+			container.classList.remove('modern-ui');
+		}));
 	}
 
 	private update(): void {

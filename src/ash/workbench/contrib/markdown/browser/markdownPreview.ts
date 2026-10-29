@@ -2,9 +2,20 @@ import { DEFAULT_FONT_FAMILY } from '../../../../base/browser/fonts.js';
 import { getWindow, h } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { dirname } from '../../../../base/common/resources.js';
-import { isSafeMarkdownLink, renderWorkbenchMarkdown, sanitizeMarkdownHtmlToString } from '../../../../base/browser/markdownRenderer.js';
-import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	isSafeMarkdownLink,
+	renderWorkbenchMarkdown,
+	sanitizeMarkdownHtmlToString,
+} from '../../../../base/browser/markdownRenderer.js';
+import {
+	Emitter,
+	type Event,
+} from '../../../../base/common/event.js';
+import {
+	Disposable,
+
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWebviewService, type IWebviewElement } from '../../webview/browser/webview.js';
 import { asWebviewUri } from '../../webview/common/webview.js';
@@ -116,25 +127,19 @@ export class MarkdownPreview extends Disposable {
 		super();
 		this.ownerDocument = container.ownerDocument;
 		this.baseUri = options.baseUri;
-		this.webview = this._register(
-			webviews.createWebviewElement({
-				title: options.title ?? 'Markdown preview',
-				options: {},
-				contentOptions: { allowScripts: true, localResourceRoots: this.baseUri ? [dirname(this.baseUri)] : [] },
-			}),
-		);
+		this.webview = this._register(webviews.createWebviewElement({
+			title: options.title ?? 'Markdown preview',
+			options: {},
+			contentOptions: { allowScripts: true, localResourceRoots: this.baseUri ? [dirname(this.baseUri)] : [] },
+		}));
 		this.element = this.webview.element;
-		this._register(
-			this.webview.onMessage(({ message }) => {
-				const openLink = validateOpenLinkMessage(message, this.baseUri);
-				if (openLink) this._onDidOpenLink.fire(openLink.href);
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.active = false;
-			}),
-		);
+		this._register(this.webview.onMessage(({ message }) => {
+			const openLink = validateOpenLinkMessage(message, this.baseUri);
+			if (openLink) this._onDidOpenLink.fire(openLink.href);
+		}));
+		this._register(toDisposable(() => {
+			this.active = false;
+		}));
 		this.setMarkdown(options.markdown ?? '');
 		this.webview.mountTo(container, getWindow(container));
 	}
@@ -154,13 +159,10 @@ export class MarkdownPreview extends Disposable {
 			...(this.baseUri ? { baseUri: this.baseUri } : {}),
 		};
 		const parserHtml = renderWorkbenchMarkdown(markdownContent, true);
-		const safeHtml = sanitizeMarkdownHtmlToString(
-			{
-				ownerDocument: this.ownerDocument,
-				markdown: markdownContent,
-			},
-			parserHtml,
-		);
+		const safeHtml = sanitizeMarkdownHtmlToString({
+			ownerDocument: this.ownerDocument,
+			markdown: markdownContent,
+		}, parserHtml);
 		const content = h(mainWindow.document, 'template');
 		content.innerHTML = safeHtml;
 		for (const image of content.content.querySelectorAll('img[src]')) {
@@ -169,7 +171,11 @@ export class MarkdownPreview extends Disposable {
 				image.setAttribute('src', asWebviewUri(URI.parse(source)).toString());
 			}
 		}
-		this.webview.setHtml(`<style>${PREVIEW_STYLE}</style>` + `<main class="ash-markdown-preview">${content.innerHTML}</main>` + `<script>${LINK_BRIDGE_SCRIPT}</script>`);
+		this.webview.setHtml(
+			`<style>${PREVIEW_STYLE}</style>` +
+			`<main class="ash-markdown-preview">${content.innerHTML}</main>` +
+			`<script>${LINK_BRIDGE_SCRIPT}</script>`,
+		);
 	}
 
 	focus(): void {
@@ -184,7 +190,10 @@ export class MarkdownPreview extends Disposable {
 	}
 }
 
-function validateOpenLinkMessage(message: unknown, baseUri?: URI): OpenLinkMessage | undefined {
+function validateOpenLinkMessage(
+	message: unknown,
+	baseUri?: URI,
+): OpenLinkMessage | undefined {
 	if (typeof message !== 'object' || message === null) return undefined;
 	const candidate = message as Record<string, unknown>;
 	if (

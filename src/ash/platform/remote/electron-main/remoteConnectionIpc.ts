@@ -31,33 +31,27 @@ export function remoteConnectionIpcRoutes(service: IRemoteConnectionApi): readon
 			channel: REMOTE_CONNECTION_CONNECT_CHANNEL,
 			validate: connectParams,
 			invoke: params => {
-				const request = params as {
-					readonly name: string;
-					readonly expectedConnection?: RemoteConnectionDefinition;
-				};
+				const request = params as { readonly name: string; readonly expectedConnection?: RemoteConnectionDefinition; };
 				return service.connect(request.name, request.expectedConnection);
 			},
 		},
 		{
 			channel: REMOTE_CONNECTION_SAVE_CHANNEL,
 			validate: saveParams,
-			invoke: params => service.save((params as { readonly connection: RemoteConnectionDefinition }).connection),
+			invoke: params => service.save((params as { readonly connection: RemoteConnectionDefinition; }).connection),
 		},
 		{
 			channel: REMOTE_CONNECTION_UPDATE_CHANNEL,
 			validate: updateParams,
 			invoke: params => {
-				const request = params as {
-					readonly originalName: string;
-					readonly connection: RemoteConnectionDefinition;
-				};
+				const request = params as { readonly originalName: string; readonly connection: RemoteConnectionDefinition; };
 				return service.update(request.originalName, request.connection);
 			},
 		},
 		{
 			channel: REMOTE_CONNECTION_REMOVE_CHANNEL,
 			validate: namedParams,
-			invoke: params => service.remove((params as { readonly name: string }).name),
+			invoke: params => service.remove((params as { readonly name: string; }).name),
 		},
 	];
 }
@@ -67,15 +61,12 @@ function emptyParams(value: unknown): undefined {
 	return undefined;
 }
 
-function namedParams(value: unknown): { readonly name: string } {
+function namedParams(value: unknown): { readonly name: string; } {
 	const params = record(value, ['name']);
 	return { name: canonicalRemoteConnectionName(boundedString(params.name, 'name', 64)) };
 }
 
-function connectParams(value: unknown): {
-	readonly name: string;
-	readonly expectedConnection?: RemoteConnectionDefinition;
-} {
+function connectParams(value: unknown): { readonly name: string; readonly expectedConnection?: RemoteConnectionDefinition; } {
 	const hasExpected = typeof value === 'object' && value !== null && Object.hasOwn(value, 'expectedConnection');
 	const params = record(value, hasExpected ? ['name', 'expectedConnection'] : ['name']);
 	const name = canonicalRemoteConnectionName(boundedString(params.name, 'name', 64));
@@ -85,15 +76,12 @@ function connectParams(value: unknown): {
 	return { name, expectedConnection };
 }
 
-function saveParams(value: unknown): { readonly connection: RemoteConnectionDefinition } {
+function saveParams(value: unknown): { readonly connection: RemoteConnectionDefinition; } {
 	const params = record(value, ['connection']);
 	return { connection: connectionDefinition(params.connection) };
 }
 
-function updateParams(value: unknown): {
-	readonly originalName: string;
-	readonly connection: RemoteConnectionDefinition;
-} {
+function updateParams(value: unknown): { readonly originalName: string; readonly connection: RemoteConnectionDefinition; } {
 	const params = record(value, ['originalName', 'connection']);
 	return {
 		originalName: canonicalRemoteConnectionName(boundedString(params.originalName, 'originalName', 64)),
@@ -129,34 +117,27 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 	}
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
-		return [
-			{
-				channel: REMOTE_AGENT_HOST_OPEN_CHANNEL,
-				validate: value => {
-					const params = record(value, ['id', 'connection']);
-					return { id: connectionLeaseId(params.id), connection: connectionDefinition(params.connection) };
-				},
-				invoke: value => {
-					const request = value as { readonly id: string; readonly connection: RemoteConnectionDefinition };
-					return this.open(request.id, request.connection);
-				},
+		return [{
+			channel: REMOTE_AGENT_HOST_OPEN_CHANNEL,
+			validate: value => {
+				const params = record(value, ['id', 'connection']);
+				return { id: connectionLeaseId(params.id), connection: connectionDefinition(params.connection) };
 			},
-			{
-				channel: REMOTE_AGENT_HOST_CLOSE_CHANNEL,
-				validate: value => connectionLeaseId(record(value, ['id']).id),
-				invoke: value => this.close(value as string),
+			invoke: value => {
+				const request = value as { readonly id: string; readonly connection: RemoteConnectionDefinition; };
+				return this.open(request.id, request.connection);
 			},
-		];
+		}, {
+			channel: REMOTE_AGENT_HOST_CLOSE_CHANNEL,
+			validate: value => connectionLeaseId(record(value, ['id']).id),
+			invoke: value => this.close(value as string),
+		}];
 	}
 
 	private async open(id: string, expected: RemoteConnectionDefinition): Promise<void> {
 		this.assertNotDisposed();
-		if (this.leases.has(id)) {
-			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists'));
-		}
-		if (this.leases.size >= 16) {
-			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections'));
-		}
+		if (this.leases.has(id)) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists')); }
+		if (this.leases.size >= 16) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections')); }
 		const resources = new DisposableStore();
 		const cancellation = new AbortController();
 		resources.add(toDisposable(() => cancellation.abort()));
@@ -165,17 +146,13 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		try {
 			// Retiring a lease must settle its OPEN route even if the old catalog connection never replies.
 			const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(connection => connection.name === expected.name);
-			if (this.isDisposed || this.leases.get(id) !== resources) {
-				throw canceled();
-			}
+			if (this.isDisposed || this.leases.get(id) !== resources) { throw canceled(); }
 			if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
 				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));
 			}
 			resources.add(this.createConnection(actual, id));
 		} catch (error) {
-			if (this.leases.get(id) === resources) {
-				this.close(id);
-			}
+			if (this.leases.get(id) === resources) { this.close(id); }
 			throw error;
 		}
 	}
@@ -188,9 +165,7 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 
 	/** A new document cannot acquire or release a predecessor's carriers. */
 	public reset(): void {
-		for (const id of this.leases.keys()) {
-			this.close(id);
-		}
+		for (const id of this.leases.keys()) { this.close(id); }
 	}
 }
 

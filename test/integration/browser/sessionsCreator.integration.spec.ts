@@ -8,9 +8,7 @@ const test = base.extend({
 	page: async ({ page }, use) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
-		page.on('console', message => {
-			if (message.type() === 'error') errors.push(message.text());
-		});
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 		await page.goto('/sessions.html?creator');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await use(page);
@@ -22,103 +20,50 @@ const test = base.extend({
 test('Sessions Prototype expressions, ordered conditional actions and custom springs run without changing variables', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]');
-	const prototype = properties.locator('.ash-prototype-properties'),
-		resources = properties.locator('.ash-design-resources');
-	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'),
-		layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	const prototype = properties.locator('.ash-prototype-properties'), resources = properties.locator('.ash-design-resources');
+	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), layers = page.getByRole('tree', { name: 'Layers', exact: true });
 	for (const name of ['Home', 'Cart', 'Empty', 'Confirmation']) {
 		await workspace.getByRole('button', { name: 'Add screen', exact: true }).click();
-		const input = properties.getByRole('textbox', { name: 'Layer name', exact: true });
-		await input.fill(name);
-		await input.press('Tab');
+		const input = properties.getByRole('textbox', { name: 'Layer name', exact: true }); await input.fill(name); await input.press('Tab');
 	}
 	await layers.getByRole('treeitem', { name: 'Home', exact: true }).click();
-	await resources.locator(':scope > summary').click();
-	await resources.locator('[data-resource-section="variables"] > summary').click();
+	await resources.locator(':scope > summary').click(); await resources.locator('[data-resource-section="variables"] > summary').click();
 	await resources.getByRole('button', { name: 'Create collection', exact: true }).click();
 	await resources.getByRole('combobox', { name: 'Variable type', exact: true }).selectOption('number');
 	await resources.getByRole('button', { name: 'Create variable', exact: true }).click();
-	const name = resources.getByRole('textbox', { name: 'Variable name', exact: true });
-	await name.fill('count');
-	await name.press('Tab');
-	const initial = resources.getByRole('spinbutton', { name: 'Default: value', exact: true });
-	await initial.fill('0');
-	await initial.press('Tab');
+	const name = resources.getByRole('textbox', { name: 'Variable name', exact: true }); await name.fill('count'); await name.press('Tab');
+	const initial = resources.getByRole('spinbutton', { name: 'Default: value', exact: true }); await initial.fill('0'); await initial.press('Tab');
 	await resources.locator(':scope > summary').click();
 	const control = (key: string) => prototype.locator(`[data-prototype-control="${key}"]`);
-	const choose = async (key: string, value: string): Promise<void> => {
-		await control(key).selectOption(value);
-	};
-	const field = async (key: string, value: string): Promise<void> => {
-		await control(key).fill(value);
-		await control(key).press('Tab');
-	};
-	await control('add').click();
-	await choose('actions.0.action', 'setVariable');
-	await field('actions.0.value', 'count + 1');
-	await control('actions.add').click();
-	await choose('actions.1.action', 'conditional');
-	await field('actions.1.branch.0.condition', 'count == 1');
-	await control('actions.1.branch.0.add').click();
-	await choose('actions.1.branch.0.0.action', 'navigate');
-	await control('actions.1.branch.0.0.destination').selectOption({ label: 'Cart' });
-	await choose('actions.1.branch.0.0.transition', 'smart');
-	await choose('actions.1.branch.0.0.easing', 'spring');
-	await field('actions.1.branch.0.0.mass', '1.5');
-	await field('actions.1.branch.0.0.damping', '14');
+	const choose = async (key: string, value: string): Promise<void> => { await control(key).selectOption(value); };
+	const field = async (key: string, value: string): Promise<void> => { await control(key).fill(value); await control(key).press('Tab'); };
+	await control('add').click(); await choose('actions.0.action', 'setVariable'); await field('actions.0.value', 'count + 1');
+	await control('actions.add').click(); await choose('actions.1.action', 'conditional'); await field('actions.1.branch.0.condition', 'count == 1');
+	await control('actions.1.branch.0.add').click(); await choose('actions.1.branch.0.0.action', 'navigate'); await control('actions.1.branch.0.0.destination').selectOption({ label: 'Cart' });
+	await choose('actions.1.branch.0.0.transition', 'smart'); await choose('actions.1.branch.0.0.easing', 'spring'); await field('actions.1.branch.0.0.mass', '1.5'); await field('actions.1.branch.0.0.damping', '14');
 	await expect(prototype.getByRole('img', { name: /Spring curve/u })).toBeVisible();
-	await control('actions.1.branch.0.0.damping').focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/animations run in sequence.*Custom spring/u);
-	await page.keyboard.press('Escape');
-	await control('actions.1.branch.0.0.mass').scrollIntoViewIfNeeded();
-	await page.screenshot({ path: testInfo.outputPath('prototype-custom-spring.png') });
-	await control('actions.1.branch.1.add').click();
-	await choose('actions.1.branch.1.0.action', 'navigate');
-	await control('actions.1.branch.1.0.destination').selectOption({ label: 'Empty' });
-	await control('actions.add').click();
-	await choose('actions.2.action', 'overlay');
-	await control('actions.2.destination').selectOption({ label: 'Confirmation' });
+	await control('actions.1.branch.0.0.damping').focus(); await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/animations run in sequence.*Custom spring/u); await page.keyboard.press('Escape');
+	await control('actions.1.branch.0.0.mass').scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath('prototype-custom-spring.png') });
+	await control('actions.1.branch.1.add').click(); await choose('actions.1.branch.1.0.action', 'navigate'); await control('actions.1.branch.1.0.destination').selectOption({ label: 'Empty' });
+	await control('actions.add').click(); await choose('actions.2.action', 'overlay'); await control('actions.2.destination').selectOption({ label: 'Confirmation' });
 	const homeId = await canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]').nth(0).getAttribute('data-shape-id');
-	const cartId = await control('actions.1.branch.0.0.destination').inputValue(),
-		emptyId = await control('actions.1.branch.1.0.destination').inputValue(),
-		confirmationId = await control('actions.2.destination').inputValue();
+	const cartId = await control('actions.1.branch.0.0.destination').inputValue(), emptyId = await control('actions.1.branch.1.0.destination').inputValue(), confirmationId = await control('actions.2.destination').inputValue();
 	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click();
-	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true }),
-		scene = preview.locator('.ash-prototype-preview-scene');
-	const activate = async (): Promise<void> => {
-		await preview.getByRole('button', { name: /Home: On click/u }).focus();
-		await page.keyboard.press('Enter');
-		await expect(scene).toHaveAttribute('data-screen-id', confirmationId);
-	};
-	await activate();
-	await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', cartId);
-	await preview.focus();
-	await page.keyboard.press('Escape');
-	await preview.getByRole('button', { name: 'Back', exact: true }).click();
-	await expect(scene).toHaveAttribute('data-screen-id', homeId!);
-	await activate();
-	await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', emptyId);
-	await preview.getByRole('button', { name: 'Restart flow', exact: true }).click();
-	await activate();
-	await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', cartId);
+	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true }), scene = preview.locator('.ash-prototype-preview-scene');
+	const activate = async (): Promise<void> => { await preview.getByRole('button', { name: /Home: On click/u }).focus(); await page.keyboard.press('Enter'); await expect(scene).toHaveAttribute('data-screen-id', confirmationId); };
+	await activate(); await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', cartId);
+	await preview.focus(); await page.keyboard.press('Escape'); await preview.getByRole('button', { name: 'Back', exact: true }).click(); await expect(scene).toHaveAttribute('data-screen-id', homeId!);
+	await activate(); await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', emptyId);
+	await preview.getByRole('button', { name: 'Restart flow', exact: true }).click(); await activate(); await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', cartId);
 	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
-	await control('actions.0.down').click();
-	await page.emulateMedia({ reducedMotion: 'reduce' });
-	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click();
-	await activate();
-	await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', emptyId);
-	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
-	await canvas.press('ControlOrMeta+z');
-	await field('actions.1.branch.0.condition', 'count + true');
-	await expect(control('actions.1.branch.0.condition')).toHaveAttribute('aria-invalid', 'true');
-	await field('actions.1.branch.0.condition', 'count == 1');
-	await control('actions.1.branch.0.condition').scrollIntoViewIfNeeded();
-	await page.screenshot({ path: testInfo.outputPath('prototype-conditional-actions.png') });
-	await resources.locator(':scope > summary').click();
-	await expect(resources.getByRole('spinbutton', { name: 'Default: value', exact: true })).toHaveValue('0');
+	await control('actions.0.down').click(); await page.emulateMedia({ reducedMotion: 'reduce' });
+	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click(); await activate(); await expect(scene.locator(':scope > svg')).toHaveAttribute('data-shape-id', emptyId);
+	await preview.getByRole('button', { name: 'Close preview', exact: true }).click(); await canvas.press('ControlOrMeta+z');
+	await field('actions.1.branch.0.condition', 'count + true'); await expect(control('actions.1.branch.0.condition')).toHaveAttribute('aria-invalid', 'true');
+	await field('actions.1.branch.0.condition', 'count == 1'); await control('actions.1.branch.0.condition').scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath('prototype-conditional-actions.png') });
+	await resources.locator(':scope > summary').click(); await expect(resources.getByRole('spinbutton', { name: 'Default: value', exact: true })).toHaveValue('0');
 });
 
 test('Sessions Prototype connects screens by dragging and plays transitions, branches and overlays', async ({ page }, testInfo) => {
@@ -131,104 +76,61 @@ test('Sessions Prototype connects screens by dragging and plays transitions, bra
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]');
 	for (const name of ['Home', 'Detail']) {
 		await workspace.getByRole('button', { name: 'Add screen', exact: true }).click();
-		const input = properties.getByRole('textbox', { name: 'Layer name', exact: true });
-		await input.fill(name);
-		await input.press('Tab');
-		for (const [field, value] of [
-			['Width', '180'],
-			['Height', '300'],
-		]) {
-			const size = properties.getByRole('spinbutton', { name: field, exact: true });
-			await size.fill(value);
-			await size.press('Tab');
-		}
+		const input = properties.getByRole('textbox', { name: 'Layer name', exact: true }); await input.fill(name); await input.press('Tab');
+		for (const [field, value] of [['Width', '180'], ['Height', '300']]) { const size = properties.getByRole('spinbutton', { name: field, exact: true }); await size.fill(value); await size.press('Tab'); }
 	}
 	await layers.getByRole('treeitem', { name: 'Home', exact: true }).click();
 	await canvas.press('0');
 	const roots = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
-	const homeId = await roots.nth(0).getAttribute('data-shape-id');
-	const detailId = await roots.nth(1).getAttribute('data-shape-id');
+	const homeId = await roots.nth(0).getAttribute('data-shape-id'); const detailId = await roots.nth(1).getAttribute('data-shape-id');
 	const handle = canvas.locator(`[data-prototype-handle="${homeId}"]`);
-	const from = await handle.boundingBox();
-	const to = await roots.nth(1).boundingBox();
-	expect(from).not.toBeNull();
-	expect(to).not.toBeNull();
-	await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
-	await page.mouse.up();
+	const from = await handle.boundingBox(); const to = await roots.nth(1).boundingBox(); expect(from).not.toBeNull(); expect(to).not.toBeNull();
+	await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2); await page.mouse.down(); await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 }); await page.mouse.up();
 	await expect(prototype.getByRole('combobox', { name: 'Destination', exact: true })).toHaveValue(detailId!);
 	await expect(canvas.locator('.ash-prototype-connections > path')).toHaveCount(2);
-	await canvas.press('Escape');
-	await page.mouse.click((from!.x + from!.width / 2 + to!.x) / 2, from!.y + from!.height / 2);
+	await canvas.press('Escape'); await page.mouse.click((from!.x + from!.width / 2 + to!.x) / 2, from!.y + from!.height / 2);
 	await expect(prototype.getByRole('combobox', { name: 'Destination', exact: true })).toHaveValue(detailId!);
 	await prototype.getByRole('combobox', { name: 'Transition', exact: true }).selectOption('smart');
-	const duration = prototype.getByRole('spinbutton', { name: 'Duration (ms)', exact: true });
-	await duration.fill('200');
-	await duration.press('Tab');
-	await prototype.getByRole('combobox', { name: 'Easing', exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Smart animate matches layer names and hierarchy/u);
-	await page.keyboard.press('Escape');
+	const duration = prototype.getByRole('spinbutton', { name: 'Duration (ms)', exact: true }); await duration.fill('200'); await duration.press('Tab');
+	await prototype.getByRole('combobox', { name: 'Easing', exact: true }).focus(); await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Smart animate matches layer names and hierarchy/u); await page.keyboard.press('Escape');
 	await page.screenshot({ path: testInfo.outputPath('prototype-connections.png') });
 	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click();
-	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true });
-	const scene = preview.locator('.ash-prototype-preview-scene');
+	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true }); const scene = preview.locator('.ash-prototype-preview-scene');
 	await expect(scene).toHaveAttribute('data-screen-id', homeId!);
-	await preview.getByRole('button', { name: /Home: On click/u }).focus();
-	await page.keyboard.press('Enter');
+	await preview.getByRole('button', { name: /Home: On click/u }).focus(); await page.keyboard.press('Enter');
 	await expect(scene).toHaveAttribute('data-screen-id', detailId!);
-	await preview.getByRole('button', { name: 'Back', exact: true }).click();
-	await expect(scene).toHaveAttribute('data-screen-id', homeId!);
+	await preview.getByRole('button', { name: 'Back', exact: true }).click(); await expect(scene).toHaveAttribute('data-screen-id', homeId!);
 	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
 	await prototype.getByRole('combobox', { name: 'Action', exact: true }).selectOption('overlay');
 	await prototype.getByRole('combobox', { name: 'Transition', exact: true }).selectOption('dissolve');
 	await page.emulateMedia({ reducedMotion: 'reduce' });
-	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click();
-	await preview.getByRole('button', { name: /Home: On click/u }).click();
-	await expect(scene).toHaveAttribute('data-screen-id', detailId!);
-	await preview.focus();
-	await page.keyboard.press('Escape');
-	await expect(scene).toHaveAttribute('data-screen-id', homeId!);
-	await expect(preview).toBeVisible();
+	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click(); await preview.getByRole('button', { name: /Home: On click/u }).click();
+	await expect(scene).toHaveAttribute('data-screen-id', detailId!); await preview.focus(); await page.keyboard.press('Escape');
+	await expect(scene).toHaveAttribute('data-screen-id', homeId!); await expect(preview).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('prototype-preview.png') });
-	await page.keyboard.press('Escape');
-	await expect(preview).toBeHidden();
-	await canvas.press('ControlOrMeta+z');
-	await expect(prototype.getByRole('combobox', { name: 'Transition', exact: true })).toHaveValue('smart');
+	await page.keyboard.press('Escape'); await expect(preview).toBeHidden();
+	await canvas.press('ControlOrMeta+z'); await expect(prototype.getByRole('combobox', { name: 'Transition', exact: true })).toHaveValue('smart');
 });
 
 test('Sessions Prototype Change to previews interactive component variants without editing the instance', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	const properties = page.locator('[data-part="auxiliarybar"]');
-	const prototype = properties.locator('.ash-prototype-properties');
+	const properties = page.locator('[data-part="auxiliarybar"]'); const prototype = properties.locator('.ash-prototype-properties');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
-	const field = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('textbox', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	await canvas.press('t');
-	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } });
-	await page.keyboard.press('Escape');
-	await field('Text content', 'Off');
-	await canvas.press('ControlOrMeta+Alt+k');
-	await field('Layer name', 'Toggle');
+	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Off'); await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Toggle');
 	await properties.getByRole('button', { name: 'Add variant', exact: true }).click();
-	await layers.getByRole('treeitem', { name: 'Off', exact: true }).first().click();
-	await field('Text content', 'On');
+	await layers.getByRole('treeitem', { name: 'Off', exact: true }).first().click(); await field('Text content', 'On');
 	await layers.getByRole('treeitem', { name: 'Main component: Toggle', exact: true }).last().click();
-	await prototype.locator(':scope > summary').click();
-	await prototype.getByRole('button', { name: 'Add interaction', exact: true }).click();
+	await prototype.locator(':scope > summary').click(); await prototype.getByRole('button', { name: 'Add interaction', exact: true }).click();
 	await expect(prototype.getByRole('combobox', { name: 'Action', exact: true })).toHaveValue('changeTo');
 	await properties.getByRole('button', { name: 'Create instance', exact: true }).click();
 	await prototype.getByRole('button', { name: 'Prototype preview', exact: true }).click();
 	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true });
 	await expect(preview.locator('[data-design-text]')).toHaveText('Off');
-	await preview.getByRole('button', { name: /Toggle: On click/u }).focus();
-	await page.keyboard.press('Enter');
+	await preview.getByRole('button', { name: /Toggle: On click/u }).focus(); await page.keyboard.press('Enter');
 	await expect(preview.locator('[data-design-text]')).toHaveText('On');
 	await page.screenshot({ path: testInfo.outputPath('prototype-component.png') });
 	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
@@ -241,23 +143,14 @@ test('Sessions Design resources bind variable modes and reuse styles with keyboa
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const resources = properties.locator('.ash-design-resources');
-	const field = async (name: string, value: string): Promise<void> => {
-		const input = resources.getByRole('textbox', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
+	const field = async (name: string, value: string): Promise<void> => { const input = resources.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('r');
-	await resources.locator(':scope > summary').focus();
-	await page.keyboard.press('Enter');
+	await resources.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
 	await resources.locator('[data-resource-section="variables"] > summary').click();
-	await resources.getByRole('button', { name: 'Create collection', exact: true }).click();
-	await field('Collection name', 'Theme');
-	await resources.getByRole('button', { name: 'Add mode', exact: true }).click();
-	await field('Mode name: Mode', 'Dark');
-	await resources.getByRole('button', { name: 'Create variable', exact: true }).click();
-	await field('Variable name', 'Brand');
-	await field('Default: value', '#6688cc');
-	await field('Dark: value', '#223355');
+	await resources.getByRole('button', { name: 'Create collection', exact: true }).click(); await field('Collection name', 'Theme');
+	await resources.getByRole('button', { name: 'Add mode', exact: true }).click(); await field('Mode name: Mode', 'Dark');
+	await resources.getByRole('button', { name: 'Create variable', exact: true }).click(); await field('Variable name', 'Brand');
+	await field('Default: value', '#6688cc'); await field('Dark: value', '#223355');
 	await resources.locator('[data-resource-section="variables"] > summary').click();
 	await resources.locator('[data-resource-section="bindings"] > summary').click();
 	await resources.getByRole('combobox', { name: 'Variable', exact: true }).selectOption({ label: 'Brand' });
@@ -265,27 +158,19 @@ test('Sessions Design resources bind variable modes and reuse styles with keyboa
 	await resources.getByRole('combobox', { name: 'Theme mode', exact: true }).selectOption({ label: 'Dark' });
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#223355');
 	await resources.locator('[data-resource-section="styles"] > summary').click();
-	await resources.getByRole('button', { name: 'Create style from selection', exact: true }).click();
-	await field('Style name', 'Surface');
-	await resources.locator('[data-resource-section="variables"] > summary').click();
-	await field('Dark: value', '#884466');
+	await resources.getByRole('button', { name: 'Create style from selection', exact: true }).click(); await field('Style name', 'Surface');
+	await resources.locator('[data-resource-section="variables"] > summary').click(); await field('Dark: value', '#884466');
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#884466');
 	await resources.locator('[data-resource-section="variables"] > summary').click();
-	await canvas.press('ControlOrMeta+z');
-	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#223355');
-	await resources.getByRole('combobox', { name: 'Apply style', exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
+	await canvas.press('ControlOrMeta+z'); await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#223355');
+	await resources.getByRole('combobox', { name: 'Apply style', exact: true }).focus(); await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Variables support color, number, string and boolean/u);
-	await page.keyboard.press('Escape');
-	await expect(resources.getByRole('combobox', { name: 'Apply style', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape'); await expect(resources.getByRole('combobox', { name: 'Apply style', exact: true })).toBeFocused();
 	await resources.locator('[data-resource-section="bindings"] > summary').scrollIntoViewIfNeeded();
 	await page.screenshot({ path: testInfo.outputPath('design-resources.png') });
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-	expect(code).toContain('"resources"');
-	expect(code).toContain('"styleBindings"');
-	expect(code).toContain('Surface');
-	expect(code).toContain('Brand');
+	expect(code).toContain('"resources"'); expect(code).toContain('"styleBindings"'); expect(code).toContain('Surface'); expect(code).toContain('Brand');
 });
 
 test('Sessions Design components inherit overrides and switch variants with keyboard-accessible controls', async ({ page }, testInfo) => {
@@ -294,17 +179,9 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
-	const field = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('textbox', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	await canvas.press('t');
-	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } });
-	await page.keyboard.press('Escape');
-	await field('Text content', 'Default label');
-	await canvas.press('ControlOrMeta+Alt+k');
-	await field('Layer name', 'Button');
+	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Default label');
+	await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Button');
 	await properties.getByRole('button', { name: 'Add variant', exact: true }).click();
 	await field('Value: State', 'Hover');
 	await properties.getByRole('button', { name: 'Add variant property', exact: true }).click();
@@ -317,23 +194,19 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 	await layers.getByRole('treeitem', { name: 'Instance: Button', exact: true }).click();
 	await properties.getByRole('combobox', { name: 'Variant: State', exact: true }).selectOption({ value: 'Variant 1' });
 	await expect(canvas.locator('.ash-sessions-design-shapes [data-design-text]')).toContainText(['Default label', 'Default label', 'My instance']);
-	await canvas.press('-');
-	await canvas.press('-');
+	await canvas.press('-'); await canvas.press('-');
 	await properties.getByRole('combobox', { name: 'Variant: State', exact: true }).scrollIntoViewIfNeeded();
 	await page.screenshot({ path: testInfo.outputPath('design-components.png') });
 	await properties.getByRole('button', { name: 'Reset all overrides', exact: true }).click();
 	await expect(canvas.locator('.ash-sessions-design-shapes [data-design-text]')).toContainText(['Default label', 'Default label', 'Default label']);
-	await canvas.press('ControlOrMeta+z');
-	await canvas.press('ControlOrMeta+Alt+b');
+	await canvas.press('ControlOrMeta+z'); await canvas.press('ControlOrMeta+Alt+b');
 	await expect(layers.getByRole('treeitem', { name: 'Instance: Button', exact: true })).toHaveCount(0);
 	await expect(canvas.locator('.ash-sessions-design-shapes [data-design-text]')).toContainText(['Default label', 'Default label', 'My instance']);
 	await canvas.press('ControlOrMeta+z');
 	await expect(layers.getByRole('treeitem', { name: 'Instance: Button', exact: true })).toBeVisible();
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-	expect(code).toContain('"componentId"');
-	expect(code).toContain('"overrides"');
-	expect(code).toContain('My instance');
+	expect(code).toContain('"componentId"'); expect(code).toContain('"overrides"'); expect(code).toContain('My instance');
 });
 
 test('Sessions Creator Slides presents reordered pages and Brand undoes an entire variant batch', async ({ page }) => {
@@ -369,223 +242,83 @@ test('Sessions Creator Slides presents reordered pages and Brand undoes an entir
 test('Sessions Prototype scrolls with wheel, drag and keyboard, pins layers and animates Scroll to', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]'),
-		layers = page.getByRole('tree', { name: 'Layers', exact: true });
-	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'),
-		prototype = properties.locator('.ash-prototype-properties');
-	const text = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('textbox', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	const number = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('spinbutton', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	await workspace.getByRole('button', { name: 'Add screen', exact: true }).click();
-	await text('Layer name', 'Scrolling page');
-	for (const [name, x, y, width, height] of [
-		['Jump to footer', '20', '10', '100', '40'],
-		['Sticky heading', '150', '90', '130', '40'],
-		['Footer', '20', '900', '260', '60'],
-	]) {
-		await canvas.press('r');
-		await text('Layer name', name);
-		await number('X', x);
-		await number('Y', y);
-		await number('Width', width);
-		await number('Height', height);
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), prototype = properties.locator('.ash-prototype-properties');
+	const text = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	const number = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	await workspace.getByRole('button', { name: 'Add screen', exact: true }).click(); await text('Layer name', 'Scrolling page');
+	for (const [name, x, y, width, height] of [['Jump to footer', '20', '10', '100', '40'], ['Sticky heading', '150', '90', '130', '40'], ['Footer', '20', '900', '260', '60']]) {
+		await canvas.press('r'); await text('Layer name', name); await number('X', x); await number('Y', y); await number('Width', width); await number('Height', height);
 	}
-	await layers.getByRole('treeitem', { name: 'Scrolling page', exact: true }).click();
-	await number('Width', '300');
-	await number('Height', '300');
+	await layers.getByRole('treeitem', { name: 'Scrolling page', exact: true }).click(); await number('Width', '300'); await number('Height', '300');
 	await prototype.getByRole('combobox', { name: 'Overflow scrolling', exact: true }).selectOption('vertical');
-	await layers.getByRole('treeitem', { name: 'Sticky heading', exact: true }).click();
-	await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).selectOption('sticky');
-	await layers.getByRole('treeitem', { name: 'Jump to footer', exact: true }).click();
-	await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).selectOption('fixed');
+	await layers.getByRole('treeitem', { name: 'Sticky heading', exact: true }).click(); await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).selectOption('sticky');
+	await layers.getByRole('treeitem', { name: 'Jump to footer', exact: true }).click(); await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).selectOption('fixed');
 	await prototype.getByRole('button', { name: 'Add interaction', exact: true }).click();
-	await prototype.getByRole('combobox', { name: 'Action', exact: true }).selectOption('scrollTo');
-	await prototype.getByRole('combobox', { name: 'Destination', exact: true }).selectOption({ label: 'Footer' });
-	await prototype.getByRole('combobox', { name: 'Transition', exact: true }).selectOption('scroll');
-	await number('Duration (ms)', '250');
+	await prototype.getByRole('combobox', { name: 'Action', exact: true }).selectOption('scrollTo'); await prototype.getByRole('combobox', { name: 'Destination', exact: true }).selectOption({ label: 'Footer' });
+	await prototype.getByRole('combobox', { name: 'Transition', exact: true }).selectOption('scroll'); await number('Duration (ms)', '250');
 	const footerId = await prototype.getByRole('combobox', { name: 'Destination', exact: true }).inputValue();
 	await workspace.getByRole('button', { name: 'Preview flow', exact: true }).click();
-	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true }),
-		scene = preview.locator('.ash-prototype-preview-scene'),
-		frame = scene.locator(':scope > svg');
-	const bounds = await frame.locator(':scope > rect').first().boundingBox();
-	expect(bounds).not.toBeNull();
-	await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height * 0.8);
-	await page.mouse.wheel(0, 180);
+	const preview = canvas.getByRole('region', { name: 'Prototype preview', exact: true }), scene = preview.locator('.ash-prototype-preview-scene'), frame = scene.locator(':scope > svg');
+	const bounds = await frame.locator(':scope > rect').first().boundingBox(); expect(bounds).not.toBeNull();
+	await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height * 0.8); await page.mouse.wheel(0, 180);
 	await expect.poll(async () => Number(await frame.getAttribute('data-scroll-y'))).toBeGreaterThan(0);
-	await frame.focus();
-	await page.keyboard.press('End');
-	await expect(frame).toHaveAttribute('data-scroll-y', '660');
+	await frame.focus(); await page.keyboard.press('End'); await expect(frame).toHaveAttribute('data-scroll-y', '660');
 	await expect(scene.locator(`[data-shape-id="${footerId}"]`)).toHaveAttribute('y', '240');
-	await page.keyboard.press('Home');
-	await expect(frame).toHaveAttribute('data-scroll-y', '0');
-	await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.8);
-	await page.mouse.down();
-	await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.45, { steps: 6 });
-	await page.mouse.up();
+	await page.keyboard.press('Home'); await expect(frame).toHaveAttribute('data-scroll-y', '0');
+	await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.8); await page.mouse.down(); await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.45, { steps: 6 }); await page.mouse.up();
 	await expect.poll(async () => Number(await frame.getAttribute('data-scroll-y'))).toBeGreaterThan(50);
-	await preview.getByRole('button', { name: /Jump to footer: On click/u }).focus();
-	await page.keyboard.press('Enter');
-	await expect(frame).toHaveAttribute('data-scroll-y', '660');
+	await preview.getByRole('button', { name: /Jump to footer: On click/u }).focus(); await page.keyboard.press('Enter'); await expect(frame).toHaveAttribute('data-scroll-y', '660');
 	await expect(preview.getByRole('button', { name: /Jump to footer: On click/u })).toHaveAttribute('y', '10');
 	await page.screenshot({ path: testInfo.outputPath('prototype-scrolling.png') });
-	await preview.getByRole('button', { name: 'Restart flow', exact: true }).click();
-	await expect(frame).toHaveAttribute('data-scroll-y', '0');
+	await preview.getByRole('button', { name: 'Restart flow', exact: true }).click(); await expect(frame).toHaveAttribute('data-scroll-y', '0');
 	await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
-	await layers.getByRole('treeitem', { name: 'Footer', exact: true }).click();
-	await expect(properties.getByRole('spinbutton', { name: 'Y', exact: true })).toHaveValue('900');
+	await layers.getByRole('treeitem', { name: 'Footer', exact: true }).click(); await expect(properties.getByRole('spinbutton', { name: 'Y', exact: true })).toHaveValue('900');
 	await layers.getByRole('treeitem', { name: 'Jump to footer (Fixed)', exact: true }).click();
-	await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Sticky layers stop at the top.*Reset scroll position/u);
-	await page.keyboard.press('Escape');
+	await prototype.getByRole('combobox', { name: 'Scroll position', exact: true }).focus(); await page.keyboard.press('Alt+F1'); await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Sticky layers stop at the top.*Reset scroll position/u); await page.keyboard.press('Escape');
 });
 
 test('Sessions Design composites fill order, opacity and plus darker against the backdrop', async ({ page }, testInfo) => {
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('spinbutton', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	await canvas.press('r');
-	await field('X', '100');
-	await field('Y', '100');
-	await field('Width', '200');
-	await field('Height', '160');
-	await paintColor(page, '#808080');
-	await canvas.press('ControlOrMeta+d');
-	await field('X', '100');
-	await field('Y', '100');
-	await paintColor(page, '#c0c0c0');
-	const fillBlend = properties.getByRole('combobox', { name: 'Fill blend mode', exact: true }),
-		layerBlend = properties.getByRole('combobox', { name: 'Layer blend mode', exact: true });
-	const rect = canvas.locator('.ash-sessions-design-shapes > [data-shape-id]').first();
-	const box = await rect.boundingBox();
-	expect(box).toBeTruthy();
-	const color = () => paintPixel(page, box!.x + box!.width * 0.4, box!.y + box!.height * 0.7);
-	const expectGray = async (expected: number) => {
-		await expect.poll(async () => (await color()).slice(0, 3).every(value => Math.abs(value - expected) <= 2)).toBe(true);
-	};
-	await fillBlend.selectOption('multiply');
-	await expectGray(96);
-	await layerBlend.selectOption('normal');
-	await expectGray(192);
-	await layerBlend.selectOption('pass-through');
-	await fillBlend.selectOption('plus-darker');
-	await expectGray(65);
-	await layerBlend.selectOption('normal');
-	await expectGray(192);
-	await layerBlend.selectOption('pass-through');
-	await field('Paint opacity (%)', '50');
-	await expectGray(96);
-	await field('Paint opacity (%)', '100');
-	await fillBlend.selectOption('normal');
-	await field('Layer opacity (%)', '50');
-	await expectGray(160);
-	await field('Layer opacity (%)', '100');
-	await layerBlend.selectOption('plus-darker');
-	await expectGray(65);
-	await layerBlend.selectOption('pass-through');
-	await properties.getByRole('button', { name: 'Add fill', exact: true }).click();
-	await paintColor(page, '#ff0000');
-	await field('Paint opacity (%)', '100');
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '200'); await field('Height', '160'); await paintColor(page, '#808080');
+	await canvas.press('ControlOrMeta+d'); await field('X', '100'); await field('Y', '100'); await paintColor(page, '#c0c0c0');
+	const fillBlend = properties.getByRole('combobox', { name: 'Fill blend mode', exact: true }), layerBlend = properties.getByRole('combobox', { name: 'Layer blend mode', exact: true });
+	const rect = canvas.locator('.ash-sessions-design-shapes > [data-shape-id]').first(); const box = await rect.boundingBox(); expect(box).toBeTruthy();
+	const color = () => paintPixel(page, box!.x + box!.width * .4, box!.y + box!.height * .7);
+	const expectGray = async (expected: number) => { await expect.poll(async () => (await color()).slice(0, 3).every(value => Math.abs(value - expected) <= 2)).toBe(true); };
+	await fillBlend.selectOption('multiply'); await expectGray(96);
+	await layerBlend.selectOption('normal'); await expectGray(192); await layerBlend.selectOption('pass-through');
+	await fillBlend.selectOption('plus-darker'); await expectGray(65); await layerBlend.selectOption('normal'); await expectGray(192); await layerBlend.selectOption('pass-through'); await field('Paint opacity (%)', '50'); await expectGray(96);
+	await field('Paint opacity (%)', '100'); await fillBlend.selectOption('normal'); await field('Layer opacity (%)', '50'); await expectGray(160); await field('Layer opacity (%)', '100'); await layerBlend.selectOption('plus-darker'); await expectGray(65); await layerBlend.selectOption('pass-through');
+	await properties.getByRole('button', { name: 'Add fill', exact: true }).click(); await paintColor(page, '#ff0000'); await field('Paint opacity (%)', '100');
 	await expect.poll(async () => (await color()).slice(0, 3)).toEqual([255, 0, 0]);
-	await properties.getByRole('button', { name: 'Move fill down', exact: true }).click();
-	await expectGray(192);
-	await properties.getByRole('button', { name: 'Move fill up', exact: true }).click();
-	await properties.getByRole('checkbox', { name: 'Fill visible', exact: true }).uncheck();
-	await expectGray(192);
-	await properties.getByRole('button', { name: 'Remove fill', exact: true }).click();
-	await properties.getByRole('button', { name: 'Remove fill', exact: true }).click();
-	await expectGray(128);
-	await canvas.press('ControlOrMeta+z');
-	await expectGray(192);
-	await fillBlend.selectOption('plus-darker');
-	await expectGray(65);
+	await properties.getByRole('button', { name: 'Move fill down', exact: true }).click(); await expectGray(192); await properties.getByRole('button', { name: 'Move fill up', exact: true }).click();
+	await properties.getByRole('checkbox', { name: 'Fill visible', exact: true }).uncheck(); await expectGray(192);
+	await properties.getByRole('button', { name: 'Remove fill', exact: true }).click(); await properties.getByRole('button', { name: 'Remove fill', exact: true }).click(); await expectGray(128);
+	await canvas.press('ControlOrMeta+z'); await expectGray(192); await fillBlend.selectOption('plus-darker'); await expectGray(65);
 	await page.screenshot({ path: testInfo.outputPath('design-paint-blend.png') });
-	await canvas.getByRole('button', { name: 'Code', exact: true }).click();
-	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-	const preview = await page.context().newPage();
-	try {
-		await preview.setContent(code);
-		expect((await paintPixel(preview, 80, 112)).slice(0, 3)).toEqual([65, 65, 65]);
-	} finally {
-		await preview.close();
-	}
+	await canvas.getByRole('button', { name: 'Code', exact: true }).click(); const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
+	const preview = await page.context().newPage(); try { await preview.setContent(code); expect((await paintPixel(preview, 80, 112)).slice(0, 3)).toEqual([65, 65, 65]); } finally { await preview.close(); }
 });
 
 test('Sessions Design paints editable text gradients and exports matching blended glyphs', async ({ page }, testInfo) => {
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]');
-	await canvas.press('t');
-	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 100, y: 100 } });
-	await page.keyboard.press('Escape');
-	const content = properties.getByRole('textbox', { name: 'Text content', exact: true });
-	await content.fill('MMMMMM');
-	await content.press('Tab');
-	const size = properties.getByRole('spinbutton', { name: 'Font size', exact: true });
-	await size.fill('72');
-	await size.press('Tab');
-	await paintColor(page, '#ff0000');
-	await properties.getByRole('combobox', { name: 'Fill type', exact: true }).selectOption('linear');
-	await properties.getByRole('combobox', { name: 'Gradient stop', exact: true }).selectOption({ index: 1 });
-	await paintColor(page, '#0000ff');
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 100, y: 100 } }); await page.keyboard.press('Escape');
+	const content = properties.getByRole('textbox', { name: 'Text content', exact: true }); await content.fill('MMMMMM'); await content.press('Tab');
+	const size = properties.getByRole('spinbutton', { name: 'Font size', exact: true }); await size.fill('72'); await size.press('Tab');
+	await paintColor(page, '#ff0000'); await properties.getByRole('combobox', { name: 'Fill type', exact: true }).selectOption('linear');
+	await properties.getByRole('combobox', { name: 'Gradient stop', exact: true }).selectOption({ index: 1 }); await paintColor(page, '#0000ff');
 	await canvas.press('Escape');
-	const colors = async (preview: Page) => {
-		const png = await preview.screenshot();
-		return preview.evaluate(async png => {
-			const image = new Image();
-			image.src = `data:image/png;base64,${png}`;
-			await image.decode();
-			const canvas = document.createElement('canvas');
-			canvas.width = image.width;
-			canvas.height = image.height;
-			const context = canvas.getContext('2d')!;
-			context.drawImage(image, 0, 0);
-			const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
-			let red = 0,
-				blue = 0;
-			for (let i = 0; i < data.length; i += 4) {
-				if (data[i] > 150 && data[i + 1] < 50 && data[i + 2] < 100) {
-					red++;
-				}
-				if (data[i + 2] > 150 && data[i + 1] < 50 && data[i] < 100) {
-					blue++;
-				}
-			}
-			return { red, blue };
-		}, png.toString('base64'));
-	};
-	const painted = await colors(page);
-	expect(painted.red).toBeGreaterThan(200);
-	expect(painted.blue).toBeGreaterThan(200);
+	const colors = async (preview: Page) => { const png = await preview.screenshot(); return preview.evaluate(async png => { const image = new Image(); image.src = `data:image/png;base64,${png}`; await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const context = canvas.getContext('2d')!; context.drawImage(image, 0, 0); const data = context.getImageData(0, 0, canvas.width, canvas.height).data; let red = 0, blue = 0; for (let i = 0; i < data.length; i += 4) { if (data[i] > 150 && data[i + 1] < 50 && data[i + 2] < 100) { red++; } if (data[i + 2] > 150 && data[i + 1] < 50 && data[i] < 100) { blue++; } } return { red, blue }; }, png.toString('base64')); };
+	const painted = await colors(page); expect(painted.red).toBeGreaterThan(200); expect(painted.blue).toBeGreaterThan(200);
 	await page.screenshot({ path: testInfo.outputPath('design-gradient-text.png') });
 	for (const blend of ['normal', 'plus-darker']) {
 		await properties.getByRole('combobox', { name: 'Fill blend mode', exact: true }).selectOption(blend);
-		await canvas.getByRole('button', { name: 'Code', exact: true }).click();
-		const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-		const preview = await page.context().newPage();
-		try {
-			await preview.setContent(code);
-			await expect.poll(async () => (await colors(preview)).red).toBeGreaterThan(200);
-			expect((await colors(preview)).blue).toBeGreaterThan(200);
-		} finally {
-			await preview.close();
-		}
+		await canvas.getByRole('button', { name: 'Code', exact: true }).click(); const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
+		const preview = await page.context().newPage(); try { await preview.setContent(code); await expect.poll(async () => (await colors(preview)).red).toBeGreaterThan(200); expect((await colors(preview)).blue).toBeGreaterThan(200); } finally { await preview.close(); }
 		await canvas.getByRole('button', { name: 'Design', exact: true }).click();
 	}
 });
@@ -593,153 +326,71 @@ test('Sessions Design paints editable text gradients and exports matching blende
 test('Sessions Design pen closes paths, inserts exact curve nodes and outlines strokes', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]');
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	const viewport = canvas.locator('.ash-canvas-viewport');
-	await canvas.press('p');
-	await viewport.click({ position: { x: 120, y: 120 } });
-	await viewport.click({ position: { x: 280, y: 120 } });
-	await viewport.click({ position: { x: 200, y: 260 } });
-	await viewport.click({ position: { x: 120, y: 120 } });
+	await canvas.press('p'); await viewport.click({ position: { x: 120, y: 120 } }); await viewport.click({ position: { x: 280, y: 120 } }); await viewport.click({ position: { x: 200, y: 260 } }); await viewport.click({ position: { x: 120, y: 120 } });
 	const artwork = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
-	await expect(artwork).toHaveCount(1);
-	await expect(properties.getByRole('checkbox', { name: 'Closed path', exact: true })).toBeChecked();
-	await canvas.press('ControlOrMeta+z');
-	await expect(artwork).toHaveCount(0);
-	await canvas.press('ControlOrMeta+Shift+z');
-	await expect(artwork).toHaveCount(1);
-	await canvas.press('v');
-	await canvas.press('Tab');
-	await canvas.press('Enter');
+	await expect(artwork).toHaveCount(1); await expect(properties.getByRole('checkbox', { name: 'Closed path', exact: true })).toBeChecked();
+	await canvas.press('ControlOrMeta+z'); await expect(artwork).toHaveCount(0); await canvas.press('ControlOrMeta+Shift+z'); await expect(artwork).toHaveCount(1);
+	await canvas.press('v'); await canvas.press('Tab'); await canvas.press('Enter');
 	await properties.getByRole('button', { name: 'Make smooth', exact: true }).click();
 	const nodeCount = await properties.getByRole('combobox', { name: 'Path node', exact: true }).locator('option').count();
 	const before = await artwork.evaluate(node => (node as SVGPathElement).getTotalLength());
-	const point = await artwork.evaluate(node => {
-		const path = node as SVGPathElement;
-		const point = path.getPointAtLength(path.getTotalLength() * 0.15).matrixTransform(path.getScreenCTM()!);
-		return { x: point.x, y: point.y };
-	});
-	await canvas.press('p');
-	await page.mouse.click(point.x, point.y);
+	const point = await artwork.evaluate(node => { const path = node as SVGPathElement; const point = path.getPointAtLength(path.getTotalLength() * .15).matrixTransform(path.getScreenCTM()!); return { x: point.x, y: point.y }; });
+	await canvas.press('p'); await page.mouse.click(point.x, point.y);
 	await expect(properties.getByRole('combobox', { name: 'Path node', exact: true }).locator('option')).toHaveCount(nodeCount + 1);
-	expect(Math.abs((await artwork.evaluate(node => (node as SVGPathElement).getTotalLength())) - before)).toBeLessThan(0.02);
-	await canvas.press('v');
-	await canvas.press('ControlOrMeta+a');
-	const layerX = await properties.getByRole('spinbutton', { name: 'X', exact: true }).inputValue();
-	await canvas.press('ArrowRight');
+	expect(Math.abs(await artwork.evaluate(node => (node as SVGPathElement).getTotalLength()) - before)).toBeLessThan(.02);
+	await canvas.press('v'); await canvas.press('ControlOrMeta+a');
+	const layerX = await properties.getByRole('spinbutton', { name: 'X', exact: true }).inputValue(); await canvas.press('ArrowRight');
 	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toHaveValue(layerX);
 	await properties.getByRole('checkbox', { name: 'Closed path', exact: true }).uncheck();
-	const stroke = properties.getByRole('spinbutton', { name: 'Stroke width', exact: true });
-	await stroke.fill('12');
-	await stroke.press('Tab');
+	const stroke = properties.getByRole('spinbutton', { name: 'Stroke width', exact: true }); await stroke.fill('12'); await stroke.press('Tab');
 	await properties.getByRole('combobox', { name: 'Stroke cap', exact: true }).selectOption('round');
-	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
-	await expect(stroke).toHaveValue('0');
-	await expect(artwork).toHaveAttribute('fill', '#808080');
-	await canvas.press('ControlOrMeta+z');
-	await expect(stroke).toHaveValue('12');
-	await canvas.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Alt\+Shift\+U\/S\/I\/E.*Original layers remain editable/u);
-	await page.keyboard.press('Escape');
+	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click(); await expect(stroke).toHaveValue('0'); await expect(artwork).toHaveAttribute('fill', '#808080');
+	await canvas.press('ControlOrMeta+z'); await expect(stroke).toHaveValue('12');
+	await canvas.press('Alt+F1'); await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Alt\+Shift\+U\/S\/I\/E.*Original layers remain editable/u); await page.keyboard.press('Escape');
 	await page.screenshot({ path: testInfo.outputPath('design-vector-path-tools.png') });
 });
 
 test('Sessions Design outlines square caps and dashed strokes as editable contours', async ({ page }) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]'),
-		viewport = canvas.locator('.ash-canvas-viewport');
-	await canvas.press('p');
-	await viewport.click({ position: { x: 100, y: 150 } });
-	await viewport.click({ position: { x: 220, y: 150 } });
-	await canvas.press('Enter');
-	await canvas.press('v');
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), viewport = canvas.locator('.ash-canvas-viewport');
+	await canvas.press('p'); await viewport.click({ position: { x: 100, y: 150 } }); await viewport.click({ position: { x: 220, y: 150 } }); await canvas.press('Enter'); await canvas.press('v');
 	const path = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
-	const before = await path.evaluate(node => {
-		const bounds = (node as SVGGraphicsElement).getBBox();
-		return { x: bounds.x, y: bounds.y };
-	});
-	const stroke = properties.getByRole('spinbutton', { name: 'Stroke width', exact: true });
-	await stroke.fill('12');
-	await stroke.press('Tab');
+	const before = await path.evaluate(node => { const bounds = (node as SVGGraphicsElement).getBBox(); return { x: bounds.x, y: bounds.y }; });
+	const stroke = properties.getByRole('spinbutton', { name: 'Stroke width', exact: true }); await stroke.fill('12'); await stroke.press('Tab');
 	await properties.getByRole('combobox', { name: 'Stroke cap', exact: true }).selectOption('square');
-	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
-	await expect(stroke).toHaveValue('0');
-	const bounds = await path.evaluate(node => {
-		const value = (node as SVGGraphicsElement).getBBox();
-		return { x: value.x, y: value.y, width: value.width, height: value.height };
-	});
-	expect(bounds.x).toBeCloseTo(before.x - 6, 2);
-	expect(bounds.y).toBeCloseTo(before.y - 6, 2);
-	expect(bounds.width).toBeCloseTo(132, 2);
-	expect(bounds.height).toBeCloseTo(12, 2);
+	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click(); await expect(stroke).toHaveValue('0');
+	const bounds = await path.evaluate(node => { const value = (node as SVGGraphicsElement).getBBox(); return { x: value.x, y: value.y, width: value.width, height: value.height }; });
+	expect(bounds.x).toBeCloseTo(before.x - 6, 2); expect(bounds.y).toBeCloseTo(before.y - 6, 2); expect(bounds.width).toBeCloseTo(132, 2); expect(bounds.height).toBeCloseTo(12, 2);
 	await canvas.press('ControlOrMeta+z');
-	const dash = properties.getByRole('textbox', { name: 'Dash pattern', exact: true });
-	await dash.fill('12 6');
-	await dash.press('Tab');
+	const dash = properties.getByRole('textbox', { name: 'Dash pattern', exact: true }); await dash.fill('12 6'); await dash.press('Tab');
 	await properties.getByRole('combobox', { name: 'Stroke cap', exact: true }).selectOption('butt');
-	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
-	await expect(stroke).toHaveValue('0');
+	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click(); await expect(stroke).toHaveValue('0');
 	await expect(properties.getByRole('combobox', { name: 'Contour', exact: true }).locator('option')).toHaveCount(7);
-	await canvas.press('r');
-	await properties.getByRole('button', { name: 'Convert to path', exact: true }).click();
-	await stroke.fill('12');
-	await stroke.press('Tab');
-	await dash.fill('12 6');
-	await dash.press('Tab');
-	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
-	await expect(stroke).toHaveValue('0');
-	await canvas.press('ControlOrMeta+z');
-	await expect(stroke).toHaveValue('12');
-	await expect(properties.getByRole('checkbox', { name: 'Closed path', exact: true })).toBeChecked();
+	await canvas.press('r'); await properties.getByRole('button', { name: 'Convert to path', exact: true }).click();
+	await stroke.fill('12'); await stroke.press('Tab'); await dash.fill('12 6'); await dash.press('Tab');
+	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click(); await expect(stroke).toHaveValue('0');
+	await canvas.press('ControlOrMeta+z'); await expect(stroke).toHaveValue('12'); await expect(properties.getByRole('checkbox', { name: 'Closed path', exact: true })).toBeChecked();
 });
 
 test('Sessions Design background blur clips to ellipses, ignores previous blurs and exports the same backdrop', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
-		properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => {
-		const input = properties.getByRole('spinbutton', { name, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
-	await canvas.press('r');
-	await field('X', '100');
-	await field('Y', '100');
-	await field('Width', '240');
-	await field('Height', '160');
-	await paintColor(page, '#ffffff');
-	await canvas.press('r');
-	await field('X', '100');
-	await field('Y', '100');
-	await field('Width', '120');
-	await field('Height', '160');
-	await paintColor(page, '#000000');
-	await canvas.press('e');
-	await field('X', '120');
-	await field('Y', '120');
-	await field('Width', '200');
-	await field('Height', '120');
-	await paintColor(page, '#ffffff00');
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
+	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '240'); await field('Height', '160'); await paintColor(page, '#ffffff');
+	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '120'); await field('Height', '160'); await paintColor(page, '#000000');
+	await canvas.press('e'); await field('X', '120'); await field('Y', '120'); await field('Width', '200'); await field('Height', '120'); await paintColor(page, '#ffffff00');
 	await properties.getByRole('button', { name: 'Add effect', exact: true }).click();
-	await properties.getByRole('combobox', { name: 'Effect type', exact: true }).selectOption('background-blur');
-	await field('Effect blur', '24');
+	await properties.getByRole('combobox', { name: 'Effect type', exact: true }).selectOption('background-blur'); await field('Effect blur', '24');
 	const ellipse = canvas.locator('.ash-sessions-design-shapes > [data-shape-id]').last().locator('ellipse').last();
-	const box = await ellipse.boundingBox();
-	expect(box).toBeTruthy();
+	const box = await ellipse.boundingBox(); expect(box).toBeTruthy();
 	const sample = () => paintPixel(page, box!.x + 92, box!.y + 60);
-	await expect
-		.poll(async () => {
-			const color = await sample();
-			return color[0] > 30 && color[0] < 110 && color[1] === color[0];
-		})
-		.toBe(true);
+	await expect.poll(async () => { const color = await sample(); return color[0] > 30 && color[0] < 110 && color[1] === color[0]; }).toBe(true);
 	const before = (await sample())[0];
-	await canvas.press('ControlOrMeta+d');
-	await field('X', '120');
-	await field('Y', '120');
+	await canvas.press('ControlOrMeta+d'); await field('X', '120'); await field('Y', '120');
 	await expect.poll(async () => Math.abs((await sample())[0] - before)).toBeLessThanOrEqual(2);
 	await expect.poll(async () => (await paintPixel(page, box!.x + 5, box!.y + 5)).slice(0, 3)).toEqual([0, 0, 0]);
 	await page.screenshot({ path: testInfo.outputPath('design-background-blur.png') });
@@ -748,13 +399,10 @@ test('Sessions Design background blur clips to ellipses, ignores previous blurs 
 	const preview = await page.context().newPage();
 	try {
 		await preview.setContent(code);
-		const exported = await preview.locator('[data-design-kind="ellipse"]').last().boundingBox();
-		expect(exported).toBeTruthy();
+		const exported = await preview.locator('[data-design-kind="ellipse"]').last().boundingBox(); expect(exported).toBeTruthy();
 		await expect.poll(async () => Math.abs((await paintPixel(preview, exported!.x + 92, exported!.y + 60))[0] - before)).toBeLessThanOrEqual(2);
 		await preview.screenshot({ path: testInfo.outputPath('design-background-blur-export.png') });
-	} finally {
-		await preview.close();
-	}
+	} finally { await preview.close(); }
 });
 
 test('Sessions Design shares color widgets and picker behavior for strokes and shadows', async ({ page }, testInfo) => {
@@ -767,11 +415,9 @@ test('Sessions Design shares color widgets and picker behavior for strokes and s
 	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 260, y: 220 } });
 	await canvas.press('Enter');
 	const stroke = properties.getByRole('textbox', { name: 'Stroke color', exact: true });
-	await stroke.fill('336699');
-	await stroke.press('Enter');
+	await stroke.fill('336699'); await stroke.press('Enter');
 	const alpha = properties.getByRole('spinbutton', { name: 'Stroke opacity (%)', exact: true });
-	await alpha.fill('40');
-	await alpha.press('Enter');
+	await alpha.fill('40'); await alpha.press('Enter');
 	await expect(canvas.locator('path[data-shape-id]')).toHaveAttribute('stroke', '#33669966');
 	await properties.getByRole('button', { name: 'Stroke color', exact: true }).click();
 	await expect(page.getByRole('dialog', { name: /^Color picker/u })).toBeVisible();
@@ -781,11 +427,9 @@ test('Sessions Design shares color widgets and picker behavior for strokes and s
 	await page.screenshot({ path: testInfo.outputPath('stroke-color-widget.png') });
 	await properties.getByRole('button', { name: 'Add effect', exact: true }).click();
 	const shadow = properties.getByRole('textbox', { name: 'Shadow color', exact: true });
-	await shadow.fill('123456');
-	await shadow.press('Enter');
+	await shadow.fill('123456'); await shadow.press('Enter');
 	const shadowAlpha = properties.getByRole('spinbutton', { name: 'Shadow opacity (%)', exact: true });
-	await shadowAlpha.fill('40');
-	await shadowAlpha.press('Enter');
+	await shadowAlpha.fill('40'); await shadowAlpha.press('Enter');
 	await expect(canvas.locator('feFlood[flood-color="#123456"]')).toHaveAttribute('flood-opacity', '0.4');
 	await properties.getByRole('button', { name: 'Choose shadow color', exact: true }).click();
 	await expect(page.getByRole('dialog', { name: /^Color picker/u })).toBeVisible();
@@ -801,17 +445,14 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
-	await canvas.press('r');
-	await canvas.press('e');
-	await canvas.press('ControlOrMeta+a');
-	await canvas.press('Shift+A');
+	await canvas.press('r'); await canvas.press('e');
+	await canvas.press('ControlOrMeta+a'); await canvas.press('Shift+A');
 	await properties.getByRole('textbox', { name: 'Layer name', exact: true }).fill('Navigation');
 	await properties.getByRole('textbox', { name: 'Layer name', exact: true }).press('Tab');
 	await expect(layers.getByRole('treeitem', { name: 'Navigation', exact: true })).toBeVisible();
 	await properties.getByRole('combobox', { name: 'Layout flow', exact: true }).selectOption('vertical');
 	const gap = properties.getByRole('spinbutton', { name: 'Gap', exact: true });
-	await gap.fill('24');
-	await gap.press('Tab');
+	await gap.fill('24'); await gap.press('Tab');
 	await expect(properties.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('208');
 	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
 	await properties.getByRole('combobox', { name: 'Width sizing', exact: true }).selectOption('fill');
@@ -820,8 +461,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	const id = await rectangle.getAttribute('data-shape-id');
 	await layers.getByRole('treeitem', { name: 'Navigation', exact: true }).click();
 	const width = properties.getByRole('spinbutton', { name: 'Width', exact: true });
-	await width.fill('300');
-	await width.press('Tab');
+	await width.fill('300'); await width.press('Tab');
 	await expect(rectangle).toHaveAttribute('width', '276');
 	await canvas.press('ControlOrMeta+z');
 	await expect(rectangle).toHaveAttribute('width', '120');
@@ -837,13 +477,9 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 			await preview.setContent(source);
 			const exported = preview.locator(`[data-design-id="${id}"]`);
 			await expect(exported).toHaveCSS('width', '276px');
-			await preview.locator('[data-design-kind="frame"]').evaluate(element => {
-				(element as HTMLElement).style.width = '400px';
-			});
+			await preview.locator('[data-design-kind="frame"]').evaluate(element => { (element as HTMLElement).style.width = '400px'; });
 			await expect(exported).toHaveCSS('width', '376px');
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 	}
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
 	await canvas.press('Alt+F1');
@@ -854,8 +490,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
 	await properties.getByRole('combobox', { name: 'Horizontal constraint', exact: true }).selectOption('end');
 	await layers.getByRole('treeitem', { name: 'Navigation', exact: true }).click();
-	await width.fill('400');
-	await width.press('Tab');
+	await width.fill('400'); await width.press('Tab');
 	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
 	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toHaveValue('112');
 	await canvas.press('ControlOrMeta+Shift+]');
@@ -876,21 +511,12 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
 	const number = async (name: string, value: string): Promise<void> => {
 		const field = properties.getByRole('spinbutton', { name, exact: true });
-		await field.fill(value);
-		await field.press('Tab');
+		await field.fill(value); await field.press('Tab');
 	};
-	const select = async (name: string, value: string): Promise<void> => {
-		await properties.getByRole('combobox', { name, exact: true }).selectOption({ value });
-	};
-	await canvas.press('r');
-	await canvas.press('e');
-	await canvas.press('r');
-	await canvas.press('e');
-	await canvas.press('ControlOrMeta+a');
-	await canvas.press('Shift+A');
-	await select('Wrap', 'wrap');
-	await number('Width', '300');
-	await number('Line gap', '16');
+	const select = async (name: string, value: string): Promise<void> => { await properties.getByRole('combobox', { name, exact: true }).selectOption({ value }); };
+	await canvas.press('r'); await canvas.press('e'); await canvas.press('r'); await canvas.press('e');
+	await canvas.press('ControlOrMeta+a'); await canvas.press('Shift+A');
+	await select('Wrap', 'wrap'); await number('Width', '300'); await number('Line gap', '16');
 	await expect(properties.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('200');
 	const source = async (): Promise<string> => {
 		await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
@@ -907,18 +533,12 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 			const children = frame.locator(':scope > .ash-design-object');
 			await expect(frame).toHaveCSS('height', '200px');
 			await expect(children.nth(2)).toHaveJSProperty('offsetTop', 108);
-			await frame.evaluate(element => {
-				(element as HTMLElement).style.width = '200px';
-			});
+			await frame.evaluate(element => { (element as HTMLElement).style.width = '200px'; });
 			await expect(frame).toHaveCSS('height', '392px');
 			await expect(children.nth(3)).toHaveJSProperty('offsetTop', 300);
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 	}
-	await select('Layout flow', 'vertical');
-	await number('Height', '200');
-	await select('Frame width sizing', 'hug');
+	await select('Layout flow', 'vertical'); await number('Height', '200'); await select('Frame width sizing', 'hug');
 	await expect(properties.getByRole('spinbutton', { name: 'Width', exact: true })).toHaveValue('280');
 	const vertical = await source();
 	{
@@ -927,17 +547,12 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 			await preview.setContent(vertical);
 			const frame = preview.locator('[data-design-kind="frame"]');
 			await expect(frame).toHaveCSS('width', '280px');
-			await frame.evaluate(element => {
-				(element as HTMLElement).style.height = '400px';
-			});
+			await frame.evaluate(element => { (element as HTMLElement).style.height = '400px'; });
 			await expect(frame).toHaveCSS('width', '144px');
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 	}
 	await select('Layout flow', 'grid');
-	await number('Max width', '360');
-	await number('Width', '500');
+	await number('Max width', '360'); await number('Width', '500');
 	await expect(properties.getByRole('spinbutton', { name: 'Width', exact: true })).toHaveValue('360');
 	await select('Column track', '1');
 	await expect(properties.getByRole('combobox', { name: 'Column track', exact: true })).toHaveValue('1');
@@ -968,19 +583,13 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 			const frame = preview.locator('[data-design-kind="frame"]');
 			const spanning = frame.locator(':scope > .ash-design-object').first();
 			await expect(spanning).toHaveCSS('width', '336px');
-			await frame.evaluate(element => {
-				(element as HTMLElement).style.width = '320px';
-			});
+			await frame.evaluate(element => { (element as HTMLElement).style.width = '320px'; });
 			// Chromium rounds fractional grid tracks to layout subpixels.
 			await expect.poll(async () => (await spanning.boundingBox())!.width).toBeCloseTo(296, 1);
-			await frame.evaluate(element => {
-				(element as HTMLElement).style.width = '800px';
-			});
+			await frame.evaluate(element => { (element as HTMLElement).style.width = '800px'; });
 			await expect(frame).toHaveCSS('width', '360px');
 			await expect(spanning).toHaveCSS('width', '336px');
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 	}
 	await canvas.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Wrap moves[\s\S]*Grid[\s\S]*Size limits/u);
@@ -990,21 +599,14 @@ test('Sessions Design edits rich text on canvas with one typing undo', async ({ 
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	await canvas.focus();
-	await canvas.press('t');
-	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } });
-	await page.keyboard.press('Escape');
-	await canvas.press('Enter');
+	await canvas.focus(); await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await canvas.press('Enter');
 	const editor = canvas.getByRole('textbox', { name: 'Edit text', exact: true });
 	await expect(editor).toBeFocused();
 	await page.keyboard.type('Hello world');
 	await expect(editor).toHaveText('Hello world');
-	await page.keyboard.press('ControlOrMeta+z');
-	await expect(editor).toHaveText('Text');
-	await page.keyboard.press('ControlOrMeta+Shift+z');
-	await expect(editor).toHaveText('Hello world');
-	await page.keyboard.press('ControlOrMeta+a');
-	await page.keyboard.press('ControlOrMeta+b');
+	await page.keyboard.press('ControlOrMeta+z'); await expect(editor).toHaveText('Text');
+	await page.keyboard.press('ControlOrMeta+Shift+z'); await expect(editor).toHaveText('Hello world');
+	await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.press('ControlOrMeta+b');
 	await expect(editor.locator('span').first()).toHaveCSS('font-weight', '700');
 	{
 		const cdp = await page.context().newCDPSession(page);
@@ -1014,34 +616,23 @@ test('Sessions Design edits rich text on canvas with one typing undo', async ({ 
 		await cdp.send('Input.insertText', { text: '中文排版' });
 		await expect(editor).toHaveText('中文排版');
 		await expect(page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true })).toHaveValue('中文排版');
-		await page.keyboard.press('ControlOrMeta+z');
-		await expect(editor).toHaveText('Hello world');
+		await page.keyboard.press('ControlOrMeta+z'); await expect(editor).toHaveText('Hello world');
 		await cdp.detach();
 	}
 	await page.screenshot({ path: testInfo.outputPath('design-rich-text-editing.png') });
-	await page.keyboard.press('Escape');
-	await expect(editor).toHaveCount(0);
+	await page.keyboard.press('Escape'); await expect(editor).toHaveCount(0);
 	await expect(canvas.locator('[data-design-text]')).toHaveText('Hello world');
-	await canvas.press('r');
-	await canvas.press('ControlOrMeta+a');
-	await canvas.press('g');
+	await canvas.press('r'); await canvas.press('ControlOrMeta+a'); await canvas.press('g');
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const width = properties.getByRole('spinbutton', { name: 'Width', exact: true });
-	await width.fill(String(Number(await width.inputValue()) * 2));
-	await width.press('Tab');
-	const rotation = properties.getByRole('spinbutton', { name: 'Rotation', exact: true });
-	await rotation.fill('30');
-	await rotation.press('Tab');
+	await width.fill(String(Number(await width.inputValue()) * 2)); await width.press('Tab');
+	const rotation = properties.getByRole('spinbutton', { name: 'Rotation', exact: true }); await rotation.fill('30'); await rotation.press('Tab');
 	await canvas.press('v');
 	const artwork = canvas.locator('[data-shape-id] [data-design-text]').first();
 	const textBounds = await artwork.boundingBox();
-	await page.mouse.dblclick(textBounds!.x + textBounds!.width / 2, textBounds!.y + textBounds!.height / 2);
-	await expect(editor).toBeFocused();
-	const before = await artwork.boundingBox(),
-		editing = await editor.boundingBox();
-	for (const key of ['x', 'y', 'width', 'height'] as const) {
-		expect(Math.abs(editing![key] - before![key])).toBeLessThan(1);
-	}
+	await page.mouse.dblclick(textBounds!.x + textBounds!.width / 2, textBounds!.y + textBounds!.height / 2); await expect(editor).toBeFocused();
+	const before = await artwork.boundingBox(), editing = await editor.boundingBox();
+	for (const key of ['x', 'y', 'width', 'height'] as const) { expect(Math.abs(editing![key] - before![key])).toBeLessThan(1); }
 	await expect(editor).toHaveCSS('user-select', 'text');
 	await page.screenshot({ path: testInfo.outputPath('design-grouped-text.png') });
 	await page.keyboard.press('Escape');
@@ -1053,20 +644,12 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const typography = properties.locator('.ash-design-text-properties').first();
-	const number = async (label: string, value: string) => {
-		const input = properties.getByRole('spinbutton', { name: label, exact: true });
-		await input.fill(value);
-		await input.press('Tab');
-	};
+	const number = async (label: string, value: string) => { const input = properties.getByRole('spinbutton', { name: label, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('t');
 	const viewport = await canvas.locator('.ash-canvas-viewport').boundingBox();
-	await page.mouse.move(viewport!.x + 200, viewport!.y + 100);
-	await page.mouse.down();
-	await page.mouse.move(viewport!.x + 420, viewport!.y + 220, { steps: 4 });
-	await page.mouse.up();
+	await page.mouse.move(viewport!.x + 200, viewport!.y + 100); await page.mouse.down(); await page.mouse.move(viewport!.x + 420, viewport!.y + 220, { steps: 4 }); await page.mouse.up();
 	const edit = canvas.getByRole('textbox', { name: 'Edit text', exact: true });
-	await expect(edit).toBeFocused();
-	await page.keyboard.type('A thoughtful headline with enough words to wrap across several lines.');
+	await expect(edit).toBeFocused(); await page.keyboard.type('A thoughtful headline with enough words to wrap across several lines.');
 	await page.keyboard.press('Escape');
 	await expect(typography.getByRole('combobox', { name: 'Text resizing', exact: true })).toHaveValue('none');
 	await typography.getByRole('combobox', { name: 'Text resizing', exact: true }).selectOption('height');
@@ -1079,9 +662,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 	expect(heightAfter).toBeLessThan(heightBefore);
 	await canvas.press('Enter');
 	await page.keyboard.press('Home');
-	for (let index = 0; index < 12; index++) {
-		await page.keyboard.press('Shift+ArrowRight');
-	}
+	for (let index = 0; index < 12; index++) { await page.keyboard.press('Shift+ArrowRight'); }
 	await typography.getByRole('combobox', { name: 'Font style', exact: true }).selectOption('italic');
 	await expect(edit.locator('span').first()).toHaveCSS('font-style', 'italic');
 	await expect(edit.locator('span').last()).toHaveCSS('font-style', 'normal');
@@ -1089,25 +670,17 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 	await expect(typography.getByRole('combobox', { name: 'Font style', exact: true })).toHaveValue('');
 	await edit.press('Escape');
 	await typography.locator('summary').click();
-	await typography.getByRole('combobox', { name: 'Line height unit', exact: true }).selectOption('percent');
-	await number('Line height', '150');
+	await typography.getByRole('combobox', { name: 'Line height unit', exact: true }).selectOption('percent'); await number('Line height', '150');
 	await typography.getByRole('combobox', { name: 'Wrap style', exact: true }).selectOption('balance');
-	const features = typography.getByRole('textbox', { name: 'OpenType features', exact: true });
-	await features.fill('liga=0, kern=1');
-	await features.press('Tab');
+	const features = typography.getByRole('textbox', { name: 'OpenType features', exact: true }); await features.fill('liga=0, kern=1'); await features.press('Tab');
 	await expect(canvas.locator('[data-design-text]').first()).toHaveCSS('font-feature-settings', '"kern", "liga" 0');
-	await typography.getByRole('checkbox', { name: 'Truncate text', exact: true }).check();
-	await number('Max lines', '2');
+	await typography.getByRole('checkbox', { name: 'Truncate text', exact: true }).check(); await number('Max lines', '2');
 	await expect(properties.getByRole('spinbutton', { name: 'Height', exact: true })).toHaveValue('72');
-	await number('Max lines', '');
-	await number('Height', '72');
+	await number('Max lines', ''); await number('Height', '72');
 	await expect(canvas.locator('[data-design-text]').first()).toHaveCSS('-webkit-line-clamp', '2');
 	await typography.getByRole('combobox', { name: 'Text resizing', exact: true }).selectOption('height');
 	await typography.getByRole('checkbox', { name: 'Truncate text', exact: true }).uncheck();
-	await features.focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Auto width grows.*Max lines/u);
-	await page.keyboard.press('Escape');
+	await features.focus(); await page.keyboard.press('Alt+F1'); await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Auto width grows.*Max lines/u); await page.keyboard.press('Escape');
 	await page.screenshot({ path: testInfo.outputPath('design-typography.png') });
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
 	const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
@@ -1115,17 +688,12 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 		const preview = await page.context().newPage();
 		try {
 			await preview.setContent(source);
-			const text = preview.locator('[data-design-kind="text"]');
-			const before = (await text.boundingBox())!.height;
-			await text.evaluate(element => {
-				(element as HTMLElement).style.width = '120px';
-			});
+			const text = preview.locator('[data-design-kind="text"]'); const before = (await text.boundingBox())!.height;
+			await text.evaluate(element => { (element as HTMLElement).style.width = '120px'; });
 			expect((await text.boundingBox())!.height).toBeGreaterThan(before);
 			await expect(text.locator('span').first()).toHaveCSS('font-style', 'italic');
 			await expect(text.locator('span').last()).toHaveCSS('font-style', 'normal');
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 	}
 });
 
@@ -1156,9 +724,7 @@ design('Sessions Design canvas context menu edits the pointed object and preserv
 	await expect(canvas).toBeFocused();
 	await canvas.press('r');
 	await canvas.press('e');
-	for (let index = 0; index < 15; index++) {
-		await canvas.press('Shift+ArrowRight');
-	}
+	for (let index = 0; index < 15; index++) { await canvas.press('Shift+ArrowRight'); }
 	const rectangle = canvas.locator('rect[data-shape-id]');
 	const ellipse = canvas.locator('ellipse[data-shape-id]');
 	await rightClickCanvasShape(rectangle);
@@ -1265,65 +831,44 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 	await expect(format.locator('option')).toHaveText(['Hex', 'RGB', 'CSS', 'HSL', 'HSB']);
 	await expect(page.locator('.ash-context-view-dialog')).toHaveCSS('border-radius', '12px');
 	await format.selectOption('css');
-	await value.fill('hsl(210 100% 50% / 0.4)');
-	await value.press('Enter');
+	await value.fill('hsl(210 100% 50% / 0.4)'); await value.press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#0080ff66');
 	for (const selected of ['hex', 'rgb', 'hsl', 'hsb', 'css']) {
 		await format.selectOption(selected);
 		await expect(shape).toHaveAttribute('fill', '#0080ff66');
 	}
-	await value.fill('var(--unknown-color)');
-	await value.press('Enter');
+	await value.fill('var(--unknown-color)'); await value.press('Enter');
 	await expect(value).toHaveAttribute('aria-invalid', 'true');
 	await expect(shape).toHaveAttribute('fill', '#0080ff66');
-	await value.fill('rebeccapurple');
-	await value.press('Enter');
+	await value.fill('rebeccapurple'); await value.press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#663399');
-	await value.fill('rgba(200, 100, 50, 0.01)');
-	await value.press('Enter');
+	await value.fill('rgba(200, 100, 50, 0.01)'); await value.press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#c8643203');
 	await format.selectOption('hex');
-	await value.fill('ff000080');
-	await value.press('Enter');
+	await value.fill('ff000080'); await value.press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#ff000080');
 	for (const selected of ['rgb', 'css', 'hsl', 'hsb', 'hex']) {
 		await format.selectOption(selected);
 		await expect(shape).toHaveAttribute('fill', '#ff000080');
 	}
-	await value.fill('ff8000');
-	await value.press('Enter');
+	await value.fill('ff8000'); await value.press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#ff800080');
 	await format.selectOption('rgb');
-	for (const [channel, number] of [
-		['R', '255'],
-		['G', '0'],
-		['B', '64'],
-	]) {
+	for (const [channel, number] of [['R', '255'], ['G', '0'], ['B', '64']]) {
 		const input = picker.getByRole('spinbutton', { name: `RGB ${channel}`, exact: true });
-		await input.fill(number);
-		await input.press('Enter');
+		await input.fill(number); await input.press('Enter');
 	}
 	await expect(shape).toHaveAttribute('fill', '#ff004080');
 	await format.selectOption('hsl');
-	for (const [channel, number] of [
-		['H', '120'],
-		['S', '100'],
-		['L', '50'],
-	]) {
+	for (const [channel, number] of [['H', '120'], ['S', '100'], ['L', '50']]) {
 		const input = picker.getByRole('spinbutton', { name: `HSL ${channel}`, exact: true });
-		await input.fill(number);
-		await input.press('Enter');
+		await input.fill(number); await input.press('Enter');
 	}
 	await expect(shape).toHaveAttribute('fill', '#00ff0080');
 	await format.selectOption('hsb');
-	for (const [channel, number] of [
-		['H', '240'],
-		['S', '100'],
-		['B', '100'],
-	]) {
+	for (const [channel, number] of [['H', '240'], ['S', '100'], ['B', '100']]) {
 		const input = picker.getByRole('spinbutton', { name: `HSB ${channel}`, exact: true });
-		await input.fill(number);
-		await input.press('Enter');
+		await input.fill(number); await input.press('Enter');
 	}
 	await expect(shape).toHaveAttribute('fill', '#0000ff80');
 	await picker.getByRole('spinbutton', { name: 'Opacity (%)', exact: true }).fill('30');
@@ -1364,8 +909,7 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 	await fill.click();
 	await expect(picker.getByRole('group', { name: 'Recent colors' })).toBeVisible();
 	const swatches = picker.getByRole('group', { name: 'Document colors' }).getByRole('button');
-	await swatches.first().focus();
-	await page.keyboard.press('ArrowRight');
+	await swatches.first().focus(); await page.keyboard.press('ArrowRight');
 	await expect(swatches.first()).toBeFocused();
 	await picker.getByRole('group', { name: 'Recent colors' }).getByRole('button', { name: '#0000FF4D', exact: true }).press('Enter');
 	await expect(shape).toHaveAttribute('fill', '#0000ff4d');
@@ -1384,19 +928,14 @@ design('Sessions Design color picker preserves formats, previews gestures and ex
 		try {
 			await preview.setContent(code);
 			await expect(preview.locator('[data-design-id]')).toHaveCSS('background-color', /rgba\(.+, 0\.3\d*\)/u);
-		} finally {
-			await preview.close();
-		}
+		} finally { await preview.close(); }
 		await page.setViewportSize({ width: 620, height: 700 });
 	}
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
 	await fill.click();
 	const popup = (await picker.boundingBox())!;
 	const viewport = page.viewportSize();
-	if (viewport) {
-		expect(popup.x).toBeGreaterThanOrEqual(0);
-		expect(popup.x + popup.width).toBeLessThanOrEqual(viewport.width);
-	}
+	if (viewport) { expect(popup.x).toBeGreaterThanOrEqual(0); expect(popup.x + popup.width).toBeLessThanOrEqual(viewport.width); }
 	await page.keyboard.press('Escape');
 });
 
@@ -1409,22 +948,10 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeDisabled();
 	await canvas.press('r');
 	await expect(pane.getByRole('heading', { name: 'Rectangle', exact: true })).toBeVisible();
-	await expect(pane.locator('details:visible > summary')).toHaveText([
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Vector tools',
-		'Prototype',
-	]);
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Vector tools', 'Prototype']);
 	await expect(pane.getByRole('button', { name: 'Export design', exact: true })).toBeEnabled();
 	const opacity = pane.getByRole('spinbutton', { name: 'Fill opacity (%)', exact: true });
-	await opacity.fill('50');
-	await opacity.press('Tab');
+	await opacity.fill('50'); await opacity.press('Tab');
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#80808080');
 	await canvas.press('ControlOrMeta+z');
 	await expect(opacity).toHaveValue('100');
@@ -1443,24 +970,11 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 	await page.keyboard.press('Escape');
 	await expect(x).toBeFocused();
 	await drawBezierPath(canvas);
-	await expect(pane.locator('details:visible > summary')).toHaveText([
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Bézier path',
-		'Vector tools',
-		'Prototype',
-	]);
+	await expect(pane.locator('details:visible > summary')).toHaveText(['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Bézier path', 'Vector tools', 'Prototype']);
 	const path = canvas.locator('path[data-shape-id]');
 	const originalWidth = await path.getAttribute('stroke-width');
 	const stroke = pane.getByRole('spinbutton', { name: 'Stroke width', exact: true });
-	await stroke.fill('6.5');
-	await stroke.press('Tab');
+	await stroke.fill('6.5'); await stroke.press('Tab');
 	await expect(path).toHaveAttribute('stroke-width', '6.5');
 	await canvas.press('ControlOrMeta+z');
 	await expect(path).toHaveAttribute('stroke-width', originalWidth!);
@@ -1487,13 +1001,7 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 	await page.mouse.up();
 	await expect.poll(async () => (await pane.boundingBox())!.width).toBeLessThanOrEqual(200);
 	const properties = pane.locator('.ash-sessions-design-properties');
-	const overflow = await properties.evaluate(root => ({
-		width: root.clientWidth,
-		scrollWidth: root.scrollWidth,
-		fieldsFit: [...root.querySelectorAll('input, textarea, select')]
-			.filter(field => (field as HTMLElement).offsetParent)
-			.every(field => field.getBoundingClientRect().right <= root.getBoundingClientRect().right),
-	}));
+	const overflow = await properties.evaluate(root => ({ width: root.clientWidth, scrollWidth: root.scrollWidth, fieldsFit: [...root.querySelectorAll('input, textarea, select')].filter(field => (field as HTMLElement).offsetParent).every(field => field.getBoundingClientRect().right <= root.getBoundingClientRect().right) }));
 	expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.width);
 	expect(overflow.fieldsFit).toBe(true);
 	await canvas.press('ControlOrMeta+a');
@@ -1510,8 +1018,7 @@ design('Sessions Design frames keep child geometry, nested selection and whole-g
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
 	const frame = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
 	await expect(frame).toHaveAttribute('width', '640');
-	await canvas.focus();
-	await page.keyboard.press('r');
+	await canvas.focus(); await page.keyboard.press('r');
 	const child = frame.locator('rect[data-shape-id]');
 	await expect(child).toHaveCount(1);
 	await expect(child).toHaveAttribute('x', '260');
@@ -1522,8 +1029,7 @@ design('Sessions Design frames keep child geometry, nested selection and whole-g
 	const layers = page.locator('[data-part="sidebar"]');
 	await layers.getByRole('treeitem', { name: 'Frame', exact: true }).click();
 	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
-	await width.fill('800');
-	await width.press('Tab');
+	await width.fill('800'); await width.press('Tab');
 	await expect(frame).toHaveAttribute('width', '800');
 	await expect(child).toHaveAttribute('width', '120');
 	await expect(child).toHaveAttribute('x', '260');
@@ -1536,8 +1042,7 @@ design('Sessions Design frames keep child geometry, nested selection and whole-g
 	await page.mouse.move(bounds!.x + 70, bounds!.y + 40, { steps: 4 });
 	await page.mouse.up();
 	await expect(child).toHaveAttribute('x', '300');
-	await canvas.focus();
-	await page.keyboard.press('ControlOrMeta+z');
+	await canvas.focus(); await page.keyboard.press('ControlOrMeta+z');
 	await expect(child).toHaveAttribute('x', '260');
 	await expect(viewport).not.toHaveClass(/moving/u);
 	await canvas.press('Alt+F1');
@@ -1550,8 +1055,7 @@ design('Sessions Design edits text and Bézier handles and transforms groups wit
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
-	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 80 } });
-	await page.keyboard.press('Escape');
+	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 80 } }); await page.keyboard.press('Escape');
 	const content = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
 	await content.fill('中文 <script>alert(1)</script>\nSecond line');
 	await content.press('Tab');
@@ -1612,9 +1116,7 @@ design('Sessions Design edits text and Bézier handles and transforms groups wit
 	await page.keyboard.press('Escape');
 	await expect(canvas).toBeFocused();
 	expect((await inspectCanvasMenu(canvas)).find(item => item.label === 'Export SVG')!.enabled).toBe(true);
-	{
-		await page.setViewportSize({ width: 600, height: 600 });
-	}
+	{ await page.setViewportSize({ width: 600, height: 600 }); }
 	await canvas.focus();
 	await drawBezierPath(canvas);
 	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
@@ -1636,57 +1138,38 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		const chromeBackground = scheme === 'hcLight' ? 'rgb(255, 255, 255)' : scheme === 'hcDark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
 		await expect(tools).toHaveCSS('background-color', chromeBackground);
 		await expect(tools).toHaveCSS('border-radius', '12px');
-		if (scheme.startsWith('hc')) {
-			await expect(tools).toHaveCSS('box-shadow', 'none');
-		}
+		if (scheme.startsWith('hc')) { await expect(tools).toHaveCSS('box-shadow', 'none'); }
 		await viewport.click({ button: 'right', position: { x: 20, y: 20 } });
 		await expect(page.locator('.ash-context-view-menu:has(> .ash-design-menu)')).toHaveCSS('background-color', chromeBackground);
-		await testInfo.attach(`design-menu-${scheme}`, {
-			body: await page.locator('.ash-context-view-menu:has(> .ash-design-menu)').screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach(`design-menu-${scheme}`, { body: await page.locator('.ash-context-view-menu:has(> .ash-design-menu)').screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
 		await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
-		await expect
-			.poll(() =>
-				viewport.evaluate(async element => {
-					const styles = getComputedStyle(element);
-					const url = /url\("?(data:image\/png;base64,[^"\)]+)"?\)/u.exec(styles.cursor)?.[1];
-					if (!url) return false;
-					const probe = document.createElement('span');
-					probe.style.color = 'var(--ash-foreground)';
-					element.append(probe);
-					const foreground = getComputedStyle(probe).color;
-					probe.remove();
-					const canvas = document.createElement('canvas');
-					canvas.width = canvas.height = 24;
-					const context = canvas.getContext('2d')!;
-					context.fillStyle = foreground;
-					context.fillRect(0, 0, 1, 1);
-					const expected = context.getImageData(0, 0, 1, 1).data;
-					const image = new Image();
-					image.src = url;
-					await image.decode();
-					if (image.width !== 24 || image.height !== 24) return false;
-					context.clearRect(0, 0, 24, 24);
-					context.drawImage(image, 0, 0);
-					const pixels = context.getImageData(0, 0, 24, 24).data;
-					let ink = 0;
-					for (let index = 0; index < pixels.length; index += 4) {
-						if (pixels[index + 3] !== 255) continue;
-						ink++;
-						if ([0, 1, 2].some(channel => Math.abs(pixels[index + channel]! - expected[channel]!) > 1)) return false;
-					}
-					return ink > 0;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => viewport.evaluate(async element => {
+			const styles = getComputedStyle(element);
+			const url = /url\("?(data:image\/png;base64,[^"\)]+)"?\)/u.exec(styles.cursor)?.[1];
+			if (!url) return false;
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-foreground)'; element.append(probe);
+			const foreground = getComputedStyle(probe).color; probe.remove();
+			const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24;
+			const context = canvas.getContext('2d')!;
+			context.fillStyle = foreground; context.fillRect(0, 0, 1, 1);
+			const expected = context.getImageData(0, 0, 1, 1).data;
+			const image = new Image(); image.src = url; await image.decode();
+			if (image.width !== 24 || image.height !== 24) return false;
+			context.clearRect(0, 0, 24, 24); context.drawImage(image, 0, 0);
+			const pixels = context.getImageData(0, 0, 24, 24).data;
+			let ink = 0;
+			for (let index = 0; index < pixels.length; index += 4) {
+				if (pixels[index + 3] !== 255) continue;
+				ink++;
+				if ([0, 1, 2].some(channel => Math.abs(pixels[index + channel]! - expected[channel]!) > 1)) return false;
+			}
+			return ink > 0;
+		})).toBe(true);
 		const colors = await viewport.evaluate(element => {
 			const styles = getComputedStyle(element);
-			return {
-				grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(),
-				contrast: styles.getPropertyValue('--ash-contrastBorder').trim(),
-			};
+			return { grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
 		});
 		if (scheme.startsWith('hc')) {
 			expect(colors.grid).toBe(colors.contrast);
@@ -1702,24 +1185,14 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		const fieldColors = await field.evaluate(input => {
 			const style = getComputedStyle(input);
 			const container = getComputedStyle(input.parentElement!);
-			return {
-				foreground: style.color,
-				background: container.backgroundColor,
-				border: container.borderColor,
-				borderWidth: container.borderWidth,
-				radius: container.borderRadius,
-				fontSize: style.fontSize,
-			};
+			return { foreground: style.color, background: container.backgroundColor, border: container.borderColor, borderWidth: container.borderWidth, radius: container.borderRadius, fontSize: style.fontSize };
 		});
 		expect(fieldColors.foreground).not.toBe(fieldColors.background);
 		expect(fieldColors.border).not.toBe(fieldColors.background);
 		expect(fieldColors).toMatchObject({ radius: '6px', fontSize: '12px' });
 		expect(Number.parseFloat(fieldColors.borderWidth)).toBeGreaterThan(0);
 		expect(Number.parseFloat(fieldColors.borderWidth)).toBeLessThanOrEqual(1);
-		await properties
-			.locator('summary')
-			.filter({ hasText: /^Position$/u })
-			.focus();
+		await properties.locator('summary').filter({ hasText: /^Position$/u }).focus();
 		await expect(properties.locator('summary').filter({ hasText: /^Position$/u })).toHaveCSS('outline-style', 'solid');
 		const fill = properties.getByRole('button', { name: 'Fill', exact: true });
 		await fill.focus();
@@ -1741,6 +1214,7 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		}
 		await page.keyboard.press('Escape');
 		await canvas.press('Delete');
+
 	}
 });
 
@@ -1846,9 +1320,7 @@ design('Sessions Design floating tools draw, edit motion and expose reusable cod
 		await expect(exported).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 50, 0)');
 		const document = await preview.locator('#ash-design-document').textContent();
 		expect(parseDesignDocument(document!).shapes[0].motion!.keyframes).toHaveLength(3);
-	} finally {
-		await preview.close();
-	}
+	} finally { await preview.close(); }
 	await tools.getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(rectangle).toHaveAttribute('x', '120');
 	await expect(rectangle).toHaveAttribute('opacity', '1');
@@ -1871,12 +1343,10 @@ design('Sessions Design floating tools draw, edit motion and expose reusable cod
 	await page.keyboard.press('Delete');
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
 	await page.setViewportSize({ width: 620, height: 700 });
-	await expect
-		.poll(async () => {
-			const [toolsBounds, viewportBounds] = await Promise.all([tools.boundingBox(), viewport.boundingBox()]);
-			return toolsBounds && viewportBounds ? toolsBounds.x + toolsBounds.width - viewportBounds.x - viewportBounds.width : Infinity;
-		})
-		.toBeLessThanOrEqual(0);
+	await expect.poll(async () => {
+		const [toolsBounds, viewportBounds] = await Promise.all([tools.boundingBox(), viewport.boundingBox()]);
+		return toolsBounds && viewportBounds ? toolsBounds.x + toolsBounds.width - viewportBounds.x - viewportBounds.width : Infinity;
+	}).toBeLessThanOrEqual(0);
 	const narrowBounds = (await tools.boundingBox())!;
 	const narrowViewport = (await viewport.boundingBox())!;
 	expect(narrowBounds.x).toBeGreaterThanOrEqual(narrowViewport.x);

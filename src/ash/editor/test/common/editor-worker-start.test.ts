@@ -6,39 +6,24 @@ import { start, type StanzaWorkerPort } from '../../editor.worker.start.js';
 test('Stanza worker bootstrap owns one structured-clone port lifecycle', () => {
 	const port = new FakeWorkerPort();
 	let received: unknown;
-	let resources: { dispose(): void } | undefined;
+	let resources: { dispose(): void; } | undefined;
 
-	start(
-		context => {
-			resources = context.resources;
-			context.port.onMessage(message => {
-				received = message;
-				context.port.send({ kind: 'ack', message });
-			});
-		},
-		() => port,
-	);
+	start(context => {
+		resources = context.resources;
+		context.port.onMessage(message => {
+			received = message;
+			context.port.send({ kind: 'ack', message });
+		});
+	}, () => port);
 
-	assert.throws(
-		() =>
-			start(
-				() => undefined,
-				() => new FakeWorkerPort(),
-			),
-		/already started/,
-	);
+	assert.throws(() => start(() => undefined, () => new FakeWorkerPort()), /already started/);
 	port.receive({ kind: 'request' });
 	assert.deepEqual(received, { kind: 'request' });
 	assert.deepEqual(port.sent, [{ kind: 'ack', message: { kind: 'request' } }]);
 
 	resources?.dispose();
 	assert.equal(port.disposed, true);
-	assert.doesNotThrow(() =>
-		start(
-			context => context.resources.dispose(),
-			() => new FakeWorkerPort(),
-		),
-	);
+	assert.doesNotThrow(() => start(context => context.resources.dispose(), () => new FakeWorkerPort()));
 });
 
 class FakeWorkerPort implements StanzaWorkerPort {

@@ -53,47 +53,31 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	}
 
 	protected doCreateLogger(category: string): LogService {
-		if (!category.trim()) {
-			throw new TypeError('Invalid logger category');
-		}
+		if (!category.trim()) { throw new TypeError('Invalid logger category'); }
 		return new LogService({
 			flush: () => this.flush(),
-			sinks: [
-				new ConsoleLogSink(),
-				{
-					log: entry => {
-						void this.log('main', {
-							...entry,
-							category: entry.category === 'application' ? category : entry.category,
-						}).catch(error => console.error('Failed to persist Desktop log', error));
-					},
+			sinks: [new ConsoleLogSink(), {
+				log: entry => {
+					void this.log('main', { ...entry, category: entry.category === 'application' ? category : entry.category })
+						.catch(error => console.error('Failed to persist Desktop log', error));
 				},
-			],
+			}]
 		});
 	}
 
 	public log(source: string, entry: LogEntry): Promise<void> {
-		if (!/^(main|window-[1-9]\d*)$/.test(source)) {
-			throw new TypeError('Invalid log source');
-		}
-		const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error === undefined ? undefined : String(entry.error);
+		if (!/^(main|window-[1-9]\d*)$/.test(source)) { throw new TypeError('Invalid log source'); }
+		const error = entry.error instanceof Error ? entry.error.stack ?? entry.error.message : entry.error === undefined ? undefined : String(entry.error);
 		const line = JSON.stringify({ ...entry, error, source, processId: process.pid }) + '\n';
 		const bytes = Buffer.byteLength(line);
-		if (bytes > this.maxFileBytes) {
-			throw new RangeError('Log entry exceeds file limit');
-		}
+		if (bytes > this.maxFileBytes) { throw new RangeError('Log entry exceeds file limit'); }
 		return this.run(async () => {
 			const path = join(this.sessionPath, `${source}.log`);
 			let size = this.fileSizes.get(source) ?? 0;
 			if (size > 0 && size + bytes > this.maxFileBytes) {
 				await rm(`${path}.2`, { force: true });
-				try {
-					await rename(`${path}.1`, `${path}.2`);
-				} catch (error) {
-					if (!isRecord(error) || error.code !== 'ENOENT') {
-						throw error;
-					}
-				}
+				try { await rename(`${path}.1`, `${path}.2`); }
+				catch (error) { if (!isRecord(error) || error.code !== 'ENOENT') { throw error; } }
 				await rename(path, `${path}.1`);
 				size = 0;
 			}
@@ -108,20 +92,12 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 		await this.queue;
 		const current = this.sessionPath.slice(this.logsHome.length + 1);
 		const files: ILogFile[] = [];
-		for (const session of (await readdir(this.logsHome, { withFileTypes: true }))
-			.filter(entry => entry.isDirectory() && SessionName.test(entry.name))
-			.sort((a, b) => b.name.localeCompare(a.name))) {
+		for (const session of (await readdir(this.logsHome, { withFileTypes: true })).filter(entry => entry.isDirectory() && SessionName.test(entry.name)).sort((a, b) => b.name.localeCompare(a.name))) {
 			for (const file of await readdir(join(this.logsHome, session.name), { withFileTypes: true })) {
 				if (!file.isFile() || !LogFileName.test(file.name)) continue;
 				const source = file.name.replace(/\.log(?:\.[12])?$/, '');
 				const live = session.name === current && file.name.endsWith('.log');
-				files.push({
-					id: `${session.name}/${file.name}`,
-					source,
-					format: 'jsonl',
-					live,
-					currentWindow: live && source === windowSource,
-				});
+				files.push({ id: `${session.name}/${file.name}`, source, format: 'jsonl', live, currentWindow: live && source === windowSource });
 			}
 		}
 		this.appServerLogPath ??= await this.appServerLog?.();
@@ -143,7 +119,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 			if (!session || !file || extra !== undefined || !SessionName.test(session) || !LogFileName.test(file)) throw new TypeError('Invalid log file identity');
 			const directory = join(this.logsHome, session);
 			// A session directory cannot redirect the authenticated reader outside the log owner.
-			if ((await realpath(directory)) !== join(await realpath(this.logsHome), session)) throw new TypeError('Invalid log session directory');
+			if (await realpath(directory) !== join(await realpath(this.logsHome), session)) throw new TypeError('Invalid log session directory');
 			path = join(directory, file);
 		}
 		// O_NOFOLLOW is unavailable on some hosts. Reject redirected sources before
@@ -182,9 +158,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 			for (const entry of sessions.slice(this.retainedSessions - 1)) {
 				const target = resolve(this.logsHome, entry.name);
 				const withinRoot = relative(this.logsHome, target);
-				if (!withinRoot || withinRoot.startsWith('..') || isAbsolute(withinRoot)) {
-					throw new Error('Log cleanup escaped its directory');
-				}
+				if (!withinRoot || withinRoot.startsWith('..') || isAbsolute(withinRoot)) { throw new Error('Log cleanup escaped its directory'); }
 				await rm(target, { recursive: true });
 			}
 		});
@@ -192,9 +166,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 
 	public async flush(): Promise<void> {
 		await this.queue;
-		if (this.failure !== undefined) {
-			throw this.failure;
-		}
+		if (this.failure !== undefined) { throw this.failure; }
 	}
 
 	public close(): Promise<void> {
@@ -204,13 +176,9 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 
 	private run(operation: () => Promise<void>): Promise<void> {
 		this.assertNotDisposed();
-		if (!this.initialized || this.closing) {
-			throw new Error('Desktop logger is not open');
-		}
+		if (!this.initialized || this.closing) { throw new Error('Desktop logger is not open'); }
 		const result = this.queue.then(operation);
-		this.queue = result.catch(error => {
-			this.failure ??= error;
-		});
+		this.queue = result.catch(error => { this.failure ??= error; });
 		return result;
 	}
 }

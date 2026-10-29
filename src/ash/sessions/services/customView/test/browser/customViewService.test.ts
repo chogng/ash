@@ -12,21 +12,15 @@ import { CustomViewService } from '../../browser/customViewService.js';
 class TestView extends AbstractCustomView {
 	readonly title = constObservable('Test');
 
-	render(container: HTMLElement): void {
-		container.textContent = 'Test';
-	}
+	render(container: HTMLElement): void { container.textContent = 'Test'; }
 
-	layout(): void {}
+	layout(): void { }
 }
 
 test('Custom View restoration waits for registration and repeated opens retain their source', () => {
 	const dom = new JSDOM('', { url: 'https://custom-view.test' });
 	try {
-		using storage = new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'test',
-			flushInterval: 0,
-		});
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		storage.store('sessions.activeCustomView', 'test', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using service = new CustomViewService(new NullLoggerService(), storage);
 		assert.equal(service.activeCustomView.get(), undefined);
@@ -41,19 +35,13 @@ test('Custom View restoration waits for registration and repeated opens retain t
 		service.hideCustomView();
 		assert.equal(service.activeCustomView.get(), undefined);
 		assert.equal(storage.get('sessions.activeCustomView', StorageScope.WORKSPACE), undefined);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('An unavailable Custom View cannot restore, and unregistering the active descriptor hides it', () => {
 	const dom = new JSDOM('', { url: 'https://custom-view.test' });
 	try {
-		using storage = new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'test',
-			flushInterval: 0,
-		});
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
 		storage.store('sessions.activeCustomView', 'test', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using service = new CustomViewService(new NullLoggerService(), storage);
 		using registration = service.registerCustomView({ id: 'test', ctor: new SyncDescriptor(TestView) }, { restore: false });
@@ -62,7 +50,5 @@ test('An unavailable Custom View cannot restore, and unregistering the active de
 		service.showCustomView('test');
 		registration.dispose();
 		assert.equal(service.activeCustomView.get(), undefined);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });

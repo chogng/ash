@@ -39,7 +39,7 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 					return empty;
 				}
 				this.logService.warn('Unable to read the browser clipboard', error);
-				if (!(await this.waitForRetry())) {
+				if (!await this.waitForRetry()) {
 					return empty;
 				}
 			}
@@ -50,9 +50,7 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 	private waitForRetry(): Promise<boolean> {
 		return new Promise(resolve => {
 			const handle = this.notificationService.notify({
-				severity: Severity.Error,
-				message: localize('clipboard.readError', 'Unable to read the clipboard. Allow this website to access your clipboard, then retry.'),
-				actions: {
+				severity: Severity.Error, message: localize('clipboard.readError', 'Unable to read the clipboard. Allow this website to access your clipboard, then retry.'), actions: {
 					primary: [
 						{
 							tooltip: '',
@@ -70,25 +68,20 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 							id: 'clipboard.learnMore',
 							label: localize('clipboard.learnMore', 'Learn More'),
 							run: async () => {
-								await this.openerService.open('https://support.google.com/chrome/answer/114662', {
-									openExternal: true,
-								});
+								await this.openerService.open('https://support.google.com/chrome/answer/114662', { openExternal: true });
 							},
 						},
-					],
-				},
+					]
+				}
 			});
 
-			let listener: { dispose(): void } | undefined;
+			let listener: { dispose(): void; } | undefined;
 			// Closing the prompt or disposing its window completes the waiting paste.
-			this.pendingReads.set(
-				handle,
-				toDisposable(() => {
-					listener?.dispose();
-					handle.close();
-					resolve(false);
-				}),
-			);
+			this.pendingReads.set(handle, toDisposable(() => {
+				listener?.dispose();
+				handle.close();
+				resolve(false);
+			}));
 			listener = handle.onDidClose(() => this.pendingReads.deleteAndDispose(handle));
 		});
 	}

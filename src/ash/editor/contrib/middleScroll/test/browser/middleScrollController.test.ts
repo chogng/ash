@@ -8,9 +8,11 @@ import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
 import '../../browser/middleScroll.contribution.js';
 
+
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
+
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = h(environment.window.document, 'main');

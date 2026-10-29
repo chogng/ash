@@ -7,7 +7,9 @@ export interface TraceSettings {
 }
 
 export type TraceRecordingState =
-	{ readonly type: 'disabled' } | { readonly type: 'enabled'; readonly directory: string } | { readonly type: 'unavailable'; readonly directory: string; readonly error: string };
+	| { readonly type: 'disabled'; }
+	| { readonly type: 'enabled'; readonly directory: string; }
+	| { readonly type: 'unavailable'; readonly directory: string; readonly error: string; };
 
 export interface TraceSettingsSnapshot {
 	readonly revision: number;

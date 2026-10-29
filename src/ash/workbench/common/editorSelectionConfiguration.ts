@@ -18,12 +18,8 @@ export const EditorSelectionConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'select',
-			get title() {
-				return localize('editor.selection.title', 'Default editor for new documents');
-			},
-			get description() {
-				return localize('editor.selection.description', 'Use the default editor, or prefer Code or Academy for new untitled documents.');
-			},
+			get title() { return localize('editor.selection.title', 'Default editor for new documents'); },
+			get description() { return localize('editor.selection.description', 'Use the default editor, or prefer Code or Academy for new untitled documents.'); },
 			options: [
 				{ value: 'buildMode', label: 'Default' },
 				{ value: 'code', label: 'Code' },

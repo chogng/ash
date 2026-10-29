@@ -35,12 +35,8 @@ EditorInputSerializers.registerStatic({
 export class DiffEditorInput extends SideBySideEditorInput implements IResourceDiffEditorInput {
 	public readonly typeId = 'workbench.editorInput.diff';
 	public readonly contentType = DIFF_EDITOR_CONTENT_TYPE;
-	public get original(): IResourceEditorInput {
-		return this.secondary;
-	}
-	public get modified(): IResourceEditorInput {
-		return this.primary;
-	}
+	public get original(): IResourceEditorInput { return this.secondary; }
+	public get modified(): IResourceEditorInput { return this.primary; }
 }
 
 /** Creates a stable synthetic tab identity for an original/modified comparison. */
@@ -56,7 +52,8 @@ export function createDiffEditorInput(original: IResourceEditorInput, modified: 
 
 /** Narrows a generic Workbench editor input to the two-resource diff contract. */
 export function isDiffEditorInput(input: IResourceEditorInput): input is DiffEditorInput {
-	return input instanceof DiffEditorInput && input.contentType === DIFF_EDITOR_CONTENT_TYPE && isResourceDiffEditorInput(input);
+	return input instanceof DiffEditorInput && input.contentType === DIFF_EDITOR_CONTENT_TYPE &&
+		isResourceDiffEditorInput(input);
 }
 
 function assertTextResourceInput(value: unknown, owner: string): asserts value is IResourceEditorInput {
@@ -64,7 +61,9 @@ function assertTextResourceInput(value: unknown, owner: string): asserts value i
 }
 
 function isTextResourceInput(value: unknown): value is IResourceEditorInput {
-	return typeof value === 'object' && value !== null && 'resource' in value && typeof (value as IResourceEditorInput).resource?.toString === 'function';
+	return typeof value === 'object' && value !== null &&
+		'resource' in value &&
+		typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }
 
 export const BINARY_DIFF_EDITOR_CONTENT_TYPE = 'application/vnd.ash.binary-diff';
@@ -72,12 +71,8 @@ export const BINARY_DIFF_EDITOR_CONTENT_TYPE = 'application/vnd.ash.binary-diff'
 export class BinaryDiffEditorInput extends SideBySideEditorInput implements IResourceDiffEditorInput {
 	public readonly typeId = 'workbench.editorInput.binaryDiff';
 	public readonly contentType = BINARY_DIFF_EDITOR_CONTENT_TYPE;
-	public get original(): IResourceEditorInput {
-		return this.secondary;
-	}
-	public get modified(): IResourceEditorInput {
-		return this.primary;
-	}
+	public get original(): IResourceEditorInput { return this.secondary; }
+	public get modified(): IResourceEditorInput { return this.primary; }
 }
 
 /** Compares two file resources without decoding their contents as text. */
@@ -90,13 +85,9 @@ export function createBinaryDiffEditorInput(original: IResourceEditorInput, modi
 }
 
 export function isBinaryDiffEditorInput(input: IResourceEditorInput): input is BinaryDiffEditorInput {
-	return (
-		input instanceof BinaryDiffEditorInput &&
-		input.contentType === BINARY_DIFF_EDITOR_CONTENT_TYPE &&
+	return input instanceof BinaryDiffEditorInput && input.contentType === BINARY_DIFF_EDITOR_CONTENT_TYPE &&
 		isResourceDiffEditorInput(input) &&
-		canReadBinary(input.original) &&
-		canReadBinary(input.modified)
-	);
+		canReadBinary(input.original) && canReadBinary(input.modified);
 }
 
 EditorInputSerializers.registerStatic({

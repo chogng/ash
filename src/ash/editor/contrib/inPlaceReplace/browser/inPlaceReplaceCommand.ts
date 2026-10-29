@@ -9,7 +9,7 @@ export class InPlaceReplaceCommand implements ICommand {
 		private readonly editRange: Range,
 		private readonly originalSelection: Selection,
 		private readonly text: string,
-	) {}
+	) { }
 
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this.editRange, this.text);

@@ -12,7 +12,5 @@ export class AICustomizationManagementEditorInput extends EditorInput {
 	public readonly readOnly = true;
 	public readonly showBreadcrumbs = false;
 
-	public getName(): string {
-		return localize('hooks.managementTitle', 'Agent Customizations: Hooks');
-	}
+	public getName(): string { return localize('hooks.managementTitle', 'Agent Customizations: Hooks'); }
 }

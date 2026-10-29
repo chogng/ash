@@ -1,23 +1,31 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { ResourceMap, ResourceSet } from '../../common/map.js';
-import { ExtUri, basename, extUri, DataUri, ResourcePathCasing, dirname } from '../../common/resources.js';
+import {
+	ExtUri,
+	basename,
+	extUri,
+	DataUri,
+	ResourcePathCasing,
+	dirname,
+} from '../../common/resources.js';
 import { URI } from '../../common/uri.js';
 
-const caseInsensitiveExtUri = new ExtUri(() => ResourcePathCasing.Insensitive);
+const caseInsensitiveExtUri = new ExtUri(
+	() => ResourcePathCasing.Insensitive,
+);
 
 test('DataUri reads encoded metadata without consuming the payload', () => {
 	const resource = URI.parse('data:text/typescript;label:Demo%20File.ts;description:Part%3BOne;base64,AA');
 
-	assert.deepEqual(
-		[...DataUri.parseMetaData(resource)],
-		[
-			[DataUri.META_DATA_MIME, 'text/typescript'],
-			[DataUri.META_DATA_LABEL, 'Demo File.ts'],
-			['description', 'Part;One'],
-		],
-	);
-	assert.deepEqual([...DataUri.parseMetaData(URI.parse('data:text/plain,content'))], [[DataUri.META_DATA_MIME, 'text/plain']]);
+	assert.deepEqual([...DataUri.parseMetaData(resource)], [
+		[DataUri.META_DATA_MIME, 'text/typescript'],
+		[DataUri.META_DATA_LABEL, 'Demo File.ts'],
+		['description', 'Part;One'],
+	]);
+	assert.deepEqual([...DataUri.parseMetaData(URI.parse('data:text/plain,content'))], [
+		[DataUri.META_DATA_MIME, 'text/plain'],
+	]);
 });
 
 test('ExtUri preserves fragments unless explicitly ignored', () => {
@@ -25,7 +33,10 @@ test('ExtUri preserves fragments unless explicitly ignored', () => {
 	const secondAnchor = URI.parse('ash://workspace/item?rev=2#anchor=2');
 
 	assert.equal(extUri.isEqual(firstAnchor, secondAnchor), false);
-	assert.equal(extUri.isEqualIgnoringFragment(firstAnchor, secondAnchor), true);
+	assert.equal(
+		extUri.isEqualIgnoringFragment(firstAnchor, secondAnchor),
+		true,
+	);
 });
 
 test('ExtUri retains query revisions', () => {
@@ -76,15 +87,12 @@ test('dirname keeps an escaped slash inside its filename', () => {
 });
 
 test('dirname preserves POSIX filename backslashes and Windows drive roots on every renderer OS', () => {
-	assert.deepEqual(
-		[
-			dirname(URI.parse('file:///work/part%5Cname.txt')).toString(),
-			dirname(URI.parse('file:///C:/part.txt')).toString(),
-			dirname(URI.parse('file:///C:/')).toString(),
-			dirname(URI.parse('file:///C:/folder/part.txt')).toString(),
-		],
-		['file:///work', 'file:///C:/', 'file:///C:/', 'file:///C:/folder'],
-	);
+	assert.deepEqual([
+		dirname(URI.parse('file:///work/part%5Cname.txt')).toString(),
+		dirname(URI.parse('file:///C:/part.txt')).toString(),
+		dirname(URI.parse('file:///C:/')).toString(),
+		dirname(URI.parse('file:///C:/folder/part.txt')).toString(),
+	], ['file:///work', 'file:///C:/', 'file:///C:/', 'file:///C:/folder']);
 });
 
 test('basename decodes the final path segment after finding its boundary', () => {

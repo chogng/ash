@@ -18,13 +18,11 @@ export class QuickDiffService extends Disposable implements IQuickDiffService {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				for (const registration of this.registrations) registration.listeners.dispose();
-				this.registrations.length = 0;
-				this.hiddenProviders.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const registration of this.registrations) registration.listeners.dispose();
+			this.registrations.length = 0;
+			this.hiddenProviders.clear();
+		}));
 	}
 
 	get providers(): readonly QuickDiffProvider[] {
@@ -68,7 +66,9 @@ export class QuickDiffService extends Disposable implements IQuickDiffService {
 	async getQuickDiffs(resource: URI, signal: AbortSignal): Promise<readonly QuickDiffOriginalResource[]> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
-		const providers = this.registrations.map(registration => registration.provider).filter(provider => this.isProviderVisible(provider.id) && containsResource(provider.rootUri, resource));
+		const providers = this.registrations
+			.map(registration => registration.provider)
+			.filter(provider => this.isProviderVisible(provider.id) && containsResource(provider.rootUri, resource));
 		const results = await Promise.all(providers.map(provider => provider.provideOriginalResource(resource, signal)));
 		signal.throwIfAborted();
 		return Object.freeze(results.filter((result): result is QuickDiffOriginalResource => result !== undefined));

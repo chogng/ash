@@ -13,10 +13,6 @@ export class ElectronChatGPTTransport implements IChatGPTTransport {
 		// Channel arguments are JSON; nested VSBuffer instances do not survive serialization.
 		return this.channel.call('request', [id, request.body instanceof VSBuffer ? { ...request, body: { base64: encodeBase64(request.body) } } : request]);
 	}
-	read(id: string): Promise<VSBuffer | null> {
-		return this.channel.call('read', [id]);
-	}
-	cancel(id: string): Promise<void> {
-		return this.channel.call('cancel', [id]);
-	}
+	read(id: string): Promise<VSBuffer | null> { return this.channel.call('read', [id]); }
+	cancel(id: string): Promise<void> { return this.channel.call('cancel', [id]); }
 }

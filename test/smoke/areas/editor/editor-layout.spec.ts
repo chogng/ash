@@ -9,43 +9,35 @@ interface SashMeasurements {
 	readonly editorPartDimensionReads: number;
 	readonly durations: number[];
 	readonly frameIntervals: number[];
-	readonly initialRaster: { width: number; height: number };
-	readonly rasters: { width: number; height: number }[];
+	readonly initialRaster: { width: number; height: number; };
+	readonly rasters: { width: number; height: number; }[];
 }
 
-test(
-	'startup omits an empty source group created by Open to the Side and preserves unsaved content',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, application, workbench, reloadWorkbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
-		await workbench.openExplorer();
-		const file = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
-		await workbench.menus.select(application, () => file.click({ button: 'right' }), ['Open to the Side']);
-		await expect(workbench.editors.groups).toHaveCount(2);
-		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
-		const document = workbench.editors.groupAt(1);
-		await expect(document.tabs).toHaveCount(1);
-		await document.editor.input.focus();
-		await workbench.page.keyboard.press('ControlOrMeta+End');
-		await workbench.page.keyboard.insertText('// retained after restart');
-		await document.editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
-		for (let restart = 0; restart < 2; restart++) {
-			({ workbench } = await reloadWorkbench());
-			await expect(workbench.editors.groups).toHaveCount(1);
-			await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
-			await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'main.ts, unsaved changes');
-			await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
-			await expect
-				.poll(() =>
-					workbench.editors.groupAt(0).element.evaluate(element => {
-						const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
-						return Math.round(content.width - element.getBoundingClientRect().width);
-					}),
-				)
-				.toBe(0);
-		}
-	},
-);
+test('startup omits an empty source group created by Open to the Side and preserves unsaved content', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await workbench.openExplorer();
+	const file = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
+	await workbench.menus.select(application, () => file.click({ button: 'right' }), ['Open to the Side']);
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
+	const document = workbench.editors.groupAt(1);
+	await expect(document.tabs).toHaveCount(1);
+	await document.editor.input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+End');
+	await workbench.page.keyboard.insertText('// retained after restart');
+	await document.editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
+	for (let restart = 0; restart < 2; restart++) {
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groups).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'main.ts, unsaved changes');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n// retained after restart');
+		await expect.poll(() => workbench.editors.groupAt(0).element.evaluate(element => {
+			const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+			return Math.round(content.width - element.getBoundingClientRect().width);
+		})).toBe(0);
+	}
+});
 
 test('closing tabs removes empty editor groups and restores one full-width group', async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
@@ -67,15 +59,11 @@ test('closing tabs removes empty editor groups and restores one full-width group
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
 	await expect(workbench.editors.groupAt(0).title).toBeHidden();
 	await expect(workbench.editors.groupAt(0).watermark).toBeVisible();
-	await expect
-		.poll(async () =>
-			workbench.editors.groupAt(0).element.evaluate(element => {
-				const group = element.getBoundingClientRect();
-				const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
-				return Math.round(content.width - group.width);
-			}),
-		)
-		.toBe(0);
+	await expect.poll(async () => workbench.editors.groupAt(0).element.evaluate(element => {
+		const group = element.getBoundingClientRect();
+		const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+		return Math.round(content.width - group.width);
+	})).toBe(0);
 	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 	await expect(workbench.editors.groups).toHaveCount(2);
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
@@ -171,49 +159,17 @@ test.describe('editor group lifecycle saved state', () => {
 	test.use({ openWorkspace: false });
 	test('startup removes a previously saved empty group without a close command and keeps one group after restart', async ({ target, application, workbench, reloadWorkbench }) => {
 		const page = workbench.page;
-		const workspaceId =
-			target.kind === 'electron'
-				? parseWorkspace(
-						await page.evaluate(() =>
-							(
-								globalThis as unknown as {
-									ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } };
-								}
-							).ash.ipcRenderer.invoke('ash:workspace:context:read'),
-						),
-					).id
-				: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'))).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
 		expect(workspaceId).toBeTruthy();
 		const state = {
-			version: 1,
-			active: 0,
-			parts: [
-				{
-					id: 'lastSession',
-					activeGroupIndex: 1,
-					groups: [
-						{ id: 'editor-group-empty', size: 0.5, activeEditorIndex: -1, editors: [] },
-						{
-							id: 'editor-group-file',
-							size: 0.5,
-							activeEditorIndex: 0,
-							editors: [
-								{
-									input: {
-										typeId: 'workbench.editorInput.resource',
-										value: {
-											resource: 'untitled:/restored.json',
-											label: 'restored.json',
-											initialText: '{ "restored": true }',
-										},
-									},
-									preview: false,
-								},
-							],
-						},
-					],
-				},
-			],
+			version: 1, active: 0, parts: [{
+				id: 'lastSession', activeGroupIndex: 1, groups: [
+					{ id: 'editor-group-empty', size: 0.5, activeEditorIndex: -1, editors: [] },
+					{ id: 'editor-group-file', size: 0.5, activeEditorIndex: 0, editors: [{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restored.json', label: 'restored.json', initialText: '{ "restored": true }' } }, preview: false }] },
+				]
+			}],
 		};
 		await seedStorageOnNextLoad(application, page, { scope: StorageScope.WORKSPACE, id: workspaceId! }, { 'editorparts.state': { value: JSON.stringify(state), target: StorageTarget.MACHINE } });
 		await page.reload();
@@ -222,14 +178,10 @@ test.describe('editor group lifecycle saved state', () => {
 		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).tabs).toHaveAttribute('aria-label', 'restored.json, unsaved changes');
 		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === '{ "restored": true }');
-		await expect
-			.poll(() =>
-				workbench.editors.groupAt(0).element.evaluate(element => {
-					const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
-					return Math.round(content.width - element.getBoundingClientRect().width);
-				}),
-			)
-			.toBe(0);
+		await expect.poll(() => workbench.editors.groupAt(0).element.evaluate(element => {
+			const content = element.closest('.ash-workbench-part-content')!.getBoundingClientRect();
+			return Math.round(content.width - element.getBoundingClientRect().width);
+		})).toBe(0);
 		({ workbench } = await reloadWorkbench());
 		await expect(workbench.editors.groups).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
@@ -239,66 +191,23 @@ test.describe('editor group lifecycle saved state', () => {
 
 	test('restores supported tabs around a missing serializer and updates the window title after reload', async ({ target, application, workbench, reloadWorkbench }) => {
 		const page = workbench.page;
-		const workspaceId =
-			target.kind === 'electron'
-				? parseWorkspace(
-						await page.evaluate(() =>
-							(
-								globalThis as unknown as {
-									ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } };
-								}
-							).ash.ipcRenderer.invoke('ash:workspace:context:read'),
-						),
-					).id
-				: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'))).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
 		expect(workspaceId).toBeTruthy();
 		const identity = { scope: StorageScope.WORKSPACE, id: workspaceId! };
 		const saved = {
-			version: 1,
-			active: 0,
-			parts: [
-				{
-					id: 'lastSession',
-					activeGroupIndex: 0,
-					groups: [
-						{
-							id: 'editor-group-restored',
-							size: 1,
-							activeEditorIndex: 2,
-							editors: [
-								{ input: { typeId: 'workbench.removedSerializer', value: {} }, preview: false },
-								{
-									input: {
-										typeId: 'workbench.editorInput.resource',
-										value: {
-											resource: 'untitled:/restore-first.ts',
-											label: 'restore-first.ts',
-											initialText: '',
-										},
-									},
-									preview: false,
-									sticky: true,
-								},
-								{
-									input: {
-										typeId: 'workbench.editorInput.resource',
-										value: {
-											resource: 'untitled:/restore-second.ts',
-											label: 'restore-second.ts',
-											initialText: '',
-										},
-									},
-									preview: true,
-								},
-							],
-						},
-					],
-				},
-			],
+			version: 1, active: 0, parts: [{
+				id: 'lastSession', activeGroupIndex: 0, groups: [{
+					id: 'editor-group-restored', size: 1, activeEditorIndex: 2, editors: [
+						{ input: { typeId: 'workbench.removedSerializer', value: {} }, preview: false },
+						{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restore-first.ts', label: 'restore-first.ts', initialText: '' } }, preview: false, sticky: true },
+						{ input: { typeId: 'workbench.editorInput.resource', value: { resource: 'untitled:/restore-second.ts', label: 'restore-second.ts', initialText: '' } }, preview: true },
+					]
+				}]
+			}]
 		};
-		await seedStorageOnNextLoad(application, page, identity, {
-			'editorparts.state': { value: JSON.stringify(saved), target: StorageTarget.MACHINE },
-		});
+		await seedStorageOnNextLoad(application, page, identity, { 'editorparts.state': { value: JSON.stringify(saved), target: StorageTarget.MACHINE } });
 		await page.reload();
 		const restored = { application, workbench };
 		const group = restored.workbench.editors.groupAt(0);
@@ -353,7 +262,7 @@ for (const groupCount of [1, 2]) {
 			const initialRaster = { width: canvas.width, height: canvas.height };
 			const durations: number[] = [];
 			const frameIntervals: number[] = [];
-			const rasters: { width: number; height: number }[] = [];
+			const rasters: { width: number; height: number; }[] = [];
 			let paints = 0;
 			let editorPartDimensionReads = 0;
 			const part = canvas.ownerDocument.querySelector<HTMLElement>('[data-part="editor"]')!;
@@ -362,13 +271,7 @@ for (const groupCount of [1, 2]) {
 				let prototype = Object.getPrototypeOf(part);
 				while (!Object.getOwnPropertyDescriptor(prototype, name)) prototype = Object.getPrototypeOf(prototype);
 				const getter = Object.getOwnPropertyDescriptor(prototype, name)!.get!;
-				Object.defineProperty(part, name, {
-					configurable: true,
-					get() {
-						editorPartDimensionReads++;
-						return getter.call(this);
-					},
-				});
+				Object.defineProperty(part, name, { configurable: true, get() { editorPartDimensionReads++; return getter.call(this); } });
 			}
 			let start = 0;
 			let previousFrame: number | undefined;
@@ -379,12 +282,8 @@ for (const groupCount of [1, 2]) {
 				frame = requestAnimationFrame(sampleFrame);
 			};
 			frame = requestAnimationFrame(sampleFrame);
-			const begin = (): void => {
-				start = performance.now();
-			};
-			const measure = (): void => {
-				durations.push(performance.now() - start);
-			};
+			const begin = (): void => { start = performance.now(); };
+			const measure = (): void => { durations.push(performance.now() - start); };
 			painter.clearRect = function (...args): void {
 				paints += 1;
 				rasters.push({ width: canvas.width, height: canvas.height });
@@ -399,9 +298,9 @@ for (const groupCount of [1, 2]) {
 					window.removeEventListener('pointermove', begin, true);
 					window.removeEventListener('pointermove', measure);
 					for (const name of dimensionProperties) delete (part as unknown as Record<string, unknown>)[name];
-					delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown }).finishMeasurement;
+					delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown; }).finishMeasurement;
 					return { paints, editorPartDimensionReads, durations, frameIntervals, initialRaster, rasters };
-				},
+				}
 			});
 		});
 		let metrics: SashMeasurements;
@@ -412,12 +311,9 @@ for (const groupCount of [1, 2]) {
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 		} finally {
 			await page.mouse.up();
-			metrics = await canvas.evaluate(element => (element as HTMLCanvasElement & { finishMeasurement(): typeof metrics }).finishMeasurement());
+			metrics = await canvas.evaluate(element => (element as HTMLCanvasElement & { finishMeasurement(): typeof metrics; }).finishMeasurement());
 		}
-		await testInfo.attach('sash-performance', {
-			body: JSON.stringify(metrics),
-			contentType: 'application/json',
-		});
+		await testInfo.attach('sash-performance', { body: JSON.stringify(metrics), contentType: 'application/json' });
 		expect(metrics.paints).toBeLessThanOrEqual(24);
 		expect(metrics.editorPartDimensionReads).toBe(0);
 		expect(new Set([metrics.initialRaster.height, ...metrics.rasters.map(raster => raster.height)]).size).toBe(1);
@@ -425,23 +321,13 @@ for (const groupCount of [1, 2]) {
 		const geometry = await editor.evaluate(element => {
 			const editorBounds = element.getBoundingClientRect();
 			const contentBounds = element.closest('.ash-editor-group-content')!.getBoundingClientRect();
-			return {
-				width: Math.round(editorBounds.width),
-				contentWidth: Math.round(contentBounds.width),
-				scrollTop: element.scrollTop,
-			};
+			return { width: Math.round(editorBounds.width), contentWidth: Math.round(contentBounds.width), scrollTop: element.scrollTop };
 		});
-		expect(geometry).toEqual({
-			width: geometry.contentWidth,
-			contentWidth: geometry.contentWidth,
-			scrollTop: 0,
-		});
+		expect(geometry).toEqual({ width: geometry.contentWidth, contentWidth: geometry.contentWidth, scrollTop: 0 });
 		for (let index = 0; index < groupCount; index += 1) {
 			const resizedEditor = workbench.editors.groupAt(index).content.locator('.stanza-editor');
 			await expect(resizedEditor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
-			await expect
-				.poll(async () => resizedEditor.evaluate(element => Math.round(element.getBoundingClientRect().width - element.closest('.ash-editor-group-content')!.getBoundingClientRect().width)))
-				.toBe(0);
+			await expect.poll(async () => resizedEditor.evaluate(element => Math.round(element.getBoundingClientRect().width - element.closest('.ash-editor-group-content')!.getBoundingClientRect().width))).toBe(0);
 		}
 		await sash.focus();
 		await page.keyboard.press('ArrowRight');
@@ -454,19 +340,12 @@ test.describe('startup layout defaults', () => {
 
 	test('empty window shows Welcome with sidebars and Panel hidden', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = workbench.page;
-		const workspaceId =
-			target.kind === 'electron'
-				? parseWorkspace(
-						await page.evaluate(() => {
-							const ipc = (
-								globalThis as unknown as {
-									ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } };
-								}
-							).ash.ipcRenderer;
-							return ipc.invoke('ash:workspace:context:read');
-						}),
-					).id
-				: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
+		const workspaceId = target.kind === 'electron'
+			? parseWorkspace(await page.evaluate(() => {
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+				return ipc.invoke('ash:workspace:context:read');
+			})).id
+			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
 		expect(workspaceId).toMatch(/^empty-window-[0-9a-f-]{36}$/u);
 		await expect(page.locator("[data-part='sidebar']")).toBeHidden();
 		await expect(page.locator("[data-part='panel']")).toBeHidden();
@@ -499,13 +378,11 @@ test.describe('startup layout defaults', () => {
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
 		const welcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
-		await expect(welcome).toContainText(
-			target.appServerMode === 'disabled'
-				? 'No source control providers registered.'
-				: target.kind === 'browser'
-					? 'The open folder does not contain a Git repository.'
-					: 'Open a folder containing a Git repository to use source control.',
-		);
+		await expect(welcome).toContainText(target.appServerMode === 'disabled'
+			? 'No source control providers registered.'
+			: target.kind === 'browser'
+				? 'The open folder does not contain a Git repository.'
+				: 'Open a folder containing a Git repository to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
@@ -686,14 +563,10 @@ test.describe('welcome brand', () => {
 		await expect(workbench.page.locator('.ash-notification')).toHaveCount(0);
 		const [bounds, titlebarBounds] = await Promise.all([dialog.boundingBox(), workbench.page.locator('[data-part="titlebar"]').boundingBox()]);
 		const viewport = workbench.page.viewportSize();
-		expect(
-			bounds && titlebarBounds && viewport
-				? {
-						centered: Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 8,
-						clearOfTitlebar: bounds.y > titlebarBounds.y + titlebarBounds.height,
-					}
-				: null,
-		).toEqual({ centered: true, clearOfTitlebar: true });
+		expect(bounds && titlebarBounds && viewport ? {
+			centered: Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 8,
+			clearOfTitlebar: bounds.y > titlebarBounds.y + titlebarBounds.height,
+		} : null).toEqual({ centered: true, clearOfTitlebar: true });
 	});
 
 	test('secondary sidebar narrows welcome cards without rearranging them', async ({ driver, workbench }) => {
@@ -703,19 +576,18 @@ test.describe('welcome brand', () => {
 		const primaryBar = page.locator("[data-part='sidebar']");
 		const auxiliaryBar = page.locator("[data-part='auxiliarybar']");
 		const toggle = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
-		const geometry = async () =>
-			welcome.evaluate(element => {
-				const content = element.querySelector('.ash-getting-started-content')!.getBoundingClientRect();
-				const cards = [...element.querySelectorAll('.ash-getting-started-card')].map(card => card.getBoundingClientRect());
-				const viewport = element.getBoundingClientRect();
-				return {
-					editorWidth: Math.round(viewport.width),
-					contentTop: Math.round(content.top - viewport.top),
-					cardsTop: Math.round(cards[0].top - content.top),
-					cardWidth: Math.round(cards[0].width),
-					secondCardOnFirstRow: cards[0].top === cards[1].top,
-				};
-			});
+		const geometry = async () => welcome.evaluate(element => {
+			const content = element.querySelector('.ash-getting-started-content')!.getBoundingClientRect();
+			const cards = [...element.querySelectorAll('.ash-getting-started-card')].map(card => card.getBoundingClientRect());
+			const viewport = element.getBoundingClientRect();
+			return {
+				editorWidth: Math.round(viewport.width),
+				contentTop: Math.round(content.top - viewport.top),
+				cardsTop: Math.round(cards[0].top - content.top),
+				cardWidth: Math.round(cards[0].width),
+				secondCardOnFirstRow: cards[0].top === cards[1].top,
+			};
+		});
 
 		if (await primaryBar.isHidden()) {
 			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
@@ -752,22 +624,16 @@ test('editor layout remains valid across workbench window sizes', async ({ drive
 	const group = editors.groupAt(0);
 	const observedSizes = new Set<string>();
 
-	for (const size of [
-		{ width: 900, height: 700 },
-		{ width: 1200, height: 800 },
-		{ width: 1494, height: 1104 },
-	]) {
+	for (const size of [{ width: 900, height: 700 }, { width: 1200, height: 800 }, { width: 1494, height: 1104 }]) {
 		const actualSize = await driver.setWindowSize(size);
 		observedSizes.add(`${actualSize.width}x${actualSize.height}`);
-		await expect
-			.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome), { message: `editor geometry at ${size.width}x${size.height}` })
-			.toEqual({
-				groupFillsEditorClient: true,
-				titleAboveContent: true,
-				titleHasHeight: true,
-				contentHasArea: true,
-				welcomeInsideContent: true,
-			});
+		await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome), { message: `editor geometry at ${size.width}x${size.height}` }).toEqual({
+			groupFillsEditorClient: true,
+			titleAboveContent: true,
+			titleHasHeight: true,
+			contentHasArea: true,
+			welcomeInsideContent: true,
+		});
 	}
 
 	expect(observedSizes.size).toBe(3);
@@ -796,22 +662,13 @@ test('split editor groups keep visible boundaries', async ({ workbench }) => {
 		probe.remove();
 		return color;
 	});
-	await expect
-		.poll(() =>
-			borderedPanes.evaluateAll(elements =>
-				elements.map(element => {
-					const style = getComputedStyle(element, '::before');
-					return {
-						color: style.backgroundColor,
-						thickness: element.parentElement?.classList.contains('ash-split-view-horizontal') ? style.width : style.height,
-					};
-				}),
-			),
-		)
-		.toEqual([
-			{ color: borderColor, thickness: '1px' },
-			{ color: borderColor, thickness: '1px' },
-		]);
+	await expect.poll(() => borderedPanes.evaluateAll(elements => elements.map(element => {
+		const style = getComputedStyle(element, '::before');
+		return { color: style.backgroundColor, thickness: element.parentElement?.classList.contains('ash-split-view-horizontal') ? style.width : style.height };
+	}))).toEqual([
+		{ color: borderColor, thickness: '1px' },
+		{ color: borderColor, thickness: '1px' },
+	]);
 });
 
 async function editorGeometry(editor: Locator, group: Locator, title: Locator, content: Locator, welcome: Locator) {
@@ -838,11 +695,10 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 	}
 	const tolerance = 1;
 	return {
-		groupFillsEditorClient:
-			approximatelyEqual(groupBox.x, editorBox.x + editorClient.x, tolerance) &&
-			approximatelyEqual(groupBox.y, editorBox.y + editorClient.y, tolerance) &&
-			approximatelyEqual(groupBox.width, editorClient.width, tolerance) &&
-			approximatelyEqual(groupBox.height, editorClient.height, tolerance),
+		groupFillsEditorClient: approximatelyEqual(groupBox.x, editorBox.x + editorClient.x, tolerance)
+			&& approximatelyEqual(groupBox.y, editorBox.y + editorClient.y, tolerance)
+			&& approximatelyEqual(groupBox.width, editorClient.width, tolerance)
+			&& approximatelyEqual(groupBox.height, editorClient.height, tolerance),
 		titleAboveContent: titleBox.y + titleBox.height <= contentBox.y + tolerance,
 		titleHasHeight: titleBox.height > 0,
 		contentHasArea: contentBox.width > 0 && contentBox.height > 0,
@@ -854,11 +710,9 @@ function approximatelyEqual(first: number, second: number, tolerance: number): b
 	return Math.abs(first - second) <= tolerance;
 }
 
-function contains(container: { x: number; y: number; width: number; height: number }, child: { x: number; y: number; width: number; height: number }, tolerance: number): boolean {
-	return (
-		child.x >= container.x - tolerance &&
-		child.y >= container.y - tolerance &&
-		child.x + child.width <= container.x + container.width + tolerance &&
-		child.y + child.height <= container.y + container.height + tolerance
-	);
+function contains(container: { x: number; y: number; width: number; height: number; }, child: { x: number; y: number; width: number; height: number; }, tolerance: number): boolean {
+	return child.x >= container.x - tolerance
+		&& child.y >= container.y - tolerance
+		&& child.x + child.width <= container.x + container.width + tolerance
+		&& child.y + child.height <= container.y + container.height + tolerance;
 }

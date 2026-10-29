@@ -29,12 +29,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffGoToFileAction' }, 'Open File'),
 			icon: Lxicon.goToFile,
 			precondition: MultiDiffEditorActive,
-			menu: {
-				id: MenuId.MultiDiffEditorFileToolbar,
-				when: MultiDiffEditorActive,
-				group: 'navigation',
-				order: 22,
-			},
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: MultiDiffEditorActive, group: 'navigation', order: 22 },
 		});
 	}
 
@@ -49,8 +44,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 		}
 		const selection = pane?.getControl()?.modifiedEditor.getSelection();
 		return accessor.get(IEditorService).openEditor(item.goToFile ?? item.modified, {
-			pinned: false,
-			revealIfOpened: true,
+			pinned: false, revealIfOpened: true,
 			...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
 		});
 	}
@@ -82,10 +76,7 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 			icon: Lxicon.arrowUp,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 10 },
-			keybinding: {
-				primary: Keybinding.single(logicalKey('F7', { shiftKey: true })),
-				when: MultiDiffEditorActive,
-			},
+			keybinding: { primary: Keybinding.single(logicalKey('F7', { shiftKey: true })), when: MultiDiffEditorActive },
 			f1: true,
 		});
 	}
@@ -174,5 +165,7 @@ function activeMultiDiffPane(accessor: ServicesAccessor, context?: unknown): Mul
 }
 
 function isEditorInput(value: unknown): value is IResourceEditorInput {
-	return typeof value === 'object' && value !== null && 'resource' in value && typeof (value as IResourceEditorInput).resource?.toString === 'function';
+	return typeof value === 'object' && value !== null &&
+		'resource' in value &&
+		typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }

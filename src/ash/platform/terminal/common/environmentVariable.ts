@@ -22,7 +22,7 @@ export interface IEnvironmentVariableMutatorOptions {
 	applyAtShellIntegration?: boolean;
 }
 
-export type EnvironmentVariableScope = { workspaceFolder?: IWorkspaceFolderData };
+export type EnvironmentVariableScope = { workspaceFolder?: IWorkspaceFolderData; };
 
 export interface IEnvironmentVariableCollectionDescription {
 	readonly description: string | undefined;

@@ -34,29 +34,21 @@ export class MarkdownRendererService implements IMarkdownRendererService {
 	declare readonly _serviceBrand: undefined;
 	private codeBlocks: IMarkdownCodeBlockRenderer | undefined;
 
-	constructor(@IOpenerService private readonly opener: IOpenerService) {}
+	constructor(@IOpenerService private readonly opener: IOpenerService) { }
 
 	render(markdown: IMarkdownString, options: MarkdownRenderOptions & IMarkdownRendererExtraOptions = {}, outElement?: HTMLElement): IRenderedMarkdown {
 		const ownerDocument = outElement?.ownerDocument ?? options.ownerDocument ?? getDocument();
 		const renderer = this.codeBlocks;
 		// Per-render code editors and synchronous placeholders take precedence over the default.
-		const codeBlockRenderer =
-			options.codeBlockRenderer ??
-			(!options.codeBlockRendererSync && renderer ? (languageId: string, value: string) => renderer.renderCodeBlock(languageId, value, { ...options, ownerDocument }) : undefined);
-		return renderMarkdown(
-			markdown,
-			{
-				...options,
-				ownerDocument,
-				codeBlockRenderer,
-				actionHandler:
-					options.actionHandler ??
-					((href, source) => {
-						void openLinkFromMarkdown(this.opener, href, source.isTrusted);
-					}),
-			},
-			outElement,
-		);
+		const codeBlockRenderer = options.codeBlockRenderer ?? (!options.codeBlockRendererSync && renderer
+			? (languageId: string, value: string) => renderer.renderCodeBlock(languageId, value, { ...options, ownerDocument })
+			: undefined);
+		return renderMarkdown(markdown, {
+			...options,
+			ownerDocument,
+			codeBlockRenderer,
+			actionHandler: options.actionHandler ?? ((href, source) => { void openLinkFromMarkdown(this.opener, href, source.isTrusted); }),
+		}, outElement);
 	}
 
 	setDefaultCodeBlockRenderer(renderer: IMarkdownCodeBlockRenderer): void {

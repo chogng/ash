@@ -68,17 +68,15 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 		const viewShown = accessibleViewIsShown.bindTo(this.contextKeys);
 		const verbosityEnabled = accessibleViewVerbosityEnabled.bindTo(this.contextKeys);
 		const providerId = accessibleViewCurrentProviderId.bindTo(this.contextKeys);
-		lifetime.add(
-			toDisposable(() => {
-				this.provider = undefined;
-				this.contextKeys.bufferChangeEvents(() => {
-					helpShown.reset();
-					viewShown.reset();
-					verbosityEnabled.reset();
-					providerId.reset();
-				});
-			}),
-		);
+		lifetime.add(toDisposable(() => {
+			this.provider = undefined;
+			this.contextKeys.bufferChangeEvents(() => {
+				helpShown.reset();
+				viewShown.reset();
+				verbosityEnabled.reset();
+				providerId.reset();
+			});
+		}));
 		lifetime.add(provider);
 		try {
 			const document = root.ownerDocument;
@@ -93,38 +91,38 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			};
 			const updateContent = (): void => {
 				const value = selectedProvider.provideContent();
-				const text = type === AccessibleViewType.Help ? (resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? '') : value;
+				const text = type === AccessibleViewType.Help
+					? resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? ''
+					: value;
 				this.updateText(content, text);
 				updateHint();
 			};
 			updateContent();
-			const title = type === AccessibleViewType.Help ? localize('accessibility.helpTitle', 'Accessibility Help') : localize('accessibility.viewTitle', 'Accessible View');
+			const title = type === AccessibleViewType.Help
+				? localize('accessibility.helpTitle', 'Accessibility Help')
+				: localize('accessibility.viewTitle', 'Accessible View');
 			content.setAttribute('aria-label', title);
-			const dialog = lifetime.add(
-				new Dialog(root, title, [localize('accessibility.close', 'Close')], {
-					buttonStyles: defaultButtonStyles,
-					dialogStyles: defaultDialogStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					renderBody: body => body.append(content),
-					extraClasses: ['ash-accessible-view-dialog'],
-					cancelId: 0,
-				}),
-			);
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				renderBody: body => body.append(content),
+				extraClasses: ['ash-accessible-view-dialog'],
+				cancelId: 0,
+			}));
 			// Close child help before releasing the content dialog and its provider.
 			lifetime.add(toDisposable(() => this.help.clear()));
 			if (provider.onDidChangeContent) {
 				lifetime.add(provider.onDidChangeContent(updateContent));
 			}
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
-			lifetime.add(
-				this.configuration.onDidChangeConfiguration(event => {
-					if (event.affectsConfiguration(selectedProvider.verbositySettingKey)) {
-						verbosityEnabled.set(this.configuration.getValue<boolean>(selectedProvider.verbositySettingKey));
-						updateHint();
-					}
-				}),
-			);
+			lifetime.add(this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(selectedProvider.verbositySettingKey)) {
+					verbosityEnabled.set(this.configuration.getValue<boolean>(selectedProvider.verbositySettingKey));
+					updateHint();
+				}
+			}));
 			this.provider = provider;
 			this.contextKeys.bufferChangeEvents(() => {
 				helpShown.set(type === AccessibleViewType.Help);
@@ -172,14 +170,10 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 		const lifetime = new DisposableStore();
 		const helpShown = accessibilityHelpIsShown.bindTo(this.contextKeys);
 		const viewShown = accessibleViewIsShown.bindTo(this.contextKeys);
-		lifetime.add(
-			toDisposable(() =>
-				this.contextKeys.bufferChangeEvents(() => {
-					helpShown.set(false);
-					viewShown.set(true);
-				}),
-			),
-		);
+		lifetime.add(toDisposable(() => this.contextKeys.bufferChangeEvents(() => {
+			helpShown.set(false);
+			viewShown.set(true);
+		})));
 		try {
 			const root = this.layoutService.mainContainer;
 			const content = h(root.ownerDocument, 'textarea');
@@ -188,10 +182,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			const title = localize('accessibility.helpTitle', 'Accessibility Help');
 			content.setAttribute('aria-label', title);
 			const helpContent = [
-				localize(
-					'accessibility.viewHelpRead',
-					'Accessible View presents the current feature as read-only text. Use arrow keys to read, Home and End to move within a line, and Ctrl+Home or Command+Home to move to the beginning.',
-				),
+				localize('accessibility.viewHelpRead', 'Accessible View presents the current feature as read-only text. Use arrow keys to read, Home and End to move within a line, and Ctrl+Home or Command+Home to move to the beginning.'),
 				localize('accessibility.viewHelpCopy', 'Use Shift with arrow keys to select text and Ctrl+C or Command+C to copy. Tab and Shift+Tab move between the text and Close.'),
 				localize('accessibility.viewHelpHint', '<keybinding:editor.action.accessibleViewDisableHint> stops announcing the help hint for the current feature.'),
 				localize('accessibility.viewHelpClose', 'Escape returns to the content. Press Escape again to close Accessible View and return to the feature.'),
@@ -201,17 +192,15 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			};
 			updateContent();
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
-			const dialog = lifetime.add(
-				new Dialog(root, title, [localize('accessibility.close', 'Close')], {
-					buttonStyles: defaultButtonStyles,
-					dialogStyles: defaultDialogStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					renderBody: body => body.append(content),
-					extraClasses: ['ash-accessible-view-dialog'],
-					cancelId: 0,
-				}),
-			);
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				renderBody: body => body.append(content),
+				extraClasses: ['ash-accessible-view-dialog'],
+				cancelId: 0,
+			}));
 			this.help.value = lifetime;
 			this.contextKeys.bufferChangeEvents(() => {
 				helpShown.set(true);

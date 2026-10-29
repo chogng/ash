@@ -8,31 +8,16 @@ import { CursorChangeReason } from '../../../common/cursorEvents.js';
 
 /** Routes the line-expansion command through the text editor input owner. */
 class LineSelectionController extends Disposable {
-	constructor(
-		input: HTMLElement,
-		private readonly viewport: View,
-		private readonly viewModel: IViewModel,
-	) {
+	constructor(input: HTMLElement, private readonly viewport: View, private readonly viewModel: IViewModel) {
 		super();
 		if (viewport.textModel !== viewModel.model) throw new TypeError('Line selection dependencies must share one text model');
-		this._register(
-			addDisposableListener(input, 'keydown', event => {
-				if (
-					event.defaultPrevented ||
-					event.isComposing ||
-					event.getModifierState('AltGraph') ||
-					(!event.ctrlKey && !event.metaKey) ||
-					event.shiftKey ||
-					event.altKey ||
-					event.key.toLowerCase() !== 'l'
-				)
-					return;
-				stopEvent(event);
-				const next = CursorMoveCommands.expandLineSelection(viewModel, viewModel.getCursorStates());
-				viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, next);
-				viewport.revealPosition(viewModel.getPrimaryCursorState().modelState.position);
-			}),
-		);
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || (!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'l') return;
+			stopEvent(event);
+			const next = CursorMoveCommands.expandLineSelection(viewModel, viewModel.getCursorStates());
+			viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, next);
+			viewport.revealPosition(viewModel.getPrimaryCursorState().modelState.position);
+		}));
 	}
 }
 

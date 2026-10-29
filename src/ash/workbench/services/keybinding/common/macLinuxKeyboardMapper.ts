@@ -9,7 +9,12 @@ export class MacLinuxKeyboardMapper extends KeyboardMapper {
 	}
 
 	public dumpDebugInfo(): string {
-		const deadKeys = Object.values(this.mapping).filter(entry => entry.valueIsDeadKey || entry.withShiftIsDeadKey || entry.withAltGrIsDeadKey || entry.withShiftAltGrIsDeadKey).length;
-		return this.dumpMappingTable('MacLinuxKeyboardMapper', `Mapped keys: ${Object.keys(this.mapping).length}; keys with dead states: ${deadKeys}`);
+		const deadKeys = Object.values(this.mapping).filter((entry) =>
+			entry.valueIsDeadKey || entry.withShiftIsDeadKey || entry.withAltGrIsDeadKey || entry.withShiftAltGrIsDeadKey
+		).length;
+		return this.dumpMappingTable(
+			'MacLinuxKeyboardMapper',
+			`Mapped keys: ${Object.keys(this.mapping).length}; keys with dead states: ${deadKeys}`,
+		);
 	}
 }

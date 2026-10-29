@@ -7,50 +7,19 @@ import { captureDocumentStyles } from '../../fixtures/documentStyles.js';
 
 let parser: Awaited<ReturnType<typeof startMarkdownExtension>>;
 let chinese: Awaited<ReturnType<typeof startMarkdownExtension>>;
-test.beforeAll(async () => {
-	test.setTimeout(600000);
-	parser = await startMarkdownExtension();
-	chinese = await startMarkdownExtension('zh-CN');
-});
-test.afterAll(async () => {
-	await Promise.all([parser?.dispose(), chinese?.dispose()]);
-});
+test.beforeAll(async () => { test.setTimeout(600000); parser = await startMarkdownExtension(); chinese = await startMarkdownExtension('zh-CN'); });
+test.afterAll(async () => { await Promise.all([parser?.dispose(), chinese?.dispose()]); });
 test.beforeEach(async ({ page }) => {
 	await page.route('**/__markdown_extension?*', async route => {
 		const extension = new URL(route.request().url()).searchParams.get('locale') === 'zh-CN' ? chinese : parser;
-		await route.fulfill({
-			json: {
-				generation: 1,
-				extensions: [
-					{
-						id: 'ash.markdown-language-features',
-						version: '1.0.0',
-						packageDigest: `sha256:${'a'.repeat(64)}`,
-						runtimeApiVersion: 1,
-						activationGeneration: 1,
-						incarnation: 1,
-						lifecycle: 'ready',
-						failure: null,
-						stderr: '',
-						outputEvents: [],
-						registrations: extension.registrations,
-					},
-				],
-			},
-		});
+		await route.fulfill({ json: { generation: 1, extensions: [{ id: 'ash.markdown-language-features', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: extension.registrations }] } });
 	});
 	await page.route('**/__markdown_render**', async route => {
 		try {
 			const query = new URL(route.request().url()).searchParams;
 			const extension = query.get('locale') === 'zh-CN' ? chinese : parser;
-			await route.fulfill({
-				json: await extension.render(query.get('view') ?? 'vscode.markdown.editor', {
-					document: { languageId: 'markdown', ...route.request().postDataJSON() },
-				}),
-			});
-		} catch (error) {
-			await route.fulfill({ status: 503, json: { error: String(error) } });
-		}
+			await route.fulfill({ json: await extension.render(query.get('view') ?? 'vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
+		} catch (error) { await route.fulfill({ status: 503, json: { error: String(error) } }); }
 	});
 });
 
@@ -81,10 +50,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 test('Markdown rich editor updates formulas and refuses untrusted math resources', async ({ page }) => {
 	const requests: string[] = [];
-	await page.route('https://audit-image.invalid/**', async route => {
-		requests.push(route.request().url());
-		await route.abort();
-	});
+	await page.route('https://audit-image.invalid/**', async route => { requests.push(route.request().url()); await route.abort(); });
 	await page.goto('/markdownEditor.html');
 	const content = page.locator('.ash-markdown-content');
 	await expect(content.locator('.katex')).toHaveCount(2);
@@ -175,11 +141,7 @@ test('rich updates retain unchanged blocks and send only versioned range edits',
 	const frame = await openHost(page);
 	const heading = frame.getByRole('heading', { name: '标题', exact: true });
 	await heading.evaluate(element => element.setAttribute('data-retained', 'true'));
-	await page.evaluate(() => {
-		const text = window.ashMarkdownHost.text;
-		const start = text.indexOf('中文段落');
-		window.ashMarkdownHost.edit(start, start + 4, '更新段落');
-	});
+	await page.evaluate(() => { const text = window.ashMarkdownHost.text; const start = text.indexOf('中文段落'); window.ashMarkdownHost.edit(start, start + 4, '更新段落'); });
 	await expect(frame.locator('.ash-markdown-content')).toContainText('更新段落');
 	await expect(heading).toHaveAttribute('data-retained', 'true');
 	await frame.locator('.ash-markdown-block').filter({ hasText: '更新段落' }).click();
@@ -187,7 +149,7 @@ test('rich updates retain unchanged blocks and send only versioned range edits',
 	await input.press('End');
 	await input.pressSequentially('x');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit').length)).toBe(1);
-	const message = (await page.evaluate(() => window.ashMarkdownHost.messages.find((message: any) => message.type === 'edit'))) as { start: number; end: number; text: string; version: number };
+	const message = await page.evaluate(() => window.ashMarkdownHost.messages.find((message: any) => message.type === 'edit')) as { start: number; end: number; text: string; version: number; };
 	expect(message.text).toBe('x');
 	expect(message.start).toBe(message.end);
 	expect(message.version).toBeGreaterThan(1);
@@ -209,31 +171,21 @@ test('preview updates keep the sandbox, focus, selection and scroll while render
 	await frame.locator('#markdown-preview').evaluate(element => {
 		element.setAttribute('data-retained', 'true');
 		const paragraph = element.querySelector('p:nth-last-child(2)')!;
-		const selection = getSelection()!;
-		selection.setBaseAndExtent(paragraph.firstChild!, 2, paragraph.firstChild!, 8);
+		const selection = getSelection()!; selection.setBaseAndExtent(paragraph.firstChild!, 2, paragraph.firstChild!, 8);
 		document.scrollingElement!.scrollTop = 600;
 	});
-	await page.evaluate(() => {
-		const text = window.ashMarkdownHost.text;
-		window.ashMarkdownHost.edit(text.indexOf('Last paragraph.'), text.length, 'Changed ending.\n');
-	});
+	await page.evaluate(() => { const text = window.ashMarkdownHost.text; window.ashMarkdownHost.edit(text.indexOf('Last paragraph.'), text.length, 'Changed ending.\n'); });
 	await expect(frame.locator('#markdown-preview')).toContainText('Changed ending.');
 	await expect(frame.locator('#markdown-preview')).toHaveAttribute('data-retained', 'true');
 	await expect(heading).toBeFocused();
-	expect(await frame.locator('#markdown-preview').evaluate(() => ({ selection: getSelection()!.toString(), scroll: document.scrollingElement!.scrollTop }))).toEqual({
-		selection: 'stable',
-		scroll: 600,
-	});
+	expect(await frame.locator('#markdown-preview').evaluate(() => ({ selection: getSelection()!.toString(), scroll: document.scrollingElement!.scrollTop }))).toEqual({ selection: 'stable', scroll: 600 });
 	await expect(frame.locator('textarea')).toHaveCount(0);
 });
 
 test('disabling the Rust Markdown provider retains the canonical source and its history', async ({ page }) => {
 	await openHost(page);
 	const initial = await page.evaluate(() => window.ashMarkdownHost.text);
-	await page.evaluate(() => {
-		window.ashMarkdownHost.disable();
-		window.ashMarkdownHost.edit(0, 0, '# Still editable\r\n');
-	});
+	await page.evaluate(() => { window.ashMarkdownHost.disable(); window.ashMarkdownHost.edit(0, 0, '# Still editable\r\n'); });
 	expect(await page.evaluate(() => window.ashMarkdownHost.registered)).toBe(false);
 	expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe('# Still editable\r\n' + initial);
 	await page.evaluate(() => window.ashMarkdownHost.undo());
@@ -246,11 +198,7 @@ test('disabling math refreshes an open preview without changing its source', asy
 	try {
 		await page.route('**/__markdown_render**', async route => {
 			const query = new URL(route.request().url()).searchParams;
-			await route.fulfill({
-				json: await runtime.render(query.get('view') ?? 'vscode.markdown.editor', {
-					document: { languageId: 'markdown', ...route.request().postDataJSON() },
-				}),
-			});
+			await route.fulfill({ json: await runtime.render(query.get('view') ?? 'vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
 		});
 		const frame = await openHost(page, 'en', 'vscode.markdown.preview.editor');
 		const text = '# Math\n\n$E=mc^2$\n';
@@ -262,9 +210,7 @@ test('disabling math refreshes an open preview without changing its source', asy
 		await expect(frame.locator('.katex')).toHaveCount(0);
 		await expect(frame.locator('#markdown-preview')).toContainText('E=mc^2');
 		expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(expectedSource);
-	} finally {
-		await runtime.dispose();
-	}
+	} finally { await runtime.dispose(); }
 });
 
 test('Rust Markdown extension and shared host preserve Chinese composition, source, saves and history', async ({ page, context }, testInfo) => {
@@ -276,10 +222,7 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
 	const input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
 	await expect(input).toBeFocused();
-	await input.evaluate((element: HTMLTextAreaElement) => {
-		const offset = element.value.indexOf('中文段落') + 4;
-		element.setSelectionRange(offset, offset);
-	});
+	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落') + 4; element.setSelectionRange(offset, offset); });
 	const session = await context.newCDPSession(page);
 	await session.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 });
 	expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
@@ -337,10 +280,7 @@ test('keyboard formatting and whole-source edits preserve unrelated CRLF and ref
 	const initial = await page.evaluate(() => window.ashMarkdownHost.text);
 	await frame.getByRole('button', { name: 'Edit document source', exact: true }).click();
 	const input = frame.getByRole('textbox', { name: 'Edit document source', exact: true });
-	await input.evaluate((element: HTMLTextAreaElement) => {
-		const offset = element.value.indexOf('中文段落');
-		element.setSelectionRange(offset, offset + 4);
-	});
+	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落'); element.setSelectionRange(offset, offset + 4); });
 	await input.press('Control+b');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial.replace('中文段落', '**中文段落**'));
 	await input.press('Control+b');
@@ -359,10 +299,7 @@ test('keyboard formatting and whole-source edits preserve unrelated CRLF and ref
 
 test('readonly Markdown remains inert and blocks HTML, unsafe links and remote image requests', async ({ page }) => {
 	const requests: string[] = [];
-	await page.route('https://audit-image.invalid/**', async route => {
-		requests.push(route.request().url());
-		await route.abort();
-	});
+	await page.route('https://audit-image.invalid/**', async route => { requests.push(route.request().url()); await route.abort(); });
 	await page.goto('/markdownEditor.html');
 	await expect(page.locator('.ash-markdown-content')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeDisabled();
@@ -393,37 +330,24 @@ test('an older Rust parse cannot replace a newer source version', async ({ page 
 	const frame = await openHost(page);
 	let release!: () => void;
 	let entered!: () => void;
-	const started = new Promise<void>(resolve => (entered = resolve));
-	const waiting = new Promise<void>(resolve => (release = resolve));
+	const started = new Promise<void>(resolve => entered = resolve);
+	const waiting = new Promise<void>(resolve => release = resolve);
 	await page.route('**/__markdown_render**', async route => {
 		const snapshot = route.request().postDataJSON();
-		const result = await parser.render('vscode.markdown.editor', {
-			document: { languageId: 'markdown', ...snapshot },
-		});
-		if (snapshot.text.includes('较旧标题')) {
-			entered();
-			await waiting;
-		}
+		const result = await parser.render('vscode.markdown.editor', { document: { languageId: 'markdown', ...snapshot } });
+		if (snapshot.text.includes('较旧标题')) { entered(); await waiting; }
 		await route.fulfill({ json: result });
 	});
 	try {
-		await page.evaluate(() => {
-			const start = window.ashMarkdownHost.text.indexOf('标题');
-			window.ashMarkdownHost.edit(start, start + 2, '较旧标题');
-		});
+		await page.evaluate(() => { const start = window.ashMarkdownHost.text.indexOf('标题'); window.ashMarkdownHost.edit(start, start + 2, '较旧标题'); });
 		await started;
-		await page.evaluate(() => {
-			const start = window.ashMarkdownHost.text.indexOf('较旧标题');
-			window.ashMarkdownHost.edit(start, start + 4, '最新标题');
-		});
+		await page.evaluate(() => { const start = window.ashMarkdownHost.text.indexOf('较旧标题'); window.ashMarkdownHost.edit(start, start + 4, '最新标题'); });
 		await expect(frame.getByRole('heading', { name: '最新标题', exact: true })).toBeVisible();
 		release();
 		await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toContain('# 最新标题');
 		await expect(frame.getByRole('heading', { name: '最新标题', exact: true })).toBeVisible();
 		await expect(frame.getByRole('heading', { name: '较旧标题', exact: true })).toHaveCount(0);
-	} finally {
-		release();
-	}
+	} finally { release(); }
 });
 
 test('multi-megabyte source crosses the actual Rust extension boundary and retains saves and shared undo', async ({ page, context }, testInfo) => {
@@ -435,11 +359,10 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 	const originalHash = hash(initial);
 	const expectedHash = hash(initial.replace('中文段落', '中文段落大文件输入😀'));
-	const digest = (saved = false) =>
-		page.evaluate(async saved => {
-			const text = saved ? window.ashMarkdownHost.saved : window.ashMarkdownHost.text;
-			return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(value => value.toString(16).padStart(2, '0')).join('');
-		}, saved);
+	const digest = (saved = false) => page.evaluate(async saved => {
+		const text = saved ? window.ashMarkdownHost.saved : window.ashMarkdownHost.text;
+		return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(value => value.toString(16).padStart(2, '0')).join('');
+	}, saved);
 	await page.goto('/markdownEditorHost.html?large=1');
 	const frame = page.frameLocator('#editor iframe').frameLocator('iframe');
 	await expect(frame.getByRole('heading', { name: '大文件 Markdown', exact: true })).toBeVisible({ timeout: 60000 });
@@ -448,10 +371,7 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	expect(await digest()).toBe(originalHash);
 	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
 	let input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-	await input.evaluate((element: HTMLTextAreaElement) => {
-		const offset = element.value.indexOf('中文段落') + 4;
-		element.setSelectionRange(offset, offset);
-	});
+	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落') + 4; element.setSelectionRange(offset, offset); });
 	const session = await context.newCDPSession(page);
 	await session.send('Input.imeSetComposition', { text: '大文件输入😀', selectionStart: 7, selectionEnd: 7 });
 	expect(await digest()).toBe(originalHash);
@@ -470,9 +390,7 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).not.toHaveValue(/大文件输入/u, { timeout: 30000 });
 	await page.evaluate(() => window.ashMarkdownHost.redo());
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(expectedHash);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/大文件输入/u, {
-		timeout: 30000,
-	});
+	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/大文件输入/u, { timeout: 30000 });
 	await frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true }).press('Escape');
 	await expect(frame.getByRole('heading', { name: '大文件 Markdown', exact: true })).toBeVisible();
 	expect(errors).toEqual([]);

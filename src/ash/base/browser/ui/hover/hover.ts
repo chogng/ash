@@ -98,69 +98,59 @@ export class Hover extends Disposable {
 		this.persistence = options.persistence ?? 'transient';
 		this.enabled = options.enabled;
 		this.pointerHoverEnabled = options.pointerHoverEnabled;
-		this.anchorAlignment = options.anchorAlignment ?? AnchorAlignment.Center;
-		this.anchorAxisAlignment = options.anchorAxisAlignment ?? AnchorAxisAlignment.Vertical;
-		this.anchorPosition = options.anchorPosition ?? AnchorPosition.Above;
+		this.anchorAlignment = options.anchorAlignment ??
+			AnchorAlignment.Center;
+		this.anchorAxisAlignment = options.anchorAxisAlignment ??
+			AnchorAxisAlignment.Vertical;
+		this.anchorPosition = options.anchorPosition ??
+			AnchorPosition.Above;
 		this.gap = Math.max(0, options.gap ?? 6);
-		this.contextView = options.contextViewProvider ?? this._register(new ContextView(target.ownerDocument.body));
+		this.contextView = options.contextViewProvider ??
+			this._register(new ContextView(target.ownerDocument.body));
 
 		const title = target.getAttribute('title');
 		if (title !== null) {
 			this.previousTitle = title;
 			target.removeAttribute('title');
 		}
-		this._register(
-			toDisposable(() => {
-				this.restoreDescription();
-				if (this.previousTitle !== undefined) {
-					target.setAttribute('title', this.previousTitle);
-				}
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.restoreDescription();
+			if (this.previousTitle !== undefined) {
+				target.setAttribute('title', this.previousTitle);
+			}
+		}));
 
-		this._register(
-			addDisposableListener(target, 'pointerenter', () => {
-				this.pointerOver = true;
-				this.bindTargetExitListeners();
-				this.hideTimer.clear();
-				this.scheduleShow('pointer');
-			}),
-		);
-		this._register(
-			addDisposableListener(
-				target,
-				'pointerdown',
-				() => {
-					this.pointerDown = true;
-					this.bindTargetExitListeners();
-					this.hide();
-				},
-				true,
-			),
-		);
-		this._register(
-			addDisposableListener(target, 'focusin', (event: FocusEvent) => {
-				this.targetFocused = true;
-				this.bindTargetExitListeners();
-				// Focus returning from a dismissed hover or removed overlay must not reopen it.
-				const fromHover = isHTMLElement(event.relatedTarget) && event.relatedTarget.closest('.ash-hover') !== null;
-				if (this.pointerDown || !event.relatedTarget || fromHover) {
-					return;
-				}
-				this.scheduleShow('focus');
-			}),
-		);
+		this._register(addDisposableListener(target, 'pointerenter', () => {
+			this.pointerOver = true;
+			this.bindTargetExitListeners();
+			this.hideTimer.clear();
+			this.scheduleShow('pointer');
+		}));
+		this._register(addDisposableListener(target, 'pointerdown', () => {
+			this.pointerDown = true;
+			this.bindTargetExitListeners();
+			this.hide();
+		}, true));
+		this._register(addDisposableListener(target, 'focusin', (event: FocusEvent) => {
+			this.targetFocused = true;
+			this.bindTargetExitListeners();
+			// Focus returning from a dismissed hover or removed overlay must not reopen it.
+			const fromHover = isHTMLElement(event.relatedTarget) &&
+				event.relatedTarget.closest('.ash-hover') !== null;
+			if (this.pointerDown || !event.relatedTarget || fromHover) {
+				return;
+			}
+			this.scheduleShow('focus');
+		}));
 		if (options.setupKeyboardEvents) {
-			this._register(
-				addDisposableListener(target, 'keydown', (event: KeyboardEvent) => {
-					if (event.key !== ' ' && event.key !== 'Enter') return;
-					this.show();
-					if (this.tooltip) {
-						this.tooltip.tabIndex = -1;
-						this.tooltip.focus();
-					}
-				}),
-			);
+			this._register(addDisposableListener(target, 'keydown', (event: KeyboardEvent) => {
+				if (event.key !== ' ' && event.key !== 'Enter') return;
+				this.show();
+				if (this.tooltip) {
+					this.tooltip.tabIndex = -1;
+					this.tooltip.focus();
+				}
+			}));
 		}
 	}
 
@@ -170,33 +160,22 @@ export class Hover extends Disposable {
 		const listeners = new DisposableStore();
 		this.targetExitListeners.value = listeners;
 		for (const type of ['pointerup', 'pointercancel'] as const) {
-			listeners.add(
-				addDisposableListener(
-					this.element,
-					type,
-					() => {
-						this.pointerDown = false;
-						this.releaseTargetExitListeners();
-					},
-					true,
-				),
-			);
-		}
-		listeners.add(
-			addDisposableListener(this.element, 'pointerleave', event => {
-				this.pointerOver = false;
+			listeners.add(addDisposableListener(this.element, type, () => {
 				this.pointerDown = false;
 				this.releaseTargetExitListeners();
-				if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
-			}),
-		);
-		listeners.add(
-			addDisposableListener(this.element, 'focusout', event => {
-				this.targetFocused = false;
-				this.releaseTargetExitListeners();
-				if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
-			}),
-		);
+			}, true));
+		}
+		listeners.add(addDisposableListener(this.element, 'pointerleave', event => {
+			this.pointerOver = false;
+			this.pointerDown = false;
+			this.releaseTargetExitListeners();
+			if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
+		}));
+		listeners.add(addDisposableListener(this.element, 'focusout', event => {
+			this.targetFocused = false;
+			this.releaseTargetExitListeners();
+			if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
+		}));
 	}
 
 	private releaseTargetExitListeners(): void {
@@ -247,7 +226,7 @@ export class Hover extends Disposable {
 			anchorPosition,
 			gap: this.gap,
 			presentation: 'hover',
-			onHide: reason => this.didHide(reason),
+			onHide: (reason) => this.didHide(reason),
 		});
 		if (!shown) {
 			if (this._visible) {
@@ -278,10 +257,7 @@ export class Hover extends Disposable {
 		this.contextView.layout();
 	}
 
-	private resolvePosition(position: HoverPosition | undefined): {
-		anchorAxisAlignment: AnchorAxisAlignment;
-		anchorPosition: AnchorPosition;
-	} {
+	private resolvePosition(position: HoverPosition | undefined): { anchorAxisAlignment: AnchorAxisAlignment; anchorPosition: AnchorPosition; } {
 		let anchorAxisAlignment = this.anchorAxisAlignment;
 		let anchorPosition = this.anchorPosition;
 		switch (position) {
@@ -310,32 +286,26 @@ export class Hover extends Disposable {
 		this.tooltipListeners.clear();
 		if (this.trapFocus) this.tooltipListeners.add(trapTabFocus(tooltip));
 		this.tooltipListeners.add(addDisposableListener(tooltip, 'pointerenter', () => this.hideTimer.clear()));
-		this.tooltipListeners.add(
-			addDisposableListener(tooltip, 'pointerleave', event => {
-				if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
-					return;
-				}
-				this.scheduleHide();
-			}),
-		);
-		this.tooltipListeners.add(
-			addDisposableListener(tooltip, 'focusin', () => {
-				this.hoverFocused = true;
-				this.hideTimer.clear();
-			}),
-		);
-		this.tooltipListeners.add(
-			addDisposableListener(tooltip, 'focusout', event => {
-				// ContextView hides its DOM before reporting Escape, blurring actions with no next target.
-				if (event.relatedTarget) {
-					this.hoverFocused = this.isInsideHover(event.relatedTarget);
-				}
-				if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
-					return;
-				}
-				this.scheduleHide();
-			}),
-		);
+		this.tooltipListeners.add(addDisposableListener(tooltip, 'pointerleave', event => {
+			if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
+				return;
+			}
+			this.scheduleHide();
+		}));
+		this.tooltipListeners.add(addDisposableListener(tooltip, 'focusin', () => {
+			this.hoverFocused = true;
+			this.hideTimer.clear();
+		}));
+		this.tooltipListeners.add(addDisposableListener(tooltip, 'focusout', event => {
+			// ContextView hides its DOM before reporting Escape, blurring actions with no next target.
+			if (event.relatedTarget) {
+				this.hoverFocused = this.isInsideHover(event.relatedTarget);
+			}
+			if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
+				return;
+			}
+			this.scheduleHide();
+		}));
 
 		this.tooltipListeners.add(addDisposableListener(ownerDocument, 'pointermove', event => this.handlePointerMove(event, tooltip)));
 		const dismissOutsideTooltip = (event: Event) => {
@@ -367,7 +337,12 @@ export class Hover extends Disposable {
 
 	private scheduleShow(trigger: 'pointer' | 'focus'): void {
 		if (this.visible || this.showTimer.value) return;
-		const delayMs = Math.max(0, typeof this.delayMs === 'function' ? this.delayMs() : this.delayMs);
+		const delayMs = Math.max(
+			0,
+			typeof this.delayMs === 'function'
+				? this.delayMs()
+				: this.delayMs,
+		);
 		this.showTimer.value = disposableWindowTimeout(
 			getWindow(this.element),
 			() => {
@@ -381,7 +356,12 @@ export class Hover extends Disposable {
 
 	private scheduleHide(): void {
 		this.showTimer.clear();
-		if (this.persistence === 'sticky' || this.hoverFocused || !this.visible || this.hideTimer.value) return;
+		if (
+			this.persistence === 'sticky' ||
+			this.hoverFocused ||
+			!this.visible ||
+			this.hideTimer.value
+		) return;
 		this.hideTimer.value = disposableWindowTimeout(
 			getWindow(this.element),
 			() => {
@@ -410,9 +390,14 @@ export class Hover extends Disposable {
 	}
 
 	private applyDescription(id: string): void {
-		this.previousDescription = getAriaAttribute(this.element, 'describedby');
+		this.previousDescription = getAriaAttribute(
+			this.element,
+			'describedby',
+		);
 		this.descriptionApplied = true;
-		const ids = new Set(this.previousDescription?.split(/\s+/).filter(Boolean) ?? []);
+		const ids = new Set(
+			this.previousDescription?.split(/\s+/).filter(Boolean) ?? [],
+		);
 		ids.add(id);
 		setAriaAttribute(this.element, 'describedby', [...ids].join(' '));
 	}
@@ -422,7 +407,11 @@ export class Hover extends Disposable {
 		if (this.previousDescription === undefined) {
 			setAriaAttribute(this.element, 'describedby', undefined);
 		} else {
-			setAriaAttribute(this.element, 'describedby', this.previousDescription);
+			setAriaAttribute(
+				this.element,
+				'describedby',
+				this.previousDescription,
+			);
 		}
 		this.previousDescription = undefined;
 		this.descriptionApplied = false;
@@ -452,9 +441,13 @@ function isPointInHoverRegion(x: number, y: number, target: DOMRect, tooltip: DO
 	}
 
 	// Only the gap within both rectangles' shared span keeps the hover open.
-	const inHorizontalGap =
-		x >= Math.min(target.right, tooltip.right) && x <= Math.max(target.left, tooltip.left) && y >= Math.max(target.top, tooltip.top) && y <= Math.min(target.bottom, tooltip.bottom);
-	const inVerticalGap =
-		y >= Math.min(target.bottom, tooltip.bottom) && y <= Math.max(target.top, tooltip.top) && x >= Math.max(target.left, tooltip.left) && x <= Math.min(target.right, tooltip.right);
+	const inHorizontalGap = x >= Math.min(target.right, tooltip.right)
+		&& x <= Math.max(target.left, tooltip.left)
+		&& y >= Math.max(target.top, tooltip.top)
+		&& y <= Math.min(target.bottom, tooltip.bottom);
+	const inVerticalGap = y >= Math.min(target.bottom, tooltip.bottom)
+		&& y <= Math.max(target.top, tooltip.top)
+		&& x >= Math.max(target.left, tooltip.left)
+		&& x <= Math.min(target.right, tooltip.right);
 	return inHorizontalGap || inVerticalGap;
 }

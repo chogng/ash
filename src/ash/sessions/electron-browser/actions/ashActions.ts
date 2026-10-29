@@ -8,11 +8,7 @@ export class OpenAshWindowAction extends Action2 {
 	public static readonly ID = OPEN_ASH_WINDOW_COMMAND_ID;
 
 	constructor() {
-		super({
-			id: OpenAshWindowAction.ID,
-			title: localize2({ bundle: 'ash', key: 'sessions.menu.openIde' }, 'Open IDE'),
-			f1: true,
-		});
+		super({ id: OpenAshWindowAction.ID, title: localize2({ bundle: 'ash', key: 'sessions.menu.openIde' }, 'Open IDE'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {

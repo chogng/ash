@@ -9,81 +9,63 @@ if (process.env.ASH_TEST_SYSTEM_AUTHORIZATION === 'approve' || process.env.ASH_T
 	test.use({ electronWindowMode: 'active' });
 }
 
-test(
-	'read-only save recovery preserves edits and overwrites with ordinary permissions',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, application, testWorkspace, workbench }) => {
-		const name = 'permission-save.txt';
-		const path = join(testWorkspace.directory, name);
-		await writeFile(path, '\uFEFForiginal\r\n');
-		await workbench.page
-			.locator('.ash-explorer')
-			.getByRole('treeitem')
-			.filter({ has: workbench.page.getByText(name, { exact: true }) })
-			.dblclick();
-		const group = workbench.editors.groupAt(0);
-		const input = group.content.getByRole('textbox', { name, exact: true });
-		const tab = group.element.locator('.ash-tab').filter({ hasText: name });
-		await input.press('ControlOrMeta+Home');
-		await input.type('editor ');
+test('read-only save recovery preserves edits and overwrites with ordinary permissions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
+	const name = 'permission-save.txt';
+	const path = join(testWorkspace.directory, name);
+	await writeFile(path, '\uFEFForiginal\r\n');
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem').filter({ has: workbench.page.getByText(name, { exact: true }) }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.getByRole('textbox', { name, exact: true });
+	const tab = group.element.locator('.ash-tab').filter({ hasText: name });
+	await input.press('ControlOrMeta+Home');
+	await input.type('editor ');
+	await expect(tab).toHaveAttribute('data-state', 'dirty');
+	await chmod(path, 0o444);
+	try {
+		const message = await workbench.dialogs.expectMessage(application, 'Save a read-only file', () => input.press('ControlOrMeta+s'));
+		expect(message.buttons).toContain('Overwrite');
+		expect(message.buttons).toContain('Save As...');
+		expect(message.buttons).toContain('Revert');
+		expect(message.buttons).not.toContain('Retry with administrator permission');
+		await expect(input).toBeFocused();
 		await expect(tab).toHaveAttribute('data-state', 'dirty');
-		await chmod(path, 0o444);
-		try {
-			const message = await workbench.dialogs.expectMessage(application, 'Save a read-only file', () => input.press('ControlOrMeta+s'));
-			expect(message.buttons).toContain('Overwrite');
-			expect(message.buttons).toContain('Save As...');
-			expect(message.buttons).toContain('Revert');
-			expect(message.buttons).not.toContain('Retry with administrator permission');
-			await expect(input).toBeFocused();
-			await expect(tab).toHaveAttribute('data-state', 'dirty');
-			await expect(group.editor.lines).toHaveText(['editor original', '']);
-			expect(await readFile(path, 'utf8')).toBe('\uFEFForiginal\r\n');
-			await workbench.dialogs.confirm(application, 'Save a read-only file', 'Overwrite', () => input.press('ControlOrMeta+s'));
-			await expect.poll(() => readFile(path, 'utf8')).toBe('\uFEFFeditor original\r\n');
-			await expect(tab).not.toHaveAttribute('data-state', /dirty|conflict/);
-		} finally {
-			await chmod(path, 0o644);
-		}
-	},
-);
+		await expect(group.editor.lines).toHaveText(['editor original', '']);
+		expect(await readFile(path, 'utf8')).toBe('\uFEFForiginal\r\n');
+		await workbench.dialogs.confirm(application, 'Save a read-only file', 'Overwrite', () => input.press('ControlOrMeta+s'));
+		await expect.poll(() => readFile(path, 'utf8')).toBe('\uFEFFeditor original\r\n');
+		await expect(tab).not.toHaveAttribute('data-state', /dirty|conflict/);
+	} finally { await chmod(path, 0o644); }
+});
 
-test(
-	'system permission save failures require an explicit desktop authorization choice',
-	{ tag: ['@browser-app-server', '@electron-app-server', '@darwin', '@linux'] },
-	async ({ target, application, testWorkspace, workbench }) => {
-		const directory = join(testWorkspace.directory, 'protected-save');
-		const name = 'protected.txt';
-		const path = join(directory, name);
-		await mkdir(directory);
-		await writeFile(path, 'original');
-		const folder = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'protected-save', exact: true });
-		await folder.locator('.ash-tree-twistie').click();
-		await expect(folder).toHaveAttribute('aria-expanded', 'true');
-		await workbench.page
-			.locator('.ash-explorer')
-			.getByRole('treeitem')
-			.filter({ has: workbench.page.getByText(name, { exact: true }) })
-			.dblclick();
-		const group = workbench.editors.groupAt(0);
-		const input = group.content.getByRole('textbox', { name, exact: true });
-		const tab = group.element.locator('.ash-tab').filter({ hasText: name });
-		await input.press('ControlOrMeta+Home');
-		await input.type('editor ');
-		await chmod(directory, 0o555);
-		try {
-			const title = target.kind === 'electron' ? 'Save with administrator permission' : 'Could not save file';
-			const message = await workbench.dialogs.expectMessage(application, title, () => input.press('ControlOrMeta+s'));
-			expect(message.buttons.includes('Retry with administrator permission')).toBe(target.kind === 'electron');
-			expect(message.buttons).toContain('Save As...');
-			expect(message.buttons).toContain('Revert');
-			await expect(input).toBeFocused();
-			await expect(tab).toHaveAttribute('data-state', 'dirty');
-			expect(await readFile(path, 'utf8')).toBe('original');
-		} finally {
-			await chmod(directory, 0o755);
-		}
-	},
-);
+
+test('system permission save failures require an explicit desktop authorization choice', { tag: ['@browser-app-server', '@electron-app-server', '@darwin', '@linux'] }, async ({ target, application, testWorkspace, workbench }) => {
+	const directory = join(testWorkspace.directory, 'protected-save');
+	const name = 'protected.txt';
+	const path = join(directory, name);
+	await mkdir(directory);
+	await writeFile(path, 'original');
+	const folder = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'protected-save', exact: true });
+	await folder.locator('.ash-tree-twistie').click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem').filter({ has: workbench.page.getByText(name, { exact: true }) }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.getByRole('textbox', { name, exact: true });
+	const tab = group.element.locator('.ash-tab').filter({ hasText: name });
+	await input.press('ControlOrMeta+Home');
+	await input.type('editor ');
+	await chmod(directory, 0o555);
+	try {
+		const title = target.kind === 'electron' ? 'Save with administrator permission' : 'Could not save file';
+		const message = await workbench.dialogs.expectMessage(application, title, () => input.press('ControlOrMeta+s'));
+		expect(message.buttons.includes('Retry with administrator permission')).toBe(target.kind === 'electron');
+		expect(message.buttons).toContain('Save As...');
+		expect(message.buttons).toContain('Revert');
+		await expect(input).toBeFocused();
+		await expect(tab).toHaveAttribute('data-state', 'dirty');
+		expect(await readFile(path, 'utf8')).toBe('original');
+	} finally { await chmod(directory, 0o755); }
+});
+
 
 for (const outcome of ['approve', 'cancel'] as const) {
 	test(`real system authorization ${outcome} retains file permissions and editor state`, { tag: '@electron-app-server' }, async ({ target, application, testWorkspace, workbench }) => {
@@ -97,11 +79,7 @@ for (const outcome of ['approve', 'cancel'] as const) {
 		const folder = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'system-authorization', exact: true });
 		await folder.locator('.ash-tree-twistie').click();
 		await expect(folder).toHaveAttribute('aria-expanded', 'true');
-		await workbench.page
-			.locator('.ash-explorer')
-			.getByRole('treeitem')
-			.filter({ has: workbench.page.getByText(name, { exact: true }) })
-			.dblclick();
+		await workbench.page.locator('.ash-explorer').getByRole('treeitem').filter({ has: workbench.page.getByText(name, { exact: true }) }).dblclick();
 		const group = workbench.editors.groupAt(0);
 		const input = group.content.getByRole('textbox', { name, exact: true });
 		const tab = group.element.locator('.ash-tab').filter({ hasText: name });
@@ -115,9 +93,7 @@ for (const outcome of ['approve', 'cancel'] as const) {
 				// Restrict writes to Administrators/System while preserving the owner's DACL recovery rights.
 				// Change inheritance on the parent only: /T would strip the child's newly inherited read access.
 				await run('icacls', [directory, '/inheritance:r', '/grant:r', `${identity}:(OI)(CI)RX`, '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F']);
-			} else {
-				await chmod(directory, 0o555);
-			}
+			} else { await chmod(directory, 0o555); }
 			expect(await readFile(path)).toEqual(Buffer.from('\uFEFForiginal\r\n'));
 			const aclBefore = identity ? (await run('icacls', [path])).stdout : undefined;
 			console.log(`In the upcoming SYSTEM authorization window, ${outcome === 'approve' ? 'authorize the save' : 'cancel authorization'}. Do not enter credentials in the test runner.`);
@@ -126,25 +102,19 @@ for (const outcome of ['approve', 'cancel'] as const) {
 				await expect.poll(() => readFile(path), { timeout: 200_000 }).toEqual(Buffer.from('\uFEFFeditor original\r\n'));
 				await expect(tab).not.toHaveAttribute('data-state', /dirty|conflict/);
 			} else {
-				const failure = await workbench.dialogs.expectMessage(application, 'Could not save file', async () => {}, 200_000);
+				const failure = await workbench.dialogs.expectMessage(application, 'Could not save file', async () => { }, 200_000);
 				expect(failure.message).toContain('System authorization was declined. Your changes remain unsaved.');
 				await expect(tab).toHaveAttribute('data-state', 'dirty');
 				await expect(group.editor.lines).toHaveText(['editor original', '']);
 				expect(await readFile(path)).toEqual(Buffer.from('\uFEFForiginal\r\n'));
 			}
 			const after = await stat(path);
-			if (identity) {
-				expect((await run('icacls', [path])).stdout).toBe(aclBefore);
-			} else {
-				expect([after.uid, after.gid, after.mode]).toEqual([before.uid, before.gid, before.mode]);
-			}
+			if (identity) { expect((await run('icacls', [path])).stdout).toBe(aclBefore); }
+			else { expect([after.uid, after.gid, after.mode]).toEqual([before.uid, before.gid, before.mode]); }
 			await expect(input).toBeFocused();
 		} finally {
-			if (identity) {
-				await run('icacls', [directory, '/inheritance:e', '/grant:r', `${identity}:(OI)(CI)F`]);
-			} else {
-				await chmod(directory, 0o755);
-			}
+			if (identity) { await run('icacls', [directory, '/inheritance:e', '/grant:r', `${identity}:(OI)(CI)F`]); }
+			else { await chmod(directory, 0o755); }
 		}
 	});
 }

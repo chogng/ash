@@ -7,17 +7,14 @@ import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID } from
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-export type SlashCommandBinding = { readonly origin: 'local'; readonly actionId: string } | { readonly origin: 'server' };
+export type SlashCommandBinding =
+	| { readonly origin: 'local'; readonly actionId: string; }
+	| { readonly origin: 'server'; };
 
 export type SlashCommandInput =
-	| { readonly kind: 'message'; readonly text: string }
-	| { readonly kind: 'unknown'; readonly name: string }
-	| {
-			readonly kind: 'command';
-			readonly command: SlashCommandDefinition;
-			readonly binding: SlashCommandBinding;
-			readonly argumentsText: string;
-	  };
+	| { readonly kind: 'message'; readonly text: string; }
+	| { readonly kind: 'unknown'; readonly name: string; }
+	| { readonly kind: 'command'; readonly command: SlashCommandDefinition; readonly binding: SlashCommandBinding; readonly argumentsText: string; };
 
 /** Registers one canonical definition with its Desktop-only execution binding. */
 export interface LocalSlashCommandRegistration {
@@ -144,7 +141,9 @@ function descriptionMatchScore(description: string, query: string): MatchScore |
 	const substringStart = normalized.indexOf(query);
 	if (substringStart >= 0) return [MatchKind.DescriptionSubstring, 0, [...normalized.slice(0, substringStart)].length];
 	const subsequence = commandMatchScore(normalized, query);
-	return subsequence?.[0] === MatchKind.Subsequence ? [MatchKind.DescriptionSubsequence, subsequence[1], subsequence[2]] : undefined;
+	return subsequence?.[0] === MatchKind.Subsequence
+		? [MatchKind.DescriptionSubsequence, subsequence[1], subsequence[2]]
+		: undefined;
 }
 
 function escapeRegExp(value: string): string {
@@ -165,7 +164,7 @@ export function matchedCharacterIndices(text: string, query: string): readonly n
 			return needle.map((_, offset) => start + offset);
 		}
 	}
-	let best: { gap: number; start: number; indices: number[] } | undefined;
+	let best: { gap: number; start: number; indices: number[]; } | undefined;
 	for (let start = 0; start < characters.length; start++) {
 		if (characters[start] !== needle[0]) continue;
 		const indices = [start];

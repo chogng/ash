@@ -16,7 +16,7 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 	public readonly languageIds = ['markdown'];
 	private readonly parser = new PromptFileParser();
 
-	constructor(@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService) {}
+	constructor(@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService) { }
 
 	public async provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): Promise<LanguageCompletionProviderResult | undefined> {
 		if (signal.aborted || !request.resource?.path.endsWith('/SKILL.md')) return undefined;
@@ -27,13 +27,7 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 		const line = lines[request.position.lineNumber - 1]!;
 		const prefix = line.slice(0, request.position.column - 1);
 		const tools = parsed.header.getAttribute('allowed-tools');
-		if (
-			tools?.range.startLineNumber === request.position.lineNumber &&
-			tools.value.type === 'scalar' &&
-			tools.value.format === 'none' &&
-			/^allowed-tools:\s/u.test(prefix) &&
-			this.toolsService.isAvailable
-		) {
+		if (tools?.range.startLineNumber === request.position.lineNumber && tools.value.type === 'scalar' && tools.value.format === 'none' && /^allowed-tools:\s/u.test(prefix) && this.toolsService.isAvailable) {
 			const token = prefix.slice(prefix.indexOf(':') + 1).match(/\S*$/u)![0];
 			const suffix = line.slice(request.position.column - 1).match(/^\S*/u)![0];
 			const current = token + suffix;
@@ -47,17 +41,9 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 				.map(name => {
 					const tool = this.toolsService.getToolByFullReferenceName(name)!;
 					return {
-						id: name,
-						label: name,
-						insertText: name,
-						range,
+						id: name, label: name, insertText: name, range,
 						kind: LanguageCompletionItemKind.Function,
-						documentation: isToolSet(tool)
-							? [...tool.getTools()]
-									.filter(member => member.canBeReferencedInPrompt)
-									.map(member => member.displayName)
-									.join(', ')
-							: tool.modelDescription,
+						documentation: isToolSet(tool) ? [...tool.getTools()].filter(member => member.canBeReferencedInPrompt).map(member => member.displayName).join(', ') : tool.modelDescription,
 					};
 				});
 			return { items, isIncomplete: true };
@@ -67,36 +53,18 @@ export class PromptHeaderAutocompletion implements LanguageCompletionProvider {
 			const parent = request.resource.path.split('/').at(-2)!;
 			const start = line.indexOf(':') + 2 + (line.slice(line.indexOf(':') + 1).match(/^\s*/u)?.[0].length ?? 0);
 			if (parent.length > getAttributeDefinition('name')!.maximumCharacters! || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parent)) return undefined;
-			return {
-				items: [
-					{
-						id: 'name-value',
-						label: parent,
-						insertText: line.endsWith(':') ? ` ${parent}` : parent,
-						range: new Range(request.position.lineNumber, Math.min(start, line.length + 1), request.position.lineNumber, line.length + 1),
-						kind: LanguageCompletionItemKind.Value,
-						documentation: getAttributeDefinition('name')!.description,
-					},
-				],
-				isIncomplete: false,
-			};
+			return { items: [{ id: 'name-value', label: parent, insertText: line.endsWith(':') ? ` ${parent}` : parent, range: new Range(request.position.lineNumber, Math.min(start, line.length + 1), request.position.lineNumber, line.length + 1), kind: LanguageCompletionItemKind.Value, documentation: getAttributeDefinition('name')!.description }], isIncomplete: false };
 		}
 		if (!/^[a-z-]*$/u.test(prefix) || !/^[a-z-]*$/u.test(line)) return undefined;
 		const existing = new Set(parsed.header.attributes.map(attribute => attribute.key));
 		const range = new Range(request.position.lineNumber, 1, request.position.lineNumber, line.length + 1);
 		return {
-			items: getValidAttributeNames()
-				.filter(name => name.startsWith(prefix) && !existing.has(name))
-				.map((name, index) => ({
-					id: name,
-					label: name,
-					insertText: `${name}: `,
-					range,
-					kind: LanguageCompletionItemKind.Property,
-					detail: localize('prompt.skill.field', 'Skill field'),
-					documentation: getAttributeDefinition(name)!.description,
-					sortText: String(index).padStart(2, '0'),
-				})),
+			items: getValidAttributeNames().filter(name => name.startsWith(prefix) && !existing.has(name)).map((name, index) => ({
+				id: name, label: name, insertText: `${name}: `, range,
+				kind: LanguageCompletionItemKind.Property,
+				detail: localize('prompt.skill.field', 'Skill field'), documentation: getAttributeDefinition(name)!.description,
+				sortText: String(index).padStart(2, '0'),
+			})),
 			isIncomplete: true,
 		};
 	}

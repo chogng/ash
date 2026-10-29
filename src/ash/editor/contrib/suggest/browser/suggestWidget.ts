@@ -29,7 +29,10 @@ export class CompletionWidget extends Disposable {
 	) {
 		super();
 		try {
-			if (viewport.textModel !== editor.getModel() || viewport.textModel !== session.textModel) {
+			if (
+				viewport.textModel !== editor.getModel() ||
+				viewport.textModel !== session.textModel
+			) {
 				throw new TypeError('Stanza completion widget dependencies must share one text model');
 			}
 		} catch (error) {
@@ -44,26 +47,22 @@ export class CompletionWidget extends Disposable {
 		this.element.setAttribute('role', 'listbox');
 		this.element.hidden = true;
 		(container ?? viewport.domNode.domNode).append(this.element);
-		this._register(
-			toDisposable(() => {
-				this.element.remove();
-				this.viewport.setAriaOptions({ activeDescendant: undefined });
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.element.remove();
+			this.viewport.setAriaOptions({ activeDescendant: undefined });
+		}));
 		this._register(session.onDidChange(() => this.render()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
 		this._register(addDisposableListener(view.element, 'keydown', event => this.handleKeydown(event)));
 		this._register(addDisposableListener(view.element, 'blur', () => session.cancel()));
 		this._register(addDisposableListener(view.element, 'compositionstart', () => session.cancel()));
-		this._register(
-			addDisposableListener<MouseEvent>(this.element, 'mousedown', event => {
-				const index = this.readOptionIndex(event);
-				if (index === undefined || event.button !== 0) return;
-				stopEvent(event);
-				session.selectIndex(index);
-				this.accept();
-			}),
-		);
+		this._register(addDisposableListener<MouseEvent>(this.element, 'mousedown', event => {
+			const index = this.readOptionIndex(event);
+			if (index === undefined || event.button !== 0) return;
+			stopEvent(event);
+			session.selectIndex(index);
+			this.accept();
+		}));
 		this.render();
 	}
 
@@ -72,7 +71,14 @@ export class CompletionWidget extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || !this.readState() || event.ctrlKey || event.altKey || event.metaKey) {
+		if (
+			event.defaultPrevented ||
+			event.isComposing ||
+			!this.readState() ||
+			event.ctrlKey ||
+			event.altKey ||
+			event.metaKey
+		) {
 			return;
 		}
 		switch (event.key) {
@@ -147,13 +153,14 @@ export class CompletionWidget extends Disposable {
 				const detail = item.detail ? URI.parse(`fake:///${encodeURIComponent(item.detail)}`) : undefined;
 				const labelClasses = getIconClasses(undefined, this.languageService, resource, fileKind);
 				const detailClasses = detail ? getIconClasses(undefined, this.languageService, detail, fileKind) : [];
-				const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length ? detailClasses : labelClasses;
+				const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length
+					? detailClasses : labelClasses;
 				kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
 			}
 			label.className = 'stanza-editor-completion-label';
 			appendHighlightedText(label, item.label, item.labelMatchIndices);
 			detail.className = 'stanza-editor-completion-detail';
-			const detailText = focused ? (state.details.detail ?? '') : (item.detail ?? '');
+			const detailText = focused ? state.details.detail ?? '' : item.detail ?? '';
 			appendHighlightedText(detail, detailText, detailText === item.detail ? item.detailMatchIndices : undefined);
 			option.append(kind, label, detail);
 			if (focused && state.details.documentation !== undefined) {
@@ -166,9 +173,7 @@ export class CompletionWidget extends Disposable {
 		reset(this.element, fragment);
 		this.element.hidden = false;
 		this.element.classList.add('visible');
-		this.viewport.setAriaOptions({
-			activeDescendant: state.selectedIndex < 0 ? undefined : `${this.widgetId}-option-${state.selectedIndex}`,
-		});
+		this.viewport.setAriaOptions({ activeDescendant: state.selectedIndex < 0 ? undefined : `${this.widgetId}-option-${state.selectedIndex}` });
 		this.position(state);
 	}
 
@@ -220,43 +225,24 @@ function appendHighlightedText(element: HTMLElement, value: string, indices: rea
 
 function completionKindLabel(kind: LanguageCompletionItemKind): string {
 	switch (kind) {
-		case LanguageCompletionItemKind.Text:
-			return 'Text';
-		case LanguageCompletionItemKind.Method:
-			return 'Method';
-		case LanguageCompletionItemKind.Function:
-			return 'Function';
-		case LanguageCompletionItemKind.Constructor:
-			return 'Constructor';
-		case LanguageCompletionItemKind.Field:
-			return 'Field';
-		case LanguageCompletionItemKind.Variable:
-			return 'Variable';
-		case LanguageCompletionItemKind.Class:
-			return 'Class';
-		case LanguageCompletionItemKind.Interface:
-			return 'Interface';
-		case LanguageCompletionItemKind.Module:
-			return 'Module';
-		case LanguageCompletionItemKind.Property:
-			return 'Property';
-		case LanguageCompletionItemKind.Unit:
-			return 'Unit';
-		case LanguageCompletionItemKind.Value:
-			return 'Value';
-		case LanguageCompletionItemKind.Enum:
-			return 'Enum';
-		case LanguageCompletionItemKind.Keyword:
-			return 'Keyword';
-		case LanguageCompletionItemKind.Snippet:
-			return 'Snippet';
-		case LanguageCompletionItemKind.File:
-			return 'File';
-		case LanguageCompletionItemKind.Folder:
-			return 'Folder';
-		case LanguageCompletionItemKind.Reference:
-			return 'Reference';
-		case LanguageCompletionItemKind.TypeParameter:
-			return 'Type';
+		case LanguageCompletionItemKind.Text: return 'Text';
+		case LanguageCompletionItemKind.Method: return 'Method';
+		case LanguageCompletionItemKind.Function: return 'Function';
+		case LanguageCompletionItemKind.Constructor: return 'Constructor';
+		case LanguageCompletionItemKind.Field: return 'Field';
+		case LanguageCompletionItemKind.Variable: return 'Variable';
+		case LanguageCompletionItemKind.Class: return 'Class';
+		case LanguageCompletionItemKind.Interface: return 'Interface';
+		case LanguageCompletionItemKind.Module: return 'Module';
+		case LanguageCompletionItemKind.Property: return 'Property';
+		case LanguageCompletionItemKind.Unit: return 'Unit';
+		case LanguageCompletionItemKind.Value: return 'Value';
+		case LanguageCompletionItemKind.Enum: return 'Enum';
+		case LanguageCompletionItemKind.Keyword: return 'Keyword';
+		case LanguageCompletionItemKind.Snippet: return 'Snippet';
+		case LanguageCompletionItemKind.File: return 'File';
+		case LanguageCompletionItemKind.Folder: return 'Folder';
+		case LanguageCompletionItemKind.Reference: return 'Reference';
+		case LanguageCompletionItemKind.TypeParameter: return 'Type';
 	}
 }

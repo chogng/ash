@@ -49,12 +49,17 @@ abstract class TransferProvider implements DocumentPasteEditProvider, DocumentDr
 		token: CancellationToken,
 	): Promise<DocumentPasteEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() {} } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() { } } : undefined;
 	}
 
-	async provideDocumentDropEdits(_model: ITextModel, _position: IPosition, transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<DocumentDropEditsSession | undefined> {
+	async provideDocumentDropEdits(
+		_model: ITextModel,
+		_position: IPosition,
+		transfer: IReadonlyVSDataTransfer,
+		token: CancellationToken,
+	): Promise<DocumentDropEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() {} } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() { } } : undefined;
 	}
 
 	protected abstract getEdit(transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<TransferEdit | undefined>;
@@ -96,10 +101,12 @@ class AbsolutePathProvider extends TransferProvider {
 		if (uris.length === 0) return undefined;
 		const allFiles = uris.every(({ uri }) => uri.scheme === 'file');
 		return {
-			title: allFiles ? localize('dropOrPaste.absolutePaths', 'Insert Paths') : localize('dropOrPaste.uris', 'Insert URIs'),
+			title: allFiles
+				? localize('dropOrPaste.absolutePaths', 'Insert Paths')
+				: localize('dropOrPaste.uris', 'Insert URIs'),
 			kind: this.kind,
 			handledMimeType: Mimes.uriList,
-			insertText: uris.map(({ uri, source }) => (uri.scheme === 'file' ? uri.fsPath : source)).join(' '),
+			insertText: uris.map(({ uri, source }) => uri.scheme === 'file' ? uri.fsPath : source).join(' '),
 		};
 	}
 }
@@ -118,7 +125,9 @@ class RelativePathProvider extends TransferProvider {
 			const uriPath = uri.toEncodedComponents().path;
 			const folder = this.workspace.getWorkspace().folders.find(candidate => {
 				const folderPath = candidate.uri.toEncodedComponents().path.replace(/\/$/u, '');
-				return candidate.uri.scheme === uri.scheme && candidate.uri.authority === uri.authority && uriPath.startsWith(`${folderPath}/`);
+				return candidate.uri.scheme === uri.scheme
+					&& candidate.uri.authority === uri.authority
+					&& uriPath.startsWith(`${folderPath}/`);
 			});
 			if (!folder) return [];
 			const folderPath = folder.uri.toEncodedComponents().path.replace(/\/$/u, '');
@@ -150,23 +159,16 @@ class HtmlPasteProvider implements DocumentPasteEditProvider {
 		const markup = await transfer.get(Mimes.html)?.asString();
 		if (!markup || token.isCancellationRequested) return undefined;
 		return {
-			edits: [
-				{
-					title: localize('dropOrPaste.html', 'Insert HTML'),
-					kind: htmlKind,
-					insertText: markup,
-					yieldTo: [{ mimeType: Mimes.text }],
-				},
-			],
-			dispose() {},
+			edits: [{ title: localize('dropOrPaste.html', 'Insert HTML'), kind: htmlKind, insertText: markup, yieldTo: [{ mimeType: Mimes.text }] }],
+			dispose() { },
 		};
 	}
 }
 
-async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string }[]> {
+async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string; }[]> {
 	const value = await transfer.get(Mimes.uriList)?.asString();
 	if (!value) return [];
-	const result: { uri: URI; source: string }[] = [];
+	const result: { uri: URI; source: string; }[] = [];
 	for (const source of UriList.parse(value)) {
 		if (!source.trim()) continue;
 		try {

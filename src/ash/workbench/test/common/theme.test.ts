@@ -18,10 +18,7 @@ test('Activity Bar badge color descriptions appear in Chinese in the theme color
 			const color = Colors.getColors().find(color => color.id === id)!;
 			registry.registerColor(id, color.defaults, color);
 		}
-		assert.deepEqual(
-			registry.getColors().map(color => color.description),
-			['活动栏通知徽章的背景色。', '活动栏通知徽章的文字颜色。'],
-		);
+		assert.deepEqual(registry.getColors().map(color => color.description), ['活动栏通知徽章的背景色。', '活动栏通知徽章的文字颜色。']);
 	} finally {
 		resetNlsResolver();
 	}
@@ -41,12 +38,10 @@ test('contributed Ash themes resolve authored window colors and included syntax 
 });
 
 test('built-in high contrast themes keep common foreground and background pairs readable', () => {
-	assert.deepEqual(
-		WorkbenchThemesRegistry.getColorThemes()
-			.filter(theme => theme.id.startsWith('ash-high-contrast-'))
-			.map(theme => theme.id),
-		[highContrastLightColorTheme.id, highContrastDarkColorTheme.id],
-	);
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => theme.id.startsWith('ash-high-contrast-')).map(theme => theme.id), [
+		highContrastLightColorTheme.id,
+		highContrastDarkColorTheme.id,
+	]);
 	const pairs = [
 		['foreground', 'workbench.background'],
 		['activityBarBadge.foreground', 'activityBarBadge.background'],
@@ -122,10 +117,7 @@ test('Workbench theme changes publish one immutable catalog after registration, 
 	registration.replace([theme('extension-demo-light', 'Light', ColorScheme.Light)]);
 	registration.dispose();
 
-	assert.deepEqual(
-		catalogs.map(catalog => catalog.map(candidate => candidate.id)),
-		[['extension-demo-dark'], ['extension-demo-light'], []],
-	);
+	assert.deepEqual(catalogs.map(catalog => catalog.map(candidate => candidate.id)), [['extension-demo-dark'], ['extension-demo-light'], []]);
 	assert.equal(Object.isFrozen(catalogs[0]), true);
 });
 
@@ -133,8 +125,8 @@ function theme(id: string, label: string, colorScheme = ColorScheme.Dark) {
 	return createColorTheme({ id, label, colorScheme });
 }
 
-function contrastRatio(foreground: { r: number; g: number; b: number }, background: { r: number; g: number; b: number }): number {
-	const luminance = (color: { r: number; g: number; b: number }): number => {
+function contrastRatio(foreground: { r: number; g: number; b: number; }, background: { r: number; g: number; b: number; }): number {
+	const luminance = (color: { r: number; g: number; b: number; }): number => {
 		const linear = (channel: number): number => {
 			const value = channel / 255;
 			return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;

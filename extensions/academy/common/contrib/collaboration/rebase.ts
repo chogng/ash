@@ -87,16 +87,9 @@ export function rebaseDocumentTransaction(base: DocumentNode, schema: DocumentSc
 		const applied = applyDocumentTransaction(remoteDocument, schema, transaction);
 		const selection = transaction.selectionSet ? normalizeSelection(local.selection, mappedSelection, remoteDocument, applied.document) : undefined;
 		const normalizedTransaction = transaction.selectionSet ? transaction.withSelection(selection) : transaction;
-		return Object.freeze({
-			transaction: normalizedTransaction,
-			document: applied.document,
-			remoteDocument,
-			droppedSteps: Object.freeze(droppedSteps),
-		});
+		return Object.freeze({ transaction: normalizedTransaction, document: applied.document, remoteDocument, droppedSteps: Object.freeze(droppedSteps) });
 	} catch (error) {
-		throw new DocumentRebaseError('The rebased document transaction is not valid after the remote change', {
-			cause: error,
-		});
+		throw new DocumentRebaseError('The rebased document transaction is not valid after the remote change', { cause: error });
 	}
 }
 
@@ -115,13 +108,7 @@ function rebaseUndoEntries(document: DocumentNode, schema: DocumentSchema, entri
 		const forward = rebaseLocalHistoryTransaction(localPrevious, schema, entry.transaction, remoteAtPrevious.transaction, insertionOrder);
 		if (!forward) return undefined;
 		const applied = applyDocumentTransaction(remoteAtPrevious.document, schema, forward.transaction);
-		rebased[index] = createRebasedHistoryEntry(
-			entry,
-			forward.transaction,
-			applied.inverse,
-			mapHistorySelection(localPrevious, schema, remoteAtPrevious.transaction, entry.selectionBefore),
-			mapHistorySelection(localDocument, schema, remoteAtCurrent, entry.selectionAfter),
-		);
+		rebased[index] = createRebasedHistoryEntry(entry, forward.transaction, applied.inverse, mapHistorySelection(localPrevious, schema, remoteAtPrevious.transaction, entry.selectionBefore), mapHistorySelection(localDocument, schema, remoteAtCurrent, entry.selectionAfter));
 		localDocument = localPrevious;
 		remoteAtCurrent = remoteAtPrevious.transaction;
 	}
@@ -139,13 +126,7 @@ function rebaseRedoEntries(document: DocumentNode, schema: DocumentSchema, entri
 		const applied = applyDocumentTransaction(remoteAtCurrentDocument(localDocument, schema, remoteAtCurrent), schema, forward.transaction);
 		const remoteAtNext = rebaseHistoryTransaction(localDocument, schema, remoteAtCurrent, entry.transaction);
 		if (!remoteAtNext) return undefined;
-		rebased[index] = createRebasedHistoryEntry(
-			entry,
-			forward.transaction,
-			applied.inverse,
-			mapHistorySelection(localDocument, schema, remoteAtCurrent, entry.selectionBefore),
-			mapHistorySelection(applyDocumentTransaction(localDocument, schema, entry.transaction).document, schema, remoteAtNext.transaction, entry.selectionAfter),
-		);
+		rebased[index] = createRebasedHistoryEntry(entry, forward.transaction, applied.inverse, mapHistorySelection(localDocument, schema, remoteAtCurrent, entry.selectionBefore), mapHistorySelection(applyDocumentTransaction(localDocument, schema, entry.transaction).document, schema, remoteAtNext.transaction, entry.selectionAfter));
 		localDocument = applyDocumentTransaction(localDocument, schema, entry.transaction).document;
 		remoteAtCurrent = remoteAtNext.transaction;
 	}
@@ -167,13 +148,7 @@ function rebaseHistoryTransaction(base: DocumentNode, schema: DocumentSchema, lo
  * insertion; otherwise redo could turn an insertion into a replacement and
  * remove another author's text.
  */
-function rebaseLocalHistoryTransaction(
-	base: DocumentNode,
-	schema: DocumentSchema,
-	local: DocumentTransaction,
-	remote: DocumentTransaction,
-	insertionOrder: HistoricalInsertionOrder,
-): RebasedDocumentTransaction | undefined {
+function rebaseLocalHistoryTransaction(base: DocumentNode, schema: DocumentSchema, local: DocumentTransaction, remote: DocumentTransaction, insertionOrder: HistoricalInsertionOrder): RebasedDocumentTransaction | undefined {
 	try {
 		const remoteApplied = applyDocumentTransaction(base, schema, remote);
 		assertReinsertedNodesUnchanged(base, remoteApplied.document, local);
@@ -201,24 +176,13 @@ function rebaseLocalHistoryTransaction(
 			metadata: local.metadata,
 		});
 		const applied = applyDocumentTransaction(remoteApplied.document, schema, transaction);
-		return Object.freeze({
-			transaction,
-			document: applied.document,
-			remoteDocument: remoteApplied.document,
-			droppedSteps: Object.freeze([]),
-		});
+		return Object.freeze({ transaction, document: applied.document, remoteDocument: remoteApplied.document, droppedSteps: Object.freeze([]) });
 	} catch {
 		return undefined;
 	}
 }
 
-function mapHistoryStepThroughRemote(
-	step: DocumentStep,
-	changes: readonly RemoteChange[],
-	remoteDocument: DocumentNode,
-	localCreatedIds: ReadonlySet<DocumentNodeId>,
-	insertionOrder: HistoricalInsertionOrder,
-): DocumentStep | undefined {
+function mapHistoryStepThroughRemote(step: DocumentStep, changes: readonly RemoteChange[], remoteDocument: DocumentNode, localCreatedIds: ReadonlySet<DocumentNodeId>, insertionOrder: HistoricalInsertionOrder): DocumentStep | undefined {
 	let mapped: DocumentStep | undefined = step;
 	for (const change of changes) {
 		if (!mapped) return undefined;
@@ -243,13 +207,7 @@ function mapHistoryStepThroughRemote(
 	return mapped;
 }
 
-function mapHistoryReplaceTextThroughRemote(
-	step: ReplaceTextStep,
-	changes: readonly RemoteChange[],
-	remoteDocument: DocumentNode,
-	insertionOrder: HistoricalInsertionOrder,
-	localCreatedIds: ReadonlySet<DocumentNodeId>,
-): ReplaceTextStep | undefined {
+function mapHistoryReplaceTextThroughRemote(step: ReplaceTextStep, changes: readonly RemoteChange[], remoteDocument: DocumentNode, insertionOrder: HistoricalInsertionOrder, localCreatedIds: ReadonlySet<DocumentNodeId>): ReplaceTextStep | undefined {
 	let mapped = step;
 	for (const change of changes) {
 		if (localCreatedIds.has(mapped.nodeId)) continue;
@@ -258,14 +216,10 @@ function mapHistoryReplaceTextThroughRemote(
 		if (remote.kind !== 'replaceText' || remote.nodeId !== mapped.nodeId) continue;
 		const textNode = findDocumentNode(remoteDocument, mapped.nodeId)?.node;
 		if (!textNode || textNode.text === undefined) throw new DocumentRebaseError(`History text node '${mapped.nodeId}' no longer exists`);
-		const fromBias = mapped.from === mapped.to ? (insertionOrder === 'before' ? 'backward' : 'forward') : 'forward';
+		const fromBias = mapped.from === mapped.to ? insertionOrder === 'before' ? 'backward' : 'forward' : 'forward';
 		const from = mapTextOffset(mapped.from, remote, fromBias);
 		const to = mapTextOffset(mapped.to, remote, mapped.from === mapped.to ? fromBias : 'backward');
-		mapped = {
-			...mapped,
-			from: Math.max(0, Math.min(textNode.text.length, from)),
-			to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))),
-		};
+		mapped = { ...mapped, from: Math.max(0, Math.min(textNode.text.length, from)), to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))) };
 		if (step.from !== step.to && mapped.from === mapped.to) return undefined;
 	}
 	return mapped;
@@ -308,13 +262,7 @@ function remoteAtCurrentDocument(document: DocumentNode, schema: DocumentSchema,
 	return applyDocumentTransaction(document, schema, remote).document;
 }
 
-function createRebasedHistoryEntry(
-	entry: DocumentHistoryEntry,
-	transaction: DocumentTransaction,
-	inverse: DocumentTransaction,
-	selectionBefore: DocumentSelection | undefined,
-	selectionAfter: DocumentSelection | undefined,
-): DocumentHistoryEntry {
+function createRebasedHistoryEntry(entry: DocumentHistoryEntry, transaction: DocumentTransaction, inverse: DocumentTransaction, selectionBefore: DocumentSelection | undefined, selectionAfter: DocumentSelection | undefined): DocumentHistoryEntry {
 	return Object.freeze({ transaction, inverse, selectionBefore, selectionAfter, historyGroup: entry.historyGroup });
 }
 
@@ -347,14 +295,7 @@ function assertReinsertedNodesUnchanged(base: DocumentNode, remote: DocumentNode
 				if (!deleted.has(id)) continue;
 				const previous = findDocumentNode(base, id)?.node;
 				const current = findDocumentNode(remote, id)?.node;
-				if (current && JSON.stringify(previous) !== JSON.stringify(current))
-					throw new DocumentRebaseError(
-						localize(
-							'document.collaboration.structuralConflict',
-							"Cannot merge a structural replacement because another collaborator changed node '{0}'. Your local edits have been retained.",
-							id,
-						),
-					);
+				if (current && JSON.stringify(previous) !== JSON.stringify(current)) throw new DocumentRebaseError(localize('document.collaboration.structuralConflict', "Cannot merge a structural replacement because another collaborator changed node '{0}'. Your local edits have been retained.", id));
 			}
 		}
 	}
@@ -396,15 +337,14 @@ function mergeMappedAttributes(step: DocumentStep, before: DocumentNode, remote:
 		if (step.nodeId === before.id && key === 'paragraphStyles') {
 			// Definitions have stable ids. Independent creations/updates can coexist,
 			// while server order resolves edits to the same definition.
-			const parse = (value: DocumentAttributes[string] | undefined): readonly { readonly id: string }[] => (value === undefined ? [] : JSON.parse(String(value)));
+			const parse = (value: DocumentAttributes[string] | undefined): readonly { readonly id: string; }[] => value === undefined ? [] : JSON.parse(String(value));
 			const oldStyles = new Map(parse(previous[key]).map(style => [style.id, style]));
 			const localStyles = new Map(parse(step.attrs[key]).map(style => [style.id, style]));
 			const result = new Map(parse(current[key]).map(style => [style.id, style]));
 			for (const id of new Set([...oldStyles.keys(), ...localStyles.keys()])) {
 				if (JSON.stringify(oldStyles.get(id)) === JSON.stringify(localStyles.get(id))) continue;
 				const style = localStyles.get(id);
-				if (style) result.set(id, style);
-				else result.delete(id);
+				if (style) result.set(id, style); else result.delete(id);
 			}
 			if (result.size || step.attrs[key] !== undefined) merged[key] = JSON.stringify([...result.values()]);
 			else delete merged[key];
@@ -447,11 +387,7 @@ function mapReplaceTextStep(step: ReplaceTextStep, change: RemoteChange, remoteD
 	if (!textNode || textNode.text === undefined) return undefined;
 	const from = mapTextOffset(step.from, remoteStep, 'backward');
 	const to = mapTextOffset(step.to, remoteStep, 'forward');
-	return {
-		...step,
-		from: Math.max(0, Math.min(textNode.text.length, from)),
-		to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))),
-	};
+	return { ...step, from: Math.max(0, Math.min(textNode.text.length, from)), to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))) };
 }
 
 function mapTextOffset(offset: number, remote: ReplaceTextStep, bias: 'backward' | 'forward'): number {
@@ -511,10 +447,9 @@ function normalizeText(text: string): string {
 /** A comment created before a peer edit must travel through the same position mapping as selections. */
 function mapReviewAnchor(step: DocumentStep, change: RemoteChange, created: ReadonlySet<DocumentNodeId>): DocumentStep {
 	const node = step.kind === 'insertNode' ? step.node : undefined;
-	const attrs =
-		node?.type === 'reviewComment' ? node.attrs : step.kind === 'setNodeAttributes' && findDocumentNode(change.before, step.nodeId)?.node.type === 'reviewComment' ? step.attrs : undefined;
+	const attrs = node?.type === 'reviewComment' ? node.attrs : (step.kind === 'setNodeAttributes' && findDocumentNode(change.before, step.nodeId)?.node.type === 'reviewComment') ? step.attrs : undefined;
 	if (!attrs?.anchor) return step;
-	const selection = JSON.parse(String(attrs.anchor)) as Extract<DocumentSelection, { kind: 'text' }>;
+	const selection = JSON.parse(String(attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }>;
 	if (created.has(selection.anchor.nodeId) || created.has(selection.head.nodeId)) return step;
 	const mapped = new DocumentTransactionMapping([change]).mapSelection(selection);
 	const { anchor: _anchor, ...rest } = attrs;

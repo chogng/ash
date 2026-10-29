@@ -26,43 +26,17 @@ const upstreamOutput = 'fatal: The current branch topic has no upstream branch.\
 function completedCommand(text: string, output: string, exitCode = 1): ITerminalCommand {
 	const lines = [...output.split('\n'), ''];
 	const buffer = {
-		cursorX: 0,
-		length: lines.length,
-		getLine: (line: number) => ({
-			isWrapped: false,
-			translateToString: (_trim: boolean, start: number, end: number) => lines[line]!.slice(start, end),
-		}),
+		cursorX: 0, length: lines.length,
+		getLine: (line: number) => ({ isWrapped: false, translateToString: (_trim: boolean, start: number, end: number) => lines[line]!.slice(start, end) }),
 	};
 	const marker = (line: number) => {
 		let disposed = false;
-		return {
-			id: line,
-			line,
-			get isDisposed() {
-				return disposed;
-			},
-			onDispose: Event.None,
-			dispose() {
-				disposed = true;
-			},
-		};
+		return { id: line, line, get isDisposed() { return disposed; }, onDispose: Event.None, dispose() { disposed = true; } };
 	};
 	return new TerminalCommand({ cols: 4096, buffer: { normal: buffer, active: buffer } } as unknown as ITerminalCommandScreen, {
-		command: text,
-		commandLineConfidence: 'high',
-		isTrusted: false,
-		timestamp: 1,
-		duration: 1,
-		id: 'failed',
-		cwd: '/workspace',
-		exitCode,
-		commandStartLineContent: text,
-		markProperties: undefined,
-		startX: 0,
-		executedX: 0,
-		marker: marker(0),
-		executedMarker: marker(0),
-		endMarker: marker(lines.length - 1),
+		command: text, commandLineConfidence: 'high', isTrusted: false, timestamp: 1, duration: 1, id: 'failed', cwd: '/workspace', exitCode,
+		commandStartLineContent: text, markProperties: undefined, startX: 0, executedX: 0,
+		marker: marker(0), executedMarker: marker(0), endMarker: marker(lines.length - 1),
 	});
 }
 
@@ -71,16 +45,9 @@ function fixture(command = completedCommand('git sttatus', typoOutput), initialI
 	const services = lifetime.add(new InstantiationService());
 	const quickFixes = lifetime.add(new TerminalQuickFixService());
 	services.registerInstance(ITerminalQuickFixService, quickFixes);
-	services.registerInstance(IExtensionService, {
-		activateByEvent: async () => undefined,
-	} as unknown as IExtensionService);
+	services.registerInstance(IExtensionService, { activateByEvent: async () => undefined } as unknown as IExtensionService);
 	const opened: string[] = [];
-	services.registerInstance(IOpenerService, {
-		open: async resource => {
-			opened.push(resource.toString());
-			return true;
-		},
-	} as IOpenerService);
+	services.registerInstance(IOpenerService, { open: async resource => { opened.push(resource.toString()); return true; } } as IOpenerService);
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	const changedInput = lifetime.add(new Emitter<void>());
 	const started = lifetime.add(new Emitter<ITerminalCommand>());
@@ -96,143 +63,58 @@ function fixture(command = completedCommand('git sttatus', typoOutput), initialI
 	let processId = 1;
 	const commands = [command];
 	const detection = {
-		type: TerminalCapability.CommandDetection,
-		commands,
+		type: TerminalCapability.CommandDetection, commands,
 		promptInputModel: {
-			state: PromptInputState.Input,
-			get value() {
-				return input;
-			},
-			get cursorIndex() {
-				return input.length;
-			},
-			ghostTextIndex: -1,
-			onDidChangeInput: changedInput.event,
-			onDidInterrupt: Event.None,
+			state: PromptInputState.Input, get value() { return input; }, get cursorIndex() { return input.length; }, ghostTextIndex: -1,
+			onDidChangeInput: changedInput.event, onDidInterrupt: Event.None,
 		},
-		onCommandStarted: started.event,
-		onCommandExecuted: Event.None,
-		onCommandFinished: finished.event,
-		onCommandInvalidated: invalidated.event,
-		onCurrentCommandInvalidated: Event.None,
+		onCommandStarted: started.event, onCommandExecuted: Event.None, onCommandFinished: finished.event,
+		onCommandInvalidated: invalidated.event, onCurrentCommandInvalidated: Event.None,
 	} as unknown as ICommandDetectionCapability;
 	capabilities.add(TerminalCapability.CommandDetection, detection);
-	const sent: Array<{ text: string; execute: boolean; paste: boolean | undefined }> = [];
+	const sent: Array<{ text: string; execute: boolean; paste: boolean | undefined; }> = [];
 	let focusCount = 0;
 	const instance = {
-		capabilities,
-		state: 'running',
-		get processId() {
-			return processId;
-		},
-		onDidChangeState: stateChanged.event,
-		onDidExit: exited.event,
-		xterm: {
-			isDisposed: false,
-			raw: { buffer: { active: { type: 'normal' } }, onData: rawInput.event },
-			focus: () => focusCount++,
-		},
-		sendText: async (text: string, execute: boolean, paste?: boolean) => {
-			sent.push({ text, execute, paste });
-		},
+		capabilities, state: 'running', get processId() { return processId; },
+		onDidChangeState: stateChanged.event, onDidExit: exited.event,
+		xterm: { isDisposed: false, raw: { buffer: { active: { type: 'normal' } }, onData: rawInput.event }, focus: () => focusCount++ },
+		sendText: async (text: string, execute: boolean, paste?: boolean) => { sent.push({ text, execute, paste }); },
 	} as unknown as ITerminalInstance;
 	let activeInstance: ITerminalInstance | undefined = instance;
 	services.registerInstance(ITerminalService, {
-		get activeInstance() {
-			return activeInstance;
-		},
-		instances: [instance],
-		onDidChangeActiveInstance: activeChanged.event,
-		onDidDisposeInstance: disposed.event,
+		get activeInstance() { return activeInstance; }, instances: [instance], onDidChangeActiveInstance: activeChanged.event, onDidDisposeInstance: disposed.event,
 	} as unknown as ITerminalService);
-	services.registerInstance(IWorkspaceContextService, {
-		onDidChangeWorkspace: workspaceChanged.event,
-		onDidChangeWorkspaceFolders: Event.None,
-	} as unknown as IWorkspaceContextService);
-	const accepted = lifetime.add(new Emitter<{ inBackground: boolean }>());
+	services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, onDidChangeWorkspaceFolders: Event.None } as unknown as IWorkspaceContextService);
+	const accepted = lifetime.add(new Emitter<{ inBackground: boolean; }>());
 	const hidden = lifetime.add(new Emitter<void>());
 	const shown = new DeferredPromise<void>();
 	const itemChanges = lifetime.add(new Emitter<readonly IQuickPickItem[]>());
 	let items: readonly IQuickPickItem[] = [];
 	const picker = {
-		get items() {
-			return items;
-		},
-		set items(value: readonly IQuickPickItem[]) {
-			items = value;
-			itemChanges.fire(value);
-		},
-		selectedItems: [] as IQuickPickItem[],
-		placeholder: '',
-		onDidAccept: accepted.event,
-		onDidHide: hidden.event,
-		show: () => {
-			void shown.complete();
-		},
-		hide: () => hidden.fire(),
-		dispose() {},
-		[Symbol.dispose]() {},
+		get items() { return items; }, set items(value: readonly IQuickPickItem[]) { items = value; itemChanges.fire(value); }, selectedItems: [] as IQuickPickItem[], placeholder: '',
+		onDidAccept: accepted.event, onDidHide: hidden.event,
+		show: () => { void shown.complete(); }, hide: () => hidden.fire(), dispose() { }, [Symbol.dispose]() { },
 	} as unknown as IQuickPick<IQuickPickItem>;
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	return {
-		[Symbol.dispose]: () => lifetime.dispose(),
-		instance,
-		picker,
-		sent,
-		shown: shown.p,
-		commands,
-		quickFixes,
-		opened,
-		waitForItems: (predicate: (items: readonly IQuickPickItem[]) => boolean): Promise<void> =>
-			new Promise(resolve => {
-				if (predicate(items)) {
-					resolve();
-					return;
-				}
-				const listener = lifetime.add(
-					itemChanges.event(value => {
-						if (predicate(value)) {
-							listener.dispose();
-							resolve();
-						}
-					}),
-				);
-			}),
+		[Symbol.dispose]: () => lifetime.dispose(), instance, picker, sent, shown: shown.p, commands, quickFixes, opened,
+		waitForItems: (predicate: (items: readonly IQuickPickItem[]) => boolean): Promise<void> => new Promise(resolve => {
+			if (predicate(items)) { resolve(); return; }
+			const listener = lifetime.add(itemChanges.event(value => { if (predicate(value)) { listener.dispose(); resolve(); } }));
+		}),
 		run: () => services.invokeFunction(CommandsRegistry.getCommand('workbench.action.terminal.showQuickFixes')!),
-		accept: (index = 0) => {
-			picker.selectedItems = [picker.items[index]! as IQuickPickItem];
-			accepted.fire({ inBackground: false });
-		},
+		accept: (index = 0) => { picker.selectedItems = [picker.items[index]! as IQuickPickItem]; accepted.fire({ inBackground: false }); },
 		cancel: () => picker.hide(),
 		focusCount: () => focusCount,
-		input: (value: string) => {
-			input = value;
-			changedInput.fire();
-		},
-		switch: () => {
-			activeInstance = undefined;
-			activeChanged.fire(undefined);
-			activeInstance = instance;
-			activeChanged.fire(instance);
-		},
-		reconnect: () => {
-			stateChanged.fire('reconnecting');
-			stateChanged.fire('running');
-		},
-		replace: () => {
-			processId++;
-		},
+		input: (value: string) => { input = value; changedInput.fire(); },
+		switch: () => { activeInstance = undefined; activeChanged.fire(undefined); activeInstance = instance; activeChanged.fire(instance); },
+		reconnect: () => { stateChanged.fire('reconnecting'); stateChanged.fire('running'); },
+		replace: () => { processId++; },
 		exit: () => exited.fire(0),
 		disposeInstance: () => disposed.fire(instance),
 		startCommand: () => started.fire(command),
-		finishCommand: () => {
-			commands.push(completedCommand('echo newer', 'newer', 0));
-			finished.fire(commands.at(-1)!);
-		},
-		invalidate: () => {
-			commands.length = 0;
-			invalidated.fire([command]);
-		},
+		finishCommand: () => { commands.push(completedCommand('echo newer', 'newer', 0)); finished.fire(commands.at(-1)!); },
+		invalidate: () => { commands.length = 0; invalidated.fire([command]); },
 		removeCapability: () => capabilities.remove(TerminalCapability.CommandDetection),
 		workspaceChange: () => workspaceChanged.fire(),
 		rawInput: () => rawInput.fire('typed before echo'),
@@ -249,10 +131,7 @@ for (const [text, output, expected] of [
 		using state = fixture(completedCommand(text, output));
 		const operation = state.run();
 		await state.shown;
-		assert.deepEqual(
-			state.picker.items.map(item => item.label),
-			expected,
-		);
+		assert.deepEqual(state.picker.items.map(item => item.label), expected);
 		assert.deepEqual(state.sent, []);
 		state.accept();
 		await operation;
@@ -334,6 +213,7 @@ for (const [text, output, code] of [
 	});
 }
 
+
 test('Terminal Quick Fixes consumes extension actions through the registered provider and cancels stale requests', async () => {
 	using state = fixture(completedCommand('tool bad', 'failed'));
 	let receivedSignal: AbortSignal | undefined;
@@ -357,12 +237,7 @@ test('Terminal Quick Fixes rejects a provider result delivered after the prompt 
 	using state = fixture(completedCommand('tool bad', 'failed'));
 	const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
 	const started = new DeferredPromise<AbortSignal>();
-	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', {
-		provideTerminalQuickFixes: (_instance, _command, signal) => {
-			void started.complete(signal);
-			return pending.p;
-		},
-	});
+	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', { provideTerminalQuickFixes: (_instance, _command, signal) => { void started.complete(signal); return pending.p; } });
 	const operation = state.run();
 	const signal = await started.p;
 	state.input('preserve');
@@ -375,9 +250,7 @@ test('Terminal Quick Fixes rejects a provider result delivered after the prompt 
 
 test('Terminal Quick Fixes cannot execute an already visible action after its provider is revoked', async () => {
 	using state = fixture(completedCommand('tool bad', 'failed'));
-	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', {
-		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }],
-	});
+	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', { provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }] });
 	const operation = state.run();
 	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
 	registration.dispose();
@@ -389,14 +262,10 @@ test('Terminal Quick Fixes cannot execute an already visible action after its pr
 test('Terminal Quick Fixes isolates synchronous and asynchronous provider failures', async () => {
 	using state = fixture(completedCommand('tool bad', 'failed'));
 	using broken = state.quickFixes.registerQuickFixProvider('extension/broken', {
-		provideTerminalQuickFixes: () => {
-			throw new Error('Provider failed');
-		},
+		provideTerminalQuickFixes: () => { throw new Error('Provider failed'); },
 	});
 	using rejected = state.quickFixes.registerQuickFixProvider('extension/rejected', {
-		provideTerminalQuickFixes: async () => {
-			throw new Error('Provider rejected');
-		},
+		provideTerminalQuickFixes: async () => { throw new Error('Provider rejected'); },
 	});
 	using healthy = state.quickFixes.registerQuickFixProvider('extension/healthy', {
 		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good' }],
@@ -445,20 +314,14 @@ test('Terminal Quick Fixes invalidates only the revoked registration of a shared
 	const results = await state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, new AbortController().signal);
 	assert.equal(results.length, 2);
 	first.dispose();
-	assert.deepEqual(
-		results.map(result => result.isValid?.()),
-		[false, true],
-	);
+	assert.deepEqual(results.map(result => result.isValid?.()), [false, true]);
 });
 
 test('Terminal Quick Fixes does not dispatch a cancelled request', async () => {
 	using quickFixes = new TerminalQuickFixService();
 	let calls = 0;
 	using registration = quickFixes.registerQuickFixProvider('extension/fix', {
-		provideTerminalQuickFixes: async () => {
-			calls++;
-			return [];
-		},
+		provideTerminalQuickFixes: async () => { calls++; return []; },
 	});
 	const request = new AbortController();
 	request.abort();
@@ -472,10 +335,7 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 		const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
 		let providerSignal: AbortSignal | undefined;
 		using registration = state.quickFixes.registerQuickFixProvider('extension/pending', {
-			provideTerminalQuickFixes: (_instance, _command, signal) => {
-				providerSignal = signal;
-				return pending.p;
-			},
+			provideTerminalQuickFixes: (_instance, _command, signal) => { providerSignal = signal; return pending.p; },
 		});
 		using healthy = state.quickFixes.registerQuickFixProvider('extension/healthy', {
 			provideTerminalQuickFixes: async () => [{ label: 'healthy', terminalCommand: 'healthy' }],
@@ -487,10 +347,7 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 		else state.quickFixes.dispose();
 		const result = await operation;
 		assert.equal(providerSignal?.aborted, true);
-		assert.deepEqual(
-			result.map(item => item.label),
-			transition === 'unregister' ? ['healthy'] : [],
-		);
+		assert.deepEqual(result.map(item => item.label), transition === 'unregister' ? ['healthy'] : []);
 		await pending.error(new Error('Late provider failure'));
 	});
 }

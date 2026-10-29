@@ -1,9 +1,4 @@
-import {
-	LanguageCompletionItemKind,
-	type LanguageCompletionProvider,
-	type LanguageCompletionProviderRequest,
-	type LanguageCompletionProviderResult,
-} from '../../../../../../../editor/common/languages.js';
+import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../../editor/common/languages.js';
 import { Position } from '../../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { matchedCharacterIndices, type SlashCommandCatalog } from '../../../../common/slashCommands.js';
@@ -30,23 +25,19 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 			const replacementEnd = commandEnd + (line[commandEnd] === ' ' ? 1 : 0);
 			const range = Range.fromPositions(new Position(1, 1), new Position(1, replacementEnd + 1));
 			return Object.freeze({
-				items: Object.freeze(
-					matches.map((command, index) =>
-						Object.freeze({
-							id: command.name,
-							label: `/${command.name}`,
-							labelMatchIndices: matchedCharacterIndices(command.name, query).map(position => position + 1),
-							kind: LanguageCompletionItemKind.Function,
-							range,
-							insertText: `/${command.name} `,
-							detail: command.description,
-							detailMatchIndices: matchedCharacterIndices(command.description, query),
-							filterText: `/${command.name}`,
-							sortText: command.name,
-							preselect: selectFirst && index === 0,
-						}),
-					),
-				),
+				items: Object.freeze(matches.map((command, index) => Object.freeze({
+					id: command.name,
+					label: `/${command.name}`,
+					labelMatchIndices: matchedCharacterIndices(command.name, query).map(position => position + 1),
+					kind: LanguageCompletionItemKind.Function,
+					range,
+					insertText: `/${command.name} `,
+					detail: command.description,
+					detailMatchIndices: matchedCharacterIndices(command.description, query),
+					filterText: `/${command.name}`,
+					sortText: command.name,
+					preselect: selectFirst && index === 0,
+				}))),
 				isIncomplete: true,
 			});
 		},
@@ -78,30 +69,29 @@ export function createChatSkillCompletionProvider(
 				return emptyCompletionResult();
 			}
 			const matches = catalog.matching(token.query);
-			const range = Range.fromPositions(new Position(request.position.lineNumber, token.startColumn + 1), new Position(request.position.lineNumber, token.endColumn + 1));
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, token.startColumn + 1),
+				new Position(request.position.lineNumber, token.endColumn + 1),
+			);
 			return Object.freeze({
-				items: Object.freeze(
-					matches.map((skill, index) =>
-						Object.freeze({
-							id: `${skill.source}:${skill.name}`,
-							label: `$${skill.name}`,
-							kind: LanguageCompletionItemKind.Reference,
-							range,
-							insertText: `$${skill.name} `,
-							detail: skill.description,
-							filterText: `$${skill.name}`,
-							sortText: skill.name,
-							...(index === 0 ? { preselect: true } : {}),
-						}),
-					),
-				),
+				items: Object.freeze(matches.map((skill, index) => Object.freeze({
+					id: `${skill.source}:${skill.name}`,
+					label: `$${skill.name}`,
+					kind: LanguageCompletionItemKind.Reference,
+					range,
+					insertText: `$${skill.name} `,
+					detail: skill.description,
+					filterText: `$${skill.name}`,
+					sortText: skill.name,
+					...(index === 0 ? { preselect: true } : {}),
+				}))),
 				isIncomplete: true,
 			});
 		},
 	});
 }
 
-function activeSkillToken(line: string, cursorColumn: number): { readonly query: string; readonly startColumn: number; readonly endColumn: number } | undefined {
+function activeSkillToken(line: string, cursorColumn: number): { readonly query: string; readonly startColumn: number; readonly endColumn: number; } | undefined {
 	if (cursorColumn > line.length) {
 		return undefined;
 	}

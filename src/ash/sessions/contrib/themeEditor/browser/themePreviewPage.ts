@@ -30,16 +30,8 @@ const workbench = resources.add(
 		serviceCollection,
 		api,
 		extensionHost: api.extensionHost,
-		profile: {
-			id: 'theme-preview',
-			label: 'Ash',
-			titlebarActionId: 'ash.themePreview',
-			workbenchRelativePath: '../workbench/workbench.html',
-		},
-		workspace: () => ({
-			id: 'theme-preview',
-			folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }],
-		}),
+		profile: { id: 'theme-preview', label: 'Ash', titlebarActionId: 'ash.themePreview', workbenchRelativePath: '../workbench/workbench.html' },
+		workspace: () => ({ id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] }),
 		workspaceSelection: () => ({ type: 'current' }),
 		browserFileSystemProvider: workspaceFiles,
 		initialConfiguration: { contents: {}, keys: [], overrides: [] },
@@ -55,23 +47,14 @@ const workbench = resources.add(
 			const descriptor = host.fileDialogDescriptor(() => services);
 			return services.createInstance(descriptor.ctor, ...descriptor.staticArguments);
 		},
-		returnToWorkbench: () => {},
-		contributionIds: ['workbench.contrib.sessionsLayout'],
+		returnToWorkbench: () => { },
+		contributionIds: [
+			'workbench.contrib.sessionsLayout',
+		],
 	}),
 );
 await workbench.whenRestored;
-const readOnlyKeys = new Set(
-	Registry.as<IConfigurationRegistry>(Extensions.Configuration)
-		.getRegisteredConfigurations()
-		.filter(entry => entry.agentsWindow?.readOnly)
-		.map(entry => entry.key),
-);
-const publishContent = connectThemePreview(
-	resources,
-	workbench.themeService,
-	workbench.configurationService,
-	() => root.innerText,
-	themePreviewConfigurationKeys.filter(key => !readOnlyKeys.has(key)),
-);
+const readOnlyKeys = new Set(Registry.as<IConfigurationRegistry>(Extensions.Configuration).getRegisteredConfigurations().filter(entry => entry.agentsWindow?.readOnly).map(entry => entry.key));
+const publishContent = connectThemePreview(resources, workbench.themeService, workbench.configurationService, () => root.innerText, themePreviewConfigurationKeys.filter(key => !readOnlyKeys.has(key)));
 resources.add(addDisposableListener(root, 'click', publishContent));
 resources.add(addDisposableListener(root, 'input', publishContent));

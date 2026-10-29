@@ -42,10 +42,7 @@ export class ViewOverlayWidgets extends ViewPart {
 	private _editorHeight = 0;
 	private _editorWidth = 0;
 
-	constructor(
-		context: ViewContext,
-		private readonly options: ViewOverlayWidgetsOptions,
-	) {
+	constructor(context: ViewContext, private readonly options: ViewOverlayWidgetsOptions) {
 		super(context);
 		this._viewDomNode = options.viewDomNode;
 		const layout = readOverlayLayout(context);
@@ -64,12 +61,10 @@ export class ViewOverlayWidgets extends ViewPart {
 		PartFingerprints.write(this.overflowingOverlayWidgetsDomNode, PartFingerprint.OverflowingOverlayWidgets);
 		this.overflowingOverlayWidgetsDomNode.setClassName('stanza-editor-overflowing-overlay-widgets');
 		this.overflowingOverlayWidgetsDomNode.setAttribute('role', 'presentation');
-		this._register(
-			toDisposable(() => {
-				this._domNode.domNode.remove();
-				this.overflowingOverlayWidgetsDomNode.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this._domNode.domNode.remove();
+			this.overflowingOverlayWidgetsDomNode.domNode.remove();
+		}));
 	}
 
 	public override dispose(): void {
@@ -102,21 +97,15 @@ export class ViewOverlayWidgets extends ViewPart {
 	public addWidget(widget: IOverlayWidget): void {
 		const id = widget.getId();
 		if (!id || this._widgets.has(id)) throw new RangeError(`Overlay widget '${id}' is already registered`);
-		const overlayWidget = this._widgets.set(
-			id,
-			new OverlayWidget(
-				{
-					viewDomNode: this._viewDomNode,
-					canOverflow: candidate => this._widgetCanOverflow(candidate),
-					usesFixedPosition: () => this._context.configuration.options.get(EditorOption.fixedOverflowWidgets),
-					requestRender: () => {
-						this.setShouldRender();
-						this.options.requestRender();
-					},
-				},
-				widget,
-			),
-		);
+		const overlayWidget = this._widgets.set(id, new OverlayWidget({
+			viewDomNode: this._viewDomNode,
+			canOverflow: candidate => this._widgetCanOverflow(candidate),
+			usesFixedPosition: () => this._context.configuration.options.get(EditorOption.fixedOverflowWidgets),
+			requestRender: () => {
+				this.setShouldRender();
+				this.options.requestRender();
+			},
+		}, widget));
 		const container = this._widgetCanOverflow(widget) ? this.overflowingOverlayWidgetsDomNode : this._domNode;
 		container.domNode.append(overlayWidget.domNode.domNode);
 		this._updateMaxMinWidth();
@@ -163,7 +152,7 @@ export class ViewOverlayWidgets extends ViewPart {
 		widgets.sort((left, right) => (left.position?.stackOrdinal ?? 0) - (right.position?.stackOrdinal ?? 0));
 		for (const widget of widgets) {
 			const preference = widget.position?.preference;
-			const stackOffset = typeof preference === 'number' ? (stacks.get(preference) ?? 0) : 0;
+			const stackOffset = typeof preference === 'number' ? stacks.get(preference) ?? 0 : 0;
 			this._renderWidget(widget, context, stackOffset);
 			if (typeof preference === 'number') stacks.set(preference, stackOffset + widget.height);
 		}
@@ -201,10 +190,7 @@ class OverlayWidget extends Disposable {
 	public height = 0;
 	private width = 0;
 
-	constructor(
-		private readonly host: OverlayWidgetHost,
-		actual: IOverlayWidget,
-	) {
+	constructor(private readonly host: OverlayWidgetHost, actual: IOverlayWidget) {
 		super();
 		this.actual = actual;
 		this.position = actual.getPosition();
@@ -213,12 +199,10 @@ class OverlayWidget extends Disposable {
 		this.updatePositionMode();
 		this.domNode.setAttribute('widgetId', actual.getId());
 		if (actual.onDidLayout) this._register(actual.onDidLayout(() => host.requestRender()));
-		this._register(
-			toDisposable(() => {
-				this.domNode.domNode.remove();
-				this.domNode.removeAttribute('widgetId');
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.domNode.domNode.remove();
+			this.domNode.removeAttribute('widgetId');
+		}));
 	}
 
 	public get minimumContentWidth(): number {
@@ -265,20 +249,12 @@ class OverlayWidget extends Disposable {
 		const targetWindow = this.host.viewDomNode.ownerDocument.defaultView;
 		const fixed = this.host.usesFixedPosition();
 		return {
-			left: viewPagePosition.left + position.left - (fixed ? (targetWindow?.scrollX ?? 0) : 0),
-			top: viewPagePosition.top + position.top - (fixed ? (targetWindow?.scrollY ?? 0) : 0),
+			left: viewPagePosition.left + position.left - (fixed ? targetWindow?.scrollX ?? 0 : 0),
+			top: viewPagePosition.top + position.top - (fixed ? targetWindow?.scrollY ?? 0 : 0),
 		};
 	}
 
-	private preferredPosition(
-		preference: OverlayWidgetPositionPreference,
-		context: RestrictedRenderingContext,
-		width: number,
-		height: number,
-		stackOffset: number,
-		viewPagePosition: IDomNodePagePosition | null,
-		layout: OverlayWidgetLayout,
-	): IOverlayWidgetPositionCoordinates {
+	private preferredPosition(preference: OverlayWidgetPositionPreference, context: RestrictedRenderingContext, width: number, height: number, stackOffset: number, viewPagePosition: IDomNodePagePosition | null, layout: OverlayWidgetLayout): IOverlayWidgetPositionCoordinates {
 		const right = Math.max(0, layout.editorWidth - layout.verticalScrollbarWidth - layout.minimapWidth);
 		let left = 0;
 		let top = 0;
@@ -325,5 +301,7 @@ function samePosition(left: IOverlayWidgetPosition | null, right: IOverlayWidget
 	const rightPreference = right.preference;
 	if (leftPreference === rightPreference) return true;
 	if (leftPreference === null || rightPreference === null) return false;
-	return isCoordinates(leftPreference) && isCoordinates(rightPreference) && leftPreference.top === rightPreference.top && leftPreference.left === rightPreference.left;
+	return isCoordinates(leftPreference) && isCoordinates(rightPreference)
+		&& leftPreference.top === rightPreference.top
+		&& leftPreference.left === rightPreference.left;
 }

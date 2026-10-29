@@ -30,25 +30,18 @@ function setup() {
 	services.registerInstance(IQuickInputService, quickInput);
 	const registry = lifetime.add(new EditorPaneRegistry());
 	for (const id of ['test.first', 'test.second', 'test.unsupported']) {
-		lifetime.add(
-			registry.registerEditorPane({
-				id,
-				name: id,
-				canOpen: () => (id === 'test.unsupported' ? EditorPaneMatch.None : EditorPaneMatch.Optional),
-				create: () => {
-					throw new Error('The selection UI must not create editor panes');
-				},
-			}),
-		);
+		lifetime.add(registry.registerEditorPane({
+			id, name: id,
+			canOpen: () => id === 'test.unsupported' ? EditorPaneMatch.None : EditorPaneMatch.Optional,
+			create: () => { throw new Error('The selection UI must not create editor panes'); },
+		}));
 	}
 	const input = { resource: URI.file('/workspace/main.ts') };
-	const opened: { input: IResourceEditorInput; options: EditorOpenOptions }[] = [];
+	const opened: { input: IResourceEditorInput; options: EditorOpenOptions; }[] = [];
 	const openStarted = new DeferredPromise<void>();
 	let openResult: Promise<void> = Promise.resolve();
 	const group = {
-		id: 'main',
-		inputs: [input],
-		activeInput: input,
+		id: 'main', inputs: [input], activeInput: input,
 		openEditor: async (input: IResourceEditorInput, options: EditorOpenOptions) => {
 			opened.push({ input, options });
 			void openStarted.complete(undefined);
@@ -57,9 +50,8 @@ function setup() {
 	};
 	const groups = [group];
 	services.registerInstance(IEditorPart, {
-		groups,
-		activeGroup: group,
-		getEditorPaneChoices: (input: IResourceEditorInput | undefined) => (input ? registry.getEditorPanesForInput(input) : []),
+		groups, activeGroup: group,
+		getEditorPaneChoices: (input: IResourceEditorInput | undefined) => input ? registry.getEditorPanesForInput(input) : [],
 	} as unknown as IEditorPart);
 	const commands = lifetime.add(new CommandService(services));
 	const currentPicker = () => {
@@ -68,19 +60,9 @@ function setup() {
 	};
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
-		services,
-		commands,
-		quickInput,
-		registry,
-		input,
-		group,
-		groups,
-		opened,
-		currentPicker,
+		services, commands, quickInput, registry, input, group, groups, opened, currentPicker,
 		whenOpenStarts: openStarted.p,
-		deferOpen: (result: Promise<void>) => {
-			openResult = result;
-		},
+		deferOpen: (result: Promise<void>) => { openResult = result; },
 	};
 }
 
@@ -88,10 +70,7 @@ test('OpenWithEditorPicker returns a selection without opening an editor', async
 	using context = setup();
 	const result = context.services.createInstance(OpenWithEditorPicker).pick(context.input);
 	const picker = context.currentPicker();
-	assert.deepEqual(
-		picker.items.map(item => item.label),
-		['test.first', 'test.second'],
-	);
+	assert.deepEqual(picker.items.map(item => item.label), ['test.first', 'test.second']);
 	await picker.accept(true);
 	assert.deepEqual(await result, { preferredEditorId: 'test.first', preserveFocus: true });
 	assert.deepEqual(context.opened, []);
@@ -127,9 +106,7 @@ test('Reopen With waits for the selected editor to finish opening', async () => 
 	const opening = new DeferredPromise<void>();
 	context.deferOpen(opening.p);
 	let completed = false;
-	const result = context.commands.executeCommand(REOPEN_WITH_COMMAND_ID).then(() => {
-		completed = true;
-	});
+	const result = context.commands.executeCommand(REOPEN_WITH_COMMAND_ID).then(() => { completed = true; });
 	await context.currentPicker().accept(true);
 	await context.whenOpenStarts;
 	assert.deepEqual(context.opened, [{ input: context.input, options: { preferredEditorId: 'test.first', preserveFocus: true, pinned: true } }]);

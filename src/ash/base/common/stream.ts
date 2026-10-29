@@ -21,28 +21,17 @@ export interface WriteableStream<T> extends ReadableStream<T> {
 	end(result?: T): void;
 }
 
-export interface IReducer<T, R = T> {
-	(data: T[]): R;
-}
-export interface IDataTransformer<T, R> {
-	(data: T): R;
-}
-export interface IErrorTransformer {
-	(error: Error): Error;
-}
-export interface ITransformer<T, R> {
-	data: IDataTransformer<T, R>;
-	error?: IErrorTransformer;
-}
+export interface IReducer<T, R = T> { (data: T[]): R; }
+export interface IDataTransformer<T, R> { (data: T): R; }
+export interface IErrorTransformer { (error: Error): Error; }
+export interface ITransformer<T, R> { data: IDataTransformer<T, R>; error?: IErrorTransformer; }
 export interface IStreamListener<T> {
 	onData(data: T): void;
 	onError(error: Error): void;
 	onEnd(): void;
 }
 
-export interface WriteableStreamOptions {
-	highWaterMark?: number;
-}
+export interface WriteableStreamOptions { highWaterMark?: number; }
 
 /** A paused stream owns its queued chunks until a consumer starts or destroys it. */
 export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: WriteableStreamOptions): WriteableStream<T> {
@@ -56,30 +45,22 @@ export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: Wri
 	let flushing = false;
 	const emit = (event: string, value?: unknown): void => {
 		for (const listener of [...(listeners.get(event) ?? [])]) {
-			if (!destroyed && listeners.get(event)?.has(listener)) {
-				listener(value);
-			}
+			if (!destroyed && listeners.get(event)?.has(listener)) { listener(value); }
 		}
 	};
 	const releaseWriters = (): void => {
-		for (const release of blocked) {
-			release();
-		}
+		for (const release of blocked) { release(); }
 		blocked.clear();
 	};
 	const flush = (): void => {
-		if (flushing || paused || destroyed) {
-			return;
-		}
+		if (flushing || paused || destroyed) { return; }
 		flushing = true;
 		try {
 			while (!paused && !destroyed && buffered.length && listeners.get('data')?.size) {
 				const chunks = buffered.splice(0, reducer ? buffered.length : 1);
 				emit('data', reducer ? reducer(chunks) : chunks[0]);
 			}
-			if (buffered.length === 0) {
-				releaseWriters();
-			}
+			if (buffered.length === 0) { releaseWriters(); }
 			while (!paused && !destroyed && errors.length && listeners.get('error')?.size) {
 				emit('error', errors.shift());
 			}
@@ -87,36 +68,20 @@ export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: Wri
 				emit('end');
 				stream.destroy();
 			}
-		} finally {
-			flushing = false;
-		}
+		} finally { flushing = false; }
 	};
 	const stream: WriteableStream<T> = {
 		on(event: string, callback: Function): void {
-			if (destroyed) {
-				return;
-			}
+			if (destroyed) { return; }
 			let callbacks = listeners.get(event);
-			if (!callbacks) {
-				callbacks = new Set();
-				listeners.set(event, callbacks);
-			}
+			if (!callbacks) { callbacks = new Set(); listeners.set(event, callbacks); }
 			callbacks.add(callback);
-			if (event === 'data') {
-				paused = false;
-			}
+			if (event === 'data') { paused = false; }
 			flush();
 		},
-		removeListener(event: string, callback: Function): void {
-			listeners.get(event)?.delete(callback);
-		},
-		pause(): void {
-			paused = true;
-		},
-		resume(): void {
-			paused = false;
-			flush();
-		},
+		removeListener(event: string, callback: Function): void { listeners.get(event)?.delete(callback); },
+		pause(): void { paused = true; },
+		resume(): void { paused = false; flush(); },
 		destroy(): void {
 			destroyed = true;
 			buffered.length = errors.length = 0;
@@ -124,9 +89,7 @@ export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: Wri
 			releaseWriters();
 		},
 		write(data: T): void | Promise<void> {
-			if (destroyed || ending) {
-				return;
-			}
+			if (destroyed || ending) { return; }
 			buffered.push(data);
 			flush();
 			if (options?.highWaterMark !== undefined && buffered.length > options.highWaterMark) {
@@ -134,19 +97,13 @@ export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: Wri
 			}
 		},
 		error(error: Error): void {
-			if (destroyed) {
-				return;
-			}
+			if (destroyed) { return; }
 			errors.push(error);
 			flush();
 		},
 		end(result?: T): void {
-			if (destroyed || ending) {
-				return;
-			}
-			if (result !== undefined) {
-				buffered.push(result);
-			}
+			if (destroyed || ending) { return; }
+			if (result !== undefined) { buffered.push(result); }
 			ending = true;
 			flush();
 		},
@@ -158,27 +115,16 @@ export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: Wri
 export function listenStream<T>(stream: ReadableStreamEvents<T>, listener: IStreamListener<T>, token: CancellationToken = CancellationToken.None): void {
 	const lifetime = new DisposableStore();
 	const stop = (): void => lifetime.dispose();
-	const onError = (error: Error): void => {
-		stop();
-		listener.onError(error);
-	};
-	const onEnd = (): void => {
-		stop();
-		listener.onEnd();
-	};
+	const onError = (error: Error): void => { stop(); listener.onError(error); };
+	const onEnd = (): void => { stop(); listener.onEnd(); };
 	const onData = (data: T): void => listener.onData(data);
 	const removable = stream as Partial<ReadableStream<T>>;
-	lifetime.add(
-		toDisposable(() => {
-			removable.removeListener?.('error', onError);
-			removable.removeListener?.('end', onEnd);
-			removable.removeListener?.('data', onData);
-		}),
-	);
-	if (token.isCancellationRequested) {
-		onError(canceled());
-		return;
-	}
+	lifetime.add(toDisposable(() => {
+		removable.removeListener?.('error', onError);
+		removable.removeListener?.('end', onEnd);
+		removable.removeListener?.('data', onData);
+	}));
+	if (token.isCancellationRequested) { onError(canceled()); return; }
 	lifetime.add(token.onCancellationRequested(() => onError(canceled())));
 	stream.on('error', onError);
 	stream.on('end', onEnd);
@@ -191,22 +137,10 @@ export function consumeStream<T, R>(stream: ReadableStreamEvents<T>, reducer?: I
 	return new Promise((resolve, reject) => {
 		const chunks: T[] = [];
 		listenStream(stream, {
-			onData: chunk => {
-				if (reducer) {
-					chunks.push(chunk);
-				}
-			},
-			onError: error => {
-				chunks.length = 0;
-				reject(error);
-				(stream as Partial<ReadableStream<T>>).destroy?.();
-			},
+			onData: chunk => { if (reducer) { chunks.push(chunk); } },
+			onError: error => { chunks.length = 0; reject(error); (stream as Partial<ReadableStream<T>>).destroy?.(); },
 			onEnd: () => {
-				try {
-					resolve(reducer?.(chunks));
-				} catch (error) {
-					reject(error);
-				}
+				try { resolve(reducer?.(chunks)); } catch (error) { reject(error); }
 			},
 		});
 	});
@@ -223,33 +157,18 @@ export function transform<T, R>(source: ReadableStreamEvents<T>, transformer: IT
 		readable.destroy?.();
 		originalDestroy();
 	};
-	listenStream(
-		source,
-		{
-			onData: data => {
-				let pending: void | Promise<void>;
-				try {
-					pending = target.write(transformer.data(data));
-				} catch (error) {
-					target.error(error instanceof Error ? error : new Error(String(error)));
-					target.end();
-					return;
-				}
-				if (pending) {
-					readable.pause?.();
-					void pending.then(() => readable.resume?.());
-				}
-			},
-			onError: error => {
-				target.error(transformer.error?.(error) ?? error);
-				target.end();
-			},
-			onEnd: () => {
-				cancellation.dispose();
-				target.end();
-			},
+	listenStream(source, {
+		onData: data => {
+			let pending: void | Promise<void>;
+			try { pending = target.write(transformer.data(data)); }
+			catch (error) { target.error(error instanceof Error ? error : new Error(String(error))); target.end(); return; }
+			if (pending) {
+				readable.pause?.();
+				void pending.then(() => readable.resume?.());
+			}
 		},
-		cancellation.token,
-	);
+		onError: error => { target.error(transformer.error?.(error) ?? error); target.end(); },
+		onEnd: () => { cancellation.dispose(); target.end(); },
+	}, cancellation.token);
 	return target;
 }

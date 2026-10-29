@@ -22,57 +22,42 @@ export class SelectionClipboard extends Disposable {
 	public static readonly ID = 'editor.contrib.selectionClipboard';
 	private readonly pendingWrite: RunOnceScheduler;
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		@IClipboardService private readonly clipboard: IClipboardService,
-	) {
+	constructor(private readonly editor: ICodeEditor, @IClipboardService private readonly clipboard: IClipboardService) {
 		super();
 		this.pendingWrite = this._register(new RunOnceScheduler(() => void this.writeSelection().catch(onUnexpectedError), 100));
-		this._register(
-			editor.onDidChangeCursorSelection(event => {
-				if (!editor.getOption(EditorOption.selectionClipboard) || event.source === 'restoreState') {
-					this.pendingWrite.cancel();
-					return;
-				}
-				this.pendingWrite.schedule();
-			}),
-		);
+		this._register(editor.onDidChangeCursorSelection(event => {
+			if (!editor.getOption(EditorOption.selectionClipboard) || event.source === 'restoreState') {
+				this.pendingWrite.cancel();
+				return;
+			}
+			this.pendingWrite.schedule();
+		}));
 		this._register(editor.onDidChangeModel(() => this.pendingWrite.cancel()));
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard)) {
-					this.pendingWrite.cancel();
-				}
-			}),
-		);
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard)) {
+				this.pendingWrite.cancel();
+			}
+		}));
 		let suppressMouseUp = false;
-		this._register(
-			addDisposableListener(editor.getContainerDomNode(), 'mousedown', () => {
-				suppressMouseUp = false;
-			}),
-		);
+		this._register(addDisposableListener(editor.getContainerDomNode(), 'mousedown', () => { suppressMouseUp = false; }));
 		// Pointer selection can consume mouseup before the public editor event sees it.
-		this._register(
-			addDisposableListener(editor.getContainerDomNode(), 'mouseup', event => {
-				if (event.button === 1 && suppressMouseUp) {
-					suppressMouseUp = false;
-					event.preventDefault();
-				}
-			}),
-		);
-		this._register(
-			editor.onMouseUp(event => {
-				if (!event.event.middleButton || !acceptsMiddlePaste(event.target.type)) {
-					return;
-				}
-				// Own middle-click paste so Chromium cannot paste a second copy or bypass the disabled option.
-				suppressMouseUp = event.event.browserEvent.type === 'pointerup';
-				event.event.preventDefault();
-				if (editor.getOption(EditorOption.selectionClipboard)) {
-					void pasteSelection(editor, clipboard, true).catch(onUnexpectedError);
-				}
-			}),
-		);
+		this._register(addDisposableListener(editor.getContainerDomNode(), 'mouseup', event => {
+			if (event.button === 1 && suppressMouseUp) {
+				suppressMouseUp = false;
+				event.preventDefault();
+			}
+		}));
+		this._register(editor.onMouseUp(event => {
+			if (!event.event.middleButton || !acceptsMiddlePaste(event.target.type)) {
+				return;
+			}
+			// Own middle-click paste so Chromium cannot paste a second copy or bypass the disabled option.
+			suppressMouseUp = event.event.browserEvent.type === 'pointerup';
+			event.event.preventDefault();
+			if (editor.getOption(EditorOption.selectionClipboard)) {
+				void pasteSelection(editor, clipboard, true).catch(onUnexpectedError);
+			}
+		}));
 	}
 
 	private async writeSelection(): Promise<void> {
@@ -116,7 +101,7 @@ class PasteSelectionClipboardAction extends EditorAction {
 }
 
 async function pasteSelection(editor: ICodeEditor, clipboard: IClipboardService, requireEnabled = false): Promise<void> {
-	if (!editor.hasModel() || editor.getOption(EditorOption.readOnly) || editor.inComposition || (requireEnabled && !editor.getOption(EditorOption.selectionClipboard))) {
+	if (!editor.hasModel() || editor.getOption(EditorOption.readOnly) || editor.inComposition || requireEnabled && !editor.getOption(EditorOption.selectionClipboard)) {
 		return;
 	}
 	editor.focus();
@@ -125,16 +110,11 @@ async function pasteSelection(editor: ICodeEditor, clipboard: IClipboardService,
 	resources.add(toDisposable(() => request.dispose(true)));
 	resources.add(editor.onDidBlurEditorText(() => request.cancel()));
 	resources.add(editor.onDidCompositionStart(() => request.cancel()));
-	resources.add(
-		editor.onDidChangeConfiguration(event => {
-			if (
-				(event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) ||
-				(requireEnabled && event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard))
-			) {
-				request.cancel();
-			}
-		}),
-	);
+	resources.add(editor.onDidChangeConfiguration(event => {
+		if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly) || requireEnabled && event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard)) {
+			request.cancel();
+		}
+	}));
 	const text = await raceCancellation(clipboard.readText('selection'), request.token);
 	if (text && !request.token.isCancellationRequested) {
 		editor.trigger('keyboard', Handler.Paste, { text, pasteOnNewLine: false, multicursorText: null, mode: null });
@@ -146,12 +126,9 @@ class LinuxSelectionClipboardPastePreventer extends Disposable {
 		super();
 		const listeners = this._register(new DisposableMap<number, IDisposable>());
 		const register = (window: IRegisteredWindow): void => {
-			listeners.set(
-				window.id,
-				addDisposableListener(window.window.document, 'mouseup', event => {
-					if (event.button === 1 && configuration.getValue<boolean>('editor.selectionClipboard') === false) event.preventDefault();
-				}),
-			);
+			listeners.set(window.id, addDisposableListener(window.window.document, 'mouseup', event => {
+				if (event.button === 1 && configuration.getValue<boolean>('editor.selectionClipboard') === false) event.preventDefault();
+			}));
 		};
 		for (const window of getWindows()) register(window);
 		this._register(onDidRegisterWindow(register));
@@ -160,9 +137,8 @@ class LinuxSelectionClipboardPastePreventer extends Disposable {
 }
 
 if (isLinux) {
-	registerWorkbenchContribution('workbench.contrib.linuxSelectionClipboardPastePreventer', WorkbenchPhase.BlockRestore, accessor =>
-		accessor.get(IInstantiationService).createInstance(LinuxSelectionClipboardPastePreventer),
-	);
+	registerWorkbenchContribution('workbench.contrib.linuxSelectionClipboardPastePreventer', WorkbenchPhase.BlockRestore,
+		accessor => accessor.get(IInstantiationService).createInstance(LinuxSelectionClipboardPastePreventer));
 	registerEditorContribution(SelectionClipboard.ID, SelectionClipboard, EditorContributionInstantiation.Eager);
 	registerEditorAction(PasteSelectionClipboardAction);
 }

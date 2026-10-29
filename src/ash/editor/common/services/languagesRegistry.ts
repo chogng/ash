@@ -55,11 +55,9 @@ export class LanguagesRegistry extends Disposable {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.descriptions.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.descriptions.clear();
+		}));
 	}
 
 	register(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {
@@ -96,12 +94,10 @@ export class LanguagesRegistry extends Disposable {
 	}
 
 	getSortedRegisteredLanguageNames(): ILanguageNameIdPair[] {
-		return this.getRegisteredLanguageIds()
-			.flatMap(languageId => {
-				const name = this.getLanguageName(languageId);
-				return name === null ? [] : [{ languageId, languageName: name }];
-			})
-			.sort((left, right) => left.languageName.localeCompare(right.languageName, undefined, { sensitivity: 'base' }));
+		return this.getRegisteredLanguageIds().flatMap(languageId => {
+			const name = this.getLanguageName(languageId);
+			return name === null ? [] : [{ languageId, languageName: name }];
+		}).sort((left, right) => left.languageName.localeCompare(right.languageName, undefined, { sensitivity: 'base' }));
 	}
 
 	getLanguageName(languageId: string): string | null {
@@ -113,13 +109,8 @@ export class LanguagesRegistry extends Disposable {
 
 	getLanguageIdByLanguageName(languageName: string): string | null {
 		const normalized = languageName.toLocaleLowerCase();
-		return (
-			this.getRegisteredLanguageIds().find(
-				languageId =>
-					languageId.toLocaleLowerCase() === normalized ||
-					this.descriptions.get(languageId)?.some(entry => entry.description.aliases?.some(alias => alias.toLocaleLowerCase() === normalized)),
-			) ?? null
-		);
+		return this.getRegisteredLanguageIds().find(languageId => languageId.toLocaleLowerCase() === normalized
+			|| this.descriptions.get(languageId)?.some(entry => entry.description.aliases?.some(alias => alias.toLocaleLowerCase() === normalized))) ?? null;
 	}
 
 	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null {
@@ -147,18 +138,13 @@ export class LanguagesRegistry extends Disposable {
 		return best?.languageId;
 	}
 
+
 	private replace(owner: object, contributions: readonly LanguageDescriptionContribution[]): void {
 		if (!Array.isArray(contributions)) throw new TypeError('Language description contributions must be an array');
 		const entries = contributions.map(contribution => {
 			if (typeof contribution !== 'object' || contribution === null) throw new TypeError('Language description contribution must be an object');
 			const description = normalizeDescription(contribution.description);
-			return Object.freeze({
-				owner,
-				description,
-				...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine) }),
-				priority: normalizePriority(contribution.options ?? {}),
-				order: this.nextOrder++,
-			});
+			return Object.freeze({ owner, description, ...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine) }), priority: normalizePriority(contribution.options ?? {}), order: this.nextOrder++ });
 		});
 		const affected = this.ownerLanguageIds(owner);
 		for (const entry of entries) affected.add(entry.description.id);
@@ -263,15 +249,11 @@ function matchDescription(entry: RegisteredLanguageDescription, path: string, fi
 }
 
 function normalizeFirstLinePattern(value: string): string {
-	if (typeof value !== 'string' || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value))
-		throw new TypeError('Language first-line pattern must be a bounded single-line regular expression');
+	if (typeof value !== 'string' || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value)) throw new TypeError('Language first-line pattern must be a bounded single-line regular expression');
 	const source = value.startsWith('^') ? value : `^(?:${value})`;
 	let pattern: RegExp;
-	try {
-		pattern = new RegExp(source);
-	} catch {
-		throw new TypeError('Language first-line pattern must be a valid regular expression');
-	}
+	try { pattern = new RegExp(source); }
+	catch { throw new TypeError('Language first-line pattern must be a valid regular expression'); }
 	if (pattern.test('')) throw new TypeError('Language first-line pattern must not match an empty line');
 	return source;
 }
@@ -291,10 +273,7 @@ function compareMatches(left: LanguageMatch, right: LanguageMatch): number {
 }
 
 function selectDescription(entries: readonly RegisteredLanguageDescription[] | undefined): RegisteredLanguageDescription | undefined {
-	return entries?.reduce(
-		(best, entry) => (!best || entry.priority > best.priority || (entry.priority === best.priority && entry.order > best.order) ? entry : best),
-		undefined as RegisteredLanguageDescription | undefined,
-	);
+	return entries?.reduce((best, entry) => !best || entry.priority > best.priority || (entry.priority === best.priority && entry.order > best.order) ? entry : best, undefined as RegisteredLanguageDescription | undefined);
 }
 
 function matchesGlob(pattern: string, value: string): boolean {

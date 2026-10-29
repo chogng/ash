@@ -14,6 +14,7 @@ const { EditorExtensionsRegistry } = await import('../../../../browser/editorExt
 await import('../../../caretOperations/browser/transpose.js');
 await import('../../../linesOperations/browser/linesOperations.js');
 
+
 test('Transpose Letters runs directly through its canonical action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -64,22 +65,15 @@ for (const primary of [new Selection(1, 3, 1, 1), new Selection(1, 1, 1, 1)]) {
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		try {
 			using model = new TextModel('keep\na😊b');
-			using editor = createTestCodeEditor({
-				container: dom.window.document.querySelector<HTMLElement>('main')!,
-				model,
-			});
+			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
 			const initial = [primary, new Selection(2, 2, 2, 2)];
 			editor.setSelections(initial);
 			const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
 			assert.ok(action);
 			editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
-			assert.deepEqual(
-				{ value: model.getValue(), selections: editor.getSelections() },
-				{
-					value: 'keep\n😊ab',
-					selections: [primary, new Selection(2, 4, 2, 4)],
-				},
-			);
+			assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, {
+				value: 'keep\n😊ab', selections: [primary, new Selection(2, 4, 2, 4)],
+			});
 			model.undo();
 			assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, { value: 'keep\na😊b', selections: initial });
 			model.redo();
@@ -95,10 +89,7 @@ test('Transpose Letters leaves a single emoji unchanged without publishing an ed
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	try {
 		using model = new TextModel('😊');
-		using editor = createTestCodeEditor({
-			container: dom.window.document.querySelector<HTMLElement>('main')!,
-			model,
-		});
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
 		const selection = new Selection(1, 3, 1, 3);
 		editor.setSelection(selection);
 		const version = model.getVersionId();

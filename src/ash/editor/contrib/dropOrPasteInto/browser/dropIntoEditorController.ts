@@ -23,7 +23,7 @@ import { DefaultTextPasteOrDropEditProvider } from './defaultProviders.js';
 import { sortEditsByYieldTo } from './edit.js';
 import { PostEditWidgetManager } from './postEditWidget.js';
 
-type DropEditWithProvider = DocumentDropEdit & { readonly provider: DocumentDropEditProvider };
+type DropEditWithProvider = DocumentDropEdit & { readonly provider: DocumentDropEditProvider; };
 export const dropWidgetVisibleCtx = new RawContextKey<boolean>('dropWidgetVisible', false);
 export const changeDropTypeCommandId = 'editor.changeDropType';
 export const dropAsPreferenceConfig = 'editor.dropIntoEditor.preferences';
@@ -50,31 +50,21 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
-		this.postEditWidget = this._register(
-			instantiationService.createInstance(
-				PostEditWidgetManager<DropEditWithProvider>,
-				editor,
-				'editor.widget.postDropSelector',
-				() => localize('dropOrPaste.dropOptions', 'Drop options'),
-				dropWidgetVisibleCtx,
-				() => DropIntoEditorController.configureDefaultAction,
-			),
-		);
+		this.postEditWidget = this._register(instantiationService.createInstance(PostEditWidgetManager<DropEditWithProvider>, editor,
+			'editor.widget.postDropSelector', () => localize('dropOrPaste.dropOptions', 'Drop options'), dropWidgetVisibleCtx, () => DropIntoEditorController.configureDefaultAction));
 		this._register(editor.onDropIntoEditor(event => this.onDrop(event.position, event.event)));
 		const domNode = editor.getDomNode();
 		if (domNode) this._register(addDisposableListener<DragEvent>(domNode, 'dragover', event => this.onDragOver(event)));
 		this._register(toDisposable(() => this.currentOperation?.dispose(true)));
 	}
 
-	changeDropType(): void {
-		this.postEditWidget.tryShowSelector();
-	}
-	clearWidgets(): void {
-		this.postEditWidget.clear();
-	}
+	changeDropType(): void { this.postEditWidget.tryShowSelector(); }
+	clearWidgets(): void { this.postEditWidget.clear(); }
 
 	private onDragOver(event: DragEvent): void {
-		if (this.editor.getOption(EditorOption.readOnly) || !this.editor.getOption(EditorOption.dropIntoEditor).enabled || event.defaultPrevented) {
+		if (this.editor.getOption(EditorOption.readOnly)
+			|| !this.editor.getOption(EditorOption.dropIntoEditor).enabled
+			|| event.defaultPrevented) {
 			return;
 		}
 		const dataTransfer = event.dataTransfer;
@@ -83,22 +73,17 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 		if (!model) return;
 		const types = [...dataTransfer.types, ...Array.from(dataTransfer.files, file => file.type), ...(dataTransfer.files.length ? ['files'] : [])];
 		const hasPlainTextItem = Array.from(dataTransfer.items).some(item => item.kind === 'string' && item.type === 'text/plain');
-		if (
-			!this.features.documentDropEditProvider
-				.ordered(model)
-				.some(
-					provider =>
-						!(provider instanceof DefaultTextPasteOrDropEditProvider && !hasPlainTextItem) &&
-						(!provider.dropMimeTypes || provider.dropMimeTypes.some(type => matchesMimeType(type, types))),
-				)
-		)
-			return;
+		if (!this.features.documentDropEditProvider.ordered(model).some(provider =>
+			!(provider instanceof DefaultTextPasteOrDropEditProvider && !hasPlainTextItem)
+			&& (!provider.dropMimeTypes || provider.dropMimeTypes.some(type => matchesMimeType(type, types))))) return;
 		event.preventDefault();
 		dataTransfer.dropEffect = 'copy';
 	}
 
 	private onDrop(rawPosition: IPosition, event: DragEvent): void {
-		if (this.editor.getOption(EditorOption.readOnly) || !this.editor.getOption(EditorOption.dropIntoEditor).enabled || event.defaultPrevented) {
+		if (this.editor.getOption(EditorOption.readOnly)
+			|| !this.editor.getOption(EditorOption.dropIntoEditor).enabled
+			|| event.defaultPrevented) {
 			return;
 		}
 		if (!this.editor.hasModel()) return;
@@ -107,13 +92,9 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 		const position = Position.lift(rawPosition);
 		const transfer = toExternalVSDataTransfer(dataTransfer);
 		const model = this.editor.getModel()!;
-		const providers = this.features.documentDropEditProvider
-			.ordered(model)
-			.filter(
-				provider =>
-					!(provider instanceof DefaultTextPasteOrDropEditProvider && transfer.get('text/plain')?.asFile()) &&
-					(!provider.dropMimeTypes || provider.dropMimeTypes.some(type => transfer.matches(type))),
-			);
+		const providers = this.features.documentDropEditProvider.ordered(model)
+			.filter(provider => !(provider instanceof DefaultTextPasteOrDropEditProvider && transfer.get('text/plain')?.asFile())
+				&& (!provider.dropMimeTypes || provider.dropMimeTypes.some(type => transfer.matches(type))));
 		if (providers.length === 0) return;
 		stopEvent(event);
 		this.editor.focus();
@@ -129,37 +110,37 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 			});
 	}
 
-	private async dropWithProviders(providers: readonly DocumentDropEditProvider[], transfer: VSDataTransfer, position: Position, operation: CancellationTokenSource): Promise<void> {
+	private async dropWithProviders(
+		providers: readonly DocumentDropEditProvider[],
+		transfer: VSDataTransfer,
+		position: Position,
+		operation: CancellationTokenSource,
+	): Promise<void> {
 		const model = this.editor.getModel();
 		if (!model) return;
 		const state = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position, undefined, operation.token);
 		using sessions = new DisposableStore();
 		let edits: DropEditWithProvider[] = [];
 		try {
-			const results = await Promise.allSettled(
-				providers.map(async provider => {
-					const session = await provider.provideDocumentDropEdits(model, position, transfer, state.token);
-					if (session) sessions.add(toDisposable(() => session.dispose()));
-					return session?.edits.map(edit => ({ ...edit, provider })) ?? [];
-				}),
-			);
+			const results = await Promise.allSettled(providers.map(async provider => {
+				const session = await provider.provideDocumentDropEdits(model, position, transfer, state.token);
+				if (session) sessions.add(toDisposable(() => session.dispose()));
+				return session?.edits.map(edit => ({ ...edit, provider })) ?? [];
+			}));
 			if (state.token.isCancellationRequested) return;
-			edits = sortEditsByYieldTo(
-				results.flatMap(result => {
-					if (result.status === 'fulfilled') return result.value;
-					onUnexpectedExternalError(result.reason);
-					return [];
-				}),
-			);
+			edits = sortEditsByYieldTo(results.flatMap(result => {
+				if (result.status === 'fulfilled') return result.value;
+				onUnexpectedExternalError(result.reason);
+				return [];
+			}));
 		} finally {
 			state.dispose();
 		}
 		if (operation.token.isCancellationRequested || edits.length === 0) return;
 		let activeEditIndex = 0;
-		const preferences =
-			this.configuration.getValue<readonly string[]>(dropAsPreferenceConfig, {
-				overrideIdentifier: model.getLanguageId(),
-			}) ?? [];
+		const preferences = this.configuration.getValue<readonly string[]>(dropAsPreferenceConfig, {
+			overrideIdentifier: model.getLanguageId(),
+		}) ?? [];
 		for (const value of preferences) {
 			const kind = new HierarchicalKind(value);
 			const index = edits.findIndex(edit => edit.kind && kind.contains(edit.kind));
@@ -171,7 +152,9 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 			[Range.fromPositions(position)],
 			{ allEdits: edits, activeEditIndex },
 			this.editor.getOption(EditorOption.dropIntoEditor).showDropSelector === 'afterDrop',
-			async (edit, token) => (edit.provider.resolveDocumentDropEdit ? { ...edit, ...(await edit.provider.resolveDocumentDropEdit(edit, token)) } : edit),
+			async (edit, token) => edit.provider.resolveDocumentDropEdit
+				? { ...edit, ...await edit.provider.resolveDocumentDropEdit(edit, token) }
+				: edit,
 			operation.token,
 		);
 	}

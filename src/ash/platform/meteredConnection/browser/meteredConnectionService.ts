@@ -16,28 +16,21 @@ export class MeteredConnectionService extends Disposable implements IMeteredConn
 	private readonly connection: NetworkInformation | undefined;
 	private metered: boolean;
 
-	constructor(
-		connectionProvider: () => NetworkInformation | undefined,
-		@IConfigurationService private readonly configuration: IConfigurationService,
-	) {
+	constructor(connectionProvider: () => NetworkInformation | undefined, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		this.connection = connectionProvider();
 		this.metered = this.readState();
 		if (this.connection) this._register(addDisposableListener(this.connection, 'change', () => this.updateState()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(METERED_CONNECTION_SETTING_KEY)) this.updateState();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(METERED_CONNECTION_SETTING_KEY)) this.updateState();
+		}));
 	}
 
-	get isConnectionMetered(): boolean {
-		return this.metered;
-	}
+	get isConnectionMetered(): boolean { return this.metered; }
 
 	private readState(): boolean {
 		const setting = this.configuration.getValue<MeteredConnectionSettingValue>(METERED_CONNECTION_SETTING_KEY);
-		return setting === 'on' || (setting === 'auto' && (this.connection?.saveData === true || this.connection?.metered === true));
+		return setting === 'on' || setting === 'auto' && (this.connection?.saveData === true || this.connection?.metered === true);
 	}
 
 	private updateState(): void {
@@ -48,4 +41,6 @@ export class MeteredConnectionService extends Disposable implements IMeteredConn
 	}
 }
 
-registerSingleton(IMeteredConnectionService, new SyncDescriptor(MeteredConnectionService, [() => (navigator as NavigatorWithConnection).connection], true));
+registerSingleton(IMeteredConnectionService, new SyncDescriptor(MeteredConnectionService, [
+	() => (navigator as NavigatorWithConnection).connection,
+], true));

@@ -14,37 +14,24 @@ export function registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures:
 }
 
 class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
-	constructor(
-		private readonly symbols: ICodebaseSymbolsService,
-		private readonly workspace: IWorkspaceContextService,
-	) {}
+	constructor(private readonly symbols: ICodebaseSymbolsService, private readonly workspace: IWorkspaceContextService) { }
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {
 		const root = singleWorkspaceRoot(this.workspace);
 		if (!root) return Object.freeze([]);
 		const result = await this.symbols.search(query, MAX_WORKSPACE_SYMBOL_RESULTS, signal);
-		return Object.freeze(
-			result.matches.flatMap(match => {
-				const resource = workspaceResourceFromPath(root, match.path);
-				if (!resource) return [];
-				return [
-					Object.freeze({
-						name: match.name,
-						kind: match.kind,
-						resource,
-						range: textRange(match.selectionRange),
-						...(match.containerName === undefined ? {} : { containerName: match.containerName }),
-						data: Object.freeze({
-							source: 'codebaseSymbols',
-							score: match.score,
-							sourceRevision: match.sourceRevision,
-							declarationRange: textRange(match.declarationRange),
-							matchedIndices: match.matchedIndices,
-						}),
-					}),
-				];
-			}),
-		);
+		return Object.freeze(result.matches.flatMap(match => {
+			const resource = workspaceResourceFromPath(root, match.path);
+			if (!resource) return [];
+			return [Object.freeze({
+				name: match.name,
+				kind: match.kind,
+				resource,
+				range: textRange(match.selectionRange),
+				...(match.containerName === undefined ? {} : { containerName: match.containerName }),
+				data: Object.freeze({ source: 'codebaseSymbols', score: match.score, sourceRevision: match.sourceRevision, declarationRange: textRange(match.declarationRange), matchedIndices: match.matchedIndices }),
+			})];
+		}));
 	}
 }
 
@@ -54,5 +41,8 @@ function singleWorkspaceRoot(workspace: IWorkspaceContextService) {
 }
 
 function textRange(range: CodebaseSymbolsRange): Range {
-	return Range.fromPositions(new Position(range.start.lineIndex + 1, range.start.columnIndex + 1), new Position(range.end.lineIndex + 1, range.end.columnIndex + 1));
+	return Range.fromPositions(
+		new Position(range.start.lineIndex + 1, range.start.columnIndex + 1),
+		new Position(range.end.lineIndex + 1, range.end.columnIndex + 1),
+	);
 }

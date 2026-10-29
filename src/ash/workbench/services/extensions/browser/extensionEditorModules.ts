@@ -37,11 +37,7 @@ export const loadExtensionEditorModule: ExtensionEditorModuleLoader = async requ
 	signal.throwIfAborted();
 	const component = factory(editorClientHost);
 	signal.throwIfAborted();
-	if (
-		!component ||
-		typeof component !== 'object' ||
-		!(('getEditorProfile' in component && typeof component.getEditorProfile === 'function') || ('getResourceEditor' in component && typeof component.getResourceEditor === 'function'))
-	) {
+	if (!component || typeof component !== 'object' || !('getEditorProfile' in component && typeof component.getEditorProfile === 'function' || 'getResourceEditor' in component && typeof component.getResourceEditor === 'function')) {
 		throw new TypeError('Installed client modules must provide document profiles or resource editors');
 	}
 	return withStyles(component, stylesheet, admission.sourceDigest);
@@ -53,18 +49,14 @@ function importFactory(source: string, digest: string): Promise<EditorClientFact
 		const load = async () => {
 			const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
 			try {
-				const module: { createEditorModule?: unknown } = await import(/* @vite-ignore */ url);
+				const module: { createEditorModule?: unknown; } = await import(/* @vite-ignore */ url);
 				if (typeof module.createEditorModule !== 'function') throw new TypeError('Invalid editor client module factory');
 				return module.createEditorModule as EditorClientFactory;
-			} finally {
-				URL.revokeObjectURL(url);
-			}
+			} finally { URL.revokeObjectURL(url); }
 		};
 		imported = load();
 		importedFactories.set(digest, imported);
-		void imported.catch(() => {
-			importedFactories.delete(digest);
-		});
+		void imported.catch(() => { importedFactories.delete(digest); });
 	}
 	return imported;
 }
@@ -77,7 +69,7 @@ async function verifyDigest(bytes: Uint8Array, expectedDigest: string): Promise<
 
 /** Styles follow actual views, including frozen dirty panes retained after the provider retires. */
 function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorModule, css: string, identity: string): ExtensionEditorModule | ExtensionResourceEditorModule {
-	const styles = new WeakMap<Document, { readonly element: HTMLStyleElement; references: number }>();
+	const styles = new WeakMap<Document, { readonly element: HTMLStyleElement; references: number; }>();
 	const acquire = (ownerDocument: Document): IDisposable => {
 		let style = styles.get(ownerDocument);
 		if (!style) {
@@ -97,58 +89,41 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 			}
 		});
 	};
-	if ('getResourceEditor' in component)
-		return {
-			packageId: component.packageId,
-			packageVersion: component.packageVersion,
-			getResourceEditor: (editorId, createInstance) => {
-				const Pane = component.getResourceEditor(editorId, createInstance);
-				return class StyledResourceEditor extends Pane {
-					private styleLease: IDisposable | undefined;
-					private styleParent: HTMLElement | undefined;
-					override create(parent: HTMLElement): void {
-						if (this.styleLease) throw new ReferenceError('Editor client view has already been created');
-						const lease = acquire(parent.ownerDocument);
-						parent.dataset.ashEditorClient = identity;
-						styledParents.set(parent, this);
-						this.styleParent = parent;
-						try {
-							super.create(parent);
-							this.styleLease = lease;
-						} catch (error) {
-							lease.dispose();
-							this.clearStyleParent();
-							throw error;
-						}
-					}
-					override dispose(): void {
-						try {
-							super.dispose();
-						} finally {
-							this.styleLease?.dispose();
-							this.styleLease = undefined;
-							this.clearStyleParent();
-						}
-					}
-					private clearStyleParent(): void {
-						const parent = this.styleParent;
-						if (parent && styledParents.get(parent) === this) {
-							delete parent.dataset.ashEditorClient;
-							styledParents.delete(parent);
-						}
-						this.styleParent = undefined;
-					}
-				};
-			},
-		};
+	if ('getResourceEditor' in component) return {
+		packageId: component.packageId, packageVersion: component.packageVersion,
+		getResourceEditor: (editorId, createInstance) => {
+			const Pane = component.getResourceEditor(editorId, createInstance);
+			return class StyledResourceEditor extends Pane {
+				private styleLease: IDisposable | undefined;
+				private styleParent: HTMLElement | undefined;
+				override create(parent: HTMLElement): void {
+					if (this.styleLease) throw new ReferenceError('Editor client view has already been created');
+					const lease = acquire(parent.ownerDocument);
+					parent.dataset.ashEditorClient = identity;
+					styledParents.set(parent, this);
+					this.styleParent = parent;
+					try { super.create(parent); this.styleLease = lease; }
+					catch (error) { lease.dispose(); this.clearStyleParent(); throw error; }
+				}
+				override dispose(): void {
+					try { super.dispose(); }
+					finally { this.styleLease?.dispose(); this.styleLease = undefined; this.clearStyleParent(); }
+				}
+				private clearStyleParent(): void {
+					const parent = this.styleParent;
+					if (parent && styledParents.get(parent) === this) { delete parent.dataset.ashEditorClient; styledParents.delete(parent); }
+					this.styleParent = undefined;
+				}
+			};
+		},
+	};
 	return {
 		packageId: component.packageId,
 		packageVersion: component.packageVersion,
 		getEditorProfile: editorId => {
 			const profile = component.getEditorProfile(editorId);
 			return {
-				...profile,
-				create: () => {
+				...profile, create: () => {
 					const configuration = profile.create();
 					const Widget = configuration.widget;
 					class StyledEditorWidget extends Widget {
@@ -170,9 +145,8 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 							}
 						}
 						public override dispose(): void {
-							try {
-								super.dispose();
-							} finally {
+							try { super.dispose(); }
+							finally {
 								this.styleLease?.dispose();
 								this.styleLease = undefined;
 								this.clearStyleParent();
@@ -188,7 +162,7 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 						}
 					}
 					return { ...configuration, widget: StyledEditorWidget };
-				},
+				}
 			};
 		},
 	};

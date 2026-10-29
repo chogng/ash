@@ -69,7 +69,7 @@ export class ScmWorkingSetController extends Disposable {
 		if (identity === this.lastRefIdentity) return;
 		this.lastRefIdentity = identity;
 		const generation = this.generation;
-		this.statusQueue = this.statusQueue.then(() => (generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined)).catch(() => undefined);
+		this.statusQueue = this.statusQueue.then(() => generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined).catch(() => undefined);
 	}
 
 	private async acceptRef(repositoryKey: string, ref: string): Promise<void> {

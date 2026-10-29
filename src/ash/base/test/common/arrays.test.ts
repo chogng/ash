@@ -9,10 +9,7 @@ test('arraysEqual compares complete sequences', () => {
 });
 
 test('arraysEqual accepts domain equality', () => {
-	assert.equal(
-		arraysEqual(['A'], ['a'], (left, right) => left.toLowerCase() === right.toLowerCase()),
-		true,
-	);
+	assert.equal(arraysEqual(['A'], ['a'], (left, right) => left.toLowerCase() === right.toLowerCase()), true);
 });
 
 test('commonPrefixLength returns the shared leading run', () => {
@@ -34,10 +31,7 @@ test('isNonEmptyArray rejects nullish and empty sequences', () => {
 });
 
 test('distinct retains the first value for every computed key', () => {
-	assert.deepEqual(
-		distinct(['A', 'a', 'B'], value => value.toLowerCase()),
-		['A', 'B'],
-	);
+	assert.deepEqual(distinct(['A', 'a', 'B'], value => value.toLowerCase()), ['A', 'B']);
 });
 
 test('CallbackIterable composes lazy mapping and early termination', () => {
@@ -48,10 +42,7 @@ test('CallbackIterable composes lazy mapping and early termination', () => {
 			if (!callback(value)) break;
 		}
 	});
-	assert.equal(
-		values.map(value => value * 2).some(value => value === 6),
-		true,
-	);
+	assert.equal(values.map(value => value * 2).some(value => value === 6), true);
 	assert.deepEqual(visited, [1, 2, 3]);
 	assert.deepEqual(values.filter(value => value % 2 === 0).toArray(), [2, 4]);
 });

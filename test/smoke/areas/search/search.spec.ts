@@ -64,29 +64,26 @@ test('workspace file picker ranks fuzzy names before truncation and preserves ex
 	await workbench.quickaccess.close();
 });
 
-test(
-	'workspace search uses unsaved editor text and removes stale disk hits without saving the file',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const path = join(testWorkspace.directory, 'src', 'alpha.ts');
-		const disk = await readFile(path, 'utf8');
-		await workbench.quickaccess.open('alpha.ts');
-		await workbench.quickaccess.select('alpha.ts');
-		const editor = workbench.editors.groupAt(0).editor;
-		await editor.waitForEditorFocus();
-		await workbench.page.keyboard.press('ControlOrMeta+A');
-		await workbench.page.keyboard.insertText('中文😀 unsaved_search_token unsaved_search_token');
-		await editor.waitForEditorContents(text => text === '中文😀 unsaved_search_token unsaved_search_token');
-		await workbench.search.open();
-		await workbench.search.search('unsaved_search_token');
-		await expect(workbench.search.status).toHaveText('2 results');
-		await expect(workbench.search.files).toHaveText(['alpha.ts']);
-		await workbench.search.search('ash_search_token');
-		await expect(workbench.search.status).toHaveText('2 results');
-		await expect.poll(async () => (await workbench.search.files.allTextContents()).sort()).toEqual(['beta.js', 'notes.md']);
-		expect(await readFile(path, 'utf8')).toBe(disk);
-	},
-);
+test('workspace search uses unsaved editor text and removes stale disk hits without saving the file', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const path = join(testWorkspace.directory, 'src', 'alpha.ts');
+	const disk = await readFile(path, 'utf8');
+	await workbench.quickaccess.open('alpha.ts');
+	await workbench.quickaccess.select('alpha.ts');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await workbench.page.keyboard.press('ControlOrMeta+A');
+	await workbench.page.keyboard.insertText('中文😀 unsaved_search_token unsaved_search_token');
+	await editor.waitForEditorContents(text => text === '中文😀 unsaved_search_token unsaved_search_token');
+	await workbench.search.open();
+	await workbench.search.search('unsaved_search_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(workbench.search.files).toHaveText(['alpha.ts']);
+	await workbench.search.search('ash_search_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect.poll(async () => (await workbench.search.files.allTextContents()).sort()).toEqual(['beta.js', 'notes.md']);
+	expect(await readFile(path, 'utf8')).toBe(disk);
+});
+
 
 test('Quick Open ranks fuzzy paths beyond the first page and supports multiple query words', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	for (let index = 0; index < 110; index++) {

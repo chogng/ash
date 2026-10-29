@@ -24,12 +24,14 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 	public showFoldingControls: 'always' | 'never' | 'mouseover' = 'mouseover';
 	public showFoldingHighlights = true;
 
-	constructor(private readonly editor: ICodeEditor) {}
+	constructor(private readonly editor: ICodeEditor) { }
 
 	getDecorationOption(isCollapsed: boolean, isHidden: boolean, isManual: boolean): IModelDecorationOptions {
 		if (isHidden) return hiddenRange;
 		if (isCollapsed) {
-			const icon = this.showFoldingControls === 'never' ? undefined : isManual ? foldingManualCollapsedIcon : foldingCollapsedIcon;
+			const icon = this.showFoldingControls === 'never'
+				? undefined
+				: isManual ? foldingManualCollapsedIcon : foldingCollapsedIcon;
 			return foldingOption(
 				isManual ? 'folding-manually-collapsed' : 'folding-collapsed',
 				TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
@@ -71,18 +73,23 @@ const expandedWithoutControls = Object.freeze<IModelDecorationOptions>({
 	isWholeLine: true,
 });
 
-function foldingOption(description: string, stickiness: TrackedRangeStickiness, tooltip: string, icon: Icon | undefined, highlight: boolean, alwaysVisible = false): IModelDecorationOptions {
+function foldingOption(
+	description: string,
+	stickiness: TrackedRangeStickiness,
+	tooltip: string,
+	icon: Icon | undefined,
+	highlight: boolean,
+	alwaysVisible = false,
+): IModelDecorationOptions {
 	return Object.freeze({
 		description,
 		stickiness,
 		isWholeLine: true,
 		linesDecorationsTooltip: tooltip,
-		...(icon
-			? {
-					firstLineDecorationClassName: `${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}`,
-					firstLineDecorationIcon: icon,
-				}
-			: {}),
+		...(icon ? {
+			firstLineDecorationClassName: `${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}`,
+			firstLineDecorationIcon: icon,
+		} : {}),
 		...(isCollapsedDescription(description) ? { afterContentClassName: 'inline-folded' } : {}),
 		...(highlight ? highlighted : {}),
 	});

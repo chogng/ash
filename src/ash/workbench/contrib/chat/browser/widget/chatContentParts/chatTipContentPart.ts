@@ -23,16 +23,14 @@ export class ChatTipContentPart extends DomWidget {
 		this.domNode.setAttribute('role', 'note');
 		const content = this._register(markdownRenderer.render(tip.content, { ownerDocument: document }));
 		this.domNode.append(content.element);
-		this._register(
-			new Button(this.domNode, {
-				...defaultButtonStyles,
-				label: localize('chat.tip.dismiss', 'Dismiss tip'),
-				ariaLabel: localize('chat.tip.dismiss', 'Dismiss tip'),
-				icon: Lxicon.close,
-				iconOnly: true,
-				onClick: dismiss,
-			}),
-		);
+		this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
+			label: localize('chat.tip.dismiss', 'Dismiss tip'),
+			ariaLabel: localize('chat.tip.dismiss', 'Dismiss tip'),
+			icon: Lxicon.close,
+			iconOnly: true,
+			onClick: dismiss,
+		}));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 }

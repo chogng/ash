@@ -33,8 +33,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	scope: ConfigurationScope.APPLICATION,
 	schema: { type: 'string', enum: ['always', 'untilDismissed', 'never'] },
 	parse(value: unknown): 'always' | 'untilDismissed' | 'never' {
-		if (value !== 'always' && value !== 'untilDismissed' && value !== 'never')
-			throw new TypeError(localize('workspaceTrust.bannerInvalid', 'Workspace permission banner must be always, untilDismissed, or never.'));
+		if (value !== 'always' && value !== 'untilDismissed' && value !== 'never') throw new TypeError(localize('workspaceTrust.bannerInvalid', 'Workspace permission banner must be always, untilDismissed, or never.'));
 		return value;
 	},
 	setting: {
@@ -65,21 +64,13 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 	) {
 		super();
 		this.workspaceId = workspace.getWorkspace().id;
-		this._register(
-			trust.onDidChangeTrustedFolders(() => {
-				void this.refresh();
-			}),
-		);
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(bannerSetting)) this.updateEntry();
-			}),
-		);
-		this._register(
-			storage.onDidChangeValue(event => {
-				if (event.scope === StorageScope.WORKSPACE && event.key === dismissedKey) this.updateEntry();
-			}),
-		);
+		this._register(trust.onDidChangeTrustedFolders(() => { void this.refresh(); }));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(bannerSetting)) this.updateEntry();
+		}));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.WORKSPACE && event.key === dismissedKey) this.updateEntry();
+		}));
 		void this.refresh();
 	}
 
@@ -117,20 +108,17 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 			this.banners.hide(bannerId);
 			return;
 		}
-		const text = this.trustInfo.isReadOnly ? localize('workspaceTrust.readOnlyStatus', 'Read-only folder') : localize('workspaceTrust.restrictedStatus', 'Restricted workspace');
+		const text = this.trustInfo.isReadOnly
+			? localize('workspaceTrust.readOnlyStatus', 'Read-only folder')
+			: localize('workspaceTrust.restrictedStatus', 'Restricted workspace');
 		const tooltip = this.trustInfo.isReadOnly
 			? localize('workspaceTrust.readOnlyStatusDetail', 'Files in this folder cannot be edited.')
 			: localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.');
 		const content = { text, ariaLabel: `${text}. ${tooltip}`, tooltip, command: MANAGE_TRUST_COMMAND_ID };
 		if (this.entry.value) this.entry.value.update(content);
-		else
-			this.entry.value = this.statusbar.addEntry(content, {
-				id: 'ash.status.workspacePermissions',
-				alignment: StatusbarAlignment.Left,
-				priority: 850,
-			});
+		else this.entry.value = this.statusbar.addEntry(content, { id: 'ash.status.workspacePermissions', alignment: StatusbarAlignment.Left, priority: 850 });
 		const policy = this.configuration.getValue<'always' | 'untilDismissed' | 'never'>(bannerSetting);
-		if (policy === 'never' || (policy !== 'always' && this.storage.getBoolean(dismissedKey, StorageScope.WORKSPACE, false))) {
+		if (policy === 'never' || policy !== 'always' && this.storage.getBoolean(dismissedKey, StorageScope.WORKSPACE, false)) {
 			this.banners.hide(bannerId);
 			return;
 		}
@@ -164,34 +152,16 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		this._register(
-			requests.onDidInitiateWorkspaceTrustRequest(options => {
-				void this.showRequest(options);
-			}),
-		);
-		this._register(
-			requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => {
-				void this.showRequest();
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				this.generation++;
-				this.dialog?.item.cancel();
-				this.dialog = undefined;
-			}),
-		);
-		void management.workspaceTrustInitialized
-			.then(async () => {
-				// A saved read-only decision has already been answered by the directory prompt.
-				if (this.isDisposed || !management.canSetWorkspaceTrust()) return;
-				const generation = this.generation;
-				const info = await management.getWorkspaceTrustInfo();
-				if (!this.isDisposed && generation === this.generation && info === undefined) requests.requestWorkspaceTrustOnStartup();
-			})
-			.catch(error => {
-				if (!this.isDisposed) notifications.error(getErrorMessage(error));
-			});
+		this._register(requests.onDidInitiateWorkspaceTrustRequest(options => { void this.showRequest(options); }));
+		this._register(requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => { void this.showRequest(); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.generation++; this.dialog?.item.cancel(); this.dialog = undefined; }));
+		void management.workspaceTrustInitialized.then(async () => {
+			// A saved read-only decision has already been answered by the directory prompt.
+			if (this.isDisposed || !management.canSetWorkspaceTrust()) return;
+			const generation = this.generation;
+			const info = await management.getWorkspaceTrustInfo();
+			if (!this.isDisposed && generation === this.generation && info === undefined) requests.requestWorkspaceTrustOnStartup();
+		}).catch(error => { if (!this.isDisposed) notifications.error(getErrorMessage(error)); });
 	}
 
 	private async showRequest(options?: WorkspaceTrustRequestOptions): Promise<void> {
@@ -201,49 +171,33 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 		try {
 			await this.management.workspaceResolved;
 			if (!current()) return;
-			const buttons =
-				options?.buttons ??
-				([
-					{
-						label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'),
-						type: 'ContinueWithTrust',
-					},
-					{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
-				] as const);
+			const buttons = options?.buttons ?? [
+				{ label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'), type: 'ContinueWithTrust' },
+				{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
+			] as const;
 			const actions = buttons.filter(button => button.type !== 'Cancel');
-			const dialog = (this.dialog = this.dialogs.show({
+			const dialog = this.dialog = this.dialogs.show({
 				kind: 'choice',
 				title: localize('workspaceTrust.editorTitle', 'Workspace Trust'),
 				message: options?.message ?? localize('workspaceTrust.requestMessage', 'Do you trust the authors of the files in this workspace?'),
-				detail: localize(
-					'workspaceTrust.requestDetail',
-					'Trusting this workspace enables commands and workspace integrations in every folder. Only continue if you trust this project. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.',
-				),
+				detail: localize('workspaceTrust.requestDetail', 'Trusting this workspace enables commands and workspace integrations in every folder. Only continue if you trust this project. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.'),
 				buttons: actions.map(button => button.label),
 				cancelButton: buttons.find(button => button.type === 'Cancel')?.label ?? localize('cancel', 'Cancel'),
-			}));
+			});
 			const result = await dialog.result;
 			if (this.dialog === dialog) this.dialog = undefined;
 			if (!current()) return;
 			switch (result.buttonIndex === undefined ? undefined : actions[result.buttonIndex]?.type) {
-				case 'ContinueWithTrust':
-					await this.requests.completeWorkspaceTrustRequest(true);
-					break;
-				case 'ContinueWithoutTrust':
-					await this.requests.completeWorkspaceTrustRequest(false);
-					break;
+				case 'ContinueWithTrust': await this.requests.completeWorkspaceTrustRequest(true); break;
+				case 'ContinueWithoutTrust': await this.requests.completeWorkspaceTrustRequest(false); break;
 				case 'Manage':
 					this.requests.cancelWorkspaceTrustRequest();
 					await this.editors.openEditor(new WorkspaceTrustEditorInput(), { pinned: true, modal: { size: { width: 560, height: 360 } } }, 'modalGroup');
 					break;
-				default:
-					this.requests.cancelWorkspaceTrustRequest();
+				default: this.requests.cancelWorkspaceTrustRequest();
 			}
 		} catch (error) {
-			if (current()) {
-				this.requests.cancelWorkspaceTrustRequest();
-				this.notifications.error(getErrorMessage(error));
-			}
+			if (current()) { this.requests.cancelWorkspaceTrustRequest(); this.notifications.error(getErrorMessage(error)); }
 		}
 	}
 
@@ -254,35 +208,36 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 	}
 }
 
-registerWorkbenchContribution('workbench.contrib.workspaceTrustRequestHandler', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(WorkspaceTrustRequestHandler),
+registerWorkbenchContribution(
+	'workbench.contrib.workspaceTrustRequestHandler',
+	WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(WorkspaceTrustRequestHandler),
 );
 
-registerWorkbenchContribution('workbench.contrib.workspacePermissionStatus', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(WorkspacePermissionStatus));
+registerWorkbenchContribution(
+	'workbench.contrib.workspacePermissionStatus',
+	WorkbenchPhase.AfterRestored,
+	accessor => accessor.get(IInstantiationService).createInstance(WorkspacePermissionStatus),
+);
 
 registerEditorPane({
 	id: WorkspaceTrustEditor.ID,
-	get name() {
-		return localize('workspaceTrust.editorTitle', 'Workspace Trust');
-	},
-	canOpen: input => (input.contentType === WorkspaceTrustEditorInput.ID ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	get name() { return localize('workspaceTrust.editorTitle', 'Workspace Trust'); },
+	canOpen: input => input.contentType === WorkspaceTrustEditorInput.ID ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Workspace Trust requires the Instantiation Service');
 		return options.instantiationService.createInstance(WorkspaceTrustEditor);
 	},
 });
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({
-				id: MANAGE_TRUST_COMMAND_ID,
-				title: localize2('manageWorkspaceTrust', 'Manage Workspace Trust'),
-				f1: true,
-			});
-		}
-		override run(accessor: ServicesAccessor): Promise<void> {
-			return accessor.get(IEditorService).openEditor(new WorkspaceTrustEditorInput(), { pinned: true, modal: { size: { width: 560, height: 360 } } }, 'modalGroup');
-		}
-	},
-);
+registerAction2(class extends Action2 {
+	constructor() {
+		super({ id: MANAGE_TRUST_COMMAND_ID, title: localize2('manageWorkspaceTrust', 'Manage Workspace Trust'), f1: true });
+	}
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IEditorService).openEditor(new WorkspaceTrustEditorInput(), {
+			pinned: true,
+			modal: { size: { width: 560, height: 360 } },
+		}, 'modalGroup');
+	}
+});

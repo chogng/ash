@@ -33,15 +33,8 @@ import '../../browser/mediaPreview.contribution.js';
 test('Built-in media declarations activate from the package catalog, localize, refresh and revoke', async () => {
 	const manifestJson = await readFile('extensions/media-preview/package.json', 'utf8');
 	const descriptor = {
-		id: 'ash.media-preview',
-		name: 'media-preview',
-		publisher: 'ash',
-		version: '1.0.0',
-		displayName: 'Media Preview',
-		sourceKind: 'builtIn' as const,
-		manifestJson,
-		manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-		packageSha256: `sha256:${'b'.repeat(64)}`,
+		id: 'ash.media-preview', name: 'media-preview', publisher: 'ash', version: '1.0.0', displayName: 'Media Preview', sourceKind: 'builtIn' as const,
+		manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'b'.repeat(64)}`,
 	};
 	let included = true;
 	let sourceKind: 'builtIn' | 'user' = 'builtIn';
@@ -49,43 +42,25 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	let generation = 1;
 
 	using adapters = new AdapterManager();
-	using service = new AppServerExtensionService(
-		{
-			api: {
-				list: async () => ({
-					generation,
-					extensions: included ? [{ ...descriptor, sourceKind }] : [],
-					diagnostics: [],
-				}),
-				resources: new ExtensionResourceLoaderService(async request => {
-					assert.equal(request.extensionId, descriptor.id);
-					assert.equal(request.generation, generation);
-					if (fail) {
-						throw new Error('Editor labels unavailable');
-					}
-					return readFile('extensions/media-preview/' + request.path);
-				}),
-			},
+	using service = new AppServerExtensionService({
+		api: {
+			list: async () => ({ generation, extensions: included ? [{ ...descriptor, sourceKind }] : [], diagnostics: [] }),
+			resources: new ExtensionResourceLoaderService(async request => {
+				assert.equal(request.extensionId, descriptor.id);
+				assert.equal(request.generation, generation);
+				if (fail) { throw new Error('Editor labels unavailable'); }
+				return readFile('extensions/media-preview/' + request.path);
+			}),
 		},
-		createEmptyTestLanguagePacks(),
-		adapters,
-	);
+
+	}, createEmptyTestLanguagePacks(), adapters);
 	try {
 		await service.start();
 		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id);
 		assert.deepEqual(choices, ['ash.imagePreview', AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, VIDEO_PREVIEW_ID]);
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'image/webp; charset=binary' })?.id, 'ash.imagePreview');
-		assert.equal(
-			EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'audio/wav' })?.canOpen({
-				resource: URI.file('/asset'),
-				contentType: 'audio/wav',
-			}),
-			EditorPaneMatch.Default,
-		);
-		assert.equal(
-			EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(pane => pane.id === AUDIO_PREVIEW_ID),
-			false,
-		);
+		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'audio/wav' })?.canOpen({ resource: URI.file('/asset'), contentType: 'audio/wav' }), EditorPaneMatch.Default);
+		assert.equal(EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(pane => pane.id === AUDIO_PREVIEW_ID), false);
 		const oldAudio = EditorPanes.getEditorPane({ resource: URI.file('/song.mp3') });
 		generation++;
 		fail = true;
@@ -98,17 +73,11 @@ test('Built-in media declarations activate from the package catalog, localize, r
 		sourceKind = 'user';
 		generation++;
 		await service.reload();
-		assert.equal(
-			EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID),
-			false,
-		);
+		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID), false);
 		included = false;
 		generation++;
 		await service.reload();
-		assert.equal(
-			EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID),
-			false,
-		);
+		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID), false);
 	} finally {
 		resetNlsResolver();
 	}
@@ -126,96 +95,42 @@ class MediaFixture extends Disposable {
 	public read = async (): Promise<Uint8Array> => new Uint8Array([1, 2, 3]);
 	public pauseCount = 0;
 	public playing = false;
-	public get player(): HTMLMediaElement {
-		return this.browser.window.document.querySelector(this.kind)!;
-	}
+	public get player(): HTMLMediaElement { return this.browser.window.document.querySelector(this.kind)!; }
 
 	constructor(kind: 'audio' | 'video' = 'audio') {
 		super();
 		this.kind = kind;
 		const originalRevoke = URL.revokeObjectURL;
-		this._register(
-			toDisposable(() => {
-				this.browser.window.close();
-				URL.revokeObjectURL = originalRevoke;
-				resetNlsResolver();
-			}),
-		);
+		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement']));
-		URL.revokeObjectURL = url => {
-			this.operations.push('revoke');
-			this.revoked.push(url);
-			originalRevoke(url);
-		};
-		const unexpected = async (): Promise<never> => {
-			throw new Error('Unexpected file operation');
-		};
-		this.services.registerSingleton(IFileService, () =>
-			createTestFileService({
-				capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
-				onDidChangeCapabilities: Event.None,
-				watch: (): IDisposable => Disposable.None,
+		URL.revokeObjectURL = url => { this.operations.push('revoke'); this.revoked.push(url); originalRevoke(url); };
+		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+		this.services.registerSingleton(IFileService, () => createTestFileService({
+			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+			onDidChangeCapabilities: Event.None,
+			watch: (): IDisposable => Disposable.None,
 
-				onDidChangeFiles: this.changes.event,
-				readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
-				stat: async target => ({
-					resource: target,
-					kind: FileKind.File,
-					sizeBytes: 3,
-					readonly: true,
-					modifiedAtMillis: undefined,
-				}),
-				readDirectory: unexpected,
-				writeFile: unexpected,
-				createFile: unexpected,
-				createDirectory: unexpected,
-				copy: unexpected,
-				rename: unexpected,
-				delete: unexpected,
-			}),
-		);
+			onDidChangeFiles: this.changes.event,
+			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
+			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
+		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
 		const registry = new ConfigurationRegistry();
-		registry.updateConfigurations({
-			add: [
-				...parseExtensionManifest(JSON.stringify(mediaManifest), {
-					id: 'ash.media-preview',
-					name: 'media-preview',
-					publisher: 'ash',
-					version: '1.0.0',
-				}).contributes.configuration,
-			],
-			remove: [],
-		});
+		registry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(mediaManifest), { id: 'ash.media-preview', name: 'media-preview', publisher: 'ash', version: '1.0.0' }).contributes.configuration], remove: [] });
 		this.configuration = this._register(new InMemoryConfigurationService(registry));
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
-		this.services.registerInstance(IAccessibleViewService, {
-			show: () => false,
-			getOpenAriaHint: () => undefined,
-			disableHint: async () => {},
-			showAccessibleViewHelp: () => {},
-			...toDisposable(() => {}),
-		});
+		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
-		this.preview = this._register(
-			getBuiltinEditorPaneFactory('ash.media-preview', id)!.create({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview,
-		);
+		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!.create({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
 		this.preview.create(this.browser.window.document.body);
 		const mediaPrototype = this.browser.window.HTMLMediaElement.prototype;
 		const fixture = this;
 		Object.defineProperties(mediaPrototype, { paused: { get: () => !this.playing }, duration: { get: () => 2 } });
-		mediaPrototype.play = async () => {
-			this.playing = true;
-		};
-		mediaPrototype.pause = () => {
-			this.operations.push('pause');
-			this.pauseCount++;
-			this.playing = false;
-		};
-		mediaPrototype.load = function (this: HTMLMediaElement): void {
-			fixture.operations.push(this.hasAttribute('src') ? 'load-with-source' : 'load-cleared');
-		};
+		mediaPrototype.play = async () => { this.playing = true; };
+		mediaPrototype.pause = () => { this.operations.push('pause'); this.pauseCount++; this.playing = false; };
+		mediaPrototype.load = function (this: HTMLMediaElement): void { fixture.operations.push(this.hasAttribute('src') ? 'load-with-source' : 'load-cleared'); };
 	}
 }
 
@@ -258,12 +173,8 @@ test('Audio and video keep first-open read failures in the pane and retry them',
 		using fixture = new MediaFixture(kind);
 		let reads = 0;
 		fixture.read = async () => {
-			if (++reads === 1) {
-				throw new Error('Read denied');
-			}
-			if (reads === 2) {
-				throw new Error('Still unavailable');
-			}
+			if (++reads === 1) { throw new Error('Read denied'); }
+			if (reads === 2) { throw new Error('Still unavailable'); }
 			return new Uint8Array([1, 2, 3]);
 		};
 		await fixture.preview.setInput({ resource: URI.file('/media/retry'), label: 'Retry sample' }, new AbortController().signal);
@@ -297,10 +208,12 @@ test('A late media error from the previous player cannot replace a newer preview
 	const newURL = newPlayer.src;
 
 	oldPlayer.dispatchEvent(new fixture.browser.window.Event('error'));
-	assert.deepEqual(
-		[oldPlayer === newPlayer, fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden, fixture.preview.getAccessibleContent().includes('New song'), fixture.revoked],
-		[false, true, true, [oldURL]],
-	);
+	assert.deepEqual([
+		oldPlayer === newPlayer,
+		fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+		fixture.preview.getAccessibleContent().includes('New song'),
+		fixture.revoked,
+	], [false, true, true, [oldURL]]);
 	fixture.preview.clearInput();
 	assert.deepEqual(fixture.revoked, [oldURL, newURL]);
 });
@@ -333,15 +246,12 @@ test('Cancelling a media load cannot replace a newer resource or allocate a URL'
 	await pending.error(new Error('Old media read failed'));
 	await cancelled;
 	assert.match(fixture.preview.getAccessibleContent(), /New song/);
-	assert.deepEqual(
-		[
-			fixture.preview.getAccessibleContent().includes('Old media read failed'),
-			fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
-			fixture.browser.window.document.querySelector<HTMLButtonElement>('button')!.hidden,
-			fixture.revoked.length,
-		],
-		[false, true, true, 0],
-	);
+	assert.deepEqual([
+		fixture.preview.getAccessibleContent().includes('Old media read failed'),
+		fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+		fixture.browser.window.document.querySelector<HTMLButtonElement>('button')!.hidden,
+		fixture.revoked.length,
+	], [false, true, true, 0]);
 });
 
 test('Playback failure and accessible metadata are translated into Chinese', async () => {
@@ -353,13 +263,12 @@ test('Playback failure and accessible metadata are translated into Chinese', asy
 	fixture.player.dispatchEvent(new fixture.browser.window.Event('error'));
 	assert.match(fixture.browser.window.document.querySelector('[role="alert"]')!.textContent!, /无法播放此媒体文件/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
-	fixture.read = async () => {
-		throw new Error('Read denied');
-	};
+	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载媒体：Error: Read denied/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
 });
+
 
 test('Media file changes stop playback, replace the URL and recover from a failed read', async () => {
 	using fixture = new MediaFixture();
@@ -367,9 +276,7 @@ test('Media file changes stop playback, replace the URL and recover from a faile
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	const firstURL = fixture.player.src;
 	await fixture.player.play();
-	fixture.read = async () => {
-		throw new Error('Read denied');
-	};
+	fixture.read = async () => { throw new Error('Read denied'); };
 	fixture.changes.fire({ resources: [resource] });
 	await setImmediate();
 	assert.deepEqual([fixture.playing, fixture.revoked], [false, [firstURL]]);

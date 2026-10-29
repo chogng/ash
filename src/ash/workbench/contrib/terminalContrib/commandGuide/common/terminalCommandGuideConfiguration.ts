@@ -7,9 +7,7 @@ export const enum TerminalCommandGuideSettingId {
 
 export const terminalCommandGuideConfiguration: Readonly<Record<string, IConfigurationPropertySchema>> = {
 	[TerminalCommandGuideSettingId.ShowCommandGuide]: {
-		type: 'boolean',
-		default: true,
-		restricted: true,
+		type: 'boolean', default: true, restricted: true,
 		get description() {
 			return localize('terminal.commandGuide.enabled', 'Show a guide beside a command and its output when hovering over the terminal.');
 		},

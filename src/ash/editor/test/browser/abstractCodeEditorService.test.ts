@@ -19,18 +19,14 @@ test('code editor open handlers use newest-first registration and dispose indepe
 	using registrations = new DisposableStore();
 	const calls: string[] = [];
 	let newerHandles = false;
-	const old = registrations.add(
-		service.registerCodeEditorOpenHandler(async (_input, _source, sideBySide) => {
-			calls.push(`first:${sideBySide}`);
-			return first;
-		}),
-	);
-	registrations.add(
-		service.registerCodeEditorOpenHandler(async (_input, _source, sideBySide) => {
-			calls.push(`second:${sideBySide}`);
-			return newerHandles ? second : null;
-		}),
-	);
+	const old = registrations.add(service.registerCodeEditorOpenHandler(async (_input, _source, sideBySide) => {
+		calls.push(`first:${sideBySide}`);
+		return first;
+	}));
+	registrations.add(service.registerCodeEditorOpenHandler(async (_input, _source, sideBySide) => {
+		calls.push(`second:${sideBySide}`);
+		return newerHandles ? second : null;
+	}));
 	assert.equal(await service.openCodeEditor({ resource: URI.parse('file:///document.ts') }, null), first);
 	newerHandles = true;
 	assert.equal(await service.openCodeEditor({ resource: URI.parse('file:///document.ts') }, null, true), second);
@@ -140,45 +136,37 @@ test('decoration types expose distinct line, inline, content, and injected-text 
 		before: { contentText: 'parent' },
 		beforeInjectedText: { contentText: 'hint', color: 'green', affectsLetterSpacing: true },
 	});
-	using child = service.registerDecorationType(
-		'child',
-		'child',
-		{
-			before: { contentText: 'child' },
-			after: { contentText: 'tail' },
-		},
-		'parent',
-	);
+	using child = service.registerDecorationType('child', 'child', {
+		before: { contentText: 'child' },
+		after: { contentText: 'tail' },
+	}, 'parent');
 
 	const parentOptions = service.resolveDecorationOptions('parent', false);
 	const childOptions = service.resolveDecorationOptions('child', false);
-	assert.deepEqual(
-		{
-			parentClass: parentOptions.className,
-			parentInline: parentOptions.inlineClassName,
-			parentBefore: parentOptions.beforeContentClassName,
-			injected: parentOptions.before,
-			childInline: childOptions.inlineClassName,
-			childBefore: childOptions.beforeContentClassName,
-			childAfter: childOptions.afterContentClassName,
+	assert.deepEqual({
+		parentClass: parentOptions.className,
+		parentInline: parentOptions.inlineClassName,
+		parentBefore: parentOptions.beforeContentClassName,
+		injected: parentOptions.before,
+		childInline: childOptions.inlineClassName,
+		childBefore: childOptions.beforeContentClassName,
+		childAfter: childOptions.afterContentClassName,
+	}, {
+		parentClass: 'ash-decoration-parent',
+		parentInline: 'ash-decoration-parent-inline',
+		parentBefore: 'ash-decoration-parent-before',
+		injected: {
+			content: 'hint',
+			inlineClassName: 'ash-decoration-parent-before-injected',
+			inlineClassNameAffectsLetterSpacing: true,
 		},
-		{
-			parentClass: 'ash-decoration-parent',
-			parentInline: 'ash-decoration-parent-inline',
-			parentBefore: 'ash-decoration-parent-before',
-			injected: {
-				content: 'hint',
-				inlineClassName: 'ash-decoration-parent-before-injected',
-				inlineClassNameAffectsLetterSpacing: true,
-			},
-			childInline: 'ash-decoration-parent-inline',
-			childBefore: 'ash-decoration-child-before',
-			childAfter: 'ash-decoration-child-after',
-		},
-	);
+		childInline: 'ash-decoration-parent-inline',
+		childBefore: 'ash-decoration-child-before',
+		childAfter: 'ash-decoration-child-after',
+	});
 });
 
-function codeEditor(id: string, focus: { text: boolean; widget: boolean }, removedDecorations: string[] = []): ICodeEditor {
+function codeEditor(id: string, focus: { text: boolean; widget: boolean; }, removedDecorations: string[] = []): ICodeEditor {
 	return {
 		getId: () => id,
 		hasTextFocus: () => focus.text,

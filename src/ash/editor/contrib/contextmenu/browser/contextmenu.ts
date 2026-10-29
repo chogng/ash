@@ -34,27 +34,23 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		super();
 		this._register(editor.onContextMenu(event => this.onContextMenu(event)));
 		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
-		this._register(
-			editor.onMouseWheel(() => {
-				if (this.activeMenu) {
-					this.contextMenuService.hideContextMenu();
-				}
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				if (this.activeMenu) {
-					this.contextMenuService.hideContextMenu();
-				}
-			}),
-		);
+		this._register(editor.onMouseWheel(() => {
+			if (this.activeMenu) {
+				this.contextMenuService.hideContextMenu();
+			}
+		}));
+		this._register(toDisposable(() => {
+			if (this.activeMenu) {
+				this.contextMenuService.hideContextMenu();
+			}
+		}));
 	}
 
 	public showContextMenu(anchor?: IMouseEvent | null): void {
 		if (!this.editor.hasModel() || !this.editor.getOption(EditorOption.contextmenu)) return;
 		const resolvedAnchor = anchor ? this.mouseAnchor(anchor) : this.keyboardAnchor();
 		if (!resolvedAnchor) return;
-		const menu = (this.activeMenu = {});
+		const menu = this.activeMenu = {};
 		this.contextMenuService.showContextMenu({
 			menuId: this.editor.contextMenuId,
 			contextKeyService: this.contextKeyService,
@@ -79,7 +75,9 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 			this.showScrollbarContextMenu(event.event);
 			return;
 		}
-		if (event.target.type !== MouseTargetType.CONTENT_TEXT && event.target.type !== MouseTargetType.CONTENT_EMPTY && event.target.type !== MouseTargetType.TEXTAREA) return;
+		if (event.target.type !== MouseTargetType.CONTENT_TEXT
+			&& event.target.type !== MouseTargetType.CONTENT_EMPTY
+			&& event.target.type !== MouseTargetType.TEXTAREA) return;
 		this.editor.focus();
 		const position = event.target.position;
 		if (position && !(this.editor.getSelections() ?? []).some(selection => selection.containsPosition(position))) this.editor.setPosition(position, 'contextmenu');
@@ -88,28 +86,54 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 
 	private showScrollbarContextMenu(event: IMouseEvent): void {
 		const minimap = this.editor.getOption(EditorOption.minimap);
-		const action = (id: string, label: string, checked: boolean, enabled: boolean, run: () => Promise<void>): IAction => ({ id, label, tooltip: '', checked, enabled, run });
-		const choice = <K extends 'size' | 'showSlider' | 'side'>(key: K, label: string, options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]> }[]): IAction => {
+		const action = (
+			id: string,
+			label: string,
+			checked: boolean,
+			enabled: boolean,
+			run: () => Promise<void>,
+		): IAction => ({ id, label, tooltip: '', checked, enabled, run });
+		const choice = <K extends 'size' | 'showSlider' | 'side'>(
+			key: K,
+			label: string,
+			options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]>; }[],
+		): IAction => {
 			if (!minimap.enabled) {
 				return {
 					id: `editor.minimap.${key}`,
 					label,
 					tooltip: '',
 					enabled: false,
-					run() {},
+					run() { },
 				};
 			}
 			return new SubmenuAction(
 				`editor.minimap.${key}`,
 				label,
-				options.map(({ label: optionLabel, value }) => action(`editor.minimap.${key}.${value}`, optionLabel, minimap[key] === value, true, () => this.updateMinimapOption(key, value))),
+				options.map(({ label: optionLabel, value }) => action(
+					`editor.minimap.${key}.${value}`,
+					optionLabel,
+					minimap[key] === value,
+					true,
+					() => this.updateMinimapOption(key, value),
+				)),
 			);
 		};
 		const actions: IAction[] = [
-			action('editor.minimap.enabled', nls.localize('context.minimap.enabled', 'Minimap'), minimap.enabled, true, () => this.updateMinimapOption('enabled', !minimap.enabled)),
+			action(
+				'editor.minimap.enabled',
+				nls.localize('context.minimap.enabled', 'Minimap'),
+				minimap.enabled,
+				true,
+				() => this.updateMinimapOption('enabled', !minimap.enabled),
+			),
 			new Separator(),
-			action('editor.minimap.renderCharacters', nls.localize('context.minimap.renderCharacters', 'Render Characters'), minimap.renderCharacters, minimap.enabled, () =>
-				this.updateMinimapOption('renderCharacters', !minimap.renderCharacters),
+			action(
+				'editor.minimap.renderCharacters',
+				nls.localize('context.minimap.renderCharacters', 'Render Characters'),
+				minimap.renderCharacters,
+				minimap.enabled,
+				() => this.updateMinimapOption('renderCharacters', !minimap.renderCharacters),
 			),
 			choice('size', nls.localize('context.minimap.size', 'Vertical Size'), [
 				{ label: nls.localize('context.minimap.size.proportional', 'Proportional'), value: 'proportional' },
@@ -125,11 +149,14 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 				{ label: nls.localize('context.minimap.side.left', 'Left'), value: 'left' },
 			]),
 		];
-		const menu = (this.activeMenu = {});
+		const menu = this.activeMenu = {};
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => this.mouseAnchor(event),
 			getActions: () => actions,
-			getCheckedActionsRepresentation: item => (item.id === 'editor.minimap.enabled' || item.id === 'editor.minimap.renderCharacters' ? 'checkbox' : 'radio'),
+			getCheckedActionsRepresentation: item =>
+				item.id === 'editor.minimap.enabled' || item.id === 'editor.minimap.renderCharacters'
+					? 'checkbox'
+					: 'radio',
 			onHide: () => this.onMenuHide(menu),
 		});
 	}
@@ -144,7 +171,10 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		}
 	}
 
-	private async updateMinimapOption<K extends keyof typeof EditorMinimapConfiguration>(key: K, value: NonNullable<IEditorMinimapOptions[K]>): Promise<void> {
+	private async updateMinimapOption<K extends keyof typeof EditorMinimapConfiguration>(
+		key: K,
+		value: NonNullable<IEditorMinimapOptions[K]>,
+	): Promise<void> {
 		await this.configurationService.updateValue(EditorMinimapConfiguration[key], value);
 		// A standalone editor has no workbench pane to apply configuration changes for it.
 		if (!this.isDisposed) {
@@ -153,7 +183,8 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 	}
 
 	private onKeyDown(event: IKeyboardEvent): void {
-		const isContextMenuKey = event.keyCode === KeyCode.ContextMenu || (event.keyCode === KeyCode.F10 && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey);
+		const isContextMenuKey = event.keyCode === KeyCode.ContextMenu
+			|| (event.keyCode === KeyCode.F10 && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey);
 		if (!isContextMenuKey || !this.editor.getOption(EditorOption.contextmenu)) return;
 		event.stop();
 		this.showContextMenu();
@@ -185,11 +216,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 
 class ShowContextMenu extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.showContextMenu',
-			label: nls.localize2('action.showContextMenu.label', 'Show Editor Context Menu'),
-			precondition: undefined,
-		});
+		super({ id: 'editor.action.showContextMenu', label: nls.localize2('action.showContextMenu.label', 'Show Editor Context Menu'), precondition: undefined });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {

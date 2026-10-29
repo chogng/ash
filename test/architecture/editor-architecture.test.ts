@@ -44,7 +44,16 @@ test('Editor dependency checks distinguish layer paths from Platform filenames',
 });
 
 test('Editor synchronous layers do not import Electron or generated DTOs', () => {
-	const protectedDirectories = ['common/config', 'common/core', 'common/diff', 'common/model', 'common/cursor', 'common/commands', 'common/viewLayout', 'common/viewModel'];
+	const protectedDirectories = [
+		'common/config',
+		'common/core',
+		'common/diff',
+		'common/model',
+		'common/cursor',
+		'common/commands',
+		'common/viewLayout',
+		'common/viewModel',
+	];
 	for (const directory of protectedDirectories) {
 		for (const file of collectFiles(join(editorRoot, directory))) {
 			if (!file.endsWith('.ts')) continue;
@@ -71,15 +80,15 @@ test('Editor implementation files have an importer or an explicit entrypoint', (
 		}
 	}
 
-	const explicitEntrypoints = new Set(
-		[resolve(editorRoot, 'editor.main.ts'), resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'), resolve(editorRoot, 'common/diff/diffWorkerMain.ts')].map(architecturePathKey),
-	);
-	const unreferenced = editorProductionFiles
-		.filter(file => {
-			const key = architecturePathKey(file);
-			return incoming.get(key) === 0 && !explicitEntrypoints.has(key);
-		})
-		.map(file => relative(editorRoot, file));
+	const explicitEntrypoints = new Set([
+		resolve(editorRoot, 'editor.main.ts'),
+		resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
+		resolve(editorRoot, 'common/diff/diffWorkerMain.ts'),
+	].map(architecturePathKey));
+	const unreferenced = editorProductionFiles.filter(file => {
+		const key = architecturePathKey(file);
+		return incoming.get(key) === 0 && !explicitEntrypoints.has(key);
+	}).map(file => relative(editorRoot, file));
 	assert.deepEqual(unreferenced, [], 'Editor files without an importer');
 });
 
@@ -102,7 +111,11 @@ test('Editor syntax ownership keeps WASM imports behind the syntax adapter', () 
 	}
 });
 test('Editor widget and view composition do not import optional contributions', () => {
-	for (const file of ['browser/widget/codeEditor/codeEditorWidget.ts', 'browser/view/viewController.ts', 'browser/editorExtensions.ts']) {
+	for (const file of [
+		'browser/widget/codeEditor/codeEditorWidget.ts',
+		'browser/view/viewController.ts',
+		'browser/editorExtensions.ts',
+	]) {
 		assert.doesNotMatch(readFileSync(editorSource(file), 'utf8'), /from\s+["'][^"']*\/contrib\//u, file);
 	}
 });

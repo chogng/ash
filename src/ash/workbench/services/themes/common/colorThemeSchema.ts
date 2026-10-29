@@ -14,10 +14,7 @@ const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONC
 
 export const colorThemeSchemaId = 'vscode://schemas/color-theme';
 
-const color: JsonSchema = {
-	type: 'string',
-	pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$',
-};
+const color: JsonSchema = { type: 'string', pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$' };
 
 /** Color-theme document shared by built-in, user, and extension themes. */
 export const colorThemeSchema: JsonSchema = {
@@ -40,38 +37,13 @@ export const colorThemeSchema: JsonSchema = {
 		semanticHighlighting: { type: 'boolean' },
 		semanticTokenColors: {
 			type: 'object',
-			get properties() {
-				return Object.fromEntries(
-					getTokenClassificationRegistry()
-						.getTokenTypes()
-						.map(type => [
-							type.id,
-							{
-								...(colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema),
-								description: type.description,
-							},
-						]),
-				);
-			},
+			get properties() { return Object.fromEntries(getTokenClassificationRegistry().getTokenTypes().map(type => [type.id, { ...colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema, description: type.description }])); },
 			additionalProperties: {
-				anyOf: [
-					color,
-					{
-						type: 'object',
-						additionalProperties: false,
-						properties: {
-							foreground: color,
-							fontStyle: {
-								type: 'string',
-								pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$',
-							},
-							bold: { type: 'boolean' },
-							italic: { type: 'boolean' },
-							underline: { type: 'boolean' },
-							strikethrough: { type: 'boolean' },
-						},
-					},
-				],
+				anyOf: [color, {
+					type: 'object',
+					additionalProperties: false,
+					properties: { foreground: color, fontStyle: { type: 'string', pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$' }, bold: { type: 'boolean' }, italic: { type: 'boolean' }, underline: { type: 'boolean' }, strikethrough: { type: 'boolean' } },
+				}],
 			},
 		},
 	},

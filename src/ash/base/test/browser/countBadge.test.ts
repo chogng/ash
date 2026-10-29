@@ -10,24 +10,15 @@ suite('CountBadge', () => {
 		const descriptions: string[] = [];
 		let disposed = false;
 		using hoverDelegate = setHoverDelegate({
-			setupDelayedHover: () => {
-				throw new Error('Unexpected delayed hover');
-			},
-			setupHover: () =>
-				({
-					visible: false,
-					show() {},
-					hide() {},
-					update: content => {
-						descriptions.push(String(content));
-					},
-					dispose: () => {
-						disposed = true;
-					},
-					[Symbol.dispose](): void {
-						this.dispose();
-					},
-				}) satisfies IManagedHover,
+			setupDelayedHover: () => { throw new Error('Unexpected delayed hover'); },
+			setupHover: () => ({
+				visible: false,
+				show() { },
+				hide() { },
+				update: content => { descriptions.push(String(content)); },
+				dispose: () => { disposed = true; },
+				[Symbol.dispose](): void { this.dispose(); },
+			} satisfies IManagedHover),
 		});
 		try {
 			using badge = new CountBadge(browser.window.document.body, { count: 6, titleFormat: '{0} changes' });
@@ -51,14 +42,7 @@ suite('CountBadge', () => {
 		try {
 			using plain = new CountBadge(browser.window.document.body);
 			using formatted = new CountBadge(browser.window.document.body, { count: 12, countFormat: '({0})' });
-			assert.deepEqual(
-				{
-					plain: plain.domNode.textContent,
-					formatted: formatted.domNode.textContent,
-					tabIndex: plain.domNode.tabIndex,
-				},
-				{ plain: '0', formatted: '(12)', tabIndex: -1 },
-			);
+			assert.deepEqual({ plain: plain.domNode.textContent, formatted: formatted.domNode.textContent, tabIndex: plain.domNode.tabIndex }, { plain: '0', formatted: '(12)', tabIndex: -1 });
 		} finally {
 			browser.window.close();
 		}

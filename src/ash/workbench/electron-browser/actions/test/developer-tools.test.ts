@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { MenuService } from '../../../../platform/actions/common/menuService.js';
+import {
+	MenuId,
+	registerAction2,
+} from '../../../../platform/actions/common/actions.js';
+import {
+	MenuService,
+} from '../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import {
@@ -14,12 +19,20 @@ import {
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 } from '../../../../platform/native/common/nativeHost.js';
-import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/nativeHostIpc.js';
-import { INativeHostService } from '../../../../workbench/common/services.js';
-import { ToggleDeveloperToolsCommandId } from '../../../../workbench/electron-browser/actions/developerActions.js';
+import {
+	nativeHostIpcRoutes,
+} from '../../../../platform/native/electron-main/nativeHostIpc.js';
+import {
+	INativeHostService,
+} from '../../../../workbench/common/services.js';
+import {
+	ToggleDeveloperToolsCommandId,
+} from '../../../../workbench/electron-browser/actions/developerActions.js';
 import { OpenFolderAction, OpenFolderCommandId } from '../../../../workbench/browser/actions/workspaceActions.js';
 import '../../../../workbench/electron-browser/desktop.contribution.js';
-import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
+import {
+	CommandService,
+} from '../../../../workbench/services/commands/common/commandService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { OpenFolderWorkspaceSupportContext } from '../../../../workbench/common/contextkeys.js';
 
@@ -30,28 +43,14 @@ test('native host routes validate folder picking and developer tools', async () 
 	const windowThemes: unknown[] = [];
 	const windowDimmed: boolean[] = [];
 	const routes = nativeHostIpcRoutes({
-		moveTerminalToWindow: async () => {
-			throw new Error('Unexpected terminal transfer');
-		},
+		moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 		takeTerminalTransfer: () => undefined,
-		completeTerminalTransfer: () => {
-			throw new Error('Unexpected terminal transfer completion');
-		},
-		getAgentHostEditorState: () => {
-			throw new Error('Unused invitation capability');
-		},
-		updateAgentHostEditorState: () => {
-			throw new Error('Unused invitation capability');
-		},
-		claimAgentsWindowInvitation: () => {
-			throw new Error('Unused invitation capability');
-		},
-		markAgentsWindowInvitationShown: () => {
-			throw new Error('Unused invitation capability');
-		},
-		releaseAgentsWindowInvitation: () => {
-			throw new Error('Unused invitation capability');
-		},
+		completeTerminalTransfer: () => { throw new Error('Unexpected terminal transfer completion'); },
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
 		getWindowClientSize: () => undefined,
 		isAdmin: async () => false,
@@ -61,34 +60,45 @@ test('native host routes validate folder picking and developer tools', async () 
 			return pickedFolder;
 		},
 		showOpenDialog: async () => ({ canceled: false, filePaths: ['C:\\project\\paper.md'] }),
-		openWorkspace: async () => {},
-		openWindow: async () => {},
-		openAgentsWindow: async () => {},
-		revealFile: () => {},
-		showSaveDialog: async options => {
+		openWorkspace: async () => { },
+		openWindow: async () => { },
+		openAgentsWindow: async () => { },
+		revealFile: () => { },
+		showSaveDialog: async (options) => {
 			savedFileOptions = options;
 			return { canceled: false, filePath: 'C:\\project\\draft.txt' };
 		},
 		isAccessibilitySupportEnabled: () => false,
-		setWindowTheme: theme => {
+		setWindowTheme: (theme) => {
 			windowThemes.push(theme);
 		},
-		setWindowDimmed: dimmed => {
-			windowDimmed.push(dimmed);
-		},
+		setWindowDimmed: dimmed => { windowDimmed.push(dimmed); },
 		toggleDeveloperTools: () => {
 			toggles += 1;
 		},
 		syncSystemWideKeybindings: () => ({ failed: [] }),
 	});
-	const accessibilitySupport = routes.find(({ channel }) => channel === NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL);
-	const pickFolder = routes.find(({ channel }) => channel === NATIVE_HOST_PICK_FOLDER_CHANNEL);
+	const accessibilitySupport = routes.find(
+		({ channel }) => channel === NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
+	);
+	const pickFolder = routes.find(
+		({ channel }) => channel === NATIVE_HOST_PICK_FOLDER_CHANNEL,
+	);
 	const pickFile = routes.find(({ channel }) => channel === NATIVE_HOST_PICK_FILE_CHANNEL);
-	const toggleDeveloperTools = routes.find(({ channel }) => channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL);
-	const setWindowTheme = routes.find(({ channel }) => channel === NATIVE_HOST_SET_WINDOW_THEME_CHANNEL);
+	const toggleDeveloperTools = routes.find(
+		({ channel }) =>
+			channel === NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
+	);
+	const setWindowTheme = routes.find(
+		({ channel }) => channel === NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
+	);
 	const setWindowDimmed = routes.find(({ channel }) => channel === NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL);
-	const syncSystemWideKeybindings = routes.find(({ channel }) => channel === NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL);
-	const saveFile = routes.find(({ channel }) => channel === NATIVE_HOST_SAVE_FILE_CHANNEL);
+	const syncSystemWideKeybindings = routes.find(
+		({ channel }) => channel === NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
+	);
+	const saveFile = routes.find(
+		({ channel }) => channel === NATIVE_HOST_SAVE_FILE_CHANNEL,
+	);
 	assert.ok(accessibilitySupport);
 	assert.ok(pickFolder);
 	assert.ok(pickFile);
@@ -97,72 +107,68 @@ test('native host routes validate folder picking and developer tools', async () 
 	assert.ok(toggleDeveloperTools);
 	assert.ok(saveFile);
 	assert.ok(syncSystemWideKeybindings);
-	assert.throws(() => syncSystemWideKeybindings.validate([{ accelerator: 'Control+Shift+A', commandId: '', userSettingsLabel: 'ctrl+shift+a' }]), /Invalid system-wide keybinding/);
-	const systemWideBindings = syncSystemWideKeybindings.validate([
-		{
-			accelerator: 'Control+Shift+A',
-			commandId: 'workbench.action.openAgentsWindow',
-			userSettingsLabel: 'ctrl+shift+a',
-		},
-	]);
+	assert.throws(
+		() => syncSystemWideKeybindings.validate([{ accelerator: 'Control+Shift+A', commandId: '', userSettingsLabel: 'ctrl+shift+a' }]),
+		/Invalid system-wide keybinding/,
+	);
+	const systemWideBindings = syncSystemWideKeybindings.validate([{ accelerator: 'Control+Shift+A', commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+shift+a' }]);
 	assert.deepEqual(syncSystemWideKeybindings.invoke(systemWideBindings), { failed: [] });
 
-	assert.throws(() => pickFolder.validate(null), /does not accept parameters/);
+	assert.throws(
+		() => pickFolder.validate(null),
+		/does not accept parameters/,
+	);
 	assert.equal(await pickFolder.invoke(pickFolder.validate(undefined)), '/tmp/trusted-folder');
 	assert.equal(pickedFolder, '/tmp/trusted-folder');
 	assert.throws(() => pickFile.validate(null), /Invalid open dialog options/);
 	assert.throws(() => pickFile.validate({ properties: ['invalid'] }), /Invalid dialog properties/);
 	assert.throws(() => pickFile.validate({ properties: ['openFile'], filters: [{ name: 'Text', extensions: ['../txt'] }] }), /Invalid file filter/);
-	const openOptions = {
-		properties: ['openFile', 'multiSelections'],
-		filters: [{ name: 'Text', extensions: ['txt'] }],
-	};
-	assert.deepEqual(await pickFile.invoke(pickFile.validate(openOptions)), {
-		canceled: false,
-		filePaths: ['C:\\project\\paper.md'],
-	});
+	const openOptions = { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Text', extensions: ['txt'] }] };
+	assert.deepEqual(await pickFile.invoke(pickFile.validate(openOptions)), { canceled: false, filePaths: ['C:\\project\\paper.md'] });
 	const packageFilters = [{ name: 'Design', extensions: ['ash-design', 'ash-design.json'] }];
-	assert.deepEqual(
-		pickFile.validate({
-			...openOptions,
-			properties: ['openFile', 'openDirectory', 'multiSelections'],
-			filters: packageFilters,
-		}),
-		{ ...openOptions, properties: ['openFile', 'openDirectory', 'multiSelections'], filters: packageFilters },
-	);
+	assert.deepEqual(pickFile.validate({ ...openOptions, properties: ['openFile', 'openDirectory', 'multiSelections'], filters: packageFilters }), { ...openOptions, properties: ['openFile', 'openDirectory', 'multiSelections'], filters: packageFilters });
 	assert.deepEqual(saveFile.validate({ filters: packageFilters }), { filters: packageFilters });
 	for (const extension of ['.json', 'ash/design', 'ash\\design', 'ash..json', '*.json']) {
 		assert.throws(() => saveFile.validate({ filters: [{ name: 'Invalid', extensions: [extension] }] }), /Invalid file filter/);
 	}
-	assert.throws(() => saveFile.validate({ defaultPath: 42 }), /Invalid dialog defaultPath/);
+	assert.throws(
+		() => saveFile.validate({ defaultPath: 42 }),
+		/Invalid dialog defaultPath/,
+	);
 	const validatedSaveFile = saveFile.validate({ defaultPath: 'Untitled-1' });
 	assert.deepEqual(await saveFile.invoke(validatedSaveFile), { canceled: false, filePath: 'C:\\project\\draft.txt' });
 	assert.deepEqual(savedFileOptions, { defaultPath: 'Untitled-1' });
-	assert.deepEqual(saveFile.validate({ defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] }), {
-		defaultPath: 'C:\\project\\report.txt',
-		filters: [{ name: 'Text', extensions: ['txt'] }],
-	});
-	assert.throws(() => accessibilitySupport.validate(null), /does not accept parameters/);
+	assert.deepEqual(saveFile.validate({ defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] }), { defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
+	assert.throws(
+		() => accessibilitySupport.validate(null),
+		/does not accept parameters/,
+	);
 	assert.equal(accessibilitySupport.invoke(accessibilitySupport.validate(undefined)), false);
-	assert.throws(() => setWindowTheme.validate({ backgroundColor: 'white', symbolColor: '#000000', backdropColor: '#00000073' }), /backgroundColor must be an opaque hexadecimal color/);
+	assert.throws(
+		() => setWindowTheme.validate({ backgroundColor: 'white', symbolColor: '#000000', backdropColor: '#00000073' }),
+		/backgroundColor must be an opaque hexadecimal color/,
+	);
 	const validatedTheme = setWindowTheme.validate({
 		backgroundColor: '#F3F3F3',
 		symbolColor: '#424242',
 		backdropColor: '#00000073',
 	});
 	setWindowTheme.invoke(validatedTheme);
-	assert.deepEqual(windowThemes, [
-		{
-			backgroundColor: '#f3f3f3',
-			symbolColor: '#424242',
-			backdropColor: '#00000073',
-		},
-	]);
+	assert.deepEqual(windowThemes, [{
+		backgroundColor: '#f3f3f3',
+		symbolColor: '#424242',
+		backdropColor: '#00000073',
+	}]);
 	assert.throws(() => setWindowDimmed.validate('true'), /boolean/);
 	setWindowDimmed.invoke(setWindowDimmed.validate(true));
 	assert.deepEqual(windowDimmed, [true]);
-	assert.throws(() => toggleDeveloperTools.validate(null), /does not accept parameters/);
-	toggleDeveloperTools.invoke(toggleDeveloperTools.validate(undefined));
+	assert.throws(
+		() => toggleDeveloperTools.validate(null),
+		/does not accept parameters/,
+	);
+	toggleDeveloperTools.invoke(
+		toggleDeveloperTools.validate(undefined),
+	);
 	assert.equal(toggles, 1);
 });
 
@@ -171,115 +177,100 @@ test('desktop commands are available from the command palette', async () => {
 	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
-		onDidSuspendOS: () => ({ dispose() {} }),
-		onDidResumeOS: () => ({ dispose() {} }),
-		getScreenshot: async () => {
-			throw new Error('Unused screenshot capability');
-		},
-		moveTerminalToWindow: async () => {
-			throw new Error('Unexpected terminal transfer');
-		},
+		onDidSuspendOS: () => ({ dispose() { } }),
+		onDidResumeOS: () => ({ dispose() { } }),
+		getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
+		moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 		takeTerminalTransfer: async () => undefined,
-		completeTerminalTransfer: async () => {
-			throw new Error('Unexpected terminal transfer completion');
-		},
-		onDidRequestTerminalTransfer: () => ({ dispose() {} }),
-		getAgentHostEditorState: () => {
-			throw new Error('Unused invitation capability');
-		},
-		updateAgentHostEditorState: () => {
-			throw new Error('Unused invitation capability');
-		},
-		claimAgentsWindowInvitation: () => {
-			throw new Error('Unused invitation capability');
-		},
-		markAgentsWindowInvitationShown: () => {
-			throw new Error('Unused invitation capability');
-		},
-		releaseAgentsWindowInvitation: () => {
-			throw new Error('Unused invitation capability');
-		},
-		onDidChangeAgentHostEditorState: () => {
-			throw new Error('Unused invitation capability');
-		},
+		completeTerminalTransfer: async () => { throw new Error('Unexpected terminal transfer completion'); },
+		onDidRequestTerminalTransfer: () => ({ dispose() { } }),
+		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+		claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
 		getWindowClientSize: async () => undefined,
-		onDidChangeWindowClientSize: () => ({ dispose() {} }),
+		onDidChangeWindowClientSize: () => ({ dispose() { } }),
 		isAdmin: async () => false,
-		onDidRequestOpenExternalUri: () => ({ dispose() {} }),
-		openExternal: async () => {
-			throw new Error('unused');
-		},
-		showMessageBox: async () => {
-			throw new Error('unused');
-		},
+		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
+		openExternal: async () => { throw new Error('unused'); },
+		showMessageBox: async () => { throw new Error('unused'); },
 		listWindows: async () => [],
-		focusWindowById: async () => {},
-		focusWindow: async () => {},
-		closeWindow: async () => {},
-		closeOtherWindows: async () => {},
+		focusWindowById: async () => { },
+		focusWindow: async () => { },
+		closeWindow: async () => { },
+		closeOtherWindows: async () => { },
 		getZoomLevel: async () => 0,
-		onDidChangeZoomLevel: () => ({ dispose() {} }),
-		setZoomLevel: async () => {},
-		getAuxiliaryWindowState: async () => {
-			throw new Error('Unused window state');
-		},
-		onDidChangeAuxiliaryWindowState: () => ({ dispose() {} }),
-		onDidChangeWindowAlwaysOnTop: () => ({ dispose() {} }),
+		onDidChangeZoomLevel: () => ({ dispose() { } }),
+		setZoomLevel: async () => { },
+		getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
+		onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 		isAlwaysOnTop: async () => false,
-		setAlwaysOnTop: async () => {},
-		performNativeTabAction: async () => {},
-		openNewWindowTab: async () => {},
+		setAlwaysOnTop: async () => { },
+		performNativeTabAction: async () => { },
+		openNewWindowTab: async () => { },
 		pickFolder: async () => undefined,
 		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
-		openWorkspace: async () => {},
-		openWindow: async () => {},
-		openAgentsWindow: async () => {},
+		openWorkspace: async () => { },
+		openWindow: async () => { },
+		openAgentsWindow: async () => { },
 		syncSystemWideKeybindings: async () => ({ failed: [] }),
-		revealFile: async () => {},
+		revealFile: async () => { },
 		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 		getOSColorScheme: async () => ({ dark: false, highContrast: false }),
-		onDidChangeColorScheme: () => ({ dispose() {} }),
+		onDidChangeColorScheme: () => ({ dispose() { } }),
 		isAccessibilitySupportEnabled: async () => false,
-		onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
-		setWindowTheme: async () => {},
-		setWindowDimmed: async () => {},
+		onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
+		setWindowTheme: async () => { },
+		setWindowDimmed: async () => { },
 		async toggleDeveloperTools() {
 			toggles += 1;
 		},
 	});
 	let folderOpens = 0;
 	services.registerInstance(IFileDialogService, {
-		pickFolderAndOpen: async () => {
-			folderOpens++;
-		},
-		pickWorkspaceAndOpen: async () => {},
-		pickFileToSave: async () => undefined,
-		showOpenDialog: async () => undefined,
-		showSaveDialog: async () => undefined,
-		showSaveConfirm: async () => 2,
+		pickFolderAndOpen: async () => { folderOpens++; },
+		pickWorkspaceAndOpen: async () => { },
+		pickFileToSave: async () => undefined, showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, showSaveConfirm: async () => 2,
 	});
 	using commands = new CommandService(services);
 	using contexts = new ContextKeyService();
 	OpenFolderWorkspaceSupportContext.bindTo(contexts).set(true);
-	const paletteActions = new MenuService(commands, contexts).getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions);
+	const paletteActions = new MenuService(commands, contexts)
+		.getMenuActions(MenuId.CommandPalette)
+		.flatMap(([, actions]) => actions);
 
-	const action = paletteActions.find(({ id }) => id === ToggleDeveloperToolsCommandId);
+	const action = paletteActions.find(
+		({ id }) => id === ToggleDeveloperToolsCommandId,
+	);
 	assert.equal(action?.label, 'Developer: Toggle Developer Tools');
 	await action?.run();
 	assert.equal(toggles, 1);
-	const helpMenuActions = new MenuService(commands, contexts).getMenuActions(MenuId.MenubarHelpMenu).flatMap(([, actions]) => actions);
-	const helpMenuAction = helpMenuActions.find(({ id }) => id === ToggleDeveloperToolsCommandId);
+	const helpMenuActions = new MenuService(commands, contexts)
+		.getMenuActions(MenuId.MenubarHelpMenu)
+		.flatMap(([, actions]) => actions);
+	const helpMenuAction = helpMenuActions.find(
+		({ id }) => id === ToggleDeveloperToolsCommandId,
+	);
 	assert.equal(helpMenuAction?.label, 'Developer: Toggle Developer Tools');
 	await helpMenuAction?.run();
 	assert.equal(toggles, 2);
 
-	const openFolder = paletteActions.find(({ id }) => id === OpenFolderCommandId);
+	const openFolder = paletteActions.find(
+		({ id }) => id === OpenFolderCommandId,
+	);
 	assert.equal(openFolder?.label, 'Open Folder...');
 	await openFolder?.run();
 	assert.equal(folderOpens, 1);
-	const fileMenuActions = new MenuService(commands, contexts).getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions);
-	const openFolderFromMenu = fileMenuActions.find(({ id }) => id === OpenFolderCommandId);
+	const fileMenuActions = new MenuService(commands, contexts)
+		.getMenuActions(MenuId.MenubarFileMenu)
+		.flatMap(([, actions]) => actions);
+	const openFolderFromMenu = fileMenuActions.find(
+		({ id }) => id === OpenFolderCommandId,
+	);
 	assert.equal(openFolderFromMenu?.label, 'Open Folder...');
 	await openFolderFromMenu?.run();
 	assert.equal(folderOpens, 2);

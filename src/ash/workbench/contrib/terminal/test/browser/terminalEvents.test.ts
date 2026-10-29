@@ -14,19 +14,8 @@ import { AgentHostOutputChannel } from '../../browser/agentHostOutputChannel.js'
 
 function screenCommand(id: string): ITerminalCommand {
 	return new TerminalCommand({ buffer: { normal: { cursorX: 0 } } } as ConstructorParameters<typeof TerminalCommand>[0], {
-		id,
-		command: 'screen command',
-		commandLineConfidence: 'high',
-		isTrusted: true,
-		timestamp: 123,
-		duration: 10,
-		marker: undefined,
-		cwd: '/workspace',
-		exitCode: 0,
-		commandStartLineContent: undefined,
-		markProperties: undefined,
-		executedX: undefined,
-		startX: undefined,
+		id, command: 'screen command', commandLineConfidence: 'high', isTrusted: true, timestamp: 123, duration: 10,
+		marker: undefined, cwd: '/workspace', exitCode: 0, commandStartLineContent: undefined, markProperties: undefined, executedX: undefined, startX: undefined,
 	});
 }
 
@@ -42,56 +31,27 @@ function source(owner: DisposableStore, id: number) {
 	cwd.updateCwd('/committed/cwd');
 	const command = {
 		type: TerminalCapability.CommandDetection as const,
-		get commands() {
-			return commands;
-		},
+		get commands() { return commands; },
 		hasRichCommandDetection: true,
-		get commandStorageDisabled() {
-			return storageDisabled;
-		},
+		get commandStorageDisabled() { return storageDisabled; },
 		onCommandFinished: finished.event,
 	} as unknown as ICommandDetectionCapability;
-	owner.add(
-		changes.event(() => {
-			if (enabled) {
-				capabilities.add(TerminalCapability.CwdDetection, cwd);
-				capabilities.add(TerminalCapability.CommandDetection, command);
-			} else {
-				capabilities.remove(TerminalCapability.CwdDetection);
-				capabilities.remove(TerminalCapability.CommandDetection);
-			}
-		}),
-	);
-	const instance = {
-		id: `instance-${id}`,
-		instanceId: id,
-		capabilities,
-		onDidChangeCommandStatus: statuses.event,
-		get shellIntegration() {
-			return { commandStorageDisabled: storageDisabled };
-		},
-	} as unknown as ITerminalInstance;
-	return {
-		instance,
-		statuses,
-		finished,
-		commands,
-		enable: (value: boolean) => {
-			enabled = value;
-			changes.fire();
-		},
-		disableStorage: () => {
-			storageDisabled = true;
-			changes.fire();
-		},
-	};
+	owner.add(changes.event(() => {
+		if (enabled) {
+			capabilities.add(TerminalCapability.CwdDetection, cwd);
+			capabilities.add(TerminalCapability.CommandDetection, command);
+		} else {
+			capabilities.remove(TerminalCapability.CwdDetection);
+			capabilities.remove(TerminalCapability.CommandDetection);
+		}
+	}));
+	const instance = { id: `instance-${id}`, instanceId: id, capabilities, onDidChangeCommandStatus: statuses.event, get shellIntegration() { return { commandStorageDisabled: storageDisabled }; } } as unknown as ITerminalInstance;
+	return { instance, statuses, finished, commands, enable: (value: boolean) => { enabled = value; changes.fire(); }, disableStorage: () => { storageDisabled = true; changes.fire(); } };
 }
 
 class RecordingChannel extends Disposable {
 	readonly lines: string[] = [];
-	appendLine(entry: { readonly text: string }): void {
-		this.lines.push(entry.text);
-	}
+	appendLine(entry: { readonly text: string; }): void { this.lines.push(entry.text); }
 }
 
 suite('Terminal capability event lifetime', () => {
@@ -206,29 +166,14 @@ suite('Terminal capability event lifetime', () => {
 		item.enable(true);
 		const channel = new RecordingChannel();
 		let creations = 0;
-		const output = {
-			createChannel: () => {
-				creations++;
-				return channel as unknown as IOutputChannel;
-			},
-		} as unknown as IOutputService;
-		const terminals = {
-			instances: [item.instance],
-			onDidCreateInstance: owner.add(new Emitter<ITerminalInstance>()).event,
-			onDidDisposeInstance: owner.add(new Emitter<ITerminalInstance>()).event,
-		} as unknown as ITerminalService;
+		const output = { createChannel: () => { creations++; return channel as unknown as IOutputChannel; } } as unknown as IOutputService;
+		const terminals = { instances: [item.instance], onDidCreateInstance: owner.add(new Emitter<ITerminalInstance>()).event, onDidDisposeInstance: owner.add(new Emitter<ITerminalInstance>()).event } as unknown as ITerminalService;
 		const diagnostics = owner.add(new AgentHostOutputChannel(terminals, output));
 		assert.equal(creations, 0);
 		item.statuses.fire({ commandId: 'one', status: 'succeeded', exitCode: 0, isTrusted: true, command: 'allowed' });
 		item.statuses.fire({ commandId: 'two', status: 'failed', exitCode: 1, isTrusted: false, command: 'untrusted' });
 		item.disableStorage();
-		item.statuses.fire({
-			commandId: 'three',
-			status: 'succeeded',
-			exitCode: 0,
-			isTrusted: true,
-			command: 'disabled',
-		});
+		item.statuses.fire({ commandId: 'three', status: 'succeeded', exitCode: 0, isTrusted: true, command: 'disabled' });
 		assert.equal(creations, 1);
 		assert.equal(JSON.parse(channel.lines[0]!).command, 'allowed');
 		assert.equal(JSON.parse(channel.lines[1]!).command, undefined);

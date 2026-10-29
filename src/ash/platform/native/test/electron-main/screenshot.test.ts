@@ -24,10 +24,7 @@ test('window capture converts CSS pixels once, retains PNG bytes and checks the 
 		webContents: {
 			isDestroyed: () => closed,
 			getZoomFactor: () => zoom,
-			capturePage: async (clip: unknown) => {
-				clips.push(clip);
-				return { toPNG: () => bytes, isEmpty: () => false };
-			},
+			capturePage: async (clip: unknown) => { clips.push(clip); return { toPNG: () => bytes, isEmpty: () => false }; },
 		},
 	} as unknown as BrowserWindow;
 	assert.deepEqual((await getScreenshot(window, { x: 10, y: 20, width: 40, height: 30 }))?.buffer, bytes);
@@ -50,12 +47,8 @@ test('a window closed during capture produces no late screenshot', async () => {
 		isDestroyed: () => closed,
 		getContentBounds: () => ({ width: 800, height: 600 }),
 		webContents: {
-			isDestroyed: () => closed,
-			getZoomFactor: () => 1,
-			capturePage: async () => {
-				closed = true;
-				return { toPNG: () => assert.fail('Closed window bytes must not be read') };
-			},
+			isDestroyed: () => closed, getZoomFactor: () => 1,
+			capturePage: async () => { closed = true; return { toPNG: () => assert.fail('Closed window bytes must not be read') }; },
 		},
 	} as unknown as BrowserWindow;
 	assert.equal(await getScreenshot(window), undefined);

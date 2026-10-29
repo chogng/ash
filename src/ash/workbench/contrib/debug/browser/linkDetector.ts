@@ -16,7 +16,7 @@ export const enum DebugLinkHoverBehavior {
 	Basic,
 	None,
 }
-export type DebugLinkHoverBehaviorTypeData = { readonly type: DebugLinkHoverBehavior; readonly store: DisposableStore };
+export type DebugLinkHoverBehaviorTypeData = { readonly type: DebugLinkHoverBehavior; readonly store: DisposableStore; };
 
 /** The console's used linkification port; row owners supply the listener lifetime. */
 export interface ILinkDetector {
@@ -32,24 +32,17 @@ export class LinkDetector implements ILinkDetector {
 		@IHoverService private readonly hovers: IHoverService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-	) {}
+	) { }
 
 	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines = false, workspaceFolder?: IWorkspaceFolder): HTMLElement {
 		const root = h(document, 'span');
 		const store = hoverBehavior.store;
 		let current = !store.isDisposed;
 		const workspaceId = this.workspace.getWorkspace().id;
-		store.add(
-			toDisposable(() => {
-				current = false;
-			}),
-		);
-		const isCurrent = () =>
-			current &&
-			(!workspaceFolder ||
-				(this.workspace.getWorkspace().id === workspaceId &&
-					this.workspace.getWorkspace().folders.some(folder => folder.id === workspaceFolder.id && folder.uri.toString() === workspaceFolder.uri.toString())));
-		const lines = splitLines ? (text.match(/[^\n]*\n|[^\n]+$/g) ?? []) : [text];
+		store.add(toDisposable(() => { current = false; }));
+		const isCurrent = () => current && (!workspaceFolder || this.workspace.getWorkspace().id === workspaceId
+			&& this.workspace.getWorkspace().folders.some(folder => folder.id === workspaceFolder.id && folder.uri.toString() === workspaceFolder.uri.toString()));
+		const lines = splitLines ? text.match(/[^\n]*\n|[^\n]+$/g) ?? [] : [text];
 		for (const line of lines) {
 			const host = splitLines ? root.appendChild(h(document, 'span')) : root;
 			let offset = 0;
@@ -67,31 +60,19 @@ export class LinkDetector implements ILinkDetector {
 				if (/^(?:https?:\/\/|mailto:)/i.test(value)) {
 					try {
 						const uri = URI.parse(value);
-						if ((/^https?$/i.test(uri.scheme) && !uri.authority) || (uri.scheme === 'mailto' && !uri.path.includes('@'))) continue;
+						if (/^https?$/i.test(uri.scheme) && !uri.authority
+							|| uri.scheme === 'mailto' && !uri.path.includes('@')) continue;
 						this.activate(label, hoverBehavior, isCurrent, async side => {
-							await this.openers.open(uri, {
-								fromUserGesture: true,
-								allowContributedOpeners: true,
-								openToSide: side,
-							});
+							await this.openers.open(uri, { fromUserGesture: true, allowContributedOpeners: true, openToSide: side });
 						});
-					} catch {
-						/* Malformed output remains plain text. */
-					}
+					} catch { /* Malformed output remains plain text. */ }
 				} else {
 					const location = fileLocation(value, workspaceFolder);
-					if (location)
-						void this.files.stat(location.resource).then(
-							stat => {
-								if (isCurrent() && stat.kind === FileKind.File)
-									this.activate(label, hoverBehavior, isCurrent, async side => {
-										await this.editors.openEditor({ resource: location.resource }, { selection: location.selection }, side ? 'sideGroup' : 'activeGroup');
-									});
-							},
-							() => {
-								/* Missing or inaccessible paths are ordinary output. */
-							},
-						);
+					if (location) void this.files.stat(location.resource).then(stat => {
+						if (isCurrent() && stat.kind === FileKind.File) this.activate(label, hoverBehavior, isCurrent, async side => {
+							await this.editors.openEditor({ resource: location.resource }, { selection: location.selection }, side ? 'sideGroup' : 'activeGroup');
+						});
+					}, () => { /* Missing or inaccessible paths are ordinary output. */ });
 				}
 			}
 			host.append(document.createTextNode(line.slice(offset)));
@@ -114,30 +95,22 @@ export class LinkDetector implements ILinkDetector {
 				if (isCurrent()) this.notifications.error(error instanceof Error ? error.message : String(error));
 			});
 		};
-		hover.store.add(
-			addDisposableListener(label, 'click', event => {
-				event.stopPropagation();
-				if ((event.ctrlKey || event.metaKey) && !label.ownerDocument.getSelection()?.toString()) follow(event.shiftKey);
-			}),
-		);
-		hover.store.add(
-			addDisposableListener(label, 'keydown', event => {
-				if (event.key !== 'Enter' && event.key !== ' ') return;
-				event.preventDefault();
-				event.stopPropagation();
-				follow(event.shiftKey);
-			}),
-		);
+		hover.store.add(addDisposableListener(label, 'click', event => {
+			event.stopPropagation();
+			if ((event.ctrlKey || event.metaKey) && !label.ownerDocument.getSelection()?.toString()) follow(event.shiftKey);
+		}));
+		hover.store.add(addDisposableListener(label, 'keydown', event => {
+			if (event.key !== 'Enter' && event.key !== ' ') return;
+			event.preventDefault();
+			event.stopPropagation();
+			follow(event.shiftKey);
+		}));
 	}
 }
 
 function trimPunctuation(text: string): string {
 	let result = text.replace(/[.,;!?]+$/, '');
-	for (const [open, close] of [
-		['(', ')'],
-		['[', ']'],
-		['{', '}'],
-	]) {
+	for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
 		let excess = result.split(close!).length - result.split(open!).length;
 		while (excess > 0 && result.endsWith(close!)) {
 			result = result.slice(0, -1);
@@ -147,7 +120,7 @@ function trimPunctuation(text: string): string {
 	return result;
 }
 
-function fileLocation(text: string, folder: IWorkspaceFolder | undefined): { resource: URI; selection?: Range } | undefined {
+function fileLocation(text: string, folder: IWorkspaceFolder | undefined): { resource: URI; selection?: Range; } | undefined {
 	const suffix = /:(\d+)(?::(\d+))?$/.exec(text);
 	const line = suffix ? Number(suffix[1]) : 1;
 	const column = suffix?.[2] ? Number(suffix[2]) : 1;
@@ -164,11 +137,10 @@ function fileLocation(text: string, folder: IWorkspaceFolder | undefined): { res
 			if (!folder) return undefined;
 			const windows = /^[A-Za-z]:[\\/]/.test(path);
 			if (path.startsWith('/') || windows) {
-				resource = isRemoteResource(folder.uri) ? withRemoteWorkspacePath(folder.uri, path) : URI.from({ scheme: 'file', path: windows ? path.replaceAll('\\', '/') : path });
+				resource = isRemoteResource(folder.uri) ? withRemoteWorkspacePath(folder.uri, path)
+					: URI.from({ scheme: 'file', path: windows ? path.replaceAll('\\', '/') : path });
 			} else resource = URI.joinPath(folder.uri, path.replaceAll('\\', '/'));
 		}
 		return { resource, selection: suffix ? new Range(line, column, line, column) : undefined };
-	} catch {
-		return undefined;
-	}
+	} catch { return undefined; }
 }

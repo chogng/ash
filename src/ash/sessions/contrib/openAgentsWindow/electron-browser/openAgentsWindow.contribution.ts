@@ -23,37 +23,32 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(
-			instantiationService.createInstance(SystemWideKeybindingsSynchronizer, {
-				getCandidates: () => {
-					const selection = selectSystemWideKeybindings(
-						resource.getKeybindings().flatMap(item => (item.userBinding ? [item.userBinding.entry] : [])),
-						operatingSystem,
-					);
-					for (const rejection of selection.unsupported) {
-						if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
-							this.log.warn(`[OpenAgentsWindow] ${rejection.userSettingsLabel} cannot be registered as a system-wide shortcut`);
-						}
+		this._register(instantiationService.createInstance(SystemWideKeybindingsSynchronizer, {
+			getCandidates: () => {
+				const selection = selectSystemWideKeybindings(
+					resource.getKeybindings().flatMap(item => item.userBinding ? [item.userBinding.entry] : []),
+					operatingSystem,
+				);
+				for (const rejection of selection.unsupported) {
+					if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
+						this.log.warn(`[OpenAgentsWindow] ${rejection.userSettingsLabel} cannot be registered as a system-wide shortcut`);
 					}
-					for (const rejection of selection.duplicates) {
-						if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
-							this.log.warn(`[OpenAgentsWindow] duplicate system-wide shortcut ${rejection.userSettingsLabel}`);
-						}
+				}
+				for (const rejection of selection.duplicates) {
+					if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
+						this.log.warn(`[OpenAgentsWindow] duplicate system-wide shortcut ${rejection.userSettingsLabel}`);
 					}
-					const ignoredWhen = selection.ignoredWhen
-						.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)
-						.map(binding => binding.userSettingsLabel)
-						.join(', ');
-					if (ignoredWhen && ignoredWhen !== this.lastIgnoredWhen) {
-						this.notifications.warn(localize('openAgentsWindow.systemWideWhenIgnored', 'The when condition is ignored for system-wide Open Agents Window shortcuts ({0}).', ignoredWhen));
-					}
-					this.lastIgnoredWhen = ignoredWhen;
-					return selection.candidates.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID);
-				},
-				onRegistrationFailuresChanged: (failed: readonly string[]) => this.reportFailures(failed),
-				onError: (error: unknown) => this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error),
-			}),
-		);
+				}
+				const ignoredWhen = selection.ignoredWhen.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID).map(binding => binding.userSettingsLabel).join(', ');
+				if (ignoredWhen && ignoredWhen !== this.lastIgnoredWhen) {
+					this.notifications.warn(localize('openAgentsWindow.systemWideWhenIgnored', 'The when condition is ignored for system-wide Open Agents Window shortcuts ({0}).', ignoredWhen));
+				}
+				this.lastIgnoredWhen = ignoredWhen;
+				return selection.candidates.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID);
+			},
+			onRegistrationFailuresChanged: (failed: readonly string[]) => this.reportFailures(failed),
+			onError: (error: unknown) => this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error),
+		}));
 	}
 
 	private reportFailures(failedLabels: readonly string[]): void {
@@ -65,6 +60,8 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 	}
 }
 
-registerWorkbenchContribution(OpenAgentsWindowSystemWideKeybindingContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(OpenAgentsWindowSystemWideKeybindingContribution),
+registerWorkbenchContribution(
+	OpenAgentsWindowSystemWideKeybindingContribution.ID,
+	WorkbenchPhase.AfterRestored,
+	accessor => accessor.get(IInstantiationService).createInstance(OpenAgentsWindowSystemWideKeybindingContribution),
 );

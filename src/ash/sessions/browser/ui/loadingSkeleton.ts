@@ -7,40 +7,19 @@ export class LoadingSkeleton extends Disposable {
 	readonly element: HTMLElement;
 	private readonly status: HTMLElement;
 
-	constructor(
-		container: HTMLElement,
-		private readonly label: string,
-		layout: 'list' | 'cards' | 'transcript' | 'diff' = 'list',
-		rows = 5,
-	) {
+	constructor(container: HTMLElement, private readonly label: string, layout: 'list' | 'cards' | 'transcript' | 'diff' = 'list', rows = 5) {
 		super();
 		const document = container.ownerDocument;
-		this.element = h(document, 'div', {
-			className: `ash-sessions-loading ${layout}`,
-			properties: { hidden: true },
-		});
+		this.element = h(document, 'div', { className: `ash-sessions-loading ${layout}`, properties: { hidden: true } });
 		this.status = h(document, 'span', { className: 'ash-sessions-loading-status', attributes: { role: 'status' } });
-		const shapes = h(document, 'div', {
-			className: 'ash-sessions-loading-shapes',
-			attributes: { 'aria-hidden': 'true' },
-		});
+		const shapes = h(document, 'div', { className: 'ash-sessions-loading-shapes', attributes: { 'aria-hidden': 'true' } });
 		for (let index = 0; index < rows; index++) {
-			shapes.append(
-				h(
-					document,
-					'div',
-					{ className: 'ash-sessions-loading-row' },
-					h(document, 'span', { className: 'ash-sessions-loading-block ash-sessions-loading-mark' }),
-					h(
-						document,
-						'div',
-						{ className: 'ash-sessions-loading-lines' },
-						h(document, 'span', { className: 'ash-sessions-loading-block' }),
-						h(document, 'span', { className: 'ash-sessions-loading-block' }),
-						h(document, 'span', { className: 'ash-sessions-loading-block' }),
-					),
-				),
-			);
+			shapes.append(h(document, 'div', { className: 'ash-sessions-loading-row' },
+				h(document, 'span', { className: 'ash-sessions-loading-block ash-sessions-loading-mark' }),
+				h(document, 'div', { className: 'ash-sessions-loading-lines' },
+					h(document, 'span', { className: 'ash-sessions-loading-block' }),
+					h(document, 'span', { className: 'ash-sessions-loading-block' }),
+					h(document, 'span', { className: 'ash-sessions-loading-block' }))));
 		}
 		this.element.append(this.status, shapes);
 		container.append(this.element);

@@ -56,11 +56,7 @@ async function createOutputView(resources: DisposableStore, kind: OutputChannelK
 	const input = pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input');
 	assert.ok(input);
 	return {
-		channel,
-		output,
-		pane,
-		editor,
-		services,
+		channel, output, pane, editor, services,
 		filter(text: string): void {
 			input.value = text;
 			input.dispatchEvent(new browserEnvironment.window.Event('input'));
@@ -99,13 +95,11 @@ test('Output channel menu survives channel registration and includes new channel
 	Object.defineProperty(trigger, 'getClientRects', { value: () => [trigger.getBoundingClientRect()] });
 	const prototype = browserEnvironment.window.HTMLElement.prototype;
 	const scrollTo = Object.getOwnPropertyDescriptor(prototype, 'scrollTo');
-	Object.defineProperty(prototype, 'scrollTo', { configurable: true, value() {} });
-	resources.add(
-		toDisposable(() => {
-			if (scrollTo) Object.defineProperty(prototype, 'scrollTo', scrollTo);
-			else Reflect.deleteProperty(prototype, 'scrollTo');
-		}),
-	);
+	Object.defineProperty(prototype, 'scrollTo', { configurable: true, value() { } });
+	resources.add(toDisposable(() => {
+		if (scrollTo) Object.defineProperty(prototype, 'scrollTo', scrollTo);
+		else Reflect.deleteProperty(prototype, 'scrollTo');
+	}));
 	trigger.focus();
 	trigger.click();
 	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
@@ -155,30 +149,21 @@ test('Output keeps nested channel changes guarded until the outer editor operati
 				// This independent service event must still observe the outer guard.
 				resources.add(view.output.createChannel({ id: 'during-render', label: 'During Render' }));
 				observedFilter = input.value;
-			} finally {
-				insideOuterOperation = false;
-			}
+			} finally { insideOuterOperation = false; }
 		}
 		return result;
 	};
-	resources.add(
-		toDisposable(() => {
-			view.editor.setModel = setModel;
-			view.editor.setHiddenAreas = setHiddenAreas;
-		}),
-	);
+	resources.add(toDisposable(() => {
+		view.editor.setModel = setModel;
+		view.editor.setHiddenAreas = setHiddenAreas;
+	}));
 	view.filter('keep');
 	assert.ok(nestedModelChanges > 0, 'The production channel switch nested an editor model operation');
 	assert.equal(observedFilter, 'keep', 'Nested filter input must wait for the outer editor operation');
 	await waitForChannel(view.editor, second);
-	assert.deepEqual(
-		{ visible: await view.visibleLines(), input: input.value, retained: second.getText() },
-		{
-			visible: ['keep second'],
-			input: 'second',
-			retained: 'keep second\n',
-		},
-	);
+	assert.deepEqual({ visible: await view.visibleLines(), input: input.value, retained: second.getText() }, {
+		visible: ['keep second'], input: 'second', retained: 'keep second\n',
+	});
 });
 
 test('Output yields between continuous editor diagnostics and retains every write once', async () => {
@@ -187,9 +172,7 @@ test('Output yields between continuous editor diagnostics and retains every writ
 	const count = 128;
 	let emitted = 0;
 	let firstRender!: () => void;
-	const rendered = new Promise<void>(resolve => {
-		firstRender = resolve;
-	});
+	const rendered = new Promise<void>(resolve => { firstRender = resolve; });
 	const setHiddenAreas = view.editor.setHiddenAreas.bind(view.editor);
 	view.editor.setHiddenAreas = (...args) => {
 		const result = setHiddenAreas(...args);
@@ -199,11 +182,7 @@ test('Output yields between continuous editor diagnostics and retains every writ
 		firstRender();
 		return result;
 	};
-	resources.add(
-		toDisposable(() => {
-			view.editor.setHiddenAreas = setHiddenAreas;
-		}),
-	);
+	resources.add(toDisposable(() => { view.editor.setHiddenAreas = setHiddenAreas; }));
 	view.channel.appendLine({ text: 'seed' });
 	await rendered;
 	assert.equal(emitted, 1, 'The next diagnostic render must not drain on the same stack');
@@ -216,18 +195,9 @@ test('Output yields between continuous editor diagnostics and retains every writ
 	}
 	const expected = ['seed', ...Array.from({ length: count }, (_, index) => `diagnostic ${index}`)];
 	using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
-	assert.deepEqual(
-		{
-			visible: await view.visibleLines(),
-			retained: view.channel.getText(),
-			shared: reference.object.textEditorModel.getValue(),
-		},
-		{
-			visible: expected,
-			retained: expected.join('\n') + '\n',
-			shared: expected.join('\n') + '\n',
-		},
-	);
+	assert.deepEqual({ visible: await view.visibleLines(), retained: view.channel.getText(), shared: reference.object.textEditorModel.getValue() }, {
+		visible: expected, retained: expected.join('\n') + '\n', shared: expected.join('\n') + '\n',
+	});
 });
 
 test('Output disposal cancels a queued diagnostic render and leaves its channel alive', async () => {
@@ -235,9 +205,7 @@ test('Output disposal cancels a queued diagnostic render and leaves its channel 
 	const view = await createOutputView(resources);
 	let renders = 0;
 	let firstRender!: () => void;
-	const rendered = new Promise<void>(resolve => {
-		firstRender = resolve;
-	});
+	const rendered = new Promise<void>(resolve => { firstRender = resolve; });
 	const setHiddenAreas = view.editor.setHiddenAreas.bind(view.editor);
 	view.editor.setHiddenAreas = (...args) => {
 		const result = setHiddenAreas(...args);
@@ -245,29 +213,16 @@ test('Output disposal cancels a queued diagnostic render and leaves its channel 
 		firstRender();
 		return result;
 	};
-	resources.add(
-		toDisposable(() => {
-			view.editor.setHiddenAreas = setHiddenAreas;
-		}),
-	);
+	resources.add(toDisposable(() => { view.editor.setHiddenAreas = setHiddenAreas; }));
 	view.channel.appendLine({ text: 'seed' });
 	await rendered;
 	assert.equal(renders, 1);
 	view.pane.dispose();
 	view.channel.appendLine({ text: 'after view disposal' });
 	await new Promise<void>(resolve => setTimeout(resolve, 10));
-	assert.deepEqual(
-		{
-			renders,
-			retained: view.channel.getText(),
-			editors: view.services.get(ICodeEditorService).listCodeEditors().length,
-		},
-		{
-			renders: 1,
-			retained: 'seed\nqueued diagnostic\nafter view disposal\n',
-			editors: 0,
-		},
-	);
+	assert.deepEqual({ renders, retained: view.channel.getText(), editors: view.services.get(ICodeEditorService).listCodeEditors().length }, {
+		renders: 1, retained: 'seed\nqueued diagnostic\nafter view disposal\n', editors: 0,
+	});
 });
 
 test('ordinary Output filters individual lines without changing the shared text model', async () => {
@@ -277,18 +232,9 @@ test('ordinary Output filters individual lines without changing the shared text 
 	view.channel.append({ text });
 	using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
 	view.filter('keep,!banned');
-	assert.deepEqual(
-		{
-			visible: await view.visibleLines(),
-			retained: view.channel.getText(),
-			shared: reference.object.textEditorModel.getValue(),
-		},
-		{
-			visible: ['keep first', 'last keep'],
-			retained: text,
-			shared: text,
-		},
-	);
+	assert.deepEqual({ visible: await view.visibleLines(), retained: view.channel.getText(), shared: reference.object.textEditorModel.getValue() }, {
+		visible: ['keep first', 'last keep'], retained: text, shared: text,
+	});
 	view.filter('!banned');
 	assert.deepEqual(await view.visibleLines(), ['keep first', 'drop', 'last keep']);
 	view.filter('absent');
@@ -303,16 +249,10 @@ test('raw saved backend logs filter model lines independently of filesystem read
 	using resources = new DisposableStore();
 	const view = await createOutputView(resources);
 	const text = 'keep first\ndrop middle\nkeep last\n';
-	const channel = resources.add(
-		openLogOutput(
-			view.output,
-			{
-				list: async () => [],
-				read: async () => ({ text, gap: false, cursor: { generation: 'raw-file', offset: text.length } }),
-			},
-			{ id: 'saved/backend', source: 'app-server', format: 'text', live: false, currentWindow: false },
-		),
-	);
+	const channel = resources.add(openLogOutput(view.output, {
+		list: async () => [],
+		read: async () => ({ text, gap: false, cursor: { generation: 'raw-file', offset: text.length } }),
+	}, { id: 'saved/backend', source: 'app-server', format: 'text', live: false, currentWindow: false }));
 	view.output.selectChannel(channel.id);
 	await waitForChannel(view.editor, channel);
 	view.filter('keep');
@@ -368,28 +308,13 @@ for (const restored of [false, true]) {
 	test(`Output category menu applies explicit choices to its channel and retains other legacy choices (${restored ? 'restored' : 'fresh'})`, async () => {
 		using resources = new DisposableStore();
 		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-		const storage = resources.add(
-			new BrowserStorageService({
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'channel-categories',
-				backend: browser.window.localStorage,
-				flushInterval: 0,
-			}),
-		);
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'channel-categories', backend: browser.window.localStorage, flushInterval: 0 }));
 		resources.add(toDisposable(() => browser.window.close()));
-		const saved = JSON.stringify({
-			syntaxVersion: 2,
-			text: '',
-			hiddenSeverities: [],
-			hiddenCategories: ['lifecycle', 'build'],
-		});
+		const saved = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'build'] });
 		if (restored) storage.store('output.filterState', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const view = await createOutputView(resources, 'log', storage);
 		const second = resources.add(view.output.createChannel({ id: 'second', label: 'Second', kind: 'log' }));
-		for (const [channel, label] of [
-			[view.channel, 'first'],
-			[second, 'second'],
-		] as const) {
+		for (const [channel, label] of [[view.channel, 'first'], [second, 'second']] as const) {
 			channel.appendLine({ text: `${label} lifecycle`, category: 'lifecycle' });
 			channel.appendLine({ text: `${label} build`, category: 'build' });
 			channel.appendLine({ text: `${label} other` });
@@ -467,14 +392,7 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 	for (const action of ['input', 'escape', 'reset']) {
 		using resources = new DisposableStore();
 		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-		const storage = resources.add(
-			new BrowserStorageService({
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'restored-output',
-				backend: browser.window.localStorage,
-				flushInterval: 0,
-			}),
-		);
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'restored-output', backend: browser.window.localStorage, flushInterval: 0 }));
 		resources.add(toDisposable(() => browser.window.close()));
 		storage.store('output.filterState', JSON.stringify({ text: 'keep !banned', hiddenSeverities: [], hiddenCategories: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const view = await createOutputView(resources, 'output', storage);
@@ -486,13 +404,9 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 		view.output.filters.setSeverityVisible('trace', false);
 		assert.deepEqual(await view.visibleLines(), ['keep one']);
 		assert.match(input.title, /Saved filter restored/);
-		if (action === 'input') {
-			view.filter('keep !banned');
-		} else if (action === 'escape') {
-			input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		} else {
-			view.output.filters.reset();
-		}
+		if (action === 'input') { view.filter('keep !banned'); }
+		else if (action === 'escape') { input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
+		else { view.output.filters.reset(); }
 		assert.deepEqual(await view.visibleLines(), action === 'input' ? [] : ['keep one', 'drop', 'keep banned']);
 		assert.equal(input.hasAttribute('title'), false);
 		assert.equal(input.hasAttribute('aria-description'), false);
@@ -503,14 +417,7 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 test('Output explains unsupported saved queries without replacing their storage', async () => {
 	using resources = new DisposableStore();
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-	const storage = resources.add(
-		new BrowserStorageService({
-			ownerWindow: browser.window as unknown as Window,
-			workspaceId: 'future-output',
-			backend: browser.window.localStorage,
-			flushInterval: 0,
-		}),
-	);
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'future-output', backend: browser.window.localStorage, flushInterval: 0 }));
 	resources.add(toDisposable(() => browser.window.close()));
 	const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', future: true });
 	storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -537,38 +444,19 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 			const rendered = await view.visibleLines();
 			const model = reference.object.textEditorModel;
 			const areas = view.editor._getViewModel()!.getHiddenAreas();
-			const hiddenLines = model
-				.getLinesContent()
-				.flatMap((line, index) => (line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber) ? [index + 1] : []));
-			assert.deepEqual(
-				{
-					visible: rendered,
-					hidden: hiddenLines,
-					retained: view.channel.getText(),
-					shared: model.getValue().replaceAll('\r\n', '\n'),
-				},
-				{
-					visible,
-					hidden,
-					retained: raw,
-					shared: modelText,
-				},
-			);
+			const hiddenLines = model.getLinesContent().flatMap((line, index) => line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber) ? [index + 1] : []);
+			assert.deepEqual({ visible: rendered, hidden: hiddenLines, retained: view.channel.getText(), shared: model.getValue().replaceAll('\r\n', '\n') }, {
+				visible, hidden, retained: raw, shared: modelText,
+			});
 		};
 		await append('keep first\r', ['keep first'], [], 'keep first\n');
-		if (emptyChunks) {
-			await append('', ['keep first'], [], 'keep first\n');
-		}
+		if (emptyChunks) { await append('', ['keep first'], [], 'keep first\n'); }
 		await append('\n', ['keep first'], [], 'keep first\n');
 		await append('drop\r', ['keep first'], [2], 'keep first\ndrop\n');
-		if (emptyChunks) {
-			await append('', ['keep first'], [2], 'keep first\ndrop\n');
-		}
+		if (emptyChunks) { await append('', ['keep first'], [2], 'keep first\ndrop\n'); }
 		await append('\n', ['keep first'], [2], 'keep first\ndrop\n');
 		await append('kee', ['keep first'], [2, 3], 'keep first\ndrop\nkee');
-		if (emptyChunks) {
-			await append('', ['keep first'], [2, 3], 'keep first\ndrop\nkee');
-		}
+		if (emptyChunks) { await append('', ['keep first'], [2, 3], 'keep first\ndrop\nkee'); }
 		await append('p second', ['keep first', 'keep second'], [2], 'keep first\ndrop\nkeep second');
 		view.filter('keep,!first');
 		assert.deepEqual(await view.visibleLines(), ['keep second']);
@@ -581,14 +469,7 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 	test(`Output updates the accessible future-schema notice after no-op input or reset (${action})`, async () => {
 		using resources = new DisposableStore();
 		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-		const storage = resources.add(
-			new BrowserStorageService({
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'later-future-output',
-				backend: browser.window.localStorage,
-				flushInterval: 0,
-			}),
-		);
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'later-future-output', backend: browser.window.localStorage, flushInterval: 0 }));
 		resources.add(toDisposable(() => browser.window.close()));
 		const view = await createOutputView(resources, 'output', storage);
 		view.channel.append({ text: 'keep one\ndrop' });
@@ -596,11 +477,8 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		view.filter(query);
 		const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', future: { untouched: true } });
 		storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		if (action === 'empty-reset') {
-			view.output.filters.reset();
-		} else {
-			view.filter(query);
-		}
+		if (action === 'empty-reset') { view.output.filters.reset(); }
+		else { view.filter(query); }
 		const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
 		assert.match(input.title, /Changes in this window are not saved/);
 		assert.equal(input.getAttribute('aria-description'), input.title);
@@ -617,23 +495,9 @@ test('Output pauses on an explicit cursor move to a visible older line without s
 	view.editor.setPosition({ lineNumber: 3, column: 1 });
 	const before = view.editor.getScrollTop();
 	pressOutputKey(view, 'ArrowUp');
-	assert.deepEqual(
-		{
-			line: view.editor.getPosition()!.lineNumber,
-			scroll: view.editor.getScrollTop(),
-			following: followsOutput(view),
-		},
-		{ line: 2, scroll: before, following: false },
-	);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, scroll: view.editor.getScrollTop(), following: followsOutput(view) }, { line: 2, scroll: before, following: false });
 	pressOutputKey(view, 'ArrowDown');
-	assert.deepEqual(
-		{
-			line: view.editor.getPosition()!.lineNumber,
-			scroll: view.editor.getScrollTop(),
-			following: followsOutput(view),
-		},
-		{ line: 3, scroll: before, following: true },
-	);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, scroll: view.editor.getScrollTop(), following: followsOutput(view) }, { line: 3, scroll: before, following: true });
 });
 
 function autoScrollButton(view: OutputViewTestEnvironment): HTMLButtonElement {
@@ -659,24 +523,10 @@ test('Output smart scrolling uses the primary selection end and includes the fin
 	view.channel.append({ text: 'first\nsecond\n' });
 	view.editor.setSelection(new Selection(3, 1, 1, 1));
 	pressOutputKey(view, 'ArrowDown', { shiftKey: true });
-	assert.deepEqual(
-		{
-			anchor: view.editor.getSelection()!.selectionStartLineNumber,
-			caret: view.editor.getPosition()!.lineNumber,
-			following: followsOutput(view),
-		},
-		{ anchor: 3, caret: 2, following: false },
-	);
+	assert.deepEqual({ anchor: view.editor.getSelection()!.selectionStartLineNumber, caret: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { anchor: 3, caret: 2, following: false });
 	view.editor.setSelection(new Selection(1, 1, 2, 1));
 	pressOutputKey(view, 'ArrowDown', { shiftKey: true });
-	assert.deepEqual(
-		{
-			anchor: view.editor.getSelection()!.selectionStartLineNumber,
-			caret: view.editor.getPosition()!.lineNumber,
-			following: followsOutput(view),
-		},
-		{ anchor: 1, caret: 3, following: true },
-	);
+	assert.deepEqual({ anchor: view.editor.getSelection()!.selectionStartLineNumber, caret: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { anchor: 1, caret: 3, following: true });
 	assert.equal(view.editor.getModel()!.getLineContent(3), '');
 });
 
@@ -687,22 +537,10 @@ test('Output smart scrolling follows the primary cursor independently of seconda
 	view.channel.append({ text: 'first\nsecond\nlast' });
 	view.editor.setSelections([new Selection(2, 1, 2, 1), new Selection(3, 1, 3, 1)]);
 	pressOutputKey(view, 'ArrowUp');
-	assert.deepEqual(
-		{
-			lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber),
-			following: followsOutput(view),
-		},
-		{ lines: [1, 2], following: false },
-	);
+	assert.deepEqual({ lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber), following: followsOutput(view) }, { lines: [1, 2], following: false });
 	view.editor.setSelections([new Selection(3, 1, 3, 1), new Selection(1, 1, 1, 1)]);
 	pressOutputKey(view, 'End');
-	assert.deepEqual(
-		{
-			lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber),
-			following: followsOutput(view),
-		},
-		{ lines: [3, 1], following: true },
-	);
+	assert.deepEqual({ lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber), following: followsOutput(view) }, { lines: [3, 1], following: true });
 });
 
 test('Output programmatic cursor restoration and model updates preserve the current scrolling choice', async () => {
@@ -720,10 +558,7 @@ test('Output programmatic cursor restoration and model updates preserve the curr
 	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 3, following: false });
 	view.channel.replace({ text: 'replacement\nlast' });
 	view.channel.append({ text: '\nnext' });
-	assert.deepEqual(
-		{ following: followsOutput(view), text: view.editor.getModel()!.getValue(), retained: view.channel.getText() },
-		{ following: false, text: 'replacement\nlast\nnext', retained: 'replacement\nlast\nnext' },
-	);
+	assert.deepEqual({ following: followsOutput(view), text: view.editor.getModel()!.getValue(), retained: view.channel.getText() }, { following: false, text: 'replacement\nlast\nnext', retained: 'replacement\nlast\nnext' });
 });
 
 test('Output reads live smart scrolling configuration on the next explicit cursor gesture', async () => {
@@ -765,13 +600,11 @@ test('Output retains manual scroll pausing and resuming when smart scrolling is 
 	assert.equal(followsOutput(view), true);
 });
 
+
 test('Output smart scrolling is editable in the existing Settings interaction group', () => {
 	const defaults = new DefaultSettings();
 	const layout = createSettingsLayout(defaults.all);
-	const setting = layout
-		.find(category => category.id === 'general')
-		?.groups.find(group => group.id === 'interaction')
-		?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
+	const setting = layout.find(category => category.id === 'general')?.groups.find(group => group.id === 'interaction')?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
 	assert.ok(setting);
 	assert.deepEqual({ type: setting.valueType, defaultValue: setting.configuration.defaultValue, title: setting.title }, { type: 'boolean', defaultValue: true, title: 'Output smart scrolling' });
 });

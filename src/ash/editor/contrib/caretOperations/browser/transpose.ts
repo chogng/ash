@@ -40,7 +40,9 @@ class TransposeLettersAction extends EditorAction {
 				continue;
 			}
 
-			const endPosition = column === lastColumn ? selection.getPosition() : MoveOperations.rightPosition(model, selection.positionLineNumber, selection.positionColumn);
+			const endPosition = column === lastColumn
+				? selection.getPosition()
+				: MoveOperations.rightPosition(model, selection.positionLineNumber, selection.positionColumn);
 			const middlePosition = MoveOperations.leftPosition(model, endPosition);
 			const beginPosition = MoveOperations.leftPosition(model, middlePosition);
 			const leftChar = model.getValueInRange(Range.fromPositions(beginPosition, middlePosition));

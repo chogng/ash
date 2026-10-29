@@ -16,94 +16,51 @@ import { TimelinePane, TimelineFocusedContext } from './timelinePane.js';
 
 /** Registers after Explorer exists; the view remains available in an empty workspace. */
 export function registerTimelineView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [
-		{
-			id: TimelinePaneId,
-			title: 'Timeline',
-			localizationKey: { bundle: 'ash.views', key: 'timeline' },
-			order: 4,
-			collapsed: true,
-			canToggleVisibility: true,
-			canMoveView: true,
-			containerIcon: Lxicon.history,
-			when: TimelineHasProviderContext.isEqualTo(true),
-			ctorDescriptor: new SyncDescriptor(TimelinePane),
-		},
-	]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [{
+		id: TimelinePaneId, title: 'Timeline', localizationKey: { bundle: 'ash.views', key: 'timeline' },
+		order: 4, collapsed: true, canToggleVisibility: true, canMoveView: true, containerIcon: Lxicon.history, when: TimelineHasProviderContext.isEqualTo(true),
+		ctorDescriptor: new SyncDescriptor(TimelinePane),
+	}]);
 }
 
-registerAction2(
-	class FocusTimelineAction extends Action2 {
-		constructor() {
-			super({ id: 'timeline.focus', title: localize2('timeline.focus', 'Focus Timeline View'), f1: true });
-		}
-		public override run(accessor: ServicesAccessor): Promise<boolean> {
-			return accessor.get(IViewsService).focusView(TimelinePaneId);
-		}
-	},
-);
+registerAction2(class FocusTimelineAction extends Action2 {
+	constructor() { super({ id: 'timeline.focus', title: localize2('timeline.focus', 'Focus Timeline View'), f1: true }); }
+	public override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView(TimelinePaneId); }
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.Timeline,
-	defaultValue: true,
-	scope: ConfigurationScope.APPLICATION,
+	key: AccessibilityVerbositySettingId.Timeline, defaultValue: true, scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') throw new TypeError(localize('timeline.verbosityInvalid', 'Timeline accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('timeline.verbosityTitle', 'Timeline accessibility help');
-		},
-		get description() {
-			return localize('timeline.verbosityDescription', 'Announce how to open accessibility help when timeline receives focus.');
-		},
+		get title() { return localize('timeline.verbosityTitle', 'Timeline accessibility help'); },
+		get description() { return localize('timeline.verbosityDescription', 'Announce how to open accessibility help when timeline receives focus.'); },
 	},
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
-		type,
-		priority: 100,
-		name: `timeline${type}`,
-		when: TimelineFocusedContext.isEqualTo(true),
+		type, priority: 100, name: `timeline${type}`, when: TimelineFocusedContext.isEqualTo(true),
 		getProvider: accessor => {
 			const view = accessor.get(IViewsService).getActiveViewWithId(TimelinePaneId);
 			if (!(view instanceof TimelinePane)) return undefined;
 			const focused = view.element.ownerDocument.activeElement;
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.Timeline,
-				{ type },
-				() =>
-					type === AccessibleViewType.Help
-						? localize(
-								'timeline.help',
-								'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry. Press Alt+Down Arrow on a Git commit to focus its details and actions; Escape returns to the timeline. More entries load automatically when you scroll to the end. If loading fails, press Enter on Retry Loading to try again. Git entries compare a commit with its parent. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.',
-							)
-						: view.getAccessibleContent(),
-				() => {
-					if (focused instanceof HTMLElement && focused.isConnected) focused.focus();
-					else view.focus();
-				},
-				AccessibilityVerbositySettingId.Timeline,
-			);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Timeline, { type },
+				() => type === AccessibleViewType.Help ? localize('timeline.help', 'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry. Press Alt+Down Arrow on a Git commit to focus its details and actions; Escape returns to the timeline. More entries load automatically when you scroll to the end. If loading fails, press Enter on Retry Loading to try again. Git entries compare a commit with its parent. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.') : view.getAccessibleContent(),
+				() => { if (focused instanceof HTMLElement && focused.isConnected) focused.focus(); else view.focus(); },
+				AccessibilityVerbositySettingId.Timeline);
 		},
 	});
 }
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<number | null>({
-	key: 'timeline.pageSize',
-	defaultValue: 50,
-	scope: ConfigurationScope.WINDOW,
+	key: 'timeline.pageSize', defaultValue: 50, scope: ConfigurationScope.WINDOW,
 	parse(value: unknown): number | null {
-		if (value !== null && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1))
-			throw new TypeError(localize('timeline.pageSizeInvalid', 'Timeline page size must be a positive integer or null.'));
+		if (value !== null && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)) throw new TypeError(localize('timeline.pageSizeInvalid', 'Timeline page size must be a positive integer or null.'));
 		return value as number | null;
 	},
-	schema: {
-		type: ['integer', 'null'],
-		minimum: 1,
-		description: localize('timeline.pageSizeDescription', 'Number of entries per timeline page. Set to null to fit the view height.'),
-	},
+	schema: { type: ['integer', 'null'], minimum: 1, description: localize('timeline.pageSizeDescription', 'Number of entries per timeline page. Set to null to fit the view height.') },
 });

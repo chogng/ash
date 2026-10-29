@@ -25,7 +25,11 @@ export class MainThreadExtensionBackend extends Disposable {
 	private editorFoldersChangedAfter = 0;
 	private discardedThrough = 0;
 	private readonly editorListeners = this._register(new DisposableMap<ICodeEditor, DisposableStore>());
-	private readonly events: { sequence: number; event: JsonValue; method: string }[] = [];
+	private readonly events: {
+		sequence: number;
+		event: JsonValue;
+		method: string;
+	}[] = [];
 	constructor(
 		@IExtensionApi
 		private readonly extensions: IExtensionApi,
@@ -40,15 +44,10 @@ export class MainThreadExtensionBackend extends Disposable {
 		@IConfigurationService configuration: IConfigurationService,
 		@IProgressService private readonly progress: IProgressService,
 		@IEditorPart private readonly editors: IEditorPart,
-		@ICodeEditorService codeEditors: ICodeEditorService,
-	) {
+		@ICodeEditorService codeEditors: ICodeEditorService) {
 		super();
 		const listener = events.subscribe(event => {
-			this.events.push({
-				sequence: ++this.sequence,
-				event: normalizeExtensionHostPayload(event),
-				method: event.method,
-			});
+			this.events.push({ sequence: ++this.sequence, event: normalizeExtensionHostPayload(event), method: event.method });
 			if (this.events.length > 256) {
 				this.discardedThrough = this.events.shift()!.sequence;
 			}
@@ -65,29 +64,26 @@ export class MainThreadExtensionBackend extends Disposable {
 		this._register(configuration.onDidChangeConfiguration(invalidateDiscovery));
 		// Cursor and text changes wake blame without invalidating repository discovery.
 		// Coalesce typing/selection bursts; never serialize a document merely to signal it.
-		const editorChanged = this._register(
-			new RunOnceScheduler(() => {
-				this.editorChangedAfter = ++this.sequence;
-				this.changed.fire(undefined);
-			}, 75),
-		);
-		const editorFolders = () => new Set(editors.groups.flatMap(group => group.inputs.map(input => dirname(input.resource).with({ query: '', fragment: '' }).toString())));
+		const editorChanged = this._register(new RunOnceScheduler(() => {
+			this.editorChangedAfter = ++this.sequence;
+			this.changed.fire(undefined);
+		}, 75));
+		const editorFolders = () => new Set(editors.groups.flatMap(group => group.inputs.map(input =>
+			dirname(input.resource).with({ query: '', fragment: '' }).toString())));
 		let previousFolders = editorFolders();
-		this._register(
-			editors.onDidChangeEditors(event => {
-				if (event.kind === 'groupChanged' && event.event.kind === 'editorStateChanged') return;
-				const folders = editorFolders();
-				// Separate editor discovery inputs from workspace/configuration resets.
-				// Providers can skip discovery for files inside repositories they already own.
-				if (folders.size !== previousFolders.size || [...folders].some(folder => !previousFolders.has(folder))) {
-					previousFolders = folders;
-					this.editorFoldersChangedAfter = ++this.sequence;
-					this.changed.fire(undefined);
-				} else {
-					editorChanged.schedule();
-				}
-			}),
-		);
+		this._register(editors.onDidChangeEditors(event => {
+			if (event.kind === 'groupChanged' && event.event.kind === 'editorStateChanged') return;
+			const folders = editorFolders();
+			// Separate editor discovery inputs from workspace/configuration resets.
+			// Providers can skip discovery for files inside repositories they already own.
+			if (folders.size !== previousFolders.size || [...folders].some(folder => !previousFolders.has(folder))) {
+				previousFolders = folders;
+				this.editorFoldersChangedAfter = ++this.sequence;
+				this.changed.fire(undefined);
+			} else {
+				editorChanged.schedule();
+			}
+		}));
 		const trackEditor = (editor: ICodeEditor) => {
 			const listeners = new DisposableStore();
 			this.editorListeners.set(editor, listeners);
@@ -103,16 +99,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		this._register(codeEditors.onCodeEditorRemove(editor => this.editorListeners.deleteAndDispose(editor)));
 		this._register(toDisposable(() => this.stopped.abort()));
 	}
-	public async handle(
-		source: ExtensionClientSource,
-		capability: string,
-		method: string | undefined,
-		params: JsonValue,
-		after: number,
-		signal: AbortSignal,
-		progressOptions?: Pick<IProgressOptions, 'title' | 'cancellable'>,
-		waitForChange = false,
-	): Promise<JsonValue> {
+	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal, progressOptions?: Pick<IProgressOptions, 'title' | 'cancellable'>, waitForChange = false): Promise<JsonValue> {
 		const catalog = await this.extensions.list('cached');
 		signal.throwIfAborted();
 		const descriptor = catalog.extensions.find(extension => extension.id === source.extensionId);
@@ -130,9 +117,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			const state = await this.connection.getConnectionState();
 			signal.throwIfAborted();
 			return normalizeExtensionHostPayload({
-				sequence: this.sequence,
-				connection: state,
-				generation: this.connection.connectionGeneration,
+				sequence: this.sequence, connection: state, generation: this.connection.connectionGeneration,
 				reset: after < this.resetAfter || after < this.discardedThrough,
 				editorFoldersChanged: after < this.editorFoldersChangedAfter,
 				events: this.events.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method)).map(entry => entry.event),
@@ -151,8 +136,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		}
 		const operationId = (params as Record<string, JsonValue>).operationId;
 		const cancellable = typeof route.cancellationRoute === 'string' && typeof operationId === 'string';
-		if (progressOptions && (typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || (progressOptions.cancellable && !cancellable)))
-			throw new TypeError('Invalid backend progress contract');
+		if (progressOptions && (typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || progressOptions.cancellable && !cancellable)) throw new TypeError('Invalid backend progress contract');
 		let cancellation: Promise<unknown> | undefined;
 		const cancel = (): void => {
 			if (!cancellable || cancellation) return;
@@ -170,12 +154,7 @@ export class MainThreadExtensionBackend extends Disposable {
 				signal.throwIfAborted();
 			} catch (error) {
 				signal.throwIfAborted();
-				return {
-					backendError: {
-						name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable',
-						message: error instanceof Error ? error.message : String(error),
-					},
-				};
+				return { backendError: { name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable', message: error instanceof Error ? error.message : String(error) } };
 			} finally {
 				signal.removeEventListener('abort', cancel);
 				await cancellation?.catch(() => undefined);
@@ -188,41 +167,25 @@ export class MainThreadExtensionBackend extends Disposable {
 			}
 			return Object.fromEntries(route.resultFields.map((field: string) => [field, (result as Record<string, JsonValue>)[field] ?? null]));
 		};
-		return progressOptions
-			? this.progress.withProgress(
-					{
-						location: ProgressLocation.Notification,
-						title: progressOptions.title,
-						cancellable: progressOptions.cancellable,
-					},
-					execute,
-					cancel,
-				)
-			: execute();
+		return progressOptions ? this.progress.withProgress({
+			location: ProgressLocation.Notification,
+			title: progressOptions.title,
+			cancellable: progressOptions.cancellable,
+		}, execute, cancel) : execute();
 	}
 
 	private async waitForStateChange(after: number, notifications: readonly string[], signal: AbortSignal): Promise<void> {
 		let finish!: () => void;
-		const waiting = new Promise<void>(resolve => {
-			finish = resolve;
-		});
-		const listener = this.changed.event(method => {
-			if (method === undefined || notifications.includes(method)) finish();
-		});
+		const waiting = new Promise<void>(resolve => { finish = resolve; });
+		const listener = this.changed.event(method => { if (method === undefined || notifications.includes(method)) finish(); });
 		// Renew before the SDK's 30-second request deadline. Actual backend and editor
 		// changes wake immediately; idle windows no longer run a discovery/blame tick.
 		const timer = setTimeout(finish, 20_000);
 		try {
 			// Subscribe before checking the retained history so no notification can
 			// fall between the caller's last sequence and the start of its wait.
-			if (
-				after < this.resetAfter ||
-				after < this.editorChangedAfter ||
-				after < this.editorFoldersChangedAfter ||
-				after < this.discardedThrough ||
-				this.events.some(entry => entry.sequence > after && notifications.includes(entry.method))
-			)
-				return;
+			if (after < this.resetAfter || after < this.editorChangedAfter || after < this.editorFoldersChangedAfter || after < this.discardedThrough
+				|| this.events.some(entry => entry.sequence > after && notifications.includes(entry.method))) return;
 			await raceCancellationError(waiting, AbortSignal.any([signal, this.stopped.signal]));
 		} finally {
 			clearTimeout(timer);

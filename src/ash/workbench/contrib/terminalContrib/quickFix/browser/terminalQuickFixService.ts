@@ -7,7 +7,7 @@ import type { ITerminalQuickFix, ITerminalQuickFixProvider, ITerminalQuickFixSer
 
 /** Selectors are admitted with the extension and evaluated by its original runtime. */
 export class TerminalQuickFixService extends Disposable implements ITerminalQuickFixService {
-	private readonly providers = new Map<string, { readonly provider: ITerminalQuickFixProvider; readonly controller: AbortController }>();
+	private readonly providers = new Map<string, { readonly provider: ITerminalQuickFixProvider; readonly controller: AbortController; }>();
 	registerQuickFixProvider(id: string, provider: ITerminalQuickFixProvider): IDisposable {
 		if (this.isDisposed) throw new CancellationError();
 		if (this.providers.has(id)) throw new Error('Terminal quick fix provider is already registered');
@@ -24,13 +24,11 @@ export class TerminalQuickFixService extends Disposable implements ITerminalQuic
 		if (signal.aborted) return [];
 		const entries = [...this.providers.entries()];
 		// An async callback isolates both synchronous throws and rejected provider promises.
-		const replies = await Promise.allSettled(
-			entries.map(async ([id, entry]) => {
-				if (signal.aborted || this.providers.get(id) !== entry) return [];
-				const cancellation = AbortSignal.any([signal, entry.controller.signal]);
-				return raceCancellationError(entry.provider.provideTerminalQuickFixes(instance, command, cancellation), cancellation);
-			}),
-		);
+		const replies = await Promise.allSettled(entries.map(async ([id, entry]) => {
+			if (signal.aborted || this.providers.get(id) !== entry) return [];
+			const cancellation = AbortSignal.any([signal, entry.controller.signal]);
+			return raceCancellationError(entry.provider.provideTerminalQuickFixes(instance, command, cancellation), cancellation);
+		}));
 		if (signal.aborted) return [];
 		return replies.flatMap((reply, index) => {
 			const [id, entry] = entries[index]!;

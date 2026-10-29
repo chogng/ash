@@ -14,13 +14,9 @@ import { projectStanzaSemanticTokenLine } from '../../../../viewParts/viewLines/
 /** Resolved original-model lines; token styling remains owned by the caller's theme pipeline. */
 export class LineSource {
 	constructor(
-		public readonly lines: readonly {
-			lineNumber: number;
-			content: string;
-			tokens: readonly ResolvedSemanticToken[];
-		}[],
+		public readonly lines: readonly { lineNumber: number; content: string; tokens: readonly ResolvedSemanticToken[]; }[],
 		public readonly projection?: EditorVisualLineProjection,
-	) {}
+	) { }
 }
 
 export class RenderOptions {
@@ -28,22 +24,12 @@ export class RenderOptions {
 		return new RenderOptions(editor.getOption(EditorOption.fontInfo), editor.getModel()!.getOptions().tabSize);
 	}
 
-	private constructor(
-		public readonly fontInfo: FontInfo,
-		public readonly tabSize: number,
-	) {}
+	private constructor(public readonly fontInfo: FontInfo, public readonly tabSize: number) { }
 }
 
 /** Retains source-column mappings for copying text from the rendered deletion. */
 export class RenderLinesResult {
-	constructor(
-		private readonly lines: readonly {
-			domNode: HTMLElement;
-			mapping: CharacterMapping;
-			lineNumber: number;
-			startColumn: number;
-		}[],
-	) {}
+	constructor(private readonly lines: readonly { domNode: HTMLElement; mapping: CharacterMapping; lineNumber: number; startColumn: number; }[]) { }
 
 	public getModelPositionAt(domNode: HTMLElement, offset: number): Position | undefined {
 		if (!Number.isSafeInteger(offset) || offset < 0) {
@@ -64,7 +50,7 @@ export class RenderLinesResult {
 				if (!part) {
 					return new Position(line.lineNumber, line.startColumn + 1);
 				}
-				return this.getModelPositionAt(part as HTMLElement, last ? (part.textContent?.length ?? 0) : 0);
+				return this.getModelPositionAt(part as HTMLElement, last ? part.textContent?.length ?? 0 : 0);
 			}
 			const partIndex = Array.prototype.indexOf.call(line.domNode.children, domNode) as number;
 			const length = domNode.textContent?.length ?? 0;
@@ -80,30 +66,25 @@ export function renderLines(source: LineSource, options: RenderOptions, decorati
 	// Use the original editor's breaks so token backgrounds can occupy a full
 	// display row without changing wrapping or source columns used by Copy.
 	const rows = source.lines.flatMap((line, index) => {
-		const segments: { startColumn: number; endColumn: number; indent: number }[] = [];
+		const segments: { startColumn: number; endColumn: number; indent: number; }[] = [];
 		const projection = source.projection;
 		if (projection) {
 			for (let row = projection.firstVisualLineIndex(line.lineNumber - 1); row < projection.visualLineCount; row++) {
 				const visualLine = projection.lineAt(row)!;
 				if (visualLine.logicalLineIndex !== line.lineNumber - 1) break;
-				segments.push({
-					startColumn: visualLine.startColumn,
-					endColumn: visualLine.endColumn,
-					indent: visualLine.wrappedTextIndentWidth ?? 0,
-				});
+				segments.push({ startColumn: visualLine.startColumn, endColumn: visualLine.endColumn, indent: visualLine.wrappedTextIndentWidth ?? 0 });
 			}
 		} else {
 			segments.push({ startColumn: 0, endColumn: line.content.length, indent: 0 });
 		}
 		return segments.map(segment => ({ line, lineNumber: index + 1, ...segment }));
 	});
-	const nodes =
-		rows.length === 1
-			? [domNode]
-			: rows.map((_, index) => {
-					const existing = domNode.children[index];
-					return existing?.classList.contains('ash-diff-original-row') ? (existing as HTMLElement) : h(domNode.ownerDocument, 'div', { className: 'ash-diff-original-row' });
-				});
+	const nodes = rows.length === 1 ? [domNode] : rows.map((_, index) => {
+		const existing = domNode.children[index];
+		return existing?.classList.contains('ash-diff-original-row')
+			? existing as HTMLElement
+			: h(domNode.ownerDocument, 'div', { className: 'ash-diff-original-row' });
+	});
 	if (rows.length !== 1 && (nodes.length !== domNode.children.length || nodes.some((node, index) => node !== domNode.children[index]))) {
 		domNode.replaceChildren(...nodes);
 	}
@@ -122,12 +103,7 @@ export function renderLines(source: LineSource, options: RenderOptions, decorati
 			const end = Math.min(endColumn, decoration.range.endLineNumber === line.lineNumber ? decoration.range.endColumn - 1 : line.content.length);
 			return end >= start ? [new InlineDecoration(new Range(1, start - startColumn + 1, 1, end - startColumn + 1), decoration.inlineClassName, decoration.type)] : [];
 		});
-		return {
-			domNode: node,
-			lineNumber,
-			startColumn,
-			mapping: projectStanzaSemanticTokenLine(node, line.content.slice(startColumn, endColumn), tokens, options.tabSize, rowDecorations),
-		};
+		return { domNode: node, lineNumber, startColumn, mapping: projectStanzaSemanticTokenLine(node, line.content.slice(startColumn, endColumn), tokens, options.tabSize, rowDecorations) };
 	});
 	return new RenderLinesResult(lines);
 }

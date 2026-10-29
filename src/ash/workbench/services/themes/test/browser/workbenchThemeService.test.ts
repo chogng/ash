@@ -43,7 +43,7 @@ import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 class ControlledThemeSettings extends TestConfigurationFiles {
-	public nextWrite: { readonly started: DeferredPromise<void>; readonly release: DeferredPromise<void>; readonly error?: Error } | undefined;
+	public nextWrite: { readonly started: DeferredPromise<void>; readonly release: DeferredPromise<void>; readonly error?: Error; } | undefined;
 	public writes = 0;
 
 	public override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): Promise<IFileWriteResult> {
@@ -64,12 +64,10 @@ class ThemeChanges extends Disposable {
 	public readonly browser = new JSDOM('<!doctype html><body></body>');
 	public readonly files = this._register(new ControlledThemeSettings());
 	public readonly configuration = this._register(new WorkbenchConfigurationService({ files: this.files }));
-	public readonly events: { name: string; data: unknown }[] = [];
+	public readonly events: { name: string; data: unknown; }[] = [];
 	public readonly telemetry: ITelemetryService = Object.assign(Object.create(NullTelemetryService), {
 		telemetryLevel: TelemetryLevel.USAGE,
-		publicLog2: (name: string, data: unknown): void => {
-			this.events.push({ name, data });
-		},
+		publicLog2: (name: string, data: unknown): void => { this.events.push({ name, data }); },
 	});
 	public readonly hostChanged = this._register(new Emitter<void>());
 	public readonly host = { dark: false, highContrast: false, onDidChangeColorScheme: this.hostChanged.event };
@@ -97,15 +95,9 @@ test('committed color theme changes report their source and bounded appearance w
 	await changes.themes.setColorTheme('ash-dark', 'themeEditor');
 	assert.equal(changes.browser.window.document.body.dataset.colorTheme, 'ash-dark');
 	assert.deepEqual(changes.events, [
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
 		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'light' } },
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' } },
 	]);
 });
 
@@ -119,10 +111,7 @@ test('preview updates and restoration do not report changes while committed sele
 	preview.dispose();
 	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
 	assert.deepEqual(changes.events, [
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
 	]);
 });
 
@@ -143,7 +132,9 @@ test('same-ID saved content is reported only when applied and equivalent replace
 	// Token colors are lazy caches, so merely reading a style must not look like a customization.
 	changes.themes.getColorTheme().getTokenStyleMetadata('keyword', [], 'typescript');
 	await changes.themes.setColorTheme('private-theme', 'themePicker');
-	assert.deepEqual(changes.events, [{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'content', colorScheme: 'dark' } }]);
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'content', colorScheme: 'dark' } },
+	]);
 });
 
 test('preview changes from a theme listener do not swallow the committed change', async () => {
@@ -154,26 +145,20 @@ test('preview changes from a theme listener do not swallow the committed change'
 	await changes.themes.setColorTheme('ash-dark', 'themePicker');
 	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
 	assert.deepEqual(changes.events, [
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
 	]);
 });
 
 test('settings report resolved customization changes and ignore inactive or equivalent values', async () => {
 	using changes = new ThemeChanges();
 	await changes.configuration.updateValue('workbench.preferredDarkColorTheme', 'ash-high-contrast-dark');
-	await changes.configuration.updateValue('workbench.colorCustomizations', {
-		'[Ash Dark]': { 'editor.background': '#123456' },
-	});
+	await changes.configuration.updateValue('workbench.colorCustomizations', { '[Ash Dark]': { 'editor.background': '#123456' } });
 	assert.deepEqual(changes.events, []);
 	await changes.configuration.updateValue('workbench.colorCustomizations', { 'editor.background': '#abcdef' });
-	await changes.configuration.updateValue('workbench.colorCustomizations', {
-		'editor.background': '#abcdef',
-		'[Ash Dark]': { 'editor.background': '#123456' },
-	});
-	assert.deepEqual(changes.events, [{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'content', colorScheme: 'light' } }]);
+	await changes.configuration.updateValue('workbench.colorCustomizations', { 'editor.background': '#abcdef', '[Ash Dark]': { 'editor.background': '#123456' } });
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'content', colorScheme: 'light' } },
+	]);
 });
 
 test('system appearance and late theme registration have distinct sources', async () => {
@@ -186,10 +171,7 @@ test('system appearance and late theme registration have distinct sources', asyn
 	assert.deepEqual(changes.events, [
 		{ name: 'workbenchColorThemeChanged', data: { source: 'system', change: 'selection', colorScheme: 'hcDark' } },
 		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'dark' } },
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themeRegistry', change: 'selection', colorScheme: 'light' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeRegistry', change: 'selection', colorScheme: 'light' } },
 	]);
 });
 
@@ -203,20 +185,11 @@ test('overlapping theme selections preserve write order and each source across a
 	const second = changes.themes.setColorTheme('ash-light', 'themeEditor');
 	assert.equal(changes.files.writes, 1);
 	await release.complete();
-	assert.deepEqual(
-		(await Promise.all([first, second])).map(theme => theme.id),
-		['ash-dark', 'ash-light'],
-	);
+	assert.deepEqual((await Promise.all([first, second])).map(theme => theme.id), ['ash-dark', 'ash-light']);
 	assert.equal(changes.configuration.getValue(WorkbenchConfiguration.colorTheme), 'ash-light');
 	assert.deepEqual(changes.events, [
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' },
-		},
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' } },
 	]);
 });
 
@@ -236,7 +209,9 @@ test('queued theme selections keep the system preference targeted when each requ
 	assert.equal(changes.configuration.getValue('workbench.preferredLightColorTheme'), 'ash-light');
 	assert.equal(changes.configuration.getValue('workbench.preferredDarkColorTheme'), 'ash-dark');
 	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
-	assert.deepEqual(changes.events, [{ name: 'workbenchColorThemeChanged', data: { source: 'system', change: 'selection', colorScheme: 'dark' } }]);
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'system', change: 'selection', colorScheme: 'dark' } },
+	]);
 });
 
 test('failed theme writes report nothing, preserve deferred content, and do not poison later selections', async () => {
@@ -260,10 +235,7 @@ test('failed theme writes report nothing, preserve deferred content, and do not 
 	await changes.themes.setColorTheme('ash-dark', 'themeEditor');
 	assert.deepEqual(changes.events, [
 		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'light' } },
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' } },
 	]);
 });
 
@@ -277,10 +249,7 @@ test('theme events follow the host usage policy without replaying changes made w
 	assert.deepEqual(changes.events, []);
 	await changes.themes.setColorTheme('ash-light', 'themeEditor');
 	assert.deepEqual(changes.events, [
-		{
-			name: 'workbenchColorThemeChanged',
-			data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' },
-		},
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' } },
 	]);
 });
 
@@ -293,23 +262,15 @@ test('theme service creation requires the host telemetry registration', () => {
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostChanged = new Emitter<void>();
-		services.registerInstance(IHostColorSchemeService, {
-			dark: false,
-			highContrast: false,
-			onDidChangeColorScheme: hostChanged.event,
-		});
+		services.registerInstance(IHostColorSchemeService, { dark: false, highContrast: false, onDidChangeColorScheme: hostChanged.event });
 		assert.throws(() => services.createInstance(WorkbenchThemeService, browser.window.document.body), /telemetryService/);
-	} finally {
-		browser.window.close();
-	}
+	} finally { browser.window.close(); }
 });
 
 test('selected product icon theme refreshes retained icon nodes and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-		});
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
 		const icon = registerIcon('test-workbench-product-icon', { fontCharacter: 'A' }, 'Workbench product icon test');
 		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
 		registration.replace([{ id: 'test-workbench-font', label: 'Test font', icons: new Map([[icon.id, { fontCharacter: 'B' }]]) }]);
@@ -358,16 +319,12 @@ test('base colors support disconnected schemes and yield to a registered extensi
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'pending-extension-theme');
 		await configuration.updateValue('window.autoDetectHighContrast', true);
 		for (const [dark, highContrast, id] of [
-			[false, false, 'ash-light'],
-			[true, false, 'ash-dark'],
-			[false, true, 'ash-high-contrast-light'],
-			[true, true, 'ash-high-contrast-dark'],
+			[false, false, 'ash-light'], [true, false, 'ash-dark'],
+			[false, true, 'ash-high-contrast-light'], [true, true, 'ash-high-contrast-dark'],
 		] as const) {
 			Object.assign(colors, { dark, highContrast });
 			// A configuration change resolves the current host scheme.
-			await configuration.updateValue('workbench.colorCustomizations', {
-				'editor.foreground': dark ? '#eeeeee' : '#111111',
-			});
+			await configuration.updateValue('workbench.colorCustomizations', { 'editor.foreground': dark ? '#eeeeee' : '#111111' });
 			assert.equal(active.getColorTheme().id, id);
 			assert(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'));
 		}
@@ -376,9 +333,7 @@ test('base colors support disconnected schemes and yield to a registered extensi
 		using registration = WorkbenchThemesRegistry.registerColorThemes([extension]);
 		assert.equal(active.getColorTheme().getColorCss('editor.background'), '#123456');
 		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#123456');
-	} finally {
-		browser.window.close();
-	}
+	} finally { browser.window.close(); }
 });
 
 const document = {
@@ -394,9 +349,7 @@ const document = {
 test('temporary previews update bound windows, keep settings unchanged, and restore the latest configured theme', async () => {
 	const browser = new JSDOM('<!doctype html><body><div id="secondary"></div></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
-		});
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() { }, removeEventListener() { } }) });
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -426,27 +379,17 @@ test('temporary previews update bound windows, keep settings unchanged, and rest
 		assert.equal(active.getColorTheme().id, 'ash-light');
 		older.update(first);
 		assert.equal(active.getColorTheme().id, 'ash-light');
-	} finally {
-		browser.window.close();
-	}
+	} finally { browser.window.close(); }
 });
 
 test('persisted color customizations override themes, update live, and restore themed colors when removed', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-		});
-		const theme = parseUserColorTheme(
-			JSON.stringify({
-				...document,
-				colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' },
-			}),
-			'selection-colors',
-		);
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' } }), 'selection-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService({
-			source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}`,
+			source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}`
 		});
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -457,19 +400,14 @@ test('persisted color customizations override themes, update live, and restore t
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
-		assert.deepEqual(
-			[
-				active.getColorTheme().getColorCss('editor.selectionBackground'),
-				active.getColorTheme().getColorCss('editor.selectionForeground'),
-				active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.a,
-				active.getColorTheme().semanticTokenRules,
-			],
-			['#456789', '#112233', 1, theme.semanticTokenRules],
-		);
+		assert.deepEqual([
+			active.getColorTheme().getColorCss('editor.selectionBackground'),
+			active.getColorTheme().getColorCss('editor.selectionForeground'),
+			active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.a,
+			active.getColorTheme().semanticTokenRules,
+		], ['#456789', '#112233', 1, theme.semanticTokenRules]);
 		assert.equal(active.getColorTheme().getColor(editorInactiveSelection)?.toString(), theme.getColor(editorInactiveSelection)?.toString());
-		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
-			'editor.inactiveSelectionBackground': '#765432',
-		});
+		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
 		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
 		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, undefined);
@@ -510,15 +448,7 @@ test('user and extension themes preserve semantic token selectors and styles', (
 	assert.deepEqual(user.semanticTokenRules, extension.semanticTokenRules);
 	assert.deepEqual(user.semanticTokenRules, [
 		{ selector: '*', type: '*', modifiers: [], foreground: '#112233' },
-		{
-			selector: 'function.declaration:typescript',
-			type: 'function',
-			modifiers: ['declaration'],
-			language: 'typescript',
-			foreground: '#abcdef',
-			bold: true,
-			italic: true,
-		},
+		{ selector: 'function.declaration:typescript', type: 'function', modifiers: ['declaration'], language: 'typescript', foreground: '#abcdef', bold: true, italic: true },
 		{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], bold: false },
 	]);
 	assert.equal(JSON.parse(serializeUserColorThemeDraft(user, user.label)).semanticTokenColors['function.declaration:typescript'].foreground, '#abcdef');
@@ -526,25 +456,10 @@ test('user and extension themes preserve semantic token selectors and styles', (
 });
 
 test('active semantic theme styles follow the selected theme', async () => {
-	const browser = new JSDOM(
-		'<!doctype html><body><div class="stanza-editor"><span class="stanza-editor-token" data-ash-semantic-type="function" data-ash-semantic-modifiers="declaration" data-ash-semantic-language="typescript">call</span></div></body>',
-	);
+	const browser = new JSDOM('<!doctype html><body><div class="stanza-editor"><span class="stanza-editor-token" data-ash-semantic-type="function" data-ash-semantic-modifiers="declaration" data-ash-semantic-language="typescript">call</span></div></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-		});
-		const theme = parseUserColorTheme(
-			JSON.stringify({
-				name: 'Semantic',
-				type: 'dark',
-				semanticHighlighting: true,
-				semanticTokenColors: {
-					'*': '#112233',
-					'function.declaration:typescript': { foreground: '#abcdef', bold: true },
-				},
-			}),
-			'test-semantic-active',
-		);
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		const theme = parseUserColorTheme(JSON.stringify({ name: 'Semantic', type: 'dark', semanticHighlighting: true, semanticTokenColors: { '*': '#112233', 'function.declaration:typescript': { foreground: '#abcdef', bold: true } } }), 'test-semantic-active');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
@@ -557,22 +472,8 @@ test('active semantic theme styles follow the selected theme', async () => {
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
-		const token = {
-			startColumn: 1,
-			endColumn: 5,
-			type: 'function',
-			modifiers: [] as const,
-			semanticType: 'function',
-			semanticModifiers: ['declaration'],
-			semanticLanguage: 'typescript',
-			syntaxPresentation: { foreground: '#123456', fontStyle: ['italic'] as const },
-		};
-		const presentation = () =>
-			resolveSemanticTokenPresentation(
-				token,
-				active.getColorTheme(),
-				configuration.getValue('editor.semanticHighlighting.enabled') !== false && active.getColorTheme().semanticHighlighting === true,
-			);
+		const token = { startColumn: 1, endColumn: 5, type: 'function', modifiers: [] as const, semanticType: 'function', semanticModifiers: ['declaration'], semanticLanguage: 'typescript', syntaxPresentation: { foreground: '#123456', fontStyle: ['italic'] as const } };
+		const presentation = () => resolveSemanticTokenPresentation(token, active.getColorTheme(), configuration.getValue('editor.semanticHighlighting.enabled') !== false && active.getColorTheme().semanticHighlighting === true);
 		assert.deepEqual(presentation(), { foreground: '#abcdef', fontStyle: ['italic', 'bold'] });
 		await configuration.updateValue('editor.semanticHighlighting.enabled', false);
 		assert.deepEqual(presentation(), token.syntaxPresentation);
@@ -580,28 +481,24 @@ test('active semantic theme styles follow the selected theme', async () => {
 		assert.equal(presentation().foreground, '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
 		assert.deepEqual(presentation(), token.syntaxPresentation);
-	} finally {
-		browser.window.close();
-	}
+	} finally { browser.window.close(); }
 });
 
 test('user themes resolve colors across component domains and their dependent defaults', () => {
-	const theme = parseUserColorTheme(
-		JSON.stringify({
-			name: 'Domain Color Overrides',
-			type: 'dark',
-			colors: {
-				'list.hoverBackground': '#123456',
-				'scrollbarSlider.background': '#234567',
-				'scrollbarSlider.hoverBackground': '#345678',
-				'scrollbarSlider.activeBackground': '#456789',
-				'success.foreground': '#345678',
-				'charts.orange': '#456789',
-				'quickInput.background': '#56789a',
-				'search.matchBackground': '#6789ab',
-			},
-		}),
-	);
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Domain Color Overrides',
+		type: 'dark',
+		colors: {
+			'list.hoverBackground': '#123456',
+			'scrollbarSlider.background': '#234567',
+			'scrollbarSlider.hoverBackground': '#345678',
+			'scrollbarSlider.activeBackground': '#456789',
+			'success.foreground': '#345678',
+			'charts.orange': '#456789',
+			'quickInput.background': '#56789a',
+			'search.matchBackground': '#6789ab',
+		},
+	}));
 	for (const [id, expected] of Object.entries({
 		'menu.selectionBackground': '#123456',
 		'button.hoverBackground': '#123456',
@@ -612,8 +509,7 @@ test('user themes resolve colors across component domains and their dependent de
 		'charts.orange': '#456789',
 		'quickInput.background': '#56789a',
 		'search.matchBackground': '#6789ab',
-	}))
-		assert.equal(theme.getColorCss(id), expected, id);
+	})) assert.equal(theme.getColorCss(id), expected, id);
 });
 
 test('theme exports contain standard fields and resolved colors', () => {
@@ -627,29 +523,22 @@ test('theme exports contain standard fields and resolved colors', () => {
 });
 
 test('theme copies retain unregistered extension colors until their contributions load', () => {
-	const original = parseUserColorTheme(
-		JSON.stringify({
-			name: 'Extension colors',
-			colors: { 'copyExtension.accent': '#12345680', 'editor.background': '#102030' },
-		}),
-	);
+	const original = parseUserColorTheme(JSON.stringify({
+		name: 'Extension colors',
+		colors: { 'copyExtension.accent': '#12345680', 'editor.background': '#102030' },
+	}));
 	const source = serializeUserColorThemeDraft(original, 'Extension copy');
 	assert.deepEqual(JSON.parse(source).colors, {
-		'copyExtension.accent': '#12345680',
-		'editor.background': '#102030',
+		'copyExtension.accent': '#12345680', 'editor.background': '#102030',
 	});
 	const restored = parseUserColorTheme(source);
 	assert.equal(restored.defines('copyExtension.accent'), true);
 	const owner = Symbol('theme copy extension');
 	try {
-		Colors.replaceColors(owner, [
-			{
-				id: 'copyExtension.accent',
-				description: 'Theme copy test.',
-				owner: 'test',
-				defaults: { dark: '#000000', light: '#ffffff', hcDark: '#ffffff', hcLight: '#000000' },
-			},
-		]);
+		Colors.replaceColors(owner, [{
+			id: 'copyExtension.accent', description: 'Theme copy test.', owner: 'test',
+			defaults: { dark: '#000000', light: '#ffffff', hcDark: '#ffffff', hcLight: '#000000' },
+		}]);
 		assert.equal(restored.getColorCss('copyExtension.accent'), '#12345680');
 		assert.equal(JSON.parse(serializeUserColorThemeDraft(restored, restored.label)).colors['copyExtension.accent'], '#12345680');
 	} finally {
@@ -658,13 +547,10 @@ test('theme copies retain unregistered extension colors until their contribution
 });
 
 test('theme copies retain default design token relationships and explicit overrides', () => {
-	const original = parseUserColorTheme(
-		JSON.stringify({
-			name: 'Linked colors',
-			type: 'dark',
-			colors: { foreground: '#123456', 'button.foreground': '#abcdef' },
-		}),
-	);
+	const original = parseUserColorTheme(JSON.stringify({
+		name: 'Linked colors', type: 'dark',
+		colors: { foreground: '#123456', 'button.foreground': '#abcdef' },
+	}));
 	const document = JSON.parse(serializeUserColorThemeDraft(original, 'Linked copy'));
 	assert.deepEqual(document.colors, { foreground: '#123456', 'button.foreground': '#abcdef' });
 	document.colors.foreground = '#654321';
@@ -676,39 +562,25 @@ test('theme copies retain default design token relationships and explicit overri
 });
 
 test('high contrast theme types round trip through user documents and color defaults', () => {
-	for (const [type, background] of [
-		['hcDark', '#000000'],
-		['hcLight', '#ffffff'],
-	] as const) {
+	for (const [type, background] of [['hcDark', '#000000'], ['hcLight', '#ffffff']] as const) {
 		const theme = parseUserColorTheme(JSON.stringify({ name: 'Contrast Test', type, colors: { 'editor.foreground': '#123456' } }));
 		const source = serializeUserColorThemeDraft(theme, theme.label);
 		const restored = parseUserColorTheme(source);
-		assert.deepEqual(
-			{
-				type: theme.colorScheme,
-				exportedType: JSON.parse(source).type,
-				restoredType: restored.colorScheme,
-				background: restored.getColorCss('editor.background'),
-				foreground: restored.getColorCss('editor.foreground'),
-			},
-			{ type, exportedType: type, restoredType: type, background, foreground: '#123456' },
-		);
+		assert.deepEqual({
+			type: theme.colorScheme,
+			exportedType: JSON.parse(source).type,
+			restoredType: restored.colorScheme,
+			background: restored.getColorCss('editor.background'),
+			foreground: restored.getColorCss('editor.foreground'),
+		}, { type, exportedType: type, restoredType: type, background, foreground: '#123456' });
 	}
 });
 
 test('active user themes apply overrides for colors registered after theme loading', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-		});
-		const theme = parseUserColorTheme(
-			JSON.stringify({
-				...document,
-				colors: { 'editorCursor.foreground': '#aabbcc', 'test.workbenchLate': '#fedcba' },
-			}),
-			'late-workbench-colors',
-		);
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editorCursor.foreground': '#aabbcc', 'test.workbenchLate': '#fedcba' } }), 'late-workbench-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
@@ -724,32 +596,17 @@ test('active user themes apply overrides for colors registered after theme loadi
 		const before = theme.colorEntries;
 		const changes: string[] = [];
 		using listener = active.onDidColorThemeChange(value => changes.push(value.getColorCss('test.workbenchLate')!));
-		registerColor(
-			'test.workbenchLate',
-			{
-				dark: 'editorCursor.foreground',
-				light: '#123456',
-				hcDark: 'editorCursor.foreground',
-				hcLight: '#000000',
-			},
-			{ description: 'Late workbench test.', owner: 'test' },
-		);
-		assert.deepEqual(
-			{
-				before: before.find(entry => entry.id === 'test.workbenchLate'),
-				resolved: theme.colors['test.workbenchLate'],
-				css: browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-test-workbenchLate'),
-				changes,
-				tokenRules: theme.semanticTokenRules,
-			},
-			{
-				before: undefined,
-				resolved: '#fedcba',
-				css: '#fedcba',
-				changes: ['#fedcba'],
-				tokenRules: theme.semanticTokenRules,
-			},
-		);
+		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456', hcDark: 'editorCursor.foreground', hcLight: '#000000' }, { description: 'Late workbench test.', owner: 'test' });
+		assert.deepEqual({
+			before: before.find(entry => entry.id === 'test.workbenchLate'),
+			resolved: theme.colors['test.workbenchLate'],
+			css: browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-test-workbenchLate'),
+			changes,
+			tokenRules: theme.semanticTokenRules,
+		}, {
+			before: undefined, resolved: '#fedcba', css: '#fedcba', changes: ['#fedcba'],
+			tokenRules: theme.semanticTokenRules,
+		});
 		assert.equal(JSON.parse(serializeUserColorThemeDraft(theme, theme.label)).colors['test.workbenchLate'], '#fedcba');
 		assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['test.workbenchLate']);
 	} finally {
@@ -799,13 +656,10 @@ test('theme documents inherit colors and syntax rules in package order', async (
 	const read = (path: string): unknown => resources.get(path);
 	const resolved = resolveColorThemeDocument('themes/child.json', read);
 	assert.deepEqual(resolved.colors, { 'editor.background': '#445566', 'statusBar.background': '#223344' });
-	assert.deepEqual(resolved.semanticTokenColors, {
-		comment: { foreground: '#334455' },
-		string: { foreground: '#556677' },
-	});
+	assert.deepEqual(resolved.semanticTokenColors, { comment: { foreground: '#334455' }, string: { foreground: '#556677' } });
 	assert.deepEqual(await loadColorThemeDocument('themes/child.json', async path => read(path)), resolved);
-	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => (path === 'themes/base.json' ? { include: './child.json' } : read(path))), /include cycle/);
-	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => (path === 'themes/child.json' ? { include: '../../outside.json' } : read(path))), /escapes its package/);
+	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => path === 'themes/base.json' ? { include: './child.json' } : read(path)), /include cycle/);
+	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => path === 'themes/child.json' ? { include: '../../outside.json' } : read(path)), /escapes its package/);
 });
 
 test('user theme reload applies included files from its theme directory', async () => {
@@ -813,28 +667,12 @@ test('user theme reload applies included files from its theme directory', async 
 	try {
 		await mkdir(join(directory, 'shared'));
 		await writeFile(join(directory, 'shared', 'base.json'), JSON.stringify({ colors: { 'statusBar.background': '#112233' } }));
-		await writeFile(
-			join(directory, 'custom.json'),
-			JSON.stringify({
-				name: 'Custom',
-				type: 'dark',
-				include: './shared/base.json',
-				colors: { 'editor.background': '#445566' },
-			}),
-		);
+		await writeFile(join(directory, 'custom.json'), JSON.stringify({ name: 'Custom', type: 'dark', include: './shared/base.json', colors: { 'editor.background': '#445566' } }));
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
 		using fileService = createTestFileService(files);
 		using service = await loadThemes(fileService, directory);
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#112233');
-		const unsaved = await service.resolve(
-			JSON.stringify({
-				name: 'Custom',
-				type: 'dark',
-				include: './shared/base.json',
-				colors: { 'editor.background': '#aabbcc' },
-			}),
-			'custom',
-		);
+		const unsaved = await service.resolve(JSON.stringify({ name: 'Custom', type: 'dark', include: './shared/base.json', colors: { 'editor.background': '#aabbcc' } }), 'custom');
 		assert.equal(unsaved.getColorCss('editor.background'), '#aabbcc');
 		assert.equal(unsaved.getColorCss('statusBar.background'), '#112233');
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('editor.background'), '#445566');
@@ -843,9 +681,7 @@ test('user theme reload applies included files from its theme directory', async 
 		await service.reload();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#667788');
 		assert.deepEqual(service.issues, []);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('invalid external edits retain the last valid selected theme', async () => {
@@ -860,36 +696,25 @@ test('invalid external edits retain the last valid selected theme', async () => 
 		await writeFile(path, '{');
 		await service.reload();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom'), previous);
-		assert.deepEqual(
-			service.issues.map(issue => issue.file),
-			['custom.json'],
-		);
+		assert.deepEqual(service.issues.map(issue => issue.file), ['custom.json']);
 		await writeFile(path, JSON.stringify({ name: 'Custom', colors: { 'editor.background': '#445566' } }));
 		await service.reload();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('editor.background'), '#445566');
 		assert.deepEqual(service.issues, []);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('legacy brightness migration preserves the original RGBA mixing appearance', () => {
-	const migrated = migrateUserTheme(
-		JSON.stringify({
-			version: 1,
-			id: 'legacy-brightness',
-			label: 'Legacy brightness',
-			colorScheme: 'dark',
-			colors: {
-				foreground: { op: 'lighten', value: '#20406080', factor: 0.5 },
-				'description.foreground': { op: 'darken', value: '#20406080', factor: 0.5 },
-			},
-		}),
-	);
+	const migrated = migrateUserTheme(JSON.stringify({
+		version: 1, id: 'legacy-brightness', label: 'Legacy brightness', colorScheme: 'dark',
+		colors: {
+			foreground: { op: 'lighten', value: '#20406080', factor: 0.5 },
+			'description.foreground': { op: 'darken', value: '#20406080', factor: 0.5 },
+		},
+	}));
 	assert.ok(migrated);
 	assert.deepEqual(JSON.parse(migrated.content).colors, {
-		foreground: '#90a0b0c0',
-		'description.foreground': '#102030c0',
+		foreground: '#90a0b0c0', 'description.foreground': '#102030c0',
 	});
 });
 
@@ -898,10 +723,7 @@ test('theme file owner migrates aliases and transforms once before registration'
 	try {
 		const legacy = JSON.parse(await readFile(join(process.cwd(), 'src/ash/workbench/services/themes/test/browser/fixtures/resolver.json'), 'utf8'));
 		await writeFile(join(directory, 'old-name.json'), JSON.stringify(legacy.theme));
-		for (const [id, colorScheme] of [
-			['legacy-hc-dark', 'high-contrast-dark'],
-			['legacy-hc-light', 'high-contrast-light'],
-		]) {
+		for (const [id, colorScheme] of [['legacy-hc-dark', 'high-contrast-dark'], ['legacy-hc-light', 'high-contrast-light']]) {
 			await writeFile(join(directory, `${id}-old.json`), JSON.stringify({ version: 1, id, label: id, colorScheme, colors: { 'editor.foreground': '#123456' } }));
 		}
 		await writeFile(join(directory, 'broken.json'), '{');
@@ -914,10 +736,7 @@ test('theme file owner migrates aliases and transforms once before registration'
 		const theme = parseUserColorTheme(migrated, 'resolver-test');
 		for (const [key, value] of Object.entries(legacy.expected)) assert.equal(theme.getColorCss(key), value, key);
 		assert.equal(JSON.parse(migrated).version, undefined);
-		for (const [id, type] of [
-			['legacy-hc-dark', 'hcDark'],
-			['legacy-hc-light', 'hcLight'],
-		]) {
+		for (const [id, type] of [['legacy-hc-dark', 'hcDark'], ['legacy-hc-light', 'hcLight']]) {
 			const source = await readFile(join(directory, `${id}.json`), 'utf8');
 			assert.equal(JSON.parse(source).type, type);
 			assert.equal(parseUserColorTheme(source).colorScheme, type);
@@ -926,30 +745,17 @@ test('theme file owner migrates aliases and transforms once before registration'
 		assert.deepEqual(await files.readDirectory(URI.file(directory)), first);
 		try {
 			assert.equal(WorkbenchThemesRegistry.getColorTheme('resolver-test')?.label, 'Resolver Test');
-			assert.deepEqual(
-				service.issues.map(issue => issue.file),
-				['broken.json'],
-			);
-		} finally {
-			service.dispose();
-		}
+			assert.deepEqual(service.issues.map(issue => issue.file), ['broken.json']);
+		} finally { service.dispose(); }
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('resolver-test'), undefined);
 		assert.deepEqual((await readdir(directory)).sort(), ['broken.json', 'ignored.txt', 'legacy-hc-dark.json', 'legacy-hc-light.json', 'resolver-test.json']);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('migration preserves conflicting targets and resumes after a durable equal target', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-theme-conflict-'));
 	try {
-		const legacy = JSON.stringify({
-			version: 1,
-			id: 'old-theme',
-			label: 'Old Theme',
-			colorScheme: 'dark',
-			colors: { 'editor.background': '#123456' },
-		});
+		const legacy = JSON.stringify({ version: 1, id: 'old-theme', label: 'Old Theme', colorScheme: 'dark', colors: { 'editor.background': '#123456' } });
 		const source = join(directory, 'source.json');
 		const target = join(directory, 'old-theme.json');
 		await writeFile(source, legacy);
@@ -968,9 +774,7 @@ test('migration preserves conflicting targets and resumes after a durable equal 
 		(await loadThemes(fileService, directory)).dispose();
 		assert.equal((await files.readDirectory(URI.file(directory))).length, 1);
 		assert.equal(await readFile(target, 'utf8'), converted);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('theme save, rename, reload, and delete keep identity in the filename', async () => {
@@ -981,7 +785,11 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
 		Object.defineProperty(browser.window, 'matchMedia', {
-			value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { },
+			})
 		});
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
@@ -996,11 +804,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		const created = await service.saveAs(JSON.stringify(document));
 		assert.equal(created.file, 'test-user-aurora.json');
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, created.theme.id);
-		const replacement = JSON.stringify({
-			...document,
-			name: 'Renamed Theme',
-			colors: { 'editor.background': '#202530' },
-		});
+		const replacement = JSON.stringify({ ...document, name: 'Renamed Theme', colors: { 'editor.background': '#202530' } });
 		const saved = await service.save(created.theme.id, replacement);
 		assert.equal(saved.theme.id, created.theme.id);
 		assert.equal(saved.theme.label, 'Renamed Theme');
@@ -1013,11 +817,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(saved.theme.id), undefined);
 		assert.equal(activeThemes.getColorTheme(), WorkbenchThemesRegistry.getColorTheme('ash-light'));
 		assert.deepEqual(await readdir(directory), []);
-	} finally {
-		service.dispose();
-		browser.window.close();
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { service.dispose(); browser.window.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
 async function loadThemes(files: IFileService, directory: string): Promise<IUserThemeService & IDisposable> {
@@ -1040,25 +840,21 @@ test('theme scoped customizations inherit global syntax and semantic styles and 
 		'scoped-aurora',
 	);
 	using configuration = new WorkbenchConfigurationService();
-	await configuration.updateValue('workbench.colorCustomizations', {
-		'editor.selectionForeground': '#445566',
-		'[Scoped *]': { 'editor.selectionBackground': 'default' },
-	});
+	await configuration.updateValue('workbench.colorCustomizations', { 'editor.selectionForeground': '#445566', '[Scoped *]': { 'editor.selectionBackground': 'default' } });
 	await configuration.updateValue('editor.tokenColorCustomizations', {
 		functions: { fontStyle: 'italic' },
 		'[Scoped Aurora]': { functions: { foreground: '#556677' } },
 	});
 	await configuration.updateValue('editor.semanticTokenColorCustomizations', {
-		enabled: true,
-		rules: { function: { foreground: '#778899', italic: false } },
+		enabled: true, rules: { function: { foreground: '#778899', italic: false } },
 		'[Scoped Aurora]': { rules: { function: { bold: false } } },
 	});
 	const { applyThemeCustomizations } = await import('../../common/themeConfiguration.js');
 	const active = applyThemeCustomizations(theme, configuration);
-	assert.deepEqual(
-		[active.defines('editor.selectionBackground'), active.getColor('editor.selectionBackground', false), active.getColorCss('editor.selectionForeground'), active.semanticHighlighting],
-		[false, undefined, '#445566', true],
-	);
+	assert.deepEqual([
+		active.defines('editor.selectionBackground'), active.getColor('editor.selectionBackground', false),
+		active.getColorCss('editor.selectionForeground'), active.semanticHighlighting,
+	], [false, undefined, '#445566', true]);
 	const metadata = active.getTokenStyleMetadata('function', [], 'typescript')!;
 	assert.deepEqual({ ...metadata, foreground: active.tokenColorMap[metadata.foreground!] }, { foreground: '#778899', bold: false, italic: false, underline: false, strikethrough: false });
 	await configuration.updateValue('editor.semanticTokenColorCustomizations', {});
@@ -1085,37 +881,19 @@ test('theme settings expose structured schemas and localized labels', async () =
 		setNlsResolver((bundle, key, original) => chinese.bundles[bundle]?.[key] ?? original);
 		assert.equal(registry.getConfiguration('editor.tokenColorCustomizations')?.setting?.title, '语法颜色');
 		assert.equal(registry.getConfiguration('window.autoDetectHighContrast')?.setting?.title, '跟随系统高对比度');
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });
 
 test('individual semantic flags override shorthand fontStyle even when false', () => {
-	const theme = parseUserColorTheme(
-		JSON.stringify({
-			name: 'Semantic flags',
-			semanticTokenColors: {
-				function: {
-					foreground: '#123456',
-					fontStyle: 'bold italic',
-					bold: false,
-					italic: false,
-					underline: true,
-				},
-			},
-		}),
-	);
-	const metadata = theme.getTokenStyleMetadata('function', [], 'typescript')!;
-	assert.deepEqual(
-		{ ...metadata, foreground: theme.tokenColorMap[metadata.foreground!] },
-		{
-			foreground: '#123456',
-			bold: false,
-			italic: false,
-			underline: true,
-			strikethrough: false,
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Semantic flags', semanticTokenColors: {
+			function: { foreground: '#123456', fontStyle: 'bold italic', bold: false, italic: false, underline: true },
 		},
-	);
+	}));
+	const metadata = theme.getTokenStyleMetadata('function', [], 'typescript')!;
+	assert.deepEqual({ ...metadata, foreground: theme.tokenColorMap[metadata.foreground!] }, {
+		foreground: '#123456', bold: false, italic: false, underline: true, strikethrough: false,
+	});
 });
 
 test('retired scope themes and configuration rules are rejected', async () => {

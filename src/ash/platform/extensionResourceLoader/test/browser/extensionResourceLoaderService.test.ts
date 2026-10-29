@@ -12,10 +12,7 @@ suite('Extension resource loader', () => {
 		const request = { generation: 7, extensionId: 'publisher.sample', path: 'themes/中文 theme.json' };
 		const requests: unknown[] = [];
 		const bytes = new TextEncoder().encode('{"name":"中文"}');
-		const loader = new ExtensionResourceLoaderService(async resource => {
-			requests.push(resource);
-			return bytes;
-		});
+		const loader = new ExtensionResourceLoaderService(async resource => { requests.push(resource); return bytes; });
 		const uri = URI.parse(toExtensionResourceURI(request).toString());
 		assert.equal(await loader.readExtensionResource(uri), '{"name":"中文"}');
 		assert.deepEqual(await loader.readExtensionResourceBytes(request), bytes);
@@ -24,10 +21,7 @@ suite('Extension resource loader', () => {
 
 	test('rejects escaping paths and malformed generations before asking the source to read', async () => {
 		let reads = 0;
-		const loader = new ExtensionResourceLoaderService(async () => {
-			reads++;
-			return new Uint8Array();
-		});
+		const loader = new ExtensionResourceLoaderService(async () => { reads++; return new Uint8Array(); });
 		for (const path of ['../file', 'a/../file', '/file', 'a\\file', 'a//file', 'a:stream', 'a\0file']) {
 			await assert.rejects(loader.readExtensionResourceBytes({ generation: 1, extensionId: 'publisher.sample', path }), /path/u);
 		}
@@ -46,9 +40,7 @@ suite('Extension resource loader', () => {
 		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		try {
-			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), {
-				message: '此资源不是已安装扩展的资源。',
-			});
+			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不是已安装扩展的资源。' });
 		} finally {
 			resetNlsResolver();
 		}

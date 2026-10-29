@@ -18,20 +18,14 @@ export class AppServerMessagePortTransport extends Disposable {
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(
-		private readonly restart: () => void,
-		private readonly connection: AppServerConnectionTarget = 'workspace',
-		private readonly acquisitionTimeoutMs = 10_000,
-	) {
+	constructor(private readonly restart: () => void, private readonly connection: AppServerConnectionTarget = 'workspace', private readonly acquisitionTimeoutMs = 10_000) {
 		super();
 		this._register(toDisposable(() => this.close()));
 		const subscription = subscribe(`${this.channelPrefix}:restart`, restart);
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
-	private get channelPrefix(): string {
-		return appServerConnectionChannel(this.connection);
-	}
+	private get channelPrefix(): string { return appServerConnectionChannel(this.connection); }
 
 	public get connectionMetadata(): unknown {
 		return this.metadata;
@@ -48,64 +42,45 @@ export class AppServerMessagePortTransport extends Disposable {
 	public async acquire(): Promise<boolean> {
 		this.assertNotDisposed();
 		this.close();
-		const nonce = (this.nonce = generateUuid());
+		const nonce = this.nonce = generateUuid();
 		this.mark('acquire-start', nonce);
 		const port = acquirePort(undefined, `${this.channelPrefix}:port`, nonce);
 		const cancellation = toDisposable(() => port.cancel());
 		this.acquisition.value = cancellation;
 		let enabled: boolean | undefined;
-		const ready = port.then(
-			value => {
-				if (this.nonce !== nonce || this.isDisposed) {
-					value.close();
-					throw new CancellationError();
-				}
-				this.socketOwner.value = new MessagePortSocket(value);
-			},
-			error => {
-				if (enabled !== false) {
-					throw error;
-				}
-			},
-		);
+		const ready = port.then(value => {
+			if (this.nonce !== nonce || this.isDisposed) {
+				value.close();
+				throw new CancellationError();
+			}
+			this.socketOwner.value = new MessagePortSocket(value);
+		}, error => { if (enabled !== false) { throw error; } });
 		let timeout: ReturnType<typeof setTimeout>;
 		const timedOut = new Promise<never>((_resolve, reject) => {
 			timeout = setTimeout(() => {
 				const error = new Error('App Server port acquisition timed out');
 				// Reject with the timeout before closing cancels the pending port acquisition.
 				reject(error);
-				if (this.nonce === nonce) {
-					this.close();
-				}
+				if (this.nonce === nonce) { this.close(); }
 			}, this.acquisitionTimeoutMs);
 		});
 		const acquisition = invoke<unknown>(`${this.channelPrefix}:acquire`, { nonce }).then(result => {
-			if (this.nonce !== nonce) {
-				throw new CancellationError();
-			}
-			if (!isRecord(result) || typeof result.enabled !== 'boolean' || (result.enabled && result.byteStream !== true)) {
-				throw new Error('Invalid connection acquisition response');
-			}
+			if (this.nonce !== nonce) { throw new CancellationError(); }
+			if (!isRecord(result) || typeof result.enabled !== 'boolean' || (result.enabled && result.byteStream !== true)) { throw new Error('Invalid connection acquisition response'); }
 			this.enabled = enabled = result.enabled;
 			this.metadata = result;
-			if (!result.enabled) {
-				port.cancel();
-			}
+			if (!result.enabled) { port.cancel(); }
 		});
 		try {
 			await Promise.race([Promise.all([acquisition, ready]), timedOut]);
 			this.mark('acquired', nonce);
 			return this.enabled === true;
 		} catch (error) {
-			if (this.nonce === nonce) {
-				this.close();
-			}
+			if (this.nonce === nonce) { this.close(); }
 			throw error;
 		} finally {
 			clearTimeout(timeout!);
-			if (this.acquisition.value === cancellation) {
-				this.acquisition.clear();
-			}
+			if (this.acquisition.value === cancellation) { this.acquisition.clear(); }
 		}
 	}
 
@@ -144,7 +119,7 @@ class MessagePortSocket extends Disposable implements ISocket {
 	public readonly onEnd = this.endEmitter.event;
 	private readonly pending: number[] = [];
 	private pendingBytes = 0;
-	private readonly drainWaiters = new Set<{ resolve(): void; reject(error: Error): void }>();
+	private readonly drainWaiters = new Set<{ resolve(): void; reject(error: Error): void; }>();
 	private closed = false;
 	private ending = false;
 	private failure: Error | undefined;
@@ -181,18 +156,15 @@ class MessagePortSocket extends Disposable implements ISocket {
 			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
 				// Ordinary MessagePort storage is already owned; only shared storage
 				// needs a copy before readers can safely retain or decode its contents.
-				const data = value.data.buffer instanceof ArrayBuffer ? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength) : new Uint8Array(value.data);
+				const data = value.data.buffer instanceof ArrayBuffer
+					? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength)
+					: new Uint8Array(value.data);
 				const buffer = VSBuffer.wrap(data);
 				this.dataEmitter.fire(buffer);
-				const ack = (): void => {
-					if (!this.closed) port.postMessage({ ack: true });
-				};
+				const ack = (): void => { if (!this.closed) port.postMessage({ ack: true }); };
 				const consumed = getAppServerReadConsumption(buffer);
-				if (consumed) {
-					void consumed.then(ack, () => this.finish(new Error('App Server read failed')));
-				} else {
-					ack();
-				}
+				if (consumed) { void consumed.then(ack, () => this.finish(new Error('App Server read failed'))); }
+				else { ack(); }
 				return;
 			}
 			if (value.intentional === true) {
@@ -239,10 +211,7 @@ class MessagePortSocket extends Disposable implements ISocket {
 			return;
 		}
 		this.ending = true;
-		void this.drain().then(
-			() => this.finish(),
-			error => this.finish(error),
-		);
+		void this.drain().then(() => this.finish(), error => this.finish(error));
 	}
 
 	public traceSocketEvent(type: SocketDiagnosticsEventType, data?: unknown): void {
@@ -258,11 +227,8 @@ class MessagePortSocket extends Disposable implements ISocket {
 		this.failure = error;
 		if (!error) {
 			// A renderer releasing its lease must not look like a failed carrier in Main.
-			try {
-				this.port.postMessage({ intentional: true });
-			} catch {
-				/* The peer may already have closed its port. */
-			}
+			try { this.port.postMessage({ intentional: true }); }
+			catch { /* The peer may already have closed its port. */ }
 		}
 		this.port.onmessage = null;
 		this.port.onmessageerror = null;

@@ -8,9 +8,7 @@ export class ModelCard extends DomWidget {
 	public readonly domNode: HTMLElement;
 	private readonly descriptionDomNode: HTMLElement;
 
-	public get element(): HTMLElement {
-		return this.domNode;
-	}
+	public get element(): HTMLElement { return this.domNode; }
 
 	constructor(ownerDocument: Document) {
 		super();
@@ -28,16 +26,11 @@ export class ModelCard extends DomWidget {
 		this.domNode.setAttribute('aria-label', entry.displayName);
 		this.descriptionDomNode.textContent = description;
 		this.domNode.hidden = description.length === 0;
-		if (description) {
-			this.domNode.setAttribute('aria-description', description);
-		} else {
-			this.domNode.removeAttribute('aria-description');
-		}
+		if (description) { this.domNode.setAttribute('aria-description', description); }
+		else { this.domNode.removeAttribute('aria-description'); }
 	}
 
 	public focus(): void {
-		if (!this.domNode.hidden) {
-			this.domNode.focus();
-		}
+		if (!this.domNode.hidden) { this.domNode.focus(); }
 	}
 }

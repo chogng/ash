@@ -13,11 +13,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		included: false,
 		valueType: 'boolean',
-		get title() {
-			return localize('sessions.activity.verbosityTitle', 'Activity Bar accessibility help');
-		},
-		get description() {
-			return localize('sessions.activity.verbosityDescription', 'Announce how to open accessibility help when the Activity Bar receives focus.');
-		},
+		get title() { return localize('sessions.activity.verbosityTitle', 'Activity Bar accessibility help'); },
+		get description() { return localize('sessions.activity.verbosityDescription', 'Announce how to open accessibility help when the Activity Bar receives focus.'); }
 	},
 });

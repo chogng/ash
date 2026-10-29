@@ -155,11 +155,7 @@ test('Artifacts home keeps the conversation sidebar and offers Docs, Slides and 
 test('Artifacts keeps creation and ownership controls legible across themes', { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	for (const [label, id] of [
-		['Ash Dark', 'ash-dark'],
-		['Ash High Contrast Dark', 'ash-high-contrast-dark'],
-		['Ash High Contrast Light', 'ash-high-contrast-light'],
-	] as const) {
+	for (const [label, id] of [['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']] as const) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
 		await picker.fill(label);
@@ -171,9 +167,7 @@ test('Artifacts keeps creation and ownership controls legible across themes', { 
 		await expect(home.locator('.ash-artifacts-create')).toHaveCount(3);
 		for (const illustration of await home.locator('.ash-artifacts-create > .ash-artifacts-illustration').all()) {
 			await expect(illustration).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
-			if (id.includes('contrast')) {
-				await expect(illustration).toHaveCSS('border-top-width', '1px');
-			}
+			if (id.includes('contrast')) { await expect(illustration).toHaveCSS('border-top-width', '1px'); }
 		}
 		await page.screenshot({ path: testInfo.outputPath(`artifacts-${id}.png`) });
 	}
@@ -247,9 +241,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	const retainedChat = await chat.elementHandle();
 	await navigation.locator('[data-action-id="sessions.open.creator"]').dragTo(navigation.locator('[data-action-id="sessions.newSession"]'), { targetPosition: { x: 8, y: 2 } });
 	await expect(items.first()).toHaveAttribute('draggable', 'true');
-	await expect
-		.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId)))
-		.toEqual(['sessions.open.creator', 'sessions.newSession', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.newSession', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -277,9 +269,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await creator.focus();
 	await new Menus(page).select(application, () => page.keyboard.press('Shift+F10'), ['Move later']);
 	await expect(creator).toBeFocused();
-	await expect
-		.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId)))
-		.toEqual(['sessions.newSession', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await page.keyboard.press('Home');
 	await expect(chat).toBeFocused();
@@ -303,9 +293,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(navigation.locator('.ash-sessions-navigation[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
 	await navigation.locator('[data-action-id="sessions.open.projects"]').dragTo(navigation.locator('[data-action-id="sessions.open.creator"]'), { targetPosition: { x: 2, y: 8 } });
-	await expect
-		.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId)))
-		.toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await chat.focus();
 	await page.keyboard.press('ArrowRight');
@@ -313,41 +301,14 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.reload();
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect
-		.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId)))
-		.toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await expect(trace).toHaveCount(0);
 	const viewer = page.locator('.ash-agent-trace:visible');
 	await expect(viewer).toBeVisible();
-	const offline = {
-		formatVersion: 3,
-		sessionId: 'shell-navigation-offline',
-		historyPrefixes: [],
-		threads: [
-			{
-				threadId: 'shell-thread',
-				events: [
-					{
-						eventId: 'shell-event',
-						sequence: 1,
-						recordedAt: 1,
-						event: {
-							type: 'threadCreated',
-							threadId: 'shell-thread',
-							title: 'Shell navigation offline fixture',
-						},
-					},
-				],
-			},
-		],
-	};
-	await viewer.locator('input[type=file]').setInputFiles({
-		name: 'shell-navigation.trace.json',
-		mimeType: 'application/json',
-		buffer: Buffer.from(JSON.stringify(offline)),
-	});
+	const offline = { formatVersion: 3, sessionId: 'shell-navigation-offline', historyPrefixes: [], threads: [{ threadId: 'shell-thread', events: [{ eventId: 'shell-event', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'shell-thread', title: 'Shell navigation offline fixture' } }] }] };
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'shell-navigation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(offline)) });
 	await expect(viewer.getByRole('status')).toContainText('Imported');
 	// Debug Logs hides its unused sidebar, including the Top navigation host.
 	await new Menus(page).select(application, () => page.getByRole('button', { name: 'Accounts', exact: true }).click({ button: 'right' }), ['Activity Bar Position', 'Default']);

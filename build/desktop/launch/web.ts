@@ -6,20 +6,13 @@ import { withProcessRun } from '../../processes.ts';
 
 if (process.env.ASH_WEB_LAUNCH_WORKER !== '1') {
 	await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
-		process.exitCode = (
-			await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
-				...environment,
-				ASH_WEB_LAUNCH_WORKER: '1',
-			})
-		).code;
+		process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_WEB_LAUNCH_WORKER: '1' })).code;
 	});
 } else {
 	const repositoryRoot = resolve(import.meta.dirname, '../../..');
 	const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/desktop/web/ash'));
 	const port = Number(process.argv[3] ?? 5173);
-	if (!Number.isInteger(port) || port < 1 || port > 65535) {
-		throw new Error('Invalid Web server port');
-	}
+	if (!Number.isInteger(port) || port < 1 || port > 65535) { throw new Error('Invalid Web server port'); }
 
 	if (process.env.ASH_WEB_APP_SERVER === '1') {
 		const launch = await startWeb({ port, assets: root, environment: process.env });
@@ -33,9 +26,7 @@ if (process.env.ASH_WEB_LAUNCH_WORKER !== '1') {
 		const server = createServer((request, response) => {
 			if ((request.method === 'GET' || request.method === 'HEAD') && (request.url === '/' || request.url?.startsWith('/?'))) {
 				const query = request.url.indexOf('?');
-				response.writeHead(302, {
-					Location: `/browser/workbench/workbench.html${query >= 0 ? request.url.slice(query) : ''}`,
-				});
+				response.writeHead(302, { Location: `/browser/workbench/workbench.html${query >= 0 ? request.url.slice(query) : ''}` });
 				response.end();
 				return;
 			}
@@ -43,11 +34,9 @@ if (process.env.ASH_WEB_LAUNCH_WORKER !== '1') {
 		});
 		server.on('upgrade', (_request, socket) => socket.destroy());
 		server.listen(port, '127.0.0.1');
-		const stop = (): void => {
-			server.close();
-			server.closeAllConnections();
-		};
+		const stop = (): void => { server.close(); server.closeAllConnections(); };
 		process.once('SIGTERM', stop);
 		process.once('SIGINT', stop);
 	}
+
 }

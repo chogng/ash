@@ -12,7 +12,7 @@ export class ParsedPromptFile {
 		public readonly content: string,
 		public readonly header?: PromptHeader,
 		public readonly body?: PromptBody,
-	) {}
+	) { }
 }
 
 export interface ParseError {
@@ -44,7 +44,7 @@ export interface ISequenceValue {
 
 export interface IMapValue {
 	readonly type: 'map';
-	readonly properties: readonly { readonly key: IScalarValue; readonly value: IValue }[];
+	readonly properties: readonly { readonly key: IScalarValue; readonly value: IValue; }[];
 	readonly range: Range;
 }
 
@@ -57,7 +57,7 @@ export class PromptHeader {
 		public readonly uri: URI,
 		public readonly attributes: readonly IHeaderAttribute[],
 		public readonly errors: readonly ParseError[],
-	) {}
+	) { }
 
 	public getAttribute(key: string): IHeaderAttribute | undefined {
 		return this.attributes.find(attribute => attribute.key === key);
@@ -78,14 +78,14 @@ export class PromptBody {
 		private readonly source: string,
 		public readonly uri: URI,
 		public readonly offset: number,
-	) {}
+	) { }
 
 	public getContent(): string {
 		return this.source.slice(this.offset);
 	}
 
 	public get fileReferences(): readonly IBodyFileReference[] {
-		return (this.references ??= bodyFileReferences(this.getContent(), this.range.startLineNumber));
+		return this.references ??= bodyFileReferences(this.getContent(), this.range.startLineNumber);
 	}
 
 	public resolveFilePath(path: string, userHome?: URI): URI | undefined {
@@ -98,15 +98,12 @@ export class PromptBody {
 			const hasScheme = /^[a-z][a-z\d+.-]*:/iu.test(path);
 			const target = URI.parse(hasScheme ? path : `relative:${path}`, true);
 			if (hasScheme) return target.scheme === 'file' || target.scheme === this.uri.scheme ? target : undefined;
-			const resolved = URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({
-				fragment: target.fragment,
-			});
+			const resolved = URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
 			if (packageResource && !resolved.path.startsWith(`/${this.uri.path.split('/')[1]}/`)) return undefined;
 			return resolved;
-		} catch {
-			return undefined;
-		}
+		} catch { return undefined; }
 	}
+
 }
 
 export class PromptFileParser {
@@ -133,7 +130,9 @@ export class PromptFileParser {
 			}
 		}
 		const header = headerRange ? parseHeader(uri, content, lines[0]!.length + (lines[1]?.length ?? 0), headerEnd, headerRange, headerClosed) : undefined;
-		const body = bodyOffset < content.length ? new PromptBody(new Range(bodyLine, 1, Math.floor(lines.length / 2) + 1, lines.at(-1)!.length + 1), content, uri, bodyOffset) : undefined;
+		const body = bodyOffset < content.length
+			? new PromptBody(new Range(bodyLine, 1, Math.floor(lines.length / 2) + 1, lines.at(-1)!.length + 1), content, uri, bodyOffset)
+			: undefined;
 		return new ParsedPromptFile(uri, content, header, body);
 	}
 }
@@ -150,8 +149,7 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		let high = starts.length;
 		while (low + 1 < high) {
 			const middle = Math.floor((low + high) / 2);
-			if (starts[middle]! <= index) low = middle;
-			else high = middle;
+			if (starts[middle]! <= index) low = middle; else high = middle;
 		}
 		return { line: low + 1, column: index - starts[low]! + 1 };
 	};
@@ -160,23 +158,16 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		const last = position(offset + Math.max(start, finish));
 		return new Range(first.line, first.column, last.line, last.column);
 	};
-	if (!closed)
-		errors.push({
-			code: 'unclosedHeader',
-			range: new Range(1, 1, 1, 4),
-			message: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.'),
-		});
+	if (!closed) errors.push({ code: 'unclosedHeader', range: new Range(1, 1, 1, 4), message: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.') });
 	const text = source.slice(offset, end);
 	const encoder = new TextEncoder();
 	const headerLines = text.split(/\r\n|\n|\r/u);
 	const exceedsBytes = encoder.encode(text).length > 16 * 1024;
 	if (exceedsBytes || headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 || headerLines.some(line => encoder.encode(line).length > 2048)) {
 		errors.push({
-			code: 'headerTooLarge',
-			range,
-			message: exceedsBytes
+			code: 'headerTooLarge', range, message: exceedsBytes
 				? localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.')
-				: localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.'),
+				: localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.')
 		});
 		return new PromptHeader(range, uri, attributes, errors);
 	}
@@ -186,30 +177,17 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		const end = node?.endOffset ?? 0;
 		const nodeRange = at(start, end);
 		if (depth > 8 || unsupported.has(`${start}:${end}`)) {
-			errors.push({
-				code: 'unsupportedYaml',
-				range: nodeRange,
-				message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.'),
-			});
+			errors.push({ code: 'unsupportedYaml', range: nodeRange, message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.') });
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
-		if (node?.type === 'map')
-			return {
-				type: 'map',
-				range: nodeRange,
-				properties: node.properties.flatMap(pair => {
-					const key = convert(pair.key, depth + 1);
-					return key.type === 'scalar' ? [{ key, value: convert(pair.value, depth + 1) }] : [];
-				}),
-			};
-		if (node?.type === 'sequence') return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(item, depth + 1)) };
-		return {
-			type: 'scalar',
-			value: node?.value ?? '',
-			format: node?.format ?? 'none',
-			range: nodeRange,
-			...(node?.format === 'none' && ['', '~', 'null', 'Null', 'NULL'].includes(node.value) ? { missing: true } : {}),
+		if (node?.type === 'map') return {
+			type: 'map', range: nodeRange, properties: node.properties.flatMap(pair => {
+				const key = convert(pair.key, depth + 1);
+				return key.type === 'scalar' ? [{ key, value: convert(pair.value, depth + 1) }] : [];
+			})
 		};
+		if (node?.type === 'sequence') return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(item, depth + 1)) };
+		return { type: 'scalar', value: node?.value ?? '', format: node?.format ?? 'none', range: nodeRange, ...(node?.format === 'none' && ['', '~', 'null', 'Null', 'NULL'].includes(node.value) ? { missing: true } : {}) };
 	};
 	try {
 		const syntaxErrors: YamlParseError[] = [];
@@ -220,38 +198,21 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 				// its placeholder; deeper nodes remain behind the existing depth limit.
 				unsupported.add(`${error.startOffset}:${error.endOffset}`);
 			} else {
-				errors.push({
-					code: error.code,
-					range: at(error.startOffset, error.endOffset),
-					message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code),
-				});
+				errors.push({ code: error.code, range: at(error.startOffset, error.endOffset), message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code) });
 			}
 		}
 		const root = convert(syntax, 0);
 		if (root.type === 'map') {
-			for (const property of root.properties)
-				attributes.push({
-					key: property.key.value,
-					keyRange: property.key.range,
-					range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()),
-					value: property.value,
-				});
+			for (const property of root.properties) attributes.push({ key: property.key.value, keyRange: property.key.range, range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()), value: property.value });
 		} else if (text.trim()) {
-			errors.push({
-				code: 'expectedMapping',
-				range: root.range,
-				message: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.'),
-			});
+			errors.push({ code: 'expectedMapping', range: root.range, message: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.') });
 		}
 	} catch {
-		errors.push({
-			code: 'invalidYaml',
-			range,
-			message: localize('prompt.syntax.parseFailed', 'The Skill header could not be parsed as YAML.'),
-		});
+		errors.push({ code: 'invalidYaml', range, message: localize('prompt.syntax.parseFailed', 'The Skill header could not be parsed as YAML.') });
 	}
 	return new PromptHeader(range, uri, attributes, errors);
 }
+
 
 /** Marked owns Markdown grammar. Source searches only recover ranges for its recognized tokens. */
 function bodyFileReferences(body: string, startLine: number): readonly IBodyFileReference[] {
@@ -265,8 +226,7 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 			let high = starts.length;
 			while (low + 1 < high) {
 				const middle = Math.floor((low + high) / 2);
-				if (starts[middle]! <= value) low = middle;
-				else high = middle;
+				if (starts[middle]! <= value) low = middle; else high = middle;
 			}
 			return low;
 		};
@@ -275,7 +235,7 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 		return new Range(startLine + index, offset - starts[index]! + 1, startLine + end, offset + length - starts[end]! + 1);
 	};
 	const add = (content: string, offset: number, length: number, isMarkdownLink: boolean) => {
-		if (content.startsWith('#') || (/^[a-z][a-z\d+.-]*:/iu.test(content) && !content.startsWith('file:'))) return;
+		if (content.startsWith('#') || /^[a-z][a-z\d+.-]*:/iu.test(content) && !content.startsWith('file:')) return;
 		result.push({ content, range: at(offset, length), isMarkdownLink });
 	};
 	const walk = (tokens: readonly Token[], start: number, end: number): void => {
@@ -284,10 +244,7 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 			const found = source.indexOf(token.raw, cursor);
 			const offset = found >= 0 && found < end ? found : cursor;
 			const limit = found >= 0 && found < end ? Math.min(end, offset + token.raw.length) : end;
-			if (token.type === 'code' || token.type === 'codespan' || token.type === 'html' || token.type === 'image') {
-				cursor = limit;
-				continue;
-			}
+			if (token.type === 'code' || token.type === 'codespan' || token.type === 'html' || token.type === 'image') { cursor = limit; continue; }
 			if (token.type === 'link' || token.type === 'def') {
 				const content = token.href as string;
 				const target = token.raw.indexOf(content, token.type === 'link' ? token.raw.indexOf('](') + 2 : 0);

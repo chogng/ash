@@ -2,7 +2,14 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { DialogSeverity, type FileFilter, type IDialogService, type IFileDialogService, type IOpenDialogOptions, type ISaveDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
+import {
+	DialogSeverity,
+	type FileFilter,
+	type IDialogService,
+	type IFileDialogService,
+	type IOpenDialogOptions,
+	type ISaveDialogOptions,
+} from '../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileKind, FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -19,38 +26,32 @@ interface FileDialogHostBase {
 
 function matchesFileFilters(name: string, filters: readonly FileFilter[]): boolean {
 	const lowerName = name.toLocaleLowerCase('en-US');
-	return filters.some(filter => filter.extensions.some(extension => extension === '*' || lowerName.endsWith(`.${extension.toLocaleLowerCase('en-US')}`)));
+	return filters.some(filter => filter.extensions.some(extension =>
+		extension === '*' || lowerName.endsWith(`.${extension.toLocaleLowerCase('en-US')}`)
+	));
 }
 
-type FileDialogHost = FileDialogHostBase &
-	(
-		| {
-				readonly kind: 'local';
-				readonly provider: HTMLFileSystemProvider;
-				readonly pickDirectory: (startIn?: FileSystemDirectoryHandle) => Promise<FileSystemDirectoryHandle>;
-		  }
-		| { readonly kind: 'server'; readonly client: IWebWorkspaceClient }
-	);
+type FileDialogHost = FileDialogHostBase & (
+	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly pickDirectory: (startIn?: FileSystemDirectoryHandle) => Promise<FileSystemDirectoryHandle>; }
+	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; }
+);
 
-type ServerDirectoryItem = IQuickPickItem &
-	(
-		| { readonly kind: 'select'; readonly path: string }
-		| { readonly kind: 'parent'; readonly path: string }
-		| { readonly kind: 'directory'; readonly path: string }
-		| { readonly kind: 'done'; readonly path: string }
-	);
+type ServerDirectoryItem = IQuickPickItem & (
+	| { readonly kind: 'select'; readonly path: string; }
+	| { readonly kind: 'parent'; readonly path: string; }
+	| { readonly kind: 'directory'; readonly path: string; }
+	| { readonly kind: 'done'; readonly path: string; }
+);
 
-type WorkspaceFileItem = IQuickPickItem &
-	({ readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI } | { readonly kind: 'navigate'; readonly resource: URI } | { readonly kind: 'done' });
+type WorkspaceFileItem = IQuickPickItem & (
+	| { readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI; }
+	| { readonly kind: 'navigate'; readonly resource: URI; }
+	| { readonly kind: 'done'; }
+);
 
 /** Selects folders and Save As targets for a browser Workbench. */
 export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
-	constructor(
-		private readonly host: FileDialogHost,
-		dialogs: () => IDialogService,
-		@IPathService private readonly paths: IPathService,
-		@IHostService hostService: IHostService,
-	) {
+	constructor(private readonly host: FileDialogHost, dialogs: () => IDialogService, @IPathService private readonly paths: IPathService, @IHostService hostService: IHostService) {
 		super(dialogs, hostService);
 	}
 
@@ -66,9 +67,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			const paths = await this.pickServerDirectories(this.host, options);
 			return paths && Promise.all(paths.map(path => this.paths.fileURI(path)));
 		}
-		let startIn = options.defaultUri?.path.startsWith('/@browser/') ? await this.host.provider.getDirectoryHandle(options.defaultUri) : undefined;
+		let startIn = options.defaultUri?.path.startsWith('/@browser/')
+			? await this.host.provider.getDirectoryHandle(options.defaultUri)
+			: undefined;
 		const folders: URI[] = [];
-		for (;;) {
+		for (; ;) {
 			let handle: FileSystemDirectoryHandle;
 			try {
 				handle = await this.host.pickDirectory(startIn);
@@ -102,30 +105,28 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		const filter = await this.chooseFileFilter(options.filters);
 		if (options.filters?.length && !filter) return undefined;
 		let defaultDirectory: URI | undefined;
-		const defaultIsAccessible =
-			options.defaultUri && (this.host.kind === 'local' ? options.defaultUri.path.startsWith('/@browser/') : !!workspaceRoot && extUri.isEqualOrParent(options.defaultUri, workspaceRoot));
+		const defaultIsAccessible = options.defaultUri && (this.host.kind === 'local'
+			? options.defaultUri.path.startsWith('/@browser/')
+			: !!workspaceRoot && extUri.isEqualOrParent(options.defaultUri, workspaceRoot));
 		if (options.defaultUri && defaultIsAccessible) {
 			const parent = dirname(options.defaultUri);
 			try {
-				defaultDirectory = (await this.host.fileService().stat(options.defaultUri)).kind === FileKind.Directory ? options.defaultUri : parent;
+				defaultDirectory = (await this.host.fileService().stat(options.defaultUri)).kind === FileKind.Directory
+					? options.defaultUri
+					: parent;
 			} catch (error) {
 				if (!(error instanceof FileNotFoundError)) throw error;
 				defaultDirectory = parent;
 			}
 		}
-		const directory =
-			this.host.kind === 'local'
-				? (
-						await this.showOpenDialog({
-							canSelectFiles: false,
-							canSelectFolders: true,
-							defaultUri: defaultDirectory,
-						})
-					)?.[0]
-				: (defaultDirectory ?? workspaceRoot);
+		const directory = this.host.kind === 'local'
+			? (await this.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: defaultDirectory }))?.[0]
+			: defaultDirectory ?? workspaceRoot;
 		if (!directory) return undefined;
-		const defaultName = options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri) ? basename(options.defaultUri) : '';
-		for (;;) {
+		const defaultName = options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri)
+			? basename(options.defaultUri)
+			: '';
+		for (; ;) {
 			const result = await this.dialogs().input({
 				title: options.title ?? localize('dialog.saveFileTitle', 'Save File'),
 				message: localize('dialog.saveFileName', 'File name'),
@@ -136,10 +137,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			const name = result.values?.[0] ?? '';
 			if (await this.paths.hasValidBasename(directory, name)) {
 				if (filter && !matchesFileFilters(name, [filter])) {
-					await this.dialogs().showMessage({
-						severity: DialogSeverity.Error,
-						message: localize('dialog.fileTypeMismatch', 'Choose a file name matching the selected file types.'),
-					});
+					await this.dialogs().showMessage({ severity: DialogSeverity.Error, message: localize('dialog.fileTypeMismatch', 'Choose a file name matching the selected file types.') });
 					continue;
 				}
 				const target = directory.joinPathSegment(name);
@@ -183,16 +181,8 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			if (defaultDirectory && (await this.host.fileService().stat(defaultDirectory)).kind !== FileKind.Directory) {
 				defaultDirectory = dirname(defaultDirectory);
 			}
-			root = (
-				await this.showOpenDialog({
-					canSelectFiles: false,
-					canSelectFolders: true,
-					defaultUri: defaultDirectory,
-				})
-			)?.[0];
-			if (!root) {
-				return undefined;
-			}
+			root = (await this.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: defaultDirectory }))?.[0];
+			if (!root) { return undefined; }
 		}
 		if (!root) {
 			await this.dialogs().showMessage({
@@ -214,44 +204,25 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			}
 		}
 		const selected = new Map<string, URI>();
-		for (;;) {
+		for (; ;) {
 			const entries = await this.host.fileService().readDirectory(directory);
 			const items: WorkspaceFileItem[] = [
-				...(options.canSelectMany && selected.size
-					? [
-							{
-								kind: 'done' as const,
-								label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})`,
-							},
-						]
-					: []),
-				...(directory.toString() === root.toString()
-					? []
-					: [
-							{
-								kind: 'parent' as const,
-								resource: dirname(directory),
-								label: '..',
-							},
-						]),
-				...entries
-					.filter(entry => entry.kind === FileKind.Directory)
-					.map(entry => ({
-						kind: 'directory' as const,
-						resource: entry.resource,
-						label: entry.name,
-						...(options.canSelectFolders ? { buttons: [{ id: 'navigate', label: localize('dialog.openFolder', 'Open Folder') }] } : {}),
-					})),
-				...(options.canSelectFiles === false
-					? []
-					: entries
-							.filter(entry => entry.kind === FileKind.File && (!filter || matchesFileFilters(entry.name, [filter])))
-							.map(entry => ({ kind: 'file' as const, resource: entry.resource, label: entry.name }))),
+				...(options.canSelectMany && selected.size ? [{ kind: 'done' as const, label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})` }] : []),
+				...(directory.toString() === root.toString() ? [] : [{
+					kind: 'parent' as const,
+					resource: dirname(directory),
+					label: '..',
+				}]),
+				...entries.filter(entry => entry.kind === FileKind.Directory).map(entry => ({
+					kind: 'directory' as const, resource: entry.resource, label: entry.name,
+					...(options.canSelectFolders ? { buttons: [{ id: 'navigate', label: localize('dialog.openFolder', 'Open Folder') }] } : {}),
+				})),
+				...(options.canSelectFiles === false ? [] : entries.filter(entry => entry.kind === FileKind.File && (!filter || matchesFileFilters(entry.name, [filter]))).map(entry => ({ kind: 'file' as const, resource: entry.resource, label: entry.name }))),
 			];
 			const choice = await this.showWorkspaceFiles(this.host.quickInput(), directory, items, options, selected);
 			if (!choice) return undefined;
 			if (choice.kind === 'done') return [...selected.values()];
-			if (choice.kind === 'file' || (choice.kind === 'directory' && options.canSelectFolders === true)) {
+			if (choice.kind === 'file' || choice.kind === 'directory' && options.canSelectFolders === true) {
 				if (!options.canSelectMany) return [choice.resource];
 				const key = choice.resource.toString();
 				if (selected.has(key)) selected.delete(key);
@@ -262,13 +233,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		}
 	}
 
-	private showWorkspaceFiles(
-		quickInput: IQuickInputService,
-		directory: URI,
-		items: readonly WorkspaceFileItem[],
-		options: IOpenDialogOptions,
-		selected: ReadonlyMap<string, URI>,
-	): Promise<WorkspaceFileItem | undefined> {
+	private showWorkspaceFiles(quickInput: IQuickInputService, directory: URI, items: readonly WorkspaceFileItem[], options: IOpenDialogOptions, selected: ReadonlyMap<string, URI>): Promise<WorkspaceFileItem | undefined> {
 		const picker = quickInput.createQuickPick<WorkspaceFileItem>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
@@ -280,9 +245,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				...item,
 				label: options.canSelectMany
 					? `${selected.has(item.resource.toString()) ? localize('dialog.deselect', 'Deselect') : localize('dialog.select', 'Select')} ${item.label}`
-					: options.openLabel
-						? `${options.openLabel} ${item.label}`
-						: item.label,
+					: options.openLabel ? `${options.openLabel} ${item.label}` : item.label,
 			};
 		});
 		picker.placeholder = directory.fsPath;
@@ -295,18 +258,14 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(item);
 			};
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					return finish(item);
-				}),
-			);
-			disposables.add(
-				picker.onDidTriggerItemButton(({ item, button }) => {
-					if (button.id === 'navigate' && item.kind === 'directory') finish({ kind: 'navigate', resource: item.resource, label: item.label });
-				}),
-			);
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item);
+			}));
+			disposables.add(picker.onDidTriggerItemButton(({ item, button }) => {
+				if (button.id === 'navigate' && item.kind === 'directory') finish({ kind: 'navigate', resource: item.resource, label: item.label });
+			}));
 			disposables.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
 		});
@@ -315,15 +274,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	private async chooseFileFilter(filters: readonly FileFilter[] | undefined): Promise<FileFilter | undefined> {
 		if (!filters?.length) return undefined;
 		if (filters.length === 1) return filters[0];
-		const picker = this.host.quickInput().createQuickPick<IQuickPickItem & { readonly filter: FileFilter }>();
+		const picker = this.host.quickInput().createQuickPick<IQuickPickItem & { readonly filter: FileFilter; }>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
 		picker.ariaLabel = localize('dialog.chooseFileType', 'Choose a file type');
-		picker.items = filters.map(filter => ({
-			filter,
-			label: filter.name,
-			description: filter.extensions.map(extension => `*.${extension}`).join(', '),
-		}));
+		picker.items = filters.map(filter => ({ filter, label: filter.name, description: filter.extensions.map(extension => `*.${extension}`).join(', ') }));
 		return new Promise(resolve => {
 			let settled = false;
 			const finish = (filter: FileFilter | undefined): void => {
@@ -332,26 +287,24 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(filter);
 			};
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					return finish(item.filter);
-				}),
-			);
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.filter);
+			}));
 			disposables.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
 		});
 	}
 
-	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server' }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
+	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server'; }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
 		let path = '';
 		const initial = options.defaultUri ?? (this.paths.resolvedUserHome ? await this.paths.userHome() : undefined);
 		if (initial) {
-			path = (await this.paths.getHostPath(initial)) ?? '';
+			path = await this.paths.getHostPath(initial) ?? '';
 		}
 		const selected = new Set<string>();
-		for (;;) {
+		for (; ;) {
 			const listing = await host.client.list(path);
 			const choice = await this.showServerDirectory(host.quickInput(), listing, options, selected);
 			if (!choice) return undefined;
@@ -366,41 +319,17 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		}
 	}
 
-	private showServerDirectory(
-		quickInput: IQuickInputService,
-		listing: IWebWorkspaceDirectoryList,
-		options: IOpenDialogOptions,
-		selected: ReadonlySet<string>,
-	): Promise<ServerDirectoryItem | undefined> {
+	private showServerDirectory(quickInput: IQuickInputService, listing: IWebWorkspaceDirectoryList, options: IOpenDialogOptions, selected: ReadonlySet<string>): Promise<ServerDirectoryItem | undefined> {
 		const picker = quickInput.createQuickPick<ServerDirectoryItem>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
 		picker.placeholder = listing.path;
 		picker.ariaLabel = options.title ?? localize({ bundle: 'ash', key: 'workbench.serverFolderChoose' }, 'Choose a server folder');
 		picker.items = [
-			...(options.canSelectMany && selected.size
-				? [
-						{
-							kind: 'done' as const,
-							path: listing.path,
-							label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})`,
-						},
-					]
-				: []),
-			{
-				kind: 'select',
-				path: listing.path,
-				label: options.canSelectMany
-					? `${selected.has(listing.path) ? localize('dialog.deselect', 'Deselect') : localize('dialog.select', 'Select')} ${listing.path}`
-					: (options.openLabel ?? localize({ bundle: 'ash', key: 'workbench.serverFolderSelect' }, 'Select this folder')),
-				description: listing.path,
-			},
+			...(options.canSelectMany && selected.size ? [{ kind: 'done' as const, path: listing.path, label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})` }] : []),
+			{ kind: 'select', path: listing.path, label: options.canSelectMany ? `${selected.has(listing.path) ? localize('dialog.deselect', 'Deselect') : localize('dialog.select', 'Select')} ${listing.path}` : options.openLabel ?? localize({ bundle: 'ash', key: 'workbench.serverFolderSelect' }, 'Select this folder'), description: listing.path },
 			...(listing.parent ? [{ kind: 'parent' as const, path: listing.parent, label: '..', description: listing.parent }] : []),
-			...listing.directories.map(directory => ({
-				kind: 'directory' as const,
-				path: directory.path,
-				label: directory.name,
-			})),
+			...listing.directories.map(directory => ({ kind: 'directory' as const, path: directory.path, label: directory.name })),
 		];
 		return new Promise(resolve => {
 			let settled = false;
@@ -410,13 +339,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				disposables.dispose();
 				resolve(item);
 			};
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					return finish(item);
-				}),
-			);
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item);
+			}));
 			disposables.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
 		});

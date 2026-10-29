@@ -25,28 +25,19 @@ export class TextureAtlas extends Disposable {
 	public readonly onDidDeleteGlyphs: Event<void> = this._onDidDeleteGlyphs.event;
 	public readonly pageSize: number;
 
-	constructor(
-		maxTextureSize: number,
-		options: ITextureAtlasOptions | undefined,
-		private readonly _decorationStyleCache: DecorationStyleCache,
-		private readonly _colorMap: string[],
-	) {
+	constructor(maxTextureSize: number, options: ITextureAtlasOptions | undefined, private readonly _decorationStyleCache: DecorationStyleCache, private readonly _colorMap: string[]) {
 		super();
 		if (!Number.isSafeInteger(maxTextureSize) || maxTextureSize < 64) throw new RangeError('WebGPU texture size must be an integer of at least 64 pixels');
 		this._allocatorType = options?.allocatorType ?? 'slab';
 		this.pageSize = Math.min(1024 * Math.max(1, Math.floor(getActiveWindow().devicePixelRatio)), maxTextureSize);
 		this._initFirstPage();
-		this._register(
-			toDisposable(() => {
-				dispose(this._pages);
-				this._pages.length = 0;
-			}),
-		);
+		this._register(toDisposable(() => {
+			dispose(this._pages);
+			this._pages.length = 0;
+		}));
 	}
 
-	public get pages(): IReadableTextureAtlasPage[] {
-		return this._pages;
-	}
+	public get pages(): IReadableTextureAtlasPage[] { return this._pages; }
 
 	private _initFirstPage(): void {
 		const firstPage = new TextureAtlasPage(0, this.pageSize, this._allocatorType, this._colorMap);
@@ -79,12 +70,10 @@ export class TextureAtlas extends Disposable {
 
 	private _tryGetGlyph(pageIndex: number, rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> {
 		this._glyphPageIndex.set(pageIndex, chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey);
-		return (
-			this._pages[pageIndex]!.getGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId) ??
-			(pageIndex + 1 < this._pages.length
+		return this._pages[pageIndex]!.getGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId)
+			?? (pageIndex + 1 < this._pages.length
 				? this._tryGetGlyph(pageIndex + 1, rasterizer, chars, tokenMetadata, decorationStyleSetId)
-				: this._getGlyphFromNewPage(rasterizer, chars, tokenMetadata, decorationStyleSetId))
-		);
+				: this._getGlyphFromNewPage(rasterizer, chars, tokenMetadata, decorationStyleSetId));
 	}
 
 	private _getGlyphFromNewPage(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> {
@@ -98,17 +87,13 @@ export class TextureAtlas extends Disposable {
 		return glyph;
 	}
 
-	public getUsagePreview(): Promise<Blob[]> {
-		return Promise.all(this._pages.map(page => page.getUsagePreview()));
-	}
-	public getStats(): string[] {
-		return this._pages.map(page => page.getStats());
-	}
+	public getUsagePreview(): Promise<Blob[]> { return Promise.all(this._pages.map(page => page.getUsagePreview())); }
+	public getStats(): string[] { return this._pages.map(page => page.getStats()); }
 
 	private _warmUpAtlas(rasterizer: IGlyphRasterizer): void {
 		const ownerWindow = getActiveWindow();
 		this._warmUpTask.value?.clear();
-		const queue = (this._warmUpTask.value = createIdleTaskQueue(ownerWindow));
+		const queue = this._warmUpTask.value = createIdleTaskQueue(ownerWindow);
 		for (let code = 33; code <= 126; code++) {
 			queue.enqueue(() => {
 				if (!this.isDisposed) this.getGlyph(rasterizer, String.fromCharCode(code), MetadataConsts.FOREGROUND_MASK & (1 << MetadataConsts.FOREGROUND_OFFSET), 0, 0);

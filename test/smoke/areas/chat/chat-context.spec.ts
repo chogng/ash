@@ -11,7 +11,7 @@ import { Editor } from '../../../automation/editor.js';
 // The same renderer interaction is exercised in Browser, Electron UI and connected Electron.
 test('Workbench context picker uploads, previews and removes attachments with the keyboard', async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -24,15 +24,9 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	const upload = page.waitForEvent('filechooser');
 	await page.getByRole('dialog', { name: 'Search attachments', exact: true }).getByRole('combobox').fill('Attach files');
 	await page.keyboard.press('Enter');
-	await (
-		await upload
-	).setFiles([
+	await (await upload).setFiles([
 		{ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Workbench attachment brief') },
-		{
-			name: 'preview.png',
-			mimeType: 'image/png',
-			buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64'),
-		},
+		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') },
 	]);
 	const attachments = chat.locator('.ash-chat-input-editor');
 	const input = chat.locator('.stanza-editor-input');
@@ -63,7 +57,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 
 test('cancelling attachment selection removes the picker and lets the composer attach again', async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -88,17 +82,17 @@ test('cancelling attachment selection removes the picker and lets the composer a
 	await expect(input).toHaveCount(0);
 });
 
+
 test('host clipboard image becomes a decoded context attachment in Workbench and Sessions', async ({ workbench, target, application }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const marker = 'ash-input-owned-clipboard-fixture-20261012';
 	const png = await page.evaluate(marker => {
 		const canvas = document.createElement('canvas');
-		canvas.width = 2560;
-		canvas.height = 1280;
+		canvas.width = 2560; canvas.height = 1280;
 		const context = canvas.getContext('2d')!;
 		context.fillRect(0, 0, 2560, 1280);
 		context.fillStyle = 'white';
@@ -121,46 +115,24 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('ControlOrMeta+c');
 		// Every read follows a successful fixture write, so only this test's content can be inspected.
-		await expect.poll(() => (target.kind === 'electron' ? electron.evaluate(({ clipboard }) => clipboard.readText()) : page.evaluate(() => navigator.clipboard.readText()))).toBe(copiedMarker);
+		await expect.poll(() => target.kind === 'electron'
+			? electron.evaluate(({ clipboard }) => clipboard.readText())
+			: page.evaluate(() => navigator.clipboard.readText())).toBe(copiedMarker);
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Backspace');
 		await page.keyboard.press('ControlOrMeta+v');
 		// Viewport rows include soft wraps; the public input value additionally checks
 		// exact logical text so an inserted newline cannot pass as a visual wrap.
 		await new Editor(chat).waitForEditorContents(contents => contents.replace(/\n/g, '') === copiedMarker);
-		await expect
-			.poll(() =>
-				editor
-					.locator('.stanza-editor-input')
-					.evaluate(element => (element instanceof HTMLTextAreaElement ? element.value : (element as HTMLElement & { readonly editContext?: { readonly text: string } }).editContext?.text)),
-			)
-			.toBe(copiedMarker);
+		await expect.poll(() => editor.locator('.stanza-editor-input').evaluate(element => element instanceof HTMLTextAreaElement
+			? element.value
+			: (element as HTMLElement & { readonly editContext?: { readonly text: string; }; }).editContext?.text)).toBe(copiedMarker);
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Backspace');
 		if (target.kind === 'electron') {
-			await electron.evaluate(
-				async ({ clipboard, ClipboardItem }, { png, marker }) =>
-					clipboard.write([
-						new ClipboardItem({
-							'image/png': new Blob([Buffer.from(png, 'base64')], { type: 'image/png' }),
-							'text/plain': new Blob([marker], { type: 'text/plain' }),
-						}),
-					]),
-				{ png, marker },
-			);
+			await electron.evaluate(async ({ clipboard, ClipboardItem }, { png, marker }) => clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(png, 'base64')], { type: 'image/png' }), 'text/plain': new Blob([marker], { type: 'text/plain' }) })]), { png, marker });
 		} else {
-			await page.evaluate(
-				async ({ png, marker }) =>
-					navigator.clipboard.write([
-						new ClipboardItem({
-							'image/png': new Blob([Uint8Array.from(atob(png), character => character.charCodeAt(0))], {
-								type: 'image/png',
-							}),
-							'text/plain': new Blob([marker], { type: 'text/plain' }),
-						}),
-					]),
-				{ png, marker },
-			);
+			await page.evaluate(async ({ png, marker }) => navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([Uint8Array.from(atob(png), character => character.charCodeAt(0))], { type: 'image/png' }), 'text/plain': new Blob([marker], { type: 'text/plain' }) })]), { png, marker });
 		}
 		for (const surface of ['workbench', 'sessions']) {
 			const surfacePage = surface === 'workbench' ? page : await workbench.openAgentsWindow(target.kind);
@@ -195,21 +167,17 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 
 test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target, application }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	if (target.kind === 'browser') {
 		await page.evaluate(() => {
 			const canvas = document.createElement('canvas');
-			canvas.width = 48;
-			canvas.height = 36;
+			canvas.width = 48; canvas.height = 36;
 			canvas.getContext('2d')!.fillRect(0, 0, 48, 36);
 			const stream = canvas.captureStream(10);
-			Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-				configurable: true,
-				value: async () => stream,
-			});
-			(window as Window & { ashContextCapture?: MediaStream }).ashContextCapture = stream;
+			Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => stream });
+			(window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture = stream;
 		});
 	}
 	let restoreCapture: (() => Promise<void>) | undefined;
@@ -219,29 +187,16 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 		// Replace the OS capture boundary with test-owned pixels; never request screen permission.
 		const saved = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences, screen, nativeImage }) => {
 			const original = { capture: desktopCapturer.getSources, access: systemPreferences.getMediaAccessStatus };
-			systemPreferences.getMediaAccessStatus = media => (media === 'screen' ? 'granted' : original.access.call(systemPreferences, media));
-			desktopCapturer.getSources = async () =>
-				screen.getAllDisplays().map(display => ({
-					id: `screen:${display.id}`,
-					name: 'Synthetic screenshot',
-					display_id: String(display.id),
-					appIcon: nativeImage.createEmpty(),
-					thumbnail: nativeImage.createFromBitmap(Buffer.alloc(48 * 36 * 4, 255), {
-						width: 48,
-						height: 36,
-					}),
-				}));
+			systemPreferences.getMediaAccessStatus = media => media === 'screen' ? 'granted' : original.access.call(systemPreferences, media);
+			desktopCapturer.getSources = async () => screen.getAllDisplays().map(display => ({
+				id: `screen:${display.id}`, name: 'Synthetic screenshot', display_id: String(display.id), appIcon: nativeImage.createEmpty(),
+				thumbnail: nativeImage.createFromBitmap(Buffer.alloc(48 * 36 * 4, 255), { width: 48, height: 36 }),
+			}));
 			return original;
 		});
 		restoreCapture = async () => {
-			try {
-				await desktop.evaluate(({ desktopCapturer, systemPreferences }, original) => {
-					desktopCapturer.getSources = original.capture;
-					systemPreferences.getMediaAccessStatus = original.access;
-				}, saved);
-			} finally {
-				await saved.dispose();
-			}
+			try { await desktop.evaluate(({ desktopCapturer, systemPreferences }, original) => { desktopCapturer.getSources = original.capture; systemPreferences.getMediaAccessStatus = original.access; }, saved); }
+			finally { await saved.dispose(); }
 		};
 	}
 	try {
@@ -253,13 +208,7 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 			await expect.poll(() => application.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBeGreaterThan(0);
 			const overlay = application.windows().find(window => window.url().includes('/imageView/imageView.html'))!;
 			await overlay.frameLocator('iframe').getByRole('button', { name: 'Entire screen', exact: true }).click();
-			await overlay
-				.frameLocator('iframe')
-				.getByRole('button', { name: 'Add to Chat', exact: true })
-				.click()
-				.catch(error => {
-					if (!overlay.isClosed()) throw error;
-				});
+			await overlay.frameLocator('iframe').getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
 			await expect.poll(() => application.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(0);
 		} else {
 			const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
@@ -271,29 +220,23 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 		await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		if (target.kind === 'browser') {
-			await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
+			await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
 		}
 		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 		await chat.getByRole('button', { name: 'Remove Screenshot', exact: true }).press('Enter');
-	} finally {
-		await restoreCapture?.();
-	}
+
+	} finally { await restoreCapture?.(); }
 });
 
 test('browser screen chooser cancellation closes the picker and restores the message', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	await page.evaluate(() => {
-		Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-			configurable: true,
-			value: async () => {
-				throw new DOMException('Cancelled', 'NotAllowedError');
-			},
-		});
+		Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => { throw new DOMException('Cancelled', 'NotAllowedError'); } });
 	});
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
@@ -311,9 +254,7 @@ test('Sessions direct image pastes use the shared resizing and preview path', as
 	const page = await workbench.openAgentsWindow(target.kind);
 	const composer = page.locator('.ash-sessions-chat-slot.active:visible');
 	await composer.locator('.stanza-editor-input').evaluate(element => {
-		const canvas = document.createElement('canvas');
-		canvas.width = 3072;
-		canvas.height = 1536;
+		const canvas = document.createElement('canvas'); canvas.width = 3072; canvas.height = 1536;
 		canvas.getContext('2d')!.fillRect(0, 0, 3072, 1536);
 		const bytes = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]), character => character.charCodeAt(0));
 		const clipboardData = new DataTransfer();
@@ -336,7 +277,7 @@ test('terminal, symbol and search context source buttons return to their product
 	await workbench.search.open();
 	await workbench.search.search('const value');
 	await expect(workbench.search.status).toHaveText('1 results');
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -368,14 +309,11 @@ test('terminal, symbol and search context source buttons return to their product
 });
 
 const instructionTest = test.extend({
-	testWorkspace: async ({}, use) => {
+	testWorkspace: async ({ }, use) => {
 		const workspace = await createTestWorkspace();
 		try {
 			await mkdir(join(workspace.directory, '.ash/instructions'), { recursive: true });
-			await writeFile(
-				join(workspace.directory, '.ash/instructions/review.md'),
-				'---\nname: review\ndescription: Check public contracts\nload: on-demand\n---\nCheck API compatibility before making changes.',
-			);
+			await writeFile(join(workspace.directory, '.ash/instructions/review.md'), '---\nname: review\ndescription: Check public contracts\nload: on-demand\n---\nCheck API compatibility before making changes.');
 			await use(workspace);
 		} finally {
 			await disposeTestWorkspace(workspace);
@@ -386,17 +324,14 @@ const instructionTest = test.extend({
 instructionTest('instruction context discovers the authorized directory and opens its source', async ({ target, workbench }) => {
 	instructionTest.skip(target.appServerMode !== 'required', 'Requires the backend instruction catalog.');
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Instructions…', exact: true }).click();
 	await page.getByRole('dialog').getByRole('combobox').fill('contracts');
-	await page
-		.getByRole('dialog')
-		.getByRole('option', { name: /review/ })
-		.click();
+	await page.getByRole('dialog').getByRole('option', { name: /review/ }).click();
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 	await chat.getByRole('button', { name: 'Open review', exact: true }).press('Enter');
 	await expect(page.getByRole('tab', { name: 'review.md', exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -420,27 +355,21 @@ test('live GitHub account attaches a real issue and pull request through the con
 		} finally {
 			await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 		}
-		const { issue, pr } = await page.evaluate(
-			async ({ accountId, state }) => {
-				const github = globalThis.ashWebWorkbenchHost!.api.github;
-				const repository = { accountId, host: 'github.com', owner: 'microsoft', name: 'vscode' };
-				return {
-					issue: (await github.listIssues(repository, state, '', 1)).items[0]!,
-					pr: (await github.listPullRequests(repository, state, 1)).items[0]!,
-				};
-			},
-			{ accountId: accountId!, state: GitHubIssueState.Open },
-		);
+		const { issue, pr } = await page.evaluate(async ({ accountId, state }) => {
+			const github = globalThis.ashWebWorkbenchHost!.api.github;
+			const repository = { accountId, host: 'github.com', owner: 'microsoft', name: 'vscode' };
+			return {
+				issue: (await github.listIssues(repository, state, '', 1)).items[0]!,
+				pr: (await github.listPullRequests(repository, state, 1)).items[0]!,
+			};
+		}, { accountId: accountId!, state: GitHubIssueState.Open });
 		expect(issue.number).toBeGreaterThan(0);
 		expect(pr.number).toBeGreaterThan(0);
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		}
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-		for (const item of [
-			{ label: 'Issue…', url: issue.url, number: issue.number },
-			{ label: 'Pull Request…', url: pr.url, number: pr.number },
-		]) {
+		for (const item of [{ label: 'Issue…', url: issue.url, number: issue.number }, { label: 'Pull Request…', url: pr.url, number: pr.number }]) {
 			await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 			await page.getByRole('dialog').getByRole('option', { name: item.label, exact: true }).click();
 			await page.getByRole('dialog').getByRole('combobox').fill(item.url);
@@ -458,21 +387,19 @@ test('live GitHub account attaches a real issue and pull request through the con
 
 test('tool context reads the current backend catalog and opens Tools settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Tools…', exact: true }).click();
 	await page.getByRole('dialog').getByRole('combobox').fill('read_file');
-	await page
-		.getByRole('dialog')
-		.getByRole('option', { name: /^read_file(?:\s|$)/ })
-		.click();
+	await page.getByRole('dialog').getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
 	await chat.getByRole('button', { name: 'Open Tool: read_file', exact: true }).press('Enter');
 	await expect(page.locator('[data-active-settings-category="tools"]')).toBeVisible();
 	await expect(page.locator('.ash-agent-capabilities-list')).toContainText('read_file');
 });
+
 
 test('Sessions tool context opens the current Tools catalog in its settings dialog', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -480,10 +407,7 @@ test('Sessions tool context opens the current Tools catalog in its settings dial
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Tools…', exact: true }).click();
 	await page.getByRole('dialog').getByRole('combobox').fill('read_file');
-	await page
-		.getByRole('dialog')
-		.getByRole('option', { name: /^read_file(?:\s|$)/ })
-		.click();
+	await page.getByRole('dialog').getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
 	await chat.getByRole('button', { name: 'Open Tool: read_file', exact: true }).press('Enter');
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings', exact: true });
 	await expect(settings.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -493,6 +417,7 @@ test('Sessions tool context opens the current Tools catalog in its settings dial
 	await expect(chat.getByRole('button', { name: 'Open Tool: read_file', exact: true })).toBeFocused();
 });
 
+
 instructionTest('Sessions instruction context is available before its first turn', async ({ target, workbench }) => {
 	instructionTest.skip(target.appServerMode !== 'required', 'Requires the backend instruction catalog.');
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -500,10 +425,7 @@ instructionTest('Sessions instruction context is available before its first turn
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Instructions…', exact: true }).click();
 	await page.getByRole('dialog').getByRole('combobox').fill('contracts');
-	await page
-		.getByRole('dialog')
-		.getByRole('option', { name: /review/ })
-		.click();
+	await page.getByRole('dialog').getByRole('option', { name: /review/ }).click();
 	await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText('review');
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 });
@@ -511,7 +433,7 @@ instructionTest('Sessions instruction context is available before its first turn
 for (const surface of ['Workbench', 'Sessions']) {
 	test(`${surface} tool selection controls the backend catalog and removal restores tools`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = surface === 'Sessions' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
-		if (surface === 'Workbench' && !(await page.locator('.ash-chat-view-pane').isVisible())) {
+		if (surface === 'Workbench' && !await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		}
 		const chat = page.locator(surface === 'Sessions' ? '.ash-sessions-chat-slot.active:visible' : '.ash-chat-view-pane .ash-chat:visible');

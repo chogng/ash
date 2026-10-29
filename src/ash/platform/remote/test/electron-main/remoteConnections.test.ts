@@ -12,17 +12,11 @@ test('Electron Main lists and resolves named targets through the shared Rust cat
 		runCommand: async (_executable, args) => {
 			calls.push([...args]);
 			if (args.includes('list')) {
-				return {
-					exitCode: 0,
-					stdout: '[{"name":"build","host":"build-linux","dir":"/srv/project"}]\n',
-					stderr: '',
-				};
+				return { exitCode: 0, stdout: '[{"name":"build","host":"build-linux","dir":"/srv/project"}]\n', stderr: '' };
 			}
 			return { exitCode: 0, stdout: '{"name":"build","host":"build-linux","dir":"/srv/project"}\n', stderr: '' };
 		},
-		scheduleConnect: connection => {
-			scheduled.push(connection);
-		},
+		scheduleConnect: connection => { scheduled.push(connection); },
 	});
 
 	assert.deepEqual(await service.list(), [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }]);
@@ -48,26 +42,14 @@ test('Electron Main creates, atomically updates, and removes targets through the
 			calls.push([...args]);
 			return { exitCode: 0, stdout: outputs.shift()!, stderr: '' };
 		},
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 
 	await assert.rejects(service.save({ name: 'build', host: 'build-linux', workspace: ' /srv/project ' }), /must be absolute/);
 	assert.deepEqual(calls, [], 'Invalid paths never reach the backend');
-	assert.deepEqual(await service.save({ name: ' BUILD ', host: 'BUILD-LINUX', workspace: '/srv/project ' }), {
-		name: 'build',
-		host: 'build-linux',
-		workspace: '/srv/project ',
-	});
-	assert.deepEqual(await service.update('BUILD', { name: 'Production', host: 'PRODUCTION-LINUX', workspace: '/srv/production' }), {
-		name: 'production',
-		host: 'production-linux',
-		workspace: '/srv/production',
-	});
-	assert.deepEqual(await service.remove('PRODUCTION'), {
-		name: 'production',
-		host: 'production-linux',
-		workspace: '/srv/production',
-	});
+	assert.deepEqual(await service.save({ name: ' BUILD ', host: 'BUILD-LINUX', workspace: '/srv/project ' }), { name: 'build', host: 'build-linux', workspace: '/srv/project ' });
+	assert.deepEqual(await service.update('BUILD', { name: 'Production', host: 'PRODUCTION-LINUX', workspace: '/srv/production' }), { name: 'production', host: 'production-linux', workspace: '/srv/production' });
+	assert.deepEqual(await service.remove('PRODUCTION'), { name: 'production', host: 'production-linux', workspace: '/srv/production' });
 	assert.deepEqual(calls, [
 		['connections', 'save', '--name', 'build', '--host', 'build-linux', '--dir', '/srv/project ', '--mode', 'create'],
 		['connections', 'update', '--name', 'build', '--new-name', 'production', '--host', 'production-linux', '--dir', '/srv/production'],
@@ -79,12 +61,8 @@ test('named Remote connection paths preserve POSIX backslashes', async () => {
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
-		runCommand: async () => ({
-			exitCode: 0,
-			stdout: '[{"name":"build","host":"build","dir":"/srv/project\\\\archive"}]',
-			stderr: '',
-		}),
-		scheduleConnect: () => {},
+		runCommand: async () => ({ exitCode: 0, stdout: '[{"name":"build","host":"build","dir":"/srv/project\\\\archive"}]', stderr: '' }),
+		scheduleConnect: () => { },
 	});
 
 	assert.deepEqual(await service.list(), [{ name: 'build', host: 'build', workspace: '/srv/project\\archive' }]);
@@ -94,12 +72,8 @@ test('named Remote connection mutations require the CLI to return the exact requ
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
-		runCommand: async () => ({
-			exitCode: 0,
-			stdout: '{"name":"other","host":"other","dir":"/srv/other"}',
-			stderr: '',
-		}),
-		scheduleConnect: () => {},
+		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"other","host":"other","dir":"/srv/other"}', stderr: '' }),
+		scheduleConnect: () => { },
 	});
 
 	await assert.rejects(() => service.save({ name: 'build', host: 'build', workspace: '/srv/build' }), /different target/);
@@ -107,7 +81,11 @@ test('named Remote connection mutations require the CLI to return the exact requ
 });
 
 test('named Remote connections fail closed on missing, non-canonical, or expanded records', async () => {
-	const outputs = ['null\n', '{"name":"build","host":"Build-Linux","dir":"/srv/project"}\n', '{"name":"build","host":"build-linux","dir":"/srv/project","password":"secret"}\n'];
+	const outputs = [
+		'null\n',
+		'{"name":"build","host":"Build-Linux","dir":"/srv/project"}\n',
+		'{"name":"build","host":"build-linux","dir":"/srv/project","password":"secret"}\n',
+	];
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
@@ -129,7 +107,7 @@ test('named Remote connection lists require sorted unique canonical records', as
 			stdout: '[{"name":"zulu","host":"zulu","dir":"/srv/z"},{"name":"alpha","host":"alpha","dir":"/srv/a"}]',
 			stderr: '',
 		}),
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 	await assert.rejects(() => service.list(), /duplicate or unsorted/);
 });
@@ -140,9 +118,7 @@ test('named Remote connection scheduling is reusable after one window open settl
 		remoteExecutable: 'ash-remote',
 		environment: {},
 		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","dir":"/"}', stderr: '' }),
-		scheduleConnect: () => {
-			schedules += 1;
-		},
+		scheduleConnect: () => { schedules += 1; },
 	});
 
 	await service.connect('build');
@@ -151,16 +127,14 @@ test('named Remote connection scheduling is reusable after one window open settl
 });
 
 test('concurrent named Remote connection requests cannot both cross the catalog gate', async () => {
-	let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string }) => void;
-	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string }>(resolve => (finishLookup = resolve));
+	let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string; }) => void;
+	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string; }>(resolve => finishLookup = resolve);
 	let schedules = 0;
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
 		runCommand: async () => lookup,
-		scheduleConnect: () => {
-			schedules += 1;
-		},
+		scheduleConnect: () => { schedules += 1; },
 	});
 
 	const first = service.connect('build');
@@ -172,16 +146,12 @@ test('concurrent named Remote connection requests cannot both cross the catalog 
 
 test('named Remote connection remains fenced until asynchronous window creation settles', async () => {
 	let finishWindowOpen!: () => void;
-	const windowOpen = new Promise<void>(resolve => (finishWindowOpen = resolve));
+	const windowOpen = new Promise<void>(resolve => finishWindowOpen = resolve);
 	let schedules = 0;
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
-		runCommand: async () => ({
-			exitCode: 0,
-			stdout: '{"name":"build","host":"build","dir":"/srv/project"}',
-			stderr: '',
-		}),
+		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","dir":"/srv/project"}', stderr: '' }),
 		scheduleConnect: async () => {
 			schedules += 1;
 			await windowOpen;
@@ -197,21 +167,15 @@ test('named Remote connection remains fenced until asynchronous window creation 
 	assert.equal(schedules, 2);
 });
 
+
 test('confirmed Remote targets cannot be redirected by a catalog edit before window creation', async () => {
 	const original = { name: 'build', host: 'build-linux', workspace: '/srv/project' };
 	let current = original;
 	const scheduled: RemoteConnectionDefinition[] = [];
 	const service = new RemoteConnections({
-		remoteExecutable: 'ash-remote',
-		environment: {},
-		runCommand: async () => ({
-			exitCode: 0,
-			stdout: JSON.stringify({ name: current.name, host: current.host, dir: current.workspace }),
-			stderr: '',
-		}),
-		scheduleConnect: connection => {
-			scheduled.push(connection);
-		},
+		remoteExecutable: 'ash-remote', environment: {},
+		runCommand: async () => ({ exitCode: 0, stdout: JSON.stringify({ name: current.name, host: current.host, dir: current.workspace }), stderr: '' }),
+		scheduleConnect: connection => { scheduled.push(connection); },
 	});
 	current = { ...original, host: 'different-host' };
 	await assert.rejects(service.connect('build', original), /changed after confirmation/);

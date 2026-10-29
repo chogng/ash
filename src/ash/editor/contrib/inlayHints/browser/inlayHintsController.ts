@@ -44,34 +44,27 @@ export class InlayHintsController extends Disposable {
 		super();
 		if (editor.getModel() !== viewport.textModel) throw new TypeError('Inlay hint dependencies must share one text model');
 		this.decorations = editor.createDecorationsCollection();
-		this.debounce = debounceService.for(languageFeaturesService.inlayHintsProvider, 'Inlay hints', {
-			min: 25,
-			max: 500,
-		});
+		this.debounce = debounceService.for(languageFeaturesService.inlayHintsProvider, 'Inlay hints', { min: 25, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.refresh(), this.debounce.default()));
 		this.modifierKeys = ModifierKeyEmitter.getInstance(viewport.domNode.domNode.ownerDocument.defaultView!);
 		this._register(this.modifierKeys.event(() => this.render()));
 		this._register(toDisposable(() => this.clear()));
-		this._register(
-			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerover', event => {
-				const element = event.target instanceof viewport.domNode.domNode.ownerDocument.defaultView!.HTMLElement ? event.target : undefined;
-				if (!element?.classList.contains('stanza-editor-inlay-hint')) return;
-				const target = viewport.getNearestTargetAtClientPoint(event);
-				const hint = target?.injectedText?.options.attachedData;
-				if (this.hints.includes(hint as LanguageInlayHint) && (hint as LanguageInlayHint).tooltip) {
-					element.title = (hint as LanguageInlayHint).tooltip!;
-				}
-			}),
-		);
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerover', event => {
+			const element = event.target instanceof viewport.domNode.domNode.ownerDocument.defaultView!.HTMLElement ? event.target : undefined;
+			if (!element?.classList.contains('stanza-editor-inlay-hint')) return;
+			const target = viewport.getNearestTargetAtClientPoint(event);
+			const hint = target?.injectedText?.options.attachedData;
+			if (this.hints.includes(hint as LanguageInlayHint) && (hint as LanguageInlayHint).tooltip) {
+				element.title = (hint as LanguageInlayHint).tooltip!;
+			}
+		}));
 		this._register(viewport.textModel.onDidChangeContent(() => this.schedule()));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.schedule()));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
 		this._register(languageFeaturesService.inlayHintsProvider.onDidChange(() => this.schedule()));
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.inlayHints)) this.schedule();
-			}),
-		);
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.inlayHints)) this.schedule();
+		}));
 		this.schedule();
 	}
 
@@ -92,7 +85,7 @@ export class InlayHintsController extends Disposable {
 	private async refresh(): Promise<void> {
 		const model = this.viewport.textModel;
 		if (this.isDisposed || model.isDisposed()) return;
-		const controller = (this.request = new AbortController());
+		const controller = this.request = new AbortController();
 		const request = {
 			...createLanguageFeatureRequest(model, model.getLanguageId(), controller.signal),
 			resource: model.uri,
@@ -134,23 +127,17 @@ export class InlayHintsController extends Disposable {
 		if (this.rendered === this.hints && this.visible === visible) return;
 		this.rendered = this.hints;
 		this.visible = visible;
-		this.decorations.set(
-			visible
-				? this.hints.map(hint => ({
-						range: Range.fromPositions(hint.position),
-						options: {
-							description: 'inlay-hint',
-							showIfCollapsed: true,
-							before: {
-								content: `${hint.paddingLeft ? '\u00a0' : ''}${typeof hint.label === 'string' ? hint.label : hint.label.map(part => part.value).join('')}${hint.paddingRight ? '\u00a0' : ''}`,
-								inlineClassName: 'stanza-editor-inlay-hint',
-								cursorStops: InjectedTextCursorStops.None,
-								attachedData: hint,
-							},
-						},
-					}))
-				: [],
-		);
+		this.decorations.set(visible ? this.hints.map(hint => ({
+			range: Range.fromPositions(hint.position),
+			options: {
+				description: 'inlay-hint', showIfCollapsed: true,
+				before: {
+					content: `${hint.paddingLeft ? '\u00a0' : ''}${typeof hint.label === 'string' ? hint.label : hint.label.map(part => part.value).join('')}${hint.paddingRight ? '\u00a0' : ''}`,
+					inlineClassName: 'stanza-editor-inlay-hint',
+					cursorStops: InjectedTextCursorStops.None, attachedData: hint,
+				},
+			},
+		})) : []);
 	}
 
 	private clear(): void {
@@ -165,22 +152,16 @@ export class InlayHintsController extends Disposable {
 }
 
 function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint {
-	if (!hint || !Number.isSafeInteger(hint.position?.lineNumber) || !Number.isSafeInteger(hint.position?.column) || hint.position.lineNumber < 1 || hint.position.column < 1) {
+	if (!hint || !Number.isSafeInteger(hint.position?.lineNumber) || !Number.isSafeInteger(hint.position?.column)
+		|| hint.position.lineNumber < 1 || hint.position.column < 1) {
 		throw new TypeError('Inlay hint has invalid position');
 	}
 	return Object.freeze({
 		position: new Position(hint.position.lineNumber, hint.position.column),
-		label:
-			typeof hint.label === 'string'
-				? hint.label
-				: Object.freeze(
-						hint.label.map(part =>
-							Object.freeze({
-								value: part.value,
-								...(part.location ? { location: part.location } : {}),
-							}),
-						),
-					),
+		label: typeof hint.label === 'string' ? hint.label : Object.freeze(hint.label.map(part => Object.freeze({
+			value: part.value,
+			...(part.location ? { location: part.location } : {}),
+		}))),
 		...(hint.kind ? { kind: hint.kind } : {}),
 		...(hint.tooltip !== undefined ? { tooltip: hint.tooltip } : {}),
 		...(hint.paddingLeft !== undefined ? { paddingLeft: hint.paddingLeft } : {}),
@@ -189,9 +170,8 @@ function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint 
 }
 
 registerEditorContribution({
-	id: InlayHintsController.ID,
-	install: context => {
+	id: InlayHintsController.ID, install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
 		return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
-	},
+	}
 });

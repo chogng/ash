@@ -31,13 +31,7 @@ export class CallViewPane extends ViewPane {
 	private readonly buttons = new Map<string, HTMLButtonElement>();
 	private working = false;
 
-	constructor(
-		container: HTMLElement,
-		options: IViewPaneOptions,
-		@ICallService private readonly calls: ICallService,
-		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IEditorService private readonly editors: IEditorService,
-	) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IConfigurationService private readonly configuration: IConfigurationService, @IEditorService private readonly editors: IEditorService) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.contentElement.classList.add('ash-call');
@@ -45,11 +39,7 @@ export class CallViewPane extends ViewPane {
 		this.statusDomNode.setAttribute('role', 'status');
 		this.formDomNode = h(document, 'form');
 		this.modeDomNode = h(document, 'select');
-		for (const [value, label] of [
-			['local', localize('call.mode.local', 'Create on this computer')],
-			['server', localize('call.mode.server', 'Create on a server')],
-			['invitation', localize('call.mode.invitation', 'Join with an invitation')],
-		]) {
+		for (const [value, label] of [['local', localize('call.mode.local', 'Create on this computer')], ['server', localize('call.mode.server', 'Create on a server')], ['invitation', localize('call.mode.invitation', 'Join with an invitation')]]) {
 			const option = h(document, 'option');
 			option.value = value!;
 			option.textContent = label!;
@@ -65,54 +55,28 @@ export class CallViewPane extends ViewPane {
 		this.field(this.formDomNode, localize('call.credential', 'Administrator key or invitation key'), this.credentialDomNode);
 		const start = this.button(localize('call.join', 'Join call'), 'start', async () => {
 			const type = this.modeDomNode.value;
-			await this.calls.start(
-				type === 'local'
-					? { type }
-					: type === 'server'
-						? { type, url: this.urlDomNode.value.trim(), administrator: this.credentialDomNode.value }
-						: {
-								type: 'invitation',
-								url: this.urlDomNode.value.trim(),
-								credential: this.credentialDomNode.value,
-							},
-			);
+			await this.calls.start(type === 'local' ? { type } : type === 'server'
+				? { type, url: this.urlDomNode.value.trim(), administrator: this.credentialDomNode.value }
+				: { type: 'invitation', url: this.urlDomNode.value.trim(), credential: this.credentialDomNode.value });
 			this.credentialDomNode.value = '';
 		});
 		this.formDomNode.append(start);
-		this._register(
-			addDisposableListener(this.formDomNode, 'submit', event => {
-				event.preventDefault();
-				start.click();
-			}),
-		);
+		this._register(addDisposableListener(this.formDomNode, 'submit', event => { event.preventDefault(); start.click(); }));
 		this._register(addDisposableListener(this.modeDomNode, 'change', () => this.render()));
-		const actions = (this.actionsDomNode = h(document, 'div'));
+		const actions = this.actionsDomNode = h(document, 'div');
 		actions.className = 'call-actions';
 		actions.append(
 			this.button(localize({ bundle: 'ash.workbench', key: 'call.document.link' }, 'Link current document'), 'link-document', () => this.linkCurrentDocument()),
 			this.button(localize('call.share', 'Share screen'), 'share', async () => {
 				this.sources = await this.calls.screenSources();
-				if (this.isDisposed || this.calls.state?.connection !== 'connected') {
-					return;
-				}
-				this.sourceDomNode.replaceChildren(
-					...this.sources.map((source, index) => {
-						const option = h(document, 'option');
-						option.value = String(index);
-						option.textContent = localize(
-							'call.sourceDescription',
-							'{0}: {1} ({2} × {3})',
-							source.target.type === 'display' ? localize('call.display', 'Display') : localize('call.window', 'Window'),
-							source.title,
-							source.width,
-							source.height,
-						);
-						return option;
-					}),
-				);
-				if (!this.sources.length) {
-					throw new Error(localize('call.noSources', 'No displays or windows are available to share.'));
-				}
+				if (this.isDisposed || this.calls.state?.connection !== 'connected') { return; }
+				this.sourceDomNode.replaceChildren(...this.sources.map((source, index) => {
+					const option = h(document, 'option');
+					option.value = String(index);
+					option.textContent = localize('call.sourceDescription', '{0}: {1} ({2} × {3})', source.target.type === 'display' ? localize('call.display', 'Display') : localize('call.window', 'Window'), source.title, source.width, source.height);
+					return option;
+				}));
+				if (!this.sources.length) { throw new Error(localize('call.noSources', 'No displays or windows are available to share.')); }
 				this.sourcePickerDomNode.hidden = false;
 			}),
 			this.button(localize('call.stopShare', 'Stop sharing'), 'stop-share', () => this.calls.stopScreenShare()),
@@ -137,25 +101,19 @@ export class CallViewPane extends ViewPane {
 		this.sourcePickerDomNode.append(
 			this.button(localize('call.startShare', 'Start sharing'), 'start-share', async () => {
 				const source = this.sources[Number(this.sourceDomNode.value)];
-				if (!source) {
-					throw new Error(localize('call.chooseSource', 'Choose a display or window.'));
-				}
+				if (!source) { throw new Error(localize('call.chooseSource', 'Choose a display or window.')); }
 				await this.calls.shareScreen(source.target);
 				this.sourcePickerDomNode.hidden = true;
 			}),
-			this.button(localize('call.cancelShare', 'Cancel sharing'), 'cancel-share', async () => {
+			this.button(localize('call.cancelShare', 'Cancel sharing'), 'cancel-share', async () => { this.sourcePickerDomNode.hidden = true; }),
+		);
+		this._register(addDisposableListener(this.sourcePickerDomNode, 'keydown', event => {
+			if (event.key === 'Escape') {
+				event.preventDefault();
 				this.sourcePickerDomNode.hidden = true;
-			}),
-		);
-		this._register(
-			addDisposableListener(this.sourcePickerDomNode, 'keydown', event => {
-				if (event.key === 'Escape') {
-					event.preventDefault();
-					this.sourcePickerDomNode.hidden = true;
-					this.buttons.get('share')?.focus();
-				}
-			}),
-		);
+				this.buttons.get('share')?.focus();
+			}
+		}));
 		this.screenStatusDomNode = h(document, 'div');
 		this.screenStatusDomNode.className = 'call-screen-status';
 		this.screenStatusDomNode.setAttribute('aria-live', 'polite');
@@ -170,17 +128,7 @@ export class CallViewPane extends ViewPane {
 		this.participantsDomNode.setAttribute('aria-label', localize('call.people', 'People in this call'));
 		this.documentsDomNode = h(document, 'ul');
 		this.documentsDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'call.document.list' }, 'Documents shared in this call'));
-		this.contentElement.append(
-			this.statusDomNode,
-			this.formDomNode,
-			actions,
-			this.documentsDomNode,
-			this.sourcePickerDomNode,
-			this.screenStatusDomNode,
-			this.screensDomNode,
-			this.invitationDomNode,
-			this.participantsDomNode,
-		);
+		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.documentsDomNode, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
 		this._register(calls.onDidChange(() => this.render()));
 		this._register(calls.onDidChangeScreens(() => this.renderScreens()));
 		this.render();
@@ -188,11 +136,8 @@ export class CallViewPane extends ViewPane {
 	}
 
 	public override focus(): void {
-		if (!this.formDomNode.hidden) {
-			this.modeDomNode.focus();
-		} else {
-			this.buttons.get('leave')?.focus();
-		}
+		if (!this.formDomNode.hidden) { this.modeDomNode.focus(); }
+		else { this.buttons.get('leave')?.focus(); }
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.calls')) {
 			this.statusDomNode.textContent = this.statusDomNode.textContent + ' ' + localize('call.helpHint', 'Use Tab to navigate and Alt+F1 for help.');
 		}
@@ -216,54 +161,34 @@ export class CallViewPane extends ViewPane {
 		button.type = 'button';
 		button.textContent = label;
 		this.buttons.set(id, button);
-		this._register(
-			addDisposableListener(button, 'click', () => {
-				if (this.working) {
-					return;
-				}
-				this.working = true;
+		this._register(addDisposableListener(button, 'click', () => {
+			if (this.working) { return; }
+			this.working = true;
+			this.render();
+			void action().then(() => {
+				this.working = false;
+				if (this.isDisposed) { return; }
 				this.render();
-				void action().then(
-					() => {
-						this.working = false;
-						if (this.isDisposed) {
-							return;
-						}
-						this.render();
-						if (id === 'start' && this.formDomNode.hidden) {
-							this.buttons.get('leave')?.focus();
-						} else if (id === 'share' && !this.sourcePickerDomNode.hidden) {
-							this.sourceDomNode.focus();
-						} else if (id === 'start-share') {
-							this.buttons.get('stop-share')?.focus();
-						} else if (id === 'cancel-share' || id === 'stop-share') {
-							this.buttons.get('share')?.focus();
-						} else if (!button.disabled && !button.hidden) {
-							button.focus();
-						}
-					},
-					error => {
-						this.working = false;
-						if (this.isDisposed) {
-							return;
-						}
-						this.render();
-						button.focus();
-						this.statusDomNode.textContent = error instanceof Error ? error.message : localize('call.failed', 'Could not update the call.');
-					},
-				);
-			}),
-		);
+				if (id === 'start' && this.formDomNode.hidden) { this.buttons.get('leave')?.focus(); }
+				else if (id === 'share' && !this.sourcePickerDomNode.hidden) { this.sourceDomNode.focus(); }
+				else if (id === 'start-share') { this.buttons.get('stop-share')?.focus(); }
+				else if (id === 'cancel-share' || id === 'stop-share') { this.buttons.get('share')?.focus(); }
+				else if (!button.disabled && !button.hidden) { button.focus(); }
+			}, error => {
+				this.working = false;
+				if (this.isDisposed) { return; }
+				this.render();
+				button.focus();
+				this.statusDomNode.textContent = error instanceof Error ? error.message : localize('call.failed', 'Could not update the call.');
+			});
+		}));
 		return button;
 	}
 
 	private render(): void {
 		const connectionLabels = {
-			connecting: localize('call.connecting', 'Connecting'),
-			connected: localize('call.connected', 'Connected'),
-			reconnecting: localize('call.reconnecting', 'Reconnecting'),
-			ended: localize('call.ended', 'Call ended'),
-			failed: localize('call.connectionFailed', 'Connection failed'),
+			connecting: localize('call.connecting', 'Connecting'), connected: localize('call.connected', 'Connected'),
+			reconnecting: localize('call.reconnecting', 'Reconnecting'), ended: localize('call.ended', 'Call ended'), failed: localize('call.connectionFailed', 'Connection failed'),
 		};
 		const state = this.calls.state;
 		const connecting = state?.connection === 'connecting' || state?.connection === 'reconnecting';
@@ -278,59 +203,34 @@ export class CallViewPane extends ViewPane {
 		this.formDomNode.hidden = active;
 		this.actionsDomNode.hidden = !active;
 		this.buttons.get('start')!.textContent = this.modeDomNode.value === 'invitation' ? localize('call.join', 'Join call') : localize('call.create', 'Create call');
-		this.statusDomNode.textContent =
-			state?.error ??
-			(state
-				? localize('call.state', '{0} · {1}', connectionLabels[state.connection], state.muted ? localize('call.micOff', 'Microphone off') : localize('call.micOn', 'Microphone on'))
-				: localize('call.idle', 'Start a call. Your microphone stays off until you unmute.'));
+		this.statusDomNode.textContent = state?.error ?? (state ? localize('call.state', '{0} · {1}', connectionLabels[state.connection], state.muted ? localize('call.micOff', 'Microphone off') : localize('call.micOn', 'Microphone on')) : localize('call.idle', 'Start a call. Your microphone stays off until you unmute.'));
 		for (const [id, button] of this.buttons) {
 			button.disabled = this.working || (id === 'start' ? active : !active);
-			if (id === 'invite' || id === 'end' || id === 'link-document') {
-				button.hidden = !state?.canManage;
-			}
-			if (id === 'invite' && state?.channelId) {
-				button.hidden = true;
-			}
-			if (id === 'link-document') {
-				button.disabled ||= state?.connection !== 'connected';
-			}
+			if (id === 'invite' || id === 'end' || id === 'link-document') { button.hidden = !state?.canManage; }
+			if (id === 'invite' && state?.channelId) { button.hidden = true; }
+			if (id === 'link-document') { button.disabled ||= state?.connection !== 'connected'; }
 			if (id === 'mute') {
 				button.textContent = state?.muted !== false ? localize('call.unmute', 'Unmute microphone') : localize('call.mute', 'Mute microphone');
 				button.disabled ||= !state?.microphoneAllowed;
 				button.setAttribute('aria-pressed', String(!state?.muted && active));
 			}
-			if (id === 'deafen') {
-				button.textContent = state?.deafened ? localize('call.resumeListening', 'Resume listening') : localize('call.stopListening', 'Stop listening');
-			}
-			if (id === 'share' || id === 'start-share') {
-				button.disabled ||= !state?.screenAllowed || state.connection !== 'connected';
-			}
-			if (id === 'share') {
-				button.hidden = !!state?.screenSharing;
-			}
-			if (id === 'stop-share') {
-				button.hidden = !state?.screenSharing;
-			}
+			if (id === 'deafen') { button.textContent = state?.deafened ? localize('call.resumeListening', 'Resume listening') : localize('call.stopListening', 'Stop listening'); }
+			if (id === 'share' || id === 'start-share') { button.disabled ||= !state?.screenAllowed || state.connection !== 'connected'; }
+			if (id === 'share') { button.hidden = !!state?.screenSharing; }
+			if (id === 'stop-share') { button.hidden = !state?.screenSharing; }
 		}
-		if (!active || state?.connection !== 'connected' || !state.screenAllowed) {
-			this.sourcePickerDomNode.hidden = true;
-		}
+		if (!active || state?.connection !== 'connected' || !state.screenAllowed) { this.sourcePickerDomNode.hidden = true; }
 		this.renderScreens();
 		this.renderDocuments();
-		if (!active) {
-			this.invitationDomNode.value = '';
-			this.invitationDomNode.hidden = true;
-		}
+		if (!active) { this.invitationDomNode.value = ''; this.invitationDomNode.hidden = true; }
 		const people = active ? state.participants : [];
 		this.participantsDomNode.hidden = !people.length;
 		const document = this.contentElement.ownerDocument;
-		this.participantsDomNode.replaceChildren(
-			...people.map((person, index) => {
-				const item = h(document, 'li');
-				item.textContent = person.muted ? localize('call.participantMuted', 'Participant {0} · microphone off', index + 1) : localize('call.participant', 'Participant {0}', index + 1);
-				return item;
-			}),
-		);
+		this.participantsDomNode.replaceChildren(...people.map((person, index) => {
+			const item = h(document, 'li');
+			item.textContent = person.muted ? localize('call.participantMuted', 'Participant {0} · microphone off', index + 1) : localize('call.participant', 'Participant {0}', index + 1);
+			return item;
+		}));
 	}
 
 	private async linkCurrentDocument(): Promise<void> {
@@ -378,8 +278,7 @@ export class CallViewPane extends ViewPane {
 						if (remove) await this.calls.unshareDocument(document);
 						else await this.openDocument(document);
 					} catch (error) {
-						if (!isCancellationError(error))
-							failure = error instanceof Error ? error.message : localize({ bundle: 'ash.workbench', key: 'call.document.failed' }, 'Could not open the shared document.');
+						if (!isCancellationError(error)) failure = error instanceof Error ? error.message : localize({ bundle: 'ash.workbench', key: 'call.document.failed' }, 'Could not open the shared document.');
 					} finally {
 						this.working = false;
 						if (!this.isDisposed) {
@@ -398,11 +297,7 @@ export class CallViewPane extends ViewPane {
 	private renderScreens(): void {
 		const frames = this.calls.screens;
 		const activeIds = new Set(frames.map(frame => frame.trackId));
-		for (const [id] of this.screens) {
-			if (!activeIds.has(id)) {
-				this.screens.deleteAndDispose(id);
-			}
-		}
+		for (const [id] of this.screens) { if (!activeIds.has(id)) { this.screens.deleteAndDispose(id); } }
 		for (const frame of frames) {
 			let screen = this.screens.get(frame.trackId);
 			if (!screen) {
@@ -412,12 +307,8 @@ export class CallViewPane extends ViewPane {
 			const index = this.calls.state?.participants.findIndex(person => person.id === frame.participantId) ?? -1;
 			screen.update(frame, index < 0 ? localize('call.screen', 'Shared screen') : localize('call.participantScreen', 'Participant {0} shared screen', index + 1));
 		}
-		const status =
-			this.calls.screenError ??
-			(this.calls.state?.screenSharing ? localize('call.sharing', 'You are sharing your screen.') : frames.length ? localize('call.screenCount', '{0} shared screens.', frames.length) : '');
-		if (this.screenStatusDomNode.textContent !== status) {
-			this.screenStatusDomNode.textContent = status;
-		}
+		const status = this.calls.screenError ?? (this.calls.state?.screenSharing ? localize('call.sharing', 'You are sharing your screen.') : frames.length ? localize('call.screenCount', '{0} shared screens.', frames.length) : '');
+		if (this.screenStatusDomNode.textContent !== status) { this.screenStatusDomNode.textContent = status; }
 	}
 }
 
@@ -437,16 +328,8 @@ class CallDocumentItem extends Disposable {
 		this.open.type = this.remove.type = 'button';
 		this.open.textContent = localize({ bundle: 'ash.workbench', key: 'call.document.open' }, 'Open document');
 		this.remove.textContent = localize({ bundle: 'ash.workbench', key: 'call.document.remove' }, 'Unlink document');
-		this._register(
-			addDisposableListener(this.open, 'click', () => {
-				if (this.document) void run(this.document, false);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.remove, 'click', () => {
-				if (this.document) void run(this.document, true);
-			}),
-		);
+		this._register(addDisposableListener(this.open, 'click', () => { if (this.document) void run(this.document, false); }));
+		this._register(addDisposableListener(this.remove, 'click', () => { if (this.document) void run(this.document, true); }));
 		item.append(this.label, this.open, this.remove);
 		container.append(item);
 		this._register(toDisposable(() => item.remove()));
@@ -476,20 +359,13 @@ class SharedScreen extends Disposable {
 		this.captionDomNode = h(container.ownerDocument, 'figcaption');
 		figure.append(this.imageDomNode, this.captionDomNode);
 		container.append(figure);
-		this._register(
-			toDisposable(() => {
-				this.imageDomNode.removeAttribute('src');
-				figure.remove();
-			}),
-		);
+		this._register(toDisposable(() => { this.imageDomNode.removeAttribute('src'); figure.remove(); }));
 	}
 
 	public update(frame: ScreenFrame, label: string): void {
 		this.imageDomNode.alt = label;
 		this.captionDomNode.textContent = label;
-		if (this.frame === frame) {
-			return;
-		}
+		if (this.frame === frame) { return; }
 		this.frame = frame;
 		const url = URL.createObjectURL(new Blob([frame.data], { type: 'image/jpeg' }));
 		this.imageDomNode.src = url;

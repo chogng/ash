@@ -25,24 +25,17 @@ test('the App Server provider requires the window connection service when create
 
 for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IServerEventApi]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
-		assert.throws(() => createProvider(sessionHost([]), dependency), {
-			message: `Unknown service: ${dependency.description}`,
-		});
+		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
 }
 
 for (const reconnect of [false, true]) {
 	test(`disposing during catalog subscription only releases its own connection (reconnect: ${reconnect})`, async () => {
 		const fake = sessionHost([]);
-		let resolveCatalog!: (value: { sessions: SessionDto[] }) => void;
-		fake.host.session.subscribeCatalog = () =>
-			new Promise(resolve => {
-				resolveCatalog = resolve;
-			});
+		let resolveCatalog!: (value: { sessions: SessionDto[]; }) => void;
+		fake.host.session.subscribeCatalog = () => new Promise(resolve => { resolveCatalog = resolve; });
 		let released = 0;
-		fake.host.session.unsubscribeCatalog = async () => {
-			released++;
-		};
+		fake.host.session.unsubscribeCatalog = async () => { released++; };
 		const provider = createProvider(fake);
 		const loading = provider.list();
 		const rejected = assert.rejects(loading, isCancellationError);
@@ -57,14 +50,9 @@ for (const reconnect of [false, true]) {
 		const fake = sessionHost([session('session-1', 'thread-1')]);
 		let resolveSession!: (value: Awaited<ReturnType<IAgentSessionService['subscribe']>>) => void;
 		const snapshot = await fake.host.session.subscribe({ sessionId: 'session-1' });
-		fake.host.session.subscribe = () =>
-			new Promise(resolve => {
-				resolveSession = resolve;
-			});
+		fake.host.session.subscribe = () => new Promise(resolve => { resolveSession = resolve; });
 		const released: string[] = [];
-		fake.host.session.unsubscribe = async ({ sessionId }) => {
-			released.push(sessionId);
-		};
+		fake.host.session.unsubscribe = async ({ sessionId }) => { released.push(sessionId); };
 		const provider = createProvider(fake);
 		const loading = provider.subscribe((await provider.list())[0]!);
 		const rejected = assert.rejects(loading, isCancellationError);
@@ -80,43 +68,27 @@ for (const terminal of ['stopped', 'replaced', 'ready', 'unknown'] as const) {
 	test(`provider teardown reports release failures only on its live connection (${terminal})`, async () => {
 		const fake = sessionHost([session('session-1', 'thread-1')]);
 		const rejectReleases: ((error: Error) => void)[] = [];
-		fake.host.session.unsubscribeCatalog = () =>
-			new Promise<void>((_, reject) => {
-				rejectReleases.push(reject);
-			});
-		fake.host.session.unsubscribe = () =>
-			new Promise<void>((_, reject) => {
-				rejectReleases.push(reject);
-			});
+		fake.host.session.unsubscribeCatalog = () => new Promise<void>((_, reject) => { rejectReleases.push(reject); });
+		fake.host.session.unsubscribe = () => new Promise<void>((_, reject) => { rejectReleases.push(reject); });
 		const provider = createProvider(fake);
 		await provider.subscribe((await provider.list())[0]!);
 		const reports: unknown[][] = [];
 		const original = console.error;
-		console.error = (...args: unknown[]) => {
-			reports.push(args);
-		};
+		console.error = (...args: unknown[]) => { reports.push(args); };
 		try {
 			provider.dispose();
 			assert.equal(fake.connectionListeners.size, 0);
 			assert.equal(rejectReleases.length, 2);
 			// The provider has removed its state listener before its parent closes/replaces the client.
 			if (terminal === 'stopped' || terminal === 'replaced') fake.setConnectionState(terminal === 'replaced' ? 'ready' : 'stopped');
-			if (terminal === 'unknown')
-				fake.appServer.getConnectionState = async () => {
-					throw new Error('State lookup failed');
-				};
+			if (terminal === 'unknown') fake.appServer.getConnectionState = async () => { throw new Error('State lookup failed'); };
 			const failure = new Error('App Server client disposed');
 			for (const reject of rejectReleases) reject(failure);
 			await new Promise<void>(resolve => setImmediate(resolve));
-			assert.deepEqual(
-				reports,
-				terminal === 'ready' || terminal === 'unknown'
-					? [
-							['Failed to unsubscribe Session catalog', failure],
-							["Failed to unsubscribe Session 'session-1'", failure],
-						]
-					: [],
-			);
+			assert.deepEqual(reports, terminal === 'ready' || terminal === 'unknown' ? [
+				['Failed to unsubscribe Session catalog', failure],
+				["Failed to unsubscribe Session 'session-1'", failure],
+			] : []);
 		} finally {
 			console.error = original;
 			provider.dispose();
@@ -127,20 +99,12 @@ for (const terminal of ['stopped', 'replaced', 'ready', 'unknown'] as const) {
 test('catalog discovery does not depend on reading the global default model', async () => {
 	const fake = sessionHost([]);
 	let modelReads = 0;
-	fake.host.model.readModel = async () => {
-		modelReads++;
-		throw new Error('Model unavailable');
-	};
+	fake.host.model.readModel = async () => { modelReads++; throw new Error('Model unavailable'); };
 	let released = 0;
-	fake.host.session.unsubscribeCatalog = async () => {
-		released++;
-	};
+	fake.host.session.unsubscribeCatalog = async () => { released++; };
 	const provider = createProvider(fake);
-	try {
-		assert.deepEqual(await provider.list(), []);
-	} finally {
-		provider.dispose();
-	}
+	try { assert.deepEqual(await provider.list(), []); }
+	finally { provider.dispose(); }
 	assert.deepEqual({ modelReads, released }, { modelReads: 0, released: 1 });
 });
 
@@ -150,19 +114,9 @@ test('initial selection follows the recorded root even when a default-named peer
 	const fake = sessionHost([value]);
 	using management = createManagement(fake);
 	await management.initialize();
-	assert.deepEqual(
-		{
-			selected: management.active?.threadId,
-			roles: management.sessions[0]?.chats.map(chat => [chat.threadId, chat.origin.type]),
-		},
-		{
-			selected: 'opaque-primary',
-			roles: [
-				['default', 'fork'],
-				['opaque-primary', 'root'],
-			],
-		},
-	);
+	assert.deepEqual({ selected: management.active?.threadId, roles: management.sessions[0]?.chats.map(chat => [chat.threadId, chat.origin.type]) }, {
+		selected: 'opaque-primary', roles: [['default', 'fork'], ['opaque-primary', 'root']],
+	});
 });
 
 test('list and subscription retain each root model independently of child and global models', async () => {
@@ -172,18 +126,11 @@ test('list and subscription retain each root model independently of child and gl
 	const otherModel = { provider: 'other-provider', model: 'other-root' };
 	const root = session('session-1', 'thread-1');
 	const fake = sessionHost([
-		{
-			...root,
-			model: rootModel,
-			threads: [...root.threads, { ...root.threads[0]!, threadId: 'child', parentThreadId: 'thread-1' }],
-		},
+		{ ...root, model: rootModel, threads: [...root.threads, { ...root.threads[0]!, threadId: 'child', parentThreadId: 'thread-1' }] },
 		{ ...session('session-2', 'thread-2'), model: otherModel },
 	]);
 	let modelReads = 0;
-	fake.host.model.readModel = async () => {
-		modelReads++;
-		return defaultModel;
-	};
+	fake.host.model.readModel = async () => { modelReads++; return defaultModel; };
 	const subscribe = fake.host.session.subscribe;
 	fake.host.session.subscribe = async params => {
 		const result = await subscribe(params);
@@ -193,19 +140,10 @@ test('list and subscription retain each root model independently of child and gl
 				...detail,
 				thread: {
 					...detail.thread,
-					turns: [
-						{
-							turnId: 'turn',
-							status: 'completed',
-							mode: 'agent',
-							kind: 'coding',
-							toolMode: 'direct',
-							approvalMode: 'manual',
-							usage: emptyUsage(),
-							items: [],
-							model: detail.thread.threadId === 'child' ? childModel : rootModel,
-						},
-					],
+					turns: [{
+						turnId: 'turn', status: 'completed', mode: 'agent', kind: 'coding', toolMode: 'direct', approvalMode: 'manual',
+						usage: emptyUsage(), items: [], model: detail.thread.threadId === 'child' ? childModel : rootModel,
+					}],
 				},
 			})),
 		};
@@ -234,32 +172,17 @@ test('creation uses the atomic root Thread and never invents a catalog model fro
 	const fake = sessionHost([]);
 	let modelReads = 0;
 	let extraThreads = 0;
-	fake.host.model.readModel = async () => {
-		modelReads++;
-		throw new Error('Defaults unavailable');
-	};
+	fake.host.model.readModel = async () => { modelReads++; throw new Error('Defaults unavailable'); };
 	fake.host.session.create = async () => {
 		const value = session('created', 'created-root');
 		fake.sessions.push(value);
 		return { session: value, agentTree: { roots: [] } };
 	};
-	fake.host.session.createThread = async () => {
-		extraThreads++;
-		throw new Error('Unexpected peer Thread');
-	};
+	fake.host.session.createThread = async () => { extraThreads++; throw new Error('Unexpected peer Thread'); };
 	using provider = createProvider(fake);
 	const active = await provider.create('New', { type: 'current' });
 	const persisted = await provider.readCatalog('created', active.session);
-	assert.deepEqual(
-		{
-			thread: active.threadId,
-			created: active.session.model,
-			persisted: persisted?.model,
-			modelReads,
-			extraThreads,
-		},
-		{ thread: 'created-root', created: undefined, persisted: undefined, modelReads: 0, extraThreads: 0 },
-	);
+	assert.deepEqual({ thread: active.threadId, created: active.session.model, persisted: persisted?.model, modelReads, extraThreads }, { thread: 'created-root', created: undefined, persisted: undefined, modelReads: 0, extraThreads: 0 });
 });
 
 for (const selected of [true, false]) {
@@ -273,22 +196,12 @@ for (const selected of [true, false]) {
 		await waitFor(() => service.active?.session.agentTree !== undefined);
 		const subscriptions = fake.subscribeCount;
 		let changes = 0;
-		using listener = service.onDidChange(() => {
-			changes++;
-		});
+		using listener = service.onDidChange(() => { changes++; });
 		fake.sessions[1] = { ...fake.sessions[1]!, model: nextModel };
 		fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
 		await waitFor(() => fake.readCatalogCount === 1);
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{
-				model: service.sessions[1]?.model,
-				active: service.active?.threadId,
-				subscriptions: fake.subscribeCount,
-				changes,
-			},
-			{ model: nextModel, active: selected ? 'thread-2' : 'thread-1', subscriptions, changes: 1 },
-		);
+		assert.deepEqual({ model: service.sessions[1]?.model, active: service.active?.threadId, subscriptions: fake.subscribeCount, changes }, { model: nextModel, active: selected ? 'thread-2' : 'thread-1', subscriptions, changes: 1 });
 	});
 }
 
@@ -301,39 +214,16 @@ for (const selected of [true, false]) {
 		await waitFor(() => service.active?.session.agentTree !== undefined);
 		const subscriptions = fake.subscribeCount;
 		let changes = 0;
-		using listener = service.onDidChange(() => {
-			changes++;
-		});
-		const manager = {
-			status: 'working' as const,
-			statusChangedAtUnixMs: 12,
-			activity: { type: 'operation' as const, text: 'Running a tool' },
-			summary: 'Background work',
-		};
-		fake.sessions[1] = {
-			...fake.sessions[1]!,
-			manager,
-			threads: fake.sessions[1]!.threads.map(thread => ({ ...thread, manager })),
-		};
+		using listener = service.onDidChange(() => { changes++; });
+		const manager = { status: 'working' as const, statusChangedAtUnixMs: 12, activity: { type: 'operation' as const, text: 'Running a tool' }, summary: 'Background work' };
+		fake.sessions[1] = { ...fake.sessions[1]!, manager, threads: fake.sessions[1]!.threads.map(thread => ({ ...thread, manager })) };
 		fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
 		await waitFor(() => fake.readCatalogCount === 1);
 		await new Promise<void>(resolve => setImmediate(resolve));
 
 		const updated = service.sessions[1]!;
-		assert.deepEqual(updated, {
-			...updated,
-			management: manager,
-			chats: updated.chats.map(chat => ({ ...chat, management: manager })),
-		});
-		assert.deepEqual(
-			{
-				subscriptions: fake.subscribeCount,
-				changes,
-				active: service.active?.threadId,
-				execution: updated.chats[0]?.executionStatus,
-			},
-			{ subscriptions, changes: 1, active: selected ? 'thread-2' : 'thread-1', execution: 'idle' },
-		);
+		assert.deepEqual(updated, { ...updated, management: manager, chats: updated.chats.map(chat => ({ ...chat, management: manager })) });
+		assert.deepEqual({ subscriptions: fake.subscribeCount, changes, active: service.active?.threadId, execution: updated.chats[0]?.executionStatus }, { subscriptions, changes: 1, active: selected ? 'thread-2' : 'thread-1', execution: 'idle' });
 	});
 }
 
@@ -348,27 +238,16 @@ for (const target of [{ type: 'local' as const, root: '/new' }, { type: 'ssh' as
 		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 		await waitFor(() => fake.readCatalogCount === 1);
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{ workspace: service.active?.session.workspace, subscriptions: fake.subscribeCount },
-			{
-				workspace: target ? { authorityId: target.type === 'ssh' ? 'ssh+new-host' : 'local', root: target.root } : null,
-				subscriptions,
-			},
-		);
+		assert.deepEqual({ workspace: service.active?.session.workspace, subscriptions: fake.subscribeCount }, { workspace: target ? { authorityId: target.type === 'ssh' ? 'ssh+new-host' : 'local', root: target.root } : null, subscriptions });
 	});
 }
 
 test('a default model write preserves durable catalog models and the active facade', async () => {
 	const first = { provider: 'provider', model: 'first' };
 	const second = { provider: 'provider', model: 'second' };
-	const fake = sessionHost([
-		{ ...session('session-1', 'thread-1'), model: first },
-		{ ...session('session-2', 'thread-2'), model: second },
-	]);
+	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model: first }, { ...session('session-2', 'thread-2'), model: second }]);
 	const written: ModelRef[] = [];
-	fake.host.model.setModel = async ({ model }) => {
-		written.push(model);
-	};
+	fake.host.model.setModel = async ({ model }) => { written.push(model); };
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
@@ -384,9 +263,7 @@ test('matching durable Session models do not suppress a default model write', as
 	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model }]);
 	fake.host.model.readModel = async () => model;
 	const written: ModelRef[] = [];
-	fake.host.model.setModel = async request => {
-		written.push(request.model);
-	};
+	fake.host.model.setModel = async request => { written.push(request.model); };
 	using service = createManagement(fake);
 	await service.setModel(model);
 	assert.deepEqual(written, [model]);
@@ -402,14 +279,7 @@ test('reconnection restores background details as well as the selected Session',
 	fake.setConnectionState('crashed');
 	fake.setConnectionState('ready');
 	await waitFor(() => fake.subscribeCount === 4 && service.sessions[0]?.agentTree !== undefined && service.sessions[1]?.agentTree !== undefined);
-	assert.deepEqual(
-		{
-			active: service.active?.threadId,
-			unopened: service.sessions[2]?.agentTree,
-			catalogSubscriptions: fake.catalogSubscriptionCount,
-		},
-		{ active: 'thread-2', unopened: undefined, catalogSubscriptions: 2 },
-	);
+	assert.deepEqual({ active: service.active?.threadId, unopened: service.sessions[2]?.agentTree, catalogSubscriptions: fake.catalogSubscriptionCount }, { active: 'thread-2', unopened: undefined, catalogSubscriptions: 2 });
 });
 
 test('a refresh from an old connection cannot revert a newer catalog or suppress later changes', async () => {
@@ -418,55 +288,23 @@ test('a refresh from an old connection cannot revert a newer catalog or suppress
 	const oldManagement = { status: 'working' as const, statusChangedAtUnixMs: 10 };
 	const restoredManagement = { status: 'stopped' as const, statusChangedAtUnixMs: 20 };
 	const originalSession = session('session-1', 'thread-1');
-	const fake = sessionHost([
-		{
-			...originalSession,
-			model: oldModel,
-			manager: oldManagement,
-			threads: originalSession.threads.map(thread => ({ ...thread, manager: oldManagement })),
-		},
-	]);
+	const fake = sessionHost([{ ...originalSession, model: oldModel, manager: oldManagement, threads: originalSession.threads.map(thread => ({ ...thread, manager: oldManagement })) }]);
 	fake.host.model.readModel = async () => ({ provider: 'provider', model: 'default' });
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
-	let release!: (result: { session: SessionDto }) => void;
+	let release!: (result: { session: SessionDto; }) => void;
 	const original = fake.host.session.readCatalog;
-	fake.host.session.readCatalog = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.readCatalog = () => new Promise(resolve => { release = resolve; });
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => release !== undefined);
 	fake.setConnectionState('crashed');
-	fake.sessions[0] = {
-		...fake.sessions[0]!,
-		title: 'Restored',
-		model: restoredModel,
-		manager: restoredManagement,
-		threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: restoredManagement })),
-	};
+	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Restored', model: restoredModel, manager: restoredManagement, threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: restoredManagement })) };
 	fake.setConnectionState('ready');
 	await waitFor(() => service.active?.session.title === 'Restored' && service.active.session.agentTree !== undefined);
-	release({
-		session: {
-			...fake.sessions[0]!,
-			title: 'Stale',
-			model: oldModel,
-			manager: oldManagement,
-			threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: oldManagement })),
-		},
-	});
+	release({ session: { ...fake.sessions[0]!, title: 'Stale', model: oldModel, manager: oldManagement, threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: oldManagement })) } });
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(
-		{
-			title: service.active?.session.title,
-			model: service.active?.session.model,
-			management: service.active?.session.management,
-			branch: service.active?.session.chats[0]?.management,
-		},
-		{ title: 'Restored', model: restoredModel, management: restoredManagement, branch: restoredManagement },
-	);
+	assert.deepEqual({ title: service.active?.session.title, model: service.active?.session.model, management: service.active?.session.management, branch: service.active?.session.chats[0]?.management }, { title: 'Restored', model: restoredModel, management: restoredManagement, branch: restoredManagement });
 	fake.host.session.readCatalog = original;
 	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Changed again', model: undefined };
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
@@ -495,25 +333,16 @@ test('reconnection restores catalog and loaded details while retaining selection
 	fake.setConnectionState('ready');
 	await waitFor(() => service.state === 'ready' && service.active?.session.agentTree !== undefined && fake.catalogSubscriptionCount === 2);
 
-	assert.deepEqual(
-		{
-			sessions: service.sessions.map(({ sessionId, title }) => ({ sessionId, title })),
-			active: service.active?.threadId,
-			draft: service.untitledSessions[0],
-			catalogSubscribed: fake.catalogSubscribed,
-			subscriptions: fake.subscribeCount,
-		},
-		{
-			sessions: [
-				{ sessionId: 'session-3', title: 'Session session-3' },
-				{ sessionId: 'session-2', title: 'Renamed while disconnected' },
-			],
-			active: 'thread-2',
-			draft: savedDraft,
-			catalogSubscribed: true,
-			subscriptions: 3,
-		},
-	);
+	assert.deepEqual({
+		sessions: service.sessions.map(({ sessionId, title }) => ({ sessionId, title })),
+		active: service.active?.threadId,
+		draft: service.untitledSessions[0],
+		catalogSubscribed: fake.catalogSubscribed,
+		subscriptions: fake.subscribeCount,
+	}, {
+		sessions: [{ sessionId: 'session-3', title: 'Session session-3' }, { sessionId: 'session-2', title: 'Renamed while disconnected' }],
+		active: 'thread-2', draft: savedDraft, catalogSubscribed: true, subscriptions: 3,
+	});
 	fake.sessions.push(session('session-4', 'thread-4'));
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-4', agentTreeChanged: false } });
 	await waitFor(() => service.sessions.length === 3);
@@ -538,15 +367,13 @@ test('reconnection preserves the active untitled Session and its manually select
 
 test('a catalog result from an old connection cannot replace the restored catalog', async () => {
 	const fake = sessionHost([]);
-	let release!: (result: { sessions: SessionDto[] }) => void;
+	let release!: (result: { sessions: SessionDto[]; }) => void;
 	const original = fake.host.session.subscribeCatalog;
 	let first = true;
 	fake.host.session.subscribeCatalog = () => {
 		if (!first) return original();
 		first = false;
-		return new Promise(resolve => {
-			release = resolve;
-		});
+		return new Promise(resolve => { release = resolve; });
 	};
 	using service = createManagement(fake);
 	const initial = service.initialize();
@@ -557,15 +384,7 @@ test('a catalog result from an old connection cannot replace the restored catalo
 	await waitFor(() => service.active?.threadId === 'fresh-thread' && service.active.session.agentTree !== undefined);
 	release({ sessions: [{ ...session('stale', 'stale-thread'), model: { provider: 'provider', model: 'stale' } }] });
 	await initial;
-	assert.deepEqual(
-		{
-			ids: service.sessions.map(session => session.sessionId),
-			model: service.active?.session.model,
-			state: service.state,
-			error: service.error,
-		},
-		{ ids: ['fresh'], model: restoredModel, state: 'ready', error: undefined },
-	);
+	assert.deepEqual({ ids: service.sessions.map(session => session.sessionId), model: service.active?.session.model, state: service.state, error: service.error }, { ids: ['fresh'], model: restoredModel, state: 'ready', error: undefined });
 });
 
 for (const outcome of ['success', 'failure']) {
@@ -575,13 +394,8 @@ for (const outcome of ['success', 'failure']) {
 		let release!: () => void;
 		let fail!: (error: Error) => void;
 		let started!: () => void;
-		const held = new Promise<void>((resolve, reject) => {
-			release = resolve;
-			fail = reject;
-		});
-		const requested = new Promise<void>(resolve => {
-			started = resolve;
-		});
+		const held = new Promise<void>((resolve, reject) => { release = resolve; fail = reject; });
+		const requested = new Promise<void>(resolve => { started = resolve; });
 		let first = true;
 		fake.host.session.subscribe = async params => {
 			const result = await original(params);
@@ -614,9 +428,7 @@ test('a failed catalog restoration retries on the next ready connection', async 
 	using service = createManagement(fake);
 	await service.initialize();
 	const original = fake.host.session.subscribeCatalog;
-	fake.host.session.subscribeCatalog = async () => {
-		throw new Error('Catalog unavailable');
-	};
+	fake.host.session.subscribeCatalog = async () => { throw new Error('Catalog unavailable'); };
 	fake.setConnectionState('crashed');
 	fake.setConnectionState('ready');
 	await waitFor(() => service.state === 'error');
@@ -632,25 +444,12 @@ test('a failed catalog restoration retries on the next ready connection', async 
 function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown): AppServerSessionsProvider {
 	using services = new InstantiationService();
 	services.registerInstance(IRendererHostService, fake.host as unknown as IRendererHost);
-	if (omitted !== IAppServerApi) {
-		services.registerInstance(IAppServerApi, fake.appServer);
-	}
-	if (omitted !== IAgentSessionService) {
-		services.registerInstance(IAgentSessionService, fake.host.session);
-	}
-	if (omitted !== IAgentModelsService) {
-		services.registerInstance(IAgentModelsService, fake.host.model);
-	}
-	if (omitted !== IAgentTurnService) {
-		services.registerInstance(IAgentTurnService, fake.host.turn);
-	}
-	if (omitted !== IServerEventApi) {
-		services.registerInstance(IServerEventApi, fake.host.events);
-	}
-	return services.createInstance(AppServerSessionsProvider, {
-		workspace: fake.host.workspace,
-		selectWorkspace: fake.host.selectWorkspace,
-	});
+	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
+	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
+	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }
+	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, fake.host.turn); }
+	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, fake.host.events); }
+	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace });
 }
 
 function createManagement(fake: ReturnType<typeof sessionHost>): SessionsManagementService {
@@ -682,12 +481,7 @@ test('container drafts preserve their Provider target through first send', async
 	};
 	using service = createManagement(fake);
 	await service.initialize();
-	const target = {
-		type: 'provider' as const,
-		providerId: 'ash.dev-containers',
-		workspace: 'C:\\work',
-		root: '/workspace',
-	};
+	const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' };
 	const draft = service.createUntitledSession('Container', target);
 	const active = await service.materializeUntitledSession(draft.untitledSessionId);
 	assert.deepEqual(active.session.workspace?.runtime, { providerId: target.providerId, workspace: target.workspace });
@@ -719,10 +513,7 @@ test('an untitled Session keeps its selected directory when the Agents window ch
 		fake.sessions.push(value);
 		return { session: value, agentTree: { roots: [] } };
 	};
-	fake.host.session.createThread = async params => ({
-		session: fake.sessions.find(candidate => candidate.sessionId === params.sessionId)!,
-		threadId: `thread-${created.length}`,
-	});
+	fake.host.session.createThread = async params => ({ session: fake.sessions.find(candidate => candidate.sessionId === params.sessionId)!, threadId: `thread-${created.length}` });
 	using service = createManagement(fake);
 	const first = service.createUntitledSession();
 	selected = { type: 'local', root: '/work/second' };
@@ -739,12 +530,8 @@ test('restoring an untitled identity keeps its workspace, model and Agent withou
 	const fake = sessionHost([]);
 	using service = createManagement(fake);
 	const draft: IUntitledChatSession = {
-		untitledSessionId: 'saved-draft',
-		title: 'Saved task',
-		model: { provider: 'provider', model: 'model' },
-		modelSelectionKind: 'manual',
-		agent: { name: 'worker', description: 'Implementation', sourceId: 'workspace-agent' },
-		workspace: { type: 'ssh', host: 'build', root: '/work/project' },
+		untitledSessionId: 'saved-draft', title: 'Saved task', model: { provider: 'provider', model: 'model' }, modelSelectionKind: 'manual',
+		agent: { name: 'worker', description: 'Implementation', sourceId: 'workspace-agent' }, workspace: { type: 'ssh', host: 'build', root: '/work/project' },
 	};
 	service.restoreUntitledSession(draft);
 	service.selectUntitledSession(draft.untitledSessionId);
@@ -758,10 +545,7 @@ test('a multi-root Workspace sends the selected folder as the execution target',
 	];
 	const fake = sessionHost([], undefined, () => ({ type: 'multiple', folders }));
 	let receivedFolders: unknown;
-	fake.host.selectWorkspace = async choices => {
-		receivedFolders = choices;
-		return choices[1]!.target;
-	};
+	fake.host.selectWorkspace = async choices => { receivedFolders = choices; return choices[1]!.target; };
 	let executionTarget: unknown;
 	fake.host.session.create = async params => {
 		executionTarget = params.executionTarget;
@@ -779,15 +563,9 @@ test('a multi-root Workspace sends the selected folder as the execution target',
 });
 
 test('closing the multi-root folder picker leaves the draft ready', async () => {
-	const fake = sessionHost([], undefined, () => ({
-		type: 'multiple',
-		folders: [{ label: 'first', target: { type: 'local', root: '/work/first' } }],
-	}));
+	const fake = sessionHost([], undefined, () => ({ type: 'multiple', folders: [{ label: 'first', target: { type: 'local', root: '/work/first' } }] }));
 	let created = false;
-	fake.host.session.create = async () => {
-		created = true;
-		throw new Error('unexpected');
-	};
+	fake.host.session.create = async () => { created = true; throw new Error('unexpected'); };
 	using service = createManagement(fake);
 	const draft = service.createUntitledSession();
 	await assert.rejects(service.materializeUntitledSession(draft.untitledSessionId), isCancellationError);
@@ -798,9 +576,7 @@ test('closing the multi-root folder picker leaves the draft ready', async () => 
 test('Session list becomes ready while the opened conversation is still loading', async () => {
 	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	let release!: () => void;
-	const held = new Promise<void>(resolve => {
-		release = resolve;
-	});
+	const held = new Promise<void>(resolve => { release = resolve; });
 	const subscribe = fake.host.session.subscribe.bind(fake.host.session);
 	fake.host.session.subscribe = async params => {
 		await held;
@@ -873,11 +649,7 @@ test('catalog invalidation refreshes a background Session without loading its co
 	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
-	fake.sessions[1] = {
-		...fake.sessions[1]!,
-		title: 'Renamed in background',
-		threads: [{ ...fake.sessions[1]!.threads[0]!, title: 'Renamed Thread' }],
-	};
+	fake.sessions[1] = { ...fake.sessions[1]!, title: 'Renamed in background', threads: [{ ...fake.sessions[1]!.threads[0]!, title: 'Renamed Thread' }] };
 
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
 	await waitFor(() => service.sessions[1]?.title === 'Renamed in background');
@@ -933,9 +705,7 @@ test('ordinary Thread events leave the opened conversation and rendered list int
 	const original = service.sessions[0];
 	const subscriptions = fake.subscribeCount;
 	let renders = 0;
-	using listener = service.onDidChange(() => {
-		renders += 1;
-	});
+	using listener = service.onDidChange(() => { renders += 1; });
 
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => fake.readCatalogCount === 1);
@@ -999,23 +769,7 @@ test('restoring a Session preserves the foreground draft and only restores the c
 	await service.restoreSession('first');
 	assert.deepEqual(fake.restoreRequests, [{ commandId: fake.restoreRequests[0]!.commandId, sessionId: 'first' }]);
 	const restored = service.sessions.find(session => session.sessionId === 'first')!;
-	assert.deepEqual(
-		{
-			status: restored.status,
-			threads: restored.chats.map(chat => [chat.threadId, chat.status]),
-			active: service.active,
-			draft: service.activeUntitledSession,
-		},
-		{
-			status: 'active',
-			threads: [
-				['root', 'active'],
-				['child', 'archived'],
-			],
-			active,
-			draft,
-		},
-	);
+	assert.deepEqual({ status: restored.status, threads: restored.chats.map(chat => [chat.threadId, chat.status]), active: service.active, draft: service.activeUntitledSession }, { status: 'active', threads: [['root', 'active'], ['child', 'archived']], active, draft });
 });
 
 test('a failed Session restore retains its archived catalog entry and can retry', async () => {
@@ -1024,9 +778,7 @@ test('a failed Session restore retains its archived catalog entry and can retry'
 	await service.initialize();
 	await service.archiveSession('first');
 	const restore = fake.host.session.restore;
-	fake.host.session.restore = async () => {
-		throw new Error('Synthetic restore failure');
-	};
+	fake.host.session.restore = async () => { throw new Error('Synthetic restore failure'); };
 	await assert.rejects(service.restoreSession('first'), /Synthetic restore failure/u);
 	assert.equal(service.sessions[0]?.status, 'archived');
 	fake.host.session.restore = restore;
@@ -1044,8 +796,7 @@ for (const disposed of [false, true]) {
 		fake.host.session.restore = () => pending.p;
 		const restoring = provider.restore(listed);
 		const rejected = assert.rejects(restoring, isCancellationError);
-		if (disposed) provider.dispose();
-		else fake.setConnectionState('crashed');
+		if (disposed) provider.dispose(); else fake.setConnectionState('crashed');
 		await pending.complete({ session: { ...initial, status: 'active' }, agentTree: { roots: [] } });
 		await rejected;
 	});
@@ -1059,22 +810,12 @@ test('interrupt reads the current Thread sequence before sending the command', a
 
 	await service.interruptThread('session-1', 'thread-1');
 
-	assert.deepEqual(
-		fake.interruptRequests.map(({ sessionId, threadId, turnId, expectedSequence }) => ({
-			sessionId,
-			threadId,
-			turnId,
-			expectedSequence,
-		})),
-		[
-			{
-				sessionId: 'session-1',
-				threadId: 'thread-1',
-				turnId: 'turn-1',
-				expectedSequence: 7,
-			},
-		],
-	);
+	assert.deepEqual(fake.interruptRequests.map(({ sessionId, threadId, turnId, expectedSequence }) => ({ sessionId, threadId, turnId, expectedSequence })), [{
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		turnId: 'turn-1',
+		expectedSequence: 7,
+	}]);
 });
 
 function session(sessionId: string, threadId: string): SessionDto {
@@ -1083,29 +824,20 @@ function session(sessionId: string, threadId: string): SessionDto {
 		title: `Session ${sessionId}`,
 		status: 'active',
 		manager: { status: 'idle', statusChangedAtUnixMs: 0 },
-		threads: [
-			{
-				threadId,
-				title: `Thread ${threadId}`,
-				createdAtUnixMs: 0,
-				completedTurnDurationMs: 0,
-				usage: emptyUsage(),
-				status: 'active',
-			},
-		],
+		threads: [{
+			threadId,
+			title: `Thread ${threadId}`,
+			createdAtUnixMs: 0,
+			completedTurnDurationMs: 0,
+			usage: emptyUsage(),
+			status: 'active',
+		}],
 	};
 }
 
 function emptyUsage(): ModelUsageSummary {
 	const total = { reported: 0, complete: true };
-	return {
-		modelInvocations: 0,
-		inputTokens: total,
-		outputTokens: total,
-		cachedInputTokens: total,
-		cacheWriteInputTokens: total,
-		reasoningTokens: total,
-	};
+	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
 }
 
 function agentNode(): AgentTreeNodeProjection {
@@ -1134,19 +866,10 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	let connectionGeneration = 1;
 	let catalogSubscribed = false;
 	const appServer: IAppServerApi = {
-		get connectionGeneration() {
-			return connectionGeneration;
-		},
+		get connectionGeneration() { return connectionGeneration; },
 		getConnectionState: async () => connectionState,
 		getSlashCommands: async () => [],
-		onConnectionState: listener => {
-			connectionListeners.add(listener);
-			return {
-				dispose: () => {
-					connectionListeners.delete(listener);
-				},
-			};
-		},
+		onConnectionState: listener => { connectionListeners.add(listener); return { dispose: () => { connectionListeners.delete(listener); } }; },
 	};
 	const listeners = new Set<(event: ServerNotification) => void>();
 	const sessions = [...initial];
@@ -1159,43 +882,16 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	let listCount = 0;
 	let readCatalogCount = 0;
 	const api: IAgentSessionService = {
-		async collectDebugLogs() {
-			throw new Error('Session management does not collect debug logs');
-		},
-		async rename({ sessionId, title }) {
-			const index = sessions.findIndex(candidate => candidate.sessionId === sessionId);
-			sessions[index] = { ...sessions[index]!, title };
-			return { session: sessions[index]!, agentTree };
-		},
-		async delete({ sessionId }) {
-			const index = sessions.findIndex(candidate => candidate.sessionId === sessionId);
-			if (index >= 0) sessions.splice(index, 1);
-		},
-		async create() {
-			throw new Error('Not used');
-		},
-		async listAgents() {
-			return { agents: [] };
-		},
-		async read({ sessionId }) {
-			return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree };
-		},
-		async readCatalog({ sessionId }) {
-			readCatalogCount += 1;
-			return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null };
-		},
-		async list() {
-			listCount += 1;
-			return { sessions };
-		},
-		async subscribeCatalog() {
-			catalogSubscriptionCount += 1;
-			catalogSubscribed = true;
-			return { sessions };
-		},
-		async unsubscribeCatalog() {
-			catalogSubscribed = false;
-		},
+		async collectDebugLogs() { throw new Error('Session management does not collect debug logs'); },
+		async rename({ sessionId, title }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); sessions[index] = { ...sessions[index]!, title }; return { session: sessions[index]!, agentTree }; },
+		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
+		async create() { throw new Error('Not used'); },
+		async listAgents() { return { agents: [] }; },
+		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
+		async readCatalog({ sessionId }) { readCatalogCount += 1; return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null }; },
+		async list() { listCount += 1; return { sessions }; },
+		async subscribeCatalog() { catalogSubscriptionCount += 1; catalogSubscribed = true; return { sessions }; },
+		async unsubscribeCatalog() { catalogSubscribed = false; },
 		async subscribe({ sessionId }) {
 			subscribeCount += 1;
 			const value = sessions.find(candidate => candidate.sessionId === sessionId)!;
@@ -1205,59 +901,35 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 				agentTree,
 			};
 		},
-		async unsubscribe() {},
-		async createThread() {
-			throw new Error('Not used');
-		},
+		async unsubscribe() { },
+		async createThread() { throw new Error('Not used'); },
 		async archive(params) {
 			archiveRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
-			sessions[index] = {
-				...sessions[index]!,
-				status: 'archived',
-				threads: sessions[index]!.threads.map(thread => ({ ...thread, status: 'archived' })),
-			};
+			sessions[index] = { ...sessions[index]!, status: 'archived', threads: sessions[index]!.threads.map(thread => ({ ...thread, status: 'archived' })) };
 			return { session: sessions[index]!, agentTree };
 		},
-		async stop() {
-			throw new Error('Not used');
-		},
+		async stop() { throw new Error('Not used'); },
 		async restore(params) {
 			restoreRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
 			const previous = sessions[index]!;
-			sessions[index] = {
-				...previous,
-				status: 'active',
-				threads: previous.threads.map((thread, i) => ({ ...thread, status: i === 0 ? 'active' : 'archived' })),
-			};
+			sessions[index] = { ...previous, status: 'active', threads: previous.threads.map((thread, i) => ({ ...thread, status: i === 0 ? 'active' : 'archived' })) };
 			return { session: sessions[index]!, agentTree };
 		},
 	};
 	const turn: IAgentTurnService = {
-		enqueue: async () => {
-			throw new Error('Queue is unavailable in this fixture');
-		},
+		enqueue: async () => { throw new Error('Queue is unavailable in this fixture'); },
 		listQueued: async () => ({ messages: [] }),
-		async consultAdvisor() {
-			throw new Error('Not used');
-		},
-		async start() {
-			throw new Error('Not used');
-		},
-		async compact() {
-			throw new Error('Not used');
-		},
-		async steer() {
-			throw new Error('Not used');
-		},
+		async consultAdvisor() { throw new Error('Not used'); },
+		async start() { throw new Error('Not used'); },
+		async compact() { throw new Error('Not used'); },
+		async steer() { throw new Error('Not used'); },
 		async interrupt(params) {
 			interruptRequests.push(params);
 			return { threadId: params.threadId, sequence: params.expectedSequence + 1, turnId: params.turnId };
 		},
-		async resolveInteraction() {
-			throw new Error('Not used');
-		},
+		async resolveInteraction() { throw new Error('Not used'); },
 	};
 	const events: IServerEventApi = {
 		subscribe(listener) {
@@ -1268,44 +940,23 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	return {
 		appServer,
 		connectionListeners,
-		get catalogSubscribed() {
-			return catalogSubscribed;
-		},
+		get catalogSubscribed() { return catalogSubscribed; },
 		setConnectionState(state: AppServerConnectionState): void {
 			connectionState = state;
-			if (state === 'ready') {
-				connectionGeneration++;
-			}
+			if (state === 'ready') { connectionGeneration++; }
 			if (state !== 'ready') catalogSubscribed = false;
 			for (const listener of connectionListeners) listener(state);
 		},
-		host: {
-			session: api,
-			model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null },
-			turn,
-			events,
-			workspace,
-			selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]): Promise<SessionExecutionTarget | undefined> => undefined,
-		},
+		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null }, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
 		restoreRequests,
 		interruptRequests,
-		get subscribeCount() {
-			return subscribeCount;
-		},
-		get catalogSubscriptionCount() {
-			return catalogSubscriptionCount;
-		},
-		get listCount() {
-			return listCount;
-		},
-		get readCatalogCount() {
-			return readCatalogCount;
-		},
-		emit(event: ServerNotification) {
-			for (const listener of listeners) listener(event);
-		},
+		get subscribeCount() { return subscribeCount; },
+		get catalogSubscriptionCount() { return catalogSubscriptionCount; },
+		get listCount() { return listCount; },
+		get readCatalogCount() { return readCatalogCount; },
+		emit(event: ServerNotification) { for (const listener of listeners) listener(event); },
 	};
 }
 
@@ -1345,14 +996,9 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 test('concurrent catalog discovery acquires a single connection subscription', async () => {
 	const fake = sessionHost([]);
-	let release!: (value: { sessions: SessionDto[] }) => void;
+	let release!: (value: { sessions: SessionDto[]; }) => void;
 	let acquisitions = 0;
-	fake.host.session.subscribeCatalog = () => {
-		acquisitions++;
-		return new Promise(resolve => {
-			release = resolve;
-		});
-	};
+	fake.host.session.subscribeCatalog = () => { acquisitions++; return new Promise(resolve => { release = resolve; }); };
 	using provider = createProvider(fake);
 	const first = provider.list();
 	const second = provider.list();
@@ -1371,15 +1017,9 @@ test('pending detail acquisition is cancelled and released before its replacemen
 	let acquisitions = 0;
 	fake.host.session.subscribe = async () => {
 		operations.push(`subscribe-${++acquisitions}`);
-		return acquisitions === 1
-			? new Promise(resolve => {
-					release = resolve;
-				})
-			: snapshot;
+		return acquisitions === 1 ? new Promise(resolve => { release = resolve; }) : snapshot;
 	};
-	fake.host.session.unsubscribe = async () => {
-		operations.push('unsubscribe');
-	};
+	fake.host.session.unsubscribe = async () => { operations.push('unsubscribe'); };
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
 	const old = provider.subscribe(listed);
@@ -1407,26 +1047,15 @@ test('a repeated release cancels its queued replacement and leaves no detail lea
 	fake.host.session.subscribe = async () => {
 		operations.push(`subscribe-${++acquisitions}`);
 		lease = true;
-		return acquisitions === 1
-			? new Promise(resolve => {
-					completeFirst = resolve;
-				})
-			: snapshot;
+		return acquisitions === 1 ? new Promise(resolve => { completeFirst = resolve; }) : snapshot;
 	};
-	fake.host.session.unsubscribe = async () => {
-		operations.push('unsubscribe');
-		lease = false;
-	};
+	fake.host.session.unsubscribe = async () => { operations.push('unsubscribe'); lease = false; };
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
-	const outcome = (pending: Promise<unknown>): Promise<string> =>
-		pending.then(
-			() => 'fulfilled',
-			error => {
-				assert.ok(isCancellationError(error));
-				return 'cancelled';
-			},
-		);
+	const outcome = (pending: Promise<unknown>): Promise<string> => pending.then(() => 'fulfilled', error => {
+		assert.ok(isCancellationError(error));
+		return 'cancelled';
+	});
 	const first = outcome(provider.subscribe(listed));
 	const releasing = provider.unsubscribe('first');
 	const replacement = outcome(provider.subscribe(listed));
@@ -1435,15 +1064,9 @@ test('a repeated release cancels its queued replacement and leaves no detail lea
 
 	completeFirst(snapshot);
 	await Promise.all([releasing, releasingAgain]);
-	assert.deepEqual(
-		{ first: await first, replacement: await replacement, operations: [...operations], lease },
-		{
-			first: 'cancelled',
-			replacement: 'cancelled',
-			operations: ['subscribe-1', 'unsubscribe'],
-			lease: false,
-		},
-	);
+	assert.deepEqual({ first: await first, replacement: await replacement, operations: [...operations], lease }, {
+		first: 'cancelled', replacement: 'cancelled', operations: ['subscribe-1', 'unsubscribe'], lease: false,
+	});
 	await provider.unsubscribe('first');
 	assert.deepEqual(operations, ['subscribe-1', 'unsubscribe']);
 
@@ -1466,25 +1089,16 @@ test('a failed post-create subscription retries the same command and uses its ex
 	const subscribe = fake.host.session.subscribe;
 	let first = true;
 	fake.host.session.subscribe = async params => {
-		if (first) {
-			first = false;
-			throw new Error('Detail unavailable');
-		}
+		if (first) { first = false; throw new Error('Detail unavailable'); }
 		return subscribe(params);
 	};
 	using management = createManagement(fake);
 	const draft = management.createUntitledSession('Retry detail');
 	await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), /Detail unavailable/);
 	const active = await management.materializeUntitledSession(draft.untitledSessionId);
-	assert.deepEqual(
-		{ commands, count: fake.sessions.length, thread: active.threadId, state: management.state },
-		{
-			commands: [`desktop-session-${draft.untitledSessionId}`, `desktop-session-${draft.untitledSessionId}`],
-			count: 1,
-			thread: 'atomic-root',
-			state: 'ready',
-		},
-	);
+	assert.deepEqual({ commands, count: fake.sessions.length, thread: active.threadId, state: management.state }, {
+		commands: [`desktop-session-${draft.untitledSessionId}`, `desktop-session-${draft.untitledSessionId}`], count: 1, thread: 'atomic-root', state: 'ready',
+	});
 });
 
 for (const rootState of ['missing', 'archived'] as const) {
@@ -1505,30 +1119,20 @@ for (const rootState of ['missing', 'archived'] as const) {
 			first = false;
 			return {
 				...result,
-				session: {
-					...result.session,
-					threads: rootState === 'missing' ? [] : result.session.threads.map(thread => ({ ...thread, status: 'archived' as const })),
-				},
+				session: { ...result.session, threads: rootState === 'missing' ? [] : result.session.threads.map(thread => ({ ...thread, status: 'archived' as const })) },
 			};
 		};
 		const released: string[] = [];
-		fake.host.session.unsubscribe = async params => {
-			released.push(params.sessionId);
-		};
+		fake.host.session.unsubscribe = async params => { released.push(params.sessionId); };
 		using provider = createProvider(fake);
 		await assert.rejects(provider.create('New', { type: 'current' }, undefined, 'creation'), /missing|new session has no active chat/i);
 		assert.deepEqual(released, ['durable']);
 		await provider.unsubscribe('durable');
 		assert.deepEqual(released, ['durable'], 'the failed creation must relinquish its lease');
 		const retried = await provider.create('New', { type: 'current' }, undefined, 'creation');
-		assert.deepEqual(
-			{ commands, sessions: fake.sessions.length, thread: retried.threadId },
-			{
-				commands: ['desktop-session-creation', 'desktop-session-creation'],
-				sessions: 1,
-				thread: 'atomic-root',
-			},
-		);
+		assert.deepEqual({ commands, sessions: fake.sessions.length, thread: retried.threadId }, {
+			commands: ['desktop-session-creation', 'desktop-session-creation'], sessions: 1, thread: 'atomic-root',
+		});
 		await provider.unsubscribe('durable');
 		assert.deepEqual(released, ['durable', 'durable']);
 	});
@@ -1537,10 +1141,7 @@ for (const rootState of ['missing', 'archived'] as const) {
 test('a Session creation response from a replaced connection cannot acquire details on the new connection', async () => {
 	const fake = sessionHost([]);
 	let release!: (value: Awaited<ReturnType<IAgentSessionService['create']>>) => void;
-	fake.host.session.create = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.create = () => new Promise(resolve => { release = resolve; });
 	using provider = createProvider(fake);
 	await provider.list();
 	const creating = provider.create('Closing connection', { type: 'current' });
@@ -1555,10 +1156,7 @@ test('a Session creation response from a replaced connection cannot acquire deta
 test('a reconnect while reading an interrupt target prevents sending its old sequence', async () => {
 	const fake = sessionHost([session('session-1', 'thread-1')], agentNode());
 	let release!: (value: Awaited<ReturnType<IAgentSessionService['read']>>) => void;
-	fake.host.session.read = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.read = () => new Promise(resolve => { release = resolve; });
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
 	const interrupting = provider.interrupt(listed, 'thread-1');
@@ -1573,14 +1171,9 @@ test('a reconnect while reading an interrupt target prevents sending its old seq
 test('disposing during atomic Session creation releases its implicit subscription on the same connection', async () => {
 	const fake = sessionHost([]);
 	let release!: (value: Awaited<ReturnType<IAgentSessionService['create']>>) => void;
-	fake.host.session.create = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.create = () => new Promise(resolve => { release = resolve; });
 	const releases: string[] = [];
-	fake.host.session.unsubscribe = async params => {
-		releases.push(params.sessionId);
-	};
+	fake.host.session.unsubscribe = async params => { releases.push(params.sessionId); };
 	const provider = createProvider(fake);
 	await provider.list();
 	const creating = provider.create('Closing', { type: 'current' });
@@ -1591,16 +1184,14 @@ test('disposing during atomic Session creation releases its implicit subscriptio
 	assert.deepEqual({ releases, details: fake.subscribeCount }, { releases: ['created'], details: 0 });
 });
 
+
 test('a catalog response resolved before disconnect cannot publish after disconnect without a new generation', async () => {
 	const fake = sessionHost([session('first', 'root')]);
 	using provider = createProvider(fake);
 	await provider.list();
 	const generation = fake.appServer.connectionGeneration;
-	let release!: (value: { sessions: SessionDto[] }) => void;
-	fake.host.session.list = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	let release!: (value: { sessions: SessionDto[]; }) => void;
+	fake.host.session.list = () => new Promise(resolve => { release = resolve; });
 	const loading = provider.list();
 	const rejected = assert.rejects(loading, isCancellationError);
 	release({ sessions: [session('late', 'late-root')] });
@@ -1614,10 +1205,7 @@ test('a resolved interrupt target is discarded when close precedes the consumer 
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
 	let release!: (value: Awaited<ReturnType<IAgentSessionService['read']>>) => void;
-	fake.host.session.read = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.read = () => new Promise(resolve => { release = resolve; });
 	const interrupting = provider.interrupt(listed, 'thread-1');
 	const rejected = assert.rejects(interrupting, isCancellationError);
 	release({ session: fake.sessions[0]!, agentTree: { roots: [agentNode()] } });
@@ -1626,16 +1214,14 @@ test('a resolved interrupt target is discarded when close precedes the consumer 
 	assert.deepEqual(fake.interruptRequests, []);
 });
 
+
 test('closing while an archive releases its lease prevents publishing the old connection snapshot', async () => {
 	const fake = sessionHost([session('first', 'root')]);
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
 	const detailed = await provider.subscribe(listed);
 	let release!: () => void;
-	fake.host.session.unsubscribe = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.unsubscribe = () => new Promise(resolve => { release = resolve; });
 	const archiving = provider.archive(detailed);
 	const rejected = assert.rejects(archiving, isCancellationError);
 	await waitFor(() => release !== undefined);
@@ -1644,16 +1230,14 @@ test('closing while an archive releases its lease prevents publishing the old co
 	await rejected;
 });
 
+
 test('closing while an archived subscription releases its lease prevents publishing its snapshot', async () => {
 	const fake = sessionHost([session('first', 'root')]);
 	using provider = createProvider(fake);
 	const listed = (await provider.list())[0]!;
 	fake.sessions[0] = { ...fake.sessions[0]!, status: 'archived' };
 	let release!: () => void;
-	fake.host.session.unsubscribe = () =>
-		new Promise(resolve => {
-			release = resolve;
-		});
+	fake.host.session.unsubscribe = () => new Promise(resolve => { release = resolve; });
 	const opening = provider.subscribe(listed);
 	const rejected = assert.rejects(opening, isCancellationError);
 	await waitFor(() => release !== undefined);
@@ -1672,33 +1256,22 @@ test('creation failure uses the real Chinese catalog and releases its implicit s
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const fake = sessionHost([]);
-		fake.host.session.create = async () => ({
-			session: { ...session('broken', 'unused'), threads: [] },
-			agentTree: { roots: [] },
-		});
+		fake.host.session.create = async () => ({ session: { ...session('broken', 'unused'), threads: [] }, agentTree: { roots: [] } });
 		const released: string[] = [];
-		fake.host.session.unsubscribe = async params => {
-			released.push(params.sessionId);
-		};
+		fake.host.session.unsubscribe = async params => { released.push(params.sessionId); };
 		using provider = createProvider(fake);
 		await provider.list();
-		await assert.rejects(provider.create('Missing root', { type: 'current' }), {
-			message: '新会话中没有活动聊天。',
-		});
+		await assert.rejects(provider.create('Missing root', { type: 'current' }), { message: '新会话中没有活动聊天。' });
 		assert.deepEqual(released, ['broken']);
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });
+
 
 test('directory readiness waits for authoritative snapshots without navigating and can be cancelled', async () => {
 	const fake = sessionHost([session('first', 'first-thread')]);
 	const snapshot = await fake.host.session.subscribe({ sessionId: 'first' });
 	let complete!: (value: typeof snapshot) => void;
-	fake.host.session.subscribe = () =>
-		new Promise(resolve => {
-			complete = resolve;
-		});
+	fake.host.session.subscribe = () => new Promise(resolve => { complete = resolve; });
 	using provider = createProvider(fake);
 	using management = new SessionsManagementService(provider);
 	await management.initialize();
@@ -1715,9 +1288,7 @@ test('directory readiness waits for authoritative snapshots without navigating a
 
 test('directory readiness fails on subscription errors and rejects after disposal', async () => {
 	const fake = sessionHost([session('first', 'first-thread')]);
-	fake.host.session.subscribe = async () => {
-		throw new Error('directory detail unavailable');
-	};
+	fake.host.session.subscribe = async () => { throw new Error('directory detail unavailable'); };
 	using provider = createProvider(fake);
 	const management = new SessionsManagementService(provider);
 	await management.initialize();

@@ -12,23 +12,12 @@ export type ChatInputMode = ChatMode;
 
 /** Presents the chat input's modes through the shared picker lifecycle and focus contract. */
 export class ModePickerActionItem extends ChatSessionPickerActionItem {
-	constructor(
-		modeAction: IModePickerAction,
-		private readonly mode: ChatInputMode,
-		captureContext: () => () => boolean,
-		onDidSelect: () => void,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
-		super(
-			modeAction,
-			{
-				getOptions: () => (typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions),
-				captureContext,
-				onDidSelect,
-			},
-			{ className: 'ash-chat-input-mode-menu' },
-			instantiationService,
-		);
+	constructor(modeAction: IModePickerAction, private readonly mode: ChatInputMode, captureContext: () => () => boolean, onDidSelect: () => void, @IInstantiationService instantiationService: IInstantiationService) {
+		super(modeAction, {
+			getOptions: () => typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions,
+			captureContext,
+			onDidSelect,
+		}, { className: 'ash-chat-input-mode-menu' }, instantiationService);
 	}
 
 	public override render(container: HTMLElement): void {

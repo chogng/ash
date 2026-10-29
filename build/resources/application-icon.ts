@@ -13,19 +13,16 @@ export async function generateWindowsApplicationIcons(): Promise<Buffer> {
 	try {
 		const page = await browser.newPage();
 		const renderPng = async (size: number): Promise<Buffer> => {
-			const dataUrl = await page.evaluate(
-				async ({ artwork, size }) => {
-					const image = new Image();
-					image.src = `data:image/svg+xml;base64,${artwork}`;
-					await image.decode();
-					const canvas = document.createElement('canvas');
-					canvas.width = size;
-					canvas.height = size;
-					canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
-					return canvas.toDataURL('image/png');
-				},
-				{ artwork, size },
-			);
+			const dataUrl = await page.evaluate(async ({ artwork, size }) => {
+				const image = new Image();
+				image.src = `data:image/svg+xml;base64,${artwork}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = size;
+				canvas.height = size;
+				canvas.getContext('2d')!.drawImage(image, 0, 0, size, size);
+				return canvas.toDataURL('image/png');
+			}, { artwork, size });
 			return Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
 		};
 		const images: Buffer[] = [];

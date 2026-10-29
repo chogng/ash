@@ -31,9 +31,7 @@ suite('Debug Console output batching', () => {
 			assert.equal(notifications, 2);
 			mock.timers.tick(16);
 			assert.equal(notifications, 2, 'Publishing the state already includes the pending output');
-		} finally {
-			mock.timers.reset();
-		}
+		} finally { mock.timers.reset(); }
 	});
 
 	test('ReplModel cancels pending output notifications on clear and disposal', async () => {
@@ -52,11 +50,9 @@ suite('Debug Console output batching', () => {
 			consoleService.dispose();
 			mock.timers.tick(16);
 			assert.equal(notifications, 1);
-		} finally {
-			consoleService.dispose();
-			mock.timers.reset();
-		}
+		} finally { consoleService.dispose(); mock.timers.reset(); }
 	});
+
 });
 
 test('ReplModel captures output while hidden, evaluates, and retains terminated sessions', async () => {
@@ -113,9 +109,7 @@ test('ReplModel never sends a frame belonging to a running or different session'
 
 class FakeDebugService extends Disposable {
 	private readonly viewModel = this._register(new ViewModel());
-	getViewModel(): ViewModel {
-		return this.viewModel;
-	}
+	getViewModel(): ViewModel { return this.viewModel; }
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	readonly onDidChangeSession = this.sessionEmitter.event;
 	sessions: readonly IDebugSession[] = Object.freeze([]);
@@ -148,52 +142,19 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	readonly onDidProgressEnd = Event.None;
 	readonly onDidLoadedSource = Event.None;
 	readonly onDidInvalidateMemory = Event.None;
-	async loadedSources(): Promise<never> {
-		throw new Error('Loaded-source IO is not configured in this fixture');
-	}
-	async readMemory(): Promise<never> {
-		throw new Error('Memory IO is not configured in this fixture');
-	}
-	async writeMemory(): Promise<never> {
-		throw new Error('Memory IO is not configured in this fixture');
-	}
-	async exceptionInfo(): Promise<never> {
-		throw new Error('Exception IO is not configured in this fixture');
-	}
-	async cancelProgress(): Promise<void> {}
+	async loadedSources(): Promise<never> { throw new Error('Loaded-source IO is not configured in this fixture'); }
+	async readMemory(): Promise<never> { throw new Error('Memory IO is not configured in this fixture'); }
+	async writeMemory(): Promise<never> { throw new Error('Memory IO is not configured in this fixture'); }
+	async exceptionInfo(): Promise<never> { throw new Error('Exception IO is not configured in this fixture'); }
+	async cancelProgress(): Promise<void> { }
 
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
 	private readonly outputEmitter = this._register(new Emitter<void>());
-	constructor(readonly id = 'debug-1') {
-		super();
-	}
+	constructor(readonly id = 'debug-1') { super(); }
 	consoleCatalogRevision = 1;
 	retainedIds: readonly string[] | undefined;
-	readonly configuration: IDebugConfiguration = Object.freeze({
-		id: 'one',
-		name: 'One',
-		type: 'demo',
-		request: 'launch',
-		adapter: Object.freeze({ program: 'adapter', arguments: Object.freeze([]) }),
-		arguments: Object.freeze({}),
-	});
-	readonly capabilities = Object.freeze({
-		supportsRestart: true,
-		supportsTerminate: true,
-		supportsSetVariable: false,
-		supportsConditionalBreakpoints: false,
-		supportsHitConditionalBreakpoints: false,
-		supportsLogPoints: false,
-		supportsFunctionBreakpoints: false,
-		supportsDataBreakpoints: false,
-		supportsInstructionBreakpoints: false,
-		supportsDisassembleRequest: false,
-		supportsSteppingGranularity: false,
-		supportsCompletionsRequest: false,
-		supportsCancelRequest: false,
-		completionTriggerCharacters: [],
-		exceptionBreakpointFilters: Object.freeze([]),
-	});
+	readonly configuration: IDebugConfiguration = Object.freeze({ id: 'one', name: 'One', type: 'demo', request: 'launch', adapter: Object.freeze({ program: 'adapter', arguments: Object.freeze([]) }), arguments: Object.freeze({}) });
+	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: Object.freeze([]) });
 	state: DebugSessionState = 'running';
 	readonly onDidChangeState = this.stateEmitter.event;
 	readonly onDidChangeReplElements = this.outputEmitter.event;
@@ -203,109 +164,43 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	readonly exceptionBreakpoints: readonly string[] = ['uncaught'];
 	readonly onDidChangeExceptionBreakpoints = Event.None;
 	public readonly name = 'One';
-	public setName(): void {
-		throw new Error('Renaming is unsupported in this fixture');
-	}
-	public async inspectStack() {
-		return { threads: [], frames: [] };
-	}
-	public async inspectFrame() {
-		return [];
-	}
-	public async evaluateWatchExpressions() {
-		return [];
-	}
-	public getDebugProtocolBreakpoint(): undefined {
-		return undefined;
-	}
-	public async customRequest(): Promise<never> {
-		throw new Error('Custom requests are unsupported in this fixture');
-	}
-	readonly evaluations: Array<{ expression: string; frameId: number | undefined; context: DebugEvaluateContext }> = [];
+	public setName(): void { throw new Error('Renaming is unsupported in this fixture'); }
+	public async inspectStack() { return { threads: [], frames: [] }; }
+	public async inspectFrame() { return []; }
+	public async evaluateWatchExpressions() { return []; }
+	public getDebugProtocolBreakpoint(): undefined { return undefined; }
+	public async customRequest(): Promise<never> { throw new Error('Custom requests are unsupported in this fixture'); }
+	readonly evaluations: Array<{ expression: string; frameId: number | undefined; context: DebugEvaluateContext; }> = [];
 	private retainedOutput = '';
-	get output(): string {
-		return this.retainedOutput;
-	}
-	get consoleSessionId(): string {
-		return this.id;
-	}
-	get replElementsRevision(): number {
-		return this.output.length;
-	}
-	get retainedConsoleSessionIds(): readonly string[] {
-		return this.retainedIds ?? [this.id];
-	}
-	getReplElements() {
-		return this.output
-			? [
-					{
-						id: 1,
-						sessionId: this.id,
-						kind: 'output' as const,
-						output: this.output,
-						category: 'console',
-						parentId: null,
-						collapsed: false,
-						variablesReference: null,
-						source: null,
-						line: null,
-						column: null,
-						data: null,
-					},
-				]
-			: [];
-	}
-	async clearRepl(): Promise<void> {
-		this.retainedOutput = '';
-		this.outputEmitter.fire();
-	}
+	get output(): string { return this.retainedOutput; }
+	get consoleSessionId(): string { return this.id; }
+	get replElementsRevision(): number { return this.output.length; }
+	get retainedConsoleSessionIds(): readonly string[] { return this.retainedIds ?? [this.id]; }
+	getReplElements() { return this.output ? [{ id: 1, sessionId: this.id, kind: 'output' as const, output: this.output, category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null }] : []; }
+	async clearRepl(): Promise<void> { this.retainedOutput = ''; this.outputEmitter.fire(); }
 
-	emitOutput(value: string): void {
-		this.retainedOutput += value;
-		this.outputEmitter.fire();
-	}
-	async completions() {
-		return undefined;
-	}
-	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
-		this.evaluations.push({ expression, frameId, context });
-		this.emitOutput(`> ${expression}\n42 : number\n`);
-		return { result: '42', type: 'number', variablesReference: 0 };
-	}
-	async continue() {}
-	async pause() {}
-	async stepOver() {}
-	async stepInto() {}
-	async stepOut() {}
-	async restart() {}
-	async threads() {
-		return [];
-	}
-	selectThread() {}
-	async stackTrace() {
-		return [];
-	}
-	async scopes() {
-		return [];
-	}
-	async variables() {
-		return [];
-	}
-	async setVariable(): Promise<never> {
-		throw new Error('Variables are read-only in this fixture');
-	}
-	async source() {
-		return { content: '' };
-	}
-	async dataBreakpointInfo(): Promise<never> {
-		throw new Error('No data breakpoints in the console fixture');
-	}
-	async disassemble(): Promise<never> {
-		throw new Error('No disassembly in the console fixture');
-	}
-	async setExceptionBreakpoints() {}
-	async disconnect() {}
+	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(); }
+	async completions() { return undefined; }
+	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { this.evaluations.push({ expression, frameId, context }); this.emitOutput(`> ${expression}\n42 : number\n`); return { result: '42', type: 'number', variablesReference: 0 }; }
+	async continue() { }
+	async pause() { }
+	async stepOver() { }
+	async stepInto() { }
+	async stepOut() { }
+	async restart() { }
+	async threads() { return []; }
+	selectThread() { }
+	async stackTrace() { return []; }
+	async scopes() { return []; }
+	async variables() { return []; }
+	async setVariable(): Promise<never> { throw new Error('Variables are read-only in this fixture'); }
+	async source() { return { content: '' }; }
+	async dataBreakpointInfo(): Promise<never> { throw new Error('No data breakpoints in the console fixture'); }
+	async disassemble(): Promise<never> { throw new Error('No disassembly in the console fixture'); }
+	async setExceptionBreakpoints() { }
+	async disconnect() { }
 }
+
 
 test('ReplModel evaluates in the selected stack frame including frame zero', async () => {
 	using debug = new FakeDebugService();
@@ -331,26 +226,15 @@ test('ReplModel retains ended consoles when an earlier admission publishes after
 	last.retainedIds = ['first', 'later', 'last'];
 	later.consoleCatalogRevision = 2;
 	later.retainedIds = ['first', 'later'];
-	debug.sessions = [first];
-	debug.setActiveSession(first);
-	debug.sessions = [first, last];
-	debug.setActiveSession(last);
+	debug.sessions = [first]; debug.setActiveSession(first);
+	debug.sessions = [first, last]; debug.setActiveSession(last);
 	last.emitOutput('retained\n');
-	debug.sessions = [first];
-	debug.setActiveSession(first);
-	debug.sessions = [first, later];
-	debug.setActiveSession(later);
-	assert.deepEqual(
-		model.sessions.map(session => session.id),
-		['first', 'last', 'later'],
-	);
+	debug.sessions = [first]; debug.setActiveSession(first);
+	debug.sessions = [first, later]; debug.setActiveSession(later);
+	assert.deepEqual(model.sessions.map(session => session.id), ['first', 'last', 'later']);
 	assert.equal(model.sessions.find(session => session.id === 'last')!.output, 'retained\n');
 	next.consoleCatalogRevision = 4;
 	next.retainedIds = ['first', 'later', 'next'];
-	debug.sessions = [first, later, next];
-	debug.setActiveSession(next);
-	assert.deepEqual(
-		model.sessions.map(session => session.id),
-		['first', 'later', 'next'],
-	);
+	debug.sessions = [first, later, next]; debug.setActiveSession(next);
+	assert.deepEqual(model.sessions.map(session => session.id), ['first', 'later', 'next']);
 });

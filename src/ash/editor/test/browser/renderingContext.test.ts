@@ -25,28 +25,25 @@ const viewLayout = {
 } as unknown as IViewLayout;
 
 test('RestrictedRenderingContext exposes the immutable viewport contract', () => {
-	const context = new (class extends RestrictedRenderingContext {})(viewLayout, viewportData);
+	const context = new class extends RestrictedRenderingContext { }(viewLayout, viewportData);
 
-	assert.deepEqual(
-		{
-			scrollWidth: context.scrollWidth,
-			scrollHeight: context.scrollHeight,
-			scrollLeft: context.scrollLeft,
-			scrollTop: context.scrollTop,
-			viewportWidth: context.viewportWidth,
-			viewportHeight: context.viewportHeight,
-			bigNumbersDelta: context.bigNumbersDelta,
-		},
-		{
-			scrollWidth: 800,
-			scrollHeight: 1_200,
-			scrollLeft: 30,
-			scrollTop: 240,
-			viewportWidth: 600,
-			viewportHeight: 400,
-			bigNumbersDelta: 100,
-		},
-	);
+	assert.deepEqual({
+		scrollWidth: context.scrollWidth,
+		scrollHeight: context.scrollHeight,
+		scrollLeft: context.scrollLeft,
+		scrollTop: context.scrollTop,
+		viewportWidth: context.viewportWidth,
+		viewportHeight: context.viewportHeight,
+		bigNumbersDelta: context.bigNumbersDelta,
+	}, {
+		scrollWidth: 800,
+		scrollHeight: 1_200,
+		scrollLeft: 30,
+		scrollTop: 240,
+		viewportWidth: 600,
+		viewportHeight: 400,
+		bigNumbersDelta: 100,
+	});
 	assert.equal(context.visibleRange, visibleRange);
 	assert.equal(context.getScrolledTopFromAbsoluteTop(300), 60);
 	assert.equal(context.getVerticalOffsetForLineNumber(3), 60);
@@ -65,16 +62,16 @@ test('RenderingContext combines DOM and GPU line geometry', () => {
 	};
 	const context = new RenderingContext(viewLayout, viewportData, domLines, gpuLines);
 
-	assert.deepEqual(
-		context.linesVisibleRangesForRange(visibleRange, true)?.map(range => range.lineNumber),
-		[2, 4],
-	);
+	assert.deepEqual(context.linesVisibleRangesForRange(visibleRange, true)?.map(range => range.lineNumber), [2, 4]);
 	assert.deepEqual(context.visibleRangeForPosition(new Position(2, 1)), new HorizontalPosition(false, 12.6));
 });
 
 test('rendering geometry keeps original coordinates and rounded DOM coordinates', () => {
 	const position = new HorizontalPosition(false, 12.6);
-	const ranges = [new LineVisibleRanges(false, 8, [new HorizontalRange(10.4, 3.7)], true), new LineVisibleRanges(false, 3, [new HorizontalRange(2.2, 5.8)], false)];
+	const ranges = [
+		new LineVisibleRanges(false, 8, [new HorizontalRange(10.4, 3.7)], true),
+		new LineVisibleRanges(false, 3, [new HorizontalRange(2.2, 5.8)], false),
+	];
 
 	assert.deepEqual({ left: position.left, originalLeft: position.originalLeft }, { left: 13, originalLeft: 12.6 });
 	assert.deepEqual(ranges[0]?.ranges[0], new HorizontalRange(10, 4));

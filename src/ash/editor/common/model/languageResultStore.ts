@@ -7,7 +7,10 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isPositiveSafeInteger } from '../../../base/common/numbers.js';
 
 export function createLanguageDiagnosticStore(model: TextModel): VersionedLanguageResultStore<LanguageDiagnosticResult> {
-	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticModelRange(currentModel, range, 'Language diagnostic')));
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageDiagnosticResult(
+		value,
+		range => assertDiagnosticModelRange(currentModel, range, 'Language diagnostic'),
+	));
 }
 
 function assertDiagnosticModelRange(model: TextModel, range: Range, owner: string): void {
@@ -77,11 +80,9 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 			throw new TypeError('Language result normalizer must be a function');
 		}
 		this._register(model.onDidChangeContent(() => this.acceptModelChange()));
-		this._register(
-			toDisposable(() => {
-				this.currentResult = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.currentResult = undefined;
+		}));
 	}
 
 	get textModel(): TextModel {
@@ -144,13 +145,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		});
 		this.latestAcceptedRequestId = accepted.requestId;
 		this.currentResult = accepted;
-		this.changeEmitter.fire(
-			Object.freeze({
-				reason: LanguageResultStoreChangeReason.Result,
-				modelVersion: accepted.modelVersion,
-				result: accepted,
-			}),
-		);
+		this.changeEmitter.fire(Object.freeze({
+			reason: LanguageResultStoreChangeReason.Result,
+			modelVersion: accepted.modelVersion,
+			result: accepted,
+		}));
 		return LanguageResultAcceptance.Applied;
 	}
 
@@ -159,13 +158,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		if (!this.currentResult) return;
 		const modelVersion = this.readModelVersion() ?? this.currentResult.modelVersion;
 		this.currentResult = undefined;
-		this.changeEmitter.fire(
-			Object.freeze({
-				reason: LanguageResultStoreChangeReason.Cleared,
-				modelVersion,
-				result: undefined,
-			}),
-		);
+		this.changeEmitter.fire(Object.freeze({
+			reason: LanguageResultStoreChangeReason.Cleared,
+			modelVersion,
+			result: undefined,
+		}));
 	}
 
 	private classifyRequest(result: VersionedLanguageResult<TResult>): LanguageResultAcceptance | undefined {
@@ -182,13 +179,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		if (!this.currentResult) return;
 		this.currentResult = undefined;
 		const modelVersion = this.model.version;
-		this.changeEmitter.fire(
-			Object.freeze({
-				reason: LanguageResultStoreChangeReason.ModelChanged,
-				modelVersion,
-				result: undefined,
-			}),
-		);
+		this.changeEmitter.fire(Object.freeze({
+			reason: LanguageResultStoreChangeReason.ModelChanged,
+			modelVersion,
+			result: undefined,
+		}));
 	}
 
 	private readModelVersion(): number | undefined {
@@ -199,6 +194,7 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 			throw error;
 		}
 	}
+
 }
 
 function assertResultEnvelope<TResult>(result: VersionedLanguageResult<TResult>): void {

@@ -9,7 +9,10 @@ export function loadKeybindingConformanceFixtures<T>(): T {
 function findFixturePath(startDirectory: string): string {
 	let directory = startDirectory;
 	while (true) {
-		const candidate = join(directory, 'resources/keybindings/conformance.json');
+		const candidate = join(
+			directory,
+			'resources/keybindings/conformance.json',
+		);
 		if (existsSync(candidate)) return candidate;
 		const parent = dirname(directory);
 		if (parent === directory) {

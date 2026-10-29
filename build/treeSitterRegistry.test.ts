@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { format } from './format.ts';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,23 +11,14 @@ test('one package declaration generates both runtimes and detects stale registra
 	const root = await fixture(t);
 	await generateTreeSitterRegistry({ root });
 	await generateTreeSitterRegistry({ root, check: true });
-	await copyFile(resolve(import.meta.dirname, '../.prettierrc.toml'), resolve(root, '.prettierrc.toml'));
-	const formatting = spawnSync(
-		resolve(import.meta.dirname, '../node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'),
-		[
-			'fmt',
-			'--config',
-			resolve(root, '.prettierrc.toml'),
-			'--check',
-			resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts'),
-			resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'),
-		],
-		{ cwd: root, encoding: 'utf8' },
-	);
-	assert.equal(formatting.status, 0, formatting.stdout + formatting.stderr);
+	for (const name of ['src/ash/platform/syntax/common/syntaxLanguages.generated.ts', 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts']) {
+		const path = resolve(root, name);
+		const source = await readFile(path, 'utf8');
+		assert.equal(format(path, source), source);
+	}
 	const metadata = await import(pathToFileURL(resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts')).href);
 	assert.deepEqual(
-		metadata.syntaxLanguageDefinitions.map((language: { id: string }) => language.id),
+		metadata.syntaxLanguageDefinitions.map((language: { id: string; }) => language.id),
 		['demo', 'demoreact'],
 	);
 	const rust = await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8');
@@ -84,7 +75,7 @@ test('invalid bindings and query paths cannot enter generated source', async t =
 	await assert.rejects(readGrammarPackages(root), /escapes its language package/);
 });
 
-async function fixture(t: { after(callback: () => Promise<void>): void }): Promise<string> {
+async function fixture(t: { after(callback: () => Promise<void>): void; }): Promise<string> {
 	const root = await mkdtemp(resolve(tmpdir(), 'ash-tree-sitter-registry-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	await writeFile(resolve(root, 'package.json'), '{"type":"module"}');

@@ -13,9 +13,7 @@ suite('diff character backgrounds', () => {
 			const { page } = browserTests;
 			await page.goto('/diff.html?locale=zh-CN');
 			await page.waitForFunction(() => !!window.ashDiffIntegration);
-			await page.locator('#single').evaluate(node => {
-				node.style.height = '520px';
-			});
+			await page.locator('#single').evaluate(node => { node.style.height = '520px'; });
 			await page.evaluate(sideBySide => {
 				window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
 				window.ashDiffIntegration.setComparisonText('shared\n    .by_index(0)\nlast', 'shared\n    .by_name(&name)\nlast');
@@ -31,9 +29,7 @@ suite('diff character backgrounds', () => {
 					await assertRowBackgrounds(modified.locator('.stanza-diff-inline-added'), lineHeight);
 				}
 			}
-			await page.screenshot({
-				path: browserTests.info.outputPath(`${sideBySide ? 'side-by-side' : 'inline'}.png`),
-			});
+			await page.screenshot({ path: browserTests.info.outputPath(`${sideBySide ? 'side-by-side' : 'inline'}.png`) });
 		});
 
 		test(`wrapped character backgrounds retain row geometry and source text in ${sideBySide ? 'side by side' : 'inline'} diff`, async () => {
@@ -41,19 +37,14 @@ suite('diff character backgrounds', () => {
 			await page.goto('/diff.html');
 			await page.waitForFunction(() => !!window.ashDiffIntegration);
 			const originalText = '    const value = "' + 'before 😀 '.repeat(20) + '";';
-			await page.locator('#single').evaluate(node => {
-				node.style.height = '600px';
-			});
-			await page.evaluate(
-				({ sideBySide, originalText }) => {
-					window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
-					window.ashDiffIntegration.setFontOptions({ fontSize: 17, lineHeight: 36 });
-					window.ashDiffIntegration.setWrapping('wordWrapColumn', 24);
-					window.ashDiffIntegration.setTheme('vs');
-					window.ashDiffIntegration.setComparisonText(originalText, originalText.replaceAll('before 😀', 'after 🤖'));
-				},
-				{ sideBySide, originalText },
-			);
+			await page.locator('#single').evaluate(node => { node.style.height = '600px'; });
+			await page.evaluate(({ sideBySide, originalText }) => {
+				window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+				window.ashDiffIntegration.setFontOptions({ fontSize: 17, lineHeight: 36 });
+				window.ashDiffIntegration.setWrapping('wordWrapColumn', 24);
+				window.ashDiffIntegration.setTheme('vs');
+				window.ashDiffIntegration.setComparisonText(originalText, originalText.replaceAll('before 😀', 'after 🤖'));
+			}, { sideBySide, originalText });
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 			const original = page.locator(sideBySide ? '#single .original' : '#single .modified .stanza-diff-inline-original-line');
 			await assertRowBackgrounds(original.locator('.stanza-diff-inline-removed'), 36);
@@ -107,22 +98,17 @@ suite('diff action visibility', () => {
 			});
 			const editor = page.locator('#single');
 			const gutter = editor.locator('.ash-diff-gutter');
-			const revert = editor.getByRole('button', {
-				name: locale === 'zh-CN' ? '还原更改' : 'Revert change',
-				exact: true,
-			});
+			const revert = editor.getByRole('button', { name: locale === 'zh-CN' ? '还原更改' : 'Revert change', exact: true });
 			await expect(revert).toHaveCount(1);
 			await expect(revert.locator('[data-ash-icon-id="discard"]')).toHaveCount(1);
 			for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 				await page.evaluate(theme => window.ashDiffIntegration.setTheme(theme), theme);
 				await expect(gutter).toBeVisible();
-				expect(
-					await editor.evaluate(node => {
-						const gutter = node.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
-						const modified = node.querySelector('.modified')!.getBoundingClientRect();
-						return { width: gutter.width, gap: modified.left - gutter.right };
-					}),
-				).toEqual({ width: 35, gap: 0 });
+				expect(await editor.evaluate(node => {
+					const gutter = node.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
+					const modified = node.querySelector('.modified')!.getBoundingClientRect();
+					return { width: gutter.width, gap: modified.left - gutter.right };
+				})).toEqual({ width: 35, gap: 0 });
 			}
 			await revert.focus();
 			await page.keyboard.press('Space');
@@ -135,13 +121,7 @@ suite('diff action visibility', () => {
 			await expect(revert).toHaveCount(0);
 			expect(await editor.locator('.stanza-diff-editor-side.modified').evaluate(node => node.getBoundingClientRect().left - node.parentElement!.getBoundingClientRect().left)).toBe(0);
 
-			await page.evaluate(() =>
-				window.ashDiffIntegration.setEditorFeatures({
-					readOnly: false,
-					renderGutterMenu: false,
-					renderMarginRevertIcon: true,
-				}),
-			);
+			await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: false, renderGutterMenu: false, renderMarginRevertIcon: true }));
 			await expect(gutter).toBeHidden();
 			await expect(revert).toHaveCount(0);
 			await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
@@ -157,17 +137,10 @@ suite('diff action visibility', () => {
 
 async function assertRowBackgrounds(backgrounds: Locator, lineHeight: number): Promise<void> {
 	await expect(backgrounds.first()).toBeVisible();
-	await expect
-		.poll(() =>
-			backgrounds.evaluateAll(
-				(nodes, lineHeight) =>
-					nodes.every(node => {
-						const box = node.getBoundingClientRect();
-						const row = node.closest('.view-overlay-line, .view-line, .ash-diff-original-row, .stanza-diff-inline-original-line')!.getBoundingClientRect();
-						return Math.abs(box.height - lineHeight) < 0.5 && Math.abs(box.top - row.top) < 0.5 && getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)';
-					}),
-				lineHeight,
-			),
-		)
-		.toBe(true);
+	await expect.poll(() => backgrounds.evaluateAll((nodes, lineHeight) => nodes.every(node => {
+		const box = node.getBoundingClientRect();
+		const row = node.closest('.view-overlay-line, .view-line, .ash-diff-original-row, .stanza-diff-inline-original-line')!.getBoundingClientRect();
+		return Math.abs(box.height - lineHeight) < 0.5 && Math.abs(box.top - row.top) < 0.5
+			&& getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)';
+	}), lineHeight)).toBe(true);
 }

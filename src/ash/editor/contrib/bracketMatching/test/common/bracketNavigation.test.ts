@@ -11,30 +11,30 @@ import { TextModel } from '../../../../common/model/textModel.js';
 
 test('Bracket navigation jumps and selects configured pairs without changing text', () => {
 	using configurations = bracketConfigurations();
-	using model = new TextModel('{\n  (value)\n}', {
-		languageId: 'typescript',
-		languageConfigurationService: configurations,
-	});
+	using model = new TextModel('{\n  (value)\n}', { languageId: 'typescript', languageConfigurationService: configurations });
 	const bracketPairs = model.bracketPairs;
-	const selections = primaryFirst([Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 8 + 1))], 1);
+	const selections = primaryFirst([
+		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (8) + 1)),
+	], 1);
 
 	const jumped = jumpToMatchingBrackets(bracketPairs, selections);
-	assert.deepEqual(jumped, primaryFirst([Selection.fromPositions(new Position(2 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 2 + 1))], 1));
-	assert.deepEqual(
-		selectToMatchingBrackets(bracketPairs, jumped),
-		primaryFirst([Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 1 + 1)), Selection.fromPositions(new Position(1 + 1, 2 + 1), new Position(1 + 1, 9 + 1))], 1),
-	);
+	assert.deepEqual(jumped, primaryFirst([
+		Selection.fromPositions(new Position((2) + 1, (0) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (2) + 1)),
+	], 1));
+	assert.deepEqual(selectToMatchingBrackets(bracketPairs, jumped), primaryFirst([
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (9) + 1)),
+	], 1));
 	assert.equal(model.getText(), '{\n  (value)\n}');
 });
 
 test('Bracket navigation leaves selections without a matching pair unchanged', () => {
 	using configurations = bracketConfigurations();
-	using model = new TextModel('// ( text', {
-		languageId: 'typescript',
-		languageConfigurationService: configurations,
-	});
+	using model = new TextModel('// ( text', { languageId: 'typescript', languageConfigurationService: configurations });
 	const bracketPairs = model.bracketPairs;
-	const selections = [Selection.fromPositions(new Position(0 + 1, 3 + 1))];
+	const selections = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
 	assert.equal(jumpToMatchingBrackets(bracketPairs, selections), selections);
 	assert.equal(selectToMatchingBrackets(bracketPairs, selections), selections);
 });
@@ -43,10 +43,7 @@ function bracketConfigurations(): TestLanguageConfigurationService {
 	const configurations = new TestLanguageConfigurationService();
 	configurations.register('typescript', {
 		comments: { lineComment: '//', blockComment: ['/*', '*/'] },
-		brackets: [
-			['(', ')'],
-			['{', '}'],
-		],
+		brackets: [['(', ')'], ['{', '}']],
 	});
 	return configurations;
 }

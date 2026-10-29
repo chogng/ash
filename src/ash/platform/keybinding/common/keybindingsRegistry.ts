@@ -1,8 +1,18 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { decodeKeybinding, type Keybinding } from '../../../base/common/keybindings.js';
-import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { CommandId } from '../../commands/common/commands.js';
-import type { ContextKeyExpression } from '../../contextkey/common/contextkey.js';
+import {
+	decodeKeybinding,
+	type Keybinding,
+} from '../../../base/common/keybindings.js';
+import {
+	type IDisposable,
+	toDisposable,
+} from '../../../base/common/lifecycle.js';
+import type {
+	CommandId,
+} from '../../commands/common/commands.js';
+import type {
+	ContextKeyExpression,
+} from '../../contextkey/common/contextkey.js';
 import { operatingSystem } from '../../../base/common/platform.js';
 
 export const enum KeybindingWeight {
@@ -49,25 +59,31 @@ export interface IKeybindingPassThrough extends IKeybindingBlocker {
 	readonly command?: CommandId;
 }
 
-export interface IRegisteredCommandKeybindingRule extends IKeybindingRule {
+export interface IRegisteredCommandKeybindingRule
+	extends IKeybindingRule {
 	readonly kind: KeybindingRuleKind.Command;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
-export interface IRegisteredKeybindingBlocker extends IKeybindingBlocker {
+export interface IRegisteredKeybindingBlocker
+	extends IKeybindingBlocker {
 	readonly kind: KeybindingRuleKind.Blocker;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
-export interface IRegisteredKeybindingPassThrough extends IKeybindingPassThrough {
+export interface IRegisteredKeybindingPassThrough
+	extends IKeybindingPassThrough {
 	readonly kind: KeybindingRuleKind.PassThrough;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
-export type IRegisteredKeybindingRule = IRegisteredCommandKeybindingRule | IRegisteredKeybindingBlocker | IRegisteredKeybindingPassThrough;
+export type IRegisteredKeybindingRule =
+	| IRegisteredCommandKeybindingRule
+	| IRegisteredKeybindingBlocker
+	| IRegisteredKeybindingPassThrough;
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {
@@ -75,7 +91,8 @@ export class KeybindingRegistry {
 	private readonly _onDidChangeKeybindings = new Emitter<void>();
 	private nextOrder = 1;
 
-	readonly onDidChangeKeybindings: Event<void> = this._onDidChangeKeybindings.event;
+	readonly onDidChangeKeybindings: Event<void> =
+		this._onDidChangeKeybindings.event;
 
 	registerKeybindingRule(rule: IKeybindingRule): IDisposable {
 		const registered: IRegisteredCommandKeybindingRule = {
@@ -87,7 +104,9 @@ export class KeybindingRegistry {
 		return this.register(registered);
 	}
 
-	registerKeybindingBlocker(blocker: IKeybindingBlocker): IDisposable {
+	registerKeybindingBlocker(
+		blocker: IKeybindingBlocker,
+	): IDisposable {
 		const registered: IRegisteredKeybindingBlocker = {
 			...blocker,
 			keybinding: resolveKeybinding(blocker.keybinding),

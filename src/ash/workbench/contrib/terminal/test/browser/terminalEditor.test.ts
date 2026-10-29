@@ -38,14 +38,7 @@ suite('Terminal editor resource boundary', () => {
 	});
 
 	test('rejects forged resource schemes, authorities, IDs and persistence values', () => {
-		for (const value of [
-			'file:/session/1',
-			'vscode-terminal://host/session/1',
-			'vscode-terminal:/session/0',
-			'vscode-terminal:/session/1x',
-			'vscode-terminal:/session/9007199254740992',
-			'vscode-terminal:/session/1/extra',
-		]) {
+		for (const value of ['file:/session/1', 'vscode-terminal://host/session/1', 'vscode-terminal:/session/0', 'vscode-terminal:/session/1x', 'vscode-terminal:/session/9007199254740992', 'vscode-terminal:/session/1/extra']) {
 			assert.throws(() => parseTerminalUri(URI.parse(value)), TypeError);
 		}
 		const serializer = new TerminalInputSerializer();
@@ -53,36 +46,22 @@ suite('Terminal editor resource boundary', () => {
 	});
 });
 
+
 suite('Terminal editor destination', () => {
 	test('a background open keeps the original input target through editor selection notifications', async () => {
 		using changed = new Emitter<void>();
-		const original = {
-			resource: getTerminalUri('session', 1),
-			target: TerminalLocation.Panel,
-		} as ITerminalInstance;
-		const background = {
-			resource: getTerminalUri('session', 2),
-			target: TerminalLocation.Panel,
-		} as ITerminalInstance;
+		const original = { resource: getTerminalUri('session', 1), target: TerminalLocation.Panel } as ITerminalInstance;
+		const background = { resource: getTerminalUri('session', 2), target: TerminalLocation.Panel } as ITerminalInstance;
 		let active = original;
 		let selected: TerminalEditorInput | undefined;
 		const terminals = {
-			instances: [original, background],
-			onDidDisposeInstance: Event.None,
-			onDidChangeInstances: Event.None,
-			setActiveInstance: (instance: ITerminalInstance) => {
-				active = instance;
-			},
+			instances: [original, background], onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None,
+			setActiveInstance: (instance: ITerminalInstance) => { active = instance; },
 		} as unknown as ITerminalService;
 		const editors = {
 			onDidActiveEditorChange: changed.event,
-			get activeEditor() {
-				return selected;
-			},
-			openEditor: async (input: TerminalEditorInput) => {
-				selected = input;
-				changed.fire();
-			},
+			get activeEditor() { return selected; },
+			openEditor: async (input: TerminalEditorInput) => { selected = input; changed.fire(); },
 		} as unknown as IEditorService;
 		const groups = { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService;
 		using service = new TerminalEditorService(terminals, editors, groups);
@@ -93,25 +72,10 @@ suite('Terminal editor destination', () => {
 	});
 
 	test('the captured auxiliary group receives the same instance even when another group is active', async () => {
-		const instance = {
-			resource: getTerminalUri('session', 1),
-			target: TerminalLocation.Panel,
-		} as ITerminalInstance;
+		const instance = { resource: getTerminalUri('session', 1), target: TerminalLocation.Panel } as ITerminalInstance;
 		const requests: unknown[] = [];
-		const terminals = {
-			instances: [instance],
-			onDidDisposeInstance: Event.None,
-			onDidChangeInstances: Event.None,
-			setActiveInstance: (active: ITerminalInstance) => {
-				assert.equal(active, instance);
-			},
-		} as unknown as ITerminalService;
-		const editors = {
-			onDidActiveEditorChange: Event.None,
-			openEditor: async (input, options, target) => {
-				requests.push([input, options, target]);
-			},
-		} as IEditorService;
+		const terminals = { instances: [instance], onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, setActiveInstance: (active: ITerminalInstance) => { assert.equal(active, instance); } } as unknown as ITerminalService;
+		const editors = { onDidActiveEditorChange: Event.None, openEditor: async (input, options, target) => { requests.push([input, options, target]); } } as IEditorService;
 		const groups = { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService;
 		using service = new TerminalEditorService(terminals, editors, groups);
 		await service.openEditor(instance, { viewColumn: 12 });
@@ -126,13 +90,7 @@ suite('Terminal editor destination', () => {
 function splitFixture() {
 	const lifetime = new DisposableStore();
 	const state = lifetime.add(new Emitter<TerminalInstanceState>());
-	const source = {
-		resource: getTerminalUri('split', 1),
-		target: TerminalLocation.Editor,
-		state: 'running',
-		onDidChangeState: state.event,
-		shellLaunchConfig: { executable: '/bin/bash', env: { TEST: 'retained' } },
-	} as unknown as ITerminalInstance;
+	const source = { resource: getTerminalUri('split', 1), target: TerminalLocation.Editor, state: 'running', onDidChangeState: state.event, shellLaunchConfig: { executable: '/bin/bash', env: { TEST: 'retained' } } } as unknown as ITerminalInstance;
 	const created = { resource: getTerminalUri('split', 2), target: TerminalLocation.Editor } as ITerminalInstance;
 	const input = new TerminalEditorInput(source.resource!, source);
 	const origin = { id: 7, inputs: [input], onDidChangeEditors: Event.None } as unknown as IEditorGroup;
@@ -142,51 +100,16 @@ function splitFixture() {
 	const closed: ITerminalInstance[] = [];
 	const removed: IEditorGroup[] = [];
 	const requests: ICreateTerminalOptions[] = [];
-	let create = async (options: ICreateTerminalOptions): Promise<ITerminalInstance> => {
-		requests.push(options);
-		instances.push(created);
-		return created;
-	};
-	const terminals = {
-		instances,
-		onDidDisposeInstance: Event.None,
-		onDidChangeInstances: Event.None,
-		createTerminal: (options: ICreateTerminalOptions) => create(options),
-		closeTerminal: async (instance: ITerminalInstance) => {
-			closed.push(instance);
-			instances.splice(instances.indexOf(instance), 1);
-		},
-	} as unknown as ITerminalService;
+	let create = async (options: ICreateTerminalOptions): Promise<ITerminalInstance> => { requests.push(options); instances.push(created); return created; };
+	const terminals = { instances, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, createTerminal: (options: ICreateTerminalOptions) => create(options), closeTerminal: async (instance: ITerminalInstance) => { closed.push(instance); instances.splice(instances.indexOf(instance), 1); } } as unknown as ITerminalService;
 	const groups = {
-		groups: allGroups,
-		onDidChangeGroups: Event.None,
+		groups: allGroups, onDidChangeGroups: Event.None,
 		getGroup: (id: number) => allGroups.find(group => group.id === id),
-		addGroup: (reference: IEditorGroup, direction: GroupDirection) => {
-			assert.equal(reference, origin);
-			assert.equal(direction, GroupDirection.RIGHT);
-			allGroups.push(destination);
-			return destination;
-		},
-		removeGroup: async (group: IEditorGroup) => {
-			removed.push(group);
-			allGroups.splice(allGroups.indexOf(group), 1);
-			return true;
-		},
+		addGroup: (reference: IEditorGroup, direction: GroupDirection) => { assert.equal(reference, origin); assert.equal(direction, GroupDirection.RIGHT); allGroups.push(destination); return destination; },
+		removeGroup: async (group: IEditorGroup) => { removed.push(group); allGroups.splice(allGroups.indexOf(group), 1); return true; },
 	} as unknown as IEditorGroupsService;
 	const service = lifetime.add(new TerminalEditorService(terminals, { onDidActiveEditorChange: Event.None } as IEditorService, groups));
-	return {
-		lifetime,
-		source,
-		created,
-		destination,
-		instances,
-		state,
-		closed,
-		removed,
-		requests,
-		service,
-		setCreate: (value: typeof create) => (create = value),
-	};
+	return { lifetime, source, created, destination, instances, state, closed, removed, requests, service, setCreate: (value: typeof create) => create = value };
 }
 
 test('editor terminal split captures the original group and reuses parent launch resolution', async () => {
@@ -201,9 +124,7 @@ test('editor terminal split captures the original group and reuses parent launch
 test('editor terminal split removes only its empty destination after creation fails', async () => {
 	const f = splitFixture();
 	using lifetime = f.lifetime;
-	f.setCreate(async () => {
-		throw new Error('Shell launch failed');
-	});
+	f.setCreate(async () => { throw new Error('Shell launch failed'); });
 	await assert.rejects(f.service.splitInstance(f.source), /Shell launch failed/);
 	assert.deepEqual(f.instances, [f.source]);
 	assert.deepEqual(f.closed, []);

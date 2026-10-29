@@ -38,16 +38,14 @@ function isPackageManifestName(value: string): boolean {
 	return /^\d{20}\.json$/u.test(value);
 }
 
-function isPackageManifest(value: unknown, sequence: number): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string } {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'formatVersion' in value &&
-		value.formatVersion === 1 &&
-		'sequence' in value &&
-		value.sequence === sequence &&
-		'directory' in value &&
-		typeof value.directory === 'string' &&
-		/^packages\/[0-9A-Za-z][0-9A-Za-z.+-]*\/[a-f0-9]{64}$/u.test(value.directory)
-	);
+function isPackageManifest(value: unknown, sequence: number): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string; } {
+	return typeof value === 'object'
+		&& value !== null
+		&& 'formatVersion' in value
+		&& value.formatVersion === 1
+		&& 'sequence' in value
+		&& value.sequence === sequence
+		&& 'directory' in value
+		&& typeof value.directory === 'string'
+		&& /^packages\/[0-9A-Za-z][0-9A-Za-z.+-]*\/[a-f0-9]{64}$/u.test(value.directory);
 }

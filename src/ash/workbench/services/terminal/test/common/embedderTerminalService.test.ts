@@ -30,14 +30,7 @@ suite('Embedder terminal creation', () => {
 		store.add(second.services.createInstance(TerminalMainContribution));
 		second.services.get(IEmbedderTerminalService).createTerminal({ name: 'Second window', pty: secondHost });
 		await waitFor(() => secondHost.opens === 1);
-		assert.deepEqual(
-			{
-				first: first.terminals.instances.length,
-				second: second.terminals.instances.map(instance => instance.title),
-				opens: firstHost.opens,
-			},
-			{ first: 0, second: ['Second window'], opens: 0 },
-		);
+		assert.deepEqual({ first: first.terminals.instances.length, second: second.terminals.instances.map(instance => instance.title), opens: firstHost.opens }, { first: 0, second: ['Second window'], opens: 0 });
 		store.add(first.services.createInstance(TerminalMainContribution));
 		await waitFor(() => firstHost.opens === 1);
 		assert.deepEqual([first.terminals.instances.map(instance => instance.title), second.terminals.instances.map(instance => instance.title)], [['First window'], ['Second window']]);
@@ -48,10 +41,7 @@ suite('Embedder terminal creation', () => {
 		const { services, terminals } = createServices(store);
 		store.add(services.createInstance(TerminalMainContribution));
 		const host = store.add(new HostPty());
-		host.onOpen = () => {
-			host.output.fire('first line');
-			host.ended.fire(0);
-		};
+		host.onOpen = () => { host.output.fire('first line'); host.ended.fire(0); };
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Early', pty: host });
 		await waitFor(() => host.opens === 1);
 		const instance = terminals.instances[0];
@@ -72,39 +62,18 @@ suite('Embedder terminal creation', () => {
 		};
 		const output: string[] = [];
 		const exited: (number | undefined)[] = [];
-		store.add(
-			terminals.onDidCreateInstance(instance => {
-				store.add(instance.onDidWriteData(data => output.push(data.data)));
-				store.add(instance.onDidExit(code => exited.push(code)));
-			}),
-		);
+		store.add(terminals.onDidCreateInstance(instance => {
+			store.add(instance.onDidWriteData(data => output.push(data.data)));
+			store.add(instance.onDidExit(code => exited.push(code)));
+		}));
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Host output', pty: host });
 		assert.equal(terminals.instances.length, 0);
 		store.add(services.createInstance(TerminalMainContribution));
 		await waitFor(() => reveals.length === 1 && terminals.instances[0]?.state === 'exited');
 		const instance = terminals.instances[0];
-		assert.deepEqual(
-			{
-				title: instance.title,
-				state: instance.state,
-				exitCode: instance.exitCode,
-				pid: instance.processId,
-				cwd: instance.initialCwd,
-				output,
-				exited,
-				reveals,
-			},
-			{
-				title: 'Host output',
-				state: 'exited',
-				exitCode: 0,
-				pid: -1,
-				cwd: '',
-				output: ['early output'],
-				exited: [0],
-				reveals: [TERMINAL_VIEW_ID],
-			},
-		);
+		assert.deepEqual({ title: instance.title, state: instance.state, exitCode: instance.exitCode, pid: instance.processId, cwd: instance.initialCwd, output, exited, reveals }, {
+			title: 'Host output', state: 'exited', exitCode: 0, pid: -1, cwd: '', output: ['early output'], exited: [0], reveals: [TERMINAL_VIEW_ID],
+		});
 		await instance.close();
 		assert.deepEqual({ remaining: terminals.instances.length, opens: host.opens, closes: host.closes }, { remaining: 0, opens: 1, closes: 0 });
 	});
@@ -122,13 +91,9 @@ suite('Embedder terminal creation', () => {
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Second', pty: second });
 		await waitFor(() => second.opens === 1);
 		terminals.moveTerminal(instance, 1);
-		assert.deepEqual(
-			terminals.instances.map(item => ({ title: item.title, readOnly: item.isReadOnly, state: item.state })),
-			[
-				{ title: 'Second', readOnly: true, state: 'running' },
-				{ title: 'Renamed', readOnly: true, state: 'running' },
-			],
-		);
+		assert.deepEqual(terminals.instances.map(item => ({ title: item.title, readOnly: item.isReadOnly, state: item.state })), [
+			{ title: 'Second', readOnly: true, state: 'running' }, { title: 'Renamed', readOnly: true, state: 'running' },
+		]);
 		await Promise.all([instance.close(), instance.close()]);
 		assert.equal(host.closes, 1);
 	});
@@ -170,14 +135,9 @@ suite('Embedder terminal creation', () => {
 		const host = store.add(new HostPty());
 		store.add(terminals.onDidCreateInstance(instance => instance.dispose()));
 		let config!: Parameters<ITerminalService['createTerminal']>[0];
-		store.add(
-			services.get(IEmbedderTerminalService).onDidCreateTerminal(value => {
-				config = {
-					config: { ...value, customPtyImplementation: value.customPtyImplementation! },
-					dimensions: { rows: 24, cols: 80 },
-				};
-			}),
-		);
+		store.add(services.get(IEmbedderTerminalService).onDidCreateTerminal(value => {
+			config = { config: { ...value, customPtyImplementation: value.customPtyImplementation! }, dimensions: { rows: 24, cols: 80 } };
+		}));
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Closed', pty: host });
 		await assert.rejects(terminals.createTerminal(config), { name: 'CancellationError' });
 		assert.deepEqual({ opens: host.opens, closes: host.closes, instances: terminals.instances.length }, { opens: 0, closes: 1, instances: 0 });
@@ -194,22 +154,9 @@ suite('Embedder terminal creation', () => {
 		host.ended.fire(3);
 		await terminals.relaunchTerminal(instance, { rows: 30, cols: 100 });
 		host.name.fire('Restarted');
-		assert.deepEqual(
-			{
-				instances: terminals.instances.length,
-				title: instance.title,
-				state: instance.state,
-				exitCode: instance.exitCode,
-				opens: host.opens,
-			},
-			{
-				instances: 1,
-				title: 'Restarted',
-				state: 'running',
-				exitCode: undefined,
-				opens: 2,
-			},
-		);
+		assert.deepEqual({ instances: terminals.instances.length, title: instance.title, state: instance.state, exitCode: instance.exitCode, opens: host.opens }, {
+			instances: 1, title: 'Restarted', state: 'running', exitCode: undefined, opens: 2,
+		});
 		await instance.close();
 		assert.equal(host.closes, 1);
 	});
@@ -219,9 +166,7 @@ suite('Embedder terminal creation', () => {
 		const { services, terminals } = createServices(store);
 		store.add(services.createInstance(TerminalMainContribution));
 		const host = store.add(new HostPty());
-		host.onOpen = () => {
-			throw new Error('Host open failed');
-		};
+		host.onOpen = () => { throw new Error('Host open failed'); };
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Broken', pty: host });
 		await waitFor(() => terminals.instances[0]?.state === 'error');
 		const instance: ITerminalInstance = terminals.instances[0];
@@ -249,58 +194,25 @@ class HostPty extends Disposable implements IEmbedderTerminalPty {
 	public opens = 0;
 	public closes = 0;
 	public onOpen: (() => void) | undefined;
-	public open(): void {
-		this.opens++;
-		this.onOpen?.();
-	}
-	public close(): void {
-		this.closes++;
-	}
+	public open(): void { this.opens++; this.onOpen?.(); }
+	public close(): void { this.closes++; }
 }
 
-function createServices(owner: DisposableStore): {
-	services: InstantiationService;
-	terminals: ITerminalService;
-	reveals: string[];
-} {
+function createServices(owner: DisposableStore): { services: InstantiationService; terminals: ITerminalService; reveals: string[]; } {
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IEmbedderTerminalService)?.[1];
 	assert.ok(descriptor);
 	const workspace = owner.add(new TestWorkspaceService({ id: 'empty-window' }));
-	const rejectBackend = async (): Promise<never> => {
-		throw new Error('Host PTY must not access the backend');
-	};
+	const rejectBackend = async (): Promise<never> => { throw new Error('Host PTY must not access the backend'); };
 	const reveals: string[] = [];
-	const services = owner.add(
-		new InstantiationService(
-			new ServiceCollection(
-				[IEmbedderTerminalService, descriptor],
-				[IWorkspaceContextService, workspace],
-				[
-					ITerminalProcessService,
-					{
-						getEnvironment: async () => ({}),
-						listProfiles: rejectBackend,
-						create: rejectBackend,
-						write: rejectBackend,
-						resize: rejectBackend,
-						read: rejectBackend,
-						close: rejectBackend,
-						getConnectionState: async () => 'crashed',
-						onConnectionState: Event.None,
-					},
-				],
-				[
-					IViewsService,
-					{
-						openView: async (id: string) => {
-							reveals.push(id);
-							return null;
-						},
-					} as IViewsService,
-				],
-			),
-		),
-	);
+	const services = owner.add(new InstantiationService(new ServiceCollection(
+		[IEmbedderTerminalService, descriptor],
+		[IWorkspaceContextService, workspace],
+		[ITerminalProcessService, {
+			getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend,
+			getConnectionState: async () => 'crashed', onConnectionState: Event.None,
+		}],
+		[IViewsService, { openView: async (id: string) => { reveals.push(id); return null; } } as IViewsService],
+	)));
 	registerTestTerminalCreationServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);

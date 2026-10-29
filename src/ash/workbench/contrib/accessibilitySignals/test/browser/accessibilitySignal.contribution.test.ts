@@ -28,15 +28,10 @@ import { type ITaskRun } from '../../../tasks/common/tasks.js';
 suite('Accessibility signal production contributions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	function services(owner: DisposableStore): { services: InstantiationService; cues: string[] } {
+	function services(owner: DisposableStore): { services: InstantiationService; cues: string[]; } {
 		const services = owner.add(new InstantiationService());
 		const cues: string[] = [];
-		services.registerInstance(IAccessibilitySignalService, {
-			playSignal: async signal => {
-				cues.push(signal.settingsKey);
-			},
-			playSignalLoop: () => Disposable.None,
-		});
+		services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => Disposable.None });
 		return { services, cues };
 	}
 
@@ -47,22 +42,9 @@ suite('Accessibility signal production contributions', () => {
 		const removed = owner.add(new Emitter<ITerminalInstance>());
 		const started = owner.add(new Emitter<ITaskRun>());
 		const instance = { id: 'terminal', onDidChangeCommandStatus: changed.event } as ITerminalInstance;
-		fixture.services.registerInstance(ITerminalService, {
-			instances: [instance],
-			onDidCreateInstance: Event.None,
-			onDidDisposeInstance: removed.event,
-		} as unknown as ITerminalService);
-		fixture.services.registerInstance(ITaskService, {
-			activeRuns: [],
-			onDidStartTask: started.event,
-		} as unknown as ITaskService);
-		using host = WorkbenchContributionsRegistry.createHost(
-			fixture.services,
-			error => {
-				throw error;
-			},
-			['workbench.contrib.terminalAccessibilitySignals'],
-		);
+		fixture.services.registerInstance(ITerminalService, { instances: [instance], onDidCreateInstance: Event.None, onDidDisposeInstance: removed.event } as unknown as ITerminalService);
+		fixture.services.registerInstance(ITaskService, { activeRuns: [], onDidStartTask: started.event } as unknown as ITaskService);
+		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.terminalAccessibilitySignals']);
 		host.advance(WorkbenchPhase.AfterRestored);
 		changed.fire({ commandId: 'command1', status: 'running', exitCode: undefined });
 		changed.fire({ commandId: 'command1', status: 'succeeded', exitCode: 0 });
@@ -79,29 +61,14 @@ suite('Accessibility signal production contributions', () => {
 		using owner = new DisposableStore();
 		const fixture = services(owner);
 		const updates = owner.add(new Emitter<ThreadUpdateEnvelope>());
-		fixture.services.registerInstance(IChatService, {
-			onDidUpdateThread: updates.event,
-			onDidBecomeReady: Event.None,
-		} as IChatService);
-		using host = WorkbenchContributionsRegistry.createHost(
-			fixture.services,
-			error => {
-				throw error;
-			},
-			['workbench.contrib.chatAccessibilitySignals'],
-		);
+		fixture.services.registerInstance(IChatService, { onDidUpdateThread: updates.event, onDidBecomeReady: Event.None } as IChatService);
+		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.chatAccessibilitySignals']);
 		host.advance(WorkbenchPhase.AfterRestored);
 		const send = (sequence: number, event: ThreadUpdateEnvelope['update']): void => updates.fire({ sessionId: 'session', threadId: 'thread', durableSequence: sequence, update: event });
 		send(1, { type: 'committed', event: { type: 'turnAccepted' } });
 		send(1, { type: 'committed', event: { type: 'turnAccepted' } });
 		send(2, { type: 'itemDelta', itemId: 'message', delta: { type: 'agentMessage', text: 'streaming response' } });
-		send(3, {
-			type: 'committed',
-			event: {
-				type: 'interactionRequested',
-				interaction: { requestId: 'question', request: { type: 'userInput', request: { questions: [] } } },
-			},
-		});
+		send(3, { type: 'committed', event: { type: 'interactionRequested', interaction: { requestId: 'question', request: { type: 'userInput', request: { questions: [] } } } } });
 		send(4, { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn' } });
 		send(5, { type: 'committed', event: { type: 'turnInterrupted', turnId: 'turn' } });
 		assert.deepEqual(fixture.cues, ['accessibility.signals.chatRequestSent', 'accessibility.signals.chatUserActionRequired', 'accessibility.signals.chatResponseReceived']);
@@ -115,30 +82,14 @@ suite('Accessibility signal production contributions', () => {
 		const fixture = services(owner);
 		const started = owner.add(new Emitter<void>());
 		const ended = owner.add(new Emitter<void>());
-		fixture.services.registerInstance(IChatSpeechToTextService, {
-			isBusy: false,
-			state: 'idle',
-			onDidChangeState: Event.None,
-		} as IChatSpeechToTextService);
-		fixture.services.registerInstance(ISpeechService, {
-			hasActiveSpeechToTextSession: false,
-			onDidStartSpeechToTextSession: started.event,
-			onDidEndSpeechToTextSession: ended.event,
-		} as ISpeechService);
-		using host = WorkbenchContributionsRegistry.createHost(
-			fixture.services,
-			error => {
-				throw error;
-			},
-			['workbench.contrib.speechAccessibilitySignal'],
-		);
+		fixture.services.registerInstance(IChatSpeechToTextService, { isBusy: false, state: 'idle', onDidChangeState: Event.None } as IChatSpeechToTextService);
+		fixture.services.registerInstance(ISpeechService, { hasActiveSpeechToTextSession: false, onDidStartSpeechToTextSession: started.event, onDidEndSpeechToTextSession: ended.event } as ISpeechService);
+		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.speechAccessibilitySignal']);
 		host.advance(WorkbenchPhase.AfterRestored);
 		ended.fire();
 		assert.deepEqual(fixture.cues, []);
-		started.fire();
-		started.fire();
-		ended.fire();
-		ended.fire();
+		started.fire(); started.fire();
+		ended.fire(); ended.fire();
 		assert.deepEqual(fixture.cues, ['accessibility.signals.voiceRecordingStarted', 'accessibility.signals.voiceRecordingStopped']);
 	});
 
@@ -150,17 +101,8 @@ suite('Accessibility signal production contributions', () => {
 		const first = owner.add(new Emitter<DebugSessionState>());
 		const second = owner.add(new Emitter<DebugSessionState>());
 		fixture.services.registerInstance(ITextFileService, { onDidSave: saves.event } as ITextFileService);
-		fixture.services.registerInstance(IDebugService, {
-			session: undefined,
-			onDidChangeSession: selection.event,
-		} as IDebugService);
-		using host = WorkbenchContributionsRegistry.createHost(
-			fixture.services,
-			error => {
-				throw error;
-			},
-			['workbench.contrib.saveAccessibilitySignals', 'workbench.contrib.debugAccessibilitySignals'],
-		);
+		fixture.services.registerInstance(IDebugService, { session: undefined, onDidChangeSession: selection.event } as IDebugService);
+		using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.saveAccessibilitySignals', 'workbench.contrib.debugAccessibilitySignals']);
 		host.advance(WorkbenchPhase.AfterRestored);
 		saves.fire({ resource: URI.file('/document'), content: 'saved', revision: 'revision' });
 		const session = { onDidChangeState: first.event } as IDebugSession;
@@ -189,42 +131,16 @@ suite('Accessibility signal production contributions', () => {
 			let position = { lineNumber: 1, column: 1 };
 			const resource = URI.file('/document');
 			const editor = {
-				getModel: () => ({ uri: resource }),
-				getPosition: () => position,
-				onDidChangeCursorPosition: positionChanged.event,
-				onDidFocusEditorText: Event.None,
-				onDidBlurEditorText: Event.None,
-				onDidChangeModel: Event.None,
+				getModel: () => ({ uri: resource }), getPosition: () => position,
+				onDidChangeCursorPosition: positionChanged.event, onDidFocusEditorText: Event.None,
+				onDidBlurEditorText: Event.None, onDidChangeModel: Event.None,
 			} as unknown as ICodeEditor;
-			fixture.services.registerInstance(ICodeEditorService, {
-				onCodeEditorAdd: Event.None,
-				onCodeEditorRemove: removed.event,
-				listCodeEditors: () => [editor],
-				getFocusedCodeEditor: () => editor,
-			} as unknown as ICodeEditorService);
+			fixture.services.registerInstance(ICodeEditorService, { onCodeEditorAdd: Event.None, onCodeEditorRemove: removed.event, listCodeEditors: () => [editor], getFocusedCodeEditor: () => editor } as unknown as ICodeEditorService);
 			fixture.services.registerInstance(IMarkerService, markers);
-			fixture.services.registerInstance(IDebugService, {
-				breakpoints: [],
-				onDidChangeBreakpoints: Event.None,
-			} as unknown as IDebugService);
-			using host = WorkbenchContributionsRegistry.createHost(
-				fixture.services,
-				error => {
-					throw error;
-				},
-				['workbench.contrib.editorTextPropertySignals'],
-			);
+			fixture.services.registerInstance(IDebugService, { breakpoints: [], onDidChangeBreakpoints: Event.None } as unknown as IDebugService);
+			using host = WorkbenchContributionsRegistry.createHost(fixture.services, error => { throw error; }, ['workbench.contrib.editorTextPropertySignals']);
 			host.advance(WorkbenchPhase.AfterRestored);
-			markers.changeOne('diagnostics', resource, [
-				{
-					severity: MarkerSeverity.Error,
-					message: 'Error',
-					startLineNumber: 1,
-					startColumn: 3,
-					endLineNumber: 1,
-					endColumn: 5,
-				},
-			]);
+			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Error, message: 'Error', startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 5 }]);
 			mock.timers.tick(250);
 			position = { lineNumber: 1, column: 3 };
 			positionChanged.fire();
@@ -235,21 +151,10 @@ suite('Accessibility signal production contributions', () => {
 			assert.deepEqual(fixture.cues, ['accessibility.signals.errorOnLine', 'accessibility.signals.errorAtPosition']);
 			markers.remove('diagnostics', [resource]);
 			mock.timers.tick(250);
-			markers.changeOne('diagnostics', resource, [
-				{
-					severity: MarkerSeverity.Warning,
-					message: 'Warning',
-					startLineNumber: 1,
-					startColumn: 3,
-					endLineNumber: 1,
-					endColumn: 5,
-				},
-			]);
+			markers.changeOne('diagnostics', resource, [{ severity: MarkerSeverity.Warning, message: 'Warning', startLineNumber: 1, startColumn: 3, endLineNumber: 1, endColumn: 5 }]);
 			removed.fire(editor);
 			mock.timers.tick(1000);
 			assert.equal(fixture.cues.length, 2);
-		} finally {
-			mock.timers.reset();
-		}
+		} finally { mock.timers.reset(); }
 	});
 });

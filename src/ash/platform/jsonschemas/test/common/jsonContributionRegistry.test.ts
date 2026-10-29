@@ -21,18 +21,9 @@ test('JSON contributions and their resource patterns have separate change notifi
 	registry.notifySchemaChanged(id);
 	association.dispose();
 	contribution.dispose();
-	assert.deepEqual(
-		{
-			schema: registry.getSchemaContributions().schemas[id],
-			associations: registry.getSchemaAssociations()[id],
-			changes,
-		},
-		{
-			schema: undefined,
-			associations: undefined,
-			changes: [id, 'associations', id, 'associations', id],
-		},
-	);
+	assert.deepEqual({ schema: registry.getSchemaContributions().schemas[id], associations: registry.getSchemaAssociations()[id], changes }, {
+		schema: undefined, associations: undefined, changes: [id, 'associations', id, 'associations', id],
+	});
 });
 
 test('disposing an older JSON contribution does not remove its replacement', () => {

@@ -9,50 +9,48 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 
 export const ToggleSideBarCommandId = 'workbench.action.toggleSideBar';
 
-registerAction2(
-	class ToggleSideBarAction extends Action2 {
-		constructor() {
-			super({
-				id: ToggleSideBarCommandId,
-				title: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
-				tooltip: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
-				icon: Lxicon.layoutSidebarLeftOff1,
-				toggled: {
-					condition: SideBarVisibleContext.isEqualTo(true),
-					title: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
-					tooltip: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
-					icon: Lxicon.layoutSidebarLeft1,
+registerAction2(class ToggleSideBarAction extends Action2 {
+	constructor() {
+		super({
+			id: ToggleSideBarCommandId,
+			title: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
+			tooltip: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
+			icon: Lxicon.layoutSidebarLeftOff1,
+			toggled: {
+				condition: SideBarVisibleContext.isEqualTo(true),
+				title: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
+				tooltip: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
+				icon: Lxicon.layoutSidebarLeft1,
+			},
+			menu: [
+				{
+					id: MenuId.TitleBarLeft,
+					when: IsAuxiliaryWindowContext.isEqualTo(false),
+					group: 'navigation',
+					order: 10,
 				},
-				menu: [
-					{
-						id: MenuId.TitleBarLeft,
-						when: IsAuxiliaryWindowContext.isEqualTo(false),
-						group: 'navigation',
-						order: 10,
-					},
-					{
-						id: MenuId.MenubarViewMenu,
-						group: '2_appearance',
-						order: 9,
-					},
-					{
-						id: MenuId.ViewContainerTitleContext,
-						when: ContextKeyExpr.and(SideBarVisibleContext.isEqualTo(true), ContextKeyExpr.equals('viewContainerLocation', 'sidebar')),
-						group: '2_visibility',
-						order: 1,
-					},
-				],
-				f1: true,
-			});
-		}
+				{
+					id: MenuId.MenubarViewMenu,
+					group: '2_appearance',
+					order: 9,
+				},
+				{
+					id: MenuId.ViewContainerTitleContext,
+					when: ContextKeyExpr.and(SideBarVisibleContext.isEqualTo(true), ContextKeyExpr.equals('viewContainerLocation', 'sidebar')),
+					group: '2_visibility',
+					order: 1,
+				},
+			],
+			f1: true,
+		});
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			const layout = accessor.get(IWorkbenchLayoutService);
-			if (layout.isPartVisible('sidebar')) {
-				layout.hidePart('sidebar');
-			} else {
-				layout.showPart('sidebar');
-			}
+	override run(accessor: ServicesAccessor): void {
+		const layout = accessor.get(IWorkbenchLayoutService);
+		if (layout.isPartVisible('sidebar')) {
+			layout.hidePart('sidebar');
+		} else {
+			layout.showPart('sidebar');
 		}
-	},
-);
+	}
+});

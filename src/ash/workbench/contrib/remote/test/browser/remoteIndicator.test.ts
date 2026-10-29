@@ -20,17 +20,10 @@ test('remote indicator owns the leading clickable left status entry', async () =
 	using statusbarService = new StatusbarService();
 	const commands: string[] = [];
 	statusbarService.addEntry({ text: 'main' }, { id: 'ash.status.git.branch', alignment: StatusbarAlignment.Left, priority: 900 });
-	using indicator = new RemoteStatusIndicator({
-		remoteAgentService,
-		runCommand: commandRunner(commands),
-		statusbarService,
-	});
+	using indicator = new RemoteStatusIndicator({ remoteAgentService, runCommand: commandRunner(commands), statusbarService });
 
 	const entries = statusbarService.getEntries(StatusbarAlignment.Left);
-	assert.deepEqual(
-		entries.map(entry => entry.id),
-		['ash.status.remote', 'ash.status.git.branch'],
-	);
+	assert.deepEqual(entries.map(entry => entry.id), ['ash.status.remote', 'ash.status.git.branch']);
 	assert.equal(entries[0]?.entry.kind, undefined);
 	assert.equal(entries[0]?.entry.icon, Lxicon.remote);
 	assert.equal(entries[0]?.entry.text, '');
@@ -43,11 +36,7 @@ test('remote indicator projects connection changes and reconnects a disconnected
 	using remoteAgentService = new TestRemoteAgentService('connecting');
 	using statusbarService = new StatusbarService();
 	const commands: string[] = [];
-	const indicator = new RemoteStatusIndicator({
-		remoteAgentService,
-		runCommand: commandRunner(commands),
-		statusbarService,
-	});
+	const indicator = new RemoteStatusIndicator({ remoteAgentService, runCommand: commandRunner(commands), statusbarService });
 
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Connecting\u2026');
 	remoteAgentService.emit('reconnecting');
@@ -55,12 +44,7 @@ test('remote indicator projects connection changes and reconnects a disconnected
 	remoteAgentService.emit('disconnected');
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Disconnected');
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.kind, undefined);
-	remoteAgentService.emitConnection({
-		kind: 'ssh',
-		generation: 2,
-		authority: 'ssh+work-server',
-		host: 'work-server',
-	});
+	remoteAgentService.emitConnection({ kind: 'ssh', generation: 2, authority: 'ssh+work-server', host: 'work-server' });
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, 'SSH host work-server is disconnected');
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.kind, undefined);
 	await statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
@@ -83,17 +67,11 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
-	async reconnect() {
-		return { kind: 'reconnected' } as const;
-	}
-	async rollbackRuntime() {
-		return { kind: 'rolledBack' } as const;
-	}
+	async reconnect() { return { kind: 'reconnected' } as const; }
+	async rollbackRuntime() { return { kind: 'rolledBack' } as const; }
 	connection: RemoteAgentConnection | undefined = { kind: 'local', generation: 1 };
 
-	constructor(public connectionState: RemoteConnectionState | undefined) {
-		super();
-	}
+	constructor(public connectionState: RemoteConnectionState | undefined) { super(); }
 
 	emit(state: RemoteConnectionState): void {
 		this.connectionState = state;
@@ -106,6 +84,7 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	}
 }
 
+
 test('a standard remote endpoint has a localized identity and accessible ready state', () => {
 	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	using restore = toDisposable(resetNlsResolver);
@@ -113,14 +92,5 @@ test('a standard remote endpoint has a localized identity and accessible ready s
 	remoteAgentService.emitConnection({ kind: 'remote', generation: 1, authority: 'fixture+backend' });
 	using statusbarService = new StatusbarService();
 	using indicator = new RemoteStatusIndicator({ remoteAgentService, statusbarService, runCommand: () => undefined });
-	assert.deepEqual(
-		statusbarService.getEntries(StatusbarAlignment.Left).map(item => ({ kind: item.entry.kind, aria: item.entry.ariaLabel, tooltip: item.entry.tooltip })),
-		[
-			{
-				kind: 'remote',
-				aria: '与 远程主机 fixture+backend 的远程连接已就绪',
-				tooltip: '已连接到 远程主机 fixture+backend',
-			},
-		],
-	);
+	assert.deepEqual(statusbarService.getEntries(StatusbarAlignment.Left).map(item => ({ kind: item.entry.kind, aria: item.entry.ariaLabel, tooltip: item.entry.tooltip })), [{ kind: 'remote', aria: '与 远程主机 fixture+backend 的远程连接已就绪', tooltip: '已连接到 远程主机 fixture+backend' }]);
 });

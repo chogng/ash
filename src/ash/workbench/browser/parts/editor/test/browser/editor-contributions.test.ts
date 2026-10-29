@@ -78,9 +78,7 @@ test('EditorAutoSave observes auxiliary editor window blur', async () => {
 	const editorChanges = new Emitter<void>();
 	const state = { domNode: main.window.document.body };
 	const editorPart = {
-		get domNode() {
-			return state.domNode;
-		},
+		get domNode() { return state.domNode; },
 		activePane: undefined,
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
@@ -163,9 +161,7 @@ test('EditorAutoSave clears a delay timer through the window that created it', a
 	const editorChanges = new Emitter<void>();
 	const state = { domNode: main.window.document.body };
 	const editorPart = {
-		get domNode() {
-			return state.domNode;
-		},
+		get domNode() { return state.domNode; },
 		activePane: undefined,
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
@@ -196,34 +192,18 @@ test('EditorStatusContribution projects and clears active pane status', () => {
 	const workingCopy = new TestWorkingCopy(URI.file('C:\\project\\status.ts'));
 	const pane = new TestStatusPane(dom.window.document, workingCopy);
 	const input: IResourceEditorInput = { resource: workingCopy.resource, languageId: 'typescript' };
-	const state: { activeInput: IResourceEditorInput | undefined; activePane: IEditorPane | undefined } = {
-		activeInput: input,
-		activePane: pane,
-	};
+	const state: { activeInput: IResourceEditorInput | undefined; activePane: IEditorPane | undefined; } = { activeInput: input, activePane: pane };
 	const editorPart = {
 		domNode: dom.window.document.body,
-		get activeInput() {
-			return state.activeInput;
-		},
-		get activePane() {
-			return state.activePane;
-		},
+		get activeInput() { return state.activeInput; },
+		get activePane() { return state.activePane; },
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(
-		editorPart,
-		statusbar,
-		{
-			onDidChangeScreenReaderOptimized: Event.None,
-			isScreenReaderOptimized: () => false,
-		} as unknown as IAccessibilityService,
-		emptyCodeEditors,
-		emptyCommands,
-		testLanguages,
-		emptyQuickInput,
-		emptyFileModels,
-	);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, {
+		onDidChangeScreenReaderOptimized: Event.None,
+		isScreenReaderOptimized: () => false,
+	} as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 
 	assert.deepEqual(statusTexts(statusbar), ['TypeScript', 'LF', 'UTF-8', 'Ln 4, Col 9']);
 	state.activeInput = { ...input, readOnly: true };
@@ -248,14 +228,7 @@ test('EditorStatusContribution projects and clears active pane status', () => {
 	workingCopy.setExternalChange(true);
 	editorChanges.fire();
 	assert.equal(statusTexts(statusbar)[0], 'Conflict');
-	pane.setStatus({
-		lineNumber: 10,
-		columnNumber: 2,
-		selectionCount: 3,
-		languageId: 'json',
-		encoding: 'UTF-8',
-		endOfLine: 'CRLF',
-	});
+	pane.setStatus({ lineNumber: 10, columnNumber: 2, selectionCount: 3, languageId: 'json', encoding: 'UTF-8', endOfLine: 'CRLF' });
 	assert.deepEqual(statusTexts(statusbar), ['Conflict', 'JSON', 'CRLF', 'UTF-8', '3 selections']);
 
 	state.activeInput = undefined;
@@ -324,82 +297,40 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly onDidChangeContent = this.contentEmitter.event;
 	saveCount = 0;
 
-	constructor(readonly resource: URI) {
-		super();
-	}
-	get isDirty(): boolean {
-		return this.dirty;
-	}
-	get hasExternalChange(): boolean {
-		return this.external;
-	}
-	backup(): string {
-		return 'content';
-	}
-	restoreBackup(): void {
-		this.markDirty();
-	}
-	markDirty(): void {
-		this.dirty = true;
-		this.dirtyEmitter.fire();
-	}
-	setExternalChange(value: boolean): void {
-		this.external = value;
-		this.externalEmitter.fire();
-	}
-	fireContentChange(): void {
-		this.contentEmitter.fire();
-	}
+	constructor(readonly resource: URI) { super(); }
+	get isDirty(): boolean { return this.dirty; }
+	get hasExternalChange(): boolean { return this.external; }
+	backup(): string { return 'content'; }
+	restoreBackup(): void { this.markDirty(); }
+	markDirty(): void { this.dirty = true; this.dirtyEmitter.fire(); }
+	setExternalChange(value: boolean): void { this.external = value; this.externalEmitter.fire(); }
+	fireContentChange(): void { this.contentEmitter.fire(); }
 	readonly saveReasons: SaveReason[] = [];
-	async save(_signal?: AbortSignal, options?: ISaveOptions): Promise<void> {
-		this.saveReasons.push(options?.reason ?? SaveReason.EXPLICIT);
-		this.saveCount += 1;
-		this.dirty = false;
-		this.dirtyEmitter.fire();
-	}
-	async saveAs(): Promise<void> {
-		await this.save();
-	}
-	async revert(): Promise<void> {
-		this.dirty = false;
-		this.dirtyEmitter.fire();
-	}
+	async save(_signal?: AbortSignal, options?: ISaveOptions): Promise<void> { this.saveReasons.push(options?.reason ?? SaveReason.EXPLICIT); this.saveCount += 1; this.dirty = false; this.dirtyEmitter.fire(); }
+	async saveAs(): Promise<void> { await this.save(); }
+	async revert(): Promise<void> { this.dirty = false; this.dirtyEmitter.fire(); }
 }
 
 class TestStatusPane extends EditorPane implements IEditorPane {
 	readonly id = 'test.status';
 	private readonly statusEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeStatus = this.statusEmitter.event;
-	private status: EditorPaneStatus = {
-		lineNumber: 4,
-		columnNumber: 9,
-		languageId: 'typescript',
-		encoding: 'UTF-8',
-		endOfLine: 'LF',
-	};
+	private status: EditorPaneStatus = { lineNumber: 4, columnNumber: 9, languageId: 'typescript', encoding: 'UTF-8', endOfLine: 'LF' };
 
-	constructor(
-		document: Document,
-		readonly workingCopy: IWorkingCopy | undefined,
-	) {
+	constructor(document: Document, readonly workingCopy: IWorkingCopy | undefined) {
 		const services = createTestComponentServices(undefined, undefined, document);
 		super('test.status', services.get(IThemeService), services.get(IStorageService));
 		this._register(services);
 	}
-	getStatus(): EditorPaneStatus {
-		return this.status;
-	}
-	setStatus(status: EditorPaneStatus): void {
-		this.status = status;
-		this.statusEmitter.fire();
-	}
+	getStatus(): EditorPaneStatus { return this.status; }
+	setStatus(status: EditorPaneStatus): void { this.status = status; this.statusEmitter.fire(); }
 	public override create(parent: HTMLElement): void {
 		super.create(parent);
 	}
-	public override async setInput(): Promise<void> {}
-	public override clearInput(): void {}
-	public override layout(): void {}
-	public override focus(): void {}
+	public override async setInput(): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(): void { }
+	public override focus(): void { }
 }
 
 function statusTexts(statusbar: StatusbarService): string[] {
@@ -418,24 +349,10 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 }
 
-const emptyCodeEditors = {
-	onCodeEditorAdd: Event.None,
-	onCodeEditorRemove: Event.None,
-	listCodeEditors: () => [],
-	listDiffEditors: () => [],
-} as unknown as import('../../../../../../editor/browser/services/codeEditorService.js').ICodeEditorService;
-const emptyCommands = {
-	executeCommand: async () => undefined,
-} as unknown as import('../../../../../../platform/commands/common/commands.js').ICommandService;
-const testLanguages = {
-	onDidChange: Event.None,
-	getLanguageName: (id: string) => ({ typescript: 'TypeScript', json: 'JSON' })[id] ?? id,
-} as unknown as import('../../../../../../editor/common/languages/language.js').IAshLanguageService;
-const emptyFileModels = {
-	onDidChangeEncoding: Event.None,
-	getModel: () => null,
-	getEncodingSupport: () => undefined,
-} as unknown as IFileTextModelService;
+const emptyCodeEditors = { onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None, listCodeEditors: () => [], listDiffEditors: () => [] } as unknown as import('../../../../../../editor/browser/services/codeEditorService.js').ICodeEditorService;
+const emptyCommands = { executeCommand: async () => undefined } as unknown as import('../../../../../../platform/commands/common/commands.js').ICommandService;
+const testLanguages = { onDidChange: Event.None, getLanguageName: (id: string) => ({ typescript: 'TypeScript', json: 'JSON' })[id] ?? id } as unknown as import('../../../../../../editor/common/languages/language.js').IAshLanguageService;
+const emptyFileModels = { onDidChangeEncoding: Event.None, getModel: () => null, getEncodingSupport: () => undefined } as unknown as IFileTextModelService;
 const emptyQuickInput = {} as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService;
 
 test('Editor status actions update the real model and clear when the active editor closes', async () => {
@@ -447,22 +364,14 @@ test('Editor status actions update the real model and clear when the active edit
 	const services = resources.add(parentServices.createChild());
 	services.registerInstance(IFileTextModelService, emptyFileModels);
 	using model = new TextModel('\talpha\r\nbeta', { languageId: 'plaintext' });
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector('main')!,
-		model,
-		instantiationService: services,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, instantiationService: services });
 	using editorChanges = new Emitter<void>();
 	let active = true;
 	const pane = { getControl: () => editor } as unknown as IEditorPane;
 	const editorPart = {
 		domNode: dom.window.document.body,
-		get activeInput() {
-			return active ? { resource: URI.file('/status.txt') } : undefined;
-		},
-		get activePane() {
-			return active ? pane : undefined;
-		},
+		get activeInput() { return active ? { resource: URI.file('/status.txt') } : undefined; },
+		get activePane() { return active ? pane : undefined; },
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
@@ -539,26 +448,9 @@ test('Editor status uses the Chinese language pack', () => {
 	using closeWindow = toDisposable(() => dom.window.close());
 	using workingCopy = new TestWorkingCopy(URI.file('/status.ts'));
 	using pane = new TestStatusPane(dom.window.document, workingCopy);
-	const editorPart = {
-		domNode: dom.window.document.body,
-		activeInput: { resource: URI.file('/status.ts') },
-		activePane: pane,
-		onDidChangeEditors: Event.None,
-	} as unknown as IEditorPart;
+	const editorPart = { domNode: dom.window.document.body, activeInput: { resource: URI.file('/status.ts') }, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(
-		editorPart,
-		statusbar,
-		{
-			onDidChangeScreenReaderOptimized: Event.None,
-			isScreenReaderOptimized: () => false,
-		} as unknown as IAccessibilityService,
-		emptyCodeEditors,
-		emptyCommands,
-		testLanguages,
-		emptyQuickInput,
-		emptyFileModels,
-	);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 	assert.ok(statusTexts(statusbar).includes('行 4，列 9'));
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip, '选择行尾序列');
 	workingCopy.markDirty();

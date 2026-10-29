@@ -33,17 +33,7 @@ export class ChatGPTInputWidget extends Disposable {
 	private readonly dictationHost = this._register(new MutableDisposable());
 	private readonly attachButton: HTMLButtonElement;
 	private readonly attachmentList: HTMLElement;
-	private readonly attachmentRows = new Map<
-		string,
-		{
-			element: HTMLElement;
-			name: HTMLElement;
-			status: HTMLElement;
-			error: HTMLElement;
-			retry: HTMLButtonElement;
-			remove: HTMLButtonElement;
-		}
-	>();
+	private readonly attachmentRows = new Map<string, { element: HTMLElement; name: HTMLElement; status: HTMLElement; error: HTMLElement; retry: HTMLButtonElement; remove: HTMLButtonElement; }>();
 	private readonly voiceStatus: HTMLElement;
 	private readonly voiceTranscript: HTMLElement;
 	private visible = true;
@@ -77,275 +67,153 @@ export class ChatGPTInputWidget extends Disposable {
 		container.insertBefore(this.voiceStatus, this.element);
 		container.insertBefore(this.voiceTranscript, this.element);
 		const picker = h(container.ownerDocument, 'input');
-		picker.type = 'file';
-		picker.multiple = true;
-		picker.hidden = true;
+		picker.type = 'file'; picker.multiple = true; picker.hidden = true;
 		this.attachButton = h(container.ownerDocument, 'button');
 		this.attachButton.type = 'button';
 		this.attachButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chat-input-capsule-button';
 		const attachLabel = localize('sessions.chatgpt.attachFiles', 'Attach files');
-		this.attachButton.setAttribute('aria-label', attachLabel);
-		this.attachButton.title = attachLabel;
+		this.attachButton.setAttribute('aria-label', attachLabel); this.attachButton.title = attachLabel;
 		appendIcon(Lxicon.add, this.attachButton);
 		this.element.append(this.attachButton, picker);
 		this._register(addDisposableListener(this.attachButton, 'click', () => picker.click()));
-		this._register(
-			addDisposableListener(picker, 'change', () => {
-				const files = [...(picker.files ?? [])];
-				picker.value = '';
-				void this.chat.attachFiles(files);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'paste', event => {
-				if (this.attachButton.disabled || !event.clipboardData?.files.length) {
-					return;
-				}
-				event.preventDefault();
-				void this.chat.attachFiles([...event.clipboardData.files]);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'dragover', event => {
-				if (!this.attachButton.disabled && [...(event.dataTransfer?.items ?? [])].some(item => item.kind === 'file')) {
-					event.preventDefault();
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'drop', event => {
-				if (this.attachButton.disabled || !event.dataTransfer?.files.length) {
-					return;
-				}
-				event.preventDefault();
-				void this.chat.attachFiles([...event.dataTransfer.files]);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.attachmentList, 'click', event => {
-				const button = (event.target as Element).closest<HTMLButtonElement>('button[data-attachment-id]');
-				if (!button || button.disabled) {
-					return;
-				}
-				this.editor.focus();
-				if (button.dataset.attachmentAction === 'retry') {
-					void this.chat.retryAttachment(button.dataset.attachmentId!);
-				} else {
-					this.chat.removeAttachment(button.dataset.attachmentId!);
-				}
-			}),
-		);
+		this._register(addDisposableListener(picker, 'change', () => {
+			const files = [...picker.files ?? []]; picker.value = '';
+			void this.chat.attachFiles(files);
+		}));
+		this._register(addDisposableListener(this.element, 'paste', event => {
+			if (this.attachButton.disabled || !event.clipboardData?.files.length) { return; }
+			event.preventDefault();
+			void this.chat.attachFiles([...event.clipboardData.files]);
+		}));
+		this._register(addDisposableListener(this.element, 'dragover', event => {
+			if (!this.attachButton.disabled && [...event.dataTransfer?.items ?? []].some(item => item.kind === 'file')) { event.preventDefault(); }
+		}));
+		this._register(addDisposableListener(this.element, 'drop', event => {
+			if (this.attachButton.disabled || !event.dataTransfer?.files.length) { return; }
+			event.preventDefault();
+			void this.chat.attachFiles([...event.dataTransfer.files]);
+		}));
+		this._register(addDisposableListener(this.attachmentList, 'click', event => {
+			const button = (event.target as Element).closest<HTMLButtonElement>('button[data-attachment-id]');
+			if (!button || button.disabled) { return; }
+			this.editor.focus();
+			if (button.dataset.attachmentAction === 'retry') { void this.chat.retryAttachment(button.dataset.attachmentId!); }
+			else { this.chat.removeAttachment(button.dataset.attachmentId!); }
+		}));
 		const input = h(container.ownerDocument, 'div');
 		input.className = 'ash-chatgpt-input ash-chat-input-capsule-editor';
 		this.element.append(input);
 		const prompt = localize('sessions.chatgpt.prompt', 'Ask ChatGPT');
-		this.editor = this._register(
-			instantiation.createInstance(ChatInputEditor, {
-				container: input,
-				placeholder: prompt,
-				ariaLabel: prompt,
-				// ChatGPT sends plain prompts and has no Agent commands or skill selectors.
-				slashCommands: new SlashCommandCatalog([], []),
-				skills: new SkillSelectorCatalog(),
-				height: { minimum: 20, maximum: 240 },
-				tabFocusMode: true,
-			}),
-		);
+		this.editor = this._register(instantiation.createInstance(ChatInputEditor, {
+			container: input,
+			placeholder: prompt,
+			ariaLabel: prompt,
+			// ChatGPT sends plain prompts and has no Agent commands or skill selectors.
+			slashCommands: new SlashCommandCatalog([], []),
+			skills: new SkillSelectorCatalog(),
+			height: { minimum: 20, maximum: 240 },
+			tabFocusMode: true,
+		}));
 		this.modelPicker = this._register(instantiation.createInstance(ModelPickerWidget, this.element, (model: string) => this.chat.setModel(model)));
 		const preview = h(container.ownerDocument, 'div');
 		preview.className = 'ash-chatgpt-dictation-preview';
 		preview.setAttribute('aria-hidden', 'true');
 		preview.hidden = true;
 		input.append(preview);
-		this.dictation = this._register(
-			instantiation.createInstance(
-				DictationInput,
-				this.editor,
-				preview,
-				() => this.visible,
-				async () => {
-					await preferences.openSettings({ section: 'dictation' });
-				},
-				'chat',
-			),
-		);
+		this.dictation = this._register(instantiation.createInstance(DictationInput, this.editor, preview, () => this.visible,
+			async () => { await preferences.openSettings({ section: 'dictation' }); }, 'chat'));
 		this.updateDictationHost();
 		this.dictationButton = h(container.ownerDocument, 'button');
 		this.dictationButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chat-input-capsule-button';
 		this.dictationButton.type = 'button';
 		appendIcon(Lxicon.mic, this.dictationButton);
-		this._register(
-			addDisposableListener(this.dictationButton, 'click', () => {
-				void this.dictation.action.run();
-			}),
-		);
-		this._register(
-			Event.any(
-				speech.onDidChangeState,
-				Event.map(this.dictation.onDidChange, () => speech.state),
-			)(() => this.renderDictation()),
-		);
+		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
+		this._register(Event.any(speech.onDidChangeState, Event.map(this.dictation.onDidChange, () => speech.state))(() => this.renderDictation()));
 		this._register(speech.onDidChangePreparingModel(() => this.renderDictation()));
-		this._register(
-			this.dictation.onDidEnd(error => {
-				this.renderDictation();
-				if (error) {
-					this.reportDictationError(error);
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if (event.key === 'Escape' && this.dictation.isActive) {
-					event.preventDefault();
-					event.stopPropagation();
-					void this.cancelDictation();
-				}
-			}),
-		);
+		this._register(this.dictation.onDidEnd(error => {
+			this.renderDictation();
+			if (error) { this.reportDictationError(error); }
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key === 'Escape' && this.dictation.isActive) {
+				event.preventDefault();
+				event.stopPropagation();
+				void this.cancelDictation();
+			}
+		}));
 		this.sendButton = h(container.ownerDocument, 'button');
 		this.sendButton.className = 'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chat-input-capsule-button';
 		this.sendButton.type = 'button';
 		this.element.append(this.dictationButton, this.sendButton);
-		this._register(
-			addDisposableListener(this.sendButton, 'click', () => {
-				const state = this.chat.state.get();
-				if (state.sending) {
-					void this.chat.stop();
-				} else if (state.voice !== 'idle') {
-					void this.chat.stopVoice();
-				} else if (state.draft.trim() || state.attachments.length || this.dictation.isActive) {
-					void this.submit();
-				} else {
-					void this.startVoice();
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'submit', event => {
-				event.preventDefault();
-			}),
-		);
-		this._register(
-			this.editor.onDidSubmit(() => {
-				void this.submit();
-			}),
-		);
-		this._register(
-			this.editor.onDidChange(value => {
-				// Restoring a service-owned draft also changes the editor model.
-				if (value !== this.chat.state.get().draft) {
-					this.chat.setDraft(value);
-				}
-			}),
-		);
-		this._register(
-			autorun(reader => {
-				const state = this.chat.state.read(reader);
-				// A new chat also replaces its parent ID while its conversation ID is still absent.
-				const identity = JSON.stringify([state.conversationId, state.parentId]);
-				if (identity !== this.inputIdentity || state.busy || state.sending) {
-					this.inputGeneration++;
-					void this.cancelDictation();
-				}
-				this.inputIdentity = identity;
-				const voiceActive = state.voice !== 'idle';
-				this.editor.setReadOnly(!state.connected || state.busy || state.sending || voiceActive);
-				this.attachButton.disabled = !state.connected || state.busy || state.sending || state.managing || voiceActive;
-				const selectedModel = state.models.find(model => model.id === state.model);
-				this.modelPicker.update({
-					models: state.models,
-					selectedModel: state.model,
-					disabled: this.attachButton.disabled,
-					thinking:
-						selectedModel && selectedModel.presets.length > 1 && state.modelPreset !== undefined
-							? {
-									levels: selectedModel.presets,
-									selectedLevel: state.modelPreset,
-									emphasized: selectedModel.presets.find(preset => preset.id === state.modelPreset)?.isPro,
-									select: value => this.chat.setModelPreset(value),
-								}
-							: undefined,
-				});
-				this.editor.value = state.draft;
-				this.renderAttachments(state.attachments, state.busy || state.sending);
-				this.voiceStatus.hidden = !voiceActive;
-				this.voiceStatus.textContent =
-					state.voice === 'connecting'
-						? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
-						: state.voice === 'connected'
-							? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
-							: state.voice === 'stopping'
-								? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
-								: '';
-				this.voiceTranscript.hidden = !voiceActive || !state.voiceTranscript.length;
-				this.voiceTranscript.textContent = state.voiceTranscript
-					.map(item => localize('sessions.chatgpt.voiceTranscript', '{0}: {1}', item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT', item.text))
-					.join('\n');
-				this.renderDictation();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.element.remove();
-				this.attachmentList.remove();
-				this.voiceStatus.remove();
-				this.voiceTranscript.remove();
-			}),
-		);
+		this._register(addDisposableListener(this.sendButton, 'click', () => {
+			const state = this.chat.state.get();
+			if (state.sending) { void this.chat.stop(); }
+			else if (state.voice !== 'idle') { void this.chat.stopVoice(); }
+			else if (state.draft.trim() || state.attachments.length || this.dictation.isActive) { void this.submit(); }
+			else { void this.startVoice(); }
+		}));
+		this._register(addDisposableListener(this.element, 'submit', event => { event.preventDefault(); }));
+		this._register(this.editor.onDidSubmit(() => { void this.submit(); }));
+		this._register(this.editor.onDidChange(value => {
+			// Restoring a service-owned draft also changes the editor model.
+			if (value !== this.chat.state.get().draft) { this.chat.setDraft(value); }
+		}));
+		this._register(autorun(reader => {
+			const state = this.chat.state.read(reader);
+			// A new chat also replaces its parent ID while its conversation ID is still absent.
+			const identity = JSON.stringify([state.conversationId, state.parentId]);
+			if (identity !== this.inputIdentity || state.busy || state.sending) {
+				this.inputGeneration++;
+				void this.cancelDictation();
+			}
+			this.inputIdentity = identity;
+			const voiceActive = state.voice !== 'idle';
+			this.editor.setReadOnly(!state.connected || state.busy || state.sending || voiceActive);
+			this.attachButton.disabled = !state.connected || state.busy || state.sending || state.managing || voiceActive;
+			const selectedModel = state.models.find(model => model.id === state.model);
+			this.modelPicker.update({
+				models: state.models, selectedModel: state.model, disabled: this.attachButton.disabled,
+				thinking: selectedModel && selectedModel.presets.length > 1 && state.modelPreset !== undefined ? {
+					levels: selectedModel.presets, selectedLevel: state.modelPreset,
+					emphasized: selectedModel.presets.find(preset => preset.id === state.modelPreset)?.isPro,
+					select: value => this.chat.setModelPreset(value),
+				} : undefined,
+			});
+			this.editor.value = state.draft;
+			this.renderAttachments(state.attachments, state.busy || state.sending);
+			this.voiceStatus.hidden = !voiceActive;
+			this.voiceStatus.textContent = state.voice === 'connecting' ? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
+				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
+					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…') : '';
+			this.voiceTranscript.hidden = !voiceActive || !state.voiceTranscript.length;
+			this.voiceTranscript.textContent = state.voiceTranscript.map(item => localize('sessions.chatgpt.voiceTranscript', '{0}: {1}', item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT', item.text)).join('\n');
+			this.renderDictation();
+		}));
+		this._register(toDisposable(() => { this.element.remove(); this.attachmentList.remove(); this.voiceStatus.remove(); this.voiceTranscript.remove(); }));
 	}
 
 	private renderAttachments(attachments: readonly ChatGPTAttachment[], disabled: boolean): void {
 		const ids = new Set(attachments.map(attachment => attachment.id));
-		for (const [id, row] of this.attachmentRows) {
-			if (!ids.has(id)) {
-				row.element.remove();
-				this.attachmentRows.delete(id);
-			}
-		}
+		for (const [id, row] of this.attachmentRows) { if (!ids.has(id)) { row.element.remove(); this.attachmentRows.delete(id); } }
 		for (const attachment of attachments) {
 			let row = this.attachmentRows.get(attachment.id);
 			if (!row) {
 				const document = this.element.ownerDocument;
-				const element = h(document, 'div');
-				element.className = 'ash-chatgpt-input-attachment';
-				element.setAttribute('role', 'listitem');
-				const name = h(document, 'span');
-				name.className = 'ash-chatgpt-attachment-name';
-				const status = h(document, 'span');
-				status.className = 'ash-chatgpt-attachment-status';
-				const error = h(document, 'span');
-				error.className = 'ash-chatgpt-attachment-error';
-				const retry = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
-				retry.type = 'button';
-				retry.dataset.attachmentId = attachment.id;
-				retry.dataset.attachmentAction = 'retry';
-				const remove = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
-				remove.type = 'button';
-				remove.dataset.attachmentId = attachment.id;
-				remove.dataset.attachmentAction = 'remove';
-				appendIcon(Lxicon.close, remove);
-				element.append(name, status, retry, remove, error);
-				this.attachmentList.append(element);
-				row = { element, name, status, retry, remove, error };
-				this.attachmentRows.set(attachment.id, row);
+				const element = h(document, 'div'); element.className = 'ash-chatgpt-input-attachment'; element.setAttribute('role', 'listitem');
+				const name = h(document, 'span'); name.className = 'ash-chatgpt-attachment-name';
+				const status = h(document, 'span'); status.className = 'ash-chatgpt-attachment-status';
+				const error = h(document, 'span'); error.className = 'ash-chatgpt-attachment-error';
+				const retry = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' }); retry.type = 'button'; retry.dataset.attachmentId = attachment.id; retry.dataset.attachmentAction = 'retry';
+				const remove = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' }); remove.type = 'button'; remove.dataset.attachmentId = attachment.id; remove.dataset.attachmentAction = 'remove'; appendIcon(Lxicon.close, remove);
+				element.append(name, status, retry, remove, error); this.attachmentList.append(element);
+				row = { element, name, status, retry, remove, error }; this.attachmentRows.set(attachment.id, row);
 			}
 			row.name.textContent = row.name.title = attachment.name;
-			row.status.textContent =
-				attachment.status === 'uploading'
-					? localize('sessions.chatgpt.uploading', 'Uploading…')
-					: attachment.status === 'ready'
-						? localize('sessions.chatgpt.fileReady', 'Ready')
-						: localize('sessions.chatgpt.fileFailed', 'Upload failed');
-			row.error.textContent = attachment.error ?? '';
-			row.error.hidden = !attachment.error;
+			row.status.textContent = attachment.status === 'uploading' ? localize('sessions.chatgpt.uploading', 'Uploading…') : attachment.status === 'ready' ? localize('sessions.chatgpt.fileReady', 'Ready') : localize('sessions.chatgpt.fileFailed', 'Upload failed');
+			row.error.textContent = attachment.error ?? ''; row.error.hidden = !attachment.error;
 			row.retry.textContent = localize('sessions.chatgpt.retryUpload', 'Retry');
-			row.retry.setAttribute('aria-label', localize('sessions.chatgpt.retryFile', 'Retry {0}', attachment.name));
-			row.retry.hidden = attachment.status !== 'failed';
-			row.retry.disabled = disabled;
-			row.remove.setAttribute('aria-label', localize('sessions.chatgpt.removeFile', 'Remove {0}', attachment.name));
-			row.remove.title = row.remove.getAttribute('aria-label')!;
-			row.remove.disabled = disabled;
+			row.retry.setAttribute('aria-label', localize('sessions.chatgpt.retryFile', 'Retry {0}', attachment.name)); row.retry.hidden = attachment.status !== 'failed'; row.retry.disabled = disabled;
+			row.remove.setAttribute('aria-label', localize('sessions.chatgpt.removeFile', 'Remove {0}', attachment.name)); row.remove.title = row.remove.getAttribute('aria-label')!; row.remove.disabled = disabled;
 		}
 		this.attachmentList.hidden = attachments.length === 0;
 	}
@@ -353,16 +221,10 @@ export class ChatGPTInputWidget extends Disposable {
 	private renderSend(): void {
 		const state = this.chat.state.get();
 		const voiceActive = state.voice !== 'idle';
-		this.sendButton.disabled =
-			!state.sending && !voiceActive && (!state.connected || state.busy || state.managing || state.uncertain || state.attachments.some(attachment => attachment.status !== 'ready'));
+		this.sendButton.disabled = !state.sending && !voiceActive && (!state.connected || state.busy || state.managing || state.uncertain || state.attachments.some(attachment => attachment.status !== 'ready'));
 		const hasInput = !!state.draft.trim() || state.attachments.length > 0 || this.dictation.isActive;
-		const sendLabel = state.sending
-			? localize('sessions.chatgpt.stop', 'Stop')
-			: voiceActive
-				? localize('sessions.chatgpt.stopVoice', 'Stop voice conversation')
-				: hasInput
-					? localize('sessions.chatgpt.send', 'Send')
-					: localize('sessions.chatgpt.startVoice', 'Voice conversation');
+		const sendLabel = state.sending ? localize('sessions.chatgpt.stop', 'Stop') : voiceActive ? localize('sessions.chatgpt.stopVoice', 'Stop voice conversation')
+			: hasInput ? localize('sessions.chatgpt.send', 'Send') : localize('sessions.chatgpt.startVoice', 'Voice conversation');
 		if (this.sendButton.getAttribute('aria-label') !== sendLabel) {
 			this.sendButton.setAttribute('aria-label', sendLabel);
 			this.sendButton.title = sendLabel;
@@ -385,23 +247,16 @@ export class ChatGPTInputWidget extends Disposable {
 
 	private async startVoice(): Promise<void> {
 		await this.cancelDictation();
-		if (this.visible && !this.isDisposed) {
-			await this.chat.startVoice(this.element.ownerDocument.defaultView!);
-		}
+		if (this.visible && !this.isDisposed) { await this.chat.startVoice(this.element.ownerDocument.defaultView!); }
 	}
 
 	private reportDictationError(error: unknown): void {
-		if (!this.isDisposed) {
-			this.notifications.error(localize('sessions.chatgpt.dictationFailed', 'Dictation failed: {0}', String(error)));
-		}
+		if (!this.isDisposed) { this.notifications.error(localize('sessions.chatgpt.dictationFailed', 'Dictation failed: {0}', String(error))); }
 	}
 
 	private async cancelDictation(): Promise<void> {
-		try {
-			await this.dictation.cancel();
-		} catch (error) {
-			this.reportDictationError(error);
-		}
+		try { await this.dictation.cancel(); }
+		catch (error) { this.reportDictationError(error); }
 	}
 
 	private async submit(): Promise<void> {
@@ -410,20 +265,15 @@ export class ChatGPTInputWidget extends Disposable {
 			// Stop commits the final transcript before sending; navigation retires this submission.
 			await this.dictation.stop();
 			notifyDictationSubmitted(this.editor.codeEditor);
-			if (!this.isDisposed && this.visible && generation === this.inputGeneration) {
-				await this.chat.send();
-			}
-		} catch (error) {
-			this.reportDictationError(error);
-		}
+			if (!this.isDisposed && this.visible && generation === this.inputGeneration) { await this.chat.send(); }
+		} catch (error) { this.reportDictationError(error); }
 	}
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
 		this.updateDictationHost();
-		if (visible) {
-			this.editor.layout();
-		} else {
+		if (visible) { this.editor.layout(); }
+		else {
 			this.modelPicker.hide();
 			this.inputGeneration++;
 			void this.cancelDictation();
@@ -433,12 +283,7 @@ export class ChatGPTInputWidget extends Disposable {
 
 	private updateDictationHost(): void {
 		if (!this.visible) this.dictationHost.clear();
-		else if (!this.dictationHost.value)
-			this.dictationHost.value = this.onboarding.registerHost({
-				container: this.container,
-				focusRoot: this.element,
-				focus: () => this.editor.focus(),
-			});
+		else if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.container, focusRoot: this.element, focus: () => this.editor.focus() });
 	}
 
 	protected override disposeCore(): void {

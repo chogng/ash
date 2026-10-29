@@ -12,29 +12,19 @@ import { CHANGESET_REVIEW_ACTION_ID, SessionChangesEditor } from './sessionChang
 export class ChangesetReviewAction extends Action2 {
 	constructor() {
 		super({
-			id: CHANGESET_REVIEW_ACTION_ID,
-			title: localize2('sessions.changes.viewed', 'Viewed'),
+			id: CHANGESET_REVIEW_ACTION_ID, title: localize2('sessions.changes.viewed', 'Viewed'),
 			precondition: ContextKeyExpr.has('sessions.changesCanReview'),
 			toggled: ContextKeyExpr.in('resource', 'sessions.changesReviewedFiles'),
-			menu: {
-				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
-				group: 'navigation',
-				order: 1,
-			},
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 1 },
 		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
 		const argument = args[0];
 		const resource = argument instanceof URI ? argument : isRecord(argument) ? argument.resource : undefined;
-		if (!(resource instanceof URI)) {
-			return;
-		}
+		if (!(resource instanceof URI)) { return; }
 		const editors = accessor.get(IEditorPart);
 		const pane = editors.activePane;
-		if (!(pane instanceof SessionChangesEditor)) {
-			return;
-		}
+		if (!(pane instanceof SessionChangesEditor)) { return; }
 		const state = accessor.get(IChangesViewService);
 		const reviewedAtStart = state.reviewedFilesObs.get();
 		let previous = reviewedAtStart;
@@ -42,34 +32,18 @@ export class ChangesetReviewAction extends Action2 {
 		// A later edit to this file supersedes the toggle, including an edit that returns it to its original state.
 		using reviewChanges = state.reviewedFilesObs.onDidChange(() => {
 			const current = state.reviewedFilesObs.get();
-			for (const uri of previous) {
-				if (!current.has(uri)) {
-					changedResources.add(uri);
-				}
-			}
-			for (const uri of current) {
-				if (!previous.has(uri)) {
-					changedResources.add(uri);
-				}
-			}
+			for (const uri of previous) { if (!current.has(uri)) { changedResources.add(uri); } }
+			for (const uri of current) { if (!previous.has(uri)) { changedResources.add(uri); } }
 			previous = current;
 		});
 		const change = await pane.getFileChange(resource, { review: true }).catch(error => {
-			if (isCancellationError(error) || editors.activePane !== pane) {
-				return undefined;
-			}
+			if (isCancellationError(error) || editors.activePane !== pane) { return undefined; }
 			throw error;
 		});
-		if (!change || editors.activePane !== pane || changedResources.has(change.uri.toString())) {
-			return;
-		}
+		if (!change || editors.activePane !== pane || changedResources.has(change.uri.toString())) { return; }
 		const reviewed = !reviewedAtStart.has(change.uri.toString());
 		state.setChangesetFilesReviewState([change.uri], reviewed);
-		if (reviewed) {
-			pane.collapse(resource);
-		} else {
-			pane.expand(resource);
-		}
+		if (reviewed) { pane.collapse(resource); } else { pane.expand(resource); }
 	}
 }
 

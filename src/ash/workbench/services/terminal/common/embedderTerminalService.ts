@@ -32,19 +32,16 @@ export interface IEmbedderTerminalPty {
 class EmbedderTerminalService extends Disposable implements IEmbedderTerminalService {
 	private readonly pending: IEmbedderTerminalOptions[] = [];
 	private readonly unclaimed = new Set<IEmbedderTerminalOptions>();
-	private readonly created = this._register(
-		new Emitter<IShellLaunchConfig>({
-			onDidAddFirstListener: () =>
-				queueMicrotask(() => {
-					if (this.isDisposed || !this.created.hasListeners()) {
-						return;
-					}
-					while (!this.isDisposed && this.created.hasListeners() && this.pending.length > 0) {
-						this.publish(this.pending.shift()!);
-					}
-				}),
+	private readonly created = this._register(new Emitter<IShellLaunchConfig>({
+		onDidAddFirstListener: () => queueMicrotask(() => {
+			if (this.isDisposed || !this.created.hasListeners()) {
+				return;
+			}
+			while (!this.isDisposed && this.created.hasListeners() && this.pending.length > 0) {
+				this.publish(this.pending.shift()!);
+			}
 		}),
-	);
+	}));
 	public readonly onDidCreateTerminal = this.created.event;
 
 	public createTerminal(options: IEmbedderTerminalOptions): void {
@@ -52,10 +49,7 @@ class EmbedderTerminalService extends Disposable implements IEmbedderTerminalSer
 		if (typeof options.name !== 'string' || typeof options.pty?.onDidWrite !== 'function' || typeof options.pty.open !== 'function' || typeof options.pty.close !== 'function') {
 			throw new TypeError('Embedder terminal requires a name and an output PTY');
 		}
-		if (
-			(options.pty.onDidClose !== undefined && typeof options.pty.onDidClose !== 'function') ||
-			(options.pty.onDidChangeName !== undefined && typeof options.pty.onDidChangeName !== 'function')
-		) {
+		if ((options.pty.onDidClose !== undefined && typeof options.pty.onDidClose !== 'function') || (options.pty.onDidChangeName !== undefined && typeof options.pty.onDidChangeName !== 'function')) {
 			throw new TypeError('Embedder terminal lifecycle events must be functions');
 		}
 		// Retain startup requests until the contribution owns an output subscriber.
@@ -105,38 +99,29 @@ class EmbedderTerminalProcess extends Disposable implements ITerminalChildProces
 	public readonly onDidChangeProperty = this.property.event;
 	public readonly onProcessExit = this.exit.event;
 
-	constructor(
-		public readonly id: number,
-		private readonly pty: IEmbedderTerminalPty,
-	) {
+	constructor(public readonly id: number, private readonly pty: IEmbedderTerminalPty) {
 		super();
-		this._register(
-			pty.onDidWrite(data => {
-				if (this.opened && !this.closed) {
-					this.data.fire(data);
-				}
-			}),
-		);
+		this._register(pty.onDidWrite(data => {
+			if (this.opened && !this.closed) {
+				this.data.fire(data);
+			}
+		}));
 		if (pty.onDidChangeName) {
-			this._register(
-				pty.onDidChangeName(name => {
-					if (!this.closed) {
-						this.property.fire({ type: ProcessPropertyType.Title, value: name });
-					}
-				}),
-			);
+			this._register(pty.onDidChangeName(name => {
+				if (!this.closed) {
+					this.property.fire({ type: ProcessPropertyType.Title, value: name });
+				}
+			}));
 		}
 		if (pty.onDidClose) {
-			this._register(
-				pty.onDidClose(code => {
-					if (this.closed) {
-						return;
-					}
-					this.closed = true;
-					this.exit.fire(typeof code === 'number' ? code : undefined);
-					this.dispose();
-				}),
-			);
+			this._register(pty.onDidClose(code => {
+				if (this.closed) {
+					return;
+				}
+				this.closed = true;
+				this.exit.fire(typeof code === 'number' ? code : undefined);
+				this.dispose();
+			}));
 		}
 	}
 

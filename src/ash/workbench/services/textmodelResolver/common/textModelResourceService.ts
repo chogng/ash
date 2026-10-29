@@ -98,7 +98,7 @@ export interface IFileTextModelService extends ITextModelResourceService {
 	waitForSaveRecovery(resource?: URI): Promise<void>;
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
-	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string }>;
+	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
 	getModel(resource: URI): TextModel | null;
 	getModels(): readonly TextModel[];
 	/** Revalidates an open file after the host regains focus. */
@@ -124,10 +124,7 @@ export class TextModelConflictError extends Error {
 export class TextModelSaveCompletionError extends Error {
 	public readonly fileSaved = true;
 
-	constructor(
-		public readonly resource: URI,
-		cause: unknown,
-	) {
+	constructor(public readonly resource: URI, cause: unknown) {
 		super(cause instanceof Error ? cause.message : String(cause), { cause });
 		this.name = 'TextModelSaveCompletionError';
 	}

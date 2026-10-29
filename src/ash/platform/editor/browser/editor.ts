@@ -12,27 +12,21 @@ export interface IOpenEditorOptions {
 
 export function registerOpenEditorListeners(element: HTMLElement, onOpenEditor: (options: IOpenEditorOptions) => void): IDisposable {
 	const listeners = new DisposableStore();
-	listeners.add(
-		addDisposableListener(element, 'click', event => {
-			if (event.detail === 2) return;
-			stopEvent(event);
-			onOpenEditor(toOpenEditorOptions(event));
-		}),
-	);
-	listeners.add(
-		addDisposableListener(element, 'dblclick', event => {
-			stopEvent(event);
-			onOpenEditor(toOpenEditorOptions(event, true));
-		}),
-	);
-	listeners.add(
-		addDisposableListener(element, 'keydown', event => {
-			const options = toOpenEditorOptions(new StandardKeyboardEvent(event));
-			if (!options) return;
-			stopEvent(event);
-			onOpenEditor(options);
-		}),
-	);
+	listeners.add(addDisposableListener(element, 'click', event => {
+		if (event.detail === 2) return;
+		stopEvent(event);
+		onOpenEditor(toOpenEditorOptions(event));
+	}));
+	listeners.add(addDisposableListener(element, 'dblclick', event => {
+		stopEvent(event);
+		onOpenEditor(toOpenEditorOptions(event, true));
+	}));
+	listeners.add(addDisposableListener(element, 'keydown', event => {
+		const options = toOpenEditorOptions(new StandardKeyboardEvent(event));
+		if (!options) return;
+		stopEvent(event);
+		onOpenEditor(options);
+	}));
 	return listeners;
 }
 
@@ -61,10 +55,7 @@ export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent | Sta
 	}
 
 	return {
-		editorOptions: {
-			pinned: isDoubleClick === true || (event instanceof StandardMouseEvent ? event.middleButton : event.button === 1),
-			preserveFocus: isDoubleClick !== true,
-		},
+		editorOptions: { pinned: isDoubleClick === true || (event instanceof StandardMouseEvent ? event.middleButton : event.button === 1), preserveFocus: isDoubleClick !== true },
 		openToSide: event.ctrlKey || event.metaKey || event.altKey,
 	};
 }

@@ -1,7 +1,12 @@
 import { IDebugService } from '../../common/debug.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import { isChatContextPickerPickItem, type IChatContextPickerItem, type IChatContextValueItem, type IChatContextPickerPickItem } from '../../../chat/browser/attachments/chatContextPickService.js';
+import {
+	isChatContextPickerPickItem,
+	type IChatContextPickerItem,
+	type IChatContextValueItem,
+	type IChatContextPickerPickItem,
+} from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
@@ -69,16 +74,23 @@ test('Debug memory editor codec preserves raw bytes and rejects stale or conflic
 	assert.deepEqual([...(await files.readFileBytes(resource)).bytes], [0, 255]);
 	const text = await files.readFile(resource, 'utf8');
 	assert.equal(text.content, '00 ff');
-	await files.writeFile({ resource, content: '01 fe', encoding: 'utf8', expectedRevision: text.revision }, { create: false, overwrite: true });
+	await files.writeFile(
+		{ resource, content: '01 fe', encoding: 'utf8', expectedRevision: text.revision },
+		{ create: false, overwrite: true },
+	);
 	assert.deepEqual(writes, [[1, 254]]);
-	await assert.rejects(files.writeFile({ resource, content: '02 fd', encoding: 'utf8', expectedRevision: text.revision }, { create: false, overwrite: true }), /Memory changed/);
+	await assert.rejects(
+		files.writeFile(
+			{ resource, content: '02 fd', encoding: 'utf8', expectedRevision: text.revision },
+			{ create: false, overwrite: true },
+		),
+		/Memory changed/,
+	);
 	await assert.rejects(files.writeFile({ resource, content: 'oops', encoding: 'utf8' }), /hexadecimal/);
-	using invalidations = new Emitter<{ memoryReference: string; offset: number; count: number }>();
+	using invalidations = new Emitter<{ memoryReference: string; offset: number; count: number; }>();
 	Object.defineProperty(session, 'onDidInvalidateMemory', { value: invalidations.event });
 	let changes = 0;
-	using changed = files.onDidChangeFiles(() => {
-		changes++;
-	});
+	using changed = files.onDidChangeFiles(() => { changes++; });
 	const watch = files.watch(resource);
 	invalidations.fire({ memoryReference: 'other', offset: 0, count: 2 });
 	assert.equal(changes, 0);
@@ -98,7 +110,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 	const session = debug.sessions[0] as MockDebugSession;
 	using starts = new Emitter<IDebugProgressStart>();
 	using updates = new Emitter<IDebugProgressUpdate>();
-	using ends = new Emitter<{ progressId: string }>();
+	using ends = new Emitter<{ progressId: string; }>();
 	Object.defineProperties(session, {
 		onDidProgressStart: { value: starts.event },
 		onDidProgressUpdate: { value: updates.event },
@@ -106,7 +118,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 		capabilities: { value: { ...session.capabilities, supportsCancelRequest: true } },
 	});
 	const cancelled: string[] = [];
-	session.cancelProgress = async id => {
+	session.cancelProgress = async (id) => {
 		cancelled.push(id);
 	};
 	using services = new InstantiationService();
@@ -118,23 +130,8 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 	let paneStarted = 0;
 	let paneFinished = 0;
 	const views = { isViewContainerVisible: () => true } as unknown as IViewsService;
-	const descriptors = {
-		getViewContainerById: (id: string) => ({ id, location: ViewContainerLocation.Sidebar }),
-	} as IViewDescriptorService;
-	const panes = {
-		getProgressIndicator: () => ({
-			show: () => {
-				paneStarted++;
-				return {
-					done: () => {
-						paneFinished++;
-					},
-					total() {},
-					worked() {},
-				};
-			},
-		}),
-	} as unknown as IPaneCompositePartService;
+	const descriptors = { getViewContainerById: (id: string) => ({ id, location: ViewContainerLocation.Sidebar }) } as IViewDescriptorService;
+	const panes = { getProgressIndicator: () => ({ show: () => { paneStarted++; return { done: () => { paneFinished++; }, total() { }, worked() { } }; } }) } as unknown as IPaneCompositePartService;
 	using progress = new ProgressService(statusbar, notifications, services.get(ICommandService), views, descriptors, panes);
 	using contribution = new DebugProgressContribution(debug, progress, notifications, views);
 	starts.fire({ progressId: 'symbols', title: 'Loading symbols', cancellable: true });
@@ -187,7 +184,10 @@ test('Debug visualizers traverse real variable ports and validate extension comm
 		}),
 		descriptor,
 	);
-	extensions.getExtensionPointContributions = <T>(name: string) => (name === 'debugVisualizers' ? [{ description: descriptor, value: manifest.contributes.debugVisualizers as T }] : []);
+	extensions.getExtensionPointContributions = <T>(name: string) =>
+		name === 'debugVisualizers'
+			? [{ description: descriptor, value: manifest.contributes.debugVisualizers as T }]
+			: [];
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	const args: unknown[] = [];
@@ -203,7 +203,7 @@ test('Debug visualizers traverse real variable ports and validate extension comm
 	assert.equal(choices.length, 2);
 	assert.match((await choices[0].visualize(new AbortController().signal)).content, /child/);
 	assert.equal((await choices[1].visualize(new AbortController().signal)).content, 'ff');
-	assert.equal((args[0] as { sessionId: string }).sessionId, session.id);
+	assert.equal((args[0] as { sessionId: string; }).sessionId, session.id);
 	invalidResult = true;
 	await assert.rejects(choices[1].visualize(new AbortController().signal), /must return text content/);
 	const cancelled = new AbortController();
@@ -235,7 +235,9 @@ test('Breakpoint language and when declarations are honored when unrestricted po
 		}),
 		descriptor,
 	);
-	extensions.getExtensionPointContributions = <T>() => [{ description: descriptor, value: manifest.contributes.breakpoints as T }];
+	extensions.getExtensionPointContributions = <T>() => [
+		{ description: descriptor, value: manifest.contributes.breakpoints as T },
+	];
 	using configuration = new TestConfigurationService();
 	await configuration.updateValue('debug.allowBreakpointsEverywhere', false);
 	using context = new ContextKeyService();
@@ -256,6 +258,7 @@ test('Debug status color lease ends when the last live session ends', () => {
 	assert.equal(statusbar.style, undefined);
 });
 
+
 async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
 	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
 	const picker = source.asPicker();
@@ -275,10 +278,7 @@ async function readContextPicks(source: IChatContextPickerItem | IChatContextVal
 				else resolve(value.picks.filter(isChatContextPickerPickItem));
 			});
 		});
-	} finally {
-		cancellation.dispose(true);
-		picker.dispose?.();
-	}
+	} finally { cancellation.dispose(true); picker.dispose?.(); }
 }
 
 async function selectedAttachment(item: IChatContextPickerPickItem): Promise<ChatContextAttachment> {

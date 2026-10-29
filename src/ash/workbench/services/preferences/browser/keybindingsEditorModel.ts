@@ -25,7 +25,7 @@ export interface KeyboardShortcutItem {
 	readonly sourceLabel: string;
 }
 
-type RankedShortcut = KeyboardShortcutItem & { readonly precedence: readonly [number, number, number] };
+type RankedShortcut = KeyboardShortcutItem & { readonly precedence: readonly [number, number, number]; };
 
 /** Owns searchable rows and service listeners; the editor input owns its lifetime. */
 export class KeybindingsEditorModel extends EditorModel {
@@ -36,7 +36,9 @@ export class KeybindingsEditorModel extends EditorModel {
 
 	public readonly onDidChange = this._onDidChange.event;
 
-	constructor(@IKeybindingService private readonly keybindings: IKeybindingService) {
+	constructor(
+		@IKeybindingService private readonly keybindings: IKeybindingService,
+	) {
 		super();
 		this.refresh();
 		this._register(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
@@ -60,23 +62,25 @@ export class KeybindingsEditorModel extends EditorModel {
 			.split(/\s+/)
 			.filter(Boolean);
 		const items = this.allItems.filter(item => {
-			if (source && (source === 'system' || source === 'default' ? item.source !== 'builtin' && item.source !== 'workbench' : item.source !== source)) return false;
+			if (source && (source === 'system' || source === 'default'
+				? item.source !== 'builtin' && item.source !== 'workbench'
+				: item.source !== source)) return false;
 			if (quoted) {
 				const resolved = item.keybindingItem.resolvedKeybinding;
 				if (!resolved || !exactLabel || getKeybindingLabel(resolved, KeybindingLabelStyle.Aria).toLocaleLowerCase() !== exactLabel) return false;
 			}
 			const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
-			return terms.every(term => (term.startsWith('@command:') ? item.command?.toLocaleLowerCase() === term.slice('@command:'.length) : searchable.includes(term)));
+			return terms.every(term => term.startsWith('@command:')
+				? item.command?.toLocaleLowerCase() === term.slice('@command:'.length)
+				: searchable.includes(term));
 		});
-		return sortByPrecedence
-			? items.sort((left, right) => {
-					for (let index = 0; index < left.precedence.length; index++) {
-						const difference = right.precedence[index]! - left.precedence[index]!;
-						if (difference) return difference;
-					}
-					return compareItems(left, right);
-				})
-			: items;
+		return sortByPrecedence ? items.sort((left, right) => {
+			for (let index = 0; index < left.precedence.length; index++) {
+				const difference = right.precedence[index]! - left.precedence[index]!;
+				if (difference) return difference;
+			}
+			return compareItems(left, right);
+		}) : items;
 	}
 
 	private refresh(): void {
@@ -90,15 +94,7 @@ export class KeybindingsEditorModel extends EditorModel {
 			items.push({
 				precedence: [rule.source ?? KeybindingSource.Workbench, rule.priority ?? 0, rule.order],
 				id: `registered:${rule.order}`,
-				keybindingItem: new ResolvedKeybindingItem(
-					this.keybindings.resolveKeybinding(rule.keybinding),
-					command,
-					rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined,
-					rule.when,
-					true,
-					null,
-					true,
-				),
+				keybindingItem: new ResolvedKeybindingItem(this.keybindings.resolveKeybinding(rule.keybinding), command, rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true),
 				command,
 				commandLabel: command ? commandLabel(command) : localize('keybindings.blocked', 'Blocked shortcut'),
 				key: serializeKeybinding(rule.keybinding),
@@ -181,10 +177,7 @@ function commandLabel(command: CommandId): string {
 		return commandActionLabel(item.command.title);
 	}
 	const segment = command.split('.').at(-1) ?? command;
-	const words = segment
-		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-		.replace(/[-_]+/g, ' ')
-		.trim();
+	const words = segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').trim();
 	return words ? words[0].toLocaleUpperCase() + words.slice(1) : command;
 }
 

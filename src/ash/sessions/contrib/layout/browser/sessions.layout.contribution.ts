@@ -17,23 +17,10 @@ class SessionsLayoutContribution extends Disposable {
 			['teams', TEAMS_NAVIGATION_CONTAINER_ID, 'sidebar'],
 			['collaboration', COLLAB_CONTAINER_ID, 'sidebar'],
 		] as const) {
-			this._register(
-				CommandsRegistry.register('sessions.open.' + id, (_accessor, source) =>
-					layout.openEntry(
-						{
-							id,
-							workspaceMode: id === 'chat' ? 'chat' : 'code',
-							sidebarContainerId: sidebar,
-							content: 'conversation',
-							focus,
-							activityContext: 'sessions.activity.' + id + 'Selected',
-							restoreCommand: 'sessions.open.' + id,
-						},
-						undefined,
-						source === 'restore' ? { source } : undefined,
-					),
-				),
-			);
+			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({
+				id, workspaceMode: id === 'chat' ? 'chat' : 'code', sidebarContainerId: sidebar, content: 'conversation', focus,
+				activityContext: 'sessions.activity.' + id + 'Selected', restoreCommand: 'sessions.open.' + id,
+			}, undefined, source === 'restore' ? { source } : undefined)));
 		}
 	}
 }

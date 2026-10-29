@@ -11,19 +11,19 @@ test('queues messages until content is ready and preserves the page for identica
 	await frame.getByRole('textbox', { name: 'First input' }).fill('keep this state');
 	await page.evaluate(() => window.ashWebviewIntegration.sameHtml());
 	await expect(frame.getByRole('textbox', { name: 'First input' })).toHaveValue('keep this state');
-	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.received)).toEqual([{ view: 'first', message: 'before mount' }]);
+	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.received)).toEqual([
+		{ view: 'first', message: 'before mount' },
+	]);
 });
 
 test('replacement cancels queued old messages and sends to the new document', async ({ page }) => {
 	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText('before mount');
 	expect(await page.evaluate(() => window.ashWebviewIntegration.replace())).toEqual([false, true]);
 	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText('replacement');
-	await expect
-		.poll(() => page.evaluate(() => window.ashWebviewIntegration.received))
-		.toEqual([
-			{ view: 'first', message: 'before mount' },
-			{ view: 'first', message: 'replacement' },
-		]);
+	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.received)).toEqual([
+		{ view: 'first', message: 'before mount' },
+		{ view: 'first', message: 'replacement' },
+	]);
 });
 
 test('tracks real iframe focus, forwards keyboard input and removes disposed instances', async ({ page }) => {
@@ -44,12 +44,10 @@ test('tracks real iframe focus, forwards keyboard input and removes disposed ins
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.active)).toBe('first');
 	expect(await page.evaluate(() => window.ashWebviewIntegration.disposeFirst())).toBe(false);
 	await expect(page.locator('iframe')).toHaveCount(1);
-	expect(
-		await page.evaluate(() => ({
-			active: window.ashWebviewIntegration.active,
-			count: window.ashWebviewIntegration.count,
-		})),
-	).toEqual({ active: undefined, count: 1 });
+	expect(await page.evaluate(() => ({
+		active: window.ashWebviewIntegration.active,
+		count: window.ashWebviewIntegration.count,
+	}))).toEqual({ active: undefined, count: 1 });
 	await page.evaluate(() => window.ashWebviewIntegration.focusSecond());
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.active)).toBe('second');
 });
@@ -57,15 +55,7 @@ test('tracks real iframe focus, forwards keyboard input and removes disposed ins
 test('keeps keyboard focus requested before the document is ready', async ({ page }) => {
 	await page.evaluate(() => window.ashWebviewIntegration.mountFocused());
 	await expect(page.frameLocator('iframe[title="Loading view"]').frameLocator('iframe').locator('output')).toHaveText('Focused document');
-	await expect
-		.poll(() =>
-			page
-				.frameLocator('iframe[title="Loading view"]')
-				.frameLocator('iframe')
-				.locator('body')
-				.evaluate(() => document.hasFocus()),
-		)
-		.toBe(true);
+	await expect.poll(() => page.frameLocator('iframe[title="Loading view"]').frameLocator('iframe').locator('body').evaluate(() => document.hasFocus())).toBe(true);
 	await page.keyboard.press('F1');
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.keyboard)).toEqual(['F1', 'F1']);
 });
@@ -78,28 +68,22 @@ test('loads workspace images, CSS siblings, fonts and module imports while enfor
 	await expect(content.locator('body')).toHaveAttribute('data-inline', 'executed');
 	await expect(content.locator('body')).toHaveCSS('color', 'rgb(1, 2, 3)');
 	await expect.poll(() => content.getByRole('img', { name: 'Workspace image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(12);
-	await expect
-		.poll(() =>
-			content.locator('body').evaluate(async () => {
-				await document.fonts.ready;
-				return document.fonts.check('14px ResourceFont');
-			}),
-		)
-		.toBe(true);
+	await expect.poll(() => content.locator('body').evaluate(async () => {
+		await document.fonts.ready;
+		return document.fonts.check('14px ResourceFont');
+	})).toBe(true);
 	expect(await content.getByRole('img', { name: 'Denied image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(0);
 	const disabled = page.frameLocator('iframe[title="Scripts disabled"]').frameLocator('iframe');
 	await expect.poll(() => disabled.getByRole('img', { name: 'Workspace image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(12);
 	expect(await disabled.locator('body').evaluate(body => ({ inline: body.getAttribute('data-inline'), module: body.getAttribute('data-answer') }))).toEqual({ inline: null, module: null });
 	const reads = await page.evaluate(() => window.ashWebviewIntegration.resourceReads);
-	expect(reads).toEqual(
-		expect.arrayContaining([
-			'file:///workspace/assets/pixel.svg',
-			'file:///workspace/assets/style.css',
-			'file:///workspace/assets/font.ttf',
-			'file:///workspace/assets/main.mjs',
-			'file:///workspace/assets/value.mjs',
-		]),
-	);
+	expect(reads).toEqual(expect.arrayContaining([
+		'file:///workspace/assets/pixel.svg',
+		'file:///workspace/assets/style.css',
+		'file:///workspace/assets/font.ttf',
+		'file:///workspace/assets/main.mjs',
+		'file:///workspace/assets/value.mjs',
+	]));
 	expect(reads).not.toContain('file:///outside/secret.svg');
 	const debuggerSession = await page.context().newCDPSession(page);
 	try {
@@ -110,10 +94,7 @@ test('loads workspace images, CSS siblings, fonts and module imports while enfor
 			const response = await fetch(`${source}?worker-restarted`);
 			return { status: response.status, content: await response.text() };
 		});
-		expect(reloaded).toEqual({
-			status: 200,
-			content: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>',
-		});
+		expect(reloaded).toEqual({ status: 200, content: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>' });
 	} finally {
 		await debuggerSession.detach();
 	}

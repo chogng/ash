@@ -17,11 +17,7 @@ import packageMetadata from '../../../../../../package.json' with { type: 'json'
 export const releaseNotesEditorId = 'workbench.editor.releaseNotes';
 export const releaseNotesResource = 'ash-release-notes:/current';
 
-const releaseNotesByFile = import.meta.glob('../../../../../../release-notes/v*.md', {
-	query: '?raw',
-	import: 'default',
-	eager: true,
-}) as Readonly<Record<string, string>>;
+const releaseNotesByFile = import.meta.glob('../../../../../../release-notes/v*.md', { query: '?raw', import: 'default', eager: true }) as Readonly<Record<string, string>>;
 
 export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 	readonly id = releaseNotesEditorId;
@@ -35,9 +31,7 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-	) {
-		super(releaseNotesEditorId, themeService, storageService);
-	}
+	) { super(releaseNotesEditorId, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		this.root = h(parent.ownerDocument, 'div');
@@ -45,12 +39,10 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		parent.append(this.root);
 		super.create(this.root);
 		this._register(toDisposable(() => this.root.remove()));
-		this.documentView = this._register(
-			this.instantiation.createInstance(MarkdownDocumentView, this.root, {
-				title: localize('releaseNotes.title', 'Release Notes'),
-				openLink: (href: string) => this.openLink(href),
-			}),
-		);
+		this.documentView = this._register(this.instantiation.createInstance(MarkdownDocumentView, this.root, {
+			title: localize('releaseNotes.title', 'Release Notes'),
+			openLink: (href: string) => this.openLink(href),
+		}));
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -59,11 +51,9 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		this.render();
 	}
 
-	public override clearInput(): void {}
-	public override layout(_dimension: IDimension): void {}
-	public override focus(): void {
-		this.documentView.focus();
-	}
+	public override clearInput(): void { }
+	public override layout(_dimension: IDimension): void { }
+	public override focus(): void { this.documentView.focus(); }
 
 	private render(): void {
 		const match = /^(\d+\.\d+)\./.exec(packageMetadata.version);

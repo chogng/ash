@@ -1,5 +1,11 @@
 import { Emitter, type Event } from '../common/event.js';
-import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	type IDisposable,
+
+	toDisposable,
+} from '../common/lifecycle.js';
 
 export type BrowserWindow = Window & typeof globalThis;
 export type CodeWindow = BrowserWindow;
@@ -21,9 +27,12 @@ export let mainWindow = globalThis.window as BrowserWindow;
 
 registerMainWindowIfAvailable();
 
-export const onDidRegisterWindow: Event<IRegisteredWindow> = onDidRegisterEmitter.event;
-export const onWillUnregisterWindow: Event<IRegisteredWindow> = onWillUnregisterEmitter.event;
-export const onDidUnregisterWindow: Event<BrowserWindow> = onDidUnregisterEmitter.event;
+export const onDidRegisterWindow: Event<IRegisteredWindow> =
+	onDidRegisterEmitter.event;
+export const onWillUnregisterWindow: Event<IRegisteredWindow> =
+	onWillUnregisterEmitter.event;
+export const onDidUnregisterWindow: Event<BrowserWindow> =
+	onDidUnregisterEmitter.event;
 
 /**
  * Registers an auxiliary browser window and owns resources scoped to its
@@ -70,7 +79,10 @@ export function isRegisteredWindow(targetWindow: Window): boolean {
 }
 
 /** Opens a new browsing context without exposing the opener capability. */
-export function openWindowNoOpener(targetWindow: Window, url: URL): void {
+export function openWindowNoOpener(
+	targetWindow: Window,
+	url: URL,
+): void {
 	targetWindow.open(url.toString(), '_blank', 'noopener');
 }
 
@@ -82,7 +94,11 @@ export interface PopupWindowOptions {
 }
 
 /** Opens a popup without exposing the opener capability. */
-export function openPopupWindow(targetWindow: Window, url: URL, options: PopupWindowOptions = {}): void {
+export function openPopupWindow(
+	targetWindow: Window,
+	url: URL,
+	options: PopupWindowOptions = {},
+): void {
 	const features = [
 		'popup=yes',
 		'noopener',
@@ -95,7 +111,10 @@ export function openPopupWindow(targetWindow: Window, url: URL, options: PopupWi
 }
 
 export function isWindow(value: unknown): value is Window {
-	return typeof value === 'object' && value !== null && 'window' in value && (value as Window).window === value;
+	return typeof value === 'object' &&
+		value !== null &&
+		'window' in value &&
+		(value as Window).window === value;
 }
 
 function registerMainWindowIfAvailable(): void {
@@ -117,24 +136,20 @@ class WindowRegistrationLifecycle extends Disposable {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				const registration = this.registration;
-				if (!registration) return;
-				registrations.delete(registration.id);
-				windowIds.delete(registration.window);
-				onDidUnregisterEmitter.fire(registration.window);
-				this.registration = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			const registration = this.registration;
+			if (!registration) return;
+			registrations.delete(registration.id);
+			windowIds.delete(registration.window);
+			onDidUnregisterEmitter.fire(registration.window);
+			this.registration = undefined;
+		}));
 		this.disposables = this._register(new DisposableStore());
-		this._register(
-			toDisposable(() => {
-				if (this.registration) {
-					onWillUnregisterEmitter.fire(this.registration);
-				}
-			}),
-		);
+		this._register(toDisposable(() => {
+			if (this.registration) {
+				onWillUnregisterEmitter.fire(this.registration);
+			}
+		}));
 	}
 
 	initialize(registration: IRegisteredWindow): void {

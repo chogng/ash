@@ -16,10 +16,7 @@ suite('Browser URL service', () => {
 
 	test('opener product links and host callbacks reach the same handlers with distinct trust', async () => {
 		using services = new InstantiationService();
-		services.registerInstance(ICodeEditorService, {
-			getFocusedCodeEditor: () => null,
-			openCodeEditor: async () => null,
-		} as unknown as ICodeEditorService);
+		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
@@ -27,26 +24,15 @@ suite('Browser URL service', () => {
 		let callbackOptions: unknown;
 		using service = services.createInstance(BrowserURLService, {
 			onCallback: callbacks.event,
-			create: (options: unknown) => {
-				callbackOptions = options;
-				return URI.parse('https://host.test/callback');
-			},
+			create: (options: unknown) => { callbackOptions = options; return URI.parse('https://host.test/callback'); },
 		});
 		const received: unknown[] = [];
-		using handler = service.registerHandler({
-			handleURL: async (uri, options) => {
-				received.push([uri.toString(), options]);
-				return true;
-			},
-		});
+		using handler = service.registerHandler({ handleURL: async (uri, options) => { received.push([uri.toString(), options]); return true; } });
 		const uri = URI.parse('ash://callback/result?code=a%26b');
 		assert.equal(await opener.open(uri), true);
 		callbacks.fire(uri);
 		callbacks.fire(URI.parse('https://other.test/callback'));
-		assert.deepEqual(received, [
-			[uri.toString(), { trusted: true }],
-			[uri.toString(), undefined],
-		]);
+		assert.deepEqual(received, [[uri.toString(), { trusted: true }], [uri.toString(), undefined]]);
 		assert.equal(service.create({ authority: 'callback', query: 'state=abc' }).toString(), 'https://host.test/callback');
 		assert.deepEqual(callbackOptions, { authority: 'callback', query: 'state=abc' });
 		service.dispose();
@@ -58,10 +44,7 @@ suite('Browser URL service', () => {
 	test('creation requires the opener and callback URL creation requires a host provider', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(BrowserURLService, undefined), /openerService/);
-		services.registerInstance(ICodeEditorService, {
-			getFocusedCodeEditor: () => null,
-			openCodeEditor: async () => null,
-		} as unknown as ICodeEditorService);
+		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);

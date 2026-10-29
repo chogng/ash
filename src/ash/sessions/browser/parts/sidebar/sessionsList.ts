@@ -54,14 +54,9 @@ export class SessionsList extends DomWidget {
 	private readonly navigationButtons = this._register(new DisposableMap<string, Button>());
 	private readonly navigationActions = new Map<string, MenuActionGroup[1][number]>();
 
-	public get element(): HTMLElement {
-		return this.domNode;
-	}
+	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(
-		container: HTMLElement,
-		title: string,
-		private readonly mode: 'chat' | 'code',
+	constructor(container: HTMLElement, title: string, private readonly mode: 'chat' | 'code',
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@ISessionsService private readonly viewService: ISessionsService,
 		@IGitHubService private readonly github: IGitHubService,
@@ -80,10 +75,7 @@ export class SessionsList extends DomWidget {
 		this.domNode.className = 'ash-sessions-list';
 		this.domNode.tabIndex = -1;
 		this.domNode.dataset.mode = mode;
-		this.navigation = h(ownerDocument, 'nav', {
-			className: 'ash-sessions-list-navigation',
-			attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') },
-		});
+		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
 		this.heading = h(ownerDocument, 'h2');
 		this.heading.textContent = title;
 		this.list = h(ownerDocument, 'div');
@@ -95,67 +87,42 @@ export class SessionsList extends DomWidget {
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
 		this.projectError.type = 'button';
 		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
-		this._register(
-			addDisposableListener(this.projectError, 'click', () => {
-				void this.loadProjects();
-			}),
-		);
+		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
 		this.domNode.append(this.navigation, this.heading, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(
-			addDisposableListener(this.list, 'keydown', event => {
-				if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-				const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.closest('[hidden]'));
-				const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
-				if (index < 0) return;
-				event.preventDefault();
-				const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-				buttons[next]?.focus();
-			}),
-		);
+		this._register(addDisposableListener(this.list, 'keydown', event => {
+			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.closest('[hidden]'));
+			const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
+			if (index < 0) return;
+			event.preventDefault();
+			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+			buttons[next]?.focus();
+		}));
 		this._register(sessionService.onDidChange(() => this.render()));
-		this._register(
-			storage.onDidChangeValue(event => {
-				if (
-					(event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')) ||
-					(event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:'))
-				)
-					this.render();
-			}),
-		);
-		this._register(
-			projectService.onDidChange(() => {
-				void this.loadProjects();
-			}),
-		);
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')
+				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
+		}));
+		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
 		const updateNavigation = (): void => {
-			const actions = menu
-				.getActions()
-				.filter(([group]) => group === 'navigation')
-				.flatMap(([, actions]) => actions);
+			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
 			this.navigationActions.clear();
 			for (const action of actions) {
 				this.navigationActions.set(action.id, action);
 				let button = this.navigationButtons.get(action.id);
 				if (!button) {
-					button = this.navigationButtons.set(
-						action.id,
-						new Button(this.navigation, {
-							...defaultButtonStyles,
-							label: action.label,
-							presentation: 'quiet',
-							onClick: () => {
-								void Promise.resolve()
-									.then(() => this.navigationActions.get(action.id)?.run())
-									.catch(error => notifications.error(String(error)));
-							},
-						}),
-					);
+					button = this.navigationButtons.set(action.id, new Button(this.navigation, {
+						...defaultButtonStyles,
+						label: action.label,
+						presentation: 'quiet',
+						onClick: () => { void Promise.resolve().then(() => this.navigationActions.get(action.id)?.run()).catch(error => notifications.error(String(error))); },
+					}));
 				}
 				button.label = action.label;
 				button.enabled = action.enabled;
@@ -166,35 +133,24 @@ export class SessionsList extends DomWidget {
 		};
 		this._register(menu.onDidChange(updateNavigation));
 		updateNavigation();
-		this._register(
-			autorun(reader => {
-				customViews.activeCustomView.read(reader);
-				this.render();
-			}),
-		);
+		this._register(autorun(reader => { customViews.activeCustomView.read(reader); this.render(); }));
 		this.render();
 		void this.loadProjects();
 	}
 
 	focus(): void {
 		const activeNavigation = this.navigation.querySelector<HTMLButtonElement>('[aria-current="page"]');
-		if (activeNavigation) {
-			activeNavigation.focus();
-			return;
-		}
+		if (activeNavigation) { activeNavigation.focus(); return; }
 		const firstItem = this.list.querySelector<HTMLButtonElement>('button');
 		(firstItem ?? this.domNode).focus();
 	}
 
-	public getViewState(): { readonly top: number; readonly focus: string | undefined } {
+	public getViewState(): { readonly top: number; readonly focus: string | undefined; } {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode.contains(active));
 		const section = [...this.sections].find(([, section]) => section.button === active);
 		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
-		return {
-			top: this.list.scrollTop,
-			focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0],
-		};
+		return { top: this.list.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
 	}
 
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
@@ -227,32 +183,23 @@ export class SessionsList extends DomWidget {
 		this.render();
 	}
 
-	private pinKey(id: string): string {
-		return `sessions.list.pinned.${id}`;
-	}
+	private pinKey(id: string): string { return `sessions.list.pinned.${id}`; }
 
 	private showItemMenu(selection: SessionsViewSelection, item: SessionListItem, anchor: ContextMenuAnchor): void {
+
 		item.setMenuVisible(true);
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () =>
-				createSessionItemActions(
-					selection,
-					this.commands,
-					this.storage,
-					this.notifications,
-					() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-					sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` }),
-				),
-			onHide: () => {
-				item.setMenuVisible(false);
-			},
+			getActions: () => createSessionItemActions(selection, this.commands, this.storage, this.notifications,
+				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
+				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })),
+			onHide: () => { item.setMenuVisible(false); },
 		});
 	}
 
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
-		const focused = this.list.contains(ownerDocument.activeElement) ? (ownerDocument.activeElement as HTMLElement) : undefined;
+		const focused = this.list.contains(ownerDocument.activeElement) ? ownerDocument.activeElement as HTMLElement : undefined;
 		const present = new Set<string>();
 		const activeSections = new Set<string>();
 		const pinned: HTMLElement[] = [];
@@ -268,14 +215,9 @@ export class SessionsList extends DomWidget {
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false): HTMLElement => {
 			activeSections.add(key);
 			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
-			const section =
-				this.sections.get(key) ??
-				this.sections.set(
-					key,
-					new SessionListSection(ownerDocument, key, subgroup, collapsed => {
-						this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
-					}),
-				);
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
+				this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+			}));
 			section.update(title, children, this.storage.getBoolean(storageKey, StorageScope.PROFILE, false));
 			return section.domNode;
 		};
@@ -283,17 +225,12 @@ export class SessionsList extends DomWidget {
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		for (const session of this.sessionService.untitledSessions) {
 			let draft: ReturnType<typeof readNewChatDraftState>;
-			try {
-				draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`);
-			} catch {
-				continue;
-			} // The composer reports unreadable drafts; one must not break the whole list.
+			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`); }
+			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
 			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
-			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () =>
-				this.viewService.openUntitledSession(session.untitledSessionId),
-			);
+			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			recent.push(item.domNode);
 		}
@@ -301,15 +238,10 @@ export class SessionsList extends DomWidget {
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
 				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === 'active')
-				: (session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active'));
+				: session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 			if (!thread || session.status !== 'active') continue;
 			const item = itemFor(`session:${session.sessionId}`);
-			item.update(
-				session.title || localize('sessions.list.untitled', 'Untitled Session'),
-				current !== undefined,
-				() => this.viewService.openSession(session.sessionId, thread.threadId),
-				session.management,
-			);
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
@@ -321,18 +253,13 @@ export class SessionsList extends DomWidget {
 		for (const project of this.projects) {
 			if (this.mode === 'chat') {
 				const item = itemFor(`project:${project.id}`);
-				item.update(project.name, false, () => {
-					void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error)));
-				});
+				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				projects.push(item.domNode);
 			} else {
 				const members: HTMLElement[] = [];
 				for (const id of project.sessionIds) {
 					const item = remaining.get(id);
-					if (item) {
-						members.push(item);
-						remaining.delete(id);
-					}
+					if (item) { members.push(item); remaining.delete(id); }
 				}
 				projects.push(sectionFor(`project:${project.id}`, project.name, members, true));
 			}
@@ -344,15 +271,12 @@ export class SessionsList extends DomWidget {
 			const members: HTMLElement[] = [];
 			for (const id of group.sessionIds) {
 				const item = remaining.get(id);
-				if (item) {
-					members.push(item);
-					remaining.delete(id);
-				}
+				if (item) { members.push(item); remaining.delete(id); }
 			}
 			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'));
 		}
 		if (this.mode === 'code') {
-			const workspaces = new Map<string, { title: string; items: HTMLElement[] }>();
+			const workspaces = new Map<string, { title: string; items: HTMLElement[]; }>();
 			for (const session of this.sessionService.sessions) {
 				const item = remaining.get(session.sessionId);
 				if (!item) continue;
@@ -360,9 +284,8 @@ export class SessionsList extends DomWidget {
 				const key = workspace ? JSON.stringify([workspace.authorityId, workspace.root]) : `provider:${session.providerId ?? ''}`;
 				let group = workspaces.get(key);
 				if (!group) {
-					const title = workspace ? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root : (session.providerLabel ?? localize('sessions.list.other', 'Other chats'));
-					group = { title, items: [] };
-					workspaces.set(key, group);
+					const title = workspace ? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root : session.providerLabel ?? localize('sessions.list.other', 'Other chats');
+					group = { title, items: [] }; workspaces.set(key, group);
 				}
 				group.items.push(item);
 			}
@@ -373,10 +296,7 @@ export class SessionsList extends DomWidget {
 		this.loading.setVisible(loading && showEmpty);
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		if (showEmpty) {
-			this.empty.textContent =
-				this.sessionService.state === 'loading'
-					? localize('sessions.list.loading', 'Loading sessions…')
-					: (this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.'));
+			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
 		}
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
@@ -407,18 +327,11 @@ class SessionListSection extends AbstractDisposable {
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private collapsed = false;
-	private readonly listeners: { dispose(): void }[];
+	private readonly listeners: { dispose(): void; }[];
 
-	constructor(
-		document: Document,
-		key: string,
-		private readonly subgroup: boolean,
-		toggle: (collapsed: boolean) => void,
-	) {
+	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed: boolean) => void) {
 		super();
-		this.domNode = h(document, 'section', {
-			className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section',
-		});
+		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
 		const heading = h(document, 'h3');
 		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
@@ -446,10 +359,9 @@ class SessionListSection extends AbstractDisposable {
 		this.button.title = title;
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const icon = this.subgroup ? (collapsed ? Lxicon.folder : Lxicon.folderOpened) : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
-			this.icon.replaceChildren();
-			appendIcon(icon, this.icon);
+			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}
 		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
 		this.body.hidden = collapsed;
@@ -471,7 +383,7 @@ class SessionListItem extends AbstractDisposable {
 	private readonly management: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
-	private open: () => void = () => {};
+	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
@@ -484,16 +396,11 @@ class SessionListItem extends AbstractDisposable {
 		this.domNode.append(this.button);
 		this.actions = new ActionBar(this.domNode, {
 			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
-			actions: [
-				{
-					id: 'sessions.list.more',
-					label: localize('sessions.list.more', 'More actions'),
-					tooltip: localize('sessions.list.more', 'More actions'),
-					icon: Lxicon.ellipsis,
-					enabled: true,
-					run: () => this.contextMenu?.(this.actions.element),
-				},
-			],
+			actions: [{
+				id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
+				tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
+				run: () => this.contextMenu?.(this.actions.element),
+			}],
 		});
 		this.actions.element.classList.add('ash-sessions-list-actions');
 		this.actions.element.hidden = true;
@@ -517,22 +424,13 @@ class SessionListItem extends AbstractDisposable {
 		this.clickListener = addDisposableListener(this.button, 'click', () => this.open());
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
-			event.preventDefault();
-			event.stopPropagation();
-			this.contextMenu(
-				event.type === 'contextmenu'
-					? {
-							x: (event as MouseEvent).clientX,
-							y: (event as MouseEvent).clientY,
-							targetWindow: getWindow(this.domNode),
-						}
-					: this.button,
-			);
+			event.preventDefault(); event.stopPropagation();
+			this.contextMenu(event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: getWindow(this.domNode) } : this.button);
 		};
 		this.contextListeners = [
 			addDisposableListener(this.domNode, 'contextmenu', showMenu),
 			addDisposableListener(this.domNode, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) showMenu(event);
+				if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) showMenu(event);
 			}),
 		];
 	}

@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 test('the built-in provider checks real HTTP deployments under a prefix and reloads into the new build', async ({ page, baseURL }) => {
 	const source = new URL(baseURL!);
 	const html = await (await fetch(new URL('/webWorkbench.html', source))).text();
-	const original: { version: string } = await (await fetch(new URL('/web-version.json', source))).json();
+	const original: { version: string; } = await (await fetch(new URL('/web-version.json', source))).json();
 	let deployment = original.version;
 	let broken = false;
 	let probes = 0;
@@ -21,10 +21,7 @@ test('the built-in provider checks real HTTP deployments under a prefix and relo
 			const url = new URL(request.url!, source);
 			if (url.pathname === '/prefix/web-version.json') {
 				probes++;
-				response.writeHead(200, {
-					'Content-Type': 'application/json',
-					'Cache-Control': 'public, max-age=86400',
-				});
+				response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' });
 				response.end(JSON.stringify(broken ? { version: 42 } : { version: deployment }));
 			} else if (url.pathname === '/prefix/webWorkbench.html') {
 				response.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
@@ -32,15 +29,10 @@ test('the built-in provider checks real HTTP deployments under a prefix and relo
 			} else {
 				url.pathname = url.pathname.replace(/^\/prefix\//u, '/');
 				const upstream = await fetch(url);
-				response.writeHead(upstream.status, {
-					'Content-Type': upstream.headers.get('Content-Type') ?? 'application/octet-stream',
-				});
+				response.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('Content-Type') ?? 'application/octet-stream' });
 				response.end(Buffer.from(await upstream.arrayBuffer()));
 			}
-		})().catch(error => {
-			response.writeHead(500);
-			response.end(String(error));
-		});
+		})().catch(error => { response.writeHead(500); response.end(String(error)); });
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	try {
@@ -69,7 +61,7 @@ test('the built-in provider checks real HTTP deployments under a prefix and relo
 		await page.evaluate(() => window.ashWebWorkbenchIntegration.check());
 		await expect(page.getByText('Ash is up to date.', { exact: true })).toBeVisible();
 	} finally {
-		const stopped = new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
+		const stopped = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 		server.closeAllConnections();
 		await stopped;
 	}

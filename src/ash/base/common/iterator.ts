@@ -1,6 +1,7 @@
 import { isIterable } from './types.js';
 
 export namespace Iterable {
+
 	export function is<T = unknown>(thing: unknown): thing is Iterable<T> {
 		return !!thing && typeof thing === 'object' && typeof (thing as Iterable<T>)[Symbol.iterator] === 'function';
 	}
@@ -167,14 +168,7 @@ export namespace Iterable {
 			consumed.push(next.value);
 		}
 
-		return [
-			consumed,
-			{
-				[Symbol.iterator]() {
-					return iterator;
-				},
-			},
-		];
+		return [consumed, { [Symbol.iterator]() { return iterator; } }];
 	}
 
 	export async function asyncToArray<T>(iterable: AsyncIterable<T>): Promise<T[]> {

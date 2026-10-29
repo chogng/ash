@@ -28,7 +28,7 @@ export class DirectoryPermissionDialog extends Disposable implements IDirectoryP
 		const controller = new AbortController();
 		const ownerWindow = this.container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Directory permission dialog requires a window');
-		const resources = (this.activeRequest.value = new DisposableStore());
+		const resources = this.activeRequest.value = new DisposableStore();
 		resources.add(toDisposable(() => controller.abort()));
 		const cancel = (): void => {
 			controller.abort(signal?.reason);
@@ -47,12 +47,9 @@ export class DirectoryPermissionDialog extends Disposable implements IDirectoryP
 			const outcome = await this.handler.showDialog(prompt, controller.signal);
 			throwIfCancelled(controller.signal);
 			switch (outcome.button) {
-				case DialogResult.Primary:
-					return 'readOnly';
-				case DialogResult.Secondary:
-					return 'development';
-				default:
-					return 'cancel';
+				case DialogResult.Primary: return 'readOnly';
+				case DialogResult.Secondary: return 'development';
+				default: return 'cancel';
 			}
 		} finally {
 			if (this.activeRequest.value === resources) this.activeRequest.clear();
@@ -60,19 +57,13 @@ export class DirectoryPermissionDialog extends Disposable implements IDirectoryP
 	}
 }
 
-function parseDirectoryPermissionPrompt(value: unknown): Extract<DialogRequest, { readonly kind: 'prompt' }> {
-	if (
-		!isRecord(value) ||
-		value.kind !== 'prompt' ||
-		Object.keys(value).sort().join(',') !== 'cancelButton,detail,kind,message,primaryButton,secondaryButton,title' ||
-		typeof value.title !== 'string' ||
-		typeof value.message !== 'string' ||
-		typeof value.detail !== 'string' ||
-		typeof value.primaryButton !== 'string' ||
-		typeof value.secondaryButton !== 'string' ||
-		typeof value.cancelButton !== 'string'
-	) {
+function parseDirectoryPermissionPrompt(value: unknown): Extract<DialogRequest, { readonly kind: 'prompt'; }> {
+	if (!isRecord(value) || value.kind !== 'prompt'
+		|| Object.keys(value).sort().join(',') !== 'cancelButton,detail,kind,message,primaryButton,secondaryButton,title'
+		|| typeof value.title !== 'string' || typeof value.message !== 'string'
+		|| typeof value.detail !== 'string' || typeof value.primaryButton !== 'string'
+		|| typeof value.secondaryButton !== 'string' || typeof value.cancelButton !== 'string') {
 		throw new TypeError('Invalid directory permission prompt');
 	}
-	return value as unknown as Extract<DialogRequest, { readonly kind: 'prompt' }>;
+	return value as unknown as Extract<DialogRequest, { readonly kind: 'prompt'; }>;
 }

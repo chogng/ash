@@ -2,10 +2,24 @@ import { nativeImage, shell } from 'electron';
 import { basename, dirname, join } from 'node:path';
 import { localize2 } from '../../../nls.js';
 import { getDesktopScreenshots } from '../../native/electron-main/nativeHostMainService.js';
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, screen, systemPreferences, type WebPreferences, type Display } from 'electron/main';
+import {
+	app,
+	BrowserWindow,
+	clipboard,
+	ClipboardItem,
+	dialog,
+	screen,
+	systemPreferences,
+	type WebPreferences,
+	type Display
+} from 'electron/main';
 import { writeFile } from 'node:fs/promises';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { normalizeEntryUrl, type IpcRoute, type TrustedIpcRouter } from '../../ipc/electron-main/trustedIpcRouter.js';
+import {
+	normalizeEntryUrl,
+	type IpcRoute,
+	type TrustedIpcRouter
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	IMAGE_VIEW_OPEN_CHANNEL,
 	IMAGE_VIEW_CANCEL_CHANNEL,
@@ -18,11 +32,11 @@ import {
 	validateImageViewId,
 	validateImageViewRequest,
 	type ImageViewCompletion,
-	type ImageViewRequest,
+	type ImageViewRequest
 } from '../common/imageView.js';
 
 interface ImageViewWindowOptions {
-	readonly entry: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean };
+	readonly entry: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean; };
 	readonly webPreferences: WebPreferences;
 	readonly router: TrustedIpcRouter;
 	readonly localization: () => {
@@ -52,7 +66,7 @@ export class ImageViewMainService extends Disposable {
 
 	constructor(
 		private readonly owner: BrowserWindow,
-		private readonly options: ImageViewWindowOptions,
+		private readonly options: ImageViewWindowOptions
 	) {
 		super();
 		const webContents = owner.webContents;
@@ -73,7 +87,7 @@ export class ImageViewMainService extends Disposable {
 				webContents.off('did-start-navigation', navigating);
 				owner.off('closed', cancel);
 				this.finish();
-			}),
+			})
 		);
 	}
 
@@ -82,15 +96,15 @@ export class ImageViewMainService extends Disposable {
 			{
 				channel: IMAGE_VIEW_OPEN_CHANNEL,
 				validate: validateImageViewRequest,
-				invoke: value => this.start(value as ImageViewRequest),
+				invoke: (value) => this.start(value as ImageViewRequest)
 			},
 			{
 				channel: IMAGE_VIEW_CANCEL_CHANNEL,
 				validate: validateImageViewId,
-				invoke: value => {
+				invoke: (value) => {
 					if (this.capture?.request.id === value) this.finish();
-				},
-			},
+				}
+			}
 		];
 	}
 
@@ -108,7 +122,7 @@ export class ImageViewMainService extends Disposable {
 				views: [],
 				generation: 0,
 				closing: false,
-				completing: false,
+				completing: false
 			};
 			this.capture = capture;
 			const displaysChanged = (): void => {
@@ -116,7 +130,8 @@ export class ImageViewMainService extends Disposable {
 			};
 			const displayMetricsChanged = (_event: unknown, _display: Display, metrics: string[]): void => {
 				// Dock/menu visibility changes only workArea; frozen desktop coordinates remain valid.
-				if (metrics.some(metric => metric === 'bounds' || metric === 'scaleFactor' || metric === 'rotation')) displaysChanged();
+				if (metrics.some((metric) => metric === 'bounds' || metric === 'scaleFactor' || metric === 'rotation'))
+					displaysChanged();
 			};
 			screen.on('display-added', displaysChanged);
 			screen.on('display-removed', displaysChanged);
@@ -126,9 +141,9 @@ export class ImageViewMainService extends Disposable {
 					screen.off('display-added', displaysChanged);
 					screen.off('display-removed', displaysChanged);
 					screen.off('display-metrics-changed', displayMetricsChanged);
-				}),
+				})
 			);
-			void this.open(capture).catch(error => {
+			void this.open(capture).catch((error) => {
 				if (this.capture === capture) this.finish(undefined, error);
 			});
 		});
@@ -141,23 +156,15 @@ export class ImageViewMainService extends Disposable {
 			return;
 		}
 		// An undetermined permission must reach the OS capture request once so macOS can ask for consent.
-		const frames =
-			capture.request.source === 'content'
-				? [
-						{
-							displayId: screen.getDisplayMatching(this.owner.getBounds()).id,
-							bounds: screen.getDisplayMatching(this.owner.getBounds()).bounds,
-							image: { buffer: new Uint8Array() },
-						},
-					]
-				: await getDesktopScreenshots().catch(async error => {
-						if (this.needsScreenPermission(true)) {
-							await this.showPermissionGuide(capture);
-							return undefined;
-						}
-						throw error;
-					});
-		if (!frames || this.capture !== capture || capture.generation !== generation || this.owner.isDestroyed()) return;
+		const frames = capture.request.source === 'content' ? [{ displayId: screen.getDisplayMatching(this.owner.getBounds()).id, bounds: screen.getDisplayMatching(this.owner.getBounds()).bounds, image: { buffer: new Uint8Array() } }] : await getDesktopScreenshots().catch(async (error) => {
+			if (this.needsScreenPermission(true)) {
+				await this.showPermissionGuide(capture);
+				return undefined;
+			}
+			throw error;
+		});
+		if (!frames || this.capture !== capture || capture.generation !== generation || this.owner.isDestroyed())
+			return;
 		if (capture.request.source === 'screen' && this.needsScreenPermission(true)) {
 			await this.showPermissionGuide(capture);
 			return;
@@ -187,8 +194,8 @@ export class ImageViewMainService extends Disposable {
 					backgroundThrottling: false,
 					nodeIntegration: false,
 					contextIsolation: true,
-					sandbox: true,
-				},
+					sandbox: true
+				}
 			});
 			capture.views.push(view);
 			view.setAlwaysOnTop(true, 'screen-saver');
@@ -196,17 +203,17 @@ export class ImageViewMainService extends Disposable {
 			view.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 			view.webContents.session.setPermissionCheckHandler(() => false);
 			view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-			view.webContents.on('will-navigate', event => event.preventDefault());
+			view.webContents.on('will-navigate', (event) => event.preventDefault());
 			const resources = capture.windows.add(new DisposableStore());
 			let ready!: () => void;
-			const rendered = new Promise<void>(resolve => {
+			const rendered = new Promise<void>((resolve) => {
 				ready = resolve;
 			});
 			resources.add(
 				this.options.router.register(
 					{
 						webContents: view.webContents,
-						allowedEntryUrls: new Set([normalizeEntryUrl(this.options.entry.url)]),
+						allowedEntryUrls: new Set([normalizeEntryUrl(this.options.entry.url)])
 					},
 					[
 						{
@@ -216,23 +223,23 @@ export class ImageViewMainService extends Disposable {
 								image: new Uint8Array(image),
 								presentation: capture.request,
 								locale: this.options.localization().locale,
-								bundles: this.options.localization().bundles,
-							}),
+								bundles: this.options.localization().bundles
+							})
 						},
 						{
 							channel: IMAGE_VIEW_READY_CHANNEL,
 							validate: noArguments,
 							invoke: () => {
 								ready();
-							},
+							}
 						},
 						{
 							channel: IMAGE_VIEW_COMPLETE_CHANNEL,
 							validate: validateImageViewCompletion,
-							invoke: value => this.complete(capture, view, value as ImageViewCompletion),
-						},
-					],
-				),
+							invoke: (value) => this.complete(capture, view, value as ImageViewCompletion)
+						}
+					]
+				)
 			);
 			const closed = (): void => {
 				if (!capture.closing && this.capture === capture) this.finish();
@@ -246,19 +253,20 @@ export class ImageViewMainService extends Disposable {
 						view.off('closed', closed);
 						view.destroy();
 					}
-				}),
+				})
 			);
 			loaded.push(
 				(async () => {
 					const timeout = setTimeout(() => {
-						if (this.capture === capture && capture.generation === generation) this.finish(undefined, new Error('ImageViewUnavailable'));
+						if (this.capture === capture && capture.generation === generation)
+							this.finish(undefined, new Error('ImageViewUnavailable'));
 					}, 15_000);
 					resources.add(toDisposable(() => clearTimeout(timeout)));
 					if (this.options.entry.useDevelopmentUrl) await view.loadURL(this.options.entry.url);
 					else await view.loadFile(this.options.entry.file);
 					await rendered;
 					clearTimeout(timeout);
-				})(),
+				})()
 			);
 		}
 		await Promise.all(loaded);
@@ -266,7 +274,7 @@ export class ImageViewMainService extends Disposable {
 		for (const view of capture.views) if (!view.isDestroyed()) view.showInactive();
 		const index = Math.max(
 			0,
-			frames.findIndex(frame => frame.displayId === preferred),
+			frames.findIndex((frame) => frame.displayId === preferred)
 		);
 		capture.views[index]?.focus();
 	}
@@ -295,25 +303,14 @@ export class ImageViewMainService extends Disposable {
 		const guide = new BrowserWindow({
 			x: area.x + Math.min(24, area.width - width),
 			y: area.y + Math.max(0, area.height - height - 24),
-			width,
-			height,
-			minWidth: width,
-			minHeight: height,
-			show: false,
-			opacity: 0,
-			minimizable: false,
-			maximizable: false,
-			fullscreenable: false,
-			alwaysOnTop: true,
-			skipTaskbar: true,
+			width, height, minWidth: width, minHeight: height,
+			show: false, opacity: 0, minimizable: false, maximizable: false, fullscreenable: false,
+			alwaysOnTop: true, skipTaskbar: true,
 			webPreferences: {
 				...this.options.webPreferences,
-				partition: 'ash-image-view',
-				backgroundThrottling: false,
-				nodeIntegration: false,
-				contextIsolation: true,
-				sandbox: true,
-			},
+				partition: 'ash-image-view', backgroundThrottling: false,
+				nodeIntegration: false, contextIsolation: true, sandbox: true
+			}
 		});
 		// A modeless companion stays visible beside System Settings without owning its window or focus.
 		guide.setAlwaysOnTop(true, 'floating');
@@ -324,17 +321,10 @@ export class ImageViewMainService extends Disposable {
 		guide.webContents.on('will-navigate', navigating);
 		const resources = capture.windows.add(new DisposableStore());
 		let ready!: () => void;
-		const rendered = new Promise<void>(resolve => {
-			ready = resolve;
-		});
+		const rendered = new Promise<void>(resolve => { ready = resolve; });
 		let complete!: (retry: boolean) => void;
-		const completed = new Promise<boolean>(resolve => {
-			complete = resolve;
-		});
-		const closed = (): void => {
-			ready();
-			complete(false);
-		};
+		const completed = new Promise<boolean>(resolve => { complete = resolve; });
+		const closed = (): void => { ready(); complete(false); };
 		const resumeIfGranted = (): void => {
 			// Returning from Settings replaces a separate Continue action. A drop alone never grants access.
 			if (this.capture === capture && !guide.isDestroyed() && systemPreferences.getMediaAccessStatus('screen') === 'granted') {
@@ -347,80 +337,60 @@ export class ImageViewMainService extends Disposable {
 		guide.on('focus', resumeIfGranted);
 		this.owner.on('focus', resumeIfGranted);
 		guide.webContents.on('render-process-gone', closed);
-		resources.add(
-			toDisposable(() => {
-				ready();
-				complete(false);
-				guide.off('closed', closed);
-				guide.off('focus', resumeIfGranted);
-				this.owner.off('focus', resumeIfGranted);
-				if (!guide.isDestroyed()) {
-					guide.webContents.off('will-navigate', navigating);
-					guide.webContents.off('render-process-gone', closed);
-					guide.destroy();
+		resources.add(toDisposable(() => {
+			ready();
+			complete(false);
+			guide.off('closed', closed);
+			guide.off('focus', resumeIfGranted);
+			this.owner.off('focus', resumeIfGranted);
+			if (!guide.isDestroyed()) {
+				guide.webContents.off('will-navigate', navigating);
+				guide.webContents.off('render-process-gone', closed);
+				guide.destroy();
+			}
+		}));
+		resources.add(this.options.router.register({
+			webContents: guide.webContents,
+			allowedEntryUrls: new Set([normalizeEntryUrl(this.options.entry.url)])
+		}, [
+			{
+				channel: IMAGE_VIEW_INITIALIZE_CHANNEL, validate: noArguments,
+				invoke: () => ({
+					permission: { applicationName: basename(bundlePath), icon: new Uint8Array(icon.toPNG()) },
+					image: new Uint8Array(), presentation: capture.request,
+					locale: this.options.localization().locale, bundles: this.options.localization().bundles
+				})
+			},
+			{ channel: IMAGE_VIEW_READY_CHANNEL, validate: noArguments, invoke: ready },
+			{
+				channel: IMAGE_VIEW_COMPLETE_CHANNEL, validate: validateImageViewCompletion,
+				invoke: value => {
+					const result = value as ImageViewCompletion;
+					if (result.kind === 'cancel') setImmediate(() => complete(false));
+					else if (result.kind === 'error') setImmediate(() => this.capture === capture && this.finish(undefined, new Error(result.message)));
+					else throw new TypeError('Screen permission guide cannot export images');
+					return true;
 				}
-			}),
-		);
-		resources.add(
-			this.options.router.register(
-				{
-					webContents: guide.webContents,
-					allowedEntryUrls: new Set([normalizeEntryUrl(this.options.entry.url)]),
-				},
-				[
-					{
-						channel: IMAGE_VIEW_INITIALIZE_CHANNEL,
-						validate: noArguments,
-						invoke: () => ({
-							permission: { applicationName: basename(bundlePath), icon: new Uint8Array(icon.toPNG()) },
-							image: new Uint8Array(),
-							presentation: capture.request,
-							locale: this.options.localization().locale,
-							bundles: this.options.localization().bundles,
-						}),
-					},
-					{ channel: IMAGE_VIEW_READY_CHANNEL, validate: noArguments, invoke: ready },
-					{
-						channel: IMAGE_VIEW_COMPLETE_CHANNEL,
-						validate: validateImageViewCompletion,
-						invoke: value => {
-							const result = value as ImageViewCompletion;
-							if (result.kind === 'cancel') setImmediate(() => complete(false));
-							else if (result.kind === 'error') setImmediate(() => this.capture === capture && this.finish(undefined, new Error(result.message)));
-							else throw new TypeError('Screen permission guide cannot export images');
-							return true;
-						},
-					},
-					{
-						channel: IMAGE_VIEW_PERMISSION_CHANNEL,
-						validate: validateImageViewPermissionAction,
-						invoke: async action => {
-							if (this.capture !== capture || guide.isDestroyed()) return false;
-							switch (action) {
-								case 'settings':
-									await this.openPermissionSettings();
-									break;
-								case 'drag':
-									guide.webContents.startDrag({ file: bundlePath, icon });
-									break;
-								case 'copyPath':
-									await clipboard.writeText(bundlePath);
-									break;
-								case 'cancel':
-									setImmediate(() => complete(false));
-									break;
-								case 'retry':
-									// A completed drag is not a permission grant. Only the OS may authorize capture.
-									if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') return false;
-									setImmediate(() => complete(true));
-									break;
-							}
-							return true;
-						},
-					},
-				],
-			),
-		);
+			},
+			{
+				channel: IMAGE_VIEW_PERMISSION_CHANNEL, validate: validateImageViewPermissionAction,
+				invoke: async action => {
+					if (this.capture !== capture || guide.isDestroyed()) return false;
+					switch (action) {
+						case 'settings': await this.openPermissionSettings(); break;
+						case 'drag': guide.webContents.startDrag({ file: bundlePath, icon }); break;
+						case 'copyPath': await clipboard.writeText(bundlePath); break;
+						case 'cancel': setImmediate(() => complete(false)); break;
+						case 'retry':
+							// A completed drag is not a permission grant. Only the OS may authorize capture.
+							if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') return false;
+							setImmediate(() => complete(true));
+							break;
+					}
+					return true;
+				}
+			}
+		]));
 		const timeout = setTimeout(() => {
 			if (this.capture === capture) this.finish(undefined, new Error('ImageViewUnavailable'));
 		}, 15_000);
@@ -436,21 +406,15 @@ export class ImageViewMainService extends Disposable {
 			clearTimeout(timeout);
 			if (this.capture === capture && !guide.isDestroyed()) {
 				const placement = await import('./screenPermissionGuideWindow.js').catch(() => undefined);
-				if (this.capture !== capture || guide.isDestroyed()) {
-					return;
-				}
+				if (this.capture !== capture || guide.isDestroyed()) { return; }
 				let lastBounds = '';
 				let recordingList: Electron.Rectangle | undefined;
 				let lastLayout = '';
 				let nextControlsRead = 0;
 				const followSettings = (): void => {
-					if (guide.isDestroyed()) {
-						return;
-					}
+					if (guide.isDestroyed()) { return; }
 					const info = placement?.getSystemSettingsWindowInfo();
-					if (!info) {
-						return;
-					}
+					if (!info) { return; }
 					const settings = info.bounds;
 					const layout = `${info.pid}:${settings.width}:${settings.height}`;
 					if (layout !== lastLayout || Date.now() >= nextControlsRead) {
@@ -463,9 +427,7 @@ export class ImageViewMainService extends Disposable {
 					const workArea = screen.getDisplayMatching(settings).workArea;
 					const [guideWidth, guideHeight] = guide.getSize();
 					const key = JSON.stringify([settings, workArea, guideWidth, guideHeight, list]);
-					if (key === lastBounds) {
-						return;
-					}
+					if (key === lastBounds) { return; }
 					lastBounds = key;
 					const position = placement!.getPermissionGuidePosition(settings, { width: guideWidth, height: guideHeight }, workArea, list);
 					guide.setPosition(position.x, position.y, false);
@@ -486,12 +448,13 @@ export class ImageViewMainService extends Disposable {
 		else this.finish();
 	}
 
-	private async complete(capture: Capture, sender: BrowserWindow, completion: ImageViewCompletion): Promise<boolean> {
+	private async complete(
+		capture: Capture,
+		sender: BrowserWindow,
+		completion: ImageViewCompletion
+	): Promise<boolean> {
 		if (this.capture !== capture || capture.closing || capture.completing) return false;
-		if (completion.kind === 'error') {
-			this.finish(undefined, new Error(completion.message));
-			return true;
-		}
+		if (completion.kind === 'error') { this.finish(undefined, new Error(completion.message)); return true; }
 		if (completion.kind === 'cancel') {
 			this.finish();
 			return true;
@@ -505,7 +468,7 @@ export class ImageViewMainService extends Disposable {
 				capture.windows = new DisposableStore();
 				capture.views.length = 0;
 				capture.closing = false;
-				void this.open(capture).catch(error => {
+				void this.open(capture).catch((error) => {
 					if (this.capture === capture) this.finish(undefined, error);
 				});
 			});
@@ -516,8 +479,8 @@ export class ImageViewMainService extends Disposable {
 			if (completion.kind === 'copy') {
 				await clipboard.write([
 					new ClipboardItem({
-						'image/png': new Blob([new Uint8Array(completion.image)], { type: 'image/png' }),
-					}),
+						'image/png': new Blob([new Uint8Array(completion.image)], { type: 'image/png' })
+					})
 				]);
 			} else if (completion.kind === 'save') {
 				for (const view of capture.views) if (!view.isDestroyed()) view.hide();
@@ -525,7 +488,7 @@ export class ImageViewMainService extends Disposable {
 				const destination = await dialog.showSaveDialog(this.owner, {
 					title: messages?.['imageView.saveTitle'] ?? localize2('imageView.saveTitle', 'Save image').original,
 					defaultPath: 'Image.png',
-					filters: [{ name: 'PNG', extensions: ['png'] }],
+					filters: [{ name: 'PNG', extensions: ['png'] }]
 				});
 				if (this.capture !== capture) return true;
 				if (destination.canceled || !destination.filePath) {

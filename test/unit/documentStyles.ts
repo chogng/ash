@@ -5,9 +5,7 @@ import { captureDocumentStyles, compareDocumentStyles } from '../fixtures/docume
 /** Check each test without removing leaked nodes and hiding the owner of the leak. */
 export function ensureNoStylesAreLeakedInTestSuite(): void {
 	let before: ReturnType<typeof captureDocumentStyles> | undefined;
-	setup(() => {
-		before = captureDocumentStyles(document.documentElement);
-	});
+	setup(() => { before = captureDocumentStyles(document.documentElement); });
 	teardown(async () => {
 		if (!before) return;
 		const baseline = before;

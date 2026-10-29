@@ -30,9 +30,7 @@ export class ChatEditor extends EditorPane {
 		@IViewsService private readonly views: IViewsService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
-	) {
-		super(ChatEditorInput.EditorID, theme, storage);
-	}
+	) { super(ChatEditorInput.EditorID, theme, storage); }
 
 	override create(parent: HTMLElement): void {
 		this.element = h(parent.ownerDocument, 'div', { className: 'ash-chat-editor' });
@@ -47,10 +45,7 @@ export class ChatEditor extends EditorPane {
 		if (!(input instanceof ChatEditorInput)) throw new TypeError('Invalid Chat editor input');
 		input.closeHandler = {
 			showConfirm: () => true,
-			confirm: async () => {
-				await view.captureActiveDraft();
-				return ConfirmResult.DONT_SAVE;
-			},
+			confirm: async () => { await view.captureActiveDraft(); return ConfirmResult.DONT_SAVE; },
 		};
 		this.view = view;
 		this.mount.value = view.attachEditor(this.element);
@@ -73,11 +68,6 @@ export class ChatEditor extends EditorPane {
 		this.element.style.height = `${dimension.height}px`;
 	}
 
-	override focus(): void {
-		this.view?.focus();
-	}
-	protected override disposeCore(): void {
-		this.clearInput();
-		super.disposeCore();
-	}
+	override focus(): void { this.view?.focus(); }
+	protected override disposeCore(): void { this.clearInput(); super.disposeCore(); }
 }

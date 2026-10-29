@@ -21,13 +21,8 @@ export interface RemoteRuntimePackageLocation {
 }
 
 export type RemoteRuntimeCatalogSource =
-	| { readonly kind: 'packaged'; readonly bundleRoot: string; readonly expectedSha256: string }
-	| {
-			readonly kind: 'network';
-			readonly catalogUrl: string;
-			readonly expectedSha256: string;
-			readonly cacheRoot: string;
-	  };
+	| { readonly kind: 'packaged'; readonly bundleRoot: string; readonly expectedSha256: string; }
+	| { readonly kind: 'network'; readonly catalogUrl: string; readonly expectedSha256: string; readonly cacheRoot: string; };
 
 /** Reads the signed product package's exact Remote catalog binding in Electron Main. */
 export function packagedRemoteRuntimeCatalogSource(location: RemoteRuntimePackageLocation, cacheRoot: string): RemoteRuntimeCatalogSource {
@@ -38,18 +33,13 @@ export function packagedRemoteRuntimeCatalogSource(location: RemoteRuntimePackag
 	if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size <= 0 || metadata.size > PACKAGE_METADATA_MAX_BYTES) throw new Error('Ash package metadata is not a bounded regular file');
 	const document = parsePackageMetadata(readFileSync(metadataPath, 'utf8'));
 	const binding = document.remoteRuntimeCatalog;
-	if (!isRecord(binding) || binding.trustBinding !== 'signedProductPackage' || typeof binding.sha256 !== 'string' || !SHA256_PATTERN.test(binding.sha256))
-		throw new Error('Ash package has no valid signed Remote runtime catalog binding');
+	if (!isRecord(binding) || binding.trustBinding !== 'signedProductPackage' || typeof binding.sha256 !== 'string' || !SHA256_PATTERN.test(binding.sha256)) throw new Error('Ash package has no valid signed Remote runtime catalog binding');
 	if (typeof binding.url === 'string' && binding.path === undefined) {
 		validateNetworkCatalogUrl(binding.url);
 		return Object.freeze({ kind: 'network', catalogUrl: binding.url, expectedSha256: binding.sha256, cacheRoot });
 	}
 	if (binding.url === undefined && binding.path === 'ash-remote-runtimes/catalog.json') {
-		return Object.freeze({
-			kind: 'packaged',
-			bundleRoot: join(packageRoot, 'ash-remote-runtimes'),
-			expectedSha256: binding.sha256,
-		});
+		return Object.freeze({ kind: 'packaged', bundleRoot: join(packageRoot, 'ash-remote-runtimes'), expectedSha256: binding.sha256 });
 	}
 	throw new Error('Ash package Remote runtime catalog binding selects an invalid or ambiguous source');
 }
@@ -66,7 +56,7 @@ function remoteRuntimePackageRoot(location: RemoteRuntimePackageLocation): strin
 
 /** A strictly validated catalog authenticated by the signed Desktop package containing it. */
 export class PackagedRemoteRuntimeCatalog {
-	private constructor(private readonly artifacts: ReadonlyMap<string, TrustedRemoteRuntimeArtifact>) {}
+	private constructor(private readonly artifacts: ReadonlyMap<string, TrustedRemoteRuntimeArtifact>) { }
 
 	static async load(bundleRoot: string, expectedSha256?: string): Promise<PackagedRemoteRuntimeCatalog> {
 		if (!isAbsolute(bundleRoot) || !validLocalCommand(bundleRoot)) throw new Error('Packaged Remote runtime bundle root must be an absolute local path');
@@ -75,8 +65,7 @@ export class PackagedRemoteRuntimeCatalog {
 		const catalogMetadata = await requireRealFile(catalogPath, 'Remote runtime catalog');
 		if (catalogMetadata.size <= 0 || catalogMetadata.size > MAX_CATALOG_BYTES) throw new Error(`Remote runtime catalog must contain between 1 and ${MAX_CATALOG_BYTES} bytes`);
 		const catalogBytes = await readFile(catalogPath);
-		if (expectedSha256 !== undefined && (!SHA256_PATTERN.test(expectedSha256) || createHash('sha256').update(catalogBytes).digest('hex') !== expectedSha256))
-			throw new Error('Packaged Remote runtime catalog SHA-256 does not match its signed product binding');
+		if (expectedSha256 !== undefined && (!SHA256_PATTERN.test(expectedSha256) || createHash('sha256').update(catalogBytes).digest('hex') !== expectedSha256)) throw new Error('Packaged Remote runtime catalog SHA-256 does not match its signed product binding');
 		const document = parseCatalogDocument(catalogBytes.toString('utf8'));
 		const artifacts = new Map<string, TrustedRemoteRuntimeArtifact>();
 		for (const record of document.artifacts) {
@@ -126,16 +115,7 @@ function validateNetworkCatalogUrl(value: string): void {
 	} catch (error) {
 		throw new Error('Remote runtime catalog URL is invalid', { cause: error });
 	}
-	if (
-		url.protocol !== 'https:' ||
-		url.hostname.length === 0 ||
-		url.username.length > 0 ||
-		url.password.length > 0 ||
-		url.search.length > 0 ||
-		url.hash.length > 0 ||
-		!url.pathname.endsWith('/catalog.json')
-	)
-		throw new Error('Remote runtime catalog URL must be a credential-free HTTPS catalog.json URL without query or fragment');
+	if (url.protocol !== 'https:' || url.hostname.length === 0 || url.username.length > 0 || url.password.length > 0 || url.search.length > 0 || url.hash.length > 0 || !url.pathname.endsWith('/catalog.json')) throw new Error('Remote runtime catalog URL must be a credential-free HTTPS catalog.json URL without query or fragment');
 }
 
 interface CatalogDocument {
@@ -158,23 +138,14 @@ function parseCatalogDocument(text: string): CatalogDocument {
 	} catch (error) {
 		throw new Error('Remote runtime catalog is invalid JSON', { cause: error });
 	}
-	if (!isRecord(value) || !hasExactKeys(value, CATALOG_KEYS) || value.formatVersion !== CATALOG_FORMAT_VERSION || !Array.isArray(value.artifacts))
-		throw new Error('Remote runtime catalog has an invalid document shape or format version');
+	if (!isRecord(value) || !hasExactKeys(value, CATALOG_KEYS) || value.formatVersion !== CATALOG_FORMAT_VERSION || !Array.isArray(value.artifacts)) throw new Error('Remote runtime catalog has an invalid document shape or format version');
 	const artifacts = value.artifacts.map((record, index) => parseArtifactRecord(record, index));
 	return { artifacts };
 }
 
 function parseArtifactRecord(value: unknown, index: number): CatalogArtifactRecord {
 	if (!isRecord(value) || !hasExactKeys(value, ARTIFACT_KEYS)) throw new Error(`Remote runtime catalog artifact ${index} has an invalid shape`);
-	if (
-		typeof value.version !== 'string' ||
-		typeof value.target !== 'string' ||
-		typeof value.archive !== 'string' ||
-		typeof value.archiveSize !== 'number' ||
-		typeof value.unpackedSize !== 'number' ||
-		typeof value.sha256 !== 'string'
-	)
-		throw new Error(`Remote runtime catalog artifact ${index} has invalid field types`);
+	if (typeof value.version !== 'string' || typeof value.target !== 'string' || typeof value.archive !== 'string' || typeof value.archiveSize !== 'number' || typeof value.unpackedSize !== 'number' || typeof value.sha256 !== 'string') throw new Error(`Remote runtime catalog artifact ${index} has invalid field types`);
 	return {
 		version: value.version,
 		target: value.target,
@@ -187,18 +158,7 @@ function parseArtifactRecord(value: unknown, index: number): CatalogArtifactReco
 
 function parseRelativeArchivePath(value: string): string {
 	const segments = value.split('/');
-	if (
-		value.length === 0 ||
-		value.startsWith('/') ||
-		value.endsWith('/') ||
-		value.includes('\\') ||
-		value.includes('\0') ||
-		value.includes('\n') ||
-		value.includes('\r') ||
-		value.includes(':') ||
-		segments.some(segment => segment.length === 0 || segment === '.' || segment === '..')
-	)
-		throw new Error(`Remote runtime archive path is not canonical: ${value}`);
+	if (value.length === 0 || value.startsWith('/') || value.endsWith('/') || value.includes('\\') || value.includes('\0') || value.includes('\n') || value.includes('\r') || value.includes(':') || segments.some(segment => segment.length === 0 || segment === '.' || segment === '..')) throw new Error(`Remote runtime archive path is not canonical: ${value}`);
 	return value;
 }
 

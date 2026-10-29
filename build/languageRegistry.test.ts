@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { copyFile, mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { format } from './format.ts';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
@@ -29,13 +29,9 @@ test('language associations come from package contributions and stale output is 
 	);
 	await generateLanguageRegistry({ root });
 	await generateLanguageRegistry({ root, check: true });
-	await copyFile(resolve(import.meta.dirname, '../.prettierrc.toml'), resolve(root, '.prettierrc.toml'));
-	const formatting = spawnSync(
-		resolve(import.meta.dirname, '../node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'),
-		['fmt', '--config', resolve(root, '.prettierrc.toml'), '--check', resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts')],
-		{ cwd: root, encoding: 'utf8' },
-	);
-	assert.equal(formatting.status, 0, formatting.stdout + formatting.stderr);
+	const frontendPath = resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts');
+	const frontend = await readFile(frontendPath, 'utf8');
+	assert.equal(format(frontendPath, frontend), frontend);
 	const generated = await readFile(resolve(root, 'crates/language/src/languages.generated.rs'), 'utf8');
 	assert.match(generated, /"legacy-demo" => "demo"/);
 	assert.doesNotMatch(generated, /optional-language/);

@@ -58,17 +58,15 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 			await this.openSettingsJson(validated);
 			return;
 		}
-		const opening = validated.revealSetting && validated.query === undefined ? { ...validated, query: `@id:${validated.revealSetting.key}` } : validated;
-		await this.editorService.openEditor(
-			this.settingsEditorInput,
-			{
-				...opening,
-				pinned: true,
-				preserveFocus: validated.preserveFocus ?? validated.focusSearch === false,
-				ignoreError: true,
-			},
-			this.getEditorTarget(validated, true),
-		);
+		const opening = validated.revealSetting && validated.query === undefined
+			? { ...validated, query: `@id:${validated.revealSetting.key}` }
+			: validated;
+		await this.editorService.openEditor(this.settingsEditorInput, {
+			...opening,
+			pinned: true,
+			preserveFocus: validated.preserveFocus ?? validated.focusSearch === false,
+			ignoreError: true,
+		}, this.getEditorTarget(validated, true));
 	}
 
 	public async openUserSettings(options: IOpenSettingsOptions = {}): Promise<void> {
@@ -87,23 +85,15 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 	private async openSettingsJson(options: IOpenSettingsOptions): Promise<void> {
 		const workspace = this.workspace.getWorkspace();
 		const folder = options.folderUri ? this.workspace.getWorkspaceFolder(options.folderUri) : workspace.folders[0];
-		const resource =
-			options.target === ConfigurationTarget.WORKSPACE
-				? (workspace.configuration ?? URI.joinPath(folder!.uri, '.vscode', 'settings.json'))
-				: options.target === ConfigurationTarget.WORKSPACE_FOLDER
-					? URI.joinPath(folder!.uri, '.vscode', 'settings.json')
-					: undefined;
+		const resource = options.target === ConfigurationTarget.WORKSPACE
+			? workspace.configuration ?? URI.joinPath(folder!.uri, '.vscode', 'settings.json')
+			: options.target === ConfigurationTarget.WORKSPACE_FOLDER ? URI.joinPath(folder!.uri, '.vscode', 'settings.json') : undefined;
 		const nested = options.target === ConfigurationTarget.WORKSPACE && !!workspace.configuration;
-		const input = resource
-			? {
-					resource,
-					languageId: 'jsonc',
-					label:
-						options.target === ConfigurationTarget.WORKSPACE
-							? localize({ bundle: 'ash.settings', key: 'json.workspaceLabel' }, 'Workspace Settings (JSON)')
-							: localize({ bundle: 'ash.settings', key: 'json.folderLabel' }, 'Folder Settings (JSON)'),
-				}
-			: createUserSettingsEditorInput();
+		const input = resource ? {
+			resource, languageId: 'jsonc', label: options.target === ConfigurationTarget.WORKSPACE
+				? localize({ bundle: 'ash.settings', key: 'json.workspaceLabel' }, 'Workspace Settings (JSON)')
+				: localize({ bundle: 'ash.settings', key: 'json.folderLabel' }, 'Folder Settings (JSON)'),
+		} : createUserSettingsEditorInput();
 		if (!this.models.getModel(input.resource)) {
 			try {
 				await this.files.stat(input.resource);
@@ -166,11 +156,7 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 				const settings = source.slice(object.offset, object.offset + object.length);
 				source = source.slice(0, object.offset) + editJsonObjectProperty(settings, key, configuration.serialize(configuration.defaultValue)) + source.slice(object.offset + object.length);
 			} else {
-				source = editJsonObjectProperty(
-					source,
-					nested ? 'settings' : key,
-					nested ? { [key]: configuration.serialize(configuration.defaultValue) } : configuration.serialize(configuration.defaultValue),
-				);
+				source = editJsonObjectProperty(source, nested ? 'settings' : key, nested ? { [key]: configuration.serialize(configuration.defaultValue) } : configuration.serialize(configuration.defaultValue));
 			}
 			model.pushStackElement();
 			model.pushEditOperations(null, [{ range: model.getFullModelRange(), text: source }], null);
@@ -186,7 +172,9 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 	public async openGlobalKeybindingSettings(textual: boolean, options?: IOpenKeybindingsEditorOptions): Promise<void> {
 		if (!textual) {
 			const activeEditor = this.editorService.activeEditor;
-			let input = activeEditor && isKeybindingsEditorInput(activeEditor) ? KeybindingsEditorInput.getOrCreate(activeEditor, this.instantiationService) : this.keybindingsEditorInput?.deref();
+			let input = activeEditor && isKeybindingsEditorInput(activeEditor)
+				? KeybindingsEditorInput.getOrCreate(activeEditor, this.instantiationService)
+				: this.keybindingsEditorInput?.deref();
 			if (!input || input.isDisposed) input = this.instantiationService.createInstance(KeybindingsEditorInput);
 			// Reuse the live input when returning to the modal or opening a shortcut already held by a group.
 			this.keybindingsEditorInput = new WeakRef(input);

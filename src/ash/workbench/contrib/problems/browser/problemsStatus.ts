@@ -20,13 +20,11 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 
 	constructor(private readonly options: ProblemsStatusContributionOptions) {
 		super();
-		this.status = this._register(
-			options.statusbarService.addEntry(this.entry(), {
-				id: 'ash.status.problems',
-				alignment: StatusbarAlignment.Left,
-				priority: ProblemsPriority,
-			}),
-		);
+		this.status = this._register(options.statusbarService.addEntry(this.entry(), {
+			id: 'ash.status.problems',
+			alignment: StatusbarAlignment.Left,
+			priority: ProblemsPriority,
+		}));
 		this._register(options.markerService.onMarkerChanged(() => this.update()));
 	}
 
@@ -39,8 +37,9 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 		const summaries: string[] = [];
 		if (errors > 0) summaries.push(localize('problems.errorCount', 'Errors: {0}', errors));
 		if (warnings > 0) summaries.push(localize('problems.warningCount', 'Warnings: {0}', warnings));
-		const tooltip =
-			summaries.length === 0 ? localize('problems.noProblems', 'No Problems') : summaries.length === 1 ? summaries[0]! : localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
+		const tooltip = summaries.length === 0
+			? localize('problems.noProblems', 'No Problems')
+			: summaries.length === 1 ? summaries[0]! : localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
 		return {
 			text: '',
 			segments: [

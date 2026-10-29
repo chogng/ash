@@ -14,11 +14,8 @@ test('SSH startup cleanup settles when a real subprocess has already closed by s
 	const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
 	const spawned = once(child, 'spawn');
 	using service = new SshPortForwardingService({
-		getWorkspace: remoteWorkspace,
-		sshExecutable: 'ssh',
-		localEnvironment: {},
-		reserveLocalPort: async () => 41_234,
-		spawnProcess: () => child,
+		getWorkspace: remoteWorkspace, sshExecutable: 'ssh', localEnvironment: {},
+		reserveLocalPort: async () => 41_234, spawnProcess: () => child,
 		probeLoopbackListener: async () => {
 			await spawned;
 			const closed = once(child, 'close');
@@ -32,18 +29,13 @@ test('SSH startup cleanup settles when a real subprocess has already closed by s
 		assert.equal(child.exitCode, null);
 		assert.equal(child.signalCode, 'SIGTERM');
 		assert.deepEqual(await service.list(), []);
-	} finally {
-		child.kill();
-	}
+	} finally { child.kill(); }
 });
 
 test('SSH tunnel coordinator fixes both ends of the forward to loopback', async () => {
 	let child = new FakeChildProcess();
-	let launch: { executable: string; args: readonly string[] } | undefined;
-	let workspace: IAnyWorkspaceIdentifier = {
-		id: 'remote',
-		uri: createSshRemoteWorkspaceUri('build-server', '/srv/project'),
-	};
+	let launch: { executable: string; args: readonly string[]; } | undefined;
+	let workspace: IAnyWorkspaceIdentifier = { id: 'remote', uri: createSshRemoteWorkspaceUri('build-server', '/srv/project') };
 	using service = new SshPortForwardingService({
 		getWorkspace: () => workspace,
 		sshExecutable: 'ssh',
@@ -55,7 +47,7 @@ test('SSH tunnel coordinator fixes both ends of the forward to loopback', async 
 		},
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 
 	const tunnel = await service.open({ remotePort: 3_000 });
@@ -114,7 +106,7 @@ test('SSH tunnel coordinator recovers repeatedly on the original local port', as
 		},
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 	service.onDidChange(change => changes.push(change));
 
@@ -127,10 +119,13 @@ test('SSH tunnel coordinator recovers repeatedly on the original local port', as
 	assert.deepEqual(launches[0], sshTunnelArguments('build-server', tunnel.localPort, tunnel.remotePort));
 	assert.deepEqual(launches[1], launches[0]);
 	assert.deepEqual(launches[2], launches[0]);
-	assert.deepEqual(
-		changes.filter(change => change.kind === 'upsert').map(change => change.tunnel.state),
-		['open', 'recovering', 'open', 'recovering', 'open'],
-	);
+	assert.deepEqual(changes.filter(change => change.kind === 'upsert').map(change => change.tunnel.state), [
+		'open',
+		'recovering',
+		'open',
+		'recovering',
+		'open',
+	]);
 	assert.equal((await service.list())[0].localPort, 41_234);
 });
 
@@ -139,7 +134,7 @@ test('closing a recovering SSH tunnel cancels backoff without launching another 
 	const changes: SshPortForwardChange[] = [];
 	let waitCall = 0;
 	let recoveryWaitStarted!: () => void;
-	const waitingForRecovery = new Promise<void>(resolve => (recoveryWaitStarted = resolve));
+	const waitingForRecovery = new Promise<void>(resolve => recoveryWaitStarted = resolve);
 	using service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
@@ -163,10 +158,7 @@ test('closing a recovering SSH tunnel cancels backoff without launching another 
 	await service.close(tunnel.id);
 
 	assert.deepEqual(await service.list(), []);
-	assert.deepEqual(
-		changes.map(change => (change.kind === 'upsert' ? change.tunnel.state : change.kind)),
-		['open', 'recovering', 'removed'],
-	);
+	assert.deepEqual(changes.map(change => change.kind === 'upsert' ? change.tunnel.state : change.kind), ['open', 'recovering', 'removed']);
 });
 
 test('closing a signalled SSH tunnel settles after its close event', async () => {
@@ -174,7 +166,7 @@ test('closing a signalled SSH tunnel settles after its close event', async () =>
 	const changes: SshPortForwardChange[] = [];
 	let waitCall = 0;
 	let recoveryWaitStarted!: () => void;
-	const waitingForRecovery = new Promise<void>(resolve => (recoveryWaitStarted = resolve));
+	const waitingForRecovery = new Promise<void>(resolve => recoveryWaitStarted = resolve);
 	using service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
@@ -200,17 +192,14 @@ test('closing a signalled SSH tunnel settles after its close event', async () =>
 	await service.close(tunnel.id);
 
 	assert.deepEqual(await service.list(), []);
-	assert.deepEqual(
-		changes.map(change => (change.kind === 'upsert' ? change.tunnel.state : change.kind)),
-		['open', 'recovering', 'removed'],
-	);
+	assert.deepEqual(changes.map(change => change.kind === 'upsert' ? change.tunnel.state : change.kind), ['open', 'recovering', 'removed']);
 });
 
 test('closing during recovery startup kills the candidate SSH child', async () => {
 	const children: FakeChildProcess[] = [];
 	let waitCall = 0;
 	let candidateSpawned!: () => void;
-	const waitingForCandidate = new Promise<void>(resolve => (candidateSpawned = resolve));
+	const waitingForCandidate = new Promise<void>(resolve => candidateSpawned = resolve);
 	using service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
@@ -246,7 +235,7 @@ test('disposing a recovering coordinator prevents post-window relaunch', async (
 	const child = new FakeChildProcess();
 	let waitCall = 0;
 	let recoveryWaitStarted!: () => void;
-	const waitingForRecovery = new Promise<void>(resolve => (recoveryWaitStarted = resolve));
+	const waitingForRecovery = new Promise<void>(resolve => recoveryWaitStarted = resolve);
 	const service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
@@ -302,10 +291,7 @@ test('SSH tunnel recovery becomes failed only after its bounded retry window', a
 
 	assert.equal(children.length, 3);
 	assert.equal((await service.list())[0].state, 'failed');
-	assert.deepEqual(
-		changes.filter(change => change.kind === 'upsert').map(change => change.tunnel.state),
-		['open', 'recovering', 'failed'],
-	);
+	assert.deepEqual(changes.filter(change => change.kind === 'upsert').map(change => change.tunnel.state), ['open', 'recovering', 'failed']);
 });
 
 test('SSH tunnel startup failure is reported without entering recovery', async () => {
@@ -318,7 +304,7 @@ test('SSH tunnel startup failure is reported without entering recovery', async (
 		spawnProcess: () => new FakeChildProcess(17) as unknown as ChildProcess,
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 	service.onDidChange(change => changes.push(change));
 
@@ -364,7 +350,7 @@ test('SSH tunnel startup times out and stops the child when no listener appears'
 		spawnProcess: () => child as unknown as ChildProcess,
 		probeLoopbackListener: async () => 'pending',
 		startupTimeoutMs: 20,
-		wait: async () => {},
+		wait: async () => { },
 	});
 
 	await assert.rejects(() => service.open({ remotePort: 3_000 }), /did not listen on 127\.0\.0\.1:41234 within 20ms/);
@@ -396,14 +382,14 @@ test('SSH tunnel default readiness probe observes a real loopback listener', asy
 		assert.equal(tunnel.localPort, address.port);
 		assert.equal(tunnel.state, 'open');
 	} finally {
-		await new Promise<void>((resolve, reject) => listener.close(error => (error ? reject(error) : resolve())));
+		await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
 	}
 });
 
 test('disposing during SSH tunnel startup cancels readiness and stops the child', async () => {
 	const child = new FakeChildProcess();
 	let spawned!: () => void;
-	const waitingForSpawn = new Promise<void>(resolve => (spawned = resolve));
+	const waitingForSpawn = new Promise<void>(resolve => spawned = resolve);
 	const service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
@@ -433,9 +419,7 @@ test('disposing during SSH tunnel startup cancels readiness and stops the child'
 test('Workspace change cancels an SSH forward waiting for startup and allows a new forward', async () => {
 	const children: FakeChildProcess[] = [];
 	let waiting!: () => void;
-	const startupWait = new Promise<void>(resolve => {
-		waiting = resolve;
-	});
+	const startupWait = new Promise<void>(resolve => { waiting = resolve; });
 	let isReady = false;
 	using service = new SshPortForwardingService({
 		getWorkspace: remoteWorkspace,
@@ -447,11 +431,9 @@ test('Workspace change cancels an SSH forward waiting for startup and allows a n
 			children.push(child);
 			return child as unknown as ChildProcess;
 		},
-		probeLoopbackListener: async () => (isReady ? 'ready' : 'pending'),
+		probeLoopbackListener: async () => isReady ? 'ready' : 'pending',
 		wait: async (_milliseconds, signal) => {
-			if (isReady || signal?.aborted) {
-				return;
-			}
+			if (isReady || signal?.aborted) { return; }
 			waiting();
 			await new Promise<void>(resolve => signal?.addEventListener('abort', () => resolve(), { once: true }));
 		},
@@ -476,14 +458,8 @@ test('Workspace change during port reservation prevents a retired SSH process fr
 		getWorkspace: remoteWorkspace,
 		sshExecutable: 'ssh',
 		localEnvironment: {},
-		reserveLocalPort: () =>
-			new Promise(resolve => {
-				reserve = resolve;
-			}),
-		spawnProcess: () => {
-			launches++;
-			return new FakeChildProcess() as unknown as ChildProcess;
-		},
+		reserveLocalPort: () => new Promise(resolve => { reserve = resolve; }),
+		spawnProcess: () => { launches++; return new FakeChildProcess() as unknown as ChildProcess; },
 	});
 	const opening = service.open({ remotePort: 3000 });
 	await service.closeAll();

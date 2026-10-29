@@ -65,21 +65,17 @@ test('command metadata validates supplied arguments while preserving handler val
 test('replacing a command batch replaces its constraints and disposal removes the registered handler', () => {
 	const registry = new CommandRegistry();
 	using services = new InstantiationService();
-	const registration = registry.registerMany([
-		{
+	const registration = registry.registerMany([{
+		id: 'test.replaced',
+		handler: (_accessor, value) => value,
+		metadata: { description: 'test', args: [{ name: 'value', constraint: 'number' }] },
+	}]);
+	try {
+		registration.replace([{
 			id: 'test.replaced',
 			handler: (_accessor, value) => value,
-			metadata: { description: 'test', args: [{ name: 'value', constraint: 'number' }] },
-		},
-	]);
-	try {
-		registration.replace([
-			{
-				id: 'test.replaced',
-				handler: (_accessor, value) => value,
-				metadata: { description: 'test', args: [{ name: 'value', constraint: 'string' }] },
-			},
-		]);
+			metadata: { description: 'test', args: [{ name: 'value', constraint: 'string' }] },
+		}]);
 		const command = registry.getCommand('test.replaced')!;
 		assert.throws(() => command(services, 3), TypeError);
 		assert.equal(command(services, 'three'), 'three');
@@ -88,6 +84,7 @@ test('replacing a command batch replaces its constraints and disposal removes th
 	}
 	assert.equal(registry.getCommand('test.replaced'), undefined);
 });
+
 
 test('command registry publishes complete metadata after each atomic change and provides isolated snapshots', () => {
 	const registry = new CommandRegistry();

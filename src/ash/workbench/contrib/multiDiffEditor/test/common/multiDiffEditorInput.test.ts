@@ -8,31 +8,24 @@ import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEdito
 test('Stanza multi-diff inputs keep one caller-owned tab identity and ordered comparisons', () => {
 	const source = URI.parse('ash-multi-diff:/scm/working?revision=7');
 	const firstFile = { resource: URI.parse('file:///workspace/src/first.ts'), label: 'first.ts' };
-	const input = createMultiDiffEditorInput(
-		source,
-		[
-			{
-				label: 'src/first.ts',
-				original: { resource: URI.parse('git-change:/first/original'), label: 'first.ts (Index)' },
-				modified: { resource: URI.parse('git-change:/first/modified'), label: 'first.ts (Working Tree)' },
-				goToFile: firstFile,
-			},
-			{
-				label: 'src/second.ts',
-				original: { resource: URI.parse('git-change:/second/original'), label: 'second.ts (Index)' },
-				modified: { resource: URI.parse('git-change:/second/modified'), label: 'second.ts (Working Tree)' },
-			},
-		],
-		'Changes',
-	);
+	const input = createMultiDiffEditorInput(source, [
+		{
+			label: 'src/first.ts',
+			original: { resource: URI.parse('git-change:/first/original'), label: 'first.ts (Index)' },
+			modified: { resource: URI.parse('git-change:/first/modified'), label: 'first.ts (Working Tree)' },
+			goToFile: firstFile,
+		},
+		{
+			label: 'src/second.ts',
+			original: { resource: URI.parse('git-change:/second/original'), label: 'second.ts (Index)' },
+			modified: { resource: URI.parse('git-change:/second/modified'), label: 'second.ts (Working Tree)' },
+		},
+	], 'Changes');
 
 	assert.equal(MULTI_DIFF_EDITOR_ID, 'stanza.editor.multiDiff');
 	assert.equal(input.resource, source);
 	assert.equal(input.readOnly, false);
-	assert.deepEqual(
-		input.items.map(item => item.label),
-		['src/first.ts', 'src/second.ts'],
-	);
+	assert.deepEqual(input.items.map((item) => item.label), ['src/first.ts', 'src/second.ts']);
 	assert.equal(input.items[0]!.goToFile, firstFile);
 	assert.equal(input.items[1]!.goToFile, undefined);
 	assert.equal(matchMultiDiffEditor(input), EditorPaneMatch.Default);
@@ -44,13 +37,15 @@ test('Stanza multi-diff inputs reject duplicate comparisons', () => {
 		original: { resource: URI.parse('git-change:/first/original') },
 		modified: { resource: URI.parse('git-change:/first/modified') },
 	};
-	assert.throws(() => createMultiDiffEditorInput(URI.parse('ash-multi-diff:/duplicates'), [item, item], 'Changes'), /Duplicate multi-diff comparison/);
+	assert.throws(
+		() => createMultiDiffEditorInput(URI.parse('ash-multi-diff:/duplicates'), [item, item], 'Changes'),
+		/Duplicate multi-diff comparison/,
+	);
 });
 
 test('Source-provided identities survive revisions while captured comparisons stay distinct', () => {
 	const first = {
-		id: 'repo:file.ts',
-		label: 'file.ts',
+		id: 'repo:file.ts', label: 'file.ts',
 		original: { resource: URI.parse('git-change:/file.ts?revision=1&side=original') },
 		modified: { resource: URI.parse('git-change:/file.ts?revision=1&side=modified') },
 	};
@@ -63,12 +58,7 @@ test('Source-provided identities survive revisions while captured comparisons st
 });
 
 test('binary metadata survives serialization and never makes a comparison writable', () => {
-	const binary = {
-		label: 'image.bin',
-		binary: true,
-		original: { resource: URI.parse('snapshot:/image.bin') },
-		modified: { resource: URI.file('/workspace/image.bin') },
-	};
+	const binary = { label: 'image.bin', binary: true, original: { resource: URI.parse('snapshot:/image.bin') }, modified: { resource: URI.file('/workspace/image.bin') } };
 	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/binary'), [binary], 'Binary review');
 	const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 	assert.ok(isMultiDiffEditorInput(restored));
@@ -77,18 +67,10 @@ test('binary metadata survives serialization and never makes a comparison writab
 });
 
 test('restored comparisons retain disabled file capabilities and reject corrupted context values', () => {
-	const input = createMultiDiffEditorInput(
-		URI.parse('ash-multi-diff:/capture'),
-		[
-			{
-				label: 'file.ts',
-				original: { resource: URI.parse('snapshot:/before') },
-				modified: { resource: URI.parse('snapshot:/after') },
-				contextKeys: { 'sessions.changesCanPreview': false },
-			},
-		],
-		'Capture',
-	);
+	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/capture'), [{
+		label: 'file.ts', original: { resource: URI.parse('snapshot:/before') }, modified: { resource: URI.parse('snapshot:/after') },
+		contextKeys: { 'sessions.changesCanPreview': false },
+	}], 'Capture');
 	const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
 	const restored = EditorInputSerializers.deserialize(serialized);
 	assert.ok(isMultiDiffEditorInput(restored));

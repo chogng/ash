@@ -24,7 +24,7 @@ async function iconFixture(t: TestContext) {
 }
 
 test('icon generation watches formatter configuration and implementation', async () => {
-	const inputs = [join(repository, '.prettierrc.toml'), join(repository, 'build/lib/generatedTypeScript.ts')];
+	const inputs = [join(repository, 'tsfmt.json'), join(repository, '.prettierrc.toml'), join(repository, 'build/format.ts'), join(repository, 'build/lib/generatedTypeScript.ts')];
 	const watched: string[] = [];
 	const watcher = Object.assign(new EventEmitter(), {
 		add(path: string) {
@@ -36,7 +36,7 @@ test('icon generation watches formatter configuration and implementation', async
 	const close = plugin.closeBundle;
 	if (typeof close !== 'function') throw new Error('Missing plugin cleanup');
 	try {
-		plugin.configureServer({ watcher, httpServer, ws: { send() {} }, config: { logger: { error() {} } } });
+		plugin.configureServer({ watcher, httpServer, ws: { send() { } }, config: { logger: { error() { } } } });
 		for (const file of inputs) {
 			assert.ok(watched.includes(file));
 			assert.deepEqual(plugin.handleHotUpdate({ file }), []);
@@ -57,7 +57,7 @@ test('all resource plugins remove subscriptions and cancel pending generation on
 	];
 	for (const { create, path } of plugins) {
 		for (const middleware of [false, true]) {
-			const watcher = Object.assign(new EventEmitter(), { add() {} });
+			const watcher = Object.assign(new EventEmitter(), { add() { } });
 			const httpServer = middleware ? null : new EventEmitter();
 			const server = {
 				watcher,
@@ -173,7 +173,7 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 	assert.equal(parseInt(manifest.codepoints['watch-first'], 16), Math.max(...Object.values(original.codepoints).map(value => parseInt(String(value), 16))) + 1);
 	assert.equal(parseInt(manifest.codepoints['watch-second'], 16), parseInt(manifest.codepoints['watch-first'], 16) + 1);
 	assert.equal(manifest.color['watch-second'], 'Source solid colors or opacity');
-	assert.match(await readFile(fixture.outputFile, 'utf8'), /watchFirst: registerLxicon\('watch-first', 0x[\da-f]+\)/);
+	assert.match(await readFile(fixture.outputFile, 'utf8'), /watchFirst: registerLxicon\("watch-first", 0x[\da-f]+\)/);
 	const python = join(repository, '.build/product-icon-font/venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 	const { stdout } = await execute(python, [
 		'-c',

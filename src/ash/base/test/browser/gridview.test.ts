@@ -29,25 +29,16 @@ test('GridView delivers physical boundary sashes through nested axes and clears 
 	try {
 		class BoundaryView extends TestView {
 			boundaries: IBoundarySashes = {};
-			setBoundarySashes(sashes: IBoundarySashes): void {
-				this.boundaries = sashes;
-			}
+			setBoundarySashes(sashes: IBoundarySashes): void { this.boundaries = sashes; }
 		}
 		const topLeft = new BoundaryView(dom.window.document, 'topLeft');
 		const bottomLeft = new BoundaryView(dom.window.document, 'bottomLeft');
 		const topRight = new BoundaryView(dom.window.document, 'topRight');
 		const bottomRight = new BoundaryView(dom.window.document, 'bottomRight');
 		using grid = new GridView(dom.window.document.body, {
-			type: 'branch',
-			orientation: 'horizontal',
-			size: 800,
-			children: [
-				[topLeft, bottomLeft],
-				[topRight, bottomRight],
-			].map(views => ({
-				type: 'branch',
-				orientation: 'vertical',
-				size: 400,
+			type: 'branch', orientation: 'horizontal', size: 800,
+			children: [[topLeft, bottomLeft], [topRight, bottomRight]].map(views => ({
+				type: 'branch', orientation: 'vertical', size: 400,
 				children: views.map(view => ({ type: 'leaf', view, size: 200 })),
 			})),
 		});
@@ -83,9 +74,7 @@ test('GridView sash updates lay out only leaves whose geometry changes', () => {
 		const editor = new TestView(dom.window.document, 'editor', 100);
 		const chat = new TestView(dom.window.document, 'chat', 100);
 		using grid = new GridView(dom.window.document.body, {
-			type: 'branch',
-			orientation: 'horizontal',
-			size: 800,
+			type: 'branch', orientation: 'horizontal', size: 800,
 			children: [
 				{ type: 'leaf', view: sidebar, size: 200 },
 				{ type: 'leaf', view: editor, size: 400 },
@@ -98,26 +87,17 @@ test('GridView sash updates lay out only leaves whose geometry changes', () => {
 		sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 600 }));
 		dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 640 }));
 		dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 640 }));
-		assert.deepEqual(
-			[sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!),
-			[0, 1, 1],
-		);
+		assert.deepEqual([sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!), [0, 1, 1]);
 		assert.deepEqual(editor.layouts.at(-1), { width: 440, height: 400, top: 0, left: 200 });
 		assert.deepEqual(chat.layouts.at(-1), { width: 160, height: 400, top: 0, left: 640 });
 		Object.defineProperty(editor, 'minimumWidth', { value: 110 });
 		sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 640 }));
 		dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 640 }));
 		dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 640 }));
-		assert.deepEqual(
-			[sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!),
-			[0, 2, 1],
-		);
+		assert.deepEqual([sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!), [0, 2, 1]);
 		// Explicit refresh must still reach content whose inset or constraints changed.
 		grid.layout(800, 400);
-		assert.deepEqual(
-			[sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!),
-			[1, 3, 2],
-		);
+		assert.deepEqual([sidebar, editor, chat].map((view, index) => view.layouts.length - initialLayouts[index]!), [1, 3, 2]);
 	} finally {
 		dom.window.close();
 	}
@@ -215,7 +195,9 @@ test('GridView removes an empty nested branch', () => {
 				type: 'branch',
 				orientation: 'vertical',
 				size: 200,
-				children: [{ type: 'leaf', view: nested, size: 400 }],
+				children: [
+					{ type: 'leaf', view: nested, size: 400 },
+				],
 			},
 			{ type: 'leaf', view: editor, size: 400 },
 		],

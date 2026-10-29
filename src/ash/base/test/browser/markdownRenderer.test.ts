@@ -19,10 +19,7 @@ suite('Shared Markdown content preservation', () => {
 	});
 
 	test('standard HTML tables and disclosure content use the shared sanitizer', () => {
-		using result = renderMarkdown({
-			value: '<details onclick="globalThis.auditXss = true"><summary>Details</summary><table><tr><td>Cell</td></tr></table>H<sub>2</sub>O<script>globalThis.auditXss = true</script></details>',
-			supportHtml: true,
-		});
+		using result = renderMarkdown({ value: '<details onclick="globalThis.auditXss = true"><summary>Details</summary><table><tr><td>Cell</td></tr></table>H<sub>2</sub>O<script>globalThis.auditXss = true</script></details>', supportHtml: true });
 		assert.equal(result.element.querySelector('summary')?.textContent, 'Details');
 		assert.equal(result.element.querySelector('td')?.textContent, 'Cell');
 		assert.equal(result.element.querySelector('sub')?.textContent, '2');
@@ -30,9 +27,7 @@ suite('Shared Markdown content preservation', () => {
 	});
 
 	test('plain text retains HTML block children and image descriptions without executable content', () => {
-		const text = renderAsPlaintext(
-			'<details><summary>Heading</summary><table><tr><td>Name</td><td>Value</td></tr></table><script>hidden()</script></details>\n\n![Diagram](https://example.com/image)',
-		);
+		const text = renderAsPlaintext('<details><summary>Heading</summary><table><tr><td>Name</td><td>Value</td></tr></table><script>hidden()</script></details>\n\n![Diagram](https://example.com/image)');
 		assert.match(text, /Heading\nName\tValue[\s\S]*Diagram/u);
 		assert.doesNotMatch(text, /<details|<td|hidden/u);
 	});

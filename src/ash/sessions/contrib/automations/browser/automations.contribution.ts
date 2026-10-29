@@ -20,8 +20,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('automations.notifySuccess', 'Notify when an automation completes'),
-		description: localize('automations.notifyDescription', 'Show successful automation results in this window. Failures and requests for input are always notified while the window is open.'),
-	},
+		description: localize('automations.notifyDescription', 'Show successful automation results in this window. Failures and requests for input are always notified while the window is open.')
+	}
 });
 
 registerSingleton(IAutomationService, ProviderAutomationService, InstantiationType.Delayed);

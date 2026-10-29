@@ -50,9 +50,7 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await quick.select('Summarize with the current task model');
 	await quick.select('Continue — generate draft');
 	await expect(quick.input).toHaveAttribute('placeholder', /0\/0 sessions/u);
-	const entry = quick.items.filter({
-		has: page.locator('.ash-quick-pick-row-label').getByText('package.json', { exact: true }),
-	});
+	const entry = quick.items.filter({ has: page.locator('.ash-quick-pick-row-label').getByText('package.json', { exact: true }) });
 	await expect(entry).toContainText('Pending review');
 	await expect(entry).toContainText('pnpm build');
 	await quick.select('package.json');

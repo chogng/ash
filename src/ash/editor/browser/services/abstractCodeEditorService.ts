@@ -206,15 +206,7 @@ class DecorationRegistration extends AbstractDisposable {
 	private readonly modelOptions: IModelDecorationOptions;
 	private readonly style: HTMLStyleElement | undefined;
 
-	constructor(
-		description: string,
-		key: string,
-		options: IDecorationRenderOptions,
-		parent: IModelDecorationOptions | undefined,
-		editor: ICodeEditor | undefined,
-		private readonly parentKey: string | undefined,
-		private readonly resolveParent: (key: string) => IModelDecorationOptions,
-	) {
+	constructor(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined, editor: ICodeEditor | undefined, private readonly parentKey: string | undefined, private readonly resolveParent: (key: string) => IModelDecorationOptions) {
 		super();
 		const rendered = renderDecoration(description, key, options, parent);
 		this.modelOptions = rendered.options;
@@ -246,11 +238,7 @@ class DecorationRegistration extends AbstractDisposable {
 export class ModelTransientSettingWatcher extends Disposable {
 	private readonly values = new Map<string, unknown>();
 
-	constructor(
-		readonly uri: string,
-		model: ITextModel,
-		owner: AbstractCodeEditorService,
-	) {
+	constructor(readonly uri: string, model: ITextModel, owner: AbstractCodeEditorService) {
 		super();
 		this._register(model.onWillDispose(() => owner.removeTransientWatcher(this)));
 	}
@@ -295,7 +283,7 @@ function createStyle(editor?: ICodeEditor): HTMLStyleElement | undefined {
 	return style;
 }
 
-function renderDecoration(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined): { options: IModelDecorationOptions; rules: string[] } {
+function renderDecoration(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined): { options: IModelDecorationOptions; rules: string[]; } {
 	const name = `ash-decoration-${safeName(key)}`;
 	const rules: string[] = [];
 	if (parent) {
@@ -325,12 +313,10 @@ function renderDecoration(description: string, key: string, options: IDecoration
 		fontWeight: options.fontWeight,
 		fontStyle: options.fontStyle,
 		stickiness: options.rangeBehavior,
-		overviewRuler: options.overviewRulerColor
-			? {
-					color: options.overviewRulerColor,
-					position: options.overviewRulerLane ?? OverviewRulerLane.Center,
-				}
-			: undefined,
+		overviewRuler: options.overviewRulerColor ? {
+			color: options.overviewRulerColor,
+			position: options.overviewRulerLane ?? OverviewRulerLane.Center,
+		} : undefined,
 	};
 	const before = renderInjectedText(rules, `${name}-before-injected`, options.beforeInjectedText, options.light?.beforeInjectedText, options.dark?.beforeInjectedText);
 	const after = renderInjectedText(rules, `${name}-after-injected`, options.afterInjectedText, options.light?.afterInjectedText, options.dark?.afterInjectedText);
@@ -365,13 +351,7 @@ function renderClass(rules: string[], className: string, options: IDecorationRen
 	return className;
 }
 
-function renderInjectedText(
-	rules: string[],
-	className: string,
-	options: IThemeDecorationRenderOptions['beforeInjectedText'],
-	light: IThemeDecorationRenderOptions['beforeInjectedText'],
-	dark: IThemeDecorationRenderOptions['beforeInjectedText'],
-): InjectedTextOptions | undefined {
+function renderInjectedText(rules: string[], className: string, options: IThemeDecorationRenderOptions['beforeInjectedText'], light: IThemeDecorationRenderOptions['beforeInjectedText'], dark: IThemeDecorationRenderOptions['beforeInjectedText']): InjectedTextOptions | undefined {
 	if (!options?.contentText) {
 		return undefined;
 	}
@@ -463,7 +443,7 @@ function uriComponentsToString(value: import('../../../base/common/uri.js').UriC
 	return `${value.scheme}:${authority}${value.path ?? ''}${query}${fragment}`;
 }
 
-function addCss(target: string[], name: string, value: string | number | { id: string } | undefined): void {
+function addCss(target: string[], name: string, value: string | number | { id: string; } | undefined): void {
 	if (value === undefined) {
 		return;
 	}

@@ -1,17 +1,6 @@
 import { Emitter, type Event } from '../../../src/ash/base/common/event.js';
 import { createUuid } from '../../../src/ash/base/common/uuid.js';
-import {
-	emptyPdfAnnotationDocument,
-	parsePdfAnnotationDocument,
-	serializePdfAnnotationDocument,
-	type PdfAnnotation,
-	type PdfAnnotationDocument,
-	type PdfAnnotationPoint,
-	type PdfAnnotationRect,
-	type PdfHighlightAnnotation,
-	type PdfInkAnnotation,
-	type PdfNoteAnnotation,
-} from '../common/pdfAnnotations.js';
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument, type PdfAnnotation, type PdfAnnotationDocument, type PdfAnnotationPoint, type PdfAnnotationRect, type PdfHighlightAnnotation, type PdfInkAnnotation, type PdfNoteAnnotation } from '../common/pdfAnnotations.js';
 import type { PdfAnnotationSnapshot } from './pdfAnnotationStore.js';
 
 export type PdfAnnotationColor = string;
@@ -74,20 +63,14 @@ export class PdfAnnotationModel {
 	}
 
 	updateNote(id: string, text: string, now = new Date()): void {
-		const annotation = this.document.annotations.find(candidate => candidate.id === id);
+		const annotation = this.document.annotations.find((candidate) => candidate.id === id);
 		if (!annotation || annotation.kind !== 'note') return;
-		this.apply({
-			version: this.document.version,
-			annotations: this.document.annotations.map(candidate => (candidate.id === id ? { ...candidate, text, updatedAt: now.toISOString() } : candidate)),
-		});
+		this.apply({ version: this.document.version, annotations: this.document.annotations.map((candidate) => candidate.id === id ? { ...candidate, text, updatedAt: now.toISOString() } : candidate) });
 	}
 
 	remove(id: string): void {
-		if (!this.document.annotations.some(annotation => annotation.id === id)) return;
-		this.apply({
-			version: this.document.version,
-			annotations: this.document.annotations.filter(annotation => annotation.id !== id),
-		});
+		if (!this.document.annotations.some((annotation) => annotation.id === id)) return;
+		this.apply({ version: this.document.version, annotations: this.document.annotations.filter((annotation) => annotation.id !== id) });
 	}
 
 	undo(): void {
@@ -123,12 +106,7 @@ export class PdfAnnotationModel {
 
 	private add(annotation: NewPdfAnnotation, now: Date): PdfAnnotation {
 		const timestamp = now.toISOString();
-		const created = {
-			...annotation,
-			id: createUuid(),
-			createdAt: timestamp,
-			updatedAt: timestamp,
-		} as PdfAnnotation;
+		const created = { ...annotation, id: createUuid(), createdAt: timestamp, updatedAt: timestamp } as PdfAnnotation;
 		this.apply({ version: this.document.version, annotations: [...this.document.annotations, created] });
 		return created;
 	}
@@ -144,7 +122,9 @@ export class PdfAnnotationModel {
 }
 
 type NewPdfAnnotation =
-	Omit<PdfHighlightAnnotation, 'id' | 'createdAt' | 'updatedAt'> | Omit<PdfInkAnnotation, 'id' | 'createdAt' | 'updatedAt'> | Omit<PdfNoteAnnotation, 'id' | 'createdAt' | 'updatedAt'>;
+	| Omit<PdfHighlightAnnotation, 'id' | 'createdAt' | 'updatedAt'>
+	| Omit<PdfInkAnnotation, 'id' | 'createdAt' | 'updatedAt'>
+	| Omit<PdfNoteAnnotation, 'id' | 'createdAt' | 'updatedAt'>;
 
 function clone(document: PdfAnnotationDocument): PdfAnnotationDocument {
 	return parsePdfAnnotationDocument(serializePdfAnnotationDocument(document));

@@ -43,10 +43,7 @@ interface ResolvedOptions {
 }
 
 export class OverlayWidgetDelegate implements IOverlayWidget {
-	constructor(
-		private readonly _id: string,
-		private readonly _domNode: HTMLElement,
-	) {}
+	constructor(private readonly _id: string, private readonly _domNode: HTMLElement) { }
 
 	getId(): string {
 		return this._id;
@@ -146,15 +143,7 @@ export abstract class ZoneWidget extends Disposable {
 		this.hide();
 		this._isShowing = true;
 		this.heightInLines = this.limitHeightInLines(heightInLines);
-		this.anchor.set([
-			{
-				range,
-				options: {
-					description: 'zone-widget-position',
-					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				},
-			},
-		]);
+		this.anchor.set([{ range, options: { description: 'zone-widget-position', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } }]);
 		const viewZone: IViewZone = {
 			afterLineNumber: range.startLineNumber,
 			afterColumn: range.startColumn,
@@ -192,15 +181,7 @@ export abstract class ZoneWidget extends Disposable {
 		const model = this.editor.getModel();
 		if (!model) throw new Error('Zone widget requires an editor model');
 		model.validateRange(range);
-		this.anchor.set([
-			{
-				range,
-				options: {
-					description: 'zone-widget-position',
-					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				},
-			},
-		]);
+		this.anchor.set([{ range, options: { description: 'zone-widget-position', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } }]);
 		this.heightInLines = this.limitHeightInLines(heightInLines);
 		this.layoutZone();
 	}
@@ -237,10 +218,10 @@ export abstract class ZoneWidget extends Disposable {
 	}
 
 	protected _getMaximumHeightInLines(): number {
-		return Math.max(12, (this.editor.getLayoutInfo().height / this.editor.getOption(EditorOption.lineHeight)) * 0.8);
+		return Math.max(12, this.editor.getLayoutInfo().height / this.editor.getOption(EditorOption.lineHeight) * 0.8);
 	}
 
-	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number } {
+	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number; } {
 		return { minLines: 5, maxLines: 35 };
 	}
 
@@ -251,7 +232,7 @@ export abstract class ZoneWidget extends Disposable {
 		this.layoutZone();
 	}
 
-	protected _onWidth(_widthInPixels: number): void {}
+	protected _onWidth(_widthInPixels: number): void { }
 
 	protected abstract _fillContainer(container: HTMLElement): void;
 	protected abstract _doLayout(heightInPixels: number, widthInPixels: number): void;
@@ -275,7 +256,7 @@ export abstract class ZoneWidget extends Disposable {
 	protected _decoratingElementsHeight(): number {
 		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const arrowHeight = this.options.showArrow ? Math.round(lineHeight / 3) : 0;
-		const frameWidth = this.options.showFrame ? (this.options.frameWidth ?? Math.round(lineHeight / 9)) : 0;
+		const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
 		return 2 * arrowHeight + 2 * frameWidth;
 	}
 
@@ -326,7 +307,7 @@ export abstract class ZoneWidget extends Disposable {
 		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const widthInPixels = this._getWidth(layout);
 		const arrowHeight = this.options.showArrow ? Math.round(lineHeight / 3) : 0;
-		const frameWidth = this.options.showFrame ? (this.options.frameWidth ?? Math.round(lineHeight / 9)) : 0;
+		const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
 		const containerHeight = Math.max(0, heightInPixels - 2 * arrowHeight - 2 * frameWidth);
 		// ViewZones already supplies the content origin, including a minimap on the left.
 		this.domNode.style.left = '0px';
@@ -361,17 +342,13 @@ export abstract class ZoneWidget extends Disposable {
 	private _initSash(): void {
 		const sash = this._register(new Sash(this.domNode, 'horizontal'));
 		this.resizeSash = sash;
-		this._register(
-			sash.onDidStart(() => {
-				this.resizeStartHeightInLines = this.heightInLines;
-			}),
-		);
+		this._register(sash.onDidStart(() => {
+			this.resizeStartHeightInLines = this.heightInLines;
+		}));
 		this._register(sash.onDidChange(event => this.handleSashChange(event)));
-		this._register(
-			sash.onDidEnd(() => {
-				this.resizeStartHeightInLines = undefined;
-			}),
-		);
+		this._register(sash.onDidEnd(() => {
+			this.resizeStartHeightInLines = undefined;
+		}));
 		this.updateSashState();
 	}
 

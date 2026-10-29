@@ -55,6 +55,7 @@
     "pnpm-workspace.yaml",
     "tsconfig.base.json",
     ".prettierrc.toml",
+    "tsfmt.json",
     ".prettierignore",
     ".editorconfig",
     ".gitignore",

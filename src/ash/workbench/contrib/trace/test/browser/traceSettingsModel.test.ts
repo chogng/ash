@@ -18,44 +18,24 @@ function field(model: TraceSettingsModel, id: string) {
 async function run(model: TraceSettingsModel, id: string): Promise<void> {
 	const action = field(model, id);
 	assert.equal(action.kind, 'action');
-	if (action.kind === 'action') {
-		await action.run();
-	}
+	if (action.kind === 'action') { await action.run(); }
 }
 
 function set(model: TraceSettingsModel, id: string, value: string | boolean): void {
 	const control = field(model, id);
-	if (control.kind === 'text' && typeof value === 'string') {
-		control.setValue(value);
-	} else if (control.kind === 'boolean' && typeof value === 'boolean') {
-		control.setValue(value);
-	} else {
-		assert.fail('Wrong field kind');
-	}
+	if (control.kind === 'text' && typeof value === 'string') { control.setValue(value); }
+	else if (control.kind === 'boolean' && typeof value === 'boolean') { control.setValue(value); }
+	else { assert.fail('Wrong field kind'); }
 }
 
 function services(trace: ITraceSettingsService): InstantiationService {
 	const result = new InstantiationService();
 	result.registerInstance(ITraceSettingsService, trace);
-	result.registerInstance(IAppServerRemoteAgentService, {
-		connectionState: 'connected',
-		connection: { kind: 'local', generation: 1 },
-		onDidChangeConnection: Event.None,
-		onDidChangeConnectionState: Event.None,
-		reconnect: async () => ({ kind: 'alreadyConnected' }),
-		rollbackRuntime: async () => ({ kind: 'cancelled' }),
-	});
+	result.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 	result.registerInstance(IFileDialogService, {
-		pickFolderAndOpen: async () => {
-			throw new Error('Unexpected folder open');
-		},
-		pickWorkspaceAndOpen: async () => {
-			throw new Error('Unexpected workspace open');
-		},
-		showOpenDialog: async () => [URI.file('/recordings')],
-		showSaveDialog: async () => undefined,
-		pickFileToSave: async () => undefined,
-		showSaveConfirm: async () => 2,
+		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+		showOpenDialog: async () => [URI.file('/recordings')], showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
 	return result;
 }
@@ -63,15 +43,8 @@ function services(trace: ITraceSettingsService): InstantiationService {
 suite('Execution trace settings model', () => {
 	test('saves against the backend revision and keeps running state distinct until restart', async () => {
 		let snapshot: TraceSettingsSnapshot = { revision: 7, configured: null, recording: { type: 'disabled' } };
-		const updates: { settings: TraceSettings; revision: number }[] = [];
-		using service = services({
-			onDidChange: Event.None,
-			read: async () => snapshot,
-			configure: async (settings, revision) => {
-				updates.push({ settings, revision });
-				snapshot = { ...snapshot, revision: 8, configured: settings };
-			},
-		});
+		const updates: { settings: TraceSettings; revision: number; }[] = [];
+		using service = services({ onDidChange: Event.None, read: async () => snapshot, configure: async (settings, revision) => { updates.push({ settings, revision }); snapshot = { ...snapshot, revision: 8, configured: settings }; } });
 		using model = service.createInstance(TraceSettingsModel);
 		model.setVisible(true);
 		await run(model, 'refresh');
@@ -92,11 +65,7 @@ suite('Execution trace settings model', () => {
 		using changes = new Emitter<void>();
 		const pending = new DeferredPromise<TraceSettingsSnapshot>();
 		let held = false;
-		using service = services({
-			onDidChange: changes.event,
-			read: async () => (held ? pending.p : { revision: 1, configured: null, recording: { type: 'disabled' } }),
-			configure: async () => assert.fail('Stale settings must not save'),
-		});
+		using service = services({ onDidChange: changes.event, read: async () => held ? pending.p : { revision: 1, configured: null, recording: { type: 'disabled' } }, configure: async () => assert.fail('Stale settings must not save') });
 		using model = service.createInstance(TraceSettingsModel);
 		model.setVisible(true);
 		await run(model, 'refresh');
@@ -108,11 +77,7 @@ suite('Execution trace settings model', () => {
 		held = true;
 		const reading = run(model, 'refresh');
 		model.setVisible(false);
-		await pending.complete({
-			revision: 2,
-			configured: { enabled: true, directory: '/late' },
-			recording: { type: 'enabled', directory: '/late' },
-		});
+		await pending.complete({ revision: 2, configured: { enabled: true, directory: '/late' }, recording: { type: 'enabled', directory: '/late' } });
 		await reading;
 		const directory = field(model, 'directory');
 		assert.ok(directory.kind === 'text' && directory.value === '/draft');

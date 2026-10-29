@@ -21,46 +21,36 @@ test('Explorer file nesting resolves captures, transitive children, and cycles',
 	});
 
 	const substitutions = new ExplorerFileNestingTrie([['package.json', ['${dirname}.lock', '${basename}.${extname}.bak']]]);
-	assert.deepEqual([...(substitutions.nest(['package.json', 'src.lock', 'package.json.bak'], 'src').get('package.json') ?? [])], ['src.lock', 'package.json.bak']);
+	assert.deepEqual([...substitutions.nest(['package.json', 'src.lock', 'package.json.bak'], 'src').get('package.json') ?? []], ['src.lock', 'package.json.bak']);
 });
 
 test('Explorer data source nests configured files and keeps folders separate', async () => {
 	const folder = URI.file('C:\\project');
 	const fileService = {
-		readDirectory: async () =>
-			['src', 'app.js', 'app.ts', 'readme.md'].map(name => ({
-				name,
-				resource: URI.file(`C:\\project\\${name}`),
-				kind: name === 'src' ? FileKind.Directory : FileKind.File,
-			})),
+		readDirectory: async () => ['src', 'app.js', 'app.ts', 'readme.md'].map(name => ({
+			name,
+			resource: URI.file(`C:\\project\\${name}`),
+			kind: name === 'src' ? FileKind.Directory : FileKind.File,
+		})),
 	} as unknown as IFileService;
 	let enabled = true;
 	const configuration = {
 		onDidChangeConfiguration: Event.None,
-		getValue: (key: string) => (key === ExplorerFileNestingSettingId.Enabled ? enabled : key === ExplorerFileNestingSettingId.Patterns ? { '*.ts': '${capture}.js' } : undefined),
+		getValue: (key: string) => key === ExplorerFileNestingSettingId.Enabled ? enabled : key === ExplorerFileNestingSettingId.Patterns ? { '*.ts': '${capture}.js' } : undefined,
 	} as IConfigurationService;
 	using workspace = new TestWorkspaceService({ id: 'project', uri: folder });
 	using source = new ExplorerDataSource(new FileSorter(configuration), fileService, configuration, workspace);
 	const root = new ExplorerItem(folder, 'project', FileKind.Directory);
 
 	const nested = await source.getChildren(root);
-	assert.deepEqual(
-		nested.map(item => [item.name, item.children?.map(child => child.name) ?? []]),
-		[
-			['src', []],
-			['app.ts', ['app.js']],
-			['readme.md', []],
-		],
-	);
+	assert.deepEqual(nested.map(item => [item.name, item.children?.map(child => child.name) ?? []]), [
+		['src', []],
+		['app.ts', ['app.js']],
+		['readme.md', []],
+	]);
 	assert.equal(source.hasChildren(nested[1]!), true);
-	assert.deepEqual(
-		(await source.getChildren(nested[1]!)).map(item => item.name),
-		['app.js'],
-	);
+	assert.deepEqual((await source.getChildren(nested[1]!)).map(item => item.name), ['app.js']);
 
 	enabled = false;
-	assert.deepEqual(
-		(await source.getChildren(root)).map(item => item.name),
-		['src', 'app.js', 'app.ts', 'readme.md'],
-	);
+	assert.deepEqual((await source.getChildren(root)).map(item => item.name), ['src', 'app.js', 'app.ts', 'readme.md']);
 });

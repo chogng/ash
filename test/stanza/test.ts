@@ -6,7 +6,7 @@ declare global {
 }
 
 /** Load only the built Stanza page; product modules must register their own dependencies. */
-export const test = base.extend<{ stanzaPage: Page }>({
+export const test = base.extend<{ stanzaPage: Page; }>({
 	stanzaPage: async ({ page }, use, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
@@ -20,11 +20,7 @@ export const test = base.extend<{ stanzaPage: Page }>({
 			await expect(page.locator('#editor-root .stanza-editor-input')).toBeVisible();
 			await use(page);
 		} finally {
-			if (errors.length)
-				await testInfo.attach('runtime-errors.json', {
-					body: JSON.stringify(errors, null, 2),
-					contentType: 'application/json',
-				});
+			if (errors.length) await testInfo.attach('runtime-errors.json', { body: JSON.stringify(errors, null, 2), contentType: 'application/json' });
 			expect.soft(errors, 'Stanza runtime and resource loading errors').toEqual([]);
 		}
 	},

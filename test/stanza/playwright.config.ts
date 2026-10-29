@@ -24,8 +24,7 @@ export default defineConfig({
 	projects: [
 		{ name: 'chromium', use: { browserName: 'chromium' } },
 		{
-			name: 'firefox',
-			use: {
+			name: 'firefox', use: {
 				browserName: 'firefox',
 				launchOptions: physicalFirefox && physicalFirefox !== installedFirefox ? { executablePath: physicalFirefox } : undefined,
 			},

@@ -13,7 +13,7 @@ interface DebugConsoleRecord {
 	revision: number;
 	owner: IDebugSession;
 	session: IDebugSession | undefined;
-	readonly members: Map<string, { readonly session: IDebugSession; readonly listener: IDisposable }>;
+	readonly members: Map<string, { readonly session: IDebugSession; readonly listener: IDisposable; }>;
 }
 /** Keeps read-only Rust console snapshots and selection independently of panel visibility. */
 export class ReplModel extends Disposable implements IReplModel {
@@ -21,18 +21,16 @@ export class ReplModel extends Disposable implements IReplModel {
 	private readonly outputNotification = this._register(new RunOnceScheduler(() => this.changeEmitter.fire(), 16));
 	private readonly records = new Map<string, DebugConsoleRecord>();
 	private activeSessionId: string | undefined;
-	private consoleCatalog: { readonly revision: number; readonly ids: readonly string[] } | undefined;
+	private consoleCatalog: { readonly revision: number; readonly ids: readonly string[]; } | undefined;
 	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(private readonly debug: IDebugService) {
 		super();
 		this._register(debug.onDidChangeSession(() => this.synchronize()));
-		this._register(
-			toDisposable(() => {
-				for (const record of this.records.values()) for (const member of record.members.values()) member.listener.dispose();
-				this.records.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const record of this.records.values()) for (const member of record.members.values()) member.listener.dispose();
+			this.records.clear();
+		}));
 		this.synchronize();
 	}
 
@@ -67,13 +65,13 @@ export class ReplModel extends Disposable implements IReplModel {
 
 	async evaluate(expression: string): Promise<void> {
 		const normalized = expression.trim();
-		if (!normalized || normalized.length > 32_768 || normalized.includes('\0'))
-			throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
+		if (!normalized || normalized.length > 32_768 || normalized.includes('\0')) throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
 		const record = this.activeSessionId ? this.records.get(this.activeSessionId) : undefined;
 		if (!record?.session) throw new Error(localize('debug.repl.activeRequired', 'Debug Console requires an active session'));
 		const session = record.session;
 		// Capture the selected frame at submission; frame IDs belong to one paused adapter session.
-		const frame = this.debug.session === session && session.state === 'stopped' ? this.debug.getViewModel().focusedStackFrame : undefined;
+		const frame = this.debug.session === session && session.state === 'stopped'
+			? this.debug.getViewModel().focusedStackFrame : undefined;
 		await session.evaluate(normalized, frame?.id, 'repl');
 		if (this.isDisposed) return;
 		if (session.replElementsRevision >= record.revision) {
@@ -95,7 +93,8 @@ export class ReplModel extends Disposable implements IReplModel {
 		for (const session of active.values()) this.ensureRecord(session);
 		for (const record of this.records.values()) {
 			const selected = this.debug.session;
-			record.session = selected && record.members.has(selected.id) ? selected : (record.members.get(record.id)?.session ?? [...record.members.values()].at(-1)?.session);
+			record.session = selected && record.members.has(selected.id)
+				? selected : record.members.get(record.id)?.session ?? [...record.members.values()].at(-1)?.session;
 			if (record.session) record.state = record.session.state;
 			else if (record.state !== 'error') record.state = 'terminated';
 		}
@@ -110,22 +109,10 @@ export class ReplModel extends Disposable implements IReplModel {
 		const owner = this.debug.sessions.find(candidate => candidate.id === session.consoleSessionId) ?? session;
 		let record = this.records.get(session.consoleSessionId);
 		if (!record) {
-			record = {
-				id: session.consoleSessionId,
-				label: owner.name,
-				state: owner.state,
-				elements: session.getReplElements(),
-				revision: session.replElementsRevision,
-				owner: session,
-				session,
-				members: new Map(),
-			};
+			record = { id: session.consoleSessionId, label: owner.name, state: owner.state, elements: session.getReplElements(), revision: session.replElementsRevision, owner: session, session, members: new Map() };
 			this.records.set(record.id, record);
 		}
-		if (session.id === record.id) {
-			record.owner = session;
-			record.label = session.name;
-		}
+		if (session.id === record.id) { record.owner = session; record.label = session.name; }
 		if (record.members.has(session.id)) return record;
 		// A later-published parent may carry an older snapshot than its child.
 		// Fresh connection scopes use new session IDs even if their clock restarts.
@@ -168,12 +155,5 @@ export class ReplModel extends Disposable implements IReplModel {
 }
 
 function snapshot(record: DebugConsoleRecord): IDebugConsoleSession {
-	return Object.freeze({
-		id: record.id,
-		label: record.label,
-		state: record.state,
-		elements: record.elements,
-		output: record.elements.map(entry => entry.output).join(''),
-		canEvaluate: record.session !== undefined,
-	});
+	return Object.freeze({ id: record.id, label: record.label, state: record.state, elements: record.elements, output: record.elements.map(entry => entry.output).join(''), canEvaluate: record.session !== undefined });
 }

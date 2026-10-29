@@ -17,11 +17,7 @@ suite('InMemoryFileSystemProvider', () => {
 		read.bytes[1] = 99;
 		assert.deepEqual((await files.readFile(resource)).bytes, new Uint8Array([1, 2, 3]));
 		await assert.rejects(other.readFile(resource), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound);
-		await files.writeFile(resource, new Uint8Array([4]), {
-			create: false,
-			overwrite: true,
-			expectedRevision: saved.revision,
-		});
+		await files.writeFile(resource, new Uint8Array([4]), { create: false, overwrite: true, expectedRevision: saved.revision });
 		await assert.rejects(files.writeFile(resource, bytes, { create: false, overwrite: true, expectedRevision: saved.revision }), FileRevisionConflictError);
 		assert.deepEqual((await files.readFile(resource)).bytes, new Uint8Array([4]));
 	});
@@ -43,10 +39,7 @@ suite('InMemoryFileSystemProvider', () => {
 		await assert.rejects(files.delete(moved, 'error', 'fileOrEmptyDirectory'));
 		await files.delete(moved, 'error', 'recursive');
 		assert.equal((await files.stat(source)).kind, FileKind.File);
-		assert.deepEqual(recorded.slice(0, 2), [
-			[folder.path, copy.path],
-			[copy.path, moved.path],
-		]);
+		assert.deepEqual(recorded.slice(0, 2), [[folder.path, copy.path], [copy.path, moved.path]]);
 		assert.ok(recorded[2]?.includes('/sample/moved/index.ts'));
 		await assert.rejects(files.stat(URI.joinPath(moved, 'index.ts')));
 	});

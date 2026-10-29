@@ -137,7 +137,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 }
 
 export function toFormattedString(value: unknown, options: FormattingOptions = {}): string {
-	const content = JSON.stringify(value, undefined, options.insertSpaces ? (options.tabSize ?? 4) : '\t');
+	const content = JSON.stringify(value, undefined, options.insertSpaces ? options.tabSize ?? 4 : '\t');
 	if (content === undefined) throw new TypeError('JSON value must be serializable');
 	return options.eol === undefined ? content : content.replace(/\r\n|\r|\n/gu, options.eol);
 }

@@ -30,11 +30,9 @@ import { TitlebarPart } from '../../browser/parts/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 class TestPart extends Part {
-	public getTabsHeight(): number {
-		return 35;
-	}
-	public setContentRightInset(_inset: number): void {}
-	public setEditorContentVisible(_visible: boolean): void {}
+	public getTabsHeight(): number { return 35; }
+	public setContentRightInset(_inset: number): void { }
+	public setEditorContentVisible(_visible: boolean): void { }
 	constructor(container: HTMLElement, id: SessionsPartId) {
 		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
 		super(container, id, services.get(IThemeService), services.get(IStorageService));
@@ -52,13 +50,8 @@ test('Sessions titlebar initializes localized actions and closes the application
 	services.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, contextKeys);
 	using resources = new DisposableStore();
-	using fileCommand = MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
-		command: { id: 'test.sessions.titlebar', title: 'Test command' },
-	});
-	using fileMenu = MenusRegistry.appendMenuItem(Menus.MenubarMainMenu, {
-		title: 'File',
-		submenu: Menus.MenubarFileMenu,
-	});
+	using fileCommand = MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, { command: { id: 'test.sessions.titlebar', title: 'Test command' } });
+	using fileMenu = MenusRegistry.appendMenuItem(Menus.MenubarMainMenu, { title: 'File', submenu: Menus.MenubarFileMenu });
 	let onHide: (() => void) | undefined;
 	let closedMenus = 0;
 	const contextMenus: IContextMenuService = {
@@ -67,10 +60,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) {
 			onHide = () => delegate.onHide?.(false);
-			assert.deepEqual(
-				delegate.getActions?.().map(action => action.label),
-				['File'],
-			);
+			assert.deepEqual(delegate.getActions?.().map(action => action.label), ['File']);
 		},
 		hideContextMenu() {
 			closedMenus++;
@@ -80,40 +70,30 @@ test('Sessions titlebar initializes localized actions and closes the application
 	};
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
-		getSelection() {
-			return { visibleSelections: [], activeSelection: undefined };
-		},
-		async openThread() {},
+		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
 		canNavigateForward: false,
-		async initialize() {},
-		openSession() {},
-		openUntitledSession() {},
-		openNewSession() {
-			throw new Error('This scenario does not create sessions');
-		},
-		activateSelection() {},
-		closeVisibleSelection() {},
-		navigateBack() {},
-		navigateForward() {},
+		async initialize() { },
+		openSession() { },
+		openUntitledSession() { },
+		openNewSession() { throw new Error('This scenario does not create sessions'); },
+		activateSelection() { },
+		closeVisibleSelection() { },
+		navigateBack() { },
+		navigateForward() { },
 	};
 	using configuration = new TestConfigurationService();
 	using contextViews = new BrowserContextViewService(browser.window.document.body);
 	using hovers = new HoverService(configuration, contextViews, contextMenus);
 	services.registerInstance(IHoverService, hovers);
 	setNlsResolver((bundle, key, fallback) => {
-		if (bundle === 'ash.regions' && key === 'applicationMenu') {
-			return '应用程序菜单';
-		}
-		if (bundle === 'ash.regions' && key === 'titleBarLeftActions') {
-			return '标题栏左侧操作';
-		}
-		if (key === 'sessions.navigation.hideSidebar') {
-			return '隐藏侧栏';
-		}
+		if (bundle === 'ash.regions' && key === 'applicationMenu') { return '应用程序菜单'; }
+		if (bundle === 'ash.regions' && key === 'titleBarLeftActions') { return '标题栏左侧操作'; }
+		if (key === 'sessions.navigation.hideSidebar') { return '隐藏侧栏'; }
 		return fallback;
 	});
 	services.registerInstance(IMenuService, menus);
@@ -158,28 +138,18 @@ test('Sessions titlebar initializes localized actions and closes the application
 		menuButton().click();
 
 		assert.equal(closedMenus, 1);
-		assert.deepEqual(
-			[...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-			['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel'],
-		);
+		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);
 		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
-		assert.deepEqual(
-			[...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-			['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel'],
-		);
+		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel']);
 		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
 		sidebarToggle.click();
 		assert.equal(systemMenuTitlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!.getAttribute('aria-pressed'), 'false');
 		systemMenuTitlebar.dispose();
 		using collapsedTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
-		assert.equal(
-			collapsedTitlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!.hidden,
-			true,
-			'A titlebar created with a collapsed sidebar starts without workspace controls',
-		);
+		assert.equal(collapsedTitlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!.hidden, true, 'A titlebar created with a collapsed sidebar starts without workspace controls');
 		collapsedTitlebar.dispose();
 		actions.dispose();
 		assert.equal(changed.hasListeners(), false);
@@ -208,12 +178,8 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 	using resources = new DisposableStore();
 	class ResizableTitlebar extends TestPart {
 		private height = 35;
-		override get minimumHeight(): number {
-			return this.height;
-		}
-		override get maximumHeight(): number {
-			return this.height;
-		}
+		override get minimumHeight(): number { return this.height; }
+		override get maximumHeight(): number { return this.height; }
 		setHeight(height: number): void {
 			this.height = height;
 			this.notifyConstraintsChanged();
@@ -232,23 +198,8 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 	}
 });
 
-function createLayout(
-	container: HTMLElement,
-	parts: ReadonlyMap<SessionsPartId, Part>,
-	options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & {
-		storageService?: import('../../../platform/storage/common/storage.js').IStorageService;
-	} = {},
-): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService
-		? undefined
-		: layoutTestResources.add(
-				new BrowserStorageService({
-					ownerWindow: container.ownerDocument.defaultView!,
-					workspaceId: 'sessions',
-					flushInterval: 0,
-					onError: () => {},
-				}),
-			);
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

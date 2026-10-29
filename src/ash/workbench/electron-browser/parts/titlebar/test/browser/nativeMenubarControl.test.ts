@@ -27,16 +27,28 @@ test('failed menubar updates retain the last installed revision', async () => {
 		},
 	} as ICommandService;
 	using contextKeys = new ContextKeyService();
-	const alternate = new MenuItemAction({ id: 'save-as', title: 'Save As' }, undefined, undefined, contextKeys, commandService);
-	const primary = new MenuItemAction({ id: 'save', title: 'Save' }, alternate, undefined, contextKeys, commandService);
+	const alternate = new MenuItemAction(
+		{ id: 'save-as', title: 'Save As' },
+		undefined,
+		undefined,
+		contextKeys,
+		commandService,
+	);
+	const primary = new MenuItemAction(
+		{ id: 'save', title: 'Save' },
+		alternate,
+		undefined,
+		contextKeys,
+		commandService,
+	);
 	const menu = {
 		onDidChange: changes.event,
 		getActions: () => [['navigation', [new SubmenuAction('file', 'File', [primary])]]] as const,
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	const menuService = {
-		createMenu: (id: MenuId) => (id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] }),
+		createMenu: (id: MenuId) => id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },
 		getMenuActions: () => [],
 	} as unknown as IMenuService;
 	const api: IMenubarService = {

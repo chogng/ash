@@ -6,43 +6,16 @@ import { EditorInput } from '../../../common/editor/editorInput.js';
 export class CustomEditorInput extends EditorInput {
 	public static readonly ID = 'workbench.editors.customEditorInput';
 	public readonly typeId = CustomEditorInput.ID;
-	constructor(
-		private readonly source: IResourceEditorInput,
-		public override readonly editorId: string,
-	) {
-		super();
-	}
-	public get resource(): IResourceEditorInput['resource'] {
-		return this.source.resource;
-	}
-	public get languageId(): string | undefined {
-		return this.source.languageId;
-	}
-	public get contentType(): string | undefined {
-		return this.source.contentType;
-	}
-	public get initialText(): string | undefined {
-		return this.source.initialText;
-	}
-	public get readOnly(): boolean | undefined {
-		return this.source.readOnly;
-	}
-	public get capabilities(): IResourceEditorInput['capabilities'] {
-		return this.source.capabilities;
-	}
-	public get showBreadcrumbs(): boolean | undefined {
-		return this.source.showBreadcrumbs;
-	}
-	public getIcon(): ReturnType<NonNullable<IResourceEditorInput['getIcon']>> {
-		return this.source.getIcon?.();
-	}
-	public getName(): string {
-		return this.source.label ?? basename(this.resource);
-	}
-	public get onDidChangeLabel(): IResourceEditorInput['onDidChangeLabel'] {
-		return this.source.onDidChangeLabel;
-	}
-	public toUntyped(): IResourceEditorInput {
-		return this.source;
-	}
+	constructor(private readonly source: IResourceEditorInput, public override readonly editorId: string) { super(); }
+	public get resource(): IResourceEditorInput['resource'] { return this.source.resource; }
+	public get languageId(): string | undefined { return this.source.languageId; }
+	public get contentType(): string | undefined { return this.source.contentType; }
+	public get initialText(): string | undefined { return this.source.initialText; }
+	public get readOnly(): boolean | undefined { return this.source.readOnly; }
+	public get capabilities(): IResourceEditorInput['capabilities'] { return this.source.capabilities; }
+	public get showBreadcrumbs(): boolean | undefined { return this.source.showBreadcrumbs; }
+	public getIcon(): ReturnType<NonNullable<IResourceEditorInput['getIcon']>> { return this.source.getIcon?.(); }
+	public getName(): string { return this.source.label ?? basename(this.resource); }
+	public get onDidChangeLabel(): IResourceEditorInput['onDidChangeLabel'] { return this.source.onDidChangeLabel; }
+	public toUntyped(): IResourceEditorInput { return this.source; }
 }

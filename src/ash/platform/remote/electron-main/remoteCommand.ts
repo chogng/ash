@@ -57,9 +57,7 @@ export function runRemoteCommand(executable: string, args: readonly string[], en
 		if (signal?.aborted) abort();
 		child.stdout.setEncoding('utf8');
 		child.stderr.setEncoding('utf8');
-		child.stdout.on('data', chunk => {
-			stdout = appendBounded(stdout, String(chunk));
-		});
+		child.stdout.on('data', chunk => { stdout = appendBounded(stdout, String(chunk)); });
 		child.stderr.on('data', chunk => {
 			const text = String(chunk);
 			if (!observerFailed) {

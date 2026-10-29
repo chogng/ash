@@ -50,23 +50,12 @@ function prepare(options: TestOptions) {
 	const parser = new ConfigurationModelParser('test settings', log);
 	parser.parse(options.source ?? '{}');
 	if (parser.errors.length) throw new TypeError('Invalid test settings');
-	return {
-		files,
-		options: {
-			...options,
-			initialConfiguration: options.initialConfiguration ?? parser.configurationModel.toJSON(),
-		},
-	};
+	return { files, options: { ...options, initialConfiguration: options.initialConfiguration ?? parser.configurationModel.toJSON() } };
 }
 
 async function read(files: IFileService) {
-	try {
-		const file = await files.readFile(resource);
-		return { source: file.content, revision: file.revision };
-	} catch (error) {
-		if (error instanceof FileNotFoundError) return { source: '{}\n', revision: undefined };
-		throw error;
-	}
+	try { const file = await files.readFile(resource); return { source: file.content, revision: file.revision }; }
+	catch (error) { if (error instanceof FileNotFoundError) return { source: '{}\n', revision: undefined }; throw error; }
 }
 
 async function write(files: IFileService, source: string, expectedRevision?: string) {
@@ -85,9 +74,7 @@ export function testConfigurationService(Service: typeof WorkspaceService) {
 			this.fileService = prepared.files;
 			if (!options.files) this._register(prepared.files as TestConfigurationFiles);
 		}
-		read() {
-			return read(this.fileService);
-		}
+		read() { return read(this.fileService); }
 		async write(source: string, expectedRevision?: string) {
 			await write(this.fileService, source, expectedRevision);
 			await this.reloadConfiguration();

@@ -19,12 +19,8 @@ export function watchNativeFile(path: string, onChange: (event: WatchEventType) 
 		if (closed) return;
 		watcher?.close();
 		watcher = undefined;
-		try {
-			bind();
-		} catch (error) {
-			close();
-			onError(error as Error);
-		}
+		try { bind(); }
+		catch (error) { close(); onError(error as Error); }
 	}
 
 	function bind(): void {
@@ -42,16 +38,11 @@ export function watchNativeFile(path: string, onChange: (event: WatchEventType) 
 			missing = true;
 			// Only an absent file needs a registration retry. Existing files use
 			// native events; no directory stream or periodic stat scan is created.
-			retry = setTimeout(() => {
-				retry = undefined;
-				reopen();
-			}, 100);
+			retry = setTimeout(() => { retry = undefined; reopen(); }, 100);
 			return;
 		}
 		watcher = current;
-		current.on('error', () => {
-			if (!closed && watcher === current) reopen();
-		});
+		current.on('error', () => { if (!closed && watcher === current) reopen(); });
 		if (missing) {
 			missing = false;
 			onChange('rename');

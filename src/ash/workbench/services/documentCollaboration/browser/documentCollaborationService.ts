@@ -15,11 +15,7 @@ import { RemoteDocumentCollaborationService } from './remoteDocumentCollaboratio
 export class DocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly remote = this._register(new RemoteDocumentCollaborationService());
 
-	constructor(
-		private readonly appServer: IDocumentCollaborationService | undefined,
-		@IDialogService private readonly dialogs: IDialogService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) {
+	constructor(private readonly appServer: IDocumentCollaborationService | undefined, @IDialogService private readonly dialogs: IDialogService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		if (appServer) this._register(appServer);
 	}

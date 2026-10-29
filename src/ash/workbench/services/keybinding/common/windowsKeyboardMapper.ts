@@ -9,7 +9,10 @@ export class WindowsKeyboardMapper extends KeyboardMapper {
 	}
 
 	public dumpDebugInfo(): string {
-		const nativeKeys = Object.values(this.mapping).filter(entry => entry.vkey).length;
-		return this.dumpMappingTable('WindowsKeyboardMapper', `Mapped keys: ${Object.keys(this.mapping).length}; native virtual keys: ${nativeKeys}`);
+		const nativeKeys = Object.values(this.mapping).filter((entry) => entry.vkey).length;
+		return this.dumpMappingTable(
+			'WindowsKeyboardMapper',
+			`Mapped keys: ${Object.keys(this.mapping).length}; native virtual keys: ${nativeKeys}`,
+		);
 	}
 }

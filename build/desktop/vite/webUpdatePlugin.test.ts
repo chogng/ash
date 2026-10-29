@@ -18,10 +18,7 @@ test('Web deployments stamp the same content identity into both entry pages and 
 	await writeFile(join(root, 'style.css'), 'body{color:black}');
 	const compile = async (): Promise<string> => {
 		const result = await build({
-			configFile: false,
-			root,
-			base: './',
-			logLevel: 'silent',
+			configFile: false, root, base: './', logLevel: 'silent',
 			plugins: [webUpdatePlugin()],
 			build: { write: false, rolldownOptions: { input: entries.map(entry => join(root, entry)) } },
 		});

@@ -66,7 +66,9 @@ export class StandardMouseEvent implements IMouseEvent {
 		this.middleButton = browserEvent.button === 1;
 		this.rightButton = browserEvent.button === 2;
 		this.buttons = browserEvent.buttons;
-		this.detail = browserEvent.type === 'dblclick' ? 2 : browserEvent.detail || 1;
+		this.detail = browserEvent.type === 'dblclick'
+			? 2
+			: browserEvent.detail || 1;
 		this.clientX = browserEvent.clientX;
 		this.clientY = browserEvent.clientY;
 		this.pageX = browserEvent.clientX + (targetWindow?.scrollX ?? 0);
@@ -90,7 +92,10 @@ export class StandardMouseEvent implements IMouseEvent {
 		this.browserEvent.stopPropagation();
 	}
 
-	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void {
+	stop(options?: {
+		readonly preventDefault?: boolean;
+		readonly immediate?: boolean;
+	}): void {
 		stopEvent(this.browserEvent, options);
 	}
 }
@@ -98,7 +103,11 @@ export class StandardMouseEvent implements IMouseEvent {
 function eventWindow(event: UIEvent): Window | undefined {
 	if (event.view) return event.view;
 	const target = event.target;
-	if (target && typeof target === 'object' && 'ownerDocument' in target) {
+	if (
+		target &&
+		typeof target === 'object' &&
+		'ownerDocument' in target
+	) {
 		return (target as Node).ownerDocument?.defaultView ?? undefined;
 	}
 	return typeof window === 'undefined' ? undefined : window;
@@ -118,7 +127,9 @@ export class StandardPointerEvent extends StandardMouseEvent {
 		super(browserEvent);
 		this.pointerId = browserEvent.pointerId ?? 0;
 		this.pointerType = browserEvent.pointerType || 'mouse';
-		this.pressure = browserEvent.pressure ?? (browserEvent.buttons === 0 ? 0 : 0.5);
+		this.pressure = browserEvent.pressure ?? (
+			browserEvent.buttons === 0 ? 0 : 0.5
+		);
 		this.isPrimary = browserEvent.isPrimary ?? true;
 		this.width = browserEvent.width ?? 1;
 		this.height = browserEvent.height ?? 1;
@@ -161,7 +172,12 @@ export class StandardWheelEvent implements IMouseWheelEvent {
 		const lineHeight = positiveFinite(options.lineHeight, 16);
 		const pageWidth = positiveFinite(options.pageWidth, lineHeight * 10);
 		const pageHeight = positiveFinite(options.pageHeight, lineHeight * 10);
-		const factors = wheelDeltaFactors(browserEvent.deltaMode, lineHeight, pageWidth, pageHeight);
+		const factors = wheelDeltaFactors(
+			browserEvent.deltaMode,
+			lineHeight,
+			pageWidth,
+			pageHeight,
+		);
 		this.deltaX = finite(browserEvent.deltaX) * factors.x;
 		this.deltaY = finite(browserEvent.deltaY) * factors.y;
 		this.deltaZ = finite(browserEvent.deltaZ) * factors.z;
@@ -183,12 +199,20 @@ export class StandardWheelEvent implements IMouseWheelEvent {
 		this.browserEvent.stopPropagation();
 	}
 
-	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void {
+	stop(options?: {
+		readonly preventDefault?: boolean;
+		readonly immediate?: boolean;
+	}): void {
 		stopEvent(this.browserEvent, options);
 	}
 }
 
-function wheelDeltaFactors(deltaMode: number, lineHeight: number, pageWidth: number, pageHeight: number): { readonly x: number; readonly y: number; readonly z: number } {
+function wheelDeltaFactors(
+	deltaMode: number,
+	lineHeight: number,
+	pageWidth: number,
+	pageHeight: number,
+): { readonly x: number; readonly y: number; readonly z: number; } {
 	if (deltaMode === 1) {
 		return { x: lineHeight, y: lineHeight, z: lineHeight };
 	}
@@ -203,5 +227,7 @@ function finite(value: number): number {
 }
 
 function positiveFinite(value: number | undefined, fallback: number): number {
-	return isFiniteNumber(value) && value > 0 ? value : fallback;
+	return isFiniteNumber(value) && value > 0
+		? value
+		: fallback;
 }

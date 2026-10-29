@@ -39,7 +39,11 @@ export interface LanguageTokenResult {
 }
 
 export function createLanguageTokenStore(model: TextModel): VersionedLanguageResultStore<LanguageTokenResult> {
-	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(value, range => assertModelRange(currentModel, range, 'Language token'), true));
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(
+		value,
+		range => assertModelRange(currentModel, range, 'Language token'),
+		true,
+	));
 }
 
 export function createLanguageTokenSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageTokenResult) => LanguageTokenResult {
@@ -82,16 +86,14 @@ function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange:
 		const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, 'Language token embedded language ID');
 		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError('Language token balanced-bracket metadata can only exclude a range');
 		const presentation = token.presentation === undefined ? undefined : normalizePresentation(token.presentation);
-		tokens.push(
-			Object.freeze({
-				range: token.range,
-				tokenType: token.tokenType,
-				modifiers: Object.freeze(modifiers),
-				...(languageId === undefined ? {} : { languageId }),
-				...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
-				...(presentation === undefined ? {} : { presentation }),
-			}),
-		);
+		tokens.push(Object.freeze({
+			range: token.range,
+			tokenType: token.tokenType,
+			modifiers: Object.freeze(modifiers),
+			...(languageId === undefined ? {} : { languageId }),
+			...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
+			...(presentation === undefined ? {} : { presentation }),
+		}));
 		previousEnd = token.range.getEndPosition();
 	}
 	const result = Object.freeze({ tokens: Object.freeze(tokens) });
@@ -112,11 +114,7 @@ function normalizePresentation(value: LanguageTokenPresentation): LanguageTokenP
 		if (new Set(styles).size !== styles.length) throw new RangeError('Language token font styles must be unique');
 		fontStyle = Object.freeze(styles);
 	}
-	return Object.freeze({
-		...(foreground === undefined ? {} : { foreground }),
-		...(background === undefined ? {} : { background }),
-		...(fontStyle === undefined ? {} : { fontStyle }),
-	});
+	return Object.freeze({ ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
 }
 
 function normalizedColor(value: unknown, kind: string): string {
@@ -209,6 +207,6 @@ export interface SemanticTokenSource {
 export interface SemanticTokenModelSource {
 	readonly textModel: TextModel;
 	readonly onDidChange: (listener: () => void) => IDisposable;
-	readonly lines: readonly { readonly lineIndex: number; readonly tokens: readonly LanguageToken[] }[];
+	readonly lines: readonly { readonly lineIndex: number; readonly tokens: readonly LanguageToken[]; }[];
 	getLineTokens(lineIndex: number): readonly LanguageToken[];
 }

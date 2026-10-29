@@ -6,11 +6,7 @@ import { IChangesViewService } from '../common/changesViewService.js';
 
 class SetChangesListViewModeAction extends Action2 {
 	constructor() {
-		super({
-			id: 'workbench.action.agentSessions.setChangesListViewMode',
-			title: localize2({ bundle: 'ash', key: 'sessions.changes.viewAsList' }, 'Changes: View as List'),
-			f1: true,
-		});
+		super({ id: 'workbench.action.agentSessions.setChangesListViewMode', title: localize2({ bundle: 'ash', key: 'sessions.changes.viewAsList' }, 'Changes: View as List'), f1: true });
 	}
 
 	public run(accessor: ServicesAccessor): void {
@@ -20,11 +16,7 @@ class SetChangesListViewModeAction extends Action2 {
 
 class SetChangesTreeViewModeAction extends Action2 {
 	constructor() {
-		super({
-			id: 'workbench.action.agentSessions.setChangesTreeViewMode',
-			title: localize2({ bundle: 'ash', key: 'sessions.changes.viewAsTree' }, 'Changes: View as Tree'),
-			f1: true,
-		});
+		super({ id: 'workbench.action.agentSessions.setChangesTreeViewMode', title: localize2({ bundle: 'ash', key: 'sessions.changes.viewAsTree' }, 'Changes: View as Tree'), f1: true });
 	}
 
 	public run(accessor: ServicesAccessor): void {

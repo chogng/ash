@@ -30,31 +30,16 @@ suite('Code editor first-interaction lifetime', () => {
 			const idle = new Map<number, IdleRequestCallback>();
 			let nextIdleId = 0;
 			Object.assign(dom.window, {
-				requestIdleCallback: (callback: IdleRequestCallback) => {
-					idle.set(++nextIdleId, callback);
-					return nextIdleId;
-				},
-				cancelIdleCallback: (id: number) => {
-					idle.delete(id);
-				},
+				requestIdleCallback: (callback: IdleRequestCallback) => { idle.set(++nextIdleId, callback); return nextIdleId; },
+				cancelIdleCallback: (id: number) => { idle.delete(id); },
 			});
 			let created = 0;
 			let disposed = 0;
 			class Contribution extends Disposable {
-				constructor() {
-					super();
-					created++;
-				}
-				protected override disposeCore(): void {
-					disposed++;
-					super.disposeCore();
-				}
+				constructor() { super(); created++; }
+				protected override disposeCore(): void { disposed++; super.disposeCore(); }
 			}
-			const first = {
-				id: 'first',
-				ctor: Contribution,
-				instantiation: EditorContributionInstantiation.BeforeFirstInteraction,
-			};
+			const first = { id: 'first', ctor: Contribution, instantiation: EditorContributionInstantiation.BeforeFirstInteraction };
 			using services = new InstantiationService();
 			using contributions = services.createInstance(CodeEditorContributions);
 			contributions.configure([first], {} as TextEditorContributionConfigurationContext);

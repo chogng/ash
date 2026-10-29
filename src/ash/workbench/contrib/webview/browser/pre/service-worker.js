@@ -24,17 +24,10 @@ async function loadFromBootstrap(event, type, documentChannel) {
 		connection.port1.onmessage = messageEvent => {
 			connection.port1.close();
 			const response = messageEvent.data;
-			resolve(
-				new Response(event.request.method === 'HEAD' ? null : response.body, {
-					status: response.status,
-					headers: {
-						'Content-Type': response.mimeType || 'application/octet-stream',
-						'Cache-Control': 'no-store',
-						'X-Content-Type-Options': 'nosniff',
-						'Access-Control-Allow-Origin': '*',
-					},
-				}),
-			);
+			resolve(new Response(event.request.method === 'HEAD' ? null : response.body, {
+				status: response.status,
+				headers: { 'Content-Type': response.mimeType || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Access-Control-Allow-Origin': '*' },
+			}));
 		};
 		bootstrap.postMessage({ type, documentChannel, url: event.request.url }, [connection.port2]);
 	});
@@ -48,11 +41,9 @@ self.addEventListener('fetch', event => {
 		return;
 	}
 	if (url.origin !== 'https://resources.ash-webview.invalid') return;
-	event.respondWith(
-		(async () => {
-			if (!['GET', 'HEAD'].includes(event.request.method)) return new Response(null, { status: 403 });
-			const client = await self.clients.get(event.clientId);
-			return loadFromBootstrap(event, 'load-resource', client ? documentChannelFromUrl(new URL(client.url)) : undefined);
-		})(),
-	);
+	event.respondWith((async () => {
+		if (!['GET', 'HEAD'].includes(event.request.method)) return new Response(null, { status: 403 });
+		const client = await self.clients.get(event.clientId);
+		return loadFromBootstrap(event, 'load-resource', client ? documentChannelFromUrl(new URL(client.url)) : undefined);
+	})());
 });

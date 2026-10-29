@@ -34,8 +34,7 @@ export function getUriFromSource(raw: IDebugSource, path: string | undefined, se
 		const sourcePath = path || raw.name || `source-${reference}`;
 		if (sourcePath.includes('\0') || sourcePath.length > 32768) throw new TypeError(localize('debug.invalidSource', 'The debug source needs a path or a source reference and a live session.'));
 		const resource = URI.from({
-			scheme: 'debug',
-			path: reference && !sourcePath.startsWith('/') ? `/${sourcePath}` : sourcePath,
+			scheme: 'debug', path: reference && !sourcePath.startsWith('/') ? `/${sourcePath}` : sourcePath,
 			query: `session=${sessionId}&ref=${reference}`,
 		});
 		logService.debug('debug.source', `Resolving source reference ${reference} in session ${sessionId}.`);

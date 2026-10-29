@@ -10,21 +10,10 @@ test('update channel rejects invalid policies and install arguments before invok
 	const channel = new UpdateChannel({
 		state: 'ready',
 		onDidChangeState: stateChanges.event,
-		async checkForUpdates(policy) {
-			calls.push(`check:${policy}`);
-			return { status: 'current', version: '1' };
-		},
-		async checkAutomatically(policy) {
-			calls.push(`automatic:${policy}`);
-			return undefined;
-		},
-		async downloadUpdate(policy) {
-			calls.push(`download:${policy}`);
-			return { version: '2' };
-		},
-		async installUpdate() {
-			calls.push('install');
-		},
+		async checkForUpdates(policy) { calls.push(`check:${policy}`); return { status: 'current', version: '1' }; },
+		async checkAutomatically(policy) { calls.push(`automatic:${policy}`); return undefined; },
+		async downloadUpdate(policy) { calls.push(`download:${policy}`); return { version: '2' }; },
+		async installUpdate() { calls.push('install'); },
 	});
 	await assert.rejects(channel.call('window:1', 'downloadUpdate', 'never'), /invalid/);
 	await assert.rejects(channel.call('window:1', 'installUpdate', { path: '/unverified' }), /takes no renderer arguments/);

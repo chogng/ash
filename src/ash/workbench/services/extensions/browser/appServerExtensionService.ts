@@ -10,12 +10,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { KeybindingsRegistry, KeybindingSource, KeybindingWeight, type IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IConfigurationNode,
-	type IConfigurationDefaults,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode, type IConfigurationDefaults } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
@@ -37,12 +32,7 @@ import type { ILanguageConfigurationService } from '../../../../editor/common/la
 import { parseLanguageConfiguration } from './languageConfigurationParser.js';
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../../../editor/common/services/languagesRegistry.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
-import type {
-	IExtensionApi,
-	ExtensionCatalogReload,
-	ExtensionCatalog as TransportExtensionCatalog,
-	ExtensionDescriptor as TransportExtensionDescriptor,
-} from '../../../../platform/extensions/common/extensionApi.js';
+import type { IExtensionApi, ExtensionCatalogReload, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { parseJsonc } from '../common/jsonc.js';
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
@@ -74,14 +64,10 @@ interface LanguageConfigurationContribution {
 // External declarative assets can remap text editing, but cannot invoke general
 // Workbench commands or supply arguments that carry process or terminal actions.
 const declarativeEditingCommands = new Set([
-	'editor.action.addSelectionToNextFindMatch',
-	'editor.action.selectHighlights',
-	'editor.action.insertCursorAbove',
-	'editor.action.insertCursorBelow',
-	'editor.action.copyLinesDownAction',
-	'editor.action.deleteLines',
-	'editor.action.insertLineAfter',
-	'editor.action.insertLineBefore',
+	'editor.action.addSelectionToNextFindMatch', 'editor.action.selectHighlights',
+	'editor.action.insertCursorAbove', 'editor.action.insertCursorBelow',
+	'editor.action.copyLinesDownAction', 'editor.action.deleteLines',
+	'editor.action.insertLineAfter', 'editor.action.insertLineBefore',
 ]);
 
 /** Activates Rust-discovered declarative extensions without materializing legacy grammar resources. */
@@ -89,13 +75,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly colorContributions = this._register(new ColorExtensionPoint());
 	private readonly iconContributions = this._register(new IconExtensionPoint());
 	private readonly tokenContributions = this._register(new TokenClassificationExtensionPoint());
-	private activeThemeContributions: ThemeContributions = {
-		colors: [],
-		icons: [],
-		fonts: [],
-		types: [],
-		modifiers: [],
-	};
+	private activeThemeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [] };
 	private readonly changeEmitter = this._register(new Emitter<ExtensionCatalog>());
 	private readonly failureEmitter = this._register(new Emitter<ExtensionServiceFailure>());
 	private readonly editorPaneRegistration = this._register(EditorPanes.registerEditorPanes([]));
@@ -134,7 +114,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly themes: ExtensionThemeSource;
 	readonly fileTemplates: ExtensionFileTemplateSource;
 	readonly debugAdapters: ExtensionDebugAdapterSource;
-	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest }[] = [];
+	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
 
 	getExtensionPointContributions<T>(name: string): readonly IExtensionPointUser<T>[] {
 		return this.manifests.flatMap(entry => {
@@ -153,31 +133,20 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	) {
 		super();
 		if (options.api.onDidChange) {
-			this._register(
-				options.api.onDidChange(() => {
-					void this.requestReload('cached').catch(error => console.error('Extension enablement refresh failed', error));
-				}),
-			);
+			this._register(options.api.onDidChange(() => { void this.requestReload('cached').catch(error => console.error('Extension enablement refresh failed', error)); }));
 		}
-		this._register(
-			toDisposable(() => {
-				this.reloadQueued = undefined;
-				this.activationHandler = undefined;
-				this.snippetHandler?.([]).commit();
-				this.snippetHandler = undefined;
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({
-					removedConfigurations: this.activeConfigurations,
-					removedDefaults: this.activeConfigurationDefaults,
-				});
-				this.activeConfigurations = [];
-				this.activeConfigurationDefaults = [];
-				this.manifests = [];
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.reloadQueued = undefined;
+			this.activationHandler = undefined;
+			this.snippetHandler?.([]).commit();
+			this.snippetHandler = undefined;
+		}));
+		this._register(toDisposable(() => {
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ removedConfigurations: this.activeConfigurations, removedDefaults: this.activeConfigurationDefaults });
+			this.activeConfigurations = [];
+			this.activeConfigurationDefaults = [];
+			this.manifests = [];
+		}));
 		this._register(toDisposable(() => this.languageConfigurationRegistrations.dispose()));
 		this.themeRegistry = this._register(new ExtensionThemeRegistry());
 		this.fileTemplateRegistry = this._register(new ExtensionFileTemplateRegistry());
@@ -185,25 +154,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const themeRegistry = this.themeRegistry;
 		const fileTemplateRegistry = this.fileTemplateRegistry;
 		const debugAdapterRegistry = this.debugAdapterRegistry;
-		this.themes = Object.freeze({
-			get currentCatalog() {
-				return themeRegistry.currentCatalog;
-			},
-			onDidChange: themeRegistry.onDidChange,
-		});
-		this.fileTemplates = Object.freeze({
-			get currentCatalog() {
-				return fileTemplateRegistry.currentCatalog;
-			},
-			onDidChange: fileTemplateRegistry.onDidChange,
-		});
-		this.debugAdapters = Object.freeze({
-			get definitions() {
-				return debugAdapterRegistry.definitions;
-			},
-			onDidChange: debugAdapterRegistry.onDidChange,
-			get: (type: string) => debugAdapterRegistry.get(type),
-		});
+		this.themes = Object.freeze({ get currentCatalog() { return themeRegistry.currentCatalog; }, onDidChange: themeRegistry.onDidChange });
+		this.fileTemplates = Object.freeze({ get currentCatalog() { return fileTemplateRegistry.currentCatalog; }, onDidChange: fileTemplateRegistry.onDidChange });
+		this.debugAdapters = Object.freeze({ get definitions() { return debugAdapterRegistry.definitions; }, onDidChange: debugAdapterRegistry.onDidChange, get: (type: string) => debugAdapterRegistry.get(type) });
 		if (!options || typeof options !== 'object') {
 			this.dispose();
 			throw new TypeError('App Server extension service options are required');
@@ -221,7 +174,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.debugAdapterFactoryRegistration = this._register(adapters.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
-			let extensionManagementRevision: { readonly instanceId: string; readonly generation: number } | undefined;
+			let extensionManagementRevision: { readonly instanceId: string; readonly generation: number; } | undefined;
 			const subscription = options.eventApi.subscribe(event => {
 				if (event.method === 'plugin/changed') {
 					if (event.params.activationGeneration === activationGeneration) return;
@@ -260,14 +213,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		if (this.loading) return this.loading;
 		const operation = this.drainReloads();
 		this.loading = operation;
-		void operation.then(
-			() => {
-				if (this.loading === operation) this.loading = undefined;
-			},
-			() => {
-				if (this.loading === operation) this.loading = undefined;
-			},
-		);
+		void operation.then(() => {
+			if (this.loading === operation) this.loading = undefined;
+		}, () => {
+			if (this.loading === operation) this.loading = undefined;
+		});
 		return operation;
 	}
 
@@ -291,9 +241,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.assertNotDisposed();
 		if (this.activationHandler) throw new Error('An executable extension activation owner is already registered');
 		this.activationHandler = handler;
-		return toDisposable(() => {
-			if (this.activationHandler === handler) this.activationHandler = undefined;
-		});
+		return toDisposable(() => { if (this.activationHandler === handler) this.activationHandler = undefined; });
 	}
 
 	public registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable {
@@ -341,11 +289,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
 		let snippetActivation: ExtensionSnippetActivation | undefined;
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
-		const manifests: { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest }[] = [];
+		const manifests: { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
 		const problemMatchers: unknown[] = [];
 		const configurations: IConfigurationNode[] = [];
 		const configurationDefaults: IConfigurationDefaults[] = [];
-		const submenus: { menu: string; item: ISubmenuItem }[] = [];
+		const submenus: { menu: string; item: ISubmenuItem; }[] = [];
 		const welcome: Parameters<typeof ViewsRegistry.registerViewWelcomeContent>[] = [];
 		const problemPatterns: unknown[] = [];
 		const editorPanes: IEditorPaneDescriptor[] = [];
@@ -366,87 +314,65 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			// Package resources are independent, but publishing contributions is one
 			// ordered transaction. Bound I/O here instead of serializing every small
 			// file's open/read/release round trips on the startup critical path.
-			await Promise.all(
-				Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
-					while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
-						const index = nextExtension++;
-						const extension = transportCatalog.extensions[index]!;
-						try {
-							await verifyExtensionManifestDigest(extension);
-							if (this.isDisposed) return;
-							const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
-							if (this.isDisposed) return;
-							const manifest = parseExtensionManifest(manifestJson, extension);
-							preparedManifests.set(extension.id, manifest);
-							const paths = new Set([
-								...(this.options.languageService ? manifest.contributes.languages.flatMap(language => (language.configuration ? [language.configuration] : [])) : []),
-								...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
-								...manifest.contributes.themes.map(theme => theme.path),
-								...manifest.contributes.iconThemes.map(theme => theme.path),
-								...manifest.contributes.productIconThemes.map(theme => theme.path),
-								...manifest.contributes.icons.flatMap(icon => (typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath])),
-							]);
-							for (const path of paths) {
-								if (this.isDisposed || preparationFailures.size > 0) return;
-								await this.loadResource(resources, catalog.generation, extension.id, path);
-							}
-						} catch (error) {
-							preparationFailures.set(index, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
+			await Promise.all(Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
+				while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
+					const index = nextExtension++;
+					const extension = transportCatalog.extensions[index]!;
+					try {
+						await verifyExtensionManifestDigest(extension);
+						if (this.isDisposed) return;
+						const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
+						if (this.isDisposed) return;
+						const manifest = parseExtensionManifest(manifestJson, extension);
+						preparedManifests.set(extension.id, manifest);
+						const paths = new Set([
+							...(this.options.languageService ? manifest.contributes.languages.flatMap(language => language.configuration ? [language.configuration] : []) : []),
+							...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
+							...manifest.contributes.themes.map(theme => theme.path),
+							...manifest.contributes.iconThemes.map(theme => theme.path),
+							...manifest.contributes.productIconThemes.map(theme => theme.path),
+							...manifest.contributes.icons.flatMap(icon => typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath]),
+						]);
+						for (const path of paths) {
+							if (this.isDisposed || preparationFailures.size > 0) return;
+							await this.loadResource(resources, catalog.generation, extension.id, path);
 						}
+					} catch (error) {
+						preparationFailures.set(index, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
 					}
-				}),
-			);
+				}
+			}));
 			if (this.isDisposed) return;
 			if (preparationFailures.size > 0) return preparationFailures.get(Math.min(...preparationFailures.keys()));
 			// Resolve independent include chains before ordered materialization and
 			// atomic publication; one theme must not serialize the remaining themes.
 			const preparedThemes = new Map<string, ExtensionThemeDefinition>();
-			const themeLoads = transportCatalog.extensions.flatMap(extension => preparedManifests.get(extension.id)!.contributes.themes.map((theme, index) => ({ extension, theme, index })));
-			let nextTheme = 0;
-			await Promise.all(
-				Array.from({ length: Math.min(8, themeLoads.length) }, async () => {
-					while (!this.isDisposed && preparationFailures.size === 0 && nextTheme < themeLoads.length) {
-						const position = nextTheme++;
-						const { extension, theme, index } = themeLoads[position]!;
-						try {
-							const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, index);
-							preparedThemes.set(`${extension.id}\0${index}`, definition);
-						} catch (error) {
-							preparationFailures.set(position, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
-						}
-					}
-				}),
+			const themeLoads = transportCatalog.extensions.flatMap(extension =>
+				preparedManifests.get(extension.id)!.contributes.themes.map((theme, index) => ({ extension, theme, index }))
 			);
+			let nextTheme = 0;
+			await Promise.all(Array.from({ length: Math.min(8, themeLoads.length) }, async () => {
+				while (!this.isDisposed && preparationFailures.size === 0 && nextTheme < themeLoads.length) {
+					const position = nextTheme++;
+					const { extension, theme, index } = themeLoads[position]!;
+					try {
+						const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, index);
+						preparedThemes.set(`${extension.id}\0${index}`, definition);
+					} catch (error) {
+						preparationFailures.set(position, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
+					}
+				}
+			}));
 			if (this.isDisposed) return;
 			if (preparationFailures.size > 0) return preparationFailures.get(Math.min(...preparationFailures.keys()));
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				const manifest = preparedManifests.get(extension.id)!;
-				keybindings.push(
-					...manifest.contributes.keybindings
-						.filter(rule => extension.sourceKind === 'builtIn' || (rule.args === undefined && declarativeEditingCommands.has(rule.command)))
-						.map(rule => ({
-							...rule,
-							source: KeybindingSource.Workbench,
-							priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension,
-						})),
-				);
+				keybindings.push(...manifest.contributes.keybindings
+					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
+					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
 				manifests.push({ description: activeExtension, manifest });
-				welcome.push(
-					...manifest.contributes.viewsWelcome.map(
-						entry =>
-							[
-								entry.view,
-								{
-									content: entry.contents,
-									when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined,
-									precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined,
-									group: entry.group,
-									order: entry.order,
-								},
-							] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>,
-					),
-				);
+				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
 				configurationDefaults.push(...manifest.contributes.configurationDefaults);
 				for (const submenu of manifest.contributes.submenus) {
@@ -454,66 +380,34 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						const [group, orderText] = (placement.group ?? '').split('@');
 						const order = orderText === undefined ? undefined : Number(orderText);
 						if (order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid submenu order');
-						submenus.push({
-							menu: placement.menu,
-							item: {
-								submenu: extensionMenuId(submenu.id),
-								title: submenu.label,
-								group,
-								order,
-								when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined,
-							},
-						});
+						submenus.push({ menu: placement.menu, item: { submenu: extensionMenuId(submenu.id), title: submenu.label, group, order, when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined } });
 					}
 				}
 				if (extension.sourceKind === 'builtIn') {
 					for (const editor of manifest.contributes.customEditors) {
 						const factory = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
-						if (!factory) {
-							continue;
-						}
+						if (!factory) { continue; }
 						let name = editor.displayName;
 						const key = /^%(.+)%$/.exec(name)?.[1];
 						if (key) {
 							const locale = getNLSLanguage() === 'en' ? '' : '.' + getNLSLanguage();
-							const messages = parseJsonc(
-								new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)),
-								'Editor labels',
-							) as Record<string, unknown>;
-							if (typeof messages[key] !== 'string') {
-								throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`);
-							}
+							const messages = parseJsonc(new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)), 'Editor labels') as Record<string, unknown>;
+							if (typeof messages[key] !== 'string') { throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`); }
 							name = messages[key];
 						}
 						editorPanes.push({
-							id: editor.viewType,
-							name,
-							create: options => factory.create(options, name),
-							...(factory.documentType
-								? {
-										documentType: {
-											...factory.documentType,
-											extensions: editor.selector
-												.map(selector => selector.filenamePattern)
-												.filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern))
-												.map(pattern => pattern.slice(1).toLowerCase()),
-										},
-									}
-								: {}),
+							id: editor.viewType, name, create: options => factory.create(options, name),
+							...(factory.documentType ? {
+								documentType: {
+									...factory.documentType,
+									extensions: editor.selector.map(selector => selector.filenamePattern).filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
+								}
+							} : {}),
 							canOpen: input => {
-								if (isResourceDiffEditorInput(input)) {
-									return EditorPaneMatch.None;
-								}
+								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
 								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-								const supported = editor.selector.some(
-									selector =>
-										(selector.filenamePattern !== undefined &&
-											match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase())) ||
-										(mediaType !== undefined && selector.mimeType === mediaType),
-								);
-								if (!supported) {
-									return EditorPaneMatch.None;
-								}
+								const supported = editor.selector.some(selector => selector.filenamePattern !== undefined && match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
+								if (!supported) { return EditorPaneMatch.None; }
 								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 							},
 						});
@@ -524,24 +418,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				themeContributions.modifiers.push(...manifest.contributes.semanticTokenModifiers);
 
 				for (const icon of manifest.contributes.icons) {
-					if (typeof icon.defaults === 'string') {
-						themeContributions.icons.push({
-							id: icon.id,
-							description: icon.description,
-							defaults: { id: icon.defaults },
-						});
-					} else {
-						const loaded = await loadExtensionFontIcon(extension.id + '.' + icon.id, icon.defaults.fontPath, icon.defaults.fontCharacter, path =>
-							this.loadResource(resources, catalog.generation, extension.id, path),
-						);
-						if (this.isDisposed) {
-							return;
-						}
-						themeContributions.icons.push({
-							id: icon.id,
-							description: icon.description,
-							defaults: loaded.icon,
-						});
+					if (typeof icon.defaults === 'string') { themeContributions.icons.push({ id: icon.id, description: icon.description, defaults: { id: icon.defaults } }); }
+					else {
+						const loaded = await loadExtensionFontIcon(extension.id + '.' + icon.id, icon.defaults.fontPath, icon.defaults.fontCharacter, path => this.loadResource(resources, catalog.generation, extension.id, path));
+						if (this.isDisposed) { return; }
+						themeContributions.icons.push({ id: icon.id, description: icon.description, defaults: loaded.icon });
 						themeContributions.fonts.push(loaded.font);
 					}
 				}
@@ -558,8 +439,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							filenamePatterns: language.filenamePatterns,
 							mimetypes: language.mimetypes,
 							...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
-						},
-						options: { priority: 100 },
+						}, options: { priority: 100 }
 					});
 					if (language.configuration !== undefined) {
 						const key = `${extension.id}\0${language.configuration}`;
@@ -567,11 +447,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						languageConfigurationResources.set(key, configuration);
 						const resolvedConfiguration = await configuration;
 						if (this.isDisposed) return;
-						languageConfigurations.push({
-							languageId: language.id,
-							configuration: resolvedConfiguration,
-							priority: 100,
-						});
+						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, priority: 100 });
 					}
 				}
 				for (const snippet of manifest.contributes.snippets) {
@@ -580,52 +456,37 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					snippetFiles.set(key, definitions);
 					const content = await definitions;
 					if (this.isDisposed) return;
-					snippetResources.push(
-						Object.freeze({
-							extensionId: extension.id,
-							location: toExtensionResourceURI({
-								generation: catalog.generation,
-								extensionId: extension.id,
-								path: snippet.path,
-							}),
-							languageIds: snippet.language,
-							content,
-						}),
-					);
+					snippetResources.push(Object.freeze({
+						extensionId: extension.id,
+						location: toExtensionResourceURI({ generation: catalog.generation, extensionId: extension.id, path: snippet.path }),
+						languageIds: snippet.language,
+						content,
+					}));
 				}
 				for (const themeIndex of manifest.contributes.themes.keys()) {
 					themes.push(preparedThemes.get(`${extension.id}\0${themeIndex}`)!);
 					if (this.isDisposed) return;
 				}
 				for (const theme of manifest.contributes.iconThemes) {
-					if (!theme.id) {
-						throw new Error('File icon themes require an ID');
-					}
+					if (!theme.id) { throw new Error('File icon themes require an ID'); }
 					const bytes = await this.loadResource(resources, catalog.generation, extension.id, theme.path);
 					const directory = theme.path.slice(0, theme.path.lastIndexOf('/') + 1);
-					fileIconThemes.push(
-						await FileIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder().decode(bytes), 'File icon theme ' + theme.id), path =>
-							this.loadResource(resources, catalog.generation, extension.id, directory + path),
-						),
-					);
-					if (this.isDisposed) {
-						return;
-					}
+					fileIconThemes.push(await FileIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder().decode(bytes), 'File icon theme ' + theme.id),
+						path => this.loadResource(resources, catalog.generation, extension.id, directory + path)));
+					if (this.isDisposed) { return; }
 				}
 				for (const theme of manifest.contributes.productIconThemes) {
 					if (!theme.id || theme.id === 'default') throw new Error('Product icon themes require a non-default ID');
 					const bytes = await this.loadResource(resources, catalog.generation, extension.id, theme.path);
 					const directory = theme.path.slice(0, theme.path.lastIndexOf('/') + 1);
-					productIconThemes.push(
-						await ProductIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder('utf-8', { fatal: true }).decode(bytes), 'Product icon theme ' + theme.id), path =>
-							this.loadResource(resources, catalog.generation, extension.id, directory + path),
-						),
-					);
+					productIconThemes.push(await ProductIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder('utf-8', { fatal: true }).decode(bytes), 'Product icon theme ' + theme.id),
+						path => this.loadResource(resources, catalog.generation, extension.id, directory + path)));
 					if (this.isDisposed) return;
 				}
 				problemMatchers.push(...manifest.contributes.problemMatchers);
 				problemPatterns.push(...manifest.contributes.problemPatterns);
 				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
+
 			}
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
 				this.reloadQueued ??= 'cached';
@@ -645,14 +506,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				const retained = this.activeDebugAdapterFactories.find(factory => factory.type === definition.type);
 				// Scan revisions may change while a launch waits for an installation path.
 				// Preserve executable identity only while both package and declaration match.
-				if (
-					retained &&
-					previousExtension &&
-					nextExtension &&
-					JSON.stringify(previousExtension) === JSON.stringify(nextExtension) &&
-					JSON.stringify(previousDefinition) === JSON.stringify(definition)
-				)
-					return [retained];
+				if (retained && previousExtension && nextExtension
+					&& JSON.stringify(previousExtension) === JSON.stringify(nextExtension)
+					&& JSON.stringify(previousDefinition) === JSON.stringify(definition)) return [retained];
 				return [createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments })];
 			});
 			// A synchronous contribution owner can replace itself or dispose this service.
@@ -668,25 +524,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
 					this.welcomeRegistrations.clear();
 					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
-					this.replaceContributions(
-						languages,
-						languageConfigurations,
-						themes,
-						fileTemplates,
-						debugAdapters,
-						debugAdapterFactories,
-						fileIconThemes,
-						productIconThemes,
-						themeContributions,
-						{ matchers: problemMatchers, patterns: problemPatterns },
-						configurations,
-						configurationDefaults,
-					);
+					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations, configurationDefaults);
 					snippetActivation?.commit();
 					this.keybindingRegistrations.clear();
-					for (const rule of keybindings) {
-						this.keybindingRegistrations.add(KeybindingsRegistry.registerKeybindingRule(rule));
-					}
+					for (const rule of keybindings) { this.keybindingRegistrations.add(KeybindingsRegistry.registerKeybindingRule(rule)); }
 					this.activeThemeContributions = themeContributions;
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
@@ -735,20 +576,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return JSON.stringify(localizeManifest(JSON.parse(extension.manifestJson), messages));
 	}
 
-	private replaceContributions(
-		languages: readonly LanguageDescriptionContribution[],
-		languageConfigurations: readonly LanguageConfigurationContribution[],
-		themes: readonly ExtensionThemeDefinition[],
-		fileTemplates: readonly ExtensionFileTemplateDefinition[],
-		debugAdapters: readonly ExtensionDebugAdapterDefinition[],
-		debugAdapterFactories: readonly DebugAdapterFactory[],
-		fileIconThemes: readonly IWorkbenchFileIconTheme[],
-		productIconThemes: readonly IWorkbenchProductIconTheme[],
-		themeContributions: ThemeContributions,
-		problemContributions: ProblemMatcherContributions,
-		configurations: IConfigurationNode[],
-		configurationDefaults: IConfigurationDefaults[],
-	): void {
+
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[], configurationDefaults: IConfigurationDefaults[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
@@ -764,12 +593,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.fileIconRegistration.replace(fileIconThemes);
 			this.productIconRegistration.replace(productIconThemes);
 			this.problemMatcherRegistration.replace(problemContributions);
-			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({
-				addedConfigurations: configurations,
-				removedConfigurations: this.activeConfigurations,
-				addedDefaults: configurationDefaults,
-				removedDefaults: this.activeConfigurationDefaults,
-			});
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ addedConfigurations: configurations, removedConfigurations: this.activeConfigurations, addedDefaults: configurationDefaults, removedDefaults: this.activeConfigurationDefaults });
 			this.activeConfigurations = configurations;
 			this.activeConfigurationDefaults = configurationDefaults;
 		} catch (error) {
@@ -817,32 +641,18 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		previous.dispose();
 	}
 
-	private validateContributions(
-		themes: readonly ExtensionThemeDefinition[],
-		fileTemplates: readonly ExtensionFileTemplateDefinition[],
-		debugAdapters: readonly ExtensionDebugAdapterDefinition[],
-	): void {
+	private validateContributions(themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {
 		const validationThemes = new ExtensionThemeRegistry();
-		try {
-			validationThemes.replace(themes);
-		} finally {
-			validationThemes.dispose();
-		}
+		try { validationThemes.replace(themes); }
+		finally { validationThemes.dispose(); }
 		const validationTemplates = new ExtensionFileTemplateRegistry();
-		try {
-			validationTemplates.replace(fileTemplates);
-		} finally {
-			validationTemplates.dispose();
-		}
+		try { validationTemplates.replace(fileTemplates); }
+		finally { validationTemplates.dispose(); }
 		validateExtensionDebugAdapterDefinitions(debugAdapters);
 	}
 
-	private async loadLanguageConfiguration(
-		resources: Map<string, Promise<Uint8Array>>,
-		generation: number,
-		extensionId: string,
-		path: string,
-	): Promise<ReturnType<typeof parseLanguageConfiguration>> {
+
+	private async loadLanguageConfiguration(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<ReturnType<typeof parseLanguageConfiguration>> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
@@ -863,22 +673,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		resources.set(key, loading);
 		return loading;
 	}
+
 }
 
 function projectExtensionCatalog(catalog: TransportExtensionCatalog): ExtensionCatalog {
 	return Object.freeze({
 		generation: catalog.generation,
 		extensions: Object.freeze(catalog.extensions.map(projectExtensionDescriptor)),
-		diagnostics: Object.freeze(
-			catalog.diagnostics.map(diagnostic =>
-				Object.freeze({
-					source: diagnostic.source,
-					subject: diagnostic.subject,
-					code: diagnostic.code,
-					message: diagnostic.message,
-				}),
-			),
-		),
+		diagnostics: Object.freeze(catalog.diagnostics.map(diagnostic => Object.freeze({
+			source: diagnostic.source,
+			subject: diagnostic.subject,
+			code: diagnostic.code,
+			message: diagnostic.message,
+		}))),
 	});
 }
 

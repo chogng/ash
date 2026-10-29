@@ -10,16 +10,10 @@ import { IPolicyService } from '../../policy/common/policy.js';
 import { PolicyConfiguration } from './configurations.js';
 import { Registry } from '../../registry/common/platform.js';
 import {
-	ConfigurationTarget,
-	isConfigurationOverrides,
-	isConfigurationUpdateOverrides,
-	type IConfigurationService,
-	type IConfigurationOverrides,
-	type IConfigurationValue,
-	type IConfigurationChangeEvent,
-	type IConfigurationData,
-	type IConfigurationUpdateOverrides,
-	type IConfigurationUpdateOptions,
+	ConfigurationTarget, isConfigurationOverrides, isConfigurationUpdateOverrides,
+	type IConfigurationService, type IConfigurationOverrides, type IConfigurationValue,
+	type IConfigurationChangeEvent, type IConfigurationData,
+	type IConfigurationUpdateOverrides, type IConfigurationUpdateOptions,
 } from './configuration.js';
 import { ConfigurationModel, ConfigurationModelParser, UserSettings } from './configurationModels.js';
 import { Extensions, ConfigurationScope, keyFromOverrideIdentifiers, type IConfigurationRegistry } from './configurationRegistry.js';
@@ -53,12 +47,10 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		this._register(this.policy.onDidChangeConfiguration(() => this.apply(this.user, ConfigurationTarget.DEFAULT)));
 		this.userSettings = this._register(new UserSettings(resource, {}, extUriBiasedIgnorePathCase, files, log));
 		this._register(this.userSettings.onDidChange(() => this.apply(this.userSettings.reparse())));
-		this._register(
-			this.registry.onDidUpdateConfiguration(() => {
-				this.defaults = this.readDefaults();
-				this.apply(this.user, ConfigurationTarget.DEFAULT);
-			}),
-		);
+		this._register(this.registry.onDidUpdateConfiguration(() => {
+			this.defaults = this.readDefaults();
+			this.apply(this.user, ConfigurationTarget.DEFAULT);
+		}));
 	}
 
 	async initialize(): Promise<void> {
@@ -95,14 +87,9 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		};
 		const policyValue = this.policy.configurationModel.getValue<Readonly<T>>(key);
 		return {
-			defaultValue,
-			userValue,
-			userLocalValue: userValue,
-			policyValue,
+			defaultValue, userValue, userLocalValue: userValue, policyValue,
 			value: this.getValue(key, overrides ?? {}),
-			default: { value: defaultValue },
-			user,
-			userLocal: user,
+			default: { value: defaultValue }, user, userLocal: user,
 			...(policyValue === undefined ? {} : { policy: { value: policyValue } }),
 		};
 	}
@@ -120,7 +107,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		const overrides = typeof arg3 === 'object' ? arg3 : undefined;
 		const destination = typeof arg3 === 'number' ? arg3 : target;
 		if (overrides !== undefined && !isConfigurationOverrides(overrides) && !isConfigurationUpdateOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-		if (overrides?.resource || (destination !== undefined && destination !== ConfigurationTarget.USER && destination !== ConfigurationTarget.USER_LOCAL)) {
+		if (overrides?.resource || destination !== undefined && destination !== ConfigurationTarget.USER && destination !== ConfigurationTarget.USER_LOCAL) {
 			throw new Error('Single-resource configuration supports only user settings');
 		}
 		let content = '{}\n';
@@ -132,12 +119,8 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		} catch (error) {
 			if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
 		}
-		const identifiers =
-			overrides && 'overrideIdentifiers' in overrides
-				? overrides.overrideIdentifiers
-				: overrides && 'overrideIdentifier' in overrides && overrides.overrideIdentifier
-					? [overrides.overrideIdentifier]
-					: [];
+		const identifiers = overrides && 'overrideIdentifiers' in overrides ? overrides.overrideIdentifiers
+			: overrides && 'overrideIdentifier' in overrides && overrides.overrideIdentifier ? [overrides.overrideIdentifier] : [];
 		const overrideKey = identifiers?.length ? keyFromOverrideIdentifiers(identifiers) : undefined;
 		const setting = this.registry.getConfiguration(key);
 		if (overrideKey && setting?.scope !== undefined && setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
@@ -148,7 +131,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			const parser = new ConfigurationModelParser('settings', this.log);
 			parser.parse(content);
 			if (parser.errors.length) throw new TypeError('Settings JSONC is invalid');
-			const properties = { ...(parser.configurationModel.contents[overrideKey] as Record<string, unknown>) };
+			const properties = { ...parser.configurationModel.contents[overrideKey] as Record<string, unknown> };
 			if (value === undefined) {
 				delete properties[key];
 			} else {
@@ -176,8 +159,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			default: this.defaults.keys,
 			policy: this.policy.configurationModel.keys,
 			user: this.user.keys,
-			workspace: [],
-			workspaceFolder: [],
+			workspace: [], workspaceFolder: [],
 		};
 	}
 
@@ -187,10 +169,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			defaults: this.defaults.toJSON(),
 			userLocal: this.user.toJSON(),
 			policy: this.policy.configurationModel.toJSON(),
-			application: empty(),
-			userRemote: empty(),
-			workspace: empty(),
-			folders: [],
+			application: empty(), userRemote: empty(), workspace: empty(), folders: [],
 		};
 	}
 
@@ -206,8 +185,10 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		this.appliedPolicy = this.policy.configurationModel;
 		const current = this.effective;
 		const policy = this.appliedPolicy;
-		const changed = (key: string, identifier?: string): boolean =>
-			!equals(this.resolve(previous, previousPolicy, identifier).getValue(key), this.resolve(current, policy, identifier).getValue(key));
+		const changed = (key: string, identifier?: string): boolean => !equals(
+			this.resolve(previous, previousPolicy, identifier).getValue(key),
+			this.resolve(current, policy, identifier).getValue(key),
+		);
 		const keys = [...new Set([...previous.keys, ...current.keys, ...previousPolicy.keys, ...policy.keys])].filter(key => changed(key));
 		const blocks = [...previous.overrides, ...current.overrides];
 		const overrides: [string, string[]][] = [...new Set(blocks.flatMap(block => block.identifiers))].map(identifier => [
@@ -221,9 +202,7 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 			for (const key of keys) affectedKeys.add(key);
 		}
 		this.changes.fire({
-			source,
-			affectedKeys,
-			change: { keys, overrides: changedOverrides },
+			source, affectedKeys, change: { keys, overrides: changedOverrides },
 			affectsConfiguration: (section, overrides) => changed(section, overrides?.overrideIdentifier ?? undefined),
 		});
 	}

@@ -30,14 +30,7 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
 	const content = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	await expect(content.getByRole('heading', { name: 'Workspace resources', exact: true })).toBeVisible();
-	await expect
-		.poll(() =>
-			content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({
-				width: image.naturalWidth,
-				height: image.naturalHeight,
-			})),
-		)
-		.toEqual({ width: 24, height: 16 });
+	await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
 });
 
 test('Markdown extension owns preview commands and shares unsaved text across editor views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {
@@ -74,10 +67,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 		await expect(workbench.quickaccess.element).toHaveCount(0);
 		const palette = await workbench.element.evaluate(element => {
 			const style = getComputedStyle(element);
-			return {
-				foreground: style.getPropertyValue('--ash-editor-foreground').trim(),
-				background: style.getPropertyValue('--ash-editor-background').trim(),
-			};
+			return { foreground: style.getPropertyValue('--ash-editor-foreground').trim(), background: style.getPropertyValue('--ash-editor-background').trim() };
 		});
 		await expect(frame.locator('html')).toHaveCSS('--ash-editor-foreground', palette.foreground);
 		await expect(frame.locator('html')).toHaveCSS('--ash-editor-background', palette.background);
@@ -96,10 +86,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await page.keyboard.press('Alt+F2');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue('# Shared draft\n\nOriginal body');
 	await page.keyboard.press('Escape');
-	const previewBreadcrumb = source.title.getByRole('button', {
-		name: 'Select editor: Markdown Preview',
-		exact: true,
-	});
+	const previewBreadcrumb = source.title.getByRole('button', { name: 'Select editor: Markdown Preview', exact: true });
 	await previewBreadcrumb.focus();
 	const editors = await workbench.menus.inspect(application, () => previewBreadcrumb.press('Enter'));
 	expect(editors).toContainEqual(expect.objectContaining({ label: 'Markdown Preview', checked: true }));
@@ -123,12 +110,10 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await expect(workbench.editors.groups).toHaveCount(2);
 	const side = workbench.editors.groupAt(1);
 	await expect(side.content.frameLocator('iframe.ash-webview').frameLocator('iframe').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
-	const boxes = await workbench.editors.groups.evaluateAll(groups =>
-		groups.map(group => {
-			const box = group.getBoundingClientRect();
-			return { x: box.x, y: box.y, width: box.width };
-		}),
-	);
+	const boxes = await workbench.editors.groups.evaluateAll(groups => groups.map(group => {
+		const box = group.getBoundingClientRect();
+		return { x: box.x, y: box.y, width: box.width };
+	}));
 	expect(boxes[1]!.x).toBeGreaterThanOrEqual(boxes[0]!.x + boxes[0]!.width);
 	expect(Math.abs(boxes[1]!.y - boxes[0]!.y)).toBeLessThan(2);
 	await side.title.locator('[data-action-id="workbench.action.splitEditor"] button').click();
@@ -185,9 +170,7 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	await group.editor.waitForEditorFocus();
 	const transfer = await page.evaluateHandle(() => {
 		const transfer = new DataTransfer();
-		transfer.items.add(
-			new File(['# Theme colors\n\n[Link](https://example.com)\n\n> Quoted text\n\n```js\nconst value = 1;\n```\n\n| Header |\n| --- |\n| Cell |'], 'theme.md', { type: 'text/markdown' }),
-		);
+		transfer.items.add(new File(['# Theme colors\n\n[Link](https://example.com)\n\n> Quoted text\n\n```js\nconst value = 1;\n```\n\n| Header |\n| --- |\n| Cell |'], 'theme.md', { type: 'text/markdown' }));
 		return transfer;
 	});
 	try {
@@ -201,12 +184,7 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
 	const bold = frame.getByRole('button', { name: 'Bold', exact: true });
 	await expect(editor).toBeVisible();
-	for (const [theme, id] of [
-		['Ash Light', 'ash-light'],
-		['Ash Dark', 'ash-dark'],
-		['Ash High Contrast Dark', 'ash-high-contrast-dark'],
-		['Ash High Contrast Light', 'ash-high-contrast-light'],
-	]) {
+	for (const [theme, id] of [['Ash Light', 'ash-light'], ['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.search(theme);
 		await workbench.quickaccess.input.press('Enter');
@@ -216,25 +194,10 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 			const probe = document.createElement('span');
 			element.appendChild(probe);
 			try {
-				return Object.fromEntries(
-					[
-						'button-foreground',
-						'button-secondaryBackground',
-						'button-hoverBackground',
-						'focusBorder',
-						'border',
-						'widget-border',
-						'text-codeBlockBackground',
-						'accent-foreground',
-						'error-foreground',
-						'editorCursor-foreground',
-						'editor-lineHighlightBackground',
-						'editor-foreground',
-					].map(name => {
-						probe.style.backgroundColor = `var(--ash-${name})`;
-						return [name, getComputedStyle(probe).backgroundColor];
-					}),
-				);
+				return Object.fromEntries(['button-foreground', 'button-secondaryBackground', 'button-hoverBackground', 'focusBorder', 'border', 'widget-border', 'text-codeBlockBackground', 'accent-foreground', 'error-foreground', 'editorCursor-foreground', 'editor-lineHighlightBackground', 'editor-foreground'].map(name => {
+					probe.style.backgroundColor = `var(--ash-${name})`;
+					return [name, getComputedStyle(probe).backgroundColor];
+				}));
 			} finally {
 				probe.remove();
 			}
@@ -277,11 +240,7 @@ test('Markdown rich editor shares text and history with the source editor', { ta
 	await group.editor.waitForEditorFocus();
 	const transfer = await page.evaluateHandle(() => {
 		const transfer = new DataTransfer();
-		transfer.items.add(
-			new File(['# Rich document\n\nOriginal body\n\n[keep]: ./other.md\n'], 'rich.md', {
-				type: 'text/markdown',
-			}),
-		);
+		transfer.items.add(new File(['# Rich document\n\nOriginal body\n\n[keep]: ./other.md\n'], 'rich.md', { type: 'text/markdown' }));
 		return transfer;
 	});
 	await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
@@ -360,11 +319,7 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 	await group.editor.waitForEditorFocus();
 	const transfer = await page.evaluateHandle(() => {
 		const transfer = new DataTransfer();
-		transfer.items.add(
-			new File(['# Protected document\n\n- [ ] Keep unchecked\n\nOriginal body'], 'protected.md', {
-				type: 'text/markdown',
-			}),
-		);
+		transfer.items.add(new File(['# Protected document\n\n- [ ] Keep unchecked\n\nOriginal body'], 'protected.md', { type: 'text/markdown' }));
 		return transfer;
 	});
 	await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
@@ -425,11 +380,7 @@ test('Markdown language providers navigate headings, rename links and show diagn
 	await group.editor.waitForEditorFocus();
 	const transfer = await page.evaluateHandle(() => {
 		const transfer = new DataTransfer();
-		transfer.items.add(
-			new File(['# Heading\n\n[go](#heading)\n\n[broken](#missing)'], 'language.md', {
-				type: 'text/markdown',
-			}),
-		);
+		transfer.items.add(new File(['# Heading\n\n[go](#heading)\n\n[broken](#missing)'], 'language.md', { type: 'text/markdown' }));
 		return transfer;
 	});
 	await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
@@ -538,9 +489,7 @@ test('Markdown preview restores an unsaved custom tab through a cold provider st
 	}, pathToFileURL(file).href);
 	try {
 		await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
-	} finally {
-		await transfer.dispose();
-	}
+	} finally { await transfer.dispose(); }
 	await group.editor.waitForEditorContents(text => text.includes('# Persisted heading'));
 	await group.editor.input.focus();
 	await workbench.page.keyboard.press('ControlOrMeta+a');

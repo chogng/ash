@@ -29,14 +29,12 @@ export class ChatTipService extends Disposable implements IChatTipService {
 
 	constructor(@IStorageService storage: IStorageService) {
 		super();
-		this.dismissedTip = this._register(
-			observableMemento({
-				key: DismissedTipStorageKey,
-				defaultValue: '',
-				toStorage: (value: string) => value,
-				fromStorage: (value: string) => value,
-			})(StorageScope.PROFILE, StorageTarget.USER, storage),
-		);
+		this.dismissedTip = this._register(observableMemento({
+			key: DismissedTipStorageKey,
+			defaultValue: '',
+			toStorage: (value: string) => value,
+			fromStorage: (value: string) => value,
+		})(StorageScope.PROFILE, StorageTarget.USER, storage));
 		this._register(this.dismissedTip.onDidChange(() => this.dismissed.fire()));
 	}
 

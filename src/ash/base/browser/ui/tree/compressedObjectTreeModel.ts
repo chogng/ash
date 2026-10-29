@@ -1,14 +1,6 @@
 import type { Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
-import {
-	ObjectTreeModel,
-	type ObjectTreeDefaultCollapseState,
-	type ObjectTreeElement,
-	type ObjectTreeIdentityProvider,
-	type ObjectTreeModelChangeEvent,
-	type ObjectTreeModelCollapseStateChangeEvent,
-	type ObjectTreeNode,
-} from './objectTreeModel.js';
+import { ObjectTreeModel, type ObjectTreeDefaultCollapseState, type ObjectTreeElement, type ObjectTreeIdentityProvider, type ObjectTreeModelChangeEvent, type ObjectTreeModelCollapseStateChangeEvent, type ObjectTreeNode } from './objectTreeModel.js';
 import type { TreeFilter, TreeSorter } from './tree.js';
 
 export interface CompressibleTreeElement<T> {
@@ -45,28 +37,18 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 	constructor(private readonly options: CompressibleObjectTreeModelOptions<T>) {
 		super();
 		this.compressionEnabled = options.compressionEnabled ?? true;
-		this.model = this._register(
-			new ObjectTreeModel({
-				identityProvider: { getId: node => compressedId(node, options.identityProvider) },
-				defaultCollapseState: options.defaultCollapseState,
-				sorter: options.sorter ? { compare: (left, right) => options.sorter!.compare(last(left.elements), last(right.elements)) } : undefined,
-				filter: options.filter
-					? {
-							filter: (node, parentVisibility) => options.filter!.filter(last(node.elements), parentVisibility),
-						}
-					: undefined,
-			}),
-		);
+		this.model = this._register(new ObjectTreeModel({
+			identityProvider: { getId: (node) => compressedId(node, options.identityProvider) },
+			defaultCollapseState: options.defaultCollapseState,
+			sorter: options.sorter ? { compare: (left, right) => options.sorter!.compare(last(left.elements), last(right.elements)) } : undefined,
+			filter: options.filter ? { filter: (node, parentVisibility) => options.filter!.filter(last(node.elements), parentVisibility) } : undefined,
+		}));
 		this.onDidChange = this.model.onDidChange;
 		this.onDidChangeCollapseState = this.model.onDidChangeCollapseState;
 	}
 
-	get visibleNodes(): readonly ObjectTreeNode<CompressedTreeNode<T>>[] {
-		return this.model.visibleNodes;
-	}
-	get rootNodes(): readonly ObjectTreeNode<CompressedTreeNode<T>>[] {
-		return this.model.rootNodes;
-	}
+	get visibleNodes(): readonly ObjectTreeNode<CompressedTreeNode<T>>[] { return this.model.visibleNodes; }
+	get rootNodes(): readonly ObjectTreeNode<CompressedTreeNode<T>>[] { return this.model.rootNodes; }
 
 	setChildren(children: readonly CompressibleTreeElement<T>[]): void {
 		this.rebuild(children);
@@ -99,42 +81,23 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 		}
 	}
 
-	getCompressedNode(element: T): CompressedTreeNode<T> | undefined {
-		return this.nodesByElementId.get(this.options.identityProvider.getId(element));
-	}
+	getCompressedNode(element: T): CompressedTreeNode<T> | undefined { return this.nodesByElementId.get(this.options.identityProvider.getId(element)); }
 	getNode(element: T): ObjectTreeNode<CompressedTreeNode<T>> | undefined {
 		const compressed = this.getCompressedNode(element);
 		return compressed ? this.model.getNode(compressedId(compressed, this.options.identityProvider)) : undefined;
 	}
-	collapse(element: T): boolean {
-		return this.model.collapse(this.requireCompressedId(element));
-	}
-	expand(element: T): boolean {
-		return this.model.expand(this.requireCompressedId(element));
-	}
-	toggleCollapsed(element: T): boolean {
-		return this.model.toggleCollapsed(this.requireCompressedId(element));
-	}
-	expandTo(element: T): boolean {
-		return this.model.expandTo(this.requireCompressedId(element));
-	}
-	rerender(element?: T): void {
-		this.model.rerender(element === undefined ? undefined : this.requireCompressedId(element));
-	}
+	collapse(element: T): boolean { return this.model.collapse(this.requireCompressedId(element)); }
+	expand(element: T): boolean { return this.model.expand(this.requireCompressedId(element)); }
+	toggleCollapsed(element: T): boolean { return this.model.toggleCollapsed(this.requireCompressedId(element)); }
+	expandTo(element: T): boolean { return this.model.expandTo(this.requireCompressedId(element)); }
+	rerender(element?: T): void { this.model.rerender(element === undefined ? undefined : this.requireCompressedId(element)); }
 
 	private rebuild(nextRoots: readonly CompressibleTreeElement<T>[]): void {
 		const prepared = this.compressionEnabled ? nextRoots.map(compressTreeElement) : nextRoots.map(noCompressTreeElement);
 		const retainIdentity = (entry: ObjectTreeElement<CompressedTreeNode<T>>): ObjectTreeElement<CompressedTreeNode<T>> => {
 			const previous = this.getCompressedNode(entry.element.elements[0]!);
-			const unchanged =
-				previous?.incompressible === entry.element.incompressible &&
-				previous.elements.length === entry.element.elements.length &&
-				previous.elements.every((element, index) => element === entry.element.elements[index]);
-			return {
-				...entry,
-				element: unchanged ? previous : entry.element,
-				children: entry.children?.map(retainIdentity),
-			};
+			const unchanged = previous?.incompressible === entry.element.incompressible && previous.elements.length === entry.element.elements.length && previous.elements.every((element, index) => element === entry.element.elements[index]);
+			return { ...entry, element: unchanged ? previous : entry.element, children: entry.children?.map(retainIdentity) };
 		};
 		const compressed = prepared.map(retainIdentity);
 		const index = new Map<string, CompressedTreeNode<T>>();
@@ -204,7 +167,7 @@ function noCompressTreeElement<T>(input: CompressibleTreeElement<T>): ObjectTree
 }
 
 function compressedId<T>(node: CompressedTreeNode<T>, identityProvider: ObjectTreeIdentityProvider<T>): string {
-	return node.elements.map(element => identityProvider.getId(element)).join('\0');
+	return node.elements.map((element) => identityProvider.getId(element)).join('\0');
 }
 
 function last<T>(elements: readonly T[]): T {

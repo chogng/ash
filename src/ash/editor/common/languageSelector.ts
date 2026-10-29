@@ -14,14 +14,7 @@ export interface LanguageFilter {
 
 export type LanguageSelector = string | LanguageFilter | ReadonlyArray<string | LanguageFilter>;
 
-export function score(
-	selector: LanguageSelector | undefined,
-	candidateUri: URI,
-	candidateLanguage: string,
-	candidateIsSynchronized: boolean,
-	candidateNotebookUri: URI | undefined,
-	candidateNotebookType: string | undefined,
-): number {
+export function score(selector: LanguageSelector | undefined, candidateUri: URI, candidateLanguage: string, candidateIsSynchronized: boolean, candidateNotebookUri: URI | undefined, candidateNotebookType: string | undefined): number {
 	if (Array.isArray(selector)) {
 		let ret = 0;
 		for (const item of selector) {

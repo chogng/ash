@@ -2,14 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';
 import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
-import {
-	EditorOption,
-	editorOptionsRegistry,
-	type ConfigurationChangedEvent,
-	type FindComputedEditorOptionValueById,
-	type IComputedEditorOptions,
-	type IEditorOptions,
-} from '../../common/config/editorOptions.js';
+import { EditorOption, editorOptionsRegistry, type ConfigurationChangedEvent, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
 import { CursorConfiguration, CursorState, type EditOperationResult, type EditOperationType } from '../../common/cursorCommon.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
@@ -39,7 +32,13 @@ export function createTestCursorsController(
 	const ownedLanguageConfigurationService = languageConfigurationService ? undefined : createTestLanguageConfigurationService();
 	const configurations = languageConfigurationService ?? ownedLanguageConfigurationService!;
 	const cursorConfig = createTestCursorConfiguration(model, configurations, options);
-	const controller = new TestCursorsController(model, new IdentityCoordinatesConverter(model), cursorConfig, ownedLanguageConfigurationService, options);
+	const controller = new TestCursorsController(
+		model,
+		new IdentityCoordinatesConverter(model),
+		cursorConfig,
+		ownedLanguageConfigurationService,
+		options,
+	);
 	setTestCursorSelections(controller, selections);
 	return controller;
 }
@@ -95,27 +94,24 @@ class TestCursorsController extends CursorsController {
 }
 
 export function createTestCursorConfiguration(model: TextModel, languageConfigurationService: ILanguageConfigurationService, rawOptions: IEditorOptions = {}): CursorConfiguration {
-	const fontInfo = new FontInfo(
-		{
-			pixelRatio: 1,
-			fontFamily: 'monospace',
-			fontWeight: 'normal',
-			fontSize: 10,
-			fontFeatureSettings: 'none',
-			fontVariationSettings: 'normal',
-			lineHeight: 20,
-			letterSpacing: 0,
-			isMonospace: true,
-			typicalHalfwidthCharacterWidth: 10,
-			typicalFullwidthCharacterWidth: 20,
-			canUseHalfwidthRightwardsArrow: true,
-			spaceWidth: 10,
-			middotWidth: 10,
-			wsmiddotWidth: 10,
-			maxDigitWidth: 10,
-		},
-		true,
-	);
+	const fontInfo = new FontInfo({
+		pixelRatio: 1,
+		fontFamily: 'monospace',
+		fontWeight: 'normal',
+		fontSize: 10,
+		fontFeatureSettings: 'none',
+		fontVariationSettings: 'normal',
+		lineHeight: 20,
+		letterSpacing: 0,
+		isMonospace: true,
+		typicalHalfwidthCharacterWidth: 10,
+		typicalFullwidthCharacterWidth: 20,
+		canUseHalfwidthRightwardsArrow: true,
+		spaceWidth: 10,
+		middotWidth: 10,
+		wsmiddotWidth: 10,
+		maxDigitWidth: 10,
+	}, true);
 	const options: IComputedEditorOptions = {
 		get<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
 			if (id === EditorOption.fontInfo) return fontInfo as unknown as FindComputedEditorOptionValueById<T>;
@@ -132,13 +128,13 @@ export function createTestCursorConfiguration(model: TextModel, languageConfigur
 		onDidChangeFast: Event.None as Event<ConfigurationChangedEvent>,
 		onDidChange: Event.None as Event<ConfigurationChangedEvent>,
 		getRawOptions: () => ({ ...rawOptions }),
-		updateOptions: () => {},
-		observeContainer: () => {},
-		setIsDominatedByLongLines: () => {},
-		setModelLineCount: () => {},
-		setViewLineCount: () => {},
-		setReservedHeight: () => {},
-		setGlyphMarginDecorationLaneCount: () => {},
+		updateOptions: () => { },
+		observeContainer: () => { },
+		setIsDominatedByLongLines: () => { },
+		setModelLineCount: () => { },
+		setViewLineCount: () => { },
+		setReservedHeight: () => { },
+		setGlyphMarginDecorationLaneCount: () => { },
 		dispose: Disposable.None.dispose,
 		[Symbol.dispose]: Disposable.None[Symbol.dispose],
 	};

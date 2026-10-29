@@ -24,13 +24,7 @@ export class ViewLine {
 	private readonly _viewGpuContext: ViewGpuContext | undefined;
 	private _isMaybeInvalid = true;
 
-	constructor(
-		host: HTMLElement,
-		lineIndex: number,
-		private _options: ViewLineOptions,
-		tabSize: number,
-		viewGpuContext?: ViewGpuContext,
-	) {
+	constructor(host: HTMLElement, lineIndex: number, private _options: ViewLineOptions, tabSize: number, viewGpuContext?: ViewGpuContext) {
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('View line tab size must be a positive safe integer');
 		const domNode = new FastDomNode(h(host.ownerDocument, 'div'));
 		const textElement = h(host.ownerDocument, 'span');
@@ -177,14 +171,7 @@ class RenderedViewLine {
 		return !this.canUseMonospaceMetrics && this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(
-		text: string,
-		tokens: readonly ResolvedSemanticToken[],
-		wrappedTextIndentWidth: number,
-		inlineDecorations: readonly InlineDecoration[],
-		lineNumber: number,
-		options: ViewLineOptions,
-	): boolean {
+	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number, options: ViewLineOptions): boolean {
 		const stopRenderingLineAfter = options.stopRenderingLineAfter;
 		const characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
 		const changed = characterMapping !== this.characterMapping || wrappedTextIndentWidth !== this.wrappedTextIndentWidth;
@@ -200,19 +187,11 @@ class RenderedViewLine {
 		this.resetCachedWidth();
 		// Retained inputs keep their eligibility with the width cache. Arbitrary
 		// decorations, font styles and non-basic text still require DOM advances.
-		this.monospaceMetrics =
-			this.useMonospaceMeasurement &&
-			options.useMonospaceOptimizations &&
-			options.fontLigatures === EditorFontLigatures.OFF &&
-			/^[\x20-\x7e]*$/u.test(text) &&
-			inlineDecorations.length === 0 &&
-			tokens.every(token => !token.modifiers?.length && !token.syntaxPresentation?.fontStyle?.length) &&
-			(stopRenderingLineAfter < 0 || text.length <= stopRenderingLineAfter)
-				? {
-						spaceWidth: options.spaceWidth,
-						requiresNormalWeight: tokens.some(token => token.syntaxPresentation?.fontStyle !== undefined),
-					}
-				: undefined;
+		this.monospaceMetrics = this.useMonospaceMeasurement && options.useMonospaceOptimizations && options.fontLigatures === EditorFontLigatures.OFF
+			&& /^[\x20-\x7e]*$/u.test(text) && inlineDecorations.length === 0
+			&& tokens.every(token => !token.modifiers?.length && !token.syntaxPresentation?.fontStyle?.length)
+			&& (stopRenderingLineAfter < 0 || text.length <= stopRenderingLineAfter)
+			? { spaceWidth: options.spaceWidth, requiresNormalWeight: tokens.some(token => token.syntaxPresentation?.fontStyle !== undefined) } : undefined;
 		this.shouldUpdateWidth = false;
 		return changed;
 	}
@@ -254,7 +233,9 @@ class RenderedViewLine {
 			this.cachedWidth = this.wrappedTextIndentWidth + this.renderedText.length * this.monospaceMetrics!.spaceWidth;
 			return this.cachedWidth;
 		}
-		const width = context ? this.textElement.getBoundingClientRect().width / context.clientRectScale : this.textElement.offsetWidth;
+		const width = context
+			? this.textElement.getBoundingClientRect().width / context.clientRectScale
+			: this.textElement.offsetWidth;
 		context?.markDidDomLayout();
 		this.cachedWidth = this.wrappedTextIndentWidth + Math.max(0, width);
 		return this.cachedWidth;
@@ -289,7 +270,7 @@ export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common
 // Token batches can change other lines. Keep the successful DOM input here so
 // both visible rows and inline deleted zones retain unchanged spans and mapping.
 // Weak keys let the row/zone owner release this render cache with its DOM.
-const renderedLineInputs = new WeakMap<HTMLElement, { readonly key: string; readonly mapping: CharacterMapping }>();
+const renderedLineInputs = new WeakMap<HTMLElement, { readonly key: string; readonly mapping: CharacterMapping; }>();
 
 /** Projects one line transactionally while preserving its exact source text. */
 export function projectStanzaSemanticTokenLine(
@@ -317,22 +298,13 @@ export function projectStanzaSemanticTokenLine(
 		.map(decoration => ({
 			...decoration,
 			range: new Range(
-				lineNumber,
-				decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : 1,
-				lineNumber,
-				decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : visibleText.length + 1,
+				lineNumber, decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : 1,
+				lineNumber, decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : visibleText.length + 1,
 			),
 		}))
 		.filter(decoration => decoration.range.startColumn - 1 <= visibleText.length);
 	const boundary = (column: number) => Math.max(0, Math.min(visibleText.length, column));
-	const boundaries = [
-		...new Set([
-			0,
-			visibleText.length,
-			...tokens.flatMap(token => [boundary(token.startColumn), boundary(token.endColumn)]),
-			...lineDecorations.flatMap(decoration => [boundary(decoration.range.startColumn - 1), boundary(decoration.range.endColumn - 1)]),
-		]),
-	].sort((left, right) => left - right);
+	const boundaries = [...new Set([0, visibleText.length, ...tokens.flatMap(token => [boundary(token.startColumn), boundary(token.endColumn)]), ...lineDecorations.flatMap(decoration => [boundary(decoration.range.startColumn - 1), boundary(decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
 	const characterMapping = new CharacterMapping(visibleText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
 	if (visibleText.length === 0) {
@@ -349,9 +321,7 @@ export function projectStanzaSemanticTokenLine(
 			fragment.append(injectedElement);
 		}
 		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
-		const decorations = lineDecorations.filter(
-			decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn,
-		);
+		const decorations = lineDecorations.filter(decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn);
 		const tokenElement = h(ownerDocument, 'span');
 		if (token || decorations.length > 0) tokenElement.className = 'stanza-editor-token';
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
@@ -372,7 +342,7 @@ export function projectStanzaSemanticTokenLine(
 		}
 		for (let offset = startColumn; offset < endColumn; offset += 1) {
 			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
-			visibleColumn += visibleText.charCodeAt(offset) === 9 ? tabSize - (visibleColumn % tabSize) : 1;
+			visibleColumn += visibleText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;
 		}
 		if (endColumn === visibleText.length) characterMapping.setColumnInfo(visibleText.length + 1, index, endColumn - startColumn, visibleColumn);
 		fragment.append(tokenElement);
@@ -401,25 +371,15 @@ export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): R
 		if (result.has(line.lineIndex)) {
 			throw new RangeError(`Duplicate Stanza semantic token line ${line.lineIndex}`);
 		}
-		const tokens = Object.freeze(
-			line.tokens.map(token =>
-				Object.freeze({
-					startColumn: token.startColumn,
-					endColumn: token.endColumn,
-					presentation: token.presentation,
-					...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
-					...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
-					...(token.semanticType === undefined
-						? {}
-						: {
-								semanticType: token.semanticType,
-								semanticModifiers: token.semanticModifiers,
-								semanticLanguage: token.semanticLanguage,
-							}),
-				}),
-			),
-		);
-		validateLineTokens(source.textModel.getLineContent(line.lineIndex + 1), tokens);
+		const tokens = Object.freeze(line.tokens.map(token => Object.freeze({
+			startColumn: token.startColumn,
+			endColumn: token.endColumn,
+			presentation: token.presentation,
+			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
+			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
+		})));
+		validateLineTokens(source.textModel.getLineContent((line.lineIndex) + 1), tokens);
 		result.set(line.lineIndex, tokens);
 	}
 	return result;
@@ -465,6 +425,6 @@ function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable
 		element.style.fontStyle = presentation.fontStyle.includes('italic') ? 'italic' : 'normal';
 		element.style.fontWeight = presentation.fontStyle.includes('bold') ? 'bold' : 'normal';
 	}
-	const decorations = presentation.fontStyle?.filter(style => style === 'underline' || style === 'strikethrough').map(style => (style === 'strikethrough' ? 'line-through' : style)) ?? [];
+	const decorations = presentation.fontStyle?.filter(style => style === 'underline' || style === 'strikethrough').map(style => style === 'strikethrough' ? 'line-through' : style) ?? [];
 	if (presentation.fontStyle !== undefined) element.style.textDecorationLine = decorations.length ? decorations.join(' ') : 'none';
 }

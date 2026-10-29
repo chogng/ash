@@ -4,7 +4,7 @@ import type { AgentTracePage, AgentTraceDiagnosticPage, AgentTraceGraph } from '
 
 /** Borrows the canonical transport. Parsers load only when evidence is requested. */
 export class AppServerChatDebugService implements IChatDebugService {
-	constructor(@IAgentThreadService private readonly threads: IAgentThreadService) {}
+	constructor(@IAgentThreadService private readonly threads: IAgentThreadService) { }
 
 	public async readTrace(sessionId: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> {
 		const [{ parseAgentTracePage }, page] = await Promise.all([import('../../common/chatDebugEvents.js'), this.threads.readTrace({ sessionId, after: { ...after }, limit: 500 })]);

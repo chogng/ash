@@ -1,5 +1,7 @@
 import type { Icon } from '../../../base/common/icon.js';
-import type { ContextKeyExpression } from '../../contextkey/common/contextkey.js';
+import type {
+	ContextKeyExpression,
+} from '../../contextkey/common/contextkey.js';
 import type { ICommandMetadata } from '../../commands/common/commands.js';
 import type { ILocalizedString } from '../../../nls.js';
 export type { ILocalizedString } from '../../../nls.js';
@@ -40,6 +42,8 @@ export function commandActionLabel(title: CommandActionTitle): string {
 	return typeof title === 'string' ? title : title.value;
 }
 
-export function isCommandActionToggleInfo(value: ContextKeyExpression | ICommandActionToggleInfo): value is ICommandActionToggleInfo {
+export function isCommandActionToggleInfo(
+	value: ContextKeyExpression | ICommandActionToggleInfo,
+): value is ICommandActionToggleInfo {
 	return 'condition' in value;
 }

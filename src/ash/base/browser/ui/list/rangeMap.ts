@@ -18,7 +18,7 @@ export interface IRangeMap {
 export class RangeMap implements IRangeMap {
 	private offsets: number[] = [0];
 
-	constructor(public paddingTop = 0) {}
+	constructor(public paddingTop = 0) { }
 
 	get count(): number {
 		return this.offsets.length - 1;
@@ -46,7 +46,7 @@ export class RangeMap implements IRangeMap {
 		if (position < 0) return -1;
 		const relativePosition = position - this.paddingTop;
 		// A row's bottom edge belongs to the next row, so search for the first bottom beyond it.
-		const result = binarySearch2(this.count, index => (this.offsets[index + 1]! <= relativePosition ? -1 : 1));
+		const result = binarySearch2(this.count, index => this.offsets[index + 1]! <= relativePosition ? -1 : 1);
 		return -result - 1;
 	}
 

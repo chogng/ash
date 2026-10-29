@@ -5,7 +5,7 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../common/view
 /** Counts containers with active views, independently of selection or user-hidden panes. */
 export class VisibleViewContainersTracker extends Disposable {
 	private readonly listeners = this._register(new DisposableMap<string>());
-	private readonly changed = this._register(new Emitter<{ before: number; after: number }>());
+	private readonly changed = this._register(new Emitter<{ before: number; after: number; }>());
 	public readonly onDidChange = this.changed.event;
 	private count = 0;
 
@@ -19,9 +19,7 @@ export class VisibleViewContainersTracker extends Disposable {
 		this.refresh();
 	}
 
-	public get visibleCount(): number {
-		return this.count;
-	}
+	public get visibleCount(): number { return this.count; }
 
 	private refresh(): void {
 		const containers = this.descriptors.getViewContainers(this.location);
@@ -35,10 +33,7 @@ export class VisibleViewContainersTracker extends Disposable {
 		for (const container of containers) {
 			const model = this.descriptors.getViewContainerModel(container.id);
 			if (!this.listeners.has(container.id)) {
-				this.listeners.set(
-					container.id,
-					model.onDidChangeActiveViewDescriptors(() => this.refresh()),
-				);
+				this.listeners.set(container.id, model.onDidChangeActiveViewDescriptors(() => this.refresh()));
 			}
 			if (model.activeViewDescriptors.length > 0) {
 				after++;

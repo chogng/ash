@@ -205,7 +205,7 @@ export class FindMatch {
 	public constructor(
 		public readonly range: Range,
 		public readonly matches: string[] | null,
-	) {}
+	) { }
 }
 
 export class TextModelResolvedOptions {
@@ -241,16 +241,14 @@ export class TextModelResolvedOptions {
 	}
 
 	public equals(other: TextModelResolvedOptions): boolean {
-		return (
-			this.tabSize === other.tabSize &&
-			this._indentSizeIsTabSize === other._indentSizeIsTabSize &&
-			this.indentSize === other.indentSize &&
-			this.insertSpaces === other.insertSpaces &&
-			this.defaultEOL === other.defaultEOL &&
-			this.trimAutoWhitespace === other.trimAutoWhitespace &&
-			this.bracketPairColorizationOptions.enabled === other.bracketPairColorizationOptions.enabled &&
-			this.bracketPairColorizationOptions.independentColorPoolPerBracketType === other.bracketPairColorizationOptions.independentColorPoolPerBracketType
-		);
+		return this.tabSize === other.tabSize
+			&& this._indentSizeIsTabSize === other._indentSizeIsTabSize
+			&& this.indentSize === other.indentSize
+			&& this.insertSpaces === other.insertSpaces
+			&& this.defaultEOL === other.defaultEOL
+			&& this.trimAutoWhitespace === other.trimAutoWhitespace
+			&& this.bracketPairColorizationOptions.enabled === other.bracketPairColorizationOptions.enabled
+			&& this.bracketPairColorizationOptions.independentColorPoolPerBracketType === other.bracketPairColorizationOptions.independentColorPoolPerBracketType;
 	}
 
 	public createChangeEvent(newOptions: TextModelResolvedOptions): IModelOptionsChangedEvent {
@@ -304,7 +302,7 @@ export class ValidAnnotatedEditOperation implements IIdentifiedSingleEditOperati
 		public readonly forceMoveMarkers: boolean,
 		public readonly isAutoWhitespaceEdit: boolean,
 		public readonly _isTracked: boolean,
-	) {}
+	) { }
 }
 
 export class ApplyEditsResult {
@@ -312,7 +310,7 @@ export class ApplyEditsResult {
 		public readonly reverseEdits: IValidEditOperation[] | null,
 		public readonly changes: IInternalModelContentChange[],
 		public readonly trimAutoWhitespaceLineNumbers: number[] | null,
-	) {}
+	) { }
 }
 
 export class SearchData {
@@ -320,7 +318,7 @@ export class SearchData {
 		public readonly regex: RegExp,
 		public readonly wordSeparators: WordCharacterClassifier | null,
 		public readonly simpleSearch: string | null,
-	) {}
+	) { }
 }
 
 /** Internal text and physical-line storage contract owned by TextModel. */
@@ -367,12 +365,12 @@ export interface ITextBufferBuilder {
 }
 
 export interface ITextBufferFactory {
-	create(defaultEOL: DefaultEndOfLine): { textBuffer: ITextBuffer; disposable: IDisposable };
+	create(defaultEOL: DefaultEndOfLine): { textBuffer: ITextBuffer; disposable: IDisposable; };
 	getFirstLineText(lengthLimit: number): string;
 }
 
 export interface IAttachedView {
-	setVisibleLines(visibleLines: { startLineNumber: number; endLineNumber: number }[], stabilized: boolean): void;
+	setVisibleLines(visibleLines: { startLineNumber: number; endLineNumber: number; }[], stabilized: boolean): void;
 }
 
 export function isITextSnapshot(value: unknown): value is ITextSnapshot {
@@ -421,14 +419,7 @@ export interface ITextModel extends IDisposable {
 	getLinesDecorations(startLineNumber: number, endLineNumber: number, ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
 	getAllDecorations(ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
 	getAllMarginDecorations(ownerId?: number): IModelDecoration[];
-	getDecorationsInRange(
-		range: IRange,
-		ownerId?: number,
-		filterOutValidation?: boolean,
-		filterFontDecorations?: boolean,
-		onlyMinimapDecorations?: boolean,
-		onlyMarginDecorations?: boolean,
-	): IModelDecoration[];
+	getDecorationsInRange(range: IRange, ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean, onlyMinimapDecorations?: boolean, onlyMarginDecorations?: boolean): IModelDecoration[];
 	getLineInjectedText(lineNumber: number, ownerId?: number): LineInjectedText[];
 	getInjectedTextDecorations(ownerId?: number): IModelDecoration[];
 	getOverviewRulerDecorations(ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
@@ -437,15 +428,9 @@ export interface ITextModel extends IDisposable {
 	getCustomLineHeightsDecorationsInRange(range: Range, ownerId?: number): IModelDecoration[];
 	pushStackElement(): void;
 	popStackElement(): void;
-	edit(edit: TextEdit, options?: { reason?: TextModelEditSource }): void;
+	edit(edit: TextEdit, options?: { reason?: TextModelEditSource; }): void;
 	pushEditOperations(beforeCursorState: Selection[] | null, editOperations: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer): Selection[] | null;
-	pushEditOperations(
-		beforeCursorState: Selection[] | null,
-		editOperations: IIdentifiedSingleEditOperation[],
-		cursorStateComputer: ICursorStateComputer,
-		group?: UndoRedoGroup,
-		reason?: TextModelEditSource,
-	): Selection[] | null;
+	pushEditOperations(beforeCursorState: Selection[] | null, editOperations: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, group?: UndoRedoGroup, reason?: TextModelEditSource): Selection[] | null;
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[]): void;
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], reason: TextModelEditSource): void;
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: false): void;
@@ -460,24 +445,8 @@ export interface ITextModel extends IDisposable {
 	isTooLargeForSyncing(): boolean;
 	isTooLargeForTokenization(): boolean;
 	isTooLargeForHeapOperation(): boolean;
-	findMatches(
-		searchString: string,
-		searchOnlyEditableRange: boolean,
-		isRegex: boolean,
-		matchCase: boolean,
-		wordSeparators: string | null,
-		captureMatches: boolean,
-		limitResultCount?: number,
-	): FindMatch[];
-	findMatches(
-		searchString: string,
-		searchScope: IRange | IRange[],
-		isRegex: boolean,
-		matchCase: boolean,
-		wordSeparators: string | null,
-		captureMatches: boolean,
-		limitResultCount?: number,
-	): FindMatch[];
+	findMatches(searchString: string, searchOnlyEditableRange: boolean, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean, limitResultCount?: number): FindMatch[];
+	findMatches(searchString: string, searchScope: IRange | IRange[], isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean, limitResultCount?: number): FindMatch[];
 	findNextMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
 	findPreviousMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
 	getLanguageId(): string;
@@ -542,15 +511,7 @@ import type { ILanguageSelection } from './languages/language.js';
 import type { FormattingOptions } from './languages.js';
 import type { TextEdit } from './core/edits/textEdit.js';
 import type { ISingleEditOperation } from './core/editOperation.js';
-import type {
-	IModelDecorationsChangedEvent,
-	IModelLanguageChangedEvent,
-	IModelLanguageConfigurationChangedEvent,
-	IModelOptionsChangedEvent,
-	IModelTokensChangedEvent,
-	ModelFontChangedEvent,
-	ModelLineHeightChangedEvent,
-} from './textModelEvents.js';
+import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelLanguageConfigurationChangedEvent, IModelOptionsChangedEvent, IModelTokensChangedEvent, ModelFontChangedEvent, ModelLineHeightChangedEvent } from './textModelEvents.js';
 import { TextChange, type TextModelChange, type TextModelContentChange } from './core/textChange.js';
 import type { TextModelEditSource } from './textModelEditSource.js';
 import type { UndoRedoGroup } from '../../platform/undoRedo/common/undoRedo.js';

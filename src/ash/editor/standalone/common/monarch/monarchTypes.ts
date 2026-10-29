@@ -1,5 +1,5 @@
 export interface IMonarchLanguage {
-	tokenizer: { [name: string]: IMonarchLanguageRule[] };
+	tokenizer: { [name: string]: IMonarchLanguageRule[]; };
 	ignoreCase?: boolean;
 	unicode?: boolean;
 	defaultToken?: string;

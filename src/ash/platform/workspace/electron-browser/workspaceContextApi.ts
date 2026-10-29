@@ -12,42 +12,18 @@ function configurationResult(resource: URI, value: unknown): IFileWriteResult {
 	if (result.error === 'notCurrent') throw new CancellationError('The workspace configuration is no longer current');
 	if (result.error === 'revisionConflict') throw new FileRevisionConflictError(resource);
 	if (result.error === 'notFound') throw new FileNotFoundError(resource);
-	if (
-		typeof result.revision !== 'string' ||
-		!Number.isSafeInteger(result.sizeBytes) ||
-		(result.sizeBytes as number) < 0 ||
-		typeof result.readonly !== 'boolean' ||
-		typeof result.modifiedAtMillis !== 'number'
-	)
-		throw new TypeError('Invalid workspace configuration response');
-	return {
-		revision: result.revision,
-		stat: {
-			resource,
-			kind: FileKind.File,
-			sizeBytes: result.sizeBytes as number,
-			readonly: result.readonly,
-			modifiedAtMillis: result.modifiedAtMillis,
-		},
-	};
+	if (typeof result.revision !== 'string' || !Number.isSafeInteger(result.sizeBytes) || (result.sizeBytes as number) < 0
+		|| typeof result.readonly !== 'boolean' || typeof result.modifiedAtMillis !== 'number') throw new TypeError('Invalid workspace configuration response');
+	return { revision: result.revision, stat: { resource, kind: FileKind.File, sizeBytes: result.sizeBytes as number, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis } };
 }
 
-export function createWorkspaceContextApi(): IWorkspaceContextApi & { validateFolders(folders: readonly URI[]): void } {
-	const validators = new Set<(event: { readonly folders: readonly URI[]; veto(reason: Error): void }) => void>();
+export function createWorkspaceContextApi(): IWorkspaceContextApi & { validateFolders(folders: readonly URI[]): void; } {
+	const validators = new Set<(event: { readonly folders: readonly URI[]; veto(reason: Error): void; }) => void>();
 	return {
-		onWillChangeFolders: listener => {
-			validators.add(listener);
-			return toDisposable(() => validators.delete(listener));
-		},
+		onWillChangeFolders: listener => { validators.add(listener); return toDisposable(() => validators.delete(listener)); },
 		validateFolders: folders => {
 			let failure: Error | undefined;
-			for (const listener of validators)
-				listener({
-					folders,
-					veto: reason => {
-						failure ??= reason;
-					},
-				});
+			for (const listener of validators) listener({ folders, veto: reason => { failure ??= reason; } });
 			if (failure) throw failure;
 		},
 		configurationFiles: {
@@ -56,32 +32,16 @@ export function createWorkspaceContextApi(): IWorkspaceContextApi & { validateFo
 				return toDisposable(() => subscription.dispose());
 			},
 			read: async resource => {
-				const value = await invoke<unknown>(WORKSPACE_CONFIGURATION_CHANNEL, {
-					operation: 'read',
-					uri: resource.toString(),
-				});
+				const value = await invoke<unknown>(WORKSPACE_CONFIGURATION_CHANNEL, { operation: 'read', uri: resource.toString() });
 				const result = configurationResult(resource, value);
 				const content = (value as Record<string, unknown>).content;
 				if (typeof content !== 'string') throw new TypeError('Invalid workspace configuration content');
 				return { resource, bytes: new TextEncoder().encode(content), ...result };
 			},
-			write: async (resource, content, options) =>
-				configurationResult(
-					resource,
-					await invoke(WORKSPACE_CONFIGURATION_CHANNEL, {
-						operation: 'write',
-						uri: resource.toString(),
-						content: new TextDecoder('utf-8', { fatal: true }).decode(content),
-						options: {
-							create: options.create,
-							overwrite: options.overwrite,
-							...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
-						},
-					}),
-				),
+			write: async (resource, content, options) => configurationResult(resource, await invoke(WORKSPACE_CONFIGURATION_CHANNEL, { operation: 'write', uri: resource.toString(), content: new TextDecoder('utf-8', { fatal: true }).decode(content), options: { create: options.create, overwrite: options.overwrite, ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })),
 		},
 		getWorkspace: () => invoke(WORKSPACE_CONTEXT_READ_CHANNEL),
 		editWorkspace: request => invoke(WORKSPACE_EDIT_CHANNEL, request),
-		onDidChange: listener => subscribe(WORKSPACE_CONTEXT_CHANGED_CHANNEL, listener),
+		onDidChange: (listener) => subscribe(WORKSPACE_CONTEXT_CHANGED_CHANNEL, listener),
 	};
 }

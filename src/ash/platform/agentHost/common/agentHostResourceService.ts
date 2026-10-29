@@ -10,7 +10,7 @@ export interface AgentHostResourceSnapshot {
 /** Snapshot content is owned here only while its initiating request is pending. */
 export interface IAgentHostResourceService extends IDisposable {
 	createSnapshot(content: string): Promise<IReference<AgentHostResourceSnapshot> | undefined>;
-	read(handle: string, offset: number, maximum: number): { readonly bytes: Uint8Array; readonly eof: boolean };
+	read(handle: string, offset: number, maximum: number): { readonly bytes: Uint8Array; readonly eof: boolean; };
 	release(handle: string): void;
 	connectionClosed(): void;
 }

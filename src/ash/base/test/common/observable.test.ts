@@ -11,7 +11,9 @@ test('derived observables track changing dependency sets', () => {
 	const useFirst = observableValue('useFirst', true);
 	const first = observableValue('first', 1);
 	const second = observableValue('second', 2);
-	const selected = derived(reader => (useFirst.read(reader) ? first.read(reader) : second.read(reader)));
+	const selected = derived(reader =>
+		useFirst.read(reader) ? first.read(reader) : second.read(reader)
+	);
 	const values: number[] = [];
 	using registration = selected.onDidChange(value => values.push(value));
 
@@ -45,7 +47,7 @@ test('autorun disposes stale dependencies and per-run resources', () => {
 	const values: string[] = [];
 	let resourceDisposals = 0;
 	const registration = autorunWithStore((reader, store) => {
-		store.add(toDisposable(() => (resourceDisposals += 1)));
+		store.add(toDisposable(() => resourceDisposals += 1));
 		values.push(selectFirst.read(reader) ? first.read(reader) : second.read(reader));
 	});
 
@@ -87,14 +89,10 @@ test('event-backed observables read current state on every event', () => {
 test('failed initial reactions release resources before propagating', () => {
 	let disposals = 0;
 
-	assert.throws(
-		() =>
-			autorunWithStore((_reader, store) => {
-				store.add(toDisposable(() => (disposals += 1)));
-				throw new Error('initial reaction failed');
-			}),
-		/initial reaction failed/,
-	);
+	assert.throws(() => autorunWithStore((_reader, store) => {
+		store.add(toDisposable(() => disposals += 1));
+		throw new Error('initial reaction failed');
+	}), /initial reaction failed/);
 	assert.equal(disposals, 1);
 });
 

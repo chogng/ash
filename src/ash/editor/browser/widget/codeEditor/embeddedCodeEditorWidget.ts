@@ -27,22 +27,12 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 		@ILogService logService: ILogService,
 		@IConfigurationService configurationService: IConfigurationService,
 	) {
-		super(
-			{
-				...parentEditor.getRawOptions(),
-				...codeEditorWidgetOptions,
-				...options,
-				container: domElement,
-			},
-			instantiationService,
-			themeService,
-			languageConfigurationService,
-			languageFeaturesService,
-			contextKeyService,
-			codeEditorService,
-			logService,
-			configurationService,
-		);
+		super({
+			...parentEditor.getRawOptions(),
+			...codeEditorWidgetOptions,
+			...options,
+			container: domElement,
+		}, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService, logService, configurationService);
 
 		this.overwriteOptions = { ...options };
 		super.updateOptions(this.overwriteOptions);

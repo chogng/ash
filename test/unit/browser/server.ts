@@ -17,10 +17,7 @@ export async function startBrowserUnitServer(run: ProcessRun, environment: NodeJ
 	const server = createServer(serve);
 	await new Promise<void>((resolveReady, reject) => {
 		server.once('error', reject);
-		server.listen(0, '127.0.0.1', () => {
-			server.off('error', reject);
-			resolveReady();
-		});
+		server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolveReady(); });
 	});
 	const address = server.address();
 	if (!address || typeof address === 'string') throw new Error('Browser unit server requires TCP.');

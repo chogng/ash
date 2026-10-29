@@ -25,34 +25,15 @@ export const externalUriOpenersConfigurationNode: IConfigurationKeyDefinition<Ex
 	scope: ConfigurationScope.WINDOW,
 	setting: {
 		valueType: 'stringMap',
-		get title() {
-			return localize('externalUriOpener.settings.title', 'URL opening rules');
-		},
-		get description() {
-			return localize(
-				'externalUriOpener.settings.description',
-				'Choose how websites open. For example, localhost:* matches local websites and * matches all websites. Rules apply in order. Select an opener with the arrow keys and Enter, or enter its ID.',
-			);
-		},
+		get title() { return localize('externalUriOpener.settings.title', 'URL opening rules'); },
+		get description() { return localize('externalUriOpener.settings.description', 'Choose how websites open. For example, localhost:* matches local websites and * matches all websites. Rules apply in order. Select an opener with the arrow keys and Enter, or enter its ID.'); },
 		keywords: ['URL', 'HTTP', 'HTTPS', 'browser', 'links', 'workbench.externalUriOpeners'],
-		get keyLabel() {
-			return localize('externalUriOpener.settings.pattern', 'URL pattern');
-		},
-		get valueLabel() {
-			return localize('externalUriOpener.settings.opener', 'Open with');
-		},
-		get addLabel() {
-			return localize('externalUriOpener.settings.add', 'Add rule');
-		},
-		get removeLabel() {
-			return localize('externalUriOpener.settings.remove', 'Remove rule');
-		},
-		get incompleteMessage() {
-			return localize('externalUriOpener.settings.incomplete', 'Enter both a URL pattern and an opener.');
-		},
-		get duplicateMessage() {
-			return localize('externalUriOpener.settings.duplicate', 'Each URL pattern must be unique.');
-		},
+		get keyLabel() { return localize('externalUriOpener.settings.pattern', 'URL pattern'); },
+		get valueLabel() { return localize('externalUriOpener.settings.opener', 'Open with'); },
+		get addLabel() { return localize('externalUriOpener.settings.add', 'Add rule'); },
+		get removeLabel() { return localize('externalUriOpener.settings.remove', 'Remove rule'); },
+		get incompleteMessage() { return localize('externalUriOpener.settings.incomplete', 'Enter both a URL pattern and an opener.'); },
+		get duplicateMessage() { return localize('externalUriOpener.settings.duplicate', 'Each URL pattern must be unique.'); },
 	},
 	parse: value => {
 		if (typeof value !== 'object' || value === null || Array.isArray(value) || !Object.entries(value).every(([pattern, id]) => pattern.length > 0 && typeof id === 'string' && id.length > 0)) {
@@ -66,23 +47,14 @@ export const externalUriOpenersConfigurationNode: IConfigurationKeyDefinition<Ex
 	},
 	schema: {
 		type: 'object',
-		get description() {
-			return localize(
-				'externalUriOpener.settingDescription',
-				'Map HTTP and HTTPS URL patterns to opener IDs. Use default for the standard browser. The first matching available opener is used.',
-			);
-		},
+		get description() { return localize('externalUriOpener.settingDescription', 'Map HTTP and HTTPS URL patterns to opener IDs. Use default for the standard browser. The first matching available opener is used.'); },
 		get additionalProperties() {
 			return {
-				type: 'string' as const,
-				minLength: 1,
-				anyOf: [
-					{ type: 'string' as const },
-					{
-						enum: [defaultExternalUriOpenerId, 'ash.browser.open', ...contributedIds],
-						enumDescriptions: [localize('externalUriOpener.default', 'Open in default browser'), localize('browser.urlOpener', 'Open in Ash browser'), ...contributedLabels],
-					},
-				],
+				type: 'string' as const, minLength: 1,
+				anyOf: [{ type: 'string' as const }, {
+					enum: [defaultExternalUriOpenerId, 'ash.browser.open', ...contributedIds],
+					enumDescriptions: [localize('externalUriOpener.default', 'Open in default browser'), localize('browser.urlOpener', 'Open in Ash browser'), ...contributedLabels],
+				}],
 			};
 		},
 	},

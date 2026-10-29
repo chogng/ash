@@ -34,9 +34,7 @@ test('Remote connection picker shows saved credential-free targets and connects 
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async name => {
-			connected.push(name);
-		},
+		connect: async name => { connected.push(name); },
 	};
 
 	using services = new InstantiationService();
@@ -45,14 +43,12 @@ test('Remote connection picker shows saved credential-free targets and connects 
 	using registration = resolvers.registerResolvers([{ authorityPrefix: 'ssh', resolve: async authority => ({ connectionName: authority.slice(4) }) }]);
 	await showRemoteConnectionPicker(resolvers, quickInput, dialogs);
 	assert.equal(quickInput.picker?.placeholder, 'Select a Remote SSH connection');
-	assert.deepEqual(quickInput.picker?.items, [
-		{
-			connection: { name: 'build', host: 'build-linux', workspace: '/srv/project' },
-			label: 'build',
-			description: 'build-linux',
-			detail: '/srv/project',
-		},
-	]);
+	assert.deepEqual(quickInput.picker?.items, [{
+		connection: { name: 'build', host: 'build-linux', workspace: '/srv/project' },
+		label: 'build',
+		description: 'build-linux',
+		detail: '/srv/project',
+	}]);
 	quickInput.picker?.acceptFirst();
 	await waitUntil(() => connected.length === 1);
 
@@ -76,13 +72,11 @@ test('Remote connection picker reports catalog failures without opening a picker
 	const dialogs = new TestDialogService();
 	const connections: IRemoteConnectionApi = {
 		available: true,
-		list: async () => {
-			throw new Error('catalog busy');
-		},
+		list: async () => { throw new Error('catalog busy'); },
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async () => {},
+		connect: async () => { },
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IRemoteConnectionApi, connections);
@@ -100,7 +94,7 @@ function testRemoteConnections(): IRemoteConnectionApi {
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async () => {},
+		connect: async () => { },
 	};
 }
 
@@ -117,9 +111,7 @@ class TestQuickInputService implements IQuickInputService {
 	cancel = quickInputServiceTestControls.cancel;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	async input(): Promise<string | undefined> {
-		return undefined;
-	}
+	async input(): Promise<string | undefined> { return undefined; }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>();
@@ -131,12 +123,9 @@ class TestQuickInputService implements IQuickInputService {
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
-	focus(): void {}
-	toggle(): void {}
-	accept(inBackground = false): void {
-		this.selectedItems = this.activeItems;
-		this.acceptEmitter.fire({ inBackground });
-	}
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
 
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
@@ -159,24 +148,17 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 
 	acceptFirst(): void {
 		const item = this.items[0];
-		if (item) {
-			this.selectedItems = [item];
-			this.acceptEmitter.fire({ inBackground: false });
-		}
+		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
 	}
 
-	show(): void {}
-	hide(): void {
-		this.hideEmitter.fire();
-	}
+	show(): void { }
+	hide(): void { this.hideEmitter.fire(); }
 	dispose(): void {
 		this.acceptEmitter.dispose();
 		this.valueEmitter.dispose();
 		this.hideEmitter.dispose();
 	}
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
 class TestDialogService implements IDialogService {
@@ -188,24 +170,18 @@ class TestDialogService implements IDialogService {
 	async showMessage(options: IMessageDialogOptions): Promise<void> {
 		this.messages.push(options);
 	}
-	async info(): Promise<void> {}
-	async warn(): Promise<void> {}
-	async error(): Promise<void> {}
-	async about(): Promise<void> {
-		throw new Error('Unexpected about dialog');
-	}
+	async info(): Promise<void> { }
+	async warn(): Promise<void> { }
+	async error(): Promise<void> { }
+	async about(): Promise<void> { throw new Error('Unexpected about dialog'); }
 
-	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
+	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean; }> {
 		this.confirmations.push(options);
 		return { confirmed: true };
 	}
 
-	async prompt(): Promise<never> {
-		throw new Error('Unexpected prompt');
-	}
-	async input(): Promise<never> {
-		throw new Error('Unexpected input dialog');
-	}
+	async prompt(): Promise<never> { throw new Error('Unexpected prompt'); }
+	async input(): Promise<never> { throw new Error('Unexpected input dialog'); }
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {
@@ -216,6 +192,7 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 	assert.fail('condition did not become true');
 }
 
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Agent Host recovery banner and command use the same owner and disappear on recovery (${locale})`, async () => {
 		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
@@ -225,43 +202,17 @@ for (const locale of ['en', 'zh-CN']) {
 			using contexts = new ContextKeyService();
 			using changed = new Emitter<void>();
 			let retries = 0;
-			const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status'] } = {
-				status: 'failed',
-				error: 'fixture offline',
-				onDidChange: changed.event,
-				reconnect: async () => {
-					retries++;
-					recovery.status = 'recovering';
-					changed.fire();
-				},
+			const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
+				status: 'failed', error: 'fixture offline', onDidChange: changed.event,
+				reconnect: async () => { retries++; recovery.status = 'recovering'; changed.fire(); },
 			};
-			services.registerInstance(IAppServerApi, {
-				connectionGeneration: 1,
-				getConnectionState: async () => 'stopped',
-				getSlashCommands: async () => [],
-				onConnectionState: () => ({ dispose() {} }),
-				recovery,
-			});
+			services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
 			services.registerInstance(IBannerService, {
-				_serviceBrand: undefined,
-				focus() {},
-				focusNextAction() {},
-				focusPreviousAction() {},
-				show: item => {
-					notices.set(item.id, item);
-				},
-				hide: id => {
-					notices.delete(id);
-				},
+				_serviceBrand: undefined, focus() { }, focusNextAction() { }, focusPreviousAction() { },
+				show: item => { notices.set(item.id, item); }, hide: id => { notices.delete(id); },
 			});
 			services.registerInstance(IContextKeyService, contexts);
-			using contribution = WorkbenchContributionsRegistry.createHost(
-				services,
-				error => {
-					throw error;
-				},
-				['workbench.contrib.appServerRecovery'],
-			);
+			using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery']);
 			contribution.advance(WorkbenchPhase.BlockRestore);
 			const notice = [...notices.values()][0]!;
 			assert.equal(notices.size, 1);
@@ -273,23 +224,18 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.equal(retries, 1);
 			assert.equal(notices.size, 1);
 			assert.equal([...notices.values()][0]!.message, locale === 'zh-CN' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
-			recovery.status = 'idle';
-			changed.fire();
+			recovery.status = 'idle'; changed.fire();
 			assert.equal(notices.size, 0);
 			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
 			assert.equal(retries, 2);
-			recovery.status = 'unavailable';
-			changed.fire();
+			recovery.status = 'unavailable'; changed.fire();
 			assert.equal(notices.size, 1);
 			assert.equal([...notices.values()][0]!.actions?.length ?? 0, 0);
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), false);
 			contribution.dispose();
 			assert.equal(notices.size, 0);
-			recovery.status = 'failed';
-			changed.fire();
+			recovery.status = 'failed'; changed.fire();
 			assert.equal(notices.size, 0);
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 	});
 }

@@ -25,34 +25,19 @@ import '../../electron-browser/localTerminalBackend.js';
 registerRemoteContributions();
 
 function fixture(owner: DisposableStore, remote: boolean) {
-	const workspace = owner.add(
-		new TestWorkspaceService({
-			id: 'workspace',
-			uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project'),
-		}),
-	);
+	const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project') }));
 	const creation = new DeferredPromise<ITerminalProcessCreation>();
 	const closed: string[] = [];
 	const written: string[] = [];
-	const queries: { terminalId: string; dirId?: string }[] = [];
-	let queryResult = Promise.resolve({
-		ready: { pid: 7, cwd: '/project' },
-		cwd: '/project/current',
-		rows: 24,
-		cols: 80,
-	});
+	const queries: { terminalId: string; dirId?: string; }[] = [];
+	let queryResult = Promise.resolve({ ready: { pid: 7, cwd: '/project' }, cwd: '/project/current', rows: 24, cols: 80 });
 	const processes = {
-		onConnectionState: () => Disposable.None,
-		getConnectionState: async () => 'ready',
+		onConnectionState: () => Disposable.None, getConnectionState: async () => 'ready',
 		create: () => creation.p,
-		close: async ({ terminalId }: { terminalId: string }) => {
-			closed.push(terminalId);
-		},
-		write: async ({ data }: { data: string }) => {
-			written.push(data);
-		},
-		resize: async () => {},
-		getProcessInfo: async (options: { terminalId: string; dirId?: string }) => {
+		close: async ({ terminalId }: { terminalId: string; }) => { closed.push(terminalId); },
+		write: async ({ data }: { data: string; }) => { written.push(data); },
+		resize: async () => { },
+		getProcessInfo: async (options: { terminalId: string; dirId?: string; }) => {
 			queries.push(options);
 			return queryResult;
 		},
@@ -62,66 +47,43 @@ function fixture(owner: DisposableStore, remote: boolean) {
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return {
-		workspace,
-		closed,
-		written,
-		queries,
-		services,
-		terminals,
-		setQuery: (value: typeof queryResult) => {
-			queryResult = value;
-		},
-		ready: () =>
-			creation.complete({
-				terminalId: 'original-pty',
-				ready: { pid: 7, cwd: '/project' },
-				profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-				connectionPersistence: 'reconnectable',
-			}),
-		create: () =>
-			terminals.createTerminal({
-				dimensions: { cols: 80, rows: 24 },
-				profile: { type: 'default' },
-				deferStart: true,
-			}),
+		workspace, closed, written, queries, services, terminals,
+		setQuery: (value: typeof queryResult) => { queryResult = value; },
+		ready: () => creation.complete({ terminalId: 'original-pty', ready: { pid: 7, cwd: '/project' }, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'reconnectable' }),
+		create: () => terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' }, deferStart: true }),
 	};
 }
 
 suite('Terminal execution host boundaries', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const remote of [false, true])
-		test(`late ${remote ? 'remote' : 'local'} creation is released after workspace replacement`, async () => {
-			using owner = new DisposableStore();
-			const f = fixture(owner, remote);
-			await f.terminals.whenConnected;
-			const pending = f.create();
-			const rejected = assert.rejects(pending, isCancellationError);
-			f.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
-			await f.ready();
-			await rejected;
-			assert.equal(f.terminals.instances.length, 0);
-			assert.deepEqual(f.closed, ['original-pty']);
-		});
+	for (const remote of [false, true]) test(`late ${remote ? 'remote' : 'local'} creation is released after workspace replacement`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
+		const pending = f.create();
+		const rejected = assert.rejects(pending, isCancellationError);
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
+		await f.ready();
+		await rejected;
+		assert.equal(f.terminals.instances.length, 0);
+		assert.deepEqual(f.closed, ['original-pty']);
+	});
 
-	for (const remote of [false, true])
-		test(`${remote ? 'remote' : 'local'} stdin cannot migrate to a replacement execution host`, async () => {
-			using owner = new DisposableStore();
-			const f = fixture(owner, remote);
-			await f.terminals.whenConnected;
-			const pending = f.create();
-			await f.ready();
-			const instance = await pending;
-			await instance.sendText('original', false);
-			f.workspace.updateWorkspace({
-				id: 'replacement',
-				uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }),
-			});
-			await assert.rejects(instance.sendText('wrong-host', false), isCancellationError);
-			assert.equal(f.written.length, 1);
-			await f.terminals.closeTerminal(instance);
-			assert.deepEqual(f.closed, ['original-pty']);
-		});
+	for (const remote of [false, true]) test(`${remote ? 'remote' : 'local'} stdin cannot migrate to a replacement execution host`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
+		const pending = f.create();
+		await f.ready();
+		const instance = await pending;
+		await instance.sendText('original', false);
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }) });
+		await assert.rejects(instance.sendText('wrong-host', false), isCancellationError);
+		assert.equal(f.written.length, 1);
+		await f.terminals.closeTerminal(instance);
+		assert.deepEqual(f.closed, ['original-pty']);
+	});
 
 	test('a remote PTY keeps its original cwd and input lease across folder changes on the same host', async () => {
 		using owner = new DisposableStore();
@@ -130,59 +92,43 @@ suite('Terminal execution host boundaries', () => {
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
-		f.workspace.updateWorkspace({
-			id: 'other',
-			uri: URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/other' }),
-		});
+		f.workspace.updateWorkspace({ id: 'other', uri: URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/other' }) });
 		await instance.sendText('still-original', false);
 		assert.equal(instance.initialCwd, '/project');
 		assert.equal(f.written.length, 1);
 		await instance.close();
 	});
 
-	for (const remote of [false, true])
-		test(`${remote ? 'remote' : 'local'} cwd queries reject a replaced execution host`, async () => {
-			using owner = new DisposableStore();
-			const f = fixture(owner, remote);
-			await f.terminals.whenConnected;
-			const pending = f.create();
-			await f.ready();
-			const instance = await pending;
-			const query = instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!;
-			f.workspace.updateWorkspace({
-				id: 'replacement',
-				uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }),
-			});
-			await assert.rejects(query.getCwd(), isCancellationError);
-			assert.deepEqual(f.queries, []);
-			await instance.close();
-		});
+	for (const remote of [false, true]) test(`${remote ? 'remote' : 'local'} cwd queries reject a replaced execution host`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
+		const pending = f.create();
+		await f.ready();
+		const instance = await pending;
+		const query = instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!;
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }) });
+		await assert.rejects(query.getCwd(), isCancellationError);
+		assert.deepEqual(f.queries, []);
+		await instance.close();
+	});
 
-	for (const remote of [false, true])
-		test(`late ${remote ? 'remote' : 'local'} cwd cannot escape a host replacement`, async () => {
-			using owner = new DisposableStore();
-			const f = fixture(owner, remote);
-			await f.terminals.whenConnected;
-			const pending = f.create();
-			await f.ready();
-			const instance = await pending;
-			const response = new DeferredPromise<{
-				ready: { pid: number; cwd: string };
-				cwd: string;
-				rows: number;
-				cols: number;
-			}>();
-			f.setQuery(response.p);
-			const rejected = assert.rejects(instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!.getCwd(), isCancellationError);
-			assert.equal(f.queries.length, 1);
-			f.workspace.updateWorkspace({
-				id: 'replacement',
-				uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }),
-			});
-			await response.complete({ ready: { pid: 7, cwd: '/project' }, cwd: '/retired-host', rows: 24, cols: 80 });
-			await rejected;
-			await instance.close();
-		});
+	for (const remote of [false, true]) test(`late ${remote ? 'remote' : 'local'} cwd cannot escape a host replacement`, async () => {
+		using owner = new DisposableStore();
+		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
+		const pending = f.create();
+		await f.ready();
+		const instance = await pending;
+		const response = new DeferredPromise<{ ready: { pid: number; cwd: string; }; cwd: string; rows: number; cols: number; }>();
+		f.setQuery(response.p);
+		const rejected = assert.rejects(instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!.getCwd(), isCancellationError);
+		assert.equal(f.queries.length, 1);
+		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.from({ scheme: 'ash-remote', authority: 'host-two', path: '/other' }) });
+		await response.complete({ ready: { pid: 7, cwd: '/project' }, cwd: '/retired-host', rows: 24, cols: 80 });
+		await rejected;
+		await instance.close();
+	});
 
 	test('Attach to Chat captures before opening the draft and never submits', async () => {
 		using owner = new DisposableStore();
@@ -197,12 +143,7 @@ suite('Terminal execution host boundaries', () => {
 			getViewWithId: () => ({ getTerminalOutput: async () => text }),
 			openView: async () => {
 				text = 'later output';
-				return {
-					addContext: (value: ChatContextAttachment) => {
-						attachment = value;
-					},
-					acceptInput: () => assert.fail('An attachment must not submit the draft'),
-				};
+				return { addContext: (value: ChatContextAttachment) => { attachment = value; }, acceptInput: () => assert.fail('An attachment must not submit the draft') };
 			},
 		} as unknown as IViewsService);
 		using entry = f.services.createInstance(TerminalTabsChatEntry);
@@ -221,12 +162,7 @@ suite('Terminal execution host boundaries', () => {
 		await f.ready();
 		const instance = await pending;
 		const controller = new AbortController();
-		const view = {
-			getTerminalOutput: async () => {
-				controller.abort();
-				return 'not accepted';
-			},
-		} as unknown as ITerminalView;
+		const view = { getTerminalOutput: async () => { controller.abort(); return 'not accepted'; } } as unknown as ITerminalView;
 		assert.equal(await captureTerminalAttachment(instance, view, controller.signal), undefined);
 		await instance.close();
 	});

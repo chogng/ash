@@ -12,7 +12,9 @@ test('resize observation uses the target document and owns all targets', () => {
 			instances.push(this);
 		}
 	}
-	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', { value: WindowResizeObserver });
+	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', {
+		value: WindowResizeObserver,
+	});
 	const targets = [...ownerDocument.body.children];
 	const deliveries: (readonly ResizeObserverEntry[])[] = [];
 	const registration = observeResize(targets, entries => deliveries.push(entries), { box: 'border-box' });
@@ -35,15 +37,15 @@ test('element-size observation falls back to the content rectangle', () => {
 			observer = this;
 		}
 	}
-	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', { value: WindowResizeObserver });
-	const sizes: { readonly width: number; readonly height: number }[] = [];
+	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', {
+		value: WindowResizeObserver,
+	});
+	const sizes: { readonly width: number; readonly height: number; }[] = [];
 	using registration = observeElementSize(ownerDocument.body.firstElementChild as HTMLElement, size => sizes.push(size));
-	observer?.emit([
-		{
-			contentRect: { width: 320, height: 180 },
-			borderBoxSize: [],
-		} as unknown as ResizeObserverEntry,
-	]);
+	observer?.emit([{
+		contentRect: { width: 320, height: 180 },
+		borderBoxSize: [],
+	} as unknown as ResizeObserverEntry]);
 
 	assert.equal(sizes.length, 1);
 	assert.equal(sizes[0]?.width, 320);
@@ -66,7 +68,10 @@ test('resize observation keeps auxiliary-window constructors isolated', () => {
 	installResizeObserver(firstDocument, firstInstances);
 	installResizeObserver(secondDocument, secondInstances);
 
-	const registration = observeResize([firstDocument.body.firstElementChild!, secondDocument.body.firstElementChild!], () => {});
+	const registration = observeResize([
+		firstDocument.body.firstElementChild!,
+		secondDocument.body.firstElementChild!,
+	], () => { });
 
 	assert.equal(firstInstances.length, 1);
 	assert.equal(secondInstances.length, 1);
@@ -92,7 +97,7 @@ class TestResizeObserver {
 	readonly options: (ResizeObserverOptions | undefined)[] = [];
 	disconnected = false;
 
-	constructor(private readonly callback: ResizeObserverCallback) {}
+	constructor(private readonly callback: ResizeObserverCallback) { }
 
 	observe(target: Element, options?: ResizeObserverOptions): void {
 		this.targets.push(target);

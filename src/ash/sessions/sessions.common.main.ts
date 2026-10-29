@@ -97,55 +97,22 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: {
-		id: 'sessions.newSession',
-		title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'),
-		icon: Lxicon.add,
-		toggled: ContextKeyExpr.or(ContextKeyExpr.has('sessions.activity.chatSelected'), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
-	},
-	group: 'navigation',
-	order: 10,
+	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(ContextKeyExpr.has('sessions.activity.chatSelected'), ContextKeyExpr.has('sessions.activity.chatgptSelected')) },
+	group: 'navigation', order: 10,
 });
 
 MenusRegistry.appendMenuItems([
 	{
 		id: Menus.CodeActivityBar,
-		item: {
-			command: {
-				id: 'sessions.newSession',
-				title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'),
-				icon: Lxicon.add,
-				toggled: ContextKeyExpr.has('sessions.activity.codeSelected'),
-			},
-			group: 'navigation',
-			order: 10,
-		},
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.codeSelected') }, group: 'navigation', order: 10 },
 	},
 	{
 		id: Menus.CodeActivityBar,
-		item: {
-			command: {
-				id: 'sessions.open.collaboration',
-				title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'),
-				icon: Lxicon.collab,
-				toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected'),
-			},
-			group: 'navigation',
-			order: 30,
-		},
+		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
 	},
 	{
 		id: Menus.CodeActivityBar,
-		item: {
-			command: {
-				id: 'sessions.open.teams',
-				title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'),
-				icon: Lxicon.agent,
-				toggled: ContextKeyExpr.has('sessions.activity.teamsSelected'),
-			},
-			group: 'navigation',
-			order: 35,
-		},
+		item: { command: { id: 'sessions.open.teams', title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), icon: Lxicon.agent, toggled: ContextKeyExpr.has('sessions.activity.teamsSelected') }, group: 'navigation', order: 35 },
 	},
 ]);
 

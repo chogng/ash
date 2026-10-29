@@ -36,17 +36,14 @@ export class AppServerRemoteAgentService extends Disposable implements IAppServe
 		if (options.remoteApi) this.observeConnection(options.remoteApi);
 		const readRevision = this.revision;
 		void Promise.resolve()
-			.then(() => (this.isDisposed ? undefined : api.getConnectionState()))
-			.then(
-				state => {
-					if (!this.isDisposed && state !== undefined && this.revision === readRevision) this.acceptState(state);
-				},
-				error => {
-					if (this.isDisposed || this.revision !== readRevision) return;
-					(options.onReadError ?? defaultReadErrorHandler)(error);
-					this.setConnectionState('disconnected');
-				},
-			);
+			.then(() => this.isDisposed ? undefined : api.getConnectionState())
+			.then(state => {
+				if (!this.isDisposed && state !== undefined && this.revision === readRevision) this.acceptState(state);
+			}, error => {
+				if (this.isDisposed || this.revision !== readRevision) return;
+				(options.onReadError ?? defaultReadErrorHandler)(error);
+				this.setConnectionState('disconnected');
+			});
 	}
 
 	get connectionState(): RemoteConnectionState | undefined {
@@ -87,16 +84,11 @@ export class AppServerRemoteAgentService extends Disposable implements IAppServe
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		const readRevision = this.connectionRevision;
-		void Promise.resolve()
-			.then(() => (this.isDisposed ? undefined : api.getConnection()))
-			.then(
-				connection => {
-					if (!this.isDisposed && connection !== undefined && this.connectionRevision === readRevision) this.setConnection(connection);
-				},
-				error => {
-					if (!this.isDisposed && this.connectionRevision === readRevision) defaultConnectionReadErrorHandler(error);
-				},
-			);
+		void Promise.resolve().then(() => this.isDisposed ? undefined : api.getConnection()).then(connection => {
+			if (!this.isDisposed && connection !== undefined && this.connectionRevision === readRevision) this.setConnection(connection);
+		}, error => {
+			if (!this.isDisposed && this.connectionRevision === readRevision) defaultConnectionReadErrorHandler(error);
+		});
 	}
 
 	private setConnection(connection: RemoteAgentConnection): void {

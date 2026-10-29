@@ -1,5 +1,11 @@
-import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
-import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
+import {
+	Disposable,
+	type IDisposable,
+	toDisposable,
+} from '../../base/common/lifecycle.js';
+import type {
+	ServicesAccessor,
+} from '../../platform/instantiation/common/instantiation.js';
 
 /** Startup point at which a workbench contribution is instantiated. */
 export enum WorkbenchPhase {
@@ -20,7 +26,8 @@ export interface IWorkbenchContribution extends IDisposable {
 }
 
 /** Creates one contribution from the services of a workbench window. */
-export type WorkbenchContributionFactory = (accessor: ServicesAccessor) => IWorkbenchContribution;
+export type WorkbenchContributionFactory =
+	(accessor: ServicesAccessor) => IWorkbenchContribution;
 
 interface IWorkbenchContributionRegistration {
 	readonly id: string;
@@ -34,10 +41,15 @@ interface IWorkbenchContributionRegistration {
  * each workbench window.
  */
 export class WorkbenchContributionRegistry {
-	private readonly registrations = new Map<string, IWorkbenchContributionRegistration>();
+	private readonly registrations =
+		new Map<string, IWorkbenchContributionRegistration>();
 	private nextOrder = 1;
 
-	register(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): IDisposable {
+	register(
+		id: string,
+		phase: WorkbenchPhase,
+		factory: WorkbenchContributionFactory,
+	): IDisposable {
 		const registration = this.add(id, phase, factory);
 		return toDisposable(() => {
 			if (this.registrations.get(id) === registration) {
@@ -47,11 +59,19 @@ export class WorkbenchContributionRegistry {
 	}
 
 	/** Registers a declaration that intentionally lives for the realm. */
-	registerStatic(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): void {
+	registerStatic(
+		id: string,
+		phase: WorkbenchPhase,
+		factory: WorkbenchContributionFactory,
+	): void {
 		this.add(id, phase, factory);
 	}
 
-	private add(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): IWorkbenchContributionRegistration {
+	private add(
+		id: string,
+		phase: WorkbenchPhase,
+		factory: WorkbenchContributionFactory,
+	): IWorkbenchContributionRegistration {
 		validateContributionId(id);
 		validateWorkbenchPhase(phase);
 		if (this.registrations.has(id)) {
@@ -70,28 +90,34 @@ export class WorkbenchContributionRegistry {
 	/**
 	 * Creates a window host from the contributions registered at this moment.
 	 */
-	createHost(accessor: ServicesAccessor, onError: WorkbenchContributionErrorHandler = defaultErrorHandler, contributionIds?: readonly string[]): WorkbenchContributionHost {
+	createHost(
+		accessor: ServicesAccessor,
+		onError: WorkbenchContributionErrorHandler = defaultErrorHandler,
+		contributionIds?: readonly string[],
+	): WorkbenchContributionHost {
 		// Product windows explicitly select their composition from the shared declarations.
-		const registrations =
-			contributionIds === undefined
-				? [...this.registrations.values()]
-				: contributionIds.map(id => {
-						const registration = this.registrations.get(id);
-						if (!registration) {
-							throw new Error(`Unknown workbench contribution: ${id}`);
-						}
-						return registration;
-					});
+		const registrations = contributionIds === undefined ? [...this.registrations.values()] : contributionIds.map(id => {
+			const registration = this.registrations.get(id);
+			if (!registration) {
+				throw new Error(`Unknown workbench contribution: ${id}`);
+			}
+			return registration;
+		});
 		return new WorkbenchContributionHost(
 			accessor,
-			registrations.sort((left, right) => left.order - right.order),
+			registrations.sort(
+				(left, right) => left.order - right.order,
+			),
 			onError,
 		);
 	}
 }
 
 /** Receives an isolated contribution construction failure. */
-export type WorkbenchContributionErrorHandler = (error: unknown, contributionId: string) => void;
+export type WorkbenchContributionErrorHandler = (
+	error: unknown,
+	contributionId: string,
+) => void;
 
 /**
  * Owns the contribution instances of one workbench window and advances their
@@ -99,13 +125,18 @@ export type WorkbenchContributionErrorHandler = (error: unknown, contributionId:
  */
 export class WorkbenchContributionHost extends Disposable {
 	private readonly accessor: ServicesAccessor;
-	private readonly registrations: readonly IWorkbenchContributionRegistration[];
+	private readonly registrations:
+		readonly IWorkbenchContributionRegistration[];
 	private readonly onError: WorkbenchContributionErrorHandler;
 	private readonly instantiated = new Set<string>();
-	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution }[] = [];
+	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution; }[] = [];
 	private _phase = 0;
 
-	constructor(accessor: ServicesAccessor, registrations: readonly IWorkbenchContributionRegistration[], onError: WorkbenchContributionErrorHandler) {
+	constructor(
+		accessor: ServicesAccessor,
+		registrations: readonly IWorkbenchContributionRegistration[],
+		onError: WorkbenchContributionErrorHandler,
+	) {
 		super();
 		this.accessor = accessor;
 		this.registrations = registrations;
@@ -113,7 +144,9 @@ export class WorkbenchContributionHost extends Disposable {
 	}
 
 	get phase(): WorkbenchPhase | undefined {
-		return this._phase === 0 ? undefined : (this._phase as WorkbenchPhase);
+		return this._phase === 0
+			? undefined
+			: this._phase as WorkbenchPhase;
 	}
 
 	/**
@@ -128,7 +161,10 @@ export class WorkbenchContributionHost extends Disposable {
 		this._phase = phase;
 
 		for (const registration of this.registrations) {
-			if (registration.phase > phase || this.instantiated.has(registration.id)) {
+			if (
+				registration.phase > phase ||
+				this.instantiated.has(registration.id)
+			) {
 				continue;
 			}
 			this.instantiated.add(registration.id);
@@ -153,7 +189,8 @@ export class WorkbenchContributionHost extends Disposable {
 }
 
 /** Realm-wide workbench contribution declarations. */
-export const WorkbenchContributionsRegistry = new WorkbenchContributionRegistry();
+export const WorkbenchContributionsRegistry =
+	new WorkbenchContributionRegistry();
 
 /**
  * Registers a process-lifetime contribution declaration.
@@ -161,7 +198,11 @@ export const WorkbenchContributionsRegistry = new WorkbenchContributionRegistry(
  * Contribution modules should call this during module evaluation, before a
  * workbench host is created.
  */
-export function registerWorkbenchContribution(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): void {
+export function registerWorkbenchContribution(
+	id: string,
+	phase: WorkbenchPhase,
+	factory: WorkbenchContributionFactory,
+): void {
 	WorkbenchContributionsRegistry.registerStatic(id, phase, factory);
 }
 
@@ -172,11 +213,21 @@ function validateContributionId(id: string): void {
 }
 
 function validateWorkbenchPhase(phase: WorkbenchPhase): void {
-	if (!Number.isInteger(phase) || phase < WorkbenchPhase.BlockStartup || phase > WorkbenchPhase.Eventually) {
+	if (
+		!Number.isInteger(phase) ||
+		phase < WorkbenchPhase.BlockStartup ||
+		phase > WorkbenchPhase.Eventually
+	) {
 		throw new TypeError(`Invalid workbench phase: ${phase}`);
 	}
 }
 
-function defaultErrorHandler(error: unknown, contributionId: string): void {
-	console.error(`Unable to create workbench contribution '${contributionId}'`, error);
+function defaultErrorHandler(
+	error: unknown,
+	contributionId: string,
+): void {
+	console.error(
+		`Unable to create workbench contribution '${contributionId}'`,
+		error,
+	);
 }

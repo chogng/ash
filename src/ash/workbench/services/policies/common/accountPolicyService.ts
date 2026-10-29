@@ -11,19 +11,15 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { AbstractPolicyService, validatePolicyValues } from '../../../../platform/policy/common/policy.js';
 
 export type AccountPolicyRefreshState = {
-	readonly scope?: { readonly accountId: string; readonly host: string; readonly credentialRevision: bigint };
+	readonly scope?: { readonly accountId: string; readonly host: string; readonly credentialRevision: bigint; };
 	/** Local start time of the current or most recent attempt. */
 	readonly lastAttemptAt?: number;
 	/** Last accepted response for this exact scope, including authoritative absence. */
 	readonly lastSuccessAt?: number;
 } & (
-	| { readonly phase: 'idle' | 'refreshing' | 'ready' }
-	| {
-			readonly phase: 'failed';
-			readonly failure: GitHubErrorCode | 'invalidResponse';
-			readonly retainsPolicy: boolean;
-	  }
-);
+		| { readonly phase: 'idle' | 'refreshing' | 'ready'; }
+		| { readonly phase: 'failed'; readonly failure: GitHubErrorCode | 'invalidResponse'; readonly retainsPolicy: boolean; }
+	);
 
 /** Window-owned policy refresh; observations do not grant or withhold execution. */
 export interface IAccountPolicyService {
@@ -51,17 +47,11 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		@ILogService private readonly log: ILogService,
 	) {
 		super();
-		this.retry = this._register(
-			new RunOnceScheduler(() => {
-				void this.refresh();
-			}, 60000),
-		);
+		this.retry = this._register(new RunOnceScheduler(() => { void this.refresh(); }, 60000));
 		this._register(accounts.onDidChangeAccounts(state => this.onAccountsChanged(state)));
 	}
 
-	get state(): AccountPolicyRefreshState {
-		return this.refreshState;
-	}
+	get state(): AccountPolicyRefreshState { return this.refreshState; }
 
 	private setState(state: AccountPolicyRefreshState): void {
 		if (this.stopped) return;
@@ -95,28 +85,22 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		this.retry.cancel();
 		// Publish after installing the shared promise: state listeners may themselves
 		// request a refresh, and must join this operation rather than start another.
-		this.pending = Promise.resolve()
-			.then(async () => {
-				while (!this.stopped) {
-					const definitions = this.policyDefinitions;
-					const generation = this.generation;
-					await this.load();
-					if (definitions === this.policyDefinitions && generation === this.generation) return;
-				}
-			})
-			.finally(() => {
-				this.pending = undefined;
-				if (!this.stopped && !this.retry.isScheduled()) this.retry.schedule(60000);
-			});
+		this.pending = Promise.resolve().then(async () => {
+			while (!this.stopped) {
+				const definitions = this.policyDefinitions;
+				const generation = this.generation;
+				await this.load();
+				if (definitions === this.policyDefinitions && generation === this.generation) return;
+			}
+		}).finally(() => {
+			this.pending = undefined;
+			if (!this.stopped && !this.retry.isScheduled()) this.retry.schedule(60000);
+		});
 		return this.pending;
 	}
 
 	private scope(account: GitHubAccount): NonNullable<AccountPolicyRefreshState['scope']> {
-		return Object.freeze({
-			accountId: account.id,
-			host: account.host,
-			credentialRevision: account.credentialRevision,
-		});
+		return Object.freeze({ accountId: account.id, host: account.host, credentialRevision: account.credentialRevision });
 	}
 
 	private async load(): Promise<void> {
@@ -132,12 +116,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		this.cancellation?.dispose(true);
 		this.cancellation = cancellation;
 		try {
-			this.setState({
-				phase: 'refreshing',
-				scope: this.state.scope,
-				lastAttemptAt,
-				lastSuccessAt: this.state.lastSuccessAt,
-			});
+			this.setState({ phase: 'refreshing', scope: this.state.scope, lastAttemptAt, lastSuccessAt: this.state.lastSuccessAt });
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
 			// The provider catalog defines primary-account order; windows never infer it from plan or email.
 			const selected = (await this.github.listAccounts(cancellation.token))[0];
@@ -149,14 +128,11 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 				return;
 			}
 			if (selected.id !== this.currentAccount?.id || selected.host !== this.currentAccount?.host) this.accept({});
-			const sameScope = selected.id === this.state.scope?.accountId && selected.host === this.state.scope.host && selected.credentialRevision === this.state.scope.credentialRevision;
+			const sameScope = selected.id === this.state.scope?.accountId
+				&& selected.host === this.state.scope.host
+				&& selected.credentialRevision === this.state.scope.credentialRevision;
 			this.currentAccount = selected;
-			this.setState({
-				phase: 'refreshing',
-				scope: this.scope(selected),
-				lastAttemptAt,
-				lastSuccessAt: sameScope ? this.state.lastSuccessAt : undefined,
-			});
+			this.setState({ phase: 'refreshing', scope: this.scope(selected), lastAttemptAt, lastSuccessAt: sameScope ? this.state.lastSuccessAt : undefined });
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
 			const raw = await this.github.readManagedSettings(selected.id, cancellation.token);
 			if (this.stopped || cancellation.token.isCancellationRequested || generation !== this.generation) return;
@@ -165,7 +141,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 				for (const [path, schema] of Object.entries(definition.managedSettings ?? {})) {
 					const value = raw ? settingAtPath(raw, path) : undefined;
 					if (value === undefined) continue;
-					if (typeof value !== schema.type || (typeof value === 'number' && !Number.isFinite(value))) throw new TypeError(`Invalid managed setting: ${path}`);
+					if (typeof value !== schema.type || typeof value === 'number' && !Number.isFinite(value)) throw new TypeError(`Invalid managed setting: ${path}`);
 					Object.defineProperty(managedSettings, path, { value, enumerable: true, configurable: true });
 				}
 			}
@@ -184,12 +160,8 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
 			const failure = error instanceof GitHubError ? error.code : error instanceof TypeError ? 'invalidResponse' : GitHubErrorCode.Unavailable;
 			this.setState({
-				phase: 'failed',
-				scope: this.state.scope,
-				lastAttemptAt,
-				lastSuccessAt: this.state.lastSuccessAt,
-				failure,
-				retainsPolicy: Object.keys(this.policyValues).length > 0,
+				phase: 'failed', scope: this.state.scope, lastAttemptAt, lastSuccessAt: this.state.lastSuccessAt,
+				failure, retainsPolicy: Object.keys(this.policyValues).length > 0,
 			});
 			if (!isCancellationError(error)) this.log.error(getErrorMessage(error));
 		} finally {
@@ -197,10 +169,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			if (this.cancellation === cancellation) this.cancellation = undefined;
 		}
 	}
-	override dispose(): void {
-		this.cancellation?.dispose(true);
-		super.dispose();
-	}
+	override dispose(): void { this.cancellation?.dispose(true); super.dispose(); }
 }
 
 function settingAtPath(raw: Readonly<Record<string, JsonValue>>, path: string): JsonValue | undefined {

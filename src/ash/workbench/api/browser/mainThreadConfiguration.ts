@@ -21,12 +21,10 @@ export class MainThreadConfiguration extends Disposable {
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 	) {
 		super();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				const payload = this.snapshot(event.change);
-				for (const [, observer] of this.observers) observer.send(payload);
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			const payload = this.snapshot(event.change);
+			for (const [, observer] of this.observers) observer.send(payload);
+		}));
 		const schemasChanged = (): void => {
 			const event = { type: 'jsonSchemas', revision: ++this.schemaRevision, emit: true };
 			for (const [, observer] of this.observers) observer.send(event);
@@ -38,11 +36,7 @@ export class MainThreadConfiguration extends Disposable {
 	/** Return a detached view; schema registration and mutation stay with their domain owners. */
 	public getJsonSchemaContributions(): JsonValue {
 		const associations = this.schemas.getSchemaAssociations();
-		const contributions = Object.entries(this.schemas.getSchemaContributions().schemas).map(([uri, schema]) => ({
-			uri,
-			fileMatch: associations[uri] ?? [],
-			schema,
-		}));
+		const contributions = Object.entries(this.schemas.getSchemaContributions().schemas).map(([uri, schema]) => ({ uri, fileMatch: associations[uri] ?? [], schema }));
 		// Registry schemas contain optional undefined fields and shared sub-schemas. Their
 		// serialized JSON representation is the document contract exposed to extensions.
 		return normalizeExtensionHostPayload(JSON.parse(JSON.stringify(contributions)));
@@ -54,28 +48,11 @@ export class MainThreadConfiguration extends Disposable {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
 				if (registration.kind !== 'workspaceEvents') continue;
-				const identity = {
-					extensionId: runtime.id,
-					activationGeneration: runtime.activationGeneration,
-					incarnation: runtime.incarnation,
-					registrationId: registration.registrationId,
-				};
+				const identity = { extensionId: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, registrationId: registration.registrationId };
 				const key = JSON.stringify(identity);
 				retained.add(key);
 				if (this.observers.has(key)) continue;
-				const observer = new ConfigurationObserver(
-					(event, signal) =>
-						this.api.invoke(
-							{
-								...identity,
-								operation: 'workspaceEvent',
-								payload: event,
-								deadlineUnixMillis: Date.now() + this.timeoutMillis,
-							},
-							signal,
-						),
-					this.reportError,
-				);
+				const observer = new ConfigurationObserver((event, signal) => this.api.invoke({ ...identity, operation: 'workspaceEvent', payload: event, deadlineUnixMillis: Date.now() + this.timeoutMillis }, signal), this.reportError);
 				this.observers.set(key, observer);
 				observer.send(this.snapshot());
 			}
@@ -83,23 +60,13 @@ export class MainThreadConfiguration extends Disposable {
 		for (const key of this.observers.keys()) if (!retained.has(key)) this.observers.deleteAndDispose(key);
 	}
 
-	public clear(): void {
-		this.observers.clearAndDisposeAll();
-	}
+	public clear(): void { this.observers.clearAndDisposeAll(); }
 
 	private snapshot(change?: IConfigurationChange): JsonValue {
 		return normalizeExtensionHostPayload({
-			type: 'configuration',
-			revision: ++this.revision,
-			emit: change !== undefined,
-			configurationValues: this.configuration.getValue() ?? {},
-			configurationData: this.configuration.getConfigurationData(),
-			change: change
-				? {
-						keys: [...change.keys],
-						overrides: change.overrides.map(([identifier, keys]) => [identifier, [...keys]]),
-					}
-				: { keys: [], overrides: [] },
+			type: 'configuration', revision: ++this.revision, emit: change !== undefined,
+			configurationValues: this.configuration.getValue() ?? {}, configurationData: this.configuration.getConfigurationData(),
+			change: change ? { keys: [...change.keys], overrides: change.overrides.map(([identifier, keys]) => [identifier, [...keys]]) } : { keys: [], overrides: [] },
 		});
 	}
 }
@@ -109,12 +76,7 @@ class ConfigurationObserver extends Disposable {
 	private queue: Promise<void> = Promise.resolve();
 	private pending = 0;
 
-	constructor(
-		private readonly invoke: (event: JsonValue, signal: AbortSignal) => Promise<JsonValue>,
-		private readonly reportError: (error: unknown) => void,
-	) {
-		super();
-	}
+	constructor(private readonly invoke: (event: JsonValue, signal: AbortSignal) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) { super(); }
 
 	public send(snapshot: JsonValue): void {
 		if (this.controller.signal.aborted) return;
@@ -123,21 +85,13 @@ class ConfigurationObserver extends Disposable {
 			this.reportError(new Error(localize({ bundle: 'ash.workbench', key: 'configurationEventsOverflow' }, 'Extension configuration event queue exceeded 64 pending events.')));
 			return;
 		}
-		this.queue = this.queue
-			.then(async () => {
-				throwIfCancelled(this.controller.signal);
-				await this.invoke(snapshot, this.controller.signal);
-			})
-			.catch(error => {
-				if (!this.controller.signal.aborted) this.reportError(error);
-			})
-			.finally(() => {
-				this.pending--;
-			});
+		this.queue = this.queue.then(async () => {
+			throwIfCancelled(this.controller.signal);
+			await this.invoke(snapshot, this.controller.signal);
+		}).catch(error => {
+			if (!this.controller.signal.aborted) this.reportError(error);
+		}).finally(() => { this.pending--; });
 	}
 
-	protected override disposeCore(): void {
-		this.controller.abort();
-		super.disposeCore();
-	}
+	protected override disposeCore(): void { this.controller.abort(); super.disposeCore(); }
 }

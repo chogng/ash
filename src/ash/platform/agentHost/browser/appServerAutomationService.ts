@@ -13,20 +13,10 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 
 	constructor(private readonly client: AppServerProtocolClient) {
 		super();
-		this._register(
-			client.onStateChange(state => {
-				if (state === 'ready') {
-					this.changed.fire();
-				}
-			}),
-		);
-		this._register(
-			client.onNotification(notification => {
-				if (notification.method === 'automation/changed') {
-					this.changed.fire();
-				}
-			}),
-		);
+		this._register(client.onStateChange(state => { if (state === 'ready') { this.changed.fire(); } }));
+		this._register(client.onNotification(notification => {
+			if (notification.method === 'automation/changed') { this.changed.fire(); }
+		}));
 	}
 
 	public get supportsPullRequestFollowUp(): boolean {
@@ -39,20 +29,10 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 
 	public save(id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus): Promise<Automation> {
 		if (definition.condition && !this.supportsPullRequestFollowUp) {
-			return Promise.reject(
-				new Error(localize('automations.followUpUnavailable', 'PR follow-up requires a backend that supports conditional automations. Update or reconnect to the owning host.')),
-			);
+			return Promise.reject(new Error(localize('automations.followUpUnavailable', 'PR follow-up requires a backend that supports conditional automations. Update or reconnect to the owning host.')));
 		}
 		const schedule = definition.schedule.type === 'weekly' ? { ...definition.schedule, weekdays: [...definition.schedule.weekdays] } : definition.schedule;
-		return this.client
-			.request(APP_SERVER_METHODS['automation/write'], {
-				id,
-				expectedRevision: revision,
-				commandId: generateUuid(),
-				definition: { ...definition, schedule },
-				status,
-			})
-			.catch(explain);
+		return this.client.request(APP_SERVER_METHODS['automation/write'], { id, expectedRevision: revision, commandId: generateUuid(), definition: { ...definition, schedule }, status }).catch(explain);
 	}
 
 	public async delete(id: string, revision: number): Promise<void> {
@@ -85,25 +65,15 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 		const source = { sessionId: run.sessionId, threadId: run.threadId };
 		const result = await this.client.request(APP_SERVER_METHODS['session/thread/read'], source);
 		const turn = result.thread.turns.find(turn => turn.turnId === run.turnId);
-		const output = turn?.items.flatMap(item => (item.type === 'agentMessage' && (item.phase === 'final_answer' || item.phase == null) ? [item.text] : [])).join('\n\n') ?? '';
+		const output = turn?.items.flatMap(item => item.type === 'agentMessage' && (item.phase === 'final_answer' || item.phase == null) ? [item.text] : []).join('\n\n') ?? '';
 		// A continued conversation may contain many runs. Never attribute another Turn's output or files to this run.
 		let files: AutomationRunResult['files'];
 		try {
 			const changes = await this.client.request(APP_SERVER_METHODS['turnChanges/list'], source);
 			const collected: NonNullable<AutomationRunResult['files']>[number][] = [];
 			for (const change of changes.changeSets.filter(change => change.turnId === run.turnId)) {
-				const details = await this.client.request(APP_SERVER_METHODS['turnChanges/read'], {
-					...source,
-					changeSetId: change.changeSetId,
-				});
-				collected.push(
-					...details.files.map(file => ({
-						path: file.path,
-						kind: file.kind,
-						additions: file.additions,
-						deletions: file.deletions,
-					})),
-				);
+				const details = await this.client.request(APP_SERVER_METHODS['turnChanges/read'], { ...source, changeSetId: change.changeSetId });
+				collected.push(...details.files.map(file => ({ path: file.path, kind: file.kind, additions: file.additions, deletions: file.deletions })));
 			}
 			files = collected;
 		} catch {
@@ -117,16 +87,11 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {
-			case 'AutomationConflict':
-				throw new Error('This automation changed in another window. Select it again to load the latest version.');
-			case 'AutomationBusy':
-				throw new Error('This automation still has an unfinished run. Stop it or wait for it to finish.');
-			case 'AutomationNotFound':
-				throw new Error('This automation no longer exists. Refresh the list.');
-			case 'AutomationUnavailable':
-				throw new Error('Automations are unavailable on this backend.');
-			case 'InvalidParams':
-				throw new Error('Check the instructions, execution directory and schedule.');
+			case 'AutomationConflict': throw new Error('This automation changed in another window. Select it again to load the latest version.');
+			case 'AutomationBusy': throw new Error('This automation still has an unfinished run. Stop it or wait for it to finish.');
+			case 'AutomationNotFound': throw new Error('This automation no longer exists. Refresh the list.');
+			case 'AutomationUnavailable': throw new Error('Automations are unavailable on this backend.');
+			case 'InvalidParams': throw new Error('Check the instructions, execution directory and schedule.');
 		}
 	}
 	throw error;

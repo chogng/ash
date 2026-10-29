@@ -13,23 +13,16 @@ interface UpdateHost {
 
 /** Validates renderer requests before they reach the shared installed-product updater. */
 export class UpdateChannel implements IServerChannel {
-	constructor(private readonly service: UpdateHost) {}
+	constructor(private readonly service: UpdateHost) { }
 
 	public async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
 		switch (command) {
-			case 'state':
-				return this.service.state as T;
-			case 'checkForUpdates':
-				return (await this.service.checkForUpdates(validateUpdateRequest(arg))) as T;
-			case 'checkAutomatically':
-				return (await this.service.checkAutomatically(validateUpdateRequest(arg))) as T;
-			case 'downloadUpdate':
-				return (await this.service.downloadUpdate(validateUpdateRequest(arg))) as T;
-			case 'installUpdate':
-				validateInstallRequest(arg);
-				return (await this.service.installUpdate()) as T;
-			default:
-				throw new Error(`Unknown update command: ${command}`);
+			case 'state': return this.service.state as T;
+			case 'checkForUpdates': return await this.service.checkForUpdates(validateUpdateRequest(arg)) as T;
+			case 'checkAutomatically': return await this.service.checkAutomatically(validateUpdateRequest(arg)) as T;
+			case 'downloadUpdate': return await this.service.downloadUpdate(validateUpdateRequest(arg)) as T;
+			case 'installUpdate': validateInstallRequest(arg); return await this.service.installUpdate() as T;
+			default: throw new Error(`Unknown update command: ${command}`);
 		}
 	}
 

@@ -76,7 +76,7 @@ export interface LanguageConfiguration {
 	/**
 	 * Defines a list of bracket pairs that are colorized depending on their nesting level.
 	 * If not set, the configured brackets will be used.
-	 */
+	*/
 	colorizedBracketPairs?: CharacterPair[];
 	/**
 	 * Defines what characters must be after the cursor for bracket or quote autoclosing to occur when using the \'languageDefined\' autoclosing setting.
@@ -95,7 +95,9 @@ export interface LanguageConfiguration {
 	 *
 	 * @deprecated Will be replaced by a better API soon.
 	 */
-	__electricCharacterSupport?: { docComment?: IDocComment };
+	__electricCharacterSupport?: {
+		docComment?: IDocComment;
+	};
 }
 
 /**
@@ -128,6 +130,7 @@ export interface IndentationRule {
 	 * If a line matches this pattern, then its indentation should not be changed and it should not be evaluated against the other rules.
 	 */
 	unIndentedLinePattern?: RegExp | null;
+
 }
 
 /**
@@ -231,7 +234,7 @@ export enum IndentAction {
 	/**
 	 * Insert new line and outdent once (relative to the previous line's indentation).
 	 */
-	Outdent = 3,
+	Outdent = 3
 }
 
 /**
@@ -278,6 +281,7 @@ export interface CompleteEnterAction {
  * @internal
  */
 export class StandardAutoClosingPairConditional {
+
 	readonly open: string;
 	readonly close: string;
 	private readonly _inString: boolean;

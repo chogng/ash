@@ -6,24 +6,14 @@ import type { VSBuffer } from '../../../../base/common/buffer.js';
 export interface CodeImageSnapshot {
 	readonly title: string;
 	readonly firstLine: number;
-	readonly lines: readonly (readonly {
-		readonly text: string;
-		readonly color: string;
-		readonly italic: boolean;
-		readonly bold: boolean;
-		readonly underline: boolean;
-		readonly strikethrough: boolean;
-	}[])[];
+	readonly lines: readonly (readonly { readonly text: string; readonly color: string; readonly italic: boolean; readonly bold: boolean; readonly underline: boolean; readonly strikethrough: boolean; }[])[];
 	readonly background: string;
 	readonly foreground: string;
 	readonly fontFamily: string;
 	readonly fontSize: number;
 	readonly tabSize: number;
 }
-export interface ImageEditorView {
-	readonly html: string;
-	readonly state?: unknown;
-}
+export interface ImageEditorView { readonly html: string; readonly state?: unknown; }
 export interface ImageEditorProvider {
 	readonly id: string;
 	readonly displayName: string;
@@ -46,7 +36,7 @@ export interface IImageEditorService {
 	readonly available: boolean;
 	readonly accessibilityHelp: string;
 	register(provider: ImageEditorProvider): IDisposable;
-	resolve(source: 'screen' | 'selection', signal: AbortSignal, id?: string): Promise<{ readonly view: ImageEditorView; readonly displayName: string; readonly signal: AbortSignal }>;
+	resolve(source: 'screen' | 'selection', signal: AbortSignal, id?: string): Promise<{ readonly view: ImageEditorView; readonly displayName: string; readonly signal: AbortSignal; }>;
 	capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined>;
 	show(options: ImageEditorOptions, signal: AbortSignal): Promise<void>;
 	registerAttachmentHandler(handler: (capture: ImageEditorCapture) => Promise<void>): IDisposable;

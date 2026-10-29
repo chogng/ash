@@ -15,7 +15,7 @@ import type { IWorkingCopy } from '../services/workingCopy/common/workingCopySer
 import type { IEditorCloseHandler } from './editor/editorInput.js';
 
 /** Format-specific control exposed by a Workbench editor pane. */
-export interface IEditorControl extends ICompositeControl {}
+export interface IEditorControl extends ICompositeControl { }
 
 /** A version-bound, package-defined editor operation. No model or service escapes this port. */
 export interface IEditorExtensionApi {
@@ -66,7 +66,9 @@ export interface IEditorPaneWithScrolling extends IEditorPane {
 
 export function isEditorPaneWithScrolling(pane: IEditorPane | undefined): pane is IEditorPaneWithScrolling {
 	const candidate = pane as Partial<IEditorPaneWithScrolling> | undefined;
-	return typeof candidate?.onDidChangeScroll === 'function' && typeof candidate.getScrollPosition === 'function' && typeof candidate.setScrollPosition === 'function';
+	return typeof candidate?.onDidChangeScroll === 'function'
+		&& typeof candidate.getScrollPosition === 'function'
+		&& typeof candidate.setScrollPosition === 'function';
 }
 
 export function getEditorWorkingCopies(pane: IEditorPane): readonly IWorkingCopy[] {
@@ -168,18 +170,10 @@ export interface IEditorResourceAccessorOptions {
 }
 
 class EditorResourceAccessorImpl {
-	public getOriginalUri(
-		editor: IResourceEditorInput | undefined | null,
-		options?: IEditorResourceAccessorOptions & {
-			supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY;
-		},
-	): URI | undefined;
-	public getOriginalUri(
-		editor: IResourceEditorInput | undefined | null,
-		options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH },
-	): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI } | undefined {
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY; }): URI | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH; }): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI; } | undefined {
 		if (!editor) {
 			return undefined;
 		}
@@ -189,10 +183,7 @@ class EditorResourceAccessorImpl {
 			}
 			if (options.supportSideBySide === SideBySideEditor.BOTH) {
 				const sideOptions = { ...options, supportSideBySide: SideBySideEditor.PRIMARY as const };
-				return {
-					primary: this.getOriginalUri(editor.modified, sideOptions),
-					secondary: this.getOriginalUri(editor.original, sideOptions),
-				};
+				return { primary: this.getOriginalUri(editor.modified, sideOptions), secondary: this.getOriginalUri(editor.original, sideOptions) };
 			}
 			if (options.supportSideBySide === SideBySideEditor.ANY) {
 				const sideOptions = { ...options, supportSideBySide: SideBySideEditor.PRIMARY as const };

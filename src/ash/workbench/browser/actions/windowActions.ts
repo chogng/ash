@@ -7,12 +7,8 @@ import { IHostService } from '../../services/host/browser/host.js';
 /** Reload through the host lifecycle so resources can prepare their handoff or veto. */
 export class ReloadWindowAction extends Action2 {
 	static readonly ID = 'workbench.action.reloadWindow';
-	constructor() {
-		super({ id: ReloadWindowAction.ID, title: localize2('reloadWindow', 'Reload Window'), f1: true });
-	}
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IHostService).reload();
-	}
+	constructor() { super({ id: ReloadWindowAction.ID, title: localize2('reloadWindow', 'Reload Window'), f1: true }); }
+	override run(accessor: ServicesAccessor): Promise<void> { return accessor.get(IHostService).reload(); }
 }
 
 export class ShowAboutDialogAction extends Action2 {

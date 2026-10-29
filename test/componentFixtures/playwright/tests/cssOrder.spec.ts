@@ -9,7 +9,7 @@ async function imageRecorder(testInfo: TestInfo, id: string) {
 	const directory = testInfo.outputPath('images');
 	await mkdir(directory, { recursive: true });
 	const prefix = `${id.replaceAll(/[^a-z0-9-]/gi, '-').slice(0, 32)}-${createHash('sha256').update(id).digest('hex').slice(0, 8)}`;
-	const images: { name: string; path: string }[] = [];
+	const images: { name: string; path: string; }[] = [];
 	return {
 		images,
 		save: async (name: string, buffers: readonly Buffer[]): Promise<void> => {
@@ -66,12 +66,10 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 			const disabled = popup.getByRole('option', { name: 'Unavailable choice', exact: true });
 			await expect(disabled).toHaveAttribute('aria-disabled', 'true');
 			await expect(disabled).toHaveCSS('cursor', 'default');
-			expect(
-				await popup.evaluate(element => ({
-					height: element.getBoundingClientRect().height,
-					rows: [...element.querySelectorAll('[role="option"]')].map(row => row.getBoundingClientRect().height),
-				})),
-			).toEqual({ height: 74, rows: [22, 22, 22] });
+			expect(await popup.evaluate(element => ({
+				height: element.getBoundingClientRect().height,
+				rows: [...element.querySelectorAll('[role="option"]')].map(row => row.getBoundingClientRect().height),
+			}))).toEqual({ height: 74, rows: [22, 22, 22] });
 			const plainList = frame.getByRole('listbox', { name: 'Fixture list', exact: true });
 			await expect(plainList).toHaveCSS('padding-top', '0px');
 			await expect(plainList.locator('.ash-list-row').first()).toHaveCSS('cursor', 'default');
@@ -119,7 +117,10 @@ test('CSS scan localizes an injected conflict to its two actual source files', a
 	await writeFile(report, `${JSON.stringify({ fault: 'Injected border-width conflict', result, images: recorder.images }, null, 2)}\n`);
 	await testInfo.attach('injected-conflict', { path: report, contentType: 'application/json' });
 	expect(result.status, JSON.stringify(result)).toBe('localized');
-	expect(result.conflict?.map(document => document.source)).toEqual(['test/componentFixtures/fixtures/cssOrder/earlier.css', 'test/componentFixtures/fixtures/cssOrder/later.css']);
+	expect(result.conflict?.map(document => document.source)).toEqual([
+		'test/componentFixtures/fixtures/cssOrder/earlier.css',
+		'test/componentFixtures/fixtures/cssOrder/later.css',
+	]);
 	expect(result.probes).toBeLessThan(15);
 	expect(result.difference?.styles.some(change => change.property === '/border-top-width')).toBe(true);
 });
@@ -150,8 +151,8 @@ test('scanner rediscovers the original SelectBox and List conflict through real 
 			// Restore the fragile selectors only in this page's actual source node.
 			// The checked-out CSS stays fixed, and the source mapping still names its owner.
 			const source = [...document.querySelectorAll<HTMLStyleElement>('style[data-vite-dev-id]')].find(style => style.dataset.viteDevId?.endsWith('/selectbox/selectbox.css'))!;
-			source.textContent = source
-				.textContent!.replace('.ash-select-box-list.ash-list', '.ash-select-box-list')
+			source.textContent = source.textContent!
+				.replace('.ash-select-box-list.ash-list', '.ash-select-box-list')
 				.replace('.ash-select-box-option:not(.ash-select-box-option-disabled)', '.ash-select-box-option');
 			window.componentFixture.refreshStyles();
 		});
@@ -160,37 +161,25 @@ test('scanner rediscovers the original SelectBox and List conflict through real 
 	await writeFile(report, `${JSON.stringify({ fault: 'Original fragile selectors restored only in this browser document', result, images: recorder.images }, null, 2)}\n`);
 	await testInfo.attach('selectbox-conflict', { path: report, contentType: 'application/json' });
 	expect(result.status, JSON.stringify(result)).toBe('localized');
-	expect(new Set(result.conflict?.map(document => document.source))).toEqual(new Set(['src/ash/base/browser/ui/selectbox/selectbox.css', 'src/ash/base/browser/ui/list/list.css']));
+	expect(new Set(result.conflict?.map(document => document.source))).toEqual(new Set([
+		'src/ash/base/browser/ui/selectbox/selectbox.css',
+		'src/ash/base/browser/ui/list/list.css',
+	]));
 });
 
 test('scan command covers registered fixtures within the shared time budget', async ({ baseURL }, testInfo) => {
 	const options = testInfo.config.metadata.fixtureOptions as FixtureScanOptions;
 	const report = await runCssOrderCommand(testInfo, baseURL!, 'Scan', [
-		'--fixture-id-regex',
-		options.pattern,
-		'--stylesheet-source-regex',
-		options.sourcePattern,
-		'--time-budget-minutes',
-		String(options.budgetMs / 60_000),
-		'--concurrency',
-		String(options.concurrency),
-		'--batch-size',
-		String(options.batchSize),
+		'--fixture-id-regex', options.pattern, '--stylesheet-source-regex', options.sourcePattern,
+		'--time-budget-minutes', String(options.budgetMs / 60_000),
+		'--concurrency', String(options.concurrency), '--batch-size', String(options.batchSize),
 	]);
 	expect(report.results.length).toBeGreaterThan(0);
 	expect(report.results.filter(result => result.status === 'error')).toEqual([]);
 	const incomplete = report.results.filter(result => ['unlocalized', 'not-scanned'].includes(result.status));
-	if (incomplete.length)
-		testInfo.annotations.push({
-			type: 'css-order-incomplete',
-			description: `${incomplete.length} fixtures; see the command report`,
-		});
+	if (incomplete.length) testInfo.annotations.push({ type: 'css-order-incomplete', description: `${incomplete.length} fixtures; see the command report` });
 	const conflicts = report.results.filter(result => result.detected);
-	if (conflicts.length)
-		testInfo.annotations.push({
-			type: 'css-order-sensitive',
-			description: `${conflicts.length} fixtures; see the command report`,
-		});
+	if (conflicts.length) testInfo.annotations.push({ type: 'css-order-sensitive', description: `${conflicts.length} fixtures; see the command report` });
 });
 
 test('bisection command selects exactly one fixture and saves its actual CSS manifest', async ({ baseURL }, testInfo) => {

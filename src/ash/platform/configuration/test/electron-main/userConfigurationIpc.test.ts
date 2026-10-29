@@ -9,13 +9,7 @@ test('User configuration editing creates only the host profile TOML and preserve
 	const root = await mkdtemp(join(tmpdir(), 'ash-hooks-'));
 	try {
 		const opened: string[] = [];
-		const route = userConfigurationIpcRoute(
-			root,
-			() => true,
-			async path => {
-				opened.push(path);
-			},
-		);
+		const route = userConfigurationIpcRoute(root, () => true, async path => { opened.push(path); });
 		assert.throws(() => route.validate({ path: '/arbitrary/config.toml' }), /no arguments/);
 		await route.invoke(route.validate(undefined));
 		const path = join(root, 'config.toml');
@@ -25,9 +19,7 @@ test('User configuration editing creates only the host profile TOML and preserve
 		await route.invoke(undefined);
 		assert.deepEqual(opened, [path, path]);
 		assert.equal(await readFile(path, 'utf8'), contents);
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
+	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('A remote connection cannot open or create the local profile configuration TOML', async () => {
@@ -36,20 +28,10 @@ test('A remote connection cannot open or create the local profile configuration 
 		let local = true;
 		let opens = 0;
 		const path = join(root, 'new-profile');
-		const route = userConfigurationIpcRoute(
-			path,
-			() => local,
-			async () => {
-				opens++;
-			},
-		);
+		const route = userConfigurationIpcRoute(path, () => local, async () => { opens++; });
 		local = false;
-		await assert.rejects(async () => {
-			await route.invoke(undefined);
-		}, /remote host/);
+		await assert.rejects(async () => { await route.invoke(undefined); }, /remote host/);
 		await assert.rejects(stat(path), { code: 'ENOENT' });
 		assert.equal(opens, 0);
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
+	} finally { await rm(root, { recursive: true, force: true }); }
 });

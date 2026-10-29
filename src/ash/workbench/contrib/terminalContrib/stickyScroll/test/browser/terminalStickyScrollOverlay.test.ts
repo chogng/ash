@@ -18,28 +18,14 @@ suite('TerminalStickyScrollOverlay', () => {
 			await page.evaluate(() => {
 				const terminal = window.ashTerminalStreamIntegration;
 				terminal.feedModel('echo first\r\nfirst-middle\r\nfirst-last\r\n');
-				terminal.environmentFrame({
-					type: 'commandExecuted',
-					commandId: 'first',
-					command: 'echo first\nfirst-middle\nfirst-last',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: 1,
-				});
+				terminal.environmentFrame({ type: 'commandExecuted', commandId: 'first', command: 'echo first\nfirst-middle\nfirst-last', isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
 				terminal.feedModel('first-output\r\n'.repeat(20));
 				terminal.environmentFrame({ type: 'commandFinished', exitCode: 0, durationMillis: 1 });
 				terminal.environmentFrame({ type: 'promptStart' });
 				terminal.feedModel('next-directory\r\n$ ');
 				terminal.environmentFrame({ type: 'commandStart' });
 				terminal.feedModel('echo second\r\n');
-				terminal.environmentFrame({
-					type: 'commandExecuted',
-					commandId: 'second',
-					command: 'echo second',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: 2,
-				});
+				terminal.environmentFrame({ type: 'commandExecuted', commandId: 'second', command: 'echo second', isTrusted: true, cwd: '/workspace', timestampMillis: 2 });
 				terminal.feedModel('second-output\r\n'.repeat(50));
 				terminal.environmentFrame({ type: 'commandFinished', exitCode: 0, durationMillis: 1 });
 			});
@@ -50,20 +36,12 @@ suite('TerminalStickyScrollOverlay', () => {
 			for (const distance of [3, 2, 1]) {
 				await page.evaluate(line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line), second.promptStartLine! - distance);
 				await expect(header).toBeVisible();
-				await expect
-					.poll(() =>
-						header.evaluate(element => {
-							const bounds = element.getBoundingClientRect();
-							const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
-							const rowHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
-							return {
-								bottom: Math.round((bounds.bottom - screen.top) / rowHeight),
-								clippedRows: Math.round((screen.top - bounds.top) / rowHeight),
-								clipPath: getComputedStyle(element).clipPath,
-							};
-						}),
-					)
-					.toMatchObject({ bottom: distance, clippedRows: 3 - distance });
+				await expect.poll(() => header.evaluate(element => {
+					const bounds = element.getBoundingClientRect();
+					const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
+					const rowHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+					return { bottom: Math.round((bounds.bottom - screen.top) / rowHeight), clippedRows: Math.round((screen.top - bounds.top) / rowHeight), clipPath: getComputedStyle(element).clipPath };
+				})).toMatchObject({ bottom: distance, clippedRows: 3 - distance });
 			}
 			await header.screenshot({ path: browserTests.info.outputPath('header-at-next-prompt.png') });
 			await page.locator('.ash-terminal-instance:visible').screenshot({ path: browserTests.info.outputPath('next-prompt-visible.png') });
@@ -86,14 +64,7 @@ suite('TerminalStickyScrollOverlay', () => {
 					const terminal = window.ashTerminalStreamIntegration;
 					await terminal.stickyScroll.configure('maxLineCount', 2);
 					terminal.feedModel('echo first 中文🙂\r\nmiddle\r\nlast\r\n');
-					terminal.environmentFrame({
-						type: 'commandExecuted',
-						commandId: 'truncated',
-						command: 'echo first 中文🙂\nmiddle\nlast',
-						isTrusted: true,
-						cwd: '/workspace',
-						timestampMillis: 1,
-					});
+					terminal.environmentFrame({ type: 'commandExecuted', commandId: 'truncated', command: 'echo first 中文🙂\nmiddle\nlast', isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
 					terminal.feedModel('truncated-output\r\n'.repeat(60));
 				});
 				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('truncated-output');
@@ -142,17 +113,8 @@ suite('TerminalStickyScrollOverlay', () => {
 		try {
 			await page.evaluate(() => {
 				const terminal = window.ashTerminalStreamIntegration;
-				terminal.feedModel(
-					'\x1b[31mred 中文🙂\x1b[0m \x1b[38;2;12;34;56mrgb\x1b[0m \x1b[38;5;196mcube\x1b[0m \x1b[38;5;244mgray\x1b[0m \x1b[7minverse\x1b[0m \x1b[48;2;65;43;21mbackground\x1b[0m \x1b[1;31mbold\x1b[0m \x1b[3;4mstyled\x1b[0m \x1b[1;31;44;7mflip\x1b[0m \x1b[38;2;12;34;56m\ue0b0█\x1b[0m\r\n',
-				);
-				terminal.environmentFrame({
-					type: 'commandExecuted',
-					commandId: 'styled',
-					command: 'red 中文🙂 rgb cube gray inverse background bold styled flip \ue0b0█',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: 1,
-				});
+				terminal.feedModel('\x1b[31mred 中文🙂\x1b[0m \x1b[38;2;12;34;56mrgb\x1b[0m \x1b[38;5;196mcube\x1b[0m \x1b[38;5;244mgray\x1b[0m \x1b[7minverse\x1b[0m \x1b[48;2;65;43;21mbackground\x1b[0m \x1b[1;31mbold\x1b[0m \x1b[3;4mstyled\x1b[0m \x1b[1;31;44;7mflip\x1b[0m \x1b[38;2;12;34;56m\ue0b0█\x1b[0m\r\n');
+				terminal.environmentFrame({ type: 'commandExecuted', commandId: 'styled', command: 'red 中文🙂 rgb cube gray inverse background bold styled flip \ue0b0█', isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
 				terminal.feedModel('colored-output\r\n'.repeat(60));
 			});
 			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('colored-output');
@@ -169,7 +131,7 @@ suite('TerminalStickyScrollOverlay', () => {
 				// Compare against the original renderer, including its configured contrast adjustment.
 				const colors = await original.evaluate(element => {
 					const text = element.textContent!;
-					const result: Record<string, { foreground: string; background: string }> = {};
+					const result: Record<string, { foreground: string; background: string; }> = {};
 					for (const word of ['red', 'rgb', 'cube', 'gray', 'inverse', 'background', 'bold', 'flip', '\ue0b0█']) {
 						const index = text.indexOf(word);
 						const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -231,14 +193,7 @@ suite('TerminalStickyScrollOverlay', () => {
 			await page.evaluate(() => {
 				const terminal = window.ashTerminalStreamIntegration;
 				terminal.feedModel('echo first\r\n\r\nthird\r\nfourth\r\nfifth\r\nsixth\r\n');
-				terminal.environmentFrame({
-					type: 'commandExecuted',
-					commandId: 'blank',
-					command: 'echo first\n\nthird\nfourth\nfifth\nsixth',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: 1,
-				});
+				terminal.environmentFrame({ type: 'commandExecuted', commandId: 'blank', command: 'echo first\n\nthird\nfourth\nfifth\nsixth', isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
 				terminal.feedModel('blank-output\r\n'.repeat(60));
 			});
 			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('blank-output');

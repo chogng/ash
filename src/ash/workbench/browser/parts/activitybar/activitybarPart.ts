@@ -24,9 +24,7 @@ export class ActivitybarPart extends Part {
 		if (this.layoutStyle === 'modern') return this.compact ? 36 : 44;
 		return this.compact ? 36 : 48;
 	}
-	public override get maximumWidth(): number {
-		return this.minimumWidth;
-	}
+	public override get maximumWidth(): number { return this.minimumWidth; }
 
 	constructor(
 		container: HTMLElement,
@@ -47,35 +45,25 @@ export class ActivitybarPart extends Part {
 		this.contentDomNode.append(compositeBar.domNode, globalCompositeBar.domNode);
 		this.applyPosition();
 		compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
-		this._register(
-			this.configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarBadges)) {
-					compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
-				}
-			}),
-		);
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarBadges)) {
+				compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
+			}
+		}));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
-		this._register(
-			addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
-				if (!this.domNode.contains(compositeBar.domNode)) this.showContextMenu(event);
-			}),
-		);
-		this._register(
-			addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
-				if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
-			}),
-		);
+		this._register(addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
+			if (!this.domNode.contains(compositeBar.domNode)) this.showContextMenu(event);
+		}));
+		this._register(addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
+			if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
+		}));
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
+		}));
 		for (const domNode of [compositeBar.domNode, globalCompositeBar.domNode]) {
-			this._register(
-				addDisposableListener(domNode, 'keydown', event => {
-					if (!this.domNode.contains(domNode) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) this.showContextMenu(event);
-				}),
-			);
+			this._register(addDisposableListener(domNode, 'keydown', event => {
+				if (!this.domNode.contains(domNode) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) this.showContextMenu(event);
+			}));
 		}
 	}
 

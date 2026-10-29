@@ -12,11 +12,7 @@ export class FormattingEdit {
 		}
 		const scroll = StableEditorScrollState.capture(editor);
 		const fullReplacement = edits.length === 1 && Range.equalsRange(edits[0].range, model.getFullModelRange());
-		const operations = edits.map(edit => ({
-			range: edit.range,
-			text: edit.text,
-			forceMoveMarkers: !fullReplacement,
-		}));
+		const operations = edits.map(edit => ({ range: edit.range, text: edit.text, forceMoveMarkers: !fullReplacement }));
 		if (addUndoStops) {
 			editor.pushUndoStop();
 		}

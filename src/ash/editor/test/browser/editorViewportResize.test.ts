@@ -23,11 +23,7 @@ test('resizing publishes geometry immediately and renders the final size in one 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('short line\n' + 'long line '.repeat(100));
-	using viewport = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-	});
+	using viewport = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
 	try {
 		viewport.layout({ width: 400, height: 100 });
 		viewport.render(true, false);
@@ -43,14 +39,10 @@ test('resizing publishes geometry immediately and renders the final size in one 
 		assert.strictEqual(viewport.getVisualLineProjection(), mapping);
 
 		await new Promise<void>(resolve => {
-			const frame = scheduleAtNextAnimationFrame(
-				dom.window as unknown as Window,
-				() => {
-					frame.dispose();
-					resolve();
-				},
-				-1,
-			);
+			const frame = scheduleAtNextAnimationFrame(dom.window as unknown as Window, () => {
+				frame.dispose();
+				resolve();
+			}, -1);
 		});
 		assert.equal(content.style.width, `${viewport.viewportLayout.contentSize.width}px`);
 		assert.strictEqual(requiredElement(viewport.domNode.domNode, '.view-line'), line);
@@ -66,57 +58,34 @@ test('resizing publishes geometry immediately and renders the final size in one 
 });
 
 test('editors finish text rendering before measuring widgets and writing widget positions', async () => {
-	const dom = new JSDOM('<!doctype html><body><main id="first"></main><main id="second"></main></body>', {
-		pretendToBeVisual: true,
-	});
+	const dom = new JSDOM('<!doctype html><body><main id="first"></main><main id="second"></main></body>', { pretendToBeVisual: true });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using firstModel = new TextModel('first');
 	using secondModel = new TextModel('second');
-	using first = new View({
-		container: requiredElement(dom.window.document, '#first'),
-		model: firstModel,
-		minimap: { enabled: false },
-		fontLigatures: true,
-	});
-	using second = new View({
-		container: requiredElement(dom.window.document, '#second'),
-		model: secondModel,
-		minimap: { enabled: false },
-		fontLigatures: true,
-	});
+	using first = new View({ container: requiredElement(dom.window.document, '#first'), model: firstModel, minimap: { enabled: false }, fontLigatures: true });
+	using second = new View({ container: requiredElement(dom.window.document, '#second'), model: secondModel, minimap: { enabled: false }, fontLigatures: true });
 	const phases: string[] = [];
 	const measuredText: string[][] = [];
 	const lineWidthSnapshots: string[][] = [];
 	try {
-		for (const [name, view] of [
-			['first', first],
-			['second', second],
-		] as const) {
+		for (const [name, view] of [['first', first], ['second', second]] as const) {
 			view.addContentWidget({
 				getId: () => name,
 				getDomNode: () => dom.window.document.createElement('div'),
-				getPosition: () => ({
-					position: new Position(1, 1),
-					preference: [ContentWidgetPositionPreference.EXACT],
-				}),
+				getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
 				beforeRender: () => {
 					phases.push(`measure ${name}`);
 					measuredText.push([first, second].map(editor => requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? ''));
 					return { width: 10, height: 10 };
 				},
-				afterRender: () => {
-					phases.push(`write ${name}`);
-				},
+				afterRender: () => { phases.push(`write ${name}`); },
 			});
 			view.layout({ width: 400, height: 100 });
 			view.render(true, false);
 		}
 		phases.length = 0;
 		measuredText.length = 0;
-		for (const [name, view] of [
-			['first', first],
-			['second', second],
-		] as const) {
+		for (const [name, view] of [['first', first], ['second', second]] as const) {
 			const text = requiredElement(view.domNode.domNode, '.stanza-editor-line-text');
 			text.getBoundingClientRect = () => {
 				phases.push(`text ${name}`);
@@ -130,20 +99,11 @@ test('editors finish text rendering before measuring widgets and writing widget 
 		second.layout({ width: 320, height: 100 });
 		first.layout({ width: 300, height: 100 });
 		await nextEditorFrame(dom.window as unknown as Window);
-		assert.deepEqual(
-			{ phases, measuredText },
-			{
-				phases: ['text first', 'text second', 'measure first', 'measure second', 'write first', 'write second'],
-				measuredText: [
-					['first updated', 'second updated'],
-					['first updated', 'second updated'],
-				],
-			},
-		);
-		assert.deepEqual(lineWidthSnapshots, [
-			['first updated', 'second'],
-			['first updated', 'second updated'],
-		]);
+		assert.deepEqual({ phases, measuredText }, {
+			phases: ['text first', 'text second', 'measure first', 'measure second', 'write first', 'write second'],
+			measuredText: [['first updated', 'second updated'], ['first updated', 'second updated']],
+		});
+		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second'], ['first updated', 'second updated']]);
 	} finally {
 		first.dispose();
 		second.dispose();
@@ -155,21 +115,14 @@ test('clean editor parts stay untouched and immediate rendering cancels queued w
 	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('text');
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
 	let measurements = 0;
 	try {
 		view.addContentWidget({
 			getId: () => 'widget',
 			getDomNode: () => dom.window.document.createElement('div'),
 			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
-			beforeRender: () => {
-				measurements += 1;
-				return { width: 10, height: 10 };
-			},
+			beforeRender: () => { measurements += 1; return { width: 10, height: 10 }; },
 		});
 		view.layout({ width: 400, height: 100 });
 		view.render(true, false);
@@ -197,14 +150,10 @@ test('clean editor parts stay untouched and immediate rendering cancels queued w
 
 async function nextEditorFrame(targetWindow: Window): Promise<void> {
 	await new Promise<void>(resolve => {
-		const frame = scheduleAtNextAnimationFrame(
-			targetWindow,
-			() => {
-				frame.dispose();
-				resolve();
-			},
-			-1,
-		);
+		const frame = scheduleAtNextAnimationFrame(targetWindow, () => {
+			frame.dispose();
+			resolve();
+		}, -1);
 	});
 }
 
@@ -225,13 +174,7 @@ test('model token ranges retain unaffected rows and ignore duplicate composite n
 		tokenReads++;
 		return changed && lineIndex === 0 ? [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground: '#123456' } }] : getLineTokens(lineIndex);
 	};
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		semanticTokenSource: source,
-		minimap: { enabled: false },
-		disableMonospaceOptimizations: true,
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, semanticTokenSource: source, minimap: { enabled: false }, disableMonospaceOptimizations: true });
 	try {
 		view.layout({ width: 400, height: 100 });
 		view.render(true, false);
@@ -257,10 +200,7 @@ test('model token ranges retain unaffected rows and ignore duplicate composite n
 		assert.equal(widthReads, 1, 'Only the affected line loses its measured width');
 		assert.deepEqual([...view.domNode.domNode.querySelectorAll('.view-lines > .view-line')], rows);
 		tokenReads = 0;
-		const ranges = [
-			{ fromLineNumber: 1, toLineNumber: 1 },
-			{ fromLineNumber: 3, toLineNumber: 3 },
-		];
+		const ranges = [{ fromLineNumber: 1, toLineNumber: 1 }, { fromLineNumber: 3, toLineNumber: 3 }];
 		tokenEvents.fire({ semanticTokensApplied: false, ranges });
 		tokenEvents.fire({ semanticTokensApplied: false, ranges });
 		view.render(true, false);
@@ -289,20 +229,9 @@ test('a model token range updates every visible wrapped fragment without queryin
 	let foreground = '#123456';
 	source.getLineTokens = lineIndex => {
 		queriedLines.push(lineIndex);
-		return [
-			{
-				startColumn: 0,
-				endColumn: model.getLineContent(lineIndex + 1).length,
-				syntaxPresentation: { foreground },
-			},
-		];
+		return [{ startColumn: 0, endColumn: model.getLineContent(lineIndex + 1).length, syntaxPresentation: { foreground } }];
 	};
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		semanticTokenSource: source,
-		minimap: { enabled: false },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, semanticTokenSource: source, minimap: { enabled: false } });
 	try {
 		view.layout({ width: 180, height: 300 });
 		view.setLineWrapping(EditorLineWrapping.On);
@@ -314,10 +243,7 @@ test('a model token range updates every visible wrapped fragment without queryin
 		foreground = '#654321';
 		tokenEvents.fire({ semanticTokensApplied: false, ranges: [{ fromLineNumber: 2, toLineNumber: 2 }] });
 		view.render(true, false);
-		assert.deepEqual(
-			queriedLines,
-			wrappedRows.map(() => 1),
-		);
+		assert.deepEqual(queriedLines, wrappedRows.map(() => 1));
 		for (const row of wrappedRows) {
 			assert.equal(requiredElement<HTMLElement>(row, '.stanza-editor-token').style.getPropertyValue('--ash-editor-token-foreground'), foreground);
 		}
@@ -335,15 +261,12 @@ test('custom token sources still refresh retained rows through their own notific
 	using changes = new Emitter<void>();
 	let foreground = '#123456';
 	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-		semanticTokenSource: {
+		container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false }, semanticTokenSource: {
 			textModel: model,
 			lines: [],
 			onDidChange: changes.event,
 			getLineTokens: () => [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground } }],
-		},
+		}
 	});
 	try {
 		view.layout({ width: 400, height: 100 });
@@ -364,11 +287,7 @@ test('scrolling leaves fixed overlay measurements clean while resize and zone ge
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 200 }, (_, index) => `line ${String(index).padStart(3, '0')} ${'x'.repeat(100)}`).join('\n'));
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
 	const node = dom.window.document.createElement('div');
 	let measurements = 0;
 	node.getBoundingClientRect = () => {
@@ -385,12 +304,7 @@ test('scrolling leaves fixed overlay measurements clean while resize and zone ge
 		view.render(true, false);
 		const initialPosition = { left: node.style.left, top: node.style.top };
 		measurements = 0;
-		for (const position of [
-			{ left: 20, top: 20 },
-			{ left: 60, top: 100 },
-			{ left: 0, top: 200 },
-			{ left: 0, top: 0 },
-		]) {
+		for (const position of [{ left: 20, top: 20 }, { left: 60, top: 100 }, { left: 0, top: 200 }, { left: 0, top: 0 }]) {
 			view.scrollTo(position);
 			view.render(true, false);
 			assert.deepEqual(view.viewportLayout.scrollPosition, position);
@@ -416,12 +330,7 @@ test('line-width measurement shares the layer scale and retains cached widths un
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('first\nsecond\nthird');
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-		disableMonospaceOptimizations: true,
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false }, disableMonospaceOptimizations: true });
 	const prototype = dom.window.HTMLElement.prototype;
 	const getBoundingClientRect = prototype.getBoundingClientRect;
 	const offsetWidth = Object.getOwnPropertyDescriptor(prototype, 'offsetWidth')!;
@@ -471,12 +380,7 @@ test('selective scroll rendering updates minimap slider and visible text without
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 200 }, (_, index) => `line ${index}`).join('\n'));
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		rulers: [40],
-		minimap: { enabled: true, size: 'fit' },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, rulers: [40], minimap: { enabled: true, size: 'fit' } });
 	try {
 		view.layout({ width: 400, height: 100 });
 		view.render(true, false);
@@ -517,16 +421,8 @@ test('one window frame renders all queued editors and later window frames do not
 	}
 	using firstModel = new TextModel('first');
 	using secondModel = new TextModel('second');
-	using first = new View({
-		container: requiredElement(firstDom.window.document, 'main'),
-		model: firstModel,
-		minimap: { enabled: false },
-	});
-	using second = new View({
-		container: requiredElement(secondDom.window.document, 'main'),
-		model: secondModel,
-		minimap: { enabled: false },
-	});
+	using first = new View({ container: requiredElement(firstDom.window.document, 'main'), model: firstModel, minimap: { enabled: false } });
+	using second = new View({ container: requiredElement(secondDom.window.document, 'main'), model: secondModel, minimap: { enabled: false } });
 	const measurements = [0, 0];
 	try {
 		for (const [index, view] of [first, second].entries()) {
@@ -534,14 +430,8 @@ test('one window frame renders all queued editors and later window frames do not
 			view.addContentWidget({
 				getId: () => 'widget',
 				getDomNode: () => node,
-				getPosition: () => ({
-					position: new Position(1, 1),
-					preference: [ContentWidgetPositionPreference.EXACT],
-				}),
-				beforeRender: () => {
-					measurements[index]! += 1;
-					return { width: 10, height: 10 };
-				},
+				getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
+				beforeRender: () => { measurements[index]! += 1; return { width: 10, height: 10 }; },
 			});
 			view.layout({ width: 300, height: 100 });
 		}
@@ -571,6 +461,7 @@ test('one window frame renders all queued editors and later window frames do not
 	}
 });
 
+
 test('Stanza viewport automatic layout uses the observed content box', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -580,9 +471,9 @@ test('Stanza viewport automatic layout uses the observed content box', () => {
 			resizeListener = listener;
 		}
 
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
+		observe(): void { }
+		unobserve(): void { }
+		disconnect(): void { }
 	}
 	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
 	using installedObserver = installEditorTestGlobals({ ResizeObserver: TestResizeObserver });
@@ -664,16 +555,10 @@ test('rendered widths update scroll layout before widget measurements and shrink
 			idleTasks.set(++idleHandle, callback);
 			return idleHandle;
 		},
-		cancelIdleCallback: (handle: number) => {
-			idleTasks.delete(handle);
-		},
+		cancelIdleCallback: (handle: number) => { idleTasks.delete(handle); },
 	});
 	using model = new TextModel([...Array<string>(599).fill('abc'), 'x'.repeat(20)].join('\n'));
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		minimap: { enabled: false },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
 	try {
 		view.layout({ width: 300, height: 80 });
 		view.render(true, false);
@@ -684,20 +569,9 @@ test('rendered widths update scroll layout before widget measurements and shrink
 			getId: () => 'width-observer',
 			getDomNode: () => dom.window.document.createElement('div'),
 			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
-			beforeRender: () => {
-				measuredScrollRange = view.viewportLayout.maximumScrollPosition.left;
-				return { width: 10, height: 10 };
-			},
+			beforeRender: () => { measuredScrollRange = view.viewportLayout.maximumScrollPosition.left; return { width: 10, height: 10 }; },
 		});
-		const decorations = model.deltaDecorations(
-			[],
-			[
-				{
-					range: new Range(1, 4, 1, 4),
-					options: { description: 'wide hint', after: { content: 'hint'.repeat(100) } },
-				},
-			],
-		);
+		const decorations = model.deltaDecorations([], [{ range: new Range(1, 4, 1, 4), options: { description: 'wide hint', after: { content: 'hint'.repeat(100) } } }]);
 		view.render(true, false);
 		const content = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-content');
 		assert.ok(measuredScrollRange >= 600);
@@ -728,18 +602,10 @@ test('glyph lanes reuse scans for cursor movement and resize and track margin ch
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('first\nsecond\nthird');
-	using view = new View({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		glyphMargin: true,
-		minimap: { enabled: false },
-	});
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, glyphMargin: true, minimap: { enabled: false } });
 	const original = model.getAllMarginDecorations;
 	let scans = 0;
-	model.getAllMarginDecorations = (...args) => {
-		scans++;
-		return original.apply(model, args);
-	};
+	model.getAllMarginDecorations = (...args) => { scans++; return original.apply(model, args); };
 	try {
 		for (let index = 1; index <= 3; index++) {
 			view.controller.setSelection(new Selection(index, 1, index, 1));
@@ -749,19 +615,7 @@ test('glyph lanes reuse scans for cursor movement and resize and track margin ch
 		model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'inline only', className: 'inline-only' } }]);
 		view.render(true, false);
 		assert.equal(scans, 0);
-		const margin = model.deltaDecorations(
-			[],
-			[
-				{
-					range: new Range(2, 1, 2, 1),
-					options: {
-						description: 'glyph',
-						glyphMarginClassName: 'audit-glyph',
-						glyphMargin: { position: GlyphMarginLane.Right },
-					},
-				},
-			],
-		);
+		const margin = model.deltaDecorations([], [{ range: new Range(2, 1, 2, 1), options: { description: 'glyph', glyphMarginClassName: 'audit-glyph', glyphMargin: { position: GlyphMarginLane.Right } } }]);
 		view.render(true, false);
 		assert.equal(scans, 1);
 		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'new line\n' }]);
@@ -771,11 +625,7 @@ test('glyph lanes reuse scans for cursor movement and resize and track margin ch
 		view.render(true, false);
 		assert.equal(scans, 3);
 		let lane = GlyphMarginLane.Right;
-		const widget = {
-			getId: () => 'glyph-widget',
-			getDomNode: () => dom.window.document.createElement('div'),
-			getPosition: () => ({ range: new Range(1, 1, 1, 1), lane, zIndex: 0 }),
-		};
+		const widget = { getId: () => 'glyph-widget', getDomNode: () => dom.window.document.createElement('div'), getPosition: () => ({ range: new Range(1, 1, 1, 1), lane, zIndex: 0 }) };
 		view.addGlyphMarginWidget(widget);
 		view.render(true, false);
 		lane = GlyphMarginLane.Left;

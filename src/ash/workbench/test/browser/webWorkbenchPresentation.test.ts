@@ -90,7 +90,10 @@ suite('webWorkbench browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashWebWorkbenchIntegration.state().shutdowns)).toBe(1);
 		await expect(reload).toBeVisible();
 		await page.evaluate(() => window.ashWebWorkbenchIntegration.vetoReload(false));
-		await Promise.all([page.waitForEvent('framenavigated', frame => frame === page.mainFrame()), reload.press('Enter')]);
+		await Promise.all([
+			page.waitForEvent('framenavigated', frame => frame === page.mainFrame()),
+			reload.press('Enter'),
+		]);
 		await page.waitForFunction(() => !!window.ashWebWorkbenchIntegration);
 		expect(await page.evaluate(() => sessionStorage.getItem('webUpdateShutdown'))).toBe('reload');
 	});

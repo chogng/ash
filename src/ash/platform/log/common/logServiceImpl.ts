@@ -33,18 +33,14 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 		this._register(toDisposable(() => this.sinks.clear()));
 	}
 
-	getLevel(): LogLevel {
-		return this.level;
-	}
+	getLevel(): LogLevel { return this.level; }
 	setLevel(level: LogLevel): void {
 		if (this.level === level) return;
 		this.level = level;
 		this.levelChanged.fire(level);
 	}
 
-	async flush(): Promise<void> {
-		await this.options.flush?.();
-	}
+	async flush(): Promise<void> { await this.options.flush?.(); }
 
 	protected doCreateLogger(category: string): LogService {
 		if (!category.trim()) throw new TypeError('Log category must not be empty');
@@ -64,18 +60,10 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 		return toDisposable(() => this.sinks.delete(sink));
 	}
 
-	trace(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
-		this.publishArguments(LogLevel.Trace, categoryOrMessage, messageOrArgument, arguments_);
-	}
-	debug(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
-		this.publishArguments(LogLevel.Debug, categoryOrMessage, messageOrArgument, arguments_);
-	}
-	info(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
-		this.publishArguments(LogLevel.Info, categoryOrMessage, messageOrArgument, arguments_);
-	}
-	warn(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
-		this.publishArguments(LogLevel.Warning, categoryOrMessage, messageOrArgument, arguments_);
-	}
+	trace(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void { this.publishArguments(LogLevel.Trace, categoryOrMessage, messageOrArgument, arguments_); }
+	debug(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void { this.publishArguments(LogLevel.Debug, categoryOrMessage, messageOrArgument, arguments_); }
+	info(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void { this.publishArguments(LogLevel.Info, categoryOrMessage, messageOrArgument, arguments_); }
+	warn(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void { this.publishArguments(LogLevel.Warning, categoryOrMessage, messageOrArgument, arguments_); }
 	error(categoryOrError: string | Error, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
 		if (categoryOrError instanceof Error) this.publish(LogLevel.Error, this.options.category ?? 'application', categoryOrError.message, categoryOrError);
 		else this.publishArguments(LogLevel.Error, categoryOrError, messageOrArgument, arguments_);
@@ -83,21 +71,11 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 
 	private publishArguments(level: LogEntryLevel, categoryOrMessage: string, messageOrArgument: unknown, arguments_: readonly unknown[]): void {
 		if (!this.options.category && typeof messageOrArgument === 'string') {
-			this.publish(
-				level,
-				categoryOrMessage,
-				formatMessage(messageOrArgument, arguments_),
-				arguments_.find(argument => argument instanceof Error),
-			);
+			this.publish(level, categoryOrMessage, formatMessage(messageOrArgument, arguments_), arguments_.find(argument => argument instanceof Error));
 			return;
 		}
 		const values = messageOrArgument === undefined ? arguments_ : [messageOrArgument, ...arguments_];
-		this.publish(
-			level,
-			this.options.category ?? 'application',
-			formatMessage(categoryOrMessage, values),
-			values.find(argument => argument instanceof Error),
-		);
+		this.publish(level, this.options.category ?? 'application', formatMessage(categoryOrMessage, values), values.find(argument => argument instanceof Error));
 	}
 
 	private publish(level: LogEntryLevel, category: string, message: string, error?: unknown): void {
@@ -117,7 +95,7 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 	private dispatch(entry: LogEntry): void {
 		if (this.isDisposed) return;
 		// Late subscribers need text diagnostics, never retained exception object graphs.
-		const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error === undefined ? undefined : String(entry.error);
+		const error = entry.error instanceof Error ? entry.error.stack ?? entry.error.message : entry.error === undefined ? undefined : String(entry.error);
 		this.history.push(Object.freeze({ ...entry, error }));
 		this.historyBytes += entry.message.length + (error?.length ?? 0);
 		while (this.historyBytes > 512 * 1024 || this.history.length > 2000) {
@@ -125,12 +103,10 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 			this.historyBytes -= removed.message.length + String(removed.error ?? '').length;
 		}
 		for (const sink of this.sinks) {
-			try {
-				sink.log(entry);
-			} catch (sinkError) {
-				try {
-					this.onSinkError(entry, sinkError);
-				} catch {
+			try { sink.log(entry); }
+			catch (sinkError) {
+				try { this.onSinkError(entry, sinkError); }
+				catch {
 					// A disconnected console can also break the failure reporter. Keep the
 					// original entry flowing to other sinks without feeding the global error handler.
 				}
@@ -142,7 +118,7 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 function formatMessage(message: string, arguments_: readonly unknown[]): string {
 	const values = arguments_.filter(argument => !(argument instanceof Error && argument.message === message));
 	if (values.length === 0) return message;
-	return `${message} ${values.map(argument => (argument instanceof Error ? argument.message : typeof argument === 'string' ? argument : JSON.stringify(argument))).join(' ')}`;
+	return `${message} ${values.map(argument => argument instanceof Error ? argument.message : typeof argument === 'string' ? argument : JSON.stringify(argument)).join(' ')}`;
 }
 
 function reportSinkFailure(entry: LogEntry, error: unknown): void {

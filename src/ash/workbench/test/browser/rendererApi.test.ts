@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { createDisconnectedRendererApi, WebAppServerUnavailableError } from '../../browser/rendererApi.js';
+import {
+	createDisconnectedRendererApi,
+	WebAppServerUnavailableError,
+} from '../../browser/rendererApi.js';
 
 test('disconnected Web renderer API reports stopped without events', async () => {
 	const api = createDisconnectedRendererApi();
 	const states: string[] = [];
-	const subscription = api.appServer.onConnectionState(state => {
+	const subscription = api.appServer.onConnectionState((state) => {
 		states.push(state);
 	});
 
@@ -28,12 +31,16 @@ test('disconnected Web renderer API rejects product operations explicitly', asyn
 		return true;
 	});
 
-	await assert.rejects(api.session.list(), (error: unknown) => {
-		assert.ok(error instanceof WebAppServerUnavailableError);
-		assert.equal(error.operation, 'session.list');
-		assert.match(error.message, /no Web host API was provided/);
-		return true;
-	});
+
+	await assert.rejects(
+		api.session.list(),
+		(error: unknown) => {
+			assert.ok(error instanceof WebAppServerUnavailableError);
+			assert.equal(error.operation, 'session.list');
+			assert.match(error.message, /no Web host API was provided/);
+			return true;
+		},
+	);
 	await assert.rejects(api.hooks.list(), (error: unknown) => {
 		assert.ok(error instanceof WebAppServerUnavailableError);
 		assert.equal(error.operation, 'hooks.list');
@@ -54,21 +61,30 @@ test('disconnected Web renderer API rejects product operations explicitly', asyn
 			return true;
 		},
 	);
-	await assert.rejects(api.fs.readFile({ path: 'src/main.ts' }), (error: unknown) => {
-		assert.ok(error instanceof WebAppServerUnavailableError);
-		assert.equal(error.operation, 'fs.readFile');
-		return true;
-	});
-	await assert.rejects(api.syntax.open({ documentId: 'model-1', language: 'rust', revision: 1, text: 'fn main() {}\n' }), (error: unknown) => {
-		assert.ok(error instanceof WebAppServerUnavailableError);
-		assert.equal(error.operation, 'syntax.open');
-		return true;
-	});
-	await assert.rejects(api.syntax.update({ documentId: 'model-1', previousRevision: 1, revision: 2, edits: [] }), (error: unknown) => {
-		assert.ok(error instanceof WebAppServerUnavailableError);
-		assert.equal(error.operation, 'syntax.update');
-		return true;
-	});
+	await assert.rejects(
+		api.fs.readFile({ path: 'src/main.ts' }),
+		(error: unknown) => {
+			assert.ok(error instanceof WebAppServerUnavailableError);
+			assert.equal(error.operation, 'fs.readFile');
+			return true;
+		},
+	);
+	await assert.rejects(
+		api.syntax.open({ documentId: 'model-1', language: 'rust', revision: 1, text: 'fn main() {}\n' }),
+		(error: unknown) => {
+			assert.ok(error instanceof WebAppServerUnavailableError);
+			assert.equal(error.operation, 'syntax.open');
+			return true;
+		},
+	);
+	await assert.rejects(
+		api.syntax.update({ documentId: 'model-1', previousRevision: 1, revision: 2, edits: [] }),
+		(error: unknown) => {
+			assert.ok(error instanceof WebAppServerUnavailableError);
+			assert.equal(error.operation, 'syntax.update');
+			return true;
+		},
+	);
 	await assert.rejects(api.syntax.analyze({ documentId: 'model-1', revision: 1 }), (error: unknown) => {
 		assert.ok(error instanceof WebAppServerUnavailableError);
 		assert.equal(error.operation, 'syntax.analyze');

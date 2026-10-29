@@ -1,4 +1,8 @@
-import { DisposableStore, type IDisposable, toDisposable } from '../common/lifecycle.js';
+import {
+	DisposableStore,
+	type IDisposable,
+	toDisposable,
+} from '../common/lifecycle.js';
 import { addDisposableListener, h } from './dom.js';
 import type { BrowserWindow } from './window.js';
 
@@ -14,7 +18,9 @@ export interface FilePickerOptions {
 }
 
 /** Opens a native browser file picker and resolves undefined when cancelled. */
-export function pickFiles(options: FilePickerOptions): Promise<readonly File[] | undefined> {
+export function pickFiles(
+	options: FilePickerOptions,
+): Promise<readonly File[] | undefined> {
 	const ownerDocument = options.ownerDocument;
 	requireOwnerWindow(ownerDocument);
 	const input = h(ownerDocument, 'input');
@@ -40,8 +46,12 @@ export function pickFiles(options: FilePickerOptions): Promise<readonly File[] |
 			}
 		};
 
-		registrations.add(addDisposableListener(input, 'change', () => finish(input.files ? [...input.files] : undefined)));
-		registrations.add(addDisposableListener(input, 'cancel', () => finish(undefined)));
+		registrations.add(addDisposableListener(input, 'change', () =>
+			finish(input.files ? [...input.files] : undefined),
+		));
+		registrations.add(addDisposableListener(input, 'cancel', () =>
+			finish(undefined),
+		));
 
 		const signal = options.signal;
 		if (signal?.aborted) {
@@ -51,7 +61,9 @@ export function pickFiles(options: FilePickerOptions): Promise<readonly File[] |
 		if (signal) {
 			const onAbort = (): void => finish(undefined);
 			signal.addEventListener('abort', onAbort, { once: true });
-			registrations.add(toDisposable(() => signal.removeEventListener('abort', onAbort)));
+			registrations.add(toDisposable(() =>
+				signal.removeEventListener('abort', onAbort),
+			));
 		}
 
 		try {
@@ -65,9 +77,15 @@ export function pickFiles(options: FilePickerOptions): Promise<readonly File[] |
 }
 
 /** Downloads a Blob or existing URL under an explicit filename. */
-export function triggerDownload(source: Blob | URL, name: string, ownerDocument: Document): void {
+export function triggerDownload(
+	source: Blob | URL,
+	name: string,
+	ownerDocument: Document,
+): void {
 	const targetWindow = requireOwnerWindow(ownerDocument);
-	const objectUrl = isBlob(source) ? targetWindow.URL.createObjectURL(source) : undefined;
+	const objectUrl = isBlob(source)
+		? targetWindow.URL.createObjectURL(source)
+		: undefined;
 	const link = h(ownerDocument, 'a');
 	link.download = name;
 	link.href = objectUrl ?? source.toString();
@@ -82,7 +100,10 @@ export function triggerDownload(source: Blob | URL, name: string, ownerDocument:
 }
 
 /** Creates a temporary object URL with an explicit disposable lifetime. */
-export function createObjectUrl(ownerWindow: Window, blob: Blob): { readonly url: URL; readonly registration: IDisposable } {
+export function createObjectUrl(ownerWindow: Window, blob: Blob): {
+	readonly url: URL;
+	readonly registration: IDisposable;
+} {
 	const urlApi = (ownerWindow as BrowserWindow).URL;
 	const value = urlApi.createObjectURL(blob);
 	return {
@@ -98,5 +119,6 @@ function requireOwnerWindow(ownerDocument: Document): BrowserWindow {
 }
 
 function isBlob(value: Blob | URL): value is Blob {
-	return typeof (value as Blob).arrayBuffer === 'function' && typeof (value as Blob).stream === 'function';
+	return typeof (value as Blob).arrayBuffer === 'function' &&
+		typeof (value as Blob).stream === 'function';
 }

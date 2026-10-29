@@ -2,16 +2,7 @@ import { isExecutionVariable } from '../../../services/configurationResolver/com
 import { localize } from '../../../../nls.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
-import {
-	ShellQuoting,
-	type RunOptions,
-	type TaskPresentationOptions,
-	type ShellQuotedString,
-	type TaskShellExecution,
-	type IWorkspaceTask,
-	type WorkspaceTaskGroup,
-	type WorkspaceTaskSource,
-} from './tasks.js';
+import { ShellQuoting, type RunOptions, type TaskPresentationOptions, type ShellQuotedString, type TaskShellExecution, type IWorkspaceTask, type WorkspaceTaskGroup, type WorkspaceTaskSource } from './tasks.js';
 
 const MAX_TASKS = 256;
 const MAX_COMMAND_LENGTH = 32_768;
@@ -32,15 +23,11 @@ export function parsePackageTasks(source: string, packageManager: 'npm' | 'pnpm'
 	const document = record(parseJsonc(source, 'package.json'), 'package.json');
 	if (document.scripts === undefined) return Object.freeze([]);
 	const scripts = record(document.scripts, 'package.json scripts');
-	return Object.freeze(
-		Object.entries(scripts)
-			.flatMap(([name, command]) => {
-				if (!/^[A-Za-z0-9:_-]{1,128}$/.test(name) || typeof command !== 'string' || !command.trim()) return [];
-				const invocation = packageManager === 'yarn' ? `yarn run ${name}` : `${packageManager} run ${name}`;
-				return [task(`${packageManager}:${name}`, name, invocation, packageManager, packageTaskGroup(name), command.trim())];
-			})
-			.slice(0, MAX_TASKS),
-	);
+	return Object.freeze(Object.entries(scripts).flatMap(([name, command]) => {
+		if (!/^[A-Za-z0-9:_-]{1,128}$/.test(name) || typeof command !== 'string' || !command.trim()) return [];
+		const invocation = packageManager === 'yarn' ? `yarn run ${name}` : `${packageManager} run ${name}`;
+		return [task(`${packageManager}:${name}`, name, invocation, packageManager, packageTaskGroup(name), command.trim())];
+	}).slice(0, MAX_TASKS));
 }
 
 /** Conventional Cargo entry points available when the workspace has Cargo.toml. */
@@ -62,10 +49,7 @@ function mergeExecutionConfiguration(base: Readonly<Record<string, unknown>>, ov
 			const values = { ...inherited, ...supplied };
 			// Environments merge by key: empty retains inherited values and null removes one.
 			if (key === 'options' && (inherited.env !== undefined || supplied.env !== undefined)) {
-				values.env = {
-					...(inherited.env === undefined ? {} : record(inherited.env, 'options.env')),
-					...(supplied.env === undefined ? {} : record(supplied.env, 'options.env')),
-				};
+				values.env = { ...(inherited.env === undefined ? {} : record(inherited.env, 'options.env')), ...(supplied.env === undefined ? {} : record(supplied.env, 'options.env')) };
 			}
 			effective[key] = values;
 		}
@@ -84,14 +68,7 @@ function platformConfiguration(source: Readonly<Record<string, unknown>>, os: Op
 	return effective;
 }
 
-function parseWorkspaceTask(
-	value: unknown,
-	index: number,
-	version: string,
-	defaults: Readonly<Record<string, unknown>>,
-	os: OperatingSystem | undefined,
-	resolvableVariables?: ReadonlySet<string>,
-): IWorkspaceTask {
+function parseWorkspaceTask(value: unknown, index: number, version: string, defaults: Readonly<Record<string, unknown>>, os: OperatingSystem | undefined, resolvableVariables?: ReadonlySet<string>): IWorkspaceTask {
 	const input = record(value, `.vscode/tasks.json tasks[${index}]`);
 	// Apply each scope's platform block before the more specific task scope.
 	// The caller supplies the execution host OS; renderer platform facts are insufficient.
@@ -105,89 +82,51 @@ function parseWorkspaceTask(
 	const shellCommand = type === 'shell' && effective.command !== undefined ? shellValue(effective.command, 'command', true) : undefined;
 	const baseCommand = typeof shellCommand === 'object' ? shellCommand.value : typeof effective.command === 'string' ? effective.command.trim() : '';
 	if (effective.command !== undefined && typeof effective.command !== 'string' && shellCommand === undefined) unsupported.push('command');
-	const dependencies =
-		effective.dependsOn === undefined ? [] : (typeof effective.dependsOn === 'string' ? [effective.dependsOn] : array(effective.dependsOn, 'dependsOn')).map(value => string(value, 'dependsOn'));
+	const dependencies = effective.dependsOn === undefined ? [] : (typeof effective.dependsOn === 'string' ? [effective.dependsOn] : array(effective.dependsOn, 'dependsOn')).map(value => string(value, 'dependsOn'));
 	if (!baseCommand && dependencies.length === 0 && unsupported.length === 0) throw new TypeError(`tasks[${index}].command must contain 1 to ${MAX_COMMAND_LENGTH} characters without NUL`);
 	const shellArgs: (string | ShellQuotedString)[] = [];
-	const args =
-		effective.args === undefined
-			? []
-			: array(effective.args, `tasks[${index}].args`).map((argument, argumentIndex) => {
-					if (type === 'process') {
-						if (typeof argument !== 'string' || argument.length > MAX_COMMAND_LENGTH || argument.includes('\0'))
-							throw new TypeError(`tasks[${index}].args[${argumentIndex}] must be a bounded string without NUL`);
-						return argument;
-					}
-					if (type === 'shell') {
-						const parsed = shellValue(argument, `args[${argumentIndex}]`, true);
-						shellArgs.push(parsed);
-						if (unsupportedVariables(typeof parsed === 'string' ? parsed : parsed.value, resolvableVariables)) unsupported.push(`args[${argumentIndex}]`);
-						return shellArgument(typeof parsed === 'string' ? parsed : parsed.value, `tasks[${index}].args[${argumentIndex}]`);
-					}
-					if ((typeof argument !== 'string' && typeof argument !== 'number') || (typeof argument === 'string' && unsupportedVariables(argument, resolvableVariables))) {
-						unsupported.push(`args[${argumentIndex}]`);
-						return typeof argument === 'string' ? argument : '';
-					}
-					return shellArgument(argument, `tasks[${index}].args[${argumentIndex}]`);
-				});
+	const args = effective.args === undefined ? [] : array(effective.args, `tasks[${index}].args`).map((argument, argumentIndex) => {
+		if (type === 'process') {
+			if (typeof argument !== 'string' || argument.length > MAX_COMMAND_LENGTH || argument.includes('\0')) throw new TypeError(`tasks[${index}].args[${argumentIndex}] must be a bounded string without NUL`);
+			return argument;
+		}
+		if (type === 'shell') {
+			const parsed = shellValue(argument, `args[${argumentIndex}]`, true);
+			shellArgs.push(parsed);
+			if (unsupportedVariables(typeof parsed === 'string' ? parsed : parsed.value, resolvableVariables)) unsupported.push(`args[${argumentIndex}]`);
+			return shellArgument(typeof parsed === 'string' ? parsed : parsed.value, `tasks[${index}].args[${argumentIndex}]`);
+		}
+		if (typeof argument !== 'string' && typeof argument !== 'number' || typeof argument === 'string' && unsupportedVariables(argument, resolvableVariables)) {
+			unsupported.push(`args[${argumentIndex}]`);
+			return typeof argument === 'string' ? argument : '';
+		}
+		return shellArgument(argument, `tasks[${index}].args[${argumentIndex}]`);
+	});
 	if (unsupportedVariables(baseCommand, resolvableVariables)) unsupported.push('command');
 	const options = effective.options === undefined ? {} : record(effective.options, 'options');
 	const shellOptions = options.shell === undefined ? undefined : record(options.shell, 'options.shell');
-	const shellExecution =
-		type !== 'shell' || shellCommand === undefined
-			? undefined
-			: parseShellExecution({
-					type: 'shell',
-					...(shellArgs.length || typeof shellCommand !== 'string' ? { command: shellCommand, args: shellArgs } : { commandLine: shellCommand }),
-					...(shellOptions === undefined
-						? {}
-						: {
-								options: {
-									executable: shellOptions.executable,
-									shellArgs: shellOptions.args,
-									shellQuoting: shellOptions.quoting,
-								},
-							}),
-				});
+	const shellExecution = type !== 'shell' || shellCommand === undefined ? undefined : parseShellExecution({
+		type: 'shell',
+		...(shellArgs.length || typeof shellCommand !== 'string' ? { command: shellCommand, args: shellArgs } : { commandLine: shellCommand }),
+		...(shellOptions === undefined ? {} : { options: { executable: shellOptions.executable, shellArgs: shellOptions.args, shellQuoting: shellOptions.quoting } }),
+	});
 	const environment = options.env === undefined ? undefined : parseTaskEnvironment(options.env);
 	const command = [baseCommand, ...args].filter(Boolean).join(' ');
-	if ((!command && dependencies.length === 0 && unsupported.length === 0) || command.length > MAX_COMMAND_LENGTH || command.includes('\0'))
-		throw new TypeError(`tasks[${index}].command must contain 1 to ${MAX_COMMAND_LENGTH} characters without NUL`);
+	if ((!command && dependencies.length === 0 && unsupported.length === 0) || command.length > MAX_COMMAND_LENGTH || command.includes('\0')) throw new TypeError(`tasks[${index}].command must contain 1 to ${MAX_COMMAND_LENGTH} characters without NUL`);
 	const matchers = effective.problemMatcher === undefined ? [] : Array.isArray(effective.problemMatcher) ? effective.problemMatcher : [effective.problemMatcher];
 	if (options.cwd !== undefined && (typeof options.cwd !== 'string' || options.cwd.includes('\0'))) throw new TypeError('options.cwd must be a string without NUL');
 	if (effective.dependsOrder !== undefined && effective.dependsOrder !== 'parallel' && effective.dependsOrder !== 'sequence') throw new TypeError('dependsOrder must be parallel or sequence');
 	if (effective.isBackground !== undefined && typeof effective.isBackground !== 'boolean') throw new TypeError('isBackground must be a boolean');
-	const groupOptions = typeof effective.group === 'object' && effective.group !== null && !Array.isArray(effective.group) ? (effective.group as Record<string, unknown>) : undefined;
-	if (groupOptions?.isDefault !== undefined && typeof groupOptions.isDefault !== 'boolean' && typeof groupOptions.isDefault !== 'string')
-		throw new TypeError('group.isDefault must be a boolean or glob string');
+	const groupOptions = typeof effective.group === 'object' && effective.group !== null && !Array.isArray(effective.group) ? effective.group as Record<string, unknown> : undefined;
+	if (groupOptions?.isDefault !== undefined && typeof groupOptions.isDefault !== 'boolean' && typeof groupOptions.isDefault !== 'string') throw new TypeError('group.isDefault must be a boolean or glob string');
 	return Object.freeze({
-		...task(
-			`vscode:${index}:${stableId(label)}`,
-			label,
-			command,
-			'vscode',
-			taskGroup(effective.group),
-			typeof effective.detail === 'string' ? effective.detail : type === 'shell' ? 'Shell task' : type === 'process' ? 'Process task' : type,
-		),
-		configuration: Object.freeze({
-			version,
-			defaults,
-			task: freezeConfiguration(input),
-			groupIsConfigured: effective.group !== undefined,
-		}),
+		...task(`vscode:${index}:${stableId(label)}`, label, command, 'vscode', taskGroup(effective.group), typeof effective.detail === 'string' ? effective.detail : type === 'shell' ? 'Shell task' : type === 'process' ? 'Process task' : type),
+		configuration: Object.freeze({ version, defaults, task: freezeConfiguration(input), groupIsConfigured: effective.group !== undefined }),
 		...(groupOptions?.isDefault === undefined ? {} : { groupIsDefault: groupOptions.isDefault as boolean | string }),
 		...(effective.runOptions === undefined ? {} : { runOptions: parseTaskRunOptions(effective.runOptions) }),
 		...(effective.presentation === undefined ? {} : { presentation: parseTaskPresentationOptions(effective.presentation) }),
 		definition: Object.freeze({ ...input, ...taskConfiguration, type }),
-		...(type === 'process'
-			? {
-					execution: Object.freeze({
-						type: 'process' as const,
-						program: baseCommand,
-						args: Object.freeze(args),
-					}),
-				}
-			: {}),
+		...(type === 'process' ? { execution: Object.freeze({ type: 'process' as const, program: baseCommand, args: Object.freeze(args) }) } : {}),
 		// Keep ordinary command lines on the interactive path; structured arguments
 		// require dispatch-time quoting and an explicit shell spawn.
 		...(shellExecution && (shellArgs.length || typeof shellCommand !== 'string' || shellOptions) ? { execution: shellExecution } : {}),
@@ -206,8 +145,7 @@ export function parseTaskEnvironment(value: unknown): Readonly<Record<string, st
 	const environment = record(value, 'Task environment');
 	if (Object.keys(environment).length > 128) throw new RangeError('Task environment cannot contain more than 128 values');
 	for (const [name, item] of Object.entries(environment)) {
-		if (!name || name.length > 256 || /[=\0]/.test(name) || (item !== null && (typeof item !== 'string' || item.length > 32768 || item.includes('\0'))))
-			throw new TypeError('Task environment must contain valid names and bounded strings or null removals');
+		if (!name || name.length > 256 || /[=\0]/.test(name) || item !== null && (typeof item !== 'string' || item.length > 32768 || item.includes('\0'))) throw new TypeError('Task environment must contain valid names and bounded strings or null removals');
 	}
 	return Object.freeze({ ...environment } as Record<string, string | null>);
 }
@@ -228,13 +166,11 @@ function unsupportedExecution(input: Readonly<Record<string, unknown>>, type: st
 /** The configuration and provider boundary validates task screen reuse before process creation. */
 export function parseTaskPresentationOptions(value: unknown): TaskPresentationOptions {
 	const options = record(value, 'presentation');
-	if (
-		(options.group !== undefined && (typeof options.group !== 'string' || options.group.length > 256 || options.group.includes('\0'))) ||
-		(options.panel !== undefined && !['shared', 'dedicated', 'new'].includes(options.panel as string)) ||
-		(options.reveal !== undefined && !['always', 'silent', 'never'].includes(options.reveal as string)) ||
-		(options.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(options.revealProblems as string)) ||
-		['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean')
-	) {
+	if (options.group !== undefined && (typeof options.group !== 'string' || options.group.length > 256 || options.group.includes('\0'))
+		|| options.panel !== undefined && !['shared', 'dedicated', 'new'].includes(options.panel as string)
+		|| options.reveal !== undefined && !['always', 'silent', 'never'].includes(options.reveal as string)
+		|| options.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(options.revealProblems as string)
+		|| ['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean')) {
 		throw new TypeError(localize('tasks.invalidPresentation', 'Invalid task presentation options.'));
 	}
 	return Object.freeze({
@@ -277,77 +213,39 @@ export function parseShellExecution(value: unknown): TaskShellExecution {
 	if (input.options !== undefined) {
 		const supplied = record(input.options, 'ShellExecution.options');
 		const executable = supplied.executable;
-		if (executable !== undefined && (typeof executable !== 'string' || !executable.trim() || executable.length > MAX_COMMAND_LENGTH || executable.includes('\0')))
-			throw new TypeError('Shell executable must be a bounded nonempty string without NUL');
-		const shellArgs =
-			supplied.shellArgs === undefined
-				? undefined
-				: array(supplied.shellArgs, 'ShellExecution.shellArgs').map(argument => {
-						if (typeof argument !== 'string' || argument.length > MAX_COMMAND_LENGTH || argument.includes('\0')) throw new TypeError('Shell arguments must be bounded strings without NUL');
-						return argument;
-					});
+		if (executable !== undefined && (typeof executable !== 'string' || !executable.trim() || executable.length > MAX_COMMAND_LENGTH || executable.includes('\0'))) throw new TypeError('Shell executable must be a bounded nonempty string without NUL');
+		const shellArgs = supplied.shellArgs === undefined ? undefined : array(supplied.shellArgs, 'ShellExecution.shellArgs').map(argument => {
+			if (typeof argument !== 'string' || argument.length > MAX_COMMAND_LENGTH || argument.includes('\0')) throw new TypeError('Shell arguments must be bounded strings without NUL');
+			return argument;
+		});
 		if (shellArgs && shellArgs.length > 256) throw new TypeError(localize('tasks.tooManyShellArgs', 'Shell arguments accept at most {0} values.', 256));
 		let shellQuoting: NonNullable<TaskShellExecution['options']>['shellQuoting'];
 		if (supplied.shellQuoting !== undefined) {
 			const quoting = record(supplied.shellQuoting, 'ShellExecution.shellQuoting');
 			for (const key of ['strong', 'weak']) {
-				if (quoting[key] !== undefined && (typeof quoting[key] !== 'string' || (quoting[key] as string).length !== 1 || /[\0\r\n]/.test(quoting[key] as string)))
-					throw new TypeError('Shell quoting characters must have length one');
+				if (quoting[key] !== undefined && (typeof quoting[key] !== 'string' || (quoting[key] as string).length !== 1 || /[\0\r\n]/.test(quoting[key] as string))) throw new TypeError('Shell quoting characters must have length one');
 			}
 			let escape = quoting.escape;
 			if (escape !== undefined && typeof escape !== 'string') {
 				const escaping = record(escape, 'ShellExecution.escape');
-				if (
-					typeof escaping.escapeChar !== 'string' ||
-					escaping.escapeChar.length !== 1 ||
-					/[\0\r\n]/.test(escaping.escapeChar) ||
-					typeof escaping.charsToEscape !== 'string' ||
-					escaping.charsToEscape.length > 256 ||
-					escaping.charsToEscape.includes('\0')
-				)
-					throw new TypeError('Invalid shell escaping options');
+				if (typeof escaping.escapeChar !== 'string' || escaping.escapeChar.length !== 1 || /[\0\r\n]/.test(escaping.escapeChar) || typeof escaping.charsToEscape !== 'string' || escaping.charsToEscape.length > 256 || escaping.charsToEscape.includes('\0')) throw new TypeError('Invalid shell escaping options');
 				escape = Object.freeze({ escapeChar: escaping.escapeChar, charsToEscape: escaping.charsToEscape });
 			} else if (typeof escape === 'string' && (escape.length !== 1 || /[\0\r\n]/.test(escape))) {
 				throw new TypeError('Shell escape character must have length one');
 			}
-			shellQuoting = Object.freeze({
-				...(escape === undefined ? {} : { escape: escape as NonNullable<typeof shellQuoting>['escape'] }),
-				...(quoting.strong === undefined ? {} : { strong: quoting.strong as string }),
-				...(quoting.weak === undefined ? {} : { weak: quoting.weak as string }),
-			});
+			shellQuoting = Object.freeze({ ...(escape === undefined ? {} : { escape: escape as NonNullable<typeof shellQuoting>['escape'] }), ...(quoting.strong === undefined ? {} : { strong: quoting.strong as string }), ...(quoting.weak === undefined ? {} : { weak: quoting.weak as string }) });
 		}
-		options = Object.freeze({
-			...(executable === undefined ? {} : { executable: executable as string }),
-			...(shellArgs === undefined ? {} : { shellArgs: Object.freeze(shellArgs) }),
-			...(shellQuoting === undefined ? {} : { shellQuoting }),
-		});
+		options = Object.freeze({ ...(executable === undefined ? {} : { executable: executable as string }), ...(shellArgs === undefined ? {} : { shellArgs: Object.freeze(shellArgs) }), ...(shellQuoting === undefined ? {} : { shellQuoting }) });
 	}
 	if (input.commandLine !== undefined) {
-		if (
-			input.command !== undefined ||
-			input.args !== undefined ||
-			typeof input.commandLine !== 'string' ||
-			!input.commandLine.trim() ||
-			input.commandLine.length > MAX_COMMAND_LENGTH ||
-			input.commandLine.includes('\0')
-		)
-			throw new TypeError('ShellExecution requires one bounded command line or command and arguments');
-		return Object.freeze({
-			type: 'shell',
-			commandLine: input.commandLine,
-			...(options === undefined ? {} : { options }),
-		});
+		if (input.command !== undefined || input.args !== undefined || typeof input.commandLine !== 'string' || !input.commandLine.trim() || input.commandLine.length > MAX_COMMAND_LENGTH || input.commandLine.includes('\0')) throw new TypeError('ShellExecution requires one bounded command line or command and arguments');
+		return Object.freeze({ type: 'shell', commandLine: input.commandLine, ...(options === undefined ? {} : { options }) });
 	}
 	const command = shellValue(input.command, 'ShellExecution.command');
 	if (!(typeof command === 'string' ? command : command.value).trim()) throw new TypeError('ShellExecution command must not be empty');
 	const args = array(input.args, 'ShellExecution.args').map(argument => shellValue(argument, 'ShellExecution argument'));
 	if (args.length > 1024) throw new RangeError('ShellExecution has too many arguments');
-	return Object.freeze({
-		type: 'shell',
-		command,
-		args: Object.freeze(args),
-		...(options === undefined ? {} : { options }),
-	});
+	return Object.freeze({ type: 'shell', command, args: Object.freeze(args), ...(options === undefined ? {} : { options }) });
 }
 
 function shellValue(value: unknown, owner: string, configuration = false): string | ShellQuotedString {
@@ -358,12 +256,8 @@ function shellValue(value: unknown, owner: string, configuration = false): strin
 	}
 	const input = record(value, owner);
 	const text = input.value;
-	const quoting =
-		configuration && typeof input.quoting === 'string'
-			? ({ escape: ShellQuoting.Escape, strong: ShellQuoting.Strong, weak: ShellQuoting.Weak } as Record<string, ShellQuoting>)[input.quoting]
-			: input.quoting;
-	if (typeof text !== 'string' || text.length > MAX_COMMAND_LENGTH || text.includes('\0') || ![ShellQuoting.Escape, ShellQuoting.Strong, ShellQuoting.Weak].includes(quoting as ShellQuoting))
-		throw new TypeError(`${owner} requires a bounded value and a valid quoting style`);
+	const quoting = configuration && typeof input.quoting === 'string' ? ({ escape: ShellQuoting.Escape, strong: ShellQuoting.Strong, weak: ShellQuoting.Weak } as Record<string, ShellQuoting>)[input.quoting] : input.quoting;
+	if (typeof text !== 'string' || text.length > MAX_COMMAND_LENGTH || text.includes('\0') || ![ShellQuoting.Escape, ShellQuoting.Strong, ShellQuoting.Weak].includes(quoting as ShellQuoting)) throw new TypeError(`${owner} requires a bounded value and a valid quoting style`);
 	return Object.freeze({ value: text, quoting: quoting as ShellQuoting });
 }
 
@@ -404,13 +298,7 @@ function shellArgument(value: unknown, path: string): string {
 }
 
 function stableId(value: string): string {
-	return (
-		value
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/^-|-$/g, '')
-			.slice(0, 80) || 'task'
-	);
+	return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'task';
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {

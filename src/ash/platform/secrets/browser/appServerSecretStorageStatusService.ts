@@ -33,18 +33,12 @@ export async function withSecretStorageErrors<T>(operation: Promise<T>): Promise
 	} catch (error) {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.data.kind) {
-				case 'SecretStorageUnavailable':
-					throw new SecretStorageError('unavailable');
-				case 'SecretStorageAccessDenied':
-					throw new SecretStorageError('accessDenied');
-				case 'SecretStorageKeyMissing':
-					throw new SecretStorageError('keyMissing');
-				case 'SecretStorageCorrupted':
-					throw new SecretStorageError('corrupted');
-				case 'SecretStorageMigrationFailed':
-					throw new SecretStorageError('migrationFailed');
-				case 'SecretStorageOperationFailed':
-					throw new SecretStorageError('failure');
+				case 'SecretStorageUnavailable': throw new SecretStorageError('unavailable');
+				case 'SecretStorageAccessDenied': throw new SecretStorageError('accessDenied');
+				case 'SecretStorageKeyMissing': throw new SecretStorageError('keyMissing');
+				case 'SecretStorageCorrupted': throw new SecretStorageError('corrupted');
+				case 'SecretStorageMigrationFailed': throw new SecretStorageError('migrationFailed');
+				case 'SecretStorageOperationFailed': throw new SecretStorageError('failure');
 			}
 		}
 		throw error;

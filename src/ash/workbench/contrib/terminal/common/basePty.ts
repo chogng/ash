@@ -13,24 +13,11 @@ export abstract class BasePty<T extends string | IProcessDataEvent = string> ext
 	readonly onDidChangeProperty = this.properties.event;
 	readonly onProcessExit = this.exited.event;
 
-	constructor(
-		readonly id: number,
-		readonly shouldPersist: boolean,
-	) {
-		super();
-	}
-	handleData(data: T): void {
-		this.output.fire(data);
-	}
-	handleReady(ready: IProcessReadyEvent): void {
-		this.ready.fire(ready);
-	}
-	handleDidChangeProperty(property: IProcessProperty): void {
-		this.properties.fire(property);
-	}
-	handleExit(code: number | undefined): void {
-		this.exited.fire(code);
-	}
+	constructor(readonly id: number, readonly shouldPersist: boolean) { super(); }
+	handleData(data: T): void { this.output.fire(data); }
+	handleReady(ready: IProcessReadyEvent): void { this.ready.fire(ready); }
+	handleDidChangeProperty(property: IProcessProperty): void { this.properties.fire(property); }
+	handleExit(code: number | undefined): void { this.exited.fire(code); }
 	abstract start(): Promise<void>;
 	abstract shutdown(immediate: boolean): void;
 }

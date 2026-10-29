@@ -14,20 +14,12 @@ export class TestThemeService extends Disposable implements IThemeService {
 		this._register(Colors.onDidChange(() => this.changed.fire(this.theme)));
 	}
 
-	public getColorTheme(): IColorTheme {
-		return this.theme;
-	}
-	public getProductIconTheme() {
-		return defaultProductIconTheme;
-	}
-	public getFileIconTheme() {
-		return noFileIconTheme;
-	}
+	public getColorTheme(): IColorTheme { return this.theme; }
+	public getProductIconTheme() { return defaultProductIconTheme; }
+	public getFileIconTheme() { return noFileIconTheme; }
 
 	public setColorTheme(theme: IColorTheme): void {
-		if (theme === this.theme) {
-			return;
-		}
+		if (theme === this.theme) { return; }
 		this.theme = theme;
 		this.changed.fire(theme);
 	}

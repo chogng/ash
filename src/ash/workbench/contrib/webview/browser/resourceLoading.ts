@@ -8,10 +8,14 @@ import { getWebviewContentMimeType } from '../../../../platform/webview/common/m
 /** Root checks narrow the existing file provider's grant; they never grant filesystem access. */
 export async function loadLocalResource(
 	requestUri: URI,
-	options: { readonly roots: readonly URI[] },
+	options: { readonly roots: readonly URI[]; },
 	fileService: IFileService,
 	token: CancellationToken,
-): Promise<{ readonly status: number; readonly mimeType: string; readonly bytes?: Uint8Array }> {
+): Promise<{
+	readonly status: number;
+	readonly mimeType: string;
+	readonly bytes?: Uint8Array;
+}> {
 	if (token.isCancellationRequested) {
 		throw new CancellationError();
 	}

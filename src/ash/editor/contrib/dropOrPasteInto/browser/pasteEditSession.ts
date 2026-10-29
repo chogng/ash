@@ -3,10 +3,7 @@ import type { DocumentPasteEdit } from '../../../common/languages.js';
 
 /** Keeps provider resources alive while a paste edit can still be selected. */
 export class PasteEditSession<T extends DocumentPasteEdit = DocumentPasteEdit> extends AbstractDisposable {
-	constructor(
-		readonly edits: readonly T[],
-		private resources: IDisposable | undefined,
-	) {
+	constructor(readonly edits: readonly T[], private resources: IDisposable | undefined) {
 		super();
 	}
 

@@ -6,16 +6,11 @@ import { NullLoggerService } from '../../../log/common/log.js';
 import { SystemPolicyService } from '../../node/systemPolicyService.js';
 
 test('Native registry snapshots preserve Unicode, numeric types, live updates and last valid policy', async function () {
-	if (process.platform !== 'win32') {
-		this.skip();
-		return;
-	}
+	if (process.platform !== 'win32') { this.skip(); return; }
 	const { default: koffi } = await import('koffi');
 	const { readWindowsRegistryPolicies } = await import('../../node/windowsRegistryPolicy.js');
 	const registry = koffi.load(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'advapi32.dll'));
-	const create = registry.func(
-		'int32_t __stdcall RegCreateKeyExW(void *key, const char16_t *path, uint32_t reserved, void *className, uint32_t options, uint32_t access, void *security, _Out_ void **result, void *disposition)',
-	);
+	const create = registry.func('int32_t __stdcall RegCreateKeyExW(void *key, const char16_t *path, uint32_t reserved, void *className, uint32_t options, uint32_t access, void *security, _Out_ void **result, void *disposition)');
 	const set = registry.func('int32_t __stdcall RegSetValueExW(void *key, const char16_t *name, uint32_t reserved, uint32_t type, const uint8_t *data, uint32_t size)');
 	const remove = registry.func('int32_t __stdcall RegDeleteValueW(void *key, const char16_t *name)');
 	const close = registry.func('int32_t __stdcall RegCloseKey(void *key)');
@@ -26,27 +21,15 @@ test('Native registry snapshots preserve Unicode, numeric types, live updates an
 	const key: [bigint | null] = [null];
 	using log = new NullLoggerService();
 	using source = new SystemPolicyService(log, async definitions => readWindowsRegistryPolicies(definitions, location), 20);
-	const definitions = {
-		Text: { type: 'string' as const },
-		Count: { type: 'number' as const },
-		Wide: { type: 'number' as const },
-		Enabled: { type: 'boolean' as const },
-	};
+	const definitions = { Text: { type: 'string' as const }, Count: { type: 'number' as const }, Wide: { type: 'number' as const }, Enabled: { type: 'boolean' as const } };
 	assert.deepEqual(await source.updatePolicyDefinitions(definitions), {});
 	assert.equal(create(root, location.path, 0, null, 0, 0x103, null, key, null), 0);
-	const write = (name: string, type: number, data: Buffer): void => {
-		assert.equal(set(key[0], name, 0, type, data, data.length), 0);
-	};
-	const dword = (value: number): Buffer => {
-		const bytes = Buffer.alloc(4);
-		bytes.writeInt32LE(value);
-		return bytes;
-	};
+	const write = (name: string, type: number, data: Buffer): void => { assert.equal(set(key[0], name, 0, type, data, data.length), 0); };
+	const dword = (value: number): Buffer => { const bytes = Buffer.alloc(4); bytes.writeInt32LE(value); return bytes; };
 	try {
 		write('Text', 1, Buffer.from('策略 😀\n第二行\0', 'utf16le'));
 		write('Count', 4, dword(-1));
-		const wide = Buffer.alloc(8);
-		wide.writeBigInt64LE(-4294967296n);
+		const wide = Buffer.alloc(8); wide.writeBigInt64LE(-4294967296n);
 		write('Wide', 11, wide);
 		write('Enabled', 4, dword(1));
 		write('Unregistered', 3, Buffer.from([1, 2]));
@@ -72,12 +55,8 @@ test('Native registry snapshots preserve Unicode, numeric types, live updates an
 		assert.equal((await source.updatePolicyDefinitions({ Later: { type: 'string' } })).Later, '新增');
 		// Exercise the service's timer and notification, not just explicit refreshes.
 		let changed!: () => void;
-		const updated = new Promise<void>(resolve => {
-			changed = resolve;
-		});
-		using listener = source.onDidChange(() => {
-			if (source.getPolicyValue('Later') === '已更新') changed();
-		});
+		const updated = new Promise<void>(resolve => { changed = resolve; });
+		using listener = source.onDidChange(() => { if (source.getPolicyValue('Later') === '已更新') changed(); });
 		write('Later', 1, Buffer.from('已更新\0', 'utf16le'));
 		await updated;
 		// Notifications fire inside refresh; let that pending snapshot finish before

@@ -19,12 +19,7 @@ function collection(value: string, persistent = true): IEnvironmentVariableColle
 
 function create(owner: DisposableStore, persisted = new Map<string, string>()) {
 	const changes = owner.add(new Emitter<void>());
-	const storage = {
-		get: (key: string) => persisted.get(key),
-		store: (key: string, value: string) => {
-			persisted.set(key, value);
-		},
-	} as unknown as IStorageService;
+	const storage = { get: (key: string) => persisted.get(key), store: (key: string, value: string) => { persisted.set(key, value); } } as unknown as IStorageService;
 	const workspace = { onDidChangeWorkspace: changes.event } as unknown as IWorkspaceContextService;
 	const service = owner.add(new EnvironmentVariableService(storage, workspace));
 	return { service, changes, persisted };
@@ -38,27 +33,20 @@ suite('Terminal environment collections', () => {
 		const { service, persisted } = create(owner);
 		const options = { applyAtProcessCreation: false, applyAtShellIntegration: true };
 		service.set('extension', {
-			persistent: true,
-			map: new Map([
+			persistent: true, map: new Map([
 				['STAGE', { variable: 'STAGE', type: 2, value: ':${value}\\literal', options }],
 				['DISABLED', { variable: 'DISABLED', type: 1, value: '${invalid}', options: {} }],
-			]),
+			])
 		});
 		const snapshot = service.mergedCollection;
 		options.applyAtProcessCreation = true;
 		const env: Record<string, string | undefined> = { STAGE: 'process' };
 		let resolves = 0;
-		await snapshot.applyToProcessEnvironment(env, undefined, async value => {
-			resolves++;
-			return value.replace('${value}', 'resolved');
-		});
+		await snapshot.applyToProcessEnvironment(env, undefined, async value => { resolves++; return value.replace('${value}', 'resolved'); });
 		assert.equal(resolves, 1);
 		assert.deepEqual(env, { STAGE: 'process', VSCODE_ENV_APPEND: 'STAGE=\\x3aresolved\\\\literal' });
 		const restored = create(owner, persisted).service;
-		assert.deepEqual(restored.collections.get('extension')!.map.get('STAGE')!.options, {
-			applyAtProcessCreation: false,
-			applyAtShellIntegration: true,
-		});
+		assert.deepEqual(restored.collections.get('extension')!.map.get('STAGE')!.options, { applyAtProcessCreation: false, applyAtShellIntegration: true });
 		assert.throws(() => deserializeEnvironmentVariableCollection([['STAGE', { variable: 'STAGE', type: 1, value: '', options: { applyAtShellIntegration: 'yes' } }]]));
 	});
 
@@ -66,32 +54,12 @@ suite('Terminal environment collections', () => {
 		const folder = { uri: URI.file('/workspace/a'), name: 'a', index: 0 };
 		const scope = { workspaceFolder: folder };
 		const options = { applyAtShellIntegration: true };
-		const make = (creation: boolean) =>
-			new MergedEnvironmentVariableCollection(
-				new Map([
-					[
-						'extension',
-						{
-							map: new Map([
-								['global', { variable: 'VALUE', type: 2 as const, value: 'global', options }],
-								[
-									'scoped',
-									{
-										variable: 'VALUE',
-										type: 1 as const,
-										value: 'scoped:literal',
-										scope,
-										options: {
-											applyAtShellIntegration: !creation,
-											applyAtProcessCreation: creation,
-										},
-									},
-								],
-							]),
-						},
-					],
-				]),
-			);
+		const make = (creation: boolean) => new MergedEnvironmentVariableCollection(new Map([['extension', {
+			map: new Map([
+				['global', { variable: 'VALUE', type: 2 as const, value: 'global', options }],
+				['scoped', { variable: 'VALUE', type: 1 as const, value: 'scoped:literal', scope, options: { applyAtShellIntegration: !creation, applyAtProcessCreation: creation } }],
+			])
+		}]]));
 		const shell = make(false);
 		const env: Record<string, string | undefined> = { VALUE: 'process' };
 		await shell.applyToProcessEnvironment(env, scope);
@@ -104,12 +72,9 @@ suite('Terminal environment collections', () => {
 		const { service } = create(owner);
 		service.set('b', collection(':b'));
 		service.set('a', {
-			persistent: true,
-			map: new Map([
-				['PATH', { variable: 'PATH', type: 3, value: '${prefix}:' }],
-				['MODE', { variable: 'MODE', type: 1, value: 'extension' }],
-				['REMOVED', { variable: 'REMOVED', type: 2, value: ':new' }],
-			]),
+			persistent: true, map: new Map([
+				['PATH', { variable: 'PATH', type: 3, value: '${prefix}:' }], ['MODE', { variable: 'MODE', type: 1, value: 'extension' }], ['REMOVED', { variable: 'REMOVED', type: 2, value: ':new' }],
+			])
 		});
 		const env = { Path: 'caller', REMOVED: undefined };
 		await new MergedEnvironmentVariableCollection(service.collections, false).applyToProcessEnvironment(env, undefined, async value => value.replace('${prefix}', 'resolved'));
@@ -139,10 +104,7 @@ suite('Terminal environment collections', () => {
 				['PATH', { variable: 'PATH', type: 2, value: ':global' }],
 				['scoped:PATH', { variable: 'PATH', type: 2, value: ':a', scope }],
 			]),
-			descriptionMap: new Map([
-				['', { description: 'global' }],
-				['a', { description: 'folder a', scope }],
-			]),
+			descriptionMap: new Map([['', { description: 'global' }], ['a', { description: 'folder a', scope }]]),
 		});
 		const restored = create(owner, persisted).service.mergedCollection;
 		const env = { PATH: 'host' };
@@ -150,9 +112,7 @@ suite('Terminal environment collections', () => {
 		assert.deepEqual(env, { PATH: 'host:global:a' });
 		assert.equal(restored.getDescriptionMap(scope).get('extension'), 'folder a');
 		const sibling = { PATH: 'host' };
-		await restored.applyToProcessEnvironment(sibling, {
-			workspaceFolder: { ...folder, uri: URI.file('/workspace/b') },
-		});
+		await restored.applyToProcessEnvironment(sibling, { workspaceFolder: { ...folder, uri: URI.file('/workspace/b') } });
 		assert.deepEqual(sibling, { PATH: 'host:global' });
 		assert.equal(restored.getDescriptionMap(undefined).get('extension'), 'global');
 		const previous = service.mergedCollection;
@@ -179,22 +139,13 @@ suite('Terminal environment collections', () => {
 	test('an earlier extension Replace hides lower priority edits and their diffs', async () => {
 		using owner = new DisposableStore();
 		const { service } = create(owner);
-		service.set('first', {
-			persistent: false,
-			map: new Map([['opaque-key', { variable: 'MODE', type: 1, value: 'first' }]]),
-		});
-		service.set('second', {
-			persistent: false,
-			map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'second' }]]),
-		});
+		service.set('first', { persistent: false, map: new Map([['opaque-key', { variable: 'MODE', type: 1, value: 'first' }]]) });
+		service.set('second', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'second' }]]) });
 		const accepted = service.mergedCollection;
 		const env = { MODE: 'inherited' };
 		await accepted.applyToProcessEnvironment(env, undefined);
 		assert.deepEqual(env, { MODE: 'first' });
-		service.set('second', {
-			persistent: false,
-			map: new Map([['MODE', { variable: 'MODE', type: 2, value: ':hidden' }]]),
-		});
+		service.set('second', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 2, value: ':hidden' }]]) });
 		assert.equal(accepted.diff(service.mergedCollection, undefined), undefined);
 	});
 
@@ -202,20 +153,16 @@ suite('Terminal environment collections', () => {
 		using owner = new DisposableStore();
 		const { service } = create(owner);
 		service.set('extension', {
-			persistent: false,
-			map: new Map([
+			persistent: false, map: new Map([
 				['PATH', { variable: 'PATH', type: 2, value: ':resolved' }],
 				['MODE', { variable: 'MODE', type: 1, value: '${missing}' }],
-			]),
+			])
 		});
 		const env = { PATH: 'caller', REMOVED: undefined };
-		await assert.rejects(
-			service.mergedCollection.applyToProcessEnvironment(env, undefined, async value => {
-				if (value === '${missing}') throw new Error('Unresolved variable');
-				return value;
-			}),
-			/Unresolved variable/,
-		);
+		await assert.rejects(service.mergedCollection.applyToProcessEnvironment(env, undefined, async value => {
+			if (value === '${missing}') throw new Error('Unresolved variable');
+			return value;
+		}), /Unresolved variable/);
 		assert.deepEqual(env, { PATH: 'caller', REMOVED: undefined });
 	});
 
@@ -223,15 +170,7 @@ suite('Terminal environment collections', () => {
 		using owner = new DisposableStore();
 		const { service } = create(owner);
 		let release!: (value: IEnvironmentVariableCollectionWithPersistence) => void;
-		const first = owner.add(
-			service.registerCollectionProvider(
-				'extension',
-				() =>
-					new Promise(resolve => {
-						release = resolve;
-					}),
-			),
-		);
+		const first = owner.add(service.registerCollectionProvider('extension', () => new Promise(resolve => { release = resolve; })));
 		const pending = service.refreshCollections();
 		first.dispose();
 		owner.add(service.registerCollectionProvider('extension', async () => collection(':new')));
@@ -245,15 +184,7 @@ suite('Terminal environment collections', () => {
 		using owner = new DisposableStore();
 		const { service } = create(owner);
 		let cancel!: (reason: unknown) => void;
-		const first = owner.add(
-			service.registerCollectionProvider(
-				'extension',
-				() =>
-					new Promise((_resolve, reject) => {
-						cancel = reject;
-					}),
-			),
-		);
+		const first = owner.add(service.registerCollectionProvider('extension', () => new Promise((_resolve, reject) => { cancel = reject; })));
 		const pending = service.refreshCollections();
 		first.dispose();
 		owner.add(service.registerCollectionProvider('extension', async () => collection(':replacement')));
@@ -266,11 +197,7 @@ suite('Terminal environment collections', () => {
 		for (const error of [new CancellationError(), new Error('extension failed')]) {
 			using owner = new DisposableStore();
 			const { service } = create(owner);
-			owner.add(
-				service.registerCollectionProvider('extension', async () => {
-					throw error;
-				}),
-			);
+			owner.add(service.registerCollectionProvider('extension', async () => { throw error; }));
 			await assert.rejects(service.refreshCollections(), candidate => candidate === error);
 			assert.equal(service.collections.size, 0);
 		}
@@ -291,15 +218,7 @@ suite('Terminal environment collections', () => {
 		using owner = new DisposableStore();
 		const { service, changes } = create(owner);
 		let release!: (value: IEnvironmentVariableCollectionWithPersistence) => void;
-		owner.add(
-			service.registerCollectionProvider(
-				'extension',
-				() =>
-					new Promise(resolve => {
-						release = resolve;
-					}),
-			),
-		);
+		owner.add(service.registerCollectionProvider('extension', () => new Promise(resolve => { release = resolve; })));
 		const pending = service.refreshCollections();
 		changes.fire();
 		release(collection(':old-workspace'));
@@ -308,12 +227,7 @@ suite('Terminal environment collections', () => {
 	});
 
 	test('rejects invalid callback entries before they reach a process', () => {
-		for (const value of [
-			[['BAD=KEY', { type: 1, value: 'x' }]],
-			[['PATH', { type: 4, value: 'x' }]],
-			[['PATH', { type: 1, value: '\0' }]],
-			[['PATH', { type: 1, value: 'x', unexpected: true }]],
-		]) {
+		for (const value of [[['BAD=KEY', { type: 1, value: 'x' }]], [['PATH', { type: 4, value: 'x' }]], [['PATH', { type: 1, value: '\0' }]], [['PATH', { type: 1, value: 'x', unexpected: true }]]]) {
 			assert.throws(() => deserializeEnvironmentVariableCollection(value), TypeError);
 		}
 	});
@@ -334,8 +248,7 @@ suite('Terminal environment collections', () => {
 		setNlsMessages('zh-cn', { ash: { 'terminal.environment.invalidCollection': '终端环境变量集合无效。' } });
 		try {
 			assert.throws(() => deserializeEnvironmentVariableCollection([['BAD=KEY', { type: 1, value: 'x' }]]), {
-				name: 'TypeError',
-				message: '终端环境变量集合无效。',
+				name: 'TypeError', message: '终端环境变量集合无效。',
 			});
 		} finally {
 			resetNlsResolver();

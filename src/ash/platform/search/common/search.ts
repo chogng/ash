@@ -41,7 +41,9 @@ export interface IContentSearchComplete {
 /** Runtime controls for one cancellable directory search. */
 export interface IContentSearchOptions {
 	readonly signal?: AbortSignal;
-	readonly onProgress?: (matches: readonly ContentSearchMatch[]) => void;
+	readonly onProgress?: (
+		matches: readonly ContentSearchMatch[],
+	) => void;
 }
 
 /** Renderer-facing directory search lifecycle independent of Electron IPC. */

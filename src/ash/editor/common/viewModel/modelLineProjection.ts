@@ -56,27 +56,27 @@ export class EditorVisualLineProjection {
 		const lines: EditorVisualLine[] = [];
 		const visualLineStarts: number[] = [];
 		for (let logicalLineIndex = 0; logicalLineIndex < model.lineCount; logicalLineIndex += 1) {
-			const text = model.getLineContent(logicalLineIndex + 1);
+			const text = model.getLineContent((logicalLineIndex) + 1);
 			const breaks = breakColumnsByLine[logicalLineIndex];
 			if (!breaks) throw new RangeError('Visual line break columns must not contain holes');
 			validateBreakColumns(text, breaks);
-			const wrappedTextIndentWidth = wrappedTextIndentWidthsByLine?.[logicalLineIndex] === undefined ? 0 : wrappedTextIndentWidthsByLine[logicalLineIndex]!;
+			const wrappedTextIndentWidth = wrappedTextIndentWidthsByLine?.[logicalLineIndex] === undefined
+				? 0
+				: wrappedTextIndentWidthsByLine[logicalLineIndex]!;
 			validateWrappedTextIndentWidth(wrappedTextIndentWidth);
 			visualLineStarts.push(lines.length);
 			let startColumn = 0;
 			for (let index = 0; index < breaks.length; index += 1) {
 				const endColumn = breaks[index]!;
-				lines.push(
-					Object.freeze({
-						visualLineIndex: lines.length,
-						logicalLineIndex,
-						startColumn,
-						endColumn,
-						firstForLogicalLine: index === 0,
-						lastForLogicalLine: index + 1 === breaks.length,
-						...(index > 0 && wrappedTextIndentWidth > 0 ? { wrappedTextIndentWidth } : {}),
-					}),
-				);
+				lines.push(Object.freeze({
+					visualLineIndex: lines.length,
+					logicalLineIndex,
+					startColumn,
+					endColumn,
+					firstForLogicalLine: index === 0,
+					lastForLogicalLine: index + 1 === breaks.length,
+					...(index > 0 && wrappedTextIndentWidth > 0 ? { wrappedTextIndentWidth } : {}),
+				}));
 				startColumn = endColumn;
 			}
 		}
@@ -100,42 +100,24 @@ export class EditorVisualLineProjection {
 			starts.push(lines.length);
 			const data = lineBreakData[logicalLineIndex];
 			if (!data) {
-				lines.push(
-					Object.freeze({
-						visualLineIndex: lines.length,
-						logicalLineIndex,
-						startColumn: 0,
-						endColumn: model.getLineLength(logicalLineIndex + 1),
-						firstForLogicalLine: true,
-						lastForLogicalLine: true,
-					}),
-				);
+				lines.push(Object.freeze({ visualLineIndex: lines.length, logicalLineIndex, startColumn: 0, endColumn: model.getLineLength(logicalLineIndex + 1), firstForLogicalLine: true, lastForLogicalLine: true }));
 				continue;
 			}
 			for (let outputLineIndex = 0; outputLineIndex < data.getOutputLineCount(); outputLineIndex += 1) {
-				lines.push(
-					Object.freeze({
-						visualLineIndex: lines.length,
-						logicalLineIndex,
-						startColumn: data.translateToInputOffset(outputLineIndex, data.getMinOutputOffset(outputLineIndex)),
-						endColumn: data.translateToInputOffset(outputLineIndex, data.getMaxOutputOffset(outputLineIndex)),
-						firstForLogicalLine: outputLineIndex === 0,
-						lastForLogicalLine: outputLineIndex + 1 === data.getOutputLineCount(),
-						outputLineIndex,
-						projectionData: data,
-						...(outputLineIndex > 0 && data.wrappedTextIndentLength > 0 ? { wrappedTextIndentWidth: data.wrappedTextIndentLength * spaceWidth } : {}),
-					}),
-				);
+				lines.push(Object.freeze({
+					visualLineIndex: lines.length,
+					logicalLineIndex,
+					startColumn: data.translateToInputOffset(outputLineIndex, data.getMinOutputOffset(outputLineIndex)),
+					endColumn: data.translateToInputOffset(outputLineIndex, data.getMaxOutputOffset(outputLineIndex)),
+					firstForLogicalLine: outputLineIndex === 0,
+					lastForLogicalLine: outputLineIndex + 1 === data.getOutputLineCount(),
+					outputLineIndex,
+					projectionData: data,
+					...(outputLineIndex > 0 && data.wrappedTextIndentLength > 0 ? { wrappedTextIndentWidth: data.wrappedTextIndentLength * spaceWidth } : {}),
+				}));
 			}
 		}
-		return new EditorVisualLineProjection(
-			model.version,
-			model.lineCount,
-			Object.freeze(lines),
-			Object.freeze(starts),
-			Object.freeze(Array.from({ length: model.lineCount }, () => true)),
-			undefined,
-		);
+		return new EditorVisualLineProjection(model.version, model.lineCount, Object.freeze(lines), Object.freeze(starts), Object.freeze(Array.from({ length: model.lineCount }, () => true)), undefined);
 	}
 
 	/**
@@ -159,7 +141,9 @@ export class EditorVisualLineProjection {
 			if (!Number.isSafeInteger(line.startColumn) || !Number.isSafeInteger(line.endColumn) || line.startColumn < 0 || line.endColumn < line.startColumn) {
 				throw new RangeError('Visible visual line columns must be ordered non-negative safe integers');
 			}
-			const wrappedTextIndentWidth = line.wrappedTextIndentWidth === undefined ? 0 : line.wrappedTextIndentWidth;
+			const wrappedTextIndentWidth = line.wrappedTextIndentWidth === undefined
+				? 0
+				: line.wrappedTextIndentWidth;
 			validateWrappedTextIndentWidth(wrappedTextIndentWidth);
 			if (starts[line.logicalLineIndex] === -1) starts[line.logicalLineIndex] = visualLineIndex;
 			visibility[line.logicalLineIndex] = true;
@@ -184,7 +168,14 @@ export class EditorVisualLineProjection {
 				throw new RangeError('Visible logical line anchor must point to its first visual row');
 			}
 		}
-		return new EditorVisualLineProjection(modelVersion, logicalLineCount, Object.freeze(normalized), Object.freeze(visualLineIndexes.slice()), Object.freeze(visibility), undefined);
+		return new EditorVisualLineProjection(
+			modelVersion,
+			logicalLineCount,
+			Object.freeze(normalized),
+			Object.freeze(visualLineIndexes.slice()),
+			Object.freeze(visibility),
+			undefined,
+		);
 	}
 
 	get lines(): readonly EditorVisualLine[] {
@@ -202,7 +193,9 @@ export class EditorVisualLineProjection {
 
 	lineAt(visualLineIndex: number): EditorVisualLine | undefined {
 		if (this.projectedLines) return this.projectedLines[visualLineIndex];
-		return Number.isSafeInteger(visualLineIndex) && visualLineIndex >= 0 && visualLineIndex < this.logicalLineCount ? this.identityLineAt(visualLineIndex) : undefined;
+		return Number.isSafeInteger(visualLineIndex) && visualLineIndex >= 0 && visualLineIndex < this.logicalLineCount
+			? this.identityLineAt(visualLineIndex)
+			: undefined;
 	}
 
 	getViewLineData(model: TextModel, viewLineNumber: number): ViewLineData {
@@ -224,20 +217,19 @@ export class EditorVisualLineProjection {
 		const tokens = injectedTokens.sliceAndInflate(start, end, indent);
 		const content = `${' '.repeat(indent)}${tokens.getLineContent()}`;
 		const firstViewLineNumber = this.firstVisualLineIndex(line.logicalLineIndex) + 1;
-		const inlineDecorations =
-			new InjectedTextInlineDecorationsComputer({
-				getInjectionOptions: () => data.injectionOptions,
-				getInjectionOffsets: () => data.injectionOffsets,
-				getBreakOffsets: () => data.breakOffsets,
-				getWrappedTextIndentLength: () => data.wrappedTextIndentLength,
-				getBaseViewLineNumber: () => firstViewLineNumber,
-			}).getInlineDecorations(modelLineNumber)[outputLineIndex] ?? null;
+		const inlineDecorations = new InjectedTextInlineDecorationsComputer({
+			getInjectionOptions: () => data.injectionOptions,
+			getInjectionOffsets: () => data.injectionOffsets,
+			getBreakOffsets: () => data.breakOffsets,
+			getWrappedTextIndentLength: () => data.wrappedTextIndentLength,
+			getBaseViewLineNumber: () => firstViewLineNumber,
+		}).getInlineDecorations(modelLineNumber)[outputLineIndex] ?? null;
 		return new ViewLineData(
 			content,
 			outputLineIndex + 1 < data.getOutputLineCount(),
 			data.getMinOutputOffset(outputLineIndex) + 1,
 			content.length + 1,
-			outputLineIndex === 0 ? 0 : (data.breakOffsetsVisibleColumn[outputLineIndex - 1] ?? 0),
+			outputLineIndex === 0 ? 0 : data.breakOffsetsVisibleColumn[outputLineIndex - 1] ?? 0,
 			tokens,
 			inlineDecorations,
 		);
@@ -246,7 +238,9 @@ export class EditorVisualLineProjection {
 	convertViewPositionToModelPosition(position: Position): Position {
 		const line = this.lineAt(position.lineNumber - 1);
 		if (!line) throw new RangeError('View position is outside the projection');
-		const column = line.projectionData ? line.projectionData.translateToInputOffset(line.outputLineIndex!, position.column - 1) + 1 : line.startColumn + position.column;
+		const column = line.projectionData
+			? line.projectionData.translateToInputOffset(line.outputLineIndex!, position.column - 1) + 1
+			: line.startColumn + position.column;
 		return new Position(line.logicalLineIndex + 1, column);
 	}
 
@@ -282,7 +276,9 @@ export class EditorVisualLineProjection {
 		if (this.identityModel) return logicalLineIndex;
 		const first = this.firstVisualLineIndex(logicalLineIndex);
 		if (!this.logicalLineVisibility![logicalLineIndex]) return first;
-		const lastExclusive = logicalLineIndex + 1 < this.logicalLineCount ? this.nextVisualLineIndex(logicalLineIndex + 1) : this.visualLineCount;
+		const lastExclusive = logicalLineIndex + 1 < this.logicalLineCount
+			? this.nextVisualLineIndex(logicalLineIndex + 1)
+			: this.visualLineCount;
 		for (let visualLineIndex = first; visualLineIndex < lastExclusive; visualLineIndex += 1) {
 			const line = this.lines[visualLineIndex]!;
 			if (columnIndex < line.endColumn || line.lastForLogicalLine) return visualLineIndex;

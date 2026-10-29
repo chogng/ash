@@ -14,12 +14,7 @@ export function createDocumentSectionCommand(schema: DocumentSchema, document: D
 	if (!child || child.type === 'reviewComment') return undefined;
 	const start = owner.content.indexOf(child);
 	if (owner !== document && start === 0) return undefined;
-	const section = schema.createNode('documentSection', {
-		attrs: {
-			...(owner === document ? {} : owner.attrs),
-			pageSize: owner.attrs.pageSize === 'letter' ? 'letter' : 'a4',
-		},
-	});
+	const section = schema.createNode('documentSection', { attrs: { ...(owner === document ? {} : owner.attrs), pageSize: owner.attrs.pageSize === 'letter' ? 'letter' : 'a4' } });
 	const index = owner === document ? start : findDocumentNode(document, owner.id)!.index + 1;
 	let transaction = new DocumentTransaction().insertNode(document.id, index, section);
 	let at = 0;

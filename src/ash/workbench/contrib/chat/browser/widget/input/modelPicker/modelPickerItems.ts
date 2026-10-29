@@ -19,8 +19,7 @@ export function buildModelPickerItems(models: readonly ModelCatalogEntry[], sele
 		}
 		if (isSelected) details.push(localize('chat.modelPicker.current', 'Current'));
 		if (entry.contextWindow) details.push(localize('chat.modelPicker.context', '{0} context tokens', entry.contextWindow.toLocaleString()));
-		if (entry.supportedReasoningEfforts?.length)
-			details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.map(option => modelPickerEffortLabel(option.effort)).join(', ')));
+		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.map(option => modelPickerEffortLabel(option.effort)).join(', ')));
 		return {
 			id: `${entry.model.provider}/${entry.model.model}`,
 			kind: ActionListItemKind.Action,

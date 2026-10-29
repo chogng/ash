@@ -14,7 +14,7 @@ export class CursorPosition {
 		public readonly lineNumber: number,
 		public readonly column: number,
 		public readonly leftoverVisibleColumns: number,
-	) {}
+	) { }
 }
 
 /** DOM-independent movement primitives over one canonical cursor state. */
@@ -40,7 +40,9 @@ export class MoveOperations {
 	}
 
 	private static left(config: CursorConfiguration, model: ICursorSimpleModel, position: Position): CursorPosition {
-		const target = config.stickyTabStops ? this.leftPositionAtomicSoftTabs(model, position, config.tabSize) : this.leftPosition(model, position);
+		const target = config.stickyTabStops
+			? this.leftPositionAtomicSoftTabs(model, position, config.tabSize)
+			: this.leftPosition(model, position);
 		return new CursorPosition(target.lineNumber, target.column, 0);
 	}
 
@@ -95,16 +97,7 @@ export class MoveOperations {
 		return cursor.move(inSelectionMode, target.lineNumber, target.column, target.leftoverVisibleColumns);
 	}
 
-	public static vertical(
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		lineNumber: number,
-		column: number,
-		leftoverVisibleColumns: number,
-		newLineNumber: number,
-		allowMoveOnEdgeLine: boolean,
-		normalizationAffinity?: PositionAffinity,
-	): CursorPosition {
+	public static vertical(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, newLineNumber: number, allowMoveOnEdgeLine: boolean, normalizationAffinity?: PositionAffinity): CursorPosition {
 		const visibleColumn = CursorColumns.visibleColumnFromColumn(model.getLineContent(lineNumber), column, config.tabSize) + leftoverVisibleColumns;
 		const lineCount = model.getLineCount();
 		const atFirstPosition = lineNumber === 1 && column === 1;
@@ -128,15 +121,7 @@ export class MoveOperations {
 		return new CursorPosition(lineNumber, column, leftoverVisibleColumns);
 	}
 
-	public static down(
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		lineNumber: number,
-		column: number,
-		leftoverVisibleColumns: number,
-		count: number,
-		allowMoveOnLastLine: boolean,
-	): CursorPosition {
+	public static down(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, count: number, allowMoveOnLastLine: boolean): CursorPosition {
 		return this.vertical(config, model, lineNumber, column, leftoverVisibleColumns, lineNumber + count, allowMoveOnLastLine, PositionAffinity.RightOfInjectedText);
 	}
 
@@ -157,15 +142,7 @@ export class MoveOperations {
 		return this.translateVertical(config, model, cursor, 1);
 	}
 
-	public static up(
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		lineNumber: number,
-		column: number,
-		leftoverVisibleColumns: number,
-		count: number,
-		allowMoveOnFirstLine: boolean,
-	): CursorPosition {
+	public static up(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, count: number, allowMoveOnFirstLine: boolean): CursorPosition {
 		return this.vertical(config, model, lineNumber, column, leftoverVisibleColumns, lineNumber - count, allowMoveOnFirstLine, PositionAffinity.LeftOfInjectedText);
 	}
 

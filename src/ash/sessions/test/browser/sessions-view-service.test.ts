@@ -20,20 +20,14 @@ import { SyncDescriptor } from '../../../platform/instantiation/common/descripto
 import { AbstractCustomView } from '../../services/customView/browser/customView.js';
 
 let storageResources: DisposableStore;
-setup(() => {
-	storageResources = new DisposableStore();
-});
+setup(() => { storageResources = new DisposableStore(); });
 teardown(() => storageResources.dispose());
 ensureNoDisposablesAreLeakedInTestSuite();
 
 function createTestStorage(): BrowserStorageService {
 	const storageEnvironment = new JSDOM('', { url: 'https://ash.test' });
 	storageResources.add(toDisposable(() => storageEnvironment.window.close()));
-	return new BrowserStorageService({
-		ownerWindow: storageEnvironment.window as unknown as Window,
-		workspaceId: 'sessions',
-		flushInterval: 0,
-	});
+	return new BrowserStorageService({ ownerWindow: storageEnvironment.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 }
 
 function createView(sessions: ISessionsManagementService, storage: IStorageService, customViews = storageResources.add(new CustomViewService(new NullLoggerService(), storage))): SessionsService {
@@ -46,17 +40,15 @@ function createView(sessions: ISessionsManagementService, storage: IStorageServi
 
 class TestCustomView extends AbstractCustomView {
 	readonly title = constObservable('Automations');
-	render(): void {}
-	layout(): void {}
+	render(): void { }
+	layout(): void { }
 }
 
 test('A restored Custom View survives delayed catalog initialization and automatic draft recovery', async () => {
 	const ready = new DeferredPromise<void>();
-	using sessions = new (class extends FakeSessionService {
-		override initialize(): Promise<void> {
-			return ready.p;
-		}
-	})([session('saved', 'root')]);
+	using sessions = new class extends FakeSessionService {
+		override initialize(): Promise<void> { return ready.p; }
+	}([session('saved', 'root')]);
 	using storage = createTestStorage();
 	storage.store('sessions.activeCustomView', 'automations', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using custom = new CustomViewService(new NullLoggerService(), storage);
@@ -111,10 +103,7 @@ test('Explicit Session opens dismiss Custom Views atomically and Back/Forward re
 		observed.push(custom.activeCustomView.read(reader)?.id ?? selectionId(selected)!);
 	});
 	view.openSession('second', 'second-thread');
-	assert.deepEqual(
-		observed.filter((destination, index) => index === 0 || destination !== observed[index - 1]),
-		['automations', 'session:second:second-thread'],
-	);
+	assert.deepEqual(observed.filter((destination, index) => index === 0 || destination !== observed[index - 1]), ['automations', 'session:second:second-thread']);
 	view.navigateBack();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
 	view.navigateBack();
@@ -262,20 +251,8 @@ test('Sessions view records window-local untitled sessions without creating dura
 test('new Sessions replace the active slot and preserve siblings across navigation history', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
-	const visible = sessions.sessions.map(session => ({
-		kind: 'session',
-		sessionId: session.sessionId,
-		threadId: session.chats[0]!.threadId,
-	}));
-	storage.store(
-		'sessions.viewState',
-		JSON.stringify({
-			version: 1,
-			pages: { chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 } },
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
+	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: { chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 } } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	view.activateSelection(view.visibleSelections[1]!);
@@ -297,20 +274,13 @@ for (const target of ['active', 'inactive', 'untitled'] as const) {
 		const visible = [
 			{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' },
 			{ kind: 'session', sessionId: 'session-2', threadId: 'thread-2' },
-			{
-				kind: 'untitled',
-				session: { untitledSessionId: 'saved-draft', title: 'Draft', workspace: { type: 'current' } },
-			},
+			{ kind: 'untitled', session: { untitledSessionId: 'saved-draft', title: 'Draft', workspace: { type: 'current' } } },
 		];
-		storage.store(
-			'sessions.viewState',
-			JSON.stringify({
-				version: 1,
-				pages: { chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 } },
-			}),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.viewState', JSON.stringify({
+			version: 1, pages: {
+				chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 },
+			}
+		}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using view = createView(sessions, storage);
 		await view.initialize();
 		assert.equal(view.visibleSelections.length, 3);
@@ -327,37 +297,29 @@ for (const target of ['active', 'inactive', 'untitled'] as const) {
 			inactive: 'session:session-2:thread-2',
 			untitled: 'untitled:saved-draft',
 		}[target];
-		assert.deepEqual(
-			{ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) },
-			{
-				visible: ['session:session-1:thread-1', 'session:session-2:thread-2', 'untitled:saved-draft'],
-				active: expected,
-			},
-		);
+		assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
+			visible: ['session:session-1:thread-1', 'session:session-2:thread-2', 'untitled:saved-draft'], active: expected,
+		});
 	});
 }
 
 test('pane focus and closing a pane preserve the remaining split while history navigation replaces the active slot', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2'), session('session-3', 'thread-3')]);
 	using storage = createTestStorage();
-	const visible = sessions.sessions.map(session => ({
-		kind: 'session',
-		sessionId: session.sessionId,
-		threadId: session.chats[0]!.threadId,
-	}));
-	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: { chat: { visible, active: 0 }, code: { visible: [], active: -1 } } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible, active: 0 }, code: { visible: [], active: -1 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	view.activateSelection(view.visibleSelections[1]!);
 	assert.equal(view.visibleSelections.length, 3);
 	view.closeVisibleSelection(view.activeSelection!);
-	assert.deepEqual(
-		{ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) },
-		{
-			visible: ['session:session-1:thread-1', 'session:session-3:thread-3'],
-			active: 'session:session-3:thread-3',
-		},
-	);
+	assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
+		visible: ['session:session-1:thread-1', 'session:session-3:thread-3'], active: 'session:session-3:thread-3',
+	});
 	view.navigateBack();
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', 'session:session-2:thread-2']);
 });
@@ -392,11 +354,9 @@ test('closing the last draft does not reopen a previously closed durable Session
 
 test('an explicit draft chosen during catalog loading remains active', async () => {
 	const pending = new DeferredPromise<void>();
-	using sessions = new (class extends FakeSessionService {
-		override initialize(): Promise<void> {
-			return pending.p;
-		}
-	})([]);
+	using sessions = new class extends FakeSessionService {
+		override initialize(): Promise<void> { return pending.p; }
+	}([]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	const initializing = view.initialize();
@@ -439,12 +399,12 @@ test('background first send materializes its history entry without replacing a l
 
 test('a delayed conversation open does not steal focus from a newer choice', async () => {
 	const pending = new DeferredPromise<void>();
-	using sessions = new (class extends FakeSessionService {
+	using sessions = new class extends FakeSessionService {
 		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 			await pending.p;
 			await super.openThread(sessionId, threadId);
 		}
-	})([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+	}([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	using view = createView(sessions, storage);
 	await view.initialize();
@@ -469,36 +429,15 @@ test('catalog notifications do not replace the foreground draft', async () => {
 test('Sessions merges legacy selections and restores one order, active selection and draft identities after restart', async () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
-	const chatDraft = {
-		kind: 'untitled',
-		session: { untitledSessionId: 'saved-chat', title: 'Chat draft', workspace: { type: 'current' } },
-	};
-	const firstCode = {
-		kind: 'untitled',
-		session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' } },
-	};
-	const secondCode = {
-		kind: 'untitled',
-		session: { untitledSessionId: 'saved-code-second', title: 'Second Code draft', workspace: { type: 'current' } },
-	};
-	storage.store(
-		'sessions.viewState',
-		JSON.stringify({
-			version: 1,
-			pages: {
-				chat: {
-					visible: [{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' }, chatDraft, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }],
-					active: 1,
-				},
-				code: {
-					visible: [firstCode, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }, secondCode, chatDraft],
-					active: 0,
-				},
-			},
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	const chatDraft = { kind: 'untitled', session: { untitledSessionId: 'saved-chat', title: 'Chat draft', workspace: { type: 'current' } } };
+	const firstCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' } } };
+	const secondCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-second', title: 'Second Code draft', workspace: { type: 'current' } } };
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible: [{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' }, chatDraft, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }], active: 1 },
+			code: { visible: [firstCode, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }, secondCode, chatDraft], active: 0 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	view.activateSelection(view.visibleSelections[0]!);
@@ -517,25 +456,12 @@ test('Sessions restoration prunes unavailable conversations and persists materia
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	const draft = { untitledSessionId: 'saved-draft', title: 'Send this', workspace: { type: 'current' as const } };
-	storage.store(
-		'sessions.viewState',
-		JSON.stringify({
-			version: 1,
-			pages: {
-				chat: {
-					visible: [
-						{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' },
-						{ kind: 'session', sessionId: 'session-2', threadId: 'thread-2' },
-						{ kind: 'untitled', session: draft },
-					],
-					active: 2,
-				},
-				code: { visible: [], active: -1 },
-			},
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible: [{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' }, { kind: 'session', sessionId: 'session-2', threadId: 'thread-2' }, { kind: 'untitled', session: draft }], active: 2 },
+			code: { visible: [], active: -1 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	const materialized = await sessions.materializeUntitledSession(draft.untitledSessionId);
@@ -544,18 +470,9 @@ test('Sessions restoration prunes unavailable conversations and persists materia
 	using nextCatalog = new FakeSessionService([session('session-1', 'thread-1'), materialized.session]);
 	using restored = createView(nextCatalog, storage);
 	await restored.initialize();
-	assert.deepEqual(
-		{
-			visible: restored.visibleSelections.map(selectionId),
-			active: selectionId(restored.activeSelection),
-			drafts: nextCatalog.untitledSessions,
-		},
-		{
-			visible: ['session:session-1:thread-1', 'session:materialized-1:materialized-thread-1'],
-			active: 'session:materialized-1:materialized-thread-1',
-			drafts: [],
-		},
-	);
+	assert.deepEqual({ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection), drafts: nextCatalog.untitledSessions }, {
+		visible: ['session:session-1:thread-1', 'session:materialized-1:materialized-thread-1'], active: 'session:materialized-1:materialized-thread-1', drafts: [],
+	});
 });
 
 test('a choice during catalog loading supersedes the saved foreground selection', async () => {
@@ -567,11 +484,9 @@ test('a choice during catalog loading supersedes the saved foreground selection'
 	view.openNewSession('Saved Code');
 	await storage.flush();
 	const pending = new DeferredPromise<void>();
-	using nextCatalog = new (class extends FakeSessionService {
-		override initialize(): Promise<void> {
-			return pending.p;
-		}
-	})([]);
+	using nextCatalog = new class extends FakeSessionService {
+		override initialize(): Promise<void> { return pending.p; }
+	}([]);
 	using restored = createView(nextCatalog, storage);
 	const initializing = restored.initialize();
 	const choice = restored.openNewSession('Chosen during startup');
@@ -580,27 +495,15 @@ test('a choice during catalog loading supersedes the saved foreground selection'
 	assert.equal(storage.get('sessions.viewState', StorageScope.WORKSPACE), savedRaw);
 	await pending.complete();
 	await initializing;
-	assert.deepEqual(
-		{ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) },
-		{
-			visible: [`untitled:${choice.untitledSessionId}`],
-			active: `untitled:${choice.untitledSessionId}`,
-		},
-	);
+	assert.deepEqual({ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) }, {
+		visible: [`untitled:${choice.untitledSessionId}`], active: `untitled:${choice.untitledSessionId}`,
+	});
 });
 
 test('invalid persisted Sessions arrangements are rejected at service creation', () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([]);
-	for (const visible of [
-		[{ kind: 'session', sessionId: '', threadId: 'thread' }],
-		[
-			{
-				kind: 'untitled',
-				session: { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'ssh', root: '/workspace' } },
-			},
-		],
-	]) {
+	for (const visible of [[{ kind: 'session', sessionId: '', threadId: 'thread' }], [{ kind: 'untitled', session: { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'ssh', root: '/workspace' } } }]]) {
 		storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: { chat: { visible, active: 0 }, code: { visible: [], active: -1 } } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		assert.throws(() => createView(sessions, storage), /Invalid stored/);
 	}
@@ -609,46 +512,25 @@ test('invalid persisted Sessions arrangements are rejected at service creation',
 test('an unavailable catalog restores local drafts and preserves unresolved conversation references', async () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1')]);
-	const draft = {
-		untitledSessionId: 'saved-local-draft',
-		title: 'Local draft',
-		workspace: { type: 'current' as const },
-	};
-	storage.store(
-		'sessions.viewState',
-		JSON.stringify({
-			version: 1,
-			pages: {
-				chat: {
-					visible: [
-						{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' },
-						{ kind: 'untitled', session: draft },
-					],
-					active: 1,
-				},
-				code: { visible: [], active: -1 },
-			},
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	const draft = { untitledSessionId: 'saved-local-draft', title: 'Local draft', workspace: { type: 'current' as const } };
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible: [{ kind: 'session', sessionId: 'session-1', threadId: 'thread-1' }, { kind: 'untitled', session: draft }], active: 1 },
+			code: { visible: [], active: -1 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	await storage.flush();
-	using disconnected = new (class extends FakeSessionService {
+	using disconnected = new class extends FakeSessionService {
 		override readonly state: SessionsManagementState = 'error';
-	})([]);
+	}([]);
 	using restored = createView(disconnected, storage);
 	await restored.initialize();
 	assert.deepEqual(restored.visibleSelections.map(selectionId), [`untitled:${draft.untitledSessionId}`]);
 	await storage.flush();
 	const saved = JSON.parse(storage.get('sessions.viewState', StorageScope.WORKSPACE)!);
-	assert.deepEqual(
-		saved.visible.map((reference: { kind: string; sessionId?: string; session?: IUntitledChatSession }) =>
-			reference.kind === 'session' ? reference.sessionId : reference.session!.untitledSessionId,
-		),
-		['session-1', draft.untitledSessionId],
-	);
+	assert.deepEqual(saved.visible.map((reference: { kind: string; sessionId?: string; session?: IUntitledChatSession; }) => reference.kind === 'session' ? reference.sessionId : reference.session!.untitledSessionId), ['session-1', draft.untitledSessionId]);
 	assert.doesNotThrow(() => restored.closeVisibleSelection(restored.activeSelection!));
 	assert.equal(restored.activeSelection?.kind, 'untitled');
 });
@@ -664,7 +546,7 @@ class FakeSessionService implements ISessionsManagementService {
 	private nextMaterializedId = 1;
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>(this, new Map());
 	readonly state: SessionsManagementState = 'ready';
 	readonly error = undefined;
 	startNewSessionCalls = 0;
@@ -676,30 +558,16 @@ class FakeSessionService implements ISessionsManagementService {
 		this._active = first && thread ? { session: first, threadId: thread.threadId } : undefined;
 	}
 
-	get sessions(): readonly ISession[] {
-		return this._sessions;
-	}
-	get active(): IActiveSessionThread | undefined {
-		return this._active;
-	}
-	get untitledSessions(): readonly IUntitledChatSession[] {
-		return this._untitledSessions;
-	}
-	get activeUntitledSession(): IUntitledChatSession | undefined {
-		return this._untitledSessions.find(session => session.untitledSessionId === this.activeUntitledSessionId);
-	}
+	get sessions(): readonly ISession[] { return this._sessions; }
+	get active(): IActiveSessionThread | undefined { return this._active; }
+	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
+	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this.activeUntitledSessionId); }
 
-	whenDirectoriesReady(): Promise<void> {
-		return Promise.resolve();
-	}
+	whenDirectoriesReady(): Promise<void> { return Promise.resolve(); }
 
-	async initialize(): Promise<void> {}
-	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> {
-		return [];
-	}
-	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		this.selectThread(sessionId, threadId);
-	}
+	async initialize(): Promise<void> { }
+	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
+	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
@@ -708,16 +576,10 @@ class FakeSessionService implements ISessionsManagementService {
 		this.activeUntitledSessionId = undefined;
 		this._onDidChange.fire();
 	}
-	async interruptThread(): Promise<void> {}
+	async interruptThread(): Promise<void> { }
 
 	createUntitledSession(title = 'New session'): IUntitledChatSession {
-		const draft = {
-			untitledSessionId: `untitled-${this.nextUntitledId++}`,
-			title,
-			model: undefined,
-			agent: undefined,
-			workspace: { type: 'current' as const },
-		};
+		const draft = { untitledSessionId: `untitled-${this.nextUntitledId++}`, title, model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 		this._untitledSessions = [draft, ...this._untitledSessions];
 		this.activeUntitledSessionId = draft.untitledSessionId;
 		this._onDidChange.fire();
@@ -741,9 +603,9 @@ class FakeSessionService implements ISessionsManagementService {
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
-	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}
-	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
+	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
+	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
+	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
 	async materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		const id = this.nextMaterializedId++;
 		const durable = session(`materialized-${id}`, `materialized-thread-${id}`);
@@ -757,24 +619,15 @@ class FakeSessionService implements ISessionsManagementService {
 		if (this.activeUntitledSessionId === untitledSessionId) this.activeUntitledSessionId = undefined;
 		this._onDidChange.fire();
 	}
-	async ensureActiveThread(): Promise<IActiveSessionThread> {
-		throw new Error('Not implemented');
-	}
-	async startNewSession(): Promise<IActiveSessionThread> {
-		this.startNewSessionCalls++;
-		throw new Error('Not implemented');
-	}
-	async stopSession(): Promise<void> {}
-	async archiveSession(): Promise<void> {}
-	async renameSession(): Promise<never> {
-		throw new Error('Unexpected rename');
-	}
-	async deleteSession(): Promise<void> {
-		throw new Error('Unexpected deletion');
-	}
-	async restoreSession(): Promise<void> {}
-	async setModel(): Promise<void> {}
-	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> {}
+	async ensureActiveThread(): Promise<IActiveSessionThread> { throw new Error('Not implemented'); }
+	async startNewSession(): Promise<IActiveSessionThread> { this.startNewSessionCalls++; throw new Error('Not implemented'); }
+	async stopSession(): Promise<void> { }
+	async archiveSession(): Promise<void> { }
+	async renameSession(): Promise<never> { throw new Error('Unexpected rename'); }
+	async deleteSession(): Promise<void> { throw new Error('Unexpected deletion'); }
+	async restoreSession(): Promise<void> { }
+	async setModel(): Promise<void> { }
+	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { }
 
 	removeSession(sessionId: SessionId): void {
 		this._sessions = this._sessions.filter(session => session.sessionId !== sessionId);
@@ -782,12 +635,8 @@ class FakeSessionService implements ISessionsManagementService {
 		this._onDidChange.fire();
 	}
 
-	dispose(): void {
-		this._onDidChange.dispose();
-	}
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	dispose(): void { this._onDidChange.dispose(); }
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
 function session(sessionId: SessionId, threadId: ThreadId): ISession {
@@ -802,23 +651,21 @@ function session(sessionId: SessionId, threadId: ThreadId): ISession {
 
 function selectionId(selection: SessionsViewSelection | undefined): string {
 	if (!selection) return 'none';
-	return selection.kind === 'session' ? `session:${selection.active.session.sessionId}:${selection.active.threadId}` : `untitled:${selection.session.untitledSessionId}`;
+	return selection.kind === 'session'
+		? `session:${selection.active.session.sessionId}:${selection.active.threadId}`
+		: `untitled:${selection.session.untitledSessionId}`;
 }
 
 test('closing a visible sibling supersedes a pending open of that conversation', async () => {
 	const pending = new DeferredPromise<void>();
-	using sessions = new (class extends FakeSessionService {
+	using sessions = new class extends FakeSessionService {
 		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
 			await pending.p;
 			await super.openThread(sessionId, threadId);
 		}
-	})([session('first', 'first-thread'), session('second', 'second-thread')]);
+	}([session('first', 'first-thread'), session('second', 'second-thread')]);
 	using storage = createTestStorage();
-	const visible = sessions.sessions.map(session => ({
-		kind: 'session',
-		sessionId: session.sessionId,
-		threadId: session.chats[0]!.threadId,
-	}));
+	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
 	storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
@@ -826,8 +673,5 @@ test('closing a visible sibling supersedes a pending open of that conversation',
 	view.closeVisibleSelection(view.visibleSelections[1]!);
 	await pending.complete();
 	await opening;
-	assert.deepEqual(
-		{ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) },
-		{ visible: ['session:first:first-thread'], active: 'session:first:first-thread' },
-	);
+	assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, { visible: ['session:first:first-thread'], active: 'session:first:first-thread' });
 });

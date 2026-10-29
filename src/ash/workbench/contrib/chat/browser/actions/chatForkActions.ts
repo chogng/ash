@@ -30,17 +30,8 @@ export class ForkConversationAction extends Action2 {
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const source = context ?? navigation.getActiveConversation();
-		if (
-			!source ||
-			typeof source !== 'object' ||
-			!('sessionId' in source) ||
-			!('threadId' in source) ||
-			typeof source.sessionId !== 'string' ||
-			!source.sessionId ||
-			typeof source.threadId !== 'string' ||
-			!source.threadId
-		)
-			return;
+		if (!source || typeof source !== 'object' || !('sessionId' in source) || !('threadId' in source)
+			|| typeof source.sessionId !== 'string' || !source.sessionId || typeof source.threadId !== 'string' || !source.threadId) return;
 		const { sessionId, threadId } = source;
 		const revision = navigation.revision;
 		const key = JSON.stringify([sessionId, threadId]);
@@ -52,10 +43,7 @@ export class ForkConversationAction extends Action2 {
 		const operation = (async () => {
 			const { thread } = await chat.readThread(sessionId, threadId, { type: 'latest', turnLimit: 1 });
 			const result = await threads.fork({
-				sessionId,
-				threadId,
-				commandId: createUuid(),
-				target: this.target,
+				sessionId, threadId, commandId: createUuid(), target: this.target,
 				title: localize('chat.forked.title', 'Forked: {0}', thread.title),
 			});
 			const active = navigation.getActiveConversation();
@@ -65,10 +53,6 @@ export class ForkConversationAction extends Action2 {
 			accessibility.status(localize('chat.forked.done', 'Conversation forked.'));
 		})();
 		this.pending.set(key, operation);
-		try {
-			await operation;
-		} finally {
-			this.pending.delete(key);
-		}
+		try { await operation; } finally { this.pending.delete(key); }
 	}
 }

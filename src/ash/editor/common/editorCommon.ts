@@ -35,6 +35,7 @@ export interface IContentSizeChangedEvent {
 	readonly contentHeightChanged: boolean;
 }
 
+
 /** Collects edit operations and tracked selections for one editor command. */
 export interface IEditOperationBuilder {
 	addEditOperation(range: IRange, text: string | null, forceMoveMarkers?: boolean): void;
@@ -106,7 +107,7 @@ export interface IViewState {
 export interface ICodeEditorViewState {
 	cursorState: ICursorState[];
 	viewState: IViewState;
-	contributionsState: { [id: string]: unknown };
+	contributionsState: { [id: string]: unknown; };
 }
 
 export interface IDiffEditorViewState {
@@ -199,7 +200,7 @@ export interface IEditorContribution extends IDisposable {
 	restoreViewState?(state: unknown): void;
 }
 
-export interface IDiffEditorContribution extends IDisposable {}
+export interface IDiffEditorContribution extends IDisposable { }
 
 export function isThemeColor(value: unknown): value is ThemeColor {
 	return typeof value === 'object' && value !== null && typeof (value as ThemeColor).id === 'string';
@@ -232,8 +233,8 @@ export interface IThemeDecorationRenderOptions {
 	overviewRulerColor?: string | ThemeColor;
 	before?: IContentDecorationRenderOptions;
 	after?: IContentDecorationRenderOptions;
-	beforeInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean };
-	afterInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean };
+	beforeInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean; };
+	afterInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean; };
 }
 
 export interface IContentDecorationRenderOptions {

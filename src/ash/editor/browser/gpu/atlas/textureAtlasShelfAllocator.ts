@@ -11,10 +11,7 @@ export class TextureAtlasShelfAllocator implements ITextureAtlasAllocator {
 	private rowHeight = 0;
 	private nextIndex = 0;
 
-	constructor(
-		private readonly canvas: OffscreenCanvas,
-		private readonly pageIndex: number,
-	) {
+	constructor(private readonly canvas: OffscreenCanvas, private readonly pageIndex: number) {
 		this.context = ensureNonNullable(canvas.getContext('2d', { willReadFrequently: true }));
 	}
 

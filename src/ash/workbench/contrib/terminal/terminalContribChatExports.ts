@@ -7,6 +7,8 @@ export const enum TerminalChatCommandId {
 }
 
 /** Only accepted display snapshots offer a passive terminal preview. */
-export function isTerminalChatAttachment(attachment: ChatContextAttachment): attachment is ChatContextAttachment & { readonly terminalSnapshot: ITerminalOutputSnapshot } {
+export function isTerminalChatAttachment(
+	attachment: ChatContextAttachment,
+): attachment is ChatContextAttachment & { readonly terminalSnapshot: ITerminalOutputSnapshot; } {
 	return attachment.kind === 'terminal' && attachment.terminalSnapshot !== undefined;
 }

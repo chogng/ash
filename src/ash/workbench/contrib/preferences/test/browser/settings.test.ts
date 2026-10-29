@@ -104,11 +104,11 @@ const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 });
 Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', {
 	configurable: true,
-	value() {},
+	value() { },
 });
 Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoView', {
 	configurable: true,
-	value() {},
+	value() { },
 });
 const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
 	navigator: browserEnvironment.window.navigator,
@@ -361,10 +361,10 @@ test('developer command opens a grouped read-only tool snapshot outside ordinary
 			id === ILanguageModelToolsService
 				? tools
 				: {
-						openEditor: async (input: import('../../../../common/editor.js').IResourceEditorInput) => {
-							opened.push(input);
-						},
+					openEditor: async (input: import('../../../../common/editor.js').IResourceEditorInput) => {
+						opened.push(input);
 					},
+				},
 	} as unknown as import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor);
 	assert.equal(opened[0].readOnly, true);
 	assert.equal(opened[0].resource.scheme, 'ash-tool-catalog');
@@ -405,15 +405,15 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	} as IAppServerRemoteAgentService);
 	services.registerInstance(IContentSearchConfigurationService, {
 		read: async () => ({ revision: 1, engine: 'tgrep' }),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	const content = resources.add(
 		services.createInstance(
@@ -448,13 +448,13 @@ test('Search settings discard retired reads and save through the current backend
 	using resources = new DisposableStore();
 	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
 	const connections = resources.add(new Emitter<void>());
-	const reads: DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep' }>[] = [];
+	const reads: DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>[] = [];
 	const writes: [string, number][] = [];
 	const model = resources.add(
 		new SearchSettingsModel(
 			{
 				read: () => {
-					const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep' }>();
+					const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>();
 					reads.push(read);
 					return read.p;
 				},
@@ -811,12 +811,12 @@ for (const locale of ['en', 'zh-CN']) {
 						triggerPaste: () => undefined,
 						read: async () => [],
 						readText: async () => '',
-						writeText: async () => {},
+						writeText: async () => { },
 						readFindText: async () => '',
-						writeFindText: async () => {},
+						writeFindText: async () => { },
 						readImage: async () => new Uint8Array(),
 						readResources: async () => ({ resources: [], operation: 'copy' }),
-						writeResources: async () => {},
+						writeResources: async () => { },
 						hasResources: async () => false,
 					},
 					onOpenSettings: async () => {
@@ -900,12 +900,12 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 				triggerPaste: () => undefined,
 				read: async () => [],
 				readText: async () => '',
-				writeText: async () => {},
+				writeText: async () => { },
 				readFindText: async () => '',
-				writeFindText: async () => {},
+				writeFindText: async () => { },
 				readImage: async () => new Uint8Array(),
 				readResources: async () => ({ resources: [], operation: 'copy' }),
-				writeResources: async () => {},
+				writeResources: async () => { },
 				hasResources: async () => false,
 			},
 			onStatus: (message, error) => {
@@ -1026,18 +1026,18 @@ test('URL rule suggestions follow extension registration without changing saved 
 			contextViewProvider: contextView,
 			clipboardService: {
 				readText: async () => '',
-				writeText: async () => {},
+				writeText: async () => { },
 				triggerPaste: () => undefined,
 				read: async () => [],
 				readFindText: async () => '',
-				writeFindText: async () => {},
+				writeFindText: async () => { },
 				readImage: async () => new Uint8Array(),
 				readResources: async () => ({ resources: [], operation: 'copy' }),
-				writeResources: async () => {},
+				writeResources: async () => { },
 				hasResources: async () => false,
 			},
-			contextMenuProvider: { showContextMenu() {} },
-			onStatus: () => {},
+			contextMenuProvider: { showContextMenu() { } },
+			onStatus: () => { },
 		}),
 	);
 	root.append(widget.domNode);
@@ -1093,20 +1093,20 @@ test('Configured markers follow explicit local user overrides and expose one acc
 			createSettingWidget(resources, root, setting, {
 				configurationService: configuration,
 				contextViewProvider: contextView,
-				contextMenuProvider: { showContextMenu() {} },
+				contextMenuProvider: { showContextMenu() { } },
 				clipboardService: {
 					triggerPaste: () => undefined,
 					read: async () => [],
 					readText: async () => '',
-					writeText: async () => {},
+					writeText: async () => { },
 					readFindText: async () => '',
-					writeFindText: async () => {},
+					writeFindText: async () => { },
 					readImage: async () => new Uint8Array(),
 					readResources: async () => ({ resources: [], operation: 'copy' }),
-					writeResources: async () => {},
+					writeResources: async () => { },
 					hasResources: async () => false,
 				},
-				onStatus: () => {},
+				onStatus: () => { },
 			}),
 		);
 		root.append(widget.domNode);
@@ -1213,10 +1213,10 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 						copied.push(value);
 					},
 					readFindText: async () => '',
-					writeFindText: async () => {},
+					writeFindText: async () => { },
 					readImage: async () => new Uint8Array(),
 					readResources: async () => ({ resources: [], operation: 'copy' }),
-					writeResources: async () => {},
+					writeResources: async () => { },
 					hasResources: async () => false,
 				},
 				onStatus: (message, isError) => {
@@ -1284,7 +1284,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	let copied = '';
 	let revealed = '';
 	let fail = false;
-	const reported = new DeferredPromise<{ message: string; isError: boolean }>();
+	const reported = new DeferredPromise<{ message: string; isError: boolean; }>();
 	const widget = resources.add(
 		createSettingWidget(resources, root, new DefaultSettings(registry).get('copy.window'), {
 			configurationService: configuration,
@@ -1304,10 +1304,10 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 					copied = value;
 				},
 				readFindText: async () => '',
-				writeFindText: async () => {},
+				writeFindText: async () => { },
 				readImage: async () => new Uint8Array(),
 				readResources: async () => ({ resources: [], operation: 'copy' }),
-				writeResources: async () => {},
+				writeResources: async () => { },
 				hasResources: async () => false,
 			},
 			onOpenSettings: async key => {
@@ -1397,12 +1397,12 @@ test('Chinese setting actions, search filters and pending saves expose translate
 					triggerPaste: () => undefined,
 					read: async () => [],
 					readText: async () => '',
-					writeText: async () => {},
+					writeText: async () => { },
 					readFindText: async () => '',
-					writeFindText: async () => {},
+					writeFindText: async () => { },
 					readImage: async () => new Uint8Array(),
 					readResources: async () => ({ resources: [], operation: 'copy' }),
-					writeResources: async () => {},
+					writeResources: async () => { },
 					hasResources: async () => false,
 				},
 				onOpenSettings: async () => {
@@ -2172,7 +2172,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => catalog,
 		listModelProviders: () => providers,
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 	} as unknown as IChatService;
@@ -2203,16 +2203,16 @@ test('Models Settings keeps loading API connections when the model catalog chang
 			revision: 1,
 			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
 		}),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	const panel = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
@@ -2266,21 +2266,21 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	const changed = resources.add(new Emitter<void>());
 	const models: ILanguageModelsService = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
-		setModelPreferences: async () => {},
+		setApprovalReviewModel: async () => { },
+		setModelPreferences: async () => { },
 		onDidChangeModels: changed.event,
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: async () => {},
+		rememberSelectedModel: async () => { },
 		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
-		saveReasoningEffort: async () => {},
+		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
-		setModelProviderApiKey: async () => {},
-		removeModelProviderApiKey: async () => {},
+		setModelProviderApiKey: async () => { },
+		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
 		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
@@ -2316,17 +2316,17 @@ test('Models Settings orders enabled models by catalog position and restores dis
 			revision: 1,
 			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
 		}),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
@@ -2475,10 +2475,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		triggerPaste: () => undefined,
 		read: async () => [],
 		readFindText: async () => '',
-		writeFindText: async () => {},
+		writeFindText: async () => { },
 		readImage: async () => new Uint8Array(),
 		readResources: async () => ({ resources: [], operation: 'copy' }),
-		writeResources: async () => {},
+		writeResources: async () => { },
 		hasResources: async () => false,
 		writeText: value => {
 			copied.push(value);
@@ -2493,7 +2493,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			menuActions = options.getActions?.() ?? [];
 			hideMenu = 'onHide' in options ? options.onHide : undefined;
 		},
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const configuration = disposables.add(new WorkspaceService());
 	const languagePacksChanged = disposables.add(new Emitter<void>());
@@ -2504,7 +2504,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		whenReady: Promise.resolve(),
 		catalogs,
 		getInstalledLanguages: async () => catalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName })),
-		refresh: async () => {},
+		refresh: async () => { },
 	};
 	const locale = disposables.add(createTestLocaleService(configuration, languagePacks));
 	await locale.whenReady;
@@ -2572,7 +2572,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			advisorWrites.push(next);
 		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		listModelProviders: async () => [
 			{
@@ -2683,10 +2683,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangeInstalled: Event.None,
 	} as IExtensionManagementService);
 	services.registerInstance(ILanguageServerService, {
-		control: async () => {},
+		control: async () => { },
 		read: async () => ({ revision: 0, configurations: {}, servers: [] }),
-		configure: async () => {},
-		removeConfiguration: async () => {},
+		configure: async () => { },
+		removeConfiguration: async () => { },
 	});
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
@@ -2716,7 +2716,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			revision: 1,
 			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
 		}),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	const localTranscription = disposables.add(new NullLocalTranscriptionService());
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
@@ -2777,7 +2777,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ITraceSettingsService, {
 		onDidChange: Event.None,
 		read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	services.registerInstance(IFileDialogService, {
 		pickFolderAndOpen: async () => {
@@ -2814,7 +2814,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	};
 	let rejectSearchSave = false;
 	let nextSearchRead: Promise<typeof searchSnapshot> | undefined;
-	const searchWrites: { engine: string; expectedRevision: number }[] = [];
+	const searchWrites: { engine: string; expectedRevision: number; }[] = [];
 	services.registerInstance(IContentSearchConfigurationService, {
 		read: async () => {
 			const pending = nextSearchRead;
@@ -2831,7 +2831,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	services.registerInstance(INetworkDiagnosticsService, {
 		read: async () => ({ revision: 0, httpMode: 'http2', targets: [] }),
-		configureHttp: async () => {},
+		configureHttp: async () => { },
 		run: async () => ({ network: { revision: 0, httpMode: 'http2', targets: [] }, checks: [] }),
 	});
 	const prompts: string[] = [];
@@ -2840,7 +2840,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
 		getConversations: () => [],
 		captureActiveDraft: async () => undefined,
-		openConversation: async () => {},
+		openConversation: async () => { },
 		startVoiceConversation: async () => {
 			throw new Error('Unexpected voice start');
 		},
@@ -2851,10 +2851,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
 	await using hooksFolderCleanup = {
@@ -2894,19 +2894,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		startLogin: async () => {
 			throw new Error('Not used');
 		},
-		cancelLogin: async () => {},
-		logout: async () => {},
+		cancelLogin: async () => { },
+		logout: async () => { },
 	});
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, {
 		state: { phase: 'idle' },
 		onDidChangeState: Event.None,
-		refresh: async () => {},
+		refresh: async () => { },
 	});
 	services.registerInstance(IGitHubConnectionService, {
 		isConnecting: false,
-		connect: async () => {},
-		cancel: async () => {},
+		connect: async () => { },
+		cancel: async () => { },
 	});
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	services.registerInstance(IWorkbenchHostService, {
@@ -2921,7 +2921,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidUpdateKeybindings: Event.None,
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
-		registerSchemaContribution: () => toDisposable(() => {}),
+		registerSchemaContribution: () => toDisposable(() => { }),
 		resolveKeybinding,
 		resolveUserBinding: () => undefined,
 		lookupKeybindings: () => [],
@@ -2933,8 +2933,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		},
 		hasFocus: true,
 		onDidChangeFocus: Event.None,
-		openWindow: async () => {},
-		restart: async () => {},
+		openWindow: async () => { },
+		restart: async () => { },
 		getScreenshot: async () => undefined,
 	});
 
@@ -3751,7 +3751,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 					progress({ state: DictationModelState.Cancelled });
 					finish(DictationModelState.Cancelled);
 				},
-				dispose() {},
+				dispose() { },
 			};
 		},
 	} as unknown as LocalTranscriptionService);
@@ -3816,7 +3816,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 				apiKeyPolicy: 'required',
 				apiKeyConfigured: true,
 			})),
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 		saveCustomModelProvider: async (provider: (typeof saved)[number]) => {
@@ -3856,17 +3856,17 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			revision: 1,
 			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
 		}),
-		configure: async () => {},
+		configure: async () => { },
 	});
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	const content = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
@@ -4042,7 +4042,7 @@ function createSettingWidget(
 		...options.contextMenuProvider,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		hideContextMenu() {},
+		hideContextMenu() { },
 	});
 	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
 	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
@@ -4059,12 +4059,12 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	services.registerInstance(IContextMenuService, {
 		contextMenuStyle: 'custom' as const,
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 	});
-	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() {} }, services), /clipboardService/);
+	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() { } }, services), /clipboardService/);
 	assert.equal(root.querySelector('.ash-configuration-setting'), null);
 });
 
@@ -4079,10 +4079,10 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	services.registerInstance(IAccessibleViewService, {
 		show: () => true,
 		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 	services.registerInstance(ILanguageModelsService, {
 		onDidChangeModels: Event.None,
@@ -4090,7 +4090,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 		listModelProviders: async () => [],
 		listCustomModelProviders: async () => [],
 	} as unknown as ILanguageModelsService);
-	let state: { status: 'accessDenied' | 'available'; mode: 'encrypted' | 'file' } = {
+	let state: { status: 'accessDenied' | 'available'; mode: 'encrypted' | 'file'; } = {
 		status: 'accessDenied',
 		mode: 'encrypted',
 	};

@@ -22,17 +22,11 @@ export class NativeHostService extends BrowserHostService {
 		@IDialogService dialogs: IDialogService,
 		@IPathService paths: IPathService,
 		@IFileService files: IFileService,
-	) {
-		super({}, lifecycle, dialogs, paths, files);
-	}
+	) { super({}, lifecycle, dialogs, paths, files); }
 
-	public override restart(): Promise<void> {
-		return invoke<void>(HOST_RESTART_CHANNEL);
-	}
+	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 
-	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> {
-		return this.host.getScreenshot(rect);
-	}
+	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> { return this.host.getScreenshot(rect); }
 
 	public override openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	public override openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;

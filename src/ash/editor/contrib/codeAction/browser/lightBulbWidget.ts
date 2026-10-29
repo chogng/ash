@@ -24,52 +24,35 @@ export class LightBulbWidget extends Disposable implements IContentWidget {
 	private readonly clicked = this._register(new Emitter<CodeActionTrigger>());
 	public readonly onClick = this.clicked.event;
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		@IKeybindingService private readonly keybindings: IKeybindingService,
-	) {
+	constructor(private readonly editor: ICodeEditor, @IKeybindingService private readonly keybindings: IKeybindingService) {
 		super();
 		this.element = h(editor.getDomNode()!.ownerDocument, 'div');
 		this.element.className = 'ash-editor-lightbulb';
-		this.button = this._register(
-			new Button(this.element, {
-				...defaultButtonStyles,
-				label: localize('codeAction.lightbulb', 'Show code actions'),
-				icon: Lxicon.lightning,
-				iconOnly: true,
-				presentation: 'quiet',
-				size: 'small',
-				onClick: () => {
-					if (this.trigger) {
-						this.clicked.fire(this.trigger);
-					}
-				},
-			}),
-		);
+		this.button = this._register(new Button(this.element, {
+			...defaultButtonStyles,
+			label: localize('codeAction.lightbulb', 'Show code actions'),
+			icon: Lxicon.lightning,
+			iconOnly: true,
+			presentation: 'quiet',
+			size: 'small',
+			onClick: () => { if (this.trigger) { this.clicked.fire(this.trigger); } },
+		}));
 		this._register(keybindings.onDidUpdateKeybindings(() => this.updateLabel()));
 		this.updateLabel();
 		editor.addContentWidget(this);
 		this._register(toDisposable(() => editor.removeContentWidget(this)));
 	}
 
-	public getId(): string {
-		return LightBulbWidget.ID;
-	}
-	public getDomNode(): HTMLElement {
-		return this.element;
-	}
+	public getId(): string { return LightBulbWidget.ID; }
+	public getDomNode(): HTMLElement { return this.element; }
 	public getPosition(): IContentWidgetPosition | null {
 		return this.position ? { position: this.position, preference: [ContentWidgetPositionPreference.EXACT] } : null;
 	}
 	public update(actions: CodeActionSet, trigger: CodeActionTrigger, atPosition: Position): void {
 		const model = this.editor.getModel();
 		const mode = this.editor.getOption(EditorOption.lightbulb).enabled;
-		if (
-			!model ||
-			actions.validActions.length === 0 ||
-			mode === ShowLightbulbIconMode.Off ||
-			(mode === ShowLightbulbIconMode.OnCode && model.getLineContent(atPosition.lineNumber).trim().length === 0)
-		) {
+		if (!model || actions.validActions.length === 0 || mode === ShowLightbulbIconMode.Off
+			|| (mode === ShowLightbulbIconMode.OnCode && model.getLineContent(atPosition.lineNumber).trim().length === 0)) {
 			this.hide();
 			return;
 		}
@@ -78,14 +61,12 @@ export class LightBulbWidget extends Disposable implements IContentWidget {
 		this.element.classList.toggle('has-preferred-fix', actions.hasAutoFix);
 		this.editor.layoutContentWidget(this);
 	}
-	public hide(): void {
-		this.position = undefined;
-		this.trigger = undefined;
-		this.editor.layoutContentWidget(this);
-	}
+	public hide(): void { this.position = undefined; this.trigger = undefined; this.editor.layoutContentWidget(this); }
 	private updateLabel(): void {
 		const binding = this.keybindings.lookupKeybinding('editor.action.quickFix');
 		const shortcut = binding ? getKeybindingLabel(binding) : undefined;
-		this.button.domNode.title = shortcut ? localize('codeAction.lightbulbShortcut', 'Show code actions ({0})', shortcut) : localize('codeAction.lightbulb', 'Show code actions');
+		this.button.domNode.title = shortcut
+			? localize('codeAction.lightbulbShortcut', 'Show code actions ({0})', shortcut)
+			: localize('codeAction.lightbulb', 'Show code actions');
 	}
 }

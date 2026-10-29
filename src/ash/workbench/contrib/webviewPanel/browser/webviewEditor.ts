@@ -65,12 +65,8 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private applyingEdit = false;
 	private readOnly = false;
 	private refreshView: (() => void) | undefined;
-	public get isEditable(): boolean {
-		return this.editable;
-	}
-	public get workingCopy(): CustomTextEditorModel | undefined {
-		return this.model;
-	}
+	public get isEditable(): boolean { return this.editable; }
+	public get workingCopy(): CustomTextEditorModel | undefined { return this.model; }
 
 	constructor(
 		private readonly provider: CustomTextEditorProvider,
@@ -124,30 +120,20 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			const model = this.model;
 			const stat = input.resource.scheme === Schemas.untitled ? undefined : await this.files.stat(input.resource);
 			inputSignal.throwIfAborted();
-			const updateReadonly = (): void => {
-				this.readOnly = input.readOnly === true || !!this.filesConfiguration.isReadonly(input.resource, stat);
-			};
+			const updateReadonly = (): void => { this.readOnly = input.readOnly === true || !!this.filesConfiguration.isReadonly(input.resource, stat); };
 			updateReadonly();
 			const render = async (): Promise<void> => {
 				const controller = new AbortController();
 				this.renderRequest.value = toDisposable(() => controller.abort());
 				const renderSignal = AbortSignal.any([inputSignal, controller.signal]);
 				try {
-					const document = {
-						uri: input.resource.toString(),
-						text: reference.model.getText(),
-						languageId: reference.model.getLanguageId(),
-						version: reference.model.getVersionId(),
-						readOnly: this.readOnly,
-					};
+					const document = { uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly };
 					const content = await this.provider.render(document, renderSignal);
 					if (renderSignal.aborted || this.model !== model) {
 						return;
 					}
-					const variables = Object.entries(this.themes.getColorTheme().colors)
-						.map(([id, value]) => `${colorCssVariable(id)}:${value}`)
-						.join(';');
-					this.editable = content.editable ?? content.update !== undefined;
+					const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
+					this.editable = content.editable ?? (content.update !== undefined);
 					this.renderedUpdate = content.update;
 					this.renderedVersion = document.version;
 					const base = asWebviewUri(input.resource).toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
@@ -156,9 +142,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 						if (content.update !== undefined) {
 							this.webview.value.postMessage({ type: 'theme', variables });
 							this.webview.value.postMessage(content.update);
-						} else {
-							this.webview.value.setHtml(this.renderedHtml);
-						}
+						} else { this.webview.value.setHtml(this.renderedHtml); }
 					} else if (this.isVisible()) {
 						this.createWebview(input, this.renderedHtml);
 					}
@@ -168,27 +152,16 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					}
 				}
 			};
-			const schedule = resources.add(
-				new RunOnceScheduler(() => {
-					void render().catch(error => {
-						if (this.model === model) {
-							console.error('Custom editor rendering failed', error);
-						}
-					});
-				}, 50),
-			);
+			const schedule = resources.add(new RunOnceScheduler(() => {
+				void render().catch(error => {
+					if (this.model === model) {
+						console.error('Custom editor rendering failed', error);
+					}
+				});
+			}, 50));
 			this.refreshView = () => schedule.schedule();
-			resources.add(
-				model.onDidChangeContent(() => {
-					if (!this.applyingEdit) schedule.schedule();
-				}),
-			);
-			resources.add(
-				this.filesConfiguration.onDidChangeReadonly(() => {
-					updateReadonly();
-					schedule.schedule();
-				}),
-			);
+			resources.add(model.onDidChangeContent(() => { if (!this.applyingEdit) schedule.schedule(); }));
+			resources.add(this.filesConfiguration.onDidChangeReadonly(() => { updateReadonly(); schedule.schedule(); }));
 			resources.add(this.themes.onDidColorThemeChange(() => schedule.schedule()));
 			// Providers read client configuration during render. A setting change must
 			// not require editing the document to refresh its existing sandbox.
@@ -234,42 +207,38 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		};
 		updateHint();
 		resources.add(this.keybindings.onDidUpdateKeybindings(updateHint));
-		resources.add(
-			this.configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.WebviewEditor)) {
-					updateHint();
-				}
-			}),
-		);
-		resources.add(
-			webview.onMessage(({ message }) => {
-				if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'ready') {
-					if (this.renderedUpdate !== undefined) webview.postMessage(this.renderedUpdate);
-					if (this.renderedVersion !== this.model?.reference.model.getVersionId()) this.refreshView?.();
-					return;
-				}
-				if (this.editable && typeof message === 'object' && message !== null && 'type' in message) {
-					this.handleEditMessage(message, webview);
-					return;
-				}
-				if (typeof message !== 'object' || message === null || !('href' in message) || typeof message.href !== 'string') {
-					return;
-				}
-				if (!URL.canParse(message.href, input.resource.toString())) {
-					return;
-				}
-				const url = new URL(message.href, input.resource.toString());
-				if (['http:', 'https:', 'mailto:', 'file:', 'ash-remote:'].includes(url.protocol)) {
-					void this.opener.open(url.href);
-				}
-			}),
-		);
+		resources.add(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.WebviewEditor)) {
+				updateHint();
+			}
+		}));
+		resources.add(webview.onMessage(({ message }) => {
+			if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'ready') {
+				if (this.renderedUpdate !== undefined) webview.postMessage(this.renderedUpdate);
+				if (this.renderedVersion !== this.model?.reference.model.getVersionId()) this.refreshView?.();
+				return;
+			}
+			if (this.editable && typeof message === 'object' && message !== null && 'type' in message) {
+				this.handleEditMessage(message, webview);
+				return;
+			}
+			if (typeof message !== 'object' || message === null || !('href' in message) || typeof message.href !== 'string') {
+				return;
+			}
+			if (!URL.canParse(message.href, input.resource.toString())) {
+				return;
+			}
+			const url = new URL(message.href, input.resource.toString());
+			if (['http:', 'https:', 'mailto:', 'file:', 'ash-remote:'].includes(url.protocol)) {
+				void this.opener.open(url.href);
+			}
+		}));
 		webview.mountTo(this.container!, getWindow(this.container!));
 		// WebviewElement queues this until its document has installed message handlers.
 		if (this.renderedUpdate !== undefined) webview.postMessage(this.renderedUpdate);
 	}
 
-	private handleEditMessage(message: object & { type: unknown }, webview: IWebviewElement): void {
+	private handleEditMessage(message: object & { type: unknown; }, webview: IWebviewElement): void {
 		const model = this.model?.reference.model;
 		if (!model) return;
 		if (message.type === 'save') {
@@ -278,17 +247,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		}
 		if (message.type !== 'edit' && message.type !== 'undo' && message.type !== 'redo') return;
 		if (!('version' in message) || !Number.isSafeInteger(message.version) || message.version !== model.getVersionId() || this.readOnly) {
-			webview.postMessage({
-				type: 'editRejected',
-				reason: this.readOnly ? 'readonly' : 'conflict',
-				document: {
-					uri: model.uri.toString(),
-					text: model.getText(),
-					languageId: model.getLanguageId(),
-					version: model.getVersionId(),
-					readOnly: this.readOnly,
-				},
-			});
+			webview.postMessage({ type: 'editRejected', reason: this.readOnly ? 'readonly' : 'conflict', document: { uri: model.uri.toString(), text: model.getText(), languageId: model.getLanguageId(), version: model.getVersionId(), readOnly: this.readOnly } });
 			this.refreshView?.();
 			return;
 		}
@@ -303,60 +262,33 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			let replacement = message.text;
 			const delta = 'start' in message || 'end' in message;
 			if (delta) {
-				if (
-					!('start' in message) ||
-					!('end' in message) ||
-					typeof message.start !== 'number' ||
-					typeof message.end !== 'number' ||
-					!Number.isSafeInteger(message.start) ||
-					!Number.isSafeInteger(message.end) ||
-					message.start < 0 ||
-					message.end < message.start ||
-					message.end > previous.length ||
-					previous.length - (message.end - message.start) + replacement.length > 16 * 1024 * 1024
-				) {
+				if (!('start' in message) || !('end' in message)
+					|| typeof message.start !== 'number' || typeof message.end !== 'number'
+					|| !Number.isSafeInteger(message.start) || !Number.isSafeInteger(message.end)
+					|| message.start < 0 || message.end < message.start || message.end > previous.length
+					|| previous.length - (message.end - message.start) + replacement.length > 16 * 1024 * 1024) {
 					webview.postMessage({ type: 'editRejected', reason: 'invalid' });
 					return;
 				}
-				start = message.start;
-				end = message.end;
+				start = message.start; end = message.end;
 			} else {
 				while (start < previous.length && start < replacement.length && previous[start] === replacement[start]) start++;
 				let nextEnd = replacement.length;
-				while (end > start && nextEnd > start && previous[end - 1] === replacement[nextEnd - 1]) {
-					end--;
-					nextEnd--;
-				}
+				while (end > start && nextEnd > start && previous[end - 1] === replacement[nextEnd - 1]) { end--; nextEnd--; }
 				replacement = replacement.slice(start, nextEnd);
 			}
 			this.applyingEdit = true;
 			try {
 				if (start !== end || replacement.length > 0) {
 					model.pushStackElement();
-					model.pushEditOperations(
-						null,
-						[
-							{
-								range: Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end)),
-								text: replacement,
-							},
-						],
-						null,
-					);
+					model.pushEditOperations(null, [{ range: Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end)), text: replacement }], null);
 					model.pushStackElement();
 				}
-			} finally {
-				this.applyingEdit = false;
-			}
-			webview.postMessage({
-				type: 'accepted',
-				version: model.getVersionId(),
-				...(delta ? {} : { text: model.getText() }),
-			});
+			} finally { this.applyingEdit = false; }
+			webview.postMessage({ type: 'accepted', version: model.getVersionId(), ...(delta ? {} : { text: model.getText() }) });
 			this.refreshView?.();
 		} else {
-			if (message.type === 'undo') model.undo();
-			else model.redo();
+			if (message.type === 'undo') model.undo(); else model.redo();
 			this.refreshView?.();
 		}
 	}
@@ -373,9 +305,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		this.inputResources.clear();
 		this.webview.clear();
 	}
-	public override getControl(): IWebviewElement | undefined {
-		return this.webview.value;
-	}
+	public override getControl(): IWebviewElement | undefined { return this.webview.value; }
 
 	public override layout(dimension: IDimension): void {
 		if (this.container) {
@@ -384,13 +314,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		}
 	}
 
-	public override focus(): void {
-		this.webview.value?.focus();
-	}
-	public async save(): Promise<void> {
-		await this.model?.save(new AbortController().signal);
-	}
-	public async saveAs(resource: URI): Promise<void> {
-		await this.model?.saveAs(resource, new AbortController().signal);
-	}
+	public override focus(): void { this.webview.value?.focus(); }
+	public async save(): Promise<void> { await this.model?.save(new AbortController().signal); }
+	public async saveAs(resource: URI): Promise<void> { await this.model?.saveAs(resource, new AbortController().signal); }
 }

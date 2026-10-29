@@ -2,8 +2,7 @@ import type { ChatToolSource } from './agent.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 
-export type ToolCategory =
-	'read' | 'edit' | 'search' | 'execute' | 'browser' | 'web' | 'agent' | 'plan' | 'workbench' | 'sessions' | 'projects' | 'automations' | 'app' | 'memory' | 'skills' | 'image';
+export type ToolCategory = 'read' | 'edit' | 'search' | 'execute' | 'browser' | 'web' | 'agent' | 'plan' | 'workbench' | 'sessions' | 'projects' | 'automations' | 'app' | 'memory' | 'skills' | 'image';
 
 export interface AgentTool {
 	readonly category?: ToolCategory;
@@ -30,7 +29,7 @@ export interface AgentToolsCatalog {
 		readonly sourceId: string;
 		readonly tools: readonly string[];
 	}[];
-	readonly toolSets: readonly { readonly id: string; readonly tools: readonly string[] }[];
+	readonly toolSets: readonly { readonly id: string; readonly tools: readonly string[]; }[];
 	readonly profiles: readonly ToolProductProfile[];
 }
 

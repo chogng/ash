@@ -18,40 +18,18 @@ test('remote startup applies resolver environment before readiness and obtains n
 	const environments: Readonly<Record<string, string | null>>[] = [];
 	const fleet = { generation: 1, extensions: [] };
 	services.registerInstance(IExtensionHostApi, {
-		start: async environment => {
-			environments.push(environment);
-			await entered.complete();
-			if (environments.length === 1) {
-				await finish.p;
-			}
-			return fleet;
-		},
-		list: async () => fleet,
-		reconcile: async () => fleet,
-		activateByEvent: async () => fleet,
-		invoke: async () => null,
-		isAvailable: async () => true,
-		getConnectionState: async () => 'ready',
-		registerClientHandler: () => Disposable.None,
-		onDidChange: () => Disposable.None,
-		onConnectionState: states.event,
+		start: async environment => { environments.push(environment); await entered.complete(); if (environments.length === 1) { await finish.p; } return fleet; },
+		list: async () => fleet, reconcile: async () => fleet, activateByEvent: async () => fleet,
+		invoke: async () => null, isAvailable: async () => true, getConnectionState: async () => 'ready',
+		registerClientHandler: () => Disposable.None, onDidChange: () => Disposable.None, onConnectionState: states.event,
 	});
 	services.registerSingleton(IRemoteAuthorityResolverService, () => services.createInstance(RemoteAuthorityResolverService));
 	const resolver = services.get(IRemoteAuthorityResolverService);
-	const address = {
-		authority: 'team+host',
-		connectTo: new WebSocketRemoteConnection('localhost', 5000),
-		connectionToken: undefined,
-	};
-	resolver._setResolvedAuthority(address, {
-		extensionHostEnv: { SET: 'first', REMOVE: null },
-		authenticationSession: { id: 'reference', providerId: 'provider' },
-	});
+	const address = { authority: 'team+host', connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined };
+	resolver._setResolvedAuthority(address, { extensionHostEnv: { SET: 'first', REMOVE: null }, authenticationSession: { id: 'reference', providerId: 'provider' } });
 	using host = services.createInstance(RemoteExtensionHost, address.authority);
 	let ready = false;
-	void host.whenReady().then(() => {
-		ready = true;
-	});
+	void host.whenReady().then(() => { ready = true; });
 	const starting = host.start();
 	await entered.p;
 	assert.equal(ready, false);
@@ -74,27 +52,11 @@ test('closing during the remote handshake prevents late startup from making the 
 	const finish = new DeferredPromise<void>();
 	const fleet = { generation: 1, extensions: [] };
 	services.registerInstance(IExtensionHostApi, {
-		start: async () => {
-			await entered.complete();
-			await finish.p;
-			return fleet;
-		},
-		list: async () => fleet,
-		reconcile: async () => fleet,
-		activateByEvent: async () => fleet,
-		invoke: async () => null,
-		isAvailable: async () => true,
-		getConnectionState: async () => 'ready',
-		registerClientHandler: () => Disposable.None,
-		onDidChange: () => Disposable.None,
-		onConnectionState: states.event,
+		start: async () => { await entered.complete(); await finish.p; return fleet; }, list: async () => fleet, reconcile: async () => fleet, activateByEvent: async () => fleet,
+		invoke: async () => null, isAvailable: async () => true, getConnectionState: async () => 'ready', registerClientHandler: () => Disposable.None, onDidChange: () => Disposable.None, onConnectionState: states.event,
 	});
 	services.registerSingleton(IRemoteAuthorityResolverService, () => services.createInstance(RemoteAuthorityResolverService));
-	services.get(IRemoteAuthorityResolverService)._setResolvedAuthority({
-		authority: 'team+host',
-		connectTo: new WebSocketRemoteConnection('localhost', 5000),
-		connectionToken: undefined,
-	});
+	services.get(IRemoteAuthorityResolverService)._setResolvedAuthority({ authority: 'team+host', connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined });
 	using host = services.createInstance(RemoteExtensionHost, 'team+host');
 	const readiness = assert.rejects(host.whenReady(), /[Cc]ancel/);
 	const starting = host.start();

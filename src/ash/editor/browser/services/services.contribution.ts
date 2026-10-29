@@ -7,7 +7,7 @@ import { getCodeLensCache } from '../../contrib/codelens/browser/codeLensCache.j
 import { registerEditorContribution } from '../editorFeatureRegistration.js';
 
 // Several views share one host registry. Default providers and cache bindings belong to that registry's live users.
-const shared = new WeakMap<ILanguageFeaturesService, { users: number; resources: DisposableStore }>();
+const shared = new WeakMap<ILanguageFeaturesService, { users: number; resources: DisposableStore; }>();
 registerEditorContribution({
 	id: 'editor.contrib.codeServices',
 	configure: context => {
@@ -25,20 +25,12 @@ registerEditorContribution({
 				if (storage) resources.add(getCodeLensCache(features).bindStorage(storage));
 				entry = { users: 0, resources };
 				shared.set(features, entry);
-			} catch (error) {
-				resources.dispose();
-				throw error;
-			}
+			} catch (error) { resources.dispose(); throw error; }
 		}
 		entry.users++;
 		const lease = entry;
-		context.register(
-			toDisposable(() => {
-				if (--lease.users === 0) {
-					shared.delete(features);
-					lease.resources.dispose();
-				}
-			}),
-		);
+		context.register(toDisposable(() => {
+			if (--lease.users === 0) { shared.delete(features); lease.resources.dispose(); }
+		}));
 	},
 });

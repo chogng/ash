@@ -9,48 +9,22 @@ import type { IInstantiationService } from '../../../../../platform/instantiatio
 import { localize } from '../../../../../nls.js';
 
 /** Supplies the Design popup host and accessibility scope; all controls and color state belong to ColorPicker. */
-export function createDesignColorPicker(
-	instantiation: IInstantiationService,
-	document: Document,
-	labels: {
-		readonly color: string;
-		readonly value: string;
-		readonly opacity: string;
-		readonly getDocumentColors?: () => readonly Color[];
-	},
-): ColorPicker {
+export function createDesignColorPicker(instantiation: IInstantiationService, document: Document, labels: { readonly color: string; readonly value: string; readonly opacity: string; readonly getDocumentColors?: () => readonly Color[]; }): ColorPicker {
 	return instantiation.invokeFunction(accessor => {
 		const contextViews = accessor.get(IContextViewService);
 		const contextKeys = accessor.get(IContextKeyService);
 		const configuration = accessor.get(IConfigurationService);
 		return new ColorPicker(document, 'input', {
 			...labels,
-			getPalettes: () => [
-				{
-					label: localize('sessions.design.documentColors', 'Document colors'),
-					colors: labels.getDocumentColors?.() ?? [],
-				},
-			],
+			getPalettes: () => [{ label: localize('sessions.design.documentColors', 'Document colors'), colors: labels.getDocumentColors?.() ?? [] }],
 			popup: {
-				show: (anchor, panel, onHide) =>
-					contextViews.show({
-						anchor,
-						content: panel,
-						presentation: 'dialog',
-						focusRestore: ContextViewFocusRestore.Previous,
-						onHide: reason => onHide(reason === ContextViewHideReason.OutsidePointer),
-					}),
+				show: (anchor, panel, onHide) => contextViews.show({ anchor, content: panel, presentation: 'dialog', focusRestore: ContextViewFocusRestore.Previous, onHide: reason => onHide(reason === ContextViewHideReason.OutsidePointer) }),
 				hide: () => contextViews.hide(),
 				configure: panel => {
 					const scoped = contextKeys.createScoped(panel);
 					scoped.createKey('sessionsDesignColorPickerFocused', true);
 					const title = localize('colorPicker.title', 'Color picker');
-					panel.setAttribute(
-						'aria-label',
-						configuration.getValue<boolean>(AccessibilityVerbositySettingId.DesignCanvas)
-							? `${title}. ${localize('sessions.design.colorHelpHint', 'Press Alt+F1 for color picker help.')}`
-							: title,
-					);
+					panel.setAttribute('aria-label', configuration.getValue<boolean>(AccessibilityVerbositySettingId.DesignCanvas) ? `${title}. ${localize('sessions.design.colorHelpHint', 'Press Alt+F1 for color picker help.')}` : title);
 					return scoped;
 				},
 			},

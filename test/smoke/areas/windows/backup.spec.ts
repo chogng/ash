@@ -9,41 +9,27 @@ import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/ele
 import type { Page } from '@playwright/test';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 
-function records(directory: string): readonly { resource: string; content: string }[] {
+
+function records(directory: string): readonly { resource: string; content: string; }[] {
 	const database = new DatabaseSync(join(directory, 'profile', 'state.sqlite3'), { readOnly: true });
-	try {
-		return database.prepare('SELECT resource, content FROM backup_contents WHERE client_id = ?').all('ash-editor') as { resource: string; content: string }[];
-	} finally {
-		database.close();
-	}
+	try { return database.prepare('SELECT resource, content FROM backup_contents WHERE client_id = ?').all('ash-editor') as { resource: string; content: string; }[]; }
+	finally { database.close(); }
 }
 
 async function profile(locale = 'en'): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-backup-'));
 	await mkdir(join(directory, 'profile'), { recursive: true });
-	await writeFile(
-		join(directory, 'profile', 'settings.json'),
-		JSON.stringify({
-			'window.restoreWindows': 'none',
-			'workbench.startupEditor': 'none',
-			'workbench.locale': locale,
-		}),
-	);
+	await writeFile(join(directory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreWindows': 'none', 'workbench.startupEditor': 'none', 'workbench.locale': locale }));
 	return directory;
 }
 
 async function recoveredWindow(desktop: ElectronLaunchResult, text: string): Promise<Workbench> {
-	await expect
-		.poll(
-			async () => {
-				for (const page of desktop.application.windows()) {
-					if (await page.locator('[data-part="editor"] .stanza-editor').filter({ hasText: text }).count()) return true;
-				}
-				return false;
-			},
-			{ timeout: 30_000, message: 'backend catalog reopens the window with unsaved content' },
-		)
-		.toBe(true);
+	await expect.poll(async () => {
+		for (const page of desktop.application.windows()) {
+			if (await page.locator('[data-part="editor"] .stanza-editor').filter({ hasText: text }).count()) return true;
+		}
+		return false;
+	}, { timeout: 30_000, message: 'backend catalog reopens the window with unsaved content' }).toBe(true);
 	const pages = desktop.application.windows();
 	for (const page of pages) {
 		if (await page.locator('[data-part="editor"] .stanza-editor').filter({ hasText: text }).count()) {
@@ -60,12 +46,7 @@ test('Desktop restores an unsaved file from shared storage despite window restor
 	const directory = await profile();
 	let desktop: ElectronLaunchResult | undefined;
 	try {
-		desktop = await launchElectron({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: testWorkspace.directory,
-			workspacePermissions: 'development',
-		});
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
 		const row = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 		await expect(row).toHaveCount(1);
@@ -86,13 +67,7 @@ test('Desktop restores an unsaved file from shared storage despite window restor
 		await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const sharedRecovery = 42;');
 		await expect.poll(() => records(directory)).toEqual([]);
 		expect(desktop.application.windows()).toHaveLength(2);
-	} finally {
-		try {
-			await desktop?.close();
-		} finally {
-			await rm(directory, { recursive: true, force: true });
-		}
-	}
+	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 });
 
 for (const locale of ['en', 'zh-CN']) {
@@ -124,13 +99,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await recoveredWindow(desktop, edited);
 			expect(desktop.application.windows()).toHaveLength(2);
 			expect(records(directory)).toHaveLength(1);
-		} finally {
-			try {
-				await desktop?.close();
-			} finally {
-				await rm(directory, { recursive: true, force: true });
-			}
-		}
+		} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 	});
 }
 
@@ -146,13 +115,7 @@ test('Desktop migrates an IndexedDB draft only after shared storage acknowledges
 		await recoveredWindow(desktop, 'legacy draft 内容');
 		expect(records(directory).map(record => JSON.parse(record.content).content)).toEqual(['legacy draft 内容']);
 		expect(await legacyCount(page)).toBe(0);
-	} finally {
-		try {
-			await desktop?.close();
-		} finally {
-			await rm(directory, { recursive: true, force: true });
-		}
-	}
+	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 });
 
 test('Desktop retains conflicting legacy content until an explicit save prevents its resurrection', { tag: ['@electron-app-server'] }, async ({ testWorkspace }) => {
@@ -160,12 +123,7 @@ test('Desktop retains conflicting legacy content until an explicit save prevents
 	const directory = await profile();
 	let desktop: ElectronLaunchResult | undefined;
 	try {
-		desktop = await launchElectron({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: testWorkspace.directory,
-			workspacePermissions: 'development',
-		});
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
 		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click();
 		const input = page.locator('[data-part="editor"] .stanza-editor-input');
@@ -184,63 +142,33 @@ test('Desktop retains conflicting legacy content until an explicit save prevents
 		await new Workbench(page).waitForReady();
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('latest durable content');
 		expect(records(directory)).toEqual([]);
-	} finally {
-		try {
-			await desktop?.close();
-		} finally {
-			await rm(directory, { recursive: true, force: true });
-		}
-	}
+	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 });
 
 async function seedLegacy(page: Page, resource: string, content: string): Promise<void> {
-	await page.evaluate(
-		async ({ resource, content }) => {
-			const bridge = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
-			const workspace = (await bridge.ipcRenderer.invoke('ash:workspace:context:read')) as { id: string };
-			const database = await new Promise<IDBDatabase>((resolve, reject) => {
-				const opening = indexedDB.open('ash-working-copy-backups', 1);
-				opening.onsuccess = () => resolve(opening.result);
-				opening.onerror = () => reject(opening.error);
+	await page.evaluate(async ({ resource, content }) => {
+		const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+		const workspace = await bridge.ipcRenderer.invoke('ash:workspace:context:read') as { id: string; };
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const opening = indexedDB.open('ash-working-copy-backups', 1);
+			opening.onsuccess = () => resolve(opening.result);
+			opening.onerror = () => reject(opening.error);
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = database.transaction('backups', 'readwrite');
+				transaction.objectStore('backups').put({ key: `${workspace.id}\0${resource}`, workspaceId: workspace.id, resource, kind: 'text', content, updatedAt: 1, languageId: 'plaintext' });
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
 			});
-			try {
-				await new Promise<void>((resolve, reject) => {
-					const transaction = database.transaction('backups', 'readwrite');
-					transaction.objectStore('backups').put({
-						key: `${workspace.id}\0${resource}`,
-						workspaceId: workspace.id,
-						resource,
-						kind: 'text',
-						content,
-						updatedAt: 1,
-						languageId: 'plaintext',
-					});
-					transaction.oncomplete = () => resolve();
-					transaction.onerror = () => reject(transaction.error);
-				});
-			} finally {
-				database.close();
-			}
-		},
-		{ resource, content },
-	);
+		} finally { database.close(); }
+	}, { resource, content });
 }
 
 async function legacyCount(page: Page): Promise<number> {
 	return page.evaluate(async () => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open('ash-working-copy-backups', 1);
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error);
-		});
-		try {
-			return await new Promise<number>((resolve, reject) => {
-				const request = database.transaction('backups', 'readonly').objectStore('backups').count();
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error);
-			});
-		} finally {
-			database.close();
-		}
+		const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('ash-working-copy-backups', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+		try { return await new Promise<number>((resolve, reject) => { const request = database.transaction('backups', 'readonly').objectStore('backups').count(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); }
+		finally { database.close(); }
 	});
 }

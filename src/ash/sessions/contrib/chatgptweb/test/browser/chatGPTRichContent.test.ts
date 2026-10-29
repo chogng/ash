@@ -17,12 +17,7 @@ import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
 
 function render(value: string, references?: readonly ChatGPTReference[]): string {
 	using services = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
-	services.registerInstance(
-		IExtensionHostApi,
-		createDisconnectedExtensionHostApi(async () => {
-			throw new Error('No extension host');
-		}),
-	);
+	services.registerInstance(IExtensionHostApi, createDisconnectedExtensionHostApi(async () => { throw new Error('No extension host'); }));
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
@@ -48,51 +43,23 @@ suite('ChatGPT rich content', () => {
 		assert.match(render(':::writing{variant="chat_message"}**Visible draft**'), /<strong>Visible draft<\/strong>/u);
 		assert.doesNotMatch(render('Before\n\n:::writing{variant="chat_message'), /:::|variant=/u);
 		const source = '`:::writing{id="inline"}literal:::`\n\n```text\n:::writing{id="fenced"}example:::\n```';
-		const root = document.createElement('div');
-		root.innerHTML = render(source);
-		assert.deepEqual(
-			[...root.querySelectorAll('code')].map(element => element.textContent?.trim()),
-			[':::writing{id="inline"}literal:::', ':::writing{id="fenced"}example:::'],
-		);
+		const root = document.createElement('div'); root.innerHTML = render(source);
+		assert.deepEqual([...root.querySelectorAll('code')].map(element => element.textContent?.trim()), [':::writing{id="inline"}literal:::', ':::writing{id="fenced"}example:::']);
 	});
 	test('keeps the shared formula grammar when rich content extensions are installed', () => {
-		const cases = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as {
-			name: string;
-			markdown: string;
-			formulas: { source: string; display: string }[];
-		}[];
+		const cases = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 		const combined = cases.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
-		cases.push({
-			name: 'combined compatibility document',
-			markdown: combined.map(entry => entry.markdown).join('\n\n'),
-			formulas: combined.flatMap(entry => entry.formulas),
-		});
+		cases.push({ name: 'combined compatibility document', markdown: combined.map(entry => entry.markdown).join('\n\n'), formulas: combined.flatMap(entry => entry.formulas) });
 		for (const entry of cases) {
-			const root = document.createElement('div');
-			root.innerHTML = render(entry.markdown);
-			assert.deepEqual(
-				[...root.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({
-					source: element.dataset.latex,
-					display: element.dataset.mathDisplay,
-				})),
-				entry.formulas,
-				entry.name,
-			);
+			const root = document.createElement('div'); root.innerHTML = render(entry.markdown);
+			assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas, entry.name);
 		}
 	});
 
 	test('resolves web reference encodings into source cards and links while keeping code literal', () => {
-		const references = [
-			{
-				id: 'turn2search1',
-				title: 'CSV documentation',
-				url: 'https://docs.python.org/3/library/csv.html',
-				snippet: 'Read and write tabular data.',
-			},
-		];
+		const references = [{ id: 'turn2search1', title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }];
 		const source = 'A <Cite refs={[["turn2search1"]]}/> B urlPython docsturn2search1 C citeturn2search1\n\n`citeturn2search1`';
-		const root = document.createElement('div');
-		root.innerHTML = render(source, references);
+		const root = document.createElement('div'); root.innerHTML = render(source, references);
 		assert.equal(root.querySelectorAll('details.ash-chatgpt-citation').length, 2);
 		assert.match(root.querySelector('details')?.textContent ?? '', /CSV documentation[\s\S]*Read and write tabular data/u);
 		assert.equal(root.querySelector('a')?.href, references[0]!.url);
@@ -121,9 +88,7 @@ suite('ChatGPT rich content', () => {
 	});
 
 	test('does not evaluate JSX expressions, forward event handlers or render arbitrary HTML', () => {
-		const html = render(
-			'<box padding={globalThis.auditXss = true} onclick="globalThis.auditXss = true" background="url(https://invalid.test/pixel)"><text>Visible</text><script>globalThis.auditXss = true</script></box>',
-		);
+		const html = render('<box padding={globalThis.auditXss = true} onclick="globalThis.auditXss = true" background="url(https://invalid.test/pixel)"><text>Visible</text><script>globalThis.auditXss = true</script></box>');
 		assert.match(html, /Visible/u);
 		assert.doesNotMatch(html, /onclick|auditXss|invalid\.test|<script/u);
 		assert.equal(Reflect.get(globalThis, 'auditXss'), undefined);
@@ -140,8 +105,7 @@ suite('ChatGPT rich content', () => {
 	test('retains unknown cards as disclosures and charts as isolated interactive resources', () => {
 		const source = '<FuturePanel title="Panel title"><FutureCard>**Card body**</FutureCard></FuturePanel>\n\n<Chart title="Sales" data={[{"month":"May","amount":42}]}/>\n\nTail';
 		const html = render(source);
-		const root = document.createElement('div');
-		root.innerHTML = html;
+		const root = document.createElement('div'); root.innerHTML = html;
 		assert.match(root.textContent ?? '', /Panel title[\s\S]*Card body[\s\S]*Sales[\s\S]*Tail/u);
 		const chart = JSON.parse(root.querySelector<HTMLElement>('[data-chatgpt-resource]')!.dataset.chatgptResource!);
 		const chartHtml = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
@@ -154,9 +118,7 @@ suite('ChatGPT rich content', () => {
 
 	test('retains unfamiliar card properties and chart schemas without evaluating expressions', () => {
 		const root = document.createElement('div');
-		root.innerHTML = render(
-			'<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>',
-		);
+		root.innerHTML = render('<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>');
 		assert.match(root.textContent ?? '', /Score[\s\S]*42[\s\S]*missingValues\(\)/u);
 		const chart = JSON.parse(root.querySelector<HTMLElement>('[data-chatgpt-resource]')!.dataset.chatgptResource!);
 		const html = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
@@ -165,9 +127,7 @@ suite('ChatGPT rich content', () => {
 	});
 
 	test('keeps semantic tables, disclosure text, subscript, superscript and Markdown formulas', () => {
-		const html = render(
-			'<details><summary>Details title</summary><table><tr><th>Name</th><td>Value</td></tr></table>H<sub>2</sub>O and x<sup>2</sup></details>\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n$$x^2 + y^2 = z^2$$',
-		);
+		const html = render('<details><summary>Details title</summary><table><tr><th>Name</th><td>Value</td></tr></table>H<sub>2</sub>O and x<sup>2</sup></details>\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n$$x^2 + y^2 = z^2$$');
 		assert.match(html, /<details><summary>Details title<\/summary>[\s\S]*<table>(?:<tbody>)?<tr><th>Name<\/th><td>Value<\/td><\/tr>(?:<\/tbody>)?<\/table>/u);
 		assert.match(html, /H<sub>2<\/sub>O and x<sup>2<\/sup>/u);
 		assert.match(html, /<td>1<\/td>[\s\S]*<td>2<\/td>/u);
@@ -175,9 +135,7 @@ suite('ChatGPT rich content', () => {
 	});
 
 	test('shows media and opaque components without running or loading their source', () => {
-		const html = render(
-			'<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>',
-		);
+		const html = render('<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>');
 		assert.match(html, /Architecture[\s\S]*Node A[\s\S]*Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
 		assert.doesNotMatch(html, /<video|<img|src=/u);
 		assert.equal((html.match(/data-chatgpt-resource/gu) ?? []).length, 2);
@@ -199,8 +157,7 @@ suite('ChatGPT rich content', () => {
 	});
 
 	test('preserves literal markup, autolinks and HTML code while omitting only annotation tokens', () => {
-		const source =
-			'`<FutureCard>example</FutureCard>`\n\n```jsx\n<Chart data={values}/>\n```\n\n<code>&lt;tag&gt; and &lt;box&gt;literal&lt;/box&gt;</code>\n\n<https://example.com/source>\n\nBefore <Cite refs={[["private-reference"]]}/> after';
+		const source = '`<FutureCard>example</FutureCard>`\n\n```jsx\n<Chart data={values}/>\n```\n\n<code>&lt;tag&gt; and &lt;box&gt;literal&lt;/box&gt;</code>\n\n<https://example.com/source>\n\nBefore <Cite refs={[["private-reference"]]}/> after';
 		const html = render(source);
 		assert.match(html, /&lt;FutureCard&gt;example&lt;\/FutureCard&gt;/u);
 		assert.match(html, /&lt;Chart data=\{values\}\/&gt;/u);

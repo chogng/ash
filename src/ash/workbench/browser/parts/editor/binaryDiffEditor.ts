@@ -12,13 +12,15 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 /** Keeps each side's file-size metadata visible to comparison commands and status UI. */
 export class BinaryResourceDiffEditor extends SideBySideEditor {
 	private readonly scrollListeners = this._register(new DisposableStore());
-	constructor(@IInstantiationService instantiationService: IInstantiationService, @IThemeService themeService: IThemeService, @IStorageService storageService: IStorageService) {
+	constructor(
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
 		super(
 			BINARY_DIFF_EDITOR_ID,
 			instantiationService.createInstance(BaseBinaryResourceEditor, 'comparison'),
-			instantiationService.createInstance(BaseBinaryResourceEditor, 'comparison'),
-			themeService,
-			storageService,
+			instantiationService.createInstance(BaseBinaryResourceEditor, 'comparison'), themeService, storageService
 		);
 	}
 
@@ -33,22 +35,17 @@ export class BinaryResourceDiffEditor extends SideBySideEditor {
 		const before = original.getControl()!;
 		const after = modified.getControl()!;
 		let synchronizing = false;
-		for (const [source, target] of [
-			[before, after],
-			[after, before],
-		]) {
-			this.scrollListeners.add(
-				source.onDidScrollChange(() => {
-					if (synchronizing) return;
-					synchronizing = true;
-					try {
-						target.setScrollTop(source.getScrollTop());
-						target.setScrollLeft(source.getScrollLeft());
-					} finally {
-						synchronizing = false;
-					}
-				}),
-			);
+		for (const [source, target] of [[before, after], [after, before]]) {
+			this.scrollListeners.add(source.onDidScrollChange(() => {
+				if (synchronizing) return;
+				synchronizing = true;
+				try {
+					target.setScrollTop(source.getScrollTop());
+					target.setScrollLeft(source.getScrollLeft());
+				} finally {
+					synchronizing = false;
+				}
+			}));
 		}
 	}
 
@@ -70,7 +67,7 @@ export function binaryDiffEditorDescriptor(): IEditorPaneDescriptor {
 	return {
 		id: BINARY_DIFF_EDITOR_ID,
 		name: 'Binary Diff Editor',
-		canOpen: input => (isBinaryDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None),
+		canOpen: input => isBinaryDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: options => {
 			if (!options.instantiationService) throw new Error('Binary diff editor requires Workbench instantiation services');
 			return options.instantiationService.createInstance(BinaryResourceDiffEditor);

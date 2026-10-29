@@ -16,16 +16,13 @@ suite('Debug ANSI output', () => {
 			const span = dom.window.document.createElement('span');
 			span.textContent = text;
 			return span;
-		},
+		}
 	};
 
 	test('renders palette, emphasis and reset as text without changing output', () => {
 		using store = new DisposableStore();
 		const text = '\x1b[31;1merror\x1b[0m <img src=x>\n';
-		const result = handleANSIOutput(text, links, undefined, undefined, {
-			type: DebugLinkHoverBehavior.None,
-			store,
-		});
+		const result = handleANSIOutput(text, links, undefined, undefined, { type: DebugLinkHoverBehavior.None, store });
 		assert.equal(result.textContent, 'error <img src=x>\n');
 		assert.equal(result.querySelector('img'), null);
 		assert.equal(result.querySelector('.bold')?.textContent, 'error');
@@ -48,10 +45,7 @@ suite('Debug ANSI output', () => {
 	test('does not execute cursor controls or OSC links and preserves incomplete escape text', () => {
 		using store = new DisposableStore();
 		const text = 'before\x1b[2Jafter \x1b]8;;command:delete\x07label\x1b]8;;\x1b\\ \x1b[';
-		const result = handleANSIOutput(text, links, undefined, undefined, {
-			type: DebugLinkHoverBehavior.None,
-			store,
-		});
+		const result = handleANSIOutput(text, links, undefined, undefined, { type: DebugLinkHoverBehavior.None, store });
 		assert.equal(result.textContent, 'beforeafter label \x1b[');
 		assert.equal(result.querySelector('a,[role=link]'), null);
 		assert.equal(removeAnsiEscapeCodes(text), result.textContent);

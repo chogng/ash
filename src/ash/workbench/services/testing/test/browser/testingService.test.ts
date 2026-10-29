@@ -19,15 +19,16 @@ const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 test('TestingService exposes only test tasks and projects passed and failed runs', async () => {
-	using tasks = new FakeTaskService([task('build', 'Build', 'build'), task('unit', 'Unit', 'test'), task('integration', 'Integration', 'test')]);
+	using tasks = new FakeTaskService([
+		task('build', 'Build', 'build'),
+		task('unit', 'Unit', 'test'),
+		task('integration', 'Integration', 'test'),
+	]);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	assert.deepEqual(
-		service.profiles.map(profile => profile.label),
-		['Unit', 'Integration'],
-	);
+	assert.deepEqual(service.profiles.map(profile => profile.label), ['Unit', 'Integration']);
 
 	const run = await service.run(service.profiles[0]!);
 	assert.equal(tasks.runs.length, 1);
@@ -50,37 +51,20 @@ test('TestingService owns dynamic Test Profile providers and maps profiles to te
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	const registration = service.registerTestProfileProviders([
-		{
-			id: 'demo.tests',
-			provideTestProfiles: () => [{ id: 'focused', label: 'Focused', taskId: 'unit', detail: 'Extension profile' }],
-		},
-	]);
+	const registration = service.registerTestProfileProviders([{ id: 'demo.tests', provideTestProfiles: () => [{ id: 'focused', label: 'Focused', taskId: 'unit', detail: 'Extension profile' }] }]);
 
 	await service.refresh();
 	const profile = service.profiles.find(candidate => candidate.id === 'extension-profile:demo.tests:focused')!;
-	assert.deepEqual(profile, {
-		id: 'extension-profile:demo.tests:focused',
-		label: 'Focused',
-		source: 'demo.tests',
-		taskId: 'unit',
-		detail: 'Extension profile',
-	});
+	assert.deepEqual(profile, { id: 'extension-profile:demo.tests:focused', label: 'Focused', source: 'demo.tests', taskId: 'unit', detail: 'Extension profile' });
 	const run = await service.run(profile);
 	assert.equal(run.taskRun.task.id, 'unit');
 
 	assert.throws(() => service.registerTestProfileProvider({ id: 'demo.tests', provideTestProfiles: () => [] }), /already registered/);
 	registration.dispose();
-	assert.deepEqual(
-		service.profiles.map(candidate => candidate.id),
-		['unit'],
-	);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 	await assert.rejects(service.run(profile), /no longer present/);
 	await service.refresh();
-	assert.deepEqual(
-		service.profiles.map(candidate => candidate.id),
-		['unit'],
-	);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 });
 
 test('TestingService rejects profiles that do not reference a current test task', async () => {
@@ -89,17 +73,11 @@ test('TestingService rejects profiles that do not reference a current test task'
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	using registration = service.registerTestProfileProvider({
-		id: 'invalid',
-		provideTestProfiles: () => [{ id: 'missing', label: 'Missing', taskId: 'missing' }],
-	});
+	using registration = service.registerTestProfileProvider({ id: 'invalid', provideTestProfiles: () => [{ id: 'missing', label: 'Missing', taskId: 'missing' }] });
 
 	await assert.rejects(service.refresh(), /unavailable test task/);
 
-	assert.deepEqual(
-		service.profiles.map(candidate => candidate.id),
-		['unit'],
-	);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 });
 
 function task(id: string, label: string, group: IWorkspaceTask['group']): IWorkspaceTask {
@@ -107,22 +85,12 @@ function task(id: string, label: string, group: IWorkspaceTask['group']): IWorks
 }
 
 class FakeTaskService extends Disposable implements ITaskService {
-	start(): never {
-		throw new Error('Agent task start is outside this fixture');
-	}
-	async describe(): Promise<never> {
-		throw new Error('Agent task description is outside this fixture');
-	}
-	getRun(): undefined {
-		return undefined;
-	}
+	start(): never { throw new Error('Agent task start is outside this fixture'); }
+	async describe(): Promise<never> { throw new Error('Agent task description is outside this fixture'); }
+	getRun(): undefined { return undefined; }
 
-	async rerun(): Promise<undefined> {
-		return undefined;
-	}
-	async runProvidedTask(): Promise<never> {
-		throw new Error('Provided task execution is outside this fixture');
-	}
+	async rerun(): Promise<undefined> { return undefined; }
+	async runProvidedTask(): Promise<never> { throw new Error('Provided task execution is outside this fixture'); }
 	private readonly tasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
 	readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	readonly runEmitter = this._register(new Emitter<ITaskRun>());
@@ -131,80 +99,37 @@ class FakeTaskService extends Disposable implements ITaskService {
 	readonly onDidChangeTaskRun = this.runEmitter.event;
 	readonly runs: FakeTaskRun[] = [];
 	lastRun: ITaskRun | undefined;
-	constructor(readonly tasks: readonly IWorkspaceTask[]) {
-		super();
-	}
-	get activeRuns(): readonly ITaskRun[] {
-		return this.runs.filter(run => run.status === 'running');
-	}
-	registerTaskProvider(_provider: TaskProvider) {
-		return toDisposable(() => undefined);
-	}
-	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration {
-		const registration = toDisposable(() => undefined) as TaskProviderRegistration;
-		registration.replace = () => undefined;
-		return registration;
-	}
-	async refresh() {
-		return this.tasks;
-	}
-	async run(task: IWorkspaceTask): Promise<ITaskRun> {
-		const run = this._register(new FakeTaskRun(task));
-		this.runs.push(run);
-		this.lastRun = run;
-		this.startEmitter.fire(run);
-		return run;
-	}
-	async terminate(run: ITaskRun) {
-		(run as FakeTaskRun).finish('canceled');
-	}
+	constructor(readonly tasks: readonly IWorkspaceTask[]) { super(); }
+	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
+	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
+	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
+	async refresh() { return this.tasks; }
+	async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this._register(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
+	async terminate(run: ITaskRun) { (run as FakeTaskRun).finish('canceled'); }
 }
 
 class FakeTaskRun extends Disposable implements ITaskRun {
 	readonly runId = 'fixture-run';
-	readOutput(cursor: number) {
-		return { text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false };
-	}
+	readOutput(cursor: number) { return { text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }; }
 
 	private readonly emitter = this._register(new Emitter<TaskRunStatus>());
 	readonly onDidChangeStatus = this.emitter.event;
 	readonly terminalId = 'task-terminal';
-	get terminal(): ITerminalInstance {
-		throw new Error('TestingService must observe task status without accessing its terminal');
-	}
+	get terminal(): ITerminalInstance { throw new Error('TestingService must observe task status without accessing its terminal'); }
 	status: TaskRunStatus = 'running';
 	exitCode: number | undefined;
-	constructor(readonly task: IWorkspaceTask) {
-		super();
-	}
-	finish(status: TaskRunStatus): void {
-		this.status = status;
-		this.exitCode = status === 'failed' ? 1 : status === 'succeeded' ? 0 : undefined;
-		this.emitter.fire(status);
-	}
+	constructor(readonly task: IWorkspaceTask) { super(); }
+	finish(status: TaskRunStatus): void { this.status = status; this.exitCode = status === 'failed' ? 1 : status === 'succeeded' ? 0 : undefined; this.emitter.fire(status); }
 }
 
 const noExecution: ITestExecutionService = {
-	onDidUpdate: Event.None,
-	onDidDisconnect: Event.None,
-	discover: async () => {
-		throw new Error('Unexpected test discovery');
-	},
-	run: async () => {
-		throw new Error('Unexpected test execution');
-	},
-	prepareDebug: async () => {
-		throw new Error('Unexpected test debug preparation');
-	},
-	read: async () => {
-		throw new Error('Unexpected test read');
-	},
-	cancel: async () => {
-		throw new Error('Unexpected test cancellation');
-	},
-	release: async () => {
-		throw new Error('Unexpected test release');
-	},
+	onDidUpdate: Event.None, onDidDisconnect: Event.None,
+	discover: async () => { throw new Error('Unexpected test discovery'); },
+	run: async () => { throw new Error('Unexpected test execution'); },
+	prepareDebug: async () => { throw new Error('Unexpected test debug preparation'); },
+	read: async () => { throw new Error('Unexpected test read'); },
+	cancel: async () => { throw new Error('Unexpected test cancellation'); },
+	release: async () => { throw new Error('Unexpected test release'); },
 };
 
 test('TestingService consumes completion before start responses and releases exact runs once', async () => {
@@ -218,10 +143,7 @@ test('TestingService consumes completion before start responses and releases exa
 	const passes = service.tests.find(test => test.name.endsWith('passes'))!;
 	await service.runTests([passes.key]);
 	assert.deepEqual(backend.runs[0]!.tests, [passes.id]);
-	assert.deepEqual(
-		service.testResults.map(result => result.state),
-		['passed'],
-	);
+	assert.deepEqual(service.testResults.map(result => result.state), ['passed']);
 	assert.equal(backend.released.filter(id => id === backend.runs[0]!.id).length, 1);
 	assert.equal(service.isRunningTests, false);
 });
@@ -238,22 +160,11 @@ test('TestingService ignores old sequences, cancels a run, and keeps scripts ind
 	const run = service.runTests(service.tests.map(test => test.key));
 	await waitFor(() => backend.runs.length === 1);
 	const id = backend.runs[0]!.id;
-	backend.updates.fire({
-		operationId: id,
-		sequence: 1,
-		status: 'completed',
-		tests: null,
-		result: null,
-		error: null,
-		launch: null,
-	});
+	backend.updates.fire({ operationId: id, sequence: 1, status: 'completed', tests: null, result: null, error: null, launch: null });
 	assert.equal(service.isRunningTests, true);
 	await service.cancelTests();
 	await run;
-	assert.deepEqual(
-		service.testResults.map(result => result.state),
-		['cancelled', 'cancelled'],
-	);
+	assert.deepEqual(service.testResults.map(result => result.state), ['cancelled', 'cancelled']);
 	assert.equal(tasks.runs.length, 0);
 });
 
@@ -261,9 +172,7 @@ test('TestingService releases an accepted discovery after workspace replacement 
 	using tasks = new FakeTaskService([]);
 	using backend = new TestExecutionService();
 	let finish!: () => void;
-	backend.pendingDiscovery = new Promise<void>(resolve => {
-		finish = resolve;
-	});
+	backend.pendingDiscovery = new Promise<void>(resolve => { finish = resolve; });
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
@@ -281,9 +190,7 @@ test('TestingService releases an accepted discovery after workspace replacement 
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	for (let i = 0; i < 100; i++) {
-		if (predicate()) {
-			return;
-		}
+		if (predicate()) { return; }
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.fail('Test operation did not reach the boundary');
@@ -296,10 +203,7 @@ test('TestingService runs scripts independently of backend test discovery', asyn
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
 	const runs = await service.runAllScripts();
-	assert.deepEqual(
-		runs.map(run => run.profile.id),
-		['script'],
-	);
+	assert.deepEqual(runs.map(run => run.profile.id), ['script']);
 	assert.deepEqual(service.tests, []);
 });
 
@@ -313,14 +217,7 @@ test('TestingService starts the prepared exact test with the DAP owner and cance
 	await service.refreshTests();
 	const selected = service.tests[0]!;
 	await service.debugTest(selected.key);
-	assert.deepEqual(debug.launches[0]!.arguments, {
-		program: '/workspace/target/test',
-		args: ['--exact', selected.name],
-		cwd: '/workspace',
-		stopOnEntry: false,
-		sourceLanguages: ['rust'],
-		terminal: 'console',
-	});
+	assert.deepEqual(debug.launches[0]!.arguments, { program: '/workspace/target/test', args: ['--exact', selected.name], cwd: '/workspace', stopOnEntry: false, sourceLanguages: ['rust'], terminal: 'console' });
 	assert.equal(debug.launches[0]!.type, 'lldb');
 	assert.equal(debug.launches[0]!.adapter, undefined, 'The Debug provider must select the adapter, including configured runtime settings');
 	assert.equal(debug.launches[0]!.dirId, 'workspace');

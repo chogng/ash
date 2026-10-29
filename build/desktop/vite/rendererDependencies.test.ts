@@ -7,18 +7,12 @@ import { rendererOutput } from './rendererOutput.ts';
 
 test('keeps the real LiveKit media dependency lazy and within renderer chunk limits', async () => {
 	const result = await build({
-		configFile: false,
-		logLevel: 'silent',
-		resolve: { alias: rendererDependencyAliases },
-		plugins: [
-			{
-				name: 'voice-fixture',
-				resolveId: id => (id === 'voice-entry' ? '\0voice-entry' : undefined),
-				load: id =>
-					id === '\0voice-entry' ? 'globalThis.startVoice = () => import("livekit-client").then(({ Room, ExternalE2EEKeyProvider }) => [Room, ExternalE2EEKeyProvider]);' : undefined,
-			},
-			buildMetricsPlugin(),
-		],
+		configFile: false, logLevel: 'silent', resolve: { alias: rendererDependencyAliases },
+		plugins: [{
+			name: 'voice-fixture',
+			resolveId: id => id === 'voice-entry' ? '\0voice-entry' : undefined,
+			load: id => id === '\0voice-entry' ? 'globalThis.startVoice = () => import("livekit-client").then(({ Room, ExternalE2EEKeyProvider }) => [Room, ExternalE2EEKeyProvider]);' : undefined,
+		}, buildMetricsPlugin()],
 		build: { write: false, rolldownOptions: { input: 'voice-entry', output: rendererOutput } },
 	});
 	assert.ok(!Array.isArray(result) && 'output' in result);

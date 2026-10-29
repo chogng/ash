@@ -26,16 +26,11 @@ export class LocalTranscriptionModelStatus extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
-	setMessage(message: string): void {
-		this.text.textContent = message;
-		this.progress.hidden = true;
-	}
+	setMessage(message: string): void { this.text.textContent = message; this.progress.hidden = true; }
 	render(snapshot: ILocalTranscriptionModelSnapshot): void {
-		this.text.textContent = snapshot.status
-			? modelProgressText(snapshot.status)
-			: snapshot.available
-				? localize('dictation.model.installedSize', 'Installed: {0} · {1} MiB', snapshot.model, (snapshot.sizeBytes / (1024 * 1024)).toFixed(1))
-				: localize('dictation.model.missing', 'Model package not installed: {0}', snapshot.model);
+		this.text.textContent = snapshot.status ? modelProgressText(snapshot.status) : snapshot.available
+			? localize('dictation.model.installedSize', 'Installed: {0} · {1} MiB', snapshot.model, (snapshot.sizeBytes / (1024 * 1024)).toFixed(1))
+			: localize('dictation.model.missing', 'Model package not installed: {0}', snapshot.model);
 		this.progress.hidden = !isModelPreparing(snapshot.status);
 		// The transport reports bytes, not a total. An indeterminate bar never invents a percentage.
 		this.progress.removeAttribute('value');
@@ -44,17 +39,11 @@ export class LocalTranscriptionModelStatus extends Disposable {
 
 export function modelProgressText(status: IDictationModelStatus): string {
 	switch (status.state) {
-		case DictationModelState.Checking:
-			return localize('dictation.model.checking', 'Checking model files…');
-		case DictationModelState.Downloading:
-			return localize('dictation.model.downloading', 'Downloading {0}: {1} MiB', status.file, (status.downloadedBytes / (1024 * 1024)).toFixed(1));
-		case DictationModelState.Loading:
-			return localize('dictation.model.loading', 'Loading model…');
-		case DictationModelState.Ready:
-			return localize('dictation.model.ready', 'Model verified and ready to use.');
-		case DictationModelState.Cancelled:
-			return localize('dictation.model.cancelled', 'Model preparation cancelled.');
-		case DictationModelState.Error:
-			return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);
+		case DictationModelState.Checking: return localize('dictation.model.checking', 'Checking model files…');
+		case DictationModelState.Downloading: return localize('dictation.model.downloading', 'Downloading {0}: {1} MiB', status.file, (status.downloadedBytes / (1024 * 1024)).toFixed(1));
+		case DictationModelState.Loading: return localize('dictation.model.loading', 'Loading model…');
+		case DictationModelState.Ready: return localize('dictation.model.ready', 'Model verified and ready to use.');
+		case DictationModelState.Cancelled: return localize('dictation.model.cancelled', 'Model preparation cancelled.');
+		case DictationModelState.Error: return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);
 	}
 }

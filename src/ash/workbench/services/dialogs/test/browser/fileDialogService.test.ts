@@ -19,15 +19,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	ConfirmResult,
-	DialogResult,
-	DialogSeverity,
-	type IDialogService,
-	IFileDialogService,
-	type IInputDialogOptions,
-	type IMessageDialogOptions,
-} from '../../../../../platform/dialogs/common/dialogs.js';
+import { ConfirmResult, DialogResult, DialogSeverity, type IDialogService, IFileDialogService, type IInputDialogOptions, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -37,31 +29,19 @@ import type { IWebWorkspaceClient } from '../../../workspaces/browser/appServerW
 
 test('file dialog service owns the save, discard, and cancel decision', async () => {
 	using dialogs = new DialogService();
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			quickInput: () => {
-				throw new Error('No picker expected');
-			},
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-			workspaceRoot: () => undefined,
-		},
-		() => dialogs,
-	);
+	const service = createFileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient,
+		quickInput: () => { throw new Error('No picker expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
 	const result = service.showSaveConfirm([URI.file('/work/draft.md')], 'The file changed on disk.');
 	const item = dialogs.model.dialogs[0];
 	assert.deepEqual(item?.request, {
-		kind: 'choice',
-		severity: DialogSeverity.Warning,
-		title: 'Save Changes',
+		kind: 'choice', severity: DialogSeverity.Warning, title: 'Save Changes',
 		message: 'Do you want to save the changes you made to draft.md?',
 		detail: "Your changes will be lost if you don't save them.\nThe file changed on disk.",
-		checkbox: undefined,
-		buttons: ['Save', "Don't Save"],
-		cancelButton: 'Cancel',
+		checkbox: undefined, buttons: ['Save', "Don't Save"], cancelButton: 'Cancel',
 	});
 	item?.close({ button: DialogResult.Primary, buttonIndex: 1 });
 	assert.equal(await result, ConfirmResult.DONT_SAVE);
@@ -73,20 +53,12 @@ test('file dialog service owns the save, discard, and cancel decision', async ()
 
 test('file dialog service lists multiple unsaved files and offers Save All', async () => {
 	using dialogs = new DialogService();
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			quickInput: () => {
-				throw new Error('No picker expected');
-			},
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-			workspaceRoot: () => undefined,
-		},
-		() => dialogs,
-	);
+	const service = createFileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient,
+		quickInput: () => { throw new Error('No picker expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
 	const result = service.showSaveConfirm(['one.md', URI.file('/work/two.md')]);
 	const request = dialogs.model.dialogs[0]?.request;
 	assert.equal(request?.message, 'Do you want to save the changes to the following 2 files?');
@@ -105,23 +77,12 @@ test('browser folder selection registers the chosen directory once', async () =>
 			return URI.file('/@browser/notes');
 		},
 	} as HTMLFileSystemProvider;
-	const service = createFileDialogService(
-		{
-			kind: 'local',
-			provider,
-			pickDirectory: async () => handle,
-			quickInput: () => {
-				throw new Error('No file picker expected');
-			},
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-			workspaceRoot: () => undefined,
-		},
-		() => {
-			throw new Error('No message dialog expected');
-		},
-	);
+	const service = createFileDialogService({
+		kind: 'local', provider, pickDirectory: async () => handle,
+		quickInput: () => { throw new Error('No file picker expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => { throw new Error('No message dialog expected'); });
 
 	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [URI.file('/@browser/notes')]);
 	assert.deepEqual(registered, [handle]);
@@ -137,68 +98,34 @@ test('browser folder picker starts in the requested authorized directory', async
 		},
 		registerDirectoryHandle: async () => URI.file('/@browser/selected'),
 	} as unknown as HTMLFileSystemProvider;
-	const service = createFileDialogService(
-		{
-			kind: 'local',
-			provider,
-			pickDirectory: async initial => {
-				received = initial;
-				return startIn;
-			},
-			quickInput: () => {
-				throw new Error('No Quick Pick expected');
-			},
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-			workspaceRoot: () => undefined,
-		},
-		() => {
-			throw new Error('No message expected');
-		},
-	);
-	assert.deepEqual(
-		await service.showOpenDialog({
-			canSelectFiles: false,
-			canSelectFolders: true,
-			defaultUri: URI.file('/@browser/session/notes'),
-		}),
-		[URI.file('/@browser/selected')],
-	);
+	const service = createFileDialogService({
+		kind: 'local', provider,
+		pickDirectory: async initial => { received = initial; return startIn; },
+		quickInput: () => { throw new Error('No Quick Pick expected'); },
+		fileService: () => { throw new Error('No file service expected'); },
+		workspaceRoot: () => undefined,
+	}, () => { throw new Error('No message expected'); });
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: URI.file('/@browser/session/notes') }), [URI.file('/@browser/selected')]);
 	assert.equal(received, startIn);
 });
 
 test('browser Save As selects a directory and reads the file name from a dialog', async () => {
 	const inputs: string[] = [];
 	const provider = {
-		async registerDirectoryHandle() {
-			return URI.file('/@browser/notes');
-		},
+		async registerDirectoryHandle() { return URI.file('/@browser/notes'); },
 	} as unknown as HTMLFileSystemProvider;
 	const dialogs = {
-		async input(options: { readonly inputs: readonly { readonly value?: string }[] }) {
+		async input(options: { readonly inputs: readonly { readonly value?: string; }[]; }) {
 			inputs.push(options.inputs[0]?.value ?? '');
 			return { confirmed: true, values: ['draft with spaces.txt'] };
 		},
 	} as unknown as IDialogService;
-	const service = createFileDialogService(
-		{
-			kind: 'local',
-			provider,
-			pickDirectory: async () => ({ name: 'notes' }) as FileSystemDirectoryHandle,
-			quickInput: () => {
-				throw new Error('No file picker expected');
-			},
-			fileService: () =>
-				({
-					stat: async (resource: URI) => {
-						throw new FileNotFoundError(resource);
-					},
-				}) as unknown as IFileService,
-			workspaceRoot: () => undefined,
-		},
-		() => dialogs,
-	);
+	const service = createFileDialogService({
+		kind: 'local', provider, pickDirectory: async () => ({ name: 'notes' }) as FileSystemDirectoryHandle,
+		quickInput: () => { throw new Error('No file picker expected'); },
+		fileService: () => ({ stat: async (resource: URI) => { throw new FileNotFoundError(resource); } }) as unknown as IFileService,
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
 
 	assert.deepEqual(await service.pickFileToSave(URI.file('/Untitled-1')), URI.file('/@browser/notes/draft with spaces.txt'));
 	assert.deepEqual(inputs, ['Untitled-1']);
@@ -211,21 +138,14 @@ test('browser Save As requires confirmation before replacing an existing file', 
 		input: async () => ({ confirmed: true, values: ['report.txt'] }),
 		confirm: async () => ({ confirmed }),
 	} as unknown as IDialogService;
-	const service = createFileDialogService(
-		{
-			kind: 'local',
-			provider: {
-				registerDirectoryHandle: async () => URI.file('/@browser/notes'),
-			} as unknown as HTMLFileSystemProvider,
-			pickDirectory: async () => ({ name: 'notes' }) as FileSystemDirectoryHandle,
-			quickInput: () => {
-				throw new Error('No file picker expected');
-			},
-			fileService: () => ({ stat: async () => ({ kind: FileKind.File }) }) as unknown as IFileService,
-			workspaceRoot: () => undefined,
-		},
-		() => dialogs,
-	);
+	const service = createFileDialogService({
+		kind: 'local',
+		provider: { registerDirectoryHandle: async () => URI.file('/@browser/notes') } as unknown as HTMLFileSystemProvider,
+		pickDirectory: async () => ({ name: 'notes' }) as FileSystemDirectoryHandle,
+		quickInput: () => { throw new Error('No file picker expected'); },
+		fileService: () => ({ stat: async () => ({ kind: FileKind.File }) }) as unknown as IFileService,
+		workspaceRoot: () => undefined,
+	}, () => dialogs);
 
 	assert.equal(await service.pickFileToSave(URI.file('/report.txt')), undefined);
 	confirmed = true;
@@ -237,52 +157,32 @@ test('server folder selection navigates directories before returning the chosen 
 	const client = {
 		async list(path: string) {
 			listed.push(path);
-			return path === '' ? { path: '/work', parent: null, directories: [{ name: 'notes', path: '/work/notes' }] } : { path: '/work/notes', parent: '/work', directories: [] };
+			return path === ''
+				? { path: '/work', parent: null, directories: [{ name: 'notes', path: '/work/notes' }] }
+				: { path: '/work/notes', parent: '/work', directories: [] };
 		},
-		async authorize() {
-			throw new Error('Authorization is owned by workspace opening');
-		},
+		async authorize() { throw new Error('Authorization is owned by workspace opening'); },
 	} as IWebWorkspaceClient;
 	let pickerCount = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<{ inBackground: boolean }>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
 			const index = pickerCount++;
 			return {
-				items: [] as IQuickPickItem[],
-				selectedItems: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
-				show() {
-					this.selectedItems = [this.items[index === 0 ? 1 : 0]!];
-					accepted.fire({ inBackground: false });
-				},
-				dispose() {
-					accepted.dispose();
-					hidden.dispose();
-				},
-				[Symbol.dispose]() {
-					accepted.dispose();
-					hidden.dispose();
-				},
+				show() { this.selectedItems = [this.items[index === 0 ? 1 : 0]!]; accepted.fire({ inBackground: false }); },
+				dispose() { accepted.dispose(); hidden.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); },
 			};
 		},
 	} as unknown as IQuickInputService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client,
-			quickInput: () => quickInput,
-			workspaceRoot: () => URI.file('/work'),
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-		},
-		() => {
-			throw new Error('No message dialog expected');
-		},
-	);
+	const service = createFileDialogService({
+		kind: 'server', client, quickInput: () => quickInput, workspaceRoot: () => URI.file('/work'),
+		fileService: () => { throw new Error('No file service expected'); },
+	}, () => { throw new Error('No message dialog expected'); });
 
 	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [URI.file('/work/notes')]);
 	assert.deepEqual(listed, ['', '/work/notes']);
@@ -296,49 +196,34 @@ test('browser Open File browses the current workspace and returns the chosen fil
 	const files = {
 		async readDirectory(resource: URI) {
 			listed.push(resource);
-			return resource.toString() === root.toString() ? [{ resource: notes, name: 'notes', kind: FileKind.Directory }] : [{ resource: paper, name: 'paper.md', kind: FileKind.File }];
+			return resource.toString() === root.toString()
+				? [{ resource: notes, name: 'notes', kind: FileKind.Directory }]
+				: [{ resource: paper, name: 'paper.md', kind: FileKind.File }];
 		},
 	} as unknown as IFileService;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<{ inBackground: boolean }>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
-				selectedItems: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
 				onDidTriggerItemButton: triggered.event,
-				show() {
-					this.selectedItems = [this.items.find(item => item.label !== '..')!];
-					accepted.fire({ inBackground: false });
-				},
-				dispose() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
-				[Symbol.dispose]() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
+				show() { this.selectedItems = [this.items.find(item => item.label !== '..')!]; accepted.fire({ inBackground: false }); },
+				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
 		},
 	} as unknown as IQuickInputService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			quickInput: () => quickInput,
-			fileService: () => files,
-			workspaceRoot: () => root,
-		},
-		() => {
-			throw new Error('No message dialog expected');
-		},
-	);
+	const service = createFileDialogService({
+		kind: 'server',
+		client: {} as IWebWorkspaceClient,
+		quickInput: () => quickInput,
+		fileService: () => files,
+		workspaceRoot: () => root,
+	}, () => { throw new Error('No message dialog expected'); });
 
 	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, canSelectFolders: false }), [paper]);
 	assert.deepEqual(listed, [root, notes]);
@@ -353,30 +238,20 @@ test('browser file dialog filters files and returns every selected file from the
 	let step = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<{ inBackground: boolean }>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
-				selectedItems: [] as IQuickPickItem[],
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
 				onDidHide: hidden.event,
 				onDidTriggerItemButton: triggered.event,
 				show() {
 					shown.push(this.items.map(item => item.label));
-					this.selectedItems = [this.items[[0, 1, 3, 0][step++]!]!];
-					accepted.fire({ inBackground: false });
+					this.selectedItems = [this.items[[0, 1, 3, 0][step++]!]!]; accepted.fire({ inBackground: false });
 				},
-				dispose() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
-				[Symbol.dispose]() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
+				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
 		},
 	} as unknown as IQuickInputService;
@@ -388,27 +263,10 @@ test('browser file dialog filters files and returns every selected file from the
 			{ resource: URI.file('/work/docs/skip.txt'), name: 'skip.txt', kind: FileKind.File },
 		],
 	} as unknown as IFileService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			quickInput: () => quickInput,
-			fileService: () => files,
-			workspaceRoot: () => root,
-		},
-		() => {
-			throw new Error('No message expected');
-		},
-	);
+	const service = createFileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => quickInput, fileService: () => files, workspaceRoot: () => root }, () => { throw new Error('No message expected'); });
 	const result = await service.showOpenDialog({
-		canSelectFiles: true,
-		canSelectFolders: false,
-		canSelectMany: true,
-		defaultUri: folder,
-		filters: [
-			{ name: 'Markdown', extensions: ['md'] },
-			{ name: 'Text', extensions: ['txt'] },
-		],
+		canSelectFiles: true, canSelectFolders: false, canSelectMany: true, defaultUri: folder,
+		filters: [{ name: 'Markdown', extensions: ['md'] }, { name: 'Text', extensions: ['txt'] }],
 	});
 	assert.deepEqual(result, [first, second]);
 	assert.deepEqual(shown[0], ['Markdown', 'Text']);
@@ -422,55 +280,27 @@ test('server folder dialog selects folders across directory navigation', async (
 	let step = 0;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<{ inBackground: boolean }>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
-				selectedItems: [] as IQuickPickItem[],
-				onDidAccept: accepted.event,
-				onDidHide: hidden.event,
-				onDidTriggerItemButton: triggered.event,
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
 				show() {
 					shown.push(this.items.map(item => item.label));
 					const label = ['Select /work', 'other', 'Select /work/other', 'Done (2)'][step++];
-					this.selectedItems = [this.items.find(item => item.label === label)!];
-					accepted.fire({ inBackground: false });
+					this.selectedItems = [this.items.find(item => item.label === label)!]; accepted.fire({ inBackground: false });
 				},
-				dispose() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
-				[Symbol.dispose]() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
+				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
 		},
 	} as unknown as IQuickInputService;
 	const client = {
-		list: async (path: string) =>
-			path === '' || path === '/work' ? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] } : { path: '/work/other', parent: '/work', directories: [] },
-		authorize: async () => {
-			throw new Error('Not needed');
-		},
+		list: async (path: string) => path === '' || path === '/work'
+			? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] }
+			: { path: '/work/other', parent: '/work', directories: [] }, authorize: async () => { throw new Error('Not needed'); }
 	} as IWebWorkspaceClient;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client,
-			quickInput: () => quickInput,
-			fileService: () => {
-				throw new Error('No file service expected');
-			},
-			workspaceRoot: () => undefined,
-		},
-		() => {
-			throw new Error('No message expected');
-		},
-	);
+	const service = createFileDialogService({ kind: 'server', client, quickInput: () => quickInput, fileService: () => { throw new Error('No file service expected'); }, workspaceRoot: () => undefined }, () => { throw new Error('No message expected'); });
 	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true }), [URI.file('/work'), URI.file('/work/other')]);
 	assert.ok(shown[3]?.includes('Done (2)'));
 });
@@ -479,41 +309,20 @@ test('browser Save As applies the chosen filter and custom dialog labels', async
 	const messages: string[] = [];
 	let inputs = 0;
 	const dialogs = {
-		input: async (options: { title?: string; primaryButton?: string }) => {
+		input: async (options: { title?: string; primaryButton?: string; }) => {
 			assert.equal(options.title, 'Export');
 			assert.equal(options.primaryButton, 'Write');
 			return { confirmed: true, values: [inputs++ === 0 ? 'report.txt' : 'report.md'] };
 		},
-		showMessage: async (options: { message: string }) => {
-			messages.push(options.message);
-		},
+		showMessage: async (options: { message: string; }) => { messages.push(options.message); },
 	} as unknown as IDialogService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			quickInput: () => {
-				throw new Error('No filter picker expected');
-			},
-			fileService: () =>
-				({
-					stat: async (resource: URI) => {
-						throw new FileNotFoundError(resource);
-					},
-				}) as unknown as IFileService,
-			workspaceRoot: () => URI.file('/work'),
-		},
-		() => dialogs,
-	);
-	assert.deepEqual(
-		await service.showSaveDialog({
-			title: 'Export',
-			saveLabel: 'Write',
-			defaultUri: URI.file('/work/report.md'),
-			filters: [{ name: 'Markdown', extensions: ['md'] }],
-		}),
-		URI.file('/work/report.md'),
-	);
+	const service = createFileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient,
+		quickInput: () => { throw new Error('No filter picker expected'); },
+		fileService: () => ({ stat: async (resource: URI) => { throw new FileNotFoundError(resource); } }) as unknown as IFileService,
+		workspaceRoot: () => URI.file('/work'),
+	}, () => dialogs);
+	assert.deepEqual(await service.showSaveDialog({ title: 'Export', saveLabel: 'Write', defaultUri: URI.file('/work/report.md'), filters: [{ name: 'Markdown', extensions: ['md'] }] }), URI.file('/work/report.md'));
 	assert.equal(inputs, 2);
 	assert.equal(messages.length, 1);
 	await assert.rejects(service.showOpenDialog({ canSelectFiles: true, availableFileSystems: ['other'] }), /file scheme only/);
@@ -525,74 +334,28 @@ test('browser document open chooses an authorized folder without replacing the w
 	const handle = { name: 'chosen' } as FileSystemDirectoryHandle;
 	const provider = {
 		registerDirectoryHandle: async () => root,
-		getDirectoryHandle: async (resource: URI) => {
-			assert.deepEqual(resource, root);
-			return handle;
-		},
+		getDirectoryHandle: async (resource: URI) => { assert.deepEqual(resource, root); return handle; },
 	} as unknown as HTMLFileSystemProvider;
 	const files = {
-		stat: async (resource: URI) => ({
-			resource,
-			kind: resource.toString() === paper.toString() ? FileKind.File : FileKind.Directory,
-		}),
+		stat: async (resource: URI) => ({ resource, kind: resource.toString() === paper.toString() ? FileKind.File : FileKind.Directory }),
 		readDirectory: async () => [{ resource: paper, name: 'design.ash-design.json', kind: FileKind.File }],
 	} as unknown as IFileService;
 	const quickInput = {
 		createQuickPick() {
-			const accepted = new Emitter<{ inBackground: boolean }>();
+			const accepted = new Emitter<{ inBackground: boolean; }>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
-				items: [] as IQuickPickItem[],
-				selectedItems: [] as IQuickPickItem[],
-				onDidAccept: accepted.event,
-				onDidHide: hidden.event,
-				onDidTriggerItemButton: triggered.event,
-				show() {
-					this.selectedItems = [this.items[0]];
-					accepted.fire({ inBackground: false });
-				},
-				dispose() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
-				[Symbol.dispose]() {
-					accepted.dispose();
-					hidden.dispose();
-					triggered.dispose();
-				},
+				items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				show() { this.selectedItems = [this.items[0]]; accepted.fire({ inBackground: false }); },
+				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
 			};
 		},
 	} as unknown as IQuickInputService;
-	const service = createFileDialogService(
-		{
-			kind: 'local',
-			provider,
-			pickDirectory: async () => handle,
-			quickInput: () => quickInput,
-			fileService: () => files,
-			workspaceRoot: () => undefined,
-		},
-		() => {
-			throw new Error('Unexpected message');
-		},
-	);
-	assert.deepEqual(
-		await service.showOpenDialog({
-			canSelectFiles: true,
-			filters: [{ name: 'Ash design', extensions: ['ash-design.json'] }],
-		}),
-		[paper],
-	);
-	assert.deepEqual(
-		await service.showOpenDialog({
-			canSelectFiles: true,
-			defaultUri: paper,
-			filters: [{ name: 'Ash design', extensions: ['json'] }],
-		}),
-		[paper],
-	);
+	const service = createFileDialogService({ kind: 'local', provider, pickDirectory: async () => handle, quickInput: () => quickInput, fileService: () => files, workspaceRoot: () => undefined }, () => { throw new Error('Unexpected message'); });
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, filters: [{ name: 'Ash design', extensions: ['ash-design.json'] }] }), [paper]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, defaultUri: paper, filters: [{ name: 'Ash design', extensions: ['json'] }] }), [paper]);
 });
 
 test('server Save As preserves a POSIX basename and trailing spaces', async () => {
@@ -602,26 +365,13 @@ test('server Save As preserves a POSIX basename and trailing spaces', async () =
 		input: async (options: IInputDialogOptions) => {
 			defaults.push(options.inputs[0]?.value ?? '');
 			return { confirmed: true, values: ['part\\name.txt '] };
-		},
+		}
 	} as unknown as IDialogService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			workspaceRoot: () => URI.parse('file:///work'),
-			quickInput: () => {
-				throw new Error('Unexpected picker');
-			},
-			fileService: () =>
-				({
-					stat: async (resource: URI) => {
-						throw new FileNotFoundError(resource);
-					},
-				}) as unknown as IFileService,
-		},
-		() => dialogs,
-		OperatingSystem.Linux,
-	);
+	const service = createFileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient, workspaceRoot: () => URI.parse('file:///work'),
+		quickInput: () => { throw new Error('Unexpected picker'); },
+		fileService: () => ({ stat: async (resource: URI) => { throw new FileNotFoundError(resource); } }) as unknown as IFileService,
+	}, () => dialogs, OperatingSystem.Linux);
 	assert.equal((await service.showSaveDialog({ defaultUri: suggested }))?.path, '/work/part\\name.txt ');
 	assert.deepEqual(defaults, ['part\\name.txt']);
 });
@@ -632,52 +382,21 @@ test('server Save As rejects Windows aliases before touching disk and accepts th
 	const checked: string[] = [];
 	const dialogs = {
 		input: async () => ({ confirmed: true, values: [names.shift()!] }),
-		showMessage: async (options: IMessageDialogOptions) => {
-			messages.push(options.message);
-		},
+		showMessage: async (options: IMessageDialogOptions) => { messages.push(options.message); },
 	} as unknown as IDialogService;
-	const service = createFileDialogService(
-		{
-			kind: 'server',
-			client: {} as IWebWorkspaceClient,
-			workspaceRoot: () => URI.parse('file:///C:/work'),
-			quickInput: () => {
-				throw new Error('Unexpected picker');
-			},
-			fileService: () =>
-				({
-					stat: async (resource: URI) => {
-						checked.push(resource.path);
-						throw new FileNotFoundError(resource);
-					},
-				}) as unknown as IFileService,
-		},
-		() => dialogs,
-		OperatingSystem.Windows,
-	);
+	const service = createFileDialogService({
+		kind: 'server', client: {} as IWebWorkspaceClient, workspaceRoot: () => URI.parse('file:///C:/work'),
+		quickInput: () => { throw new Error('Unexpected picker'); },
+		fileService: () => ({ stat: async (resource: URI) => { checked.push(resource.path); throw new FileNotFoundError(resource); } }) as unknown as IFileService,
+	}, () => dialogs, OperatingSystem.Windows);
 	assert.equal((await service.showSaveDialog({}))?.path, '/C:/work/corrected.txt');
 	assert.deepEqual({ messages, checked }, { messages: ['Enter a valid file name for the target file system.'], checked: ['/C:/work/corrected.txt'] });
 });
 
 for (const { label, os, resource, path } of [
-	{
-		label: 'Windows drive',
-		os: OperatingSystem.Windows,
-		resource: URI.parse('file:///C:/work/notes'),
-		path: 'C:\\work\\notes',
-	},
-	{
-		label: 'Windows UNC',
-		os: OperatingSystem.Windows,
-		resource: URI.parse('file://server/share/notes'),
-		path: '\\\\server\\share\\notes',
-	},
-	{
-		label: 'POSIX backslash',
-		os: OperatingSystem.Linux,
-		resource: URI.parse('file:///work/part%5Cname'),
-		path: '/work/part\\name',
-	},
+	{ label: 'Windows drive', os: OperatingSystem.Windows, resource: URI.parse('file:///C:/work/notes'), path: 'C:\\work\\notes' },
+	{ label: 'Windows UNC', os: OperatingSystem.Windows, resource: URI.parse('file://server/share/notes'), path: '\\\\server\\share\\notes' },
+	{ label: 'POSIX backslash', os: OperatingSystem.Linux, resource: URI.parse('file:///work/part%5Cname'), path: '/work/part\\name' },
 	{ label: 'POSIX colon', os: OperatingSystem.Linux, resource: URI.parse('file:///C:/work'), path: '/C:/work' },
 ]) {
 	test(`server folder selection and authorization preserve ${label} paths`, async () => {
@@ -686,65 +405,32 @@ for (const { label, os, resource, path } of [
 		let activated = false;
 		const quickInput = {
 			createQuickPick() {
-				const accepted = new Emitter<{ inBackground: boolean }>();
+				const accepted = new Emitter<{ inBackground: boolean; }>();
 				const hidden = new Emitter<void>();
 				return {
-					items: [] as IQuickPickItem[],
-					selectedItems: [] as IQuickPickItem[],
-					onDidAccept: accepted.event,
-					onDidHide: hidden.event,
-					show() {
-						this.selectedItems = [this.items[0]!];
-						accepted.fire({ inBackground: false });
-					},
-					dispose() {
-						accepted.dispose();
-						hidden.dispose();
-					},
-					[Symbol.dispose]() {
-						this.dispose();
-					},
+					items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event,
+					show() { this.selectedItems = [this.items[0]!]; accepted.fire({ inBackground: false }); },
+					dispose() { accepted.dispose(); hidden.dispose(); },
+					[Symbol.dispose]() { this.dispose(); },
 				};
 			},
 		} as unknown as IQuickInputService;
 		const client: IWebWorkspaceClient = {
-			list: async selected => {
-				listed.push(selected);
-				return { path, parent: null, directories: [] };
-			},
-			authorize: async selected => {
-				authorized.push(selected);
-				return () => {
-					activated = true;
-				};
-			},
+			list: async selected => { listed.push(selected); return { path, parent: null, directories: [] }; },
+			authorize: async selected => { authorized.push(selected); return () => { activated = true; }; },
 		};
 		const dialogs = { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService;
 		const home = os === OperatingSystem.Windows ? 'C:\\Users\\picker' : '/home/picker';
 		const services = createServices(os, home);
-		const service = services.createInstance(
-			FileDialogService,
-			{
-				kind: 'server',
-				workspaceRoot: () => undefined,
-				quickInput: () => quickInput,
-				client,
-				fileService: () => {
-					throw new Error('Folder listing is owned by the workspace client');
-				},
-			},
-			() => dialogs,
-		);
+		const service = services.createInstance(FileDialogService, {
+			kind: 'server', workspaceRoot: () => undefined, quickInput: () => quickInput,
+			client,
+			fileService: () => { throw new Error('Folder listing is owned by the workspace client'); },
+		}, () => dialogs);
 		assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: resource }), [resource]);
 		assert.deepEqual(listed, [path]);
 		services.registerInstance(IFileDialogService, service);
-		using workspace = new BrowserHostService(
-			{ workspaceProvider: { kind: 'server', client, prepareSwitch: async () => true } },
-			{} as ILifecycleService,
-			dialogs,
-			services.get(IPathService),
-			{} as IFileService,
-		);
+		using workspace = new BrowserHostService({ workspaceProvider: { kind: 'server', client, prepareSwitch: async () => true } }, {} as ILifecycleService, dialogs, services.get(IPathService), {} as IFileService);
 		const picked = await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
 		await workspace.openWindow([{ folderUri: picked![0]! }]);
 		assert.deepEqual({ listed, authorized, activated }, { listed: [path, home, path], authorized: [path], activated: true });
@@ -764,10 +450,6 @@ function createServices(os: OperatingSystem, userHome?: string): InstantiationSe
 	const services = serviceFixtures.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
 	services.registerInstance(IHostService, new TestHostService());
 	services.registerInstance(IWorkspaceContextService, serviceFixtures.add(new TestWorkspaceService({ id: 'dialog-test', folders: [] })));
-	services.registerInstance(IRendererHostService, {
-		...api,
-		hasAppServer: true,
-		appServer: { ...api.appServer, operatingSystem: os, userHome },
-	});
+	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os, userHome } });
 	return services;
 }

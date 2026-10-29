@@ -9,22 +9,14 @@ const repositoryRoot = resolve(import.meta.dirname, '..');
 
 test('production renderer projects exclude tests and host-only compilation roots', () => {
 	for (const project of ['tsconfig.renderer.json', 'tsconfig.extensions-check.json', 'tsconfig.memories-check.json']) {
-		const config = ts.getParsedCommandLineOfConfigFile(
-			join(repositoryRoot, project),
-			{},
-			{
-				...ts.sys,
-				onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
-			},
-		);
+		const config = ts.getParsedCommandLineOfConfigFile(join(repositoryRoot, project), {}, {
+			...ts.sys,
+			onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+		});
 		assert.ok(config, project);
 		assert.deepEqual(config.errors, [], project);
 		assert.equal(config.options.noEmit, true, project);
-		assert.deepEqual(
-			config.fileNames.filter(path => /\/(?:test|node|electron-main)\//u.test(path)),
-			[],
-			project,
-		);
+		assert.deepEqual(config.fileNames.filter(path => /\/(?:test|node|electron-main)\//u.test(path)), [], project);
 	}
 });
 
@@ -80,27 +72,13 @@ test('product build and launch tools have one owner while repository scripts rem
 
 test('frontend Node tools and backend package builders have separate language owners', () => {
 	for (const directory of ['pnpm', 'resources']) {
-		assert.deepEqual(
-			walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py'),
-			[],
-			directory,
-		);
+		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py'), [], directory);
 	}
 	for (const [directory, entries] of [
-		[
-			'desktop',
-			['__init__.py', 'analyze.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py'],
-		],
+		['desktop', ['__init__.py', 'analyze.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py']],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
-		assert.deepEqual(
-			walk(join(import.meta.dirname, directory))
-				.filter(path => extname(path) === '.py')
-				.map(path => path.slice(join(import.meta.dirname, directory).length + 1))
-				.sort(),
-			[...entries].sort(),
-			directory,
-		);
+		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
 	}
 	for (const directory of ['code', 'download', 'lib', 'darwin', 'win32', 'linux']) {
 		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.ts');
@@ -110,37 +88,26 @@ test('frontend Node tools and backend package builders have separate language ow
 			join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),
 			join(import.meta.dirname, 'lib/test/stylelint.test.ts'),
 			...['watchRebuild', 'preparedInputs', 'incrementalOutput', 'watchNativeFile'].flatMap(name => [
-				join(import.meta.dirname, `lib/${name}.ts`),
-				join(import.meta.dirname, `lib/${name}.test.ts`),
+				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/${name}.test.ts`),
 			]),
-			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/test/${name}.test.ts`)]),
+			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [
+				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/test/${name}.test.ts`),
+			]),
 		]);
-		assert.deepEqual(
-			files.filter(path => !sharedTooling.has(path)),
-			[],
-			directory,
-		);
+		assert.deepEqual(files.filter(path => !sharedTooling.has(path)), [], directory);
 	}
 	const scripts = join(repositoryRoot, 'scripts');
-	assert.deepEqual(
-		readdirSync(scripts, { withFileTypes: true })
-			.filter(entry => entry.isFile() && extname(entry.name) === '.ts')
-			.map(entry => entry.name),
-		[],
-	);
+	assert.deepEqual(readdirSync(scripts, { withFileTypes: true }).filter(entry => entry.isFile() && extname(entry.name) === '.ts').map(entry => entry.name), []);
 });
 
 test('Node build and repository command sources do not use runtime JavaScript', () => {
 	const javaScriptExtensions = new Set(['.cjs', '.js', '.mjs', '.mts']);
 	const files = [...walk(import.meta.dirname), ...walk(join(repositoryRoot, 'scripts'))];
-	assert.deepEqual(
-		files.filter(path => javaScriptExtensions.has(extname(path))),
-		[],
-	);
+	assert.deepEqual(files.filter((path) => javaScriptExtensions.has(extname(path))), []);
 });
 
 test('build tools do not import repository command implementations', () => {
-	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.py')) {
+	for (const path of walk(import.meta.dirname).filter((path) => extname(path) === '.py')) {
 		assert.doesNotMatch(readFileSync(path, 'utf8'), /^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m, path);
 	}
 	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.ts' && !path.endsWith('.test.ts'))) {
@@ -153,20 +120,16 @@ test('build tools do not import repository command implementations', () => {
 });
 
 function walk(directory: string): string[] {
-	return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+	return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
 		if (entry.name === 'node_modules' || entry.name === '.venv') return [];
 		const path = join(directory, entry.name);
 		return entry.isDirectory() ? walk(path) : [path];
 	});
 }
 
+
 test('build product identity loads without frontend runtime or settings migration modules', () => {
-	const result = spawnSync(
-		process.execPath,
-		[
-			'--input-type=module',
-			'-e',
-			`
+	const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import assert from 'node:assert/strict';
     import { registerHooks } from 'node:module';
     const loaded = [];
@@ -177,9 +140,6 @@ test('build product identity loads without frontend runtime or settings migratio
     const { AshRendererDirectory } = await import('./src/ash/code/common/application.ts');
     assert.equal(AshRendererDirectory, 'ash');
     assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['application.ts']);
-  `,
-		],
-		{ cwd: repositoryRoot, encoding: 'utf8' },
-	);
+  `], { cwd: repositoryRoot, encoding: 'utf8' });
 	assert.equal(result.status, 0, result.stderr);
 });

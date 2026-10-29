@@ -9,12 +9,26 @@ import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialo
 import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
 import '../../dialog.web.contribution.js';
-import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../../../platform/dialogs/common/dialogs.js';
+import {
+	type DialogRequest,
+	DialogResult,
+	DialogSeverity,
+	type IDialogHandler,
+	type IDialogOutcome,
+} from '../../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import { IDialogsModel, IWorkbenchDialogHandler } from '../../../../../../workbench/common/dialogs.js';
+import {
+	IDialogsModel,
+	IWorkbenchDialogHandler,
+} from '../../../../../../workbench/common/dialogs.js';
 import { DialogHandlerContribution } from '../../dialog.web.contribution.js';
-import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../../workbench/common/contributions.js';
-import { DialogService } from '../../../../../../workbench/services/dialogs/common/dialogService.js';
+import {
+	WorkbenchContributionsRegistry,
+	WorkbenchPhase,
+} from '../../../../../../workbench/common/contributions.js';
+import {
+	DialogService,
+} from '../../../../../../workbench/services/dialogs/common/dialogService.js';
 
 class TestDialogHandler implements IDialogHandler {
 	readonly calls: Array<{
@@ -24,7 +38,10 @@ class TestDialogHandler implements IDialogHandler {
 		readonly reject: (error: unknown) => void;
 	}> = [];
 
-	showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
+	showDialog(
+		request: DialogRequest,
+		signal: AbortSignal,
+	): Promise<IDialogOutcome> {
 		return new Promise((resolve, reject) => {
 			this.calls.push({ request, signal, resolve: result => resolve({ button: result }), reject });
 		});
@@ -50,7 +67,10 @@ test('dialog handler contribution starts at BlockStartup', async () => {
 test('dialog handler contribution presents the model queue serially', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
-	using contribution = new DialogHandlerContribution(service.model, handler);
+	using contribution = new DialogHandlerContribution(
+		service.model,
+		handler,
+	);
 	const confirmation = service.confirm({ message: 'Continue?' });
 	const message = service.showMessage({
 		severity: DialogSeverity.Info,
@@ -75,7 +95,10 @@ test('dialog handler contribution picks up existing model items', async () => {
 	using service = new DialogService();
 	const confirmation = service.confirm({ message: 'Pending' });
 	const handler = new TestDialogHandler();
-	using contribution = new DialogHandlerContribution(service.model, handler);
+	using contribution = new DialogHandlerContribution(
+		service.model,
+		handler,
+	);
 
 	assert.equal(handler.calls.length, 1);
 	assert.equal(handler.calls[0]?.request.message, 'Pending');
@@ -86,7 +109,10 @@ test('dialog handler contribution picks up existing model items', async () => {
 test('closing the active model item aborts its handler', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
-	using contribution = new DialogHandlerContribution(service.model, handler);
+	using contribution = new DialogHandlerContribution(
+		service.model,
+		handler,
+	);
 	const confirmation = service.confirm({ message: 'Cancel?' });
 	const item = service.model.dialogs[0];
 	const call = handler.calls[0];
@@ -101,7 +127,10 @@ test('closing the active model item aborts its handler', async () => {
 test('dialog handler contribution continues after a handler failure', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
-	using contribution = new DialogHandlerContribution(service.model, handler);
+	using contribution = new DialogHandlerContribution(
+		service.model,
+		handler,
+	);
 	const failed = service.showMessage({
 		severity: DialogSeverity.Error,
 		message: 'Failure',
@@ -119,7 +148,10 @@ test('dialog handler contribution continues after a handler failure', async () =
 test('disposing the contribution cancels its active model item', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
-	const contribution = new DialogHandlerContribution(service.model, handler);
+	const contribution = new DialogHandlerContribution(
+		service.model,
+		handler,
+	);
 	const confirmation = service.confirm({ message: 'Active' });
 	const call = handler.calls[0];
 
@@ -132,17 +164,14 @@ test('disposing the contribution cancels its active model item', async () => {
 
 function desktopHandler(dialogs: DialogMainService, id: number): NativeDialogHandler {
 	let sequence = 0;
-	return new NativeDialogHandler(
-		{
-			async showMessageBox({ signal, ...options }) {
-				const operation = validateNativeDialogOperation(structuredClone({ kind: 'show', id: ++sequence, options }));
-				const result = await dialogs.perform({ id } as BrowserWindow, operation);
-				assert.ok(result);
-				return result;
-			},
-		} as INativeHostApi,
-		{} as HTMLElement,
-	);
+	return new NativeDialogHandler({
+		async showMessageBox({ signal, ...options }) {
+			const operation = validateNativeDialogOperation(structuredClone({ kind: 'show', id: ++sequence, options }));
+			const result = await dialogs.perform({ id } as BrowserWindow, operation);
+			assert.ok(result);
+			return result;
+		},
+	} as INativeHostApi, {} as HTMLElement);
 }
 
 test('desktop dialog handler maps message, confirmation, and prompt results', async () => {
@@ -169,16 +198,13 @@ test('desktop dialog handler maps message, confirmation, and prompt results', as
 	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
 		expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Cancel', 'Discard'], ['Save', 'Cancel', 'Discard']];
 	}
-	assert.deepEqual(
-		{ message, confirmation, prompt, cancelledPrompt, buttons: options.map(value => value.buttons) },
-		{
-			message: { button: DialogResult.Primary, checkboxChecked: true },
-			confirmation: { button: DialogResult.Cancel, checkboxChecked: true },
-			prompt: { button: DialogResult.Secondary, checkboxChecked: true },
-			cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
-			buttons: expectedButtons,
-		},
-	);
+	assert.deepEqual({ message, confirmation, prompt, cancelledPrompt, buttons: options.map(value => value.buttons) }, {
+		message: { button: DialogResult.Primary, checkboxChecked: true },
+		confirmation: { button: DialogResult.Cancel, checkboxChecked: true },
+		prompt: { button: DialogResult.Secondary, checkboxChecked: true },
+		cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
+		buttons: expectedButtons,
+	});
 });
 
 test('desktop dialog handler returns the selected action index and checkbox state', async () => {
@@ -193,13 +219,7 @@ test('desktop dialog handler returns the selected action index and checkbox stat
 		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
 		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 	});
-	const request = {
-		kind: 'choice' as const,
-		severity: DialogSeverity.Warning,
-		message: 'Choose action',
-		buttons: ['First', 'Second', 'Third'],
-		cancelButton: 'Cancel',
-	};
+	const request = { kind: 'choice' as const, severity: DialogSeverity.Warning, message: 'Choose action', buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel' };
 	const result = await desktopHandler(dialogs, 11).showDialog(request, new AbortController().signal);
 	let expectedButtons = ['First', 'Second', 'Third', 'Cancel'];
 	if (process.platform === 'linux') {
@@ -248,9 +268,7 @@ suite('dialog browser component', () => {
 				const bounds = button.getBoundingClientRect();
 				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
 				return {
-					width: bounds.width,
-					height: bounds.height,
-					iconWidth: icon.width,
+					width: bounds.width, height: bounds.height, iconWidth: icon.width,
 					centerX: bounds.x + bounds.width / 2 - icon.x - icon.width / 2,
 					centerY: bounds.y + bounds.height / 2 - icon.y - icon.height / 2,
 				};
@@ -479,14 +497,9 @@ suite('dialog browser component', () => {
 		await dialog.getByRole('checkbox', { name: 'Remember choice' }).check();
 		await dialog.getByRole('button', { name: 'Third' }).click();
 		await expect(dialog).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({
-				button: 'primary',
-				buttonIndex: 2,
-				checkboxChecked: true,
-				values: undefined,
-			});
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary', buttonIndex: 2, checkboxChecked: true, values: undefined,
+		});
 	});
 
 	test('aborting a dialog settles it as cancelled and removes its modal', async function () {
@@ -576,23 +589,19 @@ suite('dialog browser component', () => {
 		const dialog = page.getByRole('dialog', { name: 'Connect' });
 		const input = dialog.getByRole('textbox', { name: 'Server address' });
 		await expect(input).toBeFocused();
-		expect(
-			await input.evaluate(element => {
-				const input = element as HTMLInputElement;
-				return [input.selectionStart, input.selectionEnd];
-			}),
-		).toEqual([0, 'https://'.length]);
+		expect(await input.evaluate(element => {
+			const input = element as HTMLInputElement;
+			return [input.selectionStart, input.selectionEnd];
+		})).toEqual([0, 'https://'.length]);
 		await input.pressSequentially('https://example.test');
 		await dialog.getByRole('checkbox', { name: 'Remember server' }).check();
 		await input.press('Enter');
 		await expect(dialog).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({
-				button: 'primary',
-				checkboxChecked: true,
-				values: ['https://example.test'],
-			});
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary',
+			checkboxChecked: true,
+			values: ['https://example.test'],
+		});
 	});
 
 	test('confirmation returns the checkbox state after the primary action', async function () {
@@ -605,13 +614,9 @@ suite('dialog browser component', () => {
 		await dialog.getByRole('checkbox', { name: 'Also remove credentials' }).check();
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
 		await expect(dialog).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({
-				button: 'primary',
-				checkboxChecked: true,
-				values: undefined,
-			});
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary', checkboxChecked: true, values: undefined,
+		});
 	});
 
 	test('modified Enter and IME composition do not accept an input dialog', async function () {
@@ -625,12 +630,7 @@ suite('dialog browser component', () => {
 			await expect(dialog).toBeVisible();
 		}
 		const composing = await input.evaluate(element => {
-			const event = new KeyboardEvent('keydown', {
-				key: 'Enter',
-				bubbles: true,
-				cancelable: true,
-				isComposing: true,
-			});
+			const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true });
 			element.dispatchEvent(event);
 			return event.defaultPrevented;
 		});
@@ -638,13 +638,9 @@ suite('dialog browser component', () => {
 		await expect(dialog).toBeVisible();
 		await input.press('Enter');
 		await expect(dialog).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({
-				button: 'primary',
-				checkboxChecked: false,
-				values: ['https://'],
-			});
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary', checkboxChecked: false, values: ['https://'],
+		});
 	});
 
 	for (const platform of [
@@ -664,14 +660,9 @@ suite('dialog browser component', () => {
 				await page.keyboard.press('Meta+d');
 				if (platform.secondaryShortcut) {
 					await expect(dialog).toHaveCount(0);
-					await expect
-						.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-						.toEqual({
-							button: 'primary',
-							buttonIndex: 1,
-							checkboxChecked: true,
-							values: undefined,
-						});
+					await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+						button: 'primary', buttonIndex: 1, checkboxChecked: true, values: undefined,
+					});
 				} else {
 					await expect(dialog).toBeVisible();
 					await page.keyboard.press('Escape');
@@ -689,9 +680,7 @@ suite('dialog browser component', () => {
 						await page.keyboard.press(key);
 						await expect(prompt).toBeVisible();
 					}
-					await prompt.getByRole('button', { name: 'Discard' }).evaluate(element => {
-						(element as HTMLButtonElement).disabled = true;
-					});
+					await prompt.getByRole('button', { name: 'Discard' }).evaluate(element => { (element as HTMLButtonElement).disabled = true; });
 					await page.keyboard.press('Meta+d');
 					await expect(prompt).toBeVisible();
 					await page.keyboard.press('Escape');

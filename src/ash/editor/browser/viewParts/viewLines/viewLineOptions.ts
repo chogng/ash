@@ -39,8 +39,7 @@ export class ViewLineOptions {
 	}
 
 	public equals(other: ViewLineOptions): boolean {
-		return (
-			this.themeType === other.themeType &&
+		return this.themeType === other.themeType &&
 			this.renderWhitespace === other.renderWhitespace &&
 			this.experimentalWhitespaceRendering === other.experimentalWhitespaceRendering &&
 			this.renderControlCharacters === other.renderControlCharacters &&
@@ -53,7 +52,6 @@ export class ViewLineOptions {
 			this.stopRenderingLineAfter === other.stopRenderingLineAfter &&
 			this.fontLigatures === other.fontLigatures &&
 			this.verticalScrollbarSize === other.verticalScrollbarSize &&
-			this.useGpu === other.useGpu
-		);
+			this.useGpu === other.useGpu;
 	}
 }

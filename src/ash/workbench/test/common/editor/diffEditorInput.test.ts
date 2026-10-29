@@ -17,30 +17,21 @@ suite('Comparison editor inputs', () => {
 			const modified = { resource: URI.file('/project/after.bin') };
 			const input = createInput(original, modified);
 			const identity = input.resource;
-			assert.deepEqual(
-				[
-					EditorResourceAccessor.getOriginalUri(input),
-					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY }),
-					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.SECONDARY }),
-					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.BOTH }),
-					EditorResourceAccessor.getOriginalUri(input, {
-						supportSideBySide: SideBySideEditor.BOTH,
-						filterByScheme: Schemas.file,
-					}),
-					EditorResourceAccessor.getOriginalUri(input, {
-						supportSideBySide: SideBySideEditor.ANY,
-						filterByScheme: [Schemas.ashRemote],
-					}),
-				],
-				[
-					undefined,
-					modified.resource,
-					original.resource,
-					{ primary: modified.resource, secondary: original.resource },
-					{ primary: modified.resource, secondary: undefined },
-					original.resource,
-				],
-			);
+			assert.deepEqual([
+				EditorResourceAccessor.getOriginalUri(input),
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY }),
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.SECONDARY }),
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.BOTH }),
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.BOTH, filterByScheme: Schemas.file }),
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.ANY, filterByScheme: [Schemas.ashRemote] }),
+			], [
+				undefined,
+				modified.resource,
+				original.resource,
+				{ primary: modified.resource, secondary: original.resource },
+				{ primary: modified.resource, secondary: undefined },
+				original.resource,
+			]);
 			assert.strictEqual(input.resource, identity);
 		});
 
@@ -69,12 +60,7 @@ suite('Comparison editor inputs', () => {
 			{ resource: snapshot, preferredResource, initialText: '# Heading', readOnly: true },
 		);
 		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(comparison))));
-		assert.equal(
-			EditorResourceAccessor.getOriginalUri(restored, {
-				supportSideBySide: SideBySideEditor.PRIMARY,
-			})?.toString(),
-			preferredResource.toString(),
-		);
+		assert.equal(EditorResourceAccessor.getOriginalUri(restored, { supportSideBySide: SideBySideEditor.PRIMARY })?.toString(), preferredResource.toString());
 		assert.ok(isResourceDiffEditorInput(restored));
 		assert.equal(restored.modified.resource.toString(), snapshot.toString());
 	});
@@ -84,28 +70,22 @@ suite('Comparison editor inputs', () => {
 		const after = { resource: URI.file('/project/after.bin') };
 		const binary = createBinaryDiffEditorInput(before, after);
 		const input = createDiffEditorInput(binary, { resource: URI.parse('git-change:/project/current.bin') });
-		assert.deepEqual(
-			[
-				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.BOTH }),
-				EditorResourceAccessor.getOriginalUri(input, {
-					supportSideBySide: SideBySideEditor.ANY,
-					filterByScheme: Schemas.file,
-				}),
-			],
-			[{ primary: input.modified.resource, secondary: after.resource }, after.resource],
-		);
+		assert.deepEqual([
+			EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.BOTH }),
+			EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.ANY, filterByScheme: Schemas.file }),
+		], [
+			{ primary: input.modified.resource, secondary: after.resource },
+			after.resource,
+		]);
 	});
 
 	test('resource-shaped fields alone do not identify a comparison input', () => {
 		const input = { resource: URI.file('/project/file.bin') };
-		assert.deepEqual(
-			[
-				isResourceDiffEditorInput(input),
-				isResourceDiffEditorInput({ original: input }),
-				isResourceDiffEditorInput({ original: input, modified: { resource: 'file:///project/after.bin' } }),
-				isResourceDiffEditorInput(null),
-			],
-			[false, false, false, false],
-		);
+		assert.deepEqual([
+			isResourceDiffEditorInput(input),
+			isResourceDiffEditorInput({ original: input }),
+			isResourceDiffEditorInput({ original: input, modified: { resource: 'file:///project/after.bin' } }),
+			isResourceDiffEditorInput(null),
+		], [false, false, false, false]);
 	});
 });

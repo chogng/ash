@@ -9,157 +9,143 @@ import { IKeyboardLayoutService, type IKeyboardLayoutInfo } from '../../../../pl
 import { IUserKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ChangeKeyboardLayoutCommandId, InspectKeyMappingsCommandId, InspectKeyMappingsJsonCommandId } from '../common/preferences.js';
+import {
+	ChangeKeyboardLayoutCommandId,
+	InspectKeyMappingsCommandId,
+	InspectKeyMappingsJsonCommandId,
+} from '../common/preferences.js';
 
 interface LayoutQuickPickItem extends IQuickPickItem {
 	readonly kind: 'autodetect' | 'configure' | 'layout';
 	readonly layout?: IKeyboardLayoutInfo;
 }
 
-registerAction2(
-	class ChangeKeyboardLayoutAction extends Action2 {
-		constructor() {
-			super({
-				id: ChangeKeyboardLayoutCommandId,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.ChangeKeyboardLayoutAction' }, 'Preferences: Change Keyboard Layout'),
-				f1: true,
-			});
-		}
+registerAction2(class ChangeKeyboardLayoutAction extends Action2 {
+	constructor() {
+		super({
+			id: ChangeKeyboardLayoutCommandId,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.ChangeKeyboardLayoutAction' }, 'Preferences: Change Keyboard Layout'),
+			f1: true,
+		});
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			const keyboardLayouts = accessor.get(IKeyboardLayoutService);
-			const configuration = accessor.get(IConfigurationService);
-			const userLayout = accessor.get(IUserKeyboardLayoutService);
-			const picker = accessor.get(IQuickInputService).createQuickPick<LayoutQuickPickItem>();
-			const disposables = new DisposableStore();
-			disposables.add(picker);
-			const requested = configuration.getValue(KeyboardConfiguration.layout);
-			const current = keyboardLayouts.getCurrentKeyboardLayout();
-			const layouts = [...keyboardLayouts.getAllKeyboardLayouts()].sort((first, second) => first.label.localeCompare(second.label));
+	override run(accessor: ServicesAccessor): void {
+		const keyboardLayouts = accessor.get(IKeyboardLayoutService);
+		const configuration = accessor.get(IConfigurationService);
+		const userLayout = accessor.get(IUserKeyboardLayoutService);
+		const picker = accessor.get(IQuickInputService).createQuickPick<LayoutQuickPickItem>();
+		const disposables = new DisposableStore();
+		disposables.add(picker);
+		const requested = configuration.getValue(KeyboardConfiguration.layout);
+		const current = keyboardLayouts.getCurrentKeyboardLayout();
+		const layouts = [...keyboardLayouts.getAllKeyboardLayouts()]
+			.sort((first, second) => first.label.localeCompare(second.label));
 
-			picker.placeholder = localize({ bundle: 'ash.workbench', key: 'keyboardLayout.selectLayout' }, 'Select keyboard layout');
-			picker.ariaLabel = picker.placeholder;
-			picker.items = [
-				{
-					kind: 'autodetect',
-					label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.autoDetect' }, 'Auto Detect'),
-					description: requested === 'autodetect' ? localize({ bundle: 'ash.workbench', key: 'keyboardLayout.current' }, 'Current: {0}', current.label) : undefined,
-				},
-				...(userLayout.available
-					? [
-							{
-								kind: 'configure' as const,
-								label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.configureLayoutFile' }, 'Configure Keyboard Layout File'),
-								description: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.openLayoutFile' }, 'Open profile keyboard-layout.json'),
-							},
-						]
-					: []),
-				...layouts.map((layout): LayoutQuickPickItem => ({
-					kind: 'layout',
-					layout,
-					label: layout.label,
-					description:
-						requested === layout.id ? localize({ bundle: 'ash.workbench', key: 'keyboardLayout.selected' }, '{0} · Selected', layoutSourceLabel(layout)) : layoutSourceLabel(layout),
-					detail: layout.id,
-				})),
-			];
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
+		picker.placeholder = localize({ bundle: 'ash.workbench', key: 'keyboardLayout.selectLayout' }, 'Select keyboard layout');
+		picker.ariaLabel = picker.placeholder;
+		picker.items = [
+			{
+				kind: 'autodetect',
+				label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.autoDetect' }, 'Auto Detect'),
+				description: requested === 'autodetect' ? localize({ bundle: 'ash.workbench', key: 'keyboardLayout.current' }, 'Current: {0}', current.label) : undefined,
+			},
+			...(userLayout.available ? [{
+				kind: 'configure' as const,
+				label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.configureLayoutFile' }, 'Configure Keyboard Layout File'),
+				description: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.openLayoutFile' }, 'Open profile keyboard-layout.json'),
+			}] : []),
+			...layouts.map((layout): LayoutQuickPickItem => ({
+				kind: 'layout',
+				layout,
+				label: layout.label,
+				description: requested === layout.id
+					? localize({ bundle: 'ash.workbench', key: 'keyboardLayout.selected' }, '{0} · Selected', layoutSourceLabel(layout))
+					: layoutSourceLabel(layout),
+				detail: layout.id,
+			})),
+		];
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
 
-					picker.hide();
-					if (item.kind === 'autodetect') {
-						void configuration.updateValue(KeyboardConfiguration.layout, 'autodetect').catch(reportKeyboardLayoutError);
-						return;
-					}
-					if (item.kind === 'configure') {
-						void userLayout.openResource().catch(reportKeyboardLayoutError);
-						return;
-					}
-					if (item.layout) {
-						void configuration.updateValue(KeyboardConfiguration.layout, item.layout.id).catch(reportKeyboardLayoutError);
-					}
-				}),
-			);
-			disposables.add(picker.onDidHide(() => disposables.dispose()));
-			picker.show();
-		}
-	},
-);
+			picker.hide();
+			if (item.kind === 'autodetect') {
+				void configuration.updateValue(KeyboardConfiguration.layout, 'autodetect').catch(reportKeyboardLayoutError);
+				return;
+			}
+			if (item.kind === 'configure') {
+				void userLayout.openResource().catch(reportKeyboardLayoutError);
+				return;
+			}
+			if (item.layout) {
+				void configuration.updateValue(KeyboardConfiguration.layout, item.layout.id).catch(reportKeyboardLayoutError);
+			}
 
-registerAction2(
-	class InspectKeyMappingsAction extends Action2 {
-		constructor() {
-			super({
-				id: InspectKeyMappingsCommandId,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.InspectKeyMappingsAction' }, 'Developer: Inspect Key Mappings'),
-				f1: true,
-			});
-		}
+		}));
+		disposables.add(picker.onDidHide(() => disposables.dispose()));
+		picker.show();
+	}
+});
 
-		override run(accessor: ServicesAccessor): Promise<void> {
-			const service = accessor.get(IKeyboardLayoutService);
-			const contents = [
-				localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutInfo' }, 'Layout info:'),
-				JSON.stringify(service.getCurrentKeyboardLayout(), null, 2),
-				'',
-				service.getKeyboardMapper().dumpDebugInfo(),
-			].join('\n');
-			return accessor.get(IEditorService).openEditor({
-				resource: URI.parse('untitled:/keyboard-layout-inspect.txt'),
-				label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutTitle' }, 'Keyboard Layout'),
-				languageId: 'plaintext',
-				readOnly: true,
-				initialText: contents,
-			});
-		}
-	},
-);
+registerAction2(class InspectKeyMappingsAction extends Action2 {
+	constructor() {
+		super({
+			id: InspectKeyMappingsCommandId,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.InspectKeyMappingsAction' }, 'Developer: Inspect Key Mappings'),
+			f1: true,
+		});
+	}
 
-registerAction2(
-	class InspectKeyMappingsJsonAction extends Action2 {
-		constructor() {
-			super({
-				id: InspectKeyMappingsJsonCommandId,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.InspectKeyMappingsJsonAction' }, 'Developer: Inspect Key Mappings (JSON)'),
-				f1: true,
-			});
-		}
+	override run(accessor: ServicesAccessor): Promise<void> {
+		const service = accessor.get(IKeyboardLayoutService);
+		const contents = [
+			localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutInfo' }, 'Layout info:'),
+			JSON.stringify(service.getCurrentKeyboardLayout(), null, 2),
+			'',
+			service.getKeyboardMapper().dumpDebugInfo(),
+		].join('\n');
+		return accessor.get(IEditorService).openEditor({
+			resource: URI.parse('untitled:/keyboard-layout-inspect.txt'),
+			label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutTitle' }, 'Keyboard Layout'),
+			languageId: 'plaintext',
+			readOnly: true,
+			initialText: contents,
+		});
+	}
+});
 
-		override run(accessor: ServicesAccessor): Promise<void> {
-			const service = accessor.get(IKeyboardLayoutService);
-			const contents = `${JSON.stringify(
-				{
-					layout: service.getCurrentKeyboardLayout(),
-					rawMapping: service.getRawKeyboardMapping() ?? {},
-				},
-				null,
-				2,
-			)}\n`;
-			return accessor.get(IEditorService).openEditor({
-				resource: URI.parse('untitled:/keyboard-layout-inspect.json'),
-				label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutJsonTitle' }, 'Keyboard Layout (JSON)'),
-				languageId: 'json',
-				readOnly: true,
-				initialText: contents,
-			});
-		}
-	},
-);
+registerAction2(class InspectKeyMappingsJsonAction extends Action2 {
+	constructor() {
+		super({
+			id: InspectKeyMappingsJsonCommandId,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.InspectKeyMappingsJsonAction' }, 'Developer: Inspect Key Mappings (JSON)'),
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		const service = accessor.get(IKeyboardLayoutService);
+		const contents = `${JSON.stringify({
+			layout: service.getCurrentKeyboardLayout(),
+			rawMapping: service.getRawKeyboardMapping() ?? {},
+		}, null, 2)}\n`;
+		return accessor.get(IEditorService).openEditor({
+			resource: URI.parse('untitled:/keyboard-layout-inspect.json'),
+			label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.layoutJsonTitle' }, 'Keyboard Layout (JSON)'),
+			languageId: 'json',
+			readOnly: true,
+			initialText: contents,
+		});
+	}
+});
 
 function layoutSourceLabel(layout: IKeyboardLayoutInfo): string {
 	switch (layout.source) {
-		case 'user':
-			return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.userLayout' }, 'User configured layout');
-		case 'native':
-			return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.systemLayout' }, 'Detected by operating system');
-		case 'browser':
-			return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.browserLayout' }, 'Detected by browser');
-		case 'builtin':
-			return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.builtinLayout' }, 'Built in');
-		case 'fallback':
-			return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.fallbackLayout' }, 'Fallback');
+		case 'user': return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.userLayout' }, 'User configured layout');
+		case 'native': return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.systemLayout' }, 'Detected by operating system');
+		case 'browser': return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.browserLayout' }, 'Detected by browser');
+		case 'builtin': return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.builtinLayout' }, 'Built in');
+		case 'fallback': return localize({ bundle: 'ash.workbench', key: 'keyboardLayout.fallbackLayout' }, 'Fallback');
 	}
 }
 

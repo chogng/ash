@@ -23,70 +23,31 @@ async function fixture(runExclusive?: <T>(operation: () => Promise<T>) => Promis
 	await Promise.all([mkdir(first), mkdir(second)]);
 	const manager = new WorkspacesManagementMainService();
 	const context = new WorkspaceContextMainService(getSingleFolderWorkspaceIdentifier(URI.file(first)));
-	const requests: { id: string; path: string }[][] = [];
+	const requests: { id: string; path: string; }[][] = [];
 	const errors: unknown[] = [];
 	let rejection: Error | undefined;
 	let validate: (() => Promise<void>) | undefined;
-	const editing = new WorkspaceEditingMainService(
-		context,
-		manager,
-		join(root, 'untitled'),
-		{
-			resolveGrant: async () => ({ type: 'config' }),
-			persistDirectoryGrant: async () => {},
-			validateFolders: async () => {
-				await validate?.();
-			},
-			setFolders: async folders => {
-				if (rejection) throw rejection;
-				requests.push(folders.map(({ id, path }) => ({ id, path })));
-			},
-		},
-		error => errors.push(error),
-		runExclusive,
-	);
+	const editing = new WorkspaceEditingMainService(context, manager, join(root, 'untitled'), {
+		resolveGrant: async () => ({ type: 'config' }), persistDirectoryGrant: async () => { },
+		validateFolders: async () => { await validate?.(); },
+		setFolders: async folders => { if (rejection) throw rejection; requests.push(folders.map(({ id, path }) => ({ id, path }))); },
+	}, error => errors.push(error), runExclusive);
 	return {
-		root,
-		first,
-		second,
-		context,
-		editing,
-		manager,
-		requests,
-		errors,
-		reject: (error: Error | undefined) => {
-			rejection = error;
-		},
-		beforeValidate: (callback: () => Promise<void>) => {
-			validate = callback;
-		},
-		async [Symbol.asyncDispose]() {
-			editing.dispose();
-			context.dispose();
-			await rm(root, { recursive: true, force: true });
-		},
+		root, first, second, context, editing, manager, requests, errors,
+		reject: (error: Error | undefined) => { rejection = error; },
+		beforeValidate: (callback: () => Promise<void>) => { validate = callback; },
+		async [Symbol.asyncDispose]() { editing.dispose(); context.dispose(); await rm(root, { recursive: true, force: true }); },
 	};
 }
 
 test('adding and removing roots publishes one persisted workspace after backend acceptance', async () => {
 	await using f = await fixture();
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: URI.file(f.second).toString(), name: 'API' }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.second).toString(), name: 'API' }] });
 	const workspace = f.context.getResolvedWorkspace();
-	assert.deepEqual(
-		workspace.folders.map(folder => folder.name),
-		['first', 'API'],
-	);
+	assert.deepEqual(workspace.folders.map(folder => folder.name), ['first', 'API']);
 	assert.equal(f.requests.length, 1);
-	assert.deepEqual(
-		f.requests[0]!.map(folder => folder.id),
-		workspace.folders.map(folder => folder.id),
-	);
-	const source = parseJsonc(await readFile(workspace.configuration!.fsPath, 'utf8')) as { folders: unknown[] };
+	assert.deepEqual(f.requests[0]!.map(folder => folder.id), workspace.folders.map(folder => folder.id));
+	const source = parseJsonc(await readFile(workspace.configuration!.fsPath, 'utf8')) as { folders: unknown[]; };
 	assert.equal(source.folders.length, 2);
 	const changes: number[] = [];
 	using listener = f.context.onDidChangeWorkspace(event => changes.push(event.resolvedWorkspace.folders.length));
@@ -102,12 +63,7 @@ test('empty edits and duplicate roots preserve the single-folder workspace ident
 	const changes: unknown[] = [];
 	using listener = f.context.onDidChangeWorkspace(event => changes.push(event));
 	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [] });
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: URI.file(f.first).toString() }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.first).toString() }] });
 	assert.equal(f.context.getResolvedWorkspace(), previous);
 	assert.deepEqual(changes, []);
 	assert.deepEqual(f.requests, []);
@@ -120,12 +76,7 @@ test('unchanged folder edits preserve workspace metadata bytes', async () => {
 	await writeFile(config, source);
 	const identifier = getWorkspaceIdentifier(URI.file(config));
 	f.context.updateWorkspace(identifier, await f.manager.resolveWorkspace(identifier));
-	await f.editing.edit({
-		operation: 'folders',
-		index: 0,
-		deleteCount: 1,
-		folders: [{ uri: URI.file(f.first).toString() }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 0, deleteCount: 1, folders: [{ uri: URI.file(f.first).toString() }] });
 	assert.equal(await readFile(config, 'utf8'), source);
 	assert.deepEqual(f.requests, []);
 });
@@ -138,12 +89,7 @@ test('filesystem roots retain a nonempty folder label through editing, IPC and r
 	const resolved = await f.manager.resolveWorkspace(getWorkspaceIdentifier(config));
 	assert.equal(resolved.folders[0]?.name, root);
 	assert.deepEqual(parseWorkspace(serializeWorkspace(resolved)), resolved);
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: URI.file(root).toString() }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(root).toString() }] });
 	const workspace = f.context.getResolvedWorkspace();
 	assert.equal(workspace.folders[1]?.name, root);
 	assert.deepEqual(parseWorkspace(serializeWorkspace(workspace)), workspace);
@@ -159,11 +105,7 @@ test('saving elsewhere rebases roots while retaining JSONC, settings and extensi
 	await f.editing.edit({ operation: 'save', path: target });
 	const saved = await readFile(target, 'utf8');
 	assert.ok(saved.includes('// Keep this comment'));
-	const parsed = parseJsonc(saved) as {
-		folders: { path: string; name: string }[];
-		settings: unknown;
-		extensions: unknown;
-	};
+	const parsed = parseJsonc(saved) as { folders: { path: string; name: string; }[]; settings: unknown; extensions: unknown; };
 	assert.deepEqual(parsed.folders, [{ path: '../first', name: 'Client' }]);
 	assert.deepEqual(parsed.settings, { 'editor.tabSize': 3 });
 	assert.deepEqual(parsed.extensions, { recommendations: ['team.tool'] });
@@ -177,20 +119,9 @@ test('real filesystem aliases deduplicate Unicode roots and survive saving to a 
 	await mkdir(folder);
 	await symlink(folder, alias, process.platform === 'win32' ? 'junction' : 'dir');
 	const original = join(f.root, '团队.code-workspace');
-	await writeFile(
-		original,
-		JSON.stringify({
-			folders: [{ path: '入口', name: 'API' }, { path: '服务 API #🦀', name: 'Duplicate' }, { uri: URI.file(f.second).toString() }],
-		}),
-	);
+	await writeFile(original, JSON.stringify({ folders: [{ path: '入口', name: 'API' }, { path: '服务 API #🦀', name: 'Duplicate' }, { uri: URI.file(f.second).toString() }] }));
 	const resolved = await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(original)));
-	assert.deepEqual(
-		resolved.folders.map(root => [root.uri.fsPath, root.name]),
-		[
-			[await realpath(folder), 'API'],
-			[f.second, 'second'],
-		],
-	);
+	assert.deepEqual(resolved.folders.map(root => [root.uri.fsPath, root.name]), [[await realpath(folder), 'API'], [f.second, 'second']]);
 	f.context.updateWorkspace(getWorkspaceIdentifier(URI.file(original)), resolved);
 	const target = join(f.root, 'saved workspace', '团队.code-workspace');
 	await f.editing.edit({ operation: 'save', path: target });
@@ -205,15 +136,7 @@ test('a rejected directory update leaves both metadata and the window unchanged'
 	const previous = f.context.getResolvedWorkspace();
 	const source = await readFile(previous.configuration!.fsPath, 'utf8');
 	f.reject(new Error('EnvironmentBusy'));
-	await assert.rejects(
-		f.editing.edit({
-			operation: 'folders',
-			index: 1,
-			deleteCount: 0,
-			folders: [{ uri: URI.file(f.second).toString() }],
-		}),
-		/EnvironmentBusy/,
-	);
+	await assert.rejects(f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.second).toString() }] }), /EnvironmentBusy/);
 	assert.equal(f.context.getResolvedWorkspace(), previous);
 	assert.equal(await readFile(previous.configuration!.fsPath, 'utf8'), source);
 });
@@ -224,22 +147,13 @@ test('external atomic replacements synchronize folders and recover after invalid
 	const config = f.context.getResolvedWorkspace().configuration!.fsPath;
 	const changed = new Promise<void>(resolve => {
 		const listener = f.context.onDidChangeWorkspace(event => {
-			if (event.resolvedWorkspace.folders[0]?.name === 'Renamed') {
-				listener.dispose();
-				resolve();
-			}
+			if (event.resolvedWorkspace.folders[0]?.name === 'Renamed') { listener.dispose(); resolve(); }
 		});
 	});
 	await writeFile(config, '{invalid');
 	await new Promise<void>((resolve, reject) => {
 		const deadline = setTimeout(() => reject(new Error('Invalid edit was not observed')), 5000);
-		const poll = setInterval(() => {
-			if (f.errors.length) {
-				clearInterval(poll);
-				clearTimeout(deadline);
-				resolve();
-			}
-		}, 10);
+		const poll = setInterval(() => { if (f.errors.length) { clearInterval(poll); clearTimeout(deadline); resolve(); } }, 10);
 	});
 	assert.equal(f.context.getResolvedWorkspace().folders[0]?.uri.fsPath, f.first);
 	const replacement = join(dirname(config), 'replacement.tmp');
@@ -251,13 +165,7 @@ test('external atomic replacements synchronize folders and recover after invalid
 });
 
 test('workspace edit IPC validates operation bounds and closed request fields', () => {
-	for (const request of [
-		null,
-		{ operation: 'save', path: '' },
-		{ operation: 'save', path: '/work/team.ash-workspace', extra: true },
-		{ operation: 'folders', index: -1, deleteCount: 0, folders: [] },
-		{ operation: 'folders', index: 0, deleteCount: 0, folders: [{ uri: '/work', permissions: ['all'] }] },
-	]) {
+	for (const request of [null, { operation: 'save', path: '' }, { operation: 'save', path: '/work/team.ash-workspace', extra: true }, { operation: 'folders', index: -1, deleteCount: 0, folders: [] }, { operation: 'folders', index: 0, deleteCount: 0, folders: [{ uri: '/work', permissions: ['all'] }] }]) {
 		assert.throws(() => validateWorkspaceEdit(request));
 	}
 });
@@ -267,68 +175,37 @@ test('workspace metadata access is limited to the current file and preserves rev
 	const path = join(f.root, 'team.ash-workspace');
 	await f.editing.edit({ operation: 'save', path });
 	const uri = URI.file(path).toString();
-	const original = (await f.editing.configuration({ operation: 'read', uri })) as {
-		revision: string;
-		content: string;
-	};
+	const original = await f.editing.configuration({ operation: 'read', uri }) as { revision: string; content: string; };
 	assert.ok(original.content.includes('folders'));
 	const sibling = URI.file(join(f.root, 'private.txt')).toString();
 	await writeFile(URI.parse(sibling).fsPath, 'private content');
 	assert.deepEqual(await f.editing.configuration({ operation: 'read', uri: sibling }), { error: 'notCurrent' });
-	await assert.rejects(
-		f.editing.configuration({
-			operation: 'write',
-			uri: sibling,
-			content: 'overwritten',
-			options: { create: false, overwrite: true },
-		}),
-		/Only the current workspace configuration/,
-	);
+	await assert.rejects(f.editing.configuration({ operation: 'write', uri: sibling, content: 'overwritten', options: { create: false, overwrite: true } }), /Only the current workspace configuration/);
 	assert.equal(await readFile(URI.parse(sibling).fsPath, 'utf8'), 'private content');
 	const external = '{"folders":[],"settings":{"external":true}}';
 	await writeFile(path, external);
-	assert.deepEqual(
-		await f.editing.configuration({
-			operation: 'write',
-			uri,
-			content: '{}',
-			options: { create: false, overwrite: true, expectedRevision: original.revision },
-		}),
-		{ error: 'revisionConflict' },
-	);
+	assert.deepEqual(await f.editing.configuration({ operation: 'write', uri, content: '{}', options: { create: false, overwrite: true, expectedRevision: original.revision } }), { error: 'revisionConflict' });
 	assert.equal(await readFile(path, 'utf8'), external);
 });
 
 test('renderer startup can read workspace configuration while window replacement holds queued writes', async () => {
 	let finishOpening!: () => void;
-	const opening = new Promise<void>(resolve => {
-		finishOpening = resolve;
-	});
-	await using f = await fixture(async operation => {
-		await opening;
-		return operation();
-	});
+	const opening = new Promise<void>(resolve => { finishOpening = resolve; });
+	await using f = await fixture(async operation => { await opening; return operation(); });
 	const config = URI.file(join(f.root, 'team.ash-workspace'));
 	const source = JSON.stringify({ folders: [{ path: 'first' }] });
 	const updated = JSON.stringify({ folders: [{ path: 'first' }], settings: { 'editor.tabSize': 3 } });
 	await writeFile(config.fsPath, source);
 	const identifier = getWorkspaceIdentifier(config);
 	f.context.updateWorkspace(identifier, await f.manager.resolveWorkspace(identifier));
-	const write = f.editing.configuration({
-		operation: 'write',
-		uri: config.toString(),
-		content: updated,
-		options: { create: false, overwrite: true },
-	});
+	const write = f.editing.configuration({ operation: 'write', uri: config.toString(), content: updated, options: { create: false, overwrite: true } });
 	const read = f.editing.configuration({ operation: 'read', uri: config.toString() });
 	let deadline: ReturnType<typeof setTimeout> | undefined;
 	try {
-		const result = (await Promise.race([
+		const result = await Promise.race([
 			read,
-			new Promise<never>((_resolve, reject) => {
-				deadline = setTimeout(() => reject(new Error('Renderer startup configuration read waited for window readiness')), 5000);
-			}),
-		])) as { content: string };
+			new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('Renderer startup configuration read waited for window readiness')), 5000); }),
+		]) as { content: string; };
 		assert.equal(result.content, source);
 		assert.equal(await readFile(config.fsPath, 'utf8'), source, 'metadata writes still wait for the window transition');
 	} finally {
@@ -341,17 +218,10 @@ test('renderer startup can read workspace configuration while window replacement
 
 test('metadata conflicts leave live backend directories untouched', async () => {
 	await using f = await fixture();
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: URI.file(f.second).toString() }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.second).toString() }] });
 	const previous = f.context.getResolvedWorkspace();
 	const external = JSON.stringify({ folders: [{ path: f.first }, { path: f.second }], settings: { external: true } });
-	f.beforeValidate(async () => {
-		await writeFile(previous.configuration!.fsPath, external);
-	});
+	f.beforeValidate(async () => { await writeFile(previous.configuration!.fsPath, external); });
 	const calls = f.requests.length;
 	await assert.rejects(f.editing.edit({ operation: 'folders', index: 1, deleteCount: 1, folders: [] }), /revision/i);
 	assert.equal(f.requests.length, calls, 'a failed metadata write must not retire a PTY or directory');
@@ -361,16 +231,9 @@ test('metadata conflicts leave live backend directories untouched', async () => 
 
 test('external removal is vetoed before changing the backend when dirty files remain', async () => {
 	await using f = await fixture();
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: URI.file(f.second).toString() }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.second).toString() }] });
 	const previous = f.context.getResolvedWorkspace();
-	f.beforeValidate(async () => {
-		throw new Error('dirty folder');
-	});
+	f.beforeValidate(async () => { throw new Error('dirty folder'); });
 	const calls = f.requests.length;
 	await writeFile(previous.configuration!.fsPath, JSON.stringify({ folders: [{ path: f.first }] }));
 	const deadline = Date.now() + 5000;
@@ -380,39 +243,23 @@ test('external removal is vetoed before changing the backend when dirty files re
 	assert.equal(f.context.getResolvedWorkspace(), previous);
 });
 
+
 test('Remote root edits preserve one authority and persist URI entries without reading remote paths in Main', async () => {
 	await using f = await fixture();
 	const first = createSshRemoteWorkspaceUri('test-host', '/remote-only/client');
 	const second = createSshRemoteWorkspaceUri('test-host', '/remote-only/server');
 	f.context.updateWorkspace(getSingleFolderWorkspaceIdentifier(first));
-	await f.editing.edit({
-		operation: 'folders',
-		index: 1,
-		deleteCount: 0,
-		folders: [{ uri: second.toString(), name: 'Server' }],
-	});
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: second.toString(), name: 'Server' }] });
 	const current = f.context.getResolvedWorkspace();
 	assert.equal(getWorkspaceRemoteAuthority(current), 'ssh+test-host');
-	assert.deepEqual(
-		f.requests.at(-1)!.map(folder => folder.path),
-		['/remote-only/client', '/remote-only/server'],
-	);
-	const stored = parseJsonc(await readFile(current.configuration!.fsPath, 'utf8')) as {
-		folders: { uri: string }[];
-		remoteAuthority: string;
-	};
-	assert.deepEqual(
-		stored.folders.map(folder => folder.uri),
-		[first.toString(), second.toString()],
-	);
+	assert.deepEqual(f.requests.at(-1)!.map(folder => folder.path), ['/remote-only/client', '/remote-only/server']);
+	const stored = parseJsonc(await readFile(current.configuration!.fsPath, 'utf8')) as { folders: { uri: string; }[]; remoteAuthority: string; };
+	assert.deepEqual(stored.folders.map(folder => folder.uri), [first.toString(), second.toString()]);
 	assert.equal(stored.remoteAuthority, 'ssh+test-host');
 	const target = join(f.root, 'saved.ash-workspace');
 	await f.editing.edit({ operation: 'save', path: target });
 	const reopened = await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(target)));
-	assert.deepEqual(
-		reopened.folders.map(folder => folder.uri.toString()),
-		[first.toString(), second.toString()],
-	);
+	assert.deepEqual(reopened.folders.map(folder => folder.uri.toString()), [first.toString(), second.toString()]);
 	assert.equal(getWorkspaceRemoteAuthority(reopened), 'ssh+test-host');
 	await f.editing.edit({ operation: 'folders', index: 0, deleteCount: 2, folders: [] });
 	assert.equal(getWorkspaceRemoteAuthority(f.context.getResolvedWorkspace()), 'ssh+test-host');
@@ -436,20 +283,8 @@ test('Remote root edits reject local and foreign authorities and roll back a bac
 	assert.equal(await readFile(current.configuration!.fsPath, 'utf8'), original);
 });
 
+
 test('Desktop metadata resolution rejects browser profile URIs before filesystem access', async () => {
-	const manager = new WorkspacesManagementMainService({
-		resolvePath: async () => {
-			throw new Error('Unexpected local path access');
-		},
-		readFile: async () => {
-			throw new Error('Unexpected local file read');
-		},
-	});
-	await assert.rejects(
-		manager.resolveWorkspace({
-			id: 'browser',
-			configPath: URI.from({ scheme: 'ash-userdata', path: '/workspaces/temporary/workspace.ash-workspace' }),
-		}),
-		/local file/,
-	);
+	const manager = new WorkspacesManagementMainService({ resolvePath: async () => { throw new Error('Unexpected local path access'); }, readFile: async () => { throw new Error('Unexpected local file read'); } });
+	await assert.rejects(manager.resolveWorkspace({ id: 'browser', configPath: URI.from({ scheme: 'ash-userdata', path: '/workspaces/temporary/workspace.ash-workspace' }) }), /local file/);
 });

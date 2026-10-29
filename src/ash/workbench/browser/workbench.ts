@@ -77,7 +77,12 @@ import { getWindow } from '../../base/browser/dom.js';
 import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
-import { type IDisposable, Disposable, DisposableStore, toDisposable } from '../../base/common/lifecycle.js';
+import {
+	type IDisposable,
+	Disposable,
+	DisposableStore,
+	toDisposable,
+} from '../../base/common/lifecycle.js';
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
@@ -107,7 +112,9 @@ import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServer
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../platform/remote/common/remoteConnectionService.js';
 import { UnavailableRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
-import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
+import type {
+	INativeHostApi,
+} from '../../platform/native/common/nativeHost.js';
 import { MenuId } from '../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../platform/storage/common/storage.js';
@@ -128,27 +135,49 @@ import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import type { IKeyboardLayoutProvider } from '../../platform/keyboardLayout/common/keyboardLayout.js';
-import { BrowserDialogHandler } from './parts/dialogs/dialog.js';
-import { IDialogService, IFileDialogService, type IDialogHandler } from '../../platform/dialogs/common/dialogs.js';
-import { AgentHostFileSystemProvider } from '../../platform/agentHost/common/agentHostFileSystemProvider.js';
+import {
+	BrowserDialogHandler,
+} from './parts/dialogs/dialog.js';
+import {
+	IDialogService,
+	IFileDialogService,
+	type IDialogHandler,
+} from '../../platform/dialogs/common/dialogs.js';
+import {
+	AgentHostFileSystemProvider,
+} from '../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../services/agentHost/common/agentHostFileSystemService.js';
 import { FileService } from '../../platform/files/common/fileService.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
-import { IFileService } from '../../platform/files/common/files.js';
+import {
+	IFileService,
+} from '../../platform/files/common/files.js';
 import { DecorationsService } from '../services/decorations/browser/decorationsService.js';
 import { IDecorationsService } from '../services/decorations/common/decorations.js';
-import { IThemeService } from '../../platform/theme/common/themeService.js';
+import {
+	IThemeService,
+} from '../../platform/theme/common/themeService.js';
 import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from '../../platform/workspace/common/workspace.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
-import { type WorkbenchContributionHost, WorkbenchContributionsRegistry, WorkbenchPhase } from '../common/contributions.js';
-import { IDialogsModel, IWorkbenchDialogHandler } from '../common/dialogs.js';
+import {
+	type WorkbenchContributionHost,
+	WorkbenchContributionsRegistry,
+	WorkbenchPhase,
+} from '../common/contributions.js';
+import {
+	IDialogsModel,
+	IWorkbenchDialogHandler,
+} from '../common/dialogs.js';
 import { INativeHostService } from '../common/services.js';
 import { FileDialogService } from '../services/dialogs/electron-browser/fileDialogService.js';
 import { FileDialogService as BrowserFileDialogService } from '../services/dialogs/browser/fileDialogService.js';
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from '../common/userThemes.js';
-import { ViewContainerLocation, type IView } from '../common/views.js';
+import {
+	ViewContainerLocation,
+	type IView,
+} from '../common/views.js';
 import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { IHostService } from '../services/host/browser/host.js';
@@ -159,7 +188,9 @@ import { ViewDescriptorService } from '../services/views/browser/viewDescriptorS
 import { ViewDragAndDropController } from './dnd.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 import { ViewsService } from '../services/views/browser/viewsService.js';
-import { WorkspaceService } from '../services/configuration/browser/configurationService.js';
+import {
+	WorkspaceService,
+} from '../services/configuration/browser/configurationService.js';
 import type { DialogService } from '../services/dialogs/common/dialogService.js';
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from '../services/themes/browser/workbenchThemeService.js';
@@ -189,7 +220,9 @@ import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart, StatusbarService } from './parts/statusbar/statusbarPart.js';
 import { BannerPart } from './parts/banner/bannerPart.js';
 import { IBannerService } from '../services/banner/browser/bannerService.js';
-import { type BrowserTitleService } from './parts/titlebar/titlebarPart.js';
+import {
+	type BrowserTitleService,
+} from './parts/titlebar/titlebarPart.js';
 import { PaneCompositePartService } from './parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../services/panecomposite/browser/panecomposite.js';
 import { WorkbenchWindow } from './window.js';
@@ -328,7 +361,7 @@ export interface IStartWorkbenchOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
-	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
+	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
 	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly initialConfiguration?: IConfigurationModel;
@@ -386,20 +419,16 @@ export async function startWorkbench({
 	const wasInert = container.inert;
 	container.inert = true;
 	performance.mark('ash.workbench.themes-start');
-	const themesReady = themes.start().then(() => {
-		performance.mark('ash.workbench.themes-ready');
-	});
+	const themesReady = themes.start().then(() => { performance.mark('ash.workbench.themes-ready'); });
 	// Startup owns the eventual failure; storage awaits must not leave an early
 	// theme rejection unobserved before the Workbench can take ownership.
 	void themesReady.catch(() => undefined);
 	let workbench: Workbench | undefined;
 	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
-	let userDataFiles: (IFileSystemProvider & IDisposable) | undefined;
+	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
 	try {
 		const ownerWindow = container.ownerDocument.defaultView;
-		if (!ownerWindow) {
-			throw new Error('Workbench requires an owner window');
-		}
+		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
 		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
 		userDataFiles = await createUserDataFileSystemProvider();
 		{
@@ -470,12 +499,14 @@ export async function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends Disposable {
-	public readonly window: { createTerminal(options: IEmbedderTerminalOptions): Promise<void> };
+	public readonly window: {
+		createTerminal(options: IEmbedderTerminalOptions): Promise<void>;
+	};
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceService;
 	private readonly configurationService: IConfigurationService;
-	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void> };
+	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void>; };
 	private readonly editor: IEditorPartsService;
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
@@ -489,7 +520,7 @@ export class Workbench extends Disposable {
 	private readonly ownerWindow: Window;
 	private restoreActiveViewContainers: (() => Promise<void>) | undefined;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
-	private previousUnexpectedError: { message: string | undefined; time: number } = { message: undefined, time: 0 };
+	private previousUnexpectedError: { message: string | undefined; time: number; } = { message: undefined, time: 0 };
 
 	constructor(
 		productName: string,
@@ -516,7 +547,7 @@ export class Workbench extends Disposable {
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
 		themesReady: Promise<void>,
-		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
+		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
 		logger: LogService,
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
@@ -535,65 +566,40 @@ export class Workbench extends Disposable {
 			serviceCollection.set(IClipboardService, clipboardService);
 		}
 		if (!nativeHostApi && !serviceCollection.has(IHostService)) {
-			serviceCollection.set(
-				IHostService,
-				new SyncDescriptor(
-					BrowserHostService,
-					[
-						{
-							workspaceProvider: browserFileSystemProvider
-								? {
-										kind: 'local',
-										provider: browserFileSystemProvider,
-										updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
-											services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
-											await this.updateWorkspace(next, preserveEditors);
-										},
-									}
-								: webWorkspaceClient
-									? {
-											kind: 'server',
-											client: webWorkspaceClient,
-											validateFolders: (folders: readonly URI[]) => services.get(IWorkspaceEditingService).validateFolders(folders),
-											updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
-												services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
-												try {
-													await this.updateWorkspace(next, preserveEditors);
-												} catch (error) {
-													const current = this.workspaceContext.getWorkspace();
-													if (
-														current.id === next.id &&
-														current.configuration?.toString() === next.configuration?.toString() &&
-														current.folders.length === next.folders.length &&
-														current.folders.every((folder, index) => folder.id === next.folders[index]!.id && folder.uri.toString() === next.folders[index]!.uri.toString())
-													) {
-														throw new WorkspaceTransitionCommittedError(
-															localize('workspace.committedRecovery', 'The workspace changed. Some window state still needs to be restored.'),
-															error,
-														);
-													}
-													throw error;
-												}
-											},
-											prepareSwitch: async () => {
-												await this.workingCopyBackupTracker.flush();
-												if (!(await this.editor.closeAllEditors({ reason: 'reset' }))) return false;
-												await this.workingCopyBackupTracker.flush();
-												await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
-												return true;
-											},
-										}
-									: undefined,
-						},
-					],
-					true,
-				),
-			);
+			serviceCollection.set(IHostService, new SyncDescriptor(BrowserHostService, [{
+				workspaceProvider: browserFileSystemProvider ? {
+					kind: 'local', provider: browserFileSystemProvider, updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
+						services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
+						await this.updateWorkspace(next, preserveEditors);
+					},
+				} : webWorkspaceClient ? {
+					kind: 'server', client: webWorkspaceClient,
+					validateFolders: (folders: readonly URI[]) => services.get(IWorkspaceEditingService).validateFolders(folders),
+					updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
+						services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
+						try { await this.updateWorkspace(next, preserveEditors); }
+						catch (error) {
+							const current = this.workspaceContext.getWorkspace();
+							if (current.id === next.id && current.configuration?.toString() === next.configuration?.toString()
+								&& current.folders.length === next.folders.length
+								&& current.folders.every((folder, index) => folder.id === next.folders[index]!.id && folder.uri.toString() === next.folders[index]!.uri.toString())) {
+								throw new WorkspaceTransitionCommittedError(localize('workspace.committedRecovery', 'The workspace changed. Some window state still needs to be restored.'), error);
+							}
+							throw error;
+						}
+					},
+					prepareSwitch: async () => {
+						await this.workingCopyBackupTracker.flush();
+						if (!await this.editor.closeAllEditors({ reason: 'reset' })) return false;
+						await this.workingCopyBackupTracker.flush();
+						await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+						return true;
+					},
+				} : undefined,
+			}], true));
 		}
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			if (!serviceCollection.has(id)) {
-				serviceCollection.set(id, descriptor);
-			}
+			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
@@ -641,7 +647,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IConfigurationService, configuration);
 		this.workspaceContext = workspaceContext;
 		services.registerInstance(IWorkspaceContextService, workspaceContext);
-		const lifecycleService = (this.lifecycleService = this._register(createLifecycleService(services)));
+		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
 
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
@@ -649,10 +655,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAgentVoiceService, api.agentVoice);
 		const localTranscription = api.localTranscription ?? this._register(new NullLocalTranscriptionService());
 		services.registerInstance(ILocalTranscriptionService, localTranscription);
-		services.registerInstance(
-			ILocalTranscriptionModelService,
-			api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())),
-		);
+		services.registerInstance(ILocalTranscriptionModelService, api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IAgentToolsApi, api.agentTools);
 		services.registerInstance(IMcpServerStatusService, api.mcpServerStatus);
@@ -674,22 +677,12 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAssetService, api.assets);
 		services.registerInstance(IProjectService, api.projects);
 		services.registerInstance(ITestExecutionService, api.testing);
-		if (api.approvalEnvironment) {
-			services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment);
-		}
-		if (api.memories) {
-			services.registerInstance(IMemoriesService, api.memories);
-		}
-		if (api.memoryDiagnostics) {
-			services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics);
-		}
+		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
+		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
+		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.channels) services.registerInstance(IChannelService, api.channels);
-		if (api.calls) {
-			services.registerInstance(ICallService, api.calls);
-		}
-		if (!services.has(IBrowserPasswordService)) {
-			services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
-		}
+		if (api.calls) { services.registerInstance(ICallService, api.calls); }
+		if (!services.has(IBrowserPasswordService)) { services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService); }
 		services.registerInstance(AppServerApiId, api.appServer);
 		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));
 		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);
@@ -703,41 +696,22 @@ export class Workbench extends Disposable {
 		}
 		if (browserFileSystemProvider) this._register(browserFileSystemProvider);
 		if (browserFileSystemProvider) {
-			services.registerInstance(
-				IFileDialogService,
-				services.createInstance(
-					BrowserFileDialogService,
-					{
-						kind: 'local',
-						provider: browserFileSystemProvider,
-						pickDirectory: (startIn: FileSystemDirectoryHandle | undefined) =>
-							(
-								window as unknown as {
-									showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>;
-								}
-							).showDirectoryPicker(startIn ? { startIn } : undefined),
-						quickInput: () => services.get(IQuickInputService),
-						fileService: () => services.get(IFileService),
-						workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
-					},
-					() => services.get(IDialogService),
-				),
-			);
+			services.registerInstance(IFileDialogService, services.createInstance(BrowserFileDialogService, {
+				kind: 'local',
+				provider: browserFileSystemProvider,
+				pickDirectory: (startIn: FileSystemDirectoryHandle | undefined) => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined),
+				quickInput: () => services.get(IQuickInputService),
+				fileService: () => services.get(IFileService),
+				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+			}, () => services.get(IDialogService)));
 		} else if (webWorkspaceClient) {
-			services.registerInstance(
-				IFileDialogService,
-				services.createInstance(
-					BrowserFileDialogService,
-					{
-						kind: 'server',
-						client: webWorkspaceClient,
-						quickInput: () => services.get(IQuickInputService),
-						fileService: () => services.get(IFileService),
-						workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
-					},
-					() => services.get(IDialogService),
-				),
-			);
+			services.registerInstance(IFileDialogService, services.createInstance(BrowserFileDialogService, {
+				kind: 'server',
+				client: webWorkspaceClient,
+				quickInput: () => services.get(IQuickInputService),
+				fileService: () => services.get(IFileService),
+				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+			}, () => services.get(IDialogService)));
 		}
 		const labelService = services.get(ILabelService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
@@ -758,13 +732,10 @@ export class Workbench extends Disposable {
 				});
 				subscriptions.add(toDisposable(() => subscription.dispose()));
 				const recovery = api.appServer.recovery;
-				if (recovery)
-					subscriptions.add(
-						recovery.onDidChange(() => {
-							// Directory authorization can recover without replacing the file connection.
-							if (recovery.status === 'idle') listener({ type: 'rescanRequired' });
-						}),
-					);
+				if (recovery) subscriptions.add(recovery.onDidChange(() => {
+					// Directory authorization can recover without replacing the file connection.
+					if (recovery.status === 'idle') listener({ type: 'rescanRequired' });
+				}));
 				return subscriptions;
 			},
 		});
@@ -795,42 +766,30 @@ export class Workbench extends Disposable {
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
-		services.registerSingleton(
-			IModelService,
-			() => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService),
-		);
+		services.registerSingleton(IModelService, () => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService));
 		// Markdown and opener services receive this before EditorParts exists;
 		// defer construction until an editor operation needs the completed Parts.
-		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), {
-			instantiation: InstantiationType.Delayed,
-		});
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), { instantiation: InstantiationType.Delayed });
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
 		this._register(new TreeSitterSyntaxProviders(languageFeaturesService));
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
-		const textModelService = this._register(
-			getBrowserTextModelService(textResourceStore, services, {
-				languageService,
-				languageConfigurationService,
-				languageFeaturesService,
-				createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, treeSitterLibrary, themeService),
-				onDidChangeSyntaxBackend: Event.any(
-					treeSitterLibrary.onDidChange,
-					// Models subscribe after the window's theme service has been initialized.
-					(listener, thisArgs, disposables) => themeService.onDidColorThemeChange(() => listener.call(thisArgs, undefined), undefined, disposables),
-					(listener, thisArgs, disposables) =>
-						configuration.onDidChangeConfiguration(
-							event => {
-								if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
-							},
-							undefined,
-							disposables,
-						),
-				),
-			}),
-		);
+		const textModelService = this._register(getBrowserTextModelService(textResourceStore, services, {
+			languageService,
+			languageConfigurationService,
+			languageFeaturesService,
+			createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, treeSitterLibrary, themeService),
+			onDidChangeSyntaxBackend: Event.any(
+				treeSitterLibrary.onDidChange,
+				// Models subscribe after the window's theme service has been initialized.
+				(listener, thisArgs, disposables) => themeService.onDidColorThemeChange(() => listener.call(thisArgs, undefined), undefined, disposables),
+				(listener, thisArgs, disposables) => configuration.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
+				}, undefined, disposables),
+			),
+		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
 		services.registerInstance(IFileTextModelService, textModelService);
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
@@ -855,20 +814,16 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(
-			services.createInstance(AppServerExtensionService, {
-				api: enabledExtensions,
-				eventApi: api.events,
-				languageService,
-				languageConfigurationService,
-			}),
-		);
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
 		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
-		services.registerInstance(IContentSearchService, api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService));
+		services.registerInstance(
+			IContentSearchService,
+			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService),
+		);
 		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerInstance(ITerminalProcessService, api.terminal);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
@@ -883,13 +838,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IInstructionService, api.instructions);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
-		const workbenchWindow = this._register(
-			new WorkbenchWindow({
-				root: workbenchRoot,
-				workbenchState,
-				editUserConfiguration: api.editUserConfiguration,
-			}),
-		);
+		const workbenchWindow = this._register(new WorkbenchWindow({
+			root: workbenchRoot,
+			workbenchState,
+			editUserConfiguration: api.editUserConfiguration,
+		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 
@@ -909,23 +862,13 @@ export class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
-		services.registerSingleton(IProgressService, () => services.createInstance(ProgressService), {
-			instantiation: InstantiationType.Delayed,
-		});
+		services.registerSingleton(IProgressService, () => services.createInstance(ProgressService), { instantiation: InstantiationType.Delayed });
 		if (!services.has(IClipboardService)) {
-			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), {
-				instantiation: InstantiationType.Delayed,
-			});
+			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		}
-		const workingCopyBackupTracker = this._register(
-			new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource => textModelService.hasPendingSaveRecovery(resource)),
-		);
+		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource => textModelService.hasPendingSaveRecovery(resource)));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
-		this._register(
-			textModelService.addSaveCompletionParticipant({
-				prepare: (model, signal, recovery) => workingCopyBackupTracker.prepareSave(model, signal, recovery),
-			}),
-		);
+		this._register(textModelService.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => workingCopyBackupTracker.prepareSave(model, signal, recovery) }));
 		if (!nativeHostApi) {
 			const onBeforeUnload = (event: BeforeUnloadEvent) => {
 				if (!textModelService.hasPendingSaveRecovery()) return;
@@ -939,26 +882,20 @@ export class Workbench extends Disposable {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
-		if (nativeHostApi && !createHostColorSchemeService) {
-			throw new Error('Desktop Workbench requires its system appearance service');
-		}
+		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
 		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
 		themeService.initialize();
-		const auxiliaryWindows = this._register(
-			createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot),
-		);
+		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
-		const layoutService = this._register(
-			services.createInstance(WorkbenchLayout, workbenchRoot, {
-				workbenchState,
-				defaultLayout,
-				focus: () => this.editor.focus(),
-			}),
-		);
+		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
+			workbenchState,
+			defaultLayout,
+			focus: () => this.editor.focus(),
+		}));
 		this.workbenchLayout = layoutService;
 		services.registerInstance(IWorkbenchLayoutService, layoutService);
 		services.registerInstance(IAgentModelsService, api.model);
@@ -982,69 +919,42 @@ export class Workbench extends Disposable {
 				logService.warn('editor', 'Discarded invalid saved font information', error);
 			}
 		}
-		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value));
+		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
+			configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
+		));
 		const saveFontInfo = (): void => {
 			const entries = FontMeasurements.serializeFontInfo(ownerWindow);
 			if (entries !== undefined) {
 				storage.store('editorFontInfo', JSON.stringify(entries), StorageScope.APPLICATION, StorageTarget.MACHINE);
 			}
 		};
-		this._register(
-			storage.onWillSaveState(() => {
-				if (!lifecycleService.willShutdown) saveFontInfo();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				if (!lifecycleService.willShutdown) saveFontInfo();
-			}),
-		);
-		this._register(
-			lifecycleService.onBeforeShutdown(event => {
-				// Page teardown clears font caches before async shutdown joins complete.
-				saveFontInfo();
-				event.veto(
-					textModelService.waitForSaveRecovery().then(() => false),
-					'text save recovery',
-				);
-				if (event.reason === 'load')
-					event.veto(
-						editorParts.confirmCloseAllEditors().then(confirmed => !confirmed),
-						'workspace editor changes',
-					);
-				event.veto(
-					workingCopyBackupTracker.flush().then(() => false),
-					'working-copy backup flush',
-				);
-			}),
-		);
-		this._register(
-			lifecycleService.onBeforeShutdownError(event => {
-				// pagehide forcibly disposes even before final joins; keep the previous valid backup through editor teardown.
-				if (event.reason === 'pageHide') workingCopyBackupTracker.completeShutdown();
-			}),
-		);
-		this._register(
-			lifecycleService.onWillShutdown(event => {
-				// UI state is best effort; unsaved content has its own required backup join below.
-				event.join(
-					storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)),
-					'Workbench storage flush',
-				);
-				event.join(
-					() => workingCopyBackupTracker.shutdown(),
-					'Working-copy backup drain',
-					() => workingCopyBackupTracker.isShutdownCurrent,
-				);
-			}),
-		);
+		this._register(storage.onWillSaveState(() => {
+			if (!lifecycleService.willShutdown) saveFontInfo();
+		}));
+		this._register(toDisposable(() => {
+			if (!lifecycleService.willShutdown) saveFontInfo();
+		}));
+		this._register(lifecycleService.onBeforeShutdown(event => {
+			// Page teardown clears font caches before async shutdown joins complete.
+			saveFontInfo();
+			event.veto(textModelService.waitForSaveRecovery().then(() => false), 'text save recovery');
+			if (event.reason === 'load') event.veto(editorParts.confirmCloseAllEditors().then(confirmed => !confirmed), 'workspace editor changes');
+			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
+		}));
+		this._register(lifecycleService.onBeforeShutdownError(event => {
+			// pagehide forcibly disposes even before final joins; keep the previous valid backup through editor teardown.
+			if (event.reason === 'pageHide') workingCopyBackupTracker.completeShutdown();
+		}));
+		this._register(lifecycleService.onWillShutdown(event => {
+			// UI state is best effort; unsaved content has its own required backup join below.
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)), 'Workbench storage flush');
+			event.join(() => workingCopyBackupTracker.shutdown(), 'Working-copy backup drain', () => workingCopyBackupTracker.isShutdownCurrent);
+		}));
 		this._register(lifecycleService.onDidShutdown(() => workingCopyBackupTracker.completeShutdown()));
-		this._register(
-			lifecycleService.onDidShutdownError(reason => {
-				// pagehide hosts dispose even on failure; resuming there would race a closing database.
-				if (reason !== 'pageHide') workingCopyBackupTracker.cancelShutdown();
-			}),
-		);
+		this._register(lifecycleService.onDidShutdownError(reason => {
+			// pagehide hosts dispose even on failure; resuming there would race a closing database.
+			if (reason !== 'pageHide') workingCopyBackupTracker.cancelShutdown();
+		}));
 		const outputService = services.get(IOutputService);
 		services.get(IDefaultLogLevelsService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files));
@@ -1054,7 +964,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
-		services.registerInstance(IWorkbenchDialogHandler, dialogHandler ?? new BrowserDialogHandler(workbenchRoot));
+		services.registerInstance(
+			IWorkbenchDialogHandler,
+			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
+		);
 		services.registerSingleton(IOpenerService, () => {
 			const openerService = services.createInstance(OpenerService);
 			if (nativeHostApi) {
@@ -1066,28 +979,22 @@ export class Workbench extends Disposable {
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
-		const keyboardLayoutService = this._register(
-			new BrowserKeyboardLayoutService({
-				navigator: ownerWindow.navigator,
-				configurationService: configuration,
-				layoutProvider: keyboardLayoutProvider,
-				userLayoutProvider: userKeyboardLayoutService,
-			}),
-		);
+		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
+			navigator: ownerWindow.navigator,
+			configurationService: configuration,
+			layoutProvider: keyboardLayoutProvider,
+			userLayoutProvider: userKeyboardLayoutService,
+		}));
 		services.registerInstance(IKeyboardLayoutService, keyboardLayoutService);
-		const keybindings = this._register(
-			services.createInstance(WorkbenchKeybindingService, {
-				ownerDocument: workbenchRoot.ownerDocument,
-				commandService,
-				contextKeyService: contextKeys,
-				keyboardLayoutService,
-				statusbarService,
-			}),
-		);
+		const keybindings = this._register(services.createInstance(WorkbenchKeybindingService, {
+			ownerDocument: workbenchRoot.ownerDocument,
+			commandService,
+			contextKeyService: contextKeys,
+			keyboardLayoutService,
+			statusbarService,
+		}));
 		services.registerInstance(IKeybindingService, keybindings);
-		const keybindingsReady = keybindings.initialize().catch(error => {
-			notificationService.warn(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)));
-		});
+		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warn(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))); });
 		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
 		const menus = new MenuService(commandService, contextKeys);
 		services.registerInstance(IMenuService, menus);
@@ -1106,29 +1013,21 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPolicyService, policies);
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
-		serviceContributionReady.push(
-			Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
-				languageLifecycle?.start();
-				languageProviders?.start();
-				languageDiagnosticsService?.start();
-			}),
-		);
-		const accessibilityService = this._register(
-			nativeHostApi
-				? services.createInstance(NativeAccessibilityService, workbenchRoot)
-				: new AccessibilityService({
-						root: workbenchRoot,
-						contextKeyService: contextKeys,
-						configurationService: configuration,
-					}),
-		);
+		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
+			languageLifecycle?.start();
+			languageProviders?.start();
+			languageDiagnosticsService?.start();
+		}));
+		const accessibilityService = this._register(nativeHostApi
+			? services.createInstance(NativeAccessibilityService, workbenchRoot)
+			: new AccessibilityService({
+				root: workbenchRoot,
+				contextKeyService: contextKeys,
+				configurationService: configuration,
+			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
 		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
-		const notificationsCenter = this._register(
-			services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () =>
-				services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications),
-			),
-		);
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewContainerLocationsKey = 'workbench.viewContainerLocations';
@@ -1136,117 +1035,97 @@ export class Workbench extends Disposable {
 			const saved = storage.get(viewContainerLocationsKey, StorageScope.PROFILE);
 			if (saved === undefined) return {};
 			const parsed: unknown = JSON.parse(saved);
-			if (
-				!parsed ||
-				typeof parsed !== 'object' ||
-				Array.isArray(parsed) ||
-				Object.entries(parsed).some(([id, location]) => !id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation))
-			) {
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.entries(parsed).some(([id, location]) => !id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation))) {
 				throw new TypeError(localize('workbench.invalidViewContainerLocations', 'Saved view container locations are invalid.'));
 			}
 			return parsed as Record<string, ViewContainerLocation>;
 		};
-		const viewDescriptors = this._register(
-			services.createInstance(ViewDescriptorService, {
-				viewConstructors,
-				viewContainerLocations: readViewContainerLocations(),
-			}),
-		);
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewConstructors, viewContainerLocations: readViewContainerLocations() }));
 		let restoringViewContainerLocations = false;
-		this._register(
-			viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
-				if (restoringViewContainerLocations) return;
-				const saved = readViewContainerLocations();
-				if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer)) delete saved[viewContainer.id];
-				else saved[viewContainer.id] = to;
-				storage.store(viewContainerLocationsKey, JSON.stringify(saved), StorageScope.PROFILE, StorageTarget.USER);
-			}),
-		);
-		this._register(
-			storage.onDidChangeValue(event => {
-				if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey) return;
-				const saved = readViewContainerLocations();
-				restoringViewContainerLocations = true;
-				try {
-					for (const container of viewDescriptors.viewContainers) {
-						viewDescriptors.moveViewContainerToLocation(container, saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!);
-					}
-				} finally {
-					restoringViewContainerLocations = false;
+		this._register(viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
+			if (restoringViewContainerLocations) return;
+			const saved = readViewContainerLocations();
+			if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer)) delete saved[viewContainer.id];
+			else saved[viewContainer.id] = to;
+			storage.store(viewContainerLocationsKey, JSON.stringify(saved), StorageScope.PROFILE, StorageTarget.USER);
+		}));
+		this._register(storage.onDidChangeValue(event => {
+			if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey) return;
+			const saved = readViewContainerLocations();
+			restoringViewContainerLocations = true;
+			try {
+				for (const container of viewDescriptors.viewContainers) {
+					viewDescriptors.moveViewContainerToLocation(container, saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!);
 				}
-			}),
-		);
+			} finally {
+				restoringViewContainerLocations = false;
+			}
+		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
-		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds));
+		const contributions = this._register(
+			WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds),
+		);
 		this.contributions = contributions;
 
-		const sidebar = this._register(
-			services.createInstance(SidebarPart, workbenchRoot, {
-				openComposite: (id: string, preserveFocus?: boolean) =>
-					services.invokeFunction(accessor => {
-						const panes = accessor.get(IPaneCompositePartService);
-						if (panes.getActivePaneComposite(ViewContainerLocation.Sidebar)?.getId() === id) {
-							panes.hideActivePaneComposite(ViewContainerLocation.Sidebar);
-							return Promise.resolve(null);
-						}
-						return accessor.get(IViewsService).openViewContainer(id, !preserveFocus);
-					}),
-				activityHoverOptions: {
-					// Read at display time so a pending hover follows the current host placement.
-					position: () =>
-						getActivityHoverPosition(
-							configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation),
-							configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation),
-						),
-				},
-				viewDescriptorService: viewDescriptors,
-				compositeBarContextMenuProvider: contextMenus,
-				contextKeyService: contextKeys,
-				localizationService,
-				ariaLabelKey: { bundle: 'ash.regions', key: 'primarySidebar' },
-				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'primarySidebarViews' },
-				titleActions: {
-					menuService: menus,
-					contextMenuProvider: contextMenus,
-					menuId: MenuId.SidebarTitle,
-					primaryGroup: 'navigation',
-				},
+		const sidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
+			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => {
+				const panes = accessor.get(IPaneCompositePartService);
+				if (panes.getActivePaneComposite(ViewContainerLocation.Sidebar)?.getId() === id) {
+					panes.hideActivePaneComposite(ViewContainerLocation.Sidebar);
+					return Promise.resolve(null);
+				}
+				return accessor.get(IViewsService).openViewContainer(id, !preserveFocus);
 			}),
-		);
+			activityHoverOptions: {
+				// Read at display time so a pending hover follows the current host placement.
+				position: () => getActivityHoverPosition(
+					configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation),
+					configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation),
+				),
+			},
+			viewDescriptorService: viewDescriptors,
+			compositeBarContextMenuProvider: contextMenus,
+			contextKeyService: contextKeys,
+			localizationService,
+			ariaLabelKey: { bundle: 'ash.regions', key: 'primarySidebar' },
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'primarySidebarViews' },
+			titleActions: {
+				menuService: menus,
+				contextMenuProvider: contextMenus,
+				menuId: MenuId.SidebarTitle,
+				primaryGroup: 'navigation',
+			},
+		}));
 		const globalCompositeBar = this._register(services.createInstance(GlobalCompositeBar, workbenchRoot));
 		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
 		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
-		const agentSidebar = this._register(
-			services.createInstance(SidebarPart, workbenchRoot, {
-				openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-				viewDescriptorService: viewDescriptors,
-				contextKeyService: contextKeys,
-				localizationService,
-				id: 'agentSidebar',
-				location: ViewContainerLocation.AgentSidebar,
-				ariaLabel: 'Agent sidebar',
-				ariaLabelKey: { bundle: 'ash.regions', key: 'agentSidebar' },
-				viewsAriaLabel: 'Agent sidebar views',
-				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'agentSidebarViews' },
-				compositeBarContainerFilter: () => false,
-				titleActions: {
-					menuService: menus,
-					contextMenuProvider: contextMenus,
-					menuId: MenuId.AgentSidebarTitle,
-				},
-			}),
-		);
+		const agentSidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
+			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
+			localizationService,
+			id: 'agentSidebar',
+			location: ViewContainerLocation.AgentSidebar,
+			ariaLabel: 'Agent sidebar',
+			ariaLabelKey: { bundle: 'ash.regions', key: 'agentSidebar' },
+			viewsAriaLabel: 'Agent sidebar views',
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'agentSidebarViews' },
+			compositeBarContainerFilter: () => false,
+			titleActions: {
+				menuService: menus,
+				contextMenuProvider: contextMenus,
+				menuId: MenuId.AgentSidebarTitle,
+			},
+		}));
 		const breadcrumbsService = new BreadcrumbsService();
 		services.registerInstance(IBreadcrumbsService, breadcrumbsService);
 		const editorOptions: IEditorPartOptions = {
 			beforeCloseEditor: async resource => {
-				try {
-					await textModelService.waitForSaveRecovery(resource);
-					return true;
-				} catch (error) {
+				try { await textModelService.waitForSaveRecovery(resource); return true; }
+				catch (error) {
 					await services.createInstance(TextFileSaveErrorHandler).onSaveError(error, resource);
 					return false;
 				}
@@ -1274,10 +1153,9 @@ export class Workbench extends Disposable {
 			dialogService,
 			fileDialogService: services.getOptional(IFileDialogService),
 			bulkEditService,
-			saveAsResource:
-				nativeHostApi || browserFileSystemProvider || (webWorkspaceClient && workspace.folders.length > 0)
-					? defaultName => services.get(IFileDialogService).pickFileToSave(URI.file(`/${defaultName}`))
-					: undefined,
+			saveAsResource: nativeHostApi || browserFileSystemProvider || webWorkspaceClient && workspace.folders.length > 0
+				? defaultName => services.get(IFileDialogService).pickFileToSave(URI.file(`/${defaultName}`))
+				: undefined,
 			titleActions: {
 				menuService: menus,
 				contextMenuProvider: contextMenus,
@@ -1292,45 +1170,34 @@ export class Workbench extends Disposable {
 		};
 		const editor = this._register(instantiationService.createInstance(EditorPart, workbenchRoot, editorOptions));
 		if (nativeHostApi) {
-			this._register(
-				editor.onDidChangeModalVisibility(visible => {
-					void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
-				}),
-			);
+			this._register(editor.onDidChangeModalVisibility(visible => {
+				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
+			}));
 		}
-		const editorParts = this._register(
-			services.createInstance(
-				EditorParts,
-				editor,
-				auxiliaryWindows,
-				(container: HTMLElement) => {
-					const resources = new DisposableStore();
-					let part: EditorPart | undefined;
-					try {
-						const contextKeyService = resources.add(contextKeys.createScoped(container));
-						const editorPart = (part = instantiationService.createInstance(EditorPart, container, {
-							...editorOptions,
-							contextKeyService,
-						}));
-						const windowServices = resources.add(services.createChild());
-						windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editorPart));
-						windowServices.registerInstance(IContextKeyService, contextKeyService);
-						const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, editorPart, windowServices);
-						return {
-							part: editorPart,
-							titlebar,
-							resources: [resources],
-						};
-					} catch (error) {
-						part?.dispose();
-						resources.dispose();
-						throw error;
-					}
-				},
-				accessibilityService,
-				storage,
-			),
-		);
+		const editorParts = this._register(services.createInstance(EditorParts, editor, auxiliaryWindows, (container: HTMLElement) => {
+			const resources = new DisposableStore();
+			let part: EditorPart | undefined;
+			try {
+				const contextKeyService = resources.add(contextKeys.createScoped(container));
+				const editorPart = part = instantiationService.createInstance(EditorPart, container, {
+					...editorOptions,
+					contextKeyService,
+				});
+				const windowServices = resources.add(services.createChild());
+				windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editorPart));
+				windowServices.registerInstance(IContextKeyService, contextKeyService);
+				const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, editorPart, windowServices);
+				return {
+					part: editorPart,
+					titlebar,
+					resources: [resources],
+				};
+			} catch (error) {
+				part?.dispose();
+				resources.dispose();
+				throw error;
+			}
+		}, accessibilityService, storage));
 		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		services.registerInstance(IEditorPart, editorParts);
@@ -1340,12 +1207,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
-		if (createTextDocumentHost) {
-			this._register(createTextDocumentHost(services));
-		}
-		if (createBrowserHost) {
-			this._register(createBrowserHost(services));
-		}
+		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
+		if (createBrowserHost) { this._register(createBrowserHost(services)); }
 		// Markdown rendering resolves the code editor service, which depends on the registered editor parts.
 		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		// The URL opener requires the completed editor service graph before the window announces readiness.
@@ -1355,21 +1218,16 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITitleService, titleService);
 		const titlebar = titleService.getPart(workbenchRoot);
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
-			titlebar.setActivityActions({
-				bar: globalCompositeBar,
-				showContextMenu: event => activitybar.showContextMenu(event),
-			});
+			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
 		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
 		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot));
-		const banner = this._register(
-			services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
-				if (visible) layoutService.showPart('banner');
-				else layoutService.hidePart('banner');
-			}),
-		);
+		const banner = this._register(services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
+			if (visible) layoutService.showPart('banner');
+			else layoutService.hidePart('banner');
+		}));
 		services.registerInstance(IBannerService, banner);
 		const parts = new Map<WorkbenchPartId, Part>([
 			['titlebar', titlebar],
@@ -1384,66 +1242,45 @@ export class Workbench extends Disposable {
 		]);
 		const layout = layoutService;
 		layout.createParts(parts);
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
-					const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
-					activitybar.setLayoutStyle(style);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
+				const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
+				activitybar.setLayoutStyle(style);
+			}
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
+				const location = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
+				sidebar.setActivityBarLocation(location);
+				if (location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
+					titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
+				} else {
+					activitybar.hostCompositeBar();
+					activitybar.hostGlobalActions();
+					titlebar.setActivityActions(undefined);
 				}
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
-					const location = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
-					sidebar.setActivityBarLocation(location);
-					if (location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
-						titlebar.setActivityActions({
-							bar: globalCompositeBar,
-							showContextMenu: event => activitybar.showContextMenu(event),
-						});
-					} else {
-						activitybar.hostCompositeBar();
-						activitybar.hostGlobalActions();
-						titlebar.setActivityActions(undefined);
-					}
-				}
-				if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
-					const location = configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
-					activitybar.setSideBarLocation(location);
-					sidebar.domNode.classList.toggle('sidebar-right', location === 'right');
-				}
-			}),
-		);
+			}
+			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
+				const location = configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
+				activitybar.setSideBarLocation(location);
+				sidebar.domNode.classList.toggle('sidebar-right', location === 'right');
+			}
+		}));
 		activitybar.setSidebarVisible(layout.isPartVisible('sidebar'));
-		this._register(
-			layout.onDidChangePartVisibility(({ partId, visible }) => {
-				if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
-			}),
-		);
-		this._register(
-			new WorkbenchContextKeysHandler(
-				contextKeys,
-				workspaceContext,
-				editorService,
-				editorService,
-				layout,
-				workingCopyService,
-				nativeHostApi !== undefined || webWorkspaceClient !== undefined,
-				browserFileSystemProvider !== undefined,
-			),
-		);
+		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
+			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
+		}));
+		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
 		const paneParts = new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
 			[ViewContainerLocation.Panel, panel],
 			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
 			[ViewContainerLocation.AgentSidebar, agentSidebar],
 		]);
-		this._register(
-			storage.onWillSaveState(() => {
-				const empty = viewDescriptors
-					.getViewContainers(ViewContainerLocation.AuxiliaryBar)
-					.every(container => viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0);
-				storage.store('workbench.layout.auxiliarybar.empty', empty, StorageScope.PROFILE, StorageTarget.MACHINE);
-			}),
-		);
+		this._register(storage.onWillSaveState(() => {
+			const empty = viewDescriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar).every(container =>
+				viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0);
+			storage.store('workbench.layout.auxiliarybar.empty', empty, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}));
 		const panes = this._register(instantiationService.createInstance(PaneCompositePartService, paneParts));
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
@@ -1451,11 +1288,7 @@ export class Workbench extends Disposable {
 		if (api.hasAppServer) services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
-		installWorkbenchServiceContributions({
-			container: services,
-			register: value => this._register(value),
-			blockRestorationUntil: operation => serviceContributionReady.push(operation),
-		});
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');
 		// Workspace switches reuse this operation; startup marks describe only its first run.
 		let isStartupRestoration = true;
@@ -1468,9 +1301,7 @@ export class Workbench extends Disposable {
 			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
-				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) {
-					continue;
-				}
+				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
 				if (viewDescriptors.getViewContainers(location).length === 0) {
 					layout.hidePart(panes.getPartId(location));
 					continue;
@@ -1479,29 +1310,16 @@ export class Workbench extends Disposable {
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
-					if (location === ViewContainerLocation.Sidebar) {
-						performance.mark('ash.workbench.sidebar-restore-start');
-					}
-					if (location === ViewContainerLocation.Panel) {
-						performance.mark('ash.workbench.panel-restore-start');
-					}
-					if (location === ViewContainerLocation.AuxiliaryBar) {
-						performance.mark('ash.workbench.auxiliary-restore-start');
-					}
+					if (location === ViewContainerLocation.Sidebar) { performance.mark('ash.workbench.sidebar-restore-start'); }
+					if (location === ViewContainerLocation.Panel) { performance.mark('ash.workbench.panel-restore-start'); }
+					if (location === ViewContainerLocation.AuxiliaryBar) { performance.mark('ash.workbench.auxiliary-restore-start'); }
 				}
 				openings.push(views.openViewContainer(container.id));
-				if (!visible) {
-					views.closeViewContainer(container.id);
-				}
+				if (!visible) { views.closeViewContainer(container.id); }
 			}
-			try {
-				await Promise.all(openings);
-			} finally {
-				if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true);
-			}
-			if (isStartup) {
-				performance.mark('ash.workbench.views-restored');
-			}
+			try { await Promise.all(openings); }
+			finally { if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true); }
+			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
 		// Construct services and Parts while theme resources are in flight. Keep
 		// view creation and the splash's first layout behind the verified theme,
@@ -1516,38 +1334,16 @@ export class Workbench extends Disposable {
 			layoutService.layout();
 			await viewsReady;
 		});
-		this.whenRestored = this.completeStartupRestoration(
-			[
-				keybindingsReady,
-				extensionReady,
-				paneRestoration,
-				services
-					.get(IWorkspacesService)
-					.getRecentlyOpened()
-					.then(() => {}),
-				...serviceContributionReady,
-			],
-			workingCopyBackups,
-			editor,
-			editorParts,
-			contributions,
-			saveFontInfo,
-		);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, services.get(IWorkspacesService).getRecentlyOpened().then(() => { }), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
 		void lifecycleService.when(LifecyclePhase.Restored).then(() => {
 			if (this.isDisposed) return;
-			this._register(
-				disposableWindowTimeout(
-					this.ownerWindow,
-					() => {
-						lifecycleService.phase = LifecyclePhase.Eventually;
-						contributions.advance(WorkbenchPhase.Eventually);
-					},
-					2_000,
-				),
-			);
+			this._register(disposableWindowTimeout(this.ownerWindow, () => {
+				lifecycleService.phase = LifecyclePhase.Eventually;
+				contributions.advance(WorkbenchPhase.Eventually);
+			}, 2_000));
 		});
 		performance.mark('ash.workbench.constructor-done');
 	}
@@ -1574,14 +1370,7 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(
-		extensionReady: readonly Promise<void>[],
-		backups: IWorkingCopyBackupService,
-		editor: IEditorPart,
-		editorParts: IEditorPartsService,
-		contributions: WorkbenchContributionHost,
-		saveFontInfo: () => void,
-	): Promise<void> {
+	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
 		await Promise.allSettled(extensionReady);
 		if (this.isDisposed) return;
 		await this.restoreEditorParts(editorParts);
@@ -1606,20 +1395,11 @@ export class Workbench extends Disposable {
 
 	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
-		try {
-			pending = await backups.list();
-		} catch (error) {
-			this.logService.error('workingCopy', 'Failed to list working-copy backups', error);
-			return;
-		}
+		try { pending = await backups.list(); }
+		catch (error) { this.logService.error('workingCopy', 'Failed to list working-copy backups', error); return; }
 		for (const backup of pending) {
 			if (backup.kind === 'text' && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
-				this.untitledTextEditorService.create({
-					untitledResource: backup.resource,
-					initialValue: backup.content,
-					languageId: backup.languageId,
-					label: backup.label,
-				});
+				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });
 			}
 		}
 		for (const backup of pending) {
@@ -1637,20 +1417,9 @@ export class Workbench extends Disposable {
 					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
 				} else {
 					try {
-						pane = await editor.openEditor({
-							resource: backup.resource,
-							...(backup.languageId ? { languageId: backup.languageId } : {}),
-							...(backup.contentType ? { contentType: backup.contentType } : {}),
-							...(backup.label ? { label: backup.label } : {}),
-						});
+						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
 					} catch {
-						pane = await editor.openEditor({
-							resource: backup.resource,
-							initialText: '',
-							...(backup.languageId ? { languageId: backup.languageId } : {}),
-							...(backup.contentType ? { contentType: backup.contentType } : {}),
-							...(backup.label ? { label: backup.label } : {}),
-						});
+						pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
 					}
 				}
 				const workingCopy = pane.workingCopy;
@@ -1665,10 +1434,7 @@ export class Workbench extends Disposable {
 	/** Applies a host-authoritative workspace replacement without rebuilding the Workbench. */
 	updateWorkspace(workspace: IWorkspace, preserveEditors = false): Promise<void> {
 		const switching = this.workspaceSwitchQueue.then(() => this.doUpdateWorkspace(workspace, preserveEditors));
-		this.workspaceSwitchQueue = switching.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.workspaceSwitchQueue = switching.then(() => undefined, () => undefined);
 		return switching;
 	}
 
@@ -1684,12 +1450,7 @@ export class Workbench extends Disposable {
 			// identity, while open editors and unsaved buffers belong to the user.
 			await this.workingCopyBackupTracker.shutdown();
 			try {
-				await this.workingCopyBackups.moveBackups?.({
-					id: workspace.id,
-					folders: workspace.folders.map(folder => folder.uri),
-					configuration: workspace.configuration,
-					remoteAuthority: workspace.remoteAuthority,
-				});
+				await this.workingCopyBackups.moveBackups?.({ id: workspace.id, folders: workspace.folders.map(folder => folder.uri), configuration: workspace.configuration, remoteAuthority: workspace.remoteAuthority });
 				await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 				using editorStatePause = this.editor.pauseStatePersistence();
 				await this.storage.switchWorkspace(workspace.id);
@@ -1709,7 +1470,7 @@ export class Workbench extends Disposable {
 		await this.workingCopyBackupTracker.flush();
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		using editorStatePause = this.editor.pauseStatePersistence();
-		if (!(await this.editor.closeAllEditors({ reason: 'reset' }))) throw new CancellationError('Workspace switch was cancelled');
+		if (!await this.editor.closeAllEditors({ reason: 'reset' })) throw new CancellationError('Workspace switch was cancelled');
 		await this.workingCopyBackupTracker.flush();
 		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
@@ -1725,10 +1486,18 @@ export class Workbench extends Disposable {
 	}
 }
 
-function requiredViewContainerToRestore(service: IViewDescriptorService, location: ViewContainerLocation, containerId: string | undefined) {
-	const container = service.getViewContainers(location).find(candidate => candidate.id === containerId);
+function requiredViewContainerToRestore(
+	service: IViewDescriptorService,
+	location: ViewContainerLocation,
+	containerId: string | undefined,
+) {
+	const container = service
+		.getViewContainers(location)
+		.find((candidate) => candidate.id === containerId);
 	if (!container) {
-		throw new Error(`Workbench has no ${location} view container to restore`);
+		throw new Error(
+			`Workbench has no ${location} view container to restore`,
+		);
 	}
 	return container;
 }

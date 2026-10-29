@@ -22,25 +22,13 @@ suite('Electron IPC channels', () => {
 			send: (channel, ...args) => {
 				sent.push(channel);
 				if (channel === 'ash:hello') {
-					main = resources.add(
-						new IPCClient(
-							{
-								onMessage: requests.event,
-								send: buffer =>
-									queueMicrotask(() => {
-										for (const listener of listeners) {
-											listener(buffer.buffer);
-										}
-									}),
-							},
-							'window:7',
-						),
-					);
+					main = resources.add(new IPCClient({
+						onMessage: requests.event,
+						send: buffer => queueMicrotask(() => { for (const listener of listeners) { listener(buffer.buffer); } }),
+					}, 'window:7'));
 					main.registerChannel('echo', {
 						call: async <T>(context: string, command: string, arg: unknown): Promise<T> => {
-							if (command === 'fail') {
-								throw new TypeError('Invalid operation');
-							}
+							if (command === 'fail') { throw new TypeError('Invalid operation'); }
 							return { context, arg } as T;
 						},
 						listen: () => Event.None,
@@ -53,24 +41,14 @@ suite('Electron IPC channels', () => {
 				}
 				assert.equal(channel, 'ash:disconnect');
 			},
-			invoke: async () => {
-				throw new Error('Main channels must not acquire a port');
-			},
+			invoke: async () => { throw new Error('Main channels must not acquire a port'); },
 			on: (channel, listener) => {
 				assert.equal(channel, 'ash:message');
 				listeners.add(listener);
-				return {
-					dispose: () => {
-						listeners.delete(listener);
-					},
-				};
+				return { dispose: () => { listeners.delete(listener); } };
 			},
 		},
-		ipcMessagePort: {
-			acquire: () => {
-				throw new Error('Main channels must not acquire a port');
-			},
-		},
+		ipcMessagePort: { acquire: () => { throw new Error('Main channels must not acquire a port'); } },
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};
@@ -80,11 +58,7 @@ suite('Electron IPC channels', () => {
 		ipc = await import('../../electron-browser/ipc.electron.js');
 	});
 	suiteTeardown(() => {
-		if (originalGlobals) {
-			Object.defineProperty(globalThis, 'ash', originalGlobals);
-		} else {
-			Reflect.deleteProperty(globalThis, 'ash');
-		}
+		if (originalGlobals) { Object.defineProperty(globalThis, 'ash', originalGlobals); } else { Reflect.deleteProperty(globalThis, 'ash'); }
 	});
 	setup(() => {
 		tracker = new DisposableTracker();
@@ -95,28 +69,17 @@ suite('Electron IPC channels', () => {
 	});
 	teardown(() => {
 		resources.dispose();
-		try {
-			assert.equal(listeners.size, 0);
-			tracker.assertNoLeaks();
-		} finally {
-			tracking[Symbol.dispose]();
-		}
+		try { assert.equal(listeners.size, 0); tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); }
 	});
 
 	test('channels are available immediately and calls follow hello with Main-owned context', async () => {
 		using client = new ipc.Client('renderer supplied identity');
 		const result = await client.getChannel('echo').call('read', { value: '你好' });
-		assert.deepEqual(
-			{ result, sent },
-			{
-				result: { context: 'window:7', arg: { value: '你好' } },
-				sent: ['ash:hello', 'ash:message'],
-			},
-		);
-		await assert.rejects(client.getChannel('echo').call('fail'), {
-			name: 'TypeError',
-			message: 'Invalid operation',
+		assert.deepEqual({ result, sent }, {
+			result: { context: 'window:7', arg: { value: '你好' } },
+			sent: ['ash:hello', 'ash:message'],
 		});
+		await assert.rejects(client.getChannel('echo').call('fail'), { name: 'TypeError', message: 'Invalid operation' });
 		assert.deepEqual(await client.getChannel('echo').call('read', 3), { context: 'window:7', arg: 3 });
 	});
 
@@ -131,14 +94,9 @@ suite('Electron IPC channels', () => {
 		let active = 0;
 		main.registerChannel('changes', {
 			call: async <T>() => undefined as T,
-			listen: () => () => {
-				active++;
-				return toDisposable(() => {
-					active--;
-				});
-			},
+			listen: () => () => { active++; return toDisposable(() => { active--; }); },
 		});
-		using subscription = client.getChannel('changes').listen('changed')(() => {});
+		using subscription = client.getChannel('changes').listen('changed')(() => { });
 		await setImmediate();
 		assert.equal(active, 1);
 		client.dispose();

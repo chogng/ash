@@ -3,6 +3,7 @@ import { FloatHorizontalRange } from '../../view/renderingContext.js';
 import { DomReadingContext } from './domReadingContext.js';
 
 export class RangeUtil {
+
 	/**
 	 * Reusing the same range here
 	 * because IE is buggy and constantly freezes when using a large number
@@ -84,14 +85,7 @@ export class RangeUtil {
 		return this._mergeAdjacentRanges(result);
 	}
 
-	public static readHorizontalRanges(
-		domNode: HTMLElement,
-		startChildIndex: number,
-		startOffset: number,
-		endChildIndex: number,
-		endOffset: number,
-		context: DomReadingContext,
-	): FloatHorizontalRange[] | null {
+	public static readHorizontalRanges(domNode: HTMLElement, startChildIndex: number, startOffset: number, endChildIndex: number, endOffset: number, context: DomReadingContext): FloatHorizontalRange[] | null {
 		// Panic check
 		const min = 0;
 		const max = domNode.children.length - 1;
@@ -153,10 +147,7 @@ export class RangeUtil {
 		const clientRects = this._readClientRects(startElement, startOffset, endElement, endOffset, context.endNode);
 		context.markDidDomLayout();
 		const ranges = this._createHorizontalRangesFromClientRects(clientRects, context.clientRectDeltaLeft, context.clientRectScale) ?? [];
-		for (const [element, include] of [
-			[startObject, startOffset === 0],
-			[endObject, endOffset > 0],
-		] as const) {
+		for (const [element, include] of [[startObject, startOffset === 0], [endObject, endOffset > 0]] as const) {
 			if (!include || element.dataset.ashInlineObject !== 'true') continue;
 			const box = element.getBoundingClientRect();
 			context.markDidDomLayout();

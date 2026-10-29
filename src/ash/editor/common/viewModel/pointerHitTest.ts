@@ -17,7 +17,10 @@ export interface ViewportPoint {
 
 export interface HitTestLayout {
 	readonly lineHeight: number;
-	readonly viewportSize: { readonly width: number; readonly height: number };
+	readonly viewportSize: {
+		readonly width: number;
+		readonly height: number;
+	};
 	readonly scrollPosition: EditorScrollPosition;
 }
 
@@ -43,21 +46,19 @@ export interface EditorHitTarget {
 }
 
 /** @internal */
-export function hitTestStanzaVisualEditorPoint(
-	model: TextModel,
-	projection: EditorVisualLineProjection,
-	layout: HitTestLayout,
-	point: ViewportPoint,
-	metrics: HitTestMetrics,
-	measurer: TextMeasurer,
-): EditorHitTarget | undefined {
+export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: HitTestLayout, point: ViewportPoint, metrics: HitTestMetrics, measurer: TextMeasurer): EditorHitTarget | undefined {
 	validatePoint(point);
 	validateLayout(layout);
 	validateMetrics(metrics);
 	if (projection.modelVersion !== model.version) {
 		throw new Error('Stanza visual hit testing requires the current text model projection');
 	}
-	if (point.left < 0 || point.top < 0 || point.left >= layout.viewportSize.width || point.top >= layout.viewportSize.height) {
+	if (
+		point.left < 0 ||
+		point.top < 0 ||
+		point.left >= layout.viewportSize.width ||
+		point.top >= layout.viewportSize.height
+	) {
 		return undefined;
 	}
 	const contentTop = point.top + layout.scrollPosition.top - (metrics.paddingTop ?? 0);
@@ -67,14 +68,14 @@ export function hitTestStanzaVisualEditorPoint(
 	const visualLineIndex = metrics.getLineIndexAtVerticalOffset?.(contentTop + (metrics.paddingTop ?? 0)) ?? Math.floor(contentTop / layout.lineHeight);
 	if (visualLineIndex >= projection.visualLineCount) {
 		const logicalLineIndex = model.lineCount - 1;
-		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex + 1).length);
+		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent((logicalLineIndex) + 1).length);
 	}
 	const visualLine = projection.lineAt(visualLineIndex)!;
 	if (point.left < metrics.gutterWidth) {
 		return target(EditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
 	}
 	const text = projection.getViewLineData(model, visualLineIndex + 1).content;
-	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.projectionData ? 0 : (visualLine.wrappedTextIndentWidth ?? 0));
+	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.projectionData ? 0 : visualLine.wrappedTextIndentWidth ?? 0);
 	if (textOffset < 0 || text.length === 0) {
 		return visualTarget(EditorHitTargetKind.EmptyContent, projection, visualLineIndex, 0);
 	}
@@ -95,7 +96,11 @@ function visualTarget(kind: EditorHitTargetKind, projection: EditorVisualLinePro
 	});
 }
 
-function nearestCursorColumn(line: string, horizontalOffset: number, measurer: TextMeasurer): number {
+function nearestCursorColumn(
+	line: string,
+	horizontalOffset: number,
+	measurer: TextMeasurer,
+): number {
 	const boundaries = getTextGraphemeBoundaries(line);
 	let low = 0;
 	let high = boundaries.length - 1;
@@ -114,15 +119,23 @@ function nearestCursorColumn(line: string, horizontalOffset: number, measurer: T
 	return boundaries[low] ?? line.length;
 }
 
-function target(kind: EditorHitTargetKind, lineIndex: number, columnIndex: number): EditorHitTarget {
+function target(
+	kind: EditorHitTargetKind,
+	lineIndex: number,
+	columnIndex: number,
+): EditorHitTarget {
 	return Object.freeze({
 		kind,
-		position: new Position(lineIndex + 1, columnIndex + 1),
+		position: new Position((lineIndex) + 1, (columnIndex) + 1),
 	});
 }
 
 function validatePoint(point: ViewportPoint): void {
-	if (!point || !Number.isFinite(point.left) || !Number.isFinite(point.top)) {
+	if (
+		!point ||
+		!Number.isFinite(point.left) ||
+		!Number.isFinite(point.top)
+	) {
 		throw new RangeError('Stanza hit-test point must contain finite coordinates');
 	}
 }

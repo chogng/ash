@@ -9,11 +9,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 import { TaskAgentModelFixture, taskLabel, taskMarker, taskModel } from './taskAgentModelFixture.js';
 
 interface TaskSession {
-	client: AppServerProtocolClient;
-	page: Page;
-	directory: string;
-	sessionId: string;
-	readThread(): Promise<Thread>;
+	client: AppServerProtocolClient; page: Page; directory: string; sessionId: string; readThread(): Promise<Thread>;
 }
 
 const pagePayload = 'a😀中éb😀终';
@@ -21,125 +17,45 @@ const firstPayload = 'FIRST_RUN_ONLY 😀';
 const secondPayload = 'SECOND_RUN_ONLY 中';
 type TaskScenario = 'loop' | 'dependencies' | 'background' | 'pages' | 'reuse' | 'dependency-failure' | 'dependency-cancel' | 'background-pending' | 'truncated';
 
-const test = base.extend<{
-	taskScenario: TaskScenario;
-	taskKind: 'process' | 'shell';
-	startupFailure: boolean;
-	mockModel: TaskAgentModelFixture;
-	taskSession: TaskSession;
-}>({
+const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'shell'; startupFailure: boolean; mockModel: TaskAgentModelFixture; taskSession: TaskSession; }>({
 	taskScenario: ['loop', { option: true }],
 	taskKind: ['process', { option: true }],
 	startupFailure: [false, { option: true }],
 	testWorkspace: async ({ testWorkspace, taskKind, startupFailure, taskScenario }, use) => {
 		const directory = testWorkspace.directory;
 		await mkdir(join(directory, '.vscode'), { recursive: true });
-		const presentation = {
-			echo: taskScenario !== 'pages' && taskScenario !== 'reuse' && taskScenario !== 'truncated',
-			reveal: 'always',
-			focus: false,
-			panel: taskScenario === 'reuse' ? 'shared' : 'new',
-			clear: taskScenario === 'reuse',
-		};
-		const root = {
-			label: taskLabel,
-			type: taskKind,
-			command: startupFailure ? 'ash-task-fixture-missing-executable-7f0c2' : 'node',
-			args: ['task-loop.cjs'],
-			presentation,
-		};
+		const presentation = { echo: taskScenario !== 'pages' && taskScenario !== 'reuse' && taskScenario !== 'truncated', reveal: 'always', focus: false, panel: taskScenario === 'reuse' ? 'shared' : 'new', clear: taskScenario === 'reuse' };
+		const root = { label: taskLabel, type: taskKind, command: startupFailure ? 'ash-task-fixture-missing-executable-7f0c2' : 'node', args: ['task-loop.cjs'], presentation };
 		let tasks: unknown[] = [root];
 		const starts = "fs.appendFileSync('task-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10));";
 		let script = "const fs = require('node:fs'); " + starts + "console.log('" + taskMarker + " pid=' + process.pid + ' 😀'); setInterval(() => console.log('TASK_TICK pid=' + process.pid), 500);";
 		if (taskScenario === 'dependencies' || taskScenario === 'dependency-failure') {
-			tasks = [
-				{ ...root, dependsOn: 'Mock Agent Prepare', dependsOrder: 'sequence' },
-				{
-					label: 'Mock Agent Prepare',
-					type: taskKind,
-					command: 'node',
-					args: ['task-prepare.cjs'],
-					presentation,
-				},
-			];
-			await writeFile(
-				join(directory, 'task-prepare.cjs'),
-				"const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); fs.appendFileSync('task-order.txt', 'prepare-start\\n'); const timer = setInterval(() => { if (fs.existsSync('prepare-release')) { clearInterval(timer); fs.appendFileSync('task-order.txt', 'prepare-finish\\n'); fs.writeFileSync('prepare-finished', 'done'); } }, 25);",
-			);
+			tasks = [{ ...root, dependsOn: 'Mock Agent Prepare', dependsOrder: 'sequence' }, { label: 'Mock Agent Prepare', type: taskKind, command: 'node', args: ['task-prepare.cjs'], presentation }];
+			await writeFile(join(directory, 'task-prepare.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); fs.appendFileSync('task-order.txt', 'prepare-start\\n'); const timer = setInterval(() => { if (fs.existsSync('prepare-release')) { clearInterval(timer); fs.appendFileSync('task-order.txt', 'prepare-finish\\n'); fs.writeFileSync('prepare-finished', 'done'); } }, 25);");
 			if (taskScenario === 'dependency-failure') {
-				await writeFile(
-					join(directory, 'task-prepare.cjs'),
-					"const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); console.error('DEPENDENCY_WAITING'); const timer = setInterval(() => { if (fs.existsSync('failure-release')) { clearInterval(timer); console.error('DEPENDENCY_FAILED_EXIT_17'); process.exitCode = 17; } }, 25);",
-				);
+				await writeFile(join(directory, 'task-prepare.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid}) + String.fromCharCode(10)); console.error('DEPENDENCY_WAITING'); const timer = setInterval(() => { if (fs.existsSync('failure-release')) { clearInterval(timer); console.error('DEPENDENCY_FAILED_EXIT_17'); process.exitCode = 17; } }, 25);");
 			}
 			await writeFile(join(directory, 'dependency-starts.jsonl'), '');
 			await writeFile(join(directory, 'task-order.txt'), '');
-			script =
-				"const fs = require('node:fs'); if (!fs.existsSync('prepare-finished')) throw new Error('Root started before dependency completion'); fs.appendFileSync('task-order.txt', 'root-start\\n'); " +
-				script.replace("const fs = require('node:fs'); ", '');
+			script = "const fs = require('node:fs'); if (!fs.existsSync('prepare-finished')) throw new Error('Root started before dependency completion'); fs.appendFileSync('task-order.txt', 'root-start\\n'); " + script.replace("const fs = require('node:fs'); ", '');
 		} else if (taskScenario === 'dependency-cancel') {
-			tasks = [
-				{ ...root, dependsOn: 'Mock Agent Prepare' },
-				{
-					...root,
-					label: 'Mock Agent Prepare',
-					args: ['task-middle.cjs'],
-					dependsOn: ['Mock Agent Leaf A', 'Mock Agent Leaf B'],
-					dependsOrder: 'parallel',
-				},
-				...['A', 'B'].map(leaf => ({
-					...root,
-					label: 'Mock Agent Leaf ' + leaf,
-					args: ['task-leaf.cjs', leaf],
-				})),
-			];
+			tasks = [{ ...root, dependsOn: 'Mock Agent Prepare' }, { ...root, label: 'Mock Agent Prepare', args: ['task-middle.cjs'], dependsOn: ['Mock Agent Leaf A', 'Mock Agent Leaf B'], dependsOrder: 'parallel' }, ...['A', 'B'].map(leaf => ({ ...root, label: 'Mock Agent Leaf ' + leaf, args: ['task-leaf.cjs', leaf] }))];
 			await writeFile(join(directory, 'task-middle.cjs'), "require('node:fs').writeFileSync('middle-started', 'unexpected');");
-			await writeFile(
-				join(directory, 'task-leaf.cjs'),
-				"const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid, leaf:process.argv[2]}) + String.fromCharCode(10)); setInterval(() => console.log('LEAF_' + process.argv[2] + ' pid=' + process.pid), 100);",
-			);
+			await writeFile(join(directory, 'task-leaf.cjs'), "const fs = require('node:fs'); fs.appendFileSync('dependency-starts.jsonl', JSON.stringify({pid:process.pid, leaf:process.argv[2]}) + String.fromCharCode(10)); setInterval(() => console.log('LEAF_' + process.argv[2] + ' pid=' + process.pid), 100);");
 			await writeFile(join(directory, 'dependency-starts.jsonl'), '');
 		} else if (taskScenario === 'background' || taskScenario === 'background-pending') {
-			tasks = [
-				{
-					...root,
-					isBackground: true,
-					problemMatcher: {
-						owner: 'task-regression',
-						pattern: { regexp: '^(.*):(\\d+):(.*)$', file: 1, line: 2, message: 3 },
-						background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
-					},
-				},
-			];
-			script =
-				"const fs = require('node:fs'); " +
-				starts +
-				"console.log('BUILD'); console.log('" +
-				taskMarker +
-				" pid=' + process.pid); const timer = setInterval(() => { if (fs.existsSync('ready-release')) { clearInterval(timer); console.log('READY'); } }, 25); setInterval(() => console.log('TASK_TICK pid=' + process.pid), 500);";
+			tasks = [{ ...root, isBackground: true, problemMatcher: { owner: 'task-regression', pattern: { regexp: '^(.*):(\\d+):(.*)$', file: 1, line: 2, message: 3 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } }];
+			script = "const fs = require('node:fs'); " + starts + "console.log('BUILD'); console.log('" + taskMarker + " pid=' + process.pid); const timer = setInterval(() => { if (fs.existsSync('ready-release')) { clearInterval(timer); console.log('READY'); } }, 25); setInterval(() => console.log('TASK_TICK pid=' + process.pid), 500);";
 			if (taskScenario === 'background-pending') {
-				script =
-					"const fs = require('node:fs'); " +
-					starts +
-					"console.log('BUILD'); console.log('" +
-					taskMarker +
-					" pid=' + process.pid); setInterval(() => console.log('STILL_BUILDING pid=' + process.pid), 100);";
+				script = "const fs = require('node:fs'); " + starts + "console.log('BUILD'); console.log('" + taskMarker + " pid=' + process.pid); setInterval(() => console.log('STILL_BUILDING pid=' + process.pid), 100);";
 			}
 		} else if (taskScenario === 'pages') {
 			script = "const fs = require('node:fs'); " + starts + 'process.stdout.write(' + JSON.stringify(pagePayload) + ');';
 		} else if (taskScenario === 'truncated') {
 			// Keep the initial output intact until the Agent has recorded its actual cursor.
-			script =
-				"const fs = require('node:fs'); " +
-				starts +
-				"console.log('" +
-				taskMarker +
-				" INITIAL 😀'); const timer = setInterval(() => { if (!fs.existsSync('flood-release')) return; clearInterval(timer); let step = 0; const input = require('node:readline').createInterface({input:process.stdin}); const emit = () => { step++; process.stdout.write('x'.repeat(65536) + String.fromCharCode(10) + 'TRUNCATION_STEP_' + step + ' 😀' + String.fromCharCode(10)); }; input.on('line', line => { if (line !== 'ACK_' + step) return; if (step < 18) emit(); else { input.close(); process.stdin.pause(); process.stdout.write('TRUNCATION_DONE 😀'); } }); emit(); }, 25);";
+			script = "const fs = require('node:fs'); " + starts + "console.log('" + taskMarker + " INITIAL 😀'); const timer = setInterval(() => { if (!fs.existsSync('flood-release')) return; clearInterval(timer); let step = 0; const input = require('node:readline').createInterface({input:process.stdin}); const emit = () => { step++; process.stdout.write('x'.repeat(65536) + String.fromCharCode(10) + 'TRUNCATION_STEP_' + step + ' 😀' + String.fromCharCode(10)); }; input.on('line', line => { if (line !== 'ACK_' + step) return; if (step < 18) emit(); else { input.close(); process.stdin.pause(); process.stdout.write('TRUNCATION_DONE 😀'); } }); emit(); }, 25);";
 		} else if (taskScenario === 'reuse') {
-			tasks = [
-				{ ...root, args: ['task-loop.cjs', 'first'] },
-				{ ...root, label: taskLabel + ' Second', args: ['task-loop.cjs', 'second'] },
-			];
+			tasks = [{ ...root, args: ['task-loop.cjs', 'first'] }, { ...root, label: taskLabel + ' Second', args: ['task-loop.cjs', 'second'] }];
 			script = "const fs = require('node:fs'); " + starts + 'process.stdout.write(process.argv[2] === "first" ? ' + JSON.stringify(firstPayload) + ' : ' + JSON.stringify(secondPayload) + ');';
 		}
 		await writeFile(join(directory, '.vscode/tasks.json'), JSON.stringify({ version: '2.0.0', tasks }));
@@ -147,19 +63,13 @@ const test = base.extend<{
 		await writeFile(join(directory, 'task-starts.jsonl'), '');
 		await use(testWorkspace);
 	},
-	mockModel: async ({}, use) => {
+	mockModel: async ({ }, use) => {
 		const model = new TaskAgentModelFixture();
 		await model.start();
-		try {
-			await use(model);
-		} finally {
-			await model.close();
-		}
+		try { await use(model); } finally { await model.close(); }
 	},
 	taskSession: async ({ application, workbench, testWorkspace, mockModel, taskScenario }, use, testInfo) => {
-		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page, {
-			directoryGrantsHost: true,
-		});
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 		const { client } = connection;
 		let readThread: (() => Promise<Thread>) | undefined;
 		try {
@@ -168,49 +78,25 @@ const test = base.extend<{
 			const contextWindow = taskScenario === 'truncated' ? 1_000_000 : 272_000;
 			const initial = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['provider/configure'], {
-				commandId: 'task-fixture-provider',
-				expectedRevision: initial.revision,
-				config: {
-					connection: taskModel.provider,
-					provider: taskModel.provider,
-					baseUrl: mockModel.baseUrl,
+				commandId: 'task-fixture-provider', expectedRevision: initial.revision, config: {
+					connection: taskModel.provider, provider: taskModel.provider, baseUrl: mockModel.baseUrl,
 					custom: { name: 'Task regression mock', protocol: 'responses', order: 0, contextWindow },
 					modelContext: { [taskModel.model]: { contextWindow } },
-				},
+				}
 			});
-			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], {
-				connection: taskModel.provider,
-				apiKey: 'synthetic-fixture-key',
-			});
+			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: taskModel.provider, apiKey: 'synthetic-fixture-key' });
 			const catalog = await client.request(APP_SERVER_METHODS['model/list'], {});
-			expect(
-				catalog.models.some(entry => entry.model.provider === taskModel.provider && entry.model.model === taskModel.model),
-				'The seeded Task model must be in the backend catalog',
-			).toBe(true);
+			expect(catalog.models.some(entry => entry.model.provider === taskModel.provider && entry.model.model === taskModel.model), 'The seeded Task model must be in the backend catalog').toBe(true);
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-			await client.request(APP_SERVER_METHODS['config/update'], {
-				commandId: 'task-fixture-model',
-				expectedRevision: config.revision,
-				model: taskModel,
-				execution: { ...config.execution, approvalMode: 'manual' },
-			});
+			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'task-fixture-model', expectedRevision: config.revision, model: taskModel, execution: { ...config.execution, approvalMode: 'manual' } });
 			const permissions = ['readFiles', 'browseFiles', 'watchFiles', 'executeCommands'] as const;
-			const created = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'task-fixture-session',
-				title: 'Mock Agent Task Regression',
-				agent: { type: 'default' },
-				executionTarget: { type: 'local', root: testWorkspace.directory },
-			});
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'task-fixture-session', title: 'Mock Agent Task Regression', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0]!.threadId;
 			const snapshot = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 			if (snapshot.directory?.type !== 'local') throw new Error('Task fixture needs the actual local Thread directory');
 			const directory = snapshot.directory.root;
-			await client.request(APP_SERVER_METHODS['session/dirs/add'], {
-				sessionId,
-				path: directory,
-				permissions: [...permissions],
-			});
+			await client.request(APP_SERVER_METHODS['session/dirs/add'], { sessionId, path: directory, permissions: [...permissions] });
 			readThread = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 			mockModel.selectDirectory(directory);
 			const page = workbench.page;
@@ -224,10 +110,7 @@ const test = base.extend<{
 			await picker.getByRole('button', { name: 'Open Settings', exact: true }).click();
 			const provider = page.locator(`[data-provider-id="${taskModel.provider}"]`);
 			const enabled = provider.getByRole('switch', { name: `Enable ${taskModel.model}`, exact: true });
-			if (!(await enabled.isChecked())) {
-				await enabled.focus();
-				await enabled.press('Space');
-			}
+			if (!await enabled.isChecked()) { await enabled.focus(); await enabled.press('Space'); }
 			await expect(enabled).toBeChecked();
 			await page.keyboard.press('Escape');
 			await active.locator('.ash-chat-input-model-action').press('ArrowDown');
@@ -239,23 +122,10 @@ const test = base.extend<{
 			await use({ client, page, directory, sessionId, readThread: readThread! });
 		} finally {
 			try {
-				await testInfo.attach('mock-model-exchanges', {
-					body: JSON.stringify({ exchanges: mockModel.exchanges, errors: mockModel.errors }, null, 2),
-					contentType: 'application/json',
-				});
-				if (readThread)
-					await testInfo.attach('agent-thread', {
-						body: JSON.stringify(await readThread(), null, 2),
-						contentType: 'application/json',
-					});
-				if (testInfo.status !== testInfo.expectedStatus && !workbench.page.isClosed())
-					await testInfo.attach('task-agent-window', {
-						body: await workbench.page.screenshot(),
-						contentType: 'image/png',
-					});
-			} finally {
-				await connection.close();
-			}
+				await testInfo.attach('mock-model-exchanges', { body: JSON.stringify({ exchanges: mockModel.exchanges, errors: mockModel.errors }, null, 2), contentType: 'application/json' });
+				if (readThread) await testInfo.attach('agent-thread', { body: JSON.stringify(await readThread(), null, 2), contentType: 'application/json' });
+				if (testInfo.status !== testInfo.expectedStatus && !workbench.page.isClosed()) await testInfo.attach('task-agent-window', { body: await workbench.page.screenshot(), contentType: 'image/png' });
+			} finally { await connection.close(); }
 		}
 	},
 });
@@ -282,18 +152,12 @@ interface TaskResult {
 
 function toolEvidence(turn: Turn) {
 	const calls = turn.items.filter(item => item.type === 'toolCall');
-	return turn.items
-		.filter(item => item.type === 'toolResult')
-		.map(item => {
-			const call = calls.find(call => call.toolCallId === item.toolCallId);
-			if (!call) throw new Error('Tool result has no matching call');
-			expect(item.isError, item.text).toBe(false);
-			return {
-				name: call.name,
-				arguments: JSON.parse(call.argumentsJson) as Record<string, unknown>,
-				result: JSON.parse(item.text) as TaskResult,
-			};
-		});
+	return turn.items.filter(item => item.type === 'toolResult').map(item => {
+		const call = calls.find(call => call.toolCallId === item.toolCallId);
+		if (!call) throw new Error('Tool result has no matching call');
+		expect(item.isError, item.text).toBe(false);
+		return { name: call.name, arguments: JSON.parse(call.argumentsJson) as Record<string, unknown>, result: JSON.parse(item.text) as TaskResult };
+	});
 }
 
 async function submit(page: Page, text: string): Promise<void> {
@@ -306,55 +170,35 @@ async function submit(page: Page, text: string): Promise<void> {
 async function completedTurn(page: Page, read: () => Promise<Thread>, count: number, approve: boolean | 'decline' | (() => Promise<void>), observe?: (turn: Turn) => Promise<void>): Promise<Turn> {
 	let approved = 0;
 	let completed: Turn | undefined;
-	await expect
-		.poll(
-			async () => {
-				const button = page.getByRole('button', { name: 'Approve once', exact: true });
-				if (await button.isVisible()) {
-					expect(approve, 'Only starting the Task requires approval').not.toBe(false);
-					const interaction = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
-					await expect(interaction).toContainText(taskLabel);
-					await expect(interaction).toContainText('task-loop.cjs');
-					if (typeof approve === 'function') await approve();
-					await page.getByRole('button', { name: approve === 'decline' ? 'Decline' : 'Approve once', exact: true }).click();
-					await expect(button).toBeHidden();
-					approved++;
-				}
-				const thread = await read();
-				const turn = thread.turns[count - 1];
-				if (turn?.status === 'failed' || turn?.status === 'interrupted')
-					throw new Error('Agent Turn failed: ' + JSON.stringify({ turnId: turn.turnId, status: turn.status, error: turn.error }));
-				if (turn && observe) await observe(turn);
-				if (turn?.status === 'completed') completed = turn;
-				return completed !== undefined;
-			},
-			{ timeout: 90_000, intervals: [100, 250, 500] },
-		)
-		.toBe(true);
+	await expect.poll(async () => {
+		const button = page.getByRole('button', { name: 'Approve once', exact: true });
+		if (await button.isVisible()) {
+			expect(approve, 'Only starting the Task requires approval').not.toBe(false);
+			const interaction = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
+			await expect(interaction).toContainText(taskLabel);
+			await expect(interaction).toContainText('task-loop.cjs');
+			if (typeof approve === 'function') await approve();
+			await page.getByRole('button', { name: approve === 'decline' ? 'Decline' : 'Approve once', exact: true }).click();
+			await expect(button).toBeHidden();
+			approved++;
+		}
+		const thread = await read();
+		const turn = thread.turns[count - 1];
+		if (turn?.status === 'failed' || turn?.status === 'interrupted') throw new Error('Agent Turn failed: ' + JSON.stringify({ turnId: turn.turnId, status: turn.status, error: turn.error }));
+		if (turn && observe) await observe(turn);
+		if (turn?.status === 'completed') completed = turn;
+		return completed !== undefined;
+	}, { timeout: 90_000, intervals: [100, 250, 500] }).toBe(true);
 	expect(approved).toBe(approve ? 1 : 0);
 	return completed!;
 }
 
 async function revokeCommands(session: TaskSession): Promise<void> {
-	const { revision } = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], {
-		sessionId: session.sessionId,
-	});
+	const { revision } = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], { sessionId: session.sessionId });
 	const permissions = ['readFiles', 'browseFiles', 'watchFiles'] as const;
-	await session.client.request(APP_SERVER_METHODS['session/directoryGrants/set'], {
-		sessionId: session.sessionId,
-		path: session.directory,
-		expectedRevision: revision,
-		permissions: [...permissions],
-	});
-	const current = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], {
-		sessionId: session.sessionId,
-	});
-	expect(
-		current.dirs
-			.find(dir => dir.path === session.directory)
-			?.permissions.slice()
-			.sort(),
-	).toEqual([...permissions].sort());
+	await session.client.request(APP_SERVER_METHODS['session/directoryGrants/set'], { sessionId: session.sessionId, path: session.directory, expectedRevision: revision, permissions: [...permissions] });
+	const current = await session.client.request(APP_SERVER_METHODS['session/dirs/list'], { sessionId: session.sessionId });
+	expect(current.dirs.find(dir => dir.path === session.directory)?.permissions.slice().sort()).toEqual([...permissions].sort());
 }
 
 function rejectedRun(turn: Turn, reason: string): void {
@@ -368,35 +212,27 @@ function rejectedRun(turn: Turn, reason: string): void {
 	expect(result.text).toContain(reason);
 }
 
-async function processStarts(directory: string, file = 'task-starts.jsonl'): Promise<{ pid: number }[]> {
+async function processStarts(directory: string, file = 'task-starts.jsonl'): Promise<{ pid: number; }[]> {
 	const text = (await readFile(join(directory, file), 'utf8')).trim();
 	return text ? text.split('\n').map(line => JSON.parse(line)) : [];
 }
 
 async function processExited(pid: number): Promise<void> {
-	await expect
-		.poll(
-			() => {
-				try {
-					process.kill(pid, 0);
-					return true;
-				} catch (error) {
-					if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-					return false;
-				}
-			},
-			{ timeout: 15_000 },
-		)
-		.toBe(false);
+	await expect.poll(() => {
+		try { process.kill(pid, 0); return true; } catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+			return false;
+		}
+	}, { timeout: 15_000 }).toBe(false);
 }
 
 async function showTasks(page: Page): Promise<void> {
 	const panel = page.locator('[data-part="panel"]');
-	if (!(await panel.isVisible())) await new QuickAccess(page).runCommand('ash.sessions.togglePanel');
+	if (!await panel.isVisible()) await new QuickAccess(page).runCommand('ash.sessions.togglePanel');
 	await panel.getByRole('tab', { name: 'Tasks', exact: true }).click();
 }
 
-async function runningTask(session: TaskSession): Promise<{ runId: string; terminalId: string; pid: number }> {
+async function runningTask(session: TaskSession): Promise<{ runId: string; terminalId: string; pid: number; }> {
 	await submit(session.page, 'TASK_FIXTURE_RUN: Discover and run ' + taskLabel + ' once, query status and read output.');
 	const turn = await completedTurn(session.page, session.readThread, 1, true);
 	const evidence = toolEvidence(turn);
@@ -432,23 +268,21 @@ for (const taskKind of ['process', 'shell'] as const) {
 				const { page, directory, readThread } = taskSession;
 				let childRunId: string | undefined;
 				await submit(page, 'TASK_FIXTURE_RUN: Run the existing Task and report a dependency failure.');
-				const evidence = toolEvidence(
-					await completedTurn(page, readThread, 1, true, async turn => {
-						if (childRunId) return;
-						const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);
-						const children = await processStarts(directory, 'dependency-starts.jsonl');
-						if (!waiting || !children.length) return;
-						expect(children).toHaveLength(1);
-						expect(() => process.kill(children[0]!.pid, 0)).not.toThrow();
-						expect(await processStarts(directory)).toEqual([]);
-						await showTasks(page);
-						const child = page.locator('[data-run-id]').filter({ hasText: 'Mock Agent Prepare — Running' });
-						await expect(child).toHaveCount(1);
-						childRunId = (await child.getAttribute('data-run-id'))!;
-						expect(childRunId).toBeTruthy();
-						await writeFile(join(directory, 'failure-release'), 'fail');
-					}),
-				);
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, true, async turn => {
+					if (childRunId) return;
+					const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);
+					const children = await processStarts(directory, 'dependency-starts.jsonl');
+					if (!waiting || !children.length) return;
+					expect(children).toHaveLength(1);
+					expect(() => process.kill(children[0]!.pid, 0)).not.toThrow();
+					expect(await processStarts(directory)).toEqual([]);
+					await showTasks(page);
+					const child = page.locator('[data-run-id]').filter({ hasText: 'Mock Agent Prepare — Running' });
+					await expect(child).toHaveCount(1);
+					childRunId = (await child.getAttribute('data-run-id'))!;
+					expect(childRunId).toBeTruthy();
+					await writeFile(join(directory, 'failure-release'), 'fail');
+				}));
 				const root = evidence.filter(item => item.name === 'tasks_status').at(-1)!.result;
 				expect(root).toMatchObject({ status: 'failed', terminalId: '', exitCode: null, ready: false });
 				expect(evidence.filter(item => item.name === 'tasks_run')).toHaveLength(1);
@@ -476,20 +310,15 @@ for (const taskKind of ['process', 'shell'] as const) {
 				mockModel.expectOutcome('preparing');
 				const { page, directory, readThread } = taskSession;
 				await submit(page, 'TASK_FIXTURE_RUN: Start the dependency chain and report its waiting root Run ID.');
-				const evidence = toolEvidence(
-					await completedTurn(page, readThread, 1, async () => {
-						const approval = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
-						await expect(approval).toContainText('task-middle.cjs');
-						await expect(approval).toContainText('task-leaf.cjs');
-					}),
-				);
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, async () => {
+					const approval = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
+					await expect(approval).toContainText('task-middle.cjs');
+					await expect(approval).toContainText('task-leaf.cjs');
+				}));
 				const root = evidence.filter(item => item.name === 'tasks_status').at(-1)!.result;
 				expect(root).toMatchObject({ status: 'running', terminalId: '', ready: false, exitCode: null });
 				await expect.poll(async () => (await processStarts(directory, 'dependency-starts.jsonl')).length).toBe(2);
-				const children = (await processStarts(directory, 'dependency-starts.jsonl')) as {
-					pid: number;
-					leaf: string;
-				}[];
+				const children = await processStarts(directory, 'dependency-starts.jsonl') as { pid: number; leaf: string; }[];
 				expect(children.map(child => child.leaf).sort()).toEqual(['A', 'B']);
 				for (const child of children) expect(() => process.kill(child.pid, 0)).not.toThrow();
 				expect(await processStarts(directory)).toEqual([]);
@@ -526,14 +355,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				for (const samples of [evidence, inspected]) {
 					const statuses = samples.filter(item => item.name === 'tasks_status' && item.result.terminalId);
 					expect(statuses.length).toBeGreaterThanOrEqual(3);
-					for (const status of statuses)
-						expect(status.result).toMatchObject({
-							runId: run.runId,
-							terminalId: run.terminalId,
-							status: 'running',
-							ready: false,
-							exitCode: null,
-						});
+					for (const status of statuses) expect(status.result).toMatchObject({ runId: run.runId, terminalId: run.terminalId, status: 'running', ready: false, exitCode: null });
 				}
 				expect(inspected.at(-1)!.result.text).toContain('STILL_BUILDING pid=' + starts[0]!.pid);
 				expect(() => process.kill(starts[0]!.pid, 0)).not.toThrow();
@@ -572,11 +394,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				mockModel.beginFollowup();
 				await submit(page, 'TASK_FIXTURE_INSPECT: Wait for Run ID ' + runId + ' to finish, recover cursor ' + staleCursor + ' if truncated, then read through EOF.');
 				const recovered = toolEvidence(await completedTurn(page, readThread, 2, false));
-				expect(recovered.filter(item => item.name === 'tasks_status').at(-1)!.result).toMatchObject({
-					runId,
-					status: 'succeeded',
-					exitCode: 0,
-				});
+				expect(recovered.filter(item => item.name === 'tasks_status').at(-1)!.result).toMatchObject({ runId, status: 'succeeded', exitCode: 0 });
 				const pages = recovered.filter(item => item.name === 'tasks_output');
 				const start = pages[0]!.result.cursor;
 				expect(start).toBeGreaterThan(staleCursor);
@@ -596,19 +414,13 @@ for (const taskKind of ['process', 'shell'] as const) {
 					expect(page.result.hasMore).toBe(page.result.nextCursor < start + retained.length);
 					if (page.result.text) {
 						const first = page.result.text.charCodeAt(0);
-						expect(first >= 0xdc00 && first <= 0xdfff).toBe(false);
+						expect(first >= 0xDC00 && first <= 0xDFFF).toBe(false);
 						const last = page.result.text.charCodeAt(page.result.text.length - 1);
-						expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+						expect(last >= 0xD800 && last <= 0xDBFF).toBe(false);
 					}
 					cursor = page.result.nextCursor;
 				}
-				expect(pages.at(-1)!.result).toMatchObject({
-					text: '',
-					cursor: start + retained.length,
-					nextCursor: start + retained.length,
-					hasMore: false,
-					truncated: false,
-				});
+				expect(pages.at(-1)!.result).toMatchObject({ text: '', cursor: start + retained.length, nextCursor: start + retained.length, hasMore: false, truncated: false });
 				const starts = await processStarts(directory);
 				expect(starts).toHaveLength(1);
 				await processExited(starts[0]!.pid);
@@ -623,28 +435,20 @@ for (const taskKind of ['process', 'shell'] as const) {
 				const { page, directory, readThread } = taskSession;
 				let dependencyPid: number | undefined;
 				await submit(page, 'TASK_FIXTURE_RUN: Discover and run the existing Task with its dependency.');
-				const evidence = toolEvidence(
-					await completedTurn(
-						page,
-						readThread,
-						1,
-						async () => {
-							await expect(page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible')).toContainText('task-prepare.cjs');
-						},
-						async turn => {
-							if (dependencyPid) return;
-							const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);
-							const dependencies = await processStarts(directory, 'dependency-starts.jsonl');
-							if (!waiting || !dependencies.length) return;
-							expect(dependencies).toHaveLength(1);
-							dependencyPid = dependencies[0]!.pid;
-							expect(() => process.kill(dependencyPid!, 0)).not.toThrow();
-							expect(await processStarts(directory)).toEqual([]);
-							expect(await readFile(join(directory, 'task-order.txt'), 'utf8')).toBe('prepare-start\n');
-							await writeFile(join(directory, 'prepare-release'), 'continue');
-						},
-					),
-				);
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, async () => {
+					await expect(page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible')).toContainText('task-prepare.cjs');
+				}, async turn => {
+					if (dependencyPid) return;
+					const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);
+					const dependencies = await processStarts(directory, 'dependency-starts.jsonl');
+					if (!waiting || !dependencies.length) return;
+					expect(dependencies).toHaveLength(1);
+					dependencyPid = dependencies[0]!.pid;
+					expect(() => process.kill(dependencyPid!, 0)).not.toThrow();
+					expect(await processStarts(directory)).toEqual([]);
+					expect(await readFile(join(directory, 'task-order.txt'), 'utf8')).toBe('prepare-start\n');
+					await writeFile(join(directory, 'prepare-release'), 'continue');
+				}));
 				expect(dependencyPid).toBeDefined();
 				await processExited(dependencyPid!);
 				expect(await readFile(join(directory, 'task-order.txt'), 'utf8')).toBe('prepare-start\nprepare-finish\nroot-start\n');
@@ -671,20 +475,18 @@ for (const taskKind of ['process', 'shell'] as const) {
 				const { page, directory, readThread } = taskSession;
 				let released = false;
 				await submit(page, 'TASK_FIXTURE_RUN: Run the background Task and wait for its ready status.');
-				const evidence = toolEvidence(
-					await completedTurn(page, readThread, 1, true, async turn => {
-						if (released) return;
-						const pending = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.terminalId && !item.result.ready);
-						const starts = await processStarts(directory);
-						if (!pending || !starts.length) return;
-						expect(pending.result).toMatchObject({ status: 'running', ready: false, exitCode: null });
-						expect(() => process.kill(starts[0]!.pid, 0)).not.toThrow();
-						// Verify the start marker has reached the real Terminal before ending the watch cycle.
-						await expect(page.locator('.ash-terminal-instance:visible')).toContainText('BUILD');
-						await writeFile(join(directory, 'ready-release'), 'continue');
-						released = true;
-					}),
-				);
+				const evidence = toolEvidence(await completedTurn(page, readThread, 1, true, async turn => {
+					if (released) return;
+					const pending = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.terminalId && !item.result.ready);
+					const starts = await processStarts(directory);
+					if (!pending || !starts.length) return;
+					expect(pending.result).toMatchObject({ status: 'running', ready: false, exitCode: null });
+					expect(() => process.kill(starts[0]!.pid, 0)).not.toThrow();
+					// Verify the start marker has reached the real Terminal before ending the watch cycle.
+					await expect(page.locator('.ash-terminal-instance:visible')).toContainText('BUILD');
+					await writeFile(join(directory, 'ready-release'), 'continue');
+					released = true;
+				}));
 				expect(released).toBe(true);
 				const statuses = evidence.filter(item => item.name === 'tasks_status');
 				expect(statuses.some(item => item.result.ready === false)).toBe(true);
@@ -712,10 +514,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				await submit(taskSession.page, 'TASK_FIXTURE_RUN: Run the finite Task, then read all output pages through EOF.');
 				const evidence = toolEvidence(await completedTurn(taskSession.page, taskSession.readThread, 1, true));
 				const runId = evidence.find(item => item.name === 'tasks_run')!.result.runId;
-				expect(evidence.filter(item => item.name === 'tasks_status').at(-1)!.result).toMatchObject({
-					status: 'succeeded',
-					exitCode: 0,
-				});
+				expect(evidence.filter(item => item.name === 'tasks_status').at(-1)!.result).toMatchObject({ status: 'succeeded', exitCode: 0 });
 				const [reference, ...pages] = evidence.filter(item => item.name === 'tasks_output');
 				expect(reference!.arguments).toMatchObject({ run_id: runId, cursor: 0, max_characters: 65536 });
 				expect(reference!.result).toMatchObject({ cursor: 0, hasMore: false, truncated: false });
@@ -731,16 +530,11 @@ for (const taskKind of ['process', 'shell'] as const) {
 					expect(page.result.truncated).toBe(false);
 					expect(page.result.hasMore).toBe(page.result.nextCursor < completeOutput.length);
 					// A one-unit budget must return a complete supplementary code point.
-					for (const point of Array.from(page.result.text)) expect(point.codePointAt(0)! >= 0xd800 && point.codePointAt(0)! <= 0xdfff).toBe(false);
+					for (const point of Array.from(page.result.text)) expect(point.codePointAt(0)! >= 0xD800 && point.codePointAt(0)! <= 0xDFFF).toBe(false);
 					cursor = page.result.nextCursor;
 				}
 				expect(pages.some(item => item.result.text === '😀' && item.result.nextCursor - item.result.cursor === 2)).toBe(true);
-				expect(pages.at(-1)!.result).toMatchObject({
-					text: '',
-					cursor: completeOutput.length,
-					nextCursor: completeOutput.length,
-					hasMore: false,
-				});
+				expect(pages.at(-1)!.result).toMatchObject({ text: '', cursor: completeOutput.length, nextCursor: completeOutput.length, hasMore: false });
 				const starts = await processStarts(taskSession.directory);
 				expect(starts).toHaveLength(1);
 				await processExited(starts[0]!.pid);
@@ -782,12 +576,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				const retained = toolEvidence(await completedTurn(page, readThread, 3, false));
 				expect(retained.map(item => item.name)).toEqual(['tasks_status', 'tasks_output']);
 				for (const item of retained) expect(item.arguments.run_id).toBe(old.runId);
-				expect(retained[0]!.result).toMatchObject({
-					runId: old.runId,
-					terminalId: old.terminalId,
-					status: 'succeeded',
-					exitCode: 0,
-				});
+				expect(retained[0]!.result).toMatchObject({ runId: old.runId, terminalId: old.terminalId, status: 'succeeded', exitCode: 0 });
 				expect(retained[1]!.result.text).toBe(firstOutput);
 				const starts = await processStarts(directory);
 				expect(starts).toHaveLength(2);
@@ -916,11 +705,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 			const terminalId = status!.result.terminalId;
 			const output = results.find(result => result.name === 'tasks_output' && result.result.text.includes(taskMarker));
 			expect(output).toBeDefined();
-			const processStarts = async (): Promise<{ pid: number }[]> =>
-				(await readFile(join(directory, 'task-starts.jsonl'), 'utf8'))
-					.trim()
-					.split('\n')
-					.map(line => JSON.parse(line));
+			const processStarts = async (): Promise<{ pid: number; }[]> => (await readFile(join(directory, 'task-starts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 			const launched = await processStarts();
 			expect(launched).toHaveLength(1);
 			const pid = launched[0]!.pid;
@@ -950,20 +735,12 @@ for (const taskKind of ['process', 'shell'] as const) {
 				expect(evidence[2]!.result.text).toContain(taskMarker + ' pid=' + pid + ' 😀');
 				expect(evidence[2]!.result.text.startsWith(output!.result.text)).toBe(true);
 				expect(evidence[2]!.result.nextCursor).toBe(evidence[2]!.result.text.length);
-				await expect
-					.poll(
-						() => {
-							try {
-								process.kill(pid, 0);
-								return true;
-							} catch (error) {
-								if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-								return false;
-							}
-						},
-						{ timeout: 15_000 },
-					)
-					.toBe(false);
+				await expect.poll(() => {
+					try { process.kill(pid, 0); return true; } catch (error) {
+						if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+						return false;
+					}
+				}, { timeout: 15_000 }).toBe(false);
 				await page.locator('[data-part="panel"]').getByRole('tab', { name: 'Tasks', exact: true }).click();
 				await expect(page.locator('[data-run-id="' + runId + '"]')).toContainText(taskLabel + ' — Canceled');
 				expect(await processStarts()).toEqual(launched);

@@ -115,22 +115,22 @@ export class WordOperations {
 		const line = model.getLineContent(position.lineNumber);
 		const startIndex = position.column - 2;
 		const lastNonWhitespace = strings.lastNonWhitespaceIndex(line, startIndex);
-		return lastNonWhitespace + 1 < startIndex ? new Range(position.lineNumber, lastNonWhitespace + 2, position.lineNumber, position.column) : null;
+		return lastNonWhitespace + 1 < startIndex
+			? new Range(position.lineNumber, lastNonWhitespace + 2, position.lineNumber, position.column)
+			: null;
 	}
 
 	public static deleteWordLeft(context: DeleteWordContext, wordNavigationType: WordNavigationType): Range | null {
 		if (!context.selection.isEmpty()) return context.selection;
-		if (
-			DeleteOperations.isAutoClosingPairDelete(
-				context.autoClosingDelete,
-				context.autoClosingBrackets,
-				context.autoClosingQuotes,
-				context.autoClosingPairs.autoClosingPairsOpenByEnd,
-				context.model,
-				[context.selection],
-				context.autoClosedCharacters,
-			)
-		) {
+		if (DeleteOperations.isAutoClosingPairDelete(
+			context.autoClosingDelete,
+			context.autoClosingBrackets,
+			context.autoClosingQuotes,
+			context.autoClosingPairs.autoClosingPairsOpenByEnd,
+			context.model,
+			[context.selection],
+			context.autoClosedCharacters,
+		)) {
 			const position = context.selection.getPosition();
 			return new Range(position.lineNumber, position.column - 1, position.lineNumber, position.column + 1);
 		}
@@ -195,9 +195,8 @@ export class WordOperations {
 	public static getWordAtPosition(model: ITextModel, wordSeparators: string, intlSegmenterLocales: string[], position: Position): IWordAtPosition | null {
 		const classifier = getMapForWordSeparators(wordSeparators, intlSegmenterLocales);
 		const offset = position.column - 1;
-		const word = [previousWord(classifier, model, position), nextWord(classifier, model, position)].find(
-			candidate => candidate?.type === WordBoundaryType.Regular && candidate.start <= offset && offset <= candidate.end,
-		);
+		const word = [previousWord(classifier, model, position), nextWord(classifier, model, position)]
+			.find(candidate => candidate?.type === WordBoundaryType.Regular && candidate.start <= offset && offset <= candidate.end);
 		if (!word) return null;
 		const range = new Range(position.lineNumber, word.start + 1, position.lineNumber, word.end + 1);
 		return { word: model.getValueInRange(range), startColumn: range.startColumn, endColumn: range.endColumn };
@@ -379,12 +378,9 @@ function isWordPartBoundary(line: string, column: number, direction: 'left' | 'r
 	if (direction === 'left' && (left === CharCode.Underline || left === CharCode.Dash) && left !== right) return true;
 	if (direction === 'right' && (right === CharCode.Underline || right === CharCode.Dash) && left !== right) return true;
 	if ((strings.isLowerAsciiLetter(left) || strings.isAsciiDigit(left)) && strings.isUpperAsciiLetter(right)) return true;
-	return (
-		strings.isUpperAsciiLetter(left) &&
-		strings.isUpperAsciiLetter(right) &&
-		column < line.length &&
-		(strings.isLowerAsciiLetter(line.charCodeAt(column)) || strings.isAsciiDigit(line.charCodeAt(column)))
-	);
+	return strings.isUpperAsciiLetter(left) && strings.isUpperAsciiLetter(right)
+		&& column < line.length
+		&& (strings.isLowerAsciiLetter(line.charCodeAt(column)) || strings.isAsciiDigit(line.charCodeAt(column)));
 }
 
 function isWhitespace(text: string, index: number): boolean {

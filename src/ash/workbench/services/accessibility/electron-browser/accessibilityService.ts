@@ -17,19 +17,16 @@ export class NativeAccessibilityService extends AccessibilityService {
 		super({ root, contextKeyService, configurationService });
 		let active = true;
 		let supportChangedByEvent = false;
-		const subscription = host.onDidChangeAccessibilitySupport(enabled => {
+		const subscription = host.onDidChangeAccessibilitySupport((enabled) => {
 			supportChangedByEvent = true;
 			if (active) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 		});
-		this._register(
-			toDisposable(() => {
-				active = false;
-				subscription.dispose();
-			}),
-		);
-		void host
-			.isAccessibilitySupportEnabled()
-			.then(enabled => {
+		this._register(toDisposable(() => {
+			active = false;
+			subscription.dispose();
+		}));
+		void host.isAccessibilitySupportEnabled()
+			.then((enabled) => {
 				if (active && !supportChangedByEvent) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 			})
 			.catch((error: unknown) => console.error('Failed to read Electron accessibility support', error));

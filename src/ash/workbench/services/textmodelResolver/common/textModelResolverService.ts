@@ -2,10 +2,17 @@ import type { FileReadOperation } from '../../../../platform/files/common/files.
 import { toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
-import { ITextModelService, type IResolvedTextEditorModel, type ITextModelContentProvider } from '../../../../editor/common/services/resolverService.js';
+import {
+	ITextModelService,
+	type IResolvedTextEditorModel,
+	type ITextModelContentProvider,
+} from '../../../../editor/common/services/resolverService.js';
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextResourceEditorModel } from '../../../common/editor/textResourceEditorModel.js';
-import { ITextModelResourceService, type ITextModelResourceService as ITextModelResourceServiceContract } from './textModelResourceService.js';
+import {
+	ITextModelResourceService,
+	type ITextModelResourceService as ITextModelResourceServiceContract,
+} from './textModelResourceService.js';
 
 /** Resolves Workbench resources through the existing reference-counted text model owner. */
 export class TextModelResolverService implements ITextModelService {
@@ -13,9 +20,9 @@ export class TextModelResolverService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) {}
+	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) { }
 
-	async createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation }): Promise<IReference<IResolvedTextEditorModel>> {
+	async createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation; }): Promise<IReference<IResolvedTextEditorModel>> {
 		const provider = options ? undefined : this.contentProviders.get(resource.scheme);
 		if (provider) {
 			const model = await provider.provideTextContent(resource);

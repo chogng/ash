@@ -12,7 +12,7 @@ export const ITextModelService = createDecorator<ITextModelService>('textModelSe
 /** Resolves URI-backed text models without owning persistence or dirty state. */
 export interface ITextModelService {
 	readonly _serviceBrand: undefined;
-	createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation }): Promise<IReference<IResolvedTextEditorModel>>;
+	createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation; }): Promise<IReference<IResolvedTextEditorModel>>;
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable;
 	canHandleResource(resource: URI): boolean;
 }
@@ -61,7 +61,7 @@ export function createResolvedTextEditorModelReference(model: ITextModel, releas
 	const object: IResolvedTextEditorModel = {
 		textEditorModel: model,
 		onWillDispose: willDispose.event,
-		resolve: async () => {},
+		resolve: async () => { },
 		isResolved: () => !released && !model.isDisposed(),
 		createSnapshot: () => model.createSnapshot(),
 		isReadonly: () => false,

@@ -139,7 +139,12 @@ export class ScreenReaderSupport extends Disposable {
 	private synchronize(): void {
 		const content = this.content.value;
 		if (!content) return;
-		if (this.isDisposed || !this.isEnabled() || !this.focused || this.options.viewController.compositionController.composing) {
+		if (
+			this.isDisposed ||
+			!this.isEnabled() ||
+			!this.focused ||
+			this.options.viewController.compositionController.composing
+		) {
 			content.clear();
 			this.resetNativeScreenReaderLayout();
 			return;
@@ -151,7 +156,13 @@ export class ScreenReaderSupport extends Disposable {
 		const content = this.content.value;
 		if (!content) return;
 		const state = content.getState();
-		if (!state || this.isDisposed || !this.isEnabled() || !this.focused || this.options.viewController.compositionController.composing) {
+		if (
+			!state ||
+			this.isDisposed ||
+			!this.isEnabled() ||
+			!this.focused ||
+			this.options.viewController.compositionController.composing
+		) {
 			this.resetNativeScreenReaderLayout();
 			return;
 		}
@@ -162,14 +173,12 @@ export class ScreenReaderSupport extends Disposable {
 		const scrollPosition = viewportLayout.scrollPosition;
 		const viewportWidth = viewportLayout.viewportSize.width;
 		const viewportHeight = viewportLayout.viewportSize.height;
-		const cursorVisible =
-			viewportWidth > 0 &&
-			viewportHeight > 0 &&
+		const cursorVisible = viewportWidth > 0 && viewportHeight > 0 &&
 			position.left >= scrollPosition.left &&
 			position.left <= scrollPosition.left + viewportWidth &&
 			position.top >= scrollPosition.top &&
 			position.top <= scrollPosition.top + viewportHeight;
-		const textLeft = this.options.viewport.getPositionContentCoordinates(new Position(0 + 1, 0 + 1)).left;
+		const textLeft = this.options.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)).left;
 		const desiredLeft = cursorVisible ? textLeft - scrollPosition.left : 0;
 		const desiredTop = cursorVisible ? position.top - scrollPosition.top : 0;
 		const lineHeight = Math.max(1, position.height);
@@ -199,10 +208,19 @@ export class ScreenReaderSupport extends Disposable {
 			return;
 		}
 		const content = renderRichContent
-			? new RichScreenReaderContent(this.options.domNode, this.options.context, this.options.viewController, {
+			? new RichScreenReaderContent(
+				this.options.domNode,
+				this.options.context,
+				this.options.viewController,
+				{
 					semanticTokenSource: this.options.semanticTokenSource,
-				})
-			: new SimpleScreenReaderContent(this.options.domNode, this.options.context, this.options.viewController);
+				},
+			)
+			: new SimpleScreenReaderContent(
+				this.options.domNode,
+				this.options.context,
+				this.options.viewController,
+			);
 		content.onConfigurationChanged(configuration.options);
 		content.onFocusChange(this.focused);
 		this.content.value = content;

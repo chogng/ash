@@ -14,8 +14,8 @@ export interface IPathLabelFormatting {
 export interface IRelativePathProvider {
 	readonly noPrefix?: boolean;
 
-	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string }[] };
-	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string } | null;
+	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string; }[]; };
+	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string; } | null;
 }
 
 /** Supplies the home resource used for `~` path shortening. */
@@ -25,7 +25,9 @@ export interface IUserHomeProvider {
 
 /** Formats a resource using the target operating system's path conventions. */
 export function getPathLabel(resource: URI, formatting: IPathLabelFormatting): string {
-	const relative = formatting.relative ? getRelativePathLabel(resource, formatting.relative, formatting.os) : undefined;
+	const relative = formatting.relative
+		? getRelativePathLabel(resource, formatting.relative, formatting.os)
+		: undefined;
 	if (relative !== undefined) return relative;
 
 	let path = resourcePath(resource, formatting.os);
@@ -149,7 +151,9 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? '\\'
 					const otherPath = paths[otherPathIndex];
 					if (otherPathIndex === pathIndex || !otherPath || !otherPath.includes(subpath)) continue;
 					const isSubpathEnding = start + subpathLength === segments.length;
-					const subpathWithSeparator = start > 0 && otherPath.includes(pathSeparator) ? `${pathSeparator}${subpath}` : subpath;
+					const subpathWithSeparator = start > 0 && otherPath.includes(pathSeparator)
+						? `${pathSeparator}${subpath}`
+						: subpath;
 					const isOtherPathEnding = otherPath.endsWith(subpathWithSeparator);
 					matchesOtherPath = !isSubpathEnding || isOtherPathEnding;
 				}
@@ -170,7 +174,9 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? '\\'
 				if (start > 0) result += `${ellipsis}${pathSeparator}`;
 				if (!result.endsWith(subpath)) result += subpath;
 				if (start + subpathLength < segments.length) {
-					result += segments[start + subpathLength] === '' && start + subpathLength === segments.length - 1 ? pathSeparator : `${pathSeparator}${ellipsis}`;
+					result += segments[start + subpathLength] === '' && start + subpathLength === segments.length - 1
+						? pathSeparator
+						: `${pathSeparator}${ellipsis}`;
 				}
 				shortenedPaths[pathIndex] = result;
 				found = true;
@@ -187,7 +193,7 @@ export interface ISeparator {
 
 /** Expands `${variable}` placeholders and omits separators beside empty values. */
 export function template(value: string, values: Readonly<Record<string, string | ISeparator | undefined | null>> = {}): string {
-	const segments: { readonly value: string; readonly separator: boolean }[] = [];
+	const segments: { readonly value: string; readonly separator: boolean; }[] = [];
 	let current = '';
 	let variable = false;
 	for (const character of value) {
@@ -211,15 +217,12 @@ export function template(value: string, values: Readonly<Record<string, string |
 		current += character;
 	}
 	if (current && !variable) segments.push({ value: current, separator: false });
-	return segments
-		.filter((segment, index) => {
-			if (!segment.separator) return true;
-			const left = segments[index - 1];
-			const right = segments[index + 1];
-			return Boolean(left?.value && !left.separator && right?.value && !right.separator);
-		})
-		.map(segment => segment.value)
-		.join('');
+	return segments.filter((segment, index) => {
+		if (!segment.separator) return true;
+		const left = segments[index - 1];
+		const right = segments[index + 1];
+		return Boolean(left?.value && !left.separator && right?.value && !right.separator);
+	}).map(segment => segment.value).join('');
 }
 
 /** Applies platform-specific mnemonic escaping to a menu label. */
@@ -227,16 +230,18 @@ export function mnemonicMenuLabel(label: string, forceDisableMnemonics = false):
 	if (isMacintosh || forceDisableMnemonics) {
 		return label.replace(/\(&&\w\)|&&/gu, '').replace(/&/gu, isMacintosh ? '&' : '&&');
 	}
-	return label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&'));
+	return label.replace(/&&|&/gu, match => match === '&' ? '&&' : '&');
 }
 
 export function mnemonicButtonLabel(label: string, forceDisableMnemonics: true): string;
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string };
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string } | string {
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string; };
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string; } | string {
 	const withoutMnemonic = label.replace(/\(&&\w\)|&&/gu, '');
 	if (forceDisableMnemonics) return withoutMnemonic;
 	if (isMacintosh) return { withMnemonic: withoutMnemonic, withoutMnemonic };
-	const withMnemonic = isWindows ? label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&')) : label.replace(/&&/gu, '_');
+	const withMnemonic = isWindows
+		? label.replace(/&&|&/gu, match => match === '&' ? '&&' : '&')
+		: label.replace(/&&/gu, '_');
 	return { withMnemonic, withoutMnemonic };
 }
 
@@ -246,7 +251,7 @@ export function unmnemonicLabel(label: string): string {
 }
 
 /** Splits a recent workspace label into its visible name and containing path. */
-export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string } {
+export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string; } {
 	if (recentLabel.endsWith(']')) {
 		const suffixStart = recentLabel.lastIndexOf(' [', recentLabel.length - 2);
 		if (suffixStart !== -1) {
@@ -257,7 +262,7 @@ export function splitRecentLabel(recentLabel: string): { readonly name: string; 
 	return splitName(recentLabel);
 }
 
-function splitName(fullPath: string): { readonly name: string; readonly parentPath: string } {
+function splitName(fullPath: string): { readonly name: string; readonly parentPath: string; } {
 	const separator = Math.max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'));
 	const name = fullPath.slice(separator + 1);
 	const parentPath = separator === -1 ? '' : fullPath.slice(0, separator) || fullPath.slice(0, separator + 1);

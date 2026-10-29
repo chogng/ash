@@ -49,10 +49,7 @@ registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationTyp
 
 /** Owns the browser services and Workbench created for one Sessions embedder. */
 export class SessionsBrowserMain extends Disposable {
-	constructor(
-		private readonly container: HTMLElement,
-		private readonly profile: SessionsProfile,
-	) {
+	constructor(private readonly container: HTMLElement, private readonly profile: SessionsProfile) {
 		super();
 	}
 
@@ -61,23 +58,9 @@ export class SessionsBrowserMain extends Disposable {
 		const { container, profile } = this;
 		try {
 			let documentClient: AppServerProtocolClient | undefined;
-			const connectedHost = await connectBrowserWorkbenchHost(
-				[
-					client => {
-						documentClient = client;
-						return {};
-					},
-				],
-				true,
-				true,
-			);
-			if (this.isDisposed) {
-				connectedHost?.dispose();
-				this.assertNotDisposed();
-			}
-			if (connectedHost) {
-				this._register(connectedHost);
-			}
+			const connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
+			if (this.isDisposed) { connectedHost?.dispose(); this.assertNotDisposed(); }
+			if (connectedHost) { this._register(connectedHost); }
 			installBaseUiStyles();
 			this.assertNotDisposed();
 			const host = globalThis.ashWebWorkbenchHost;
@@ -94,15 +77,10 @@ export class SessionsBrowserMain extends Disposable {
 					]),
 				]),
 				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
-				createTextDocumentHost: documentClient
-					? services => {
-							const editing = services.get(IChatEditingService);
-							return services.createInstance(AppServerTextDocumentHost, documentClient!, {
-								applyEdits: editing.applyEdits.bind(editing),
-								finishTurn: editing.finishTurn.bind(editing),
-							});
-						}
-					: undefined,
+				createTextDocumentHost: documentClient ? services => {
+					const editing = services.get(IChatEditingService);
+					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
+				} : undefined,
 				contributionIds: [
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
@@ -138,18 +116,14 @@ export class SessionsBrowserMain extends Disposable {
 				createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 				profile,
 				api: host?.api ?? createDisconnectedRendererApi(),
-				workspaceSelection: () => (host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' }),
-				workspace: () => (host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] }),
-				createUserDataFileSystemProvider: () =>
-					IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(async provider => {
-						try {
-							await migrateLegacyBrowserSettings(ownerWindow.indexedDB, provider, SettingsURI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
-							return provider;
-						} catch (error) {
-							provider.dispose();
-							throw error;
-						}
-					}),
+				workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
+				workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
+				createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(async provider => {
+					try {
+						await migrateLegacyBrowserSettings(ownerWindow.indexedDB, provider, SettingsURI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+						return provider;
+					} catch (error) { provider.dispose(); throw error; }
+				}),
 				browserFileSystemProvider: browserFiles,
 				createFileDialogService: services => {
 					const common = {
@@ -161,21 +135,7 @@ export class SessionsBrowserMain extends Disposable {
 					if (host?.webWorkspaceClient) {
 						return services.createInstance(FileDialogService, { ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
 					}
-					return services.createInstance(
-						FileDialogService,
-						{
-							...common,
-							kind: 'local',
-							provider: browserFiles!,
-							pickDirectory: (startIn?: FileSystemDirectoryHandle) =>
-								(
-									ownerWindow as unknown as Window & {
-										showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>;
-									}
-								).showDirectoryPicker(startIn ? { startIn } : undefined),
-						},
-						dialogs,
-					);
+					return services.createInstance(FileDialogService, { ...common, kind: 'local', provider: browserFiles!, pickDirectory: (startIn?: FileSystemDirectoryHandle) => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
 				},
 				createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 				returnToWorkbench: () => {
@@ -187,10 +147,7 @@ export class SessionsBrowserMain extends Disposable {
 				createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
 				container,
 			});
-			if (this.isDisposed) {
-				workbench.dispose();
-				this.assertNotDisposed();
-			}
+			if (this.isDisposed) { workbench.dispose(); this.assertNotDisposed(); }
 			this._register(workbench);
 			await workbench.whenRestored;
 			this.assertNotDisposed();

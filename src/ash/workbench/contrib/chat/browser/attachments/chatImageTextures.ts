@@ -1,12 +1,6 @@
 /** A small image grid used by the transient glyph layer; the original image remains untouched. */
 export class ImageSamples {
-	private constructor(
-		public readonly width: number,
-		public readonly height: number,
-		private readonly columns: number,
-		private readonly rows: number,
-		private readonly pixels: Uint8ClampedArray,
-	) {}
+	private constructor(public readonly width: number, public readonly height: number, private readonly columns: number, private readonly rows: number, private readonly pixels: Uint8ClampedArray) { }
 
 	static create(image: HTMLImageElement, width: number, height: number): ImageSamples | undefined {
 		const canvas = image.ownerDocument.createElement('canvas');
@@ -20,9 +14,7 @@ export class ImageSamples {
 		} catch {
 			// A cross-origin image may be displayed without granting access to its pixels.
 			return undefined;
-		} finally {
-			canvas.width = canvas.height = 0;
-		}
+		} finally { canvas.width = canvas.height = 0; }
 	}
 
 	colorAt(x: number, y: number): string {
@@ -42,7 +34,7 @@ export interface ITextureFrame {
 
 export interface ITextureRevealTiming {
 	readonly loadingTime: number;
-	readonly pace: { readonly duration: number };
+	readonly pace: { readonly duration: number; };
 }
 
 export interface ITextureRevealOptions {

@@ -48,7 +48,12 @@ function createFileDataTransferItemFromFile(file: File): IDataTransferItem {
 	return createFileDataTransferItem(file.name, path ? URI.file(path) : undefined, async () => new Uint8Array(await file.arrayBuffer()));
 }
 
-const INTERNAL_DND_MIME_TYPES = Object.freeze([CodeDataTransfers.EDITORS, CodeDataTransfers.FILES, DataTransfers.RESOURCES, DataTransfers.INTERNAL_URI_LIST]);
+const INTERNAL_DND_MIME_TYPES = Object.freeze([
+	CodeDataTransfers.EDITORS,
+	CodeDataTransfers.FILES,
+	DataTransfers.RESOURCES,
+	DataTransfers.INTERNAL_URI_LIST,
+]);
 
 export function toExternalVSDataTransfer(sourceDataTransfer: DataTransfer, overwriteUriList = false): VSDataTransfer {
 	const result = toVSDataTransfer(sourceDataTransfer);

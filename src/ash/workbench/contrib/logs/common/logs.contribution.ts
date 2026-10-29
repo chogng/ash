@@ -13,68 +13,43 @@ class LogsContribution extends Disposable {
 
 	constructor(@ILoggerService loggers: ILoggerService, @IOutputService output: IOutputService) {
 		super();
-		this._register(
-			registerAction2(
-				class ShowWindowLogAction extends Action2 {
-					constructor() {
-						super({
-							id: showWindowLogActionId,
-							title: localize2('show window log', 'Developer: Show Window Log'),
-							f1: true,
-						});
-					}
-					override run(accessor: ServicesAccessor): void {
-						accessor.get(IOutputService).showChannel(windowLogId);
-					}
-				},
-			),
-		);
+		this._register(registerAction2(class ShowWindowLogAction extends Action2 {
+			constructor() {
+				super({ id: showWindowLogActionId, title: localize2('show window log', 'Developer: Show Window Log'), f1: true });
+			}
+			override run(accessor: ServicesAccessor): void {
+				accessor.get(IOutputService).showChannel(windowLogId);
+			}
+		}));
 		const add = (info: ILoggerResource): void => {
 			if (info.hidden || this.channels.has(info.id)) return;
 			const logger = loggers.getLogger(info.id);
 			if (!logger) return;
 			const lifetime = new DisposableStore();
 			const label = info.name ?? info.id;
-			const channel = lifetime.add(
-				output.createChannel({
-					id: `logger.${encodeURIComponent(info.id)}`,
-					label,
-					kind: 'log',
-					source: 'core',
-					extensionId: info.extensionId,
-					logger: { label, control: logger },
-				}),
-			);
-			lifetime.add(
-				logger.registerSink(
-					{
-						log: entry => {
-							const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error;
-							channel.appendLine({
-								timestamp: entry.timestampMillis,
-								severity: entry.level,
-								category: entry.category,
-								text: error === undefined ? entry.message : `${entry.message}\n${String(error)}`,
-							});
-						},
-					},
-					true,
-				),
-			);
+			const channel = lifetime.add(output.createChannel({
+				id: `logger.${encodeURIComponent(info.id)}`, label, kind: 'log', source: 'core', extensionId: info.extensionId,
+				logger: { label, control: logger },
+			}));
+			lifetime.add(logger.registerSink({
+				log: entry => {
+					const error = entry.error instanceof Error ? entry.error.stack ?? entry.error.message : entry.error;
+					channel.appendLine({
+						timestamp: entry.timestampMillis, severity: entry.level, category: entry.category,
+						text: error === undefined ? entry.message : `${entry.message}\n${String(error)}`,
+					});
+				}
+			}, true));
 			this.channels.set(info.id, lifetime);
 		};
-		this._register(
-			loggers.onDidChangeLoggers(event => {
-				for (const info of event.removed) this.channels.deleteAndDispose(info.id);
-				for (const info of event.added) add(info);
-			}),
-		);
-		this._register(
-			loggers.onDidChangeVisibility(([id, visible]) => {
-				if (!visible) this.channels.deleteAndDispose(id);
-				else for (const info of loggers.getRegisteredLoggers()) if (info.id === id) add(info);
-			}),
-		);
+		this._register(loggers.onDidChangeLoggers(event => {
+			for (const info of event.removed) this.channels.deleteAndDispose(info.id);
+			for (const info of event.added) add(info);
+		}));
+		this._register(loggers.onDidChangeVisibility(([id, visible]) => {
+			if (!visible) this.channels.deleteAndDispose(id);
+			else for (const info of loggers.getRegisteredLoggers()) if (info.id === id) add(info);
+		}));
 		for (const info of loggers.getRegisteredLoggers()) add(info);
 	}
 }

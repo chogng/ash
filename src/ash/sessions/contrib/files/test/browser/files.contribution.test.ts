@@ -45,21 +45,14 @@ test('Sessions Files selects one view from the current folder state and creates 
 	services.registerInstance(IConfigurationService, configuration);
 	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
 	using storageOwner = toDisposable(() => storageEnvironment.window.close());
-	using storage = new BrowserStorageService({
-		ownerWindow: browserEnvironment.window as unknown as Window,
-		workspaceId: 'empty',
-		backend: storageEnvironment.window.localStorage,
-		flushInterval: 0,
-	});
+	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using commands = new CommandService(services);
 	services.registerInstance(IMenuService, new MenuService(commands, contexts));
 	using host = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,
 		model,
-		onDidFailCreateView: (error: unknown) => {
-			throw error;
-		},
+		onDidFailCreateView: (error: unknown) => { throw error; },
 	});
 	const message = host.element.querySelector('[role="status"]');
 	assert.equal(message?.textContent, 'Folders and files will appear here.');
@@ -68,11 +61,8 @@ test('Sessions Files selects one view from the current folder state and creates 
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		assert.equal(message?.textContent, 'Folders and files will appear here.');
 		using translated = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
-			viewContainer: model.viewContainer,
-			model,
-			onDidFailCreateView: (error: unknown) => {
-				throw error;
-			},
+			viewContainer: model.viewContainer, model,
+			onDidFailCreateView: (error: unknown) => { throw error; },
 		});
 		assert.equal(translated.element.querySelector('[role="status"]')?.textContent, '文件夹和文件将在这里显示。');
 		host.getView(SESSIONS_FILES_EMPTY_VIEW_ID)!.focus();
@@ -87,10 +77,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	const remote = ['first.bin', 'second.bin'].map(name => URI.from({ scheme: ASH_REMOTE_SCHEME, authority: 'host', path: `/project/${name}` }));
 	const inputs = [...remote, URI.file('/local.txt')].map(resource => new FileEditorInput(resource));
 	const group = {
-		id: 1,
-		inputs,
-		selectedInputs: inputs,
-		activeInput: inputs[0],
+		id: 1, inputs, selectedInputs: inputs, activeInput: inputs[0],
 		editors: inputs.map(input => ({ input })),
 	} as unknown as IEditorGroup;
 	using services = new InstantiationService();
@@ -102,15 +89,11 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	const blobs: Blob[] = [];
 	let revokedCount = 0;
 	let finishRevoking!: () => void;
-	const revoked = new Promise<void>(resolve => {
-		finishRevoking = resolve;
-	});
+	const revoked = new Promise<void>(resolve => { finishRevoking = resolve; });
 	let fail = false;
 	services.registerInstance(IFileService, {
 		readFileBytes: async resource => {
-			if (fail) {
-				throw new Error('Remote file unavailable');
-			}
+			if (fail) { throw new Error('Remote file unavailable'); }
 			reads.push(resource);
 			return { resource, bytes: new Uint8Array([0, 255, 42]), revision: 'revision' };
 		},
@@ -118,18 +101,11 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	const previousCreate = browser.window.URL.createObjectURL;
 	const previousRevoke = browser.window.URL.revokeObjectURL;
 	const previousClick = browser.window.HTMLAnchorElement.prototype.click;
-	browser.window.URL.createObjectURL = (blob: Blob) => {
-		blobs.push(blob);
-		return 'blob:download';
-	};
+	browser.window.URL.createObjectURL = (blob: Blob) => { blobs.push(blob); return 'blob:download'; };
 	browser.window.URL.revokeObjectURL = () => {
-		if (++revokedCount === remote.length) {
-			finishRevoking();
-		}
+		if (++revokedCount === remote.length) { finishRevoking(); }
 	};
-	browser.window.HTMLAnchorElement.prototype.click = function () {
-		downloads.push(this.download);
-	};
+	browser.window.HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
 	try {
 		using commands = new CommandService(services);
 		await commands.executeCommand(DownloadRemoteFileAction.ID, { groupId: group.id });
@@ -141,10 +117,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 		}
 		fail = true;
 		await assert.rejects(commands.executeCommand(DownloadRemoteFileAction.ID, { groupId: group.id }), /Remote file unavailable/);
-		assert.deepEqual(
-			notifications.model.getNotifications().map(item => item.message),
-			['Remote file unavailable'],
-		);
+		assert.deepEqual(notifications.model.getNotifications().map(item => item.message), ['Remote file unavailable']);
 	} finally {
 		browser.window.URL.createObjectURL = previousCreate;
 		browser.window.URL.revokeObjectURL = previousRevoke;
@@ -157,11 +130,7 @@ test('Sessions remote download is available only for a remote file in the Sessio
 	const session = IsSessionsWindowContext.bindTo(contexts);
 	const scheme = ResourceSchemeContext.bindTo(contexts);
 	const action = new DownloadRemoteFileAction();
-	for (const [isSession, resourceScheme, expected] of [
-		[false, ASH_REMOTE_SCHEME, false],
-		[true, 'file', false],
-		[true, ASH_REMOTE_SCHEME, true],
-	] as const) {
+	for (const [isSession, resourceScheme, expected] of [[false, ASH_REMOTE_SCHEME, false], [true, 'file', false], [true, ASH_REMOTE_SCHEME, true]] as const) {
 		session.set(isSession);
 		scheme.set(resourceScheme);
 		assert.equal(contexts.contextMatchesRules(action.desc.precondition), expected);

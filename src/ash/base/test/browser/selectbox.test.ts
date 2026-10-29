@@ -13,11 +13,11 @@ test('SelectBox uses the default chevron trigger and trailing selected check ins
 	});
 	Object.defineProperty(dom.window.Element.prototype, 'scrollIntoView', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollTo', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	const [{ ContextView }, { appendIcon }, { SelectBox }, { Lxicon }] = await Promise.all([
 		import('../../browser/ui/contextview/contextview.js'),
@@ -40,7 +40,7 @@ test('SelectBox uses the default chevron trigger and trailing selected check ins
 	host.append(selectBox.element);
 
 	const button = selectBox.element.querySelector<HTMLButtonElement>('.ash-select-box-button')!;
-	button.getBoundingClientRect = () => ({ width: 192 }) as DOMRect;
+	button.getBoundingClientRect = () => ({ width: 192 } as DOMRect);
 	const indicator = selectBox.element.querySelector<HTMLElement>('.ash-dropdown-indicator')!;
 	const expectedIndicator = h(dom.window.document, 'span');
 	appendIcon(Lxicon.chevronDown, expectedIndicator);
@@ -77,6 +77,7 @@ test('SelectBox uses the default chevron trigger and trailing selected check ins
 	assert.equal(button.hasAttribute('aria-activedescendant'), false);
 	assert.equal(list.querySelector('.focused, [aria-selected="true"]'), null);
 	selectBox.hide();
+
 
 	selectBox.dispose();
 	contextView.dispose();

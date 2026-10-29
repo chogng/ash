@@ -6,18 +6,8 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceState } from './editorState.js';
 
-export enum GroupDirection {
-	UP,
-	DOWN,
-	LEFT,
-	RIGHT,
-}
-export enum GroupLocation {
-	FIRST,
-	LAST,
-	NEXT,
-	PREVIOUS,
-}
+export enum GroupDirection { UP, DOWN, LEFT, RIGHT }
+export enum GroupLocation { FIRST, LAST, NEXT, PREVIOUS }
 export interface IFindGroupScope {
 	readonly direction?: GroupDirection;
 	readonly location?: GroupLocation;
@@ -27,7 +17,10 @@ export interface IFindGroupScope {
 export interface IActiveEditorActions {
 	/** A pane-owned control borrowed by compact window chrome while the pane is active. Opaque outside the browser. */
 	readonly titleControl?: unknown /* HTMLElement */;
-	readonly actions: { readonly primary: readonly IAction[]; readonly secondary: readonly IAction[] };
+	readonly actions: {
+		readonly primary: readonly IAction[];
+		readonly secondary: readonly IAction[];
+	};
 	readonly onDidChange: Event<void>;
 }
 

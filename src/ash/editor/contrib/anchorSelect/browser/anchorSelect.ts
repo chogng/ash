@@ -11,6 +11,8 @@ import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
+
+
 /** Owns one editor-local selection anchor and its commands. */
 export class SelectionAnchorController extends Disposable {
 	private readonly chordTimeout = this._register(new MutableDisposable<IDisposable>());
@@ -42,18 +44,16 @@ export class SelectionAnchorController extends Disposable {
 
 	setSelectionAnchor(): void {
 		const position = Position.lift(this.editor.getPosition()!);
-		const [decorationId] = this.decorations.replaceAll([
-			{
-				range: Range.fromPositions(position),
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: {
-					description: 'selection-anchor',
-					className: 'selection-anchor',
-					hoverMessage: { value: 'Selection Anchor' },
-				},
-				metadata: undefined,
+		const [decorationId] = this.decorations.replaceAll([{
+			range: Range.fromPositions(position),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: 'selection-anchor',
+				className: 'selection-anchor',
+				hoverMessage: { value: 'Selection Anchor' },
 			},
-		]);
+			metadata: undefined,
+		}]);
 		this.decorationId = decorationId;
 		this.viewport.announceAccessibilityStatus(`Anchor set at ${position.lineNumber}:${position.column}`);
 	}

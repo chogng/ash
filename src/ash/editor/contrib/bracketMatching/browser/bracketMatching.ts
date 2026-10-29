@@ -12,6 +12,7 @@ import { localize2 } from '../../../../nls.js';
 import { jumpToMatchingBrackets } from '../common/bracketNavigation.js';
 import { createRemoveMatchingBracketsCommand } from '../common/bracketEditing.js';
 
+
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
 export class BracketMatchingController extends Disposable {
 	public static readonly ID = 'editor.contrib.bracketMatchingController';
@@ -49,19 +50,18 @@ export class BracketMatchingController extends Disposable {
 		const ranges = new Map<string, Range>();
 		for (const selection of this.editor.getSelections()!) {
 			if (!selection.isEmpty()) continue;
-			const match = this.bracketPairs.matchBracket(selection.getPosition()) ?? (this.mode === 'always' ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
+			const match = this.bracketPairs.matchBracket(selection.getPosition())
+				?? (this.mode === 'always' ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
 			if (!match) continue;
 			ranges.set(rangeKey(match[0]), match[0]);
 			ranges.set(rangeKey(match[1]), match[1]);
 		}
-		this.decorations.replaceAll(
-			[...ranges.values()].map(range => ({
-				range,
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: { description: 'bracket-match', className: 'bracket-match' },
-				metadata: undefined,
-			})),
-		);
+		this.decorations.replaceAll([...ranges.values()].map(range => ({
+			range,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: { description: 'bracket-match', className: 'bracket-match' },
+			metadata: undefined,
+		})));
 	}
 
 	public jumpToBracket(): void {
@@ -92,10 +92,7 @@ class JumpToBracketAction extends EditorAction {
 			id: 'editor.action.jumpToBracket',
 			label: localize2('smartSelect.jumpBracket', 'Go to Bracket'),
 			precondition: undefined,
-			kbOpts: {
-				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Backslash,
-				weight: KeybindingWeight.EditorContrib,
-			},
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Backslash, weight: KeybindingWeight.EditorContrib },
 		});
 	}
 
@@ -110,10 +107,7 @@ class RemoveBracketsAction extends EditorAction {
 			id: 'editor.action.removeBrackets',
 			label: localize2('smartSelect.removeBrackets', 'Remove Brackets'),
 			precondition: undefined,
-			kbOpts: {
-				primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.Backspace,
-				weight: KeybindingWeight.EditorContrib,
-			},
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.Backspace, weight: KeybindingWeight.EditorContrib },
 			canTriggerInlineEdits: true,
 		});
 	}

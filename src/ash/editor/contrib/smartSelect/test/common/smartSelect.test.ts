@@ -8,7 +8,7 @@ import { expandSmartSelection } from '../../common/smartSelectionExpansion.js';
 
 test('Smart select expands a caret through word, pair, line, and document scopes', () => {
 	using model = new TextModel('const value = (one + two);\nnext');
-	const caret = Selection.fromPositions(new Position(0 + 1, 16 + 1));
+	const caret = Selection.fromPositions(new Position((0) + 1, (16) + 1));
 	const word = expandSmartSelection(model, caret);
 	assert.equal(model.getTextInRange(word), 'one');
 	const pair = expandSmartSelection(model, word);

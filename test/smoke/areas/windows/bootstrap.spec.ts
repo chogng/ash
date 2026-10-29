@@ -22,9 +22,7 @@ interface ShellProbe {
 
 async function writeShellEntry(testInfo: TestInfo): Promise<string> {
 	const entry = testInfo.outputPath('late-start.mjs');
-	await writeFile(
-		entry,
-		`
+	await writeFile(entry, `
 import { app, Tray } from 'electron/main';
 import { writeFileSync } from 'node:fs';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
@@ -46,10 +44,10 @@ void app.whenReady().then(async () => {
 	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 	startElectronApplication();
 });
-`,
-	);
+`);
 	return entry;
 }
+
 
 for (const scenario of [
 	{ name: 'missing settings', settings: undefined },
@@ -57,7 +55,7 @@ for (const scenario of [
 	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}' },
 	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academy"}}' },
 ]) {
-	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, { tag: ['@electron-ui'] }, async ({}, testInfo) => {
+	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		const profile = join(userDataDirectory, 'profile');
 		await mkdir(profile, { recursive: true });
@@ -65,12 +63,7 @@ for (const scenario of [
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 		const environment = { ...configuration.env };
 		environment.ASH_WORKBENCH_MODE = 'academy'; // Retired launch input must not select a product.
-		const application = await _electron.launch({
-			executablePath: configuration.executablePath,
-			args: [...configuration.args],
-			cwd: configuration.cwd,
-			env: environment,
-		});
+		const application = await _electron.launch({ executablePath: configuration.executablePath, args: [...configuration.args], cwd: configuration.cwd, env: environment });
 		try {
 			const page = await application.firstWindow();
 			await expect(page.locator('.ash-workbench')).toBeVisible();
@@ -88,13 +81,7 @@ for (const scenario of [
 
 for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
 	ashTest.describe(`Startup theme ${theme}`, () => {
-		ashTest.use({
-			electronUserSettings: {
-				'workbench.colorTheme': theme,
-				'window.autoDetectColorScheme': false,
-				'window.autoDetectHighContrast': false,
-			},
-		});
+		ashTest.use({ electronUserSettings: { 'workbench.colorTheme': theme, 'window.autoDetectColorScheme': false, 'window.autoDetectHighContrast': false } });
 		ashTest(`Desktop waits for the selected ${theme} theme before exposing the restored shell`, { tag: ['@electron-app-server'] }, async ({ workbench }) => {
 			const source = JSON.parse(await readFile(join(desktop, 'extensions/theme-defaults/themes', `${theme}.json`), 'utf8'));
 			const page = workbench.page;
@@ -107,10 +94,7 @@ for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
 				await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
 				const state = await page.evaluate(() => {
 					const marks = Object.fromEntries(performance.getEntriesByType('mark').map(mark => [mark.name, mark.startTime]));
-					return {
-						marks,
-						background: getComputedStyle(document.querySelector('.ash-workbench')!).getPropertyValue('--ash-workbench-background').trim(),
-					};
+					return { marks, background: getComputedStyle(document.querySelector('.ash-workbench')!).getPropertyValue('--ash-workbench-background').trim() };
 				});
 				expect(state.background).toBe(source.colors['workbench.background'].toLowerCase());
 				expect(state.marks['ash.workbench.shell-ready']).toBeGreaterThanOrEqual(state.marks['ash.workbench.themes-ready']);
@@ -122,7 +106,7 @@ for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
 }
 
 for (const hasWorkbench of [false, true]) {
-	test(`packaged startup rejects an incomplete renderer with Workbench ${hasWorkbench ? 'present' : 'missing'}`, { tag: ['@electron-ui'] }, async ({}, testInfo) => {
+	test(`packaged startup rejects an incomplete renderer with Workbench ${hasWorkbench ? 'present' : 'missing'}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const packagedRoot = testInfo.outputPath('package');
 		await mkdir(packagedRoot, { recursive: true });
 		if (hasWorkbench) {
@@ -131,9 +115,7 @@ for (const hasWorkbench of [false, true]) {
 			await writeFile(join(workbenchRoot, 'workbench.html'), '<!doctype html>');
 		}
 		const entry = testInfo.outputPath('packaged-start.mjs');
-		await writeFile(
-			entry,
-			`
+		await writeFile(entry, `
 import { app } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
@@ -146,16 +128,9 @@ try {
 	console.error(error);
 	app.exit(1);
 }
-`,
-		);
-		const configuration = resolveElectronConfiguration({
-			appServerMode: 'disabled',
-			userDataDirectory: testInfo.outputPath('user-data'),
-		});
-		const result = await runUntilExit({
-			...configuration,
-			args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
-		});
+`);
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: testInfo.outputPath('user-data') });
+		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
 		expect(result.code).toBe(1);
 		expect(result.output).toContain('Packaged Ash renderer is incomplete');
 		expect(result.output).toContain(hasWorkbench ? join('sessions', 'electron-browser', 'sessions.html') : 'workbench.html');
@@ -163,7 +138,7 @@ try {
 }
 
 for (const boundary of ['readiness', 'initialization'] as const) {
-	test(`Desktop quit during ${boundary} drains startup before closing services`, { tag: ['@electron-ui'] }, async ({}, testInfo) => {
+	test(`Desktop quit during ${boundary} drains startup before closing services`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		const statePath = join(userDataDirectory, 'state.json');
@@ -171,9 +146,7 @@ for (const boundary of ['readiness', 'initialization'] as const) {
 		await writeFile(statePath, JSON.stringify(savedSession));
 		const resultPath = testInfo.outputPath('shutdown.json');
 		const entry = testInfo.outputPath('quit-during-startup.mjs');
-		await writeFile(
-			entry,
-			`
+		await writeFile(entry, `
 import { app, BrowserWindow } from 'electron/main';
 import { writeFileSync } from 'node:fs';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
@@ -207,81 +180,53 @@ void app.whenReady().then(async () => {
 		await startElectronApplication();
 	}
 });
-`,
-		);
+`);
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
-		const result = await runUntilExit({
-			...configuration,
-			args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
-		});
+		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
 		expect(result.code, result.output).toBe(0);
 		expect(result.output).not.toContain('Failed to start Ash');
 		expect(result.output).not.toContain('disposed');
-		expect(JSON.parse(await readFile(resultPath, 'utf8'))).toEqual({
-			events: boundary === 'readiness' ? ['quit-before-ready', 'closed-services'] : ['initializing', 'initialized', 'closed-services'],
-			windows: 0,
-		});
+		expect(JSON.parse(await readFile(resultPath, 'utf8'))).toEqual({ events: boundary === 'readiness' ? ['quit-before-ready', 'closed-services'] : ['initializing', 'initialized', 'closed-services'], windows: 0 });
 		expect(JSON.parse(await readFile(statePath, 'utf8'))).toEqual(savedSession);
 	});
 }
 
-test('Desktop starts when its application entry loads after Electron is ready', { tag: ['@electron-ui'] }, async ({}, testInfo) => {
+test('Desktop starts when its application entry loads after Electron is ready', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const entry = await writeShellEntry(testInfo);
 	const application = await _electron.launch({
 		executablePath: configuration.executablePath,
-		args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
+		args: configuration.args.map(argument => argument === desktop ? entry : argument),
 		cwd: configuration.cwd,
 		env: configuration.env,
 	});
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
-		expect(
-			await application.evaluate(({ app, BrowserWindow }) => ({
-				ready: app.isReady(),
-				windows: BrowserWindow.getAllWindows().length,
-			})),
-		).toEqual({ ready: true, windows: 1 });
+		expect(await application.evaluate(({ app, BrowserWindow }) => ({
+			ready: app.isReady(),
+			windows: BrowserWindow.getAllWindows().length,
+		}))).toEqual({ ready: true, windows: 1 });
 		if (process.platform === 'win32' || process.platform === 'darwin') {
-			await expect
-				.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu?.items.map(item => item.label || item.type)))
-				.toEqual(['Show Ash', 'New Window', 'Open Agents Window', 'separator', 'Recent Folders & Workspaces', 'separator', 'Quit Ash']);
-			expect(
-				await application.evaluate(() =>
-					(globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items
-						.find(item => item.submenu)!
-						.submenu!.items.map(item => ({
-							label: item.label,
-							enabled: item.enabled,
-							type: item.type,
-						})),
-				),
-			).toEqual([
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu?.items.map(item => item.label || item.type))).toEqual(['Show Ash', 'New Window', 'Open Agents Window', 'separator', 'Recent Folders & Workspaces', 'separator', 'Quit Ash']);
+			expect(await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items.map(item => ({ label: item.label, enabled: item.enabled, type: item.type })))).toEqual([
 				{ label: 'No Recent Projects', enabled: false, type: 'normal' },
 				{ label: '', enabled: true, type: 'separator' },
 				{ label: 'Clear Recently Opened', enabled: false, type: 'normal' },
 			]);
-			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string }).__ashTrayTooltip)).toBe('Ash');
+			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string; }).__ashTrayTooltip)).toBe('Ash');
 			if (process.platform === 'darwin') {
 				expect(await application.evaluate(({ app }) => app.dock!.isVisible())).toBe(configuration.env.ASH_TEST_WINDOW_MODE === undefined);
 				const menuBarIconPaths = [18, 27, 36].map(size => resolve(desktop, `../resources/tray/ash-black-${size}.png`));
 				const menuBarIconSizes = await application.evaluate(({ nativeImage }, paths) => paths.map(path => nativeImage.createFromPath(path).getSize()), menuBarIconPaths);
-				expect(menuBarIconSizes).toEqual([
-					{ width: 18, height: 18 },
-					{ width: 27, height: 27 },
-					{ width: 36, height: 36 },
-				]);
+				expect(menuBarIconSizes).toEqual([{ width: 18, height: 18 }, { width: 27, height: 27 }, { width: 36, height: 36 }]);
 				const visibleMarkSize = await application.evaluate(({ nativeImage }, path) => {
 					const image = nativeImage.createFromPath(path);
 					const bitmap = image.toBitmap();
 					const { width, height } = image.getSize();
-					let left = width,
-						top = height,
-						right = -1,
-						bottom = -1;
+					let left = width, top = height, right = -1, bottom = -1;
 					for (let y = 0; y < height; y++) {
 						for (let x = 0; x < width; x++) {
 							if (bitmap[(y * width + x) * 4 + 3] <= 32) continue;
@@ -295,19 +240,13 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 				}, menuBarIconPaths[2]);
 				expect(visibleMarkSize.width).toBeGreaterThanOrEqual(30);
 				expect(visibleMarkSize.height).toBeGreaterThanOrEqual(30);
-				const trayBounds = await application.evaluate(() =>
-					(
-						globalThis as typeof globalThis & {
-							__ashTray: { getBounds(): { width: number; height: number } };
-						}
-					).__ashTray.getBounds(),
-				);
+				const trayBounds = await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { getBounds(): { width: number; height: number; }; }; }).__ashTray.getBounds());
 				expect(trayBounds.width).toBeGreaterThan(0);
 				expect(trayBounds.height).toBeGreaterThan(0);
 			}
 			await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
-			await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
+			await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void; }; }).__ashTray.emit('click'));
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(false);
 			await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
@@ -319,25 +258,14 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 			const projectPath = testInfo.outputPath('tray project with spaces');
 			await mkdir(projectPath, { recursive: true });
 			await page.evaluate(async folderUri => {
-				await globalThis.ashTestMainProcess.call('workspaces', 'addRecentlyOpened', {
-					workspaces: [{ folderUri, label: 'Tray project' }],
-				});
+				await globalThis.ashTestMainProcess.call('workspaces', 'addRecentlyOpened', { workspaces: [{ folderUri, label: 'Tray project' }] });
 			}, URI.file(projectPath).toString());
-			await expect
-				.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label))
-				.toBe('Tray project');
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label)).toBe('Tray project');
 			for (const window of application.windows()) await expect(window.locator('.ash-getting-started-recent-name')).toHaveText(['Tray project']);
 			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.click({ altKey: false }));
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.getTitle().includes('tray project with spaces')))).toBe(true);
-			await application.evaluate(() =>
-				(globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items
-					.find(item => item.submenu)!
-					.submenu!.items.find(item => item.label === 'Clear Recently Opened')!
-					.click({ altKey: false }),
-			);
-			await expect
-				.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label))
-				.toBe('No Recent Projects');
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items.find(item => item.label === 'Clear Recently Opened')!.click({ altKey: false }));
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label)).toBe('No Recent Projects');
 			await expect(page.locator('.ash-getting-started-recent-name')).toHaveCount(0);
 			const agentsOpened = application.waitForEvent('window');
 			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Open Agents Window')!.click({ altKey: false }));
@@ -345,11 +273,9 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Open Agents Window')!.click({ altKey: false }));
 			expect(application.windows().filter(window => window.url().includes('sessions'))).toHaveLength(1);
 			if (process.platform === 'darwin') {
-				await application.evaluate(({ BrowserWindow }) => {
-					for (const window of BrowserWindow.getAllWindows()) window.close();
-				});
+				await application.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.close(); });
 				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(0);
-				await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
+				await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void; }; }).__ashTray.emit('click'));
 				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
 			}
 		}
@@ -358,19 +284,14 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 	}
 });
 
-test('tray Quit honors a window veto, keeps services usable, and restores drafts after shutdown', { tag: ['@electron-ui', '@darwin', '@win32'] }, async ({}, testInfo) => {
+test('tray Quit honors a window veto, keeps services usable, and restores drafts after shutdown', { tag: ['@electron-ui', '@darwin', '@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(60_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'workbench.locale': 'zh-cn' }));
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const entry = await writeShellEntry(testInfo);
-	const options = {
-		executablePath: configuration.executablePath,
-		args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
-		cwd: configuration.cwd,
-		env: configuration.env,
-	};
+	const options = { executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env };
 	let application = await _electron.launch(options);
 	try {
 		const page = await application.firstWindow();
@@ -386,10 +307,7 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 			const state = globalThis as typeof globalThis & ShellProbe;
 			state.__ashQuitVetoCount = 0;
 			contents.send = (channel, ...args) => {
-				if (channel !== 'ash:window:prepare-close') {
-					original(channel, ...args);
-					return;
-				}
+				if (channel !== 'ash:window:prepare-close') { original(channel, ...args); return; }
 				contents.send = original;
 				// Simulate a renderer veto at the real close-protocol boundary, before shutdown.
 				void contents.executeJavaScript(`globalThis.ash.ipcRenderer.invoke('ash:window:close-response', { kind: 'vetoed', token: ${Number(args[0])} })`).then(() => state.__ashQuitVetoCount++);
@@ -398,20 +316,14 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '退出 Ash')!.click({ altKey: false }));
 		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashQuitVetoCount)).toBe(1);
 		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved tray draft');
-		await expect
-			.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.map(item => item.label || item.type)))
-			.toEqual(['显示 Ash', '新建窗口', '打开 Agents 窗口', 'separator', '最近的文件夹和工作区', 'separator', '退出 Ash']);
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.map(item => item.label || item.type))).toEqual(['显示 Ash', '新建窗口', '打开 Agents 窗口', 'separator', '最近的文件夹和工作区', 'separator', '退出 Ash']);
 		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '新建窗口')!.click({ altKey: false }));
 		await expect.poll(() => application.windows().length).toBe(2);
 		await new Workbench(application.windows()[1]!).waitForReady();
 		const closed = application.waitForEvent('close');
-		await application.evaluate(() => {
-			(globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '退出 Ash')!.click({ altKey: false });
-		});
+		await application.evaluate(() => { (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '退出 Ash')!.click({ altKey: false }); });
 		await closed;
-		expect(JSON.parse(await readFile(testInfo.outputPath('tray-cleanup.json'), 'utf8'))).toEqual({
-			destroyed: true,
-		});
+		expect(JSON.parse(await readFile(testInfo.outputPath('tray-cleanup.json'), 'utf8'))).toEqual({ destroyed: true });
 		application = await _electron.launch(options);
 		await expect.poll(() => application.windows().length).toBe(2);
 		for (const restoredPage of application.windows()) await new Workbench(restoredPage).waitForReady();
@@ -421,7 +333,7 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 	}
 });
 
-test('Windows development launcher shows the Workbench window', { tag: ['@electron-ui', '@win32'] }, async ({}, testInfo) => {
+test('Windows development launcher shows the Workbench window', { tag: ['@electron-ui', '@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(60_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
@@ -429,120 +341,70 @@ test('Windows development launcher shows the Workbench window', { tag: ['@electr
 	const portListener = createServer();
 	await new Promise<void>(resolve => portListener.listen(0, '127.0.0.1', resolve));
 	const address = portListener.address();
-	if (!address || typeof address === 'string') {
-		throw new Error('Could not reserve a CDP port');
-	}
+	if (!address || typeof address === 'string') { throw new Error('Could not reserve a CDP port'); }
 	const port = address.port;
 	await new Promise<void>(resolve => portListener.close(() => resolve()));
 	const environment = { ...configuration.env };
 	delete environment.NODE_OPTIONS;
-	const child = spawn(process.execPath, [resolve(desktop, 'build/desktop/launch/electron.ts'), '--inspect=0', `--remote-debugging-port=${port}`, `--user-data-dir=${userDataDirectory}`], {
-		cwd: desktop,
-		env: environment,
-		stdio: ['ignore', 'pipe', 'pipe'],
-	});
+	const child = spawn(process.execPath, [
+		resolve(desktop, 'build/desktop/launch/electron.ts'),
+		'--inspect=0',
+		`--remote-debugging-port=${port}`,
+		`--user-data-dir=${userDataDirectory}`,
+	], { cwd: desktop, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
 	let output = '';
-	child.stderr.on('data', (chunk: Buffer) => {
-		output = (output + chunk.toString()).slice(-16_384);
-	});
+	child.stderr.on('data', (chunk: Buffer) => { output = (output + chunk.toString()).slice(-16_384); });
 	const closed = new Promise<void>(resolveClose => child.once('close', () => resolveClose()));
 	let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
 	try {
-		await expect
-			.poll(() => /Debugger listening on ws:\/\/127\.0\.0\.1:\d+/u.test(output), {
-				timeout: 15_000,
-				message: output,
-			})
-			.toBe(true);
-		await expect
-			.poll(
-				async () => {
-					try {
-						return (await fetch(`http://127.0.0.1:${port}/json/version`)).ok;
-					} catch {
-						return false;
-					}
-				},
-				{ timeout: 15_000 },
-			)
-			.toBe(true);
+		await expect.poll(() => /Debugger listening on ws:\/\/127\.0\.0\.1:\d+/u.test(output), { timeout: 15_000, message: output }).toBe(true);
+		await expect.poll(async () => {
+			try { return (await fetch(`http://127.0.0.1:${port}/json/version`)).ok; }
+			catch { return false; }
+		}, { timeout: 15_000 }).toBe(true);
 		browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
 		const context = browser.contexts()[0];
 		await expect.poll(() => context.pages().some(page => page.url().includes('/workbench/workbench.html'))).toBe(true);
 		const page = context.pages().find(page => page.url().includes('/workbench/workbench.html'))!;
 		await expect(page.getByText('ASH', { exact: true })).toBeVisible();
 		const inspectorPort = Number(output.match(/Debugger listening on ws:\/\/127\.0\.0\.1:(\d+)/u)![1]);
-		const [target] = (await (await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json()) as Array<{
-			webSocketDebuggerUrl: string;
-		}>;
+		const [target] = await (await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json() as Array<{ webSocketDebuggerUrl: string; }>;
 		const socket = new WebSocket(target.webSocketDebuggerUrl);
 		try {
-			await new Promise<void>((resolveOpen, reject) => {
-				socket.onopen = () => resolveOpen();
-				socket.onerror = reject;
-			});
+			await new Promise<void>((resolveOpen, reject) => { socket.onopen = () => resolveOpen(); socket.onerror = reject; });
 			let requestId = 0;
-			const isVisible = (): Promise<boolean> =>
-				new Promise((resolveResult, reject) => {
-					const id = ++requestId;
-					const timer = setTimeout(() => {
-						socket.removeEventListener('message', onMessage);
-						reject(new Error('Electron visibility check timed out'));
-					}, 5_000);
-					const onMessage = (event: MessageEvent): void => {
-						const response = JSON.parse(String(event.data)) as {
-							id?: number;
-							result?: { result?: { value?: boolean }; exceptionDetails?: { text: string } };
-						};
-						if (response.id !== id) return;
-						clearTimeout(timer);
-						socket.removeEventListener('message', onMessage);
-						if (response.result?.exceptionDetails) {
-							reject(new Error(response.result.exceptionDetails.text));
-							return;
-						}
-						resolveResult(response.result?.result?.value === true);
-					};
-					socket.addEventListener('message', onMessage);
-					socket.send(
-						JSON.stringify({
-							id,
-							method: 'Runtime.evaluate',
-							params: {
-								expression: "process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].isVisible()",
-								returnByValue: true,
-							},
-						}),
-					);
-				});
+			const isVisible = (): Promise<boolean> => new Promise((resolveResult, reject) => {
+				const id = ++requestId;
+				const timer = setTimeout(() => { socket.removeEventListener('message', onMessage); reject(new Error('Electron visibility check timed out')); }, 5_000);
+				const onMessage = (event: MessageEvent): void => {
+					const response = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: boolean; }; exceptionDetails?: { text: string; }; }; };
+					if (response.id !== id) return;
+					clearTimeout(timer);
+					socket.removeEventListener('message', onMessage);
+					if (response.result?.exceptionDetails) { reject(new Error(response.result.exceptionDetails.text)); return; }
+					resolveResult(response.result?.result?.value === true);
+				};
+				socket.addEventListener('message', onMessage);
+				socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression: "process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].isVisible()", returnByValue: true } }));
+			});
 			await expect.poll(isVisible, { timeout: 10_000 }).toBe(true);
-		} finally {
-			socket.close();
-		}
+		} finally { socket.close(); }
 	} finally {
 		await browser?.close();
-		if (child.exitCode === null && child.signalCode === null) {
-			child.kill('SIGTERM');
-		}
+		if (child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); }
 		await closed;
 	}
 });
 
-test('Desktop exits with a failure status when entry initialization fails', { tag: ['@electron-ui'] }, async ({}, testInfo) => {
-	const configuration = resolveElectronConfiguration({
-		appServerMode: 'disabled',
-		userDataDirectory: testInfo.outputPath('user-data'),
-	});
-	const result = await runUntilExit({
-		...configuration,
-		env: { ...configuration.env, ASH_HOME: 'relative-profile' },
-	});
+test('Desktop exits with a failure status when entry initialization fails', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: testInfo.outputPath('user-data') });
+	const result = await runUntilExit({ ...configuration, env: { ...configuration.env, ASH_HOME: 'relative-profile' } });
 	expect(result.code).toBe(1);
 	expect(result.output).toContain('Failed to initialize Ash');
 	expect(result.output).toContain('ASH_HOME must be a non-empty absolute directory path');
 });
 
-test('Desktop exits with a failure status when persistent services cannot start', { tag: ['@electron-ui'] }, async ({}, testInfo) => {
+test('Desktop exits with a failure status when persistent services cannot start', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'state.json'), { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
@@ -552,7 +414,7 @@ test('Desktop exits with a failure status when persistent services cannot start'
 	expect(result.output).toContain('StateService.load');
 });
 
-async function runUntilExit(configuration: ElectronConfiguration): Promise<{ code: number | null; output: string }> {
+async function runUntilExit(configuration: ElectronConfiguration): Promise<{ code: number | null; output: string; }> {
 	const child = spawn(configuration.executablePath, [...configuration.args], {
 		cwd: configuration.cwd,
 		env: configuration.env,
@@ -560,34 +422,21 @@ async function runUntilExit(configuration: ElectronConfiguration): Promise<{ cod
 		windowsHide: true,
 	});
 	let output = '';
-	const collect = (chunk: Buffer): void => {
-		output = (output + chunk.toString()).slice(-16_384);
-	};
+	const collect = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-16_384); };
 	child.stdout.on('data', collect);
 	child.stderr.on('data', collect);
 	let processError: Error | undefined;
-	child.once('error', error => {
-		processError = error;
-	});
+	child.once('error', error => { processError = error; });
 	const closed = new Promise<void>(resolveClose => child.once('close', () => resolveClose()));
 	try {
-		await expect
-			.poll(
-				() => {
-					if (processError) {
-						throw processError;
-					}
-					return child.exitCode;
-				},
-				{ timeout: 15_000, message: 'Startup failure must terminate the Electron process' },
-			)
-			.not.toBeNull();
+		await expect.poll(() => {
+			if (processError) { throw processError; }
+			return child.exitCode;
+		}, { timeout: 15_000, message: 'Startup failure must terminate the Electron process' }).not.toBeNull();
 		await closed;
 		return { code: child.exitCode, output };
 	} finally {
-		if (child.exitCode === null && child.signalCode === null) {
-			child.kill();
-		}
+		if (child.exitCode === null && child.signalCode === null) { child.kill(); }
 		await closed;
 	}
 }

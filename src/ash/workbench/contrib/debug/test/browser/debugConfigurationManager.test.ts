@@ -4,24 +4,17 @@ import { ConfigurationManager, parseLaunchConfigurationDocument, parseLaunchConf
 
 test('configuration manager reconciles selection against refreshed catalogs and compounds', async () => {
 	using manager = new ConfigurationManager();
-	const document = parseLaunchConfigurationDocument(
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [
-				{ name: 'First', type: 'demo', request: 'launch' },
-				{ name: 'Second', type: 'demo', request: 'launch' },
-			],
-			compounds: [{ name: 'Both', configurations: ['First', 'Second'] }],
-		}),
-	);
+	const document = parseLaunchConfigurationDocument(JSON.stringify({
+		version: '0.2.0', configurations: [
+			{ name: 'First', type: 'demo', request: 'launch' },
+			{ name: 'Second', type: 'demo', request: 'launch' },
+		], compounds: [{ name: 'Both', configurations: ['First', 'Second'] }]
+	}));
 	const selections: (string | undefined)[] = [];
 	using listener = manager.onDidSelectConfiguration(() => selections.push(manager.selectedConfiguration?.name));
 	manager.setConfigurations(document.configurations, document.compounds);
 	await manager.selectConfiguration(document.configurations[1]);
-	const refreshed = document.configurations.map(configuration => ({
-		...configuration,
-		arguments: { changed: true },
-	}));
+	const refreshed = document.configurations.map(configuration => ({ ...configuration, arguments: { changed: true } }));
 	manager.setConfigurations(refreshed, document.compounds);
 	assert.equal(manager.selectedConfiguration, refreshed[1]);
 	await manager.selectConfiguration(document.compounds[0]);
@@ -47,17 +40,15 @@ test('launch configurations parse an explicit generic DAP command', () => {
     }],
   }`);
 
-	assert.deepEqual(configurations, [
-		{
-			id: 'launch:0:debug-app',
-			name: 'Debug app',
-			type: 'example',
-			request: 'launch',
-			adapterExplicit: true,
-			adapter: { program: 'adapter', arguments: ['--stdio'] },
-			arguments: { program: '${workspaceFolder}/app', stopOnEntry: true },
-		},
-	]);
+	assert.deepEqual(configurations, [{
+		id: 'launch:0:debug-app',
+		name: 'Debug app',
+		type: 'example',
+		request: 'launch',
+		adapterExplicit: true,
+		adapter: { program: 'adapter', arguments: ['--stdio'] },
+		arguments: { program: '${workspaceFolder}/app', stopOnEntry: true },
+	}]);
 });
 
 test('launch configurations retain a dormant type before its descriptor factory activates', () => {
@@ -93,43 +84,18 @@ test('launch documents keep task orchestration out of DAP arguments and resolve 
 		preLaunchTask: 'build',
 		postDebugTask: 'cleanup',
 	});
-	assert.deepEqual(document.compounds, [
-		{
-			id: 'compound:0:everything',
-			name: 'Everything',
-			configurations: ['Server'],
-			preLaunchTask: 'prepare',
-			stopAll: true,
-		},
-	]);
+	assert.deepEqual(document.compounds, [{ id: 'compound:0:everything', name: 'Everything', configurations: ['Server'], preLaunchTask: 'prepare', stopAll: true }]);
 });
 
 test('launch configurations resolve declarative extension debug adapters by type', () => {
-	const configurations = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"demo","request":"launch","program":"app"}]}', type =>
-		type === 'demo' ? { program: 'demo-adapter', arguments: ['--stdio'] } : undefined,
-	);
+	const configurations = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"demo","request":"launch","program":"app"}]}', type => type === 'demo' ? { program: 'demo-adapter', arguments: ['--stdio'] } : undefined);
 	assert.deepEqual(configurations[0]?.adapter, { program: 'demo-adapter', arguments: ['--stdio'] });
 	assert.deepEqual(configurations[0]?.arguments, { program: 'app' });
 });
 
+
 test('launch compounds retain folder-qualified references and reject missing selectors', () => {
-	const document = parseLaunchConfigurationDocument(
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [],
-			compounds: [{ name: 'Both', configurations: [{ name: 'Launch', folder: 'Server' }, 'Client'] }],
-		}),
-	);
+	const document = parseLaunchConfigurationDocument(JSON.stringify({ version: '0.2.0', configurations: [], compounds: [{ name: 'Both', configurations: [{ name: 'Launch', folder: 'Server' }, 'Client'] }] }));
 	assert.deepEqual(document.compounds[0]?.configurations, [{ name: 'Launch', folder: 'Server' }, 'Client']);
-	assert.throws(
-		() =>
-			parseLaunchConfigurationDocument(
-				JSON.stringify({
-					version: '0.2.0',
-					configurations: [],
-					compounds: [{ name: 'Invalid', configurations: [{ name: 'Launch' }] }],
-				}),
-			),
-		/folder/,
-	);
+	assert.throws(() => parseLaunchConfigurationDocument(JSON.stringify({ version: '0.2.0', configurations: [], compounds: [{ name: 'Invalid', configurations: [{ name: 'Launch' }] }] })), /folder/);
 });

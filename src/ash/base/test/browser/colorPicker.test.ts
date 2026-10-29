@@ -15,66 +15,33 @@ function fixture() {
 	let configurations = 0;
 	let configurationDisposed = false;
 	const picker = new ColorPicker(document, 'input', {
-		color: 'Fill color',
-		value: 'Fill hex',
-		opacity: 'Fill opacity',
+		color: 'Fill color', value: 'Fill hex', opacity: 'Fill opacity',
 		popup: {
-			show: (_anchor, content, onHide) => {
-				panel = content;
-				dismiss = onHide;
-				document.body.append(content);
-				return true;
-			},
+			show: (_anchor, content, onHide) => { panel = content; dismiss = onHide; document.body.append(content); return true; },
 			hide: () => hide(false),
-			configure: () => {
-				configurations++;
-				return toDisposable(() => {
-					configurationDisposed = true;
-				});
-			},
+			configure: () => { configurations++; return toDisposable(() => { configurationDisposed = true; }); },
 		},
 	});
 	document.body.append(picker.domNode);
-	function hide(commit: boolean) {
-		const callback = dismiss;
-		dismiss = undefined;
-		panel?.remove();
-		callback?.(commit);
-	}
+	function hide(commit: boolean) { const callback = dismiss; dismiss = undefined; panel?.remove(); callback?.(commit); }
 	return {
-		picker,
-		hide,
-		get configurations() {
-			return configurations;
-		},
-		get configurationDisposed() {
-			return configurationDisposed;
-		},
-		get panel() {
-			assert.ok(panel);
-			return panel;
-		},
-		open() {
-			picker.domNode.querySelector('button')!.click();
-		},
-		[Symbol.dispose]() {
-			picker.dispose();
-		},
+		picker, hide,
+		get configurations() { return configurations; }, get configurationDisposed() { return configurationDisposed; },
+		get panel() { assert.ok(panel); return panel; },
+		open() { picker.domNode.querySelector('button')!.click(); },
+		[Symbol.dispose]() { picker.dispose(); },
 	};
 }
 
 function field(root: HTMLElement, label: string): HTMLInputElement {
 	const element = root.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
-	assert.ok(element);
-	return element;
+	assert.ok(element); return element;
 }
 function change(input: HTMLInputElement, value: string): void {
 	input.value = value;
 	input.dispatchEvent(new environment.window.Event('change', { bubbles: true }));
 }
-function hex(color: Color): string {
-	return Color.Format.CSS.formatHexA(color, true);
-}
+function hex(color: Color): string { return Color.Format.CSS.formatHexA(color, true); }
 
 test('ColorPicker input validates hex and opacity through the same color model', () => {
 	using view = fixture();
@@ -104,16 +71,13 @@ test('ColorPicker creates its popup once and keeps compact hex independent of pa
 		assert.equal(ColorPicker.getFocused(field(view.panel, 'Color value')), view.picker);
 		assert.equal(ColorPicker.getFocused(field(view.picker.domNode, 'Fill hex')), view.picker);
 		const format = view.panel.querySelector('select')!;
-		format.value = 'rgb';
-		format.dispatchEvent(new environment.window.Event('change'));
+		format.value = 'rgb'; format.dispatchEvent(new environment.window.Event('change'));
 		change(field(view.panel, 'RGB R'), '255');
 		assert.equal(field(view.picker.domNode, 'Fill hex').value, 'FF6699');
 		view.hide(false);
 		view.open();
 		assert.equal(view.configurations, 1);
-	} finally {
-		view[Symbol.dispose]();
-	}
+	} finally { view[Symbol.dispose](); }
 	assert.equal(view.configurationDisposed, true);
 });
 
@@ -126,8 +90,7 @@ test('ColorPicker opacity fields and slider preserve exact RGB channels', () => 
 	change(field(view.panel, 'Opacity (%)'), '60');
 	assert.equal(hex(view.picker.color), '#2f6fed99');
 	const slider = field(view.panel, 'Opacity');
-	slider.value = '40';
-	slider.dispatchEvent(new environment.window.Event('input'));
+	slider.value = '40'; slider.dispatchEvent(new environment.window.Event('input'));
 	assert.equal(hex(view.picker.color), '#2f6fed66');
 });
 
@@ -137,8 +100,7 @@ test('ColorPicker keeps live document echoes and same-target Undo inside its pop
 	using echo = view.picker.onDidChangeColor(color => view.picker.setColor(color, 'fill'));
 	view.open();
 	const alpha = field(view.panel, 'Opacity');
-	alpha.value = '40';
-	alpha.dispatchEvent(new environment.window.Event('input'));
+	alpha.value = '40'; alpha.dispatchEvent(new environment.window.Event('input'));
 	assert.equal(view.panel.isConnected, true);
 	assert.equal(hex(view.picker.color), '#2f6fed66');
 	view.picker.setColor(Color.fromHex('#12345680'), 'fill');
@@ -153,9 +115,7 @@ test('ColorPicker commits an explicit equal-value input once so a host can overr
 	using view = fixture();
 	view.picker.setColor(Color.fromHex('#123456'));
 	let commits = 0;
-	using subscription = view.picker.onDidCommitColor(() => {
-		commits++;
-	});
+	using subscription = view.picker.onDidCommitColor(() => { commits++; });
 	const input = field(view.picker.domNode, 'Fill hex');
 	input.dispatchEvent(new environment.window.Event('input'));
 	change(input, '123456');
@@ -183,14 +143,12 @@ test('ColorPicker rolls back popup previews on cancellation and commits outside 
 	using subscription = view.picker.onDidCommitColor(color => commits.push(hex(color)));
 	view.open();
 	const alpha = field(view.panel, 'Opacity');
-	alpha.value = '40';
-	alpha.dispatchEvent(new environment.window.Event('input'));
+	alpha.value = '40'; alpha.dispatchEvent(new environment.window.Event('input'));
 	assert.equal(field(view.picker.domNode, 'Fill opacity').value, '40');
 	view.hide(false);
 	assert.equal(hex(view.picker.color), '#336699');
 	view.open();
-	alpha.value = '40';
-	alpha.dispatchEvent(new environment.window.Event('input'));
+	alpha.value = '40'; alpha.dispatchEvent(new environment.window.Event('input'));
 	view.hide(true);
 	assert.deepEqual(commits, ['#33669966']);
 	view.open();
@@ -204,17 +162,13 @@ test('ColorPicker dialog and embedded presentations retain their commit and clos
 		using picker = new ColorPicker(document, variant);
 		picker.setColor(Color.fromHex('#12345680'));
 		let committed: string | undefined;
-		using subscription = picker.onDidCommitColor(color => {
-			committed = hex(color);
-		});
+		using subscription = picker.onDidCommitColor(color => { committed = hex(color); });
 		change(field(picker.domNode, 'Opacity (%)'), '40');
 		assert.equal(committed, '#12345666');
 		assert.equal(picker.domNode.getAttribute('role'), variant === 'dialog' ? 'dialog' : 'group');
 		if (variant === 'dialog') {
 			let closed = false;
-			using close = picker.onDidRequestClose(() => {
-				closed = true;
-			});
+			using close = picker.onDidRequestClose(() => { closed = true; });
 			picker.domNode.querySelector('button')!.click();
 			assert.equal(closed, true);
 		}

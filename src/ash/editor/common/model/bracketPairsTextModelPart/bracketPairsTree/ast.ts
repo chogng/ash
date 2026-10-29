@@ -18,7 +18,7 @@ export type AstNode = PairAstNode | ListAstNode | BracketAstNode | InvalidBracke
 
 /**
  * The base implementation for all AST nodes.
- */
+*/
 abstract class BaseAstNode {
 	public abstract readonly kind: AstNodeKind;
 
@@ -26,30 +26,30 @@ abstract class BaseAstNode {
 
 	/**
 	 * Might return null even if {@link idx} is smaller than {@link BaseAstNode.childrenLength}.
-	 */
+	*/
 	public abstract getChild(idx: number): AstNode | null;
 
 	/**
 	 * Try to avoid using this property, as implementations might need to allocate the resulting array.
-	 */
+	*/
 	public abstract readonly children: readonly AstNode[];
 
 	/**
 	 * Represents the set of all (potentially) missing opening bracket ids in this node.
 	 * E.g. in `{ ] ) }` that set is {`[`, `(` }.
-	 */
+	*/
 	public abstract readonly missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>;
 
 	/**
 	 * In case of a list, determines the height of the (2,3) tree.
-	 */
+	*/
 	public abstract readonly listHeight: number;
 
 	protected _length: Length;
 
 	/**
 	 * The length of the entire node, which should equal the sum of lengths of all children.
-	 */
+	*/
 	public get length(): Length {
 		return this._length;
 	}
@@ -61,7 +61,9 @@ abstract class BaseAstNode {
 	/**
 	 * @param openBracketIds The set of all opening brackets that have not yet been closed.
 	 */
-	public abstract canBeReused(openBracketIds: SmallImmutableSet<OpeningBracketId>): boolean;
+	public abstract canBeReused(
+		openBracketIds: SmallImmutableSet<OpeningBracketId>
+	): boolean;
 
 	/**
 	 * Flattens all lists in this AST. Only for debugging.
@@ -80,9 +82,13 @@ abstract class BaseAstNode {
  * Represents a bracket pair including its child (e.g. `{ ... }`).
  * Might be unclosed.
  * Immutable, if all children are immutable.
- */
+*/
 export class PairAstNode extends BaseAstNode {
-	public static create(openingBracket: BracketAstNode, child: AstNode | null, closingBracket: BracketAstNode | null) {
+	public static create(
+		openingBracket: BracketAstNode,
+		child: AstNode | null,
+		closingBracket: BracketAstNode | null
+	) {
 		let length = openingBracket.length;
 		if (child) {
 			length = lengthAdd(length, child.length);
@@ -104,19 +110,16 @@ export class PairAstNode extends BaseAstNode {
 	}
 	public getChild(idx: number): AstNode | null {
 		switch (idx) {
-			case 0:
-				return this.openingBracket;
-			case 1:
-				return this.child;
-			case 2:
-				return this.closingBracket;
+			case 0: return this.openingBracket;
+			case 1: return this.child;
+			case 2: return this.closingBracket;
 		}
 		throw new Error('Invalid child index');
 	}
 
 	/**
 	 * Avoid using this property, it allocates an array!
-	 */
+	*/
 	public get children() {
 		const result: AstNode[] = [];
 		result.push(this.openingBracket);
@@ -134,7 +137,7 @@ export class PairAstNode extends BaseAstNode {
 		public readonly openingBracket: BracketAstNode,
 		public readonly child: AstNode | null,
 		public readonly closingBracket: BracketAstNode | null,
-		public readonly missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>,
+		public readonly missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>
 	) {
 		super(length);
 	}
@@ -159,7 +162,11 @@ export class PairAstNode extends BaseAstNode {
 	}
 
 	public flattenLists(): PairAstNode {
-		return PairAstNode.create(this.openingBracket.flattenLists(), this.child && this.child.flattenLists(), this.closingBracket && this.closingBracket.flattenLists());
+		return PairAstNode.create(
+			this.openingBracket.flattenLists(),
+			this.child && this.child.flattenLists(),
+			this.closingBracket && this.closingBracket.flattenLists()
+		);
 	}
 
 	public deepClone(): PairAstNode {
@@ -168,7 +175,7 @@ export class PairAstNode extends BaseAstNode {
 			this.openingBracket.deepClone(),
 			this.child && this.child.deepClone(),
 			this.closingBracket && this.closingBracket.deepClone(),
-			this.missingOpeningBracketIds,
+			this.missingOpeningBracketIds
 		);
 	}
 
@@ -180,7 +187,7 @@ export class PairAstNode extends BaseAstNode {
 export abstract class ListAstNode extends BaseAstNode {
 	/**
 	 * This method uses more memory-efficient list nodes that can only store 2 or 3 children.
-	 */
+	*/
 	public static create23(item1: AstNode, item2: AstNode, item3: AstNode | null, immutable: boolean = false): ListAstNode {
 		let length = item1.length;
 		let missingBracketIds = item1.missingOpeningBracketIds;
@@ -214,7 +221,9 @@ export abstract class ListAstNode extends BaseAstNode {
 				length = lengthAdd(length, items[i].length);
 				unopenedBrackets = unopenedBrackets.merge(items[i].missingOpeningBracketIds);
 			}
-			return immutable ? new ImmutableArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets) : new ArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets);
+			return immutable
+				? new ImmutableArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets)
+				: new ArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets);
 		}
 	}
 
@@ -234,11 +243,11 @@ export abstract class ListAstNode extends BaseAstNode {
 
 	/**
 	 * Use ListAstNode.create.
-	 */
+	*/
 	constructor(
 		length: Length,
 		public readonly listHeight: number,
-		private _missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>,
+		private _missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>
 	) {
 		super(length);
 	}
@@ -368,26 +377,17 @@ class TwoThreeListAstNode extends ListAstNode {
 	}
 	public getChild(idx: number): AstNode | null {
 		switch (idx) {
-			case 0:
-				return this._item1;
-			case 1:
-				return this._item2;
-			case 2:
-				return this._item3;
+			case 0: return this._item1;
+			case 1: return this._item2;
+			case 2: return this._item3;
 		}
 		throw new Error('Invalid child index');
 	}
 	protected setChild(idx: number, node: AstNode): void {
 		switch (idx) {
-			case 0:
-				this._item1 = node;
-				return;
-			case 1:
-				this._item2 = node;
-				return;
-			case 2:
-				this._item3 = node;
-				return;
+			case 0: this._item1 = node; return;
+			case 1: this._item2 = node; return;
+			case 2: this._item3 = node; return;
 		}
 		throw new Error('Invalid child index');
 	}
@@ -412,13 +412,20 @@ class TwoThreeListAstNode extends ListAstNode {
 		private _item1: AstNode,
 		private _item2: AstNode,
 		private _item3: AstNode | null,
-		missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>,
+		missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>
 	) {
 		super(length, listHeight, missingOpeningBracketIds);
 	}
 
 	public deepClone(): ListAstNode {
-		return new TwoThreeListAstNode(this.length, this.listHeight, this._item1.deepClone(), this._item2.deepClone(), this._item3 ? this._item3.deepClone() : null, this.missingOpeningBracketIds);
+		return new TwoThreeListAstNode(
+			this.length,
+			this.listHeight,
+			this._item1.deepClone(),
+			this._item2.deepClone(),
+			this._item3 ? this._item3.deepClone() : null,
+			this.missingOpeningBracketIds
+		);
 	}
 
 	public appendChildOfSameHeight(node: AstNode): void {
@@ -473,7 +480,7 @@ class TwoThreeListAstNode extends ListAstNode {
 
 /**
  * Immutable, if all children are immutable.
- */
+*/
 class Immutable23ListAstNode extends TwoThreeListAstNode {
 	override toMutable(): ListAstNode {
 		return new TwoThreeListAstNode(this.length, this.listHeight, this.item1, this.item2, this.item3, this.missingOpeningBracketIds);
@@ -486,7 +493,7 @@ class Immutable23ListAstNode extends TwoThreeListAstNode {
 
 /**
  * For debugging.
- */
+*/
 class ArrayListAstNode extends ListAstNode {
 	get childrenLength(): number {
 		return this._children.length;
@@ -505,7 +512,7 @@ class ArrayListAstNode extends ListAstNode {
 		length: Length,
 		listHeight: number,
 		private readonly _children: AstNode[],
-		missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>,
+		missingOpeningBracketIds: SmallImmutableSet<OpeningBracketId>
 	) {
 		super(length, listHeight, missingOpeningBracketIds);
 	}
@@ -551,7 +558,7 @@ class ArrayListAstNode extends ListAstNode {
 
 /**
  * Immutable, if all children are immutable.
- */
+*/
 class ImmutableArrayListAstNode extends ArrayListAstNode {
 	override toMutable(): ListAstNode {
 		return new ArrayListAstNode(this.length, this.listHeight, [...this.children], this.missingOpeningBracketIds);
@@ -623,7 +630,11 @@ export class TextAstNode extends ImmutableLeafAstNode {
 }
 
 export class BracketAstNode extends ImmutableLeafAstNode {
-	public static create(length: Length, bracketInfo: BracketKind, bracketIds: SmallImmutableSet<OpeningBracketId>): BracketAstNode {
+	public static create(
+		length: Length,
+		bracketInfo: BracketKind,
+		bracketIds: SmallImmutableSet<OpeningBracketId>
+	): BracketAstNode {
 		const node = new BracketAstNode(length, bracketInfo, bracketIds);
 		return node;
 	}
@@ -642,8 +653,8 @@ export class BracketAstNode extends ImmutableLeafAstNode {
 		/**
 		 * In case of a opening bracket, this is the id of the opening bracket.
 		 * In case of a closing bracket, this contains the ids of all opening brackets it can close.
-		 */
-		public readonly bracketIds: SmallImmutableSet<OpeningBracketId>,
+		*/
+		public readonly bracketIds: SmallImmutableSet<OpeningBracketId>
 	) {
 		super(length);
 	}

@@ -14,7 +14,10 @@ export const CodebaseSettingId = 'codebase';
 export interface CodebaseConfigurationSnapshot {
 	readonly revision: number;
 	readonly generation: number;
-	readonly codebase: { readonly models?: CodebaseModels | null; readonly automaticContext: CodebaseAutomaticContext };
+	readonly codebase: {
+		readonly models?: CodebaseModels | null;
+		readonly automaticContext: CodebaseAutomaticContext;
+	};
 }
 
 export interface CodebaseConfigurationCommandResult {
@@ -25,19 +28,19 @@ export interface CodebaseConfigurationCommandResult {
 
 /** Runtime binding and vector publication are independent of the source index. */
 export type CodebaseEmbeddingStatus =
-	| { readonly type: 'disabled' }
-	| { readonly type: 'unavailable' }
+	| { readonly type: 'disabled'; }
+	| { readonly type: 'unavailable'; }
 	| {
-			readonly type: 'active';
-			readonly state: 'idle' | 'indexing' | 'ready' | 'stale' | 'cancelled' | 'failed';
-			readonly targetGeneration: number;
-			readonly publishedGeneration: number | null;
-			readonly totalChunkCount: number;
-			readonly processedChunkCount: number;
-			readonly reusedEmbeddingCount: number;
-			readonly embeddedChunkCount: number;
-			readonly lastErrorCode: string | null;
-	  };
+		readonly type: 'active';
+		readonly state: 'idle' | 'indexing' | 'ready' | 'stale' | 'cancelled' | 'failed';
+		readonly targetGeneration: number;
+		readonly publishedGeneration: number | null;
+		readonly totalChunkCount: number;
+		readonly processedChunkCount: number;
+		readonly reusedEmbeddingCount: number;
+		readonly embeddedChunkCount: number;
+		readonly lastErrorCode: string | null;
+	};
 
 export interface CodebaseStatus {
 	/** Source scanning and publication only; embedding failures do not change this state. */

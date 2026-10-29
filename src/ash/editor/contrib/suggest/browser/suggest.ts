@@ -71,7 +71,9 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		this.results = this._register(createLanguageCompletionStore(model));
 		this.resource = options.resource;
 		const createWorker = (): languages.LanguageCompletionWorker => {
-			const worker = options.workerFactory ? options.workerFactory() : new LanguageCompletionProviderWorker(this.registry, options.onProviderError);
+			const worker = options.workerFactory
+				? options.workerFactory()
+				: new LanguageCompletionProviderWorker(this.registry, options.onProviderError);
 			try {
 				if (options.workerFactory) {
 					if (isCatalogSource(worker)) this.bindCatalogSource(worker);
@@ -84,7 +86,10 @@ export class LanguageCompletionService extends Disposable implements languages.L
 				throw error;
 			}
 		};
-		this.coordinator = this._register(new LanguageRequestCoordinator(model, createWorker));
+		this.coordinator = this._register(new LanguageRequestCoordinator(
+			model,
+			createWorker,
+		));
 		this.bindCatalogSource(registry);
 		if (options.workerFactory) {
 			try {
@@ -94,11 +99,9 @@ export class LanguageCompletionService extends Disposable implements languages.L
 				throw error;
 			}
 		}
-		this._register(
-			toDisposable(() => {
-				this.currentResolver = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.currentResolver = undefined;
+		}));
 	}
 
 	private readonly resource: URI | undefined;
@@ -137,12 +140,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 	}
 
 	request(languageId: string, position: Position, context: languages.LanguageCompletionRequest['context'], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
-		const request = Object.freeze({
-			languageId,
-			...(this.resource ? { resource: this.resource } : {}),
-			position,
-			context,
-		});
+		const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
 		languages.assertLanguageCompletionRequest(request);
 		this.model.offsetAt(position);
 		return this.coordinator.runLatest(
@@ -182,15 +180,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		if (!item.command) return;
 		const provider = this.registry.getProvider(item.providerId);
 		if (!provider?.executeCompletionCommand) throw new ReferenceError(`Language completion provider '${item.providerId}' cannot execute completion commands`);
-		await provider.executeCompletionCommand(
-			Object.freeze({
-				languageId,
-				...(this.resource ? { resource: this.resource } : {}),
-				snapshot: this.model.createVersionedSnapshot(),
-				command: item.command,
-			}),
-			signal,
-		);
+		await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createVersionedSnapshot(), command: item.command }), signal);
 		signal.throwIfAborted();
 		this.assertNotDisposed();
 	}
@@ -209,7 +199,10 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		try {
 			this.coordinator.restartWorker();
 		} catch (disposalError) {
-			throw new AggregateError([catalogError, disposalError], 'Completion provider catalog and Worker disposal both failed');
+			throw new AggregateError(
+				[catalogError, disposalError],
+				'Completion provider catalog and Worker disposal both failed',
+			);
 		}
 	}
 
@@ -220,6 +213,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 			throw new ReferenceError('Language completion resolve request is not the current deferred item');
 		}
 	}
+
 }
 
 /** Coordinator-compatible host that runs matching providers concurrently. */
@@ -240,18 +234,20 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		this.ensureAlive();
 		signal.throwIfAborted();
 		languages.assertLanguageCompletionRequest(request.payload);
-		const providers = this.registry.getProviders(request.payload.languageId, request.payload.context);
+		const providers = this.registry.getProviders(
+			request.payload.languageId,
+			request.payload.context,
+		);
 		if (providers.length === 0) {
 			this.resolutionCache = createResolutionCache(request, []);
 			return mergeProviderResults(request.payload.position, []);
 		}
 		const normalizeResult = languages.createLanguageCompletionSnapshotNormalizer(request.snapshot);
-		const batches = await Promise.all(providers.map(provider => this.runProvider(provider, request, signal, normalizeResult)));
+		const batches = await Promise.all(providers.map(provider => (
+			this.runProvider(provider, request, signal, normalizeResult)
+		)));
 		signal.throwIfAborted();
-		const result = mergeProviderResults(
-			request.payload.position,
-			batches.map(batch => batch?.result),
-		);
+		const result = mergeProviderResults(request.payload.position, batches.map(batch => batch?.result));
 		this.resolutionCache = createResolutionCache(request, batches);
 		return result;
 	}
@@ -279,14 +275,11 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		}
 		let details: languages.LanguageCompletionItemDetails;
 		try {
-			const value = await entry.provider.resolveCompletionItem(
-				Object.freeze({
-					completionRequestId: normalized.completionRequestId,
-					modelVersion: normalized.modelVersion,
-					item: entry.item,
-				}),
-				signal,
-			);
+			const value = await entry.provider.resolveCompletionItem(Object.freeze({
+				completionRequestId: normalized.completionRequestId,
+				modelVersion: normalized.modelVersion,
+				item: entry.item,
+			}), signal);
 			signal.throwIfAborted();
 			details = languages.normalizeLanguageCompletionItemDetails(value);
 		} catch (error) {
@@ -315,28 +308,17 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 			signal.throwIfAborted();
 			if (value === undefined) return undefined;
 			assertProviderResult(value);
-			const result = normalizeResult(
-				validateCompletionSnippets({
-					position: request.payload.position,
-					items: value.items.map(item => createCompletionResultItem(provider, item)),
-					isIncomplete: value.isIncomplete,
-				}),
-			);
-			const resolutions =
-				provider.resolveCompletionItem === undefined
-					? Object.freeze([])
-					: Object.freeze(
-							result.items.flatMap((item, index) =>
-								value.items[index]!.resolveData === undefined
-									? []
-									: [
-											Object.freeze({
-												provider,
-												item: createProviderResolveItem(item, value.items[index]!.resolveData),
-											}),
-										],
-							),
-						);
+			const result = normalizeResult(validateCompletionSnippets({
+				position: request.payload.position,
+				items: value.items.map(item => createCompletionResultItem(provider, item)),
+				isIncomplete: value.isIncomplete,
+			}));
+			const resolutions = provider.resolveCompletionItem === undefined
+				? Object.freeze([])
+				: Object.freeze(result.items.flatMap((item, index) => value.items[index]!.resolveData === undefined ? [] : [Object.freeze({
+					provider,
+					item: createProviderResolveItem(item, value.items[index]!.resolveData),
+				})]));
 			return Object.freeze({ result, resolutions });
 		} catch (error) {
 			if (signal.aborted) throw error;
@@ -349,7 +331,10 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		try {
 			this.onProviderError(providerId, error);
 		} catch (reportingError) {
-			reportProviderError(providerId, new AggregateError([error, reportingError], 'Completion provider and error reporter both failed'));
+			reportProviderError(providerId, new AggregateError(
+				[error, reportingError],
+				'Completion provider and error reporter both failed',
+			));
 		}
 	}
 
@@ -392,12 +377,10 @@ function mergeProviderResults(position: Position, batches: readonly (ProviderBat
 			const { preselect, ...rest } = item;
 			const keepPreselection: boolean = preselect === true && !hasPreselection;
 			if (keepPreselection) hasPreselection = true;
-			items.push(
-				Object.freeze({
-					...rest,
-					...(keepPreselection ? { preselect: true } : preselect === false ? { preselect: false } : {}),
-				}),
-			);
+			items.push(Object.freeze({
+				...rest,
+				...(keepPreselection ? { preselect: true } : preselect === false ? { preselect: false } : {}),
+			}));
 		}
 	}
 	return Object.freeze({
@@ -407,10 +390,7 @@ function mergeProviderResults(position: Position, batches: readonly (ProviderBat
 	});
 }
 
-function createResolutionCache(
-	request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>,
-	batches: readonly (ResolvedProviderBatch | undefined)[],
-): CompletionResolutionCache {
+function createResolutionCache(request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>, batches: readonly (ResolvedProviderBatch | undefined)[]): CompletionResolutionCache {
 	const items = new Map<string, CompletionResolutionEntry>();
 	for (const batch of batches) {
 		for (const entry of batch?.resolutions ?? []) {
@@ -474,7 +454,12 @@ function completionIdentity(providerId: string, itemId: string): string {
 }
 
 function assertProviderResult(result: languages.LanguageCompletionProviderResult): void {
-	if (typeof result !== 'object' || result === null || !Array.isArray(result.items) || typeof result.isIncomplete !== 'boolean') {
+	if (
+		typeof result !== 'object' ||
+		result === null ||
+		!Array.isArray(result.items) ||
+		typeof result.isIncomplete !== 'boolean'
+	) {
 		throw new TypeError('Language completion provider result must contain items and isIncomplete');
 	}
 }
@@ -485,12 +470,10 @@ function reportProviderError(providerId: string, error: unknown): void {
 
 function isCatalogSource(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionProviderCatalogSource {
 	const candidate = value as Partial<languages.LanguageCompletionProviderCatalogSource>;
-	return (
-		typeof candidate.onDidChangeProviderCatalog === 'function' &&
+	return typeof candidate.onDidChangeProviderCatalog === 'function' &&
 		typeof candidate.waitForProviderCatalog === 'function' &&
 		typeof candidate.providerCatalogReady === 'boolean' &&
-		typeof candidate.providerCatalog === 'object'
-	);
+		typeof candidate.providerCatalog === 'object';
 }
 
 function isCompletionItemResolver(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionItemResolver {
@@ -503,14 +486,12 @@ function waitForCatalog(source: languages.LanguageCompletionProviderCatalogSourc
 }
 
 export function createLanguageCompletionStore(model: TextModel): VersionedLanguageResultStore<languages.LanguageCompletionResult> {
-	return new VersionedLanguageResultStore(model, value =>
-		languages.normalizeLanguageCompletionResult(
-			validateCompletionSnippets(value),
-			position => model.offsetAt(position),
-			(position, range) => assertModelCompletionRange(model, position, range),
-			range => assertModelTextEditRange(model, range),
-		),
-	);
+	return new VersionedLanguageResultStore(model, (value) => languages.normalizeLanguageCompletionResult(
+		validateCompletionSnippets(value),
+		position => model.offsetAt(position),
+		(position, range) => assertModelCompletionRange(model, position, range),
+		range => assertModelTextEditRange(model, range),
+	));
 }
 
 function assertModelCompletionRange(model: TextModel, position: Position, range: Range): void {
@@ -519,7 +500,10 @@ function assertModelCompletionRange(model: TextModel, position: Position, range:
 	}
 	model.offsetAt(range.getStartPosition());
 	model.offsetAt(range.getEndPosition());
-	if (range.getStartPosition().lineNumber !== position.lineNumber || range.getEndPosition().lineNumber !== position.lineNumber) {
+	if (
+		range.getStartPosition().lineNumber !== position.lineNumber ||
+		range.getEndPosition().lineNumber !== position.lineNumber
+	) {
 		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
 	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {

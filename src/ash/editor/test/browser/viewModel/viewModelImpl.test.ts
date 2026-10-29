@@ -22,15 +22,7 @@ import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/mo
 import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { CursorStateChangedEvent, ModelTokensChangedEvent } from '../../../common/viewModelEventDispatcher.js';
 import { ViewEventHandler } from '../../../common/viewEventHandler.js';
-import {
-	type ViewCursorStateChangedEvent,
-	type ViewDecorationsChangedEvent,
-	type ViewFlushedEvent,
-	type ViewLanguageConfigurationEvent,
-	type ViewLineMappingChangedEvent,
-	type ViewRevealRangeRequestEvent,
-	type ViewTokensChangedEvent,
-} from '../../../common/viewEvents.js';
+import { type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLanguageConfigurationEvent, type ViewLineMappingChangedEvent, type ViewRevealRangeRequestEvent, type ViewTokensChangedEvent } from '../../../common/viewEvents.js';
 
 test('ViewModel selects the configured wrapping strategy and recomputes when it changes', () => {
 	const dom = new JSDOM('<body><main></main></body>');
@@ -38,17 +30,9 @@ test('ViewModel selects the configured wrapping strategy and recomputes when it 
 	using resources = new DisposableStore();
 	const container = dom.window.document.querySelector('main')!;
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{
-			wordWrap: 'wordWrapColumn',
-			wordWrapColumn: 4,
-			wrappingStrategy: 'simple',
-		},
-		container,
-	);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		wordWrap: 'wordWrapColumn', wordWrapColumn: 4, wrappingStrategy: 'simple',
+	}, container);
 	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('long wrapping paragraph', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
@@ -60,18 +44,8 @@ test('ViewModel selects the configured wrapping strategy and recomputes when it 
 			return factory.createLineBreaksComputer(...args);
 		},
 	});
-	using viewModel = new ViewModel(
-		1,
-		configuration,
-		model,
-		tracked('advanced'),
-		tracked('simple'),
-		() => Disposable.None,
-		languages,
-		theme,
-		{ setVisibleLines: () => {} },
-		{ batchChanges: callback => callback() },
-	);
+	using viewModel = new ViewModel(1, configuration, model, tracked('advanced'), tracked('simple'),
+		() => Disposable.None, languages, theme, { setVisibleLines: () => { } }, { batchChanges: callback => callback() });
 	assert.ok(viewModel.getLineCount() > 1);
 	assert.ok(calls.length > 0);
 	assert.deepEqual([...new Set(calls)], ['simple']);
@@ -91,24 +65,17 @@ test('viewport wrapping waits for available text width and preserves coordinates
 	using resources = new DisposableStore();
 	const container = dom.window.document.querySelector('main')!;
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{
-			dimension: { width: 0, height: 120 },
-			wordWrap: 'on',
-			minimap: { enabled: false },
-			lineNumbers: 'off',
-		},
-		container,
-	);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		dimension: { width: 0, height: 120 },
+		wordWrap: 'on', minimap: { enabled: false }, lineNumbers: 'off',
+	}, container);
 	using languages = createTestLanguageConfigurationService();
 	const text = '# Heading 😀\n' + ('Markdown 中文 😀 paragraph '.repeat(6) + '\n').repeat(32);
 	using model = new TextModel(text, { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
+	using viewModel = new ViewModel(1, configuration, model, factory, factory,
+		() => Disposable.None, languages, theme, { setVisibleLines: () => { } }, { batchChanges: callback => callback() });
 	const selection = new Selection(2, 10, 2, 10);
 	viewModel.setSelections('test', [selection], CursorChangeReason.Explicit);
 	const assertCoordinates = (): void => {
@@ -187,34 +154,33 @@ test('minimap configuration follows visible lines through folding, wrapping, tab
 	using cleanup = toDisposable(() => dom.window.close());
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{
-			dimension: { width: 400, height: 120 },
-			lineHeight: 20,
-			padding: { top: 0, bottom: 0 },
-			scrollBeyondLastLine: false,
-			minimap: { enabled: true, size: 'fill' },
-		},
-		container,
-	);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		dimension: { width: 400, height: 120 },
+		lineHeight: 20,
+		padding: { top: 0, bottom: 0 },
+		scrollBeyondLastLine: false,
+		minimap: { enabled: true, size: 'fill' },
+	}, container);
 	using languages = createTestLanguageConfigurationService();
-	using model = new TextModel(Array.from({ length: 60 }, () => 'abcd').join('\n'), {
-		languageConfigurationService: languages,
-	});
+	using model = new TextModel(Array.from({ length: 60 }, () => 'abcd').join('\n'), { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
-	const states: Array<{ lines: number; height: number; sampling: boolean }> = [];
+	using viewModel = new ViewModel(
+		1,
+		configuration,
+		model,
+		factory,
+		factory,
+		() => Disposable.None,
+		languages,
+		theme,
+		{ setVisibleLines: () => { } },
+		{ batchChanges: callback => callback() },
+	);
+	const states: Array<{ lines: number; height: number; sampling: boolean; }> = [];
 	const read = (): void => {
 		const minimap = configuration.options.get(EditorOption.layoutInfo).minimap;
-		states.push({
-			lines: viewModel.getLineCount(),
-			height: minimap.minimapLineHeight,
-			sampling: minimap.minimapIsSampling,
-		});
+		states.push({ lines: viewModel.getLineCount(), height: minimap.minimapLineHeight, sampling: minimap.minimapIsSampling });
 	};
 	read();
 	viewModel.setHiddenAreas([new Range(2, 1, 59, 5)]);
@@ -248,21 +214,15 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	using cleanup = toDisposable(() => dom.window.close());
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{
-			dimension: { width: 200, height: 40 },
-			lineHeight: 20,
-		},
-		container,
-	);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		dimension: { width: 200, height: 40 },
+		lineHeight: 20,
+	}, container);
 	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('one\ntwo\nthree', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	const visible: Array<{ startLineNumber: number; endLineNumber: number }> = [];
+	const visible: Array<{ startLineNumber: number; endLineNumber: number; }> = [];
 	using viewModel = new ViewModel(
 		1,
 		configuration,
@@ -296,13 +256,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.deepEqual(viewModel.getPrimaryCursorState().modelState.position, new Position(3, 2));
 	assert.deepEqual(outgoingCursorSources, ['test']);
 	assert.equal(captured.cursorEvents.length, 1);
-	const columnSelection = {
-		isReal: true,
-		fromViewLineNumber: 1,
-		fromViewVisualColumn: 2,
-		toViewLineNumber: 3,
-		toViewVisualColumn: 4,
-	};
+	const columnSelection = { isReal: true, fromViewLineNumber: 1, fromViewVisualColumn: 2, toViewLineNumber: 3, toViewVisualColumn: 4 };
 	viewModel.setCursorColumnSelectData(columnSelection);
 	assert.deepEqual(viewModel.getCursorColumnSelectData(), columnSelection);
 	const cursorState = viewModel.saveCursorState();
@@ -337,21 +291,16 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.equal(viewModel.getLineCount(), 2);
 	assert.equal(viewModel.getLineContent(2), 'three');
 	assert.deepEqual(viewModel.getVisibleRanges(), [new Range(1, 1, 1, 4), new Range(3, 1, 3, 6)]);
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(1, 4)),
-			text: '!',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position(1, 4)),
+		text: '!',
+	}]);
 	assert.equal(viewModel.getLineContent(1), 'one!');
 	viewModel.visibleLinesStabilized();
-	assert.deepEqual(
-		visible.slice(-2).map(({ startLineNumber, endLineNumber }) => ({ startLineNumber, endLineNumber })),
-		[
-			{ startLineNumber: 1, endLineNumber: 1 },
-			{ startLineNumber: 3, endLineNumber: 3 },
-		],
-	);
+	assert.deepEqual(visible.slice(-2).map(({ startLineNumber, endLineNumber }) => ({ startLineNumber, endLineNumber })), [
+		{ startLineNumber: 1, endLineNumber: 1 },
+		{ startLineNumber: 3, endLineNumber: 3 },
+	]);
 });
 
 test('ViewModel preserves cursor markers across structural edits and resets them only on model replacement', () => {
@@ -365,7 +314,18 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 	using model = new TextModel('one\ntwo', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
+	using viewModel = new ViewModel(
+		1,
+		configuration,
+		model,
+		factory,
+		factory,
+		() => Disposable.None,
+		languages,
+		theme,
+		{ setVisibleLines: () => { } },
+		{ batchChanges: callback => callback() },
+	);
 	using captured = new CapturedViewEvents();
 	viewModel.addViewEventHandler(captured);
 	using detachCaptured = toDisposable(() => viewModel.removeViewEventHandler(captured));
@@ -382,10 +342,7 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 	model.pushStackElement();
 	assert.deepEqual(viewModel.getSelections(), [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)]);
 	assert.equal(viewModel.getLineCount(), 3);
-	assert.equal(
-		outgoing.some(event => event.reason === CursorChangeReason.ContentFlush),
-		false,
-	);
+	assert.equal(outgoing.some(event => event.reason === CursorChangeReason.ContentFlush), false);
 	model.undo();
 	assert.deepEqual(viewModel.getSelections(), [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)]);
 	assert.equal(viewModel.getLineCount(), 2);
@@ -397,18 +354,15 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 
 	model.setValue('reset');
 
-	assert.deepEqual(
-		{
-			selections: viewModel.getSelections(),
-			flushViewReasons: captured.cursorEvents.map(event => event.reason).filter(reason => reason === CursorChangeReason.ContentFlush),
-			outgoingReasons: outgoing.map(event => event.reason),
-		},
-		{
-			selections: [new Selection(1, 1, 1, 1)],
-			flushViewReasons: [CursorChangeReason.ContentFlush],
-			outgoingReasons: [CursorChangeReason.ContentFlush],
-		},
-	);
+	assert.deepEqual({
+		selections: viewModel.getSelections(),
+		flushViewReasons: captured.cursorEvents.map(event => event.reason).filter(reason => reason === CursorChangeReason.ContentFlush),
+		outgoingReasons: outgoing.map(event => event.reason),
+	}, {
+		selections: [new Selection(1, 1, 1, 1)],
+		flushViewReasons: [CursorChangeReason.ContentFlush],
+		outgoingReasons: [CursorChangeReason.ContentFlush],
+	});
 });
 
 const codeFeatures = registerTestCodeEditorFeatures();

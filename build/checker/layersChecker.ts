@@ -9,7 +9,10 @@ const webEnvironments = new Set(['common', 'browser', 'worker', 'electron-browse
 const nodeModules = new Set(builtinModules.map(name => name.replace(/^node:/u, '')));
 const hostGlobals = new Set(['process', 'Buffer', 'require', 'module', 'exports', '__filename', '__dirname', 'setImmediate', 'clearImmediate', 'global', 'NodeJS', 'Electron']);
 // These are separately compiled sandbox scripts; ordinary renderer code uses their bridges.
-const preloads = new Set(['base/parts/sandbox/electron-browser/preload.cts', 'platform/browserView/electron-browser/preload-browserView.ts']);
+const preloads = new Set([
+	'base/parts/sandbox/electron-browser/preload.cts',
+	'platform/browserView/electron-browser/preload-browserView.ts',
+]);
 
 interface ILayerViolation {
 	readonly fileName: string;
@@ -28,10 +31,9 @@ function environmentFor(path: string): string {
 
 function importedModule(node: ts.Node): ts.StringLiteralLike | undefined {
 	if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) return node.moduleSpecifier;
-	if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression && ts.isStringLiteralLike(node.moduleReference.expression))
-		return node.moduleReference.expression;
+	if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression && ts.isStringLiteralLike(node.moduleReference.expression)) return node.moduleReference.expression;
 	if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) return node.argument.literal;
-	if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+	if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression) && node.expression.text === 'require')) {
 		const argument = node.arguments[0];
 		if (argument && ts.isStringLiteralLike(argument)) return argument;
 	}
@@ -40,16 +42,10 @@ function importedModule(node: ts.Node): ts.StringLiteralLike | undefined {
 
 /** Checks explicit runtime imports and native IPC references, including aliases and inferred receivers. */
 export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly ILayerViolation[] {
-	const config = ts.getParsedCommandLineOfConfigFile(
-		tsconfigPath,
-		{ noEmit: true },
-		{
-			...ts.sys,
-			onUnRecoverableConfigFileDiagnostic: diagnostic => {
-				throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
-			},
-		},
-	);
+	const config = ts.getParsedCommandLineOfConfigFile(tsconfigPath, { noEmit: true }, {
+		...ts.sys,
+		onUnRecoverableConfigFileDiagnostic: diagnostic => { throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')); },
+	});
 	if (!config || config.errors.length) throw new Error(config?.errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')).join('\n') ?? `Cannot read ${tsconfigPath}`);
 	const files = ts.sys.readDirectory(sourceRoot, ['.ts', '.tsx', '.cts', '.mts'], ['**/test/**', '**/fixtures/**'], ['**/*']).sort();
 	if (files.length === 0) throw new Error(`No production TypeScript sources in ${sourceRoot}`);
@@ -71,7 +67,7 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 		let result = type.getSymbol() === nativeIPC || type.aliasSymbol === nativeIPC;
 		if (!result && type.isUnionOrIntersection()) result = type.types.some(isNativeType);
 		if (!result && type.aliasTypeArguments) result = type.aliasTypeArguments.some(isNativeType);
-		if (!result && type.flags & ts.TypeFlags.Object) {
+		if (!result && (type.flags & ts.TypeFlags.Object)) {
 			const object = type as ts.ObjectType;
 			if (object.objectFlags & ts.ObjectFlags.Reference) result = checker.getTypeArguments(object as ts.TypeReference).some(isNativeType);
 			if (!result && object.objectFlags & (ts.ObjectFlags.Class | ts.ObjectFlags.Interface)) result = checker.getBaseTypes(object as ts.InterfaceType).some(isNativeType);
@@ -88,18 +84,13 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 		const restrictHostGlobals = webEnvironments.has(environment) && !preloads.has(path);
 		const report = (node: ts.Node, message: string): void => {
 			const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-			violations.push({
-				fileName: source.fileName,
-				line: position.line + 1,
-				character: position.character + 1,
-				message,
-			});
+			violations.push({ fileName: source.fileName, line: position.line + 1, character: position.character + 1, message });
 		};
 		function visit(node: ts.Node): void {
 			const specifier = importedModule(node);
 			if (specifier && webEnvironments.has(environment)) {
 				const name = specifier.text;
-				if (name.startsWith('node:') || nodeModules.has(name) || ((name === 'electron' || name.startsWith('electron/')) && !preloads.has(path))) {
+				if (name.startsWith('node:') || nodeModules.has(name) || (name === 'electron' || name.startsWith('electron/')) && !preloads.has(path)) {
 					report(specifier, `Module '${name}' is unavailable in the ${environment} layer.`);
 				}
 				const target = checker.getSymbolAtLocation(specifier)?.declarations?.find(ts.isSourceFile);
@@ -116,11 +107,7 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 				if (restrictNativeIPC && symbol === nativeIPC) report(node, `IMainProcessService is only available to Electron host adapters, not ${environment} code.`);
 				// Dependencies can bring Node globals into an otherwise isolated browser compilation.
 				// Resolve their origin so a same-named local variable or property remains legal.
-				if (
-					restrictHostGlobals &&
-					hostGlobals.has(node.text) &&
-					symbol?.declarations?.some(declaration => /\/node_modules\/(?:@types\/node|electron)\//u.test(declaration.getSourceFile().fileName.replaceAll('\\', '/')))
-				) {
+				if (restrictHostGlobals && hostGlobals.has(node.text) && symbol?.declarations?.some(declaration => /\/node_modules\/(?:@types\/node|electron)\//u.test(declaration.getSourceFile().fileName.replaceAll('\\', '/')))) {
 					report(node, `Host global '${node.text}' is unavailable in the ${environment} layer.`);
 				}
 			} else if (restrictNativeIPC && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && isNativeType(checker.getTypeAtLocation(node.expression))) {

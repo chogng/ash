@@ -9,11 +9,7 @@ test('stopping initialization preserves the structured cause and localizes its e
 	try {
 		const bundles = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		setNlsMessages('zh-CN', bundles);
-		const response = decodeAppServerResponse('initialize', {
-			jsonrpc: '2.0',
-			id: 42,
-			error: { code: -32600, message: 'diagnostic changed', data: { kind: 'ServerShuttingDown' } },
-		});
+		const response = decodeAppServerResponse('initialize', { jsonrpc: '2.0', id: 42, error: { code: -32600, message: 'diagnostic changed', data: { kind: 'ServerShuttingDown' } } });
 		assert.ok('error' in response);
 		const error = new AppServerRemoteError(response.error.code, response.error.message, response.error.data);
 		assert.deepEqual({ code: error.code, kind: error.errorName, message: error.message }, { code: -32600, kind: 'ServerShuttingDown', message: 'App Server 正在停止。请等待停止完成后重新连接。' });

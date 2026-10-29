@@ -11,16 +11,8 @@ import type { ScreenshotManifest } from '../screenshotDiffReport.ts';
 
 test('only blocks-ci fixtures enter the sorted approval list and rendering errors cannot be approved', () => {
 	const environment = { platform: 'win32', browserVersion: 'test' };
-	const entry = (fixtureId: string, labels: string[]) => ({
-		fixtureId,
-		labels,
-		imageHash: 'a'.repeat(64),
-		imagePath: 'images/image.png',
-	});
-	const manifest = {
-		environment,
-		fixtures: [entry('z', ['blocks-ci']), entry('ignored', []), entry('a', ['blocks-ci'])],
-	};
+	const entry = (fixtureId: string, labels: string[]) => ({ fixtureId, labels, imageHash: 'a'.repeat(64), imagePath: 'images/image.png' });
+	const manifest = { environment, fixtures: [entry('z', ['blocks-ci']), entry('ignored', []), entry('a', ['blocks-ci'])] };
 	const result = generateBlocksCiMarkdown(manifest, 'images-root');
 	assert.ok(result.indexOf('#### a') < result.indexOf('#### z'));
 	assert.doesNotMatch(result, /ignored/);
@@ -34,10 +26,7 @@ test('real blocks-ci command passes unchanged hashes and fails an intentionally 
 		const imageHash = createHash('sha256').update(png).digest('hex');
 		await mkdir(resolve(directory, 'images'));
 		await writeFile(resolve(directory, 'images', `${imageHash}.png`), png);
-		const manifest: ScreenshotManifest = {
-			environment: { platform: 'win32', browserVersion: 'test' },
-			fixtures: [{ fixtureId: 'test/Light', labels: ['blocks-ci'], imageHash, imagePath: `images/${imageHash}.png` }],
-		};
+		const manifest: ScreenshotManifest = { environment: { platform: 'win32', browserVersion: 'test' }, fixtures: [{ fixtureId: 'test/Light', labels: ['blocks-ci'], imageHash, imagePath: `images/${imageHash}.png` }] };
 		const manifestPath = resolve(directory, 'manifest.json');
 		const markdownPath = resolve(directory, 'blocks-ci-screenshots.md');
 		await writeFile(manifestPath, JSON.stringify(manifest));
@@ -48,13 +37,11 @@ test('real blocks-ci command passes unchanged hashes and fails an intentionally 
 		const execute = promisify(execFile);
 		assert.equal((await execute(process.execPath, args, { windowsHide: true })).stdout, markdown);
 		await writeFile(markdownPath, markdown.replace(imageHash, 'b'.repeat(64)));
-		await assert.rejects(execute(process.execPath, [...args, '--json'], { windowsHide: true }), (error: Error & { code?: number; stdout?: string }) => {
+		await assert.rejects(execute(process.execPath, [...args, '--json'], { windowsHide: true }), (error: Error & { code?: number; stdout?: string; }) => {
 			assert.equal(error.code, 1);
 			assert.equal(JSON.parse(error.stdout!).replacement, markdown);
 			return true;
 		});
 		assert.equal(await readFile(markdownPath, 'utf8'), markdown.replace(imageHash, 'b'.repeat(64)));
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });

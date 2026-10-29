@@ -12,9 +12,7 @@ export class TerminalTabsChatEntry extends Disposable {
 	constructor(
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IViewsService private readonly views: IViewsService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	async attach(instance: ITerminalInstance): Promise<void> {
 		if (this.isDisposed || !this.terminals.instances.includes(instance)) return;

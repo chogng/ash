@@ -20,76 +20,49 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 
 async function expectSelectionColor(row: Locator, token: string): Promise<void> {
-	await expect
-		.poll(() =>
-			row.evaluate((element, token) => {
-				const probe = element.ownerDocument.createElement('span');
-				probe.style.backgroundColor = `var(${token})`;
-				element.append(probe);
-				const matches = getComputedStyle(element).backgroundColor === getComputedStyle(probe).backgroundColor;
-				probe.remove();
-				return matches;
-			}, token),
-		)
-		.toBe(true);
+	await expect.poll(() => row.evaluate((element, token) => {
+		const probe = element.ownerDocument.createElement('span');
+		probe.style.backgroundColor = `var(${token})`;
+		element.append(probe);
+		const matches = getComputedStyle(element).backgroundColor === getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return matches;
+	}, token)).toBe(true);
 }
 
 suite('SCM history graph', () => {
-	for (const remoteIsRoot of [false, true])
-		test(`changes color at the upstream reference in a linear history${remoteIsRoot ? ' ending at that reference' : ''}`, () => {
-			const remote = {
-				id: 'refs/remotes/origin/main',
-				name: 'origin/main',
-				revision: 'remote',
-				category: 'remoteBranch',
-			};
-			const history: ISCMHistoryItem[] = [
-				{ id: 'local', parentIds: ['remote'], subject: 'Local change', message: '' },
-				{
-					id: 'remote',
-					parentIds: remoteIsRoot ? [] : ['root'],
-					subject: 'Pushed change',
-					message: '',
-					references: [remote],
-				},
-				...(remoteIsRoot ? [] : [{ id: 'root', parentIds: [], subject: 'Shared root', message: '' }]),
-			];
-			const rows = toISCMHistoryItemViewModelArray(history, new Map(), {
-				id: 'refs/heads/main',
-				name: 'main',
-				revision: 'local',
-			});
-			const localColor = rows[0].color;
-			const remoteColor = rows[1].color;
-			assert.notEqual(localColor, undefined);
-			assert.notEqual(remoteColor, undefined);
-			assert.notEqual(localColor, remoteColor);
-			assert.equal(rows[0].outputSwimlanes[0].color, localColor);
-			assert.equal(rows[1].inputSwimlanes[0].color, localColor);
-			const environment = new JSDOM();
-			try {
-				const graph = renderSCMHistoryItemGraph(rows[1], 22, environment.window.document);
-				assert.equal(graph.querySelector('path[d="M 11 0 V 11"]')?.getAttribute('data-lane-color'), String(localColor));
-				assert.equal(graph.querySelector('circle')?.getAttribute('data-lane-color'), String(remoteColor));
-				if (!remoteIsRoot) {
-					assert.equal(graph.querySelector('path[d="M 11 11 V 22"]')?.getAttribute('data-lane-color'), String(remoteColor));
-					const child = renderSCMHistoryGraphPlaceholder(rows[1].outputSwimlanes, environment.window.document);
-					assert.equal(child.querySelector('path')?.getAttribute('data-lane-color'), String(remoteColor));
-					assert.equal(rows[2].inputSwimlanes[0].color, remoteColor);
-				}
-			} finally {
-				environment.window.close();
+	for (const remoteIsRoot of [false, true]) test(`changes color at the upstream reference in a linear history${remoteIsRoot ? ' ending at that reference' : ''}`, () => {
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['remote'], subject: 'Local change', message: '' },
+			{ id: 'remote', parentIds: remoteIsRoot ? [] : ['root'], subject: 'Pushed change', message: '', references: [remote] },
+			...remoteIsRoot ? [] : [{ id: 'root', parentIds: [], subject: 'Shared root', message: '' }],
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'refs/heads/main', name: 'main', revision: 'local' });
+		const localColor = rows[0].color;
+		const remoteColor = rows[1].color;
+		assert.notEqual(localColor, undefined);
+		assert.notEqual(remoteColor, undefined);
+		assert.notEqual(localColor, remoteColor);
+		assert.equal(rows[0].outputSwimlanes[0].color, localColor);
+		assert.equal(rows[1].inputSwimlanes[0].color, localColor);
+		const environment = new JSDOM();
+		try {
+			const graph = renderSCMHistoryItemGraph(rows[1], 22, environment.window.document);
+			assert.equal(graph.querySelector('path[d="M 11 0 V 11"]')?.getAttribute('data-lane-color'), String(localColor));
+			assert.equal(graph.querySelector('circle')?.getAttribute('data-lane-color'), String(remoteColor));
+			if (!remoteIsRoot) {
+				assert.equal(graph.querySelector('path[d="M 11 11 V 22"]')?.getAttribute('data-lane-color'), String(remoteColor));
+				const child = renderSCMHistoryGraphPlaceholder(rows[1].outputSwimlanes, environment.window.document);
+				assert.equal(child.querySelector('path')?.getAttribute('data-lane-color'), String(remoteColor));
+				assert.equal(rows[2].inputSwimlanes[0].color, remoteColor);
 			}
-		});
+		} finally { environment.window.close(); }
+	});
 
 	test('keeps the current reference color when local and upstream point to the same commit', () => {
 		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
-		const remote = {
-			id: 'refs/remotes/origin/main',
-			name: 'origin/main',
-			revision: 'tip',
-			category: 'remoteBranch',
-		};
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'tip', category: 'remoteBranch' };
 		const history = [
 			{ id: 'tip', parentIds: ['root'], subject: 'Synced change', message: '', references: [remote, current] },
 			{ id: 'root', parentIds: [], subject: 'Shared root', message: '' },
@@ -104,36 +77,22 @@ suite('SCM history graph', () => {
 
 	test('preserves explicit reference colors supplied by the caller', () => {
 		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
-		const rows = toISCMHistoryItemViewModelArray([{ id: 'tip', parentIds: [], subject: 'Root', message: '', references: [current] }], new Map([[current.id, 3]]), current);
+		const rows = toISCMHistoryItemViewModelArray([
+			{ id: 'tip', parentIds: [], subject: 'Root', message: '', references: [current] },
+		], new Map([[current.id, 3]]), current);
 		const environment = new JSDOM();
 		try {
 			assert.equal(renderSCMHistoryItemGraph(rows[0], 22, environment.window.document).querySelector('circle')?.getAttribute('data-lane-color'), '3');
-		} finally {
-			environment.window.close();
-		}
+		} finally { environment.window.close(); }
 	});
 
 	test('child rows continue both outgoing merge lanes without drawing another commit', () => {
 		const environment = new JSDOM();
 		try {
-			const graph = renderSCMHistoryGraphPlaceholder(
-				[
-					{ id: 'main', color: 2 },
-					{ id: 'branch', color: 5 },
-				],
-				environment.window.document,
-			);
-			assert.deepEqual(
-				[...graph.querySelectorAll('path')].map(path => [path.dataset.laneColor, path.getAttribute('d')]),
-				[
-					['2', 'M 11 0 V 22'],
-					['5', 'M 22 0 V 22'],
-				],
-			);
+			const graph = renderSCMHistoryGraphPlaceholder([{ id: 'main', color: 2 }, { id: 'branch', color: 5 }], environment.window.document);
+			assert.deepEqual([...graph.querySelectorAll('path')].map(path => [path.dataset.laneColor, path.getAttribute('d')]), [['2', 'M 11 0 V 22'], ['5', 'M 22 0 V 22']]);
 			assert.equal(graph.querySelectorAll('circle').length, 0);
-		} finally {
-			environment.window.close();
-		}
+		} finally { environment.window.close(); }
 	});
 
 	test('connects a merge to its additional parent when that parent already has a lane', () => {
@@ -150,10 +109,7 @@ suite('SCM history graph', () => {
 			const graph = renderSCMHistoryItemGraph(rows[1], 22, environment.window.document);
 			const branchColor = rows[1].outputSwimlanes[2].color;
 			const branchPaths = [...graph.querySelectorAll('path')].filter(path => path.dataset.laneColor === String(branchColor));
-			assert.ok(
-				branchPaths.some(path => path.getAttribute('d')?.endsWith('33 22')),
-				'The new merge edge must reach its own lane at x=33.',
-			);
+			assert.ok(branchPaths.some(path => path.getAttribute('d')?.endsWith('33 22')), 'The new merge edge must reach its own lane at x=33.');
 			const base = renderSCMHistoryItemGraph(rows[3], 22, environment.window.document);
 			assert.equal(base.querySelectorAll('path[d$="H 11"]').length, 2, 'Both side lanes must reconnect to the base commit.');
 			assert.equal(rows[3].outputSwimlanes.length, 1);
@@ -179,42 +135,29 @@ suite('SCM history graph', () => {
 		}
 	});
 
-	for (const incoming of [false, true])
-		test(`connects a remote merge to its own parent lane with incoming changes ${incoming ? 'shown' : 'hidden'}`, () => {
-			const history: ISCMHistoryItem[] = [
-				{ id: 'local', parentIds: ['base'], subject: 'local', message: 'local' },
-				{ id: 'remote', parentIds: ['topic', 'base'], subject: 'remote merge', message: 'remote merge' },
-				{ id: 'base', parentIds: ['root'], subject: 'base', message: 'base' },
-				{ id: 'topic', parentIds: ['root'], subject: 'topic', message: 'topic' },
-				{ id: 'root', parentIds: [], subject: 'root', message: 'root' },
-			];
-			const rows = toISCMHistoryItemViewModelArray(
-				history,
-				new Map(),
-				{ id: 'main', name: 'main', revision: 'local' },
-				{
-					remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' },
-					base: 'base',
-					incoming,
-					outgoing: true,
-				},
-			);
-			const environment = new JSDOM();
-			try {
-				const merge = rows.find(row => row.historyItem.id === 'remote')!;
-				const graph = renderSCMHistoryItemGraph(merge, 22, environment.window.document);
-				assert.deepEqual(merge.historyItem.parentIds, ['topic', 'base']);
-				assert.equal(
-					graph.querySelectorAll('path[d="M 22 11 A 11 11 0 0 1 33 22"]').length,
-					1,
-					'The second parent must enter the third lane, including when projected through Incoming Changes.',
-				);
-				assert.equal(graph.querySelectorAll('path[d="M 22 11 H 22"]').length, 1, 'The merge edge must start at its own node.');
-				assert.equal(graph.querySelectorAll('path[d="M 0 11 A 11 11 0 0 1 11 22"]').length, 0, 'The merge must not hook into the unrelated local branch.');
-			} finally {
-				environment.window.close();
-			}
+	for (const incoming of [false, true]) test(`connects a remote merge to its own parent lane with incoming changes ${incoming ? 'shown' : 'hidden'}`, () => {
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['base'], subject: 'local', message: 'local' },
+			{ id: 'remote', parentIds: ['topic', 'base'], subject: 'remote merge', message: 'remote merge' },
+			{ id: 'base', parentIds: ['root'], subject: 'base', message: 'base' },
+			{ id: 'topic', parentIds: ['root'], subject: 'topic', message: 'topic' },
+			{ id: 'root', parentIds: [], subject: 'root', message: 'root' },
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+			remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming, outgoing: true,
 		});
+		const environment = new JSDOM();
+		try {
+			const merge = rows.find(row => row.historyItem.id === 'remote')!;
+			const graph = renderSCMHistoryItemGraph(merge, 22, environment.window.document);
+			assert.deepEqual(merge.historyItem.parentIds, ['topic', 'base']);
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 A 11 11 0 0 1 33 22"]').length, 1, 'The second parent must enter the third lane, including when projected through Incoming Changes.');
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 H 22"]').length, 1, 'The merge edge must start at its own node.');
+			assert.equal(graph.querySelectorAll('path[d="M 0 11 A 11 11 0 0 1 11 22"]').length, 0, 'The merge must not hook into the unrelated local branch.');
+		} finally {
+			environment.window.close();
+		}
+	});
 });
 
 test('summary nodes compare captured branch revisions without changing commit parents', () => {
@@ -223,21 +166,10 @@ test('summary nodes compare captured branch revisions without changing commit pa
 		{ id: 'remote', parentIds: ['base'], subject: 'remote', message: 'remote' },
 		{ id: 'base', parentIds: [], subject: 'base', message: 'base' },
 	];
-	const rows = toISCMHistoryItemViewModelArray(
-		history,
-		new Map(),
-		{ id: 'main', name: 'main', revision: 'local' },
-		{
-			remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' },
-			base: 'base',
-			incoming: true,
-			outgoing: true,
-		},
-	);
-	assert.deepEqual(
-		rows.map(row => row.kind),
-		['outgoing-changes', 'HEAD', 'node', 'incoming-changes', 'node'],
-	);
+	const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: true, outgoing: true,
+	});
+	assert.deepEqual(rows.map(row => row.kind), ['outgoing-changes', 'HEAD', 'node', 'incoming-changes', 'node']);
 	assert.deepEqual(rows[0].historyItem.comparison, { revision: 'local', baseRevision: 'base' });
 	assert.deepEqual(rows[3].historyItem.comparison, { revision: 'remote', baseRevision: 'base' });
 	assert.equal(rows[0].color, rows[1].color, 'Outgoing changes share the local reference color.');
@@ -245,193 +177,110 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	assert.notEqual(rows[1].color, rows[2].color, 'Diverged local and upstream lanes have distinct reference colors.');
 	assert.deepEqual(rows[2].historyItem.parentIds, ['base']);
 	assert.deepEqual(history[1].parentIds, ['base']);
-	assert.equal(
-		toISCMHistoryItemViewModelArray(
-			history,
-			new Map(),
-			{ id: 'main', name: 'main', revision: 'local' },
-			{
-				remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' },
-				base: 'base',
-				incoming: false,
-				outgoing: false,
-			},
-		).length,
-		history.length,
-	);
+	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: false, outgoing: false,
+	}).length, history.length);
 });
 
 suite('SCM attachment source commands', () => {
-	suiteSetup(async () => {
-		await import('../../browser/scmHistoryViewPane.js');
-	});
+	suiteSetup(async () => { await import('../../browser/scmHistoryViewPane.js'); });
 	ensureNoDisposablesAreLeakedInTestSuite();
-	for (const changeSource of [false, true])
-		for (const revisionUris of [false, true])
-			test(`opens the captured ${changeSource ? 'revision file' : 'commit changes'} through the SCM owner with ${revisionUris ? 'provider' : 'snapshot'} URIs`, async () => {
-				await import('../../browser/scmHistoryViewPane.js');
-				using services = new InstantiationService();
-				using commands = new CommandService(services);
-				const calls: unknown[] = [];
-				const opened: unknown[] = [];
-				const change = {
-					path: 'src/name:中文.ts',
-					uri: URI.file('/working/name.ts'),
-					modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined,
-					status: 'modified',
-				};
-				const repository = {
-					id: 'repo:original',
-					provider: {
-						historyProvider: {
-							provideHistoryItemChanges: async (...args: unknown[]) => {
-								calls.push(args);
-								return [change];
-							},
-							resolveHistoryItemChangeContents: async (...args: unknown[]) => {
-								calls.push(args);
-								return {
-									original: { kind: 'text', text: 'Before' },
-									modified: { kind: 'text', text: 'Captured after' },
-								};
-							},
-						},
-					},
-				} as unknown as ISCMRepository;
-				services.registerInstance(ISCMService, {
-					getRepository: id => (id === repository.id ? repository : undefined),
-				} as ISCMService);
-				services.registerInstance(IProgressService, {
-					withProgress: (_options, task) => task({ report() {} }),
-				});
-				services.registerInstance(IEditorService, {
-					openEditor: async (...args: unknown[]) => {
-						opened.push(args);
-					},
-				} as unknown as IEditorService);
-				const source = SCMHistoryItemUri.toUri({
-					repositoryId: repository.id,
-					revision: 'captured:tip',
-					baseRevision: 'captured:parent',
-					...(changeSource ? { path: change.path } : {}),
-				});
-				await commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', URI.parse(source.toString()), 'Captured label');
-				assert.deepEqual(calls, [
-					['captured:tip', 'captured:parent'],
-					['captured:tip', change],
-				]);
-				assert.equal(opened.length, 1);
-				const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
-				assert.deepEqual(options, { pinned: true });
-				if (changeSource) {
-					if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
-					else {
-						assert.notEqual(input.resource.toString(), change.uri.toString());
-						assert.equal(input.resource.query.includes('captured:tip'), true);
-					}
-					assert.equal(input.initialText, 'Captured after');
-					assert.equal(input.readOnly, true);
-				} else {
-					assert.ok(isMultiDiffEditorInput(input));
-					assert.equal(input.label, 'Captured label');
-					assert.equal(input.items[0].modified.initialText, 'Captured after');
-					assert.equal(input.items[0].modified.readOnly, true);
-					assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
+	for (const changeSource of [false, true]) for (const revisionUris of [false, true]) test(`opens the captured ${changeSource ? 'revision file' : 'commit changes'} through the SCM owner with ${revisionUris ? 'provider' : 'snapshot'} URIs`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const calls: unknown[] = [];
+		const opened: unknown[] = [];
+		const change = { path: 'src/name:中文.ts', uri: URI.file('/working/name.ts'), modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined, status: 'modified' };
+		const repository = {
+			id: 'repo:original', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async (...args: unknown[]) => { calls.push(args); return [change]; },
+					resolveHistoryItemChangeContents: async (...args: unknown[]) => { calls.push(args); return { original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'Captured after' } }; },
 				}
-			});
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: id => id === repository.id ? repository : undefined } as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured:tip', baseRevision: 'captured:parent', ...(changeSource ? { path: change.path } : {}) });
+		await commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', URI.parse(source.toString()), 'Captured label');
+		assert.deepEqual(calls, [['captured:tip', 'captured:parent'], ['captured:tip', change]]);
+		assert.equal(opened.length, 1);
+		const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
+		assert.deepEqual(options, { pinned: true });
+		if (changeSource) {
+			if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
+			else {
+				assert.notEqual(input.resource.toString(), change.uri.toString());
+				assert.equal(input.resource.query.includes('captured:tip'), true);
+			}
+			assert.equal(input.initialText, 'Captured after');
+			assert.equal(input.readOnly, true);
+		} else {
+			assert.ok(isMultiDiffEditorInput(input));
+			assert.equal(input.label, 'Captured label');
+			assert.equal(input.items[0].modified.initialText, 'Captured after');
+			assert.equal(input.items[0].modified.readOnly, true);
+			assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
+		}
+	});
 
-	for (const kind of ['deleted', 'binary'])
-		test(`revision file sources retain ${kind} contents without reading the working file`, async () => {
-			using services = new InstantiationService();
-			using commands = new CommandService(services);
-			const change = {
-				path: 'file.bin',
-				uri: URI.file('/working/file.bin'),
-				originalUri: URI.parse('git:/original/file.bin'),
-				modifiedUri: URI.parse('git:/modified/file.bin'),
-				status: kind,
-			};
-			const repository = {
-				id: 'repo',
-				provider: {
-					historyProvider: {
-						provideHistoryItemChanges: async () => [change],
-						resolveHistoryItemChangeContents: async () => ({
-							parentId: 'captured-parent',
-							original: { kind: 'text', text: 'Deleted content' },
-							modified: kind === 'deleted' ? { kind: 'missing' } : { kind: 'binary', bytes: new Uint8Array([1, 2, 3]) },
-						}),
-					},
-				},
-			} as unknown as ISCMRepository;
-			services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
-			let opened = 0;
-			services.registerInstance(IEditorService, {
-				openEditor: async input => {
-					opened++;
-					assert.equal(input.resource.toString(), (kind === 'deleted' ? change.originalUri : change.modifiedUri).toString());
-					assert.equal(input.readOnly, true);
-					if (kind === 'deleted') assert.equal(input.initialText, 'Deleted content');
-					else assert.deepEqual(input.initialBytes, new Uint8Array([1, 2, 3]));
-				},
-			} as IEditorService);
-			await commands.executeCommand(
-				'workbench.scm.action.graph.openFile',
-				SCMHistoryItemUri.toUri({
-					repositoryId: repository.id,
-					revision: 'captured-tip',
-					baseRevision: 'captured-parent',
-					path: change.path,
-				}),
-			);
-			assert.equal(opened, 1);
-		});
+	for (const kind of ['deleted', 'binary']) test(`revision file sources retain ${kind} contents without reading the working file`, async () => {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const change = { path: 'file.bin', uri: URI.file('/working/file.bin'), originalUri: URI.parse('git:/original/file.bin'), modifiedUri: URI.parse('git:/modified/file.bin'), status: kind };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => ({ parentId: 'captured-parent', original: { kind: 'text', text: 'Deleted content' }, modified: kind === 'deleted' ? { kind: 'missing' } : { kind: 'binary', bytes: new Uint8Array([1, 2, 3]) } }),
+				}
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
+		let opened = 0;
+		services.registerInstance(IEditorService, {
+			openEditor: async input => {
+				opened++;
+				assert.equal(input.resource.toString(), (kind === 'deleted' ? change.originalUri : change.modifiedUri).toString());
+				assert.equal(input.readOnly, true);
+				if (kind === 'deleted') assert.equal(input.initialText, 'Deleted content');
+				else assert.deepEqual(input.initialBytes, new Uint8Array([1, 2, 3]));
+			}
+		} as IEditorService);
+		await commands.executeCommand('workbench.scm.action.graph.openFile', SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured-tip', baseRevision: 'captured-parent', path: change.path }));
+		assert.equal(opened, 1);
+	});
 
-	for (const changeSource of [false, true])
-		for (const retired of ['cancelled', 'removed', 'replaced'])
-			test(`${changeSource ? 'file' : 'commit'} source cannot open after its owner is ${retired}`, async () => {
-				await import('../../browser/scmHistoryViewPane.js');
-				using services = new InstantiationService();
-				using commands = new CommandService(services);
-				using lifetime = new CancellationTokenSource();
-				const pending = new DeferredPromise<void>();
-				let reads = 0;
-				const change = { path: 'saved.ts', uri: URI.file('/saved.ts'), status: 'modified' };
-				const repository = {
-					id: 'repo',
-					provider: {
-						historyProvider: {
-							provideHistoryItemChanges: async () => [change],
-							resolveHistoryItemChangeContents: async () => {
-								reads++;
-								await pending.p;
-								return { original: { kind: 'missing' }, modified: { kind: 'text', text: 'Saved' } };
-							},
-						},
-					},
-				} as unknown as ISCMRepository;
-				let current: ISCMRepository | undefined = repository;
-				services.registerInstance(ISCMService, { getRepository: () => current } as unknown as ISCMService);
-				services.registerInstance(IProgressService, {
-					withProgress: (_options, task) => task({ report() {} }),
-				});
-				services.registerInstance(IEditorService, {
-					openEditor: async () => {
-						assert.fail('Retired source opened an editor');
-					},
-				} as unknown as IEditorService);
-				const source = SCMHistoryItemUri.toUri({
-					repositoryId: repository.id,
-					revision: 'captured',
-					...(changeSource ? { path: change.path } : {}),
-				});
-				const operation = commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', source, 'Saved', lifetime.token);
-				await expect.poll(() => reads).toBe(1);
-				if (retired === 'cancelled') lifetime.cancel();
-				else current = retired === 'removed' ? undefined : { ...repository };
-				await pending.complete();
-				await operation;
-			});
+	for (const changeSource of [false, true]) for (const retired of ['cancelled', 'removed', 'replaced']) test(`${changeSource ? 'file' : 'commit'} source cannot open after its owner is ${retired}`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		using lifetime = new CancellationTokenSource();
+		const pending = new DeferredPromise<void>();
+		let reads = 0;
+		const change = { path: 'saved.ts', uri: URI.file('/saved.ts'), status: 'modified' };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => { reads++; await pending.p; return { original: { kind: 'missing' }, modified: { kind: 'text', text: 'Saved' } }; },
+				}
+			}
+		} as unknown as ISCMRepository;
+		let current: ISCMRepository | undefined = repository;
+		services.registerInstance(ISCMService, { getRepository: () => current } as unknown as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async () => { assert.fail('Retired source opened an editor'); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured', ...(changeSource ? { path: change.path } : {}) });
+		const operation = commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', source, 'Saved', lifetime.token);
+		await expect.poll(() => reads).toBe(1);
+		if (retired === 'cancelled') lifetime.cancel();
+		else current = retired === 'removed' ? undefined : { ...repository };
+		await pending.complete();
+		await operation;
+	});
 });
 
 suite('SCM history Open Changes', () => {
@@ -442,46 +291,34 @@ suite('SCM history Open Changes', () => {
 			using commands = new CommandService(services);
 			using notifications = new TestNotificationService();
 			services.registerInstance(INotificationService, notifications);
-			const changes = Array.from({ length: 7 }, (_, index) => ({
-				path: `${index}.txt`,
-				uri: URI.file(`/fixture/${index}.txt`),
-				status: 'modified' as const,
-			}));
+			const changes = Array.from({ length: 7 }, (_, index) => ({ path: `${index}.txt`, uri: URI.file(`/fixture/${index}.txt`), status: 'modified' as const }));
 			const pending = changes.map(() => new DeferredPromise<void>());
 			const started: number[] = [];
 			const opened: MultiDiffEditorInput[] = [];
 			const failure = new Error('Failed history read');
 			const repository = {
-				id: 'fixture',
-				provider: {
-					id: 'fixture',
-					historyProvider: {
+				id: 'fixture', provider: {
+					id: 'fixture', historyProvider: {
 						provideHistoryItemChanges: async () => changes,
-						resolveHistoryItemChangeContents: async (_revision: string, change: (typeof changes)[number]) => {
+						resolveHistoryItemChangeContents: async (_revision: string, change: typeof changes[number]) => {
 							const index = changes.indexOf(change);
 							started.push(index);
 							await pending[index].p;
 							if (fail && index === 0) throw failure;
-							return {
-								original: { kind: 'missing' },
-								modified: { kind: 'text', text: `After ${index}` },
-							};
-						},
-					},
-				},
+							return { original: { kind: 'missing' }, modified: { kind: 'text', text: `After ${index}` } };
+						}
+					}
+				}
 			} as unknown as ISCMRepository;
 			services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
-			services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() {} }) });
+			services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 			services.registerInstance(IEditorService, {
 				openEditor: async input => {
-					assert.ok(isMultiDiffEditorInput(input));
-					opened.push(input);
-				},
+					assert.ok(isMultiDiffEditorInput(input)); opened.push(input);
+				}
 			} as IEditorService);
 			const operation = commands.executeCommand('workbench.scm.action.graph.viewChanges', {
-				repository,
-				type: 'historyItemViewModel',
-				historyItemViewModel: { historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture' } },
+				repository, type: 'historyItemViewModel', historyItemViewModel: { historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture' } },
 			});
 			const completed = fail ? assert.rejects(operation, error => error === failure) : operation;
 			try {
@@ -496,10 +333,7 @@ suite('SCM history Open Changes', () => {
 				}
 				await completed;
 				assert.deepEqual(started, fail ? [0, 1, 2, 3] : [0, 1, 2, 3, 4, 5, 6]);
-				assert.deepEqual(
-					opened.flatMap(input => input.items.map(item => item.modified.initialText)),
-					fail ? [] : changes.map((_, index) => `After ${index}`),
-				);
+				assert.deepEqual(opened.flatMap(input => input.items.map(item => item.modified.initialText)), fail ? [] : changes.map((_, index) => `After ${index}`));
 				assert.equal(notifications.model.getNotifications().length, fail ? 1 : 0);
 			} finally {
 				for (const read of pending) if (!read.isSettled) await read.complete();
@@ -521,44 +355,29 @@ suite('SCM history Open Changes', () => {
 			const started: string[] = [];
 			const opened: MultiDiffEditorInput[] = [];
 			let progressActive = false;
-			const changes = Array.from({ length: 3 }, (_, index) => ({
-				path: `${index}.txt`,
-				uri: URI.file(`/fixture/${index}.txt`),
-				status: 'modified' as const,
-			}));
+			const changes = Array.from({ length: 3 }, (_, index) => ({ path: `${index}.txt`, uri: URI.file(`/fixture/${index}.txt`), status: 'modified' as const }));
 			const failure = new Error('History contents unavailable');
 			const repository = {
-				id: 'fixture',
-				provider: {
-					id: 'fixture',
-					historyProvider: {
-						provideHistoryItemChanges: async () => {
-							await pendingChanges.p;
-							return changes;
-						},
-						resolveHistoryItemChangeContents: async (_revision: string, change: (typeof changes)[number]) => {
+				id: 'fixture', provider: {
+					id: 'fixture', historyProvider: {
+						provideHistoryItemChanges: async () => { await pendingChanges.p; return changes; },
+						resolveHistoryItemChangeContents: async (_revision: string, change: typeof changes[number]) => {
 							started.push(change.path);
 							const index = changes.indexOf(change);
 							await pendingContents.p;
 							if (fail) throw failure;
-							return {
-								original: { kind: 'text', text: `Before ${index}` },
-								modified: { kind: 'text', text: `After ${index}` },
-							};
+							return { original: { kind: 'text', text: `Before ${index}` }, modified: { kind: 'text', text: `After ${index}` } };
 						},
-					},
-				},
+					}
+				}
 			} as unknown as ISCMRepository;
 			services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
 			services.registerInstance(IProgressService, {
 				async withProgress(options, task) {
 					assert.deepEqual(options, { location: 'ash.gitGraph', delay: 100 });
 					progressActive = true;
-					try {
-						return await task({ report() {} });
-					} finally {
-						progressActive = false;
-					}
+					try { return await task({ report() { } }); }
+					finally { progressActive = false; }
 				},
 			});
 			services.registerInstance(IEditorService, {
@@ -566,14 +385,11 @@ suite('SCM history Open Changes', () => {
 					assert.ok(isMultiDiffEditorInput(input));
 					opened.push(input);
 					await pendingEditor.p;
-				},
+				}
 			} as IEditorService);
 			const operation = commands.executeCommand('workbench.scm.action.graph.viewChanges', {
-				repository,
-				type: 'historyItemViewModel',
-				historyItemViewModel: {
-					historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture changes' },
-				},
+				repository, type: 'historyItemViewModel',
+				historyItemViewModel: { historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture changes' } },
 			});
 			const completed = fail ? assert.rejects(operation, error => error === failure) : operation;
 			try {
@@ -591,18 +407,9 @@ suite('SCM history Open Changes', () => {
 				}
 				await completed;
 				assert.equal(progressActive, false);
-				assert.deepEqual(
-					notifications.model.getNotifications().map(notification => notification.message),
-					fail ? [failure.message] : [],
-				);
-				assert.deepEqual(
-					started,
-					changes.map(change => change.path),
-				);
-				assert.deepEqual(
-					opened.flatMap(input => input.items.map(item => ({ label: item.label, text: item.modified.initialText }))),
-					fail ? [] : changes.map((change, index) => ({ label: change.path, text: `After ${index}` })),
-				);
+				assert.deepEqual(notifications.model.getNotifications().map(notification => notification.message), fail ? [failure.message] : []);
+				assert.deepEqual(started, changes.map(change => change.path));
+				assert.deepEqual(opened.flatMap(input => input.items.map(item => ({ label: item.label, text: item.modified.initialText }))), fail ? [] : changes.map((change, index) => ({ label: change.path, text: `After ${index}` })));
 			} finally {
 				for (const read of [pendingChanges, pendingContents, pendingEditor]) if (!read.isSettled) await read.complete();
 				await completed;
@@ -619,12 +426,7 @@ suite('scmHistory browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/scmHistory.html');
-		await expect
-			.poll(async () => ({
-				mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(),
-				errors,
-			}))
-			.toEqual({ mounted: 1, errors: [] });
+		await expect.poll(async () => ({ mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(), errors })).toEqual({ mounted: 1, errors: [] });
 	});
 
 	test('SCM history progress follows reads, collapse, completion and failure', async function () {
@@ -676,29 +478,20 @@ suite('scmHistory browser component', () => {
 			const tree = graph.locator('.ash-scm-graph-tree');
 			const viewport = graph.locator('.ash-scrollbar-viewport');
 			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
-			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads)).toEqual([
-				{ skip: 0, limit: 81 },
-				{ skip: 80, limit: 81 },
-			]);
+			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads)).toEqual([{ skip: 0, limit: 81 }, { skip: 80, limit: 81 }]);
 			await expect(tree).toHaveAttribute('aria-description', locale === 'en' ? /Automatic loading fetches older commits/u : /启用自动加载时/u);
 			await tree.focus();
 			await tree.press('Home');
 			await tree.press('ArrowDown');
 			await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
-			await viewport.evaluate(element => {
-				element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44;
-			});
+			await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44; });
 			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
 			await expect(graph).toHaveAttribute('aria-busy', 'true');
 			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
 			const position = await viewport.evaluate(element => {
 				const top = element.getBoundingClientRect().top;
 				const anchor = [...element.querySelectorAll<HTMLElement>('.ash-list-row')].find(row => row.getBoundingClientRect().bottom > top)!;
-				return {
-					scrollTop: element.scrollTop,
-					anchorId: anchor.id,
-					anchorTop: anchor.getBoundingClientRect().top,
-				};
+				return { scrollTop: element.scrollTop, anchorId: anchor.id, anchorTop: anchor.getBoundingClientRect().top };
 			});
 			const anchor = await page.locator(`[id="${position.anchorId}"]`).elementHandle();
 			assert.ok(anchor);
@@ -717,20 +510,13 @@ suite('scmHistory browser component', () => {
 			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
 			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
 			await page.screenshot({ path: browserTests.info.outputPath(`silent-paging-appended-${locale}.png`) });
-			await viewport.evaluate(element => {
-				element.scrollTop = 0;
-			});
+			await viewport.evaluate(element => { element.scrollTop = 0; });
 			await expect(tree.locator('[data-history-item-id="paging-1"]').locator('xpath=ancestor::*[@role="treeitem"]')).toHaveAttribute('aria-selected', 'true');
-			await viewport.evaluate(element => {
-				element.scrollTop = element.scrollHeight;
-			});
+			await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '320');
 			await expect(graph).toHaveAttribute('aria-busy', 'false');
 			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads)).toEqual([
-				{ skip: 0, limit: 81 },
-				{ skip: 80, limit: 81 },
-				{ skip: 160, limit: 81 },
-				{ skip: 240, limit: 81 },
+				{ skip: 0, limit: 81 }, { skip: 80, limit: 81 }, { skip: 160, limit: 81 }, { skip: 240, limit: 81 },
 			]);
 			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
 			await anchor.dispose();
@@ -758,11 +544,7 @@ suite('scmHistory browser component', () => {
 					const position = await viewport.evaluate(element => {
 						const top = element.getBoundingClientRect().top;
 						const anchor = [...element.querySelectorAll<HTMLElement>('.ash-list-row')].find(row => row.getBoundingClientRect().bottom > top)!;
-						return {
-							scrollTop: element.scrollTop,
-							anchorId: anchor.id,
-							anchorTop: anchor.getBoundingClientRect().top,
-						};
+						return { scrollTop: element.scrollTop, anchorId: anchor.id, anchorTop: anchor.getBoundingClientRect().top };
 					});
 					const reads = await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length);
 					await page.evaluate(silent => window.ashSCMHistoryIntegration.prependHistoryItem('new-tip', silent), silent);
@@ -834,16 +616,12 @@ suite('scmHistory browser component', () => {
 		const viewport = graph.locator('.ash-scrollbar-viewport');
 		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
 		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
-		await viewport.evaluate(element => {
-			element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44;
-		});
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44; });
 		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
 		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead(true));
 		const retry = graph.getByRole('button', { name: 'Retry loading commit history', exact: true });
 		await expect(graph).toHaveAttribute('aria-busy', 'false');
-		await viewport.evaluate(element => {
-			element.scrollTop = element.scrollHeight;
-		});
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 		await expect(retry).toBeVisible();
 		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
 		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
@@ -871,9 +649,7 @@ suite('scmHistory browser component', () => {
 		await tree.press('ArrowRight');
 		await expect(tree.locator('.ash-scm-graph-change').first()).toBeVisible();
 		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
-		await viewport.evaluate(element => {
-			element.scrollTop = 4400;
-		});
+		await viewport.evaluate(element => { element.scrollTop = 4400; });
 		await expect(tree.locator('[data-history-item-id="paging-1"]')).toBeVisible();
 		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(2);
 		await expect(graph).toHaveAttribute('aria-busy', 'false');
@@ -887,9 +663,7 @@ suite('scmHistory browser component', () => {
 		const tree = graph.locator('.ash-scm-graph-tree');
 		const viewport = graph.locator('.ash-scrollbar-viewport');
 		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
-		await viewport.evaluate(element => {
-			element.scrollTop = element.scrollHeight;
-		});
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 		const more = graph.getByRole('button', { name: 'Load more commits', exact: true });
 		await expect(more).toBeVisible();
 		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(1);
@@ -1027,16 +801,10 @@ suite('scmHistory browser component', () => {
 			await expect(hover).toContainText('original details 0');
 			await hover.hover();
 			const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
-			await viewport.evaluate(element => {
-				element.scrollTop = 1600;
-				element.dispatchEvent(new Event('scroll'));
-			});
+			await viewport.evaluate(element => { element.scrollTop = 1600; element.dispatchEvent(new Event('scroll')); });
 			await expect(first).toHaveCount(0);
 			await expect(hover).toHaveCount(0);
-			await viewport.evaluate(element => {
-				element.scrollTop = 0;
-				element.dispatchEvent(new Event('scroll'));
-			});
+			await viewport.evaluate(element => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')); });
 			await expect(first).toBeVisible();
 			await first.locator('.ash-scm-graph-subject').hover();
 			await expect(hover).toContainText('original details 0');
@@ -1057,11 +825,10 @@ suite('scmHistory browser component', () => {
 			await expect(tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="original-99"]') })).toHaveAttribute('aria-selected', 'true');
 			await page.evaluate(() => window.ashSCMHistoryIntegration.setHistoryItems('rewritten'));
 			await expect(tree).toBeFocused();
-			const focusedCommit = () =>
-				tree.evaluate(element => {
-					const row = element.ownerDocument.getElementById(element.getAttribute('aria-activedescendant') ?? '');
-					return row?.querySelector<HTMLElement>('[data-history-item-id]')?.dataset.historyItemId;
-				});
+			const focusedCommit = () => tree.evaluate(element => {
+				const row = element.ownerDocument.getElementById(element.getAttribute('aria-activedescendant') ?? '');
+				return row?.querySelector<HTMLElement>('[data-history-item-id]')?.dataset.historyItemId;
+			});
 			await expect.poll(focusedCommit).toMatch(/^rewritten-\d+$/u);
 			const replacement = await focusedCommit();
 			const row = tree.getByRole('treeitem').filter({ has: page.locator(`[data-history-item-id="${replacement}"]`) });
@@ -1171,11 +938,7 @@ suite('scmHistory browser component', () => {
 						await expectVisibleFocusOutline(fileRows.first());
 						await fileRows.last().hover();
 						await expect(fileRows.nth(1)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-						if (width === 280 && theme === 1)
-							await browserTests.info.attach(`history-file-${locale}-${mode}`, {
-								body: await tree.screenshot(),
-								contentType: 'image/png',
-							});
+						if (width === 280 && theme === 1) await browserTests.info.attach(`history-file-${locale}-${mode}`, { body: await tree.screenshot(), contentType: 'image/png' });
 					}
 				}
 			}
@@ -1235,10 +998,7 @@ suite('scmHistory browser component', () => {
 			}
 			expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
 			await retained?.dispose();
-			await testInfo.attach(`header-actions-${locale}`, {
-				body: await page.locator('#history-root').screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach(`header-actions-${locale}`, { body: await page.locator('#history-root').screenshot(), contentType: 'image/png' });
 		});
 
 		test(`history title actions remain visible while expanded without hover or focus (${locale})`, async function () {
@@ -1286,10 +1046,7 @@ suite('scmHistory browser component', () => {
 				await alwaysPane.locator('.ash-pane-view-header-button').press('ArrowLeft');
 				await outside.focus();
 				await expect(alwaysActions).toBeVisible();
-				await testInfo.attach(`history-title-${locale}-${theme}`, {
-					body: await history.locator('.ash-pane-view-header').screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(`history-title-${locale}-${theme}`, { body: await history.locator('.ash-pane-view-header').screenshot(), contentType: 'image/png' });
 			}
 			expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
 			await retainedActions?.dispose();
@@ -1311,12 +1068,7 @@ suite('scmHistory browser component', () => {
 				const graph = element.querySelector('.ash-scm-graph-graph')!.getBoundingClientRect();
 				const title = element.querySelector('.ash-scm-graph-subject')!.getBoundingClientRect();
 				const row = element.querySelector('.ash-scm-graph-row')!.getBoundingClientRect();
-				return {
-					left: title.left - graph.right,
-					right: row.right - title.right,
-					rowHeight: row.height,
-					graphHeight: graph.height,
-				};
+				return { left: title.left - graph.right, right: row.right - title.right, rowHeight: row.height, graphHeight: graph.height };
 			});
 			expect(geometry.left).toBeCloseTo(0, 1);
 			expect(geometry.right).toBeCloseTo(8, 1);
@@ -1329,30 +1081,18 @@ suite('scmHistory browser component', () => {
 		expect(await subject.boundingBox()).toEqual(restingTitle);
 		const overlay = commit.locator('.ash-scm-graph-overlay');
 		await expect(overlay.locator('.ash-scm-graph-actions')).toBeVisible();
-		await expect
-			.poll(() =>
-				overlay.evaluate(element => {
-					const style = getComputedStyle(element, '::before');
-					return { mask: style.maskImage, opacity: style.opacity, pointerEvents: style.pointerEvents };
-				}),
-			)
-			.toMatchObject({ mask: expect.stringContaining('linear-gradient'), opacity: '1', pointerEvents: 'none' });
-		await browserTests.info.attach('scm-history-row-overlay', {
-			body: await commit.screenshot(),
-			contentType: 'image/png',
-		});
+		await expect.poll(() => overlay.evaluate(element => {
+			const style = getComputedStyle(element, '::before');
+			return { mask: style.maskImage, opacity: style.opacity, pointerEvents: style.pointerEvents };
+		})).toMatchObject({ mask: expect.stringContaining('linear-gradient'), opacity: '1', pointerEvents: 'none' });
+		await browserTests.info.attach('scm-history-row-overlay', { body: await commit.screenshot(), contentType: 'image/png' });
 		await retainedCommit?.dispose();
 		await retainedActions?.dispose();
 	});
 
 	test('history graph aligns with the pane chevron and keeps Open Changes at the trailing edge', async function () {
 		const { page } = browserTests;
-		for (const [locale, modernUI] of [
-			['en', false],
-			['zh-CN', false],
-			['en', true],
-			['zh-CN', true],
-		] as const) {
+		for (const [locale, modernUI] of [['en', false], ['zh-CN', false], ['en', true], ['zh-CN', true]] as const) {
 			await page.goto(`/scmHistory.html?headerActions&locale=${locale}${modernUI ? '&modernUI' : ''}`);
 			const pane = page.locator('[data-view-id="fixture.history"]');
 			const commit = pane.getByRole('treeitem', { name: /History metadata:/u });
@@ -1412,9 +1152,7 @@ suite('scmHistory browser component', () => {
 				await expect(actions).toBeHidden();
 			}
 			await tree.press('Home');
-			if ((await commit.getAttribute('aria-expanded')) === 'false') {
-				await tree.press('ArrowRight');
-			}
+			if (await commit.getAttribute('aria-expanded') === 'false') { await tree.press('ArrowRight'); }
 			await tree.press('ArrowRight');
 			const file = tree.locator('.ash-scm-graph-change-row').first();
 			const fileActions = file.locator('.ash-scm-graph-actions');
@@ -1477,10 +1215,7 @@ suite('scmHistory browser component', () => {
 				await page.locator('.ash-scm-graph-tree').focus();
 				await page.locator('.ash-scm-graph-tree').press('Home');
 			}
-			await browserTests.info.attach(`history-focus-${theme}`, {
-				body: await row.screenshot(),
-				contentType: 'image/png',
-			});
+			await browserTests.info.attach(`history-focus-${theme}`, { body: await row.screenshot(), contentType: 'image/png' });
 		}
 	});
 
@@ -1530,10 +1265,7 @@ suite('scmHistory browser component', () => {
 		await expect(openOnGitHub).toBeVisible();
 		await expect(openOnGitHub).toHaveText('Open on GitHub');
 		await expect(openOnGitHub.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
-		await browserTests.info.attach('scm-history-hover', {
-			body: await hover.screenshot(),
-			contentType: 'image/png',
-		});
+		await browserTests.info.attach('scm-history-hover', { body: await hover.screenshot(), contentType: 'image/png' });
 	});
 
 	test('commit details render Markdown within the existing themed and keyboard-accessible hover', async function () {
@@ -1556,27 +1288,21 @@ suite('scmHistory browser component', () => {
 			await expect(message.locator('a[href^="command:"]')).toHaveCount(0);
 			await expect(message.locator('a[href]')).toHaveAttribute('href', 'https://example.invalid/docs');
 			await expect(message).toHaveCSS('white-space', 'normal');
-			expect(
-				await message.evaluate(element => {
-					const heading = element.querySelector('h2')!;
-					const link = element.querySelector('a[href]')!;
-					return {
-						headingIsLarger: parseFloat(getComputedStyle(heading).fontSize) > parseFloat(getComputedStyle(element).fontSize),
-						linkIsDistinct: getComputedStyle(link).color !== getComputedStyle(element).color,
-						inheritsHoverText:
-							getComputedStyle(element).color === getComputedStyle(element.closest('.ash-hover')!).color &&
-							getComputedStyle(element).fontSize === getComputedStyle(element.closest('.ash-hover')!).fontSize,
-						fitsCard: element.scrollWidth <= element.clientWidth,
-					};
-				}),
-			).toEqual({ headingIsLarger: true, linkIsDistinct: true, inheritsHoverText: true, fitsCard: true });
+			expect(await message.evaluate(element => {
+				const heading = element.querySelector('h2')!;
+				const link = element.querySelector('a[href]')!;
+				return {
+					headingIsLarger: parseFloat(getComputedStyle(heading).fontSize) > parseFloat(getComputedStyle(element).fontSize),
+					linkIsDistinct: getComputedStyle(link).color !== getComputedStyle(element).color,
+					inheritsHoverText: getComputedStyle(element).color === getComputedStyle(element.closest('.ash-hover')!).color
+						&& getComputedStyle(element).fontSize === getComputedStyle(element.closest('.ash-hover')!).fontSize,
+					fitsCard: element.scrollWidth <= element.clientWidth,
+				};
+			})).toEqual({ headingIsLarger: true, linkIsDistinct: true, inheritsHoverText: true, fitsCard: true });
 			await expect(hover.getByRole('region', { name: '提交消息', exact: true })).toBeVisible();
 			await hover.getByRole('link', { name: 'Documentation', exact: true }).focus();
 			await expect(hover.getByRole('link', { name: 'Documentation', exact: true })).toBeFocused();
-			await browserTests.info.attach(`scm-history-markdown-${theme}`, {
-				body: await hover.screenshot(),
-				contentType: 'image/png',
-			});
+			await browserTests.info.attach(`scm-history-markdown-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
 			await expect(hover).toHaveCount(0);
 			await expect(tree).toBeFocused();
@@ -1639,21 +1365,16 @@ suite('scmHistory browser component', () => {
 			await expect(messageScroll).toHaveCSS('outline-style', 'solid');
 			const thumb = messageScroll.locator('.ash-scrollbar-track-vertical > .ash-scrollbar-thumb');
 			await expect(thumb).toBeVisible();
-			expect(
-				await thumb.evaluate(element => {
-					const probe = document.createElement('span');
-					probe.style.backgroundColor = 'var(--ash-scrollbarSlider-background)';
-					element.append(probe);
-					const color = getComputedStyle(element).backgroundColor;
-					const themed = color === getComputedStyle(probe).backgroundColor && color !== 'rgba(0, 0, 0, 0)';
-					probe.remove();
-					return themed;
-				}),
-			).toBe(true);
-			await browserTests.info.attach(`scm-history-${theme}`, {
-				body: await hover.screenshot(),
-				contentType: 'image/png',
-			});
+			expect(await thumb.evaluate(element => {
+				const probe = document.createElement('span');
+				probe.style.backgroundColor = 'var(--ash-scrollbarSlider-background)';
+				element.append(probe);
+				const color = getComputedStyle(element).backgroundColor;
+				const themed = color === getComputedStyle(probe).backgroundColor && color !== 'rgba(0, 0, 0, 0)';
+				probe.remove();
+				return themed;
+			})).toBe(true);
+			await browserTests.info.attach(`scm-history-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
 			await expect(page.locator('.ash-scm-graph-tree')).toBeFocused();
 		}
@@ -1684,18 +1405,14 @@ suite('scmHistory browser component', () => {
 			await page.locator('.ash-scm-graph-tree').press('Home');
 			await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 			await expect(localizedHover).toBeVisible();
-			await expect
-				.poll(() =>
-					localizedHover.evaluate(element => {
-						const tooltip = element.closest<HTMLElement>('.ash-hover')!;
-						const bounds = tooltip.getBoundingClientRect();
-						return {
-							horizontalOverflow: tooltip.scrollWidth > tooltip.clientWidth,
-							insideWindow: bounds.left >= 0 && bounds.right <= element.ownerDocument.defaultView!.innerWidth,
-						};
-					}),
-				)
-				.toEqual({ horizontalOverflow: false, insideWindow: true });
+			await expect.poll(() => localizedHover.evaluate(element => {
+				const tooltip = element.closest<HTMLElement>('.ash-hover')!;
+				const bounds = tooltip.getBoundingClientRect();
+				return {
+					horizontalOverflow: tooltip.scrollWidth > tooltip.clientWidth,
+					insideWindow: bounds.left >= 0 && bounds.right <= element.ownerDocument.defaultView!.innerWidth,
+				};
+			})).toEqual({ horizontalOverflow: false, insideWindow: true });
 			await expect(localizedHover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
 		}
 	});

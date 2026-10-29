@@ -15,12 +15,8 @@ export interface IAgentSkill extends SkillDescriptor {
 
 export interface SkillManagementSnapshot {
 	readonly revision: number;
-	readonly catalog: { readonly generation: number; readonly skills: readonly IAgentSkill[] };
-	readonly diagnostics: readonly {
-		readonly source: string;
-		readonly subject: string | undefined;
-		readonly message: string;
-	}[];
+	readonly catalog: { readonly generation: number; readonly skills: readonly IAgentSkill[]; };
+	readonly diagnostics: readonly { readonly source: string; readonly subject: string | undefined; readonly message: string; }[];
 }
 
 /** Current production Prompt operations; other upstream Prompt types are not implemented yet. */

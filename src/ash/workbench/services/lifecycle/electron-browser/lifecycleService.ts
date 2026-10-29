@@ -3,13 +3,7 @@ import { localize } from '../../../../nls.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { BrowserLifecycleService } from '../browser/lifecycleService.js';
 import { ShutdownVetoError, type ShutdownReason } from '../common/lifecycle.js';
-import {
-	WINDOW_CLOSE_RESPONSE_CHANNEL,
-	WINDOW_PREPARE_CLOSE_CHANNEL,
-	WINDOW_PREPARE_QUIT_CHANNEL,
-	WINDOW_PREPARE_LOAD_CHANNEL,
-	WINDOW_PREPARE_RELOAD_CHANNEL,
-} from '../../../../platform/window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../../platform/window/common/window.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 
 /** Coordinates Electron's close handshake with the renderer's shutdown join point. */
@@ -18,18 +12,12 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 	async initialize(): Promise<void> {
 		this.assertNotDisposed();
 		let unloadAllowed = false;
-		this._register(
-			this.onDidShutdown(() => {
-				unloadAllowed = true;
-			}),
-		);
-		this._register(
-			addDisposableListener(window, 'beforeunload', event => {
-				if (unloadAllowed) return;
-				event.preventDefault();
-				event.returnValue = false;
-			}),
-		);
+		this._register(this.onDidShutdown(() => { unloadAllowed = true; }));
+		this._register(addDisposableListener(window, 'beforeunload', event => {
+			if (unloadAllowed) return;
+			event.preventDefault();
+			event.returnValue = false;
+		}));
 		const handleRequest = (token: number, reason: ShutdownReason): void => {
 			if (!Number.isSafeInteger(token) || token <= 0) throw new TypeError('Invalid window shutdown token');
 			this.logService.info('lifecycle', 'Renderer received window shutdown request', { token, reason });
@@ -48,8 +36,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 					}
 					console.error('Failed to save window state before closing', error);
 					await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, {
-						kind: 'failed',
-						token,
+						kind: 'failed', token,
 						message: localize({ bundle: 'ash', key: 'workbench.closeSaveFailed' }, 'The window could not close because its state was not saved.'),
 					});
 					return;

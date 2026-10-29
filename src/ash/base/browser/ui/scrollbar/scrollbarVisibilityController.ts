@@ -12,9 +12,7 @@ export class ScrollbarVisibilityController extends AbstractDisposable {
 		private visibility: ScrollbarVisibility,
 		private readonly visibleClassName: string,
 		private readonly invisibleClassName: string,
-	) {
-		super();
-	}
+	) { super(); }
 
 	public setDomNode(domNode: FastDomNode<HTMLElement>): void {
 		this.domNode = domNode;

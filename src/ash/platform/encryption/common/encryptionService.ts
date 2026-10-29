@@ -12,7 +12,7 @@ export interface IEncryptionService extends ICommonEncryptionService {
 	getKeyStorageProvider(): Promise<KnownStorageProvider>;
 }
 
-export interface IEncryptionMainService extends IEncryptionService {}
+export interface IEncryptionMainService extends IEncryptionService { }
 export const IEncryptionMainService = createDecorator<IEncryptionMainService>('encryptionMainService');
 
 export const enum KnownStorageProvider {

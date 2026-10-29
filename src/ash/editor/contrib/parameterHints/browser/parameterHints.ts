@@ -41,32 +41,30 @@ class ParameterHintsController extends Disposable {
 		}
 		this.model = this._register(new ParameterHintsModel(input, editor, viewport.textModel, onError, languageFeaturesService));
 		this.widget = this._register(new ParameterHintsWidget(viewport, editor, this.model, contextKeyService));
-		this._register(
-			editor.onKeyDown(keyboardEvent => {
-				const event = keyboardEvent.browserEvent;
-				if (event.defaultPrevented || event.isComposing) return;
-				if (event.key === 'Escape' && (this.model.isActive || this.widget.isVisible)) {
-					stopEvent(event);
-					editor.trigger('keyboard', 'closeParameterHints', {});
-					return;
-				}
-				if (event.shiftKey && !event.altKey && (event.ctrlKey || event.metaKey) && event.key === ' ') {
-					if (!editor.getAction('editor.action.triggerParameterHints')?.isSupported()) return;
-					stopEvent(event);
-					editor.trigger('keyboard', 'editor.action.triggerParameterHints', {});
-					return;
-				}
-				const hints = this.model.hints;
-				if (!this.widget.isVisible || !hints || hints.signatures.length < 2 || event.shiftKey || event.metaKey) return;
-				const macControl = isMacintosh && event.ctrlKey && !event.altKey;
-				const previous = (!event.ctrlKey && event.key === 'ArrowUp') || (macControl && event.key.toLowerCase() === 'p');
-				const next = (!event.ctrlKey && event.key === 'ArrowDown') || (macControl && event.key.toLowerCase() === 'n');
-				if (previous || next) {
-					stopEvent(event);
-					editor.trigger('keyboard', previous ? 'showPrevParameterHint' : 'showNextParameterHint', {});
-				}
-			}),
-		);
+		this._register(editor.onKeyDown(keyboardEvent => {
+			const event = keyboardEvent.browserEvent;
+			if (event.defaultPrevented || event.isComposing) return;
+			if (event.key === 'Escape' && (this.model.isActive || this.widget.isVisible)) {
+				stopEvent(event);
+				editor.trigger('keyboard', 'closeParameterHints', {});
+				return;
+			}
+			if (event.shiftKey && !event.altKey && (event.ctrlKey || event.metaKey) && event.key === ' ') {
+				if (!editor.getAction('editor.action.triggerParameterHints')?.isSupported()) return;
+				stopEvent(event);
+				editor.trigger('keyboard', 'editor.action.triggerParameterHints', {});
+				return;
+			}
+			const hints = this.model.hints;
+			if (!this.widget.isVisible || !hints || hints.signatures.length < 2 || event.shiftKey || event.metaKey) return;
+			const macControl = isMacintosh && event.ctrlKey && !event.altKey;
+			const previous = (!event.ctrlKey && event.key === 'ArrowUp') || (macControl && event.key.toLowerCase() === 'p');
+			const next = (!event.ctrlKey && event.key === 'ArrowDown') || (macControl && event.key.toLowerCase() === 'n');
+			if (previous || next) {
+				stopEvent(event);
+				editor.trigger('keyboard', previous ? 'showPrevParameterHint' : 'showNextParameterHint', {});
+			}
+		}));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
 	}
 
@@ -113,52 +111,43 @@ class TriggerParameterHintsAction extends EditorAction {
 registerEditorAction(TriggerParameterHintsAction);
 
 const ParameterHintsCommand = EditorCommand.bindToContribution(ParameterHintsController.get);
-registerEditorCommand(
-	new ParameterHintsCommand({
-		id: 'closeParameterHints',
-		precondition: undefined,
-		handler: controller => controller.cancel(),
-		kbOpts: {
-			kbExpr: ContextKeyExpr.and(EditorContextKeys.focus.isEqualTo(true), Context.Visible.isEqualTo(true)),
-			primary: KeyCode.Escape,
-			secondary: [KeyMod.Shift | KeyCode.Escape],
-			weight: KeybindingWeight.EditorContrib + 75,
-		},
-	}),
-);
+registerEditorCommand(new ParameterHintsCommand({
+	id: 'closeParameterHints',
+	precondition: undefined,
+	handler: controller => controller.cancel(),
+	kbOpts: {
+		kbExpr: ContextKeyExpr.and(EditorContextKeys.focus.isEqualTo(true), Context.Visible.isEqualTo(true)),
+		primary: KeyCode.Escape,
+		secondary: [KeyMod.Shift | KeyCode.Escape],
+		weight: KeybindingWeight.EditorContrib + 75,
+	},
+}));
 
-registerEditorCommand(
-	new ParameterHintsCommand({
-		id: 'showPrevParameterHint',
-		precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
-		handler: controller => controller.previous(),
-		kbOpts: {
-			kbExpr: EditorContextKeys.focus.isEqualTo(true),
-			primary: KeyCode.UpArrow,
-			secondary: [KeyMod.Alt | KeyCode.UpArrow],
-			mac: { primary: KeyCode.UpArrow, secondary: [KeyMod.Alt | KeyCode.UpArrow, KeyMod.WinCtrl | KeyCode.KeyP] },
-			weight: KeybindingWeight.EditorContrib + 75,
-		},
-	}),
-);
+registerEditorCommand(new ParameterHintsCommand({
+	id: 'showPrevParameterHint',
+	precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
+	handler: controller => controller.previous(),
+	kbOpts: {
+		kbExpr: EditorContextKeys.focus.isEqualTo(true),
+		primary: KeyCode.UpArrow,
+		secondary: [KeyMod.Alt | KeyCode.UpArrow],
+		mac: { primary: KeyCode.UpArrow, secondary: [KeyMod.Alt | KeyCode.UpArrow, KeyMod.WinCtrl | KeyCode.KeyP] },
+		weight: KeybindingWeight.EditorContrib + 75,
+	},
+}));
 
-registerEditorCommand(
-	new ParameterHintsCommand({
-		id: 'showNextParameterHint',
-		precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
-		handler: controller => controller.next(),
-		kbOpts: {
-			kbExpr: EditorContextKeys.focus.isEqualTo(true),
-			primary: KeyCode.DownArrow,
-			secondary: [KeyMod.Alt | KeyCode.DownArrow],
-			mac: {
-				primary: KeyCode.DownArrow,
-				secondary: [KeyMod.Alt | KeyCode.DownArrow, KeyMod.WinCtrl | KeyCode.KeyN],
-			},
-			weight: KeybindingWeight.EditorContrib + 75,
-		},
-	}),
-);
+registerEditorCommand(new ParameterHintsCommand({
+	id: 'showNextParameterHint',
+	precondition: ContextKeyExpr.and(Context.Visible.isEqualTo(true), Context.MultipleSignatures.isEqualTo(true)),
+	handler: controller => controller.next(),
+	kbOpts: {
+		kbExpr: EditorContextKeys.focus.isEqualTo(true),
+		primary: KeyCode.DownArrow,
+		secondary: [KeyMod.Alt | KeyCode.DownArrow],
+		mac: { primary: KeyCode.DownArrow, secondary: [KeyMod.Alt | KeyCode.DownArrow, KeyMod.WinCtrl | KeyCode.KeyN] },
+		weight: KeybindingWeight.EditorContrib + 75,
+	},
+}));
 
 registerEditorContribution({
 	id: ParameterHintsController.ID,
@@ -166,6 +155,12 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		return context.instantiationService.createInstance(ParameterHintsController, context.controller.element, context.editor, context.view, context.onLanguageError);
+		return context.instantiationService.createInstance(
+			ParameterHintsController,
+			context.controller.element,
+			context.editor,
+			context.view,
+			context.onLanguageError,
+		);
 	},
 });

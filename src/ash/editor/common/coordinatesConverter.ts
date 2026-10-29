@@ -17,7 +17,7 @@ export interface ICoordinatesConverter {
 	convertModelPositionToViewPosition(modelPosition: Position, affinity?: PositionAffinity, allowZeroLineNumber?: boolean, belowHiddenRanges?: boolean): Position;
 	/**
 	 * @param affinity Only has an effect if the range is empty.
-	 */
+	*/
 	convertModelRangeToViewRange(modelRange: Range, affinity?: PositionAffinity): Range;
 	modelPositionIsVisible(modelPosition: Position): boolean;
 	getModelLineViewLineCount(modelLineNumber: number): number;
@@ -25,6 +25,7 @@ export interface ICoordinatesConverter {
 }
 
 export class IdentityCoordinatesConverter implements ICoordinatesConverter {
+
 	private readonly _model: ITextModel;
 
 	constructor(model: ITextModel) {

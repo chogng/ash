@@ -27,33 +27,22 @@ export class SyncScroll extends Disposable implements IWorkbenchContribution {
 
 	// Commands belong to the realm; resolve their controller from the invoking window.
 	static {
-		registerAction2(
-			class extends Action2 {
-				constructor() {
-					super({
-						id: toggleCommand,
-						title: localize('scrollLocking.toggle', 'Toggle Locked Scrolling Across Editors'),
-						f1: true,
-					});
-				}
-				run(accessor: ServicesAccessor): void {
-					SyncScroll.instances.get(accessor.get(IEditorService))?.toggle();
-				}
-			},
-		);
-		registerAction2(
-			class extends Action2 {
-				constructor() {
-					super({
-						id: holdCommand,
-						title: localize('scrollLocking.hold', 'Hold Locked Scrolling Across Editors'),
-					});
-				}
-				run(accessor: ServicesAccessor): void {
-					SyncScroll.instances.get(accessor.get(IEditorService))?.hold(accessor.get(IKeybindingService));
-				}
-			},
-		);
+		registerAction2(class extends Action2 {
+			constructor() {
+				super({ id: toggleCommand, title: localize('scrollLocking.toggle', 'Toggle Locked Scrolling Across Editors'), f1: true });
+			}
+			run(accessor: ServicesAccessor): void {
+				SyncScroll.instances.get(accessor.get(IEditorService))?.toggle();
+			}
+		});
+		registerAction2(class extends Action2 {
+			constructor() {
+				super({ id: holdCommand, title: localize('scrollLocking.hold', 'Hold Locked Scrolling Across Editors') });
+			}
+			run(accessor: ServicesAccessor): void {
+				SyncScroll.instances.get(accessor.get(IEditorService))?.hold(accessor.get(IKeybindingService));
+			}
+		});
 	}
 
 	constructor(
@@ -63,12 +52,10 @@ export class SyncScroll extends Disposable implements IWorkbenchContribution {
 	) {
 		super();
 		SyncScroll.instances.set(editors, this);
-		this._register(
-			toDisposable(() => {
-				SyncScroll.instances.delete(editors);
-				this.baseline.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			SyncScroll.instances.delete(editors);
+			this.baseline.clear();
+		}));
 	}
 
 	toggle(): void {
@@ -98,19 +85,18 @@ export class SyncScroll extends Disposable implements IWorkbenchContribution {
 			this.activeListeners.add(this.editors.onDidVisibleEditorsChange(() => this.bindPanes()));
 			this.bindPanes();
 			const text = localize('scrollLocking.enabled', 'Scrolling Locked');
-			this.status.value = this.statusbar.addEntry(
-				{
-					text,
-					ariaLabel: text,
-					tooltip: localize('scrollLocking.tooltip', 'Disable locked scrolling across editors'),
-					run: () => this.toggle(),
-				},
-				{ id: 'status.scrollLockingEnabled', alignment: StatusbarAlignment.Right, priority: 102 },
-			);
+			this.status.value = this.statusbar.addEntry({
+				text,
+				ariaLabel: text,
+				tooltip: localize('scrollLocking.tooltip', 'Disable locked scrolling across editors'),
+				run: () => this.toggle(),
+			}, { id: 'status.scrollLockingEnabled', alignment: StatusbarAlignment.Right, priority: 102 });
 		} else {
 			this.status.clear();
 		}
-		this.accessibility.status(active ? localize('scrollLocking.enabled', 'Scrolling Locked') : localize('scrollLocking.disabled', 'Locked scrolling disabled'));
+		this.accessibility.status(active
+			? localize('scrollLocking.enabled', 'Scrolling Locked')
+			: localize('scrollLocking.disabled', 'Locked scrolling disabled'));
 	}
 
 	private bindPanes(): void {

@@ -8,16 +8,12 @@ export function createScreenPermissionGuide(
 	document: Document,
 	initial: NonNullable<ImageEditorInput['permission']>,
 	accessibilityHints: boolean,
-	action: (action: ImageEditorPermissionAction) => Promise<boolean>,
+	action: (action: ImageEditorPermissionAction) => Promise<boolean>
 ): DisposableStore {
 	const lifetime = new DisposableStore();
 	const window = document.defaultView!;
 	let disposed = false;
-	lifetime.add(
-		toDisposable(() => {
-			disposed = true;
-		}),
-	);
+	lifetime.add(toDisposable(() => { disposed = true; }));
 
 	const domNode = document.createElement('main');
 	domNode.className = 'screen-permission-guide';
@@ -26,9 +22,8 @@ export function createScreenPermissionGuide(
 	status.setAttribute('role', 'status');
 	status.setAttribute('aria-atomic', 'true');
 	const run = async (kind: ImageEditorPermissionAction): Promise<boolean> => {
-		try {
-			return await action(kind);
-		} catch {
+		try { return await action(kind); }
+		catch {
 			if (!disposed) status.textContent = localize('screenshot.permission.failed', 'The action could not be completed. Please try again.');
 			return false;
 		}
@@ -63,12 +58,10 @@ export function createScreenPermissionGuide(
 	name.title = initial.applicationName;
 	label.append(name, status);
 	card.append(icon, label);
-	lifetime.add(
-		addDisposableListener(card, 'dragstart', event => {
-			event.preventDefault();
-			void run('drag');
-		}),
-	);
+	lifetime.add(addDisposableListener(card, 'dragstart', event => {
+		event.preventDefault();
+		void run('drag');
+	}));
 	// Plain text and native dialog semantics keep the isolated guide directly readable.
 	const help = document.createElement('dialog');
 	help.className = 'screen-permission-help';
@@ -77,23 +70,18 @@ export function createScreenPermissionGuide(
 	helpTitle.textContent = localize('screenshot.permission.helpTitle', 'Screen Permission Help');
 	help.setAttribute('aria-labelledby', helpTitle.id);
 	const helpText = document.createElement('p');
-	helpText.textContent = localize(
-		'screenshot.permission.help',
-		'System Settings opens automatically. Drag the app card into the upper Screen & System Audio Recording list and enable it. For keyboard access, press Enter on the app card to copy its path, use + in System Settings, press ⌘⇧G and paste the path. Return to Ash after granting permission to continue the screenshot automatically. If macOS asks you to reopen Ash, follow its prompt. Escape closes this guide.',
-	);
+	helpText.textContent = localize('screenshot.permission.help', 'System Settings opens automatically. Drag the app card into the upper Screen & System Audio Recording list and enable it. For keyboard access, press Enter on the app card to copy its path, use + in System Settings, press ⌘⇧G and paste the path. Return to Ash after granting permission to continue the screenshot automatically. If macOS asks you to reopen Ash, follow its prompt. Escape closes this guide.');
 	help.append(helpTitle, helpText);
 	button(localize('screenshot.permission.closeHelp', 'Close Help'), help, () => help.close());
-	lifetime.add(
-		addDisposableListener(window, 'keydown', event => {
-			if (event.altKey && event.key === 'F1') {
-				event.preventDefault();
-				if (!help.open) help.showModal();
-			} else if (event.key === 'Escape' && !help.open) {
-				event.preventDefault();
-				void run('cancel');
-			}
-		}),
-	);
+	lifetime.add(addDisposableListener(window, 'keydown', event => {
+		if (event.altKey && event.key === 'F1') {
+			event.preventDefault();
+			if (!help.open) help.showModal();
+		} else if (event.key === 'Escape' && !help.open) {
+			event.preventDefault();
+			void run('cancel');
+		}
+	}));
 	if (accessibilityHints) {
 		const helpHint = document.createElement('p');
 		helpHint.className = 'screen-permission-help-hint';
@@ -105,13 +93,10 @@ export function createScreenPermissionGuide(
 	document.body.append(domNode, help);
 	document.body.classList.add('screen-permission-window');
 	card.focus();
-	lifetime.add(
-		toDisposable(() => {
-			if (help.open) help.close();
-			help.remove();
-			domNode.remove();
-			document.body.classList.remove('screen-permission-window');
-		}),
-	);
+	lifetime.add(toDisposable(() => {
+		if (help.open) help.close();
+		help.remove(); domNode.remove();
+		document.body.classList.remove('screen-permission-window');
+	}));
 	return lifetime;
 }

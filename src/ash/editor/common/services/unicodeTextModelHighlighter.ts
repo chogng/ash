@@ -45,13 +45,11 @@ export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortS
 		}
 		if (kind) {
 			const column = match.index - lineStart + 1;
-			result.push(
-				Object.freeze({
-					range: Range.fromPositions(new Position(lineNumber, column), new Position(lineNumber, column + character.length)),
-					kind,
-					character,
-				}),
-			);
+			result.push(Object.freeze({
+				range: Range.fromPositions(new Position(lineNumber, column), new Position(lineNumber, column + character.length)),
+				kind,
+				character,
+			}));
 		}
 	}
 	return Object.freeze(result);
@@ -62,14 +60,12 @@ function isBidiControl(codePoint: number): boolean {
 }
 
 function isInvisible(codePoint: number): boolean {
-	return (
-		codePoint === 0x00ad ||
-		codePoint === 0x061c ||
-		codePoint === 0x200b ||
-		codePoint === 0x200c ||
-		codePoint === 0x200d ||
-		codePoint === 0x2060 ||
-		codePoint === 0xfeff ||
-		(codePoint >= 0 && codePoint < 0x20 && codePoint !== 0x09)
-	);
+	return codePoint === 0x00ad
+		|| codePoint === 0x061c
+		|| codePoint === 0x200b
+		|| codePoint === 0x200c
+		|| codePoint === 0x200d
+		|| codePoint === 0x2060
+		|| codePoint === 0xfeff
+		|| (codePoint >= 0 && codePoint < 0x20 && codePoint !== 0x09);
 }

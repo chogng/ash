@@ -4,9 +4,7 @@ import { WebWorkerService } from '../../../../platform/webWorker/browser/webWork
 
 /** Standalone embedding controls how default Workers are resolved and created. */
 export class StandaloneWebWorkerService extends WebWorkerService {
-	constructor(private readonly environment: () => IMonacoEnvironment | undefined = getMonacoEnvironment) {
-		super();
-	}
+	constructor(private readonly environment: () => IMonacoEnvironment | undefined = getMonacoEnvironment) { super(); }
 
 	protected override _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
 		const environment = this.environment();

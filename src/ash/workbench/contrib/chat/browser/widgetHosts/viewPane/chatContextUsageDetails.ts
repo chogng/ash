@@ -27,17 +27,15 @@ export class ChatContextUsageDetails extends Disposable {
 		header.className = 'ash-chat-context-details-header';
 		const title = h(document, 'h3');
 		title.textContent = localize('chat.input.contextUsage', 'Context usage');
-		const close = this._register(
-			new Button(header, {
-				...defaultButtonStyles,
-				label: '',
-				icon: Lxicon.close,
-				iconOnly: true,
-				size: 'small',
-				ariaLabel: localize('chat.input.contextClose', 'Close context usage details'),
-				onClick: onClose,
-			}),
-		);
+		const close = this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: '',
+			icon: Lxicon.close,
+			iconOnly: true,
+			size: 'small',
+			ariaLabel: localize('chat.input.contextClose', 'Close context usage details'),
+			onClick: onClose,
+		}));
 		header.prepend(title);
 		close.domNode.classList.add('ash-chat-context-details-close');
 		this.body = h(document, 'div');
@@ -59,16 +57,9 @@ export class ChatContextUsageDetails extends Disposable {
 		body.replaceChildren();
 		const summary = h(document, 'p');
 		summary.className = 'ash-chat-context-details-summary';
-		summary.textContent =
-			capacity !== undefined
-				? localize(
-						'chat.input.contextSummary',
-						'Estimated input: {0} / {1} tokens · {2}%',
-						usage.estimatedTokens.toLocaleString(),
-						capacity.toLocaleString(),
-						Math.round((usage.estimatedTokens / capacity) * 100),
-					)
-				: localize('chat.input.contextSummaryUnknown', '{0} tokens · Capacity unavailable', usage.estimatedTokens.toLocaleString());
+		summary.textContent = capacity !== undefined
+			? localize('chat.input.contextSummary', 'Estimated input: {0} / {1} tokens · {2}%', usage.estimatedTokens.toLocaleString(), capacity.toLocaleString(), Math.round(usage.estimatedTokens / capacity * 100))
+			: localize('chat.input.contextSummaryUnknown', '{0} tokens · Capacity unavailable', usage.estimatedTokens.toLocaleString());
 		const bar = h(document, 'div');
 		bar.className = 'ash-chat-context-details-bar';
 		bar.setAttribute('aria-hidden', 'true');
@@ -77,7 +68,7 @@ export class ChatContextUsageDetails extends Disposable {
 				const segment = h(document, 'span');
 				segment.className = 'ash-chat-context-category';
 				segment.dataset.category = category;
-				segment.style.width = `${Math.min(100, (tokens / capacity) * 100)}%`;
+				segment.style.width = `${Math.min(100, tokens / capacity * 100)}%`;
 				bar.append(segment);
 			}
 		}
@@ -105,7 +96,7 @@ export class ChatContextUsageDetails extends Disposable {
 			heading.append(marker, document.createTextNode(label));
 			row.append(heading);
 			row.insertCell().textContent = tokens.toLocaleString();
-			if (capacity !== undefined) row.insertCell().textContent = `${((tokens / capacity) * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+			if (capacity !== undefined) row.insertCell().textContent = `${(tokens / capacity * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 		};
 		for (const { category, tokens } of usage.categories) appendRow(categoryLabels[category], tokens, category);
 		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining input budget'), Math.max(0, capacity - usage.estimatedTokens));

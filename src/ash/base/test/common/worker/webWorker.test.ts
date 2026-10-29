@@ -39,9 +39,7 @@ suite('Worker transport and RPC', () => {
 	test('cancelling one worker request leaves unrelated requests usable', async () => {
 		const [clientPort, serverPort] = ports();
 		let started!: () => void;
-		const ready = new Promise<void>(resolve => {
-			started = resolve;
-		});
+		const ready = new Promise<void>(resolve => { started = resolve; });
 		let remoteSignal: AbortSignal | undefined;
 		using server = new WebWorkerServer(serverPort, channel, {
 			handleRequest: async (message, signal) => {
@@ -68,9 +66,7 @@ suite('Worker transport and RPC', () => {
 		const [clientPort, serverPort] = ports();
 		using server = new WebWorkerServer(serverPort, channel, {
 			handleRequest: async (_message, signal) => new Promise(resolve => signal.addEventListener('abort', () => resolve(null), { once: true })),
-			handleNotification: () => {
-				throw new RangeError('Invalid settings');
-			},
+			handleNotification: () => { throw new RangeError('Invalid settings'); },
 		});
 		using client = new WebWorkerClient(clientPort, channel);
 		const pending = client.request(1, {}, new AbortController().signal);
@@ -82,28 +78,25 @@ suite('Worker transport and RPC', () => {
 
 	test('Worker proxies route named channels and host callbacks through the same request protocol', async () => {
 		const [clientPort, serverPort] = ports();
-		using client = new WebWorkerClient<{
-			$add(a: number, b: number): number;
-			$host(value: string): Promise<string>;
-		}>(clientPort);
+		using client = new WebWorkerClient<{ $add(a: number, b: number): number; $host(value: string): Promise<string>; }>(clientPort);
 		client.setChannel('host', { $echo: (value: string) => `host:${value}` });
 		using server = new WebWorkerServer(serverPort, server => ({
 			$add: (a: number, b: number) => a + b,
-			$host: (value: string) => server.getChannel<{ $echo(value: string): string }>('host').$echo(value),
+			$host: (value: string) => server.getChannel<{ $echo(value: string): string; }>('host').$echo(value),
 		}));
 		server.setChannel('other', { $add: (value: number) => value * 2 });
 		assert.equal(await client.proxy.$add(2, 3), 5);
 		assert.equal(await client.proxy.$host('hello'), 'host:hello');
-		assert.equal(await client.getChannel<{ $add(value: number): number }>('other').$add(7), 14);
+		assert.equal(await client.getChannel<{ $add(value: number): number; }>('other').$add(7), 14);
 		assert.equal(client.getChannel('other'), client.getChannel('other'));
-		await assert.rejects(client.getChannel<{ $missing(): void }>('other').$missing(), /Unknown Worker method/);
+		await assert.rejects(client.getChannel<{ $missing(): void; }>('other').$missing(), /Unknown Worker method/);
 		assert.equal(await client.proxy.$add(5, 6), 11);
 	});
 
 	test('disposing a Worker proxy rejects pending calls and prevents a retained proxy from sending', async () => {
 		const [clientPort, serverPort] = ports();
-		using server = new WebWorkerServer(serverPort, () => ({ $wait: () => new Promise(() => {}) }));
-		const client = new WebWorkerClient<{ $wait(): Promise<void> }>(clientPort);
+		using server = new WebWorkerServer(serverPort, () => ({ $wait: () => new Promise(() => { }) }));
+		const client = new WebWorkerClient<{ $wait(): Promise<void>; }>(clientPort);
 		const proxy = client.proxy;
 		const rejected = assert.rejects(proxy.$wait(), /disposed/);
 		client.dispose();
@@ -114,7 +107,7 @@ suite('Worker transport and RPC', () => {
 	test('Worker proxies transfer ArrayBuffer arguments and replies without retaining the sending buffer', async () => {
 		const [clientPort, serverPort] = ports();
 		using server = new WebWorkerServer(serverPort, () => ({ $echo: (value: ArrayBuffer) => value }));
-		using client = new WebWorkerClient<{ $echo(value: ArrayBuffer): ArrayBuffer }>(clientPort);
+		using client = new WebWorkerClient<{ $echo(value: ArrayBuffer): ArrayBuffer; }>(clientPort);
 		const bytes = new Uint8Array([3, 7, 11]);
 		const result = client.proxy.$echo(bytes.buffer);
 		assert.equal(bytes.byteLength, 0);
@@ -125,14 +118,13 @@ suite('Worker transport and RPC', () => {
 		const [clientPort, serverPort] = ports();
 		using server = new WebWorkerServer(serverPort, channel, {
 			handleRequest: async () => null,
-			handleNotification: () => {
-				throw new Error('Domain channel failed');
-			},
+			handleNotification: () => { throw new Error('Domain channel failed'); },
 		});
-		server.setChannel('foreign', { $wait: () => new Promise(() => {}) });
+		server.setChannel('foreign', { $wait: () => new Promise(() => { }) });
 		using client = new WebWorkerClient(clientPort, channel);
-		const rejected = assert.rejects(client.getChannel<{ $wait(): void }>('foreign').$wait(), /Domain channel failed/);
+		const rejected = assert.rejects(client.getChannel<{ $wait(): void; }>('foreign').$wait(), /Domain channel failed/);
 		client.send('invalid', {});
 		await rejected;
 	});
+
 });

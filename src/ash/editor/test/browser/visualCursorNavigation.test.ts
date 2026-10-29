@@ -54,7 +54,10 @@ test('Visual cursor navigation preserves measured horizontal intent across wrapp
 		},
 		text => [...text].length * 10,
 	);
-	assert.deepEqual(extended.selections[0]!, Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 3 + 1)));
+	assert.deepEqual(
+		extended.selections[0]!,
+		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
+	);
 });
 
 test('Visual cursor navigation removes continuation indentation before resolving a target column', () => {
@@ -90,11 +93,11 @@ test('Visual cursor navigation uses browser geometry when bidirectional layout p
 		},
 		() => 0,
 		{
-			getHorizontalOffset: position => (position.column === 2 ? 91 : undefined),
+			getHorizontalOffset: position => position.column === 2 ? 91 : undefined,
 			getNearestPosition: (visualLineIndex, horizontalOffset) => {
 				assert.equal(visualLineIndex, 1);
 				assert.equal(horizontalOffset, 91);
-				return new Position(0 + 1, 5 + 1);
+				return new Position((0) + 1, (5) + 1);
 			},
 		},
 	);
@@ -105,48 +108,38 @@ test('Visual cursor navigation uses browser geometry when bidirectional layout p
 test('Visual cursor navigation rejects stale projections and invalid preferred offsets', () => {
 	using model = new TextModel('abc');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
-			text: 'd',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
+		text: 'd',
+	}]);
 
-	assert.throws(
-		() =>
-			navigateStanzaVisualCursors(
-				model,
-				projection,
-				[caret(0, 0)],
-				{
-					command: EditorCursorNavigationCommand.LineDown,
-					mode: EditorCursorNavigationMode.Move,
-					pageLineCount: 1,
-				},
-				text => text.length,
-			),
-		/current text model projection/,
-	);
+	assert.throws(() => navigateStanzaVisualCursors(
+		model,
+		projection,
+		[caret(0, 0)],
+		{
+			command: EditorCursorNavigationCommand.LineDown,
+			mode: EditorCursorNavigationMode.Move,
+			pageLineCount: 1,
+		},
+		text => text.length,
+	), /current text model projection/);
 
 	const current = EditorVisualLineProjection.fromBreakColumns(model, [[4]]);
-	assert.throws(
-		() =>
-			navigateStanzaVisualCursors(
-				model,
-				current,
-				[caret(0, 0)],
-				{
-					command: EditorCursorNavigationCommand.LineDown,
-					mode: EditorCursorNavigationMode.Move,
-					pageLineCount: 1,
-					preferredHorizontalOffsets: [-1],
-				},
-				text => text.length,
-			),
-		/preferred horizontal offsets/,
-	);
+	assert.throws(() => navigateStanzaVisualCursors(
+		model,
+		current,
+		[caret(0, 0)],
+		{
+			command: EditorCursorNavigationCommand.LineDown,
+			mode: EditorCursorNavigationMode.Move,
+			pageLineCount: 1,
+			preferredHorizontalOffsets: [-1],
+		},
+		text => text.length,
+	), /preferred horizontal offsets/);
 });
 
 function caret(lineIndex: number, columnIndex: number): Selection {
-	return Selection.fromPositions(new Position(lineIndex + 1, columnIndex + 1));
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

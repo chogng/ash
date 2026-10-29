@@ -29,12 +29,21 @@ export interface BounceElementOptions {
 export function isReducedMotion(element: Element): boolean {
 	if (element.closest('.ash-reduce-motion')) return true;
 	if (element.closest('.ash-enable-motion')) return false;
-	return element.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+	return element.ownerDocument.defaultView?.matchMedia?.(
+		'(prefers-reduced-motion: reduce)',
+	)?.matches ?? false;
 }
 
 /** Starts a Web Animations API animation when the platform permits motion. */
-export function animateElement(element: HTMLElement, keyframes: Keyframe[] | PropertyIndexedKeyframes, options: UIAnimationOptions = {}): Animation | undefined {
-	if (options.respectReducedMotion !== false && isReducedMotion(element)) return undefined;
+export function animateElement(
+	element: HTMLElement,
+	keyframes: Keyframe[] | PropertyIndexedKeyframes,
+	options: UIAnimationOptions = {},
+): Animation | undefined {
+	if (
+		options.respectReducedMotion !== false &&
+		isReducedMotion(element)
+	) return undefined;
 	if (typeof element.animate !== 'function') return undefined;
 	return element.animate(keyframes, {
 		delay: options.delay ?? 0,
@@ -47,8 +56,15 @@ export function animateElement(element: HTMLElement, keyframes: Keyframe[] | Pro
 }
 
 /** Builds the same compact bounce primitive used by VS Code's UI animations. */
-export function bounceElement(element: HTMLElement, options: BounceElementOptions): Animation | undefined {
-	const steps = Math.max(options.scale?.length ?? 0, options.rotate?.length ?? 0, options.translateY?.length ?? 0);
+export function bounceElement(
+	element: HTMLElement,
+	options: BounceElementOptions,
+): Animation | undefined {
+	const steps = Math.max(
+		options.scale?.length ?? 0,
+		options.rotate?.length ?? 0,
+		options.translateY?.length ?? 0,
+	);
 	if (steps === 0) return undefined;
 
 	const keyframes: Keyframe[] = [];

@@ -19,79 +19,39 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 
 const previewActions = [
-	{
-		id: 'refactorPreview.apply',
-		title: localize('bulkEdit.applySelected', 'Apply selected'),
-		run: (pane: BulkEditPane) => pane.accept(),
-	},
-	{
-		id: 'refactorPreview.discard',
-		title: localize('bulkEdit.cancel', 'Cancel'),
-		run: (pane: BulkEditPane) => pane.discard(),
-	},
-	{
-		id: 'refactorPreview.toggleCheckedState',
-		title: localize('bulkEdit.toggleChecked', 'Toggle selected change'),
-		run: (pane: BulkEditPane) => pane.toggleChecked(),
-	},
-	{
-		id: 'refactorPreview.groupByFile',
-		title: localize('bulkEdit.groupByFile', 'Group by file'),
-		run: (pane: BulkEditPane) => pane.groupByFile(),
-	},
-	{
-		id: 'refactorPreview.groupByType',
-		title: localize('bulkEdit.groupByType', 'Group by type'),
-		run: (pane: BulkEditPane) => pane.groupByType(),
-	},
-	{
-		id: 'refactorPreview.toggleGrouping',
-		title: localize('bulkEdit.toggleGrouping', 'Toggle grouping'),
-		run: (pane: BulkEditPane) => pane.toggleGrouping(),
-	},
+	{ id: 'refactorPreview.apply', title: localize('bulkEdit.applySelected', 'Apply selected'), run: (pane: BulkEditPane) => pane.accept() },
+	{ id: 'refactorPreview.discard', title: localize('bulkEdit.cancel', 'Cancel'), run: (pane: BulkEditPane) => pane.discard() },
+	{ id: 'refactorPreview.toggleCheckedState', title: localize('bulkEdit.toggleChecked', 'Toggle selected change'), run: (pane: BulkEditPane) => pane.toggleChecked() },
+	{ id: 'refactorPreview.groupByFile', title: localize('bulkEdit.groupByFile', 'Group by file'), run: (pane: BulkEditPane) => pane.groupByFile() },
+	{ id: 'refactorPreview.groupByType', title: localize('bulkEdit.groupByType', 'Group by type'), run: (pane: BulkEditPane) => pane.groupByType() },
+	{ id: 'refactorPreview.toggleGrouping', title: localize('bulkEdit.toggleGrouping', 'Toggle grouping'), run: (pane: BulkEditPane) => pane.toggleGrouping() },
 ];
 
 for (const action of previewActions) {
-	registerAction2(
-		class extends Action2 {
-			constructor() {
-				super({
-					id: action.id,
-					title: action.title,
-					f1: true,
-					precondition: ContextKeyExpr.has('refactorPreview.enabled'),
-				});
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({ id: action.id, title: action.title, f1: true, precondition: ContextKeyExpr.has('refactorPreview.enabled') });
+		}
+		public run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId(BulkEditPane.ID);
+			if (pane instanceof BulkEditPane && pane.hasInput) {
+				action.run(pane);
 			}
-			public run(accessor: ServicesAccessor): void {
-				const pane = accessor.get(IViewsService).getViewWithId(BulkEditPane.ID);
-				if (pane instanceof BulkEditPane && pane.hasInput) {
-					action.run(pane);
-				}
-			}
-		},
-	);
+		}
+	});
 }
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
 export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({
-		id: WorkbenchViewContainerId.BulkEdit,
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: 'Refactor Preview', localizationKey: { bundle: 'ash.views', key: 'refactorPreview' }, location: ViewContainerLocation.Panel, order: 2.75, hideIfEmpty: true });
+	registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [{
+		id: BulkEditPane.ID,
 		title: 'Refactor Preview',
 		localizationKey: { bundle: 'ash.views', key: 'refactorPreview' },
-		location: ViewContainerLocation.Panel,
-		order: 2.75,
-		hideIfEmpty: true,
-	});
-	registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [
-		{
-			id: BulkEditPane.ID,
-			title: 'Refactor Preview',
-			localizationKey: { bundle: 'ash.views', key: 'refactorPreview' },
-			order: 1,
-			when: ContextKeyExpr.has('refactorPreview.enabled'),
-			ctorDescriptor: new SyncDescriptor(BulkEditPane),
-		},
-	]);
+		order: 1,
+		when: ContextKeyExpr.has('refactorPreview.enabled'),
+		ctorDescriptor: new SyncDescriptor(BulkEditPane),
+	}]);
 }
 
 /** Connects the bulk-edit service to the transient preview pane. */
@@ -108,12 +68,10 @@ export class BulkEditPreviewContribution extends Disposable {
 		super();
 		this.enabledContext = contextKeys.createKey('refactorPreview.enabled', false);
 		this._register(bulkEdits.setPreviewHandler((edits, options) => this.preview(edits, options?.token ?? new AbortController().signal)));
-		this._register(
-			toDisposable(() => {
-				this.activeSession?.controller.abort();
-				this.enabledContext.reset();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.activeSession?.controller.abort();
+			this.enabledContext.reset();
+		}));
 	}
 
 	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
@@ -147,7 +105,7 @@ export class BulkEditPreviewContribution extends Disposable {
 			const view = await this.views.openView(BulkEditPane.ID);
 			if (!(view instanceof BulkEditPane)) throw new Error('Bulk edit preview view is not available');
 			if (controller.signal.aborted) return [];
-			return (await view.setInput(edits, controller.signal)) ?? [];
+			return await view.setInput(edits, controller.signal) ?? [];
 		} catch (error) {
 			if (isCancellationError(error) || controller.signal.aborted) return [];
 			throw error;
@@ -168,29 +126,16 @@ registerBulkEditView();
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
-		type,
-		priority: 110,
-		name: `bulk-edit-preview-${type}`,
+		type, priority: 110, name: `bulk-edit-preview-${type}`,
 		getProvider: accessor => {
 			const pane = accessor.get(IViewsService).getViewWithId(BulkEditPane.ID);
 			if (!(pane instanceof BulkEditPane) || !pane.isVisible()) return undefined;
 			const focused = pane.element.ownerDocument.activeElement;
 			if (!focused || !pane.element.contains(focused)) return undefined;
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.BulkEditPreview,
-				{ type },
-				() =>
-					type === AccessibleViewType.View
-						? pane.getAccessibleContent()
-						: localize(
-								'bulkEdit.help',
-								'Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Choose Open changes to review the selected replacements in a diff editor, or expand Show text change. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.',
-							),
-				() => {
-					if (isHTMLElement(focused) && focused.isConnected) focused.focus();
-				},
-				AccessibilityVerbositySettingId.BulkEditPreview,
-			);
+			return new AccessibleContentProvider(AccessibleViewProviderId.BulkEditPreview, { type },
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('bulkEdit.help', 'Refactor preview\nUse Tab and Shift+Tab to move between changes and actions. Press Space to select a change. File operations and dependent text changes are selected together. Choose Open changes to review the selected replacements in a diff editor, or expand Show text change. Group by file or type to organize the changes. Press Ctrl or Command+Enter to apply selected changes. Press Escape to cancel. Changes to the source files disable Apply; cancel and run the refactoring again. Press Alt+F2 to read the full changes.'),
+				() => { if (isHTMLElement(focused) && focused.isConnected) focused.focus(); },
+				AccessibilityVerbositySettingId.BulkEditPreview);
 		},
 	});
 }

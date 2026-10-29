@@ -5,11 +5,7 @@ import { EditorZoom } from '../../../common/config/editorZoom.js';
 
 class EditorFontZoomIn extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.fontZoomIn',
-			label: nls.localize2('EditorFontZoomIn.label', 'Increase Editor Font Size'),
-			precondition: undefined,
-		});
+		super({ id: 'editor.action.fontZoomIn', label: nls.localize2('EditorFontZoomIn.label', 'Increase Editor Font Size'), precondition: undefined });
 	}
 	run(_accessor: ServicesAccessor, _editor: ICodeEditor): void {
 		EditorZoom.setZoomLevel(EditorZoom.getZoomLevel() + 1);
@@ -18,11 +14,7 @@ class EditorFontZoomIn extends EditorAction {
 
 class EditorFontZoomOut extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.fontZoomOut',
-			label: nls.localize2('EditorFontZoomOut.label', 'Decrease Editor Font Size'),
-			precondition: undefined,
-		});
+		super({ id: 'editor.action.fontZoomOut', label: nls.localize2('EditorFontZoomOut.label', 'Decrease Editor Font Size'), precondition: undefined });
 	}
 	run(_accessor: ServicesAccessor, _editor: ICodeEditor): void {
 		EditorZoom.setZoomLevel(EditorZoom.getZoomLevel() - 1);
@@ -31,11 +23,7 @@ class EditorFontZoomOut extends EditorAction {
 
 class EditorFontZoomReset extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.fontZoomReset',
-			label: nls.localize2('EditorFontZoomReset.label', 'Reset Editor Font Size'),
-			precondition: undefined,
-		});
+		super({ id: 'editor.action.fontZoomReset', label: nls.localize2('EditorFontZoomReset.label', 'Reset Editor Font Size'), precondition: undefined });
 	}
 	run(_accessor: ServicesAccessor, _editor: ICodeEditor): void {
 		EditorZoom.setZoomLevel(0);

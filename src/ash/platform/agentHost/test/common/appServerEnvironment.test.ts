@@ -4,32 +4,27 @@ import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from '../
 import { AiAgentEnvVar } from '../../../chat/common/aiAgentEnv.js';
 
 test('App Server environment inherits developer POSIX credentials and session variables', () => {
-	const environment = buildAppServerEnvironment(
-		{
-			HOME: '/home/ash',
-			CARGO_HOME: '/tools/cargo',
-			RUSTUP_HOME: '/tools/rustup',
-			ZCODE_DATA_BASE_DIR: '/external-accounts',
-			LANG: 'en_US.UTF-8',
-			LC_ALL: 'C.UTF-8',
-			PATH: '/usr/bin',
-			SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
-			XDG_CONFIG_HOME: '/home/ash/.config',
-			OPENAI_API_KEY: 'secret',
-			ZCODE_CREDENTIAL_SECRET: 'secret',
-		},
-		'macos',
-		{
-			ASH_APP_SERVER_PATH: '/opt/Ash/ash-app-server-daemon',
-			ASH_ELECTRON_RUN_AS_NODE_PATH: '/opt/Ash/ash',
-			ASH_HOME: '/state',
-			ASH_WORKSPACE_ROOT: '/workspace',
-			ASH_DIR_GRANT_SOURCE: 'userConfig',
-			ASH_APP_SERVER_CONNECTION_ROLE: 'agents',
-			ASH_SSH_PATH: '/usr/bin/ssh',
-		},
-		'desktop',
-	);
+	const environment = buildAppServerEnvironment({
+		HOME: '/home/ash',
+		CARGO_HOME: '/tools/cargo',
+		RUSTUP_HOME: '/tools/rustup',
+		ZCODE_DATA_BASE_DIR: '/external-accounts',
+		LANG: 'en_US.UTF-8',
+		LC_ALL: 'C.UTF-8',
+		PATH: '/usr/bin',
+		SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
+		XDG_CONFIG_HOME: '/home/ash/.config',
+		OPENAI_API_KEY: 'secret',
+		ZCODE_CREDENTIAL_SECRET: 'secret',
+	}, 'macos', {
+		ASH_APP_SERVER_PATH: '/opt/Ash/ash-app-server-daemon',
+		ASH_ELECTRON_RUN_AS_NODE_PATH: '/opt/Ash/ash',
+		ASH_HOME: '/state',
+		ASH_WORKSPACE_ROOT: '/workspace',
+		ASH_DIR_GRANT_SOURCE: 'userConfig',
+		ASH_APP_SERVER_CONNECTION_ROLE: 'agents',
+		ASH_SSH_PATH: '/usr/bin/ssh',
+	}, 'desktop');
 
 	assert.deepEqual(environment, {
 		HOME: '/home/ash',
@@ -83,19 +78,14 @@ test('App Server environment preserves the Linux clipboard display session', () 
 });
 
 test('App Server environment canonicalizes Windows keys case-insensitively', () => {
-	const environment = buildAppServerEnvironment(
-		{
-			Path: 'C:\\Windows\\System32',
-			SystemRoot: 'C:\\Windows',
-			UserProfile: 'C:\\Users\\ash',
-			AWS_SECRET_ACCESS_KEY: 'secret',
-		},
-		'windows',
-		{
-			ASH_HOME: 'C:\\state',
-		},
-		'desktop',
-	);
+	const environment = buildAppServerEnvironment({
+		Path: 'C:\\Windows\\System32',
+		SystemRoot: 'C:\\Windows',
+		UserProfile: 'C:\\Users\\ash',
+		AWS_SECRET_ACCESS_KEY: 'secret',
+	}, 'windows', {
+		ASH_HOME: 'C:\\state',
+	}, 'desktop');
 
 	assert.equal(environment.PATH, 'C:\\Windows\\System32');
 	assert.equal(environment.SYSTEMROOT, 'C:\\Windows');
@@ -124,11 +114,7 @@ test('App Server environment excludes host authentication and launcher controls 
 		NULL_VALUE: 'invalid\0value',
 		UNDEFINED_VALUE: undefined,
 	};
-	assert.deepEqual(buildAppServerEnvironment(source, 'macos', {}, 'desktop'), {
-		GITHUB_TOKEN: 'developer',
-		HTTPS_PROXY: 'http://localhost:8080',
-		EMPTY_VALUE: '',
-	});
+	assert.deepEqual(buildAppServerEnvironment(source, 'macos', {}, 'desktop'), { GITHUB_TOKEN: 'developer', HTTPS_PROXY: 'http://localhost:8080', EMPTY_VALUE: '' });
 	for (const key of Object.keys(source).filter(key => key !== 'GITHUB_TOKEN' && key !== 'HTTPS_PROXY' && !key.endsWith('VALUE'))) {
 		assert.equal(isAllowedAppServerEnvironmentKey(key), false, key);
 	}
@@ -137,16 +123,8 @@ test('App Server environment excludes host authentication and launcher controls 
 test('Shared App Server environment discards inherited agent attribution for every host and launch mode', () => {
 	for (const platform of ['linux', 'macos', 'windows'] as const) {
 		for (const mode of ['desktop', 'web'] as const) {
-			const source = {
-				[AiAgentEnvVar]: 'enclosing-agent',
-				ai_agent: 'other-agent',
-				PATH: '/bin',
-				GITHUB_TOKEN: 'synthetic-developer-token',
-			};
-			assert.deepEqual(buildAppServerEnvironment(source, platform, {}, mode), {
-				PATH: '/bin',
-				GITHUB_TOKEN: 'synthetic-developer-token',
-			});
+			const source = { [AiAgentEnvVar]: 'enclosing-agent', ai_agent: 'other-agent', PATH: '/bin', GITHUB_TOKEN: 'synthetic-developer-token' };
+			assert.deepEqual(buildAppServerEnvironment(source, platform, {}, mode), { PATH: '/bin', GITHUB_TOKEN: 'synthetic-developer-token' });
 			assert.equal(source[AiAgentEnvVar], 'enclosing-agent');
 		}
 	}

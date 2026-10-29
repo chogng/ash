@@ -10,11 +10,7 @@ suite('treeView browser component', () => {
 
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
-			page.on('console', message => {
-				if (message.type() === 'error') {
-					errors.push(message.text());
-				}
-			});
+			page.on('console', message => { if (message.type() === 'error') { errors.push(message.text()); } });
 			await page.goto(`/treeView.html${variant}`);
 			try {
 				const root = page.getByRole('treeitem').filter({ hasText: 'Root' });
@@ -26,16 +22,12 @@ suite('treeView browser component', () => {
 				const checkbox = child.getByRole('checkbox');
 				await checkbox.focus();
 				await page.keyboard.press('Space');
-				await expect
-					.poll(() => page.evaluate(() => window.treeIntegration.requests().some(request => (request.payload as any).method === 'checkbox' && (request.payload as any).isChecked)))
-					.toBe(true);
+				await expect.poll(() => page.evaluate(() => window.treeIntegration.requests().some(request => (request.payload as any).method === 'checkbox' && (request.payload as any).isChecked))).toBe(true);
 				await expect(checkbox).toBeChecked();
 				expect(await page.evaluate(() => window.treeIntegration.commands())).toEqual([]);
 				await child.click();
 				await page.keyboard.press('F2');
-				const rename = page.getByRole('textbox', {
-					name: variant.includes('zh-CN') ? '重命名 Child' : 'Rename Child',
-				});
+				const rename = page.getByRole('textbox', { name: variant.includes('zh-CN') ? '重命名 Child' : 'Rename Child' });
 				await expect(rename).toBeFocused();
 				expect(await rename.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([0, 5]);
 				await rename.fill('Renamed');
@@ -46,14 +38,7 @@ suite('treeView browser component', () => {
 				await cancel.fill('Cancelled');
 				await cancel.press('Escape');
 				await expect(cancel).toHaveCount(0);
-				expect(
-					await page.evaluate(() =>
-						window.treeIntegration
-							.requests()
-							.filter(request => (request.payload as any).method === 'rename')
-							.map(request => (request.payload as any).value),
-					),
-				).toEqual(['Renamed']);
+				expect(await page.evaluate(() => window.treeIntegration.requests().filter(request => (request.payload as any).method === 'rename').map(request => (request.payload as any).value))).toEqual(['Renamed']);
 				const tree = page.getByRole('tree');
 				await tree.focus();
 				expect(await page.evaluate(() => window.treeIntegration.accessible(false))).toContain('Renamed: Provider owned');
@@ -64,17 +49,10 @@ suite('treeView browser component', () => {
 				await page.locator('#outside').focus();
 				await tree.focus();
 				await expect(tree).not.toHaveAttribute('aria-description');
-				const geometry = await page
-					.locator('.ash-custom-tree-row')
-					.last()
-					.evaluate(row => {
-						const text = row.querySelector('.ash-custom-tree-label')!;
-						return {
-							overflow: getComputedStyle(text).textOverflow,
-							height: row.getBoundingClientRect().height,
-							width: row.getBoundingClientRect().width,
-						};
-					});
+				const geometry = await page.locator('.ash-custom-tree-row').last().evaluate(row => {
+					const text = row.querySelector('.ash-custom-tree-label')!;
+					return { overflow: getComputedStyle(text).textOverflow, height: row.getBoundingClientRect().height, width: row.getBoundingClientRect().width };
+				});
 				expect(geometry.overflow).toBe('ellipsis');
 				expect(geometry.height).toBeGreaterThan(0);
 				expect(geometry.width).toBeGreaterThan(0);
@@ -93,9 +71,7 @@ suite('treeView browser component', () => {
 				await page.keyboard.press('ArrowRight');
 				await expect(page.locator('#second .ash-custom-tree-label').filter({ hasText: /^From provider$/ })).toBeVisible();
 				expect(errors).toEqual([]);
-			} finally {
-				await page.evaluate(() => window.treeIntegration?.dispose());
-			}
+			} finally { await page.evaluate(() => window.treeIntegration?.dispose()); }
 		});
 	}
 

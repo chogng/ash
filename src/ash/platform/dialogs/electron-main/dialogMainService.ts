@@ -32,12 +32,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 	private readonly active = new Map<number, Map<number, AbortController>>();
 	private readonly closedWindows = new WeakSet<BrowserWindow>();
 
-	constructor(
-		private readonly api: ISystemDialogApi,
-		private readonly platform: NodeJS.Platform = process.platform,
-	) {
-		super();
-	}
+	constructor(private readonly api: ISystemDialogApi, private readonly platform: NodeJS.Platform = process.platform) { super(); }
 
 	async perform(window: BrowserWindow, operation: NativeDialogOperation): Promise<MessageBoxReturnValue | void> {
 		this.assertNotDisposed();
@@ -48,10 +43,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 		}
 		if (active?.has(operation.id)) throw new Error('Dialog ID is already active');
 		const options = operation.options;
-		const cancelled = (): MessageBoxReturnValue => ({
-			response: options.cancelId ?? 0,
-			checkboxChecked: options.checkboxChecked ?? false,
-		});
+		const cancelled = (): MessageBoxReturnValue => ({ response: options.cancelId ?? 0, checkboxChecked: options.checkboxChecked ?? false });
 		const controller = new AbortController();
 		const windowActive = active ?? new Map<number, AbortController>();
 		windowActive.set(operation.id, controller);
@@ -70,11 +62,8 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 
 	showMessageBox(options: MessageBoxOptions, window?: BrowserWindow): Promise<MessageBoxReturnValue> {
 		return this.enqueue(window, () => {
-			if (options.signal?.aborted || (window && this.closedWindows.has(window)) || this.isDisposed) {
-				return Promise.resolve({
-					response: options.cancelId ?? (options.buttons?.length ?? 1) - 1,
-					checkboxChecked: options.checkboxChecked ?? false,
-				});
+			if (options.signal?.aborted || window && this.closedWindows.has(window) || this.isDisposed) {
+				return Promise.resolve({ response: options.cancelId ?? (options.buttons?.length ?? 1) - 1, checkboxChecked: options.checkboxChecked ?? false });
 			}
 			const prepared = massageMessageBoxOptions(options);
 			return this.api.showMessageBox(prepared.options, window).then(result => {
@@ -91,14 +80,11 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 		const release = this.lockFileDialog(options, window);
 		if (!release) return Promise.resolve({ canceled: true, filePaths: [] });
 		return this.enqueue(window, async () => {
-			if ((window && this.closedWindows.has(window)) || this.isDisposed) return { canceled: true, filePaths: [] };
+			if (window && this.closedWindows.has(window) || this.isDisposed) return { canceled: true, filePaths: [] };
 			let defaultPath = options.defaultPath;
 			if (defaultPath) {
-				try {
-					await access(defaultPath);
-				} catch {
-					defaultPath = undefined;
-				}
+				try { await access(defaultPath); }
+				catch { defaultPath = undefined; }
 			}
 			const result = await this.api.showOpenDialog({ ...options, defaultPath }, window);
 			return { ...result, filePaths: result.filePaths.map(path => this.normalizePath(path)) };
@@ -110,7 +96,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 		const release = this.lockFileDialog(options, window);
 		if (!release) return Promise.resolve({ canceled: true, filePath: '' });
 		return this.enqueue(window, async () => {
-			if ((window && this.closedWindows.has(window)) || this.isDisposed) return { canceled: true, filePath: '' };
+			if (window && this.closedWindows.has(window) || this.isDisposed) return { canceled: true, filePath: '' };
 			const result = await this.api.showSaveDialog(options, window);
 			return { ...result, filePath: this.normalizePath(result.filePath) };
 		}).finally(release);
@@ -130,18 +116,14 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 		const result = previous.catch(() => undefined).then(task);
 		this.queues.set(id, result);
 		void result.then(
-			() => {
-				if (this.queues.get(id) === result) this.queues.delete(id);
-			},
-			() => {
-				if (this.queues.get(id) === result) this.queues.delete(id);
-			},
+			() => { if (this.queues.get(id) === result) this.queues.delete(id); },
+			() => { if (this.queues.get(id) === result) this.queues.delete(id); },
 		);
 		return result;
 	}
 
 	private lockFileDialog(options: OpenDialogOptions | SaveDialogOptions, window: BrowserWindow | undefined): (() => void) | undefined {
-		if (!window) return () => {};
+		if (!window) return () => { };
 		const windowId = window.id;
 		const key = hash(options);
 		const locks = this.fileDialogLocks.get(windowId) ?? new Set<number>();

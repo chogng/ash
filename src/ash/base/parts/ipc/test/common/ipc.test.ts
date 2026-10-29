@@ -13,36 +13,22 @@ class MemoryProtocol extends Disposable implements IMessagePassingProtocol {
 	public other!: MemoryProtocol;
 	public send(buffer: VSBuffer): void {
 		this.assertNotDisposed();
-		queueMicrotask(() => {
-			if (!this.other.isDisposed) {
-				this.other.messages.fire(buffer);
-			}
-		});
+		queueMicrotask(() => { if (!this.other.isDisposed) { this.other.messages.fire(buffer); } });
 	}
 }
 
 function pair(resources: DisposableStore): [MemoryProtocol, MemoryProtocol] {
 	const first = resources.add(new MemoryProtocol());
 	const second = resources.add(new MemoryProtocol());
-	first.other = second;
-	second.other = first;
+	first.other = second; second.other = first;
 	return [first, second];
 }
 
 suite('IPC channels', () => {
 	let tracker: DisposableTracker;
 	let tracking: ReturnType<typeof installDisposableTracker>;
-	setup(() => {
-		tracker = new DisposableTracker();
-		tracking = installDisposableTracker(tracker);
-	});
-	teardown(() => {
-		try {
-			tracker.assertNoLeaks();
-		} finally {
-			tracking[Symbol.dispose]();
-		}
-	});
+	setup(() => { tracker = new DisposableTracker(); tracking = installDisposableTracker(tracker); });
+	teardown(() => { try { tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); } });
 
 	test('service proxies preserve method receivers and route keyed events across the connection', async () => {
 		using resources = new DisposableStore();
@@ -50,13 +36,7 @@ suite('IPC channels', () => {
 		const client = resources.add(new IPCClient(a, 'first'));
 		const server = resources.add(new IPCClient(b, 'second'));
 		const changed = resources.add(new Emitter<string>());
-		const service = {
-			prefix: 'group:',
-			async read(id: string) {
-				return this.prefix + id;
-			},
-			onDynamicChanged: (_id: string) => changed.event,
-		};
+		const service = { prefix: 'group:', async read(id: string) { return this.prefix + id; }, onDynamicChanged: (_id: string) => changed.event };
 		server.registerChannel('service', ProxyChannel.fromService(service, resources));
 		const proxy = ProxyChannel.toService<typeof service>(client.getChannel('service'));
 		const received: string[] = [];
@@ -75,21 +55,17 @@ suite('IPC channels', () => {
 		const second = resources.add(new IPCClient(b, 'second'));
 		const channel: IServerChannel = {
 			async call<T>(context: string, command: string, arg?: unknown): Promise<T> {
-				if (command === 'fail') {
-					throw new TypeError('Invalid operation');
-				}
+				if (command === 'fail') { throw new TypeError('Invalid operation'); }
 				return { context, arg } as T;
-			},
-			listen: () => Event.None,
+			}, listen: () => Event.None,
 		};
-		first.registerChannel('echo', channel);
-		second.registerChannel('echo', channel);
+		first.registerChannel('echo', channel); second.registerChannel('echo', channel);
 		const payload = { items: [false, null, '你好'], count: 3 };
-		assert.deepEqual(await Promise.all([first.getChannel('echo').call('read', payload), second.getChannel('echo').call('read')]), [{ context: 'second', arg: payload }, { context: 'first' }]);
-		await assert.rejects(first.getChannel('echo').call('fail'), {
-			name: 'TypeError',
-			message: 'Invalid operation',
-		});
+		assert.deepEqual(await Promise.all([
+			first.getChannel('echo').call('read', payload),
+			second.getChannel('echo').call('read'),
+		]), [{ context: 'second', arg: payload }, { context: 'first' }]);
+		await assert.rejects(first.getChannel('echo').call('fail'), { name: 'TypeError', message: 'Invalid operation' });
 		await assert.rejects(first.getChannel('missing').call('read'), /Unknown IPC channel/);
 		assert.deepEqual(await first.getChannel('echo').call('read', 4), { context: 'second', arg: 4 });
 		assert.throws(() => second.registerChannel('echo', channel), /already registered/);
@@ -119,24 +95,17 @@ suite('IPC channels', () => {
 		server.registerChannel('slow', {
 			call<T>(_context: string, _command: string, _arg: unknown, cancellation?: CancellationToken): Promise<T> {
 				resources.add(cancellation!.onCancellationRequested(() => cancelled++));
-				return new Promise<T>(resolve => {
-					finish = resolve as (value: unknown) => void;
-				});
-			},
-			listen: () => Event.None,
+				return new Promise<T>(resolve => { finish = resolve as (value: unknown) => void; });
+			}, listen: () => Event.None,
 		});
 		const call = client.getChannel('slow').call('run', undefined, token.token);
 		await setImmediate();
 		const rejected = assert.rejects(call, { name: 'CancellationError' });
 		token.cancel();
-		await rejected;
-		await setImmediate();
-		finish('late');
-		await setImmediate();
+		await rejected; await setImmediate();
+		finish('late'); await setImmediate();
 		assert.equal(cancelled, 1);
-		await assert.rejects(client.getChannel('slow').call('run', undefined, token.token), {
-			name: 'CancellationError',
-		});
+		await assert.rejects(client.getChannel('slow').call('run', undefined, token.token), { name: 'CancellationError' });
 	});
 
 	test('disposing a listener releases its server subscription while other listeners stay live', async () => {
@@ -152,27 +121,17 @@ suite('IPC channels', () => {
 				return listener => {
 					subscriptions++;
 					const subscription = changes.event(value => listener(value as T));
-					return toDisposable(() => {
-						subscription.dispose();
-						subscriptions--;
-					});
+					return toDisposable(() => { subscription.dispose(); subscriptions--; });
 				};
 			},
 		});
-		const first: number[] = [];
-		const second: number[] = [];
+		const first: number[] = []; const second: number[] = [];
 		const listener = resources.add(client.getChannel('changes').listen<number>('updated')(value => first.push(value)));
 		resources.add(client.getChannel('changes').listen<number>('updated')(value => second.push(value)));
-		await setImmediate();
-		changes.fire(1);
-		await setImmediate();
-		listener.dispose();
-		await setImmediate();
-		changes.fire(2);
-		await setImmediate();
+		await setImmediate(); changes.fire(1); await setImmediate();
+		listener.dispose(); await setImmediate(); changes.fire(2); await setImmediate();
 		assert.deepEqual({ first, second, subscriptions }, { first: [1], second: [1, 2], subscriptions: 1 });
-		client.dispose();
-		await setImmediate();
+		client.dispose(); await setImmediate();
 		assert.equal(subscriptions, 0);
 	});
 
@@ -180,30 +139,19 @@ suite('IPC channels', () => {
 		using resources = new DisposableStore();
 		const connections = resources.add(new Emitter<ClientConnectionEvent>());
 		const server = resources.add(new IPCServer(connections.event));
-		const operations: { context: string; cancelled: boolean; finish(value: unknown): void }[] = [];
+		const operations: { context: string; cancelled: boolean; finish(value: unknown): void; }[] = [];
 		const active = new Set<string>();
 		server.registerChannel('system', {
 			call<T>(context: string, _command: string, _arg: unknown, token?: CancellationToken): Promise<T> {
 				return new Promise<T>(resolve => {
 					const operation = { context, cancelled: false, finish: resolve as (value: unknown) => void };
 					operations.push(operation);
-					resources.add(
-						token!.onCancellationRequested(() => {
-							operation.cancelled = true;
-						}),
-					);
+					resources.add(token!.onCancellationRequested(() => { operation.cancelled = true; }));
 				});
 			},
-			listen<T>(context: string): Event<T> {
-				return () => {
-					active.add(context);
-					return toDisposable(() => {
-						active.delete(context);
-					});
-				};
-			},
+			listen<T>(context: string): Event<T> { return () => { active.add(context); return toDisposable(() => { active.delete(context); }); }; },
 		});
-		const open = (context: string): { client: IPCClient; disconnect: Emitter<void> } => {
+		const open = (context: string): { client: IPCClient; disconnect: Emitter<void>; } => {
 			const [a, b] = pair(resources);
 			const disconnect = resources.add(new Emitter<void>());
 			const client = resources.add(new IPCClient(a, 'untrusted renderer claim'));
@@ -211,32 +159,20 @@ suite('IPC channels', () => {
 			resources.add(toDisposable(() => disconnect.fire()));
 			return { client, disconnect };
 		};
-		const first = open('window:1');
-		const second = open('window:2');
-		resources.add(first.client.getChannel('system').listen('changed')(() => {}));
-		resources.add(second.client.getChannel('system').listen('changed')(() => {}));
+		const first = open('window:1'); const second = open('window:2');
+		resources.add(first.client.getChannel('system').listen('changed')(() => { }));
+		resources.add(second.client.getChannel('system').listen('changed')(() => { }));
 		const firstChannel = first.client.getChannel('system');
-		const firstCall = firstChannel.call('read');
-		const secondCall = second.client.getChannel('system').call('read');
+		const firstCall = firstChannel.call('read'); const secondCall = second.client.getChannel('system').call('read');
 		await setImmediate();
 		const rejected = assert.rejects(firstCall, /IPC connection closed/);
-		first.disconnect.fire();
-		await rejected;
-		await setImmediate();
+		first.disconnect.fire(); await rejected; await setImmediate();
 		await assert.rejects(firstChannel.call('read'), /IPC connection closed/);
-		operations[0]!.finish('old');
-		operations[1]!.finish('second result');
+		operations[0]!.finish('old'); operations[1]!.finish('second result');
 		assert.equal(await secondCall, 'second result');
-		assert.deepEqual(
-			{ active: [...active], operations: operations.map(({ context, cancelled }) => ({ context, cancelled })) },
-			{
-				active: ['window:2'],
-				operations: [
-					{ context: 'window:1', cancelled: true },
-					{ context: 'window:2', cancelled: false },
-				],
-			},
-		);
+		assert.deepEqual({ active: [...active], operations: operations.map(({ context, cancelled }) => ({ context, cancelled })) }, {
+			active: ['window:2'], operations: [{ context: 'window:1', cancelled: true }, { context: 'window:2', cancelled: false }],
+		});
 	});
 
 	test('Main selects a renderer by authenticated context and follows document replacement', async () => {
@@ -264,18 +200,16 @@ suite('IPC channels', () => {
 		await assert.rejects(server.getChannel('callback', () => true).call('handle'), /found 2/);
 	});
 
+
 	test('routed event subscriptions attach to current and later selected renderer documents', async () => {
 		using resources = new DisposableStore();
 		const connections = resources.add(new Emitter<ClientConnectionEvent>());
 		const server = resources.add(new IPCServer(connections.event));
-		const open = (context: string): { changes: Emitter<string>; disconnect: Emitter<void> } => {
+		const open = (context: string): { changes: Emitter<string>; disconnect: Emitter<void>; } => {
 			const [a, b] = pair(resources);
 			const client = resources.add(new IPCClient(a, 'renderer claim'));
 			const changes = resources.add(new Emitter<string>());
-			client.registerChannel('events', {
-				call: async <T>() => undefined as T,
-				listen: <T>() => changes.event as Event<T>,
-			});
+			client.registerChannel('events', { call: async <T>() => undefined as T, listen: <T>() => changes.event as Event<T> });
 			const disconnect = resources.add(new Emitter<void>());
 			connections.fire({ protocol: b, ctx: context, onDidClientDisconnect: disconnect.event });
 			resources.add(toDisposable(() => disconnect.fire()));
@@ -300,4 +234,5 @@ suite('IPC channels', () => {
 		await setImmediate();
 		assert.deepEqual(received, ['first', 'replacement']);
 	});
+
 });

@@ -26,13 +26,7 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 	constructor(private readonly warnOnOverwrite = false) {
 		super();
 		LanguageService.instanceCount += 1;
-		this._register(
-			this.languages.register({
-				id: PLAINTEXT_LANGUAGE_ID,
-				extensions: [PLAINTEXT_EXTENSION],
-				mimetypes: ['text/plain'],
-			}),
-		);
+		this._register(this.languages.register({ id: PLAINTEXT_LANGUAGE_ID, extensions: [PLAINTEXT_EXTENSION], mimetypes: ['text/plain'] }));
 	}
 
 	public registerLanguage(definition: ILanguageExtensionPoint): IDisposable;
@@ -59,45 +53,23 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 		return this.languages.resolveLanguageId(input);
 	}
 
-	isRegisteredLanguageId(languageId: string | null | undefined): boolean {
-		return languageId !== null && languageId !== undefined && this.languages.get(languageId) !== undefined;
-	}
-	getRegisteredLanguageIds(): string[] {
-		return this.languages.getRegisteredLanguageIds();
-	}
-	getSortedRegisteredLanguageNames(): ILanguageNameIdPair[] {
-		return this.languages.getSortedRegisteredLanguageNames();
-	}
-	getLanguageName(languageId: string): string | null {
-		return this.languages.getLanguageName(languageId);
-	}
-	getMimeType(languageId: string): string | null {
-		return this.languages.get(languageId)?.mimetypes?.[0] ?? null;
-	}
-	getIcon(languageId: string): ILanguageIcon | null {
-		return this.languages.get(languageId)?.icon ?? null;
-	}
-	getExtensions(languageId: string): ReadonlyArray<string> {
-		return this.languages.get(languageId)?.extensions ?? [];
-	}
-	getFilenames(languageId: string): ReadonlyArray<string> {
-		return this.languages.get(languageId)?.filenames ?? [];
-	}
+	isRegisteredLanguageId(languageId: string | null | undefined): boolean { return languageId !== null && languageId !== undefined && this.languages.get(languageId) !== undefined; }
+	getRegisteredLanguageIds(): string[] { return this.languages.getRegisteredLanguageIds(); }
+	getSortedRegisteredLanguageNames(): ILanguageNameIdPair[] { return this.languages.getSortedRegisteredLanguageNames(); }
+	getLanguageName(languageId: string): string | null { return this.languages.getLanguageName(languageId); }
+	getMimeType(languageId: string): string | null { return this.languages.get(languageId)?.mimetypes?.[0] ?? null; }
+	getIcon(languageId: string): ILanguageIcon | null { return this.languages.get(languageId)?.icon ?? null; }
+	getExtensions(languageId: string): ReadonlyArray<string> { return this.languages.get(languageId)?.extensions ?? []; }
+	getFilenames(languageId: string): ReadonlyArray<string> { return this.languages.get(languageId)?.filenames ?? []; }
 	getConfigurationFiles(languageId: string): ReadonlyArray<URI> {
 		const configuration = this.languages.get(languageId)?.configuration;
 		return configuration ? [configuration] : [];
 	}
-	getLanguageIdByLanguageName(languageName: string): string | null {
-		return this.languages.getLanguageIdByLanguageName(languageName);
-	}
-	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null {
-		return this.languages.getLanguageIdByMimeType(mimeType);
-	}
-	guessLanguageIdByFilepathOrFirstLine(resource: URI | null, firstLine?: string): string | null {
-		return resource ? (this.resolveLanguageId({ resource, firstLine }) ?? null) : null;
-	}
+	getLanguageIdByLanguageName(languageName: string): string | null { return this.languages.getLanguageIdByLanguageName(languageName); }
+	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null { return this.languages.getLanguageIdByMimeType(mimeType); }
+	guessLanguageIdByFilepathOrFirstLine(resource: URI | null, firstLine?: string): string | null { return resource ? this.resolveLanguageId({ resource, firstLine }) ?? null : null; }
 	createById(languageId: string | null | undefined): ILanguageSelection {
-		return new LanguageSelection(this.onDidChange, () => (languageId && this.isRegisteredLanguageId(languageId) ? languageId : PLAINTEXT_LANGUAGE_ID));
+		return new LanguageSelection(this.onDidChange, () => languageId && this.isRegisteredLanguageId(languageId) ? languageId : PLAINTEXT_LANGUAGE_ID);
 	}
 	createByMimeType(mimeType: string | null | undefined): ILanguageSelection {
 		return new LanguageSelection(this.onDidChange, () => this.getLanguageIdByMimeType(mimeType) ?? PLAINTEXT_LANGUAGE_ID);
@@ -138,30 +110,21 @@ class LanguageIdCodec implements ILanguageIdCodec {
 		return id;
 	}
 
-	decodeLanguageId(languageId: LanguageId): string {
-		return this.languages.get(languageId) ?? PLAINTEXT_LANGUAGE_ID;
-	}
+	decodeLanguageId(languageId: LanguageId): string { return this.languages.get(languageId) ?? PLAINTEXT_LANGUAGE_ID; }
 }
 
 class LanguageSelection implements ILanguageSelection {
 	readonly onDidChange: Event<string>;
 
-	constructor(
-		onDidChangeLanguages: Event<void>,
-		private readonly selector: () => string,
-	) {
+	constructor(onDidChangeLanguages: Event<void>, private readonly selector: () => string) {
 		this.onDidChange = (listener, thisArgs, disposables) => {
 			let previous = this.selector();
-			return onDidChangeLanguages(
-				() => {
-					const current = this.selector();
-					if (current === previous) return;
-					previous = current;
-					listener.call(thisArgs, current);
-				},
-				undefined,
-				disposables,
-			);
+			return onDidChangeLanguages(() => {
+				const current = this.selector();
+				if (current === previous) return;
+				previous = current;
+				listener.call(thisArgs, current);
+			}, undefined, disposables);
 		};
 	}
 

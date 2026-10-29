@@ -1,5 +1,11 @@
 import { CharCode } from '../../../../base/common/charCode.js';
-import { IMMUTABLE_CODE_TO_KEY_CODE, KeyCode, KeyCodeUtils, NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE, ScanCodeUtils } from '../../../../base/common/keyCodes.js';
+import {
+	IMMUTABLE_CODE_TO_KEY_CODE,
+	KeyCode,
+	KeyCodeUtils,
+	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
+	ScanCodeUtils,
+} from '../../../../base/common/keyCodes.js';
 import type { KeybindingEvent, ResolvedKeybindingChord } from '../../../../base/common/keybindings.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import type { IKeyboardMapping, IKeyboardMappingEntry } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
@@ -58,7 +64,10 @@ export function copyKeyboardMapping(mapping: IKeyboardMapping): Record<string, I
 	return copy;
 }
 
-export function observeKeyboardMapping(mapping: IKeyboardMapping, event: KeybindingEvent): IKeyboardMapping {
+export function observeKeyboardMapping(
+	mapping: IKeyboardMapping,
+	event: KeybindingEvent,
+): IKeyboardMapping {
 	if (!event.code || event.key.length === 0 || event.key === 'Process') {
 		return mapping;
 	}
@@ -80,7 +89,7 @@ export function observeKeyboardMapping(mapping: IKeyboardMapping, event: Keybind
 
 export function getKeyboardMappingValue(
 	entry: IKeyboardMappingEntry | undefined,
-	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean },
+	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean; },
 	mapAltGrToCtrlAlt: boolean,
 ): string {
 	if (!entry) {
@@ -98,7 +107,7 @@ export function getKeyboardMappingValue(
 
 export function isKeyboardMappingDeadKey(
 	entry: IKeyboardMappingEntry | undefined,
-	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean },
+	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean; },
 	mapAltGrToCtrlAlt: boolean,
 ): boolean {
 	if (!entry) {
@@ -141,16 +150,11 @@ export function getKeyboardMappingLabel(
 
 function immutableKeyLabel(keyCode: KeyCode): string {
 	switch (keyCode) {
-		case KeyCode.LeftArrow:
-			return 'Left';
-		case KeyCode.UpArrow:
-			return 'Up';
-		case KeyCode.RightArrow:
-			return 'Right';
-		case KeyCode.DownArrow:
-			return 'Down';
-		default:
-			return KeyCodeUtils.toString(keyCode);
+		case KeyCode.LeftArrow: return 'Left';
+		case KeyCode.UpArrow: return 'Up';
+		case KeyCode.RightArrow: return 'Right';
+		case KeyCode.DownArrow: return 'Down';
+		default: return KeyCodeUtils.toString(keyCode);
 	}
 }
 
@@ -165,7 +169,8 @@ export function findKeyboardMappingCodes(
 	const matches: string[] = [];
 	for (const [code, entry] of Object.entries(mapping)) {
 		const nativeKeyCode = entry.vkey ? NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] : undefined;
-		if ((nativeKeyCode !== undefined && nativeKeyCode === targetKeyCode) || (entry.value && entry.value.toLocaleLowerCase('en-US') === normalizedKey)) {
+		if ((nativeKeyCode !== undefined && nativeKeyCode === targetKeyCode) ||
+			(entry.value && entry.value.toLocaleLowerCase('en-US') === normalizedKey)) {
 			matches.push(code);
 		}
 	}
@@ -197,7 +202,9 @@ export function findKeyboardMappingCandidates(
 	operatingSystem: OperatingSystem,
 ): readonly IKeyboardMappingCandidate[] {
 	if (operatingSystem === OperatingSystem.Windows) {
-		const nativeMatches = Object.entries(mapping).filter(([, entry]) => entry.vkey !== undefined && NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] === keyCode);
+		const nativeMatches = Object.entries(mapping).filter(([, entry]) =>
+			entry.vkey !== undefined && NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] === keyCode
+		);
 		if (nativeMatches.length > 0) {
 			return nativeMatches.map(([code, entry]) => ({
 				code,
@@ -252,7 +259,7 @@ export function findKeyboardMappingCandidates(
 }
 
 function mappingProducesLatinLetters(mapping: IKeyboardMapping): boolean {
-	return Object.values(mapping).some(entry => /^[a-z]$/iu.test(entry.value));
+	return Object.values(mapping).some((entry) => /^[a-z]$/iu.test(entry.value));
 }
 
 function usProducedValue(keyCode: KeyCode, key: string, shiftKey: boolean): string {
@@ -320,33 +327,19 @@ function isCombiningCharacter(value: string): boolean {
 
 function spacingAccent(value: string): string {
 	switch (value.charCodeAt(0)) {
-		case CharCode.U_Combining_Grave_Accent:
-			return '`';
-		case CharCode.U_Combining_Acute_Accent:
-			return '´';
-		case CharCode.U_Combining_Circumflex_Accent:
-			return '^';
-		case CharCode.U_Combining_Tilde:
-			return '~';
-		case CharCode.U_Combining_Macron:
-			return '¯';
-		case CharCode.U_Combining_Breve:
-			return '˘';
-		case CharCode.U_Combining_Dot_Above:
-			return '˙';
-		case CharCode.U_Combining_Diaeresis:
-			return '¨';
-		case CharCode.U_Combining_Ring_Above:
-			return '˚';
-		case CharCode.U_Combining_Double_Acute_Accent:
-			return '˝';
-		case CharCode.U_Combining_Caron:
-			return 'ˇ';
-		case CharCode.U_Combining_Cedilla:
-			return '¸';
-		case CharCode.U_Combining_Ogonek:
-			return '˛';
-		default:
-			return value;
+		case CharCode.U_Combining_Grave_Accent: return '`';
+		case CharCode.U_Combining_Acute_Accent: return '´';
+		case CharCode.U_Combining_Circumflex_Accent: return '^';
+		case CharCode.U_Combining_Tilde: return '~';
+		case CharCode.U_Combining_Macron: return '¯';
+		case CharCode.U_Combining_Breve: return '˘';
+		case CharCode.U_Combining_Dot_Above: return '˙';
+		case CharCode.U_Combining_Diaeresis: return '¨';
+		case CharCode.U_Combining_Ring_Above: return '˚';
+		case CharCode.U_Combining_Double_Acute_Accent: return '˝';
+		case CharCode.U_Combining_Caron: return 'ˇ';
+		case CharCode.U_Combining_Cedilla: return '¸';
+		case CharCode.U_Combining_Ogonek: return '˛';
+		default: return value;
 	}
 }

@@ -27,7 +27,7 @@ export interface ResourceNavigatorOptions {
 	readonly openOnSingleClick?: boolean;
 }
 
-export interface WorkbenchObjectTreeOptions<T> extends ObjectTreeOptions<T>, ResourceNavigatorOptions {}
+export interface WorkbenchObjectTreeOptions<T> extends ObjectTreeOptions<T>, ResourceNavigatorOptions { }
 
 /** Platform-integrated ObjectTree with canonical resource-opening semantics. */
 export class WorkbenchObjectTree<T> extends ObjectTree<T> {
@@ -45,26 +45,17 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
 		});
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined)
-					this.updateOptions({
-						smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
-					});
-				if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined)
-					this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
-				if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined)
-					this.updateOptions({
-						indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
-					});
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
 		this.navigator = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
 
-export interface WorkbenchAsyncDataTreeOptions<T> extends AsyncDataTreeOptions<T>, ResourceNavigatorOptions {}
+export interface WorkbenchAsyncDataTreeOptions<T> extends AsyncDataTreeOptions<T>, ResourceNavigatorOptions { }
 
 /** Platform-integrated AsyncDataTree with the same open contract as other Workbench trees. */
 export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> {
@@ -82,26 +73,17 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
 		});
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined)
-					this.updateOptions({
-						smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
-					});
-				if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined)
-					this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
-				if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined)
-					this.updateOptions({
-						indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
-					});
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
 		this.navigator = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
 
-export interface WorkbenchCompressibleAsyncDataTreeOptions<T> extends CompressibleAsyncDataTreeOptions<T>, ResourceNavigatorOptions {}
+export interface WorkbenchCompressibleAsyncDataTreeOptions<T> extends CompressibleAsyncDataTreeOptions<T>, ResourceNavigatorOptions { }
 
 /** Workbench resource navigation over the shared compressed async tree. */
 export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleAsyncDataTree<TInput, T> {
@@ -118,20 +100,11 @@ export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleA
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
 		});
 		this.onDidOpen = this._register(new TreeResourceNavigator<T>(this, configurationService, openOnSingleClick)).onDidOpen;
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined)
-					this.updateOptions({
-						smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
-					});
-				if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined)
-					this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
-				if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined)
-					this.updateOptions({
-						indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
-					});
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.smoothScrolling) && options.smoothScrolling === undefined) this.updateOptions({ smoothScrolling: configurationService.getValue<boolean>(ListConfiguration.smoothScrolling) });
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
 	}
 }
 
@@ -148,16 +121,12 @@ class TreeResourceNavigator<T> extends Disposable {
 
 	readonly onDidOpen: Event<ResourceOpenEvent<T>> = this._onDidOpen.event;
 
-	constructor(
-		tree: ResourceNavigationTree<T>,
-		private readonly configurationService: IConfigurationService,
-		private readonly openOnSingleClick: boolean | undefined,
-	) {
+	constructor(tree: ResourceNavigationTree<T>, private readonly configurationService: IConfigurationService, private readonly openOnSingleClick: boolean | undefined) {
 		super();
-		this._register(tree.onPointer(event => this.onPointer(event)));
-		this._register(tree.onDidDoubleClick(event => this.onDoubleClick(event)));
-		this._register(tree.onDidAccept(event => this.onAccept(event)));
-		this._register(tree.onDidChangeSelection(event => this.onSelection(event)));
+		this._register(tree.onPointer((event) => this.onPointer(event)));
+		this._register(tree.onDidDoubleClick((event) => this.onDoubleClick(event)));
+		this._register(tree.onDidAccept((event) => this.onAccept(event)));
+		this._register(tree.onDidChangeSelection((event) => this.onSelection(event)));
 	}
 
 	private onPointer(event: Pick<ObjectTreePointerEvent<T>, 'element' | 'target' | 'browserEvent'>): void {
@@ -170,17 +139,10 @@ class TreeResourceNavigator<T> extends Disposable {
 	}
 
 	private onAccept(event: Pick<ObjectTreeAcceptEvent<T>, 'element' | 'browserEvent'>): void {
-		this.open(
-			event.element,
-			{
-				editorOptions: {
-					pinned: event.browserEvent.key !== ' ',
-					preserveFocus: event.browserEvent.key === ' ',
-				},
-				openToSide: event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey,
-			},
-			event.browserEvent,
-		);
+		this.open(event.element, {
+			editorOptions: { pinned: event.browserEvent.key !== ' ', preserveFocus: event.browserEvent.key === ' ' },
+			openToSide: event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey,
+		}, event.browserEvent);
 	}
 
 	private onSelection(event: Pick<ObjectTreeSelectionChangeEvent<T>, 'elements' | 'browserEvent'>): void {
@@ -193,14 +155,7 @@ class TreeResourceNavigator<T> extends Disposable {
 	}
 
 	private open(element: T, options: IOpenEditorOptions, browserEvent: MouseEvent | KeyboardEvent): void {
-		this._onDidOpen.fire(
-			Object.freeze({
-				element,
-				editorOptions: Object.freeze(options.editorOptions),
-				sideBySide: options.openToSide,
-				browserEvent,
-			}),
-		);
+		this._onDidOpen.fire(Object.freeze({ element, editorOptions: Object.freeze(options.editorOptions), sideBySide: options.openToSide, browserEvent }));
 	}
 }
 
@@ -222,12 +177,8 @@ export const ListConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'boolean',
-			get title() {
-				return localize('list.smoothScrollingTitle', 'Smooth scrolling in lists');
-			},
-			get description() {
-				return localize('list.smoothScrollingDescription', 'Controls whether lists and trees scroll with a short animation.');
-			},
+			get title() { return localize('list.smoothScrollingTitle', 'Smooth scrolling in lists'); },
+			get description() { return localize('list.smoothScrollingDescription', 'Controls whether lists and trees scroll with a short animation.'); },
 		},
 	}),
 	treeIndent: configurationRegistry.registerConfiguration<number>({
@@ -241,12 +192,8 @@ export const ListConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'number',
-			get title() {
-				return localize('list.treeIndentTitle', 'Tree indentation');
-			},
-			get description() {
-				return localize('list.treeIndentDescription', 'Controls tree indentation in pixels.');
-			},
+			get title() { return localize('list.treeIndentTitle', 'Tree indentation'); },
+			get description() { return localize('list.treeIndentDescription', 'Controls tree indentation in pixels.'); },
 			minimum: 4,
 			maximum: 40,
 		},
@@ -262,12 +209,8 @@ export const ListConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'select',
-			get title() {
-				return localize('list.treeGuidesTitle', 'Tree indent guides');
-			},
-			get description() {
-				return localize('list.treeGuidesDescription', 'Controls when tree indent guides are visible.');
-			},
+			get title() { return localize('list.treeGuidesTitle', 'Tree indent guides'); },
+			get description() { return localize('list.treeGuidesDescription', 'Controls when tree indent guides are visible.'); },
 			get options() {
 				return [
 					{ value: 'none', label: localize('list.treeGuidesNone', 'None') },

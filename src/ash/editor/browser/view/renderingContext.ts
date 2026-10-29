@@ -20,10 +20,7 @@ export abstract class RestrictedRenderingContext {
 	public readonly viewportWidth: number;
 	public readonly viewportHeight: number;
 
-	constructor(
-		private readonly viewLayout: IViewLayout,
-		public readonly viewportData: ViewportData,
-	) {
+	constructor(private readonly viewLayout: IViewLayout, public readonly viewportData: ViewportData) {
 		this.scrollWidth = viewLayout.getScrollWidth();
 		this.scrollHeight = viewLayout.getScrollHeight();
 		this.visibleRange = viewportData.visibleRange;
@@ -59,12 +56,7 @@ export abstract class RestrictedRenderingContext {
 export class RenderingContext extends RestrictedRenderingContext {
 	_renderingContextBrand: void = undefined;
 
-	constructor(
-		viewLayout: IViewLayout,
-		viewportData: ViewportData,
-		private readonly viewLines: IViewLines,
-		private readonly viewLinesGpu?: IViewLines,
-	) {
+	constructor(viewLayout: IViewLayout, viewportData: ViewportData, private readonly viewLines: IViewLines, private readonly viewLinesGpu?: IViewLines) {
 		super(viewLayout, viewportData);
 	}
 
@@ -135,16 +127,16 @@ export class VisibleRanges {
 	constructor(
 		public readonly outsideRenderedLine: boolean,
 		public readonly ranges: FloatHorizontalRange[],
-	) {}
+	) { }
 }
 
 export class LineVisibleRanges {
 	public static firstLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
-		return ranges?.reduce<LineVisibleRanges | null>((first, range) => (!first || range.lineNumber < first.lineNumber ? range : first), null) ?? null;
+		return ranges?.reduce<LineVisibleRanges | null>((first, range) => !first || range.lineNumber < first.lineNumber ? range : first, null) ?? null;
 	}
 
 	public static lastLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
-		return ranges?.reduce<LineVisibleRanges | null>((last, range) => (!last || range.lineNumber > last.lineNumber ? range : last), null) ?? null;
+		return ranges?.reduce<LineVisibleRanges | null>((last, range) => !last || range.lineNumber > last.lineNumber ? range : last, null) ?? null;
 	}
 
 	constructor(
@@ -152,5 +144,5 @@ export class LineVisibleRanges {
 		public readonly lineNumber: number,
 		public readonly ranges: HorizontalRange[],
 		public readonly continuesOnNextLine: boolean,
-	) {}
+	) { }
 }

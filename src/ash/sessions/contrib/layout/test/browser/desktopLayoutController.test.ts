@@ -33,7 +33,7 @@ import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../..
 const { IEditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { DesktopLayoutController } = await import('../../browser/desktopLayoutController.js');
 const { BaseLayoutController } = await import('../../browser/baseSessionLayoutController.js');
-class WorkingSetController extends BaseLayoutController {}
+class WorkingSetController extends BaseLayoutController { }
 const storageKey = 'sessions.singlePane.layoutState';
 
 suite('DesktopLayoutController', () => {
@@ -42,35 +42,22 @@ suite('DesktopLayoutController', () => {
 	test('hidden Canvas retention preserves split geometry while still capturing new tabs', async () => {
 		using fixture = await createFixture();
 		const initial = {
-			...workingSet('initial'),
-			groups: [
+			...workingSet('initial'), groups: [
 				{ ...workingSet('left', 'one.ts').groups[0]!, id: 1, size: 0.25 },
 				{ ...workingSet('right', 'two.ts').groups[0]!, id: 2, size: 0.75 },
-			],
+			]
 		};
 		fixture.editor.set(initial);
-		await fixture.open('b');
-		await fixture.open('a');
+		await fixture.open('b'); await fixture.open('a');
 		const retained = { resource: URI.parse('session-canvas:/live') };
 		fixture.editor.groups = [{ inputs: [retained] }];
 		using lease = fixture.controller.retainEditor(retained);
-		fixture.editor.set({
-			...initial,
-			groups: initial.groups.map((group, index) => ({
-				...group,
-				size: 0.5,
-				editors: index ? group.editors : [...group.editors, workingSet('new', 'new.ts').groups[0]!.editors[0]!],
-			})),
-		});
+		fixture.editor.set({ ...initial, groups: initial.groups.map((group, index) => ({ ...group, size: 0.5, editors: index ? group.editors : [...group.editors, workingSet('new', 'new.ts').groups[0]!.editors[0]!] })) });
 		fixture.editorVisible = false;
-		await fixture.open('b');
-		await fixture.open('a');
+		await fixture.open('b'); await fixture.open('a');
 		assert.notEqual(fixture.editor.current, 'empty');
 		const restored = fixture.editor.current as EditorWorkingSet;
-		assert.deepEqual(
-			restored.groups.map(group => group.size),
-			[0.25, 0.75],
-		);
+		assert.deepEqual(restored.groups.map(group => group.size), [0.25, 0.75]);
 		assert.equal(restored.groups[0]!.editors.length, 2);
 	});
 
@@ -87,21 +74,16 @@ suite('DesktopLayoutController', () => {
 			using fixture = await createFixture();
 			await fixture.configuration.updateValue(SESSIONS_LAYOUT_SCOPE_SETTING, mode);
 			await fixture.controller.whenSettled();
-			fixture.editorVisible = true;
-			fixture.auxiliaryVisible = false;
+			fixture.editorVisible = true; fixture.auxiliaryVisible = false;
 			fixture.partsChanged.fire();
 			await fixture.open('b');
-			fixture.editorVisible = false;
-			fixture.auxiliaryVisible = true;
+			fixture.editorVisible = false; fixture.auxiliaryVisible = true;
 			fixture.partsChanged.fire();
 			await fixture.open('a');
 			assert.deepEqual([fixture.editorVisible, fixture.auxiliaryVisible], mode === 'chat' ? [true, false] : [false, true]);
 			await fixture.storage.flush();
 			const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!);
-			assert.deepEqual(
-				saved.find((entry: { sessionResource: string }) => entry.sessionResource === 'chat:["a","a-thread"]')?.partVisibility,
-				mode === 'chat' ? { editor: true, auxiliarybar: false } : undefined,
-			);
+			assert.deepEqual(saved.find((entry: { sessionResource: string; }) => entry.sessionResource === 'chat:["a","a-thread"]')?.partVisibility, mode === 'chat' ? { editor: true, auxiliarybar: false } : undefined);
 		});
 	}
 
@@ -109,14 +91,9 @@ suite('DesktopLayoutController', () => {
 		test(`restores document working sets independently for peer Chats (${mode})`, async () => {
 			using fixture = await createFixture();
 			await fixture.configuration.updateValue(SESSIONS_LAYOUT_SCOPE_SETTING, mode);
-			fixture.catalog.sessions = fixture.catalog.sessions.map(session =>
-				session.sessionId === 'a'
-					? {
-							...session,
-							chats: [...session.chats, { threadId: 'peer', status: 'active', origin: { type: 'root' }, workspace: null }],
-						}
-					: session,
-			);
+			fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'a'
+				? { ...session, chats: [...session.chats, { threadId: 'peer', status: 'active', origin: { type: 'root' }, workspace: null }] }
+				: session);
 			await fixture.controller.whenSettled();
 			fixture.editor.set(workingSet('main', 'main.ts'));
 			fixture.sessions.openSession('a', 'peer');
@@ -133,20 +110,14 @@ suite('DesktopLayoutController', () => {
 	test('restoring an older Code working set removes page tabs and retains the selected file', async () => {
 		const saved = workingSet('session:b', 'retained.ts');
 		const file = saved.groups[0]!.editors[0]!;
-		const page = (resource: string): typeof file => ({
-			input: { typeId: 'workbench.editorInput.resource', value: { resource } },
-			preview: false,
-		});
-		const mixed = {
-			...saved,
-			groups: [{ ...saved.groups[0]!, editors: [page('ash-design:/canvas'), file], activeEditorIndex: 1 }],
-		};
+		const page = (resource: string): typeof file => ({ input: { typeId: 'workbench.editorInput.resource', value: { resource } }, preview: false });
+		const mixed = { ...saved, groups: [{ ...saved.groups[0]!, editors: [page('ash-design:/canvas'), file], activeEditorIndex: 1 }] };
 		using fixture = await createFixture([{ sessionResource: 'session:b', editorWorkingSet: mixed }]);
 		await fixture.open('b');
 		assert.deepEqual(fixture.editor.current, saved);
 		await fixture.storage.flush();
 		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!);
-		assert.deepEqual(persisted.find((entry: { sessionResource: string }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
+		assert.deepEqual(persisted.find((entry: { sessionResource: string; }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
 	});
 
 	test('Code restores each session panel view only while the panel is visible', async () => {
@@ -167,10 +138,7 @@ suite('DesktopLayoutController', () => {
 		await fixture.open('a');
 		assert.equal(fixture.panelView, 'tools.a');
 		await fixture.storage.flush();
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as {
-			sessionResource: string;
-			panelViewContainerId: string;
-		}[];
+		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string; }[];
 		assert.equal(saved.find(entry => entry.sessionResource === 'session:b')?.panelViewContainerId, 'tools.a');
 	});
 	test('switching sessions restores their editors and layout visibility does not change selection', async () => {
@@ -198,10 +166,7 @@ suite('DesktopLayoutController', () => {
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.applied.length, 0);
 		await fixture.storage.flush();
-		assert.deepEqual(
-			JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string }) => entry.sessionResource),
-			['session:a'],
-		);
+		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string; }) => entry.sessionResource), ['session:a']);
 		fixture.workspace.updateWorkspace({ id: 'b', folders: [] });
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.current, 'empty');
@@ -211,34 +176,16 @@ suite('DesktopLayoutController', () => {
 		using fixture = await createFixture();
 		const directory = new DeferredPromise<void>();
 		fixture.catalog.directoryReady = directory.p;
-		fixture.catalog.sessions = fixture.catalog.sessions.map(session =>
-			session.sessionId === 'b'
-				? {
-						...session,
-						chats: session.chats.map(chat => ({
-							...chat,
-							workspace: { authorityId: 'local', root: '/managed/b' },
-						})),
-					}
-				: session,
-		);
+		fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'b' ? { ...session, chats: session.chats.map(chat => ({ ...chat, workspace: { authorityId: 'local', root: '/managed/b' } })) } : session);
 		fixture.editor.set(workingSet('a', 'a.ts'));
 		fixture.sessions.openSession('b', 'b-thread');
-		fixture.workspace.updateWorkspace({
-			id: 'b',
-			folders: [{ id: 'b-source', index: 0, name: 'source', uri: URI.file('/source/b') }],
-		});
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'b-source', index: 0, name: 'source', uri: URI.file('/source/b') }] });
 		let settled = false;
-		const restoring = fixture.controller.whenSettled().then(() => {
-			settled = true;
-		});
+		const restoring = fixture.controller.whenSettled().then(() => { settled = true; });
 		await Promise.resolve();
 		assert.equal(settled, false);
 		assert.equal(fixture.editor.applied.length, 0);
-		fixture.workspace.updateWorkspace({
-			id: 'b',
-			folders: [{ id: 'b-managed', index: 0, name: 'managed', uri: URI.file('/managed/b') }],
-		});
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'b-managed', index: 0, name: 'managed', uri: URI.file('/managed/b') }] });
 		await directory.complete();
 		await restoring;
 		assert.equal(fixture.editor.current, 'empty');
@@ -263,44 +210,27 @@ suite('DesktopLayoutController', () => {
 		using fixture = await createFixture([{ sessionResource: 'session:b', editorWorkingSet: saved }]);
 		fixture.editor.set(workingSet('a', 'unsaved-source.ts'));
 		fixture.followWorkspace = false;
-		fixture.catalog.sessions = fixture.catalog.sessions.map(session =>
-			session.sessionId === 'b'
-				? {
-						...session,
-						chats: [
-							{ ...session.chats[0]!, workspace: { authorityId: 'local', root: '/managed/b/first' } },
-							{
-								threadId: 'b-second',
-								status: 'active',
-								origin: { type: 'root' },
-								workspace: { authorityId: 'local', root: '/managed/b/second' },
-							},
-						],
-					}
-				: session,
-		);
+		fixture.catalog.sessions = fixture.catalog.sessions.map(session => session.sessionId === 'b' ? {
+			...session,
+			chats: [
+				{ ...session.chats[0]!, workspace: { authorityId: 'local', root: '/managed/b/first' } },
+				{ threadId: 'b-second', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'local', root: '/managed/b/second' } },
+			],
+		} : session);
 		const directory = new DeferredPromise<void>();
 		const started = new DeferredPromise<void>();
 		fixture.catalog.directoryReady = directory.p;
 		const ready = fixture.catalog.whenDirectoriesReady.bind(fixture.catalog);
 		fixture.catalog.whenDirectoriesReady = async signal => {
-			if (!started.isSettled) {
-				await started.complete();
-			}
+			if (!started.isSettled) { await started.complete(); }
 			await ready(signal);
 		};
 		fixture.sessions.openSession('b', 'b-thread');
-		fixture.workspace.updateWorkspace({
-			id: 'b',
-			folders: [{ id: 'first', index: 0, name: 'first', uri: URI.file('/managed/b/first') }],
-		});
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'first', index: 0, name: 'first', uri: URI.file('/managed/b/first') }] });
 		await started.p;
 		assert.equal(fixture.editor.applied.length, 0);
 		fixture.sessions.openSession('b', 'b-second');
-		fixture.workspace.updateWorkspace({
-			id: 'b',
-			folders: [{ id: 'second', index: 0, name: 'second', uri: URI.file('/managed/b/second') }],
-		});
+		fixture.workspace.updateWorkspace({ id: 'b', folders: [{ id: 'second', index: 0, name: 'second', uri: URI.file('/managed/b/second') }] });
 		await directory.complete();
 		await fixture.controller.whenSettled();
 		assert.deepEqual(fixture.editor.applied, [saved]);
@@ -308,10 +238,7 @@ suite('DesktopLayoutController', () => {
 		assert.equal(selection?.kind === 'session' ? selection.active.threadId : undefined, 'b-second');
 		assert.deepEqual(fixture.errors, []);
 		await fixture.storage.flush();
-		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as {
-			sessionResource: string;
-			editorWorkingSet: EditorWorkingSet;
-		}[];
+		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet; }[];
 		assert.deepEqual(persisted.find(entry => entry.sessionResource === 'session:a')?.editorWorkingSet, workingSet('session:a', 'unsaved-source.ts'));
 	});
 
@@ -378,10 +305,7 @@ suite('DesktopLayoutController', () => {
 		const draft = fixture.sessions.openNewSession('Code draft');
 		await fixture.controller.whenSettled();
 		fixture.editor.set(workingSet('draft', 'draft.ts'));
-		fixture.catalog.promoteUntitledSession(draft.untitledSessionId, {
-			session: fixture.catalog.sessions[1]!,
-			threadId: 'b-thread',
-		});
+		fixture.catalog.promoteUntitledSession(draft.untitledSessionId, { session: fixture.catalog.sessions[1]!, threadId: 'b-thread' });
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.applied.length, 0);
 		await fixture.open('c');
@@ -396,10 +320,7 @@ suite('DesktopLayoutController', () => {
 		fixture.catalog.remove('a');
 		await fixture.controller.whenSettled();
 		await fixture.storage.flush();
-		assert.deepEqual(
-			JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string }) => entry.sessionResource),
-			['session:b'],
-		);
+		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string; }) => entry.sessionResource), ['session:b']);
 	});
 
 	test('draft materialization during restoration preserves the created identity for later saves', async () => {
@@ -413,10 +334,7 @@ suite('DesktopLayoutController', () => {
 		fixture.editor.pending = pending.p;
 		fixture.sessions.openUntitledSession(draft.untitledSessionId);
 		await fixture.editor.started.p;
-		fixture.catalog.promoteUntitledSession(draft.untitledSessionId, {
-			session: fixture.catalog.sessions[1]!,
-			threadId: 'b-thread',
-		});
+		fixture.catalog.promoteUntitledSession(draft.untitledSessionId, { session: fixture.catalog.sessions[1]!, threadId: 'b-thread' });
 		await pending.complete();
 		await fixture.controller.whenSettled();
 		await fixture.open('a');
@@ -457,21 +375,14 @@ suite('DesktopLayoutController', () => {
 		fixture.sessions.openSession('b', 'b-thread');
 		await fixture.editor.started.p;
 		const joining = new DeferredPromise<void>();
-		using listener = fixture.lifecycle.onWillShutdown(() => {
-			void joining.complete();
-		});
+		using listener = fixture.lifecycle.onWillShutdown(() => { void joining.complete(); });
 		let closed = false;
-		const closing = fixture.lifecycle.shutdown('reload').then(() => {
-			closed = true;
-		});
+		const closing = fixture.lifecycle.shutdown('reload').then(() => { closed = true; });
 		await joining.p;
 		assert.equal(closed, false);
 		await pending.complete();
 		await closing;
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as {
-			sessionResource: string;
-			editorWorkingSet: EditorWorkingSet;
-		}[];
+		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet; }[];
 		assert.deepEqual(saved.find(entry => entry.sessionResource === 'session:b')?.editorWorkingSet, workingSet('session:b', 'b.ts'));
 	});
 
@@ -488,28 +399,18 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() =>
-				services.createInstance(DesktopLayoutController, 'pages', {
-					isSessionContent: true,
-					isDocumentContent: true,
-					documentContent: observableValue('documents', true),
-					isChangingContent: false,
-					runOperation: async (operation: () => Promise<void>) => operation(),
-				}),
-			/paneCompositePartService/,
-		);
+		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /paneCompositePartService/);
 	});
 });
 
 class TestEditors extends Disposable {
-	public groups: { inputs: { resource: URI }[] }[] = [];
+	public groups: { inputs: { resource: URI; }[]; }[] = [];
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidVisibleEditorsChange = this.changed.event;
 	public started = new DeferredPromise<void>();
 	public current: EditorWorkingSetTarget = 'empty';
 	public readonly applied: EditorWorkingSetTarget[] = [];
-	public readonly options: { preserveFocus?: boolean }[] = [];
+	public readonly options: { preserveFocus?: boolean; }[] = [];
 	public pending: Promise<void> | undefined;
 	public get visibleEditors(): readonly unknown[] {
 		return this.current === 'empty' ? [] : this.current.groups.flatMap(group => group.editors);
@@ -521,7 +422,7 @@ class TestEditors extends Disposable {
 	public saveWorkingSet(id: string): EditorWorkingSet {
 		return this.current === 'empty' ? workingSet(id) : { ...this.current, id };
 	}
-	public async applyWorkingSet(value: EditorWorkingSetTarget, options: { preserveFocus?: boolean }): Promise<void> {
+	public async applyWorkingSet(value: EditorWorkingSetTarget, options: { preserveFocus?: boolean; }): Promise<void> {
 		this.applied.push(value);
 		this.options.push(options);
 		this.set('empty');
@@ -538,14 +439,8 @@ class TestEditors extends Disposable {
 class TestCatalog extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	public readonly materializedSessions = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>(this, new Map());
-	public sessions: readonly ISession[] = ['a', 'b', 'c'].map(id => ({
-		sessionId: id,
-		title: id,
-		status: 'active',
-		nextApprovalMode: 'manual',
-		chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }],
-	}));
+	public readonly materializedSessions = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>(this, new Map());
+	public sessions: readonly ISession[] = ['a', 'b', 'c'].map(id => ({ sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] }));
 	public untitledSessions: readonly IUntitledChatSession[] = [];
 	public active: IActiveSessionThread | undefined = { session: this.sessions[0]!, threadId: 'a-thread' };
 	public activeUntitledSession: IUntitledChatSession | undefined;
@@ -553,31 +448,20 @@ class TestCatalog extends Disposable {
 	public readonly error = undefined;
 	public directoryReady: Promise<void> | undefined;
 	public async whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
-		if (this.directoryReady) {
-			await (signal ? raceCancellationError(this.directoryReady, signal) : this.directoryReady);
-		}
+		if (this.directoryReady) { await (signal ? raceCancellationError(this.directoryReady, signal) : this.directoryReady); }
 		if (this.sessions.some(session => session.chats.some(chat => chat.workspace === undefined))) {
-			this.sessions = this.sessions.map(session => ({
-				...session,
-				chats: session.chats.map(chat => ({ ...chat, workspace: chat.workspace ?? null })),
-			}));
+			this.sessions = this.sessions.map(session => ({ ...session, chats: session.chats.map(chat => ({ ...chat, workspace: chat.workspace ?? null })) }));
 			this.changed.fire();
 		}
 	}
-	public async initialize(): Promise<void> {}
+	public async initialize(): Promise<void> { }
 	public selectThread(sessionId: string, threadId: string): void {
 		this.active = { session: this.sessions.find(session => session.sessionId === sessionId)!, threadId };
 		this.activeUntitledSession = undefined;
 		this.changed.fire();
 	}
 	public createUntitledSession(title: string): IUntitledChatSession {
-		const draft: IUntitledChatSession = {
-			untitledSessionId: `draft-${this.untitledSessions.length}`,
-			title,
-			workspace: { type: 'current' },
-			model: undefined,
-			agent: undefined,
-		};
+		const draft: IUntitledChatSession = { untitledSessionId: `draft-${this.untitledSessions.length}`, title, workspace: { type: 'current' }, model: undefined, agent: undefined };
 		this.untitledSessions = [...this.untitledSessions, draft];
 		return draft;
 	}
@@ -602,14 +486,7 @@ class LayoutFixture extends Disposable {
 	public readonly configuration = this._register(new InMemoryConfigurationService());
 	private readonly storageEnvironment = new JSDOM('', { url: 'https://sessions-layout.test' });
 	public readonly services = this._register(new InstantiationService());
-	public readonly storage = this._register(
-		new BrowserStorageService({
-			ownerWindow: browserEnvironment.window as unknown as Window,
-			workspaceId: 'sessions',
-			backend: this.storageEnvironment.window.localStorage,
-			flushInterval: 0,
-		}),
-	);
+	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.storageEnvironment.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly catalog = this._register(new TestCatalog());
 	public readonly editor = this._register(new TestEditors());
@@ -643,48 +520,24 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(ILayoutService, {
 			onDidChangePartVisibility: this.partsChanged.event,
-			isPartVisible: (part: string) => (part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible),
-			showPart: (part: string) => {
-				if (part === 'auxiliarybar') {
-					this.auxiliaryVisible = true;
-				} else {
-					this.editorVisible = true;
-				}
-			},
-			hidePart: (part: string) => {
-				if (part === 'auxiliarybar') {
-					this.auxiliaryVisible = false;
-				} else {
-					this.editorVisible = false;
-				}
-			},
+			isPartVisible: (part: string) => part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
+			showPart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = true; } else { this.editorVisible = true; } },
+			hidePart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = false; } else { this.editorVisible = false; } },
 		} as unknown as ILayoutService);
-		this.services.registerInstance(INotificationService, {
-			error: (message: string) => this.errors.push(message),
-		} as unknown as INotificationService);
-		this._register(
-			this.sessions.onDidChange(() => {
-				const selected = this.sessions.activeSelection;
-				if (this.followWorkspace && selected?.kind === 'session') {
-					this.workspace.updateWorkspace({ id: selected.active.session.sessionId, folders: [] });
-				}
-			}),
-		);
+		this.services.registerInstance(INotificationService, { error: (message: string) => this.errors.push(message) } as unknown as INotificationService);
+		this._register(this.sessions.onDidChange(() => {
+			const selected = this.sessions.activeSelection;
+			if (this.followWorkspace && selected?.kind === 'session') {
+				this.workspace.updateWorkspace({ id: selected.active.session.sessionId, folders: [] });
+			}
+		}));
 		this.services.registerInstance(IPaneCompositePartService, {
 			getProgressIndicator: () => undefined,
-			onDidPaneCompositeOpen: listener =>
-				this.panelOpened.event(id =>
-					listener({
-						composite: { id } as import('../../../../../workbench/browser/panecomposite.js').PaneComposite,
-						viewContainerLocation: ViewContainerLocation.Panel,
-					}),
-				),
+			onDidPaneCompositeOpen: listener => this.panelOpened.event(id => listener({ composite: { id } as import('../../../../../workbench/browser/panecomposite.js').PaneComposite, viewContainerLocation: ViewContainerLocation.Panel })),
 			onDidPaneCompositeClose: Event.None,
 			getActivePaneComposite: () => undefined,
 			getPartId: () => 'panel',
-			hideActivePaneComposite: () => {
-				this.panelVisible = false;
-			},
+			hideActivePaneComposite: () => { this.panelVisible = false; },
 			getLastActivePaneCompositeId: () => this.panelView,
 			openPaneComposite: async (id: string | undefined) => {
 				if (id !== undefined && id !== this.panelView) {
@@ -712,28 +565,8 @@ async function createFixture(saved?: readonly unknown[]): Promise<LayoutFixture>
 	return fixture;
 }
 
-class TestLifecycle extends AbstractLifecycleService {}
+class TestLifecycle extends AbstractLifecycleService { }
 
 function workingSet(id: string, file?: string): EditorWorkingSet {
-	return {
-		id,
-		activeGroupIndex: 0,
-		groups: [
-			{
-				editors: file
-					? [
-							{
-								input: {
-									typeId: 'workbench.editorInput.resource',
-									value: { resource: `file:///${file}` },
-								},
-								preview: false,
-							},
-						]
-					: [],
-				activeEditorIndex: file ? 0 : -1,
-				size: 1,
-			},
-		],
-	};
+	return { id, activeGroupIndex: 0, groups: [{ editors: file ? [{ input: { typeId: 'workbench.editorInput.resource', value: { resource: `file:///${file}` } }, preview: false }] : [], activeEditorIndex: file ? 0 : -1, size: 1 }] };
 }

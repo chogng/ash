@@ -56,40 +56,29 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 			screen.raw.options.rightClickSelectsWord = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'selectWord';
 		};
 		updateMouseOptions();
-		this._register(
-			this.configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TerminalSettingId.RightClickBehavior)) updateMouseOptions();
-			}),
-		);
-		this._register(
-			screen.onDidRequestRunCommand(async ({ command, noNewLine }) => {
-				const generation = this.inputGeneration;
-				const instance = this.context.instance;
-				const current = (): boolean =>
-					!this.isDisposed &&
-					!screen.isDisposed &&
-					this.inputGeneration === generation &&
-					instance.state === 'running' &&
-					!instance.isReadOnly &&
-					this.terminals.activeInstance === instance &&
-					instance.capabilities?.get(TerminalCapability.CommandDetection)?.commands.includes(command) === true;
-				if (!command.command || !current()) return;
-				try {
-					if (!command.isTrusted) {
-						const result = await this.dialogs.confirm({
-							message: localize('terminal.command.confirmRerun', 'Run this command again?'),
-							detail: command.command,
-							primaryButton: localize('terminal.command.confirmRun', 'Run'),
-						});
-						if (!result.confirmed || !current()) return;
-					}
-					screen.focus();
-					await instance.sendText(command.command, !noNewLine);
-				} catch (error) {
-					onUnexpectedError(error);
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TerminalSettingId.RightClickBehavior)) updateMouseOptions();
+		}));
+		this._register(screen.onDidRequestRunCommand(async ({ command, noNewLine }) => {
+			const generation = this.inputGeneration;
+			const instance = this.context.instance;
+			const current = (): boolean => !this.isDisposed && !screen.isDisposed && this.inputGeneration === generation
+				&& instance.state === 'running' && !instance.isReadOnly && this.terminals.activeInstance === instance
+				&& instance.capabilities?.get(TerminalCapability.CommandDetection)?.commands.includes(command) === true;
+			if (!command.command || !current()) return;
+			try {
+				if (!command.isTrusted) {
+					const result = await this.dialogs.confirm({
+						message: localize('terminal.command.confirmRerun', 'Run this command again?'),
+						detail: command.command,
+						primaryButton: localize('terminal.command.confirmRun', 'Run'),
+					});
+					if (!result.confirmed || !current()) return;
 				}
-			}),
-		);
+				screen.focus();
+				await instance.sendText(command.command, !noNewLine);
+			} catch (error) { onUnexpectedError(error); }
+		}));
 		const textarea = screen.raw.textarea!;
 		const scope = this._register(this.contextKeys.createScoped(textarea));
 		const selected = TerminalContextKeys.textSelectedInFocused.bindTo(scope);
@@ -97,71 +86,38 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		updateSelection();
 		const listener = screen.raw.onSelectionChange(() => {
 			updateSelection();
-			if (
-				this.configuration.getValue<boolean>(TerminalSettingId.CopyOnSelection) &&
-				this.terminals.activeInstance === this.context.instance &&
-				textarea === textarea.ownerDocument.activeElement
-			) {
-				void this.copySelection().catch(error => {
-					if (!this.isDisposed) this.notifications.error(error);
-				});
+			if (this.configuration.getValue<boolean>(TerminalSettingId.CopyOnSelection) && this.terminals.activeInstance === this.context.instance
+				&& textarea === textarea.ownerDocument.activeElement) {
+				void this.copySelection().catch(error => { if (!this.isDisposed) this.notifications.error(error); });
 			}
 		});
 		this._register(toDisposable(() => listener.dispose()));
 		this._register(addDisposableListener(textarea, 'focus', updateSelection));
-		this._register(
-			addDisposableListener(textarea, 'blur', () => {
-				this.focusGeneration++;
-				selected.set(false);
-			}),
-		);
+		this._register(addDisposableListener(textarea, 'blur', () => { this.focusGeneration++; selected.set(false); }));
 		// Capture before xterm can change the selection on right click. Shift and
 		// keyboard context menus retain their normal menu path.
 		const isScreenTarget = (event: MouseEvent): boolean => !(event.target as Element | null)?.closest?.('.ash-terminal-widget-overlay, [role="button"], button, a');
-		this._register(
-			addDisposableListener(
-				screen.element,
-				'mousedown',
-				(event: MouseEvent) => {
-					if (!isScreenTarget(event) || !this.shouldHandleRightClick(event)) return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					void this.handleMouseEvent(event).catch(error => {
-						if (!this.isDisposed) this.notifications.error(error);
-					});
-				},
-				true,
-			),
-		);
-		this._register(
-			addDisposableListener(
-				screen.element,
-				'contextmenu',
-				(event: MouseEvent) => {
-					if (!isScreenTarget(event) || event.button !== 2 || event.shiftKey) return;
-					const behavior = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior);
-					if (behavior === 'copyPaste' || behavior === 'paste' || behavior === 'nothing') {
-						event.preventDefault();
-						event.stopImmediatePropagation();
-					}
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(screen.element, 'mousedown', (event: MouseEvent) => {
+			if (!isScreenTarget(event) || !this.shouldHandleRightClick(event)) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			void this.handleMouseEvent(event).catch(error => { if (!this.isDisposed) this.notifications.error(error); });
+		}, true));
+		this._register(addDisposableListener(screen.element, 'contextmenu', (event: MouseEvent) => {
+			if (!isScreenTarget(event) || event.button !== 2 || event.shiftKey) return;
+			const behavior = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior);
+			if (behavior === 'copyPaste' || behavior === 'paste' || behavior === 'nothing') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true));
 		// xterm listens on both its textarea and root. Capture before either handler
 		// so browser-menu paste uses the same confirmation and acknowledged input path.
-		this._register(
-			addDisposableListener(
-				screen.element,
-				'paste',
-				(event: ClipboardEvent) => {
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					void this.readAndPaste(undefined, event.clipboardData?.getData('text/plain') ?? '').catch(onUnexpectedError);
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(screen.element, 'paste', (event: ClipboardEvent) => {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			void this.readAndPaste(undefined, event.clipboardData?.getData('text/plain') ?? '').catch(onUnexpectedError);
+		}, true));
 	}
 
 	public async copySelection(): Promise<void> {
@@ -184,7 +140,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		return event.button === 2 && !event.shiftKey && (behavior === 'copyPaste' || behavior === 'paste');
 	}
 
-	public async handleMouseEvent(event: MouseEvent): Promise<{ handled: boolean } | void> {
+	public async handleMouseEvent(event: MouseEvent): Promise<{ handled: boolean; } | void> {
 		const screen = this.screen;
 		if (!this.shouldHandleRightClick(event) || this.isDisposed || !screen || screen.isDisposed) return;
 		const instance = this.context.instance;
@@ -199,18 +155,9 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 			const current = screen.isDisposed ? undefined : screen.raw.getSelectionPosition();
 			// A failed write, a newer selection or a switch to another terminal must
 			// leave the selection intact, so a retry cannot destroy uncopied text.
-			if (
-				!this.isDisposed &&
-				!screen.isDisposed &&
-				generation === this.inputGeneration &&
-				focusGeneration === this.focusGeneration &&
-				screen.raw.getSelection() === selection &&
-				current?.start.x === position?.start.x &&
-				current?.start.y === position?.start.y &&
-				current?.end.x === position?.end.x &&
-				current?.end.y === position?.end.y
-			)
-				screen.raw.clearSelection();
+			if (!this.isDisposed && !screen.isDisposed && generation === this.inputGeneration && focusGeneration === this.focusGeneration && screen.raw.getSelection() === selection
+				&& current?.start.x === position?.start.x && current?.start.y === position?.start.y
+				&& current?.end.x === position?.end.x && current?.end.y === position?.end.y) screen.raw.clearSelection();
 		} else {
 			await this.readAndPaste(undefined, undefined, true);
 		}
@@ -222,18 +169,11 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		const instance = this.context.instance;
 		const generation = this.inputGeneration;
 		const focusGeneration = this.focusGeneration;
-		const canPaste = (): boolean =>
-			!this.isDisposed &&
-			!!screen &&
-			!screen.isDisposed &&
-			generation === this.inputGeneration &&
-			instance.state === 'running' &&
-			!instance.isReadOnly &&
-			this.terminals.activeInstance === instance &&
-			screen.element.isConnected &&
-			!screen.element.hidden;
+		const canPaste = (): boolean => !this.isDisposed && !!screen && !screen.isDisposed
+			&& generation === this.inputGeneration && instance.state === 'running' && !instance.isReadOnly
+			&& this.terminals.activeInstance === instance && screen.element.isConnected && !screen.element.hidden;
 		if (!canPaste()) return;
-		const text = suppliedText ?? (await this.clipboard.readText(type));
+		const text = suppliedText ?? await this.clipboard.readText(type);
 		if (!text || !canPaste() || (requireFocus && focusGeneration !== this.focusGeneration)) return;
 		const decision = await this.instantiation.invokeFunction(shouldPasteTerminalText, text, screen!.raw.modes.bracketedPasteMode);
 		if (!canPaste()) return;
@@ -259,12 +199,8 @@ const selected = TerminalContextKeys.textSelectedInFocused.isEqualTo(true);
 function clipboardInstance(accessor: ServicesAccessor, context: unknown): ITerminalInstance | undefined {
 	const terminals = accessor.get(ITerminalService);
 	if (context === undefined) return terminals.activeInstance;
-	const id =
-		context instanceof InstanceContext
-			? context.instanceId
-			: context && typeof context === 'object' && '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context
-				? context.instanceId
-				: undefined;
+	const id = context instanceof InstanceContext ? context.instanceId : context && typeof context === 'object'
+		&& '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context ? context.instanceId : undefined;
 	if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
 		throw new TypeError(localize('terminal.context.invalid', 'Invalid terminal instance context'));
 	}
@@ -273,119 +209,86 @@ function clipboardInstance(accessor: ServicesAccessor, context: unknown): ITermi
 	return instance;
 }
 
-registerAction2(
-	class TerminalCopySelectionAction extends Action2 {
-		constructor() {
-			super({
-				id: TerminalCommandId.CopySelection,
-				title: localize2('terminal.clipboard.copy', 'Terminal: Copy Selection'),
-				f1: true,
-				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
-				keybinding: {
-					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyC,
-					mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyC },
-					when: selected,
-					weight: KeybindingWeight.WorkbenchContrib,
-				},
-			});
-		}
-		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			const instance = clipboardInstance(accessor, context);
-			if (instance) await TerminalClipboardContribution.get(instance)?.copySelection();
-		}
-	},
-);
+registerAction2(class TerminalCopySelectionAction extends Action2 {
+	constructor() {
+		super({
+			id: TerminalCommandId.CopySelection,
+			title: localize2('terminal.clipboard.copy', 'Terminal: Copy Selection'),
+			f1: true,
+			precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyC, mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyC }, when: selected, weight: KeybindingWeight.WorkbenchContrib },
+		});
+	}
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		const instance = clipboardInstance(accessor, context);
+		if (instance) await TerminalClipboardContribution.get(instance)?.copySelection();
+	}
+});
 
-registerAction2(
-	class TerminalCopyAndClearSelectionAction extends Action2 {
+registerAction2(class TerminalCopyAndClearSelectionAction extends Action2 {
+	constructor() {
+		super({
+			id: TerminalCommandId.CopyAndClearSelection,
+			title: localize2('terminal.clipboard.copyAndClear', 'Terminal: Copy and Clear Selection'),
+			f1: true,
+			precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+			keybinding: isWindows ? { primary: KeyMod.CtrlCmd | KeyCode.KeyC, when: selected, weight: KeybindingWeight.WorkbenchContrib } : undefined,
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const instance = accessor.get(ITerminalService).activeInstance;
+		const screen = instance?.xterm;
+		if (!instance || !screen || screen.isDisposed) return;
+		const contribution = TerminalClipboardContribution.get(instance);
+		if (!contribution) return;
+		const selection = screen.raw.getSelection();
+		const position = screen.raw.getSelectionPosition();
+		await contribution.copySelection();
+		// A delayed clipboard write must not erase a newer selection.
+		if (screen.isDisposed) return;
+		const current = screen.raw.getSelectionPosition();
+		if (screen.raw.getSelection() === selection && current?.start.x === position?.start.x && current?.start.y === position?.start.y
+			&& current?.end.x === position?.end.x && current?.end.y === position?.end.y) screen.raw.clearSelection();
+	}
+});
+
+registerAction2(class TerminalPasteAction extends Action2 {
+	constructor() {
+		super({
+			id: TerminalCommandId.Paste,
+			title: localize2('terminal.clipboard.paste', 'Terminal: Paste into Active Terminal'),
+			f1: true,
+			precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+			keybinding: {
+				primary: KeyMod.CtrlCmd | KeyCode.KeyV,
+				linux: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyV },
+				win: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyV] },
+				when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib,
+			},
+		});
+	}
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		const instance = clipboardInstance(accessor, context);
+		if (!instance) return;
+		if (context !== undefined) accessor.get(ITerminalService).setActiveInstance(instance);
+		await TerminalClipboardContribution.get(instance)?.paste();
+	}
+});
+
+if (isLinux) {
+	registerAction2(class TerminalPasteSelectionAction extends Action2 {
 		constructor() {
 			super({
-				id: TerminalCommandId.CopyAndClearSelection,
-				title: localize2('terminal.clipboard.copyAndClear', 'Terminal: Copy and Clear Selection'),
+				id: TerminalCommandId.PasteSelection,
+				title: localize2('terminal.clipboard.pasteSelection', 'Terminal: Paste Selection into Active Terminal'),
 				f1: true,
 				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
-				keybinding: isWindows
-					? {
-							primary: KeyMod.CtrlCmd | KeyCode.KeyC,
-							when: selected,
-							weight: KeybindingWeight.WorkbenchContrib,
-						}
-					: undefined,
+				keybinding: { primary: KeyMod.Shift | KeyCode.Insert, when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib },
 			});
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const instance = accessor.get(ITerminalService).activeInstance;
-			const screen = instance?.xterm;
-			if (!instance || !screen || screen.isDisposed) return;
-			const contribution = TerminalClipboardContribution.get(instance);
-			if (!contribution) return;
-			const selection = screen.raw.getSelection();
-			const position = screen.raw.getSelectionPosition();
-			await contribution.copySelection();
-			// A delayed clipboard write must not erase a newer selection.
-			if (screen.isDisposed) return;
-			const current = screen.raw.getSelectionPosition();
-			if (
-				screen.raw.getSelection() === selection &&
-				current?.start.x === position?.start.x &&
-				current?.start.y === position?.start.y &&
-				current?.end.x === position?.end.x &&
-				current?.end.y === position?.end.y
-			)
-				screen.raw.clearSelection();
+			if (instance) await TerminalClipboardContribution.get(instance)?.pasteSelection();
 		}
-	},
-);
-
-registerAction2(
-	class TerminalPasteAction extends Action2 {
-		constructor() {
-			super({
-				id: TerminalCommandId.Paste,
-				title: localize2('terminal.clipboard.paste', 'Terminal: Paste into Active Terminal'),
-				f1: true,
-				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
-				keybinding: {
-					primary: KeyMod.CtrlCmd | KeyCode.KeyV,
-					linux: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyV },
-					win: {
-						primary: KeyMod.CtrlCmd | KeyCode.KeyV,
-						secondary: [KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyV],
-					},
-					when: TerminalContextKeys.focus.isEqualTo(true),
-					weight: KeybindingWeight.WorkbenchContrib,
-				},
-			});
-		}
-		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			const instance = clipboardInstance(accessor, context);
-			if (!instance) return;
-			if (context !== undefined) accessor.get(ITerminalService).setActiveInstance(instance);
-			await TerminalClipboardContribution.get(instance)?.paste();
-		}
-	},
-);
-
-if (isLinux) {
-	registerAction2(
-		class TerminalPasteSelectionAction extends Action2 {
-			constructor() {
-				super({
-					id: TerminalCommandId.PasteSelection,
-					title: localize2('terminal.clipboard.pasteSelection', 'Terminal: Paste Selection into Active Terminal'),
-					f1: true,
-					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
-					keybinding: {
-						primary: KeyMod.Shift | KeyCode.Insert,
-						when: TerminalContextKeys.focus.isEqualTo(true),
-						weight: KeybindingWeight.WorkbenchContrib,
-					},
-				});
-			}
-			public override async run(accessor: ServicesAccessor): Promise<void> {
-				const instance = accessor.get(ITerminalService).activeInstance;
-				if (instance) await TerminalClipboardContribution.get(instance)?.pasteSelection();
-			}
-		},
-	);
+	});
 }

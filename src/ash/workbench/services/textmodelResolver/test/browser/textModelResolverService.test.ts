@@ -29,18 +29,14 @@ test('document symbol command resolves a closed Workbench resource and releases 
 	const resource = URI.file('/workspace/symbols.ts');
 	using changes = new Emitter<TextResourceChangeEvent>();
 	let resolves = 0;
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: changes.event,
-			resolve: async request => {
-				resolves++;
-				return { resource: request.resource, text: 'first second', revision: '1' };
-			},
-			save: async () => ({ revision: '1' }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async request => {
+			resolves++;
+			return { resource: request.resource, text: 'first second', revision: '1' };
+		},
+		save: async () => ({ revision: '1' }),
+	} satisfies ITextResourceStore, {});
 	using features = new LanguageFeaturesService();
 	using first = features.documentSymbolProvider.register('*', {
 		provideDocumentSymbols: () => [symbol('first', 1, 6)],
@@ -55,10 +51,7 @@ test('document symbol command resolves a closed Workbench resource and releases 
 	using commands = new CommandService(services, CommandsRegistry);
 
 	const symbols = await commands.executeCommand<readonly LanguageDocumentSymbol[]>('_executeDocumentSymbolProvider', resource);
-	assert.deepEqual(
-		symbols.map(item => item.name),
-		['first', 'second'],
-	);
+	assert.deepEqual(symbols.map(item => item.name), ['first', 'second']);
 	assert.equal(resolves, 1);
 	await assert.rejects(commands.executeCommand('_executeDocumentSymbolProvider', resource.toString()), TypeError);
 
@@ -74,15 +67,11 @@ test('document symbol command resolves a closed Workbench resource and releases 
 });
 
 test('provider references share text and release it after the last editor model closes', async () => {
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
-			resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
-			save: async () => ({ revision: '1' }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: () => ({ dispose() { }, [Symbol.dispose]() { } }),
+		resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
+		save: async () => ({ revision: '1' }),
+	} satisfies ITextResourceStore, {});
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	const resolver = services.createInstance(TextModelResolverService);

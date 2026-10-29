@@ -116,14 +116,7 @@ test('PDF reading shortcuts precede document commands only while the pane is foc
 	pane.create(dom.window.document.body);
 	await pane.setInput(input('paper.pdf'), new AbortController().signal);
 	let globalKeys = 0;
-	using globalListener = addDisposableListener(
-		dom.window.document,
-		'keydown',
-		() => {
-			globalKeys++;
-		},
-		true,
-	);
+	using globalListener = addDisposableListener(dom.window.document, 'keydown', () => { globalKeys++; }, true);
 	const pages = dom.window.document.querySelector<HTMLElement>('.ash-pdf-pages')!;
 	const zoom = dom.window.document.querySelector<HTMLSelectElement>('.ash-pdf-zoom')!;
 	const key = () => new dom.window.KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true, cancelable: true });
@@ -150,38 +143,16 @@ test('workspace PDF loader reads only through the binary file contract', async (
 		onDidChangeCapabilities: Event.None,
 		watch: (): IDisposable => Disposable.None,
 
-		onDidChangeFiles: () => ({ dispose() {}, [Symbol.dispose]() {} }),
-		stat: async () => ({
-			resource,
-			kind: FileKind.File,
-			sizeBytes: 4,
-			readonly: true,
-			modifiedAtMillis: undefined,
-		}),
+		onDidChangeFiles: () => ({ dispose() { }, [Symbol.dispose]() { } }),
+		stat: async () => ({ resource, kind: FileKind.File, sizeBytes: 4, readonly: true, modifiedAtMillis: undefined }),
 		readDirectory: async () => [],
-		readFile: async requested => ({
-			resource: requested,
-			bytes: new Uint8Array([37, 80, 68, 70]),
-			revision: 'pdf-revision',
-		}),
-		writeFile: async () => {
-			throw new Error('PDF loader is read-only');
-		},
-		createFile: async () => {
-			throw new Error('PDF loader is read-only');
-		},
-		createDirectory: async () => {
-			throw new Error('PDF loader is read-only');
-		},
-		copy: async () => {
-			throw new Error('Copy is not used in this test');
-		},
-		rename: async () => {
-			throw new Error('PDF loader is read-only');
-		},
-		delete: async () => {
-			throw new Error('PDF loader is read-only');
-		},
+		readFile: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: 'pdf-revision' }),
+		writeFile: async () => { throw new Error('PDF loader is read-only'); },
+		createFile: async () => { throw new Error('PDF loader is read-only'); },
+		createDirectory: async () => { throw new Error('PDF loader is read-only'); },
+		copy: async () => { throw new Error('Copy is not used in this test'); },
+		rename: async () => { throw new Error('PDF loader is read-only'); },
+		delete: async () => { throw new Error('PDF loader is read-only'); },
 	} satisfies IFileSystemProvider);
 	const loader = new WorkspacePdfDocumentLoader(fileService);
 
@@ -237,7 +208,7 @@ class TestRenderer implements IPdfRenderer {
 		return {
 			pages: [{ pageNumber: 1, element: page, width: 300, height: 144, text: '', textRuns: [] }],
 			scale: request.scale,
-			setScale: async () => {},
+			setScale: async () => { },
 			pageCount: 1,
 			dispose: () => {
 				this.disposed += 1;

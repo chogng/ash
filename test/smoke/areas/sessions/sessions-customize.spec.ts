@@ -54,9 +54,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await expect(page.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true })).toHaveCount(0);
 		await page.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
 		await expect(workbenchSettings.locator('.ash-advisor-settings [role="status"]')).toHaveText('Advisor settings saved.');
-		if (!(await workbenchEnable.isChecked())) {
-			await workbenchEnable.press('Space');
-		}
+		if (!await workbenchEnable.isChecked()) { await workbenchEnable.press('Space'); }
 		await expect(workbenchEnable).toBeEnabled();
 	}
 	await page.locator('.ash-modal-editor-close').click();
@@ -124,7 +122,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await expect(tabs.getByRole('tab')).toHaveText(['Settings', 'Hooks']);
 	const settingsTab = tabs.getByRole('tab', { name: 'Settings', exact: true });
 	await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
-	await expect(settings.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', (await settingsTab.getAttribute('id')) ?? '');
+	await expect(settings.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await settingsTab.getAttribute('id') ?? '');
 	await expect(settings.locator('.ash-advisor-settings')).toHaveCount(0);
 	await settingsTab.focus();
 	await settingsTab.press('Alt+F1');
@@ -234,6 +232,7 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await hooks.getByRole('searchbox').press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/配置 Hooks[\s\S]*不会发送/u);
 });
+
 
 test('Sessions Customize settings hands off to the same Workbench settings and JSON resources', async ({ target, workbench, runningApplication }) => {
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);

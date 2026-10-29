@@ -24,13 +24,11 @@ export class AccessibilityStatus extends Disposable implements IWorkbenchContrib
 	) {
 		super();
 		this._register(accessibility.onDidChangeScreenReaderOptimized(() => this.update()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('editor.accessibilitySupport')) {
-					this.update();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('editor.accessibilitySupport')) {
+				this.update();
+			}
+		}));
 		this.update();
 	}
 
@@ -42,15 +40,12 @@ export class AccessibilityStatus extends Disposable implements IWorkbenchContrib
 		}
 		if (!this.entry.value) {
 			const text = localize('accessibility.screenReaderStatus', 'Screen Reader Optimized');
-			this.entry.value = this.statusbar.addEntry(
-				{
-					text,
-					ariaLabel: text,
-					tooltip: localize('accessibility.screenReaderStatusHint', 'Configure screen reader optimization'),
-					run: () => this.commands.executeCommand('showEditorScreenReaderNotification'),
-				},
-				{ id: 'status.editor.screenReaderMode', alignment: StatusbarAlignment.Right, priority: 100.6 },
-			);
+			this.entry.value = this.statusbar.addEntry({
+				text,
+				ariaLabel: text,
+				tooltip: localize('accessibility.screenReaderStatusHint', 'Configure screen reader optimization'),
+				run: () => this.commands.executeCommand('showEditorScreenReaderNotification'),
+			}, { id: 'status.editor.screenReaderMode', alignment: StatusbarAlignment.Right, priority: 100.6 });
 		}
 		if (!this.prompted && this.configuration.getValue('editor.accessibilitySupport') === 'auto') {
 			this.prompted = true;
@@ -62,58 +57,41 @@ export class AccessibilityStatus extends Disposable implements IWorkbenchContrib
 
 function showScreenReaderNotification(configuration: IConfigurationService, notifications: INotificationService): INotificationHandle {
 	const notification = notifications.notify({
-		severity: Severity.Info,
-		message: localize('accessibility.screenReaderPrompt', 'Choose how Ash enables screen reader optimization.'),
-		actions: {
+		severity: Severity.Info, message: localize('accessibility.screenReaderPrompt', 'Choose how Ash enables screen reader optimization.'), actions: {
 			primary: [
 				{
 					tooltip: '',
 					enabled: true,
 					id: 'accessibility.screenReader.auto',
 					label: localize('accessibility.screenReaderAuto', 'Follow System Detection'),
-					run: async () => {
-						await configuration.updateValue('editor.accessibilitySupport', 'auto');
-						notification.close();
-					},
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'auto'); notification.close(); },
 				},
 				{
 					tooltip: '',
 					enabled: true,
 					id: 'accessibility.screenReader.on',
 					label: localize('accessibility.screenReaderAlwaysOn', 'Always Enable'),
-					run: async () => {
-						await configuration.updateValue('editor.accessibilitySupport', 'on');
-						notification.close();
-					},
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'on'); notification.close(); },
 				},
 				{
 					tooltip: '',
 					enabled: true,
 					id: 'accessibility.screenReader.off',
 					label: localize('accessibility.screenReaderAlwaysOff', 'Disable'),
-					run: async () => {
-						await configuration.updateValue('editor.accessibilitySupport', 'off');
-						notification.close();
-					},
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'off'); notification.close(); },
 				},
-			],
-		},
+			]
+		}
 	});
 	return notification;
 }
 
-registerAction2(
-	class ShowScreenReaderNotificationAction extends Action2 {
-		constructor() {
-			super({
-				id: 'showEditorScreenReaderNotification',
-				title: localize2('accessibility.configureScreenReader', 'Configure Screen Reader Optimization'),
-				f1: true,
-			});
-		}
+registerAction2(class ShowScreenReaderNotificationAction extends Action2 {
+	constructor() {
+		super({ id: 'showEditorScreenReaderNotification', title: localize2('accessibility.configureScreenReader', 'Configure Screen Reader Optimization'), f1: true });
+	}
 
-		public override run(accessor: ServicesAccessor): void {
-			showScreenReaderNotification(accessor.get(IConfigurationService), accessor.get(INotificationService));
-		}
-	},
-);
+	public override run(accessor: ServicesAccessor): void {
+		showScreenReaderNotification(accessor.get(IConfigurationService), accessor.get(INotificationService));
+	}
+});

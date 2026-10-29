@@ -49,19 +49,11 @@ export class RefactorAction extends EditorAction {
 
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor, arg?: unknown): Promise<void> {
 		editor.focus();
-		const args = CodeActionCommandArgs.fromUser(arg, {
-			kind: CodeActionKind.Refactor,
-			apply: CodeActionAutoApply.Never,
-		});
-		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.Refactor,
-			{
-				include: CodeActionKind.Refactor.contains(args.kind) ? args.kind : HierarchicalKind.None,
-				onlyIncludePreferredActions: args.preferred,
-			},
-			args.apply,
-		);
+		const args = CodeActionCommandArgs.fromUser(arg, { kind: CodeActionKind.Refactor, apply: CodeActionAutoApply.Never });
+		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.Refactor, {
+			include: CodeActionKind.Refactor.contains(args.kind) ? args.kind : HierarchicalKind.None,
+			onlyIncludePreferredActions: args.preferred,
+		}, args.apply);
 	}
 }
 
@@ -77,20 +69,12 @@ export class SourceAction extends EditorAction {
 
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor, arg?: unknown): Promise<void> {
 		editor.focus();
-		const args = CodeActionCommandArgs.fromUser(arg, {
-			kind: CodeActionKind.Source,
-			apply: CodeActionAutoApply.Never,
-		});
-		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.SourceAction,
-			{
-				include: CodeActionKind.Source.contains(args.kind) ? args.kind : HierarchicalKind.None,
-				includeSourceActions: true,
-				onlyIncludePreferredActions: args.preferred,
-			},
-			args.apply,
-		);
+		const args = CodeActionCommandArgs.fromUser(arg, { kind: CodeActionKind.Source, apply: CodeActionAutoApply.Never });
+		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.SourceAction, {
+			include: CodeActionKind.Source.contains(args.kind) ? args.kind : HierarchicalKind.None,
+			includeSourceActions: true,
+			onlyIncludePreferredActions: args.preferred,
+		}, args.apply);
 	}
 }
 
@@ -100,23 +84,16 @@ registerEditorAction(SourceAction);
 class CodeActionCommand extends EditorAction {
 	constructor() {
 		super({
-			id: 'editor.action.codeAction',
-			label: localize2('codeAction.genericLabel', 'Code Action...'),
+			id: 'editor.action.codeAction', label: localize2('codeAction.genericLabel', 'Code Action...'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor, arg: unknown): Promise<void> {
 		editor.focus();
-		const args = CodeActionCommandArgs.fromUser(arg, {
-			kind: HierarchicalKind.Empty,
-			apply: CodeActionAutoApply.IfSingle,
-		});
+		const args = CodeActionCommandArgs.fromUser(arg, { kind: HierarchicalKind.Empty, apply: CodeActionAutoApply.IfSingle });
 		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.Default,
-			{ include: args.kind, onlyIncludePreferredActions: args.preferred },
-			args.apply,
-		);
+			localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.Default,
+			{ include: args.kind, onlyIncludePreferredActions: args.preferred }, args.apply);
 	}
 }
 registerEditorAction(CodeActionCommand);
@@ -124,19 +101,15 @@ registerEditorAction(CodeActionCommand);
 class OrganizeImportsAction extends EditorAction {
 	constructor() {
 		super({
-			id: 'editor.action.organizeImports',
-			label: localize2('codeAction.organizeImports', 'Organize Imports'),
+			id: 'editor.action.organizeImports', label: localize2('codeAction.organizeImports', 'Organize Imports'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		editor.focus();
 		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.OrganizeImports,
-			{ include: CodeActionKind.SourceOrganizeImports },
-			CodeActionAutoApply.IfSingle,
-		);
+			localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.OrganizeImports,
+			{ include: CodeActionKind.SourceOrganizeImports }, CodeActionAutoApply.IfSingle);
 	}
 }
 registerEditorAction(OrganizeImportsAction);
@@ -144,19 +117,15 @@ registerEditorAction(OrganizeImportsAction);
 class FixAllAction extends EditorAction {
 	constructor() {
 		super({
-			id: 'editor.action.fixAll',
-			label: localize2('codeAction.fixAll', 'Fix All'),
+			id: 'editor.action.fixAll', label: localize2('codeAction.fixAll', 'Fix All'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		editor.focus();
 		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.FixAll,
-			{ include: CodeActionKind.SourceFixAll },
-			CodeActionAutoApply.IfSingle,
-		);
+			localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.FixAll,
+			{ include: CodeActionKind.SourceFixAll }, CodeActionAutoApply.IfSingle);
 	}
 }
 registerEditorAction(FixAllAction);

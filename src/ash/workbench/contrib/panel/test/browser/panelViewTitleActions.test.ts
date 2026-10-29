@@ -21,10 +21,8 @@ test('Output projects channel selection and active-channel clearing into the Pan
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu: options => {
-			shownActions = options.getActions?.() ?? [];
-		},
-		hideContextMenu() {},
+		showContextMenu: options => { shownActions = options.getActions?.() ?? []; },
+		hideContextMenu() { },
 	};
 	try {
 		const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
@@ -39,17 +37,8 @@ test('Output projects channel selection and active-channel clearing into the Pan
 		const overrides = outputResources.add(outputScope.createChild());
 		overrides.registerInstance(IContextMenuService, contextMenus);
 		const services = createCodeEditorServices(outputResources, overrides);
-		services.registerInstance(IAccessibleViewService, {
-			...toDisposable(() => {}),
-			show: () => false,
-			getOpenAriaHint: () => undefined,
-			disableHint: async () => {},
-			showAccessibleViewHelp: () => {},
-		});
-		using pane = services.createInstance(OutputViewPane, browser.window.document.body, {
-			id: 'ash.output.test',
-			title: 'Output',
-		});
+		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
+		using pane = services.createInstance(OutputViewPane, browser.window.document.body, { id: 'ash.output.test', title: 'Output' });
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(pane.element, titleActions);
@@ -72,6 +61,7 @@ test('Output projects channel selection and active-channel clearing into the Pan
 		browser.window.close();
 	}
 });
+
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 1_000;
@@ -97,11 +87,7 @@ function installDomGlobals(browser: JSDOM): IDisposable {
 		InputEvent: browser.window.InputEvent,
 		NodeFilter: browser.window.NodeFilter,
 		PointerEvent: browser.window.MouseEvent,
-		ResizeObserver: class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		},
+		ResizeObserver: class { observe() { } unobserve() { } disconnect() { } },
 	};
 	return installEditorTestGlobals(globals);
 }

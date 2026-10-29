@@ -43,7 +43,9 @@ export class Dropdown extends Disposable {
 	private readonly label: HTMLSpanElement;
 	private readonly content: DropdownContent;
 	private readonly contextView: IContextViewProvider;
-	private readonly _onDidChangeVisibility = this._register(new Emitter<DropdownVisibilityChangeEvent>());
+	private readonly _onDidChangeVisibility = this._register(
+		new Emitter<DropdownVisibilityChangeEvent>(),
+	);
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 	private readonly options: DropdownOptions;
 	private _visible = false;
@@ -85,15 +87,18 @@ export class Dropdown extends Disposable {
 		this.contextView = options.contextViewProvider ?? this._register(new ContextView(popupContainer));
 		this._register(toDisposable(() => this.hide()));
 		this._register(addDisposableListener(button, 'click', () => this.toggle()));
-		this._register(
-			addDisposableListener(button, 'keydown', event => {
-				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter' && event.key !== ' ') {
-					return;
-				}
-				stopEvent(event);
-				this.show();
-			}),
-		);
+		this._register(addDisposableListener(button, 'keydown', (event) => {
+			if (
+				event.key !== 'ArrowDown' &&
+				event.key !== 'ArrowUp' &&
+				event.key !== 'Enter' &&
+				event.key !== ' '
+			) {
+				return;
+			}
+			stopEvent(event);
+			this.show();
+		}));
 	}
 
 	get visible(): boolean {
@@ -115,7 +120,9 @@ export class Dropdown extends Disposable {
 
 	show(): void {
 		if (this._visible || !this.enabled) return;
-		const content = typeof this.content === 'function' ? this.content() : this.content;
+		const content = typeof this.content === 'function'
+			? this.content()
+			: this.content;
 		content.classList.add('ash-dropdown-content');
 		if (this.options.contentWidth === 'at-least-trigger') {
 			const triggerWidth = Math.ceil(this.button.getBoundingClientRect().width);
@@ -134,7 +141,7 @@ export class Dropdown extends Disposable {
 			anchorAxisAlignment: this.options.anchorAxisAlignment,
 			gap: this.options.gap,
 			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: reason => this.didHide(reason),
+			onHide: (reason) => this.didHide(reason),
 		});
 		if (!shown) return;
 		this._visible = true;

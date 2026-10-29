@@ -20,32 +20,16 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('local file protocol delegates reads, rejects website initiators and unregisters with its last page', async () => {
 	let handler: ((request: Request) => Promise<Response>) | undefined;
 	const electronSession = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler() {},
-		setPermissionRequestHandler() {},
-		setDevicePermissionHandler() {},
-		protocol: {
-			handle: (_scheme: string, read: typeof handler) => {
-				handler = read;
-			},
-			unhandle: () => {
-				handler = undefined;
-			},
-		},
+		setPermissionCheckHandler() { }, setPermissionRequestHandler() { }, setDevicePermissionHandler() { },
+		protocol: { handle: (_scheme: string, read: typeof handler) => { handler = read; }, unhandle: () => { handler = undefined; } },
 	}) as unknown as Session;
 	const session = BrowserSession.getOrCreate('local-files', BrowserViewStorageScope.Workspace, electronSession);
 	const reads: string[] = [];
-	using first = session.attachFileReader('first', async url => {
-		reads.push(url);
-		return new TextEncoder().encode('<title>File preview</title>');
-	});
-	using second = session.attachFileReader('second', async () => {
-		throw new Error('First live reader owns this session');
-	});
+	using first = session.attachFileReader('first', async url => { reads.push(url); return new TextEncoder().encode('<title>File preview</title>'); });
+	using second = session.attachFileReader('second', async () => { throw new Error('First live reader owns this session'); });
 	const response = await handler!(new Request('file:///workspace/index.html'));
 	assert.deepEqual([response.headers.get('Content-Type'), await response.text(), reads], ['text/html', '<title>File preview</title>', ['file:///workspace/index.html']]);
-	const websiteRequest = Object.assign(new Request('file:///workspace/private.txt'), {
-		initiatorOrigin: 'https://example.test',
-	});
+	const websiteRequest = Object.assign(new Request('file:///workspace/private.txt'), { initiatorOrigin: 'https://example.test' });
 	assert.equal((await handler!(websiteRequest)).status, 403);
 	assert.equal(reads.length, 1);
 	second.dispose();
@@ -63,9 +47,7 @@ test('history leases share one session owner and preserve data after the final w
 		services.registerInstance(IApplicationStorageMainService, storage);
 		services.registerInstance(ILogService, new NullLoggerService());
 		const electronSession = Object.assign(new EventEmitter(), {
-			setPermissionCheckHandler: () => {},
-			setPermissionRequestHandler: () => {},
-			setDevicePermissionHandler: () => {},
+			setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
 		}) as unknown as Session;
 		const session = BrowserSession.getOrCreate('history', BrowserViewStorageScope.Workspace, electronSession);
 		const acquire = () => session.acquireHistory(() => services.createInstance(BrowserSessionHistory, session));
@@ -80,44 +62,25 @@ test('history leases share one session owner and preserve data after the final w
 		assert.deepEqual(restored.history.entries.serialize(), snapshot);
 		assert.equal(restored.history.favicons.get(snapshot.items[0]!.icon!), 'data:image/png;base64,icon');
 		await storage.close();
-	} finally {
-		assert.equal(dirname(directory), tmpdir());
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
 });
 
 test('agent requests require current authority for every resource and cannot be approved by another page', () => {
 	let intercept!: NonNullable<Parameters<Session['webRequest']['onBeforeRequest']>[0]>;
 	const electronSession = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: () => {},
-		setPermissionRequestHandler: () => {},
-		setDevicePermissionHandler: () => {},
-		webRequest: {
-			onBeforeRequest: (handler: typeof intercept) => {
-				intercept = handler;
-			},
-		},
+		setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
+		webRequest: { onBeforeRequest: (handler: typeof intercept) => { intercept = handler; } },
 	}) as unknown as Session;
 	const session = BrowserSession.getOrCreate('agent-network', BrowserViewStorageScope.Agent, electronSession);
-	const events: Extract<BrowserViewEvent, { type: 'networkRequested' }>[] = [];
+	const events: Extract<BrowserViewEvent, { type: 'networkRequested'; }>[] = [];
 	let token: string | null = 'tool-one';
-	const attachment = session.attachNetwork(
-		'page',
-		{ id: 7 } as WebContents,
-		{ type: 'agent', sessionId: 'thread' },
-		() => token,
-		event => {
-			if (event.type === 'networkRequested') {
-				events.push(event);
-			}
-		},
-	);
+	const attachment = session.attachNetwork('page', { id: 7 } as WebContents, { type: 'agent', sessionId: 'thread' }, () => token, event => {
+		if (event.type === 'networkRequested') { events.push(event); }
+	});
 	try {
 		const request = (url: string, contentsId = 7) => {
 			const result: boolean[] = [];
-			intercept!({ url, webContentsId: contentsId, method: 'GET' } as Electron.OnBeforeRequestListenerDetails, response => {
-				result.push(response.cancel ?? false);
-			});
+			intercept!({ url, webContentsId: contentsId, method: 'GET' } as Electron.OnBeforeRequestListenerDetails, response => { result.push(response.cancel ?? false); });
 			return result;
 		};
 		for (const url of ['https://allowed.test/', 'https://redirect.test/', 'https://allowed.test/script']) {
@@ -145,22 +108,16 @@ test('agent requests require current authority for every resource and cannot be 
 		assert.deepEqual(request('about:blank'), [false]);
 		attachment.dispose();
 		assert.deepEqual(request('https://allowed.test/closed'), [true]);
-	} finally {
-		attachment.dispose();
-	}
+	} finally { attachment.dispose(); }
 });
 
 test('website grants bind both origins, reset removes decisions and closing cancels without remembering a denial', () => {
 	let request!: NonNullable<Parameters<Session['setPermissionRequestHandler']>[0]>;
 	let check!: NonNullable<Parameters<Session['setPermissionCheckHandler']>[0]>;
 	const session = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: (handler: typeof check) => {
-			check = handler;
-		},
-		setPermissionRequestHandler: (handler: typeof request) => {
-			request = handler;
-		},
-		setDevicePermissionHandler: () => {},
+		setPermissionCheckHandler: (handler: typeof check) => { check = handler; },
+		setPermissionRequestHandler: (handler: typeof request) => { request = handler; },
+		setDevicePermissionHandler: () => { },
 	}) as unknown as Session;
 	let pageUrl = 'https://parent.test/';
 	const contents = Object.assign(new EventEmitter(), { getURL: () => pageUrl }) as unknown as WebContents;
@@ -169,15 +126,7 @@ test('website grants bind both origins, reset removes decisions and closing canc
 	let granted: boolean | undefined;
 	const attach = () => policy.attach('page', contents, event => events.push(event));
 	let page = attach();
-	const ask = () =>
-		request(
-			contents,
-			'geolocation',
-			value => {
-				granted = value;
-			},
-			{ requestingUrl: 'https://frame.test/', isMainFrame: false },
-		);
+	const ask = () => request(contents, 'geolocation', value => { granted = value; }, { requestingUrl: 'https://frame.test/', isMainFrame: false });
 	ask();
 	const first = events.find(event => event.type === 'permissionRequested')!;
 	assert.equal(first.type, 'permissionRequested');
@@ -186,38 +135,14 @@ test('website grants bind both origins, reset removes decisions and closing canc
 	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: 'allow' }]);
 	assert.deepEqual(policy.snapshot(contents).origins['https://frame.test'], { location: 'allow' });
 	assert.equal(granted, true);
-	assert.equal(
-		check(contents, 'geolocation', 'https://frame.test/', {
-			isMainFrame: false,
-			embeddingOrigin: 'https://parent.test/',
-		}),
-		true,
-	);
-	assert.equal(
-		check(contents, 'geolocation', 'https://frame.test/', {
-			isMainFrame: false,
-			embeddingOrigin: 'https://other.test/',
-		}),
-		false,
-	);
+	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), true);
+	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://other.test/' }), false);
 	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: 'deny' }]);
-	assert.equal(
-		check(contents, 'geolocation', 'https://frame.test/', {
-			isMainFrame: false,
-			embeddingOrigin: 'https://parent.test/',
-		}),
-		false,
-	);
+	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), false);
 	policy.setPermissions('page', 'https://frame.test', [{ category: PermissionCategory.Location, state: null }]);
 	assert.deepEqual(policy.snapshot(contents), { origins: {} });
 	policy.clear();
-	assert.equal(
-		check(contents, 'geolocation', 'https://frame.test/', {
-			isMainFrame: false,
-			embeddingOrigin: 'https://parent.test/',
-		}),
-		false,
-	);
+	assert.equal(check(contents, 'geolocation', 'https://frame.test/', { isMainFrame: false, embeddingOrigin: 'https://parent.test/' }), false);
 	ask();
 	page.dispose();
 	assert.equal(granted, false);
@@ -229,14 +154,7 @@ test('website grants bind both origins, reset removes decisions and closing canc
 	policy.cancelRequests('page');
 	pageUrl = 'about:blank';
 	const eventCount = events.length;
-	request(
-		contents,
-		'geolocation',
-		value => {
-			granted = value;
-		},
-		{ requestingUrl: 'about:blank', isMainFrame: true },
-	);
+	request(contents, 'geolocation', value => { granted = value; }, { requestingUrl: 'about:blank', isMainFrame: true });
 	assert.equal(granted, false);
 	assert.equal(events.length, eventCount);
 	assert.equal(check(contents, 'geolocation', 'null', { isMainFrame: true, embeddingOrigin: 'null' }), false);
@@ -244,20 +162,10 @@ test('website grants bind both origins, reset removes decisions and closing canc
 });
 
 test('a remote session retains one SOCKS policy until its last page closes and never clears it to direct mode', async () => {
-	const child = Object.assign(new EventEmitter(), {
-		exitCode: null,
-		signalCode: null,
-		stderr: new EventEmitter(),
-		kill: () => {
-			child.emit('exit', 0);
-			return true;
-		},
-	});
+	const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, stderr: new EventEmitter(), kill: () => { child.emit('exit', 0); return true; } });
 	using tunnels = new SshPortForwardingService({
 		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+test-host' }),
-		sshExecutable: 'ssh',
-		localEnvironment: {},
-		reserveLocalPort: async () => 12345,
+		sshExecutable: 'ssh', localEnvironment: {}, reserveLocalPort: async () => 12345,
 		spawnProcess: (_executable, args) => {
 			assert.deepEqual(args.slice(-3), ['-D', '127.0.0.1:12345', 'test-host']);
 			return child as unknown as import('node:child_process').ChildProcess;
@@ -267,15 +175,9 @@ test('a remote session retains one SOCKS policy until its last page closes and n
 	const policies: Electron.ProxyConfig[] = [];
 	let connectionsClosed = 0;
 	const session = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: () => {},
-		setPermissionRequestHandler: () => {},
-		setDevicePermissionHandler: () => {},
-		setProxy: async (policy: Electron.ProxyConfig) => {
-			policies.push(policy);
-		},
-		closeAllConnections: async () => {
-			connectionsClosed++;
-		},
+		setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
+		setProxy: async (policy: Electron.ProxyConfig) => { policies.push(policy); },
+		closeAllConnections: async () => { connectionsClosed++; },
 	}) as unknown as Session;
 	const owner = BrowserSession.getOrCreate('remote', BrowserViewStorageScope.Workspace, session);
 	const first = await owner.acquireRemote(tunnels, new AbortController().signal);

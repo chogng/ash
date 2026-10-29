@@ -36,13 +36,7 @@ test('cancelling aborts only the active operation and fences stale reports', () 
 		assert.deepEqual(service.getState(), { host: 'build-linux', status: 'cancelling', phase: 'probingPlatform' });
 
 		first.report({ phase: 'uploading', transferredBytes: 1, totalBytes: 2 });
-		assert.deepEqual(service.getState(), {
-			host: 'build-linux',
-			status: 'cancelling',
-			phase: 'uploading',
-			transferredBytes: 1,
-			totalBytes: 2,
-		});
+		assert.deepEqual(service.getState(), { host: 'build-linux', status: 'cancelling', phase: 'uploading', transferredBytes: 1, totalBytes: 2 });
 		first.finish();
 
 		const second = service.begin('prod-linux');

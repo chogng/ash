@@ -21,7 +21,9 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { Direction, Grid, SerializableGrid, Sizing } = await import('../../browser/ui/grid/grid.js');
+const { Direction, Grid, SerializableGrid, Sizing } = await import(
+	'../../browser/ui/grid/grid.js'
+);
 
 class TestView {
 	readonly element: HTMLDivElement;
@@ -36,7 +38,7 @@ class TestView {
 		this.element = h(ownerDocument, 'div');
 	}
 
-	layout(_bounds: IPositionedRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void { }
 }
 
 class SerializableTestView extends TestView {
@@ -93,26 +95,40 @@ test('SerializableGrid persists a mutated GridView topology', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const editor = new SerializableTestView(dom.window.document, 'editor');
 	const panel = new SerializableTestView(dom.window.document, 'panel');
-	const grid = new SerializableGrid(dom.window.document.body, { type: 'leaf', view: editor, size: 600 });
+	const grid = new SerializableGrid(dom.window.document.body, {
+		type: 'leaf',
+		view: editor,
+		size: 600,
+	});
 	grid.layout(800, 600);
 	grid.addView(panel, Sizing.Split, editor, Direction.Down);
 
 	const snapshot = grid.serialize();
 	const restoredViews = new Map<string, SerializableTestView>();
-	const restored = SerializableGrid.deserialize(dom.window.document.body, snapshot, {
-		fromJSON(data) {
-			if (typeof data !== 'string') {
-				throw new TypeError('Serialized test view ID must be a string');
-			}
-			const view = new SerializableTestView(dom.window.document, data);
-			restoredViews.set(data, view);
-			return view;
+	const restored = SerializableGrid.deserialize(
+		dom.window.document.body,
+		snapshot,
+		{
+			fromJSON(data) {
+				if (typeof data !== 'string') {
+					throw new TypeError('Serialized test view ID must be a string');
+				}
+				const view = new SerializableTestView(dom.window.document, data);
+				restoredViews.set(data, view);
+				return view;
+			},
 		},
-	});
+	);
 	restored.layout(800, 600);
 
-	assert.deepEqual(restored.getViewSize(restoredViews.get('editor')!), { width: 800, height: 300 });
-	assert.deepEqual(restored.getViewSize(restoredViews.get('panel')!), { width: 800, height: 300 });
+	assert.deepEqual(
+		restored.getViewSize(restoredViews.get('editor')!),
+		{ width: 800, height: 300 },
+	);
+	assert.deepEqual(
+		restored.getViewSize(restoredViews.get('panel')!),
+		{ width: 800, height: 300 },
+	);
 
 	restored.dispose();
 	grid.dispose();

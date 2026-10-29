@@ -29,20 +29,11 @@ registerSingleton(IBrowserViewWorkbenchService, BrowserViewWorkbenchService, Ins
 registerSingleton(IBrowserZoomService, BrowserZoomService, InstantiationType.Delayed);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: 'accessibility.verbosity.browser',
-	defaultValue: true,
-	parse: value => {
-		if (typeof value !== 'boolean') {
-			throw new TypeError('Browser accessibility verbosity must be boolean');
-		}
-		return value;
-	},
-	setting: {
-		valueType: 'boolean',
-		title: 'Browser accessibility help',
-		description: 'Announce keyboard help when the browser address field receives focus.',
-	},
+	key: 'accessibility.verbosity.browser', defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Browser accessibility verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: 'Browser accessibility help', description: 'Announce keyboard help when the browser address field receives focus.' },
 });
+
 
 registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.BlockRestore, services => {
 	const store = new DisposableStore();
@@ -50,35 +41,27 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	const views = services.get(IBrowserViewWorkbenchService);
 	const configuration = services.get(IConfigurationService);
 	store.add(bindNavigationContext(services));
-	store.add(
-		services.get(IExternalUriOpenerService).registerExternalOpenerProvider({
-			async *getOpeners(): AsyncIterable<IExternalUriOpener> {
-				yield {
-					id: 'ash.browser.open',
-					label: localize('browser.urlOpener', 'Open in Ash browser'),
-					// Offer the browser for explicit URL rules without changing ordinary link opening.
-					canOpen: async uri =>
-						configuration.getValue<boolean>('workbench.browser.openLocalhostLinks') && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(uri.toString()).hostname)
-							? ExternalUriOpenerPriority.Preferred
-							: ExternalUriOpenerPriority.Option,
-					openExternalUri: async uri => {
-						await views.createBrowserView({ initialUrl: uri.toString(), owner: { type: 'user' } });
-						return true;
-					},
-				};
-			},
-		}),
-	);
+	store.add(services.get(IExternalUriOpenerService).registerExternalOpenerProvider({
+		async *getOpeners(): AsyncIterable<IExternalUriOpener> {
+			yield {
+				id: 'ash.browser.open',
+				label: localize('browser.urlOpener', 'Open in Ash browser'),
+				// Offer the browser for explicit URL rules without changing ordinary link opening.
+				canOpen: async uri => configuration.getValue<boolean>('workbench.browser.openLocalhostLinks') && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(uri.toString()).hostname) ? ExternalUriOpenerPriority.Preferred : ExternalUriOpenerPriority.Option,
+				openExternalUri: async uri => {
+					await views.createBrowserView({ initialUrl: uri.toString(), owner: { type: 'user' } });
+					return true;
+				},
+			};
+		},
+	}));
 	store.add(EditorInputSerializers.register(instantiation.createInstance(BrowserEditorSerializer)));
 	void views.initialize().catch(error => console.error('Failed to read browser pages', error));
-	store.add(
-		EditorPanes.registerEditorPane({
-			id: BrowserViewEditorId,
-			name: 'Browser',
-			canOpen: input => (BrowserViewUri.parse(input.resource) ? EditorPaneMatch.Default : EditorPaneMatch.None),
-			create: () => instantiation.createInstance(BrowserEditor),
-		}),
-	);
+	store.add(EditorPanes.registerEditorPane({
+		id: BrowserViewEditorId, name: 'Browser',
+		canOpen: input => BrowserViewUri.parse(input.resource) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => instantiation.createInstance(BrowserEditor),
+	}));
 
 	return store;
 });
@@ -88,16 +71,13 @@ registerWorkbenchContribution('workbench.contrib.browserView.restore', Workbench
 	const views = instantiation.get(IBrowserViewWorkbenchService);
 	const editors = services.get(IEditorService);
 	const editorPart = services.get(IEditorPart);
-	void views
-		.initialize()
-		.then(async () => {
-			for (const input of views.getContextualBrowserViews().values()) {
-				if (!editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
-					await editors.openEditor(input, { pinned: true, preserveFocus: true });
-				}
+	void views.initialize().then(async () => {
+		for (const input of views.getContextualBrowserViews().values()) {
+			if (!editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
+				await editors.openEditor(input, { pinned: true, preserveFocus: true });
 			}
-		})
-		.catch(error => console.error('Failed to restore browser pages', error));
+		}
+	}).catch(error => console.error('Failed to restore browser pages', error));
 	return Disposable.None;
 });
 
@@ -132,26 +112,18 @@ function bindNavigationContext(services: ServicesAccessor): DisposableStore {
 	const update = (): void => {
 		active.clear();
 		const pane = editors.activePane;
-		const render = (): void =>
-			contexts.bufferChangeEvents(() => {
-				back.set(pane instanceof BrowserEditor && pane.model?.state.canGoBack === true);
-				forward.set(pane instanceof BrowserEditor && pane.model?.state.canGoForward === true);
-			});
+		const render = (): void => contexts.bufferChangeEvents(() => {
+			back.set(pane instanceof BrowserEditor && pane.model?.state.canGoBack === true);
+			forward.set(pane instanceof BrowserEditor && pane.model?.state.canGoForward === true);
+		});
 		if (pane instanceof BrowserEditor) {
 			active.add(pane.onDidChangeModel(update));
-			if (pane.model) {
-				active.add(pane.model.onDidChangeState(render));
-			}
+			if (pane.model) { active.add(pane.model.onDidChangeState(render)); }
 		}
 		render();
 	};
 	store.add(editors.onDidChangeEditors(update));
-	store.add(
-		toDisposable(() => {
-			back.reset();
-			forward.reset();
-		}),
-	);
+	store.add(toDisposable(() => { back.reset(); forward.reset(); }));
 	update();
 	return store;
 }

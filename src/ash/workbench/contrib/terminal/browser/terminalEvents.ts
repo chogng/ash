@@ -10,9 +10,9 @@ export function createInstanceCapabilityEventMultiplexer<T extends TerminalCapab
 	onRemoveInstance: Event<ITerminalInstance>,
 	capabilityId: T,
 	getEvent: (capability: ITerminalCapabilityImplMap[T]) => Event<K>,
-): IDisposable & { readonly event: Event<{ readonly instance: ITerminalInstance; readonly data: K }> } {
+): IDisposable & { readonly event: Event<{ readonly instance: ITerminalInstance; readonly data: K; }>; } {
 	const lifetime = new DisposableStore();
-	const multiplexer = lifetime.add(new EventMultiplexer<{ instance: ITerminalInstance; data: K }>());
+	const multiplexer = lifetime.add(new EventMultiplexer<{ instance: ITerminalInstance; data: K; }>());
 	const instances = lifetime.add(new DisposableMap<ITerminalInstance, DisposableStore>());
 	const add = (instance: ITerminalInstance): void => {
 		if (instances.has(instance) || !instance.capabilities) return;

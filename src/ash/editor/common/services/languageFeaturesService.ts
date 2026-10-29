@@ -184,7 +184,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 
 interface LanguageProviderRegistrations {
 	readonly documentHighlights: LanguageFeatureBatchRegistration<languages.DocumentHighlightProvider>;
-	readonly syntax: IDisposable & { replace(providers: readonly languages.SyntaxProvider[]): void };
+	readonly syntax: IDisposable & { replace(providers: readonly languages.SyntaxProvider[]): void; };
 	readonly workspaceSymbols: LanguageFeatureBatchRegistration<languages.LanguageWorkspaceSymbolProvider>;
 	readonly definitions: LanguageFeatureBatchRegistration<languages.LanguageDefinitionProvider>;
 	readonly references: LanguageFeatureBatchRegistration<languages.LanguageReferenceProvider>;
@@ -208,7 +208,9 @@ interface LanguageProviderRegistrations {
 class LanguageFeatureBatchRegistration<TProvider> implements IDisposable {
 	private registrations: IDisposable[] = [];
 
-	constructor(private readonly registry: LanguageFeatureRegistry<TProvider>) {}
+	constructor(
+		private readonly registry: LanguageFeatureRegistry<TProvider>,
+	) { }
 
 	replace(entries: readonly LanguageProviderBatchEntry<TProvider>[]): void {
 		const next: IDisposable[] = [];
@@ -260,24 +262,9 @@ function replaceProviderRegistrations(registrations: LanguageProviderRegistratio
 	registrations.selectionRanges.replace(providers.selectionRanges);
 	registrations.completions.replace(providers.completions);
 	registrations.hovers.replace(providers.hovers);
-	registrations.documentFormatting.replace(
-		providers.formatting.filter(
-			(entry): entry is LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider> =>
-				'provideDocumentFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentFormattingEdits === 'function',
-		),
-	);
-	registrations.documentRangeFormatting.replace(
-		providers.formatting.filter(
-			(entry): entry is LanguageProviderBatchEntry<languages.DocumentRangeFormattingEditProvider> =>
-				'provideDocumentRangeFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentRangeFormattingEdits === 'function',
-		),
-	);
-	registrations.onTypeFormatting.replace(
-		providers.formatting.filter(
-			(entry): entry is LanguageProviderBatchEntry<languages.OnTypeFormattingEditProvider> =>
-				'provideOnTypeFormattingEdits' in entry.provider && typeof entry.provider.provideOnTypeFormattingEdits === 'function',
-		),
-	);
+	registrations.documentFormatting.replace(providers.formatting.filter((entry): entry is LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider> => 'provideDocumentFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentFormattingEdits === 'function'));
+	registrations.documentRangeFormatting.replace(providers.formatting.filter((entry): entry is LanguageProviderBatchEntry<languages.DocumentRangeFormattingEditProvider> => 'provideDocumentRangeFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentRangeFormattingEdits === 'function'));
+	registrations.onTypeFormatting.replace(providers.formatting.filter((entry): entry is LanguageProviderBatchEntry<languages.OnTypeFormattingEditProvider> => 'provideOnTypeFormattingEdits' in entry.provider && typeof entry.provider.provideOnTypeFormattingEdits === 'function'));
 	registrations.inlayHints.replace(providers.inlayHints);
 	registrations.linkedEditing.replace(providers.linkedEditing);
 	registrations.parameterHints.replace(providers.parameterHints);
@@ -288,25 +275,7 @@ function normalizeProviderBatch(value: LanguageProviderBatch): Required<Language
 		throw new TypeError('Language provider batch must be an object');
 	}
 	const record = value as Record<string, unknown>;
-	const supported = new Set([
-		'documentHighlights',
-		'syntax',
-		'workspaceSymbols',
-		'completions',
-		'hovers',
-		'formatting',
-		'inlayHints',
-		'linkedEditing',
-		'parameterHints',
-		'definitions',
-		'references',
-		'renames',
-		'documentSymbols',
-		'foldingRanges',
-		'documentLinks',
-		'codeActions',
-		'selectionRanges',
-	]);
+	const supported = new Set(['documentHighlights', 'syntax', 'workspaceSymbols', 'completions', 'hovers', 'formatting', 'inlayHints', 'linkedEditing', 'parameterHints', 'definitions', 'references', 'renames', 'documentSymbols', 'foldingRanges', 'documentLinks', 'codeActions', 'selectionRanges']);
 	if (Object.keys(record).some(key => !supported.has(key))) {
 		throw new TypeError('Language provider batch contains an unsupported provider kind');
 	}
@@ -366,12 +335,10 @@ function frozenProviderArray<T>(value: readonly T[] | undefined, owner: string):
 
 function frozenLanguageFeatureEntries<TProvider>(value: readonly LanguageProviderBatchEntry<TProvider>[] | undefined, owner: string): readonly LanguageProviderBatchEntry<TProvider>[] {
 	const entries = frozenProviderArray(value, owner);
-	return Object.freeze(
-		entries.map(entry => {
-			if (!entry || typeof entry !== 'object' || !('selector' in entry) || !entry.provider || typeof entry.provider !== 'object') {
-				throw new TypeError(`Language ${owner} provider entry must contain a selector and provider`);
-			}
-			return Object.freeze({ selector: entry.selector, provider: entry.provider });
-		}),
-	);
+	return Object.freeze(entries.map(entry => {
+		if (!entry || typeof entry !== 'object' || !('selector' in entry) || !entry.provider || typeof entry.provider !== 'object') {
+			throw new TypeError(`Language ${owner} provider entry must contain a selector and provider`);
+		}
+		return Object.freeze({ selector: entry.selector, provider: entry.provider });
+	}));
 }

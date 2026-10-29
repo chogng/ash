@@ -34,7 +34,7 @@ export class GotoLineAction extends EditorAction {
 	run(accessor: ServicesAccessor, editor: ICodeEditor, args?: unknown): void {
 		const resources = new DisposableStore();
 		const picker = resources.add(accessor.get(IQuickInputService).createQuickPick<CommandPick>());
-		picker.filterValue = value => (value.startsWith('>') ? value.slice(1) : value);
+		picker.filterValue = value => value.startsWith('>') ? value.slice(1) : value;
 		const keybindings = accessor.get(IKeybindingService);
 		const notifications = accessor.get(INotificationService);
 		const updateMode = () => {
@@ -52,35 +52,30 @@ export class GotoLineAction extends EditorAction {
 			picker.placeholder = isHelp
 				? localize('quickHelp.placeholder', 'Choose a command or type to filter')
 				: localize('quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols');
-			picker.items = isHelp
-				? getStandaloneHelpPicks(editor, keybindings)
-				: [...EditorExtensionsRegistry.getEditorActions()].flatMap(registered => {
-						const action = editor.getAction(registered.id);
-						if (!action?.isSupported() || action.id === GotoLineAction.ID) {
-							return [];
-						}
-						const keybinding = keybindings.lookupKeybinding(action.id);
-						return [
-							{
-								action,
-								label: action.label,
-								description: action.id,
-								keybinding,
-							},
-						];
-					});
+			picker.items = isHelp ? getStandaloneHelpPicks(editor, keybindings) : [...EditorExtensionsRegistry.getEditorActions()].flatMap(registered => {
+				const action = editor.getAction(registered.id);
+				if (!action?.isSupported() || action.id === GotoLineAction.ID) {
+					return [];
+				}
+				const keybinding = keybindings.lookupKeybinding(action.id);
+				return [{
+					action,
+					label: action.label,
+					description: action.id,
+					keybinding,
+				}];
+			});
 		};
 		resources.add(keybindings.onDidUpdateKeybindings(updateMode));
 		resources.add(picker.onDidChangeValue(updateMode));
-		resources.add(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
 
-				picker.hide();
-				void item.action.run().catch(error => notifications.error(String(error)));
-			}),
-		);
+			picker.hide();
+			void item.action.run().catch(error => notifications.error(String(error)));
+
+		}));
 		resources.add(picker.onDidHide(() => resources.dispose()));
 		updateMode();
 		picker.show();

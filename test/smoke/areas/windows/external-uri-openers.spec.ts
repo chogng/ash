@@ -2,11 +2,8 @@ import { expect, test } from '../../../automation/test.js';
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
 
-interface URLRuleSmokeState {
-	readonly urls: string[];
-	restore(): void;
-}
-type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState };
+interface URLRuleSmokeState { readonly urls: string[]; restore(): void; }
+type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState; };
 
 test('Graphical URL opening rules support suggestions, validation, persistence and Chinese labels', async ({ workbench, restartWorkbench }) => {
 	const page = workbench.page;
@@ -54,9 +51,7 @@ test('Graphical URL opening rules support suggestions, validation, persistence a
 	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
 	await settings.locator('.ash-modal-editor-close').click();
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
-	await workbench.editors
-		.groupAt(0)
-		.editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify({ 'localhost:*': 'ash.browser.open', '*': 'default' }));
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify({ 'localhost:*': 'ash.browser.open', '*': 'default' }));
 
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
@@ -69,9 +64,7 @@ test('Graphical URL opening rules support suggestions, validation, persistence a
 	await expect(rules).toContainText('网址打开规则');
 	await expect(rules).toContainText('用方向键选择打开方式，再按 Enter 确认');
 	await expect.poll(() => rules.locator('[data-pattern-part="key"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['localhost:*', '*']);
-	await expect
-		.poll(() => rules.locator('[data-pattern-part="value"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value)))
-		.toEqual(['ash.browser.open', 'default']);
+	await expect.poll(() => rules.locator('[data-pattern-part="value"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['ash.browser.open', 'default']);
 	await rules.getByRole('button', { name: '添加规则', exact: true }).click();
 	row = rules.locator('.ash-string-map-row').last();
 	await row.getByRole('textbox', { name: '网址模式 3', exact: true }).fill('example.test');
@@ -93,14 +86,11 @@ test('External URL opener rules accept unregistered IDs and persist after reopen
 	await expect(tab).toHaveCount(1);
 	await expect(group.editor.input).toBeFocused();
 	await group.editor.input.press('ControlOrMeta+A');
-	await group.editor.input.evaluate(
-		(element, source) => {
-			const clipboardData = new DataTransfer();
-			clipboardData.setData('text/plain', source);
-			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-		},
-		JSON.stringify({ 'workbench.externalUriOpeners': rules }),
-	);
+	await group.editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, JSON.stringify({ 'workbench.externalUriOpeners': rules }));
 	await group.editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify(rules));
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -137,33 +127,19 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();
-	if (!address || typeof address === 'string') {
-		throw new Error('Missing fixture endpoint');
-	}
+	if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
 	const root = `http://127.0.0.1:${address.port}`;
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ shell }) => {
 		const original = shell.openExternal;
-		Object.assign(globalThis, {
-			urlRuleSmoke: {
-				urls: [] as string[],
-				restore: () => {
-					shell.openExternal = original;
-				},
-			},
-		});
-		shell.openExternal = async url => {
-			(globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls.push(url);
-		};
+		Object.assign(globalThis, { urlRuleSmoke: { urls: [] as string[], restore: () => { shell.openExternal = original; } } });
+		shell.openExternal = async url => { (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls.push(url); };
 	});
 	try {
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectCategory('general');
 		const rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
-		for (const [pattern, id] of [
-			[`${root}/internal`, 'ash.browser.open'],
-			['*', 'default'],
-		]) {
+		for (const [pattern, id] of [[`${root}/internal`, 'ash.browser.open'], ['*', 'default']]) {
 			await rules.getByRole('button', { name: 'Add rule', exact: true }).click();
 			const row = rules.locator('.ash-string-map-row').last();
 			await row.getByRole('textbox').fill(pattern);
@@ -178,46 +154,25 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 		await group.editor.input.focus();
 		await expect(group.editor.input).toBeFocused();
 		await workbench.page.keyboard.insertText(`${root}/external`);
-		await expect(
-			group.content
-				.locator('.view-line > span > span')
-				.filter({ hasText: `${root}/external` })
-				.first(),
-		).toBeVisible();
+		await expect(group.content.locator('.view-line > span > span').filter({ hasText: `${root}/external` }).first()).toBeVisible();
 		await workbench.page.keyboard.press('ControlOrMeta+Home');
 		await workbench.quickaccess.runCommand('editor.action.openLink');
 		await expect.poll(() => electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls)).toEqual([`${root}/external`]);
 		await expect(workbench.page.locator('.ash-browser-editor')).toHaveCount(0);
 		await group.editor.input.press('ControlOrMeta+A');
 		await workbench.page.keyboard.insertText(`${root}/internal?source=editor#topic`);
-		await expect(
-			group.content
-				.locator('.view-line > span > span')
-				.filter({ hasText: `${root}/internal?source=editor#topic` })
-				.first(),
-		).toBeVisible();
+		await expect(group.content.locator('.view-line > span > span').filter({ hasText: `${root}/internal?source=editor#topic` }).first()).toBeVisible();
 		await workbench.page.keyboard.press('ControlOrMeta+Home');
 		await workbench.quickaccess.runCommand('editor.action.openLink');
 		const browser = workbench.page.locator('.ash-browser-editor:visible');
 		await expect(browser.getByRole('status')).toHaveText('Configured URL page');
-		const views = () =>
-			electron.evaluate(({ BrowserWindow }) =>
-				BrowserWindow.getAllWindows()
-					.flatMap(window => window.contentView.children)
-					.filter(child => 'webContents' in child)
-					.map(child => ({
-						url: (child as Electron.WebContentsView).webContents.getURL(),
-						visible: child.getVisible(),
-					})),
-			);
+		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(child => 'webContents' in child).map(child => ({ url: (child as Electron.WebContentsView).webContents.getURL(), visible: child.getVisible() })));
 		await expect.poll(views).toEqual([{ url: `${root}/internal?source=editor#topic`, visible: true }]);
 		await workbench.page.getByRole('button', { name: 'Close Configured URL page', exact: true }).click();
 		await expect.poll(views).toEqual([]);
 		await expect.poll(() => electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls)).toEqual([`${root}/external`]);
 
-		await workbench.page.evaluate(url => {
-			window.open(url, '_blank', 'noopener,noreferrer');
-		}, `${root}/internal?source=window`);
+		await workbench.page.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/internal?source=window`);
 		await expect(browser.getByRole('status')).toHaveText('Configured URL page');
 		await expect.poll(views).toEqual([{ url: `${root}/internal?source=window`, visible: true }]);
 		await workbench.page.getByRole('button', { name: 'Close Configured URL page', exact: true }).click();
@@ -225,9 +180,7 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 
 		// The dedicated Agents window loads the same desktop provider and browser editor.
 		const agents = await workbench.openAgentsWindow(target.kind);
-		await agents.evaluate(url => {
-			window.open(url, '_blank', 'noopener,noreferrer');
-		}, `${root}/internal?source=agents`);
+		await agents.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/internal?source=agents`);
 		const agentBrowser = agents.locator('.ash-browser-editor:visible');
 		await expect(agentBrowser).toBeVisible();
 		await expect(agentBrowser.getByRole('status')).toHaveText('Configured URL page');
@@ -242,29 +195,20 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 });
 
 test('terminal URL rules support mouse, keyboard selection and Chinese command text', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench }) => {
-	const server = createServer((_request, response) => {
-		response.end('<title>Terminal URL page</title>');
-	});
+	const server = createServer((_request, response) => { response.end('<title>Terminal URL page</title>'); });
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();
-	if (!address || typeof address === 'string') {
-		throw new Error('Missing fixture endpoint');
-	}
+	if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
 	const url = `http://127.0.0.1:${address.port}/terminal`;
 	try {
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const group = workbench.editors.groupAt(0);
 		await group.editor.input.press('ControlOrMeta+A');
-		await group.editor.input.evaluate(
-			(element, source) => {
-				const clipboardData = new DataTransfer();
-				clipboardData.setData('text/plain', source);
-				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-			},
-			JSON.stringify({
-				'workbench.externalUriOpeners': { '127.0.0.1:*': 'ash.browser.open', '*': 'default' },
-			}),
-		);
+		await group.editor.input.evaluate((element, source) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', source);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, JSON.stringify({ 'workbench.externalUriOpeners': { '127.0.0.1:*': 'ash.browser.open', '*': 'default' } }));
 		await group.editor.waitForEditorContents(source => JSON.parse(source)['workbench.externalUriOpeners']['*'] === 'default');
 		await workbench.quickaccess.runCommand('workbench.action.files.save');
 		await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -273,9 +217,7 @@ test('terminal URL rules support mouse, keyboard selection and Chinese command t
 		const rows = workbench.terminal.activeInstance.locator('.xterm-rows');
 		await expect(rows).toContainText(url);
 		const linkBounds = await rows.locator('span').filter({ hasText: url }).last().boundingBox();
-		if (!linkBounds) {
-			throw new Error('Terminal URL is not visible');
-		}
+		if (!linkBounds) { throw new Error('Terminal URL is not visible'); }
 		// Xterm handles pointer input on its screen above the text rows.
 		const linkX = linkBounds.x + linkBounds.width / 2;
 		const linkY = linkBounds.y + linkBounds.height / 2;
@@ -305,16 +247,7 @@ test('terminal URL rules support mouse, keyboard selection and Chinese command t
 		await expect(workbench.page.locator('.ash-accessible-view-content')).toHaveValue(/将 workbench.externalUriOpeners.*ash.browser.open/u);
 		await workbench.page.keyboard.press('Escape');
 		await workbench.page.getByRole('button', { name: '关闭 Terminal URL page', exact: true }).click();
-		await expect
-			.poll(() =>
-				(application as ElectronApplication).evaluate(
-					({ BrowserWindow }) =>
-						BrowserWindow.getAllWindows()
-							.flatMap(window => window.contentView.children)
-							.filter(child => 'webContents' in child).length,
-				),
-			)
-			.toBe(0);
+		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(child => 'webContents' in child).length)).toBe(0);
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>(resolve => server.close(() => resolve()));

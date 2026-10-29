@@ -17,10 +17,7 @@ import { hc_black, hc_light, vs, vs_dark } from '../common/themes.js';
 
 const ForcedColorsQuery = '(forced-colors: active)';
 const builtinDefinitions = new Map<BuiltinTheme, IStandaloneThemeData>([
-	['vs', vs],
-	['vs-dark', vs_dark],
-	['hc-black', hc_black],
-	['hc-light', hc_light],
+	['vs', vs], ['vs-dark', vs_dark], ['hc-black', hc_black], ['hc-light', hc_light],
 ]);
 
 /** Owns named themes and the active theme for one standalone browser window. */
@@ -36,19 +33,21 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private readonly forcedColors: MediaQueryList;
 	private selectedThemeId = lightColorTheme.id;
 	private autoDetectHighContrast = true;
-	private readonly documentStyles = new Map<Document, { readonly styles: ManagedStyleSheet; readonly metadata: IDisposable; references: number }>();
+	private readonly documentStyles = new Map<Document, {
+		readonly styles: ManagedStyleSheet;
+		readonly metadata: IDisposable;
+		references: number;
+	}>();
 
 	constructor(ownerWindow: Window) {
 		super();
-		this._register(
-			toDisposable(() => {
-				for (const entry of this.documentStyles.values()) {
-					entry.styles.dispose();
-					entry.metadata.dispose();
-				}
-				this.documentStyles.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const entry of this.documentStyles.values()) {
+				entry.styles.dispose();
+				entry.metadata.dispose();
+			}
+			this.documentStyles.clear();
+		}));
 		// Host-level menus outlive individual editors; other documents follow their container lifetimes.
 		this._register(this.registerEditorContainer(ownerWindow.document.documentElement));
 		setIconResolver(ownerWindow.document, icon => getIconDefinition(icon));
@@ -66,12 +65,10 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		this.applySelectedTheme();
 		this.updateColorMap();
 		this.updateThemeStyles();
-		this._register(
-			Colors.onDidChange(() => {
-				this.updateThemeStyles();
-				this.changed.fire(this.colorTheme);
-			}),
-		);
+		this._register(Colors.onDidChange(() => {
+			this.updateThemeStyles();
+			this.changed.fire(this.colorTheme);
+		}));
 	}
 
 	/** One stylesheet per registered document also themes its overflow widgets and menus. */
@@ -193,12 +190,8 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		return this.colorTheme;
 	}
 
-	public getProductIconTheme() {
-		return defaultProductIconTheme;
-	}
-	public getFileIconTheme() {
-		return noFileIconTheme;
-	}
+	public getProductIconTheme() { return defaultProductIconTheme; }
+	public getFileIconTheme() { return noFileIconTheme; }
 
 	public setColorTheme(theme: IColorTheme): void {
 		this.registerColorTheme(theme);
@@ -243,7 +236,9 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 			return;
 		}
 		const dark = isDarkColorScheme(selectedTheme.colorScheme);
-		const highContrastId = this.definitions.has(selectedTheme.id) ? (dark ? 'hc-black' : 'hc-light') : dark ? highContrastDarkColorTheme.id : highContrastLightColorTheme.id;
+		const highContrastId = this.definitions.has(selectedTheme.id)
+			? (dark ? 'hc-black' : 'hc-light')
+			: (dark ? highContrastDarkColorTheme.id : highContrastLightColorTheme.id);
 		const registeredHighContrastTheme = this.themes.get(highContrastId);
 		if (!registeredHighContrastTheme) {
 			throw new Error(`Unknown standalone color theme: ${highContrastId}`);
@@ -268,14 +263,10 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 
 function definitionForScheme(scheme: ColorScheme): IStandaloneThemeData {
 	switch (scheme) {
-		case ColorScheme.Light:
-			return vs;
-		case ColorScheme.Dark:
-			return vs_dark;
-		case ColorScheme.HighContrastLight:
-			return hc_light;
-		case ColorScheme.HighContrastDark:
-			return hc_black;
+		case ColorScheme.Light: return vs;
+		case ColorScheme.Dark: return vs_dark;
+		case ColorScheme.HighContrastLight: return hc_light;
+		case ColorScheme.HighContrastDark: return hc_black;
 	}
 }
 
@@ -284,7 +275,7 @@ function compileTheme(name: string, data: IStandaloneThemeData, definitions: Rea
 	const base = name === data.base ? builtin : definitions.get(data.base)!;
 	const inheritedRules = base.inherit ? [...builtin.rules, ...base.rules] : base.rules;
 	const rules = data.inherit ? [...inheritedRules, ...data.rules] : data.rules;
-	const defaults: { foreground?: string; background?: string } = {};
+	const defaults: { foreground?: string; background?: string; } = {};
 	for (const rule of rules) {
 		if (rule.token === '') {
 			if (rule.foreground !== undefined) {
@@ -295,7 +286,9 @@ function compileTheme(name: string, data: IStandaloneThemeData, definitions: Rea
 			}
 		}
 	}
-	const colorScheme = data.base === 'vs' ? ColorScheme.Light : data.base === 'vs-dark' ? ColorScheme.Dark : data.base === 'hc-black' ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight;
+	const colorScheme = data.base === 'vs' ? ColorScheme.Light
+		: data.base === 'vs-dark' ? ColorScheme.Dark
+			: data.base === 'hc-black' ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight;
 	const theme = createColorTheme({
 		id: name,
 		label: name,
@@ -313,20 +306,12 @@ function compileTheme(name: string, data: IStandaloneThemeData, definitions: Rea
 function withTokenTheme(theme: IColorTheme, data: IStandaloneThemeData): IStandaloneTheme {
 	const rules = [
 		...data.rules,
-		{
-			token: '',
-			foreground: theme.getColorCss('editor.foreground'),
-			background: theme.getColorCss('editor.background'),
-		},
+		{ token: '', foreground: theme.getColorCss('editor.foreground'), background: theme.getColorCss('editor.background') },
 	];
 	return Object.freeze({
 		...theme,
-		get colors() {
-			return theme.colors;
-		},
-		get colorEntries() {
-			return theme.colorEntries;
-		},
+		get colors() { return theme.colors; },
+		get colorEntries() { return theme.colorEntries; },
 		themeName: theme.id,
 		tokenTheme: TokenTheme.createFromRawTokenTheme(rules, data.encodedTokensColors ?? []),
 	});

@@ -12,7 +12,7 @@ export class InternalEditorAction implements IEditorAction {
 		private readonly precondition: ContextKeyExpression | undefined,
 		private readonly execute: (args: unknown) => Promise<void>,
 		private readonly context: IContextKeyService,
-	) {}
+	) { }
 
 	public isSupported(): boolean {
 		return this.context.contextMatchesRules(this.precondition);
@@ -21,10 +21,7 @@ export class InternalEditorAction implements IEditorAction {
 	public async run(args?: unknown): Promise<void> {
 		if (this.isSupported()) {
 			if (this.metadata?.args) {
-				validateConstraints(
-					args === undefined ? [] : [args],
-					this.metadata.args.map(argument => argument.constraint),
-				);
+				validateConstraints(args === undefined ? [] : [args], this.metadata.args.map(argument => argument.constraint));
 			}
 			await this.execute(args);
 		}

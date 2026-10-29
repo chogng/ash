@@ -47,7 +47,7 @@ export class BlockDecorations extends ViewPart {
 		return true;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {}
+	public override prepareRender(_context: RenderingContext): void { }
 
 	public render(context: RestrictedRenderingContext): void {
 		let count = 0;
@@ -66,10 +66,9 @@ export class BlockDecorations extends ViewPart {
 				bottom = context.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
 			} else {
 				top = context.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, true);
-				bottom =
-					decoration.range.isEmpty() && !decoration.options.blockDoesNotCollapse
-						? context.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, false)
-						: context.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
+				bottom = decoration.range.isEmpty() && !decoration.options.blockDoesNotCollapse
+					? context.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, false)
+					: context.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
 			}
 			const [paddingTop, paddingRight, paddingBottom, paddingLeft] = decoration.options.blockPadding ?? [0, 0, 0, 0];
 			block.setClassName(`stanza-editor-block-decoration blockDecorations-block ${decoration.options.blockClassName}`);

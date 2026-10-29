@@ -39,12 +39,10 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
-		this._register(
-			toDisposable(() => {
-				for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
-				this.liveEntries.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
+			this.liveEntries.clear();
+		}));
 	}
 
 	createModelReference(resource: URI, model: TextModel): QuickDiffModelReference {
@@ -54,12 +52,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 			throw new Error('A text model cannot be shared by different Quick Diff resources');
 		}
 		if (!entry) {
-			entry = {
-				resource,
-				model,
-				quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService, this.configuration),
-				references: 0,
-			};
+			entry = { resource, model, quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService, this.configuration), references: 0 };
 			this.entries.set(model, entry);
 			this.liveEntries.add(entry);
 		}
@@ -89,53 +82,33 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	private readonly comparisonStore = this._register(new MutableDisposable<DisposableStore>());
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
-	private _state: QuickDiffModelState = Object.freeze({
-		loading: true,
-		comparisons: Object.freeze([]),
-		changes: Object.freeze([]),
-	});
+	private _state: QuickDiffModelState = Object.freeze({ loading: true, comparisons: Object.freeze([]), changes: Object.freeze([]) });
 
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(
-		private readonly resource: URI,
-		private readonly modified: TextModel,
-		diffService: IDiffService,
-		private readonly quickDiffService: IQuickDiffService,
-		private readonly configuration: IConfigurationService,
-	) {
+	constructor(private readonly resource: URI, private readonly modified: TextModel, diffService: IDiffService, private readonly quickDiffService: IQuickDiffService, private readonly configuration: IConfigurationService) {
 		super();
 		this.diffProvider = this._register(diffService.createComputationService());
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (
-					!event.affectsConfiguration('scm.diffDecorationsIgnoreTrimWhitespace') &&
-					!event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, {
-						overrideIdentifier: modified.getLanguageId(),
-					})
-				)
-					return;
-				const options = this.diffOptions();
-				for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
-			}),
-		);
-		this._register(
-			modified.onDidChangeLanguage(() => {
-				const options = this.diffOptions();
-				for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
-			}),
-		);
-		this._register(
-			quickDiffService.onDidChange(changedResource => {
-				if (!changedResource || changedResource.toString() === resource.toString()) void this.refresh();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.activeRequest?.abort('quickDiffModelDisposed');
-				this.activeRequest = undefined;
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration('scm.diffDecorationsIgnoreTrimWhitespace')
+				&& !event.affectsConfiguration(
+					CodeEditorConfiguration.diffIgnoreTrimWhitespace,
+					{ overrideIdentifier: modified.getLanguageId() },
+				)) return;
+			const options = this.diffOptions();
+			for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
+		}));
+		this._register(modified.onDidChangeLanguage(() => {
+			const options = this.diffOptions();
+			for (const comparison of this._state.comparisons) comparison.model.updateOptions(options);
+		}));
+		this._register(quickDiffService.onDidChange(changedResource => {
+			if (!changedResource || changedResource.toString() === resource.toString()) void this.refresh();
+		}));
+		this._register(toDisposable(() => {
+			this.activeRequest?.abort('quickDiffModelDisposed');
+			this.activeRequest = undefined;
+		}));
 		void this.refresh();
 	}
 
@@ -158,14 +131,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 			try {
 				for (const original of originals) {
 					const originalModel = store.add(new TextModel(original.text));
-					const diffModel = store.add(
-						new DiffModel({
-							original: originalModel,
-							modified: this.modified,
-							diffProvider: this.diffProvider,
-							diffOptions: this.diffOptions(),
-						}),
-					);
+					const diffModel = store.add(new DiffModel({ original: originalModel, modified: this.modified, diffProvider: this.diffProvider, diffOptions: this.diffOptions() }));
 					const comparison = Object.freeze({ original, model: diffModel });
 					comparisons.push(comparison);
 					store.add(diffModel.onDidChange(() => this.rebuildChanges()));
@@ -175,11 +141,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 				throw error;
 			}
 			this.comparisonStore.value = store;
-			this._state = Object.freeze({
-				loading: false,
-				comparisons: Object.freeze(comparisons),
-				changes: Object.freeze([]),
-			});
+			this._state = Object.freeze({ loading: false, comparisons: Object.freeze(comparisons), changes: Object.freeze([]) });
 			this.rebuildChanges();
 		} catch (error) {
 			if (controller.signal.aborted || this.isDisposed || generation !== this.requestGeneration) return;
@@ -206,12 +168,12 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	private diffOptions(): IDocumentDiffProviderOptions {
 		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>('scm.diffDecorationsIgnoreTrimWhitespace');
 		return {
-			ignoreTrimWhitespace:
-				setting === 'inherit'
-					? this.configuration.getValue<boolean>(CodeEditorConfiguration.diffIgnoreTrimWhitespace, {
-							overrideIdentifier: this.modified.getLanguageId(),
-						})
-					: setting === 'true',
+			ignoreTrimWhitespace: setting === 'inherit'
+				? this.configuration.getValue<boolean>(
+					CodeEditorConfiguration.diffIgnoreTrimWhitespace,
+					{ overrideIdentifier: this.modified.getLanguageId() },
+				)
+				: setting === 'true',
 			maxComputationTimeMs: QUICK_DIFF_MAX_COMPUTATION_TIME_MS,
 			computeMoves: false,
 		};
@@ -220,13 +182,13 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	findNextChange(lineIndex: number, inclusive = false): QuickDiffChange | undefined {
 		validateLineIndex(lineIndex);
 		const changes = this._state.changes;
-		return changes.find(change => (inclusive ? change.lineIndex >= lineIndex : change.lineIndex > lineIndex)) ?? changes[0];
+		return changes.find(change => inclusive ? change.lineIndex >= lineIndex : change.lineIndex > lineIndex) ?? changes[0];
 	}
 
 	findPreviousChange(lineIndex: number, inclusive = false): QuickDiffChange | undefined {
 		validateLineIndex(lineIndex);
 		const changes = this._state.changes;
-		return [...changes].reverse().find(change => (inclusive ? change.lineIndex <= lineIndex : change.lineIndex < lineIndex)) ?? changes[changes.length - 1];
+		return [...changes].reverse().find(change => inclusive ? change.lineIndex <= lineIndex : change.lineIndex < lineIndex) ?? changes[changes.length - 1];
 	}
 
 	private rebuildChanges(): void {

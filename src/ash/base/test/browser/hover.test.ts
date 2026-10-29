@@ -16,10 +16,7 @@ Object.defineProperties(environment.window, {
 });
 Object.defineProperty(environment.window.Element.prototype, 'scrollTo', {
 	configurable: true,
-	value(this: Element, left: number, top: number) {
-		this.scrollLeft = left;
-		this.scrollTop = top;
-	},
+	value(this: Element, left: number, top: number) { this.scrollLeft = left; this.scrollTop = top; },
 });
 
 const { ContextView } = await import('../../browser/ui/contextview/contextview.js');
@@ -92,14 +89,7 @@ test('Hover traps Tab in interactive content and releases the listener when hidd
 	const tooltip = contextView.element.querySelector<HTMLElement>('.ash-hover')!;
 	last.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
 	assert.equal(environment.window.document.activeElement, first);
-	first.dispatchEvent(
-		new environment.window.KeyboardEvent('keydown', {
-			key: 'Tab',
-			shiftKey: true,
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
+	first.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
 	assert.equal(environment.window.document.activeElement, last);
 	last.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(environment.window.document.activeElement, target);
@@ -124,10 +114,7 @@ test('Hover cancels content work on update, hide and disposal', () => {
 	assert.equal(tokens[0]!.isCancellationRequested, false);
 	hover.update('Updated content');
 	assert.equal(tokens[0]!.isCancellationRequested, true);
-	hover.update(token => {
-		tokens.push(token);
-		return 'New details';
-	});
+	hover.update(token => { tokens.push(token); return 'New details'; });
 	hover.hide();
 	assert.equal(tokens[1]!.isCancellationRequested, true);
 	hover.show();
@@ -221,12 +208,10 @@ test('Hover closes an in-flight ContextView when target layout disposes it', () 
 
 	assert.doesNotThrow(() => hover.show());
 	assert.equal(contextView.visible, false);
-	assert.doesNotThrow(() =>
-		contextView.show({
-			anchor: rectangle(40, 80, 0, 0),
-			content: h(environment.window.document, 'div'),
-		}),
-	);
+	assert.doesNotThrow(() => contextView.show({
+		anchor: rectangle(40, 80, 0, 0),
+		content: h(environment.window.document, 'div'),
+	}));
 	assert.equal(contextView.visible, true);
 
 	contextView.dispose();
@@ -253,7 +238,7 @@ function rectangle(left: number, top: number, width: number, height: number): DO
 }
 
 async function nextTimer(): Promise<void> {
-	await new Promise<void>(resolve => environment.window.setTimeout(resolve, 5));
+	await new Promise<void>((resolve) => environment.window.setTimeout(resolve, 5));
 }
 
 test('Hover releases interaction listeners when a target becomes idle', async () => {

@@ -40,23 +40,10 @@ test('keyboard edits and undo preserve multiple cursors', async ({ stanzaPage: p
 	await page.keyboard.type('!');
 	await expect.poll(() => page.evaluate(() => stanza.editor.getModels()[0].getValue())).toBe('alpha!\nbeta!');
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect
-		.poll(() =>
-			page.evaluate(() => ({
-				value: stanza.editor.getModels()[0].getValue(),
-				cursors: stanza.editor
-					.getEditors()[0]
-					.getSelections()
-					?.map(selection => [selection.positionLineNumber, selection.positionColumn]),
-			})),
-		)
-		.toEqual({
-			value: 'alpha\nbeta',
-			cursors: [
-				[1, 6],
-				[2, 5],
-			],
-		});
+	await expect.poll(() => page.evaluate(() => ({
+		value: stanza.editor.getModels()[0].getValue(),
+		cursors: stanza.editor.getEditors()[0].getSelections()?.map(selection => [selection.positionLineNumber, selection.positionColumn]),
+	}))).toEqual({ value: 'alpha\nbeta', cursors: [[1, 6], [2, 5]] });
 	await expect(page.locator('.view-line')).toContainText(['alpha', 'beta']);
 });
 
@@ -67,22 +54,13 @@ test('public editor creation and disposal retain the caller-owned model', async 
 		existing.dispose();
 		const editor = stanza.editor.create(document.getElementById('editor-root')!, { model });
 		try {
-			return {
-				registered: stanza.editor.getEditors()[0] === editor,
-				sameModel: editor.getModel() === model,
-				text: model.getLineContent(1),
-			};
+			return { registered: stanza.editor.getEditors()[0] === editor, sameModel: editor.getModel() === model, text: model.getLineContent(1) };
 		} finally {
 			editor.dispose();
 		}
 	});
 	expect(result).toEqual({ registered: true, sameModel: true, text: 'interface GeometrySample {' });
-	expect(
-		await page.evaluate(() => ({
-			editors: stanza.editor.getEditors().length,
-			models: stanza.editor.getModels().length,
-		})),
-	).toEqual({ editors: 0, models: 1 });
+	expect(await page.evaluate(() => ({ editors: stanza.editor.getEditors().length, models: stanza.editor.getModels().length }))).toEqual({ editors: 0, models: 1 });
 	await expect(page.locator('#editor-root .stanza-editor')).toHaveCount(0);
 });
 
@@ -101,9 +79,6 @@ test('standalone editor passes WCAG accessibility checks', async ({ stanzaPage: 
 	const violations = await getViolations(page, '#editor-root', {
 		runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
 	});
-	await testInfo.attach('accessibility.json', {
-		body: JSON.stringify(violations, null, 2),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('accessibility.json', { body: JSON.stringify(violations, null, 2), contentType: 'application/json' });
 	expect(violations).toEqual([]);
 });

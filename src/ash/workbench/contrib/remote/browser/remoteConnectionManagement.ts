@@ -31,13 +31,7 @@ export async function showRemoteConnectionManager(connections: IRemoteConnection
 		return;
 	}
 
-	const items: ManagementQuickPickItem[] = [
-		{
-			action: 'add',
-			label: 'Add SSH Host',
-			detail: 'Save a credential-free OpenSSH host alias and Remote Workspace',
-		},
-	];
+	const items: ManagementQuickPickItem[] = [{ action: 'add', label: 'Add SSH Host', detail: 'Save a credential-free OpenSSH host alias and Remote Workspace' }];
 	if (available.length > 0) {
 		items.push({ action: 'edit', label: 'Edit SSH Host', detail: 'Change or rename an existing saved connection' });
 		items.push({ action: 'remove', label: 'Remove SSH Host', detail: 'Delete an existing saved connection' });
@@ -108,26 +102,18 @@ async function promptConnection(quickInput: IQuickInputService, initial?: Remote
 	if (name === undefined) return undefined;
 	const host = await promptText(quickInput, 'OpenSSH config host alias', initial?.host);
 	if (host === undefined) return undefined;
-	const workspace = await promptText(
-		quickInput,
-		localize({ bundle: 'ash.workbench', key: 'remote.workspace.absolutePath' }, 'Absolute path to the Remote Workspace (for example, /srv/project or C:/work/project)'),
-		initial?.workspace,
-	);
+	const workspace = await promptText(quickInput, localize({ bundle: 'ash.workbench', key: 'remote.workspace.absolutePath' }, 'Absolute path to the Remote Workspace (for example, /srv/project or C:/work/project)'), initial?.workspace);
 	if (workspace === undefined) return undefined;
 	return { name, host, workspace };
 }
 
 function pickConnection(quickInput: IQuickInputService, placeholder: string, connections: readonly RemoteConnectionDefinition[]): Promise<RemoteConnectionDefinition | undefined> {
-	return pickOne(
-		quickInput,
-		placeholder,
-		connections.map(connection => ({
-			connection,
-			label: connection.name,
-			description: connection.host,
-			detail: connection.workspace,
-		})),
-	).then(item => item?.connection);
+	return pickOne(quickInput, placeholder, connections.map(connection => ({
+		connection,
+		label: connection.name,
+		description: connection.host,
+		detail: connection.workspace,
+	}))).then(item => item?.connection);
 }
 
 function promptText(quickInput: IQuickInputService, placeholder: string, initialValue = ''): Promise<string | undefined> {
@@ -149,19 +135,15 @@ function promptText(quickInput: IQuickInputService, placeholder: string, initial
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
-				return finish(item.text);
-			}),
-		);
-		disposables.add(
-			picker.onDidHide(() => {
-				finish(undefined);
-				disposables.dispose();
-			}),
-		);
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item.text);
+		}));
+		disposables.add(picker.onDidHide(() => {
+			finish(undefined);
+			disposables.dispose();
+		}));
 		picker.show();
 	});
 }
@@ -180,19 +162,15 @@ function pickOne<TItem extends IQuickPickItem>(quickInput: IQuickInputService, p
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
-				return finish(item);
-			}),
-		);
-		disposables.add(
-			picker.onDidHide(() => {
-				finish(undefined);
-				disposables.dispose();
-			}),
-		);
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item);
+		}));
+		disposables.add(picker.onDidHide(() => {
+			finish(undefined);
+			disposables.dispose();
+		}));
 		picker.show();
 	});
 }

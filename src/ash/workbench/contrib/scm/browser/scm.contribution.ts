@@ -30,17 +30,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
-import {
-	ISCMService,
-	ISCMViewService,
-	SCMHistoryBusyContext,
-	SCMProviderContext,
-	SCMViewModeContext,
-	SCMViewSortKeyContext,
-	VIEW_PANE_ID,
-	type SCMViewMode,
-	type SCMViewSortKey,
-} from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMProviderContext, SCMViewModeContext, SCMViewSortKeyContext, VIEW_PANE_ID, type SCMViewMode, type SCMViewSortKey } from '../common/scm.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -62,39 +52,27 @@ CommandsRegistry.register('workbench.scm.action.focusNextResourceGroup', async a
 	pane?.focusNextResourceGroup();
 });
 MenusRegistry.appendMenuItem(MenuId.SCMTitle, {
-	submenu: scmViewSortMenu,
-	title: localize2('scm.viewSort', 'View & Sort'),
-	when: ContextKeyExpr.notEquals(SCMProviderContext.key, ''),
-	group: '0_view',
-	order: 2,
+	submenu: scmViewSortMenu, title: localize2('scm.viewSort', 'View & Sort'),
+	when: ContextKeyExpr.notEquals(SCMProviderContext.key, ''), group: '0_view', order: 2,
 });
 
 for (const mode of ['list', 'tree'] as const) {
 	const title = mode === 'list' ? localize2('scm.viewAsList', 'View as List') : localize2('scm.viewAsTree', 'View as Tree');
-	registerAction2(
-		class extends Action2 {
-			constructor() {
-				super({
-					id: mode === 'list' ? 'workbench.scm.action.setListViewMode' : 'workbench.scm.action.setTreeViewMode',
-					title,
-					toggled: SCMViewModeContext.isEqualTo(mode),
-					menu: [
-						{ id: scmViewSortMenu, group: '1_viewmode', order: mode === 'list' ? 1 : 2 },
-						{
-							id: MenuId.SCMTitle,
-							group: '0_view',
-							order: 1,
-							when: ContextKeyExpr.and(ContextKeyExpr.notEquals(SCMProviderContext.key, ''), ContextKeyExpr.notEquals(SCMViewModeContext.key, mode)),
-						},
-					],
-				});
-			}
-			public override run(accessor: ServicesAccessor): void {
-				const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
-				if (pane) pane.viewMode = mode satisfies SCMViewMode;
-			}
-		},
-	);
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: mode === 'list' ? 'workbench.scm.action.setListViewMode' : 'workbench.scm.action.setTreeViewMode', title,
+				toggled: SCMViewModeContext.isEqualTo(mode), menu: [
+					{ id: scmViewSortMenu, group: '1_viewmode', order: mode === 'list' ? 1 : 2 },
+					{ id: MenuId.SCMTitle, group: '0_view', order: 1, when: ContextKeyExpr.and(ContextKeyExpr.notEquals(SCMProviderContext.key, ''), ContextKeyExpr.notEquals(SCMViewModeContext.key, mode)) },
+				]
+			});
+		}
+		public override run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
+			if (pane) pane.viewMode = mode satisfies SCMViewMode;
+		}
+	});
 }
 
 const sortActions = [
@@ -103,23 +81,19 @@ const sortActions = [
 	{ key: 'status', title: localize2('scm.sortByStatus', 'Sort Changes by Status') },
 ] as const;
 for (const [order, action] of sortActions.entries()) {
-	registerAction2(
-		class extends Action2 {
-			constructor() {
-				super({
-					id: `workbench.scm.action.setSortKey.${action.key}`,
-					title: action.title,
-					precondition: SCMViewModeContext.isEqualTo('list'),
-					toggled: SCMViewSortKeyContext.isEqualTo(action.key),
-					menu: { id: scmViewSortMenu, group: '2_sort', order },
-				});
-			}
-			public override run(accessor: ServicesAccessor): void {
-				const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
-				if (pane) pane.viewSortKey = action.key satisfies SCMViewSortKey;
-			}
-		},
-	);
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.scm.action.setSortKey.${action.key}`, title: action.title,
+				precondition: SCMViewModeContext.isEqualTo('list'), toggled: SCMViewSortKeyContext.isEqualTo(action.key),
+				menu: { id: scmViewSortMenu, group: '2_sort', order }
+			});
+		}
+		public override run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
+			if (pane) pane.viewSortKey = action.key satisfies SCMViewSortKey;
+		}
+	});
 }
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -130,19 +104,13 @@ configurationRegistry.registerConfiguration<'all' | 'filter'>({
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: ['all', 'filter'] },
 	parse: value => {
-		if (value !== 'all' && value !== 'filter') {
-			throw new TypeError(localize('scm.history.badgesInvalid', 'History badges must be all or filter.'));
-		}
+		if (value !== 'all' && value !== 'filter') { throw new TypeError(localize('scm.history.badgesInvalid', 'History badges must be all or filter.')); }
 		return value;
 	},
 	setting: {
 		valueType: 'select',
-		get title() {
-			return localize('scm.history.badgesTitle', 'Source Control › Graph: Badges');
-		},
-		get description() {
-			return localize('scm.history.badgesDescription', 'Choose whether the graph shows all reference badges or only the references selected by the filter.');
-		},
+		get title() { return localize('scm.history.badgesTitle', 'Source Control › Graph: Badges'); },
+		get description() { return localize('scm.history.badgesDescription', 'Choose whether the graph shows all reference badges or only the references selected by the filter.'); },
 		get options() {
 			return [
 				{ value: 'all' as const, label: localize('scm.history.badgesAll', 'All references') },
@@ -163,15 +131,9 @@ configurationRegistry.registerConfiguration<number>({
 		return Math.floor(value);
 	},
 	setting: {
-		valueType: 'number',
-		minimum: 1,
-		maximum: 1000,
-		get title() {
-			return localize('scm.history.pageSizeTitle', 'Source Control › Graph: Page Size');
-		},
-		get description() {
-			return localize('scm.history.pageSizeDescription', 'Number of commits loaded initially and with each additional page.');
-		},
+		valueType: 'number', minimum: 1, maximum: 1000,
+		get title() { return localize('scm.history.pageSizeTitle', 'Source Control › Graph: Page Size'); },
+		get description() { return localize('scm.history.pageSizeDescription', 'Number of commits loaded initially and with each additional page.'); },
 	},
 });
 configurationRegistry.registerConfiguration<boolean>({
@@ -187,55 +149,22 @@ configurationRegistry.registerConfiguration<boolean>({
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('scm.history.pageOnScrollTitle', 'Source Control › Graph: Page On Scroll');
-		},
-		get description() {
-			return localize('scm.history.pageOnScrollDescription', 'Automatically load the next page when the end of the commit graph is visible.');
-		},
+		get title() { return localize('scm.history.pageOnScrollTitle', 'Source Control › Graph: Page On Scroll'); },
+		get description() { return localize('scm.history.pageOnScrollDescription', 'Automatically load the next page when the end of the commit graph is visible.'); },
 	},
 });
 
 for (const setting of [
-	{
-		key: 'scm.graph.showIncomingChanges',
-		get title() {
-			return localize('scm.history.showIncomingTitle', 'Source Control › Graph: Show Incoming Changes');
-		},
-		get description() {
-			return localize('scm.history.showIncomingDescription', 'Show the incoming changes summary for the upstream branch.');
-		},
-	},
-	{
-		key: 'scm.graph.showOutgoingChanges',
-		get title() {
-			return localize('scm.history.showOutgoingTitle', 'Source Control › Graph: Show Outgoing Changes');
-		},
-		get description() {
-			return localize('scm.history.showOutgoingDescription', 'Show the outgoing changes summary for the current branch.');
-		},
-	},
+	{ key: 'scm.graph.showIncomingChanges', get title() { return localize('scm.history.showIncomingTitle', 'Source Control › Graph: Show Incoming Changes'); }, get description() { return localize('scm.history.showIncomingDescription', 'Show the incoming changes summary for the upstream branch.'); } },
+	{ key: 'scm.graph.showOutgoingChanges', get title() { return localize('scm.history.showOutgoingTitle', 'Source Control › Graph: Show Outgoing Changes'); }, get description() { return localize('scm.history.showOutgoingDescription', 'Show the outgoing changes summary for the current branch.'); } },
 ]) {
 	configurationRegistry.registerConfiguration<boolean>({
-		key: setting.key,
-		defaultValue: true,
-		scope: ConfigurationScope.WINDOW,
-		schema: { type: 'boolean' },
+		key: setting.key, defaultValue: true, scope: ConfigurationScope.WINDOW, schema: { type: 'boolean' },
 		parse: value => {
-			if (typeof value !== 'boolean') {
-				throw new TypeError(localize('scm.history.changesSettingInvalid', 'History changes visibility must be a boolean.'));
-			}
+			if (typeof value !== 'boolean') { throw new TypeError(localize('scm.history.changesSettingInvalid', 'History changes visibility must be a boolean.')); }
 			return value;
 		},
-		setting: {
-			valueType: 'boolean',
-			get title() {
-				return setting.title;
-			},
-			get description() {
-				return setting.description;
-			},
-		},
+		setting: { valueType: 'boolean', get title() { return setting.title; }, get description() { return setting.description; } },
 	});
 }
 
@@ -260,30 +189,16 @@ AccessibleViewRegistry.register({
 			const content = description
 				.replaceAll('workbench.scm.action.focusPreviousResourceGroup', '<keybinding:workbench.scm.action.focusPreviousResourceGroup>')
 				.replaceAll('workbench.scm.action.focusNextResourceGroup', '<keybinding:workbench.scm.action.focusNextResourceGroup>');
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.Scm,
-				{ type: AccessibleViewType.Help },
-				() => content,
-				() => {
-					const active = focused.ownerDocument.activeElement;
-					if (!pane.isDisposed && pane.isBodyVisible() && isFocusable(focused) && (active === focused.ownerDocument.body || pane.element.contains(active))) {
-						restoreFocus(focused);
-					}
-				},
-				AccessibilityVerbositySettingId.Scm,
-			);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help }, () => content, () => {
+				const active = focused.ownerDocument.activeElement;
+				if (!pane.isDisposed && pane.isBodyVisible() && isFocusable(focused) && (active === focused.ownerDocument.body || pane.element.contains(active))) {
+					restoreFocus(focused);
+				}
+			}, AccessibilityVerbositySettingId.Scm);
 		}
-		return new AccessibleContentProvider(
-			AccessibleViewProviderId.Scm,
-			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					'scm.welcome.help',
-					'Source control has no repositories yet. Repository detection may still be running or may have failed. If detection fails, use Retry Repository Detection to scan again. Open a folder or use the repository actions supplied by an extension. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.',
-				),
-			() => restoreFocus(focused),
-			AccessibilityVerbositySettingId.Scm,
-		);
+		return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help },
+			() => localize('scm.welcome.help', 'Source control has no repositories yet. Repository detection may still be running or may have failed. If detection fails, use Retry Repository Detection to scan again. Open a folder or use the repository actions supplied by an extension. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.'),
+			() => restoreFocus(focused), AccessibilityVerbositySettingId.Scm);
 	},
 });
 type ScmWorkingSetDefault = 'current' | 'empty';
@@ -313,17 +228,9 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => {
 		const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
 		const focused = document.activeElement as HTMLElement;
-		return new AccessibleContentProvider(
-			AccessibleViewProviderId.ScmInput,
-			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					'scm.input.help',
-					'Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the commit message action, when available, and then to the commit button; Shift+Tab moves to the previous control. Generate commit message requires a configured generator and changes. While generation runs, the action becomes Stop generating commit message. Switching repositories cancels generation. When the commit button has a dropdown, Tab reaches More commit actions. Down Arrow opens its menu; Escape closes it and returns focus to the dropdown. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. The provider may show message length validation and may configure the action button to commit, publish or synchronize. Some providers open a message editor when committing without an input message; finish editing and run Commit again. Save and diagnostic checks can stop a commit before files are staged. Escape closes this help and returns to the message.',
-				),
-			() => restoreFocus(focused),
-			AccessibilityVerbositySettingId.ScmInput,
-		);
+		return new AccessibleContentProvider(AccessibleViewProviderId.ScmInput, { type: AccessibleViewType.Help },
+			() => localize('scm.input.help', 'Type a message for the selected source control provider. Enter inserts a new line. Ctrl+Enter on Windows and Linux, or Command+Enter on macOS, runs the provider’s input action. Tab moves to the commit message action, when available, and then to the commit button; Shift+Tab moves to the previous control. Generate commit message requires a configured generator and changes. While generation runs, the action becomes Stop generating commit message. Switching repositories cancels generation. When the commit button has a dropdown, Tab reaches More commit actions. Down Arrow opens its menu; Escape closes it and returns focus to the dropdown. The toolbar and menus show actions supplied by the provider. Use the editor shortcuts to select, copy, paste, undo and redo. The input grows with its content up to ten lines and then scrolls. Each repository keeps its own draft. The provider may show message length validation and may configure the action button to commit, publish or synchronize. Some providers open a message editor when committing without an input message; finish editing and run Commit again. Save and diagnostic checks can stop a commit before files are staged. Escape closes this help and returns to the message.'),
+			() => restoreFocus(focused), AccessibilityVerbositySettingId.ScmInput);
 	},
 });
 
@@ -337,20 +244,10 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const document = accessor.get(ILayoutService).mainContainer.ownerDocument;
 			const focused = document.activeElement as HTMLElement;
 			const list = document.querySelector<HTMLElement>('.ash-scm-repositories-list')!;
-			const content =
-				type === AccessibleViewType.Help
-					? localize(
-							'scm.repositories.help',
-							'Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path.',
-						)
-					: [...list.querySelectorAll<HTMLElement>('[role="option"]')].map(row => row.getAttribute('aria-label')).join('\n');
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.ScmRepositories,
-				{ type },
-				() => content,
-				() => restoreFocus(focused),
-				AccessibilityVerbositySettingId.ScmRepositories,
-			);
+			const content = type === AccessibleViewType.Help
+				? localize('scm.repositories.help', 'Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path.')
+				: [...list.querySelectorAll<HTMLElement>('[role="option"]')].map(row => row.getAttribute('aria-label')).join('\n');
+			return new AccessibleContentProvider(AccessibleViewProviderId.ScmRepositories, { type }, () => content, () => restoreFocus(focused), AccessibilityVerbositySettingId.ScmRepositories);
 		},
 	});
 }
@@ -368,14 +265,10 @@ registerWorkbenchContribution('workbench.contrib.scmRepositories', WorkbenchPhas
 			historyCount.set(repositories.filter(repository => repository.provider.historyProvider !== undefined).length);
 		});
 	};
-	resources.add(
-		toDisposable(() =>
-			contextKeyService.bufferChangeEvents(() => {
-				count.reset();
-				historyCount.reset();
-			}),
-		),
-	);
+	resources.add(toDisposable(() => contextKeyService.bufferChangeEvents(() => {
+		count.reset();
+		historyCount.reset();
+	})));
 	resources.add(scm.onDidAddRepository(update));
 	resources.add(scm.onDidRemoveRepository(update));
 	update();
@@ -394,20 +287,10 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const tooltip = card.closest<HTMLElement>('.ash-hover')!;
 			const commit = document.querySelector<HTMLElement>(`[aria-describedby~="${tooltip.id}"]`)!;
 			// Opening the modal dismisses the hover, so capture its readable content and return target first.
-			const content =
-				type === AccessibleViewType.Help
-					? localize(
-							'scm.history.detailsHelp',
-							'Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Tab and Shift+Tab to move between the message and actions within the details card. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.',
-						)
-					: `${card.innerText}\n${card.querySelector<HTMLElement>('.ash-scm-graph-hover-hash')!.title}`;
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.ScmHistoryDetails,
-				{ type },
-				() => content,
-				() => restoreFocus(commit),
-				AccessibilityVerbositySettingId.ScmHistoryDetails,
-			);
+			const content = type === AccessibleViewType.Help
+				? localize('scm.history.detailsHelp', 'Commit details show the author, relative and full time, complete message, and file and line change counts. Use Left and Right Arrow in the actions toolbar to copy the full commit ID or open the commit in a browser. Use Tab and Shift+Tab to move between the message and actions within the details card. Escape returns to the commit. Press <keybinding:editor.action.accessibleView> to read these details as plain text.')
+				: `${card.innerText}\n${card.querySelector<HTMLElement>('.ash-scm-graph-hover-hash')!.title}`;
+			return new AccessibleContentProvider(AccessibleViewProviderId.ScmHistoryDetails, { type }, () => content, () => restoreFocus(commit), AccessibilityVerbositySettingId.ScmHistoryDetails);
 		},
 	});
 }
@@ -417,25 +300,23 @@ export const SCM_HISTORY_VIEW_ID = 'ash.gitGraph';
 
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
-registerAction2(
-	class SCMHistoryRefreshAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.scm.action.graph.refresh',
-				title: localize2({ bundle: 'ash', key: 'library.refresh' }, 'Refresh'),
-				tooltip: localize('scm.history.refresh', 'Refresh source control history'),
-				icon: Lxicon.refresh,
-				precondition: SCMHistoryBusyContext.isEqualTo(false),
-				menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 1000 },
-			});
-		}
+registerAction2(class SCMHistoryRefreshAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.graph.refresh',
+			title: localize2({ bundle: 'ash', key: 'library.refresh' }, 'Refresh'),
+			tooltip: localize('scm.history.refresh', 'Refresh source control history'),
+			icon: Lxicon.refresh,
+			precondition: SCMHistoryBusyContext.isEqualTo(false),
+			menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 1000 },
+		});
+	}
 
-		override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
-			const view = target instanceof SCMHistoryViewPane ? target : accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>(SCM_HISTORY_VIEW_ID);
-			await view?.runTitleOperation();
-		}
-	},
-);
+	override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+		const view = target instanceof SCMHistoryViewPane ? target : accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>(SCM_HISTORY_VIEW_ID);
+		await view?.runTitleOperation();
+	}
+});
 
 registerEditorPane({
 	id: SCM_MERGE_EDITOR_ID,
@@ -466,11 +347,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.ScmMerge,
 			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					{ bundle: 'ash', key: 'mergeEditor.help' },
-					'Merge editor. Review aligned Current, Incoming, and Result editors. Show Base reveals the common ancestor; Use Columns changes the layout. Actions beside each conflict accept Base, Current, Incoming, or a combination. Mark Handled confirms a result that was already edited; Mark Unhandled returns it to the review list. Navigate all conflicts or only unresolved conflicts with the buttons above, or accept all remaining conflicts from one side. You can also edit Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves the result and asks the source control provider to complete the resolution after every conflict is handled and all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.',
-				),
+			() => localize({ bundle: 'ash', key: 'mergeEditor.help' }, 'Merge editor. Review aligned Current, Incoming, and Result editors. Show Base reveals the common ancestor; Use Columns changes the layout. Actions beside each conflict accept Base, Current, Incoming, or a combination. Mark Handled confirms a result that was already edited; Mark Unhandled returns it to the review list. Navigate all conflicts or only unresolved conflicts with the buttons above, or accept all remaining conflicts from one side. You can also edit Result directly. For deleted or binary versions, choose the whole file. Save with Ctrl+S or Command+S. Complete Merge saves the result and asks the source control provider to complete the resolution after every conflict is handled and all conflict markers are removed. Press <keybinding:editor.action.accessibleView> to read all four versions.'),
 			() => pane.focus(),
 			AccessibilityVerbositySettingId.ScmMerge,
 		);
@@ -496,7 +373,9 @@ AccessibleViewRegistry.register({
 });
 
 /** Registers the Source Control Sidebar container and its initial pane. */
-export function registerSCMViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
+export function registerSCMViews(
+	registry: WorkbenchViewRegistry = ViewsRegistry,
+): void {
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.SourceControl,
 		title: 'Source Control',
@@ -553,18 +432,11 @@ export function registerSCMViews(registry: WorkbenchViewRegistry = ViewsRegistry
 
 registerWorkbenchContribution('workbench.contrib.scmStatus', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmStatusContribution));
 
-registerWorkbenchContribution(
-	'workbench.contrib.scmWorkingSets',
-	WorkbenchPhase.BlockRestore,
-	accessor =>
-		new ScmWorkingSetController({
-			configurationService: accessor.get(IConfigurationService),
-			editorPart: accessor.get(IEditorPart),
-			scmViewService: accessor.get(ISCMViewService),
-			storageService: accessor.get(IStorageService),
-		}),
-);
+registerWorkbenchContribution('workbench.contrib.scmWorkingSets', WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
+	configurationService: accessor.get(IConfigurationService),
+	editorPart: accessor.get(IEditorPart),
+	scmViewService: accessor.get(ISCMViewService),
+	storageService: accessor.get(IStorageService),
+}));
 
-registerWorkbenchContribution('workbench.contrib.scmHistoryChatContext', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(ScmHistoryChatContextContribution),
-);
+registerWorkbenchContribution('workbench.contrib.scmHistoryChatContext', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmHistoryChatContextContribution));

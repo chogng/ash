@@ -6,9 +6,7 @@ import type { IMcpServerStatusService } from '../common/mcpServerStatusService.j
 
 export function createAppServerMcpServerStatusApi(connection: AppServerProtocolClient): IMcpServerStatusService {
 	return {
-		get isAvailable() {
-			return connection.capabilities?.mcp === true;
-		},
+		get isAvailable() { return connection.capabilities?.mcp === true; },
 		read: async () => {
 			if (!connection.capabilities?.mcp) {
 				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.'));

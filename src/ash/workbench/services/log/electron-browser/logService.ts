@@ -14,16 +14,9 @@ export class NativeLogService extends LogService {
 		const client = new LoggerChannelClient(mainProcessService.getChannel('logger'));
 		super({
 			level: environment.initialLogLevel ?? (environment.logLevel ? parseLogLevel(environment.logLevel) : undefined),
-			sinks: [
-				new ConsoleLogSink(),
-				{
-					log: entry =>
-						client.log({
-							...entry,
-							category: entry.category === 'application' ? category : entry.category,
-						}),
-				},
-			],
+			sinks: [new ConsoleLogSink(), {
+				log: entry => client.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
+			}],
 			flush: () => client.flush(),
 		});
 		this._register(client);

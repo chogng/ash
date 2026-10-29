@@ -29,9 +29,7 @@ test('theme CSS applies registered colors, sizes and scheme, masks missing color
 		styles.dispose();
 		assert.equal(browser.window.getComputedStyle(root).getPropertyValue('--ash-editor-background'), '');
 		assert.equal(browser.window.document.querySelector('style'), null);
-	} finally {
-		browser.window.close();
-	}
+	} finally { browser.window.close(); }
 });
 
 test('theme CSS includes colors registered after a theme was first serialized', () => {

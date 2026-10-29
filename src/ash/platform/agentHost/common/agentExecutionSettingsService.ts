@@ -20,4 +20,5 @@ export interface IAgentExecutionSettingsService {
 	configure(settings: ExecutionSettings, expectedRevision: number): Promise<void>;
 }
 
-export const IAgentExecutionSettingsService = createServiceIdentifier<IAgentExecutionSettingsService>('executionSettingsService');
+export const IAgentExecutionSettingsService =
+	createServiceIdentifier<IAgentExecutionSettingsService>('executionSettingsService');

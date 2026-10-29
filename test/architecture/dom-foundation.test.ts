@@ -9,7 +9,11 @@ const desktopRoot = findDesktopRoot(import.meta.dirname);
 const sourceRoot = resolve(desktopRoot, 'src/ash');
 test('DOM context queries have one canonical owner', () => {
 	const expectedSymbols = ['getWindow', 'getDocument', 'getActiveElement', 'getActiveDocument'];
-	const ownerFiles = [resolve(sourceRoot, 'base/browser/dom.ts'), resolve(sourceRoot, 'base/browser/focus.ts'), resolve(sourceRoot, 'base/browser/window.ts')];
+	const ownerFiles = [
+		resolve(sourceRoot, 'base/browser/dom.ts'),
+		resolve(sourceRoot, 'base/browser/focus.ts'),
+		resolve(sourceRoot, 'base/browser/window.ts'),
+	];
 	const owners = Object.fromEntries(expectedSymbols.map(symbol => [symbol, [] as string[]]));
 	for (const file of ownerFiles) {
 		const source = readFileSync(file, 'utf8');

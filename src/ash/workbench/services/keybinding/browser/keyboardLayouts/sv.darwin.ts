@@ -1,5 +1,6 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
+
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.keylayout.Swedish-Pro', lang: 'sv', localizedName: 'Swedish - Pro' },
 	secondaryLayouts: [],
@@ -121,6 +122,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: [],
-	},
+		MetaRight: []
+	}
 });

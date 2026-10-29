@@ -30,11 +30,8 @@ export class SessionScopedPromptsService implements IPromptsService {
 		return this.scope.services.prompts.registerSkillSource(rootReference);
 	}
 	parseNew(...args: Parameters<IPromptsService['parseNew']>): ReturnType<IPromptsService['parseNew']> {
-		this.scope.assertCurrent();
-		return this.scope.services.prompts.parseNew(...args);
+		this.scope.assertCurrent(); return this.scope.services.prompts.parseNew(...args);
 	}
-	dispose(): void {}
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	dispose(): void { }
+	[Symbol.dispose](): void { this.dispose(); }
 }

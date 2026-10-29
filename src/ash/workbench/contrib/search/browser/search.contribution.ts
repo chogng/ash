@@ -24,24 +24,22 @@ AccessibleViewRegistry.register(new SearchAccessibilityHelp());
 registerSingleton(ISearchHistoryService, SearchHistoryService, InstantiationType.Delayed);
 registerSingleton(IReplaceService, ReplaceService, InstantiationType.Delayed);
 
-registerAction2(
-	class FocusSearchAction extends Action2 {
-		constructor() {
-			super({
-				id: FOCUS_SEARCH_COMMAND_ID,
-				title: localize2('search.focus', 'Search in Files'),
-				f1: true,
-				keybinding: { primary: Keybinding.single(logicalKey('f', { primaryKey: true, shiftKey: true })) },
-			});
-		}
-		override run(accessor: ServicesAccessor): Promise<boolean> {
-			return accessor.get(IViewsService).focusView(SEARCH_VIEW_ID);
-		}
-	},
-);
+registerAction2(class FocusSearchAction extends Action2 {
+	constructor() {
+		super({
+			id: FOCUS_SEARCH_COMMAND_ID, title: localize2('search.focus', 'Search in Files'), f1: true,
+			keybinding: { primary: Keybinding.single(logicalKey('f', { primaryKey: true, shiftKey: true })) },
+		});
+	}
+	override run(accessor: ServicesAccessor): Promise<boolean> {
+		return accessor.get(IViewsService).focusView(SEARCH_VIEW_ID);
+	}
+});
 
 /** Registers the Search Sidebar container and its initial pane. */
-export function registerSearchViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
+export function registerSearchViews(
+	registry: WorkbenchViewRegistry = ViewsRegistry,
+): void {
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.Search,
 		title: 'Search',
@@ -51,15 +49,13 @@ export function registerSearchViews(registry: WorkbenchViewRegistry = ViewsRegis
 		icon: Lxicon.search,
 		order: 2,
 	});
-	registry.registerStaticViews(WorkbenchViewContainerId.Search, [
-		{
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-			localizationKey: { bundle: 'ash.views', key: 'search' },
-			order: 1,
-			canToggleVisibility: false,
-			canMoveView: true,
-			ctorDescriptor: new SyncDescriptor(SearchView),
-		},
-	]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Search, [{
+		id: SEARCH_VIEW_ID,
+		title: 'Search',
+		localizationKey: { bundle: 'ash.views', key: 'search' },
+		order: 1,
+		canToggleVisibility: false,
+		canMoveView: true,
+		ctorDescriptor: new SyncDescriptor(SearchView),
+	}]);
 }

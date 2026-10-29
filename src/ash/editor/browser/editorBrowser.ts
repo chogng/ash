@@ -5,37 +5,12 @@ import { type IDimension } from '../common/core/2d/dimension.js';
 import { type IPosition, type Position } from '../common/core/position.js';
 import { type IRange, type Range } from '../common/core/range.js';
 import { type ISelection, type Selection } from '../common/core/selection.js';
-import {
-	type GlyphMarginLane,
-	type ICursorStateComputer,
-	type IIdentifiedSingleEditOperation,
-	type IModelDecoration,
-	type IModelDecorationsChangeAccessor,
-	type PositionAffinity,
-} from '../common/model.js';
+import { type GlyphMarginLane, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
 import { type IModelDeltaDecoration } from '../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
-import {
-	type ConfigurationChangedEvent,
-	type EditorLayoutInfo,
-	type EditorOption,
-	type FindComputedEditorOptionValueById,
-	type IComputedEditorOptions,
-	type IEditorOptions,
-	type OverviewRulerPosition,
-} from '../common/config/editorOptions.js';
-import {
-	type ICodeEditorViewState,
-	type ICommand,
-	type IEditor,
-	type IEditorAction,
-	type IEditorContribution,
-	type IEditorDecorationsCollection,
-	type IModelChangedEvent,
-	type INewScrollPosition,
-	type ScrollType,
-} from '../common/editorCommon.js';
+import { type ConfigurationChangedEvent, type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, type OverviewRulerPosition } from '../common/config/editorOptions.js';
+import { type ICodeEditorViewState, type ICommand, type IEditor, type IEditorAction, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
@@ -164,18 +139,7 @@ export interface IMouseTargetOutsideEditor extends IBaseMouseTarget {
 	readonly outsideDistance: number;
 }
 
-export type IMouseTarget =
-	| IMouseTargetUnknown
-	| IMouseTargetTextarea
-	| IMouseTargetMargin
-	| IMouseTargetViewZone
-	| IMouseTargetContentText
-	| IMouseTargetContentEmpty
-	| IMouseTargetContentWidget
-	| IMouseTargetOverlayWidget
-	| IMouseTargetScrollbar
-	| IMouseTargetOverviewRuler
-	| IMouseTargetOutsideEditor;
+export type IMouseTarget = IMouseTargetUnknown | IMouseTargetTextarea | IMouseTargetMargin | IMouseTargetViewZone | IMouseTargetContentText | IMouseTargetContentEmpty | IMouseTargetContentWidget | IMouseTargetOverlayWidget | IMouseTargetScrollbar | IMouseTargetOverviewRuler | IMouseTargetOutsideEditor;
 
 export interface IEditorMouseEvent {
 	readonly event: IMouseEvent;
@@ -209,7 +173,7 @@ export interface ICodeEditor extends IEditor {
 	readonly onWillChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
-	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
 	readonly onDidChangeModelDecorations: Event<IModelDecorationsChangedEvent>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;
@@ -232,7 +196,7 @@ export interface ICodeEditor extends IEditor {
 	readonly onMouseDrag: Event<IEditorMouseEvent>;
 	readonly onMouseDrop: Event<IPartialEditorMouseEvent>;
 	readonly onMouseDropCanceled: Event<void>;
-	readonly onDropIntoEditor: Event<{ readonly position: IPosition; readonly event: DragEvent }>;
+	readonly onDropIntoEditor: Event<{ readonly position: IPosition; readonly event: DragEvent; }>;
 	readonly onContextMenu: Event<IEditorMouseEvent>;
 	readonly onMouseMove: Event<IEditorMouseEvent>;
 	readonly onMouseLeave: Event<IPartialEditorMouseEvent>;
@@ -285,7 +249,7 @@ export interface ICodeEditor extends IEditor {
 	getOptions(): IComputedEditorOptions;
 	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T>;
 	getRawOptions(): IEditorOptions;
-	getScrolledVisiblePosition(position: IPosition): { top: number; left: number; height: number } | null;
+	getScrolledVisiblePosition(position: IPosition): { top: number; left: number; height: number; } | null;
 	getWidthOfLine(lineNumber: number): number;
 	applyFontInfo(target: HTMLElement): void;
 	createDecorationsCollection(decorations?: IModelDeltaDecoration[]): IEditorDecorationsCollection;
@@ -326,7 +290,9 @@ export function getCodeEditor(control: unknown): ICodeEditor | null {
 	if ('getModifiedEditor' in control && typeof control.getModifiedEditor === 'function') {
 		return getCodeEditor(control.getModifiedEditor());
 	}
-	return 'getModel' in control && typeof control.getModel === 'function' && 'getContribution' in control && typeof control.getContribution === 'function' ? (control as ICodeEditor) : null;
+	return 'getModel' in control && typeof control.getModel === 'function'
+		&& 'getContribution' in control && typeof control.getContribution === 'function'
+		? control as ICodeEditor : null;
 }
 
 export interface IViewZone {

@@ -30,7 +30,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 	private selectedChange: MultiDiffEditorLocation | undefined;
 	public activeItemId: string | undefined;
 
-	constructor(items: readonly { readonly id: string }[]) {
+	constructor(items: readonly { readonly id: string; }[]) {
 		super();
 		this.itemIds = new Set(items.map(item => item.id));
 	}
@@ -39,7 +39,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 		return this.itemIds.size > 0 && this.collapsedItemIds.size === this.itemIds.size;
 	}
 
-	public setItems(items: readonly { readonly id: string }[]): void {
+	public setItems(items: readonly { readonly id: string; }[]): void {
 		this.itemIds = new Set(items.map(item => item.id));
 		for (const id of this.collapsedItemIds) if (!this.itemIds.has(id)) this.collapsedItemIds.delete(id);
 		for (const id of this.itemViewStates.keys()) if (!this.itemIds.has(id)) this.itemViewStates.delete(id);
@@ -70,18 +70,14 @@ export class MultiDiffEditorViewModel extends Disposable {
 
 	public expand(itemId: string): boolean {
 		const changed = this.collapsedItemIds.delete(itemId);
-		if (changed) {
-			this.collapseStateChanged.fire();
-		}
+		if (changed) { this.collapseStateChanged.fire(); }
 		return changed;
 	}
 
 	public collapseAll(): boolean {
 		const changed = this.collapsedItemIds.size !== this.itemIds.size;
 		for (const id of this.itemIds) this.collapsedItemIds.add(id);
-		if (changed) {
-			this.collapseStateChanged.fire();
-		}
+		if (changed) { this.collapseStateChanged.fire(); }
 		return changed;
 	}
 
@@ -105,7 +101,8 @@ export class MultiDiffEditorViewModel extends Disposable {
 			scrollTop,
 			...(this.activeItemId ? { activeItemId: this.activeItemId } : {}),
 			collapsedItemIds: [...this.collapsedItemIds],
-			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) => (state.original || state.modified ? [{ id, ...state }] : [])),
+			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) =>
+				state.original || state.modified ? [{ id, ...state }] : []),
 		};
 	}
 
@@ -127,17 +124,14 @@ export class MultiDiffEditorViewModel extends Disposable {
 function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorViewState {
 	if (!value || typeof value !== 'object') return false;
 	const state = value as Partial<MultiDiffEditorViewState>;
-	return (
-		isFiniteNumber(state.scrollTop) &&
-		state.scrollTop >= 0 &&
-		(state.activeItemId === undefined || typeof state.activeItemId === 'string') &&
-		Array.isArray(state.collapsedItemIds) &&
-		state.collapsedItemIds.every((id: unknown) => typeof id === 'string') &&
-		Array.isArray(state.itemViewStates) &&
-		state.itemViewStates.every((item: unknown) => {
+	return isFiniteNumber(state.scrollTop) && state.scrollTop >= 0
+		&& (state.activeItemId === undefined || typeof state.activeItemId === 'string')
+		&& Array.isArray(state.collapsedItemIds) && state.collapsedItemIds.every((id: unknown) => typeof id === 'string')
+		&& Array.isArray(state.itemViewStates) && state.itemViewStates.every((item: unknown) => {
 			if (!item || typeof item !== 'object') return false;
 			const entry = item as MultiDiffEditorViewState['itemViewStates'][number];
-			return typeof entry.id === 'string' && (entry.original === null || isCodeEditorViewState(entry.original)) && (entry.modified === null || isCodeEditorViewState(entry.modified));
-		})
-	);
+			return typeof entry.id === 'string'
+				&& (entry.original === null || isCodeEditorViewState(entry.original))
+				&& (entry.modified === null || isCodeEditorViewState(entry.modified));
+		});
 }

@@ -10,12 +10,8 @@ import {
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	NATIVE_HOST_TERMINAL_MOVE_CHANNEL,
-	NATIVE_HOST_TERMINAL_TAKE_CHANNEL,
-	NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
-	NATIVE_HOST_TERMINAL_REQUEST_CHANNEL,
-	validateTerminalWindowTransfer,
-	validateTerminalWindowTransferResult,
+	NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL,
+	validateTerminalWindowTransfer, validateTerminalWindowTransferResult,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 	validateSystemWideKeybindingsResult,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
@@ -34,12 +30,9 @@ import {
 	parseTitleBarStyle,
 	WINDOW_OPERATION_CHANNEL,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
-	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL,
-	validateWindowClientSize,
+	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, validateWindowClientSize,
 	WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL,
-	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL,
-	validateAuxiliaryWindowState,
-	validateAuxiliaryWindowStateEvent,
+	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowState, validateAuxiliaryWindowStateEvent,
 	validateWindowAlwaysOnTopChangedEvent,
 	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
 	type IWorkbenchWindowInfo,
@@ -48,14 +41,9 @@ import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import {
-	AGENT_HOST_EDITOR_STATE_CHANNEL,
-	AGENT_HOST_EDITOR_UPDATE_CHANNEL,
-	AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL,
-	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
-	AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL,
-	AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
-	validateAgentHostEditorState,
-	validateAgentsWindowInvitation,
+	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL,
+	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
+	validateAgentHostEditorState, validateAgentsWindowInvitation,
 } from '../common/nativeHost.js';
 
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
@@ -75,57 +63,24 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		onDidChangeWindowClientSize: listener => subscribe<unknown>(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, value => listener(validateWindowClientSize(value))),
 		async isAdmin(): Promise<boolean> {
 			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);
-			if (typeof value !== 'boolean') {
-				throw new TypeError('Invalid desktop privilege result');
-			}
+			if (typeof value !== 'boolean') { throw new TypeError('Invalid desktop privilege result'); }
 			return value;
 		},
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
 		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showMessageBox,
-		listWindows: windowName =>
-			invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'list',
-				...(windowName === undefined ? {} : { windowName }),
-			}),
+		listWindows: windowName => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list', ...(windowName === undefined ? {} : { windowName }) }),
 		focusWindowById: windowId => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focus', windowId }),
-		focusWindow: windowName =>
-			invoke<void>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'focusSelf',
-				...(windowName === undefined ? {} : { windowName }),
-			}),
-		closeWindow: windowName =>
-			invoke<void>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'close',
-				...(windowName === undefined ? {} : { windowName }),
-			}),
+		focusWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focusSelf', ...(windowName === undefined ? {} : { windowName }) }),
+		closeWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'close', ...(windowName === undefined ? {} : { windowName }) }),
 		closeOtherWindows: () => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'closeOthers' }),
-		getZoomLevel: windowName =>
-			invoke<number>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'getZoom',
-				...(windowName === undefined ? {} : { windowName }),
-			}),
+		getZoomLevel: windowName => invoke<number>(WINDOW_OPERATION_CHANNEL, { kind: 'getZoom', ...(windowName === undefined ? {} : { windowName }) }),
 		onDidChangeZoomLevel: listener => subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, listener),
-		setZoomLevel: (level, windowName, allWindows) =>
-			invoke<void>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'setZoom',
-				level,
-				...(windowName === undefined ? {} : { windowName }),
-				...(allWindows ? { allWindows: true } : {}),
-			}),
+		setZoomLevel: (level, windowName, allWindows) => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'setZoom', level, ...(windowName === undefined ? {} : { windowName }), ...(allWindows ? { allWindows: true } : {}) }),
 		getAuxiliaryWindowState: async windowName => validateAuxiliaryWindowState(await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'getAuxiliaryState', windowName })),
 		onDidChangeAuxiliaryWindowState: listener => subscribe<unknown>(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, value => listener(validateAuxiliaryWindowStateEvent(value))),
-		isAlwaysOnTop: windowName =>
-			invoke<boolean>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'getAlwaysOnTop',
-				...(windowName === undefined ? {} : { windowName }),
-			}),
-		setAlwaysOnTop: (enabled, windowName) =>
-			invoke<void>(WINDOW_OPERATION_CHANNEL, {
-				kind: 'setAlwaysOnTop',
-				enabled,
-				...(windowName === undefined ? {} : { windowName }),
-			}),
+		isAlwaysOnTop: windowName => invoke<boolean>(WINDOW_OPERATION_CHANNEL, { kind: 'getAlwaysOnTop', ...(windowName === undefined ? {} : { windowName }) }),
+		setAlwaysOnTop: (enabled, windowName) => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'setAlwaysOnTop', enabled, ...(windowName === undefined ? {} : { windowName }) }),
 		onDidChangeWindowAlwaysOnTop: listener => subscribe<unknown>(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, value => listener(validateWindowAlwaysOnTopChangedEvent(value))),
 		performNativeTabAction: action => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'nativeTab', action }),
 		openNewWindowTab: () => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'newTab' }),
@@ -135,10 +90,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		async moveTerminalToWindow(transfer, targetWindowId) {
-			const result = await invoke<unknown>(NATIVE_HOST_TERMINAL_MOVE_CHANNEL, {
-				transfer,
-				...(targetWindowId === undefined ? {} : { targetWindowId }),
-			});
+			const result = await invoke<unknown>(NATIVE_HOST_TERMINAL_MOVE_CHANNEL, { transfer, ...(targetWindowId === undefined ? {} : { targetWindowId }) });
 			return validateTerminalWindowTransferResult(result);
 		},
 		async takeTerminalTransfer() {
@@ -155,15 +107,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		releaseAgentsWindowInvitation: id => invoke<void>(AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, id),
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
-		onDidRequestOpenExternalUri: listener =>
-			subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
-				if (typeof value !== 'string') {
-					throw new TypeError('Invalid external URL request');
-				}
-				listener(normalizeExternalUrl(value));
-			}),
+		onDidRequestOpenExternalUri: listener => subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
+			if (typeof value !== 'string') { throw new TypeError('Invalid external URL request'); }
+			listener(normalizeExternalUrl(value));
+		}),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
-		setWindowTheme: theme => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
+		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),
 		toggleDeveloperTools: () => invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
 		showSaveDialog: async options => validateSaveDialogResult(await invoke<unknown>(NATIVE_HOST_SAVE_FILE_CHANNEL, options)),
@@ -171,7 +120,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 			return validateAccessibilitySupport(await invoke<unknown>(NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL));
 		},
 		onDidChangeAccessibilitySupport(listener) {
-			return subscribe<unknown>(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, value => listener(validateAccessibilitySupport(value)));
+			return subscribe<unknown>(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, (value) => listener(validateAccessibilitySupport(value)));
 		},
 	};
 }

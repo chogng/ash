@@ -4,21 +4,16 @@ import { PickerQuickAccessProvider, type IPickerQuickAccessItem, type Picks } fr
 import { filterQuickPickItems } from './quickInputList.js';
 
 export class HelpQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
-	constructor(@IQuickInputService private readonly quickInput: IQuickInputService) {
-		super('?');
-	}
+	constructor(@IQuickInputService private readonly quickInput: IQuickInputService) { super('?'); }
 
 	protected override _getPicks(filter: string): Picks<IPickerQuickAccessItem> {
-		return filterQuickPickItems(
-			QuickAccessRegistry.all()
-				.filter(descriptor => descriptor.prefix !== '' && descriptor.prefix !== '?')
-				.map(descriptor => ({
-					label: `${descriptor.prefix} ${descriptor.helpLabel}`,
-					description: descriptor.placeholder,
-					keepOpen: true,
-					accept: () => this.quickInput.quickAccess.show(descriptor.prefix),
-				})),
-			filter,
-		);
+		return filterQuickPickItems(QuickAccessRegistry.all()
+			.filter(descriptor => descriptor.prefix !== '' && descriptor.prefix !== '?')
+			.map(descriptor => ({
+				label: `${descriptor.prefix} ${descriptor.helpLabel}`,
+				description: descriptor.placeholder,
+				keepOpen: true,
+				accept: () => this.quickInput.quickAccess.show(descriptor.prefix),
+			})), filter);
 	}
 }

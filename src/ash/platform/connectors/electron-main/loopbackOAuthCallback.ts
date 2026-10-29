@@ -3,16 +3,12 @@ import { createServer } from 'node:http';
 
 export class LoopbackOAuthCallback {
 	private settled = false;
-	private readonly completion: Promise<{ readonly state: string; readonly code: string; readonly issuer?: string }>;
-	private resolve!: (value: { readonly state: string; readonly code: string; readonly issuer?: string }) => void;
+	private readonly completion: Promise<{ readonly state: string; readonly code: string; readonly issuer?: string; }>;
+	private resolve!: (value: { readonly state: string; readonly code: string; readonly issuer?: string; }) => void;
 	private reject!: (reason: Error) => void;
 	private readonly timeout: NodeJS.Timeout;
 
-	private constructor(
-		private readonly server: ReturnType<typeof createServer>,
-		readonly redirectUri: string,
-		private readonly callbackPath: string,
-	) {
+	private constructor(private readonly server: ReturnType<typeof createServer>, readonly redirectUri: string, private readonly callbackPath: string) {
 		this.completion = new Promise((resolve, reject) => {
 			this.resolve = resolve;
 			this.reject = reject;
@@ -41,7 +37,7 @@ export class LoopbackOAuthCallback {
 		return callback;
 	}
 
-	wait(): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string }> {
+	wait(): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string; }> {
 		return this.completion;
 	}
 
@@ -57,12 +53,8 @@ export class LoopbackOAuthCallback {
 			return;
 		}
 		let url: URL;
-		try {
-			url = new URL(rawUrl, this.redirectUri);
-		} catch {
-			response.writeHead(400).end();
-			return;
-		}
+		try { url = new URL(rawUrl, this.redirectUri); }
+		catch { response.writeHead(400).end(); return; }
 		if (url.pathname !== this.callbackPath) {
 			response.writeHead(404).end();
 			return;

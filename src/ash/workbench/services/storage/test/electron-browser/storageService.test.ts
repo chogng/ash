@@ -31,17 +31,12 @@ suite('Desktop window storage', () => {
 			services.registerInstance(IMainProcessService, {
 				_serviceBrand: undefined,
 				getChannel: () => ({
-					call: (command, arg) => (command === 'updateItems' && unavailable ? Promise.reject(failure) : channel.call('window:1', command, arg)),
+					call: (command, arg) => command === 'updateItems' && unavailable ? Promise.reject(failure) : channel.call('window:1', command, arg),
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
-				registerChannel: () => {
-					throw new Error('Unexpected channel registration');
-				},
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
-			using storage = services.createInstance(NativeWorkbenchStorageService, {
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'first',
-			});
+			using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' });
 			await storage.initialize();
 			storage.store('removed', 'old', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			await storage.flush();
@@ -55,15 +50,9 @@ suite('Desktop window storage', () => {
 			await storage.flush();
 			storage.store('subsequent', 'saved', StorageScope.PROFILE, StorageTarget.USER);
 			await storage.flush();
-			using reopened = services.createInstance(NativeWorkbenchStorageService, {
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'first',
-			});
+			using reopened = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' });
 			await reopened.initialize();
-			assert.deepEqual(
-				[reopened.get('layout:sidebar', StorageScope.WORKSPACE), reopened.get('removed', StorageScope.WORKSPACE), reopened.get('subsequent', StorageScope.PROFILE)],
-				['latest', undefined, 'saved'],
-			);
+			assert.deepEqual([reopened.get('layout:sidebar', StorageScope.WORKSPACE), reopened.get('removed', StorageScope.WORKSPACE), reopened.get('subsequent', StorageScope.PROFILE)], ['latest', undefined, 'saved']);
 		} finally {
 			setUnexpectedErrorHandler(previousHandler);
 			browser.window.close();
@@ -79,29 +68,18 @@ suite('Desktop window storage', () => {
 			await owner.initialize();
 			const channel = new StorageDatabaseChannel(owner);
 			using services = new InstantiationService();
-			assert.throws(
-				() =>
-					services.createInstance(NativeWorkbenchStorageService, {
-						ownerWindow: browser.window as unknown as Window,
-						workspaceId: 'first',
-					}),
-				/mainProcessService/,
-			);
+			assert.throws(() => services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' }), /mainProcessService/);
 			let sentWrites = 0;
 			services.registerInstance(IMainProcessService, {
 				_serviceBrand: undefined,
 				getChannel: () => ({
 					call: (command, arg) => {
-						if (command === 'updateItems') {
-							sentWrites++;
-						}
+						if (command === 'updateItems') { sentWrites++; }
 						return channel.call('window:1', command, arg);
 					},
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
-				registerChannel: () => {
-					throw new Error('Unexpected channel registration');
-				},
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
 			const options = { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' };
 			using first = services.createInstance(NativeWorkbenchStorageService, options);
@@ -144,41 +122,17 @@ suite('Desktop window storage', () => {
 					call: (command, arg) => channel.call('window:1', command, arg),
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
-				registerChannel: () => {
-					throw new Error('Unexpected channel registration');
-				},
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
 			const key = 'ash.code.storage.application';
 			browser.window.localStorage.setItem(key, JSON.stringify({ version: 1, entries: { saved: { value: 'yes', target: StorageTarget.USER } } }));
-			browser.window.localStorage.setItem(
-				'ash.code.storage.workspace.sessions',
-				JSON.stringify({
-					version: 1,
-					entries: { draft: { value: 'retained', target: StorageTarget.MACHINE } },
-				}),
-			);
-			browser.window.localStorage.setItem(
-				'ash.code.storage.profile.code-sessions',
-				JSON.stringify({
-					version: 1,
-					entries: { sidebar: { value: 'hidden', target: StorageTarget.MACHINE } },
-				}),
-			);
-			using storage = services.createInstance(NativeWorkbenchStorageService, {
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'sessions',
-				profileId: 'code-sessions',
-			});
+			browser.window.localStorage.setItem('ash.code.storage.workspace.sessions', JSON.stringify({ version: 1, entries: { draft: { value: 'retained', target: StorageTarget.MACHINE } } }));
+			browser.window.localStorage.setItem('ash.code.storage.profile.code-sessions', JSON.stringify({ version: 1, entries: { sidebar: { value: 'hidden', target: StorageTarget.MACHINE } } }));
+			using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', profileId: 'code-sessions' });
 			await storage.initialize();
-			assert.deepEqual(
-				[storage.get('saved', StorageScope.APPLICATION), browser.window.localStorage.getItem(key), browser.window.localStorage.getItem('ash.storage.application')],
-				['yes', null, null],
-			);
+			assert.deepEqual([storage.get('saved', StorageScope.APPLICATION), browser.window.localStorage.getItem(key), browser.window.localStorage.getItem('ash.storage.application')], ['yes', null, null]);
 			assert.deepEqual([storage.get('draft', StorageScope.WORKSPACE), storage.get('sidebar', StorageScope.PROFILE)], ['retained', 'hidden']);
-			assert.deepEqual(
-				['ash.storage.workspace.sessions', 'ash.storage.profile.code-sessions'].map(key => browser.window.localStorage.getItem(key)),
-				[null, null],
-			);
+			assert.deepEqual(['ash.storage.workspace.sessions', 'ash.storage.profile.code-sessions'].map(key => browser.window.localStorage.getItem(key)), [null, null]);
 			assert.ok(browser.window.localStorage.getItem('ash.storage.v1.code.application'));
 		} finally {
 			browser.window.close();
@@ -203,17 +157,12 @@ suite('Desktop window storage', () => {
 					call: (command, arg) => channel.call('window:1', command, arg),
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
-				registerChannel: () => {
-					throw new Error('Unexpected channel registration');
-				},
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
 			const key = 'ash.storage.application';
 			for (const source of ['{"version":1,"entries":{"saved":{"value":1,"target":"user"}}}', '{"version":1,"entries":{"saved":{"value":"conflict","target":"user"}}}']) {
 				browser.window.localStorage.setItem(key, source);
-				using storage = services.createInstance(NativeWorkbenchStorageService, {
-					ownerWindow: browser.window as unknown as Window,
-					workspaceId: 'first',
-				});
+				using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' });
 				await assert.rejects(storage.initialize(), /Invalid storage entry|migration conflict/);
 				assert.equal(browser.window.localStorage.getItem(key), source);
 				assert.deepEqual({ ...(await owner.getItems(identity)).entries }, entries);

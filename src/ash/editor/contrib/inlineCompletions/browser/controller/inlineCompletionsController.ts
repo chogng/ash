@@ -31,21 +31,12 @@ import { DataChannelForwardingTelemetryService } from '../../../../../platform/d
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
-type CompletionEndOfLife = { accepted: boolean; durationMs: number };
+type CompletionEndOfLife = { accepted: boolean; durationMs: number; };
 type CompletionEndOfLifeClassification = {
 	owner: 'lanxi';
 	comment: 'Inline completion lifecycle without document or suggestion content.';
-	accepted: {
-		classification: 'SystemMetaData';
-		purpose: 'FeatureInsight';
-		comment: 'Whether the suggestion was accepted.';
-	};
-	durationMs: {
-		classification: 'SystemMetaData';
-		purpose: 'PerformanceAndHealth';
-		comment: 'Time the suggestion remained available in milliseconds.';
-		isMeasurement: true;
-	};
+	accepted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the suggestion was accepted.'; };
+	durationMs: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'Time the suggestion remained available in milliseconds.'; isMeasurement: true; };
 };
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
@@ -90,45 +81,35 @@ export class InlineCompletionsController extends Disposable {
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
 		this.debounce = debounceService.for(providers, 'Inline completions', { min: 50, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.trigger('automatic'), this.debounce.default()));
-		const element = (this.element = h(viewport.domNode.domNode.ownerDocument, 'span'));
+		const element = this.element = h(viewport.domNode.domNode.ownerDocument, 'span');
 		element.className = 'stanza-editor-inline-completion';
 		element.hidden = true;
 		viewport.domNode.domNode.append(element);
-		this._register(
-			toDisposable(() => {
+		this._register(toDisposable(() => {
+			this.hide();
+			element.remove();
+		}));
+		this._register(inlineCompletionsService.onDidChangeIsSnoozing(snoozing => {
+			if (snoozing) {
 				this.hide();
-				element.remove();
-			}),
-		);
-		this._register(
-			inlineCompletionsService.onDidChangeIsSnoozing(snoozing => {
-				if (snoozing) {
-					this.hide();
-				}
-			}),
-		);
+			}
+		}));
 		this._register(editor.onDidChangeCursorSelection(() => this.hide()));
 		this._register(editor.onDidType(() => this.schedule()));
-		this._register(
-			editor.onDidCompositionStart(() => {
-				this.composing = true;
-				this.hide();
-			}),
-		);
-		this._register(
-			editor.onDidCompositionEnd(() => {
-				this.composing = false;
-				this.schedule();
-			}),
-		);
+		this._register(editor.onDidCompositionStart(() => {
+			this.composing = true;
+			this.hide();
+		}));
+		this._register(editor.onDidCompositionEnd(() => {
+			this.composing = false;
+			this.schedule();
+		}));
 		this._register(editor.onDidBlurEditorText(() => this.hide()));
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.inlineSuggest) || event.hasChanged(EditorOption.readOnly)) {
-					this.hide();
-				}
-			}),
-		);
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.inlineSuggest) || event.hasChanged(EditorOption.readOnly)) {
+				this.hide();
+			}
+		}));
 		this._register(providers.onDidChange(() => this.hide()));
 		this._register(model.onWillDispose(() => this.hide()));
 		this._register(model.onDidChangeLanguage(() => this.hide()));
@@ -136,12 +117,10 @@ export class InlineCompletionsController extends Disposable {
 		this._register(viewport.textModel.onDidChangeContent(() => this.hide()));
 		if (onDidExecuteCommand) {
 			const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
-			this._register(
-				onDidExecuteCommand(event => {
-					if (!triggerCommands.has(event.commandId)) return;
-					this.schedule();
-				}),
-			);
+			this._register(onDidExecuteCommand(event => {
+				if (!triggerCommands.has(event.commandId)) return;
+				this.schedule();
+			}));
 		}
 	}
 
@@ -167,18 +146,10 @@ export class InlineCompletionsController extends Disposable {
 		const selection = this.editor.getSelection();
 		if (!selection) return;
 		if (!selection.isEmpty()) return;
-		const request = (this.request = new AbortController());
+		const request = this.request = new AbortController();
 		const duration = StopWatch.create();
 		try {
-			const items = await provideInlineCompletions(
-				this.model,
-				this.providers,
-				this.model.getLanguageId(),
-				selection.getPosition(),
-				triggerKind,
-				request.signal,
-				this.languageConfigurationService,
-			);
+			const items = await provideInlineCompletions(this.model, this.providers, this.model.getLanguageId(), selection.getPosition(), triggerKind, request.signal, this.languageConfigurationService);
 			if (request.signal.aborted) return;
 			this.debounce.update(this.model, duration.elapsed());
 			this.item = items[0];
@@ -188,9 +159,7 @@ export class InlineCompletionsController extends Disposable {
 				this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
 			}
 			this.render();
-			if (this.item && !this.element.hidden) {
-				void this.signals.playSignal(AccessibilitySignal.inlineSuggestion);
-			}
+			if (this.item && !this.element.hidden) { void this.signals.playSignal(AccessibilitySignal.inlineSuggestion); }
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
 		} finally {
@@ -252,10 +221,7 @@ export class InlineCompletionsController extends Disposable {
 }
 
 class AcceptInlineCompletionCommand implements ICommand {
-	constructor(
-		private readonly edits: readonly TextEdit[],
-		private readonly mainEditIndex: number,
-	) {}
+	constructor(private readonly edits: readonly TextEdit[], private readonly mainEditIndex: number) { }
 
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		for (const edit of this.edits) builder.addTrackedEditOperation(edit.range, edit.text);
@@ -267,17 +233,8 @@ class AcceptInlineCompletionCommand implements ICommand {
 }
 
 registerEditorContribution({
-	id: InlineCompletionsController.ID,
-	install: context => {
+	id: InlineCompletionsController.ID, install: context => {
 		if (context.kind !== 'text' || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
-		return context.instantiationService.createInstance(
-			InlineCompletionsController,
-			context.editor,
-			context.view,
-			context.model,
-			context.languageFeaturesService.inlineCompletionsProvider,
-			context.onDidExecuteCommand,
-			context.onLanguageError,
-		);
-	},
+		return context.instantiationService.createInstance(InlineCompletionsController, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
+	}
 });

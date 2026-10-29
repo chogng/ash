@@ -12,158 +12,69 @@ test.beforeEach(async ({ workbench }) => {
 		const pending = new Map<number, string>();
 		const listeners = new Map<MessagePort, EventListener>();
 		const frames: unknown[] = [];
-		const bytes = (value: unknown) => (value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined);
+		const bytes = (value: unknown) => value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined;
 		const redact = (value: unknown): unknown => {
 			if (Array.isArray(value)) return value.map(redact);
 			if (!value || typeof value !== 'object') return value;
-			return Object.fromEntries(
-				Object.entries(value).map(([key, entry]) => [
-					key,
-					/token|secret|password|credential|authorization|api.?key|VSCODE_INSPECTOR_OPTIONS|ASH_JS_DEBUG/i.test(key) ? '<redacted>' : redact(entry),
-				]),
-			);
+			return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, /token|secret|password|credential|authorization|api.?key|VSCODE_INSPECTOR_OPTIONS|ASH_JS_DEBUG/i.test(key) ? '<redacted>' : redact(entry)]));
 		};
-		const append = (value: unknown) => {
-			frames.push(redact(value));
-			if (frames.length > 512) frames.shift();
-		};
+		const append = (value: unknown) => { frames.push(redact(value)); if (frames.length > 512) frames.shift(); };
 		MessagePort.prototype.postMessage = function (message: unknown, options?: Transferable[] | StructuredSerializeOptions) {
 			const raw = bytes(message);
 			if (raw) {
-				const request = JSON.parse(new TextDecoder().decode(raw)) as {
-					id: number;
-					method?: string;
-					error?: unknown;
-				};
+				const request = JSON.parse(new TextDecoder().decode(raw)) as { id: number; method?: string; error?: unknown; };
 				if (request.error !== undefined) append({ clientResponse: request });
-				if (request.method?.startsWith('debug/') && request.method !== 'debug/workspace/read') {
-					pending.set(request.id, request.method);
-					if (
-						![
-							'debug/adapter/read',
-							'debug/session/breakpoints/read',
-							'debug/session/console/read',
-							'debug/session/lifecycle',
-							'debug/session/response',
-							'debug/session/inspection/read',
-						].includes(request.method)
-					)
-						append(request);
-				}
+				if (request.method?.startsWith('debug/') && request.method !== 'debug/workspace/read') { pending.set(request.id, request.method); if (!['debug/adapter/read', 'debug/session/breakpoints/read', 'debug/session/console/read', 'debug/session/lifecycle', 'debug/session/response', 'debug/session/inspection/read'].includes(request.method)) append(request); }
 				if (!listeners.has(this)) {
 					let buffer = '';
 					const observer: EventListener = event => {
 						if (!(event instanceof MessageEvent)) return;
-						const raw = bytes(event.data);
-						if (!raw) return;
+						const raw = bytes(event.data); if (!raw) return;
 						buffer += new TextDecoder().decode(raw);
 						let end: number;
 						while ((end = buffer.indexOf('\n')) >= 0) {
-							const frame = JSON.parse(buffer.slice(0, end)) as { id?: number; method?: string };
-							buffer = buffer.slice(end + 1);
-							if (frame.id !== undefined && pending.has(frame.id)) {
-								const method = pending.get(frame.id)!;
-								const result = (frame as { result?: { messages?: unknown[] } }).result;
-								if (method === 'debug/adapter/read') {
-									if (result?.messages?.length)
-										append({
-											method,
-											messages: result.messages.filter(entry => {
-												const message = (entry as { message: { command?: string; type?: string } }).message;
-												return message.type !== 'response' || !['variables', 'scopes', 'stackTrace', 'threads'].includes(message.command ?? '');
-											}),
-										});
-								} else if (
-									!['debug/session/breakpoints/read', 'debug/session/console/read', 'debug/session/lifecycle', 'debug/session/response', 'debug/session/inspection/read'].includes(
-										method,
-									)
-								)
-									append({ method, response: frame });
-								pending.delete(frame.id);
-							} else if (
-								frame.method?.startsWith('debug/') ||
-								(frame.method === 'extensionClient/request' && (frame as { params?: { operation?: { operation?: string } } }).params?.operation?.operation !== 'readTerminal')
-							)
-								append(frame);
+							const frame = JSON.parse(buffer.slice(0, end)) as { id?: number; method?: string; }; buffer = buffer.slice(end + 1);
+							if (frame.id !== undefined && pending.has(frame.id)) { const method = pending.get(frame.id)!; const result = (frame as { result?: { messages?: unknown[]; }; }).result; if (method === 'debug/adapter/read') { if (result?.messages?.length) append({ method, messages: result.messages.filter(entry => { const message = (entry as { message: { command?: string; type?: string; }; }).message; return message.type !== 'response' || !['variables', 'scopes', 'stackTrace', 'threads'].includes(message.command ?? ''); }) }); } else if (!['debug/session/breakpoints/read', 'debug/session/console/read', 'debug/session/lifecycle', 'debug/session/response', 'debug/session/inspection/read'].includes(method)) append({ method, response: frame }); pending.delete(frame.id); }
+							else if (frame.method?.startsWith('debug/') || frame.method === 'extensionClient/request' && (frame as { params?: { operation?: { operation?: string; }; }; }).params?.operation?.operation !== 'readTerminal') append(frame);
 						}
 					};
-					listeners.set(this, observer);
-					this.addEventListener('message', observer);
+					listeners.set(this, observer); this.addEventListener('message', observer);
 				}
 			}
 			Reflect.apply(saved, this, options === undefined ? [message] : [message, options]);
 		};
-		Object.assign(globalThis, {
-			debugWorkflowTrace: {
-				frames,
-				dispose: () => {
-					MessagePort.prototype.postMessage = saved;
-					for (const [port, listener] of listeners) port.removeEventListener('message', listener);
-				},
-			},
-		});
+		Object.assign(globalThis, { debugWorkflowTrace: { frames, dispose: () => { MessagePort.prototype.postMessage = saved; for (const [port, listener] of listeners) port.removeEventListener('message', listener); } } });
 	});
 });
 test.afterEach(async ({ workbench }, info) => {
-	const frames = workbench.page.isClosed()
-		? []
-		: await workbench.page.evaluate(() => {
-				const trace = (globalThis as typeof globalThis & { debugWorkflowTrace?: { frames: unknown[]; dispose(): void } }).debugWorkflowTrace;
-				trace?.dispose();
-				return trace?.frames ?? [];
-			});
+	const frames = workbench.page.isClosed() ? [] : await workbench.page.evaluate(() => { const trace = (globalThis as typeof globalThis & { debugWorkflowTrace?: { frames: unknown[]; dispose(): void; }; }).debugWorkflowTrace; trace?.dispose(); return trace?.frames ?? []; });
 	const path = info.outputPath('debug-workflow-boundary.json');
 	await writeFile(path, JSON.stringify(frames, null, 2));
 	await info.attach('debug-workflow-boundary', { path, contentType: 'application/json' });
 });
 
-const alive = (pid: number): boolean => {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
-		throw error;
-	}
-};
+const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } };
 
 function terminalNodeCommand(script: string): string {
 	const args = [process.execPath, script];
-	return process.platform === 'win32' ? args.map(argument => `"${argument}"`).join(' ') : args.map(argument => `'${argument.replaceAll("'", "'\\''")}'`).join(' ');
+	return process.platform === 'win32'
+		? args.map(argument => `"${argument}"`).join(' ')
+		: args.map(argument => `'${argument.replaceAll("'", "'\\''")}'`).join(' ');
 }
-for (const consoleMode of ['internalConsole', 'integratedTerminal'])
-	test(`managed Node runtime executes JavaScript in ${consoleMode} without an explicit executable`, tags, async ({ workbench, testWorkspace }) => {
-		const root = testWorkspace.directory;
-		await mkdir(join(root, '.vscode'), { recursive: true });
-		await writeFile(
-			join(root, 'managed.cjs'),
-			"if (process.type) throw Error('Expected Node mode');\nconst answer = 42;\nrequire('node:fs').writeFileSync('managed.pid', String(process.pid));\ndebugger;\nsetInterval(() => {}, 1000);\n",
-		);
-		await writeFile(
-			join(root, '.vscode/launch.json'),
-			JSON.stringify({
-				version: '0.2.0',
-				configurations: [
-					{
-						name: 'Managed Node',
-						type: 'node',
-						request: 'launch',
-						program: '${workspaceFolder}/managed.cjs',
-						cwd: '${workspaceFolder}',
-						console: consoleMode,
-					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
-		await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
-		await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
-		await expect(pane.locator('.ash-debug-variables')).toContainText('42');
-		const pid = Number(await readFile(join(root, 'managed.pid'), 'utf8'));
-		await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
-		await expect.poll(() => alive(pid)).toBe(false);
-	});
+for (const consoleMode of ['internalConsole', 'integratedTerminal']) test(`managed Node runtime executes JavaScript in ${consoleMode} without an explicit executable`, tags, async ({ workbench, testWorkspace }) => {
+	const root = testWorkspace.directory;
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, 'managed.cjs'), "if (process.type) throw Error('Expected Node mode');\nconst answer = 42;\nrequire('node:fs').writeFileSync('managed.pid', String(process.pid));\ndebugger;\nsetInterval(() => {}, 1000);\n");
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Managed Node', type: 'node', request: 'launch', program: '${workspaceFolder}/managed.cjs', cwd: '${workspaceFolder}', console: consoleMode }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
+	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
+	const pid = Number(await readFile(join(root, 'managed.pid'), 'utf8'));
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	await expect.poll(() => alive(pid)).toBe(false);
+});
 
 async function disableProvider(workbench: Workbench): Promise<void> {
 	const page = workbench.page;
@@ -181,52 +92,44 @@ async function disableProvider(workbench: Workbench): Promise<void> {
 	await expect(enabled).not.toBeChecked();
 }
 
-for (const configurationName of ['Ash', 'Ash Agents', 'Ash (Hot Reload)'])
-	test(`node-terminal ${configurationName} retains child debugging after preparation and releases it on stop`, tags, async ({ workbench, testWorkspace }) => {
-		test.setTimeout(90_000);
-		const root = testWorkspace.directory;
-		const launch = JSON.parse(await readFile(join(import.meta.dirname, '../../../../.vscode/launch.json'), 'utf8')) as { configurations: Array<{ name: string }> };
-		const configuration = launch.configurations.find(candidate => candidate.name === configurationName);
-		if (!configuration) throw new Error('Missing Ash self-host launch configuration');
-		await mkdir(join(root, '.vscode'), { recursive: true });
-		await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [configuration] }));
-		// Leave no inspected child alive between lifecycle scripts. The parent
-		// terminal session must retain the connection while native pnpm runs its shell delay.
-		const delay = process.platform === 'win32' ? 'ping -n 2 127.0.0.1 >NUL' : 'sleep 1';
-		await writeFile(
-			join(root, 'package.json'),
-			JSON.stringify({
-				private: true,
-				scripts: {
-					predev: `${JSON.stringify(process.execPath)} prepare.cjs`,
-					dev: `${delay} && ${JSON.stringify(process.execPath)} main.cjs`,
-					'dev:agents': 'pnpm run dev',
-					'dev:ui:connected': 'pnpm run dev',
-				},
-			}),
-		);
-		await writeFile(join(root, 'prepare.cjs'), "require('node:fs').writeFileSync('prepare.pid', String(process.pid));\n");
-		await writeFile(
-			join(root, 'main.cjs'),
-			"const answer = 42;\nrequire('node:fs').writeFileSync('child.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n",
-		);
-		const page = workbench.page;
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		if (!(await pane.isVisible())) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const sidebar = page.locator('[data-part="sidebar"]');
-		await expect(sidebar.getByRole('button', { name: /^Debug configuration:/ })).toContainText(configurationName);
-		await sidebar.getByRole('button', { name: 'Start Debugging', exact: true }).click();
-		await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
-		await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
-		await expect(pane.locator('.ash-debug-variables')).toContainText('42');
-		const preparationPid = Number(await readFile(join(root, 'prepare.pid'), 'utf8'));
-		expect(alive(preparationPid)).toBe(false);
-		const pid = Number(await readFile(join(root, 'child.pid'), 'utf8'));
-		expect(alive(pid)).toBe(true);
-		await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
-		await expect.poll(() => alive(pid)).toBe(false);
-		await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-	});
+for (const configurationName of ['Ash', 'Ash Agents', 'Ash (Hot Reload)']) test(`node-terminal ${configurationName} retains child debugging after preparation and releases it on stop`, tags, async ({ workbench, testWorkspace }) => {
+	test.setTimeout(90_000);
+	const root = testWorkspace.directory;
+	const launch = JSON.parse(await readFile(join(import.meta.dirname, '../../../../.vscode/launch.json'), 'utf8')) as { configurations: Array<{ name: string; }>; };
+	const configuration = launch.configurations.find(candidate => candidate.name === configurationName);
+	if (!configuration) throw new Error('Missing Ash self-host launch configuration');
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [configuration] }));
+	// Leave no inspected child alive between lifecycle scripts. The parent
+	// terminal session must retain the connection while native pnpm runs its shell delay.
+	const delay = process.platform === 'win32' ? 'ping -n 2 127.0.0.1 >NUL' : 'sleep 1';
+	await writeFile(join(root, 'package.json'), JSON.stringify({
+		private: true, scripts: {
+			predev: `${JSON.stringify(process.execPath)} prepare.cjs`,
+			dev: `${delay} && ${JSON.stringify(process.execPath)} main.cjs`,
+			'dev:agents': 'pnpm run dev',
+			'dev:ui:connected': 'pnpm run dev',
+		}
+	}));
+	await writeFile(join(root, 'prepare.cjs'), "require('node:fs').writeFileSync('prepare.pid', String(process.pid));\n");
+	await writeFile(join(root, 'main.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('child.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n");
+	const page = workbench.page;
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	await expect(sidebar.getByRole('button', { name: /^Debug configuration:/ })).toContainText(configurationName);
+	await sidebar.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
+	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
+	const preparationPid = Number(await readFile(join(root, 'prepare.pid'), 'utf8'));
+	expect(alive(preparationPid)).toBe(false);
+	const pid = Number(await readFile(join(root, 'child.pid'), 'utf8'));
+	expect(alive(pid)).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	await expect.poll(() => alive(pid)).toBe(false);
+	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+});
 
 test.describe('node-terminal with global Auto Attach', () => {
 	test.use({ electronUserSettings: { 'debug.javascript.autoAttachFilter': 'always' } });
@@ -234,50 +137,14 @@ test.describe('node-terminal with global Auto Attach', () => {
 		test.setTimeout(120_000);
 		const root = testWorkspace.directory;
 		await mkdir(join(root, '.vscode'), { recursive: true });
-		await writeFile(
-			join(root, '.vscode/launch.json'),
-			JSON.stringify({
-				version: '0.2.0',
-				configurations: [
-					{
-						name: 'Terminal lifecycle',
-						type: 'node-terminal',
-						request: 'launch',
-						command: 'pnpm dev',
-						env: { TERMINAL_TEST: 'two words', NODE_OPTIONS: '--no-warnings' },
-					},
-				],
-			}),
-		);
-		await writeFile(
-			join(root, 'package.json'),
-			JSON.stringify({
-				private: true,
-				scripts: {
-					predev: `${JSON.stringify(process.execPath)} prepare.cjs`,
-					dev: `${JSON.stringify(process.execPath)} complete.cjs`,
-				},
-			}),
-		);
+		await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Terminal lifecycle', type: 'node-terminal', request: 'launch', command: 'pnpm dev', env: { TERMINAL_TEST: 'two words', NODE_OPTIONS: '--no-warnings' } }] }));
+		await writeFile(join(root, 'package.json'), JSON.stringify({ private: true, scripts: { predev: `${JSON.stringify(process.execPath)} prepare.cjs`, dev: `${JSON.stringify(process.execPath)} complete.cjs` } }));
 		await writeFile(join(root, 'prepare.cjs'), 'process.exit(0);\n');
 		await writeFile(join(root, 'fail.cjs'), 'process.exit(7);\n');
-		await writeFile(
-			join(root, 'complete.cjs'),
-			"require('node:fs').appendFileSync('starts.jsonl', JSON.stringify({pid:process.pid, inspector:!!require('node:inspector').url(),env:process.env.TERMINAL_TEST})+'\\n');\n",
-		);
-		await writeFile(
-			join(root, 'hold.cjs'),
-			"require('node:fs').appendFileSync('held.jsonl', JSON.stringify({pid:process.pid,inspector:!!require('node:inspector').url()})+'\\n');setInterval(()=>{},1000);\n",
-		);
-		const read = async (name: string): Promise<Array<{ pid: number; inspector: boolean; env?: string }>> => {
-			try {
-				return (await readFile(join(root, name), 'utf8'))
-					.trim()
-					.split('\n')
-					.map(line => JSON.parse(line));
-			} catch {
-				return [];
-			}
+		await writeFile(join(root, 'complete.cjs'), "require('node:fs').appendFileSync('starts.jsonl', JSON.stringify({pid:process.pid, inspector:!!require('node:inspector').url(),env:process.env.TERMINAL_TEST})+'\\n');\n");
+		await writeFile(join(root, 'hold.cjs'), "require('node:fs').appendFileSync('held.jsonl', JSON.stringify({pid:process.pid,inspector:!!require('node:inspector').url()})+'\\n');setInterval(()=>{},1000);\n");
+		const read = async (name: string): Promise<Array<{ pid: number; inspector: boolean; env?: string; }>> => {
+			try { return (await readFile(join(root, name), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); } catch { return []; }
 		};
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
@@ -288,10 +155,7 @@ test.describe('node-terminal with global Auto Attach', () => {
 		await page.getByRole('tab', { name: 'Terminal', exact: true }).first().click();
 		await workbench.terminal.runCommand('pnpm dev');
 		await expect.poll(async () => (await read('starts.jsonl')).length, { timeout: 30_000 }).toBe(2);
-		for (const start of await read('starts.jsonl')) {
-			expect(start.inspector).toBe(true);
-			expect(start.env).toBe('two words');
-		}
+		for (const start of await read('starts.jsonl')) { expect(start.inspector).toBe(true); expect(start.env).toBe('two words'); }
 		await workbench.terminal.runCommand(terminalNodeCommand(join(root, 'hold.cjs')));
 		await expect.poll(async () => (await read('held.jsonl')).length, { timeout: 30_000 }).toBe(1);
 		const first = (await read('held.jsonl'))[0]!;
@@ -311,6 +175,7 @@ test.describe('node-terminal with global Auto Attach', () => {
 		await expect.poll(() => alive(second.pid)).toBe(false);
 		await expect(workbench.terminal.instances).toHaveCount(0);
 	});
+
 });
 
 test('Rust JavaScript provider debugs TypeScript source maps, variables and stepping', tags, async ({ workbench, testWorkspace }) => {
@@ -321,37 +186,8 @@ test('Rust JavaScript provider debugs TypeScript source maps, variables and step
 	const source = 'const answer: number = 40;\nconst increment: number = 2;\nconst result: number = answer + increment;\nconsole.log(result);\nconsole.log(result);\nsetInterval(() => {}, 1000);\n';
 	await writeFile(join(root, 'main.ts'), source);
 	await writeFile(join(root, 'dist/main.js'), source.replaceAll(': number', '') + '\n//# sourceMappingURL=main.js.map\n');
-	await writeFile(
-		join(root, 'dist/main.js.map'),
-		JSON.stringify({
-			version: 3,
-			file: 'main.js',
-			sourceRoot: '',
-			sources: ['../main.ts'],
-			sourcesContent: [source],
-			names: [],
-			mappings: 'AAAA;AACA;AACA;AACA;AACA;AACA',
-		}),
-	);
-	await writeFile(
-		join(root, '.vscode/launch.json'),
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [
-				{
-					name: 'Rust JS source maps',
-					type: 'node',
-					request: 'launch',
-					runtimeExecutable: process.execPath,
-					program: '${workspaceFolder}/dist/main.js',
-					cwd: '${workspaceFolder}',
-					outFiles: ['${workspaceFolder}/dist/**/*.js'],
-					sourceMaps: true,
-					console: 'internalConsole',
-				},
-			],
-		}),
-	);
+	await writeFile(join(root, 'dist/main.js.map'), JSON.stringify({ version: 3, file: 'main.js', sourceRoot: '', sources: ['../main.ts'], sourcesContent: [source], names: [], mappings: 'AAAA;AACA;AACA;AACA;AACA;AACA' }));
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Rust JS source maps', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/dist/main.js', cwd: '${workspaceFolder}', outFiles: ['${workspaceFolder}/dist/**/*.js'], sourceMaps: true, console: 'internalConsole' }] }));
 	const page = workbench.page;
 	await workbench.quickaccess.open('main.ts');
 	await workbench.quickaccess.select('main.ts');
@@ -375,83 +211,41 @@ test('Rust JavaScript provider debugs TypeScript source maps, variables and step
 	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
 });
 
-for (const consoleMode of ['internalConsole', 'integratedTerminal'])
-	test(`Rust server-ready launches one child from ${consoleMode} and stops it with its server`, tags, async ({ workbench, testWorkspace }) => {
-		test.setTimeout(90_000);
-		const root = testWorkspace.directory;
-		await mkdir(join(root, '.vscode'), { recursive: true });
-		await writeFile(
-			join(root, 'server.cjs'),
-			"require('node:fs').writeFileSync('server.pid', String(process.pid));\nprocess.stdout.write('\\x1b[32mASH_SERVER_');\nsetTimeout(() => { console.log('READY 4567\\x1b[0m'); console.log('ASH_SERVER_READY 4567'); }, 100);\nsetInterval(() => {}, 1000);\n",
-		);
-		await writeFile(join(root, 'client.cjs'), "require('node:fs').appendFileSync('client-starts.jsonl', JSON.stringify({pid:process.pid})+'\\n');\nsetInterval(() => {}, 1000);\n");
-		await writeFile(
-			join(root, '.vscode/launch.json'),
-			JSON.stringify({
-				version: '0.2.0',
-				configurations: [
-					{
-						name: 'Rust server ready',
-						type: 'node',
-						request: 'launch',
-						runtimeExecutable: process.execPath,
-						program: '${workspaceFolder}/server.cjs',
-						cwd: '${workspaceFolder}',
-						console: consoleMode,
-						serverReadyAction: {
-							action: 'startDebugging',
-							pattern: 'ASH_SERVER_READY (\\d+)',
-							name: 'Rust ready child',
-							killOnServerStop: true,
-						},
-					},
-					{
-						name: 'Rust ready child',
-						type: 'node',
-						request: 'launch',
-						runtimeExecutable: process.execPath,
-						program: '${workspaceFolder}/client.cjs',
-						cwd: '${workspaceFolder}',
-						console: 'internalConsole',
-					},
-				],
-			}),
-		);
-		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Rust server ready');
-		await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
-		const starts = async () => {
-			try {
-				return (await readFile(join(root, 'client-starts.jsonl'), 'utf8'))
-					.trim()
-					.split('\n')
-					.map(line => JSON.parse(line) as { pid: number });
-			} catch {
-				return [];
-			}
-		};
-		await expect.poll(async () => (await starts()).length, { timeout: 30_000 }).toBe(1);
-		const client = (await starts())[0]!.pid;
-		const server = Number(await readFile(join(root, 'server.pid'), 'utf8'));
-		expect(alive(client)).toBe(true);
-		// The selected child routes Stop through its managed parent relationship.
-		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-		await expect.poll(() => alive(client) || alive(server)).toBe(false);
-		expect(await starts()).toHaveLength(1);
-		await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-	});
+for (const consoleMode of ['internalConsole', 'integratedTerminal']) test(`Rust server-ready launches one child from ${consoleMode} and stops it with its server`, tags, async ({ workbench, testWorkspace }) => {
+	test.setTimeout(90_000);
+	const root = testWorkspace.directory;
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, 'server.cjs'), "require('node:fs').writeFileSync('server.pid', String(process.pid));\nprocess.stdout.write('\\x1b[32mASH_SERVER_');\nsetTimeout(() => { console.log('READY 4567\\x1b[0m'); console.log('ASH_SERVER_READY 4567'); }, 100);\nsetInterval(() => {}, 1000);\n");
+	await writeFile(join(root, 'client.cjs'), "require('node:fs').appendFileSync('client-starts.jsonl', JSON.stringify({pid:process.pid})+'\\n');\nsetInterval(() => {}, 1000);\n");
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({
+		version: '0.2.0', configurations: [
+			{ name: 'Rust server ready', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/server.cjs', cwd: '${workspaceFolder}', console: consoleMode, serverReadyAction: { action: 'startDebugging', pattern: 'ASH_SERVER_READY (\\d+)', name: 'Rust ready child', killOnServerStop: true } },
+			{ name: 'Rust ready child', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/client.cjs', cwd: '${workspaceFolder}', console: 'internalConsole' }
+		]
+	}));
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	await expect(page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Rust server ready');
+	await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	const starts = async () => { try { return (await readFile(join(root, 'client-starts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { pid: number; }); } catch { return []; } };
+	await expect.poll(async () => (await starts()).length, { timeout: 30_000 }).toBe(1);
+	const client = (await starts())[0]!.pid;
+	const server = Number(await readFile(join(root, 'server.pid'), 'utf8'));
+	expect(alive(client)).toBe(true);
+	// The selected child routes Stop through its managed parent relationship.
+	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect.poll(() => alive(client) || alive(server)).toBe(false);
+	expect(await starts()).toHaveLength(1);
+	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+});
 
 test.describe('Rust terminal auto attach', () => {
 	test.use({ electronUserSettings: { 'debug.javascript.autoAttachFilter': 'always' } });
 	test('attaches before Node executes and releases the process on stop', tags, async ({ workbench, testWorkspace }) => {
 		test.setTimeout(90_000);
 		const root = testWorkspace.directory;
-		await writeFile(
-			join(root, 'auto.cjs'),
-			"const answer = 42;\nrequire('node:fs').writeFileSync('auto.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n",
-		);
+		await writeFile(join(root, 'auto.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('auto.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n");
 		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
 		await workbench.terminal.runCommand(terminalNodeCommand(join(root, 'auto.cjs')));
 		const page = workbench.page;
@@ -536,7 +330,7 @@ test('Rust auto attach controls persist modes and pause and resume in existing t
 	const runNode = async (file: string) => workbench.terminal.runCommand(terminalNodeCommand(join(root, file)));
 	await runNode('auto.cjs');
 	const pane = page.locator('[data-view-container-id="ash.debug"]');
-	if (!(await pane.isVisible())) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
 	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
 	const pid = Number(await readFile(join(root, 'auto.pid'), 'utf8'));
@@ -560,7 +354,7 @@ test('Rust auto attach controls persist modes and pause and resume in existing t
 	await choose('Re-enable Auto Attach', 'Workspace Settings');
 	await expect(autoAttach()).toHaveText('Auto Attach: Always');
 	await runNode('auto.cjs');
-	if (!(await pane.isVisible())) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
 	const resumedPid = Number(await readFile(join(root, 'auto.pid'), 'utf8'));
 	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
@@ -584,23 +378,7 @@ test('Rust JavaScript provider releases launched processes when its authority is
 	const root = testWorkspace.directory;
 	await mkdir(join(root, '.vscode'), { recursive: true });
 	await writeFile(join(root, 'owned.cjs'), "require('node:fs').writeFileSync('owned.pid', String(process.pid)); setInterval(() => {}, 1000);\n");
-	await writeFile(
-		join(root, '.vscode/launch.json'),
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [
-				{
-					name: 'Provider lifetime',
-					type: 'node',
-					request: 'launch',
-					runtimeExecutable: process.execPath,
-					program: '${workspaceFolder}/owned.cjs',
-					cwd: '${workspaceFolder}',
-					console: 'internalConsole',
-				},
-			],
-		}),
-	);
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Provider lifetime', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/owned.cjs', cwd: '${workspaceFolder}', console: 'internalConsole' }] }));
 	await workbench.quickaccess.runCommand('workbench.action.debug.start');
 	await expect.poll(async () => readFile(join(root, 'owned.pid'), 'utf8').catch(() => '')).toMatch(/^\d+$/);
 	const pid = Number(await readFile(join(root, 'owned.pid'), 'utf8'));
@@ -614,30 +392,14 @@ test('Rust JavaScript provider releases a launched target when its window connec
 	const root = testWorkspace.directory;
 	await mkdir(join(root, '.vscode'), { recursive: true });
 	await writeFile(join(root, 'connection.cjs'), "require('node:fs').writeFileSync('connection.pid', String(process.pid)); setInterval(() => {}, 1000);\n");
-	await writeFile(
-		join(root, '.vscode/launch.json'),
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [
-				{
-					name: 'Connection lifetime',
-					type: 'node',
-					request: 'launch',
-					runtimeExecutable: process.execPath,
-					program: '${workspaceFolder}/connection.cjs',
-					cwd: '${workspaceFolder}',
-					console: 'internalConsole',
-				},
-			],
-		}),
-	);
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Connection lifetime', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/connection.cjs', cwd: '${workspaceFolder}', console: 'internalConsole' }] }));
 	await workbench.quickaccess.runCommand('workbench.action.debug.start');
 	await expect.poll(async () => readFile(join(root, 'connection.pid'), 'utf8').catch(() => '')).toMatch(/^\d+$/);
 	const pid = Number(await readFile(join(root, 'connection.pid'), 'utf8'));
 	({ workbench } = await reloadWorkbench());
 	await expect.poll(() => alive(pid)).toBe(false);
 	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
-	if (!(await pane.isVisible())) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	if (!await pane.isVisible()) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	await expect(pane).toBeVisible();
 	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
 });
@@ -647,51 +409,19 @@ test('Rust server-ready opens its matching URL once through the native opener', 
 	await application.evaluate(({ shell }) => {
 		const saved = shell.openExternal;
 		const urls: string[] = [];
-		Object.assign(globalThis, {
-			debugWorkflowOpener: {
-				urls,
-				restore: () => {
-					shell.openExternal = saved;
-				},
-			},
-		});
-		shell.openExternal = async url => {
-			urls.push(url);
-		};
+		Object.assign(globalThis, { debugWorkflowOpener: { urls, restore: () => { shell.openExternal = saved; } } });
+		shell.openExternal = async url => { urls.push(url); };
 	});
 	try {
 		const root = testWorkspace.directory;
 		await mkdir(join(root, '.vscode'), { recursive: true });
 		await writeFile(join(root, 'open.cjs'), "console.log('READY 4567'); console.log('READY 4567'); setInterval(() => {}, 1000);\n");
-		await writeFile(
-			join(root, '.vscode/launch.json'),
-			JSON.stringify({
-				version: '0.2.0',
-				configurations: [
-					{
-						name: 'Server URL',
-						type: 'node',
-						request: 'launch',
-						runtimeExecutable: process.execPath,
-						program: '${workspaceFolder}/open.cjs',
-						cwd: '${workspaceFolder}',
-						console: 'internalConsole',
-						serverReadyAction: {
-							action: 'openExternally',
-							pattern: 'READY (\\d+)',
-							uriFormat: 'http://localhost:%s/status',
-						},
-					},
-				],
-			}),
-		);
+		await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Server URL', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/open.cjs', cwd: '${workspaceFolder}', console: 'internalConsole', serverReadyAction: { action: 'openExternally', pattern: 'READY (\\d+)', uriFormat: 'http://localhost:%s/status' } }] }));
 		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect
-			.poll(async () => application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { urls: string[] } }).debugWorkflowOpener.urls))
-			.toEqual(['http://localhost:4567/status']);
+		await expect.poll(async () => application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { urls: string[]; }; }).debugWorkflowOpener.urls)).toEqual(['http://localhost:4567/status']);
 		await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
 	} finally {
-		await application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { restore(): void } }).debugWorkflowOpener.restore());
+		await application.evaluate(() => (globalThis as typeof globalThis & { debugWorkflowOpener: { restore(): void; }; }).debugWorkflowOpener.restore());
 	}
 });
 
@@ -703,10 +433,7 @@ test('Rust debug workflow errors and accessibility help follow Chinese display l
 	await picker.getByRole('combobox').press('Enter');
 	({ workbench } = await restartWorkbench());
 	await workbench.quickaccess.runCommand('ash.debug-javascript.toggleAutoAttach');
-	const autoAttachPicker = workbench.page.getByRole('combobox', {
-		name: '切换自动附加（用户设置）',
-		exact: true,
-	});
+	const autoAttachPicker = workbench.page.getByRole('combobox', { name: '切换自动附加（用户设置）', exact: true });
 	await expect(autoAttachPicker).toBeFocused();
 	await autoAttachPicker.fill('始终');
 	await autoAttachPicker.press('Control+Home');
@@ -733,32 +460,15 @@ test('Rust debug workflow errors and accessibility help follow Chinese display l
 	const root = testWorkspace.directory;
 	await mkdir(join(root, '.vscode'), { recursive: true });
 	await writeFile(join(root, 'locale.cjs'), 'setInterval(() => {}, 1000);\n');
-	await writeFile(
-		join(root, '.vscode/launch.json'),
-		JSON.stringify({
-			version: '0.2.0',
-			configurations: [
-				{
-					name: '中文工作流',
-					type: 'node',
-					request: 'launch',
-					runtimeExecutable: process.execPath,
-					program: '${workspaceFolder}/locale.cjs',
-					cwd: '${workspaceFolder}',
-					console: 'internalConsole',
-					serverReadyAction: { action: 'openExternally', pattern: '(unsupported)\\1' },
-				},
-			],
-		}),
-	);
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: '中文工作流', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/locale.cjs', cwd: '${workspaceFolder}', console: 'internalConsole', serverReadyAction: { action: 'openExternally', pattern: '(unsupported)\\1' } }] }));
 	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
-	if (!(await pane.isVisible())) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
+	if (!await pane.isVisible()) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
 	const sidebar = workbench.page.locator('[data-part="sidebar"]');
 	await expect(sidebar.getByRole('button', { name: '调试配置：中文工作流', exact: true })).toBeVisible();
 	await sidebar.getByRole('button', { name: '启动调试', exact: true }).click();
 	await expect(workbench.page.getByRole('article').filter({ hasText: '服务就绪配置无效或正则表达式不受支持' })).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
-	if (!(await pane.isVisible())) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
+	if (!await pane.isVisible()) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
 	const heading = pane.getByRole('button', { name: '变量', exact: true });
 	await heading.focus();
 	await workbench.page.keyboard.press('Alt+F1');

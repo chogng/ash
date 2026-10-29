@@ -27,32 +27,26 @@ class TerminalOscNotificationsContribution extends Disposable implements ITermin
 	) {
 		super();
 		const instance = context.instance;
-		this.handler = this._register(
-			new TerminalNotificationHandler({
-				isEnabled: () =>
-					!this.isDisposed && !instance.isReadOnly && instance.state === 'running' && configuration.getValue<boolean>(TerminalOscNotificationsSettingId.EnableNotifications) !== false,
-				isWindowFocused: () => host.hasFocus,
-				isTerminalVisible: () => !!this.screen?.element.isConnected && this.screen.element.getClientRects().length > 0,
-				focusTerminal: () => {
-					void this.focus().catch(onUnexpectedError);
-				},
-				notify: notification => notifications.notify(notification),
-				updateEnableNotifications: value => configuration.updateValue(TerminalOscNotificationsSettingId.EnableNotifications, value),
-				logWarn: message => log.warn(message),
-				writeToProcess: data => {
-					if (!this.isDisposed && terminals.instances.includes(instance) && instance.state === 'running' && !instance.isReadOnly) {
-						void instance.sendText(data, false).catch(error => log.warn('Could not deliver an OSC 99 terminal reply', error));
-					}
-				},
-			}),
-		);
+		this.handler = this._register(new TerminalNotificationHandler({
+			isEnabled: () => !this.isDisposed && !instance.isReadOnly && instance.state === 'running'
+				&& configuration.getValue<boolean>(TerminalOscNotificationsSettingId.EnableNotifications) !== false,
+			isWindowFocused: () => host.hasFocus,
+			isTerminalVisible: () => !!this.screen?.element.isConnected && this.screen.element.getClientRects().length > 0,
+			focusTerminal: () => { void this.focus().catch(onUnexpectedError); },
+			notify: notification => notifications.notify(notification),
+			updateEnableNotifications: value => configuration.updateValue(TerminalOscNotificationsSettingId.EnableNotifications, value),
+			logWarn: message => log.warn(message),
+			writeToProcess: data => {
+				if (!this.isDisposed && terminals.instances.includes(instance) && instance.state === 'running' && !instance.isReadOnly) {
+					void instance.sendText(data, false).catch(error => log.warn('Could not deliver an OSC 99 terminal reply', error));
+				}
+			},
+		}));
 		this._register(instance.onDidChangeState(() => this.handler.clear()));
 		this._register(instance.onDidExit(() => this.handler.clear()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TerminalOscNotificationsSettingId.EnableNotifications)) this.handler.clear();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TerminalOscNotificationsSettingId.EnableNotifications)) this.handler.clear();
+		}));
 	}
 
 	xtermReady(screen: IXtermTerminal): void {

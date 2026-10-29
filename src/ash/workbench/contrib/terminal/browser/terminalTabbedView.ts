@@ -46,36 +46,30 @@ export class TerminalTabbedView extends Disposable {
 		this.onDidFocusInstance = this.tabList.onDidFocusInstance;
 		this.terminalContainer = h(parentElement.ownerDocument, 'div');
 		this.terminalContainer.className = 'ash-terminal-widgets';
-		this._register(
-			addDisposableListener(this.terminalContainer, 'dragover', event => {
-				if (event.dataTransfer?.types.includes(TerminalDataTransfers.Terminals.toLowerCase())) {
-					event.preventDefault();
-					event.dataTransfer.dropEffect = 'move';
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.terminalContainer, 'drop', event => {
-				const encoded = event.dataTransfer?.getData(TerminalDataTransfers.Terminals);
-				if (!encoded || encoded.length > 65536) return;
-				let resources: unknown;
-				try {
-					resources = JSON.parse(encoded);
-				} catch {
-					return;
-				}
-				if (!Array.isArray(resources) || resources.length !== 1 || typeof resources[0] !== 'string') return;
-				const source = this.terminalService.instances.find(candidate => candidate.resource?.toString() === resources[0]);
-				const pane = (event.target as HTMLElement).closest<HTMLElement>('.ash-terminal-group-pane');
-				const target = this.terminalService.instances.find(candidate => candidate.id === pane?.dataset.instanceId);
-				if (!source || !target || source === target || !this.groups.getGroupForInstance(source)) return;
+		this._register(addDisposableListener(this.terminalContainer, 'dragover', event => {
+			if (event.dataTransfer?.types.includes(TerminalDataTransfers.Terminals.toLowerCase())) {
 				event.preventDefault();
-				event.stopPropagation();
-				const bounds = pane!.getBoundingClientRect();
-				const before = isHorizontal(layoutService.getPanelPosition()) ? event.clientX < bounds.left + bounds.width / 2 : event.clientY < bounds.top + bounds.height / 2;
-				this.groups.moveInstance(source, target, before ? 'before' : 'after');
-			}),
-		);
+				event.dataTransfer.dropEffect = 'move';
+			}
+		}));
+		this._register(addDisposableListener(this.terminalContainer, 'drop', event => {
+			const encoded = event.dataTransfer?.getData(TerminalDataTransfers.Terminals);
+			if (!encoded || encoded.length > 65536) return;
+			let resources: unknown;
+			try { resources = JSON.parse(encoded); } catch { return; }
+			if (!Array.isArray(resources) || resources.length !== 1 || typeof resources[0] !== 'string') return;
+			const source = this.terminalService.instances.find(candidate => candidate.resource?.toString() === resources[0]);
+			const pane = (event.target as HTMLElement).closest<HTMLElement>('.ash-terminal-group-pane');
+			const target = this.terminalService.instances.find(candidate => candidate.id === pane?.dataset.instanceId);
+			if (!source || !target || source === target || !this.groups.getGroupForInstance(source)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const bounds = pane!.getBoundingClientRect();
+			const before = isHorizontal(layoutService.getPanelPosition())
+				? event.clientX < bounds.left + bounds.width / 2
+				: event.clientY < bounds.top + bounds.height / 2;
+			this.groups.moveInstance(source, target, before ? 'before' : 'after');
+		}));
 		const host = h(parentElement.ownerDocument, 'div');
 		this.splitView = this._register(new SplitView(host, 'horizontal'));
 		this.element = this.splitView.element;
@@ -113,12 +107,10 @@ export class TerminalTabbedView extends Disposable {
 		const document = this.terminalContainer.ownerDocument;
 		const focusSource = document.activeElement as HTMLElement | null;
 		const card = lifetime.add(this.instantiation.createInstance(TerminalInstanceHover, this.terminalContainer, instance));
-		lifetime.add(
-			card.onDidHide(() => {
-				this.keyboardHover.clear();
-				if (document.activeElement === document.body && focusSource?.isConnected) focusSource.focus();
-			}),
-		);
+		lifetime.add(card.onDidHide(() => {
+			this.keyboardHover.clear();
+			if (document.activeElement === document.body && focusSource?.isConnected) focusSource.focus();
+		}));
 		card.focus();
 	}
 
@@ -134,12 +126,11 @@ export class TerminalTabbedView extends Disposable {
 			return;
 		}
 		const width = this.splitView.getViewSize(TABS_VIEW_INDEX);
-		const snappedWidth =
-			width < TerminalTabsListSizes.MidpointViewWidth
-				? TerminalTabsListSizes.NarrowViewWidth
-				: width < TerminalTabsListSizes.WideViewMinimumWidth
-					? TerminalTabsListSizes.WideViewMinimumWidth
-					: width;
+		const snappedWidth = width < TerminalTabsListSizes.MidpointViewWidth
+			? TerminalTabsListSizes.NarrowViewWidth
+			: width < TerminalTabsListSizes.WideViewMinimumWidth
+				? TerminalTabsListSizes.WideViewMinimumWidth
+				: width;
 		if (snappedWidth !== width) {
 			this.snapping = true;
 			this.splitView.resizeView(TABS_VIEW_INDEX, snappedWidth);
@@ -152,8 +143,7 @@ export class TerminalTabbedView extends Disposable {
 	private savedTabsWidth(): number {
 		const width = this.storage.getNumber(TerminalStorageKeys.TabsListWidthHorizontal, StorageScope.WORKSPACE);
 		return width !== undefined && Number.isFinite(width) && width >= TerminalTabsListSizes.NarrowViewWidth && width <= TerminalTabsListSizes.MaximumWidth
-			? width
-			: TerminalTabsListSizes.DefaultWidth;
+			? width : TerminalTabsListSizes.DefaultWidth;
 	}
 
 	private updateTabsPresentation(width: number): void {
@@ -168,6 +158,6 @@ function splitViewItem(element: HTMLElement, minimumSize: number, maximumSize: n
 		minimumSize,
 		maximumSize,
 		priority,
-		layout() {},
+		layout() { },
 	};
 }

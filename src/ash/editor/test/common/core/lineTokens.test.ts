@@ -11,8 +11,8 @@ interface ILineToken {
 }
 
 const languageIdCodec: ILanguageIdCodec = {
-	encodeLanguageId: languageId => (languageId === 'typescript' ? (2 as LanguageId) : LanguageId.PlainText),
-	decodeLanguageId: languageId => (languageId === (2 as LanguageId) ? 'typescript' : 'plaintext'),
+	encodeLanguageId: languageId => languageId === 'typescript' ? 2 as LanguageId : LanguageId.PlainText,
+	decodeLanguageId: languageId => languageId === (2 as LanguageId) ? 'typescript' : 'plaintext',
 };
 
 function createLineTokens(text: string, tokens: readonly ILineToken[]): LineTokens {
@@ -47,7 +47,7 @@ function renderLineTokens(tokens: LineTokens): string {
 	return result;
 }
 
-function viewTokenSummary(tokens: IViewLineTokens): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string }[] {
+function viewTokenSummary(tokens: IViewLineTokens): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string; }[] {
 	return Array.from({ length: tokens.getCount() }, (_, index) => ({
 		endIndex: tokens.getEndOffset(index),
 		foreground: tokens.getForeground(index),
@@ -59,37 +59,22 @@ test('LineTokens inserts tokens at boundaries and inside existing tokens', () =>
 	const lineTokens = createTestLineTokens();
 	assert.equal(renderLineTokens(lineTokens), 'Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)');
 
-	assert.equal(
-		renderLineTokens(
-			lineTokens.withInserted([
-				{ offset: 0, text: '1', tokenMetadata: 0 },
-				{ offset: 6, text: '2', tokenMetadata: 0 },
-				{ offset: 9, text: '3', tokenMetadata: 0 },
-			]),
-		),
-		'1(0)Hello (32768)2(0)wor(65536)3(0)ld, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)',
-	);
+	assert.equal(renderLineTokens(lineTokens.withInserted([
+		{ offset: 0, text: '1', tokenMetadata: 0 },
+		{ offset: 6, text: '2', tokenMetadata: 0 },
+		{ offset: 9, text: '3', tokenMetadata: 0 },
+	])), '1(0)Hello (32768)2(0)wor(65536)3(0)ld, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)');
 
-	assert.equal(
-		renderLineTokens(
-			lineTokens.withInserted([
-				{ offset: 0, text: '1', tokenMetadata: 0 },
-				{ offset: 0, text: '2', tokenMetadata: 0 },
-				{ offset: 0, text: '3', tokenMetadata: 0 },
-			]),
-		),
-		'1(0)2(0)3(0)Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)',
-	);
+	assert.equal(renderLineTokens(lineTokens.withInserted([
+		{ offset: 0, text: '1', tokenMetadata: 0 },
+		{ offset: 0, text: '2', tokenMetadata: 0 },
+		{ offset: 0, text: '3', tokenMetadata: 0 },
+	])), '1(0)2(0)3(0)Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)');
 
-	assert.equal(
-		renderLineTokens(
-			lineTokens.withInserted([
-				{ offset: 32, text: '1', tokenMetadata: 0 },
-				{ offset: 33, text: '2', tokenMetadata: 0 },
-			]),
-		),
-		'Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)da(229376)1(0)y(229376)2(0)',
-	);
+	assert.equal(renderLineTokens(lineTokens.withInserted([
+		{ offset: 32, text: '1', tokenMetadata: 0 },
+		{ offset: 33, text: '2', tokenMetadata: 0 },
+	])), 'Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)da(229376)1(0)y(229376)2(0)');
 });
 
 test('LineTokens exposes offsets and finds the token containing each boundary', () => {
@@ -97,22 +82,24 @@ test('LineTokens exposes offsets and finds the token containing each boundary', 
 	assert.equal(lineTokens.getLineContent(), 'Hello world, this is a lovely day');
 	assert.equal(lineTokens.getTextLength(), 33);
 	assert.equal(lineTokens.getCount(), 7);
-	assert.deepEqual(
-		Array.from({ length: 7 }, (_, index) => [lineTokens.getStartOffset(index), lineTokens.getEndOffset(index)]),
-		[
-			[0, 6],
-			[6, 13],
-			[13, 18],
-			[18, 21],
-			[21, 23],
-			[23, 30],
-			[30, 33],
-		],
-	);
-	assert.deepEqual(
-		Array.from({ length: 35 }, (_, offset) => lineTokens.findTokenIndexAtOffset(offset)),
-		[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6],
-	);
+	assert.deepEqual(Array.from({ length: 7 }, (_, index) => [lineTokens.getStartOffset(index), lineTokens.getEndOffset(index)]), [
+		[0, 6],
+		[6, 13],
+		[13, 18],
+		[18, 21],
+		[21, 23],
+		[23, 30],
+		[30, 33],
+	]);
+	assert.deepEqual(Array.from({ length: 35 }, (_, offset) => lineTokens.findTokenIndexAtOffset(offset)), [
+		0, 0, 0, 0, 0, 0,
+		1, 1, 1, 1, 1, 1, 1,
+		2, 2, 2, 2, 2,
+		3, 3, 3,
+		4, 4,
+		5, 5, 5, 5, 5, 5, 5,
+		6, 6, 6, 6, 6,
+	]);
 });
 
 test('LineTokens slices preserve token metadata, clipped text, and delta offsets', () => {
@@ -140,13 +127,10 @@ test('LineTokens slices preserve token metadata, clipped text, and delta offsets
 
 test('LineTokens factories and metadata access preserve text and language identity', () => {
 	const metadata = (2 << MetadataConsts.LANGUAGEID_OFFSET) | (4 << MetadataConsts.FOREGROUND_OFFSET);
-	const lineTokens = LineTokens.createFromTextAndMetadata(
-		[
-			{ text: 'const ', metadata },
-			{ text: 'value', metadata: 0 },
-		],
-		languageIdCodec,
-	);
+	const lineTokens = LineTokens.createFromTextAndMetadata([
+		{ text: 'const ', metadata },
+		{ text: 'value', metadata: 0 },
+	], languageIdCodec);
 	assert.equal(lineTokens.getLanguageId(0), 'typescript');
 	assert.equal(lineTokens.getForeground(0), 4);
 	assert.equal(lineTokens.getTokenText(0), 'const ');
@@ -156,18 +140,10 @@ test('LineTokens factories and metadata access preserve text and language identi
 	const startOffsets = new Uint32Array([0, metadata, 6, 0]);
 	LineTokens.convertToEndOffset(startOffsets, 11);
 	assert.deepEqual([...startOffsets], [6, metadata, 11, 0]);
-	assert.equal(
-		lineTokens.equals(
-			LineTokens.createFromTextAndMetadata(
-				[
-					{ text: 'const ', metadata },
-					{ text: 'value', metadata: 0 },
-				],
-				languageIdCodec,
-			),
-		),
-		true,
-	);
+	assert.equal(lineTokens.equals(LineTokens.createFromTextAndMetadata([
+		{ text: 'const ', metadata },
+		{ text: 'value', metadata: 0 },
+	], languageIdCodec)), true);
 });
 
 test('TokenArray slices, appends, and converts without changing metadata spans', () => {
@@ -175,20 +151,8 @@ test('TokenArray slices, appends, and converts without changing metadata spans',
 	builder.add(3, 10);
 	builder.add(4, 20);
 	const tokens = builder.build();
-	assert.deepEqual(
-		tokens.map((range, token) => [range.start, range.endExclusive, token.metadata]),
-		[
-			[0, 3, 10],
-			[3, 7, 20],
-		],
-	);
-	assert.deepEqual(
-		tokens.slice(new OffsetRange(2, 5)).map((range, token) => [range.length, token.metadata]),
-		[
-			[1, 10],
-			[2, 20],
-		],
-	);
+	assert.deepEqual(tokens.map((range, token) => [range.start, range.endExclusive, token.metadata]), [[0, 3, 10], [3, 7, 20]]);
+	assert.deepEqual(tokens.slice(new OffsetRange(2, 5)).map((range, token) => [range.length, token.metadata]), [[1, 10], [2, 20]]);
 
 	const appended = tokens.append(TokenArray.create([new TokenInfo(2, 30)]));
 	const lineTokens = appended.toLineTokens('abcdefghi', languageIdCodec);
@@ -197,12 +161,5 @@ test('TokenArray slices, appends, and converts without changing metadata spans',
 		{ endIndex: 7, foreground: 0, text: 'defg' },
 		{ endIndex: 9, foreground: 0, text: 'hi' },
 	]);
-	assert.deepEqual(
-		TokenArray.fromLineTokens(lineTokens).map((range, token) => [range.length, token.metadata]),
-		[
-			[3, 10],
-			[4, 20],
-			[2, 30],
-		],
-	);
+	assert.deepEqual(TokenArray.fromLineTokens(lineTokens).map((range, token) => [range.length, token.metadata]), [[3, 10], [4, 20], [2, 30]]);
 });

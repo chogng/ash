@@ -15,31 +15,17 @@ export class TunnelService extends AbstractDisposable implements ITunnelService 
 		return Promise.resolve([]);
 	}
 
-	public openTunnel(
-		_addressProvider: IAddressProvider | undefined,
-		_remoteHost: string | undefined,
-		_remotePort: number,
-		_localHost?: string,
-		_localPort?: number,
-		_elevateIfNeeded?: boolean,
-		_privacy?: string,
-		_protocol?: string,
-	): undefined {
+	public openTunnel(_addressProvider: IAddressProvider | undefined, _remoteHost: string | undefined, _remotePort: number, _localHost?: string, _localPort?: number, _elevateIfNeeded?: boolean, _privacy?: string, _protocol?: string): undefined {
 		this.assertNotDisposed();
 		return undefined;
 	}
 
-	public async getExistingTunnel(_host: string, _port: number): Promise<undefined> {
-		this.assertNotDisposed();
-		return undefined;
-	}
-	public async closeAll(): Promise<void> {
-		this.assertNotDisposed();
-	}
+	public async getExistingTunnel(_host: string, _port: number): Promise<undefined> { this.assertNotDisposed(); return undefined; }
+	public async closeAll(): Promise<void> { this.assertNotDisposed(); }
 
 	public async closeTunnel(_remoteHost: string, _remotePort: number): Promise<void> {
 		this.assertNotDisposed();
 	}
 
-	protected override disposeCore(): void {}
+	protected override disposeCore(): void { }
 }

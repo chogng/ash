@@ -16,43 +16,28 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 	private readonly _glyphInOrderSet = new Set<ITextureAtlasPageGlyph>();
 	private readonly _allocator: ITextureAtlasAllocator;
 
-	constructor(
-		textureIndex: number,
-		pageSize: number,
-		allocatorType: AllocatorType,
-		private readonly _colorMap: string[],
-	) {
+	constructor(textureIndex: number, pageSize: number, allocatorType: AllocatorType, private readonly _colorMap: string[]) {
 		super();
 		this._canvas = new OffscreenCanvas(pageSize, pageSize);
-		this._allocator =
-			typeof allocatorType === 'function'
-				? allocatorType(this._canvas, textureIndex)
-				: allocatorType === 'shelf'
-					? new TextureAtlasShelfAllocator(this._canvas, textureIndex)
-					: new TextureAtlasSlabAllocator(this._canvas, textureIndex);
-		this._register(
-			toDisposable(() => {
-				this._canvas.width = 1;
-				this._canvas.height = 1;
-			}),
-		);
+		this._allocator = typeof allocatorType === 'function'
+			? allocatorType(this._canvas, textureIndex)
+			: allocatorType === 'shelf'
+				? new TextureAtlasShelfAllocator(this._canvas, textureIndex)
+				: new TextureAtlasSlabAllocator(this._canvas, textureIndex);
+		this._register(toDisposable(() => {
+			this._canvas.width = 1;
+			this._canvas.height = 1;
+		}));
 	}
 
-	public get version(): number {
-		return this._version;
-	}
-	public get usedArea(): Readonly<IBoundingBox> {
-		return this._usedArea;
-	}
-	public get source(): OffscreenCanvas {
-		return this._canvas;
-	}
-	public get glyphs(): IterableIterator<ITextureAtlasPageGlyph> {
-		return this._glyphInOrderSet.values();
-	}
+	public get version(): number { return this._version; }
+	public get usedArea(): Readonly<IBoundingBox> { return this._usedArea; }
+	public get source(): OffscreenCanvas { return this._canvas; }
+	public get glyphs(): IterableIterator<ITextureAtlasPageGlyph> { return this._glyphInOrderSet.values(); }
 
 	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> | undefined {
-		return this._glyphMap.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey) ?? this._createGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId);
+		return this._glyphMap.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey)
+			?? this._createGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId);
 	}
 
 	private _createGlyph(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> | undefined {
@@ -71,10 +56,6 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 		return glyph;
 	}
 
-	public getUsagePreview(): Promise<Blob> {
-		return this._allocator.getUsagePreview();
-	}
-	public getStats(): string {
-		return this._allocator.getStats();
-	}
+	public getUsagePreview(): Promise<Blob> { return this._allocator.getUsagePreview(); }
+	public getStats(): string { return this._allocator.getStats(); }
 }

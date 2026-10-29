@@ -3,321 +3,487 @@
 
 export const syntaxLanguageDefinitions = [
 	{
-		id: 'bat',
-		editorLanguage: 'bat',
-		editorIds: ['bat'],
-		aliases: ['batch', 'cmd'],
+		"id": "bat",
+		"editorLanguage": "bat",
+		"editorIds": [
+			"bat"
+		],
+		"aliases": [
+			"batch",
+			"cmd"
+		]
 	},
 	{
-		id: 'starlark',
-		editorLanguage: 'starlark',
-		editorIds: ['starlark'],
-		aliases: [],
+		"id": "starlark",
+		"editorLanguage": "starlark",
+		"editorIds": [
+			"starlark"
+		],
+		"aliases": []
 	},
 	{
-		id: 'bazelrc',
-		editorLanguage: 'bazelrc',
-		editorIds: ['bazelrc'],
-		aliases: [],
+		"id": "bazelrc",
+		"editorLanguage": "bazelrc",
+		"editorIds": [
+			"bazelrc"
+		],
+		"aliases": []
 	},
 	{
-		id: 'clojure',
-		editorLanguage: 'clojure',
-		editorIds: ['clojure'],
-		aliases: ['clj', 'cljs', 'edn'],
+		"id": "clojure",
+		"editorLanguage": "clojure",
+		"editorIds": [
+			"clojure"
+		],
+		"aliases": [
+			"clj",
+			"cljs",
+			"edn"
+		]
 	},
 	{
-		id: 'coffeescript',
-		editorLanguage: 'coffeescript',
-		editorIds: ['coffeescript'],
-		aliases: ['coffee'],
+		"id": "coffeescript",
+		"editorLanguage": "coffeescript",
+		"editorIds": [
+			"coffeescript"
+		],
+		"aliases": [
+			"coffee"
+		]
 	},
 	{
-		id: 'c',
-		editorLanguage: 'c',
-		editorIds: ['c'],
-		aliases: [],
+		"id": "c",
+		"editorLanguage": "c",
+		"editorIds": [
+			"c"
+		],
+		"aliases": []
 	},
 	{
-		id: 'cpp',
-		editorLanguage: 'cpp',
-		editorIds: ['cpp'],
-		aliases: ['c++', 'cxx'],
+		"id": "cpp",
+		"editorLanguage": "cpp",
+		"editorIds": [
+			"cpp"
+		],
+		"aliases": [
+			"c++",
+			"cxx"
+		]
 	},
 	{
-		id: 'csharp',
-		editorLanguage: 'csharp',
-		editorIds: ['csharp'],
-		aliases: ['cs', 'c-sharp', 'c#'],
+		"id": "csharp",
+		"editorLanguage": "csharp",
+		"editorIds": [
+			"csharp"
+		],
+		"aliases": [
+			"cs",
+			"c-sharp",
+			"c#"
+		]
 	},
 	{
-		id: 'css',
-		editorLanguage: 'css',
-		editorIds: ['css'],
-		aliases: [],
+		"id": "css",
+		"editorLanguage": "css",
+		"editorIds": [
+			"css"
+		],
+		"aliases": []
 	},
 	{
-		id: 'scss',
-		editorLanguage: 'scss',
-		editorIds: ['scss'],
-		aliases: [],
+		"id": "scss",
+		"editorLanguage": "scss",
+		"editorIds": [
+			"scss"
+		],
+		"aliases": []
 	},
 	{
-		id: 'less',
-		editorLanguage: 'less',
-		editorIds: ['less'],
-		aliases: [],
+		"id": "less",
+		"editorLanguage": "less",
+		"editorIds": [
+			"less"
+		],
+		"aliases": []
 	},
 	{
-		id: 'dart',
-		editorLanguage: 'dart',
-		editorIds: ['dart'],
-		aliases: [],
+		"id": "dart",
+		"editorLanguage": "dart",
+		"editorIds": [
+			"dart"
+		],
+		"aliases": []
 	},
 	{
-		id: 'diff',
-		editorLanguage: 'diff',
-		editorIds: ['diff'],
-		aliases: [],
+		"id": "diff",
+		"editorLanguage": "diff",
+		"editorIds": [
+			"diff"
+		],
+		"aliases": []
 	},
 	{
-		id: 'dockerfile',
-		editorLanguage: 'dockerfile',
-		editorIds: ['dockerfile'],
-		aliases: ['docker', 'containerfile'],
+		"id": "dockerfile",
+		"editorLanguage": "dockerfile",
+		"editorIds": [
+			"dockerfile"
+		],
+		"aliases": [
+			"docker",
+			"containerfile"
+		]
 	},
 	{
-		id: 'dotenv',
-		editorLanguage: 'dotenv',
-		editorIds: ['dotenv'],
-		aliases: ['env'],
+		"id": "dotenv",
+		"editorLanguage": "dotenv",
+		"editorIds": [
+			"dotenv"
+		],
+		"aliases": [
+			"env"
+		]
 	},
 	{
-		id: 'gitcommit',
-		editorLanguage: 'git-commit',
-		editorIds: ['git-commit'],
-		aliases: ['commit_editmsg'],
+		"id": "gitcommit",
+		"editorLanguage": "git-commit",
+		"editorIds": [
+			"git-commit"
+		],
+		"aliases": [
+			"commit_editmsg"
+		]
 	},
 	{
-		id: 'gitrebase',
-		editorLanguage: 'git-rebase',
-		editorIds: ['git-rebase'],
-		aliases: ['git_rebase', 'git-rebase-todo'],
+		"id": "gitrebase",
+		"editorLanguage": "git-rebase",
+		"editorIds": [
+			"git-rebase"
+		],
+		"aliases": [
+			"git_rebase",
+			"git-rebase-todo"
+		]
 	},
 	{
-		id: 'gitignore',
-		editorLanguage: 'ignore',
-		editorIds: ['ignore'],
-		aliases: [],
+		"id": "gitignore",
+		"editorLanguage": "ignore",
+		"editorIds": [
+			"ignore"
+		],
+		"aliases": []
 	},
 	{
-		id: 'go',
-		editorLanguage: 'go',
-		editorIds: ['go'],
-		aliases: [],
+		"id": "go",
+		"editorLanguage": "go",
+		"editorIds": [
+			"go"
+		],
+		"aliases": []
 	},
 	{
-		id: 'groovy',
-		editorLanguage: 'groovy',
-		editorIds: ['groovy'],
-		aliases: [],
+		"id": "groovy",
+		"editorLanguage": "groovy",
+		"editorIds": [
+			"groovy"
+		],
+		"aliases": []
 	},
 	{
-		id: 'html',
-		editorLanguage: 'html',
-		editorIds: ['html'],
-		aliases: [],
+		"id": "html",
+		"editorLanguage": "html",
+		"editorIds": [
+			"html"
+		],
+		"aliases": []
 	},
 	{
-		id: 'ini',
-		editorLanguage: 'ini',
-		editorIds: ['ini'],
-		aliases: [],
+		"id": "ini",
+		"editorLanguage": "ini",
+		"editorIds": [
+			"ini"
+		],
+		"aliases": []
 	},
 	{
-		id: 'properties',
-		editorLanguage: 'properties',
-		editorIds: ['properties'],
-		aliases: [],
+		"id": "properties",
+		"editorLanguage": "properties",
+		"editorIds": [
+			"properties"
+		],
+		"aliases": []
 	},
 	{
-		id: 'java',
-		editorLanguage: 'java',
-		editorIds: ['java'],
-		aliases: [],
+		"id": "java",
+		"editorLanguage": "java",
+		"editorIds": [
+			"java"
+		],
+		"aliases": []
 	},
 	{
-		id: 'javascript',
-		editorLanguage: 'javascript',
-		editorIds: ['javascript'],
-		aliases: ['js'],
+		"id": "javascript",
+		"editorLanguage": "javascript",
+		"editorIds": [
+			"javascript"
+		],
+		"aliases": [
+			"js"
+		]
 	},
 	{
-		id: 'javascriptreact',
-		editorLanguage: 'javascriptreact',
-		editorIds: ['javascriptreact', 'jsx-tags'],
-		aliases: ['jsx'],
+		"id": "javascriptreact",
+		"editorLanguage": "javascriptreact",
+		"editorIds": [
+			"javascriptreact",
+			"jsx-tags"
+		],
+		"aliases": [
+			"jsx"
+		]
 	},
 	{
-		id: 'json',
-		editorLanguage: 'json',
-		editorIds: ['json'],
-		aliases: [],
+		"id": "json",
+		"editorLanguage": "json",
+		"editorIds": [
+			"json"
+		],
+		"aliases": []
 	},
 	{
-		id: 'jsonc',
-		editorLanguage: 'jsonc',
-		editorIds: ['jsonc'],
-		aliases: [],
+		"id": "jsonc",
+		"editorLanguage": "jsonc",
+		"editorIds": [
+			"jsonc"
+		],
+		"aliases": []
 	},
 	{
-		id: 'jsonl',
-		editorLanguage: 'jsonl',
-		editorIds: ['jsonl'],
-		aliases: ['ndjson'],
+		"id": "jsonl",
+		"editorLanguage": "jsonl",
+		"editorIds": [
+			"jsonl"
+		],
+		"aliases": [
+			"ndjson"
+		]
 	},
 	{
-		id: 'snippets',
-		editorLanguage: 'snippets',
-		editorIds: ['snippets'],
-		aliases: [],
+		"id": "snippets",
+		"editorLanguage": "snippets",
+		"editorIds": [
+			"snippets"
+		],
+		"aliases": []
 	},
 	{
-		id: 'julia',
-		editorLanguage: 'julia',
-		editorIds: ['julia'],
-		aliases: [],
+		"id": "julia",
+		"editorLanguage": "julia",
+		"editorIds": [
+			"julia"
+		],
+		"aliases": []
 	},
 	{
-		id: 'log',
-		editorLanguage: 'log',
-		editorIds: ['log'],
-		aliases: [],
+		"id": "log",
+		"editorLanguage": "log",
+		"editorIds": [
+			"log"
+		],
+		"aliases": []
 	},
 	{
-		id: 'lua',
-		editorLanguage: 'lua',
-		editorIds: ['lua'],
-		aliases: ['lua'],
+		"id": "lua",
+		"editorLanguage": "lua",
+		"editorIds": [
+			"lua"
+		],
+		"aliases": [
+			"lua"
+		]
 	},
 	{
-		id: 'makefile',
-		editorLanguage: 'makefile',
-		editorIds: ['makefile'],
-		aliases: ['make'],
+		"id": "makefile",
+		"editorLanguage": "makefile",
+		"editorIds": [
+			"makefile"
+		],
+		"aliases": [
+			"make"
+		]
 	},
 	{
-		id: 'markdown',
-		editorLanguage: 'markdown',
-		editorIds: ['markdown'],
-		aliases: ['md'],
+		"id": "markdown",
+		"editorLanguage": "markdown",
+		"editorIds": [
+			"markdown"
+		],
+		"aliases": [
+			"md"
+		]
 	},
 	{
-		id: 'markdown_inline',
-		editorLanguage: 'markdown',
-		editorIds: [],
-		aliases: ['markdown-inline'],
+		"id": "markdown_inline",
+		"editorLanguage": "markdown",
+		"editorIds": [],
+		"aliases": [
+			"markdown-inline"
+		]
 	},
 	{
-		id: 'perl',
-		editorLanguage: 'perl',
-		editorIds: ['perl'],
-		aliases: [],
+		"id": "perl",
+		"editorLanguage": "perl",
+		"editorIds": [
+			"perl"
+		],
+		"aliases": []
 	},
 	{
-		id: 'php',
-		editorLanguage: 'php',
-		editorIds: ['php'],
-		aliases: [],
+		"id": "php",
+		"editorLanguage": "php",
+		"editorIds": [
+			"php"
+		],
+		"aliases": []
 	},
 	{
-		id: 'powershell',
-		editorLanguage: 'powershell',
-		editorIds: ['powershell'],
-		aliases: ['ps1', 'pwsh'],
+		"id": "powershell",
+		"editorLanguage": "powershell",
+		"editorIds": [
+			"powershell"
+		],
+		"aliases": [
+			"ps1",
+			"pwsh"
+		]
 	},
 	{
-		id: 'python',
-		editorLanguage: 'python',
-		editorIds: ['python'],
-		aliases: ['py'],
+		"id": "python",
+		"editorLanguage": "python",
+		"editorIds": [
+			"python"
+		],
+		"aliases": [
+			"py"
+		]
 	},
 	{
-		id: 'r',
-		editorLanguage: 'r',
-		editorIds: ['r'],
-		aliases: [],
+		"id": "r",
+		"editorLanguage": "r",
+		"editorIds": [
+			"r"
+		],
+		"aliases": []
 	},
 	{
-		id: 'ruby',
-		editorLanguage: 'ruby',
-		editorIds: ['ruby'],
-		aliases: ['rb'],
+		"id": "ruby",
+		"editorLanguage": "ruby",
+		"editorIds": [
+			"ruby"
+		],
+		"aliases": [
+			"rb"
+		]
 	},
 	{
-		id: 'rust',
-		editorLanguage: 'rust',
-		editorIds: ['rust'],
-		aliases: ['rs'],
+		"id": "rust",
+		"editorLanguage": "rust",
+		"editorIds": [
+			"rust"
+		],
+		"aliases": [
+			"rs"
+		]
 	},
 	{
-		id: 'shell',
-		editorLanguage: 'shellscript',
-		editorIds: ['shellscript'],
-		aliases: ['bash', 'sh'],
+		"id": "shell",
+		"editorLanguage": "shellscript",
+		"editorIds": [
+			"shellscript"
+		],
+		"aliases": [
+			"bash",
+			"sh"
+		]
 	},
 	{
-		id: 'sql',
-		editorLanguage: 'sql',
-		editorIds: ['sql'],
-		aliases: [],
+		"id": "sql",
+		"editorLanguage": "sql",
+		"editorIds": [
+			"sql"
+		],
+		"aliases": []
 	},
 	{
-		id: 'swift',
-		editorLanguage: 'swift',
-		editorIds: ['swift'],
-		aliases: [],
+		"id": "swift",
+		"editorLanguage": "swift",
+		"editorIds": [
+			"swift"
+		],
+		"aliases": []
 	},
 	{
-		id: 'toml',
-		editorLanguage: 'toml',
-		editorIds: ['toml'],
-		aliases: [],
+		"id": "toml",
+		"editorLanguage": "toml",
+		"editorIds": [
+			"toml"
+		],
+		"aliases": []
 	},
 	{
-		id: 'typescript',
-		editorLanguage: 'typescript',
-		editorIds: ['typescript'],
-		aliases: ['ts'],
+		"id": "typescript",
+		"editorLanguage": "typescript",
+		"editorIds": [
+			"typescript"
+		],
+		"aliases": [
+			"ts"
+		]
 	},
 	{
-		id: 'typescriptreact',
-		editorLanguage: 'typescriptreact',
-		editorIds: ['typescriptreact'],
-		aliases: ['tsx'],
+		"id": "typescriptreact",
+		"editorLanguage": "typescriptreact",
+		"editorIds": [
+			"typescriptreact"
+		],
+		"aliases": [
+			"tsx"
+		]
 	},
 	{
-		id: 'xml',
-		editorLanguage: 'xml',
-		editorIds: ['xml', 'xsl'],
-		aliases: ['xslt'],
+		"id": "xml",
+		"editorLanguage": "xml",
+		"editorIds": [
+			"xml",
+			"xsl"
+		],
+		"aliases": [
+			"xslt"
+		]
 	},
 	{
-		id: 'dtd',
-		editorLanguage: 'dtd',
-		editorIds: ['dtd'],
-		aliases: [],
+		"id": "dtd",
+		"editorLanguage": "dtd",
+		"editorIds": [
+			"dtd"
+		],
+		"aliases": []
 	},
 	{
-		id: 'dockercompose',
-		editorLanguage: 'dockercompose',
-		editorIds: ['dockercompose'],
-		aliases: ['compose'],
+		"id": "dockercompose",
+		"editorLanguage": "dockercompose",
+		"editorIds": [
+			"dockercompose"
+		],
+		"aliases": [
+			"compose"
+		]
 	},
 	{
-		id: 'yaml',
-		editorLanguage: 'yaml',
-		editorIds: ['yaml'],
-		aliases: [],
-	},
+		"id": "yaml",
+		"editorLanguage": "yaml",
+		"editorIds": [
+			"yaml"
+		],
+		"aliases": []
+	}
 ] as const;

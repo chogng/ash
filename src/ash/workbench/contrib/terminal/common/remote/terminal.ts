@@ -17,10 +17,7 @@ export function terminalExecutionScope(workspace: IWorkspace): ITerminalExecutio
 }
 
 export function terminalExecutionScopesEqual(left: ITerminalExecutionScope, right: ITerminalExecutionScope): boolean {
-	return (
-		left.workspaceId === right.workspaceId &&
-		left.remoteAuthority === right.remoteAuthority &&
-		left.folders.length === right.folders.length &&
-		left.folders.every((folder, index) => folder === right.folders[index])
-	);
+	return left.workspaceId === right.workspaceId && left.remoteAuthority === right.remoteAuthority
+		&& left.folders.length === right.folders.length
+		&& left.folders.every((folder, index) => folder === right.folders[index]);
 }

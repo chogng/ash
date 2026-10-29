@@ -54,14 +54,12 @@ function matchesMarker(pattern: RegExp | undefined, line: string): boolean {
 /** Merges independently-derived provider ranges while retaining only nested or disjoint spans. */
 export function mergeEditorFoldingRanges(...sources: readonly (readonly EditorFoldingRange[])[]): readonly EditorFoldingRange[] {
 	if (sources.some(source => !Array.isArray(source))) throw new TypeError('Folding range sources must be arrays');
-	const ranges = sources.flat().map(range =>
-		Object.freeze({
-			startLineIndex: range.startLineIndex,
-			endLineIndex: range.endLineIndex,
-			collapsed: false,
-			source: EditorFoldingRangeSource.Provider,
-		}),
-	);
+	const ranges = sources.flat().map(range => Object.freeze({
+		startLineIndex: range.startLineIndex,
+		endLineIndex: range.endLineIndex,
+		collapsed: false,
+		source: EditorFoldingRangeSource.Provider,
+	}));
 	return Object.freeze(normalizeFoldingRanges(ranges));
 }
 

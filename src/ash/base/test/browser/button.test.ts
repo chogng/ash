@@ -15,12 +15,7 @@ suite('Button deferred content', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		using cleanup = { [Symbol.dispose]: () => dom.window.close() };
 		let clicks = 0;
-		using button = new Button(dom.window.document.body, {
-			label: '',
-			iconOnly: true,
-			ariaLabel: 'Choose color',
-			onClick: () => clicks++,
-		});
+		using button = new Button(dom.window.document.body, { label: '', iconOnly: true, ariaLabel: 'Choose color', onClick: () => clicks++ });
 		assert.equal(button.domNode.childElementCount, 0);
 		const swatch = dom.window.document.createElement('span');
 		button.domNode.append(swatch);
@@ -49,9 +44,7 @@ test('Button only installs a Hover for an explicit title', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contents: unknown[] = [];
 	using delegateRegistration = setHoverDelegate({
-		setupDelayedHover() {
-			throw new Error('Unexpected delayed hover registration');
-		},
+		setupDelayedHover() { throw new Error('Unexpected delayed hover registration'); },
 		setupHover(options) {
 			contents.push(options.content);
 			return managedHover();
@@ -111,11 +104,11 @@ test('Button only installs a Hover for an explicit title', () => {
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
@@ -128,15 +121,9 @@ suite('ButtonWithDropdown', () => {
 		let runs = 0;
 		let menu: IContextMenuDelegate | undefined;
 		using button = new ButtonWithDropdown(dom.window.document.body, {
-			label: 'Run',
-			checked: true,
-			onClick: () => runs++,
-			actions: [{ id: 'other', label: 'Other', tooltip: '', enabled: true, run: () => {} }],
-			contextMenuProvider: {
-				showContextMenu: delegate => {
-					menu = delegate;
-				},
-			},
+			label: 'Run', checked: true, onClick: () => runs++,
+			actions: [{ id: 'other', label: 'Other', tooltip: '', enabled: true, run: () => { } }],
+			contextMenuProvider: { showContextMenu: delegate => { menu = delegate; } },
 		});
 		button.dropdownButton.domNode.click();
 		assert.equal(runs, 0);
@@ -153,29 +140,18 @@ suite('ButtonWithDropdown', () => {
 		let suffix = 'first';
 		let menu: IContextMenuDelegate | undefined;
 		using button = new ButtonWithDropdown(dom.window.document.body, {
-			label: 'Commit',
-			type: 'submit',
-			presentation: 'primary',
+			label: 'Commit', type: 'submit', presentation: 'primary',
 			onClick: () => primaryRuns++,
-			actions: {
-				getActions: () => [{ id: suffix, label: suffix, tooltip: '', enabled: true, run: () => menuRuns++ }],
-			},
+			actions: { getActions: () => [{ id: suffix, label: suffix, tooltip: '', enabled: true, run: () => menuRuns++ }] },
 			addPrimaryActionToDropdown: false,
-			contextMenuProvider: {
-				showContextMenu: delegate => {
-					menu = delegate;
-				},
-			},
+			contextMenuProvider: { showContextMenu: delegate => { menu = delegate; } },
 		});
 		assert.equal(button.primaryButton.domNode.type, 'submit');
 		assert.equal(button.dropdownButton.domNode.type, 'button');
 		button.dropdownButton.domNode.click();
 		assert.equal(primaryRuns, 0);
 		assert.equal(menu!.getAnchor(), button.dropdownButton.domNode);
-		assert.deepEqual(
-			menu!.getActions().map(action => action.id),
-			['first'],
-		);
+		assert.deepEqual(menu!.getActions().map(action => action.id), ['first']);
 		menu!.getActions()[0]!.run();
 		assert.equal(menuRuns, 1);
 		const first = menu!;
@@ -189,10 +165,7 @@ suite('ButtonWithDropdown', () => {
 		button.dropdownButton.domNode.click();
 		first.onHide?.(true);
 		assert.equal(button.dropdownButton.domNode.getAttribute('aria-expanded'), 'true');
-		assert.deepEqual(
-			menu!.getActions().map(action => action.id),
-			['second'],
-		);
+		assert.deepEqual(menu!.getActions().map(action => action.id), ['second']);
 		const second = menu!;
 		button.dispose();
 		assert.equal(second.cancellationToken!.isCancellationRequested, true);
@@ -220,17 +193,7 @@ suite('Split button rendering', () => {
 				const mainStyle = getComputedStyle(main!);
 				const arrowStyle = getComputedStyle(arrow!);
 				const icon = arrow!.querySelector('.ash-icon')!.getBoundingClientRect();
-				return {
-					height: left.height,
-					arrowHeight: right.height,
-					gap: right.left - left.right,
-					iconOffset: icon.left + icon.width / 2 - right.left - right.width / 2,
-					innerRadius: mainStyle.borderTopRightRadius,
-					arrowRadius: arrowStyle.borderTopLeftRadius,
-					border: arrowStyle.borderLeftWidth,
-					borderColor: arrowStyle.borderLeftColor,
-					background: mainStyle.backgroundColor,
-				};
+				return { height: left.height, arrowHeight: right.height, gap: right.left - left.right, iconOffset: icon.left + icon.width / 2 - right.left - right.width / 2, innerRadius: mainStyle.borderTopRightRadius, arrowRadius: arrowStyle.borderTopLeftRadius, border: arrowStyle.borderLeftWidth, borderColor: arrowStyle.borderLeftColor, background: mainStyle.backgroundColor };
 			});
 			assert.equal(geometry.height, geometry.arrowHeight);
 			assert.equal(geometry.gap, 0);
@@ -266,30 +229,21 @@ suite('Split button rendering', () => {
 		test(`filled split triggers follow button height without enlarging icon tools in ${theme}`, async () => {
 			const { page } = browser;
 			await page.evaluate(theme => window.ashButtonIntegration.theme(theme), theme);
-			const dimensions = async () =>
-				page.evaluate(() => {
-					const measure = (selector: string) => {
-						const root = document.querySelector(selector)!;
-						const [primary, dropdown] = [...root.querySelectorAll('button')];
-						const main = primary!.getBoundingClientRect();
-						const arrow = dropdown!.getBoundingClientRect();
-						return { height: main.height, width: arrow.width, arrowHeight: arrow.height };
-					};
-					const pin = document.querySelector<HTMLButtonElement>('#quiet-toolbar button[aria-label="Pin"]')!.getBoundingClientRect();
-					return {
-						standard: measure('#buttons'),
-						small: measure('#small-buttons'),
-						filled: measure('#primary-toolbar'),
-						quiet: measure('#quiet-toolbar'),
-						pin: { width: pin.width, height: pin.height },
-					};
-				});
-			await expect
-				.poll(async () => {
-					const sizes = await dimensions();
-					return [sizes.standard, sizes.small, sizes.filled].every(size => Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight);
-				})
-				.toBe(true);
+			const dimensions = async () => page.evaluate(() => {
+				const measure = (selector: string) => {
+					const root = document.querySelector(selector)!;
+					const [primary, dropdown] = [...root.querySelectorAll('button')];
+					const main = primary!.getBoundingClientRect();
+					const arrow = dropdown!.getBoundingClientRect();
+					return { height: main.height, width: arrow.width, arrowHeight: arrow.height };
+				};
+				const pin = document.querySelector<HTMLButtonElement>('#quiet-toolbar button[aria-label="Pin"]')!.getBoundingClientRect();
+				return { standard: measure('#buttons'), small: measure('#small-buttons'), filled: measure('#primary-toolbar'), quiet: measure('#quiet-toolbar'), pin: { width: pin.width, height: pin.height } };
+			});
+			await expect.poll(async () => {
+				const sizes = await dimensions();
+				return [sizes.standard, sizes.small, sizes.filled].every(size => Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight);
+			}).toBe(true);
 			const initial = await dimensions();
 			assert.ok(initial.standard.height >= 28);
 			assert.ok(initial.small.height >= 24);
@@ -306,23 +260,18 @@ suite('Split button rendering', () => {
 				document.body.style.fontSize = '20px';
 				document.body.style.lineHeight = '1.5';
 			});
-			await expect
-				.poll(async () => {
-					const sizes = await dimensions();
-					return [sizes.standard, sizes.filled].map((size, index) => ({
-						...size,
-						grew: size.height > [initial.standard, initial.filled][index]!.height,
-						square: Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight,
-					}));
-				})
-				.toEqual([expect.objectContaining({ grew: true, square: true }), expect.objectContaining({ grew: true, square: true })]);
+			await expect.poll(async () => {
+				const sizes = await dimensions();
+				return [sizes.standard, sizes.filled].map((size, index) => ({
+					...size, grew: size.height > [initial.standard, initial.filled][index]!.height,
+					square: Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight,
+				}));
+			}).toEqual([expect.objectContaining({ grew: true, square: true }), expect.objectContaining({ grew: true, square: true })]);
 			await page.evaluate(() => window.ashButtonIntegration.refreshToolbarDropdown());
-			await expect
-				.poll(async () => {
-					const { filled } = await dimensions();
-					return Math.abs(filled.width - filled.height) < 0.5;
-				})
-				.toBe(true);
+			await expect.poll(async () => {
+				const { filled } = await dimensions();
+				return Math.abs(filled.width - filled.height) < 0.5;
+			}).toBe(true);
 		});
 	}
 

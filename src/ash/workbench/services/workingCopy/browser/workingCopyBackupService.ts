@@ -17,7 +17,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private readonly legacyConflicts = new Map<string, WorkingCopyBackup>();
 	private readonly legacy: IndexedDbWorkingCopyBackupService;
 	private preparation: Promise<void> | undefined;
-	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string> } | undefined;
+	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string>; } | undefined;
 
 	constructor(
 		@IBackupService private readonly backups: IBackupService,
@@ -87,19 +87,12 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		await this.prepare(generation);
 		const source = await this.backups.list(sourceId);
 		const observed = new Set(source.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision).map(record => record.content.resource.toString()));
-		const moved = await this.backups.move(
-			sourceId,
-			target,
-			source.map(record => ({ resource: record.content.resource, revision: record.revision })),
-		);
+		const moved = await this.backups.move(sourceId, target, source.map(record => ({ resource: record.content.resource, revision: record.revision })));
 		this.assertCurrentWorkspace(generation);
 		// Moving bytes does not acknowledge recovery content. Retain only revisions
 		// already observed by this editor; unknown formats and other writers' newer
 		// source records still require explicit restoration in the destination.
-		this.movedRevisions = {
-			workspaceId: target.id,
-			revisions: new Map(moved.filter(record => observed.has(record.resource.toString())).map(record => [record.resource.toString(), record.revision])),
-		};
+		this.movedRevisions = { workspaceId: target.id, revisions: new Map(moved.filter(record => observed.has(record.resource.toString())).map(record => [record.resource.toString(), record.revision])) };
 	}
 
 	switchWorkspace(workspaceId: string): void {
@@ -124,22 +117,17 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private workspace(): IBackupWorkspace {
 		const workspace = this.workspaceContext.getWorkspace();
 		if (workspace.id !== this.workspaceId) throw new Error('Backup workspace does not match the current workspace');
-		return {
-			id: workspace.id,
-			folders: workspace.folders.map(folder => folder.uri),
-			...(workspace.configuration ? { configuration: workspace.configuration } : {}),
-			...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
-		};
+		return { id: workspace.id, folders: workspace.folders.map(folder => folder.uri), ...(workspace.configuration ? { configuration: workspace.configuration } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
 	}
 
 	private prepare(generation: number): Promise<void> {
 		this.assertCurrentWorkspace(generation);
-		return (this.preparation ??= this.migrate(generation).catch(error => {
+		return this.preparation ??= this.migrate(generation).catch(error => {
 			if (generation === this.workspaceGeneration) {
 				this.preparation = undefined;
 			}
 			throw error;
-		}));
+		});
 	}
 
 	private async migrate(generation: number): Promise<void> {
@@ -157,7 +145,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 				this.legacyConflicts.set(backup.resource.toString(), backup);
 				continue;
 			}
-			const record = stored ?? (await this.backups.store(workspace, content));
+			const record = stored ?? await this.backups.store(workspace, content);
 			this.assertCurrentWorkspace(generation);
 			existing.set(backup.resource.toString(), record);
 			await this.legacy.deleteIfUnchanged(backup);
@@ -168,17 +156,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 }
 
 function serialize(backup: WorkingCopyBackup): IBackupContent {
-	return {
-		resource: backup.resource,
-		format: CONTENT_FORMAT,
-		content: JSON.stringify({
-			kind: backup.kind,
-			content: backup.content,
-			...(backup.languageId !== undefined ? { languageId: backup.languageId } : {}),
-			...(backup.contentType !== undefined ? { contentType: backup.contentType } : {}),
-			...(backup.label !== undefined ? { label: backup.label } : {}),
-		}),
-	};
+	return { resource: backup.resource, format: CONTENT_FORMAT, content: JSON.stringify({ kind: backup.kind, content: backup.content, ...(backup.languageId !== undefined ? { languageId: backup.languageId } : {}), ...(backup.contentType !== undefined ? { contentType: backup.contentType } : {}), ...(backup.label !== undefined ? { label: backup.label } : {}) }) };
 }
 
 function deserialize(record: IBackupRecord): WorkingCopyBackup {
@@ -186,17 +164,10 @@ function deserialize(record: IBackupRecord): WorkingCopyBackup {
 	const payload: unknown = JSON.parse(record.content.content);
 	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid working-copy backup');
 	const value = payload as Record<string, unknown>;
-	if (
-		(value.kind !== 'text' && value.kind !== 'structuredDocument') ||
-		typeof value.content !== 'string' ||
-		['languageId', 'contentType', 'label'].some(key => value[key] !== undefined && typeof value[key] !== 'string')
-	)
-		throw new Error('Invalid working-copy backup content');
+	if ((value.kind !== 'text' && value.kind !== 'structuredDocument') || typeof value.content !== 'string'
+		|| ['languageId', 'contentType', 'label'].some(key => value[key] !== undefined && typeof value[key] !== 'string')) throw new Error('Invalid working-copy backup content');
 	return {
-		resource: record.content.resource,
-		kind: value.kind,
-		content: value.content,
-		updatedAt: record.updatedAt,
+		resource: record.content.resource, kind: value.kind, content: value.content, updatedAt: record.updatedAt,
 		...(typeof value.languageId === 'string' ? { languageId: value.languageId } : {}),
 		...(typeof value.contentType === 'string' ? { contentType: value.contentType } : {}),
 		...(typeof value.label === 'string' ? { label: value.label } : {}),

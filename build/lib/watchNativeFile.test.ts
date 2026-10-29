@@ -23,18 +23,10 @@ test('native file watch follows repeated atomic saves and delayed recreation', a
 	await writeFile(file, 'original');
 	const observed = new Set<string>();
 	const errors: Error[] = [];
-	const watcher = watchNativeFile(
-		file,
-		() => {
-			try {
-				observed.add(fs.readFileSync(file, 'utf8'));
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === 'ENOENT') observed.add('missing');
-				else throw error;
-			}
-		},
-		error => errors.push(error),
-	);
+	const watcher = watchNativeFile(file, () => {
+		try { observed.add(fs.readFileSync(file, 'utf8')); }
+		catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') observed.add('missing'); else throw error; }
+	}, error => errors.push(error));
 	t.after(() => watcher.close());
 	for (const content of ['first replacement', 'second replacement']) {
 		const temporary = join(directory, 'replacement');
@@ -61,15 +53,7 @@ test('an initially missing file is announced when its native watch becomes avail
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	const file = join(directory, 'Cargo.lock');
 	let observed = false;
-	const watcher = watchNativeFile(
-		file,
-		() => {
-			observed = fs.readFileSync(file, 'utf8') === 'created';
-		},
-		error => {
-			throw error;
-		},
-	);
+	const watcher = watchNativeFile(file, () => { observed = fs.readFileSync(file, 'utf8') === 'created'; }, error => { throw error; });
 	t.after(() => watcher.close());
 	await writeFile(file, 'created');
 	await eventually(() => observed);
@@ -83,18 +67,9 @@ test('closing an absent file cancels registration retries and leaves its parent 
 		calls.push(file);
 		throw Object.assign(new Error('missing'), { code: 'ENOENT' });
 	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	syncBuiltinESMExports();
-	const watcher = watchNativeFile(
-		'/workspace/Cargo.lock',
-		() => assert.fail('closed watch emitted'),
-		error => {
-			throw error;
-		},
-	);
+	const watcher = watchNativeFile('/workspace/Cargo.lock', () => assert.fail('closed watch emitted'), error => { throw error; });
 	watcher.close();
 	t.mock.timers.tick(1000);
 	assert.deepEqual(calls, ['/workspace/Cargo.lock']);
@@ -104,21 +79,11 @@ test('a failed rebind reports the error and releases the obsolete native handle'
 	const native = Object.assign(new EventEmitter(), { close: t.mock.fn() });
 	const failure = Object.assign(new Error('permission denied'), { code: 'EACCES' });
 	let opens = 0;
-	t.mock.method(fs, 'watch', () => {
-		if (++opens > 1) throw failure;
-		return native;
-	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	t.mock.method(fs, 'watch', () => { if (++opens > 1) throw failure; return native; });
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	syncBuiltinESMExports();
 	const errors: Error[] = [];
-	const watcher = watchNativeFile(
-		'/workspace/Cargo.toml',
-		() => {},
-		error => errors.push(error),
-	);
+	const watcher = watchNativeFile('/workspace/Cargo.toml', () => { }, error => errors.push(error));
 	native.emit('error', new Error('old inode unavailable'));
 	watcher.close();
 	assert.deepEqual(errors, [failure]);

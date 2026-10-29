@@ -5,7 +5,12 @@ import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
 import { getIndentationAtPosition, ILanguageConfigurationService } from './languageConfigurationRegistry.js';
 import { IndentationContextProcessor } from './supports/indentationLineProcessor.js';
 
-export function getEnterAction(autoIndent: EditorAutoIndentStrategy, model: ITextModel, range: Range, languageConfigurationService: ILanguageConfigurationService): CompleteEnterAction | null {
+export function getEnterAction(
+	autoIndent: EditorAutoIndentStrategy,
+	model: ITextModel,
+	range: Range,
+	languageConfigurationService: ILanguageConfigurationService
+): CompleteEnterAction | null {
 	model.tokenization.forceTokenization(range.startLineNumber);
 	const languageId = model.getLanguageIdAtPosition(range.startLineNumber, range.startColumn);
 	const richEditSupport = languageConfigurationService.getLanguageConfiguration(languageId);
@@ -29,7 +34,10 @@ export function getEnterAction(autoIndent: EditorAutoIndentStrategy, model: ITex
 
 	// Here we add `\t` to appendText first because enterAction is leveraging appendText and removeText to change indentation.
 	if (!appendText) {
-		if (indentAction === IndentAction.Indent || indentAction === IndentAction.IndentOutdent) {
+		if (
+			(indentAction === IndentAction.Indent) ||
+			(indentAction === IndentAction.IndentOutdent)
+		) {
 			appendText = '\t';
 		} else {
 			appendText = '';
@@ -47,6 +55,6 @@ export function getEnterAction(autoIndent: EditorAutoIndentStrategy, model: ITex
 		indentAction: indentAction,
 		appendText: appendText,
 		removeText: removeText,
-		indentation: indentation,
+		indentation: indentation
 	};
 }

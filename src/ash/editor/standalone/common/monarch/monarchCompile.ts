@@ -20,14 +20,12 @@ export function compile(languageId: string, definition: IMonarchLanguage): ILexe
 		maxStack: 100,
 		tokenPostfix: definition.tokenPostfix ?? `.${languageId}`,
 		tokenizer: Object.create(null) as Record<string, IRule[]>,
-		brackets: (
-			definition.brackets ?? [
-				{ open: '{', close: '}', token: 'delimiter.curly' },
-				{ open: '[', close: ']', token: 'delimiter.square' },
-				{ open: '(', close: ')', token: 'delimiter.parenthesis' },
-				{ open: '<', close: '>', token: 'delimiter.angle' },
-			]
-		).map(bracket => ({ ...bracket })),
+		brackets: (definition.brackets ?? [
+			{ open: '{', close: '}', token: 'delimiter.curly' },
+			{ open: '[', close: ']', token: 'delimiter.square' },
+			{ open: '(', close: ')', token: 'delimiter.parenthesis' },
+			{ open: '<', close: '>', token: 'delimiter.angle' },
+		]).map(bracket => ({ ...bracket })),
 	};
 	for (const [key, value] of Object.entries(definition)) {
 		if (Array.isArray(value) && key !== 'brackets') {

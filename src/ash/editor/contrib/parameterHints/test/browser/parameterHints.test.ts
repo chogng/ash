@@ -24,9 +24,7 @@ test('signature actions follow provider availability, language and model attachm
 	const context = fixture.editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
 	const read = () => [action.isSupported(), context.getValue('editorHasSignatureHelpProvider')];
 	assert.deepEqual(read(), [false, false]);
-	using provider = fixture.features.signatureHelpProvider.register('typescript', {
-		provideParameterHints: () => hints,
-	});
+	using provider = fixture.features.signatureHelpProvider.register('typescript', { provideParameterHints: () => hints });
 	assert.deepEqual(read(), [true, true]);
 	fixture.model.setLanguage('plaintext');
 	assert.deepEqual(read(), [false, false]);
@@ -48,9 +46,7 @@ test('signature commands switch the returned result without querying or moving t
 	using provider = fixture.features.signatureHelpProvider.register('typescript', {
 		provideParameterHints: () => {
 			calls++;
-			return {
-				signatures: [...hints.signatures, { label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 }],
-			};
+			return { signatures: [...hints.signatures, { label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 }] };
 		},
 	});
 	await fixture.invoke();
@@ -75,9 +71,7 @@ test('signature help uses the editor snapshot and stops after the first usable p
 	using fixture = createEditor();
 	const requests: LanguageParameterHintsRequest[] = [];
 	using unused = fixture.features.signatureHelpProvider.register('typescript', {
-		provideParameterHints: () => {
-			throw new Error('Lower priority provider was called');
-		},
+		provideParameterHints: () => { throw new Error('Lower priority provider was called'); },
 	});
 	using owner = fixture.features.signatureHelpProvider.register('typescript', {
 		provideParameterHints: (request, signal) => {
@@ -91,22 +85,13 @@ test('signature help uses the editor snapshot and stops after the first usable p
 	const request = requests[0]!;
 	assert.equal(request.model, fixture.model);
 	assert.equal(request.resource, fixture.model.uri);
-	assert.deepEqual(
-		{
-			text: request.snapshot.getText(),
-			version: request.snapshot.version,
-			position: request.position.toString(),
-			language: request.languageId,
-			context: request.context,
-		},
-		{
-			text: 'call(',
-			version: fixture.model.version,
-			position: '(1,6)',
-			language: 'typescript',
-			context: { kind: 'invoke', isRetrigger: false },
-		},
-	);
+	assert.deepEqual({
+		text: request.snapshot.getText(), version: request.snapshot.version,
+		position: request.position.toString(), language: request.languageId, context: request.context,
+	}, {
+		text: 'call(', version: fixture.model.version,
+		position: '(1,6)', language: 'typescript', context: { kind: 'invoke', isRetrigger: false },
+	});
 	assert.equal(fixture.dialog.hidden, false);
 	assert.equal(fixture.dialog.querySelector('.active')?.textContent, 'call(value)');
 	assert.equal(fixture.dialog.querySelector('strong')?.textContent, 'value');
@@ -116,9 +101,7 @@ test('signature help uses the editor snapshot and stops after the first usable p
 for (const result of ['empty', 'throw', 'invalid label', 'invalid signature index', 'invalid parameter index'] as const) {
 	test(`a provider returning ${result} does not block another signature provider`, async () => {
 		using fixture = createEditor();
-		using healthy = fixture.features.signatureHelpProvider.register('typescript', {
-			provideParameterHints: () => hints,
-		});
+		using healthy = fixture.features.signatureHelpProvider.register('typescript', { provideParameterHints: () => hints });
 		using first = fixture.features.signatureHelpProvider.register('typescript', {
 			provideParameterHints: () => {
 				if (result === 'throw') {
@@ -164,9 +147,7 @@ test('signature help can be enabled after an initially disabled editor is create
 test('disposing a model cancels signature help before trying another provider', async () => {
 	using fixture = createEditor();
 	let release!: () => void;
-	const pending = new Promise<void>(resolve => {
-		release = resolve;
-	});
+	const pending = new Promise<void>(resolve => { release = resolve; });
 	let signal: AbortSignal | undefined;
 	let laterCalls = 0;
 	using later = fixture.features.signatureHelpProvider.register('typescript', {
@@ -204,34 +185,18 @@ function createEditor(enabled = true) {
 	const errors: unknown[] = [];
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = createTestCodeEditor({
-		container,
-		model,
-		ariaLabel: 'test.ts',
-		languageFeaturesService: features,
-		dimension: { width: 400, height: 120 },
-		parameterHints: { enabled },
-		onLanguageError: error => errors.push(error),
+		container, model, ariaLabel: 'test.ts',
+		languageFeaturesService: features, dimension: { width: 400, height: 120 },
+		parameterHints: { enabled }, onLanguageError: error => errors.push(error),
 	});
 	editor.setPosition(new Position(1, 6));
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 	const dialog = container.querySelector<HTMLElement>('.stanza-editor-parameter-hints')!;
 	return {
-		model,
-		features,
-		editor,
-		dialog,
-		errors,
+		model, features, editor, dialog, errors,
 		invoke: async () => {
 			editor.focus();
-			input.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', {
-					bubbles: true,
-					cancelable: true,
-					key: ' ',
-					ctrlKey: true,
-					shiftKey: true,
-				}),
-			);
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', ctrlKey: true, shiftKey: true }));
 			await flushPromises();
 		},
 		[Symbol.dispose]: () => {

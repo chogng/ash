@@ -18,12 +18,7 @@ test('The contributed Open Chat command focuses its owning view and honors the w
 	using configuration = new TestConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	const focused: string[] = [];
-	services.registerInstance(IViewsService, {
-		focusView: async (id: string) => {
-			focused.push(id);
-			return true;
-		},
-	} as IViewsService);
+	services.registerInstance(IViewsService, { focusView: async (id: string) => { focused.push(id); return true; } } as IViewsService);
 	using commands = new CommandService(services);
 	assert.equal(await commands.executeCommand(OPEN_CHAT_COMMAND_ID), true);
 	assert.deepEqual(focused, [CHAT_VIEW_ID]);

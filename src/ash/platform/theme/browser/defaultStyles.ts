@@ -13,16 +13,22 @@ import type { IBreadcrumbsWidgetStyles } from '../../../base/browser/ui/breadcru
 import { colorCssVariable } from '../common/colorUtils.js';
 import type { ColorIdentifier } from '../common/colorRegistry.js';
 import { descriptionForeground, foreground, widgetBorder } from '../common/colors/baseColors.js';
-import { buttonForeground, buttonHoverBackground, buttonSecondaryBackground, primaryButtonBackground, primaryButtonForeground, primaryButtonHoverBackground } from '../common/colors/inputColors.js';
+import {
+	buttonForeground, buttonHoverBackground, buttonSecondaryBackground,
+	primaryButtonBackground, primaryButtonForeground, primaryButtonHoverBackground,
+} from '../common/colors/inputColors.js';
 
 /** Overrides name registered colors; widgets receive CSS values and stay independent of platform services. */
-export type IStyleOverride<T> = { readonly [P in keyof T]?: ColorIdentifier | undefined };
+export type IStyleOverride<T> = { readonly [P in keyof T]?: ColorIdentifier | undefined; };
 
 function colorVariable(id: ColorIdentifier): string {
 	return `var(${colorCssVariable(id)})`;
 }
 
-function withOverrides<T extends { readonly [P in keyof T]: string | undefined }>(defaults: T, overrides: IStyleOverride<T>): T {
+function withOverrides<T extends { readonly [P in keyof T]: string | undefined; }>(
+	defaults: T,
+	overrides: IStyleOverride<T>,
+): T {
 	const result = { ...defaults };
 	for (const key of Object.keys(overrides) as (keyof T)[]) {
 		const id = overrides[key];

@@ -21,10 +21,7 @@ suite('Desktop URL service', () => {
 
 	test('opener relays through Main and handles the returning callback before focusing its window', async () => {
 		using services = new InstantiationService();
-		services.registerInstance(ICodeEditorService, {
-			getFocusedCodeEditor: () => null,
-			openCodeEditor: async () => null,
-		} as unknown as ICodeEditorService);
+		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
@@ -34,46 +31,20 @@ suite('Desktop URL service', () => {
 			handleURL: async (uri, options) => {
 				calls.push(['main', uri.toString(), options]);
 				return rendererChannel.call<boolean>('main', 'handleURL', [uri.toString(), options]);
-			},
+			}
 		});
 		services.registerInstance(IMainProcessService, {
 			_serviceBrand: undefined,
-			getChannel: name => {
-				assert.equal(name, 'url');
-				return { call: (command, arg) => mainChannel.call('window:7', command, arg), listen: () => Event.None };
-			},
-			registerChannel: (name, channel) => {
-				assert.equal(name, 'urlHandler');
-				rendererChannel = channel;
-			},
+			getChannel: name => { assert.equal(name, 'url'); return { call: (command, arg) => mainChannel.call('window:7', command, arg), listen: () => Event.None }; },
+			registerChannel: (name, channel) => { assert.equal(name, 'urlHandler'); rendererChannel = channel; },
 		});
-		services.registerInstance(INativeHostService, {
-			focusWindow: async () => {
-				calls.push(['focus']);
-			},
-		} as unknown as INativeHostApi);
+		services.registerInstance(INativeHostService, { focusWindow: async () => { calls.push(['focus']); } } as unknown as INativeHostApi);
 		using service = services.createInstance(RelayURLService, 7);
-		using handler = service.registerHandler({
-			handleURL: async (uri, options) => {
-				calls.push(['handler', uri.toString(), options]);
-				return true;
-			},
-		});
-		const uri = service.create({
-			authority: 'callback',
-			path: 'result',
-			query: 'state=你好&windowId=1',
-			fragment: 'done',
-		});
+		using handler = service.registerHandler({ handleURL: async (uri, options) => { calls.push(['handler', uri.toString(), options]); return true; } });
+		const uri = service.create({ authority: 'callback', path: 'result', query: 'state=你好&windowId=1', fragment: 'done' });
 		assert.equal(uri.scheme, 'ash');
 		assert.equal(uri.path, '/result');
-		assert.deepEqual(
-			[...new URL(uri.toString()).searchParams],
-			[
-				['state', '你好'],
-				['windowId', '7'],
-			],
-		);
+		assert.deepEqual([...new URL(uri.toString()).searchParams], [['state', '你好'], ['windowId', '7']]);
 		assert.equal(await opener.open(uri), true);
 		assert.deepEqual(calls, [['main', uri.toString(), { trusted: true, originalUrl: undefined }], ['handler', uri.toString(), { trusted: true, originalUrl: undefined }], ['focus']]);
 		calls.length = 0;

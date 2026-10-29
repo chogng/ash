@@ -2,7 +2,11 @@ import { EditorOption, EditorOptions } from './editorOptions.js';
 import { BareFontInfo, type IValidatedEditorOptions } from './fontInfo.js';
 
 /** Builds a bare font descriptor from a normalized editor-option source. */
-export function createBareFontInfoFromValidatedSettings(options: IValidatedEditorOptions, pixelRatio: number, ignoreEditorZoom: boolean): BareFontInfo {
+export function createBareFontInfoFromValidatedSettings(
+	options: IValidatedEditorOptions,
+	pixelRatio: number,
+	ignoreEditorZoom: boolean,
+): BareFontInfo {
 	const fontFamily = options.get(EditorOption.fontFamily);
 	const fontWeight = options.get(EditorOption.fontWeight);
 	const fontSize = options.get(EditorOption.fontSize);

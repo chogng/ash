@@ -24,53 +24,33 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		public readonly hidesExplorerArrows: boolean,
 	) {
 		this.hasFileIcons = [normal, light, highContrast].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
-		this.hasFolderIcons = [normal, light, highContrast].some(
-			associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')),
-		);
+		this.hasFolderIcons = [normal, light, highContrast].some(associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')));
 	}
 
 	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
 		const document = record(value);
-		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') {
-			throw new Error('hidesExplorerArrows must be a boolean');
-		}
-		const fonts = new Map<string, { family: string; size: string; weight: string; style: string }>();
+		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') { throw new Error('hidesExplorerArrows must be a boolean'); }
+		const fonts = new Map<string, { family: string; size: string; weight: string; style: string; }>();
 		const styles: string[] = [];
-		if (document.fonts !== undefined && !Array.isArray(document.fonts)) {
-			throw new Error('Icon fonts must be an array');
-		}
+		if (document.fonts !== undefined && !Array.isArray(document.fonts)) { throw new Error('Icon fonts must be an array'); }
 		for (const [index, candidate] of ((document.fonts ?? []) as unknown[]).entries()) {
 			const font = record(candidate);
 			const fontId = text(font.id);
-			if (fonts.has(fontId)) {
-				throw new Error('Duplicate icon font');
-			}
-			const family =
-				'ash-file-icon-' +
-				Array.from(id)
-					.map(c => c.codePointAt(0)!.toString(16))
-					.join('-') +
-				'-' +
-				index;
-			if (!Array.isArray(font.src) || font.src.length === 0) {
-				throw new Error('Icon font requires a source');
-			}
+			if (fonts.has(fontId)) { throw new Error('Duplicate icon font'); }
+			const family = 'ash-file-icon-' + Array.from(id).map(c => c.codePointAt(0)!.toString(16)).join('-') + '-' + index;
+			if (!Array.isArray(font.src) || font.src.length === 0) { throw new Error('Icon font requires a source'); }
 			const sources: string[] = [];
 			for (const candidate of font.src) {
 				const source = record(candidate);
 				const format = text(source.format);
-				if (!['woff', 'woff2', 'truetype', 'opentype'].includes(format)) {
-					throw new Error('Unsupported icon font format');
-				}
+				if (!['woff', 'woff2', 'truetype', 'opentype'].includes(format)) { throw new Error('Unsupported icon font format'); }
 				const data = dataUrl(await readResource(assetPath(source.path)), 'application/octet-stream');
 				sources.push('url("' + data + '") format("' + format + '")');
 			}
 			const size = font.size === undefined ? '100%' : fontSize(font.size);
 			const weight = font.weight === undefined ? 'normal' : text(font.weight);
 			const style = font.style === undefined ? 'normal' : text(font.style);
-			if (!/^(?:normal|bold|[1-9]00)$/.test(weight) || !['normal', 'italic', 'oblique'].includes(style)) {
-				throw new Error('Invalid icon font weight or style');
-			}
+			if (!/^(?:normal|bold|[1-9]00)$/.test(weight) || !['normal', 'italic', 'oblique'].includes(style)) { throw new Error('Invalid icon font weight or style'); }
 			fonts.set(fontId, { family, size, weight, style });
 			styles.push('@font-face{font-family:"' + family + '";src:' + sources.join(',') + ';font-weight:' + weight + ';font-style:' + style + ';font-display:block;}');
 		}
@@ -83,32 +63,19 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 				const path = assetPath(definition.iconPath);
 				const extension = path.split('.').at(-1)?.toLowerCase();
 				const mime = extension === 'svg' ? 'image/svg+xml' : extension === 'png' ? 'image/png' : undefined;
-				if (!mime) {
-					throw new Error('Unsupported icon image format');
-				}
+				if (!mime) { throw new Error('Unsupported icon image format'); }
 				image = dataUrl(await readResource(path), mime);
 			}
 			const character = definition.fontCharacter === undefined ? '' : text(definition.fontCharacter);
-			if (!image && character && !font) {
-				throw new Error('Unknown icon font');
-			}
+			if (!image && character && !font) { throw new Error('Unknown icon font'); }
 			const color = definition.fontColor === undefined ? '' : text(definition.fontColor);
-			if (color && !/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) {
-				throw new Error('Invalid icon color');
-			}
+			if (color && !/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) { throw new Error('Invalid icon color'); }
 			const escape = /^\\([0-9a-f]{1,6})$/i.exec(character);
-			icons.set(
-				key,
-				Object.freeze({
-					character: escape ? String.fromCodePoint(parseInt(escape[1]!, 16)) : character,
-					fontWeight: font?.weight ?? 'normal',
-					fontStyle: font?.style ?? 'normal',
-					color,
-					fontFamily: font?.family ?? '',
-					fontSize: definition.fontSize === undefined ? (font?.size ?? '100%') : fontSize(definition.fontSize),
-					image,
-				}),
-			);
+			icons.set(key, Object.freeze({
+				character: escape ? String.fromCodePoint(parseInt(escape[1]!, 16)) : character,
+				fontWeight: font?.weight ?? 'normal', fontStyle: font?.style ?? 'normal',
+				color, fontFamily: font?.family ?? '', fontSize: definition.fontSize === undefined ? font?.size ?? '100%' : fontSize(definition.fontSize), image,
+			}));
 		}
 		const normal = associations(document, icons);
 		const light = associations(document.light ?? {}, icons);
@@ -119,7 +86,8 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 
 	public resolveFileIcon(classes: readonly string[], colorScheme: ColorScheme): FileIconDefinition | undefined {
 		const fallback = (associations: Associations): string | undefined =>
-			classes.includes('rootfolder-icon') ? (associations.rootFolder ?? associations.folder) : classes.includes('folder-icon') ? associations.folder : associations.file;
+			classes.includes('rootfolder-icon') ? associations.rootFolder ?? associations.folder :
+				classes.includes('folder-icon') ? associations.folder : associations.file;
 		const dark = isDarkColorScheme(colorScheme);
 		const contrast = colorScheme === ColorScheme.HighContrastDark || colorScheme === ColorScheme.HighContrastLight;
 		const variants: Associations[] = [];
@@ -147,45 +115,33 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 }
 
 function record(value: unknown): Record<string, unknown> {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) {
-		throw new Error('Expected an icon theme object');
-	}
+	if (!value || typeof value !== 'object' || Array.isArray(value)) { throw new Error('Expected an icon theme object'); }
 	return value as Record<string, unknown>;
 }
 function text(value: unknown): string {
-	if (typeof value !== 'string' || !value || value.length > 1024) {
-		throw new Error('Invalid icon theme text');
-	}
+	if (typeof value !== 'string' || !value || value.length > 1024) { throw new Error('Invalid icon theme text'); }
 	return value;
 }
 function fontSize(value: unknown): string {
 	const size = text(value);
-	if (!/^(?:[1-9][0-9]{0,2})(?:\.[0-9]+)?%$/.test(size)) {
-		throw new Error('Icon font size must be a percentage');
-	}
+	if (!/^(?:[1-9][0-9]{0,2})(?:\.[0-9]+)?%$/.test(size)) { throw new Error('Icon font size must be a percentage'); }
 	return size;
 }
 function assetPath(value: unknown): string {
 	const path = text(value).replace(/^\.\//, '');
-	if (path.split('/').some(part => !part || part === '.' || part === '..') || /[\\:%?#\x00-\x1f]/.test(path)) {
-		throw new Error('Icon asset must stay inside its theme directory');
-	}
+	if (path.split('/').some(part => !part || part === '.' || part === '..') || /[\\:%?#\x00-\x1f]/.test(path)) { throw new Error('Icon asset must stay inside its theme directory'); }
 	return path;
 }
 function dataUrl(bytes: Uint8Array, mime: string): string {
 	let binary = '';
-	for (let index = 0; index < bytes.length; index += 32768) {
-		binary += String.fromCharCode(...bytes.subarray(index, index + 32768));
-	}
+	for (let index = 0; index < bytes.length; index += 32768) { binary += String.fromCharCode(...bytes.subarray(index, index + 32768)); }
 	return 'data:' + mime + ';base64,' + btoa(binary);
 }
 function associations(value: unknown, icons: ReadonlyMap<string, FileIconDefinition>): Associations {
 	const input = record(value);
 	const checked = (value: unknown): string => {
 		const id = text(value);
-		if (!icons.has(id)) {
-			throw new Error('Unknown file icon definition: ' + id);
-		}
+		if (!icons.has(id)) { throw new Error('Unknown file icon definition: ' + id); }
 		return id;
 	};
 	const selectors = new Map<string, string>();
@@ -216,11 +172,9 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		const icon = icons.get(iconId)!;
 		styles.push(`${selector}{font-size:0;min-width:16px;inline-size:16px;}`);
 		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
-		styles.push(
-			icon.image
-				? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
-				: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`,
-		);
+		styles.push(icon.image
+			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
+			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
 	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
@@ -240,7 +194,7 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 	defaults(lightBase, light);
 	defaults(contrastBase, highContrast);
 	for (const { prefix, className, iconId } of entries) {
-		const kind = className.endsWith('-folder-icon') ? (className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon') : 'file-icon';
+		const kind = className.endsWith('-folder-icon') ? className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon' : 'file-icon';
 		add(`${prefix}.${kind}[class~=${cssString(className)}]`, iconId);
 	}
 	return styles;
@@ -253,5 +207,5 @@ function iconSelectorPriority(className: string): number {
 }
 
 function cssString(value: string): string {
-	return '"' + Array.from(value, character => (/[a-z0-9_-]/i.test(character) ? character : `\\${character.codePointAt(0)!.toString(16)} `)).join('') + '"';
+	return '"' + Array.from(value, character => /[a-z0-9_-]/i.test(character) ? character : `\\${character.codePointAt(0)!.toString(16)} `).join('') + '"';
 }

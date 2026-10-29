@@ -7,8 +7,7 @@ export const enum TerminalResizeDimensionsOverlaySettingId {
 
 export const terminalResizeDimensionsOverlayConfiguration: Readonly<Record<string, IConfigurationPropertySchema>> = {
 	[TerminalResizeDimensionsOverlaySettingId.Enabled]: {
-		type: 'boolean',
-		default: true,
+		type: 'boolean', default: true,
 		get description() {
 			return localize('terminal.resizeDimensionsOverlay.enabled', 'Show the terminal column and row counts briefly when its size changes.');
 		},

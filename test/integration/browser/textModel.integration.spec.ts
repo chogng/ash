@@ -7,10 +7,7 @@ const pageErrors = new WeakMap<object, string[]>();
 
 for (const inputMode of ['EditContext', 'textarea'] as const) {
 	test(`composition anchor follows the caret inside the scrolling body with ${inputMode}`, async ({ page }) => {
-		if (inputMode === 'textarea')
-			await page.addInitScript(() => {
-				Reflect.deleteProperty(window, 'EditContext');
-			});
+		if (inputMode === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 		await openEditor(page);
 		await page.evaluate(() => {
 			const editor = window.ashTextModelIntegration.getControl();
@@ -22,18 +19,14 @@ for (const inputMode of ['EditContext', 'textarea'] as const) {
 		});
 		const input = page.locator('.stanza-editor-input');
 		await input.evaluate(element => {
-			const target = (element as HTMLElement & { editContext?: EventTarget }).editContext ?? element;
+			const target = (element as HTMLElement & { editContext?: EventTarget; }).editContext ?? element;
 			target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 		});
 		await expect(page.locator('.stanza-editor')).toHaveClass(/\bcomposing\b/u);
-		await expect
-			.poll(() =>
-				input.evaluate(element => {
-					const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!;
-					return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
-				}),
-			)
-			.toBeLessThanOrEqual(1);
+		await expect.poll(() => input.evaluate(element => {
+			const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!;
+			return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
+		})).toBeLessThanOrEqual(1);
 	});
 }
 
@@ -44,25 +37,18 @@ test('syntax theme updates repaint text and minimap through shared line support'
 	await expect(token).toBeVisible();
 	const workers = page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'));
 	expect(workers).toHaveLength(0);
-	for (const [color, expected] of [
-		['#149b37', 'rgb(20, 155, 55)'],
-		['#9a41da', 'rgb(154, 65, 218)'],
-	] as const) {
+	for (const [color, expected] of [['#149b37', 'rgb(20, 155, 55)'], ['#9a41da', 'rgb(154, 65, 218)']] as const) {
 		await page.evaluate(color => window.ashTextModelIntegration.setSyntaxColor(color), color);
 		await expect(token).toHaveCSS('color', expected);
-		await expect
-			.poll(() =>
-				editor.locator('.minimap canvas').evaluate((element, color) => {
-					const canvas = element as HTMLCanvasElement;
-					const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
-					const channel = color === '#149b37' ? 1 : 2;
-					for (let offset = 0; offset < pixels.length; offset += 4) {
-						if (pixels[offset + 3]! > 0 && pixels[offset + channel]! > pixels[offset]! && pixels[offset + channel]! > pixels[offset + 3 - channel]!) return true;
-					}
-					return false;
-				}, color),
-			)
-			.toBe(true);
+		await expect.poll(() => editor.locator('.minimap canvas').evaluate((element, color) => {
+			const canvas = element as HTMLCanvasElement;
+			const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+			const channel = color === '#149b37' ? 1 : 2;
+			for (let offset = 0; offset < pixels.length; offset += 4) {
+				if (pixels[offset + 3]! > 0 && pixels[offset + channel]! > pixels[offset]! && pixels[offset + channel]! > pixels[offset + 3 - channel]!) return true;
+			}
+			return false;
+		}, color)).toBe(true);
 		expect(page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toEqual(workers);
 	}
 });
@@ -74,11 +60,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-	await page
-		.evaluate(() => {
-			window.ashTextModelIntegration?.dispose();
-		})
-		.catch(() => undefined);
+	await page.evaluate(() => {
+		window.ashTextModelIntegration?.dispose();
+	}).catch(() => undefined);
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
@@ -185,10 +169,7 @@ test('Explicit Code assembly installs text contributions without document contro
 
 for (const inputBackend of ['EditContext', 'textarea'] as const) {
 	test(`Chinese IME caret revisions preserve surrounding text and undo through ${inputBackend}`, async ({ page }) => {
-		if (inputBackend === 'textarea')
-			await page.addInitScript(() => {
-				Reflect.deleteProperty(window, 'EditContext');
-			});
+		if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 		await openEditor(page);
 		await page.evaluate(() => {
 			const editor = window.ashTextModelIntegration.getControl();
@@ -198,78 +179,41 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 		});
 		const session = await page.context().newCDPSession(page);
 		try {
-			for (const [text, offset] of [
-				['你好', 1],
-				['您好', 1],
-				['您们好', 3],
-			] as const) {
+			for (const [text, offset] of [['你好', 1], ['您好', 1], ['您们好', 3]] as const) {
 				await session.send('Input.imeSetComposition', { text, selectionStart: offset, selectionEnd: offset });
-				await expect
-					.poll(() =>
-						page.evaluate(() => ({
-							text: window.ashTextModelIntegration.getValue(),
-							position: window.ashTextModelIntegration.getControl().getPosition(),
-						})),
-					)
-					.toEqual({ text: `前${text}后`, position: { lineNumber: 1, column: 2 + offset } });
+				await expect.poll(() => page.evaluate(() => ({
+					text: window.ashTextModelIntegration.getValue(), position: window.ashTextModelIntegration.getControl().getPosition(),
+				}))).toEqual({ text: `前${text}后`, position: { lineNumber: 1, column: 2 + offset } });
 			}
 			await session.send('Input.insertText', { text: '您们好' });
 			await expect(page.locator('.stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
 			const input = page.locator('.stanza-editor-input');
 			await input.press('ControlOrMeta+z');
-			await expect
-				.poll(() =>
-					page.evaluate(() => ({
-						text: window.ashTextModelIntegration.getValue(),
-						position: window.ashTextModelIntegration.getControl().getPosition(),
-					})),
-				)
-				.toEqual({ text: '前后', position: { lineNumber: 1, column: 2 } });
+			await expect.poll(() => page.evaluate(() => ({
+				text: window.ashTextModelIntegration.getValue(), position: window.ashTextModelIntegration.getControl().getPosition(),
+			}))).toEqual({ text: '前后', position: { lineNumber: 1, column: 2 } });
 			await input.press('ControlOrMeta+Shift+z');
 			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('前您们好后');
 			await page.evaluate(() => {
 				const editor = window.ashTextModelIntegration.getControl();
 				editor.setValue('中文');
-				editor.setSelection({
-					selectionStartLineNumber: 1,
-					selectionStartColumn: 2,
-					positionLineNumber: 1,
-					positionColumn: 1,
-				});
+				editor.setSelection({ selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 1 });
 			});
 			await session.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 });
 			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('zhong文');
 			await input.press('Escape');
 			await session.send('Input.imeSetComposition', { text: '', selectionStart: 0, selectionEnd: 0 });
-			await expect
-				.poll(() =>
-					page.evaluate(() => {
-						const editor = window.ashTextModelIntegration.getControl();
-						const selection = editor.getSelection()!;
-						return {
-							text: editor.getValue(),
-							selection: [selection.selectionStartColumn, selection.positionColumn],
-							canRedo: editor.getModel()!.canRedo(),
-						};
-					}),
-				)
-				.toEqual({ text: '中文', selection: [2, 1], canRedo: false });
-		} finally {
-			await session.detach();
-		}
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				const selection = editor.getSelection()!;
+				return { text: editor.getValue(), selection: [selection.selectionStartColumn, selection.positionColumn], canRedo: editor.getModel()!.canRedo() };
+			})).toEqual({ text: '中文', selection: [2, 1], canRedo: false });
+		} finally { await session.detach(); }
 	});
 
-	for (const [unchanged, cancelKey] of [
-		[false, 'Escape'],
-		[true, 'Escape'],
-		[false, 'Process'],
-		[true, 'Process'],
-	] as const) {
+	for (const [unchanged, cancelKey] of [[false, 'Escape'], [true, 'Escape'], [false, 'Process'], [true, 'Process']] as const) {
 		test(`Chinese composition cancellation restores selection and history through ${inputBackend} with ${cancelKey}${unchanged ? ' without a text change' : ''}`, async ({ page }) => {
-			if (inputBackend === 'textarea')
-				await page.addInitScript(() => {
-					Reflect.deleteProperty(window, 'EditContext');
-				});
+			if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 			await openEditor(page);
 			await page.evaluate(() => {
 				const editor = window.ashTextModelIntegration.getControl();
@@ -279,102 +223,60 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 			});
 			const input = page.locator('.stanza-editor-input');
 			await page.keyboard.insertText('!');
-			await page.evaluate(() =>
-				window.ashTextModelIntegration.getControl().setSelection({
-					selectionStartLineNumber: 1,
-					selectionStartColumn: 2,
-					positionLineNumber: 1,
-					positionColumn: 1,
-				}),
-			);
-			await input.evaluate(
-				(element, { unchanged, cancelKey }) => {
-					const native = (
-						element as HTMLElement & {
-							editContext?: EventTarget & {
-								readonly selectionStart: number;
-								readonly selectionEnd: number;
-								updateText(start: number, end: number, text: string): void;
-								updateSelection(start: number, end: number): void;
-							};
-						}
-					).editContext;
-					const target = native ?? element;
-					const textarea = element as HTMLTextAreaElement;
-					const start = Math.min(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
-					let end = Math.max(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
-					target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
-					for (const text of unchanged ? ['中'] : ['n', 'ni', '你']) {
-						if (native) {
-							native.updateText(start, end, text);
-							native.updateSelection(start + text.length, start + text.length);
-							target.dispatchEvent(
-								Object.assign(new Event('textupdate'), {
-									text,
-									updateRangeStart: start,
-									updateRangeEnd: end,
-									selectionStart: start + text.length,
-									selectionEnd: start + text.length,
-								}),
-							);
-							end = start + text.length;
-						} else {
-							textarea.setRangeText(text, start, end, 'end');
-							end = start + text.length;
-							target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
-						}
+			await page.evaluate(() => window.ashTextModelIntegration.getControl().setSelection({
+				selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 1,
+			}));
+			await input.evaluate((element, { unchanged, cancelKey }) => {
+				const native = (element as HTMLElement & {
+					editContext?: EventTarget & {
+						readonly selectionStart: number; readonly selectionEnd: number;
+						updateText(start: number, end: number, text: string): void;
+						updateSelection(start: number, end: number): void;
+					};
+				}).editContext;
+				const target = native ?? element;
+				const textarea = element as HTMLTextAreaElement;
+				const start = Math.min(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
+				let end = Math.max(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
+				target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+				for (const text of unchanged ? ['中'] : ['n', 'ni', '你']) {
+					if (native) {
+						native.updateText(start, end, text);
+						native.updateSelection(start + text.length, start + text.length);
+						target.dispatchEvent(Object.assign(new Event('textupdate'), {
+							text, updateRangeStart: start, updateRangeEnd: end,
+							selectionStart: start + text.length, selectionEnd: start + text.length,
+						}));
+						end = start + text.length;
+					} else {
+						textarea.setRangeText(text, start, end, 'end');
+						end = start + text.length;
+						target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
 					}
-					element.dispatchEvent(
-						new KeyboardEvent('keydown', {
-							bubbles: true,
-							key: cancelKey,
-							isComposing: cancelKey === 'Escape',
-						}),
-					);
-					if (cancelKey === 'Process') {
-						// The Windows IME consumes Escape, removes the candidate, then
-						// completes with empty data. There is no Escape keydown in the editor.
-						if (native) {
-							native.updateText(start, end, '');
-							native.updateSelection(start, start);
-							target.dispatchEvent(
-								Object.assign(new Event('textupdate'), {
-									text: '',
-									updateRangeStart: start,
-									updateRangeEnd: end,
-									selectionStart: start,
-									selectionEnd: start,
-								}),
-							);
-						} else {
-							textarea.setRangeText('', start, end, 'end');
-							target.dispatchEvent(
-								new InputEvent('input', {
-									bubbles: true,
-									data: '',
-									inputType: 'insertCompositionText',
-									isComposing: true,
-								}),
-							);
-						}
+				}
+				element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: cancelKey, isComposing: cancelKey === 'Escape' }));
+				if (cancelKey === 'Process') {
+					// The Windows IME consumes Escape, removes the candidate, then
+					// completes with empty data. There is no Escape keydown in the editor.
+					if (native) {
+						native.updateText(start, end, '');
+						native.updateSelection(start, start);
+						target.dispatchEvent(Object.assign(new Event('textupdate'), {
+							text: '', updateRangeStart: start, updateRangeEnd: end,
+							selectionStart: start, selectionEnd: start,
+						}));
+					} else {
+						textarea.setRangeText('', start, end, 'end');
+						target.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'insertCompositionText', isComposing: true }));
 					}
-					target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
-				},
-				{ unchanged, cancelKey },
-			);
-			await expect
-				.poll(() =>
-					page.evaluate(() => {
-						const editor = window.ashTextModelIntegration.getControl();
-						const selection = editor.getSelection()!;
-						return {
-							text: editor.getValue(),
-							selection: [selection.selectionStartColumn, selection.positionColumn],
-							canRedo: editor.getModel()!.canRedo(),
-						};
-					}),
-				)
-				.toEqual({ text: '中文!', selection: [2, 1], canRedo: false });
+				}
+				target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+			}, { unchanged, cancelKey });
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				const selection = editor.getSelection()!;
+				return { text: editor.getValue(), selection: [selection.selectionStartColumn, selection.positionColumn], canRedo: editor.getModel()!.canRedo() };
+			})).toEqual({ text: '中文!', selection: [2, 1], canRedo: false });
 			await expect(page.locator('.stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
 			await input.press('ControlOrMeta+Shift+z');
 			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('中文!');
@@ -386,10 +288,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 	}
 
 	test(`Unicode overtype preserves text and history through ${inputBackend}`, async ({ page }) => {
-		if (inputBackend === 'textarea')
-			await page.addInitScript(() => {
-				Reflect.deleteProperty(window, 'EditContext');
-			});
+		if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 		await openEditor(page);
 		const input = page.locator('.stanza-editor-input');
 		await input.focus();
@@ -405,16 +304,13 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 					});
 					if (composition) {
 						await input.evaluate((element, text) => {
-							const native = (
-								element as HTMLElement & {
-									editContext?: EventTarget & {
-										readonly selectionStart: number;
-										readonly selectionEnd: number;
-										updateText(start: number, end: number, text: string): void;
-										updateSelection(start: number, end: number): void;
-									};
-								}
-							).editContext;
+							const native = (element as HTMLElement & {
+								editContext?: EventTarget & {
+									readonly selectionStart: number; readonly selectionEnd: number;
+									updateText(start: number, end: number, text: string): void;
+									updateSelection(start: number, end: number): void;
+								};
+							}).editContext;
 							const target = native ?? element;
 							target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 							if (native) {
@@ -422,15 +318,10 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 								const end = native.selectionEnd;
 								native.updateText(start, end, text);
 								native.updateSelection(start + text.length, start + text.length);
-								native.dispatchEvent(
-									Object.assign(new Event('textupdate'), {
-										text,
-										updateRangeStart: start,
-										updateRangeEnd: end,
-										selectionStart: start + text.length,
-										selectionEnd: start + text.length,
-									}),
-								);
+								native.dispatchEvent(Object.assign(new Event('textupdate'), {
+									text, updateRangeStart: start, updateRangeEnd: end,
+									selectionStart: start + text.length, selectionEnd: start + text.length,
+								}));
 							} else {
 								const textarea = element as HTMLTextAreaElement;
 								textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
@@ -441,17 +332,9 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 					} else {
 						await page.keyboard.insertText(text);
 					}
-					await expect
-						.poll(() =>
-							page.evaluate(() => ({
-								text: window.ashTextModelIntegration.getValue(),
-								selection: window.ashTextModelIntegration.getControl().getPosition(),
-							})),
-						)
-						.toEqual({
-							text: `a${text}😀e\u0301z\nend`,
-							selection: { lineNumber: 1, column: 2 + text.length },
-						});
+					await expect.poll(() => page.evaluate(() => ({
+						text: window.ashTextModelIntegration.getValue(), selection: window.ashTextModelIntegration.getControl().getPosition(),
+					}))).toEqual({ text: `a${text}😀e\u0301z\nend`, selection: { lineNumber: 1, column: 2 + text.length } });
 					await input.press('ControlOrMeta+z');
 					await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('ab😀e\u0301z\nend');
 					await input.press('ControlOrMeta+Shift+z');
@@ -496,22 +379,16 @@ test('textarea fallback routes type and composition through the standard input p
 		textArea.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: 'xy' }));
 	});
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^xyfn main/u);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({
-			startLineIndex: 0,
-			startColumnIndex: 1,
-			endLineIndex: 0,
-			endColumnIndex: 1,
-		});
-	await expect
-		.poll(() =>
-			input.evaluate(element => {
-				const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret.primary')!;
-				return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
-			}),
-		)
-		.toBeLessThan(2);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 1,
+	});
+	await expect.poll(() => input.evaluate(element => {
+		const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret.primary')!;
+		return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
+	})).toBeLessThan(2);
 	await input.evaluate(element => {
 		element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'xy' }));
 	});
@@ -548,14 +425,9 @@ test('editor scrollbar configuration updates visibility and track dimensions', a
 	await openEditor(page);
 	const horizontal = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-horizontal');
 	const vertical = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-vertical');
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.setScrollbar({
-			horizontal: 'visible',
-			vertical: 'visible',
-			horizontalScrollbarSize: 18,
-			verticalScrollbarSize: 22,
-		}),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({
+		horizontal: 'visible', vertical: 'visible', horizontalScrollbarSize: 18, verticalScrollbarSize: 22,
+	}));
 	await expect(horizontal).toBeVisible();
 	await expect(vertical).toBeVisible();
 	await expect(horizontal).toHaveCSS('opacity', '1');
@@ -599,13 +471,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 		window.ashTextModelIntegration.updateOptions({
 			mouseWheelScrollSensitivity: 2,
 			fastScrollSensitivity: 3,
-			scrollbar: {
-				vertical: 'visible',
-				horizontal: 'visible',
-				verticalSliderSize: 6,
-				horizontalSliderSize: 4,
-				scrollByPage: true,
-			},
+			scrollbar: { vertical: 'visible', horizontal: 'visible', verticalSliderSize: 6, horizontalSliderSize: 4, scrollByPage: true },
 		});
 	});
 	const editor = page.locator('.stanza-editor');
@@ -628,10 +494,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(520);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ scrollByPage: false }));
 	await page.locator('.decorationsOverviewRuler').dispatchEvent('pointerdown', {
-		button: 0,
-		buttons: 1,
-		clientX: box.x + box.width / 2,
-		clientY: box.y + box.height - 3,
+		button: 0, buttons: 1, clientX: box.x + box.width / 2, clientY: box.y + box.height - 3,
 	});
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(520);
 });
@@ -641,11 +504,7 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.setScrollbar({
-			vertical: 'visible',
-			horizontal: 'visible',
-			verticalHasArrows: true,
-			horizontalHasArrows: true,
-			arrowSize: 18,
+			vertical: 'visible', horizontal: 'visible', verticalHasArrows: true, horizontalHasArrows: true, arrowSize: 18,
 		});
 	});
 	const editor = page.locator('.stanza-editor');
@@ -762,14 +621,12 @@ test('textarea system-caret movement updates the editor only while focused', asy
 		textArea.setSelectionRange(1, 3, 'forward');
 		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({
-			startLineIndex: 0,
-			startColumnIndex: 1,
-			endLineIndex: 0,
-			endColumnIndex: 3,
-		});
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 3,
+	});
 
 	await input.blur();
 	await input.evaluate(element => {
@@ -777,14 +634,12 @@ test('textarea system-caret movement updates the editor only while focused', asy
 		textArea.setSelectionRange(0, 1, 'forward');
 		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({
-			startLineIndex: 0,
-			startColumnIndex: 1,
-			endLineIndex: 0,
-			endColumnIndex: 3,
-		});
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection())).toEqual({
+		startLineIndex: 0,
+		startColumnIndex: 1,
+		endLineIndex: 0,
+		endColumnIndex: 3,
+	});
 });
 
 test('textarea clipboard events pass through TextAreaInput semantic events', async ({ page }) => {
@@ -819,23 +674,19 @@ test('textarea clipboard events pass through TextAreaInput semantic events', asy
 		const textArea = element as HTMLTextAreaElement;
 		textArea.setSelectionRange(0, 3, 'forward');
 		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
-		textArea.dispatchEvent(
-			new ClipboardEvent('cut', {
-				bubbles: true,
-				cancelable: true,
-				clipboardData: new DataTransfer(),
-			}),
-		);
+		textArea.dispatchEvent(new ClipboardEvent('cut', {
+			bubbles: true,
+			cancelable: true,
+			clipboardData: new DataTransfer(),
+		}));
 	});
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^main\(\)/u);
 });
 
-function assertBox(
-	box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null,
-	name: string,
-): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number; } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number; } {
 	expect(box, `Expected ${name} geometry`).not.toBeNull();
 }
+
 
 test('large multiline keyboard input replaces the selection and keeps the editor responsive', async ({ page }) => {
 	await openEditor(page);
@@ -855,22 +706,14 @@ async function openEditor(page: Page): Promise<void> {
 	await page.waitForFunction(() => window.ashTextModelIntegration !== undefined);
 }
 
+
 for (const editContext of [true, false]) {
 	test(`editor Tab navigation has one input stop with ${editContext ? 'NativeEditContext' : 'textarea'}`, async ({ page }) => {
-		if (!editContext) {
-			await page.addInitScript(() => {
-				Reflect.deleteProperty(window, 'EditContext');
-			});
-		}
+		if (!editContext) { await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); }); }
 		await openEditor(page);
 		await page.evaluate(() => {
 			const editor = window.ashTextModelIntegration.getControl();
-			editor.updateOptions({
-				tabFocusMode: true,
-				tabIndex: 0,
-				minimap: { enabled: false },
-				scrollbar: { vertical: 'hidden', horizontal: 'hidden' },
-			});
+			editor.updateOptions({ tabFocusMode: true, tabIndex: 0, minimap: { enabled: false }, scrollbar: { vertical: 'hidden', horizontal: 'hidden' } });
 			const before = document.createElement('button');
 			before.textContent = 'Before editor';
 			const after = document.createElement('button');
@@ -949,6 +792,7 @@ test('extension snippet completions accept, navigate placeholders and undo in th
 	await page.evaluate(() => window.ashTextModelIntegration.dispose());
 });
 
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	test(`formatters select, persist a language default, restore focus and undo in ${locale}`, async ({ page }) => {
 		await page.goto('/textModel.html');
@@ -994,13 +838,11 @@ test('format on type uses the input event and is one undo step with the typed tr
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('alpha');
 });
 
+
 test('formatter choice cancels on cursor changes and readonly formatting does not open a picker', async ({ page }) => {
 	await page.goto('/textModel.html');
 	await page.waitForFunction(() => !!window.ashTextModelIntegration);
-	await page.evaluate(() => {
-		window.ashTextModelIntegration.enableFormatting('en');
-		void window.ashTextModelIntegration.formatDocument();
-	});
+	await page.evaluate(() => { window.ashTextModelIntegration.enableFormatting('en'); void window.ashTextModelIntegration.formatDocument(); });
 	await expect(page.locator('.ash-quick-pick')).toBeVisible();
 	await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 2, column: 1 }));
 	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
@@ -1016,29 +858,10 @@ test('minimap section headers use comment tokens and live MARK, region, pattern 
 	await page.evaluate(() => {
 		const editor = window.ashTextModelIntegration.getControl();
 		editor.updateOptions({ minimap: { enabled: true, size: 'fit', maxColumn: 160 } });
-		editor.setValue(
-			[
-				'// MARK: First',
-				'fn first() {}',
-				'// #region Region',
-				'fn second() {}',
-				'// #endregion',
-				'let fake = "MARK: Fake";',
-				'// PART Third',
-				...Array.from({ length: 100 }, () => 'fn more() {}'),
-			].join('\n'),
-		);
+		editor.setValue(['// MARK: First', 'fn first() {}', '// #region Region', 'fn second() {}', '// #endregion', 'let fake = "MARK: Fake";', '// PART Third', ...Array.from({ length: 100 }, () => 'fn more() {}')].join('\n'));
 	});
-	const labels = () =>
-		page.evaluate(() =>
-			window.ashTextModelIntegration
-				.getControl()
-				.getModel()!
-				.getAllDecorations()
-				.map(decoration => decoration.options.minimap?.sectionHeaderText)
-				.filter(Boolean)
-				.sort(),
-		);
+	const labels = () => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getAllDecorations()
+		.map(decoration => decoration.options.minimap?.sectionHeaderText).filter(Boolean).sort());
 	await expect.poll(labels).toEqual(['First', 'Region']);
 	const pixels = () => page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
 	const original = await pixels();
@@ -1062,75 +885,30 @@ test('minimap inline diagnostics and gutter changes keep distinct positions thro
 		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
 		for (const wrap of ['off', 'on'] as const) {
 			for (const folded of [false, true]) {
-				await page.evaluate(
-					({ wrap, folded }) => {
-						const editor = window.ashTextModelIntegration.getControl();
-						editor.getModel()!.setLanguage('plaintext');
-						editor.updateOptions({
-							wordWrap: wrap,
-							lineHeight: 20,
-							smoothScrolling: false,
-							padding: { top: 0, bottom: 0 },
-							minimap: { enabled: true, size: 'fit', scale: 1 },
-						});
-						editor.setValue(Array.from({ length: 20 }, () => 'a'.repeat(180)).join('\n'));
-						editor.setHiddenAreas(
-							folded
-								? [
-										editor.getModel()!.validateRange({
-											startLineNumber: 2,
-											startColumn: 1,
-											endLineNumber: 4,
-											endColumn: 181,
-										}),
-									]
-								: [],
-						);
-						editor.getModel()!.deltaDecorations(
-							[],
-							[
-								{
-									range: { startLineNumber: 8, startColumn: 10, endLineNumber: 8, endColumn: 160 },
-									options: {
-										description: 'audit diagnostic',
-										minimap: { color: '#ff00ff', position: 1 },
-									},
-								},
-								{
-									range: { startLineNumber: 8, startColumn: 1, endLineNumber: 8, endColumn: 2 },
-									options: {
-										description: 'audit change',
-										minimap: { color: '#00ffff', position: 2 },
-									},
-								},
-							],
-						);
-					},
-					{ wrap, folded },
-				);
-				await expect
-					.poll(
-						() =>
-							page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => {
-								const editor = window.ashTextModelIntegration.getControl();
-								const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
-								const inline: number[] = [];
-								const gutter = new Set<number>();
-								for (let offset = 0; offset < data.length; offset += 4) {
-									if (data[offset + 3] !== 255 || data[offset + 2] !== 255) continue;
-									if (data[offset] === 255 && data[offset + 1] === 0) inline.push(offset / 4);
-									if (data[offset] === 0 && data[offset + 1] === 255) gutter.add((offset / 4) % canvas.width);
-								}
-								const expectedTop = Math.floor((editor.getTopForLineNumber(8) / 20) * editor.getLayoutInfo().minimap.minimapLineHeight);
-								return {
-									inline: inline.some(pixel => pixel % canvas.width > 5),
-									gutter: [...gutter].sort((a, b) => a - b),
-									top: inline.length ? Math.floor(inline[0]! / canvas.width) - expectedTop : null,
-								};
-							}),
-						{ message: `${theme}, wrap=${wrap}, folded=${folded}` },
-					)
-					.toEqual({ inline: true, gutter: [2, 3, 4], top: 0 });
+				await page.evaluate(({ wrap, folded }) => {
+					const editor = window.ashTextModelIntegration.getControl();
+					editor.getModel()!.setLanguage('plaintext');
+					editor.updateOptions({ wordWrap: wrap, lineHeight: 20, smoothScrolling: false, padding: { top: 0, bottom: 0 }, minimap: { enabled: true, size: 'fit', scale: 1 } });
+					editor.setValue(Array.from({ length: 20 }, () => 'a'.repeat(180)).join('\n'));
+					editor.setHiddenAreas(folded ? [editor.getModel()!.validateRange({ startLineNumber: 2, startColumn: 1, endLineNumber: 4, endColumn: 181 })] : []);
+					editor.getModel()!.deltaDecorations([], [
+						{ range: { startLineNumber: 8, startColumn: 10, endLineNumber: 8, endColumn: 160 }, options: { description: 'audit diagnostic', minimap: { color: '#ff00ff', position: 1 } } },
+						{ range: { startLineNumber: 8, startColumn: 1, endLineNumber: 8, endColumn: 2 }, options: { description: 'audit change', minimap: { color: '#00ffff', position: 2 } } },
+					]);
+				}, { wrap, folded });
+				await expect.poll(() => page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => {
+					const editor = window.ashTextModelIntegration.getControl();
+					const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+					const inline: number[] = [];
+					const gutter = new Set<number>();
+					for (let offset = 0; offset < data.length; offset += 4) {
+						if (data[offset + 3] !== 255 || data[offset + 2] !== 255) continue;
+						if (data[offset] === 255 && data[offset + 1] === 0) inline.push(offset / 4);
+						if (data[offset] === 0 && data[offset + 1] === 255) gutter.add(offset / 4 % canvas.width);
+					}
+					const expectedTop = Math.floor(editor.getTopForLineNumber(8) / 20 * editor.getLayoutInfo().minimap.minimapLineHeight);
+					return { inline: inline.some(pixel => pixel % canvas.width > 5), gutter: [...gutter].sort((a, b) => a - b), top: inline.length ? Math.floor(inline[0]! / canvas.width) - expectedTop : null };
+				}), { message: `${theme}, wrap=${wrap}, folded=${folded}` }).toEqual({ inline: true, gutter: [2, 3, 4], top: 0 });
 			}
 		}
 	}

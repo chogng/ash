@@ -42,7 +42,7 @@ export interface CharacterMap {
 
 const autoCloseAlways = () => true;
 const autoCloseNever = () => false;
-const autoCloseBeforeWhitespace = (chr: string) => chr === ' ' || chr === '\t';
+const autoCloseBeforeWhitespace = (chr: string) => (chr === ' ' || chr === '\t');
 
 export class CursorConfiguration {
 	_cursorMoveConfigurationBrand: void = undefined;
@@ -73,38 +73,34 @@ export class CursorConfiguration {
 	public readonly autoClosingPairs: AutoClosingPairs;
 	public readonly surroundingPairs: CharacterMap;
 	public readonly blockCommentStartToken: string | null;
-	public readonly shouldAutoCloseBefore: {
-		quote: (ch: string) => boolean;
-		bracket: (ch: string) => boolean;
-		comment: (ch: string) => boolean;
-	};
+	public readonly shouldAutoCloseBefore: { quote: (ch: string) => boolean; bracket: (ch: string) => boolean; comment: (ch: string) => boolean; };
 	public readonly wordSegmenterLocales: string[];
 	public readonly overtypeOnPaste: boolean;
 
 	private readonly _languageId: string;
-	private _electricChars: { [key: string]: boolean } | null;
+	private _electricChars: { [key: string]: boolean; } | null;
 
 	public static shouldRecreate(e: ConfigurationChangedEvent): boolean {
 		return (
-			e.hasChanged(EditorOption.layoutInfo) ||
-			e.hasChanged(EditorOption.wordSeparators) ||
-			e.hasChanged(EditorOption.emptySelectionClipboard) ||
-			e.hasChanged(EditorOption.multiCursorMergeOverlapping) ||
-			e.hasChanged(EditorOption.multiCursorPaste) ||
-			e.hasChanged(EditorOption.multiCursorLimit) ||
-			e.hasChanged(EditorOption.autoClosingBrackets) ||
-			e.hasChanged(EditorOption.autoClosingComments) ||
-			e.hasChanged(EditorOption.autoClosingQuotes) ||
-			e.hasChanged(EditorOption.autoClosingDelete) ||
-			e.hasChanged(EditorOption.autoClosingOvertype) ||
-			e.hasChanged(EditorOption.autoSurround) ||
-			e.hasChanged(EditorOption.autoIndent) ||
-			e.hasChanged(EditorOption.useTabStops) ||
-			e.hasChanged(EditorOption.trimWhitespaceOnDelete) ||
-			e.hasChanged(EditorOption.fontInfo) ||
-			e.hasChanged(EditorOption.readOnly) ||
-			e.hasChanged(EditorOption.wordSegmenterLocales) ||
-			e.hasChanged(EditorOption.overtypeOnPaste)
+			e.hasChanged(EditorOption.layoutInfo)
+			|| e.hasChanged(EditorOption.wordSeparators)
+			|| e.hasChanged(EditorOption.emptySelectionClipboard)
+			|| e.hasChanged(EditorOption.multiCursorMergeOverlapping)
+			|| e.hasChanged(EditorOption.multiCursorPaste)
+			|| e.hasChanged(EditorOption.multiCursorLimit)
+			|| e.hasChanged(EditorOption.autoClosingBrackets)
+			|| e.hasChanged(EditorOption.autoClosingComments)
+			|| e.hasChanged(EditorOption.autoClosingQuotes)
+			|| e.hasChanged(EditorOption.autoClosingDelete)
+			|| e.hasChanged(EditorOption.autoClosingOvertype)
+			|| e.hasChanged(EditorOption.autoSurround)
+			|| e.hasChanged(EditorOption.autoIndent)
+			|| e.hasChanged(EditorOption.useTabStops)
+			|| e.hasChanged(EditorOption.trimWhitespaceOnDelete)
+			|| e.hasChanged(EditorOption.fontInfo)
+			|| e.hasChanged(EditorOption.readOnly)
+			|| e.hasChanged(EditorOption.wordSegmenterLocales)
+			|| e.hasChanged(EditorOption.overtypeOnPaste)
 		);
 	}
 
@@ -112,7 +108,7 @@ export class CursorConfiguration {
 		languageId: string,
 		modelOptions: TextModelResolvedOptions,
 		configuration: IEditorConfiguration,
-		public readonly languageConfigurationService: ILanguageConfigurationService,
+		public readonly languageConfigurationService: ILanguageConfigurationService
 	) {
 		this._languageId = languageId;
 
@@ -283,7 +279,11 @@ export class CursorState {
 
 	public static fromModelSelection(modelSelection: ISelection): PartialModelCursorState {
 		const selection = Selection.liftSelection(modelSelection);
-		const modelState = new SingleCursorState(Range.fromPositions(selection.getSelectionStart()), SelectionStartKind.Simple, 0, selection.getPosition(), 0);
+		const modelState = new SingleCursorState(
+			Range.fromPositions(selection.getSelectionStart()),
+			SelectionStartKind.Simple, 0,
+			selection.getPosition(), 0
+		);
 		return CursorState.fromModelState(modelState);
 	}
 
@@ -304,7 +304,7 @@ export class CursorState {
 	}
 
 	public equals(other: CursorState): boolean {
-		return this.viewState.equals(other.viewState) && this.modelState.equals(other.modelState);
+		return (this.viewState.equals(other.viewState) && this.modelState.equals(other.modelState));
 	}
 }
 
@@ -331,7 +331,7 @@ export class PartialViewCursorState {
 export const enum SelectionStartKind {
 	Simple,
 	Word,
-	Line,
+	Line
 }
 
 /**
@@ -354,22 +354,28 @@ export class SingleCursorState {
 
 	public equals(other: SingleCursorState) {
 		return (
-			this.selectionStartLeftoverVisibleColumns === other.selectionStartLeftoverVisibleColumns &&
-			this.leftoverVisibleColumns === other.leftoverVisibleColumns &&
-			this.selectionStartKind === other.selectionStartKind &&
-			this.position.equals(other.position) &&
-			this.selectionStart.equalsRange(other.selectionStart)
+			this.selectionStartLeftoverVisibleColumns === other.selectionStartLeftoverVisibleColumns
+			&& this.leftoverVisibleColumns === other.leftoverVisibleColumns
+			&& this.selectionStartKind === other.selectionStartKind
+			&& this.position.equals(other.position)
+			&& this.selectionStart.equalsRange(other.selectionStart)
 		);
 	}
 
 	public hasSelection(): boolean {
-		return !this.selection.isEmpty() || !this.selectionStart.isEmpty();
+		return (!this.selection.isEmpty() || !this.selectionStart.isEmpty());
 	}
 
 	public move(inSelectionMode: boolean, lineNumber: number, column: number, leftoverVisibleColumns: number): SingleCursorState {
 		if (inSelectionMode) {
 			// move just position
-			return new SingleCursorState(this.selectionStart, this.selectionStartKind, this.selectionStartLeftoverVisibleColumns, new Position(lineNumber, column), leftoverVisibleColumns);
+			return new SingleCursorState(
+				this.selectionStart,
+				this.selectionStartKind,
+				this.selectionStartLeftoverVisibleColumns,
+				new Position(lineNumber, column),
+				leftoverVisibleColumns
+			);
 		} else {
 			// move everything
 			return new SingleCursorState(
@@ -377,7 +383,7 @@ export class SingleCursorState {
 				SelectionStartKind.Simple,
 				leftoverVisibleColumns,
 				new Position(lineNumber, column),
-				leftoverVisibleColumns,
+				leftoverVisibleColumns
 			);
 		}
 	}
@@ -399,7 +405,14 @@ export class EditOperationResult {
 	readonly shouldPushStackElementBefore: boolean;
 	readonly shouldPushStackElementAfter: boolean;
 
-	constructor(type: EditOperationType, commands: Array<ICommand | null>, opts: { shouldPushStackElementBefore: boolean; shouldPushStackElementAfter: boolean }) {
+	constructor(
+		type: EditOperationType,
+		commands: Array<ICommand | null>,
+		opts: {
+			shouldPushStackElementBefore: boolean;
+			shouldPushStackElementAfter: boolean;
+		}
+	) {
 		this.type = type;
 		this.commands = commands;
 		this.shouldPushStackElementBefore = opts.shouldPushStackElementBefore;
@@ -408,5 +421,5 @@ export class EditOperationResult {
 }
 
 export function isQuote(ch: string): boolean {
-	return ch === "'" || ch === '"' || ch === '`';
+	return (ch === "'" || ch === '"' || ch === '`');
 }

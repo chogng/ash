@@ -87,10 +87,9 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 			this.bytes = visible;
 			this.metadata = formatByteCount(resolved.bytes.length);
 			this.updateAriaLabel();
-			summary.textContent =
-				resolved.bytes.length > visible.length
-					? localize('binaryEditor.truncatedSummary', '{0} · read-only hexadecimal preview · first {1}', this.metadata, formatByteCount(visible.length))
-					: localize('binaryEditor.summary', '{0} · read-only hexadecimal preview', this.metadata);
+			summary.textContent = resolved.bytes.length > visible.length
+				? localize('binaryEditor.truncatedSummary', '{0} · read-only hexadecimal preview · first {1}', this.metadata, formatByteCount(visible.length))
+				: localize('binaryEditor.summary', '{0} · read-only hexadecimal preview', this.metadata);
 			// A comparison waits for both byte ranges, avoiding a second full
 			// projection and initial line-width scan when the shorter side is padded.
 			if (this.projectionMode === 'standalone') this.createProjection(visible.length);
@@ -102,10 +101,7 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 
 	private createProjection(length: number): void {
 		const content = this.requireContent();
-		const projection = new TextModel(renderHexDump(this.bytes, length), {
-			isForSimpleWidget: true,
-			resource: this.model.value!.resource.with({ scheme: 'ash-binary-preview' }),
-		});
+		const projection = new TextModel(renderHexDump(this.bytes, length), { isForSimpleWidget: true, resource: this.model.value!.resource.with({ scheme: 'ash-binary-preview' }) });
 		try {
 			const font = content.ownerDocument.defaultView!.getComputedStyle(content);
 			const fontSize = Number.parseFloat(font.fontSize);
@@ -161,14 +157,10 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 		}
 	}
 
-	public override getControl(): CodeEditorWidget | undefined {
-		return this.editor.value;
-	}
+	public override getControl(): CodeEditorWidget | undefined { return this.editor.value; }
 
 	/** Bounded projection bytes, shared only with the owning binary comparison. */
-	getPreviewBytes(): Uint8Array {
-		return this.bytes;
-	}
+	getPreviewBytes(): Uint8Array { return this.bytes; }
 
 	/** Compare identical byte offsets, padding the shorter side so scrolling stays aligned. */
 	setComparison(other: Uint8Array, side: 'original' | 'modified'): void {
@@ -199,28 +191,18 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 		projection.deltaDecorations([], decorations);
 		const label = side === 'original' ? localize('binaryEditor.original', 'Original') : localize('binaryEditor.modified', 'Modified');
 		this.requireSummary().textContent = localize('binaryEditor.comparisonSummary', '{0} · {1} · {2} differing bytes in preview (by offset)', label, this.metadata!, changed);
-		editor.updateOptions({
-			ariaLabel: localize(
-				'binaryEditor.comparisonLabel',
-				'{0}: {1}. {2} differing bytes by offset. Scrolling is synchronized. Missing bytes are shown as dashes.',
-				label,
-				this.model.value!.getName(),
-				changed,
-			),
-		});
+		editor.updateOptions({ ariaLabel: localize('binaryEditor.comparisonLabel', '{0}: {1}. {2} differing bytes by offset. Scrolling is synchronized. Missing bytes are shown as dashes.', label, this.model.value!.getName(), changed) });
 	}
 
-	public override focus(): void {
-		this.editor.value?.focus();
-	}
+	public override focus(): void { this.editor.value?.focus(); }
 
-	getMetadata(): string | undefined {
-		return this.metadata;
-	}
+	getMetadata(): string | undefined { return this.metadata; }
 
 	private updateAriaLabel(): void {
 		const model = this.model.value;
-		this.container?.setAttribute('aria-label', model ? localize('binaryEditor.resourceLabel', 'Binary editor: {0}', model.getName()) : localize('binaryEditor.label', 'Binary editor'));
+		this.container?.setAttribute('aria-label', model
+			? localize('binaryEditor.resourceLabel', 'Binary editor: {0}', model.getName())
+			: localize('binaryEditor.label', 'Binary editor'));
 	}
 
 	private requireSummary(): HTMLElement {
@@ -255,10 +237,8 @@ function renderHexDump(bytes: Uint8Array, length = bytes.length): string {
 		const row = bytes.subarray(offset, offset + 16);
 		const address = offset.toString(16).padStart(8, '0');
 		const count = Math.min(16, length - offset);
-		const hex = Array.from({ length: count }, (_, index) => (row[index] === undefined ? '--' : row[index].toString(16).padStart(2, '0')))
-			.join(' ')
-			.padEnd(47, ' ');
-		const ascii = Array.from({ length: count }, (_, index) => (row[index] === undefined ? '-' : row[index] >= 0x20 && row[index] <= 0x7e ? String.fromCharCode(row[index]) : '.')).join('');
+		const hex = Array.from({ length: count }, (_, index) => row[index] === undefined ? '--' : row[index].toString(16).padStart(2, '0')).join(' ').padEnd(47, ' ');
+		const ascii = Array.from({ length: count }, (_, index) => row[index] === undefined ? '-' : row[index] >= 0x20 && row[index] <= 0x7e ? String.fromCharCode(row[index]) : '.').join('');
 		rows.push(`${address}  ${hex}  |${ascii}|`);
 	}
 	return rows.join('\n');

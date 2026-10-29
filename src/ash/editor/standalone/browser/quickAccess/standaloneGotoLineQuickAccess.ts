@@ -6,9 +6,7 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 
-interface GotoLineContribution extends IEditorContribution {
-	open(mode?: 'line' | 'offset'): void;
-}
+interface GotoLineContribution extends IEditorContribution { open(mode?: 'line' | 'offset'): void; }
 
 export class GotoLineAction extends EditorAction {
 	public static readonly ID = 'editor.action.gotoLine';

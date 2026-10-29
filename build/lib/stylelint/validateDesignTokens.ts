@@ -16,13 +16,9 @@ export function validateDesignTokens(contents: string): DesignTokenSuggestion[] 
 		const property = match[1]!.toLowerCase();
 		const value = match[2]!.trim().replace(/\s*!important\s*$/i, '');
 		const offset = match.index + match[0].indexOf(match[1]!);
-		const add = (category: string, message: string): void => {
-			suggestions.push({ offset, category, message });
-		};
+		const add = (category: string, message: string): void => { suggestions.push({ offset, category, message }); };
 		// Expressions may encode computed geometry or configuration values, rather than a design literal.
-		if (/\b(?:var|calc|min|max|clamp)\(/i.test(value)) {
-			continue;
-		}
+		if (/\b(?:var|calc|min|max|clamp)\(/i.test(value)) { continue; }
 		const lengths = [...value.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)px(?=\s|\/|$)/g)].map(length => Number(length[1]));
 		if (/^(?:padding|margin)(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end|block-start|block-end))?$|^(?:gap|row-gap|column-gap)$/.test(property)) {
 			const offRamp = lengths.filter(length => !spacingRamp.includes(length));

@@ -35,24 +35,21 @@ SessionsViewRegistry.registerStaticViewContainer({
 	order: 0,
 	isDefault: true,
 });
-SessionsViewRegistry.registerStaticViews(SESSIONS_FILES_CONTAINER_ID, [
-	{
-		id: SESSIONS_FILES_VIEW_ID,
-		title: 'Files',
-		localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-		ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
-		when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-		canToggleVisibility: false,
-	},
-	{
-		id: SESSIONS_FILES_EMPTY_VIEW_ID,
-		title: 'Files',
-		localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-		ctorDescriptor: new SyncDescriptor(SessionsExplorerEmptyView),
-		when: WorkspaceFolderCountContext.isEqualTo(0),
-		canToggleVisibility: false,
-	},
-]);
+SessionsViewRegistry.registerStaticViews(SESSIONS_FILES_CONTAINER_ID, [{
+	id: SESSIONS_FILES_VIEW_ID,
+	title: 'Files',
+	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
+	ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
+	when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
+	canToggleVisibility: false,
+}, {
+	id: SESSIONS_FILES_EMPTY_VIEW_ID,
+	title: 'Files',
+	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
+	ctorDescriptor: new SyncDescriptor(SessionsExplorerEmptyView),
+	when: WorkspaceFolderCountContext.isEqualTo(0),
+	canToggleVisibility: false,
+}]);
 
 // The container registry owns its open/focus command; contribute only the
 // Sessions shortcut so loading this contribution cannot register it twice.
@@ -62,25 +59,23 @@ KeybindingsRegistry.registerKeybindingRule({
 	when: IsSessionsWindowContext.isEqualTo(true),
 });
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({
-				id: 'sessions.files.action.collapseExplorerFolders',
-				title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
-				precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
-				f1: true,
-			});
-		}
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.files.action.collapseExplorerFolders',
+			title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
+			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
+			f1: true,
+		});
+	}
 
-		public override run(accessor: ServicesAccessor): void {
-			const view = accessor.get(IViewsService).getViewWithId(SESSIONS_FILES_VIEW_ID);
-			if (view instanceof SessionsExplorerView) {
-				view.collapseAll();
-			}
+	public override run(accessor: ServicesAccessor): void {
+		const view = accessor.get(IViewsService).getViewWithId(SESSIONS_FILES_VIEW_ID);
+		if (view instanceof SessionsExplorerView) {
+			view.collapseAll();
 		}
-	},
-);
+	}
+});
 
 export class DownloadRemoteFileAction extends Action2 {
 	public static readonly ID = 'sessions.files.action.downloadRemoteFile';
@@ -120,30 +115,17 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
 	name: 'sessionsFilesHelp',
 	priority: 110,
-	when: ContextKeyExpr.and(
-		IsSessionsWindowContext.isEqualTo(true),
-		ContextKeyExpr.or(FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID), FocusedViewContext.isEqualTo(SESSIONS_FILES_EMPTY_VIEW_ID)),
-	),
+	when: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.or(FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID), FocusedViewContext.isEqualTo(SESSIONS_FILES_EMPTY_VIEW_ID))),
 	getProvider: accessor => {
 		const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
 		const view = accessor.get(IViewsService).getViewWithId(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
-		if (!(view instanceof SessionsExplorerView || view instanceof SessionsExplorerEmptyView)) {
-			return undefined;
-		}
+		if (!(view instanceof SessionsExplorerView || view instanceof SessionsExplorerEmptyView)) { return undefined; }
 		const focused = view.element.ownerDocument.activeElement;
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					'sessions.files.help',
-					'Files\nFiles follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message.',
-				),
-			() => {
-				if (focused instanceof HTMLElement) {
-					focused.focus();
-				}
-			},
+			() => localize('sessions.files.help', 'Files\nFiles follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message.'),
+			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,
 		);
 	},

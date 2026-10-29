@@ -49,29 +49,33 @@ export class ToolBar extends Disposable {
 	constructor(container: HTMLElement, options: ToolBarOptions) {
 		super();
 		this.moreActionsPlacement = options.moreActionsPlacement;
-		const actionViewItemOptions: ActionViewItemOptions = {
-			buttonStyles: options.buttonStyles,
-			hoverAnchorPosition: options.hoverAnchorPosition,
-		};
-		this.actionBar = this._register(
-			new ActionBar(container, {
-				ariaLabel: options.ariaLabel,
-				orientation: options.orientation,
-				highlightToggledItems: options.highlightToggledItems,
-				actionViewItemOptions,
-				actionViewItemProvider: (action, actionOptions) => {
-					if (action === this.moreActions) {
-						return new MoreActionsViewItem(action, () => this.secondaryActions, options.contextMenuProvider, actionOptions);
-					}
-					return options.actionViewItemProvider?.(action, actionOptions);
-				},
-			}),
-		);
+		const actionViewItemOptions: ActionViewItemOptions = { buttonStyles: options.buttonStyles, hoverAnchorPosition: options.hoverAnchorPosition };
+		this.actionBar = this._register(new ActionBar(container, {
+			ariaLabel: options.ariaLabel,
+			orientation: options.orientation,
+			highlightToggledItems: options.highlightToggledItems,
+			actionViewItemOptions,
+			actionViewItemProvider: (action, actionOptions) => {
+				if (action === this.moreActions) {
+					return new MoreActionsViewItem(
+						action,
+						() => this.secondaryActions,
+						options.contextMenuProvider,
+						actionOptions,
+					);
+				}
+				return options.actionViewItemProvider?.(action, actionOptions);
+			},
+		}));
 		this.element = this.actionBar.element;
 		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
 	}
 
-	setActions(primaryActions: readonly IAction[], secondaryActions: readonly IAction[] = [], trailingActions: readonly IAction[] = []): void {
+	setActions(
+		primaryActions: readonly IAction[],
+		secondaryActions: readonly IAction[] = [],
+		trailingActions: readonly IAction[] = [],
+	): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);
@@ -83,7 +87,11 @@ export class ToolBar extends Disposable {
 	}
 
 	/** Refreshes retained action slots when their ordering and presence are unchanged. */
-	protected updateActions(primaryActions: readonly IAction[], secondaryActions: readonly IAction[] = [], trailingActions: readonly IAction[] = []): void {
+	protected updateActions(
+		primaryActions: readonly IAction[],
+		secondaryActions: readonly IAction[] = [],
+		trailingActions: readonly IAction[] = [],
+	): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);
@@ -93,9 +101,16 @@ export class ToolBar extends Disposable {
 	private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
 		if (this.secondaryActions.length === 0) return [...primary, ...this.trailingActions];
 		const beforeActionId = this.moreActionsPlacement?.beforeActionId;
-		const index = beforeActionId === undefined ? -1 : primary.findIndex(action => action.id === beforeActionId);
+		const index = beforeActionId === undefined
+			? -1
+			: primary.findIndex((action) => action.id === beforeActionId);
 		if (index < 0) return [...primary, this.moreActions, ...this.trailingActions];
-		return [...primary.slice(0, index), this.moreActions, ...primary.slice(index), ...this.trailingActions];
+		return [
+			...primary.slice(0, index),
+			this.moreActions,
+			...primary.slice(index),
+			...this.trailingActions,
+		];
 	}
 }
 
@@ -107,7 +122,7 @@ class MoreActionsAction implements IAction {
 	readonly enabled = true;
 	readonly checked = undefined;
 
-	run(): void {}
+	run(): void { }
 }
 
 class MoreActionsViewItem extends DropdownMenuActionViewItem {
@@ -120,7 +135,10 @@ class MoreActionsViewItem extends DropdownMenuActionViewItem {
 function cleanSeparators(actions: readonly IAction[]): IAction[] {
 	const result: IAction[] = [];
 	for (const action of actions) {
-		if (action instanceof Separator && (result.length === 0 || result[result.length - 1] instanceof Separator)) {
+		if (
+			action instanceof Separator &&
+			(result.length === 0 || result[result.length - 1] instanceof Separator)
+		) {
 			continue;
 		}
 		result.push(action);

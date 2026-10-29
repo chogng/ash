@@ -36,7 +36,7 @@ export interface ILinkPresentation {
 	readonly reference?: string;
 	readonly status?: ILinkPresentationStatus;
 	readonly secondaryStatus?: ILinkPresentationStatus;
-	readonly changes?: { readonly insertions: number; readonly deletions: number };
+	readonly changes?: { readonly insertions: number; readonly deletions: number; };
 	readonly tooltip?: string;
 	readonly ariaLabel?: string;
 	readonly isLoading?: boolean;
@@ -52,9 +52,7 @@ export function parseLinkPresentation(value: unknown): ILinkPresentation {
 	if (typeof input.kind !== 'string' || !kinds.includes(input.kind)) {
 		throw new TypeError('Link presentation kind is invalid');
 	}
-	const result: { -readonly [K in keyof ILinkPresentation]: ILinkPresentation[K] } = {
-		kind: input.kind as LinkPresentationKind,
-	};
+	const result: { -readonly [K in keyof ILinkPresentation]: ILinkPresentation[K] } = { kind: input.kind as LinkPresentationKind };
 	for (const key of ['title', 'detail', 'reference', 'tooltip', 'ariaLabel'] as const) {
 		if (input[key] !== undefined) {
 			if (typeof input[key] !== 'string' || input[key].length > 4096) {
@@ -126,6 +124,6 @@ export class NullDataChannelService implements IDataChannelService {
 	public readonly _serviceBrand = undefined;
 	public readonly onDidSendData = Event.None;
 	public getDataChannel<T>(_channelId: string): CoreDataChannel<T> {
-		return { sendData: () => {} };
+		return { sendData: () => { } };
 	}
 }

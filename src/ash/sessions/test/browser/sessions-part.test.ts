@@ -98,32 +98,18 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		materializedSessions: observableValue('materialized drafts', new Map()),
 		sessions: [],
 		active: undefined,
-		get untitledSessions() {
-			return untitledSessions;
-		},
-		get activeUntitledSession() {
-			return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId);
-		},
+		get untitledSessions() { return untitledSessions; },
+		get activeUntitledSession() { return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId); },
 		state: 'ready',
 		error: undefined,
-		whenDirectoriesReady(): Promise<void> {
-			return Promise.resolve();
-		},
-		async initialize() {},
-		async listAgents() {
-			return [];
-		},
-		async openThread() {},
-		selectThread() {},
-		async interruptThread() {},
+		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
+		async initialize() { },
+		async listAgents() { return []; },
+		async openThread() { },
+		selectThread() { },
+		async interruptThread() { },
 		createUntitledSession() {
-			const untitledSession = {
-				untitledSessionId: `untitled-${++nextUntitledSessionId}`,
-				title: 'New code session',
-				model: undefined,
-				agent: undefined,
-				workspace: { type: 'current' as const },
-			};
+			const untitledSession = { untitledSessionId: `untitled-${++nextUntitledSessionId}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 			untitledSessions = [...untitledSessions, untitledSession];
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();
@@ -142,13 +128,13 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
-		setUntitledSessionModel() {},
-		setUntitledSessionDefaultModel() {},
-		setUntitledSessionAgent() {},
+		setUntitledSessionModel() { },
+		setUntitledSessionDefaultModel() { },
+		setUntitledSessionAgent() { },
 		async materializeUntitledSession() {
 			throw new Error('Session creation is unavailable');
 		},
-		promoteUntitledSession() {},
+		promoteUntitledSession() { },
 		async ensureActiveThread() {
 			throw new Error('No active thread');
 		},
@@ -164,12 +150,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async archiveSession() {
 			throw new Error('Session archiving is unavailable');
 		},
-		async renameSession() {
-			throw new Error('Unexpected rename');
-		},
-		async deleteSession() {
-			throw new Error('Unexpected deletion');
-		},
+		async renameSession() { throw new Error('Unexpected rename'); },
+		async deleteSession() { throw new Error('Unexpected deletion'); },
 		async restoreSession() {
 			throw new Error('Session restoration is unavailable');
 		},
@@ -178,155 +160,89 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const transcriptUpdates = new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
-		rewriteRequest: async () => {
-			throw new Error('Unexpected request rewrite');
-		},
-		renameThread: async () => {
-			throw new Error('Unexpected rename');
-		},
-		configureAdvisor: async () => {},
-		consultAdvisor: async () => {},
-		readContextUsage: async () => {
-			throw new Error('No active Thread');
-		},
+		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
+		renameThread: async () => { throw new Error('Unexpected rename'); },
+		configureAdvisor: async () => { },
+		consultAdvisor: async () => { },
+		readContextUsage: async () => { throw new Error('No active Thread'); },
 		readAdvisorDefault: async () => null,
-		saveAdvisorDefault: async () => {},
-		onDidSubmitRequest: () => toDisposable(() => {}),
+		saveAdvisorDefault: async () => { },
+		onDidSubmitRequest: () => toDisposable(() => { }),
 		onDidChangeSession: Event.None,
-		getInteractionOffer: () => undefined,
-		onDidChangeInteractionOffer: Event.None,
-		onDidUpdateThread: threadUpdates.event,
+		getInteractionOffer: () => undefined, onDidChangeInteractionOffer: Event.None, onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,
-		onDidUpdateGoal: () => toDisposable(() => {}),
+		onDidUpdateGoal: () => toDisposable(() => { }),
 		onDidBecomeReady: ready.event,
 		onDidChangeModels: ready.event,
 		onDidChangeQueue: ready.event,
-		onDidUpdateTurnChanges: () => toDisposable(() => {}),
+		onDidUpdateTurnChanges: () => toDisposable(() => { }),
 		discoverProviderModels: async () => [],
-		async listModels() {
-			return [];
-		},
-		getDefaultNewChatModel() {
-			return undefined;
-		},
-		async rememberSelectedModel() {},
+		async listModels() { return []; },
+		getDefaultNewChatModel() { return undefined; },
+		async rememberSelectedModel() { },
 		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
-		saveReasoningEffort: async () => {},
-		async listModelCatalog() {
-			return [];
-		},
-		async listModelProviders() {
-			return [];
-		},
-		setModelPreferences: async () => {},
+		saveReasoningEffort: async () => { },
+		async listModelCatalog() { return []; },
+		async listModelProviders() { return []; },
+		setModelPreferences: async () => { },
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
+		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
-		async setModelProviderApiKey() {},
-		async removeModelProviderApiKey() {},
-		async listAdvisorModels() {
-			return [];
-		},
-		async refreshModels() {
-			return [];
-		},
-		isModelVisible() {
-			return true;
-		},
-		async setModelVisible() {},
-		async listSlashCommands() {
-			return [];
-		},
-		async readCheckpoints() {
-			return [];
-		},
-		async readHistoryState() {
-			return { sequence: 0, canUndo: false, canRedo: false };
-		},
-		async moveHistory() {
-			throw new Error('History is not configured in this fixture');
-		},
-		async restoreCheckpoint() {
-			throw new Error('Checkpoint restore is not configured in this fixture');
-		},
-		async readThread() {
-			throw new Error('No active Thread');
-		},
-		async subscribeThread() {
-			throw new Error('No active Thread');
-		},
-		async unsubscribeThread() {},
-		async startTurn() {},
-		async queueTurn() {},
-		async queuedMessageCount() {
-			return 0;
-		},
-		async compactContext() {},
-		async steerTurn() {},
-		async interruptTurn() {},
-		async resolveInteraction() {},
-		async listTurnChanges() {
-			return [];
-		},
-		async readThreadChanges() {
-			throw new Error('No Thread changes');
-		},
-		async readThreadChangeFile() {
-			throw new Error('No Thread change file');
-		},
-		async readTurnChange() {
-			throw new Error('No ChangeSet');
-		},
-		async readTurnChangeFile() {
-			throw new Error('No ChangeSet file');
-		},
-		async generateTurnChangeMessage() {
-			return [];
-		},
-		async updateTurnChangeDraft() {
-			return [];
-		},
-		async prepareTurnCommit() {
-			throw new Error('No selected changes');
-		},
-		async readTurnCommit() {
-			throw new Error('No selected changes');
-		},
-		async readTurnCommitFile() {
-			throw new Error('No selected changes');
-		},
-		async commitTurnChange() {
-			return [];
-		},
-		async discardThreadChanges() {
-			return [];
-		},
+		async setModelProviderApiKey() { },
+		async removeModelProviderApiKey() { },
+		async listAdvisorModels() { return []; },
+		async refreshModels() { return []; },
+		isModelVisible() { return true; },
+		async setModelVisible() { },
+		async listSlashCommands() { return []; },
+		async readCheckpoints() { return []; },
+		async readHistoryState() { return { sequence: 0, canUndo: false, canRedo: false }; },
+		async moveHistory() { throw new Error('History is not configured in this fixture'); },
+		async restoreCheckpoint() { throw new Error('Checkpoint restore is not configured in this fixture'); },
+		async readThread() { throw new Error('No active Thread'); },
+		async subscribeThread() { throw new Error('No active Thread'); },
+		async unsubscribeThread() { },
+		async startTurn() { },
+		async queueTurn() { },
+		async queuedMessageCount() { return 0; },
+		async compactContext() { },
+		async steerTurn() { },
+		async interruptTurn() { },
+		async resolveInteraction() { },
+		async listTurnChanges() { return []; },
+		async readThreadChanges() { throw new Error('No Thread changes'); },
+		async readThreadChangeFile() { throw new Error('No Thread change file'); },
+		async readTurnChange() { throw new Error('No ChangeSet'); },
+		async readTurnChangeFile() { throw new Error('No ChangeSet file'); },
+		async generateTurnChangeMessage() { return []; },
+		async updateTurnChangeDraft() { return []; },
+		async prepareTurnCommit() { throw new Error('No selected changes'); },
+		async readTurnCommit() { throw new Error('No selected changes'); },
+		async readTurnCommitFile() { throw new Error('No selected changes'); },
+		async commitTurnChange() { return []; },
+		async discardThreadChanges() { return []; },
 	};
 	const contextMenuEvents = new Emitter<void>();
 	const contextMenuService: IContextMenuService = {
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: contextMenuEvents.event,
 		onDidHideContextMenu: contextMenuEvents.event,
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 	};
 	const contextViewService: IContextViewService = {
 		container: dom.window.document.body,
-		show() {
-			return false;
-		},
-		hide() {},
-		layout() {},
+		show() { return false; },
+		hide() { },
+		layout() { },
 	};
 	const commandEvents = new Emitter<ICommandEvent>();
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
-		async executeCommand() {
-			throw new Error('No commands registered');
-		},
+		async executeCommand() { throw new Error('No commands registered'); },
 	};
 	using resources = new DisposableStore();
 	const editorRoot = createCodeEditorServices(resources);
@@ -337,60 +253,20 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
-		getSessionPullRequests: () => [],
-		getSessionIssues: () => [],
-		attachIssue: async () => {},
-		detachIssue: async () => {},
-		initialize() {},
-		attachPullRequest: async () => {
-			throw new Error('Unexpected PR attachment');
-		},
-		detachPullRequest: async () => {
-			throw new Error('Unexpected PR removal');
-		},
+		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
+		initialize() { },
+		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
+		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
-	services.registerInstance(IAgentExecutionSettingsService, {
-		onDidChange: Event.None,
-		read: async () => ({
-			revision: 1,
-			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
-		}),
-		configure: async () => {},
-	});
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IChatService, chatService);
-	services.registerInstance(IEditorService, {
-		...emptyEditorServiceState,
-		openEditor: async () => {
-			assert.fail('Unexpected editor navigation');
-		},
-		focusActiveEditor: () => {},
-	});
-	services.registerInstance(IAppServerSkillApi, {
-		onDidChangeSkills: ready.event,
-		readTextResource: async () => {
-			throw new Error('No Skill body in this test fixture');
-		},
-		list: async () => ({ generation: 0, skills: [] }),
-		read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }),
-		registerSource: async () => {
-			throw new Error('Unexpected skill source registration');
-		},
-		setEnabled: async () => {},
-	});
-	services.registerInstance(IChatSessionNavigationService, {
-		openConversation: async () => {
-			throw new Error('Unexpected conversation navigation');
-		},
-	} as unknown as IChatSessionNavigationService);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
+	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new TestNotificationService();
@@ -398,60 +274,29 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IContextViewService, contextViewService);
 	const dialogs = resources.add(new DialogService());
 	services.registerInstance(IDialogService, dialogs);
-	const unexpectedFileOperation = async (): Promise<never> => {
-		throw new Error('Unexpected file operation');
-	};
-	services.registerSingleton(IFileService, () =>
-		createTestFileService({
-			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
-			onDidChangeCapabilities: Event.None,
-			watch: (): IDisposable => Disposable.None,
-			onDidChangeFiles: Event.None,
-			stat: unexpectedFileOperation,
-			readDirectory: unexpectedFileOperation,
-			readFile: unexpectedFileOperation,
-			writeFile: unexpectedFileOperation,
-			createFile: unexpectedFileOperation,
-			createDirectory: unexpectedFileOperation,
-			copy: unexpectedFileOperation,
-			rename: unexpectedFileOperation,
-			delete: unexpectedFileOperation,
-		}),
-	);
+	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+	services.registerSingleton(IFileService, () => createTestFileService({
+		capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+		onDidChangeCapabilities: Event.None,
+		watch: (): IDisposable => Disposable.None,
+		onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation
+	}));
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
 
-	services.registerInstance(IAccessibleViewService, {
-		getOpenAriaHint: () => undefined,
-	} as unknown as IAccessibleViewService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
-	const storage = resources.add(
-		new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'test',
-			flushInterval: 0,
-		}),
-	);
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
-	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({
-		untitledSessionId,
-		title: 'New code session',
-		workspace: { type: 'current' },
-	}));
-	storage.store(
-		'sessions.viewState',
-		JSON.stringify({
-			version: 1,
-			pages: {
-				chat: { visible: initialDrafts.map(session => ({ kind: 'untitled', session })), active: 1 },
-				code: { visible: [], active: -1 },
-			},
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible: initialDrafts.map(session => ({ kind: 'untitled', session })), active: 1 },
+			code: { visible: [], active: -1 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const customViews = resources.add(services.createInstance(CustomViewService));
 	services.registerInstance(ICustomViewService, customViews);
 	const viewService = services.createInstance(SessionsService);
@@ -459,59 +304,19 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
-	services.registerInstance(
-		ILifecycleService,
-		resources.add(
-			services.createInstance(BrowserLifecycleService, {
-				ownerWindow: dom.window as unknown as Window,
-				onError: (error: unknown) => {
-					throw error;
-				},
-			}),
-		),
-	);
+	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
-	services.registerInstance(
-		IFileDialogService,
-		editorServices.createInstance(
-			FileDialogService,
-			{
-				kind: 'server',
-				client: {} as IWebWorkspaceClient,
-				quickInput: () => {
-					throw new Error('Unexpected picker');
-				},
-				fileService: () => {
-					throw new Error('Unexpected files');
-				},
-				workspaceRoot: () => undefined,
-			},
-			() => dialogs,
-		),
-	);
+	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
 	paneServices.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
-		onDidActiveEditorChange: Event.None,
-		onDidVisibleEditorsChange: Event.None,
-		activeEditor: undefined,
-		visibleEditors: [],
-		openEditor: async () => {
-			throw new Error('Unexpected editor navigation');
-		},
-		focusActiveEditor: () => {},
+		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
+		openEditor: async () => { throw new Error('Unexpected editor navigation'); }, focusActiveEditor: () => { },
 	});
 	paneServices.registerInstance(ISessionProviderScopeService, {
-		onDidChange: Event.None,
-		onDidChangeScopes: Event.None,
-		getScopes: () => [],
-		getScope: () => {
-			throw new Error('Unexpected host routing');
-		},
-		getProviderScope: () => {
-			throw new Error('Unexpected host routing');
-		},
+		onDidChange: Event.None, onDidChangeScopes: Event.None,
+		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
 		createScope: () => paneServices.createChild(),
 	});
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
@@ -529,14 +334,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			inputs.push(input);
 			return input;
 		},
-		createCoworkPane: (container, panelId, selection) =>
-			cowork.createPane(container, panelId, selection, () => {
-				viewService.openNewSession();
-			}),
+		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
-		createNewSession: () => {
-			viewService.openNewSession();
-		},
+		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
 	const updatePart = (): void => {
 		const selection = viewService.getSelection();
@@ -573,26 +373,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
-	const draft = {
-		mode: 'plan' as const,
-		text: 'Keep this Chat draft chat.txt Tool selection: 1 disabled ',
-		contexts: [
-			{
-				id: 'chat-file',
-				kind: 'file',
-				name: 'chat.txt',
-				content: 'Chat context',
-				reference: { start: 21, end: 29 },
-			},
-			{
-				id: 'tool-selection',
-				kind: 'toolSelection',
-				name: 'Tool selection: 1 disabled',
-				content: '["read_file"]',
-				reference: { start: 30, end: 56 },
-			},
-		],
-	};
+	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft chat.txt Tool selection: 1 disabled ', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', reference: { start: 21, end: 29 } }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]', reference: { start: 30, end: 56 } }] };
 	part.restoreDraft(draft);
 	const selected = viewService.activeSelection!;
 	assert.equal(selected.kind, 'untitled');
@@ -602,19 +383,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(inputs.length, 2);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
-	const separateDraft = {
-		mode: 'plan' as const,
-		text: 'Keep this second draft code.ts ',
-		contexts: [
-			{
-				id: 'code-file',
-				kind: 'file',
-				name: 'code.ts',
-				content: 'Code context',
-				reference: { start: 23, end: 30 },
-			},
-		],
-	};
+	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };
 	part.restoreDraft(separateDraft);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
@@ -671,20 +440,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
-	const draft = {
-		mode: 'debug' as const,
-		text: 'Review this',
-		contexts: [
-			{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' },
-			{
-				id: 'file',
-				kind: 'file',
-				name: 'brief.ts',
-				content: 'const answer = 42;',
-				resource: 'file:///workspace/brief.ts',
-			},
-		],
-	};
+	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
 	writeNewChatDraftState(storage, draft, 'untitled:first');
 	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
@@ -704,20 +460,7 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
 	const chatDraft = { mode: 'agent' as const, text: 'Chat text', contexts: [] };
-	const codeDraft = {
-		mode: 'plan' as const,
-		text: 'Code text',
-		contexts: [
-			{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' },
-			{
-				id: 'file',
-				kind: 'file',
-				name: 'brief.ts',
-				content: 'const answer = 42;',
-				resource: 'file:///workspace/brief.ts',
-			},
-		],
-	};
+	const codeDraft = { mode: 'plan' as const, text: 'Code text', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
 	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -736,9 +479,7 @@ test('Sessions file picker forwards the original files to the shared composer', 
 	const container = document.createElement('div');
 	const batches: (readonly File[])[] = [];
 	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt', { type: 'text/plain' })];
-	using attachments = new NewChatContextAttachments(container, async selected => {
-		batches.push(selected);
-	});
+	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
 	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
 	Object.defineProperty(picker, 'files', { value: files });
 	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
@@ -751,9 +492,7 @@ test('Closing the Sessions file picker removes its event source and rejects late
 	const container = document.createElement('div');
 	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt')];
 	let reads = 0;
-	using attachments = new NewChatContextAttachments(container, async () => {
-		reads++;
-	});
+	using attachments = new NewChatContextAttachments(container, async () => { reads++; });
 	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
 	attachments.dispose();
 	await attachments.attachFiles(files);
@@ -765,9 +504,7 @@ test('Closing the Sessions file picker removes its event source and rejects late
 test('Sessions file paste reaches the shared composer once and text paste stays editable', () => {
 	const container = document.createElement('div');
 	const batches: (readonly File[])[] = [];
-	using attachments = new NewChatContextAttachments(container, async selected => {
-		batches.push(selected);
-	});
+	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
 	using target = new NewChatInputPasteTarget(container, attachments);
 	const files = [new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })];
 	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });

@@ -8,9 +8,7 @@ test('Electron renderer startup failure copies the complete error before the Wor
 	// Fail the renderer's first real IPC call on reload to exercise its error view.
 	await application.evaluate(({ ipcMain }, failure) => {
 		ipcMain.removeHandler('ash:ipc:window-id');
-		ipcMain.handle('ash:ipc:window-id', () => {
-			throw new Error(failure);
-		});
+		ipcMain.handle('ash:ipc:window-id', () => { throw new Error(failure); });
 	}, failure);
 	const page = workbench.page;
 	await page.reload();
@@ -23,14 +21,8 @@ test('Electron renderer startup failure copies the complete error before the Wor
 });
 
 test('Web startup failure copies its details and keeps them selectable', { tag: ['@browser-app-server'] }, async ({ webAppServer }, testInfo) => {
-	if (!webAppServer) {
-		throw new Error('The Web startup scenario requires its App Server');
-	}
-	const browser = await launchBrowser({
-		appServerMode: 'required',
-		baseURL: webAppServer.connection.endpoint,
-		webSession: webAppServer.connection,
-	});
+	if (!webAppServer) { throw new Error('The Web startup scenario requires its App Server'); }
+	const browser = await launchBrowser({ appServerMode: 'required', baseURL: webAppServer.connection.endpoint, webSession: webAppServer.connection });
 	try {
 		const page = browser.driver.workbench.page;
 		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);

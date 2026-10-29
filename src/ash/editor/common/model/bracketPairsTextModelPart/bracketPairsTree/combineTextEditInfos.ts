@@ -13,7 +13,7 @@ export function combineTextEditInfos(textEditInfoFirst: TextEditInfo[], textEdit
 	// s0: State before any edits
 	const s0ToS1Map = new ArrayQueue(toLengthMapping(textEditInfoFirst));
 	// s1: State after first edit, but before second edit
-	const s1ToS2Map = toLengthMapping(textEditInfoSecond) as (LengthMapping | { lengthBefore: undefined; lengthAfter: undefined; modified: false })[];
+	const s1ToS2Map = toLengthMapping(textEditInfoSecond) as (LengthMapping | { lengthBefore: undefined; lengthAfter: undefined; modified: false; })[];
 	s1ToS2Map.push({ modified: false, lengthBefore: undefined, lengthAfter: undefined }); // Copy everything from old to new
 	// s2: State after both edits
 
@@ -85,16 +85,23 @@ class LengthMapping {
 		public readonly modified: boolean,
 		public readonly lengthBefore: Length,
 		public readonly lengthAfter: Length,
-	) {}
+	) {
+	}
 
 	splitAt(lengthAfter: Length): [LengthMapping, LengthMapping | undefined] {
 		const remainingLengthAfter = lengthDiffNonNegative(lengthAfter, this.lengthAfter);
 		if (lengthEquals(remainingLengthAfter, lengthZero)) {
 			return [this, undefined];
 		} else if (this.modified) {
-			return [new LengthMapping(this.modified, this.lengthBefore, lengthAfter), new LengthMapping(this.modified, lengthZero, remainingLengthAfter)];
+			return [
+				new LengthMapping(this.modified, this.lengthBefore, lengthAfter),
+				new LengthMapping(this.modified, lengthZero, remainingLengthAfter)
+			];
 		} else {
-			return [new LengthMapping(this.modified, lengthAfter, lengthAfter), new LengthMapping(this.modified, remainingLengthAfter, remainingLengthAfter)];
+			return [
+				new LengthMapping(this.modified, lengthAfter, lengthAfter),
+				new LengthMapping(this.modified, remainingLengthAfter, remainingLengthAfter)
+			];
 		}
 	}
 

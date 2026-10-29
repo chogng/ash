@@ -21,7 +21,8 @@ export class LineDecoration {
 		if (left.length !== right.length) return false;
 		return left.every((decoration, index) => {
 			const other = right[index]!;
-			return decoration.startColumn === other.startColumn && decoration.endColumn === other.endColumn && decoration.className === other.className && decoration.type === other.type;
+			return decoration.startColumn === other.startColumn && decoration.endColumn === other.endColumn &&
+				decoration.className === other.className && decoration.type === other.type;
 		});
 	}
 
@@ -39,11 +40,18 @@ export class LineDecoration {
 			if (decoration.endColumn <= wrappedStartColumn || decoration.startColumn >= wrappedEndColumn) return [];
 			const startColumn = Math.max(1, decoration.startColumn - wrappedStartColumn + 1);
 			const endColumn = Math.min(endOffset - startOffset + 1, decoration.endColumn - wrappedStartColumn + 1);
-			return endColumn >= startColumn ? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)] : [];
+			return endColumn >= startColumn
+				? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)]
+				: [];
 		});
 	}
 
-	public static filter(decorations: InlineDecoration[], lineNumber: number, minColumn: number, maxColumn: number): LineDecoration[] {
+	public static filter(
+		decorations: InlineDecoration[],
+		lineNumber: number,
+		minColumn: number,
+		maxColumn: number,
+	): LineDecoration[] {
 		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(minColumn) || !Number.isSafeInteger(maxColumn) || minColumn < 0 || maxColumn < minColumn) {
 			throw new RangeError('Line decoration filter coordinates are invalid');
 		}
@@ -78,7 +86,12 @@ export class DecorationSegment {
 	public className: string;
 	public metadata: number;
 
-	public constructor(startOffset: number, endOffset: number, className: string, metadata: number) {
+	public constructor(
+		startOffset: number,
+		endOffset: number,
+		className: string,
+		metadata: number,
+	) {
 		this.startOffset = startOffset;
 		this.endOffset = endOffset;
 		this.className = className;
@@ -110,14 +123,12 @@ export class LineDecorationsNormalizer {
 			if (endOffset <= startOffset) continue;
 			const active = normalizedDecorations.filter(({ startColumn, endColumn }) => startColumn <= startOffset && endColumn >= endOffset);
 			if (active.length === 0) continue;
-			result.push(
-				new DecorationSegment(
-					startOffset,
-					endOffset,
-					active.map(({ decoration }) => decoration.className).join(' '),
-					active.reduce((metadata, { decoration }) => metadata | metadataFor(decoration.type), 0),
-				),
-			);
+			result.push(new DecorationSegment(
+				startOffset,
+				endOffset,
+				active.map(({ decoration }) => decoration.className).join(' '),
+				active.reduce((metadata, { decoration }) => metadata | metadataFor(decoration.type), 0),
+			));
 		}
 		for (const { decoration, startColumn, endColumn } of normalizedDecorations) {
 			if (startColumn !== endColumn) continue;
@@ -130,9 +141,13 @@ export class LineDecorationsNormalizer {
 }
 
 function metadataFor(type: InlineDecorationType): number {
-	return type === InlineDecorationType.Before ? LinePartMetadata.PSEUDO_BEFORE : type === InlineDecorationType.After ? LinePartMetadata.PSEUDO_AFTER : 0;
+	return type === InlineDecorationType.Before
+		? LinePartMetadata.PSEUDO_BEFORE
+		: type === InlineDecorationType.After ? LinePartMetadata.PSEUDO_AFTER : 0;
 }
 
 function moveSurrogateBoundary(lineContent: string, column: number): number {
-	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1)) ? column - 1 : column;
+	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1))
+		? column - 1
+		: column;
 }

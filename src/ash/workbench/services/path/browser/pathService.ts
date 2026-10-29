@@ -16,7 +16,7 @@ export class BrowserPathService implements IPathService {
 	constructor(
 		@IRendererHostService private readonly host: IRendererHost,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-	) {}
+	) { }
 
 	public get path(): Promise<IPath> {
 		const os = this.hostOperatingSystem;
@@ -31,9 +31,9 @@ export class BrowserPathService implements IPathService {
 		return path === undefined ? undefined : this.toFileURI(path);
 	}
 
-	public userHome(options: { preferLocal: true }): URI;
-	public userHome(options?: { preferLocal: boolean }): Promise<URI>;
-	public userHome(options?: { preferLocal: boolean }): URI | Promise<URI> {
+	public userHome(options: { preferLocal: true; }): URI;
+	public userHome(options?: { preferLocal: boolean; }): Promise<URI>;
+	public userHome(options?: { preferLocal: boolean; }): URI | Promise<URI> {
 		if (options?.preferLocal || !this.host.hasAppServer) {
 			const workspace = this.workspace.getWorkspace();
 			// Web has no OS home: match VS Code's workspace-derived fallback for dialog callers.
@@ -83,17 +83,13 @@ export class BrowserPathService implements IPathService {
 
 	private toFileURI(path: string, os = this.hostOperatingSystem): URI {
 		// Older servers may omit OS facts. Only explicit drive/UNC syntax identifies Windows then.
-		const windowsPath = os === OperatingSystem.Windows || (os === undefined && (/^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\')));
+		const windowsPath = os === OperatingSystem.Windows || os === undefined && (/^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\'));
 		const normalized = windowsPath ? this.windowsPath(path).replaceAll('\\', '/') : path;
 		if (!normalized.startsWith('/') && !(windowsPath && /^[a-z]:\//i.test(normalized))) {
 			throw new TypeError(localize('path.absoluteRequired', 'File path must be absolute'));
 		}
 		const share = /^\/\/([^/]+)(\/.*)?$/.exec(normalized);
-		return URI.from({
-			scheme: Schemas.file,
-			authority: share?.[1] ?? '',
-			path: share ? (share[2] ?? '/') : normalized,
-		});
+		return URI.from({ scheme: Schemas.file, authority: share?.[1] ?? '', path: share ? share[2] ?? '/' : normalized });
 	}
 
 	private windowsPath(path: string): string {

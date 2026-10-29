@@ -63,7 +63,12 @@ for (const scenario of [
 		manager.setOuterHeight(50 * lineHeight);
 		manager.setLineHeight(lineHeight);
 		manager.setPixelRatio(scenario.pixelRatio);
-		manager.setZones([new OverviewRulerZone(1, 1, 0, '1'), new OverviewRulerZone(10, 10, 0, '2'), new OverviewRulerZone(30, 31, 0, '3'), new OverviewRulerZone(50, 50, 0, '4')]);
+		manager.setZones([
+			new OverviewRulerZone(1, 1, 0, '1'),
+			new OverviewRulerZone(10, 10, 0, '2'),
+			new OverviewRulerZone(30, 31, 0, '3'),
+			new OverviewRulerZone(50, 50, 0, '4'),
+		]);
 
 		assert.deepEqual(manager.resolveColorZones(), scenario.expected);
 	});

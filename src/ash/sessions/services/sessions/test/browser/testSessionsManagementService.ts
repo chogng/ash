@@ -12,8 +12,5 @@ export class TestSessionsManagementService extends SessionsManagementService {
 		this.registry = registry;
 		this._register(registration);
 	}
-	override dispose(): void {
-		super.dispose();
-		this.registry.dispose();
-	}
+	override dispose(): void { super.dispose(); this.registry.dispose(); }
 }

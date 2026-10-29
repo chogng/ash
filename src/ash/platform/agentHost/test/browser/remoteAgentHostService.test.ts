@@ -31,11 +31,9 @@ class RemotePeer extends Disposable implements ISocket {
 			this.data.fire(VSBuffer.fromString(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'));
 		}
 	}
-	end(): void {
-		this.ended.fire();
-	}
-	async drain(): Promise<void> {}
-	traceSocketEvent(_type: SocketDiagnosticsEventType): void {}
+	end(): void { this.ended.fire(); }
+	async drain(): Promise<void> { }
+	traceSocketEvent(_type: SocketDiagnosticsEventType): void { }
 }
 
 function registerServices(services: InstantiationService, logger: ILogService): void {
@@ -52,31 +50,20 @@ test('remote service reacquires its endpoint and reinitializes extensions after 
 	const sockets: RemotePeer[] = [];
 	using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 		supports: connection => connection.id === 17,
-		connect: async () => {
-			const socket = new RemotePeer();
-			sockets.push(socket);
-			return socket;
-		},
+		connect: async () => { const socket = new RemotePeer(); sockets.push(socket); return socket; },
 	});
 	let initialized = 0;
 	let resolutions = 0;
 	using service = services.createInstance(RemoteAgentHostService, {
 		protocol: { clientName: 'test-remote' },
-		getAddress: async () => {
-			resolutions++;
-			return { connectTo: new ManagedRemoteConnection(17), connectionToken: undefined };
-		},
+		getAddress: async () => { resolutions++; return { connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }; },
 		getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 		onDidReconnectLocal: localRestart.event,
-		initialize: async () => {
-			initialized++;
-		},
+		initialize: async () => { initialized++; },
 	} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 	const client = service.client;
 	let reconnects = 0;
-	using reconnect = service.onDidReconnect(() => {
-		reconnects++;
-	});
+	using reconnect = service.onDidReconnect(() => { reconnects++; });
 	const initial = service.connect();
 	assert.equal(service.connect(), initial);
 	await initial;
@@ -114,15 +101,11 @@ test('remote extension initialization failure is logged and retried even while t
 			getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 			onDidReconnectLocal: localRestart.event,
 			initialize: async () => {
-				if (++initialized === 2) {
-					throw new Error('remote extension initialization failed');
-				}
+				if (++initialized === 2) { throw new Error('remote extension initialization failed'); }
 			},
 		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 		let reconnects = 0;
-		using reconnect = service.onDidReconnect(() => {
-			reconnects++;
-		});
+		using reconnect = service.onDidReconnect(() => { reconnects++; });
 		await service.connect();
 		localRestart.fire();
 		await assert.rejects(service.whenConnected(), /remote extension initialization failed/);
@@ -135,9 +118,7 @@ test('remote extension initialization failure is logged and retried even while t
 		const errors = entries.filter(entry => entry.error !== undefined);
 		assert.equal(errors.length, 1);
 		assert.match((errors[0].error as Error).message, /remote extension initialization failed/);
-	} finally {
-		mock.timers.reset();
-	}
+	} finally { mock.timers.reset(); }
 });
 
 test('disposing a remote service during authority resolution prevents late sockets and initialization', async () => {
@@ -147,34 +128,21 @@ test('disposing a remote service during authority resolution prevents late socke
 	using localRestart = new Emitter<void>();
 	registerServices(services, logger);
 	let release!: () => void;
-	const resolved = new Promise<void>(resolve => {
-		release = resolve;
-	});
+	const resolved = new Promise<void>(resolve => { release = resolve; });
 	let entered!: () => void;
-	const resolving = new Promise<void>(resolve => {
-		entered = resolve;
-	});
+	const resolving = new Promise<void>(resolve => { entered = resolve; });
 	let sockets = 0;
 	using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 		supports: () => true,
-		connect: async () => {
-			sockets++;
-			return new RemotePeer();
-		},
+		connect: async () => { sockets++; return new RemotePeer(); },
 	});
 	let initialized = 0;
 	using service = services.createInstance(RemoteAgentHostService, {
 		protocol: {},
-		getAddress: async () => {
-			entered();
-			await resolved;
-			return { connectTo: new ManagedRemoteConnection(17), connectionToken: undefined };
-		},
+		getAddress: async () => { entered(); await resolved; return { connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }; },
 		getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 		onDidReconnectLocal: localRestart.event,
-		initialize: async () => {
-			initialized++;
-		},
+		initialize: async () => { initialized++; },
 	} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 	const result = assert.rejects(service.connect());
 	await resolving;
@@ -200,13 +168,9 @@ test('a local restart retires unresolved authority lookup without waiting for it
 		},
 	});
 	let release!: () => void;
-	const obsolete = new Promise<void>(resolve => {
-		release = resolve;
-	});
+	const obsolete = new Promise<void>(resolve => { release = resolve; });
 	let entered!: () => void;
-	const resolving = new Promise<void>(resolve => {
-		entered = resolve;
-	});
+	const resolving = new Promise<void>(resolve => { entered = resolve; });
 	let resolutions = 0;
 	let initialized = 0;
 	using service = services.createInstance(RemoteAgentHostService, {
@@ -221,12 +185,10 @@ test('a local restart retires unresolved authority lookup without waiting for it
 		},
 		getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 		onDidReconnectLocal: localRestart.event,
-		initialize: async () => {
-			initialized++;
-		},
+		initialize: async () => { initialized++; },
 	} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 	const connecting = service.connect();
-	void connecting.catch(() => {});
+	void connecting.catch(() => { });
 	await resolving;
 	localRestart.fire();
 	await new Promise<void>(resolve => setImmediate(resolve));
@@ -255,13 +217,9 @@ test('a local restart during extension initialization completes only after fresh
 		},
 	});
 	let entered!: () => void;
-	const initializing = new Promise<void>(resolve => {
-		entered = resolve;
-	});
+	const initializing = new Promise<void>(resolve => { entered = resolve; });
 	let release!: () => void;
-	const obsolete = new Promise<void>(resolve => {
-		release = resolve;
-	});
+	const obsolete = new Promise<void>(resolve => { release = resolve; });
 	let initialized = 0;
 	using service = services.createInstance(RemoteAgentHostService, {
 		protocol: {},
@@ -296,15 +254,7 @@ suite('remote extension initialization retirement', () => {
 			using services = new InstantiationService();
 			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			const errors: unknown[] = [];
-			using logger = new LogService({
-				sinks: [
-					{
-						log: entry => {
-							if (entry.error) errors.push(entry.error);
-						},
-					},
-				],
-			});
+			using logger = new LogService({ sinks: [{ log: entry => { if (entry.error) errors.push(entry.error); } }] });
 			using localRestart = new Emitter<void>();
 			registerServices(services, logger);
 			const sockets: RemotePeer[] = [];
@@ -335,11 +285,9 @@ suite('remote extension initialization retirement', () => {
 				},
 			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 			let reconnects = 0;
-			using reconnect = service.onDidReconnect(() => {
-				reconnects++;
-			});
+			using reconnect = service.onDidReconnect(() => { reconnects++; });
 			const connecting = service.connect();
-			void connecting.catch(() => {});
+			void connecting.catch(() => { });
 			await entered.p;
 			localRestart.fire();
 			await new Promise<void>(resolve => setImmediate(resolve));
@@ -349,11 +297,8 @@ suite('remote extension initialization retirement', () => {
 			await fresh.complete();
 			await connecting;
 			assert.equal(reconnects, 0, 'the first completed incarnation is initialization, not reconnection');
-			if (outcome === 'success') {
-				await obsolete.complete();
-			} else {
-				await obsolete.error(new Error('obsolete initialization failed'));
-			}
+			if (outcome === 'success') { await obsolete.complete(); }
+			else { await obsolete.error(new Error('obsolete initialization failed')); }
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(service.client.state, 'ready');
 			assert.equal(service.client.generation, 2);
@@ -393,10 +338,7 @@ suite('remote extension initialization retirement', () => {
 				getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 				onDidReconnectLocal: localRestart.event,
 				initialize: async () => {
-					if (++initialized === 2) {
-						await entered.complete();
-						await obsolete.p;
-					}
+					if (++initialized === 2) { await entered.complete(); await obsolete.p; }
 				},
 			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 			await service.connect();
@@ -414,13 +356,8 @@ suite('remote extension initialization retirement', () => {
 			assert.equal(service.client.generation, 3);
 			assert.equal(service.client.state, 'ready');
 			assert.equal(service.recovery.status, 'idle');
-			assert.deepEqual(
-				sockets.map(socket => socket.isDisposed),
-				[true, true, false],
-			);
-		} finally {
-			mock.timers.reset();
-		}
+			assert.deepEqual(sockets.map(socket => socket.isDisposed), [true, true, false]);
+		} finally { mock.timers.reset(); }
 	});
 
 	test('disposing during extension initialization rejects the connection wait before a late reply', async () => {
@@ -441,10 +378,7 @@ suite('remote extension initialization retirement', () => {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }),
 			getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 			onDidReconnectLocal: localRestart.event,
-			initialize: async () => {
-				await entered.complete();
-				await obsolete.p;
-			},
+			initialize: async () => { await entered.complete(); await obsolete.p; },
 		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 		let rejected = false;
 		const result = assert.rejects(service.connect(), error => {

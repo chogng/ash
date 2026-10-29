@@ -6,7 +6,11 @@ import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProj
 
 test('visual line projection maps logical rows, UTF-16 columns, and empty lines', () => {
 	using model = new TextModel('ab😀cd\n\nxyz');
-	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [0], [1, 3]]);
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, [
+		[2, 4, 6],
+		[0],
+		[1, 3],
+	]);
 
 	assert.deepEqual(projection.lines, [
 		{
@@ -58,9 +62,9 @@ test('visual line projection maps logical rows, UTF-16 columns, and empty lines'
 			lastForLogicalLine: true,
 		},
 	]);
-	assert.equal(projection.visualLineIndexAt(new Position(0 + 1, 2 + 1)), 1);
-	assert.equal(projection.visualLineIndexAt(new Position(0 + 1, 6 + 1)), 2);
-	assert.equal(projection.visualLineIndexAt(new Position(1 + 1, 0 + 1)), 3);
+	assert.equal(projection.visualLineIndexAt(new Position((0) + 1, (2) + 1)), 1);
+	assert.equal(projection.visualLineIndexAt(new Position((0) + 1, (6) + 1)), 2);
+	assert.equal(projection.visualLineIndexAt(new Position((1) + 1, (0) + 1)), 3);
 	assert.equal(projection.firstVisualLineIndex(2), 4);
 });
 
@@ -86,5 +90,5 @@ test('identity visual line projection resolves unwrapped lines lazily', () => {
 		lastForLogicalLine: true,
 	});
 	assert.equal(projection.firstVisualLineIndex(1), 1);
-	assert.equal(projection.visualLineIndexAt(new Position(1 + 1, 3 + 1)), 1);
+	assert.equal(projection.visualLineIndexAt(new Position((1) + 1, (3) + 1)), 1);
 });

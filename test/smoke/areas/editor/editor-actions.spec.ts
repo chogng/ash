@@ -42,10 +42,7 @@ test('browser editor breadcrumbs start at the opened workspace and navigate its 
 		const storage = await navigator.storage.getDirectory();
 		const folder = await storage.getDirectoryHandle(`breadcrumbs-${crypto.randomUUID()}`, { create: true });
 		const source = await folder.getDirectoryHandle('src', { create: true });
-		for (const [directory, name] of [
-			[folder, 'main.ts'],
-			[source, 'sibling.ts'],
-		] as const) {
+		for (const [directory, name] of [[folder, 'main.ts'], [source, 'sibling.ts']] as const) {
 			const file = await directory.getFileHandle(name, { create: true });
 			const writer = await file.createWritable();
 			await writer.write('const value = 1;');

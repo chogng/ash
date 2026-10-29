@@ -25,7 +25,7 @@ import { getSingleFolderWorkspaceIdentifier, nodeWorkspacePathService, stableWor
 
 /** Resolves workspace files and canonical folder identities for desktop windows. */
 export class WorkspacesManagementMainService {
-	constructor(private readonly pathService: IWorkspacePathService = nodeWorkspacePathService) {}
+	constructor(private readonly pathService: IWorkspacePathService = nodeWorkspacePathService) { }
 
 	public async resolveFolder(path: string): Promise<ISingleFolderWorkspaceIdentifier> {
 		const folder = await this.pathService.resolvePath(resolve(path));
@@ -45,13 +45,11 @@ export class WorkspacesManagementMainService {
 		if (identifier.configPath.scheme !== 'file') throw new TypeError(localize('workspace.localConfigurationOnly', 'Desktop workspace configuration must be a local file.'));
 		const configPath = identifier.configPath.fsPath;
 		const source = await this.pathService.readFile(configPath);
-		const document = parseJsonc(source, configPath) as { remoteAuthority?: unknown };
+		const document = parseJsonc(source, configPath) as { remoteAuthority?: unknown; };
 		const configuredFolders = parseStoredWorkspaceFolders(document, configPath);
-		const storedAuthority =
-			document.remoteAuthority === undefined ? undefined : getWorkspaceRemoteAuthority(parseWorkspaceIdentifier({ id: identifier.id, remoteAuthority: document.remoteAuthority }));
+		const storedAuthority = document.remoteAuthority === undefined ? undefined : getWorkspaceRemoteAuthority(parseWorkspaceIdentifier({ id: identifier.id, remoteAuthority: document.remoteAuthority }));
 		let remoteAuthority = identifier.remoteAuthority ?? storedAuthority;
-		if (identifier.remoteAuthority && storedAuthority && identifier.remoteAuthority !== storedAuthority)
-			throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
+		if (identifier.remoteAuthority && storedAuthority && identifier.remoteAuthority !== storedAuthority) throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
 		const folders: IWorkspaceFolder[] = [];
 		const identities = new Set<string>();
 		for (const configured of configuredFolders) {
@@ -59,20 +57,12 @@ export class WorkspacesManagementMainService {
 			if (remote && isRemoteResource(remote)) {
 				getRemoteWorkspacePath(remote);
 				const authority = getRemoteAuthority(remote)!;
-				if ((remoteAuthority && remoteAuthority !== authority) || folders.some(folder => !isRemoteResource(folder.uri)))
-					throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
+				if (remoteAuthority && remoteAuthority !== authority || folders.some(folder => !isRemoteResource(folder.uri))) throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
 				remoteAuthority = authority;
 				const id = stableWorkspaceId(remote);
 				if (identities.has(id)) continue;
 				identities.add(id);
-				folders.push(
-					Object.freeze({
-						id,
-						uri: remote,
-						name: configured.name ?? resourceBasename(remote),
-						index: folders.length,
-					}),
-				);
+				folders.push(Object.freeze({ id, uri: remote, name: configured.name ?? resourceBasename(remote), index: folders.length }));
 				continue;
 			}
 			if (remoteAuthority) throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
@@ -88,14 +78,12 @@ export class WorkspacesManagementMainService {
 				continue;
 			}
 			identities.add(identity);
-			folders.push(
-				Object.freeze({
-					id: stableWorkspaceId(uri),
-					uri,
-					name: configured.name ?? (basename(resolved.path) || resolved.path),
-					index: folders.length,
-				}),
-			);
+			folders.push(Object.freeze({
+				id: stableWorkspaceId(uri),
+				uri,
+				name: configured.name ?? (basename(resolved.path) || resolved.path),
+				index: folders.length,
+			}));
 		}
 		return Object.freeze({
 			id: identifier.id,
@@ -115,11 +103,9 @@ export class WorkspacesManagementMainService {
 export class WorkspaceEditingMainService extends Disposable {
 	private queue: Promise<unknown> = Promise.resolve();
 	private readonly watcher = this._register(new MutableDisposable());
-	private readonly reload = this._register(
-		new RunOnceScheduler(() => {
-			void this.enqueue(() => this.reloadWorkspace()).catch(this.reportError);
-		}, 100),
-	);
+	private readonly reload = this._register(new RunOnceScheduler(() => {
+		void this.enqueue(() => this.reloadWorkspace()).catch(this.reportError);
+	}, 100));
 
 	constructor(
 		private readonly context: WorkspaceContextMainService,
@@ -128,12 +114,12 @@ export class WorkspaceEditingMainService extends Disposable {
 		private readonly host: {
 			resolveGrant(path: string): Promise<WorkspaceTrustGrant | undefined>;
 			persistDirectoryGrant(path: string, grant: WorkspaceTrustGrant): Promise<void>;
-			setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[]): Promise<void>;
-			validateFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[]): Promise<void>;
+			setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void>;
+			validateFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void>;
 		},
 		private readonly reportError: (error: unknown) => void,
 		private readonly runExclusive?: <T>(operation: () => Promise<T>) => Promise<T>,
-		private readonly configurationChanged: () => void = () => {},
+		private readonly configurationChanged: () => void = () => { },
 	) {
 		super();
 		this._register(context.onDidChangeWorkspace(() => this.watchConfiguration()));
@@ -152,14 +138,12 @@ export class WorkspaceEditingMainService extends Disposable {
 			}
 			using disk = new DiskFileSystemProvider([URI.file(dirname(resource.fsPath))]);
 			try {
-				const result = request.operation === 'read' ? await disk.readFile(resource) : await disk.writeFile(resource, new TextEncoder().encode(request.content), request.options);
+				const result = request.operation === 'read' ? await disk.readFile(resource)
+					: await disk.writeFile(resource, new TextEncoder().encode(request.content), request.options);
 				const stat = await disk.stat(resource);
 				return {
-					revision: result.revision,
-					sizeBytes: stat.sizeBytes,
-					readonly: stat.readonly,
-					modifiedAtMillis: stat.modifiedAtMillis,
-					...(request.operation === 'read' && 'bytes' in result ? { content: new TextDecoder('utf-8', { fatal: true }).decode(result.bytes) } : {}),
+					revision: result.revision, sizeBytes: stat.sizeBytes, readonly: stat.readonly, modifiedAtMillis: stat.modifiedAtMillis,
+					...(request.operation === 'read' && 'bytes' in result ? { content: new TextDecoder('utf-8', { fatal: true }).decode(result.bytes) } : {})
 				};
 			} catch (error) {
 				if (error instanceof FileRevisionConflictError) return { error: 'revisionConflict' };
@@ -190,81 +174,46 @@ export class WorkspaceEditingMainService extends Disposable {
 			}
 			let folders = [...latest.folders];
 			if (request.operation === 'folders') {
-				if (request.index > folders.length || request.deleteCount > folders.length - request.index)
-					throw new RangeError(localize('workspace.invalidFolderEdit', 'Workspace folder edit is outside the current list'));
-				const added = await Promise.all(
-					request.folders.map(async entry => {
-						const uri = URI.parse(entry.uri);
-						if (remoteAuthority) {
-							if (!isRemoteResource(uri) || getRemoteAuthority(uri) !== remoteAuthority)
-								throw new TypeError(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
-							getRemoteWorkspacePath(uri);
-							return {
-								id: stableWorkspaceId(uri),
-								uri,
-								name: entry.name ?? resourceBasename(uri),
-								index: 0,
-							};
-						}
-						if (uri.scheme !== 'file' || uri.query || uri.fragment || !isAbsolute(uri.fsPath))
-							throw new TypeError(localize('workspace.localFoldersOnly', 'Workspace folders must be absolute local directories'));
-						const resolved = await this.workspaces.resolveFolder(uri.fsPath);
-						return {
-							id: resolved.id,
-							uri: resolved.uri,
-							name: entry.name ?? (basename(resolved.uri.fsPath) || resolved.uri.fsPath),
-							index: 0,
-						};
-					}),
-				);
+				if (request.index > folders.length || request.deleteCount > folders.length - request.index) throw new RangeError(localize('workspace.invalidFolderEdit', 'Workspace folder edit is outside the current list'));
+				const added = await Promise.all(request.folders.map(async entry => {
+					const uri = URI.parse(entry.uri);
+					if (remoteAuthority) {
+						if (!isRemoteResource(uri) || getRemoteAuthority(uri) !== remoteAuthority) throw new TypeError(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
+						getRemoteWorkspacePath(uri);
+						return { id: stableWorkspaceId(uri), uri, name: entry.name ?? resourceBasename(uri), index: 0 };
+					}
+					if (uri.scheme !== 'file' || uri.query || uri.fragment || !isAbsolute(uri.fsPath)) throw new TypeError(localize('workspace.localFoldersOnly', 'Workspace folders must be absolute local directories'));
+					const resolved = await this.workspaces.resolveFolder(uri.fsPath);
+					return { id: resolved.id, uri: resolved.uri, name: entry.name ?? (basename(resolved.uri.fsPath) || resolved.uri.fsPath), index: 0 };
+				}));
 				folders.splice(request.index, request.deleteCount, ...added);
 			}
 			const identities = new Set<string>();
-			folders = folders
-				.filter(folder => {
-					if (identities.has(folder.id)) return false;
-					identities.add(folder.id);
-					return true;
-				})
-				.map((folder, index) => ({ ...folder, index }));
+			folders = folders.filter(folder => {
+				if (identities.has(folder.id)) return false;
+				identities.add(folder.id);
+				return true;
+			}).map((folder, index) => ({ ...folder, index }));
 			if (folders.length > 256) throw new RangeError(localize('workspace.folderLimit', 'Workspace supports at most 256 folders'));
 			// A duplicate or empty edit must not create a workspace identity or rewrite
 			// the user's JSONC when the accepted folder list did not change.
-			if (
-				request.operation === 'folders' &&
-				folders.length === current.folders.length &&
-				folders.every((folder, index) => {
-					const previous = current.folders[index]!;
-					return folder.id === previous.id && folder.uri.toString() === previous.uri.toString() && folder.name === previous.name;
-				})
-			) {
+			if (request.operation === 'folders' && folders.length === current.folders.length && folders.every((folder, index) => {
+				const previous = current.folders[index]!;
+				return folder.id === previous.id && folder.uri.toString() === previous.uri.toString() && folder.name === previous.name;
+			})) {
 				return serializeWorkspace(current);
 			}
-			const path = request.operation === 'save' ? resolve(request.path) : (current.configuration?.fsPath ?? resolve(this.untitledHome, randomUUID(), 'workspace.ash-workspace'));
+			const path = request.operation === 'save' ? resolve(request.path)
+				: current.configuration?.fsPath ?? resolve(this.untitledHome, randomUUID(), 'workspace.ash-workspace');
 			if (!hasWorkspaceFileExtension(path)) throw new TypeError(localize('workspace.invalidExtension', 'Expected an .ash-workspace or .code-workspace file'));
 			const configPath = URI.file(path);
 			const nextIdentifier = getWorkspaceIdentifier(configPath, remoteAuthority);
-			const next: IWorkspace = {
-				id: nextIdentifier.id,
-				configuration: configPath,
-				name: basename(path).replace(/\.(ash|code)-workspace$/i, ''),
-				folders,
-				...(remoteAuthority ? { remoteAuthority } : {}),
-			};
+			const next: IWorkspace = { id: nextIdentifier.id, configuration: configPath, name: basename(path).replace(/\.(ash|code)-workspace$/i, ''), folders, ...(remoteAuthority ? { remoteAuthority } : {}) };
 			// Rebase relative paths when saving elsewhere. Preserve settings, tasks,
 			// launch, extensions, unknown properties and comments outside folders.
-			let output = editJsonObjectProperty(
-				source,
-				'folders',
-				folders.map(folder =>
-					remoteAuthority
-						? { uri: folder.uri.toString(), name: folder.name }
-						: {
-								path: sep === '\\' ? (relative(dirname(path), folder.uri.fsPath) || '.').replaceAll('\\', '/') : relative(dirname(path), folder.uri.fsPath) || '.',
-								name: folder.name,
-							},
-				),
-			);
+			let output = editJsonObjectProperty(source, 'folders', folders.map(folder => remoteAuthority ? { uri: folder.uri.toString(), name: folder.name } : {
+				path: sep === '\\' ? (relative(dirname(path), folder.uri.fsPath) || '.').replaceAll('\\', '/') : relative(dirname(path), folder.uri.fsPath) || '.', name: folder.name,
+			}));
 			if (remoteAuthority) output = editJsonObjectProperty(output, 'remoteAuthority', remoteAuthority);
 			await mkdir(dirname(path), { recursive: true });
 			using disk = new DiskFileSystemProvider([URI.file(dirname(path))]);
@@ -274,24 +223,12 @@ export class WorkspaceEditingMainService extends Disposable {
 				const previous = await disk.readFile(configPath);
 				revision = previous.revision;
 				previousContent = previous.bytes;
-				if (current.configuration?.toString() === configPath.toString() && new TextDecoder().decode(previous.bytes) !== source)
-					throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
-			} catch (error) {
-				if (!(error instanceof FileNotFoundError)) throw error;
-			}
+				if (current.configuration?.toString() === configPath.toString() && new TextDecoder().decode(previous.bytes) !== source) throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
+			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
 			await this.apply(next, async () => {
-				const written = await disk.writeFile(configPath, new TextEncoder().encode(output), {
-					create: true,
-					overwrite: revision !== undefined,
-					expectedRevision: revision,
-				});
+				const written = await disk.writeFile(configPath, new TextEncoder().encode(output), { create: true, overwrite: revision !== undefined, expectedRevision: revision });
 				return async () => {
-					if (previousContent)
-						await disk.writeFile(configPath, previousContent, {
-							create: false,
-							overwrite: true,
-							expectedRevision: written.revision,
-						});
+					if (previousContent) await disk.writeFile(configPath, previousContent, { create: false, overwrite: true, expectedRevision: written.revision });
 					else {
 						if ((await disk.readFile(configPath)).revision !== written.revision) throw new FileRevisionConflictError(configPath);
 						await disk.delete(configPath, 'ignore', 'fileOrEmptyDirectory');
@@ -303,7 +240,7 @@ export class WorkspaceEditingMainService extends Disposable {
 	}
 
 	private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-		const result = this.queue.then(() => (this.runExclusive ? this.runExclusive(operation) : operation()));
+		const result = this.queue.then(() => this.runExclusive ? this.runExclusive(operation) : operation());
 		this.queue = result.catch(() => undefined);
 		return result;
 	}
@@ -322,9 +259,7 @@ export class WorkspaceEditingMainService extends Disposable {
 			});
 			watcher.on('error', this.reportError);
 			this.watcher.value = toDisposable(() => watcher.close());
-		} catch (error) {
-			this.reportError(error);
-		}
+		} catch (error) { this.reportError(error); }
 	}
 
 	private async reloadWorkspace(): Promise<void> {
@@ -338,11 +273,7 @@ export class WorkspaceEditingMainService extends Disposable {
 	private async apply(next: IWorkspace, persist?: () => Promise<() => Promise<void>>): Promise<void> {
 		const previous = this.context.getResolvedWorkspace();
 		const changed = previous.folders.length !== next.folders.length || previous.folders.some((folder, index) => folder.id !== next.folders[index]?.id);
-		const dirs = next.folders.map(folder => ({
-			id: folder.id,
-			path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,
-			grant: { type: 'config' as const },
-		}));
+		const dirs = next.folders.map(folder => ({ id: folder.id, path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath, grant: { type: 'config' as const } }));
 		if (changed) {
 			await this.host.validateFolders(dirs);
 			for (const folder of next.folders) {
@@ -361,11 +292,8 @@ export class WorkspaceEditingMainService extends Disposable {
 				await this.host.setFolders(dirs);
 			}
 		} catch (error) {
-			try {
-				await rollback?.();
-			} catch (failure) {
-				throw new AggregateError([error, failure], 'Workspace update and metadata rollback failed');
-			}
+			try { await rollback?.(); }
+			catch (failure) { throw new AggregateError([error, failure], 'Workspace update and metadata rollback failed'); }
 			throw error;
 		}
 		this.assertNotDisposed();

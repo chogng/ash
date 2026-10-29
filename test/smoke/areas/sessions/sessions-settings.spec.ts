@@ -10,28 +10,17 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
-	await group.editor.input.evaluate(
-		(element, source) => {
-			const clipboardData = new DataTransfer();
-			clipboardData.setData('text/plain', source);
-			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-		},
-		JSON.stringify([
-			{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'chat.disableAIFeatures' },
-			{
-				key: 'ctrl+alt+u',
-				command: 'workbench.action.openSettings',
-				args: { query: '@id:chat.disableAIFeatures', target: 3 },
-			},
-			{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
-			{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
-			{
-				key: 'ctrl+alt+p',
-				command: 'workbench.action.openSettings',
-				args: { openToSide: true, query: '@id:editor.fontSize' },
-			},
-		]),
-	);
+	await group.editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, JSON.stringify([
+		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'chat.disableAIFeatures' },
+		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:chat.disableAIFeatures', target: 3 } },
+		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
+		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
+		{ key: 'ctrl+alt+p', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
+	]));
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
@@ -62,10 +51,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 			const profile = await application.evaluate(() => process.env.ASH_HOME!);
 			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['chat.disableAIFeatures'];
 		}
-		return (async () => {
-			const snapshot = await readUserSettings(sessionsPage);
-			return JSON.parse(snapshot.content)['chat.disableAIFeatures'];
-		})();
+		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)['chat.disableAIFeatures']; })();
 	};
 	await expect.poll(readSaved).toBe(true);
 	await settings.getByRole('searchbox').press('Control+Alt+I');
@@ -103,10 +89,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(groupedSettings.getByRole('searchbox')).toBeFocused();
 	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
 
-	await testInfo.attach('sessions-settings-query-diagnostics', {
-		body: JSON.stringify(runningApplication.diagnostics),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('sessions-settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
@@ -146,11 +129,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	await expect(settings.locator('.ash-models-settings-model-row')).toHaveCount(0);
 	let writer: Workbench | undefined;
 	const saveExternal = async (disabledAI: boolean | undefined): Promise<void> => {
-		const source = JSON.stringify({
-			'window.menuStyle': 'custom',
-			'workbench.activityBar.compact': true,
-			...(disabledAI === undefined ? {} : { 'chat.disableAIFeatures': disabledAI }),
-		});
+		const source = JSON.stringify({ 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true, ...(disabledAI === undefined ? {} : { 'chat.disableAIFeatures': disabledAI }) });
 		if ('windows' in application) {
 			await (async source => {
 				const current = await readUserSettings(sessionsPage);
@@ -200,14 +179,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
 		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual(remaining);
 	} else {
-		await expect
-			.poll(() =>
-				(async () => {
-					const snapshot = await readUserSettings(sessionsPage);
-					return JSON.parse(snapshot.content);
-				})(),
-			)
-			.toEqual(remaining);
+		await expect.poll(() => (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content); })()).toEqual(remaining);
 	}
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openSettings();
@@ -220,10 +192,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	await settings.getByRole('button', { name: 'General', exact: true }).click();
 	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).not.toBeChecked();
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
-	await testInfo.attach('sessions-modified-settings-diagnostics', {
-		body: JSON.stringify(runningApplication.diagnostics),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('sessions-modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
@@ -241,40 +210,21 @@ test('Sessions setting menus copy their current registered value as JSON', async
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	if ('windows' in application) {
 		await application.evaluate(({ clipboard }) => {
-			const captured = globalThis as typeof globalThis & {
-				sessionsCopyText: string;
-				sessionsCopyCount: number;
-				restoreSessionsCopy(): void;
-			};
+			const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; restoreSessionsCopy(): void; };
 			const write = clipboard.writeText.bind(clipboard);
 			captured.sessionsCopyText = '';
 			captured.sessionsCopyCount = 0;
-			clipboard.writeText = async text => {
-				captured.sessionsCopyText = text;
-				captured.sessionsCopyCount++;
-				await write(text);
-			};
-			captured.restoreSessionsCopy = () => {
-				clipboard.writeText = write;
-			};
+			clipboard.writeText = async text => { captured.sessionsCopyText = text; captured.sessionsCopyCount++; await write(text); };
+			captured.restoreSessionsCopy = () => { clipboard.writeText = write; };
 		});
 	} else {
 		await sessionsPage.evaluate(() => {
-			const captured = globalThis as typeof globalThis & {
-				sessionsCopyText: string;
-				sessionsCopyCount: number;
-				restoreSessionsCopy(): void;
-			};
+			const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; restoreSessionsCopy(): void; };
 			const write = navigator.clipboard.writeText.bind(navigator.clipboard);
 			captured.sessionsCopyText = '';
 			captured.sessionsCopyCount = 0;
-			navigator.clipboard.writeText = async text => {
-				captured.sessionsCopyText = text;
-				captured.sessionsCopyCount++;
-			};
-			captured.restoreSessionsCopy = () => {
-				navigator.clipboard.writeText = write;
-			};
+			navigator.clipboard.writeText = async text => { captured.sessionsCopyText = text; captured.sessionsCopyCount++; };
+			captured.restoreSessionsCopy = () => { navigator.clipboard.writeText = write; };
 		});
 	}
 	try {
@@ -299,24 +249,15 @@ test('Sessions setting menus copy their current registered value as JSON', async
 			await sessionsPage.keyboard.press('ArrowUp');
 			await expect(copy).toBeFocused();
 		};
-		const read =
-			'windows' in application
-				? () =>
-						application.evaluate(() => {
-							const captured = globalThis as typeof globalThis & {
-								sessionsCopyText: string;
-								sessionsCopyCount: number;
-							};
-							return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
-						})
-				: () =>
-						sessionsPage.evaluate(() => {
-							const captured = globalThis as typeof globalThis & {
-								sessionsCopyText: string;
-								sessionsCopyCount: number;
-							};
-							return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
-						});
+		const read = 'windows' in application
+			? () => application.evaluate(() => {
+				const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; };
+				return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
+			})
+			: () => sessionsPage.evaluate(() => {
+				const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; };
+				return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
+			});
 		await openSettings();
 		await expect(row.getByRole('switch')).toBeChecked();
 		await expect(row).toHaveClass(/is-configured/u);
@@ -360,30 +301,22 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await expect(sessionsPage.locator('.ash-sessions-activity-bottom button').last()).toBeFocused();
 	} finally {
 		if ('windows' in application) {
-			await application.evaluate(() => {
-				(globalThis as typeof globalThis & { restoreSessionsCopy(): void }).restoreSessionsCopy();
-			});
+			await application.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });
 		} else {
-			await sessionsPage.evaluate(() => {
-				(globalThis as typeof globalThis & { restoreSessionsCopy(): void }).restoreSessionsCopy();
-			});
+			await sessionsPage.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });
 		}
 	}
 });
 
 test('Workbench and Sessions keep one settings document across edits and window restarts', async ({ application, target, workbench }) => {
-	const source = JSON.stringify(
-		{
-			'window.title': 'Shared settings test',
-			'workbench.sideBar.location': 'right',
-			'workbench.activityBar.compact': true,
-			'workbench.layoutStyle': 'modern',
-			'sessions.layoutStyle': 'flat',
-			'chat.disableAIFeatures': false,
-		},
-		null,
-		'\t',
-	);
+	const source = JSON.stringify({
+		'window.title': 'Shared settings test',
+		'workbench.sideBar.location': 'right',
+		'workbench.activityBar.compact': true,
+		'workbench.layoutStyle': 'modern',
+		'sessions.layoutStyle': 'flat',
+		'chat.disableAIFeatures': false,
+	}, null, '\t');
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
 	await expect(group.editor.input).toBeFocused();
@@ -427,21 +360,20 @@ test('Workbench and Sessions keep one settings document across edits and window 
 	}
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	await expect(group.editor.element).toBeVisible();
-	await expect
-		.poll(async () => {
-			const contents = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
-			if (contents.trim().length === 0) return undefined;
-			return JSON.parse(contents);
-		})
-		.toEqual({
-			'window.title': 'Shared settings test',
-			'workbench.sideBar.location': 'right',
-			'workbench.activityBar.compact': true,
-			'workbench.layoutStyle': 'modern',
-			'chat.disableAIFeatures': false,
-		});
+	await expect.poll(async () => {
+		const contents = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
+		if (contents.trim().length === 0) return undefined;
+		return JSON.parse(contents);
+	}).toEqual({
+		'window.title': 'Shared settings test',
+		'workbench.sideBar.location': 'right',
+		'workbench.activityBar.compact': true,
+		'workbench.layoutStyle': 'modern',
+		'chat.disableAIFeatures': false,
+	});
 	await expect(workbench.page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
 });
+
 
 test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
@@ -470,12 +402,7 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	let shortcuts = page.locator('.ash-keybindings-editor');
 	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
 	const userRows = () => shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^User$/u }) });
-	const defaultRow = shortcuts
-		.locator('.ash-keybindings-row')
-		.filter({ has: page.locator('.ash-keybindings-source', { hasText: /^System$/u }) })
-		.filter({
-			has: page.locator('.ash-keybindings-command-id', { hasText: /^workbench\.action\.openSettings$/u }),
-		});
+	const defaultRow = shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^System$/u }) }).filter({ has: page.locator('.ash-keybindings-command-id', { hasText: /^workbench\.action\.openSettings$/u }) });
 	const addShortcut = defaultRow.getByRole('button', { name: /^Edit keybinding for /u });
 	await addShortcut.click();
 	const recorder = shortcuts.getByRole('textbox', { name: 'Record keybinding', exact: true });
@@ -520,9 +447,6 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await expect(group.tabs.getByText('Keyboard Shortcuts (JSON)', { exact: true })).toBeVisible();
 	await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === '[]');
 	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
-	await testInfo.attach('sessions-preferences-shortcuts-diagnostics', {
-		body: JSON.stringify(runningApplication.diagnostics),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('sessions-preferences-shortcuts-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });

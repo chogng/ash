@@ -9,11 +9,7 @@ import './media/terminalResizeDimensionsOverlay.css';
 export class TerminalResizeDimensionsOverlay extends Disposable implements ITerminalWidget {
 	public readonly id = 'resize-dimensions-overlay';
 	private readonly label: HTMLSpanElement;
-	private readonly hide = this._register(
-		new RunOnceScheduler(() => {
-			this.label.hidden = true;
-		}, 500),
-	);
+	private readonly hide = this._register(new RunOnceScheduler(() => { this.label.hidden = true; }, 500));
 
 	constructor(container: HTMLElement, screen: IXtermTerminal) {
 		super();

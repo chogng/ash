@@ -18,7 +18,9 @@ export interface PluginPackageView {
 }
 
 export type PluginPermission =
-	{ readonly type: 'directory'; readonly access: 'read' | 'write' } | { readonly type: 'process'; readonly executable: string } | { readonly type: 'network'; readonly hosts: readonly string[] };
+	| { readonly type: 'directory'; readonly access: 'read' | 'write'; }
+	| { readonly type: 'process'; readonly executable: string; }
+	| { readonly type: 'network'; readonly hosts: readonly string[]; };
 
 export interface PluginInstallation {
 	readonly id: string;
@@ -38,7 +40,13 @@ export interface IPluginManagementService {
 	/** Path is relative to the selected authorized directory; installation does not activate it. */
 	installLocal(path: string, revision: number): Promise<PluginInstallation>;
 	/** App-owned source materialization; the package authority still owns installation and grants. */
-	installFromGit(folder: IWorkspaceFolder, url: string, reference: string | undefined, packagePath: string, signal: AbortSignal): Promise<PluginInstallation>;
+	installFromGit(
+		folder: IWorkspaceFolder,
+		url: string,
+		reference: string | undefined,
+		packagePath: string,
+		signal: AbortSignal,
+	): Promise<PluginInstallation>;
 	enable(plugin: PluginPackageView, revision: number): Promise<void>;
 	disable(plugin: PluginPackageView, revision: number): Promise<void>;
 	grant(plugin: PluginPackageView, revision: number): Promise<void>;

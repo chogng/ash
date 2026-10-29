@@ -26,7 +26,7 @@ export class SessionsLayoutPolicy {
 		return { sideBarSize: 300, auxiliaryBarSize: 340, panelSize: 300, sessionsWidth: width - 300 };
 	}
 
-	public getFrameMetrics(style: SessionsLayoutStyle): { readonly leftEdge: number; readonly rightEdge: number } {
+	public getFrameMetrics(style: SessionsLayoutStyle): { readonly leftEdge: number; readonly rightEdge: number; } {
 		return style === 'modern' ? { leftEdge: 6, rightEdge: AGENTS_FLOATING_PANEL_GAP } : { leftEdge: 0, rightEdge: 0 };
 	}
 }

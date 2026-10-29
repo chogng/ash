@@ -43,23 +43,17 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		this.updateScrollbar();
 		this._register(this.tabList.onDidScroll(() => this.layout()));
 		this._register(observeResize(this.tabList.scrollableElement, () => this.layout()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) {
-					this.updatePresentation();
-				}
-				if (
-					event.affectsConfiguration(EditorTabSizingConfiguration) ||
-					event.affectsConfiguration(EditorTabSizingFixedMinWidthConfiguration) ||
-					event.affectsConfiguration(EditorTabSizingFixedMaxWidthConfiguration)
-				) {
-					this.updateSizing();
-				}
-				if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) {
-					this.updateScrollbar();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) {
+				this.updatePresentation();
+			}
+			if (event.affectsConfiguration(EditorTabSizingConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMinWidthConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMaxWidthConfiguration)) {
+				this.updateSizing();
+			}
+			if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) {
+				this.updateScrollbar();
+			}
+		}));
 	}
 
 	setTabs(tabs: readonly TabListItem<T>[], activeId: string | undefined, selectedIds?: ReadonlySet<string>): void {
@@ -90,15 +84,11 @@ export class WorkbenchTabsControl<T> extends Disposable {
 
 	private updateSizing(): void {
 		const mode = this.configuration.getValue<EditorTabSizing>(EditorTabSizingConfiguration);
-		this.tabList.setSizing(
-			mode === 'fixed'
-				? {
-						mode,
-						minWidth: this.configuration.getValue<number>(EditorTabSizingFixedMinWidthConfiguration),
-						maxWidth: this.configuration.getValue<number>(EditorTabSizingFixedMaxWidthConfiguration),
-					}
-				: { mode },
-		);
+		this.tabList.setSizing(mode === 'fixed' ? {
+			mode,
+			minWidth: this.configuration.getValue<number>(EditorTabSizingFixedMinWidthConfiguration),
+			maxWidth: this.configuration.getValue<number>(EditorTabSizingFixedMaxWidthConfiguration),
+		} : { mode });
 		this.layout();
 	}
 
@@ -123,17 +113,14 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		const viewport = this.tabList.scrollableElement;
 		const bounds = tab.getBoundingClientRect();
 		const viewportBounds = viewport.getBoundingClientRect();
-		updateConnectedTabClipping(
-			{
-				tab,
-				overflowEdge: this.tabList.element,
-				fillLeft: bounds.left - viewportBounds.left + viewport.scrollLeft,
-				fillRight: bounds.right - viewportBounds.left + viewport.scrollLeft,
-				viewportLeft: 0,
-				viewportRight: viewport.clientWidth,
-				shoulderExtent: 6,
-			},
-			viewport.scrollLeft,
-		);
+		updateConnectedTabClipping({
+			tab,
+			overflowEdge: this.tabList.element,
+			fillLeft: bounds.left - viewportBounds.left + viewport.scrollLeft,
+			fillRight: bounds.right - viewportBounds.left + viewport.scrollLeft,
+			viewportLeft: 0,
+			viewportRight: viewport.clientWidth,
+			shoulderExtent: 6,
+		}, viewport.scrollLeft);
 	}
 }

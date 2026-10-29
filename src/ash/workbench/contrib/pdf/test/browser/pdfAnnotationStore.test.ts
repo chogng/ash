@@ -45,12 +45,10 @@ test('PDF annotation store reads and conditionally writes its sibling sidecar', 
 class TestFileService implements IFileSystemProvider {
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
-	public watch(): IDisposable {
-		return Disposable.None;
-	}
+	public watch(): IDisposable { return Disposable.None; }
 
-	readonly onDidChangeFiles = () => toDisposable(() => {});
-	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[] = [];
+	readonly onDidChangeFiles = () => toDisposable(() => { });
+	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[] = [];
 	content = '';
 	revision = 'revision';
 	readonly readFileRequests: URI[] = [];
@@ -60,7 +58,7 @@ class TestFileService implements IFileSystemProvider {
 		return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 	}
 
-	async readDirectory(): Promise<readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[]> {
+	async readDirectory(): Promise<readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[]> {
 		return this.entries;
 	}
 
@@ -70,50 +68,26 @@ class TestFileService implements IFileSystemProvider {
 	}
 
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) {
-			throw new Error('PDF annotation tests do not paste files');
-		}
-		const request = {
-			resource,
-			content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
-			...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
-		};
+		if (!options.overwrite) { throw new Error('PDF annotation tests do not paste files'); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		this.writeRequests.push(request);
 		return {
-			stat: {
-				resource: request.resource,
-				kind: FileKind.File,
-				sizeBytes: request.content.length,
-				readonly: false,
-				modifiedAtMillis: undefined,
-			},
+			stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined },
 			revision: 'after',
 		};
 	}
 
-	async createFile(): Promise<never> {
-		throw new Error('PDF annotation tests do not create empty files');
-	}
-	async createDirectory(): Promise<never> {
-		throw new Error('PDF annotation tests do not create directories');
-	}
-	async copy(): Promise<void> {
-		throw new Error('Copy is not used in this test');
-	}
-	async rename(): Promise<never> {
-		throw new Error('PDF annotation tests do not rename files');
-	}
-	async delete(): Promise<never> {
-		throw new Error('PDF annotation tests do not delete files');
-	}
+	async createFile(): Promise<never> { throw new Error('PDF annotation tests do not create empty files'); }
+	async createDirectory(): Promise<never> { throw new Error('PDF annotation tests do not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename(): Promise<never> { throw new Error('PDF annotation tests do not rename files'); }
+	async delete(): Promise<never> { throw new Error('PDF annotation tests do not delete files'); }
 }
 
 test('provider retirement cancels a sidecar write through the authorized file service', async () => {
 	const controller = new AbortController();
 	let entered!: () => void;
-	const writing = new Promise<void>(resolve => {
-		entered = resolve;
-	});
+	const writing = new Promise<void>(resolve => { entered = resolve; });
 	const files = new TestFileService();
 	files.writeFile = async (_resource, _bytes, _options, signal?: AbortSignal) => {
 		assert.ok(signal);

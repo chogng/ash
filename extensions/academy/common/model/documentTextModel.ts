@@ -16,13 +16,11 @@ export class DocumentTextModel extends TextModel {
 	private constructor(schema: DocumentSchema, document: DocumentNode, options: TextModelBlockOptions) {
 		super('', { extensionSnapshot: projectDocumentToLines(schema, document) });
 		try {
-			this.blockState = this._register(
-				new TextModelBlockState(schema, document, options, {
-					getVersion: () => this.version,
-					commit: snapshot => this.commitExtensionSnapshot(snapshot),
-					publishTextChange: change => this.publishTextChange(change),
-				}),
-			);
+			this.blockState = this._register(new TextModelBlockState(schema, document, options, {
+				getVersion: () => this.version,
+				commit: snapshot => this.commitExtensionSnapshot(snapshot),
+				publishTextChange: change => this.publishTextChange(change),
+			}));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -33,9 +31,7 @@ export class DocumentTextModel extends TextModel {
 		return new DocumentTextModel(schema, document, options);
 	}
 
-	get documentType(): string {
-		return this.blockState.schema.documentType;
-	}
+	get documentType(): string { return this.blockState.schema.documentType; }
 
 	get schema(): DocumentSchema {
 		return this.blockState.schema;
@@ -112,4 +108,5 @@ export class DocumentTextModel extends TextModel {
 	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
 		return this.blockState.getPluginDecorations();
 	}
+
 }

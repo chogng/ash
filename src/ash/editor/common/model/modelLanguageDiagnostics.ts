@@ -14,11 +14,7 @@ export class ModelLanguageDiagnostics extends Disposable {
 	readonly results: ReturnType<typeof createLanguageDiagnosticStore>;
 	private generation = 0;
 
-	constructor(
-		private readonly model: TextModel,
-		registry?: SyntaxProviderRegistry,
-		onDidChangeConfiguration?: Event<unknown>,
-	) {
+	constructor(private readonly model: TextModel, registry?: SyntaxProviderRegistry, onDidChangeConfiguration?: Event<unknown>) {
 		super();
 		const providers = registry ?? this._register(new SyntaxProviderRegistry());
 		this.results = this._register(createLanguageDiagnosticStore(model));
@@ -41,14 +37,12 @@ export class ModelLanguageDiagnostics extends Disposable {
 		if (this.model.largeFile.tooLargeForTokenization) return;
 		queueMicrotask(() => {
 			if (this.isDisposed || generation !== this.generation) return;
-			void this.coordinator
-				.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: this.model.getLanguageId() }, result => {
-					if (result.value.lane !== SYNTAX_DIAGNOSTIC_LANE) throw new TypeError('Expected diagnostic result');
-					this.results.accept({ ...result, value: result.value.value });
-				})
-				.catch(error => {
-					if (!this.isDisposed && generation === this.generation) this.errors.fire(error);
-				});
+			void this.coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: this.model.getLanguageId() }, result => {
+				if (result.value.lane !== SYNTAX_DIAGNOSTIC_LANE) throw new TypeError('Expected diagnostic result');
+				this.results.accept({ ...result, value: result.value.value });
+			}).catch(error => {
+				if (!this.isDisposed && generation === this.generation) this.errors.fire(error);
+			});
 		});
 	}
 }

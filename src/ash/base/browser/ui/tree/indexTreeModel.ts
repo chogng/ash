@@ -91,18 +91,10 @@ export class IndexTreeModel<T> extends Disposable {
 		this.rebuildIndexAndProjection();
 	}
 
-	get rootNode(): IndexTreeNode<T> {
-		return this.root;
-	}
-	get rootNodes(): readonly IndexTreeNode<T>[] {
-		return this.root.children;
-	}
-	get visibleNodes(): readonly IndexTreeNode<T>[] {
-		return this.visible;
-	}
-	get size(): number {
-		return this.nodesById.size - 1;
-	}
+	get rootNode(): IndexTreeNode<T> { return this.root; }
+	get rootNodes(): readonly IndexTreeNode<T>[] { return this.root.children; }
+	get visibleNodes(): readonly IndexTreeNode<T>[] { return this.visible; }
+	get size(): number { return this.nodesById.size - 1; }
 
 	has(location: IndexTreeLocation): boolean {
 		return this.findNode(location) !== undefined;
@@ -149,7 +141,7 @@ export class IndexTreeModel<T> extends Disposable {
 		const prepare = (element: TreeElement<T>): PreparedTreeElement<T> => {
 			const id = this.identityProvider?.getId(element.element) ?? `index-tree-node-${++this.generatedId}`;
 			if (!id.trim()) throw new TypeError('Tree node IDs must not be empty');
-			if (insertedIds.has(id) || (this.nodesById.has(id) && !deletedById.has(id))) throw new Error(`Duplicate tree node ID: ${id}`);
+			if (insertedIds.has(id) || this.nodesById.has(id) && !deletedById.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
 			insertedIds.add(id);
 			return { ...element, id, children: (element.children ?? []).map(prepare) };
 		};
@@ -174,24 +166,16 @@ export class IndexTreeModel<T> extends Disposable {
 		this._onDidChange.fire({ kind: 'structure', node: parent === this.root ? undefined : parent, visibleSplice });
 	}
 
-	collapse(location: IndexTreeLocation): boolean {
-		return this.updateCollapsed(location, true);
-	}
-	expand(location: IndexTreeLocation): boolean {
-		return this.updateCollapsed(location, false);
-	}
+	collapse(location: IndexTreeLocation): boolean { return this.updateCollapsed(location, true); }
+	expand(location: IndexTreeLocation): boolean { return this.updateCollapsed(location, false); }
 
 	toggleCollapsed(location: IndexTreeLocation): boolean {
 		const node = this.requireMutableNode(location);
 		return this.updateCollapsed(location, !node.collapsed);
 	}
 
-	collapseRecursive(location: IndexTreeLocation): boolean {
-		return this.updateCollapsedRecursive(location, true);
-	}
-	expandRecursive(location: IndexTreeLocation): boolean {
-		return this.updateCollapsedRecursive(location, false);
-	}
+	collapseRecursive(location: IndexTreeLocation): boolean { return this.updateCollapsedRecursive(location, true); }
+	expandRecursive(location: IndexTreeLocation): boolean { return this.updateCollapsedRecursive(location, false); }
 
 	expandTo(location: IndexTreeLocation): boolean {
 		let node = this.requireMutableNode(location).parent;
@@ -222,14 +206,11 @@ export class IndexTreeModel<T> extends Disposable {
 	}
 
 	rerender(location?: IndexTreeLocation): void {
-		this._onDidChange.fire({
-			kind: 'rerender',
-			node: location === undefined ? undefined : this.requireNode(location),
-		});
+		this._onDidChange.fire({ kind: 'rerender', node: location === undefined ? undefined : this.requireNode(location) });
 	}
 
 	private buildNodes(elements: readonly PreparedTreeElement<T>[], parent: MutableIndexTreeNode<T>, previous: ReadonlyMap<string, MutableIndexTreeNode<T>>): MutableIndexTreeNode<T>[] {
-		return elements.map(treeElement => {
+		return elements.map((treeElement) => {
 			const id = treeElement.id;
 			const oldNode = previous.get(id);
 			const node: MutableIndexTreeNode<T> = oldNode ?? {
@@ -253,7 +234,7 @@ export class IndexTreeModel<T> extends Disposable {
 			node.declaredCollapsible = treeElement.collapsible;
 			node.children = this.buildNodes(treeElement.children, node, previous);
 			node.collapsible = treeElement.collapsible ?? node.children.length > 0;
-			node.collapsed = node.collapsible ? (oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === 'collapsed') : false;
+			node.collapsed = node.collapsible ? oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === 'collapsed' : false;
 			return node;
 		});
 	}
@@ -318,7 +299,7 @@ export class IndexTreeModel<T> extends Disposable {
 		for (const child of node.children) this.markSubtreeVisible(child);
 	}
 
-	private visibleDescendantRange(parent: MutableIndexTreeNode<T>): { readonly start: number; readonly deleteCount: number } | undefined {
+	private visibleDescendantRange(parent: MutableIndexTreeNode<T>): { readonly start: number; readonly deleteCount: number; } | undefined {
 		const parentIndex = parent === this.root ? -1 : this.visible.indexOf(parent);
 		if (parent !== this.root && parentIndex < 0) return undefined;
 		const start = parentIndex + 1;
@@ -383,7 +364,7 @@ export class IndexTreeModel<T> extends Disposable {
 	}
 
 	private updateVisibleChildMetadataAtLevel(nodes: readonly MutableIndexTreeNode<T>[]): void {
-		const visible = nodes.filter(node => node.visible);
+		const visible = nodes.filter((node) => node.visible);
 		for (const node of nodes) {
 			node.visibleChildIndex = -1;
 			node.visibleChildrenCount = visible.length;

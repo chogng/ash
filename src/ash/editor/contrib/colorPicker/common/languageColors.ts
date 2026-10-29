@@ -4,21 +4,12 @@ import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
 import { computeDefaultDocumentColors, computeDefaultDocumentColorsAsync } from '../../../common/languages/defaultDocumentColorsComputer.js';
 
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type IColor,
-	type IColorInformation,
-	type IColorPresentation,
-	type LanguageColorRequest,
-	type LanguageColorPresentationRequest,
-	type LanguageColorProvider,
-} from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type IColor, type IColorInformation, type IColorPresentation, type LanguageColorRequest, type LanguageColorPresentationRequest, type LanguageColorProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface ColorData {
-	readonly information: IColorInformation & { readonly range: Range };
+	readonly information: IColorInformation & { readonly range: Range; };
 	readonly provider: LanguageColorProvider;
 }
 
@@ -51,7 +42,7 @@ export class ColorService {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			for (const color of normalized) result.push(color);
 		}
-		if (enablement === 'always' || (enablement === 'auto' && !validProviderFound)) {
+		if (enablement === 'always' || enablement === 'auto' && !validProviderFound) {
 			const colors = await this.defaultProvider.provideDocumentColors(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const normalized = await this.normalizeColors(colors, this.defaultProvider, request);
@@ -62,35 +53,23 @@ export class ColorService {
 	}
 
 	async provideColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
-		return (await this.requestColorPresentations(languageId, data, color, signal)) ?? Object.freeze([]);
+		return await this.requestColorPresentations(languageId, data, color, signal) ?? Object.freeze([]);
 	}
 
-	public async provideColorPresentationsFromProviders(
-		languageId: string,
-		range: Range,
-		color: IColor,
-		enablement: DefaultColorDecoratorsEnablement,
-		signal: AbortSignal,
-	): Promise<readonly IColorPresentation[]> {
+	public async provideColorPresentationsFromProviders(languageId: string, range: Range, color: IColor, enablement: DefaultColorDecoratorsEnablement, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
 		const request = this.createRequest(languageId, signal);
 		const result: IColorPresentation[] = [];
 		let validProviderFound = false;
 		for (const provider of this.providers.ordered(this.model)) {
 			const values = await this.requestColorPresentations(languageId, { provider, information: { range, color } }, color, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) {
-				return Object.freeze([]);
-			}
-			if (!values) {
-				continue;
-			}
+			if (!isLanguageFeatureRequestCurrent(request)) { return Object.freeze([]); }
+			if (!values) { continue; }
 			validProviderFound = true;
 			result.push(...values);
 		}
-		if (enablement === 'always' || (enablement === 'auto' && !validProviderFound)) {
+		if (enablement === 'always' || enablement === 'auto' && !validProviderFound) {
 			const values = await this.provideColorPresentations(languageId, { provider: this.defaultProvider, information: { range, color } }, color, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) {
-				return Object.freeze([]);
-			}
+			if (!isLanguageFeatureRequestCurrent(request)) { return Object.freeze([]); }
 			result.push(...values);
 		}
 		return Object.freeze(result);
@@ -141,15 +120,10 @@ export class ColorService {
 			this.model.offsetAt(range.getStartPosition());
 			this.model.offsetAt(range.getEndPosition());
 			assertColor(value.color);
-			result.push(
-				Object.freeze({
-					information: Object.freeze({
-						range,
-						color: normalizedColor(value.color.red, value.color.green, value.color.blue, value.color.alpha),
-					}),
-					provider,
-				}),
-			);
+			result.push(Object.freeze({
+				information: Object.freeze({ range, color: normalizedColor(value.color.red, value.color.green, value.color.blue, value.color.alpha) }),
+				provider,
+			}));
 		}
 		return result;
 	}
@@ -160,9 +134,7 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | Promise<readonly IColorInformation[]> {
 		signal.throwIfAborted();
 		const text = request.snapshot.getText();
-		let lineNumber = 1,
-			lineStart = 0,
-			nextLineBreak: number | undefined;
+		let lineNumber = 1, lineStart = 0, nextLineBreak: number | undefined;
 		// Regex matches arrive in order. Advance snapshot coordinates only as far
 		// as a match instead of allocating a second whole-document line index.
 		const target = {
@@ -179,7 +151,9 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 				return { lineNumber, column: offset - lineStart + 1 };
 			},
 		};
-		return text.length < 65_536 ? Object.freeze(computeDefaultDocumentColors(target)) : computeDefaultDocumentColorsAsync(target, signal).then(colors => Object.freeze(colors));
+		return text.length < 65_536
+			? Object.freeze(computeDefaultDocumentColors(target))
+			: computeDefaultDocumentColorsAsync(target, signal).then(colors => Object.freeze(colors));
 	}
 
 	provideColorPresentations(request: LanguageColorPresentationRequest): readonly IColorPresentation[] {

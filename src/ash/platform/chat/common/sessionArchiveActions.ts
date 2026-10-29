@@ -25,8 +25,7 @@ export interface IChatSessionArchiveActionPresentation {
 
 export function getChatSessionArchiveActionWording(configurationService: IConfigurationService): ChatSessionArchiveActionWording {
 	return configurationService.getValue(ChatSessionArchiveActionWordingSettingId) === ChatSessionArchiveActionWording.MarkAsDone
-		? ChatSessionArchiveActionWording.MarkAsDone
-		: ChatSessionArchiveActionWording.Archive;
+		? ChatSessionArchiveActionWording.MarkAsDone : ChatSessionArchiveActionWording.Archive;
 }
 
 /** Presentation follows the UI preference; Session lifecycle remains backend-owned. */
@@ -53,5 +52,6 @@ export function getChatSessionArchiveActionPresentation(wording: ChatSessionArch
 }
 
 export function getChatSessionArchivedSectionLabel(wording: ChatSessionArchiveActionWording): string {
-	return wording === ChatSessionArchiveActionWording.MarkAsDone ? localize('chatSession.done', 'Done') : localize('chatSession.archived', 'Archived');
+	return wording === ChatSessionArchiveActionWording.MarkAsDone
+		? localize('chatSession.done', 'Done') : localize('chatSession.archived', 'Archived');
 }

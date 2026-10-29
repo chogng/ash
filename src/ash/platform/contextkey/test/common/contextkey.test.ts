@@ -17,23 +17,25 @@ test('serialized shortcut conditions retain values, operators and grouping after
 		const original = ContextKeyExpr.deserialize(text)!;
 		const restored = ContextKeyExpr.deserialize(original.serialize())!;
 		assert.deepEqual(restored.keys(), original.keys());
-		for (const mode of ['edit', 'preview'])
-			for (const readOnly of [true, false]) {
-				context.setContext('mode', mode);
-				context.setContext('editorFocus', true);
-				context.setContext('readOnly', readOnly);
-				context.setContext('count', 3);
-				context.setContext('modes', ['edit']);
-				context.setContext('resourceExtname', '.ts');
-				context.setContext('path', "C:\\Users\\O'Brien");
-				assert.equal(restored.evaluate(context), original.evaluate(context), text);
-			}
+		for (const mode of ['edit', 'preview']) for (const readOnly of [true, false]) {
+			context.setContext('mode', mode);
+			context.setContext('editorFocus', true);
+			context.setContext('readOnly', readOnly);
+			context.setContext('count', 3);
+			context.setContext('modes', ['edit']);
+			context.setContext('resourceExtname', '.ts');
+			context.setContext('path', "C:\\Users\\O'Brien");
+			assert.equal(restored.evaluate(context), original.evaluate(context), text);
+		}
 	}
 });
 
 test('typed context keys reset to their declared default', () => {
 	using service = new ContextKeyService();
-	const ready = new RawContextKey<boolean>('test.ready.typed', false).bindTo(service);
+	const ready = new RawContextKey<boolean>(
+		'test.ready.typed',
+		false,
+	).bindTo(service);
 
 	assert.equal(ready.get(), false);
 	ready.set(true);
@@ -61,7 +63,13 @@ test('scoped contexts inherit values and override the nearest DOM subtree', () =
 	assert.equal(childContext.getValue('test.focused'), true);
 	assert.equal(nestedContext.getValue('test.language'), 'local');
 	assert.equal(nestedContext.getValue('test.nested'), true);
-	assert.equal(root.contextMatchesRules(ContextKeyExpr.equals('test.language', 'local'), childElement), true);
+	assert.equal(
+		root.contextMatchesRules(
+			ContextKeyExpr.equals('test.language', 'local'),
+			childElement,
+		),
+		true,
+	);
 
 	scope.removeContext('test.language');
 	assert.equal(childContext.getValue('test.language'), 'global');
@@ -83,7 +91,11 @@ test('context key change buffering publishes one complete change set', () => {
 		});
 	});
 
-	assert.deepEqual(changes, [['resource', 'resourceLangId', 'resourceScheme']]);
+	assert.deepEqual(changes, [[
+		'resource',
+		'resourceLangId',
+		'resourceScheme',
+	]]);
 });
 
 suite('scoped context change isolation', () => {
@@ -144,23 +156,16 @@ suite('scoped context change isolation', () => {
 		using firstListener = first.onDidChangeContext(event => changes.push(['first', ...event.keys].sort()));
 		using secondListener = second.onDidChangeContext(event => changes.push(['second', ...event.keys].sort()));
 		const failure = new Error('fixture failure');
-		assert.throws(
-			() =>
-				root.bufferChangeEvents(() => {
-					first.setContext('firstKey', true);
-					second.bufferChangeEvents(() => {
-						second.setContext('secondKey', true);
-						first.setContext('extraKey', true);
-					});
-					assert.deepEqual(changes, []);
-					throw failure;
-				}),
-			error => error === failure,
-		);
-		assert.deepEqual(changes, [
-			['extraKey', 'first', 'firstKey'],
-			['second', 'secondKey'],
-		]);
+		assert.throws(() => root.bufferChangeEvents(() => {
+			first.setContext('firstKey', true);
+			second.bufferChangeEvents(() => {
+				second.setContext('secondKey', true);
+				first.setContext('extraKey', true);
+			});
+			assert.deepEqual(changes, []);
+			throw failure;
+		}), error => error === failure);
+		assert.deepEqual(changes, [['extraKey', 'first', 'firstKey'], ['second', 'secondKey']]);
 	});
 });
 

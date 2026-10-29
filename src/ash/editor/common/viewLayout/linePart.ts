@@ -16,7 +16,7 @@ export class LinePart {
 		public readonly type: string,
 		public readonly metadata: number,
 		public readonly containsRTL: boolean,
-	) {}
+	) { }
 
 	public isWhitespace(): boolean {
 		return (this.metadata & LinePartMetadata.IS_WHITESPACE_MASK) !== 0;

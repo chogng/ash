@@ -29,13 +29,8 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 	public listen<T>(_context: TContext, event: string, value?: unknown): Event<T> {
 		this.assertNotDisposed();
 		if (event === 'watch') {
-			if (
-				!isRecord(value) ||
-				!isRecord(value.options) ||
-				typeof value.options.recursive !== 'boolean' ||
-				!Array.isArray(value.options.excludes) ||
-				value.options.excludes.some(pattern => typeof pattern !== 'string')
-			) {
+			if (!isRecord(value) || !isRecord(value.options) || typeof value.options.recursive !== 'boolean'
+				|| !Array.isArray(value.options.excludes) || value.options.excludes.some(pattern => typeof pattern !== 'string')) {
 				throw new TypeError('Invalid file watch request');
 			}
 			const resource = this.resource(value.resource);
@@ -45,24 +40,14 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 				const lifetime = new DisposableStore();
 				this.watches.set(lifetime, lifetime);
 				lifetime.add(toDisposable(() => this.watches.deleteAndDispose(lifetime)));
-				try {
-					lifetime.add(this.provider.watch(resource, options));
-				} catch (error) {
-					lifetime.dispose();
-					throw error;
-				}
-				if (Array.isArray(disposables)) {
-					disposables.push(lifetime);
-				} else {
-					disposables?.add(lifetime);
-				}
+				try { lifetime.add(this.provider.watch(resource, options)); }
+				catch (error) { lifetime.dispose(); throw error; }
+				if (Array.isArray(disposables)) { disposables.push(lifetime); } else { disposables?.add(lifetime); }
 				return lifetime;
 			};
 		}
 		if (event === 'readFileStream') {
-			if (!isRecord(value) || !hasFileReadStreamCapability(this.provider)) {
-				throw new TypeError('Invalid file stream request');
-			}
+			if (!isRecord(value) || !hasFileReadStreamCapability(this.provider)) { throw new TypeError('Invalid file stream request'); }
 			const provider = this.provider;
 			const resource = this.resource(value.resource);
 			const options = this.readOptions(value.options);
@@ -73,49 +58,24 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 				lifetime.add(toDisposable(() => this.streams.deleteAndDispose(lifetime)));
 				const cancellation = new CancellationTokenSource();
 				lifetime.add(toDisposable(() => cancellation.dispose(true)));
-				const deliver = (payload: unknown): void => {
-					if (!lifetime.isDisposed) {
-						listener.call(thisArgs, payload as T);
-					}
-				};
+				const deliver = (payload: unknown): void => { if (!lifetime.isDisposed) { listener.call(thisArgs, payload as T); } };
 				// The IPC owner records the subscription before a buffered terminal event can arrive.
 				queueMicrotask(() => {
-					if (lifetime.isDisposed) {
-						return;
-					}
+					if (lifetime.isDisposed) { return; }
 					try {
 						const stream = provider.readFileStream(resource, options, cancellation.token);
 						lifetime.add(toDisposable(() => (stream as Partial<ReadableStream<Uint8Array>>).destroy?.()));
-						listenStream(
-							stream,
-							{
-								onData: bytes => deliver({ bytes: Buffer.from(bytes).toString('base64') }),
-								onError: error => {
-									deliver({ error: { name: error.name, message: error.message } });
-									lifetime.dispose();
-								},
-								onEnd: () => {
-									deliver('end');
-									lifetime.dispose();
-								},
-							},
-							cancellation.token,
-						);
+						listenStream(stream, {
+							onData: bytes => deliver({ bytes: Buffer.from(bytes).toString('base64') }),
+							onError: error => { deliver({ error: { name: error.name, message: error.message } }); lifetime.dispose(); },
+							onEnd: () => { deliver('end'); lifetime.dispose(); },
+						}, cancellation.token);
 					} catch (error) {
-						deliver({
-							error: {
-								name: error instanceof Error ? error.name : 'Error',
-								message: error instanceof Error ? error.message : String(error),
-							},
-						});
+						deliver({ error: { name: error instanceof Error ? error.name : 'Error', message: error instanceof Error ? error.message : String(error) } });
 						lifetime.dispose();
 					}
 				});
-				if (Array.isArray(disposables)) {
-					disposables.push(lifetime);
-				} else {
-					disposables?.add(lifetime);
-				}
+				if (Array.isArray(disposables)) { disposables.push(lifetime); } else { disposables?.add(lifetime); }
 				return lifetime;
 			};
 		}
@@ -130,52 +90,28 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 		if (token.isCancellationRequested) {
 			throw canceled();
 		}
-		if (
-			!['stat', 'readdir', 'readFile', 'writeFile', 'createFile', 'mkdir', 'copy', 'rename', 'delete'].includes(command) ||
-			!isRecord(value) ||
-			typeof value.resource !== 'string' ||
-			value.resource.length > 8192
-		) {
+		if (!['stat', 'readdir', 'readFile', 'writeFile', 'createFile', 'mkdir', 'copy', 'rename', 'delete'].includes(command)
+			|| !isRecord(value) || typeof value.resource !== 'string' || value.resource.length > 8192) {
 			throw new TypeError('Invalid file operation or resource');
 		}
 		const resource = this.resource(value.resource);
 		let result: unknown;
 		switch (command) {
-			case 'stat':
-				result = { ...(await this.provider.stat(resource)), resource: resource.toString() };
-				break;
-			case 'readdir':
-				result = (await this.provider.readDirectory(resource)).map(entry => ({
-					...entry,
-					resource: entry.resource.toString(),
-				}));
-				break;
+			case 'stat': result = { ...await this.provider.stat(resource), resource: resource.toString() }; break;
+			case 'readdir': result = (await this.provider.readDirectory(resource)).map(entry => ({ ...entry, resource: entry.resource.toString() })); break;
 			case 'readFile': {
 				const content = await this.provider.readFile(resource);
-				result = {
-					resource: resource.toString(),
-					bytes: Buffer.from(content.bytes).toString('base64'),
-					revision: content.revision,
-				};
+				result = { resource: resource.toString(), bytes: Buffer.from(content.bytes).toString('base64'), revision: content.revision };
 				break;
 			}
 			case 'writeFile': {
-				if (
-					typeof value.bytes !== 'string' ||
-					value.bytes.length > Math.ceil((50 * 1024 * 1024) / 3) * 4 ||
-					value.bytes.length % 4 !== 0 ||
-					!/^[A-Za-z0-9+/]*={0,2}$/u.test(value.bytes) ||
-					!isRecord(value.options) ||
-					typeof value.options.create !== 'boolean' ||
-					typeof value.options.overwrite !== 'boolean' ||
-					(value.options.expectedRevision !== undefined && typeof value.options.expectedRevision !== 'string')
-				) {
+				if (typeof value.bytes !== 'string' || value.bytes.length > Math.ceil(50 * 1024 * 1024 / 3) * 4 || value.bytes.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value.bytes)
+					|| !isRecord(value.options) || typeof value.options.create !== 'boolean' || typeof value.options.overwrite !== 'boolean'
+					|| (value.options.expectedRevision !== undefined && typeof value.options.expectedRevision !== 'string')) {
 					throw new TypeError('Invalid file write');
 				}
 				const bytes = decodeBase64(value.bytes).buffer;
-				if (bytes.byteLength > 50 * 1024 * 1024) {
-					throw new TypeError('File write is too large');
-				}
+				if (bytes.byteLength > 50 * 1024 * 1024) { throw new TypeError('File write is too large'); }
 				const written = await this.provider.writeFile(resource, bytes, value.options as unknown as IFileWriteOptions);
 				result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
 				break;
@@ -185,15 +121,9 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 				result = { ...stat, resource: resource.toString() };
 				break;
 			}
-			case 'mkdir':
-				result = { ...(await this.provider.createDirectory(resource)), resource: resource.toString() };
-				break;
-			case 'copy':
-				result = await this.provider.copy(resource, this.resource(value.target));
-				break;
-			case 'rename':
-				result = await this.provider.rename(resource, this.resource(value.target), this.existing(value.existing));
-				break;
+			case 'mkdir': result = { ...await this.provider.createDirectory(resource), resource: resource.toString() }; break;
+			case 'copy': result = await this.provider.copy(resource, this.resource(value.target)); break;
+			case 'rename': result = await this.provider.rename(resource, this.resource(value.target), this.existing(value.existing)); break;
 			case 'delete': {
 				if (!['error', 'ignore'].includes(value.missing as string) || !['fileOrEmptyDirectory', 'recursive'].includes(value.mode as string)) {
 					throw new TypeError('Invalid file delete');
@@ -206,33 +136,23 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 	}
 
 	private resource(value: unknown): URI {
-		if (typeof value !== 'string' || value.length > 8192) {
-			throw new TypeError('Invalid file resource');
-		}
+		if (typeof value !== 'string' || value.length > 8192) { throw new TypeError('Invalid file resource'); }
 		const resource = URI.parse(value);
-		if (resource.scheme !== 'file' || resource.query || resource.fragment) {
-			throw new TypeError('Expected a local file resource');
-		}
+		if (resource.scheme !== 'file' || resource.query || resource.fragment) { throw new TypeError('Expected a local file resource'); }
 		return resource;
 	}
 
 	private readOptions(value: unknown): IFileReadStreamOptions {
-		if (!isRecord(value) || (value.limits !== undefined && !isRecord(value.limits))) {
-			throw new TypeError('Invalid file read options');
-		}
+		if (!isRecord(value) || (value.limits !== undefined && !isRecord(value.limits))) { throw new TypeError('Invalid file read options'); }
 		const size = isRecord(value.limits) ? value.limits.size : undefined;
 		for (const count of [value.position, value.length, size]) {
-			if (count !== undefined && (!Number.isSafeInteger(count) || (count as number) < 0)) {
-				throw new TypeError('Invalid file read range or size');
-			}
+			if (count !== undefined && (!Number.isSafeInteger(count) || (count as number) < 0)) { throw new TypeError('Invalid file read range or size'); }
 		}
 		return value as IFileReadStreamOptions;
 	}
 
 	private existing(value: unknown): FileExistingTargetBehavior {
-		if (value !== 'error' && value !== 'overwrite' && value !== 'ignore') {
-			throw new TypeError('Invalid existing target behavior');
-		}
+		if (value !== 'error' && value !== 'overwrite' && value !== 'ignore') { throw new TypeError('Invalid existing target behavior'); }
 		return value;
 	}
 }

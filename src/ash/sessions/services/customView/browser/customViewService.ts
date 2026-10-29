@@ -14,8 +14,8 @@ export interface ICustomViewOpenRequest {
 export interface ICustomViewService {
 	readonly activeCustomView: IObservable<ICustomViewDescriptor | undefined>;
 	readonly activeCustomViewOpen: IObservable<ICustomViewOpenRequest | undefined>;
-	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean }): IDisposable;
-	showCustomView(id: string, options?: { readonly source: 'history' }): void;
+	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean; }): IDisposable;
+	showCustomView(id: string, options?: { readonly source: 'history'; }): void;
 	hideCustomView(tx?: ITransaction): void;
 }
 
@@ -30,15 +30,12 @@ export class CustomViewService extends Disposable implements ICustomViewService 
 	readonly activeCustomView = derived(reader => this.opening.read(reader)?.descriptor);
 	private desired: string | undefined;
 
-	constructor(
-		@ILogService private readonly log: ILogService,
-		@IStorageService private readonly storage: IStorageService,
-	) {
+	constructor(@ILogService private readonly log: ILogService, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this.desired = storage.get(activeViewKey, StorageScope.WORKSPACE);
 	}
 
-	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean }): IDisposable {
+	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean; }): IDisposable {
 		if (!descriptor.id.trim() || this.descriptors.has(descriptor.id)) throw new Error(`Invalid or duplicate custom view: ${descriptor.id}`);
 		this.descriptors.set(descriptor.id, descriptor);
 		if (this.desired === descriptor.id) {
@@ -52,7 +49,7 @@ export class CustomViewService extends Disposable implements ICustomViewService 
 		});
 	}
 
-	showCustomView(id: string, options?: { readonly source: 'history' }): void {
+	showCustomView(id: string, options?: { readonly source: 'history'; }): void {
 		const descriptor = this.descriptors.get(id);
 		if (!descriptor) {
 			this.log.warn(`Custom view is not registered: ${id}`);

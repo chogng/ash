@@ -87,7 +87,11 @@ export class IconLabel extends Disposable {
 		this.setLabel(options.label, options.description, options);
 	}
 
-	setLabel(label: string | readonly string[] | undefined, description?: string, options?: IconLabelValueOptions): void {
+	setLabel(
+		label: string | readonly string[] | undefined,
+		description?: string,
+		options?: IconLabelValueOptions,
+	): void {
 		this.setIcon(
 			options?.hideIcon ? undefined : options?.icon,
 			options?.hideIcon ? undefined : options?.renderIcon,
@@ -114,7 +118,13 @@ export class IconLabel extends Disposable {
 	}
 
 	/** Replaces the current icon while keeping the label nodes stable. */
-	setIcon(icon: Icon | undefined, renderIcon: ((container: HTMLSpanElement) => void) | undefined = undefined, reserveIconSpace = false, hideIcon = false, iconPath?: URI): void {
+	setIcon(
+		icon: Icon | undefined,
+		renderIcon: ((container: HTMLSpanElement) => void) | undefined = undefined,
+		reserveIconSpace = false,
+		hideIcon = false,
+		iconPath?: URI,
+	): void {
 		if (Number(!!icon) + Number(!!renderIcon) + Number(!!iconPath) > 1) throw new TypeError('IconLabel accepts one icon source');
 		this.iconElement.replaceChildren();
 		this.iconElement.className = 'ash-icon-label-icon';
@@ -136,9 +146,15 @@ export class IconLabel extends Disposable {
 		this.setLabel('');
 	}
 
-	private renderName(label: string | readonly string[], supportIcons: boolean, matches: readonly IMatch[] | undefined, separator: string, domId: string | undefined): void {
+	private renderName(
+		label: string | readonly string[],
+		supportIcons: boolean,
+		matches: readonly IMatch[] | undefined,
+		separator: string,
+		domId: string | undefined,
+	): void {
 		this.labelElement.replaceChildren();
-		const labels = typeof label === 'string' ? [label] : (label ?? ['']);
+		const labels = typeof label === 'string' ? [label] : label ?? [''];
 		this.labelElement.classList.toggle('multiple', typeof label !== 'string');
 		if (typeof label === 'string' && domId) this.labelElement.id = domId;
 		else this.labelElement.removeAttribute('id');
@@ -172,9 +188,14 @@ export class IconLabel extends Disposable {
 		}
 	}
 
-	private renderDescription(description: string | undefined, matches: readonly IMatch[] | undefined, supportIcons: boolean, title: HoverContent): void {
+	private renderDescription(
+		description: string | undefined,
+		matches: readonly IMatch[] | undefined,
+		supportIcons: boolean,
+		title: HoverContent,
+	): void {
 		if (description !== undefined || this.descriptionElement) {
-			const element = (this.descriptionElement ??= this.createDescriptionElement());
+			const element = this.descriptionElement ??= this.createDescriptionElement();
 			element.replaceChildren();
 			element.hidden = !description;
 			if (supportIcons) renderLabelWithIcons(element, description ?? '', { matches });
@@ -187,7 +208,7 @@ export class IconLabel extends Disposable {
 
 	private renderSuffix(suffix: string | undefined): void {
 		if (suffix !== undefined || this.suffixElement) {
-			const element = (this.suffixElement ??= this.createSuffixElement());
+			const element = this.suffixElement ??= this.createSuffixElement();
 			element.textContent = suffix ?? '';
 			element.hidden = !suffix;
 		}
@@ -195,7 +216,7 @@ export class IconLabel extends Disposable {
 
 	private renderSuffixIcon(icon: Icon | undefined): void {
 		if (!icon && !this.suffixIconElement) return;
-		const element = (this.suffixIconElement ??= h(this.element.ownerDocument, 'span'));
+		const element = this.suffixIconElement ??= h(this.element.ownerDocument, 'span');
 		element.className = 'ash-icon-label-suffix-icon';
 		element.setAttribute('aria-hidden', 'true');
 		element.hidden = !icon;
@@ -224,12 +245,21 @@ export class IconLabel extends Disposable {
 
 	private updateClasses(options: IconLabelValueOptions | undefined): void {
 		for (const className of this.appliedClasses) this.element.classList.remove(className);
-		const classes = [...(options?.extraClasses ?? []), ...(options?.bold ? ['bold'] : []), ...(options?.italic ? ['italic'] : []), ...(options?.strikethrough ? ['strikethrough'] : [])];
+		const classes = [
+			...(options?.extraClasses ?? []),
+			...(options?.bold ? ['bold'] : []),
+			...(options?.italic ? ['italic'] : []),
+			...(options?.strikethrough ? ['strikethrough'] : []),
+		];
 		this.appliedClasses = classes;
 		this.element.classList.add(...classes);
 	}
 
-	private setHover(slot: MutableDisposable<IManagedHover>, target: HTMLElement, content: HoverContent): void {
+	private setHover(
+		slot: MutableDisposable<IManagedHover>,
+		target: HTMLElement,
+		content: HoverContent,
+	): void {
 		slot.clear();
 		target.removeAttribute('title');
 		if (content === undefined || content === '') return;
@@ -237,7 +267,12 @@ export class IconLabel extends Disposable {
 	}
 }
 
-function appendTextWithMatches(container: HTMLElement, text: string, start: number, matches: readonly IMatch[] | undefined): void {
+function appendTextWithMatches(
+	container: HTMLElement,
+	text: string,
+	start: number,
+	matches: readonly IMatch[] | undefined,
+): void {
 	if (!text) return;
 	if (!matches || matches.length === 0) {
 		container.textContent = text;
@@ -263,7 +298,7 @@ function normalizeLabel(
 	matches: readonly IMatch[] | undefined,
 	escapeNewLines: boolean,
 	separator = '/',
-): { readonly value: string | readonly string[] | undefined; readonly matches: readonly IMatch[] | undefined } {
+): { readonly value: string | readonly string[] | undefined; readonly matches: readonly IMatch[] | undefined; } {
 	if (!escapeNewLines || value === undefined) return { value, matches };
 	if (typeof value !== 'string') {
 		let sourceOffset = 0;
@@ -276,11 +311,7 @@ function normalizeLabel(
 			for (const match of matches ?? []) {
 				const start = Math.max(sourceOffset, match.start);
 				const end = Math.min(sourceOffset + segment.length, match.end);
-				if (start < end)
-					normalizedMatches.push({
-						start: outputOffset + result.offset(start - sourceOffset),
-						end: outputOffset + result.offset(end - sourceOffset),
-					});
+				if (start < end) normalizedMatches.push({ start: outputOffset + result.offset(start - sourceOffset), end: outputOffset + result.offset(end - sourceOffset) });
 			}
 			sourceOffset += segment.length + (index < value.length - 1 ? separator.length : 0);
 			outputOffset += result.value.length + (index < value.length - 1 ? separator.length : 0);
@@ -288,16 +319,10 @@ function normalizeLabel(
 		return { value: normalized, matches: normalizedMatches };
 	}
 	const result = escapeLabelNewLines(value);
-	return {
-		value: result.value,
-		matches: matches?.map(match => ({ start: result.offset(match.start), end: result.offset(match.end) })),
-	};
+	return { value: result.value, matches: matches?.map(match => ({ start: result.offset(match.start), end: result.offset(match.end) })) };
 }
 
-function escapeLabelNewLines(value: string): {
-	readonly value: string;
-	readonly offset: (sourceOffset: number) => number;
-} {
+function escapeLabelNewLines(value: string): { readonly value: string; readonly offset: (sourceOffset: number) => number; } {
 	const offsets = new Array<number>(value.length + 1);
 	let result = '';
 	let sourceOffset = 0;
@@ -319,8 +344,5 @@ function escapeLabelNewLines(value: string): {
 		sourceOffset += 1;
 	}
 	offsets[value.length] ??= result.length;
-	return {
-		value: result,
-		offset: sourceOffset => offsets[Math.max(0, Math.min(value.length, sourceOffset))] ?? result.length,
-	};
+	return { value: result, offset: sourceOffset => offsets[Math.max(0, Math.min(value.length, sourceOffset))] ?? result.length };
 }

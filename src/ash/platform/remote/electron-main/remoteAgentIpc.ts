@@ -2,14 +2,7 @@ import type { AppServerConnectionRelay } from '../../agentHost/electron-main/app
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 import { getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
-import {
-	REMOTE_AGENT_CONNECTION_READ_CHANNEL,
-	REMOTE_AGENT_RECONNECT_CHANNEL,
-	REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL,
-	type RemoteAgentConnection,
-	type RemoteAgentReconnectResult,
-	type RemoteRuntimeRollbackResult,
-} from '../common/remoteAgentApi.js';
+import { REMOTE_AGENT_CONNECTION_READ_CHANNEL, REMOTE_AGENT_RECONNECT_CHANNEL, REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL, type RemoteAgentConnection, type RemoteAgentReconnectResult, type RemoteRuntimeRollbackResult } from '../common/remoteAgentApi.js';
 import { createSshRemoteAuthority } from '../common/remote.js';
 
 export interface IRemoteAgentRecoveryMainService {
@@ -23,19 +16,10 @@ export function remoteAgentConnection(supervisor: AppServerConnectionRelay, work
 	if (!remoteAuthority) return Object.freeze({ kind: 'local', generation: supervisor.generation });
 	if (!remoteAuthority.startsWith('ssh+')) return Object.freeze({ kind: 'remote', generation: supervisor.generation, authority: remoteAuthority });
 	const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
-	return Object.freeze({
-		kind: 'ssh',
-		generation: supervisor.generation,
-		authority: authority.authority,
-		host: authority.host,
-	});
+	return Object.freeze({ kind: 'ssh', generation: supervisor.generation, authority: authority.authority, host: authority.host });
 }
 
-export function remoteAgentIpcRoutes(
-	supervisor: AppServerConnectionRelay,
-	getWorkspace: () => IAnyWorkspaceIdentifier,
-	recovery?: IRemoteAgentRecoveryMainService,
-): readonly IpcRoute<unknown, unknown>[] {
+export function remoteAgentIpcRoutes(supervisor: AppServerConnectionRelay, getWorkspace: () => IAnyWorkspaceIdentifier, recovery?: IRemoteAgentRecoveryMainService): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: REMOTE_AGENT_CONNECTION_READ_CHANNEL,

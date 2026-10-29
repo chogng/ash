@@ -78,35 +78,17 @@ test('new untitled identities do not reuse drafts restored through resource inpu
 	using service = services.createInstance(UntitledTextEditorService);
 	const resource = URI.parse('untitled:/Untitled-1');
 	using restored = workingCopies.register({
-		resource,
-		backupKind: 'text',
-		isDirty: true,
-		hasExternalChange: false,
-		onDidChangeDirty: Event.None,
-		onDidChangeExternalChange: Event.None,
-		onDidChangeContent: Event.None,
-		backup: () => 'recovered draft',
-		restoreBackup: () => {},
-		save: async () => {},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		resource, backupKind: 'text', isDirty: true, hasExternalChange: false,
+		onDidChangeDirty: Event.None, onDidChangeExternalChange: Event.None, onDidChangeContent: Event.None,
+		backup: () => 'recovered draft', restoreBackup: () => { },
+		save: async () => { }, saveAs: async () => { }, revert: async () => { },
+		dispose: () => { }, [Symbol.dispose]: () => { },
 	});
 	assert.equal(service.get(resource), undefined);
 	const created = service.create();
-	assert.deepEqual(
-		{
-			resource: created.resource.toString(),
-			text: created.initialValue,
-			recovered: workingCopies.get(resource)[0]!.backup(),
-		},
-		{
-			resource: 'untitled:/Untitled-2',
-			text: '',
-			recovered: 'recovered draft',
-		},
-	);
+	assert.deepEqual({ resource: created.resource.toString(), text: created.initialValue, recovered: workingCopies.get(resource)[0]!.backup() }, {
+		resource: 'untitled:/Untitled-2', text: '', recovered: 'recovered draft',
+	});
 });
 
 test('untitled service publishes display-label changes without changing resource identity', () => {
@@ -140,22 +122,14 @@ test('restored untitled resources are reused and reserve their document numbers'
 	services.registerInstance(ITextModelResourceService, models);
 	using service = services.createInstance(UntitledTextEditorService);
 	const resource = URI.parse('untitled:/Untitled-7');
-	const restored = service.create({
-		untitledResource: resource,
-		initialValue: 'recovered draft',
-		languageId: 'typescript',
-		label: 'Recovered draft',
-	});
+	const restored = service.create({ untitledResource: resource, initialValue: 'recovered draft', languageId: 'typescript', label: 'Recovered draft' });
 
 	assert.equal(service.create({ untitledResource: resource, initialValue: 'stale' }), restored);
-	assert.deepEqual(
-		{ restored: restored.initialValue, label: restored.name, next: service.create().resource.toString() },
-		{
-			restored: 'recovered draft',
-			label: 'Recovered draft',
-			next: 'untitled:/Untitled-8',
-		},
-	);
+	assert.deepEqual({ restored: restored.initialValue, label: restored.name, next: service.create().resource.toString() }, {
+		restored: 'recovered draft',
+		label: 'Recovered draft',
+		next: 'untitled:/Untitled-8',
+	});
 	service.reset();
 	assert.equal(service.get(resource), undefined);
 	assert.equal(service.create().resource.toString(), 'untitled:/Untitled-1');
@@ -179,12 +153,12 @@ test('closing the last working copy releases its untitled identity and shared te
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: Event.None,
 		backup: () => '',
-		restoreBackup: () => {},
-		save: async () => {},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		restoreBackup: () => { },
+		save: async () => { },
+		saveAs: async () => { },
+		revert: async () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 	using first = workingCopies.register(copy);
 	using second = workingCopies.register({ ...copy });
@@ -203,12 +177,8 @@ test('New Untitled Text Editor opens a compatible text editor input', async () =
 	using models = createModels();
 	services.registerInstance(ITextModelResourceService, models);
 	using untitled = services.createInstance(UntitledTextEditorService);
-	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
-	const editorPart = {
-		openEditor: async (input: (typeof opened)[number]) => {
-			opened.push(input);
-		},
-	} as unknown as IEditorPartContract;
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; }> = [];
+	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	services.registerInstance(IUntitledTextEditorService, untitled);
 	services.registerInstance(IEditorPart, editorPart);
 	using commands = new CommandService(services);
@@ -230,27 +200,16 @@ test('New File from Template opens the selected extension template as an untitle
 	services.registerInstance(ITextModelResourceService, models);
 	using untitled = services.createInstance(UntitledTextEditorService);
 	using templates = new ExtensionFileTemplateRegistry();
-	templates.replace([
-		{
-			id: 'builtin.typescript.class',
-			extensionId: 'ash.typescript',
-			label: 'TypeScript Class',
-			languageId: 'typescript',
-			body: 'export class Example {}\n',
-			description: 'Create a class',
-		},
-	]);
-	const opened: Array<{
-		readonly resource: URI;
-		readonly label?: string;
-		readonly initialText?: string;
-		readonly languageId?: string;
-	}> = [];
-	const editorPart = {
-		openEditor: async (input: (typeof opened)[number]) => {
-			opened.push(input);
-		},
-	} as unknown as IEditorPartContract;
+	templates.replace([{
+		id: 'builtin.typescript.class',
+		extensionId: 'ash.typescript',
+		label: 'TypeScript Class',
+		languageId: 'typescript',
+		body: 'export class Example {}\n',
+		description: 'Create a class',
+	}]);
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string; }> = [];
+	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	const quickInput = new TestQuickInputService();
 	services.registerInstance(IUntitledTextEditorService, untitled);
 	services.registerInstance(IEditorPart, editorPart);
@@ -293,14 +252,9 @@ test('untitled inputs resolve the shared editable text and publish dirty changes
 	assert.equal(draft.isDirty(), true);
 	assert.equal(draft.createSnapshot()?.read(), 'draft');
 	await reference.revert(new AbortController().signal);
-	assert.deepEqual(
-		{ text: reference.model.getText(), dirty: draft.isDirty(), dirtyChanges },
-		{
-			text: '',
-			dirty: false,
-			dirtyChanges: [false],
-		},
-	);
+	assert.deepEqual({ text: reference.model.getText(), dirty: draft.isDirty(), dirtyChanges }, {
+		text: '', dirty: false, dirtyChanges: [false],
+	});
 });
 
 test('the backup handler restores an editable input and keeps its recovered number reserved', async () => {
@@ -312,36 +266,16 @@ test('the backup handler restores an editable input and keeps its recovered numb
 	using service = services.createInstance(UntitledTextEditorService);
 	services.registerInstance(IUntitledTextEditorService, service);
 	const handler = services.createInstance(UntitledTextEditorWorkingCopyEditorHandler);
-	const backup = {
-		resource: URI.parse('untitled:/Untitled-7'),
-		kind: 'text' as const,
-		content: 'recovered draft',
-		languageId: 'typescript',
-		label: 'Recovered',
-		updatedAt: 0,
-	};
+	const backup = { resource: URI.parse('untitled:/Untitled-7'), kind: 'text' as const, content: 'recovered draft', languageId: 'typescript', label: 'Recovered', updatedAt: 0 };
 	const input = handler.createEditor(backup);
 	const model = await input.resolve();
 	assert.equal(handler.handles({ ...backup, kind: 'structuredDocument' }), false);
 	assert.equal(handler.handles({ ...backup, resource: URI.file('/workspace/file.ts') }), false);
 	assert.throws(() => handler.createEditor({ ...backup, kind: 'structuredDocument' }), TypeError);
-	assert.equal(await handler.createEditor(backup).resolve(), model);
-	assert.deepEqual(
-		{
-			text: model.textEditorModel?.getValue(),
-			label: input.label,
-			language: input.languageId,
-			dirty: model.isDirty(),
-			next: service.create().resource.toString(),
-		},
-		{
-			text: 'recovered draft',
-			label: 'Recovered',
-			language: 'typescript',
-			dirty: true,
-			next: 'untitled:/Untitled-8',
-		},
-	);
+	assert.equal((await handler.createEditor(backup).resolve()), model);
+	assert.deepEqual({ text: model.textEditorModel?.getValue(), label: input.label, language: input.languageId, dirty: model.isDirty(), next: service.create().resource.toString() }, {
+		text: 'recovered draft', label: 'Recovered', language: 'typescript', dirty: true, next: 'untitled:/Untitled-8',
+	});
 });
 
 test('disposing a draft releases its shared text reference and removes the service identity', async () => {
@@ -357,39 +291,22 @@ test('disposing a draft releases its shared text reference and removes the servi
 	using listener = service.onWillDispose(model => released.push(model.resource.toString()));
 
 	draft.dispose();
-	assert.deepEqual(
-		{
-			released,
-			registered: service.get(draft.resource),
-			resolved: draft.isResolved(),
-			textDisposed: text.isDisposed(),
-		},
-		{
-			released: ['untitled:/Untitled-1'],
-			registered: undefined,
-			resolved: false,
-			textDisposed: true,
-		},
-	);
+	assert.deepEqual({ released, registered: service.get(draft.resource), resolved: draft.isResolved(), textDisposed: text.isDisposed() }, {
+		released: ['untitled:/Untitled-1'], registered: undefined, resolved: false, textDisposed: true,
+	});
 });
 
 test('reset cancels pending draft resolution without retaining a text model', async () => {
 	let finishRead: (() => void) | undefined;
-	const reading = new Promise<void>(resolve => {
-		finishRead = resolve;
-	});
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: Event.None,
-			resolve: async request => {
-				await reading;
-				return { resource: request.resource, text: request.bootstrapText ?? '', revision: undefined };
-			},
-			save: async () => ({ revision: undefined }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	const reading = new Promise<void>(resolve => { finishRead = resolve; });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async request => {
+			await reading;
+			return { resource: request.resource, text: request.bootstrapText ?? '', revision: undefined };
+		},
+		save: async () => ({ revision: undefined }),
+	} satisfies ITextResourceStore, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
@@ -401,34 +318,17 @@ test('reset cancels pending draft resolution without retaining a text model', as
 	service.reset();
 	finishRead!();
 	await cancelled;
-	assert.deepEqual(
-		{
-			registered: service.get(draft.resource),
-			resolved: draft.isResolved(),
-			text: models.getModel(draft.resource),
-		},
-		{
-			registered: undefined,
-			resolved: false,
-			text: null,
-		},
-	);
+	assert.deepEqual({ registered: service.get(draft.resource), resolved: draft.isResolved(), text: models.getModel(draft.resource) }, {
+		registered: undefined, resolved: false, text: null,
+	});
 });
 
 function createModels(): BrowserTextModelService {
-	return uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: Event.None,
-			resolve: async request => ({
-				resource: request.resource,
-				text: request.bootstrapText ?? '',
-				revision: undefined,
-			}),
-			save: async () => ({ revision: undefined }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	return uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
+		save: async () => ({ revision: undefined }),
+	} satisfies ITextResourceStore, {});
 }
 
 class TestQuickInputService implements IQuickInputServiceContract {
@@ -444,9 +344,7 @@ class TestQuickInputService implements IQuickInputServiceContract {
 	cancel = quickInputServiceTestControls.cancel;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	async input(): Promise<string | undefined> {
-		return undefined;
-	}
+	async input(): Promise<string | undefined> { return undefined; }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>();
@@ -458,12 +356,9 @@ class TestQuickInputService implements IQuickInputServiceContract {
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
-	focus(): void {}
-	toggle(): void {}
-	accept(inBackground = false): void {
-		this.selectedItems = this.activeItems;
-		this.acceptEmitter.fire({ inBackground });
-	}
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
 
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
@@ -487,13 +382,10 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 
 	acceptFirst(): void {
 		const item = this.items[0];
-		if (item) {
-			this.selectedItems = [item];
-			this.acceptEmitter.fire({ inBackground: false });
-		}
+		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
 	}
 
-	show(): void {}
+	show(): void { }
 
 	hide(): void {
 		this.hideEmitter.fire();

@@ -10,7 +10,7 @@ import type { DocumentCollaborationConnection } from '../../documentCollaboratio
 export interface DocumentEditorWidget extends IDisposable {
 	readonly isDisposed: boolean;
 	create(parent: HTMLElement): void;
-	setModel(model: DocumentTextModel, input: { readonly resource: URI; readonly readOnly?: boolean }): void;
+	setModel(model: DocumentTextModel, input: { readonly resource: URI; readonly readOnly?: boolean; }): void;
 	setReadOnly(readOnly: boolean): void;
 	clearInput(): void;
 	layout(dimension: IDimension): void;
@@ -23,10 +23,7 @@ export interface DocumentEditorWidget extends IDisposable {
 	getOutline(): DocumentOutline;
 	clearCollaboration(): void;
 	setCollaborationConnection(connection: DocumentCollaborationConnection): {
-		readonly onDidChangeState: Event<{
-			readonly state: 'connected' | 'resyncRequired' | 'error';
-			readonly message?: string;
-		}>;
+		readonly onDidChangeState: Event<{ readonly state: 'connected' | 'resyncRequired' | 'error'; readonly message?: string; }>;
 		readonly onDidConfirmDocument: Event<DocumentNode>;
 		invalidate(message: string): void;
 	};
@@ -36,14 +33,8 @@ export interface DocumentEditorWidget extends IDisposable {
 export interface DocumentEditorConfiguration {
 	/** The package describes its own controls; the host adds only Workbench actions. */
 	readonly accessibilityHelp?: () => readonly string[];
-	readonly artifactFormats?: readonly {
-		readonly id: string;
-		readonly label: string;
-		readonly extension: string;
-		readonly mimeType: string;
-		readonly canImport: boolean;
-	}[];
-	importBinary?(bytes: Uint8Array, format: string, ownerDocument: Document, signal: AbortSignal): Promise<{ readonly document: DocumentNode; readonly documentType: string }>;
+	readonly artifactFormats?: readonly { readonly id: string; readonly label: string; readonly extension: string; readonly mimeType: string; readonly canImport: boolean; }[];
+	importBinary?(bytes: Uint8Array, format: string, ownerDocument: Document, signal: AbortSignal): Promise<{ readonly document: DocumentNode; readonly documentType: string; }>;
 	readonly codec: DocumentCodec;
 	readonly widget: Constructor<DocumentEditorWidget>;
 	readonly createEmptyDocument?: () => DocumentNode;

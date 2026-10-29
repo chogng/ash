@@ -16,12 +16,10 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		return value;
 	},
 	schema: {
-		type: ['string', 'null'],
-		default: null,
-		get description() {
-			return localize('format.default.description', 'The extension identifier used to format this language.');
-		},
+		type: ['string', 'null'], default: null,
+		get description() { return localize('format.default.description', 'The extension identifier used to format this language.'); },
 	},
 });
 
-registerWorkbenchContribution('workbench.contrib.defaultFormatter', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DefaultFormatter));
+registerWorkbenchContribution('workbench.contrib.defaultFormatter', WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(DefaultFormatter));

@@ -41,9 +41,7 @@ interface ConversationGroup {
 }
 
 function focusConversation(root: HTMLElement, id: string, preventScroll = false): void {
-	if (!root.isConnected || root.closest('[hidden]')) {
-		return;
-	}
+	if (!root.isConnected || root.closest('[hidden]')) { return; }
 	const item = [...root.querySelectorAll<HTMLButtonElement>('.ash-chatgpt-conversation')].find(item => item.dataset.conversation === id);
 	const pane = item?.closest('.ash-view-pane.collapsed');
 	const target = pane?.querySelector<HTMLButtonElement>('.ash-pane-view-header-button') ?? item;
@@ -52,20 +50,10 @@ function focusConversation(root: HTMLElement, id: string, preventScroll = false)
 
 /** The sidebar's retained composite; registered ViewPanes own all group chrome and expansion. */
 export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
-	private readonly registrations = new Map<
-		string,
-		{
-			readonly title: string;
-			readonly order: number;
-			readonly visible: IContextKey<boolean>;
-			readonly registration: IDisposable;
-		}
-	>();
-	private scheduleLoad: () => void = () => {};
+	private readonly registrations = new Map<string, { readonly title: string; readonly order: number; readonly visible: IContextKey<boolean>; readonly registration: IDisposable; }>();
+	private scheduleLoad: () => void = () => { };
 
-	constructor(
-		parent: HTMLElement,
-		options: PaneCompositeOptions,
+	constructor(parent: HTMLElement, options: PaneCompositeOptions,
 		@IChatGPTService chat: IChatGPTService,
 		@IEditorService editors: IEditorService,
 		@ICommandService commands: ICommandService,
@@ -76,33 +64,16 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
-		super(
-			parent,
-			{
-				...options,
-				paneHeaders: 'visible',
-				paneLayout: 'content',
-				stateScope: StorageScope.PROFILE,
-				mergeViewWithContainerWhenSingleView: false,
-			},
-			storage,
-			theme,
-			menus,
-			configuration,
-			instantiationService,
-			contextKeys,
-		);
+		super(parent, { ...options, paneHeaders: 'visible', paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration, instantiationService, contextKeys);
 		const root = this.element;
 		const document = root.ownerDocument;
 		root.classList.add('ash-chatgpt-navigation');
 		this.scopedContextKeyService.createKey('chatGPTFocused', true);
-		this._register(
-			addDisposableListener(root, 'focusin', event => {
-				if (!root.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
-					status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
-				}
-			}),
-		);
+		this._register(addDisposableListener(root, 'focusin', event => {
+			if (!root.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
+				status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
+			}
+		}));
 		const scrollable = this.scrollable!;
 		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
 		const list = scrollable.contentElement;
@@ -110,46 +81,29 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		list.setAttribute('role', 'navigation');
 		list.setAttribute('aria-label', localize('sessions.chatgpt.conversations', 'Conversations'));
 		const loading = this._register(new LoadingSkeleton(list, localize('sessions.loadingHistory', 'Loading history…')));
-		this._register(
-			addDisposableListener(list, 'click', event => {
-				const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
-				if (item?.dataset.conversation) {
-					const id = item.dataset.conversation;
-					void commands
-						.executeCommand('sessions.show.chatgpt')
-						.then(() => chat.select(id))
-						.then(() => editors.focusActiveEditor());
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(list, 'keydown', event => {
-				const active = getActiveElement(document) as HTMLButtonElement | null;
-				if (!active?.classList.contains('ash-chatgpt-conversation') || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-					return;
-				}
-				const items = [...list.querySelectorAll<HTMLButtonElement>('.ash-chatgpt-conversation')].filter(item => !item.closest('[hidden], .ash-view-pane.collapsed') && !item.disabled);
-				const index = items.indexOf(active);
-				if (index < 0) {
-					return;
-				}
-				event.preventDefault();
-				const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-				items[next]?.focus();
-			}),
-		);
+		this._register(addDisposableListener(list, 'click', event => {
+			const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
+			if (item?.dataset.conversation) {
+				const id = item.dataset.conversation;
+				void commands.executeCommand('sessions.show.chatgpt').then(() => chat.select(id)).then(() => editors.focusActiveEditor());
+			}
+		}));
+		this._register(addDisposableListener(list, 'keydown', event => {
+			const active = getActiveElement(document) as HTMLButtonElement | null;
+			if (!active?.classList.contains('ash-chatgpt-conversation') || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
+			const items = [...list.querySelectorAll<HTMLButtonElement>('.ash-chatgpt-conversation')].filter(item => !item.closest('[hidden], .ash-view-pane.collapsed') && !item.disabled);
+			const index = items.indexOf(active);
+			if (index < 0) { return; }
+			event.preventDefault();
+			const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+			items[next]?.focus();
+		}));
 		const loadMoreIfNeeded = (retry: boolean): void => {
 			const state = chat.state.get();
 			const viewport = scrollable.state;
-			if (!this.isVisible() || !viewport.height || !state.connected || state.busy || state.sending || state.managing || !state.hasMore || (!retry && state.error)) {
-				return;
-			}
-			if (this.panes.at(-1)?.isExpanded() === false) {
-				return;
-			}
-			if (viewport.maximumTop - viewport.top <= 96) {
-				void chat.loadMore();
-			}
+			if (!this.isVisible() || !viewport.height || !state.connected || state.busy || state.sending || state.managing || !state.hasMore || (!retry && state.error)) { return; }
+			if (this.panes.at(-1)?.isExpanded() === false) { return; }
+			if (viewport.maximumTop - viewport.top <= 96) { void chat.loadMore(); }
 		};
 		const pendingLoad = this._register(new MutableDisposable());
 		let retryLoad = false;
@@ -157,8 +111,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			retryLoad ||= retry;
 			pendingLoad.value = scheduleAtNextAnimationFrame(getWindow(root), () => {
 				pendingLoad.clear();
-				const retry = retryLoad;
-				retryLoad = false;
+				const retry = retryLoad; retryLoad = false;
 				loadMoreIfNeeded(retry);
 			});
 		};
@@ -166,21 +119,14 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		this._register(scrollable.onDidScroll(event => scheduleLoad(event.current.top !== event.previous.top)));
 		this._register(observeResize(scrollable.element, () => scheduleLoad()));
 		this._register(this.onDidChangeViewVisibility(() => scheduleLoad()));
-		this._register(
-			toDisposable(() => {
-				for (const entry of this.registrations.values()) {
-					entry.registration.dispose();
-					entry.visible.reset();
-				}
-				this.registrations.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const entry of this.registrations.values()) { entry.registration.dispose(); entry.visible.reset(); }
+			this.registrations.clear();
+		}));
 		// One-way migration only; ViewPaneContainer owns every subsequent collapse read and write.
 		const previousPrefix = 'sessions.chatgpt.navigation.collapsed.';
 		for (const previousKey of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
-			if (!previousKey.startsWith(previousPrefix)) {
-				continue;
-			}
+			if (!previousKey.startsWith(previousPrefix)) { continue; }
 			const key = previousKey.slice(previousPrefix.length);
 			if (key && key !== 'projects') {
 				const nextKey = this.stateKey(`${chatGPTNavigationContainerId}.${key}`, 'collapsed');
@@ -200,54 +146,35 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			const groups = this.groups(state);
 			const wanted = new Set(groups.map(group => group.key));
 			for (const [key, entry] of this.registrations) {
-				if (wanted.has(key)) {
-					continue;
-				}
-				entry.registration.dispose();
-				entry.visible.reset();
-				this.registrations.delete(key);
+				if (wanted.has(key)) { continue; }
+				entry.registration.dispose(); entry.visible.reset(); this.registrations.delete(key);
 			}
 			for (const group of groups) {
 				let entry = this.registrations.get(group.key);
 				if (entry && (entry.title !== group.title || entry.order !== group.order)) {
-					entry.registration.dispose();
-					entry.visible.reset();
-					this.registrations.delete(group.key);
-					entry = undefined;
+					entry.registration.dispose(); entry.visible.reset(); this.registrations.delete(group.key); entry = undefined;
 				}
 				if (!entry) {
 					const id = `${chatGPTNavigationContainerId}.${group.key}`;
 					const context = `sessions.chatgpt.groupVisible.${group.key}`;
 					const visible = contextKeys.createKey<boolean>(context, false);
 					visible.set(true);
-					const registration = SessionsViewRegistry.registerViews(this.id, [
-						{
-							id,
-							title: group.title,
-							order: group.order,
-							when: ContextKeyExpr.has(context),
-							canToggleVisibility: false,
-							ctorDescriptor: new SyncDescriptor(ChatGPTNavigationView, [group.key]),
-						},
-					]);
+					const registration = SessionsViewRegistry.registerViews(this.id, [{
+						id, title: group.title, order: group.order, when: ContextKeyExpr.has(context), canToggleVisibility: false,
+						ctorDescriptor: new SyncDescriptor(ChatGPTNavigationView, [group.key]),
+					}]);
 					entry = { title: group.title, order: group.order, visible, registration };
 					this.registrations.set(group.key, entry);
 				}
 				const pane = this.getView(`${chatGPTNavigationContainerId}.${group.key}`);
-				if (pane instanceof ChatGPTNavigationView) {
-					pane.render(group.conversations, state);
-				}
+				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
 			const readingHistory = state.loading?.kind === 'history';
 			loading.setVisible(readingHistory && !state.conversations.length);
 			list.setAttribute('aria-busy', String(readingHistory));
 			scrollable.layout();
-			if (focusedId && hadFocus) {
-				focusConversation(root, focusedId, true);
-			}
-			if (focusedGroup) {
-				this.getView(`${chatGPTNavigationContainerId}.${focusedGroup}`)?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus({ preventScroll: true });
-			}
+			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }
+			if (focusedGroup) { this.getView(`${chatGPTNavigationContainerId}.${focusedGroup}`)?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus({ preventScroll: true }); }
 			scrollable.scrollTo(0, top);
 			scheduleLoad();
 		};
@@ -259,45 +186,24 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		const buckets = new Map<string, ChatGPTConversation[]>();
 		const projects = new Set(state.projects.map(project => project.id));
 		for (const conversation of state.conversations) {
-			const key = conversation.pinned
-				? 'pinned'
-				: conversation.projectId && (conversation.projectId.startsWith('g-p-') || projects.has(conversation.projectId))
-					? projects.has(conversation.projectId)
-						? conversation.projectId
-						: 'other'
-					: 'recent';
-			const items = buckets.get(key) ?? [];
-			items.push(conversation);
-			buckets.set(key, items);
+			const key = conversation.pinned ? 'pinned' : conversation.projectId && (conversation.projectId.startsWith('g-p-') || projects.has(conversation.projectId))
+				? (projects.has(conversation.projectId) ? conversation.projectId : 'other') : 'recent';
+			const items = buckets.get(key) ?? []; items.push(conversation); buckets.set(key, items);
 		}
 		return [
 			{ key: 'pinned', title: localize('sessions.chatgpt.pinnedGroup', 'Pinned'), order: 0 },
 			...state.projects.map((project, index) => ({ key: project.id, title: project.title, order: index + 1 })),
-			{
-				key: 'other',
-				title: localize('sessions.chatgpt.otherProjects', 'Other projects'),
-				order: state.projects.length + 1,
-			},
-			{
-				key: 'recent',
-				title: localize('sessions.chatgpt.recentGroup', 'Recent'),
-				order: Number.MAX_SAFE_INTEGER,
-			},
-		].flatMap(group => {
-			const conversations = buckets.get(group.key);
-			return conversations?.length ? [{ ...group, conversations }] : [];
-		});
+			{ key: 'other', title: localize('sessions.chatgpt.otherProjects', 'Other projects'), order: state.projects.length + 1 },
+			{ key: 'recent', title: localize('sessions.chatgpt.recentGroup', 'Recent'), order: Number.MAX_SAFE_INTEGER },
+		].flatMap(group => { const conversations = buckets.get(group.key); return conversations?.length ? [{ ...group, conversations }] : []; });
 	}
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		this.scrollable?.layout();
-		this.scheduleLoad();
+		this.scrollable?.layout(); this.scheduleLoad();
 	}
 
-	public override focus(): void {
-		this.element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-	}
+	public override focus(): void { this.element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }
 }
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
@@ -308,10 +214,7 @@ export class ChatGPTNavigationView extends ViewPane {
 	private menuGeneration = 0;
 	private menuRow: HTMLElement | undefined;
 	private readonly menuLoad = this._register(new MutableDisposable());
-	constructor(
-		key: string,
-		private readonly navigation: HTMLElement,
-		options: IViewPaneOptions,
+	constructor(key: string, private readonly navigation: HTMLElement, options: IViewPaneOptions,
 		@IChatGPTService private readonly chat: IChatGPTService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
@@ -324,29 +227,16 @@ export class ChatGPTNavigationView extends ViewPane {
 		this.element.setAttribute('role', 'group');
 		this.element.setAttribute('aria-label', options.title);
 		this.contentElement.classList.add('ash-chatgpt-navigation-rows');
-		this._register(
-			toDisposable(() => {
-				if (this.menuRow) {
-					this.contextMenus.hideContextMenu();
-				}
-			}),
-		);
-		this._register(
-			this.onDidChangeBodyVisibility(() => {
-				if (!this.isBodyVisible()) {
-					this.menuGeneration++;
-					this.menuLoad.clear();
-					if (this.menuRow) {
-						this.contextMenus.hideContextMenu();
-					}
-				}
-			}),
-		);
+		this._register(toDisposable(() => { if (this.menuRow) { this.contextMenus.hideContextMenu(); } }));
+		this._register(this.onDidChangeBodyVisibility(() => {
+			if (!this.isBodyVisible()) {
+				this.menuGeneration++; this.menuLoad.clear();
+				if (this.menuRow) { this.contextMenus.hideContextMenu(); }
+			}
+		}));
 	}
 
-	public override get maximumSize(): number {
-		return this.minimumSize;
-	}
+	public override get maximumSize(): number { return this.minimumSize; }
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState): void {
 		if (state.loading?.kind === 'history' && !this.loadingProgress.value) {
@@ -362,11 +252,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			const conversation = conversations[index]!;
 			for (const button of row.querySelectorAll('button')) {
 				button.disabled = state.sending || state.managing || (state.busy && !button.classList.contains('ash-chatgpt-conversation'));
-				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === state.conversationId) {
-					button.setAttribute('aria-current', 'page');
-				} else {
-					button.removeAttribute('aria-current');
-				}
+				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === state.conversationId) { button.setAttribute('aria-current', 'page'); }
+				else { button.removeAttribute('aria-current'); }
 			}
 		}
 		// Pane sizing follows the host's row metric, including its text and action targets.
@@ -391,23 +278,17 @@ export class ChatGPTNavigationView extends ViewPane {
 		row.append(item);
 		const more = this.action('more', localize('sessions.chatgpt.more', 'More actions'), () => this.showMore(row, conversation), Lxicon.ellipsis);
 		// The glyph shows the current pin state; the label describes the action.
-		const pin = this.action(
-			'pin',
-			conversation.pinned ? localize('sessions.chatgpt.unpin', 'Unpin chat') : localize('sessions.chatgpt.pin', 'Pin chat'),
+		const pin = this.action('pin', conversation.pinned ? localize('sessions.chatgpt.unpin', 'Unpin chat') : localize('sessions.chatgpt.pin', 'Pin chat'),
 			async () => {
 				await this.chat.setPinned(conversation.id, !conversation.pinned);
 				this.focusConversation(conversation.id);
-			},
-			conversation.pinned ? Lxicon.pinned : Lxicon.unpin,
-		);
-		const bar = this.rows.add(
-			new ActionBar(row, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				actions: [more, { ...pin, checked: conversation.pinned === true }],
-				ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
-				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
-			}),
-		);
+			}, conversation.pinned ? Lxicon.pinned : Lxicon.unpin);
+		const bar = this.rows.add(new ActionBar(row, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+			actions: [more, { ...pin, checked: conversation.pinned === true }],
+			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
+			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+		}));
 		bar.element.classList.add('ash-chatgpt-conversation-actions');
 		const trigger = bar.element.querySelector('button')!;
 		trigger.setAttribute('aria-haspopup', 'menu');
@@ -433,36 +314,21 @@ export class ChatGPTNavigationView extends ViewPane {
 				checked: project.id === conversation.projectId,
 			}));
 			if (!projects.length) {
-				projects = [
-					{
-						...this.action('noProjects', localize('sessions.chatgpt.noProjects', 'No projects'), () => {}),
-						enabled: false,
-					},
-				];
+				projects = [{ ...this.action('noProjects', localize('sessions.chatgpt.noProjects', 'No projects'), () => { }), enabled: false }];
 			}
 		} catch {
-			projects = [
-				{
-					...this.action('projectsUnavailable', localize('sessions.chatgpt.projectsUnavailable', 'Could not load projects. Reopen the menu to retry.'), () => {}),
-					enabled: false,
-				},
-			];
+			projects = [{ ...this.action('projectsUnavailable', localize('sessions.chatgpt.projectsUnavailable', 'Could not load projects. Reopen the menu to retry.'), () => { }), enabled: false }];
 		}
 		if (controller.signal.aborted || this.isDisposed || generation !== this.menuGeneration) {
-			row.classList.remove('menu-open');
-			trigger.setAttribute('aria-expanded', 'false');
-			return;
+			row.classList.remove('menu-open'); trigger.setAttribute('aria-expanded', 'false'); return;
 		}
 		// Refreshing project names can regroup the rows while the menu is loading.
 		if (!row.isConnected) {
 			const replacement = [...this.contentElement.querySelectorAll<HTMLElement>('.ash-chatgpt-navigation-row')].find(item => item.dataset.conversation === conversation.id);
-			if (!replacement) {
-				return;
-			}
+			if (!replacement) { return; }
 			row = replacement;
 			trigger = row.querySelector<HTMLButtonElement>('.ash-chatgpt-conversation-actions button')!;
-			row.classList.add('menu-open');
-			trigger.setAttribute('aria-expanded', 'true');
+			row.classList.add('menu-open'); trigger.setAttribute('aria-expanded', 'true');
 		}
 		this.menuRow = row;
 		this.contextMenus.showContextMenu({
@@ -475,27 +341,19 @@ export class ChatGPTNavigationView extends ViewPane {
 				new SubmenuAction('sessions.chatgpt.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), projects),
 			],
 			onHide: cancelled => {
-				if (this.menuRow === row) {
-					this.menuRow = undefined;
-				}
-				row.classList.remove('menu-open');
-				trigger.setAttribute('aria-expanded', 'false');
-				if (cancelled && trigger.isConnected && this.isBodyVisible() && !this.isDisposed) {
-					trigger.focus();
-				}
+				if (this.menuRow === row) { this.menuRow = undefined; }
+				row.classList.remove('menu-open'); trigger.setAttribute('aria-expanded', 'false');
+				if (cancelled && trigger.isConnected && this.isBodyVisible() && !this.isDisposed) { trigger.focus(); }
 			},
 		});
 	}
 
 	private async rename(conversation: ChatGPTConversation): Promise<void> {
 		const title = await this.quickInput.input({
-			title: localize('sessions.chatgpt.rename', 'Rename'),
-			value: conversation.title,
-			validateInput: async value => (value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.')),
+			title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
+			validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
 		});
-		if (title !== undefined) {
-			await this.chat.rename(conversation.id, title);
-		}
+		if (title !== undefined) { await this.chat.rename(conversation.id, title); }
 		this.focusConversation(conversation.id);
 	}
 
@@ -509,9 +367,7 @@ export class ChatGPTNavigationView extends ViewPane {
 			detail: localize('sessions.chatgpt.deleteDetail', 'This chat will be permanently deleted.'),
 			primaryButton: localize('sessions.chatgpt.delete', 'Delete'),
 		});
-		if (result.confirmed) {
-			await this.chat.deleteConversation(conversation.id);
-		}
+		if (result.confirmed) { await this.chat.deleteConversation(conversation.id); }
 	}
 
 	private async share(conversation: ChatGPTConversation): Promise<void> {
@@ -520,17 +376,11 @@ export class ChatGPTNavigationView extends ViewPane {
 			detail: localize('sessions.chatgpt.shareDetail', 'Anyone with the link may be able to read this chat. A share link will be created and copied.'),
 			primaryButton: localize('sessions.chatgpt.share', 'Share'),
 		});
-		if (!result.confirmed) {
-			return;
-		}
+		if (!result.confirmed) { return; }
 		const url = await this.chat.share(conversation.id);
 		if (url) {
-			try {
-				await this.clipboard.writeText(url);
-				status(localize('sessions.chatgpt.shareCopied', 'Share link copied.'));
-			} catch {
-				await this.dialogs.info(localize('sessions.chatgpt.shareLink', 'Share link'), url);
-			}
+			try { await this.clipboard.writeText(url); status(localize('sessions.chatgpt.shareCopied', 'Share link copied.')); }
+			catch { await this.dialogs.info(localize('sessions.chatgpt.shareLink', 'Share link'), url); }
 		}
 	}
 

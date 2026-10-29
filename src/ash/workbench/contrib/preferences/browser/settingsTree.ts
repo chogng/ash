@@ -55,13 +55,11 @@ export class SettingsTree<T> extends Disposable {
 		this.element.className = `ash-settings-tree ${options.rootClassName}`;
 		container.append(this.element);
 		this._register(options.model.onDidChange(() => this.render()));
-		this._register(
-			toDisposable(() => {
-				for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
-				this.rendered.clear();
-				this.element.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
+			this.rendered.clear();
+			this.element.remove();
+		}));
 		this.render();
 	}
 
@@ -87,7 +85,7 @@ export class SettingsTree<T> extends Disposable {
 	}
 
 	private render(): void {
-		const children = this.options.model.visibleChildren.map(node => this.renderNode(node));
+		const children = this.options.model.visibleChildren.map((node) => this.renderNode(node));
 		reconcileSettingsChildren(this.element, children);
 		for (const [id, rendered] of this.rendered) {
 			if (this.options.model.has(id)) continue;
@@ -97,7 +95,9 @@ export class SettingsTree<T> extends Disposable {
 	}
 
 	private renderNode(node: ObjectTreeNode<SettingsTreeElement<T>>): HTMLElement {
-		return node.element.kind === 'item' ? this.renderItem(node.element) : this.renderGroup(node, node.element);
+		return node.element.kind === 'item'
+			? this.renderItem(node.element)
+			: this.renderGroup(node, node.element);
 	}
 
 	private renderItem(item: SettingsTreeItem<T>): HTMLElement {
@@ -144,7 +144,9 @@ export class SettingsTree<T> extends Disposable {
 		rendered.element.classList.toggle('collapsed', node.collapsed);
 		rendered.element.classList.toggle('is-navigation-target', this.model.navigationTarget === group.id);
 		rendered.element.dataset.settingsTreeGroupId = group.id;
-		const children = node.collapsed ? [] : node.children.filter(child => child.visible).map(child => this.renderNode(child));
+		const children = node.collapsed
+			? []
+			: node.children.filter((child) => child.visible).map((child) => this.renderNode(child));
 		reconcileSettingsChildren(rendered.items, children);
 		return rendered.element;
 	}

@@ -46,6 +46,11 @@ export class ViewMenuActions extends Disposable {
 	}
 
 	private resolveTitleActions(): PrimaryAndSecondaryActions {
-		return getActionBarActions(this.titleMenu.getActions(this.options), group => group === 'navigation' || this.menuActionsOptions?.primaryActionGroups?.includes(group) === true, undefined, true);
+		return getActionBarActions(
+			this.titleMenu.getActions(this.options),
+			group => group === 'navigation' || this.menuActionsOptions?.primaryActionGroups?.includes(group) === true,
+			undefined,
+			true,
+		);
 	}
 }

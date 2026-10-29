@@ -41,14 +41,9 @@ export function recentWorkspaceUri(recent: IRecent): URI {
 /** Preserves URI identity across storage and process boundaries. */
 export function toStoreData(recents: IRecentlyOpened): object {
 	return {
-		workspaces: recents.workspaces.map(recent =>
-			'workspace' in recent
-				? {
-						workspace: { id: recent.workspace.id, configPath: recent.workspace.configPath.toString() },
-						label: recent.label,
-					}
-				: { folderUri: recent.folderUri.toString(), label: recent.label },
-		),
+		workspaces: recents.workspaces.map(recent => 'workspace' in recent
+			? { workspace: { id: recent.workspace.id, configPath: recent.workspace.configPath.toString() }, label: recent.label }
+			: { folderUri: recent.folderUri.toString(), label: recent.label }),
 	};
 }
 
@@ -171,7 +166,7 @@ function optionalNonEmptyString(value: unknown, owner: string): string | undefin
 export function toWorkspaceFolders(configuredFolders: readonly IStoredWorkspaceFolder[], workspaceConfigFile: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IWorkspaceFolder[] {
 	const folders: IWorkspaceFolder[] = [];
 	for (const entry of configuredFolders) {
-		let uri = entry.uri ? URI.parse(entry.uri) : entry.path!.startsWith('/') ? workspaceConfigFile.with({ path: entry.path! }) : URI.joinPath(dirname(workspaceConfigFile), entry.path!);
+		let uri = entry.uri ? URI.parse(entry.uri) : (entry.path!.startsWith('/') ? workspaceConfigFile.with({ path: entry.path! }) : URI.joinPath(dirname(workspaceConfigFile), entry.path!));
 		if (uri.path.length > 1 && !/^\/[A-Za-z]:\/$/.test(uri.path)) uri = uri.with({ path: uri.path.replace(/\/+$/, '') });
 		if (uri.scheme !== Schemas.file && uri.scheme !== Schemas.ashRemote) throw new TypeError('Unsupported workspace folder scheme');
 		if (folders.some(folder => comparison.isEqual(folder.uri, uri))) continue;
@@ -181,20 +176,13 @@ export function toWorkspaceFolders(configuredFolders: readonly IStoredWorkspaceF
 }
 
 /** Relative paths are meaningful only within the same filesystem authority. */
-export function getStoredWorkspaceFolder(
-	folderURI: URI,
-	forceAbsolute: boolean,
-	folderName: string | undefined,
-	targetConfigFolderURI: URI,
-	comparison: IExtUri = extUriBiasedIgnorePathCase,
-): IStoredWorkspaceFolder {
+export function getStoredWorkspaceFolder(folderURI: URI, forceAbsolute: boolean, folderName: string | undefined, targetConfigFolderURI: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IStoredWorkspaceFolder {
 	let relative: string | undefined;
 	if (!forceAbsolute && folderURI.scheme === targetConfigFolderURI.scheme && folderURI.authority === targetConfigFolderURI.authority) {
 		const from = targetConfigFolderURI.path.split('/').filter(Boolean);
 		const to = folderURI.path.split('/').filter(Boolean);
 		let shared = 0;
-		while (shared < from.length && shared < to.length && (comparison.ignorePathCasing(folderURI) ? from[shared]!.toLowerCase() === to[shared]!.toLowerCase() : from[shared] === to[shared]))
-			shared++;
+		while (shared < from.length && shared < to.length && (comparison.ignorePathCasing(folderURI) ? from[shared]!.toLowerCase() === to[shared]!.toLowerCase() : from[shared] === to[shared])) shared++;
 		relative = [...from.slice(shared).map(() => '..'), ...to.slice(shared)].join('/');
 	}
 	return {

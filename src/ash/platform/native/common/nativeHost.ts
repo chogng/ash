@@ -3,15 +3,7 @@ import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChange
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agent.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
-import type {
-	FileFilter,
-	MessageBoxOptions,
-	MessageBoxReturnValue,
-	OpenDialogOptions,
-	OpenDialogReturnValue,
-	SaveDialogOptions,
-	SaveDialogReturnValue,
-} from '../../../base/parts/sandbox/common/electronTypes.js';
+import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
 import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { URI, type UriComponents } from '../../../base/common/uri.js';
@@ -23,15 +15,10 @@ import type { IRectangle, IWindowClientSize } from '../../window/common/window.j
 /** The IPC boundary accepts only a rectangle in the sender's own window. */
 export function validateScreenshotRectangle(value: unknown): IRectangle | undefined {
 	if (value === undefined) return undefined;
-	if (
-		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !== 'height,width,x,y' ||
-		!['x', 'y', 'width', 'height'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key])) ||
-		(value.x as number) < 0 ||
-		(value.y as number) < 0 ||
-		(value.width as number) <= 0 ||
-		(value.height as number) <= 0
-	) {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'height,width,x,y'
+		|| !['x', 'y', 'width', 'height'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
+		|| (value.x as number) < 0 || (value.y as number) < 0
+		|| (value.width as number) <= 0 || (value.height as number) <= 0) {
 		throw new TypeError('Invalid screenshot rectangle');
 	}
 	return value as unknown as IRectangle;
@@ -51,10 +38,14 @@ export const NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL = 'ash:native-host:get-w
 
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
 
-export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL = 'ash:native-host:toggle-developer-tools';
-export const NATIVE_HOST_PICK_FOLDER_CHANNEL = 'ash:native-host:pick-folder';
-export const NATIVE_HOST_PICK_FILE_CHANNEL = 'ash:native-host:pick-file';
-export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL = 'ash:native-host:open-workspace';
+export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
+	'ash:native-host:toggle-developer-tools';
+export const NATIVE_HOST_PICK_FOLDER_CHANNEL =
+	'ash:native-host:pick-folder';
+export const NATIVE_HOST_PICK_FILE_CHANNEL =
+	'ash:native-host:pick-file';
+export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
+	'ash:native-host:open-workspace';
 export const NATIVE_HOST_OPEN_WINDOW_CHANNEL = 'ash:window:open';
 export const NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL = 'ash:native-host:open-agents-window';
 export const NATIVE_HOST_TERMINAL_MOVE_CHANNEL = 'ash:native-host:terminal-move';
@@ -62,48 +53,48 @@ export const NATIVE_HOST_TERMINAL_TAKE_CHANNEL = 'ash:native-host:terminal-take'
 export const NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL = 'ash:native-host:terminal-complete';
 export const NATIVE_HOST_TERMINAL_REQUEST_CHANNEL = 'ash:native-host:terminal-request';
 
-export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL = 'ash:native-host:set-window-theme';
-export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL = 'ash:native-host:set-window-dimmed';
-export const NATIVE_HOST_SAVE_FILE_CHANNEL = 'ash:native-host:save-file';
-export const NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL = 'ash:native-host:get-accessibility-support';
-export const NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL = 'ash:native-host:accessibility-support-changed';
-export const NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL = 'ash:native-host:sync-system-wide-keybindings';
+export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
+	'ash:native-host:set-window-theme';
+export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL =
+	'ash:native-host:set-window-dimmed';
+export const NATIVE_HOST_SAVE_FILE_CHANNEL =
+	'ash:native-host:save-file';
+export const NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL =
+	'ash:native-host:get-accessibility-support';
+export const NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL =
+	'ash:native-host:accessibility-support-changed';
+export const NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL =
+	'ash:native-host:sync-system-wide-keybindings';
 export const NATIVE_HOST_DIALOG_CHANNEL = 'ash:native-host:dialog';
 export const NATIVE_HOST_REVEAL_FILE_CHANNEL = 'ash:native-host:reveal-file';
+
 
 export function validateColorScheme(value: unknown): IColorScheme {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system color scheme');
 	const scheme = value as Record<string, unknown>;
-	if (Object.keys(scheme).sort().join(',') !== 'dark,highContrast' || typeof scheme.dark !== 'boolean' || typeof scheme.highContrast !== 'boolean')
-		throw new TypeError('Invalid system color scheme');
+	if (Object.keys(scheme).sort().join(',') !== 'dark,highContrast' || typeof scheme.dark !== 'boolean' || typeof scheme.highContrast !== 'boolean') throw new TypeError('Invalid system color scheme');
 	return scheme as unknown as IColorScheme;
 }
 
-export type NativeDialogOperation = { readonly kind: 'show'; readonly id: number; readonly options: Omit<MessageBoxOptions, 'signal'> } | { readonly kind: 'cancel'; readonly id: number };
+export type NativeDialogOperation =
+	| { readonly kind: 'show'; readonly id: number; readonly options: Omit<MessageBoxOptions, 'signal'>; }
+	| { readonly kind: 'cancel'; readonly id: number; };
 
 export function validateNativeDialogOperation(value: unknown): NativeDialogOperation {
 	const operation = dialogFields(value, ['kind', 'id', 'options'], 'dialog operation');
 	if (!Number.isSafeInteger(operation.id) || (operation.id as number) <= 0) throw new TypeError('Invalid dialog ID');
 	if (operation.kind === 'cancel' && Object.keys(operation).sort().join(',') === 'id,kind') return operation as NativeDialogOperation;
 	if (operation.kind !== 'show' || Object.keys(operation).sort().join(',') !== 'id,kind,options') throw new TypeError('Invalid dialog operation');
-	const options = dialogFields(
-		operation.options,
-		['message', 'type', 'buttons', 'defaultId', 'title', 'detail', 'checkboxLabel', 'checkboxChecked', 'textWidth', 'cancelId', 'noLink', 'normalizeAccessKeys'],
-		'message box options',
-	);
-	if (typeof options.message !== 'string' || (options.type !== undefined && !['none', 'info', 'error', 'question', 'warning'].includes(options.type as string)))
-		throw new TypeError('Invalid message box options');
+	const options = dialogFields(operation.options, ['message', 'type', 'buttons', 'defaultId', 'title', 'detail', 'checkboxLabel', 'checkboxChecked', 'textWidth', 'cancelId', 'noLink', 'normalizeAccessKeys'], 'message box options');
+	if (typeof options.message !== 'string' || options.type !== undefined && !['none', 'info', 'error', 'question', 'warning'].includes(options.type as string)) throw new TypeError('Invalid message box options');
 	validateDialogStrings(options, ['title', 'detail', 'checkboxLabel']);
 	validateDialogBooleans(options, ['checkboxChecked', 'noLink', 'normalizeAccessKeys']);
-	if (options.buttons !== undefined && (!Array.isArray(options.buttons) || options.buttons.length > 100 || !options.buttons.every(button => typeof button === 'string')))
-		throw new TypeError('Invalid message box buttons');
+	if (options.buttons !== undefined && (!Array.isArray(options.buttons) || options.buttons.length > 100 || !options.buttons.every(button => typeof button === 'string'))) throw new TypeError('Invalid message box buttons');
 	const buttons = Array.isArray(options.buttons) && options.buttons.length ? options.buttons.length : 1;
 	for (const key of ['defaultId', 'cancelId']) {
-		if (options[key] !== undefined && (!Number.isInteger(options[key]) || (options[key] as number) < (key === 'cancelId' ? -1 : 0) || (options[key] as number) >= buttons))
-			throw new TypeError('Invalid message box button index');
+		if (options[key] !== undefined && (!Number.isInteger(options[key]) || (options[key] as number) < (key === 'cancelId' ? -1 : 0) || (options[key] as number) >= buttons)) throw new TypeError('Invalid message box button index');
 	}
-	if (options.textWidth !== undefined && (typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0))
-		throw new TypeError('Invalid message box text width');
+	if (options.textWidth !== undefined && (typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0)) throw new TypeError('Invalid message box text width');
 	return operation as NativeDialogOperation;
 }
 
@@ -124,15 +115,10 @@ export function validateSystemWideKeybindings(value: unknown): readonly INativeS
 	return value.map((item: unknown) => {
 		if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('Invalid system-wide keybinding');
 		const binding = item as Record<string, unknown>;
-		if (
-			Object.keys(binding).some(key => !['accelerator', 'commandId', 'args', 'userSettingsLabel'].includes(key)) ||
-			typeof binding.accelerator !== 'string' ||
-			!binding.accelerator ||
-			typeof binding.commandId !== 'string' ||
-			!binding.commandId ||
-			typeof binding.userSettingsLabel !== 'string' ||
-			!binding.userSettingsLabel
-		) {
+		if (Object.keys(binding).some(key => !['accelerator', 'commandId', 'args', 'userSettingsLabel'].includes(key))
+			|| typeof binding.accelerator !== 'string' || !binding.accelerator
+			|| typeof binding.commandId !== 'string' || !binding.commandId
+			|| typeof binding.userSettingsLabel !== 'string' || !binding.userSettingsLabel) {
 			throw new TypeError('Invalid system-wide keybinding');
 		}
 		if (binding.args !== undefined) validateJsonValue(binding.args);
@@ -143,7 +129,8 @@ export function validateSystemWideKeybindings(value: unknown): readonly INativeS
 export function validateSystemWideKeybindingsResult(value: unknown): INativeSystemWideKeybindingResult {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system-wide keybinding result');
 	const result = value as Record<string, unknown>;
-	if (Object.keys(result).join(',') !== 'failed' || !Array.isArray(result.failed) || !result.failed.every(label => typeof label === 'string')) {
+	if (Object.keys(result).join(',') !== 'failed' || !Array.isArray(result.failed)
+		|| !result.failed.every(label => typeof label === 'string')) {
 		throw new TypeError('Invalid system-wide keybinding result');
 	}
 	return result as unknown as INativeSystemWideKeybindingResult;
@@ -156,20 +143,12 @@ export interface INativeWindowTheme {
 }
 
 export interface IOpenAgentsWindowOptions {
-	readonly conversation?: { readonly sessionId: string; readonly threadId: string };
+	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	readonly draft?: {
 		readonly mode: SessionMode;
 		readonly text: string;
 		/** Optional resource is the original source URI; content is a snapshot or an instruction catalog path. */
-		readonly contexts: readonly {
-			readonly id: string;
-			readonly kind: string;
-			readonly name: string;
-			readonly content: string;
-			readonly resource?: string;
-			readonly terminalSnapshot?: ITerminalOutputSnapshot;
-			readonly reference?: { readonly start: number; readonly end: number };
-		}[];
+		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; readonly terminalSnapshot?: ITerminalOutputSnapshot; readonly reference?: { readonly start: number; readonly end: number; }; }[];
 	};
 }
 
@@ -189,38 +168,20 @@ export interface ITerminalWindowTransferResult {
 }
 
 export function validateTerminalWindowTransfer(value: unknown): ITerminalWindowTransfer {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !== 'id,lease,state' ||
-		typeof value.id !== 'string' ||
-		value.id.length === 0 ||
-		value.id.length > 128 ||
-		value.id.includes('\0') ||
-		typeof value.state !== 'string' ||
-		value.state.length === 0 ||
-		value.state.length > 64 * 1024 * 1024 ||
-		!isRecord(value.lease)
-	)
-		throw new TypeError('Invalid terminal transfer');
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'id,lease,state'
+		|| typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128 || value.id.includes('\0')
+		|| typeof value.state !== 'string' || value.state.length === 0 || value.state.length > 64 * 1024 * 1024
+		|| !isRecord(value.lease)) throw new TypeError('Invalid terminal transfer');
 	return { id: value.id, state: value.state, lease: validateTerminalTransferLease(value.lease) };
 }
 
 function validateTerminalTransferLease(value: unknown): ITerminalReconnectLease {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).some(key => !['terminalId', 'dirId', 'reconnectToken', 'reconnectGracePeriodMillis'].includes(key)) ||
-		typeof value.terminalId !== 'string' ||
-		value.terminalId.length === 0 ||
-		value.terminalId.length > 1024 ||
-		value.terminalId.includes('\0') ||
-		(value.dirId !== undefined && (typeof value.dirId !== 'string' || value.dirId.length === 0 || value.dirId.length > 4096 || value.dirId.includes('\0'))) ||
-		typeof value.reconnectToken !== 'string' ||
-		!/^[0-9a-f]{64}$/.test(value.reconnectToken) ||
-		!Number.isSafeInteger(value.reconnectGracePeriodMillis) ||
-		(value.reconnectGracePeriodMillis as number) < 0 ||
-		(value.reconnectGracePeriodMillis as number) > 300_000
-	)
-		throw new TypeError('Invalid terminal transfer lease');
+	if (!isRecord(value) || Object.keys(value).some(key => !['terminalId', 'dirId', 'reconnectToken', 'reconnectGracePeriodMillis'].includes(key))
+		|| typeof value.terminalId !== 'string' || value.terminalId.length === 0 || value.terminalId.length > 1024 || value.terminalId.includes('\0')
+		|| value.dirId !== undefined && (typeof value.dirId !== 'string' || value.dirId.length === 0 || value.dirId.length > 4096 || value.dirId.includes('\0'))
+		|| typeof value.reconnectToken !== 'string' || !/^[0-9a-f]{64}$/.test(value.reconnectToken)
+		|| !Number.isSafeInteger(value.reconnectGracePeriodMillis) || (value.reconnectGracePeriodMillis as number) < 0
+		|| (value.reconnectGracePeriodMillis as number) > 300_000) throw new TypeError('Invalid terminal transfer lease');
 	return {
 		terminalId: value.terminalId,
 		...(value.dirId === undefined ? {} : { dirId: value.dirId as string }),
@@ -229,16 +190,9 @@ function validateTerminalTransferLease(value: unknown): ITerminalReconnectLease 
 	};
 }
 
-export function validateTerminalWindowTransferMove(value: unknown): {
-	readonly transfer: ITerminalWindowTransfer;
-	readonly targetWindowId?: number;
-} {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).some(key => !['transfer', 'targetWindowId'].includes(key)) ||
-		(value.targetWindowId !== undefined && (!Number.isSafeInteger(value.targetWindowId) || (value.targetWindowId as number) <= 0))
-	)
-		throw new TypeError('Invalid terminal transfer target');
+export function validateTerminalWindowTransferMove(value: unknown): { readonly transfer: ITerminalWindowTransfer; readonly targetWindowId?: number; } {
+	if (!isRecord(value) || Object.keys(value).some(key => !['transfer', 'targetWindowId'].includes(key))
+		|| value.targetWindowId !== undefined && (!Number.isSafeInteger(value.targetWindowId) || (value.targetWindowId as number) <= 0)) throw new TypeError('Invalid terminal transfer target');
 	return {
 		transfer: validateTerminalWindowTransfer(value.transfer),
 		...(value.targetWindowId === undefined ? {} : { targetWindowId: value.targetWindowId as number }),
@@ -246,17 +200,10 @@ export function validateTerminalWindowTransferMove(value: unknown): {
 }
 
 export function validateTerminalWindowTransferResult(value: unknown): ITerminalWindowTransferResult {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).some(key => !['id', 'error', 'lease'].includes(key)) ||
-		typeof value.id !== 'string' ||
-		value.id.length === 0 ||
-		value.id.length > 128 ||
-		value.id.includes('\0') ||
-		(value.error !== undefined && (typeof value.error !== 'string' || value.error.length === 0 || value.error.length > 2048)) ||
-		(value.lease !== undefined && value.error === undefined)
-	)
-		throw new TypeError('Invalid terminal transfer result');
+	if (!isRecord(value) || Object.keys(value).some(key => !['id', 'error', 'lease'].includes(key))
+		|| typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128 || value.id.includes('\0')
+		|| value.error !== undefined && (typeof value.error !== 'string' || value.error.length === 0 || value.error.length > 2048)
+		|| value.lease !== undefined && value.error === undefined) throw new TypeError('Invalid terminal transfer result');
 	return {
 		id: value.id,
 		...(value.error === undefined ? {} : { error: value.error as string }),
@@ -327,19 +274,11 @@ export function validateRevealFilePath(value: unknown): string {
 	return value;
 }
 
-export function validateOpenWorkspace(value: unknown): { root: string; forceNewWindow: boolean } {
+export function validateOpenWorkspace(value: unknown): { root: string; forceNewWindow: boolean; } {
 	const request = typeof value === 'string' ? { root: value } : value;
 	if (!request || typeof request !== 'object' || Array.isArray(request)) throw new TypeError('Invalid workspace request');
 	const options = request as Record<string, unknown>;
-	if (
-		Object.keys(options).some(key => key !== 'root' && key !== 'forceNewWindow') ||
-		typeof options.root !== 'string' ||
-		!options.root.trim() ||
-		options.root.includes('\0') ||
-		options.root.length > 32768 ||
-		(options.forceNewWindow !== undefined && typeof options.forceNewWindow !== 'boolean')
-	)
-		throw new TypeError('Invalid workspace request');
+	if (Object.keys(options).some(key => key !== 'root' && key !== 'forceNewWindow') || typeof options.root !== 'string' || !options.root.trim() || options.root.includes('\0') || options.root.length > 32768 || options.forceNewWindow !== undefined && typeof options.forceNewWindow !== 'boolean') throw new TypeError('Invalid workspace request');
 	return { root: options.root, forceNewWindow: options.forceNewWindow === true };
 }
 
@@ -353,57 +292,33 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		const conversation = options.conversation;
 		if (!conversation || typeof conversation !== 'object' || Array.isArray(conversation)) throw new TypeError('Invalid Agents Window conversation');
 		const fields = conversation as Record<string, unknown>;
-		if (Object.keys(fields).sort().join(',') !== 'sessionId,threadId' || typeof fields.sessionId !== 'string' || !fields.sessionId || typeof fields.threadId !== 'string' || !fields.threadId)
-			throw new TypeError('Invalid Agents Window conversation');
+		if (Object.keys(fields).sort().join(',') !== 'sessionId,threadId' || typeof fields.sessionId !== 'string' || !fields.sessionId || typeof fields.threadId !== 'string' || !fields.threadId) throw new TypeError('Invalid Agents Window conversation');
 	}
 	if (options.draft !== undefined) {
 		const draft = options.draft;
 		if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new TypeError('Invalid Agents Window draft');
 		const fields = draft as Record<string, unknown>;
-		if (
-			!['agent', 'plan', 'debug', 'multitask', 'ask'].includes(fields.mode as string) ||
-			Object.keys(fields).sort().join(',') !== 'contexts,mode,text' ||
-			typeof fields.text !== 'string' ||
-			!Array.isArray(fields.contexts)
-		)
-			throw new TypeError('Invalid Agents Window draft');
+		if (!['agent', 'plan', 'debug', 'multitask', 'ask'].includes(fields.mode as string) || Object.keys(fields).sort().join(',') !== 'contexts,mode,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
 		for (const context of fields.contexts) {
 			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;
-			if (
-				!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') ||
-				Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot', 'reference'].includes(key)) ||
-				(attachment.resource !== undefined && typeof attachment.resource !== 'string')
-			)
-				throw new TypeError('Invalid Agents Window context');
+			if (!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') || Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot', 'reference'].includes(key)) || attachment.resource !== undefined && typeof attachment.resource !== 'string') throw new TypeError('Invalid Agents Window context');
 			if (attachment.terminalSnapshot !== undefined) {
 				const snapshot = attachment.terminalSnapshot;
 				if (attachment.kind !== 'terminal' || !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new TypeError('Invalid terminal snapshot');
 				const data = snapshot as Record<string, unknown>;
 				if (
-					Object.keys(data).sort().join(',') !== 'columns,text' ||
-					typeof data.text !== 'string' ||
-					data.text.length > 131072 ||
-					!Number.isInteger(data.columns) ||
-					(data.columns as number) < 2 ||
-					(data.columns as number) > 4096
-				)
-					throw new TypeError('Invalid terminal snapshot');
+					Object.keys(data).sort().join(',') !== 'columns,text'
+					|| typeof data.text !== 'string' || data.text.length > 131072
+					|| !Number.isInteger(data.columns) || (data.columns as number) < 2 || (data.columns as number) > 4096
+				) throw new TypeError('Invalid terminal snapshot');
 			}
 			if (attachment.reference !== undefined) {
 				const reference = attachment.reference as Record<string, unknown> | null;
-				if (
-					!reference ||
-					typeof reference !== 'object' ||
-					Array.isArray(reference) ||
-					Object.keys(reference).sort().join(',') !== 'end,start' ||
-					!Number.isSafeInteger(reference.start) ||
-					!Number.isSafeInteger(reference.end) ||
-					(reference.start as number) < 0 ||
-					(reference.end as number) <= (reference.start as number) ||
-					(reference.end as number) > fields.text.length ||
-					fields.text.slice(reference.start as number, reference.end as number) !== attachment.name
-				) {
+				if (!reference || typeof reference !== 'object' || Array.isArray(reference) || Object.keys(reference).sort().join(',') !== 'end,start'
+					|| !Number.isSafeInteger(reference.start) || !Number.isSafeInteger(reference.end)
+					|| (reference.start as number) < 0 || (reference.end as number) <= (reference.start as number) || (reference.end as number) > fields.text.length
+					|| fields.text.slice(reference.start as number, reference.end as number) !== attachment.name) {
 					throw new TypeError('Invalid Agents Window context reference');
 				}
 			}
@@ -413,14 +328,10 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 }
 
 export function validateAgentHostEditorResource(value: unknown): UriComponents {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).some(key => !['$mid', 'external', 'scheme', 'authority', 'path', 'query', 'fragment'].includes(key)) ||
-		!['scheme', 'authority', 'path', 'query'].every(key => typeof value[key] === 'string') ||
-		(value.$mid !== undefined && value.$mid !== 1) ||
-		(value.fragment !== undefined && typeof value.fragment !== 'string')
-	)
-		throw new TypeError('Invalid editor conversation resource');
+	if (!isRecord(value) || Object.keys(value).some(key => !['$mid', 'external', 'scheme', 'authority', 'path', 'query', 'fragment'].includes(key))
+		|| !['scheme', 'authority', 'path', 'query'].every(key => typeof value[key] === 'string')
+		|| value.$mid !== undefined && value.$mid !== 1
+		|| value.fragment !== undefined && typeof value.fragment !== 'string') throw new TypeError('Invalid editor conversation resource');
 	const resource = URI.from(value as unknown as UriComponents);
 	// Ash's URI serialization includes its encoded spelling. Neither representation may redirect the other.
 	if (value.external !== undefined && value.external !== resource.toString()) throw new TypeError('Inconsistent editor conversation resource');
@@ -431,37 +342,16 @@ export function validateAgentHostEditorResource(value: unknown): UriComponents {
 
 export function validateAgentHostEditorUpdate(value: unknown): AgentHostEditorUpdate {
 	if (!isRecord(value)) throw new TypeError('Invalid editor activity update');
-	if (
-		value.kind === 'request' &&
-		Object.keys(value).sort().join(',') === 'isNewSession,kind,requestSequence,resource' &&
-		typeof value.isNewSession === 'boolean' &&
-		Number.isSafeInteger(value.requestSequence) &&
-		(value.requestSequence as number) >= 0
-	) {
-		return {
-			kind: 'request',
-			resource: validateAgentHostEditorResource(value.resource),
-			isNewSession: value.isNewSession,
-			requestSequence: value.requestSequence as number,
-		};
+	if (value.kind === 'request' && Object.keys(value).sort().join(',') === 'isNewSession,kind,requestSequence,resource' && typeof value.isNewSession === 'boolean' && Number.isSafeInteger(value.requestSequence) && (value.requestSequence as number) >= 0) {
+		return { kind: 'request', resource: validateAgentHostEditorResource(value.resource), isNewSession: value.isNewSession, requestSequence: value.requestSequence as number };
 	}
 	if (value.kind === 'sessions' && Object.keys(value).sort().join(',') === 'kind,sessions' && Array.isArray(value.sessions) && value.sessions.length <= 128) {
 		return {
-			kind: 'sessions',
-			sessions: value.sessions.map(session => {
-				if (
-					!isRecord(session) ||
-					Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource' ||
-					typeof session.inProgress !== 'boolean' ||
-					typeof session.needsInput !== 'boolean'
-				)
-					throw new TypeError('Invalid editor activity');
-				return {
-					resource: validateAgentHostEditorResource(session.resource),
-					inProgress: session.inProgress,
-					needsInput: session.needsInput,
-				};
-			}),
+			kind: 'sessions', sessions: value.sessions.map(session => {
+				if (!isRecord(session) || Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource'
+					|| typeof session.inProgress !== 'boolean' || typeof session.needsInput !== 'boolean') throw new TypeError('Invalid editor activity');
+				return { resource: validateAgentHostEditorResource(session.resource), inProgress: session.inProgress, needsInput: session.needsInput };
+			})
 		};
 	}
 	if (value.kind === 'delete' && Object.keys(value).sort().join(',') === 'kind,resources' && Array.isArray(value.resources) && value.resources.length <= 128) {
@@ -477,73 +367,30 @@ export function validateAgentsWindowInvitationId(value: unknown): string {
 
 export function validateAgentsWindowInvitation(value: unknown): IAgentsWindowInvitation | undefined {
 	if (value === undefined) return undefined;
-	if (
-		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !== 'id,resource,revision,shown,windowId' ||
-		!Number.isSafeInteger(value.revision) ||
-		(value.revision as number) < 0 ||
-		!Number.isSafeInteger(value.windowId) ||
-		(value.windowId as number) <= 0 ||
-		typeof value.shown !== 'boolean'
-	)
-		throw new TypeError('Invalid invitation');
-	return {
-		id: validateAgentsWindowInvitationId(value.id),
-		resource: validateAgentHostEditorResource(value.resource),
-		revision: value.revision as number,
-		windowId: value.windowId as number,
-		shown: value.shown,
-	};
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'id,resource,revision,shown,windowId'
+		|| !Number.isSafeInteger(value.revision) || (value.revision as number) < 0
+		|| !Number.isSafeInteger(value.windowId) || (value.windowId as number) <= 0 || typeof value.shown !== 'boolean') throw new TypeError('Invalid invitation');
+	return { id: validateAgentsWindowInvitationId(value.id), resource: validateAgentHostEditorResource(value.resource), revision: value.revision as number, windowId: value.windowId as number, shown: value.shown };
 }
 
 export function validateAgentHostEditorState(value: unknown): IAgentHostEditorState {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !== 'agentsWindowSessionCount,editorSessionCount,invitation,lastAgentsWindowSessionCreated,lastShown,revision,sessions' ||
-		!['revision', 'editorSessionCount', 'agentsWindowSessionCount'].every(key => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0) ||
-		(value.lastAgentsWindowSessionCreated !== undefined &&
-			(typeof value.lastAgentsWindowSessionCreated !== 'number' || !Number.isFinite(value.lastAgentsWindowSessionCreated) || value.lastAgentsWindowSessionCreated < 0)) ||
-		!Array.isArray(value.sessions) ||
-		value.sessions.length > 4096
-	)
-		throw new TypeError('Invalid editor activity state');
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'agentsWindowSessionCount,editorSessionCount,invitation,lastAgentsWindowSessionCreated,lastShown,revision,sessions'
+		|| !['revision', 'editorSessionCount', 'agentsWindowSessionCount'].every(key => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0)
+		|| value.lastAgentsWindowSessionCreated !== undefined && (typeof value.lastAgentsWindowSessionCreated !== 'number' || !Number.isFinite(value.lastAgentsWindowSessionCreated) || value.lastAgentsWindowSessionCreated < 0)
+		|| !Array.isArray(value.sessions) || value.sessions.length > 4096) throw new TypeError('Invalid editor activity state');
 	const sessions = value.sessions.map(session => {
-		if (
-			!isRecord(session) ||
-			Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource,windowId' ||
-			!Number.isSafeInteger(session.windowId) ||
-			(session.windowId as number) <= 0 ||
-			typeof session.inProgress !== 'boolean' ||
-			typeof session.needsInput !== 'boolean'
-		)
-			throw new TypeError('Invalid editor activity state');
-		return {
-			resource: validateAgentHostEditorResource(session.resource),
-			windowId: session.windowId as number,
-			inProgress: session.inProgress,
-			needsInput: session.needsInput,
-		};
+		if (!isRecord(session) || Object.keys(session).sort().join(',') !== 'inProgress,needsInput,resource,windowId'
+			|| !Number.isSafeInteger(session.windowId) || (session.windowId as number) <= 0
+			|| typeof session.inProgress !== 'boolean' || typeof session.needsInput !== 'boolean') throw new TypeError('Invalid editor activity state');
+		return { resource: validateAgentHostEditorResource(session.resource), windowId: session.windowId as number, inProgress: session.inProgress, needsInput: session.needsInput };
 	});
-	if (
-		value.lastShown !== undefined &&
-		(!isRecord(value.lastShown) ||
-			Object.keys(value.lastShown).sort().join(',') !== 'editorSessionCount,timestamp' ||
-			typeof value.lastShown.editorSessionCount !== 'number' ||
-			!Number.isSafeInteger(value.lastShown.editorSessionCount) ||
-			value.lastShown.editorSessionCount < 0 ||
-			typeof value.lastShown.timestamp !== 'number' ||
-			!Number.isFinite(value.lastShown.timestamp) ||
-			value.lastShown.timestamp < 0)
-	)
-		throw new TypeError('Invalid invitation impression');
+	if (value.lastShown !== undefined && (!isRecord(value.lastShown) || Object.keys(value.lastShown).sort().join(',') !== 'editorSessionCount,timestamp'
+		|| typeof value.lastShown.editorSessionCount !== 'number' || !Number.isSafeInteger(value.lastShown.editorSessionCount) || value.lastShown.editorSessionCount < 0
+		|| typeof value.lastShown.timestamp !== 'number' || !Number.isFinite(value.lastShown.timestamp) || value.lastShown.timestamp < 0)) throw new TypeError('Invalid invitation impression');
 	return {
-		revision: value.revision as number,
-		editorSessionCount: value.editorSessionCount as number,
-		agentsWindowSessionCount: value.agentsWindowSessionCount as number,
-		lastAgentsWindowSessionCreated: value.lastAgentsWindowSessionCreated as number | undefined,
-		sessions,
-		invitation: validateAgentsWindowInvitation(value.invitation),
-		lastShown: value.lastShown as IAgentHostEditorState['lastShown'],
+		revision: value.revision as number, editorSessionCount: value.editorSessionCount as number, agentsWindowSessionCount: value.agentsWindowSessionCount as number,
+		lastAgentsWindowSessionCreated: value.lastAgentsWindowSessionCreated as number | undefined, sessions,
+		invitation: validateAgentsWindowInvitation(value.invitation), lastShown: value.lastShown as IAgentHostEditorState['lastShown']
 	};
 }
 
@@ -560,13 +407,8 @@ function validateFileFilters(value: unknown): FileFilter[] | undefined {
 	for (const filter of value) {
 		if (!filter || typeof filter !== 'object' || Array.isArray(filter)) throw new TypeError('Invalid file filter');
 		const fields = filter as Record<string, unknown>;
-		if (
-			Object.keys(fields).sort().join(',') !== 'extensions,name' ||
-			typeof fields.name !== 'string' ||
-			!fields.name ||
-			!Array.isArray(fields.extensions) ||
-			!fields.extensions.every(extension => typeof extension === 'string' && (extension === '*' || /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/i.test(extension)))
-		) {
+		if (Object.keys(fields).sort().join(',') !== 'extensions,name' || typeof fields.name !== 'string' || !fields.name
+			|| !Array.isArray(fields.extensions) || !fields.extensions.every(extension => typeof extension === 'string' && (extension === '*' || /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/i.test(extension)))) {
 			throw new TypeError('Invalid file filter');
 		}
 	}
@@ -591,8 +433,7 @@ function validateDialogBooleans(fields: Record<string, unknown>, keys: readonly 
 }
 
 function validateDialogProperties(value: unknown, allowed: readonly string[]): void {
-	if (value !== undefined && (!Array.isArray(value) || value.length > allowed.length || !value.every(property => typeof property === 'string' && allowed.includes(property))))
-		throw new TypeError('Invalid dialog properties');
+	if (value !== undefined && (!Array.isArray(value) || value.length > allowed.length || !value.every(property => typeof property === 'string' && allowed.includes(property)))) throw new TypeError('Invalid dialog properties');
 }
 
 export function validateOpenDialogOptions(value: unknown): OpenDialogOptions {
@@ -600,36 +441,20 @@ export function validateOpenDialogOptions(value: unknown): OpenDialogOptions {
 	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message']);
 	validateDialogBooleans(fields, ['securityScopedBookmarks']);
 	validateFileFilters(fields.filters);
-	validateDialogProperties(fields.properties, [
-		'openFile',
-		'openDirectory',
-		'multiSelections',
-		'showHiddenFiles',
-		'createDirectory',
-		'promptToCreate',
-		'noResolveAliases',
-		'treatPackageAsDirectory',
-		'dontAddToRecent',
-	]);
+	validateDialogProperties(fields.properties, ['openFile', 'openDirectory', 'multiSelections', 'showHiddenFiles', 'createDirectory', 'promptToCreate', 'noResolveAliases', 'treatPackageAsDirectory', 'dontAddToRecent']);
 	return fields as OpenDialogOptions;
 }
 
 export function validateOpenDialogResult(value: unknown): OpenDialogReturnValue {
 	const fields = dialogFields(value, ['canceled', 'filePaths', 'bookmarks'], 'open dialog result');
-	if (
-		typeof fields.canceled !== 'boolean' ||
-		!Array.isArray(fields.filePaths) ||
-		!fields.filePaths.every(path => typeof path === 'string') ||
-		(fields.bookmarks !== undefined && (!Array.isArray(fields.bookmarks) || !fields.bookmarks.every(bookmark => typeof bookmark === 'string')))
-	)
-		throw new TypeError('Invalid open dialog result');
+	if (typeof fields.canceled !== 'boolean' || !Array.isArray(fields.filePaths) || !fields.filePaths.every(path => typeof path === 'string')
+		|| fields.bookmarks !== undefined && (!Array.isArray(fields.bookmarks) || !fields.bookmarks.every(bookmark => typeof bookmark === 'string'))) throw new TypeError('Invalid open dialog result');
 	return fields as unknown as OpenDialogReturnValue;
 }
 
 export function validateSaveDialogResult(value: unknown): SaveDialogReturnValue {
 	const fields = dialogFields(value, ['canceled', 'filePath', 'bookmark'], 'save dialog result');
-	if (typeof fields.canceled !== 'boolean' || typeof fields.filePath !== 'string' || (fields.bookmark !== undefined && typeof fields.bookmark !== 'string'))
-		throw new TypeError('Invalid save dialog result');
+	if (typeof fields.canceled !== 'boolean' || typeof fields.filePath !== 'string' || fields.bookmark !== undefined && typeof fields.bookmark !== 'string') throw new TypeError('Invalid save dialog result');
 	return fields as unknown as SaveDialogReturnValue;
 }
 
@@ -655,11 +480,7 @@ export function validateAccessibilitySupportRead(value: unknown): undefined {
 }
 
 export function validateSaveDialogOptions(value: unknown): SaveDialogOptions {
-	const fields = dialogFields(
-		value,
-		['title', 'defaultPath', 'buttonLabel', 'filters', 'message', 'nameFieldLabel', 'showsTagField', 'properties', 'securityScopedBookmarks'],
-		'save dialog options',
-	);
+	const fields = dialogFields(value, ['title', 'defaultPath', 'buttonLabel', 'filters', 'message', 'nameFieldLabel', 'showsTagField', 'properties', 'securityScopedBookmarks'], 'save dialog options');
 	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message', 'nameFieldLabel']);
 	validateDialogBooleans(fields, ['showsTagField', 'securityScopedBookmarks']);
 	validateFileFilters(fields.filters);

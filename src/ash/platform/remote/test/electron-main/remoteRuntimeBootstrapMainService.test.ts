@@ -14,12 +14,7 @@ test('Remote runtime bootstrap binds install cancellation and settles its projec
 		workspace: URI.parse('ash-remote://ssh+build-linux/workspace/project'),
 		sshExecutable: 'ssh',
 		remoteExecutable: 'ash',
-		carrier: new AppServerDaemonLauncher({
-			executable: '/runtime/ash-app-server-daemon',
-			args: ['connect-selected'],
-			environment: {},
-			fileExists: () => true,
-		}),
+		carrier: new AppServerDaemonLauncher({ executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		runtimeInstaller: {
 			install: async (_host, options) => {
@@ -35,19 +30,9 @@ test('Remote runtime bootstrap binds install cancellation and settles its projec
 		assert.equal(await provisionRuntime('build-linux'), '/opt/ash/bin/ash-remote-server');
 		assert.ok(installSignal);
 		assert.equal(installSignal.aborted, false);
-		assert.deepEqual(service.installProgress.getState(), {
-			host: 'build-linux',
-			status: 'installing',
-			phase: 'probingPlatform',
-		});
+		assert.deepEqual(service.installProgress.getState(), { host: 'build-linux', status: 'installing', phase: 'probingPlatform' });
 		reportProgress?.({ phase: 'uploading', transferredBytes: 2, totalBytes: 4 });
-		assert.deepEqual(service.installProgress.getState(), {
-			host: 'build-linux',
-			status: 'installing',
-			phase: 'uploading',
-			transferredBytes: 2,
-			totalBytes: 4,
-		});
+		assert.deepEqual(service.installProgress.getState(), { host: 'build-linux', status: 'installing', phase: 'uploading', transferredBytes: 2, totalBytes: 4 });
 
 		service.installProgress.cancel();
 		assert.equal(installSignal?.aborted, true);
@@ -63,10 +48,7 @@ test('Remote runtime bootstrap delegates exact profile operations', async () => 
 	const profiles: IRemoteRuntimeConnectionProfiles = {
 		get: async (host, workspace) => {
 			calls.push(`get:${host}:${workspace}`);
-			return {
-				activeRuntime: '/opt/ash/active/bin/ash-remote-server',
-				previousRuntime: '/opt/ash/previous/bin/ash-remote-server',
-			};
+			return { activeRuntime: '/opt/ash/active/bin/ash-remote-server', previousRuntime: '/opt/ash/previous/bin/ash-remote-server' };
 		},
 		activate: async (host, workspace, runtime) => {
 			calls.push(`activate:${host}:${workspace}:${runtime}`);
@@ -81,12 +63,7 @@ test('Remote runtime bootstrap delegates exact profile operations', async () => 
 		workspace: URI.parse('ash-remote://ssh+build-linux/workspace/project'),
 		sshExecutable: 'custom-ssh',
 		remoteExecutable: 'ash',
-		carrier: new AppServerDaemonLauncher({
-			executable: '/runtime/ash-app-server-daemon',
-			args: ['connect-selected'],
-			environment: {},
-			fileExists: () => true,
-		}),
+		carrier: new AppServerDaemonLauncher({ executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		runtimeInstaller: { install: async () => '/opt/ash/new/bin/ash-remote-server' },
 		connectionProfiles: profiles,
@@ -131,5 +108,9 @@ test('Remote runtime progress logger bounds download and upload chatter separate
 		'Remote runtime installation: uploaded 11%',
 		'Remote runtime installation',
 	]);
-	assert.deepEqual(structured, [{ phase: 'downloadingCatalog' }, { phase: 'validatingArtifact' }, { phase: 'complete', disposition: 'installed' }]);
+	assert.deepEqual(structured, [
+		{ phase: 'downloadingCatalog' },
+		{ phase: 'validatingArtifact' },
+		{ phase: 'complete', disposition: 'installed' },
+	]);
 });

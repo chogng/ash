@@ -71,23 +71,20 @@ export interface IKeyboardLayoutService {
 	refreshKeyboardLayout(): Promise<void>;
 }
 
-export function keyboardMappingEntriesEqual(first: IKeyboardMappingEntry | undefined, second: IKeyboardMappingEntry | undefined): boolean {
-	return (
-		first === second ||
-		Boolean(
-			first &&
-			second &&
-			first.value === second.value &&
-			first.withShift === second.withShift &&
-			first.withAltGr === second.withAltGr &&
-			first.withShiftAltGr === second.withShiftAltGr &&
-			Boolean(first.valueIsDeadKey) === Boolean(second.valueIsDeadKey) &&
-			Boolean(first.withShiftIsDeadKey) === Boolean(second.withShiftIsDeadKey) &&
-			Boolean(first.withAltGrIsDeadKey) === Boolean(second.withAltGrIsDeadKey) &&
-			Boolean(first.withShiftAltGrIsDeadKey) === Boolean(second.withShiftAltGrIsDeadKey) &&
-			first.vkey === second.vkey,
-		)
-	);
+export function keyboardMappingEntriesEqual(
+	first: IKeyboardMappingEntry | undefined,
+	second: IKeyboardMappingEntry | undefined,
+): boolean {
+	return first === second || Boolean(first && second &&
+		first.value === second.value &&
+		first.withShift === second.withShift &&
+		first.withAltGr === second.withAltGr &&
+		first.withShiftAltGr === second.withShiftAltGr &&
+		Boolean(first.valueIsDeadKey) === Boolean(second.valueIsDeadKey) &&
+		Boolean(first.withShiftIsDeadKey) === Boolean(second.withShiftIsDeadKey) &&
+		Boolean(first.withAltGrIsDeadKey) === Boolean(second.withAltGrIsDeadKey) &&
+		Boolean(first.withShiftAltGrIsDeadKey) === Boolean(second.withShiftAltGrIsDeadKey) &&
+		first.vkey === second.vkey);
 }
 
 export function keyboardMappingsEqual(first: IKeyboardMapping | undefined, second: IKeyboardMapping | undefined): boolean {
@@ -99,7 +96,8 @@ export function keyboardMappingsEqual(first: IKeyboardMapping | undefined, secon
 	}
 	const firstCodes = Object.keys(first);
 	const secondCodes = Object.keys(second);
-	return firstCodes.length === secondCodes.length && firstCodes.every(code => keyboardMappingEntriesEqual(first[code], second[code]));
+	return firstCodes.length === secondCodes.length &&
+		firstCodes.every((code) => keyboardMappingEntriesEqual(first[code], second[code]));
 }
 
 export const IKeyboardLayoutService = createServiceIdentifier<IKeyboardLayoutService>('keyboardLayoutService');

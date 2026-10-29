@@ -17,7 +17,10 @@ test('ToolBar renders primary actions and trails More Actions', () => {
 		contextMenuProvider,
 		ariaLabel: 'Test actions',
 	});
-	toolbar.setActions([action('primary')], [action('secondary')]);
+	toolbar.setActions(
+		[action('primary')],
+		[action('secondary')],
+	);
 	dom.window.document.body.append(toolbar.element);
 
 	const buttons = toolbar.element.querySelectorAll('button');
@@ -116,11 +119,7 @@ test('ToolBar applies its hover anchor position to primary and More Actions item
 	const setups: Pick<IDelayedHoverOptions, 'position'>[] = [];
 	using delegateRegistration = setHoverDelegate({
 		setupHover(options) {
-			setups.push({
-				position: {
-					hoverPosition: options.anchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
-				},
-			});
+			setups.push({ position: { hoverPosition: options.anchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE } });
 			return managedHover();
 		},
 		setupDelayedHover(target, options, lifecycleOptions) {
@@ -135,10 +134,7 @@ test('ToolBar applies its hover anchor position to primary and More Actions item
 	});
 	toolbar.setActions([action('primary')], [action('secondary')]);
 
-	assert.deepEqual(
-		setups.map(({ position }) => position?.hoverPosition),
-		[HoverPosition.BELOW, HoverPosition.BELOW],
-	);
+	assert.deepEqual(setups.map(({ position }) => position?.hoverPosition), [HoverPosition.BELOW, HoverPosition.BELOW]);
 
 	dom.window.close();
 });
@@ -148,7 +144,10 @@ test('ToolBar omits More Actions when secondary actions are empty', () => {
 	const toolbar = new ToolBar(dom.window.document.body, {
 		contextMenuProvider: new TestContextMenuProvider(),
 	});
-	toolbar.setActions([new Separator(), action('primary'), new Separator()], [new Separator()]);
+	toolbar.setActions(
+		[new Separator(), action('primary'), new Separator()],
+		[new Separator()],
+	);
 
 	const buttons = toolbar.element.querySelectorAll('button');
 	assert.equal(buttons.length, 1);
@@ -164,10 +163,15 @@ test('ToolBar can place More Actions before a named primary action', () => {
 		contextMenuProvider: new TestContextMenuProvider(),
 		moreActionsPlacement: { beforeActionId: 'maximize' },
 	});
-	toolbar.setActions([action('kill'), action('maximize'), action('close')], [action('clear')], [action('account'), action('manage')]);
+	toolbar.setActions(
+		[action('kill'), action('maximize'), action('close')],
+		[action('clear')],
+		[action('account'), action('manage')],
+	);
 
 	assert.deepEqual(
-		[...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')].map(item => item.dataset.actionId),
+		[...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')]
+			.map((item) => item.dataset.actionId),
 		['kill', 'ash.toolbar.moreActions', 'maximize', 'close', 'account', 'manage'],
 	);
 
@@ -189,17 +193,17 @@ function action(id: string): IAction {
 		label: id,
 		tooltip: id,
 		enabled: true,
-		run() {},
+		run() { },
 	};
 }
 
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }

@@ -48,9 +48,7 @@ export class ElectronWindow extends Disposable {
 		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
 		// The shell and launch-file handshake remain available while installation files are scanned.
 		void this.updateTitleProperties().catch(error => {
-			if (this.isDisposed) {
-				return;
-			}
+			if (this.isDisposed) { return; }
 			this.log.error('integrity', 'Desktop environment detection failed', error);
 			this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
 		});
@@ -58,14 +56,10 @@ export class ElectronWindow extends Disposable {
 
 	private async updateTitleProperties(): Promise<void> {
 		const isAdmin = await this.host.isAdmin();
-		if (this.isDisposed) {
-			return;
-		}
+		if (this.isDisposed) { return; }
 		this.title.updateProperties({ isAdmin });
 		const result = await this.integrity.isPure();
-		if (this.isDisposed) {
-			return;
-		}
+		if (this.isDisposed) { return; }
 		this.title.updateProperties({ isPure: result.isPure });
 		if (result.isPure === false) {
 			this.notifications.warn(localize('integrity.modified', 'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.'));
@@ -85,11 +79,7 @@ export class ElectronWindow extends Disposable {
 			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'opened', id: request.id });
 			this.completeClosedFiles();
 		} catch (error) {
-			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, {
-				kind: 'failed',
-				id: request.id,
-				message: error instanceof Error ? error.message : String(error),
-			});
+			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'failed', id: request.id, message: error instanceof Error ? error.message : String(error) });
 		}
 	}
 
@@ -140,12 +130,9 @@ export class NativeWindow extends Disposable {
 			if (state.zoomLevel !== this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING)) updateZoom(state.zoomLevel);
 		});
 		this._register(toDisposable(() => auxiliaryZoom.dispose()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if ((event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) || event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) && this.pendingZoomLevel === undefined)
-					void this.applyConfiguredZoom().catch(onUnexpectedError);
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if ((event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) || event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) && this.pendingZoomLevel === undefined) void this.applyConfiguredZoom().catch(onUnexpectedError);
+		}));
 		void this.applyConfiguredZoom().catch(onUnexpectedError);
 	}
 
@@ -178,14 +165,12 @@ export class NativeWindow extends Disposable {
 			size = value;
 			update();
 		});
-		this._register(
-			toDisposable(() => {
-				subscription.dispose();
-				if (frame !== undefined) target.cancelAnimationFrame(frame);
-				container.style.maxWidth = originalWidth;
-				container.style.maxHeight = originalHeight;
-			}),
-		);
+		this._register(toDisposable(() => {
+			subscription.dispose();
+			if (frame !== undefined) target.cancelAnimationFrame(frame);
+			container.style.maxWidth = originalWidth;
+			container.style.maxHeight = originalHeight;
+		}));
 		this._register(addDisposableListener(target, 'resize', update));
 		// Subscribe before reading so a late initial reply cannot replace a newer resize.
 		const currentRevision = revision;
@@ -203,11 +188,8 @@ export class NativeWindow extends Disposable {
 		if (this.isDisposed) return;
 		if (allWindows || current !== level) {
 			this.applyingConfiguredZoom = true;
-			try {
-				await this.host.setZoomLevel(level, undefined, allWindows);
-			} finally {
-				this.applyingConfiguredZoom = false;
-			}
+			try { await this.host.setZoomLevel(level, undefined, allWindows); }
+			finally { this.applyingConfiguredZoom = false; }
 		}
 	}
 }

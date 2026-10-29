@@ -16,17 +16,15 @@ export class MeteredConnectionMainService extends Disposable implements IMetered
 
 	constructor(@IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(METERED_CONNECTION_SETTING_KEY)) this.applyConfiguration();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(METERED_CONNECTION_SETTING_KEY)) this.applyConfiguration();
+		}));
 		this.applyConfiguration();
 		this.whenConnectionStateInitialized = this.firstObservation.p;
 	}
 
 	get isConnectionMetered(): boolean {
-		return this.setting === 'on' || (this.setting === 'auto' && this.browserMetered);
+		return this.setting === 'on' || this.setting === 'auto' && this.browserMetered;
 	}
 
 	public setIsBrowserConnectionMetered(value: boolean): void {

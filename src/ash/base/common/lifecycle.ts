@@ -25,8 +25,8 @@ export class ImmortalReference<T> implements IReference<T> {
 	constructor(object: T) {
 		this.object = object;
 	}
-	dispose(): void {}
-	[Symbol.dispose](): void {}
+	dispose(): void { }
+	[Symbol.dispose](): void { }
 }
 
 /**
@@ -39,8 +39,8 @@ export interface IAsyncDisposable extends globalThis.AsyncDisposable {
 
 /** Reusable cleanup handle for contracts that intentionally own no resource. */
 export const noneDisposable: IDisposable = Object.freeze({
-	dispose(): void {},
-	[Symbol.dispose](): void {},
+	dispose(): void { },
+	[Symbol.dispose](): void { },
 });
 
 /** @internal */
@@ -59,9 +59,18 @@ function isNoneDisposable(disposable: TrackableDisposable): boolean {
  * @internal
  */
 export interface IDisposableTracker {
-	trackDisposable(disposable: TrackableDisposable, label?: string): void;
-	validateDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void;
-	setDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void;
+	trackDisposable(
+		disposable: TrackableDisposable,
+		label?: string,
+	): void;
+	validateDisposableOwner(
+		disposable: TrackableDisposable,
+		owner: TrackableDisposable,
+	): void;
+	setDisposableOwner(
+		disposable: TrackableDisposable,
+		owner: TrackableDisposable,
+	): void;
 	clearDisposableOwner(disposable: TrackableDisposable): void;
 	markAsDisposed(disposable: TrackableDisposable): void;
 	markAsSingleton(disposable: TrackableDisposable): void;
@@ -71,7 +80,9 @@ let disposableTracker: IDisposableTracker | undefined;
 const singletonDisposables = new WeakSet<TrackableDisposable>();
 
 /** @internal */
-export function registerDisposableTracker(tracker: IDisposableTracker): globalThis.Disposable {
+export function registerDisposableTracker(
+	tracker: IDisposableTracker,
+): globalThis.Disposable {
 	if (disposableTracker) {
 		throw new Error('A disposable tracker is already installed');
 	}
@@ -90,18 +101,27 @@ export function registerDisposableTracker(tracker: IDisposableTracker): globalTh
 }
 
 /** @internal */
-export function trackDisposable<T extends TrackableDisposable>(disposable: T, label?: string): T {
+export function trackDisposable<T extends TrackableDisposable>(
+	disposable: T,
+	label?: string,
+): T {
 	if (!isNoneDisposable(disposable)) disposableTracker?.trackDisposable(disposable, label);
 	return disposable;
 }
 
 /** @internal */
-export function validateDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void {
+export function validateDisposableOwner(
+	disposable: TrackableDisposable,
+	owner: TrackableDisposable,
+): void {
 	if (!isNoneDisposable(disposable)) disposableTracker?.validateDisposableOwner(disposable, owner);
 }
 
 /** @internal */
-export function setDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void {
+export function setDisposableOwner(
+	disposable: TrackableDisposable,
+	owner: TrackableDisposable,
+): void {
 	if (!isNoneDisposable(disposable)) disposableTracker?.setDisposableOwner(disposable, owner);
 }
 
@@ -151,7 +171,10 @@ export class DisposableTracker implements IDisposableTracker {
 	private readonly records = new Map<TrackableDisposable, DisposableRecord>();
 	private readonly disposed = new WeakSet<object>();
 
-	trackDisposable(disposable: TrackableDisposable, label = disposableLabel(disposable)): void {
+	trackDisposable(
+		disposable: TrackableDisposable,
+		label = disposableLabel(disposable),
+	): void {
 		if (this.disposed.has(disposable)) {
 			throw new ReferenceError(`Cannot track disposed disposable: ${label}`);
 		}
@@ -165,25 +188,39 @@ export class DisposableTracker implements IDisposableTracker {
 		});
 	}
 
-	validateDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void {
+	validateDisposableOwner(
+		disposable: TrackableDisposable,
+		owner: TrackableDisposable,
+	): void {
 		if (disposable === owner) {
 			throw new Error('A disposable cannot own itself');
 		}
 		if (this.disposed.has(disposable)) {
-			throw new ReferenceError(`Cannot own disposed disposable: ${disposableLabel(disposable)}`);
+			throw new ReferenceError(
+				`Cannot own disposed disposable: ${disposableLabel(disposable)}`,
+			);
 		}
 		const existingOwner = this.records.get(disposable)?.owner;
 		if (existingOwner && existingOwner !== owner) {
-			throw new Error(`${this.label(disposable)} already belongs to ${this.label(existingOwner)}`);
+			throw new Error(
+				`${this.label(disposable)} already belongs to ${this.label(existingOwner)}`,
+			);
 		}
-		for (let ancestor: TrackableDisposable | undefined = owner; ancestor; ancestor = this.records.get(ancestor)?.owner) {
+		for (
+			let ancestor: TrackableDisposable | undefined = owner;
+			ancestor;
+			ancestor = this.records.get(ancestor)?.owner
+		) {
 			if (ancestor === disposable) {
 				throw new Error('Disposable ownership cannot contain a cycle');
 			}
 		}
 	}
 
-	setDisposableOwner(disposable: TrackableDisposable, owner: TrackableDisposable): void {
+	setDisposableOwner(
+		disposable: TrackableDisposable,
+		owner: TrackableDisposable,
+	): void {
 		this.validateDisposableOwner(disposable, owner);
 		this.trackDisposable(owner);
 		this.trackDisposable(disposable);
@@ -223,7 +260,9 @@ export class DisposableTracker implements IDisposableTracker {
 	leaks(): readonly DisposableLeak[] {
 		// Recompute from current roots so detaching or transferring ownership restores reporting.
 		const singletonOwned = new Set<TrackableDisposable>();
-		const pending = [...this.records.values()].filter(record => record.isSingleton && !record.owner).map(record => record.disposable);
+		const pending = [...this.records.values()]
+			.filter(record => record.isSingleton && !record.owner)
+			.map(record => record.disposable);
 		while (pending.length > 0) {
 			const disposable = pending.pop()!;
 			if (singletonOwned.has(disposable)) {
@@ -237,24 +276,26 @@ export class DisposableTracker implements IDisposableTracker {
 				}
 			}
 		}
-		return [...this.records.values()]
-			.filter(record => !singletonOwned.has(record.disposable))
-			.map(record => ({
-				disposable: record.disposable,
-				label: record.label,
-				ownerLabel: record.owner ? this.label(record.owner) : undefined,
-				createdAt: record.createdAt,
-			}));
+		return [...this.records.values()].filter(record => !singletonOwned.has(record.disposable)).map((record) => ({
+			disposable: record.disposable,
+			label: record.label,
+			ownerLabel: record.owner ? this.label(record.owner) : undefined,
+			createdAt: record.createdAt,
+		}));
 	}
 
 	assertNoLeaks(): void {
 		const leaks = this.leaks();
 		if (leaks.length === 0) return;
-		const details = leaks.map(leak => {
-			const ownership = leak.ownerLabel ? ` owned by ${leak.ownerLabel}` : ' without an owner';
+		const details = leaks.map((leak) => {
+			const ownership = leak.ownerLabel
+				? ` owned by ${leak.ownerLabel}`
+				: ' without an owner';
 			return `${leak.label}${ownership}${leak.createdAt ? `\n${leak.createdAt}` : ''}`;
 		});
-		throw new Error(`Detected ${leaks.length} undisposed disposable(s):\n${details.join('\n')}`);
+		throw new Error(
+			`Detected ${leaks.length} undisposed disposable(s):\n${details.join('\n')}`,
+		);
 	}
 
 	private label(disposable: TrackableDisposable): string {
@@ -265,17 +306,24 @@ export class DisposableTracker implements IDisposableTracker {
 /**
  * Installs the development tracker for the current JavaScript realm.
  */
-export function installDisposableTracker(tracker: DisposableTracker): globalThis.Disposable {
+export function installDisposableTracker(
+	tracker: DisposableTracker,
+): globalThis.Disposable {
 	return registerDisposableTracker(tracker);
 }
 
 function disposableLabel(disposable: TrackableDisposable): string {
 	const constructor = (disposable as object).constructor;
-	return typeof constructor === 'function' && constructor.name ? constructor.name : 'Disposable';
+	return typeof constructor === 'function' && constructor.name
+		? constructor.name
+		: 'Disposable';
 }
 
 function captureCreationStack(): string | undefined {
-	return new Error().stack?.split('\n').slice(3).join('\n');
+	return new Error().stack
+		?.split('\n')
+		.slice(3)
+		.join('\n');
 }
 
 /**
@@ -442,7 +490,9 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 		return this.stack.disposed;
 	}
 
-	public add<T extends globalThis.AsyncDisposable | globalThis.Disposable | null | undefined>(resource: T): T {
+	public add<
+		T extends globalThis.AsyncDisposable | globalThis.Disposable | null | undefined,
+	>(resource: T): T {
 		if (!resource) return resource;
 		if ((resource as unknown) === this) {
 			throw new Error('Cannot register an async disposable store on itself');
@@ -604,18 +654,20 @@ export class DisposableMap<K, V extends IDisposable = IDisposable> extends Abstr
 /**
  * Combines resources into one project disposable.
  */
-export function combinedDisposable(...resources: readonly IDisposable[]): IDisposable {
+export function combinedDisposable(
+	...resources: readonly IDisposable[]
+): IDisposable {
 	const store = new DisposableStore();
 	for (const resource of resources) store.add(resource);
 	return store;
 }
 
-export function dispose<T extends { dispose(): void }>(resource: T): T;
-export function dispose<T extends { dispose(): void }>(resource: T | undefined): T | undefined;
-export function dispose<T extends { dispose(): void }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
-export function dispose<T extends { dispose(): void }>(resources: Array<T>): Array<T>;
-export function dispose<T extends { dispose(): void }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
-export function dispose<T extends { dispose(): void }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
+export function dispose<T extends { dispose(): void; }>(resource: T): T;
+export function dispose<T extends { dispose(): void; }>(resource: T | undefined): T | undefined;
+export function dispose<T extends { dispose(): void; }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
+export function dispose<T extends { dispose(): void; }>(resources: Array<T>): Array<T>;
+export function dispose<T extends { dispose(): void; }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
+export function dispose<T extends { dispose(): void; }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
 	if (!value) {
 		return value;
 	}

@@ -54,13 +54,7 @@ test('save cleanup waits for editor parts before creating the Workbench editor s
 	services.registerInstance(IBulkEditService, bulk.service);
 	services.registerInstance(IMarkerService, markers);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
-	using host = WorkbenchContributionsRegistry.createHost(
-		services,
-		error => {
-			throw error;
-		},
-		[SaveParticipantsContribution.ID],
-	);
+	using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [SaveParticipantsContribution.ID]);
 	// Match the production startup order: editor Parts do not exist at BlockStartup.
 	host.advance(WorkbenchPhase.BlockStartup);
 	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
@@ -73,12 +67,7 @@ test('save cleanup waits for editor parts before creating the Workbench editor s
 });
 
 class SaveTestServices extends Disposable {
-	readonly bulk = this._register(
-		new BulkEditTestServices([
-			[resource, 'original'],
-			[URI.file('/workspace/other.ts'), 'other'],
-		]),
-	);
+	readonly bulk = this._register(new BulkEditTestServices([[resource, 'original'], [URI.file('/workspace/other.ts'), 'other']]));
 	readonly configuration = this._register(new WorkbenchConfigurationService());
 	readonly features = this._register(new LanguageFeaturesService());
 	readonly markers = this._register(new MarkerService());
@@ -92,15 +81,7 @@ class SaveTestServices extends Disposable {
 		this.services.registerInstance(IBulkEditService, this.bulk.service);
 		this.services.registerInstance(IMarkerService, this.markers);
 		registerCodeEditorServices(this.services);
-		this.host = this._register(
-			WorkbenchContributionsRegistry.createHost(
-				this.services,
-				error => {
-					throw error;
-				},
-				[SaveParticipantsContribution.ID],
-			),
-		);
+		this.host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, [SaveParticipantsContribution.ID]));
 		this.host.advance(WorkbenchPhase.BlockRestore);
 	}
 }
@@ -118,39 +99,27 @@ class SaveTestEditor extends Disposable {
 		const modelChanges = this._register(new Emitter<void>());
 		this.editor = {
 			getId: () => id,
-			getModel: () => (this.isDisposed ? null : currentModel),
-			setModel: (value: TextModel | null) => {
-				currentModel = value;
-				modelChanges.fire();
-			},
+			getModel: () => this.isDisposed ? null : currentModel,
+			setModel: (value: TextModel | null) => { currentModel = value; modelChanges.fire(); },
 			getSelections: () => this.selections,
 			getSelection: () => this.selections[0] ?? null,
-			setSelections: (selections: readonly Selection[]) => {
-				this.selections = [...selections];
-			},
+			setSelections: (selections: readonly Selection[]) => { this.selections = [...selections]; },
 			getDomNode: () => null,
 			onDidChangeModel: modelChanges.event,
 			onDidFocusEditorText: Event.None,
 			onDidFocusEditorWidget: Event.None,
 			hasTextFocus: () => false,
 			hasWidgetFocus: () => false,
-			pushUndoStop: () => {
-				model.pushStackElement();
-				return true;
-			},
-			getContribution: (id: string) => (id === SnippetController2.ID ? this.snippets : null),
+			pushUndoStop: () => { model.pushStackElement(); return true; },
+			getContribution: (id: string) => id === SnippetController2.ID ? this.snippets : null,
 		} as unknown as ICodeEditor;
 		this.snippets = this._register(new SnippetController2(this.editor));
 		const registry = services.get(ICodeEditorService);
 		registry.addCodeEditor(this.editor);
 		this._register(toDisposable(() => registry.removeCodeEditor(this.editor)));
 	}
-	setSelection(selection: Selection): void {
-		this.editor.setSelections([selection]);
-	}
-	getSelections(): readonly Selection[] | null {
-		return this.editor.getSelections();
-	}
+	setSelection(selection: Selection): void { this.editor.setSelections([selection]); }
+	getSelections(): readonly Selection[] | null { return this.editor.getSelections(); }
 }
 
 test('save cleanup runs on the shared model without a pane and groups both edits for undo', async () => {
@@ -207,7 +176,7 @@ test('save cleanup runs before code actions and inserts the final newline after 
 		provideCodeActions: request => {
 			assert.equal(request.snapshot.getText(), 'alpha\n beta');
 			return [action(request, 'fixed')];
-		},
+		}
 	});
 	await reference.save(signal());
 	assert.equal(fixture.bulk.store.text(resource), 'fixed\n');
@@ -329,12 +298,7 @@ test('cancelled cleanup retains undo and the save queue can retry with current c
 	reference.model.pushStackElement();
 	const started = new DeferredPromise<void>();
 	const ready = new DeferredPromise<readonly LanguageCodeAction[]>();
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: () => {
-			void started.complete();
-			return ready.p;
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
 	const controller = new AbortController();
 	const saving = reference.save(controller.signal);
 	await started.p;
@@ -379,58 +343,31 @@ test('Save As cleans the destination and leaves the source draft intact', async 
 
 function action(request: LanguageCodeActionRequest, text: string, kind = request.only![0]): LanguageCodeAction {
 	return {
-		title: kind,
-		kind,
-		edit: {
-			entries: [
-				{
-					kind: 'textDocument',
-					resource: request.resource,
-					version: request.snapshot.version,
-					expectedText: request.snapshot.getText(),
-					edits: [{ range: request.range, text }],
-				},
-			],
-		},
+		title: kind, kind, edit: {
+			entries: [{
+				kind: 'textDocument', resource: request.resource,
+				version: request.snapshot.version, expectedText: request.snapshot.getText(), edits: [{ range: request.range, text }]
+			}]
+		}
 	};
 }
 
 test('save contribution runs fixes before imports on the shared model, persists their result and retains undo', async () => {
 	using fixture = new SaveTestServices();
-	await fixture.configuration.updateValue('editor.codeActionsOnSave', {
-		'source.organizeImports': 'explicit',
-		'source.fixAll': 'explicit',
-	});
+	await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.organizeImports': 'explicit', 'source.fixAll': 'explicit' });
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	using second = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
-	fixture.markers.changeOne('test', resource, [
-		{
-			startLineNumber: 1,
-			startColumn: 1,
-			endLineNumber: 1,
-			endColumn: 7,
-			severity: MarkerSeverity.Warning,
-			message: 'unused',
-			source: 'test',
-			code: '42',
-		},
-	]);
+	fixture.markers.changeOne('test', resource, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 7, severity: MarkerSeverity.Warning, message: 'unused', source: 'test', code: '42' }]);
 	const requests: LanguageCodeActionRequest[] = [];
 	using provider = fixture.features.codeActionProvider.register('*', {
 		provideCodeActions: request => {
 			requests.push(request);
 			return [action(request, request.snapshot.getText() + (request.only![0] === 'source.fixAll' ? '-fixed' : '-sorted'))];
-		},
+		}
 	});
 	await reference.save(signal());
-	assert.deepEqual(
-		requests.map(request => [request.only![0], request.snapshot.getText()]),
-		[
-			['source.fixAll', 'edited'],
-			['source.organizeImports', 'edited-fixed'],
-		],
-	);
+	assert.deepEqual(requests.map(request => [request.only![0], request.snapshot.getText()]), [['source.fixAll', 'edited'], ['source.organizeImports', 'edited-fixed']]);
 	assert.equal(requests[0].diagnostics[0].severity, LanguageDiagnosticSeverity.Warning);
 	assert.deepEqual(requests[0].diagnostics[0].range, new Range(1, 1, 1, 7));
 	assert.equal(fixture.bulk.store.text(resource), 'edited-fixed-sorted');
@@ -446,11 +383,7 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 	test(`save modes and language overrides select actions for reason ${reason}`, async () => {
 		using fixture = new SaveTestServices();
 		await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.global': 'always' });
-		await fixture.configuration.updateValue(
-			'editor.codeActionsOnSave',
-			{ 'source.fixAll': 'explicit', 'source.organizeImports': 'always', 'source.disabled': 'never' },
-			{ overrideIdentifier: 'plaintext' },
-		);
+		await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit', 'source.organizeImports': 'always', 'source.disabled': 'never' }, { overrideIdentifier: 'plaintext' });
 		using reference = await fixture.bulk.models.acquire({ resource }, signal());
 		reference.model.setValue('edited');
 		const kinds: string[] = [];
@@ -458,37 +391,25 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 			provideCodeActions: request => {
 				kinds.push(request.only![0]);
 				return [action(request, request.snapshot.getText() + '-action')];
-			},
+			}
 		});
 		await reference.save(signal(), { reason });
-		assert.deepEqual(
-			kinds,
-			reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.global', 'source.organizeImports'] : ['source.global', 'source.organizeImports'],
-		);
+		assert.deepEqual(kinds, reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.global', 'source.organizeImports'] : ['source.global', 'source.organizeImports']);
 		assert.equal(fixture.bulk.store.text(resource), reason === SaveReason.AUTO ? 'edited' : reason === SaveReason.EXPLICIT ? 'edited-action-action-action' : 'edited-action-action');
 	});
 }
 
 test('parent save kinds query once and never exclusions reject disabled descendants', async () => {
 	using fixture = new SaveTestServices();
-	await fixture.configuration.updateValue('editor.codeActionsOnSave', {
-		source: 'explicit',
-		'source.organizeImports': 'explicit',
-		'source.fixAll': 'never',
-	});
+	await fixture.configuration.updateValue('editor.codeActionsOnSave', { source: 'explicit', 'source.organizeImports': 'explicit', 'source.fixAll': 'never' });
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	const kinds: string[] = [];
 	using provider = fixture.features.codeActionProvider.register('*', {
 		provideCodeActions: request => {
 			kinds.push(request.only![0]);
-			return [
-				action(request, 'forbidden', 'source.fixAll.tool'),
-				{ title: 'disabled', kind: 'source.organizeImports', disabledReason: 'unavailable' },
-				{ title: 'resolved imports', kind: 'source.organizeImports' },
-			];
-		},
-		resolveCodeAction: (_original, request) => action(request, 'sorted', 'source.organizeImports'),
+			return [action(request, 'forbidden', 'source.fixAll.tool'), { title: 'disabled', kind: 'source.organizeImports', disabledReason: 'unavailable' }, { title: 'resolved imports', kind: 'source.organizeImports' }];
+		}, resolveCodeAction: (_original, request) => action(request, 'sorted', 'source.organizeImports')
 	});
 	await reference.save(signal());
 	assert.deepEqual(kinds, ['source']);
@@ -505,18 +426,9 @@ for (const phase of ['query', 'resolve'] as const) {
 		const ready = new DeferredPromise<void>();
 		using provider = fixture.features.codeActionProvider.register('*', {
 			provideCodeActions: async request => {
-				if (phase === 'query') {
-					await started.complete();
-					await ready.p;
-					return [action(request, 'stale')];
-				}
+				if (phase === 'query') { await started.complete(); await ready.p; return [action(request, 'stale')]; }
 				return [{ title: 'resolve', kind: 'source.fixAll' }];
-			},
-			resolveCodeAction: async (_original, request) => {
-				await started.complete();
-				await ready.p;
-				return action(request, 'stale');
-			},
+			}, resolveCodeAction: async (_original, request) => { await started.complete(); await ready.p; return action(request, 'stale'); },
 		});
 		const saving = reference.save(signal());
 		await started.p;
@@ -537,12 +449,7 @@ test('cancelled providers release the save queue, and removing the contribution 
 	const started = new DeferredPromise<void>();
 	const ready = new DeferredPromise<LanguageCodeActionList>();
 	let released = 0;
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: () => {
-			void started.complete();
-			return ready.p;
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
 	const controller = new AbortController();
 	const saving = reference.save(controller.signal);
 	await started.p;
@@ -564,15 +471,10 @@ for (const outcome of ['apply', 'resolve error'] as const) {
 		reference.model.setValue('edited');
 		let released = 0;
 		using provider = fixture.features.codeActionProvider.register('*', {
-			provideCodeActions: () => ({
-				actions: [{ title: 'Fix', kind: 'source.fixAll', isAI: true }],
-				...toDisposable(() => released++),
-			}),
+			provideCodeActions: () => ({ actions: [{ title: 'Fix', kind: 'source.fixAll', isAI: true }], ...toDisposable(() => released++) }),
 			resolveCodeAction: (_original, request) => {
 				assert.equal(released, 0, 'provider data remains available during resolution');
-				if (outcome === 'resolve error') {
-					throw new Error('resolve failed');
-				}
+				if (outcome === 'resolve error') { throw new Error('resolve failed'); }
 				return action(request, 'fixed');
 			},
 		});
@@ -592,11 +494,7 @@ test('save action failures preserve dirty text and propagate before persistence'
 	await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit' });
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: () => {
-			throw new Error('provider failed');
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { throw new Error('provider failed'); } });
 	await assert.rejects(reference.save(signal()), /provider failed/);
 	assert.equal(fixture.bulk.store.text(resource), 'original');
 	assert.equal(reference.isDirty, true);
@@ -612,23 +510,8 @@ test('workspace edits persist unopened files without recursively running save ac
 		provideCodeActions: request => {
 			requests++;
 			const current = action(request, 'fixed');
-			return [
-				{
-					...current,
-					edit: {
-						entries: [
-							...current.edit!.entries,
-							{
-								kind: 'textDocument',
-								resource: URI.file('/workspace/other.ts'),
-								expectedText: 'other',
-								edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }],
-							},
-						],
-					},
-				},
-			];
-		},
+			return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
+		}
 	});
 	await reference.save(signal());
 	assert.equal(requests, 1);
@@ -643,12 +526,7 @@ test('Save As runs on the target model before writing and leaves the original fi
 	reference.model.setValue('edited');
 	const target = URI.file('/workspace/copy.ts');
 	const requested: string[] = [];
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: request => {
-			requested.push(request.resource.toString());
-			return [action(request, 'fixed copy')];
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => { requested.push(request.resource.toString()); return [action(request, 'fixed copy')]; } });
 	await reference.saveAs(target, signal());
 	assert.deepEqual(requested, [target.toString()]);
 	assert.equal(fixture.bulk.store.text(target), 'fixed copy');
@@ -663,18 +541,8 @@ test('sequential providers receive the current version when fixing the same save
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	const queried: string[] = [];
-	using second = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: request => {
-			queried.push(request.snapshot.getText());
-			return [action(request, request.snapshot.getText() + '-second')];
-		},
-	});
-	using first = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: request => {
-			queried.push(request.snapshot.getText());
-			return [action(request, request.snapshot.getText() + '-first')];
-		},
-	});
+	using second = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => { queried.push(request.snapshot.getText()); return [action(request, request.snapshot.getText() + '-second')]; } });
+	using first = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => { queried.push(request.snapshot.getText()); return [action(request, request.snapshot.getText() + '-first')]; } });
 	await reference.save(signal());
 	assert.deepEqual(queried, ['edited', 'edited-first']);
 	assert.equal(fixture.bulk.store.text(resource), 'edited-first-second');
@@ -689,23 +557,8 @@ test('a failed workspace write rolls back save edits without reentering the save
 	using provider = fixture.features.codeActionProvider.register('*', {
 		provideCodeActions: request => {
 			const current = action(request, 'fixed');
-			return [
-				{
-					...current,
-					edit: {
-						entries: [
-							...current.edit!.entries,
-							{
-								kind: 'textDocument',
-								resource: URI.file('/workspace/other.ts'),
-								expectedText: 'other',
-								edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }],
-							},
-						],
-					},
-				},
-			];
-		},
+			return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
+		}
 	});
 	await assert.rejects(reference.save(signal()), /write failed/);
 	assert.equal(reference.model.getText(), 'edited');
@@ -721,12 +574,7 @@ test('disposing the file model service cancels an unfinished save query before w
 	reference.model.setValue('edited');
 	const started = new DeferredPromise<void>();
 	const ready = new DeferredPromise<readonly LanguageCodeAction[]>();
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: () => {
-			void started.complete();
-			return ready.p;
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
 	const saving = reference.save(signal());
 	await started.p;
 	fixture.bulk.models.dispose();
@@ -742,13 +590,7 @@ test('save retains the shared model after its last pane closes until the action 
 	reference.model.setValue('edited');
 	const started = new DeferredPromise<void>();
 	const ready = new DeferredPromise<void>();
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: async request => {
-			await started.complete();
-			await ready.p;
-			return [action(request, 'fixed')];
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: async request => { await started.complete(); await ready.p; return [action(request, 'fixed')]; } });
 	const saving = reference.save(signal());
 	await started.p;
 	reference.dispose();
@@ -762,6 +604,7 @@ test('save retains the shared model after its last pane closes until the action 
 const codeFeatures = registerTestCodeEditorFeatures();
 afterCodeFeatures(() => codeFeatures.dispose());
 
+
 test('retiring the Code provider cancels an unfinished save action without persisting stale edits', async () => {
 	using fixture = new SaveTestServices();
 	await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit' });
@@ -769,12 +612,7 @@ test('retiring the Code provider cancels an unfinished save action without persi
 	reference.model.setValue('edited');
 	const started = new DeferredPromise<void>();
 	const ready = new DeferredPromise<readonly LanguageCodeAction[]>();
-	using provider = fixture.features.codeActionProvider.register('*', {
-		provideCodeActions: () => {
-			void started.complete();
-			return ready.p;
-		},
-	});
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
 	try {
 		const saving = reference.save(signal());
 		await started.p;
@@ -784,7 +622,5 @@ test('retiring the Code provider cancels an unfinished save action without persi
 		assert.equal(reference.model.getText(), 'edited');
 		assert.equal(reference.isDirty, true);
 		assert.equal(fixture.bulk.store.saved.length, 0);
-	} finally {
-		await ready.complete([]);
-	}
+	} finally { await ready.complete([]); }
 });

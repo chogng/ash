@@ -1,14 +1,4 @@
-import {
-	type IDebugSession,
-	type IDebugConfiguration,
-	normalizeDebugAdapterDescriptor,
-	type DebugAdapterFactory,
-	DebugConfigurationProviderTriggerKind,
-	type DebugConfiguration,
-	type IDebugConfigurationProvider,
-	type IDebugAdapterTracker,
-	type IDebugAdapterTrackerFactory,
-} from '../../contrib/debug/common/debug.js';
+import { type IDebugSession, type IDebugConfiguration, normalizeDebugAdapterDescriptor, type DebugAdapterFactory, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory } from '../../contrib/debug/common/debug.js';
 import { parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions } from '../../contrib/tasks/common/taskConfiguration.js';
 import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
@@ -23,13 +13,7 @@ import type { IWorkspaceContextService } from '../../../platform/workspace/commo
 import { URI } from '../../../base/common/uri.js';
 
 /** Debug owns resolution order; this adapter owns only bounded Host callback data. */
-export function createExtensionHostDebugConfigurationProvider(
-	type: string,
-	id: string,
-	triggerKind: DebugConfigurationProviderTriggerKind,
-	invoke: ExtensionHostProviderInvoker,
-	workspace: IWorkspaceContextService,
-): IDebugConfigurationProvider {
+export function createExtensionHostDebugConfigurationProvider(type: string, id: string, triggerKind: DebugConfigurationProviderTriggerKind, invoke: ExtensionHostProviderInvoker, workspace: IWorkspaceContextService): IDebugConfigurationProvider {
 	const folderPayload = (resource: URI | undefined): JsonValue => {
 		if (!resource) return null;
 		const folder = workspace.getWorkspace().folders.find(candidate => candidate.uri.toString() === resource.toString());
@@ -39,8 +23,7 @@ export function createExtensionHostDebugConfigurationProvider(
 	const configuration = (value: JsonValue): DebugConfiguration => {
 		const input = object(value, 'Extension Debug configuration');
 		return Object.freeze({
-			...input,
-			name: boundedString(input.name, 'Debug configuration name', 256, false),
+			...input, name: boundedString(input.name, 'Debug configuration name', 256, false),
 			type: boundedString(input.type, 'Debug configuration type', 128, false),
 			request: textEnum(input.request, 'Debug configuration request', ['launch', 'attach'] as const),
 		});
@@ -55,71 +38,45 @@ export function createExtensionHostDebugConfigurationProvider(
 		return result.configuration === null ? null : configuration(result.configuration);
 	};
 	return Object.freeze({
-		id,
-		type,
-		triggerKind,
+		id, type, triggerKind,
 		provideDebugConfigurations: async (folder: URI | undefined, signal: AbortSignal) => {
 			const result = exactObject(await invoke('provideDebugConfigurations', { folder: folderPayload(folder) }, signal), 'Extension Debug configuration templates', ['configurations']);
 			return Object.freeze(boundedArray(result.configurations, 'Debug configuration templates', 64).map(configuration));
 		},
 		resolveDebugConfiguration: (folder: URI | undefined, config: DebugConfiguration, signal: AbortSignal) => resolve('resolveDebugConfiguration', folder, config, signal),
-		resolveDebugConfigurationWithSubstitutedVariables: (folder: URI | undefined, config: DebugConfiguration, signal: AbortSignal) =>
-			resolve('resolveDebugConfigurationWithSubstitutedVariables', folder, config, signal),
+		resolveDebugConfigurationWithSubstitutedVariables: (folder: URI | undefined, config: DebugConfiguration, signal: AbortSignal) => resolve('resolveDebugConfigurationWithSubstitutedVariables', folder, config, signal),
 	});
 }
 
 /** Both catalog queries and resolveTask expose the same current workspace metadata. */
 export function extensionHostTaskSnapshot(task: IWorkspaceTask, workspace: IWorkspaceContextService): JsonValue {
 	const folders = workspace.getWorkspace().folders;
-	const folder = task.dirId
-		? folders.find(folder => folder.id === task.dirId)
-		: URI.isUri(task.scope)
-			? folders.find(folder => folder.uri.toString() === task.scope!.toString())
-			: task.scope === undefined && folders.length === 1
-				? folders[0]
-				: undefined;
+	const folder = task.dirId ? folders.find(folder => folder.id === task.dirId)
+		: URI.isUri(task.scope) ? folders.find(folder => folder.uri.toString() === task.scope!.toString())
+			: task.scope === undefined && folders.length === 1 ? folders[0] : undefined;
 	const unresolved = task.definition && task.unsupportedFeatures?.includes(`type:${task.definition.type}`);
-	const execution = task.execution?.type === 'custom' ? { type: 'custom' } : (task.execution ?? (!unresolved && task.command ? { type: 'shell', commandLine: task.command } : undefined));
+	const execution = task.execution?.type === 'custom' ? { type: 'custom' }
+		: task.execution ?? (!unresolved && task.command ? { type: 'shell', commandLine: task.command } : undefined);
 	return normalizeExtensionHostPayload({
-		id: task.id,
-		clientTaskId: task.extensionTaskId ?? null,
-		name: task.label,
+		id: task.id, clientTaskId: task.extensionTaskId ?? null, name: task.label,
 		source: task.extensionSource ?? task.source,
 		definition: task.definition ?? { type: task.execution?.type ?? 'shell', task: task.label },
 		scope: typeof task.scope === 'number' ? task.scope : folder ? { uri: folder.uri.toString(), name: folder.name, index: folder.index } : 2,
 		...(execution === undefined ? {} : { execution }),
-		options: {
-			...(task.cwd === undefined ? {} : { cwd: task.cwd }),
-			...(task.environment === undefined ? {} : { env: task.environment }),
-		},
-		...(task.runOptions === undefined
-			? {}
-			: {
-					runOptions: task.runOptions.reevaluateOnRerun === undefined ? {} : { reevaluateOnRerun: task.runOptions.reevaluateOnRerun },
-				}),
+		options: { ...(task.cwd === undefined ? {} : { cwd: task.cwd }), ...(task.environment === undefined ? {} : { env: task.environment }) },
+		...(task.runOptions === undefined ? {} : { runOptions: task.runOptions.reevaluateOnRerun === undefined ? {} : { reevaluateOnRerun: task.runOptions.reevaluateOnRerun } }),
 		...(task.presentation === undefined ? {} : { presentation: task.presentation }),
-		group: task.group,
-		...(task.groupIsDefault === undefined ? {} : { groupIsDefault: task.groupIsDefault === true }),
-		isBackground: task.isBackground ?? false,
-		problemMatchers: task.problemMatchers ?? [],
-		detail: task.detail ?? null,
+		group: task.group, ...(task.groupIsDefault === undefined ? {} : { groupIsDefault: task.groupIsDefault === true }), isBackground: task.isBackground ?? false,
+		problemMatchers: task.problemMatchers ?? [], detail: task.detail ?? null,
 	});
 }
 
 export function createExtensionHostTaskProvider(id: string, invoke: ExtensionHostProviderInvoker, workspace: IWorkspaceContextService, type?: string): TaskProvider {
 	return Object.freeze({
-		id,
-		type,
+		id, type,
 		provideTasks: async (signal: AbortSignal): Promise<readonly TaskProviderTask[]> => normalizeTaskResult(await invoke('provideTasks', Object.freeze({}), signal), invoke),
 		resolveTask: async (task: IWorkspaceTask, signal: AbortSignal): Promise<TaskProviderTask | undefined> => {
-			const payload = {
-				task: {
-					...object(extensionHostTaskSnapshot(task, workspace), 'Task snapshot'),
-					label: task.label,
-					command: task.command,
-					...(task.dirId ? { dirId: task.dirId } : {}),
-				},
-			};
+			const payload = { task: { ...object(extensionHostTaskSnapshot(task, workspace), 'Task snapshot'), label: task.label, command: task.command, ...(task.dirId ? { dirId: task.dirId } : {}) } };
 			const value = await invoke('resolveTask', normalizeExtensionHostPayload(payload), signal);
 			if (value === null) return undefined;
 			const result = exactObject(value, 'Extension Task resolution', ['task']);
@@ -131,26 +88,15 @@ export function createExtensionHostTaskProvider(id: string, invoke: ExtensionHos
 /** A Host-broker callback supplies a descriptor; the existing Debug process owner starts it. */
 export function createExtensionHostDebugAdapterFactory(type: string, sourceId: string, invoke: ExtensionHostProviderInvoker, workspace: IWorkspaceContextService): DebugAdapterFactory {
 	return Object.freeze({
-		type,
-		label: type,
-		sourceId,
+		type, label: type, sourceId,
 		createDebugAdapterDescriptor: async (configuration: IDebugConfiguration, signal: AbortSignal, session: IDebugSession) => {
 			const folder = workspace.getWorkspace().folders.find(value => value.id === configuration.dirId);
-			const executable = configuration.adapter && !configuration.adapter.inline && !configuration.adapter.connection ? configuration.adapter : undefined;
+			const executable = configuration.adapter && !configuration.adapter.inline && !configuration.adapter.connection
+				? configuration.adapter : undefined;
 			const payload = {
 				...(executable === undefined ? {} : { executable }),
-				configuration: {
-					...configuration.arguments,
-					name: configuration.name,
-					type: configuration.type,
-					request: configuration.request,
-				},
-				session: {
-					id: session.id,
-					...(session.parentSession ? { parentSessionId: session.parentSession.id } : {}),
-					workspaceFolder: folder ? { uri: folder.uri.toString(), name: folder.name, index: folder.index } : null,
-				},
-				...(configuration.dirId ? { dirId: configuration.dirId } : {}),
+				configuration: { ...configuration.arguments, name: configuration.name, type: configuration.type, request: configuration.request },
+				session: { id: session.id, ...(session.parentSession ? { parentSessionId: session.parentSession.id } : {}), workspaceFolder: folder ? { uri: folder.uri.toString(), name: folder.name, index: folder.index } : null }, ...(configuration.dirId ? { dirId: configuration.dirId } : {}),
 			};
 			const returned = await invoke('createDebugAdapterDescriptor', normalizeExtensionHostPayload(payload), signal);
 			if (returned === null) return undefined;
@@ -161,61 +107,32 @@ export function createExtensionHostDebugAdapterFactory(type: string, sourceId: s
 				let closed = false;
 				const lifetime = new AbortController();
 				let closing: Promise<void> | undefined;
-				const close = (): Promise<void> =>
-					(closing ??= (async () => {
-						closed = true;
-						// Close remains admitted after descriptor retirement and gets its own deadline.
-						await invoke('closeInlineDebugAdapter', { inlineAdapterId }, new AbortController().signal);
-						// Canceling an admitted V8 call retires its entire isolate. A normal
-						// close lets finite in-flight reads settle under their existing deadlines.
-					})());
+				const close = (): Promise<void> => closing ??= (async () => {
+					closed = true;
+					// Close remains admitted after descriptor retirement and gets its own deadline.
+					await invoke('closeInlineDebugAdapter', { inlineAdapterId }, new AbortController().signal);
+					// Canceling an admitted V8 call retires its entire isolate. A normal
+					// close lets finite in-flight reads settle under their existing deadlines.
+				})();
 				return Object.freeze({
 					inline: {
 						async send(message: unknown): Promise<void> {
-							if (closed) {
-								throw new Error('Inline Debug Adapter is closed');
-							}
+							if (closed) { throw new Error('Inline Debug Adapter is closed'); }
 							await invoke('sendInlineDebugAdapter', normalizeExtensionHostPayload({ inlineAdapterId, message }), lifetime.signal);
 						},
 						async read(afterSequence: number, maxMessages: number) {
-							if (closed) {
-								throw new Error('Inline Debug Adapter is closed');
-							}
-							const value = exactObject(await invoke('readInlineDebugAdapter', { inlineAdapterId, afterSequence, maxMessages }, lifetime.signal), 'Inline Debug Adapter messages', [
-								'messages',
-								'nextSequence',
-								'exited',
-								'protocolError',
-							]);
+							if (closed) { throw new Error('Inline Debug Adapter is closed'); }
+							const value = exactObject(await invoke('readInlineDebugAdapter', { inlineAdapterId, afterSequence, maxMessages }, lifetime.signal), 'Inline Debug Adapter messages', ['messages', 'nextSequence', 'exited', 'protocolError']);
 							const messages = boundedArray(value.messages, 'Inline Debug Adapter messages', maxMessages).map(entry => {
 								const message = exactObject(entry, 'Inline Debug Adapter message', ['sequence', 'message']);
-								return Object.freeze({
-									sequence: nonNegativeInteger(message.sequence, 'Inline message sequence'),
-									message: message.message,
-								});
+								return Object.freeze({ sequence: nonNegativeInteger(message.sequence, 'Inline message sequence'), message: message.message });
 							});
 							const nextSequence = nonNegativeInteger(value.nextSequence, 'Inline read sequence');
-							if (
-								messages.some((message, index) => message.sequence !== afterSequence + index) ||
-								nextSequence !== afterSequence + messages.length ||
-								typeof value.exited !== 'boolean' ||
-								(value.protocolError !== null && typeof value.protocolError !== 'string')
-							) {
-								throw new TypeError('Invalid inline Debug Adapter read');
-							}
-							return {
-								messages,
-								nextSequence,
-								exited: value.exited,
-								protocolError: value.protocolError as string | null,
-								outputGap: false,
-								stderr: '',
-								exitCode: null,
-							};
+							if (messages.some((message, index) => message.sequence !== afterSequence + index) || nextSequence !== afterSequence + messages.length || typeof value.exited !== 'boolean' || value.protocolError !== null && typeof value.protocolError !== 'string') { throw new TypeError('Invalid inline Debug Adapter read'); }
+							return { messages, nextSequence, exited: value.exited, protocolError: value.protocolError as string | null, outputGap: false, stderr: '', exitCode: null };
 						},
 						close,
-					},
-					arguments: Object.freeze([]),
+					}, arguments: Object.freeze([])
 				});
 			}
 			if (result.connection !== undefined) {
@@ -224,19 +141,10 @@ export function createExtensionHostDebugAdapterFactory(type: string, sourceId: s
 			}
 			assertAllowedKeys(result, 'Extension Debug Adapter descriptor', ['program', 'arguments', 'cwd', 'env'], ['program', 'arguments']);
 			const env = result.env === undefined ? undefined : object(result.env, 'Extension Debug Adapter environment');
-			if (
-				env &&
-				(Object.keys(env).length > 128 ||
-					Object.entries(env).some(
-						([key, value]) => !key || key.length > 256 || /[=\0]/.test(key) || (value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))),
-					))
-			)
-				throw new TypeError('Invalid extension Debug Adapter environment');
+			if (env && (Object.keys(env).length > 128 || Object.entries(env).some(([key, value]) => !key || key.length > 256 || /[=\0]/.test(key) || value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))))) throw new TypeError('Invalid extension Debug Adapter environment');
 			return Object.freeze({
 				program: boundedString(result.program, 'Extension Debug Adapter program', 4096, false),
-				arguments: Object.freeze(
-					boundedArray(result.arguments, 'Extension Debug Adapter arguments', 256).map(value => boundedString(value, 'Extension Debug Adapter argument', 4096, true, false)),
-				),
+				arguments: Object.freeze(boundedArray(result.arguments, 'Extension Debug Adapter arguments', 256).map(value => boundedString(value, 'Extension Debug Adapter argument', 4096, true, false))),
 				...(result.cwd === undefined ? {} : { cwd: boundedString(result.cwd, 'Extension Debug Adapter cwd', 32768, false, false) }),
 				...(env === undefined ? {} : { env: Object.freeze(env as Record<string, string | null>) }),
 			});
@@ -247,82 +155,53 @@ export function createExtensionHostDebugAdapterFactory(type: string, sourceId: s
 /** The session owns callback handles; the Host never owns DAP sequencing or processes. */
 export function createExtensionHostDebugAdapterTrackerFactory(type: string, id: string, invoke: ExtensionHostProviderInvoker, workspace: IWorkspaceContextService): IDebugAdapterTrackerFactory {
 	return Object.freeze({
-		id,
-		type,
+		id, type,
 		createDebugAdapterTracker: async (session: IDebugSession, signal: AbortSignal): Promise<IDebugAdapterTracker | undefined> => {
 			const configuration = session.resolvedConfiguration ?? session.configuration;
 			const folder = workspace.getWorkspace().folders.find(candidate => candidate.id === configuration.dirId);
 			const payload = normalizeExtensionHostPayload({
 				session: {
-					id: session.id,
-					type: configuration.type,
-					name: session.name,
+					id: session.id, type: configuration.type, name: session.name,
 					...(session.parentSession ? { parentSessionId: session.parentSession.id } : {}),
-					configuration: {
-						...configuration.arguments,
-						name: configuration.name,
-						type: configuration.type,
-						request: configuration.request,
-					},
+					configuration: { ...configuration.arguments, name: configuration.name, type: configuration.type, request: configuration.request },
 					workspaceFolder: folder ? { uri: folder.uri.toString(), name: folder.name, index: folder.index } : null,
-				},
+				}
 			});
 			const value = await invoke('createDebugAdapterTracker', payload, signal);
-			if (value === null) {
-				return undefined;
-			}
+			if (value === null) { return undefined; }
 			const result = exactObject(value, 'Debug Adapter tracker handle', ['trackerId', 'operations']);
 			const trackerId = boundedString(result.trackerId, 'Debug Adapter tracker ID', 256, false);
-			const operations = boundedArray(result.operations, 'Debug Adapter tracker operations', 6).map(operation =>
-				textEnum(operation, 'Debug Adapter tracker operation', ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit'] as const),
-			);
-			if (new Set(operations).size !== operations.length) {
-				throw new TypeError('Duplicate Debug Adapter tracker operation');
-			}
+			const operations = boundedArray(result.operations, 'Debug Adapter tracker operations', 6).map(operation => textEnum(operation, 'Debug Adapter tracker operation', ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit'] as const));
+			if (new Set(operations).size !== operations.length) { throw new TypeError('Duplicate Debug Adapter tracker operation'); }
 			const lifetime = new AbortController();
 			let disposed = false;
 			const callback = async (event: string, data: Readonly<Record<string, unknown>> = {}): Promise<void> => {
-				if (disposed) {
-					return;
-				}
+				if (disposed) { return; }
 				await invoke('debugAdapterTrackerEvent', normalizeExtensionHostPayload({ trackerId, event, ...data }), lifetime.signal);
 			};
 			const release = toDisposable(() => {
-				if (disposed) {
-					return;
-				}
+				if (disposed) { return; }
 				// Release uses a separate deadline after pending hooks are canceled.
-				void invoke('debugAdapterTrackerEvent', { trackerId, event: 'dispose' }, new AbortController().signal).catch(() => {});
+				void invoke('debugAdapterTrackerEvent', { trackerId, event: 'dispose' }, new AbortController().signal).catch(() => { });
 				disposed = true;
 				lifetime.abort();
 			});
-			return Object.freeze(
-				Object.assign(release, {
-					...(operations.includes('onWillStartSession') ? { onWillStartSession: () => callback('onWillStartSession') } : {}),
-					...(operations.includes('onWillReceiveMessage') ? { onWillReceiveMessage: (message: unknown) => callback('onWillReceiveMessage', { message }) } : {}),
-					...(operations.includes('onDidSendMessage') ? { onDidSendMessage: (message: unknown) => callback('onDidSendMessage', { message }) } : {}),
-					...(operations.includes('onWillStopSession') ? { onWillStopSession: () => callback('onWillStopSession') } : {}),
-					...(operations.includes('onError')
-						? {
-								onError: (error: Error) => callback('onError', { message: error.message, name: error.name }),
-							}
-						: {}),
-					onExit: (code: number | undefined, exitSignal: string | undefined) => callback('onExit', { code: code ?? null, signal: exitSignal ?? null }),
-				}),
-			);
+			return Object.freeze(Object.assign(release, {
+				...(operations.includes('onWillStartSession') ? { onWillStartSession: () => callback('onWillStartSession') } : {}),
+				...(operations.includes('onWillReceiveMessage') ? { onWillReceiveMessage: (message: unknown) => callback('onWillReceiveMessage', { message }) } : {}),
+				...(operations.includes('onDidSendMessage') ? { onDidSendMessage: (message: unknown) => callback('onDidSendMessage', { message }) } : {}),
+				...(operations.includes('onWillStopSession') ? { onWillStopSession: () => callback('onWillStopSession') } : {}),
+				...(operations.includes('onError') ? { onError: (error: Error) => callback('onError', { message: error.message, name: error.name }) } : {}),
+				onExit: (code: number | undefined, exitSignal: string | undefined) => callback('onExit', { code: code ?? null, signal: exitSignal ?? null }),
+			}));
 		},
 	});
 }
 
-export function createExtensionHostTestProfileProvider(
-	id: string,
-	invoke: ExtensionHostProviderInvoker,
-	resolveTaskId: (providerRegistrationId: string, taskId: string) => string,
-): TestProfileProvider {
+export function createExtensionHostTestProfileProvider(id: string, invoke: ExtensionHostProviderInvoker, resolveTaskId: (providerRegistrationId: string, taskId: string) => string): TestProfileProvider {
 	return Object.freeze({
 		id,
-		provideTestProfiles: async (signal: AbortSignal): Promise<readonly TestProfileContribution[]> =>
-			normalizeTestProfileResult(await invoke('provideTestProfiles', Object.freeze({}), signal), resolveTaskId),
+		provideTestProfiles: async (signal: AbortSignal): Promise<readonly TestProfileContribution[]> => normalizeTestProfileResult(await invoke('provideTestProfiles', Object.freeze({}), signal), resolveTaskId),
 	});
 }
 
@@ -338,29 +217,7 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 	const result = exactObject(value, 'Extension Task provider result', ['tasks']);
 	const tasks = boundedArray(result.tasks, 'Extension Tasks', 10_000).map((task, index) => {
 		const input = object(task, `Extension Task ${index}`);
-		assertAllowedKeys(
-			input,
-			`Extension Task ${index}`,
-			[
-				'command',
-				'detail',
-				'env',
-				'group',
-				'groupIsDefault',
-				'runOptions',
-				'presentation',
-				'id',
-				'label',
-				'execution',
-				'definition',
-				'cwd',
-				'isBackground',
-				'problemMatchers',
-				'scope',
-				'source',
-			],
-			['group', 'id', 'label'],
-		);
+		assertAllowedKeys(input, `Extension Task ${index}`, ['command', 'detail', 'env', 'group', 'groupIsDefault', 'runOptions', 'presentation', 'id', 'label', 'execution', 'definition', 'cwd', 'isBackground', 'problemMatchers', 'scope', 'source'], ['group', 'id', 'label']);
 		if (input.isBackground !== undefined && typeof input.isBackground !== 'boolean') throw new TypeError('Extension Task isBackground must be a boolean');
 		if (input.groupIsDefault !== undefined && typeof input.groupIsDefault !== 'boolean') throw new TypeError('Extension Task groupIsDefault must be a boolean');
 		const runOptions = input.runOptions === undefined ? undefined : object(input.runOptions, 'Extension Task runOptions');
@@ -372,21 +229,14 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 			const descriptor = object(input.execution, 'Extension Task execution');
 			if (descriptor.type === 'process') {
 				assertAllowedKeys(descriptor, 'Extension Task execution', ['type', 'program', 'args'], ['type', 'program', 'args']);
-				execution = Object.freeze({
-					type: 'process',
-					program: boundedString(descriptor.program, 'Extension Task process', 32768, false, false),
-					args: Object.freeze(boundedArray(descriptor.args, 'Extension Task arguments', 1024).map(value => boundedString(value, 'Extension Task argument', 32768, true, false))),
-				});
+				execution = Object.freeze({ type: 'process', program: boundedString(descriptor.program, 'Extension Task process', 32768, false, false), args: Object.freeze(boundedArray(descriptor.args, 'Extension Task arguments', 1024).map(value => boundedString(value, 'Extension Task argument', 32768, true, false))) });
 			} else if (descriptor.type === 'shell') {
 				assertAllowedKeys(descriptor, 'Extension Task execution', ['type', 'commandLine', 'command', 'args', 'options'], ['type']);
 				execution = parseShellExecution(descriptor);
 			} else if (descriptor.type === 'custom') {
 				assertAllowedKeys(descriptor, 'Extension Task execution', ['type', 'id'], ['type', 'id']);
 				const executionId = boundedString(descriptor.id, 'Extension CustomExecution ID', 256, false);
-				execution = Object.freeze({
-					type: 'custom',
-					callback: (definition: TaskDefinition) => ExtensionTaskTerminal.create(invoke, executionId, definition),
-				});
+				execution = Object.freeze({ type: 'custom', callback: (definition: TaskDefinition) => ExtensionTaskTerminal.create(invoke, executionId, definition) });
 			} else {
 				throw new TypeError('Unsupported Extension Task execution');
 			}
@@ -408,11 +258,7 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 			...(input.command === undefined ? {} : { command: boundedString(input.command, `Extension Task ${index} command`, 32_768, false, false) }),
 			...(execution === undefined ? {} : { execution }),
 			...(input.isBackground === undefined ? {} : { isBackground: input.isBackground }),
-			...(input.problemMatchers === undefined
-				? {}
-				: {
-						problemMatchers: Object.freeze([...boundedArray(input.problemMatchers, 'Extension Task problemMatchers', 32)]),
-					}),
+			...(input.problemMatchers === undefined ? {} : { problemMatchers: Object.freeze([...boundedArray(input.problemMatchers, 'Extension Task problemMatchers', 32)]) }),
 			...(definition === undefined ? {} : { definition: Object.freeze({ ...definition, type: definition.type as string }) }),
 			...(input.cwd === undefined ? {} : { cwd: boundedString(input.cwd, 'Extension Task cwd', 32768, false, false) }),
 			group: textEnum(input.group, `Extension Task ${index} group`, ['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const) as WorkspaceTaskGroup,
@@ -422,10 +268,7 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 			...(input.detail === undefined ? {} : { detail: boundedString(input.detail, `Extension Task ${index} detail`, 4096, true) }),
 		});
 	});
-	assertUnique(
-		tasks.map(task => task.id),
-		'Extension Task IDs',
-	);
+	assertUnique(tasks.map(task => task.id), 'Extension Task IDs');
 	return Object.freeze(tasks);
 }
 
@@ -446,70 +289,46 @@ class ExtensionTaskTerminal extends Disposable implements TaskPseudoterminal {
 	readonly onDidChangeName = this.nameEmitter.event;
 	readonly handleInput: ((data: string) => void) | undefined;
 
-	private constructor(
-		private readonly invoke: ExtensionHostProviderInvoker,
-		private readonly ptyId: string,
-		acceptsInput: boolean,
-	) {
+	private constructor(private readonly invoke: ExtensionHostProviderInvoker, private readonly ptyId: string, acceptsInput: boolean) {
 		super();
 		void this.releaseCompletion.catch(() => undefined);
 		this.handleInput = acceptsInput ? data => this.dispatch('inputTaskTerminal', { data }) : undefined;
 	}
 
 	static async create(invoke: ExtensionHostProviderInvoker, executionId: string, definition: TaskDefinition): Promise<ExtensionTaskTerminal> {
-		const result = exactObject(await invoke('createTaskTerminal', normalizeExtensionHostPayload({ executionId, definition }), new AbortController().signal), 'Extension custom terminal', [
-			'ptyId',
-			'acceptsInput',
-		]);
+		const result = exactObject(await invoke('createTaskTerminal', normalizeExtensionHostPayload({ executionId, definition }), new AbortController().signal), 'Extension custom terminal', ['ptyId', 'acceptsInput']);
 		if (typeof result.acceptsInput !== 'boolean') throw new TypeError('Invalid custom terminal input capability');
 		return new ExtensionTaskTerminal(invoke, boundedString(result.ptyId, 'Extension terminal ID', 256, false), result.acceptsInput);
 	}
 
-	open(dimensions: { readonly columns: number; readonly rows: number } | undefined): void {
+	open(dimensions: { readonly columns: number; readonly rows: number; } | undefined): void {
 		if (this.opened || this.closed) return;
 		this.opened = true;
 		this.dispatch('openTaskTerminal', { dimensions: dimensions ?? null });
 		this.poll();
 	}
 
-	setDimensions(dimensions: { readonly columns: number; readonly rows: number }): void {
-		this.dispatch('resizeTaskTerminal', { dimensions });
-	}
-	close(): void {
-		this.dispose();
-	}
+	setDimensions(dimensions: { readonly columns: number; readonly rows: number; }): void { this.dispatch('resizeTaskTerminal', { dimensions }); }
+	close(): void { this.dispose(); }
 
 	private dispatch(operation: string, payload: JsonValue): void {
 		if (this.closed) return;
-		void this.queue
-			.schedule(async () => {
-				if (this.closed) return;
-				const result = exactObject(await this.invoke(operation, { ...object(payload, 'Terminal request'), ptyId: this.ptyId }, this.signal), 'Extension terminal events', ['events']);
-				for (const value of boundedArray(result.events, 'Extension terminal events', 1024)) {
-					if (this.closed) break;
-					const event = object(value, 'Extension terminal event');
-					if (event.type === 'data') this.writeEmitter.fire(boundedString(event.data, 'Extension terminal data', 262144, true, false));
-					else if (event.type === 'name') this.nameEmitter.fire(boundedString(event.name, 'Extension terminal name', 4096, false));
-					else if (event.type === 'close') {
-						if (event.code !== null && (!Number.isSafeInteger(event.code) || (event.code as number) < 0 || (event.code as number) > 2147483647))
-							throw new TypeError('Invalid extension terminal exit code');
-						try {
-							this.closeEmitter.fire(event.code === null ? undefined : (event.code as number));
-						} finally {
-							this.dispose();
-						}
-					} else throw new TypeError('Invalid extension terminal event');
-				}
-			})
-			.catch(() => {
-				if (!this.closed) {
-					try {
-						this.closeEmitter.fire(1);
-					} finally {
-						this.dispose();
-					}
-				}
-			});
+		void this.queue.schedule(async () => {
+			if (this.closed) return;
+			const result = exactObject(await this.invoke(operation, { ...object(payload, 'Terminal request'), ptyId: this.ptyId }, this.signal), 'Extension terminal events', ['events']);
+			for (const value of boundedArray(result.events, 'Extension terminal events', 1024)) {
+				if (this.closed) break;
+				const event = object(value, 'Extension terminal event');
+				if (event.type === 'data') this.writeEmitter.fire(boundedString(event.data, 'Extension terminal data', 262144, true, false));
+				else if (event.type === 'name') this.nameEmitter.fire(boundedString(event.name, 'Extension terminal name', 4096, false));
+				else if (event.type === 'close') {
+					if (event.code !== null && (!Number.isSafeInteger(event.code) || (event.code as number) < 0 || (event.code as number) > 2147483647)) throw new TypeError('Invalid extension terminal exit code');
+					try { this.closeEmitter.fire(event.code === null ? undefined : event.code as number); } finally { this.dispose(); }
+				} else throw new TypeError('Invalid extension terminal event');
+			}
+		}).catch(() => {
+			if (!this.closed) { try { this.closeEmitter.fire(1); } finally { this.dispose(); } }
+		});
 	}
 
 	private poll(): void {
@@ -518,13 +337,7 @@ class ExtensionTaskTerminal extends Disposable implements TaskPseudoterminal {
 			if (this.closed) return;
 			this.dispatch('readTaskTerminal', {});
 			// Wait for this read to retire; a slow extension cannot grow the polling queue.
-			void this.queue
-				.schedule(() => {
-					if (!this.closed) this.poll();
-				})
-				.catch(() => {
-					/* Closing the terminal clears queued polls. */
-				});
+			void this.queue.schedule(() => { if (!this.closed) this.poll(); }).catch(() => { /* Closing the terminal clears queued polls. */ });
 		}, 40);
 	}
 
@@ -534,12 +347,10 @@ class ExtensionTaskTerminal extends Disposable implements TaskPseudoterminal {
 		this.timer = undefined;
 		this.queue.clearPending();
 		// Do not cancel a short in-flight read: cancellation retires the entire extension isolate.
-		void this.queue
-			.schedule(() => this.invoke('closeTaskTerminal', { ptyId: this.ptyId }, this.signal))
-			.then(
-				() => this.released.complete(undefined),
-				error => this.released.error(error),
-			);
+		void this.queue.schedule(() => this.invoke('closeTaskTerminal', { ptyId: this.ptyId }, this.signal)).then(
+			() => this.released.complete(undefined),
+			error => this.released.error(error),
+		);
 		super.disposeCore();
 	}
 }
@@ -558,10 +369,7 @@ function normalizeTestProfileResult(value: JsonValue, resolveTaskId: (providerRe
 			...(input.detail === undefined ? {} : { detail: boundedString(input.detail, `Extension Test Profile ${index} detail`, 4096, true) }),
 		});
 	});
-	assertUnique(
-		profiles.map(profile => profile.id),
-		'Extension Test Profile IDs',
-	);
+	assertUnique(profiles.map(profile => profile.id), 'Extension Test Profile IDs');
 	return Object.freeze(profiles);
 }
 
@@ -607,8 +415,6 @@ function hexIdentifier(value: string): string {
 }
 
 function nonNegativeInteger(value: unknown, owner: string): number {
-	if (!Number.isSafeInteger(value) || (value as number) < 0) {
-		throw new TypeError(`${owner} must be a nonnegative safe integer`);
-	}
+	if (!Number.isSafeInteger(value) || (value as number) < 0) { throw new TypeError(`${owner} must be a nonnegative safe integer`); }
 	return value as number;
 }

@@ -17,9 +17,7 @@ suite('table browser component', () => {
 			for (const theme of ['light', 'hcDark', 'hcLight']) {
 				await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
 				await page.evaluate(() => window.ashTableIntegration.setCredentialStorage('accessDenied'));
-				const retry = root.getByRole('button', {
-					name: locale === 'zh-CN' ? '重试凭据存储' : 'Retry credential storage',
-				});
+				const retry = root.getByRole('button', { name: locale === 'zh-CN' ? '重试凭据存储' : 'Retry credential storage' });
 				await expect(retry).toBeVisible();
 				await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '访问被拒绝' : 'access was denied' })).toBeVisible();
 				await expect(key).toBeDisabled();
@@ -46,30 +44,19 @@ suite('table browser component', () => {
 				const errors: string[] = [];
 				page.on('pageerror', error => errors.push(error.message));
 				await page.goto('/table.html');
-				await expect
-					.poll(async () => ({
-						initialized: await page.evaluate(() => !!window.ashTableIntegration),
-						errors,
-					}))
-					.toEqual({ initialized: true, errors: [] });
+				await expect.poll(async () => ({ initialized: await page.evaluate(() => !!window.ashTableIntegration), errors })).toEqual({ initialized: true, errors: [] });
 				expect(await page.evaluate(() => devicePixelRatio)).toBe(scale);
 				const grid = page.getByRole('grid', { name: 'Local dictation models' });
 				await expect(grid.getByRole('row')).toHaveCount(3);
 				for (const theme of ['light', 'hcDark', 'hcLight']) {
 					await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
 					for (const width of [760, 340, 760]) {
-						await page.evaluate(width => {
-							document.getElementById('models')!.style.width = `${width}px`;
-						}, width);
+						await page.evaluate(width => { document.getElementById('models')!.style.width = `${width}px`; }, width);
 						const headerWidth = Math.max(590, await grid.evaluate(element => element.clientWidth));
-						await expect
-							.poll(() =>
-								grid.evaluate(element => ({
-									overflow: element.scrollWidth > element.clientWidth,
-									headerWidth: Math.round([...element.querySelectorAll('[role="columnheader"]')].reduce((width, header) => width + header.getBoundingClientRect().width, 0)),
-								})),
-							)
-							.toEqual({ overflow: width === 340, headerWidth });
+						await expect.poll(() => grid.evaluate(element => ({
+							overflow: element.scrollWidth > element.clientWidth,
+							headerWidth: Math.round([...element.querySelectorAll('[role="columnheader"]')].reduce((width, header) => width + header.getBoundingClientRect().width, 0)),
+						}))).toEqual({ overflow: width === 340, headerWidth });
 					}
 				}
 				await page.evaluate(() => window.ashTableIntegration.dispose());
@@ -103,9 +90,7 @@ suite('table browser component', () => {
 		await installed.getByRole('button', { name: 'Confirm uninstall', exact: true }).click();
 		await expect(installed).toContainText('Not installed');
 		expect(await page.evaluate(() => window.ashTableIntegration.operations)).toEqual([
-			'install:paraformer-large-online-ec6a3c64',
-			'cancel:paraformer-large-online-ec6a3c64',
-			'uninstall:imported-model',
+			'install:paraformer-large-online-ec6a3c64', 'cancel:paraformer-large-online-ec6a3c64', 'uninstall:imported-model',
 		]);
 	});
 
@@ -122,13 +107,7 @@ suite('table browser component', () => {
 		await expect(rows.nth(2).getByRole('gridcell').first()).toBeFocused();
 		for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 			await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
-			expect(
-				await rows
-					.nth(2)
-					.getByRole('gridcell')
-					.first()
-					.evaluate(element => getComputedStyle(element).outlineStyle),
-			).toBe('solid');
+			expect(await rows.nth(2).getByRole('gridcell').first().evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
 		}
 		const separator = grid.getByRole('separator').first();
 		await separator.focus();
@@ -141,9 +120,7 @@ suite('table browser component', () => {
 			return [headers, [...cells].map(node => node.getBoundingClientRect().width)];
 		});
 		expect(widths[1]).toEqual(widths[0]);
-		await page.evaluate(() => {
-			document.getElementById('models')!.style.width = '340px';
-		});
+		await page.evaluate(() => { document.getElementById('models')!.style.width = '340px'; });
 		await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 		await page.goto('/table.html?locale=zh-CN');
 		await expect(page.getByRole('grid', { name: '本地听写模型' }).getByRole('columnheader')).toHaveText(['模型', '大小', '状态', '操作']);
@@ -162,13 +139,9 @@ suite('table browser component', () => {
 				window.ashTableIntegration.showCredentialSettings();
 			});
 			const root = page.locator('#credential-settings');
-			const authorize = root.getByRole('button', {
-				name: locale === 'zh-CN' ? '授权系统钥匙串' : 'Authorize system keyring',
-			});
+			const authorize = root.getByRole('button', { name: locale === 'zh-CN' ? '授权系统钥匙串' : 'Authorize system keyring' });
 			const file = root.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage' });
-			const encrypted = root.getByRole('button', {
-				name: locale === 'zh-CN' ? '使用加密存储' : 'Use encrypted storage',
-			});
+			const encrypted = root.getByRole('button', { name: locale === 'zh-CN' ? '使用加密存储' : 'Use encrypted storage' });
 			await expect(authorize).toBeVisible();
 			await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual([]);
 			await authorize.focus();
@@ -201,10 +174,7 @@ suite('table browser component', () => {
 			await page.goto(`/table.html?locale=${locale}`);
 			await page.evaluate(() => window.ashTableIntegration.showSearchSettings());
 			const root = page.locator('#search-settings');
-			const engine = root.getByRole('combobox', {
-				name: locale === 'zh-CN' ? '索引搜索引擎' : 'Indexed search engine',
-				exact: true,
-			});
+			const engine = root.getByRole('combobox', { name: locale === 'zh-CN' ? '索引搜索引擎' : 'Indexed search engine', exact: true });
 			await expect(engine).toBeEnabled();
 			await expect(engine).toHaveText(locale === 'zh-CN' ? 'tgrep（默认）' : 'tgrep (default)');
 			await engine.focus();

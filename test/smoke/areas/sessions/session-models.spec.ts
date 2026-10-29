@@ -17,15 +17,15 @@ test.use({ video: 'on' });
 
 interface ModelTraffic {
 	dispose(): void;
-	readonly catalogReplies: { sessionId: string; model: ModelRef | null | undefined }[];
+	readonly catalogReplies: { sessionId: string; model: ModelRef | null | undefined; }[];
 	readonly modelReads: string[];
-	readonly starts: { threadId: string; model: ModelRef | null | undefined }[];
+	readonly starts: { threadId: string; model: ModelRef | null | undefined; }[];
 }
 
 // Observe product transport traffic without replacing services or replies.
 // Every recorded connection belongs to this scenario's isolated profile.
 function observeModels(): void {
-	const watched = new Map<EventTarget, { methods: Map<string | number, string>; incoming: EventListener }>();
+	const watched = new Map<EventTarget, { methods: Map<string | number, string>; incoming: EventListener; }>();
 	// Electron carries a newline-delimited UTF-8 byte stream. A MessagePort
 	// delivery may split a JSON frame or a multibyte character, unlike WebSocket.
 	const frameReader = (): ((value: unknown) => string[]) => {
@@ -34,7 +34,7 @@ function observeModels(): void {
 		return value => {
 			if (typeof value === 'string') return [value];
 			if (!value || typeof value !== 'object') return [];
-			const envelope = value as { frame?: unknown; data?: unknown };
+			const envelope = value as { frame?: unknown; data?: unknown; };
 			if (typeof envelope.frame === 'string') return [envelope.frame];
 			if (!(envelope.data instanceof Uint8Array)) return [];
 			pending += decoder.decode(envelope.data, { stream: true });
@@ -57,7 +57,7 @@ function observeModels(): void {
 			watched.clear();
 		},
 	};
-	(window as Window & { sessionModelTraffic?: ModelTraffic }).sessionModelTraffic = traffic;
+	(window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic = traffic;
 	const outgoing = (target: EventTarget, frame: string): void => {
 		let channel = watched.get(target);
 		if (!channel) {
@@ -148,7 +148,7 @@ for (const scenario of [
 			}
 			const chunks: Buffer[] = [];
 			for await (const chunk of request) chunks.push(Buffer.from(chunk));
-			const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string };
+			const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; };
 			invokedModels.push(body.model);
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			response.end(
@@ -343,7 +343,7 @@ for (const scenario of [
 			await selectModel(page, active(), childModel.model);
 			const catalogCount = async (): Promise<number> =>
 				page.evaluate(
-					sessionId => (window as Window & { sessionModelTraffic?: ModelTraffic }).sessionModelTraffic!.catalogReplies.filter(reply => reply.sessionId === sessionId).length,
+					sessionId => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.catalogReplies.filter(reply => reply.sessionId === sessionId).length,
 					sessionId,
 				);
 			let beforeRefresh = await catalogCount();
@@ -400,7 +400,7 @@ for (const scenario of [
 				.toBe('completed');
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(childModel.model);
 			expect(invokedModels).toEqual([rootModel.model, childModel.model, childModel.model, childModel.model, childModel.model]);
-			expect(await page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic }).sessionModelTraffic!.starts)).toEqual([{ threadId: rootThreadId, model: childModel }]);
+			expect(await page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.starts)).toEqual([{ threadId: rootThreadId, model: childModel }]);
 			if (scenario.subscription) await verifySubscriptionUpdates(application, webAppServer, client, source, sourceChat, page, active(), childModel, testInfo);
 			await attachJson(testInfo, 'durable-models', {
 				rootThreadId,
@@ -415,7 +415,7 @@ for (const scenario of [
 		} finally {
 			try {
 				for (const page of workbench.page.context().pages()) {
-					if (!page.isClosed()) await page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic }).sessionModelTraffic?.dispose());
+					if (!page.isClosed()) await page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic?.dispose());
 				}
 			} finally {
 				try {
@@ -528,7 +528,7 @@ async function verifySubscriptionUpdates(
 		);
 		await rename(temporary, join(directory, 'models_cache.json'));
 	};
-	const updates: { at: string; value: ProviderModelsUpdated }[] = [];
+	const updates: { at: string; value: ProviderModelsUpdated; }[] = [];
 	let accountUpdates = 0;
 	using listener = client.onNotification(notification => {
 		if (notification.method === 'provider/models/updated' && notification.params.connection === 'chatgpt-subscription') {
@@ -565,8 +565,8 @@ async function verifySubscriptionUpdates(
 		}),
 	);
 	await client.request(APP_SERVER_METHODS['account/read'], {});
-	const waitFor = async (name: string, effort: 'medium' | 'high', invalid: boolean, from: number, timeout: number): Promise<Extract<ProviderModelsUpdated, { accountId: string }>> => {
-		let found: Extract<ProviderModelsUpdated, { accountId: string }> | undefined;
+	const waitFor = async (name: string, effort: 'medium' | 'high', invalid: boolean, from: number, timeout: number): Promise<Extract<ProviderModelsUpdated, { accountId: string; }>> => {
+		let found: Extract<ProviderModelsUpdated, { accountId: string; }> | undefined;
 		await expect
 			.poll(
 				async () => {
@@ -575,7 +575,7 @@ async function verifySubscriptionUpdates(
 						.slice(from)
 						.map(update => update.value)
 						.find(
-							(update): update is Extract<ProviderModelsUpdated, { accountId: string }> =>
+							(update): update is Extract<ProviderModelsUpdated, { accountId: string; }> =>
 								'accountId' in update &&
 								(invalid ? update.result.type === 'failed' : update.result.type === 'models' && update.result.models.some(entry => entry.display_name === name)),
 						);
@@ -619,7 +619,7 @@ async function verifySubscriptionUpdates(
 		await expect(picker(page).getByRole('menuitemradio')).toHaveCount(1);
 		await expect(picker(page).getByRole('menuitemradio')).toContainText(initial);
 	}
-	const reads = (page: Page): Promise<number> => page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic }).sessionModelTraffic!.modelReads.length);
+	const reads = (page: Page): Promise<number> => page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.modelReads.length);
 	const expectCodeAuto = async (): Promise<void> => {
 		await cowork.keyboard.press('Escape');
 		await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -740,14 +740,14 @@ async function attachJson(testInfo: TestInfo, name: string, value: unknown): Pro
 
 interface DefaultsFixtureRequest {
 	readonly model: string;
-	readonly reasoning?: { readonly effort?: string };
+	readonly reasoning?: { readonly effort?: string; };
 	readonly input: readonly unknown[];
-	readonly tools?: readonly { readonly name?: string }[];
+	readonly tools?: readonly { readonly name?: string; }[];
 }
 const defaultsTest = test.extend<{
-	defaultsEndpoint: { readonly url: string; readonly requests: DefaultsFixtureRequest[] };
+	defaultsEndpoint: { readonly url: string; readonly requests: DefaultsFixtureRequest[]; };
 }>({
-	defaultsEndpoint: async ({}, use) => {
+	defaultsEndpoint: async ({ }, use) => {
 		const requests: DefaultsFixtureRequest[] = [];
 		const server = createServer(async (request, response) => {
 			if (request.method === 'GET') {
@@ -764,28 +764,28 @@ const defaultsTest = test.extend<{
 				if (consult && !body.tools?.some(tool => tool.name === 'advisor')) throw new Error('The real Turn did not expose its configured Advisor');
 				const output = consult
 					? [
-							{
-								type: 'function_call',
-								id: 'defaults-advice-item',
-								call_id: 'defaults-advice-call',
-								name: 'advisor',
-								arguments: JSON.stringify({ question: 'Confirm the persisted Advisor preference.' }),
-							},
-						]
+						{
+							type: 'function_call',
+							id: 'defaults-advice-item',
+							call_id: 'defaults-advice-call',
+							name: 'advisor',
+							arguments: JSON.stringify({ question: 'Confirm the persisted Advisor preference.' }),
+						},
+					]
 					: [
-							{
-								type: 'message',
-								id: `defaults-answer-${requests.length}`,
-								role: 'assistant',
-								phase: 'final_answer',
-								content: [
-									{
-										type: 'output_text',
-										text: body.model === 'gpt-6-astra' ? 'Persisted Advisor consulted.' : 'Saved defaults accepted.',
-									},
-								],
-							},
-						];
+						{
+							type: 'message',
+							id: `defaults-answer-${requests.length}`,
+							role: 'assistant',
+							phase: 'final_answer',
+							content: [
+								{
+									type: 'output_text',
+									text: body.model === 'gpt-6-astra' ? 'Persisted Advisor consulted.' : 'Saved defaults accepted.',
+								},
+							],
+						},
+					];
 				response
 					.writeHead(200, { 'content-type': 'text/event-stream' })
 					.end(
@@ -827,37 +827,37 @@ for (const locale of ['en', 'zh-CN']) {
 			const copy =
 				locale === 'zh-CN'
 					? {
-							code: '代码',
-							picker: '选择聊天模型',
-							auto: '自动',
-							high: '高',
-							execution: '执行与权限',
-							approval: '默认审批模式',
-							files: '命令文件访问',
-							readOnly: '只读',
-							save: '保存执行默认值',
-							refresh: '刷新',
-							stale: '后端设置已变化',
-							agents: '智能体',
-							advisor: '顾问模型',
-							enabledAdvisor: '启用顾问',
-						}
+						code: '代码',
+						picker: '选择聊天模型',
+						auto: '自动',
+						high: '高',
+						execution: '执行与权限',
+						approval: '默认审批模式',
+						files: '命令文件访问',
+						readOnly: '只读',
+						save: '保存执行默认值',
+						refresh: '刷新',
+						stale: '后端设置已变化',
+						agents: '智能体',
+						advisor: '顾问模型',
+						enabledAdvisor: '启用顾问',
+					}
 					: {
-							code: 'Code',
-							picker: 'Choose a chat model',
-							auto: 'Auto',
-							high: 'High',
-							execution: 'Execution and permissions',
-							approval: 'Default approval mode',
-							files: 'Command file access',
-							readOnly: 'Read only',
-							save: 'Save execution defaults',
-							refresh: 'Refresh',
-							stale: 'Backend settings changed',
-							agents: 'Agents',
-							advisor: 'Advisor model',
-							enabledAdvisor: 'Enable Advisor',
-						};
+						code: 'Code',
+						picker: 'Choose a chat model',
+						auto: 'Auto',
+						high: 'High',
+						execution: 'Execution and permissions',
+						approval: 'Default approval mode',
+						files: 'Command file access',
+						readOnly: 'Read only',
+						save: 'Save execution defaults',
+						refresh: 'Refresh',
+						stale: 'Backend settings changed',
+						agents: 'Agents',
+						advisor: 'Advisor model',
+						enabledAdvisor: 'Enable Advisor',
+					};
 			const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 			const { client } = connection;
 			try {

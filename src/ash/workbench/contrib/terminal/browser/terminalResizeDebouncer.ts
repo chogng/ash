@@ -5,7 +5,7 @@ import type { XtermTerminal } from './xterm/xtermTerminal.js';
 
 /** Coalesces expensive screen reflow; process acknowledgement stays in the process manager. */
 export class TerminalResizeDebouncer extends Disposable {
-	private pending: { cols: number; rows: number; horizontalOnly: boolean } | undefined;
+	private pending: { cols: number; rows: number; horizontalOnly: boolean; } | undefined;
 	private readonly idle = this._register(new MutableDisposable<IDisposable>());
 	private readonly scheduled = this._register(new RunOnceScheduler(() => this.flush(), 100));
 
@@ -15,9 +15,7 @@ export class TerminalResizeDebouncer extends Disposable {
 		private readonly resizeBoth: (cols: number, rows: number) => void,
 		private readonly resizeX: (cols: number) => void,
 		private readonly resizeY: (rows: number) => void,
-	) {
-		super();
-	}
+	) { super(); }
 
 	public async resize(cols: number, rows: number, immediate: boolean): Promise<void> {
 		if (this.isDisposed) return;

@@ -6,8 +6,12 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 export interface McpServerConfiguration {
 	readonly id: string;
 	readonly displayName: string;
-	readonly transport: { readonly type: 'stdio'; readonly command: string; readonly args: readonly string[] } | { readonly type: 'streamableHttp'; readonly url: string };
-	readonly credential: { readonly type: 'unauthenticated' } | { readonly type: 'reference'; readonly credentialRef: string };
+	readonly transport:
+	| { readonly type: 'stdio'; readonly command: string; readonly args: readonly string[]; }
+	| { readonly type: 'streamableHttp'; readonly url: string; };
+	readonly credential:
+	| { readonly type: 'unauthenticated'; }
+	| { readonly type: 'reference'; readonly credentialRef: string; };
 	readonly enablement: 'enabled' | 'disabled';
 }
 
@@ -18,7 +22,7 @@ export interface McpServerConfigurationSnapshot {
 
 /** Config is persistent user intent; connect/disconnect affect only the running backend process. */
 /** The server requires client registration details before a browser flow can start. */
-export class McpOAuthClientRequiredError extends Error {}
+export class McpOAuthClientRequiredError extends Error { }
 
 export interface McpOAuthLoginOptions {
 	readonly clientId?: string;

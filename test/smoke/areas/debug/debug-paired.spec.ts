@@ -1,4 +1,9 @@
-import { _electron, type ElectronApplication, type Locator, type Page } from '@playwright/test';
+import {
+	_electron,
+	type ElectronApplication,
+	type Locator,
+	type Page,
+} from '@playwright/test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
@@ -70,13 +75,22 @@ process.stdin.on('data', data => {
 
 test.use({ useDefaultLanguageServer: false });
 test.beforeEach(async ({ testWorkspace }) => {
-	test.skip(!upstreamExecutable, 'Set ASH_DEBUG_UPSTREAM_EXECUTABLE to run the paired product acceptance.');
+	test.skip(
+		!upstreamExecutable,
+		'Set ASH_DEBUG_UPSTREAM_EXECUTABLE to run the paired product acceptance.',
+	);
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, '.vscode'));
 	await writeFile(join(directory, 'paired-adapter.cjs'), adapter);
 	await writeFile(
 		join(directory, 'paired-source.js'),
-		Array.from({ length: 200 }, (_, index) => (index === 0 ? 'const answer = 42;' : index === 1 ? 'console.log(answer);' : `// synthetic source line ${index + 1}`)).join('\n') + '\n',
+		Array.from({ length: 200 }, (_, index) =>
+			index === 0
+				? 'const answer = 42;'
+				: index === 1
+					? 'console.log(answer);'
+					: `// synthetic source line ${index + 1}`,
+		).join('\n') + '\n',
 	);
 	await writeFile(
 		join(directory, '.vscode', 'launch.json'),
@@ -89,7 +103,11 @@ test.beforeEach(async ({ testWorkspace }) => {
 					request: 'launch',
 					debugAdapter: {
 						program: process.execPath,
-						args: [join(directory, 'paired-adapter.cjs'), join(directory, 'paired-source.js'), join(directory, 'ash-requests.jsonl')],
+						args: [
+							join(directory, 'paired-adapter.cjs'),
+							join(directory, 'paired-source.js'),
+							join(directory, 'ash-requests.jsonl'),
+						],
 					},
 				},
 			],
@@ -108,13 +126,21 @@ interface PairHost {
 }
 
 async function focusedRow(row: Locator): Promise<boolean> {
-	return row.evaluate(element => element.contains(document.activeElement) || document.activeElement?.getAttribute('aria-activedescendant') === element.id);
+	return row.evaluate(
+		(element) =>
+			element.contains(document.activeElement) ||
+			document.activeElement?.getAttribute('aria-activedescendant') ===
+			element.id,
+	);
 }
 
 test(
 	'paired upstream Debug preserves independent views, inspection, keyboard focus, source selection, scrolling and themes',
 	{ tag: ['@electron-app-server'] },
-	async ({ application, workbench, reloadWorkbench, testWorkspace }, testInfo) => {
+	async (
+		{ application, workbench, reloadWorkbench, testWorkspace },
+		testInfo,
+	) => {
 		test.setTimeout(240_000);
 		const directory = testWorkspace.directory;
 		const reference = join(directory, 'reference');
@@ -198,44 +224,86 @@ test(
 			});
 			await referenceResource.process(upstream.process());
 			let upstreamLog = '';
-			upstream.process().stderr?.on('data', data => {
+			upstream.process().stderr?.on('data', (data) => {
 				upstreamLog += data.toString();
 			});
-			upstream.process().stdout?.on('data', data => {
+			upstream.process().stdout?.on('data', (data) => {
 				upstreamLog += data.toString();
 			});
 			upstream.process().once('exit', (code, signal) => {
 				evidence.upstreamExit = { code, signal, log: upstreamLog };
 			});
 			const referencePage = await upstream.firstWindow();
-			await upstream.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+			await upstream
+				.context()
+				.tracing.start({ screenshots: true, snapshots: true, sources: true });
 			referencePage.setDefaultTimeout(15_000);
 			await expect(referencePage.locator('.monaco-workbench')).toBeVisible();
-			const appRoot = process.platform === 'darwin' ? resolve(dirname(upstreamExecutable!), '../Resources/app') : join(dirname(upstreamExecutable!), 'resources', 'app');
-			const product = JSON.parse(await readFile(join(appRoot, 'product.json'), 'utf8'));
+			const appRoot =
+				process.platform === 'darwin'
+					? resolve(dirname(upstreamExecutable!), '../Resources/app')
+					: join(dirname(upstreamExecutable!), 'resources', 'app');
+			const product = JSON.parse(
+				await readFile(join(appRoot, 'product.json'), 'utf8'),
+			);
 			evidence.upstream = {
-				version: JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8')).version,
+				version: JSON.parse(
+					await readFile(join(appRoot, 'package.json'), 'utf8'),
+				).version,
 				commit: product.commit,
 				date: product.date,
 			};
-			await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-			const openViews = () => workbench.page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('button', { name: 'More Actions', exact: true }).click();
+			await workbench.page
+				.getByRole('tab', { name: 'Run and Debug', exact: true })
+				.first()
+				.click();
+			const openViews = () =>
+				workbench.page
+					.locator('[data-part="sidebar"] .ash-pane-composite-title')
+					.getByRole('button', { name: 'More Actions', exact: true })
+					.click();
 			const items = await workbench.menus.inspect(application, openViews);
-			await workbench.menus.select(application, openViews, items.some(item => item.label === 'Call Stack') ? ['Call Stack'] : ['Views', 'Call Stack']);
+			await workbench.menus.select(
+				application,
+				openViews,
+				items.some((item) => item.label === 'Call Stack')
+					? ['Call Stack']
+					: ['Views', 'Call Stack'],
+			);
 			({ application, workbench } = await reloadWorkbench());
 			workbench.page.setDefaultTimeout(15_000);
-			if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible())) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-			await expect(workbench.page.locator('[data-view-id="workbench.debug.callStackView"]')).toHaveCount(0);
+			if (
+				!(await workbench.page
+					.locator('[data-view-container-id="ash.debug"]')
+					.isVisible())
+			)
+				await workbench.page
+					.getByRole('tab', { name: 'Run and Debug', exact: true })
+					.first()
+					.click();
+			await expect(
+				workbench.page.locator(
+					'[data-view-id="workbench.debug.callStackView"]',
+				),
+			).toHaveCount(0);
 			await referencePage.keyboard.press('ControlOrMeta+Shift+D');
-			await referencePage.locator('.part.sidebar').getByRole('button', { name: 'Views and More Actions...', exact: true }).click();
-			evidence.referenceViewMenu = await referencePage.locator('[role^="menuitem"]').evaluateAll(elements =>
-				elements.map(element => ({
-					role: element.getAttribute('role'),
-					label: element.getAttribute('aria-label'),
-					text: element.textContent,
-				})),
-			);
-			await referencePage.getByText('Call Stack', { exact: true }).last().click();
+			await referencePage
+				.locator('.part.sidebar')
+				.getByRole('button', { name: 'Views and More Actions...', exact: true })
+				.click();
+			evidence.referenceViewMenu = await referencePage
+				.locator('[role^="menuitem"]')
+				.evaluateAll((elements) =>
+					elements.map((element) => ({
+						role: element.getAttribute('role'),
+						label: element.getAttribute('aria-label'),
+						text: element.textContent,
+					})),
+				);
+			await referencePage
+				.getByText('Call Stack', { exact: true })
+				.last()
+				.click();
 			await expect(
 				referencePage.getByRole('button', {
 					name: 'Call Stack Section',
@@ -249,7 +317,10 @@ test(
 				await referencePage.locator('.quick-input-widget').getByText(label, { exact: true }).click();
 			};
 			const referenceReload = referencePage.waitForEvent('domcontentloaded');
-			await referenceCommand('workbench.action.reloadWindow', 'Developer: Reload Window');
+			await referenceCommand(
+				'workbench.action.reloadWindow',
+				'Developer: Reload Window',
+			);
 			await referenceReload;
 			console.log('Reference views hidden; reloading');
 			await expect(referencePage.locator('.monaco-workbench')).toBeVisible();
@@ -264,10 +335,16 @@ test(
 				page: workbench.page,
 				variables: workbench.page.locator('.ash-debug-variables'),
 				editor: workbench.editors.groupAt(0).editor.element,
-				cursor: workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]'),
-				command: id => workbench.quickaccess.runCommand(id),
+				cursor: workbench.page.locator(
+					'[data-statusbar-item-id="ash.status.editor.cursor"]',
+				),
+				command: (id) => workbench.quickaccess.runCommand(id),
 				size: async (width, height) => {
-					await (application as ElectronApplication).evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), { width, height });
+					await (application as ElectronApplication).evaluate(
+						({ BrowserWindow }, bounds) =>
+							BrowserWindow.getAllWindows()[0].setBounds(bounds),
+						{ width, height },
+					);
 				},
 			};
 			const vscode: PairHost = {
@@ -281,18 +358,29 @@ test(
 				cursor: referencePage.locator('[id="status.editor.selection"]'),
 				command: referenceCommand,
 				size: async (width, height) => {
-					await upstream!.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), { width, height });
+					await upstream!.evaluate(
+						({ BrowserWindow }, bounds) =>
+							BrowserWindow.getAllWindows()[0].setBounds(bounds),
+						{ width, height },
+					);
 				},
 			};
 			for (const host of [ash, vscode]) {
 				const { page } = host;
 				await host.size(1440, 900);
-				const requests = async (): Promise<{ command: string; arguments?: Record<string, unknown> }[]> =>
-					(await readFile(join(directory, `${host.kind}-requests.jsonl`), 'utf8'))
+				const requests = async (): Promise<
+					{ command: string; arguments?: Record<string, unknown>; }[]
+				> =>
+					(
+						await readFile(
+							join(directory, `${host.kind}-requests.jsonl`),
+							'utf8',
+						)
+					)
 						.trim()
 						.split('\n')
 						.filter(Boolean)
-						.map(line => JSON.parse(line));
+						.map((line) => JSON.parse(line));
 				await page
 					.getByRole('button', {
 						name: host.kind === 'ash' ? 'Start Debugging' : /^Start Debugging/,
@@ -306,9 +394,9 @@ test(
 					host.kind === 'ash'
 						? page.locator('[data-view-id="workbench.debug.callStackView"]')
 						: page.getByRole('button', {
-								name: 'Call Stack Section',
-								exact: true,
-							});
+							name: 'Call Stack Section',
+							exact: true,
+						});
 				await expect(hiddenStack).toHaveCount(0);
 				await capture(host, 'hidden-stack-source', {
 					sourceLine: 2,
@@ -316,10 +404,12 @@ test(
 				});
 				const variable = (name: string) =>
 					host.kind === 'ash'
-						? host.variables.locator('.ash-debug-variable').filter({ hasText: `${name} =` })
+						? host.variables
+							.locator('.ash-debug-variable')
+							.filter({ hasText: `${name} =` })
 						: host.variables.getByRole('treeitem', {
-								name: new RegExp(`^${name}, value `),
-							});
+							name: new RegExp(`^${name}, value `),
+						});
 				const answer = variable('answer');
 				await answer.dblclick();
 				const edit = host.variables.locator('input:visible');
@@ -327,18 +417,24 @@ test(
 				await edit.fill('100');
 				await edit.press('Escape');
 				await expect(edit).toBeHidden();
-				if (host.kind === 'ash') await expect.poll(() => focusedRow(answer)).toBe(true);
+				if (host.kind === 'ash')
+					await expect.poll(() => focusedRow(answer)).toBe(true);
 				await capture(host, 'variable-cancel-focus', {
 					rowFocused: await focusedRow(answer),
 					editorClosed: true,
 				});
 				await expect(answer).toContainText('42');
-				expect((await requests()).filter(request => request.command === 'setVariable')).toHaveLength(0);
+				expect(
+					(await requests()).filter(
+						(request) => request.command === 'setVariable',
+					),
+				).toHaveLength(0);
 				await answer.dblclick();
 				await edit.fill('43');
 				await edit.press('Enter');
 				await expect(answer).toContainText('43');
-				if (host.kind === 'ash') await expect.poll(() => focusedRow(answer)).toBe(true);
+				if (host.kind === 'ash')
+					await expect.poll(() => focusedRow(answer)).toBe(true);
 				if (host.kind === 'ash') await variable('object').click();
 				else await variable('object').locator('.monaco-tl-twistie').click();
 				const child = variable('child');
@@ -346,8 +442,13 @@ test(
 				await edit.fill('2');
 				await edit.press('Enter');
 				await expect(child).toContainText('2');
-				if (host.kind === 'ash') await expect.poll(() => focusedRow(child)).toBe(true);
-				expect((await requests()).filter(request => request.command === 'setVariable').map(request => request.arguments)).toEqual([
+				if (host.kind === 'ash')
+					await expect.poll(() => focusedRow(child)).toBe(true);
+				expect(
+					(await requests())
+						.filter((request) => request.command === 'setVariable')
+						.map((request) => request.arguments),
+				).toEqual([
 					{ variablesReference: 10, name: 'answer', value: '43' },
 					{ variablesReference: 20, name: 'child', value: '2' },
 				]);
@@ -362,13 +463,25 @@ test(
 					exact: true,
 				});
 				await watchHeader.hover();
-				await page.getByRole('button', { name: /^Add (?:watch )?Expression$/i }).click();
-				const watchInput = host.kind === 'ash' ? page.getByRole('textbox', { name: 'Add watch expression' }) : page.locator('.debug-watch input');
+				await page
+					.getByRole('button', { name: /^Add (?:watch )?Expression$/i })
+					.click();
+				const watchInput =
+					host.kind === 'ash'
+						? page.getByRole('textbox', { name: 'Add watch expression' })
+						: page.locator('.debug-watch input');
 				await watchInput.fill('answer');
 				await watchInput.press('Enter');
-				const watch = page.locator(host.kind === 'ash' ? '.ash-debug-watch-value' : '.debug-watch .expression');
+				const watch = page.locator(
+					host.kind === 'ash'
+						? '.ash-debug-watch-value'
+						: '.debug-watch .expression',
+				);
 				await expect(watch).toContainText('43');
-				await host.command('workbench.action.debug.stepOver', 'Debug: Step Over');
+				await host.command(
+					'workbench.action.debug.stepOver',
+					'Debug: Step Over',
+				);
 				await expect(host.cursor).toContainText('Ln 3, Col 1');
 				await expect(hiddenStack).toHaveCount(0);
 				await expect(watch).toContainText('44');
@@ -381,7 +494,9 @@ test(
 					child: 2,
 					callStackAbsent: true,
 				});
-				const input = host.editor.locator(host.kind === 'ash' ? '.stanza-editor-input' : '[role="textbox"]');
+				const input = host.editor.locator(
+					host.kind === 'ash' ? '.stanza-editor-input' : '[role="textbox"]',
+				);
 				await input.focus();
 				await input.press('Shift+ArrowRight');
 				await input.press('Shift+ArrowRight');
@@ -389,25 +504,46 @@ test(
 				await expect(host.cursor).toContainText('3 selected');
 				await capture(host, 'source-selection', { selectedCharacters: 3 });
 				await input.press(host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowDown' : 'ControlOrMeta+End');
-				await expect(host.editor).toContainText('synthetic\u00a0source\u00a0line\u00a0200');
+				await expect(host.editor).toContainText(
+					'synthetic\u00a0source\u00a0line\u00a0200',
+				);
 				await input.press(host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowUp' : 'ControlOrMeta+Home');
 				await expect(host.cursor).toContainText('Ln 1, Col 1');
 				await expect(host.editor).toContainText('const\u00a0answer');
 				await capture(host, 'source-scroll', {
 					bottomLine: 200,
 					restoredLine: 1,
-					editorFocused: await input.evaluate(element => element === document.activeElement),
+					editorFocused: await input.evaluate(
+						(element) => element === document.activeElement,
+					),
 				});
-				await host.command('workbench.debug.action.focusRepl', 'Debug Console: Focus on Debug Console View');
-				const consoleInput = page.locator(host.kind === 'ash' ? '.ash-debug-console-form .stanza-editor-input' : '.repl-input-wrapper [role="textbox"]');
+				await host.command(
+					'workbench.debug.action.focusRepl',
+					'Debug Console: Focus on Debug Console View',
+				);
+				const consoleInput = page.locator(
+					host.kind === 'ash'
+						? '.ash-debug-console-form .stanza-editor-input'
+						: '.repl-input-wrapper [role="textbox"]',
+				);
 				await consoleInput.focus();
 				await expect(consoleInput).toBeFocused();
 				await page.keyboard.insertText('answer');
 				await consoleInput.press('Enter');
 				await expect
-					.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').map(request => request.arguments?.expression))
+					.poll(async () =>
+						(await requests())
+							.filter(
+								(request) =>
+									request.command === 'evaluate' &&
+									request.arguments?.context === 'repl',
+							)
+							.map((request) => request.arguments?.expression),
+					)
 					.toEqual(['answer']);
-				const consoleOutput = page.locator(host.kind === 'ash' ? '.ash-debug-console-output' : '.repl');
+				const consoleOutput = page.locator(
+					host.kind === 'ash' ? '.ash-debug-console-output' : '.repl',
+				);
 				await expect(consoleOutput).toContainText('PAIRED_DEBUG_READY');
 				await expect(consoleOutput).toContainText('44');
 				await expect(consoleInput).toBeFocused();
@@ -423,15 +559,19 @@ test(
 					['hcDark', 'Ash High Contrast Dark', 'Dark High Contrast'],
 					['hcLight', 'Ash High Contrast Light', 'Light High Contrast'],
 				] as const) {
-					await host.command('workbench.action.selectTheme', 'Preferences: Color Theme');
-					const themeInput = page.locator(host.kind === 'ash' ? '.ash-quick-pick input' : '.quick-input-widget input');
+					await host.command(
+						'workbench.action.selectTheme',
+						'Preferences: Color Theme',
+					);
+					const themeInput = page.locator(
+						host.kind === 'ash'
+							? '.ash-quick-pick input'
+							: '.quick-input-widget input',
+					);
 					await expect(themeInput).not.toHaveValue(/^>/);
 					const selectedTheme = host.kind === 'ash' ? ashTheme : referenceTheme;
 					await themeInput.fill(selectedTheme);
-					await page
-						.locator(host.kind === 'ash' ? '.ash-quick-pick' : '.quick-input-widget')
-						.getByText(selectedTheme, { exact: true })
-						.click();
+					await page.locator(host.kind === 'ash' ? '.ash-quick-pick' : '.quick-input-widget').getByText(selectedTheme, { exact: true }).click();
 					await expect(themeInput).toBeHidden();
 					if (host.kind === 'ash') {
 						await expect(workbench.element).toHaveAttribute(
@@ -444,11 +584,15 @@ test(
 							}[name]!,
 						);
 					} else {
-						await expect(page.locator('.monaco-workbench')).toHaveClass(new RegExp(`(?:^|\\s)${{ dark: 'vs-dark', light: 'vs', hcDark: 'hc-black', hcLight: 'hc-light' }[name]}(?:\\s|$)`));
+						await expect(page.locator('.monaco-workbench')).toHaveClass(
+							new RegExp(
+								`(?:^|\\s)${{ dark: 'vs-dark', light: 'vs', hcDark: 'hc-black', hcLight: 'hc-light' }[name]}(?:\\s|$)`,
+							),
+						);
 					}
 					await host.size(1000, 700);
 					await answer.click();
-					const geometry = await host.variables.evaluate(element => {
+					const geometry = await host.variables.evaluate((element) => {
 						const rect = element.getBoundingClientRect();
 						const style = getComputedStyle(element);
 						return {
@@ -465,10 +609,14 @@ test(
 					expect(geometry.width).toBeGreaterThan(80);
 					expect(geometry.height).toBeGreaterThan(20);
 					expect(geometry.x).toBeGreaterThanOrEqual(0);
-					expect(geometry.y + geometry.height).toBeLessThanOrEqual(geometry.viewportHeight);
+					expect(geometry.y + geometry.height).toBeLessThanOrEqual(
+						geometry.viewportHeight,
+					);
 					await expect(answer).toBeVisible();
-					const statusbar = page.locator(host.kind === 'ash' ? '[data-part="statusbar"]' : '.part.statusbar');
-					const colors = await statusbar.evaluate(element => ({
+					const statusbar = page.locator(
+						host.kind === 'ash' ? '[data-part="statusbar"]' : '.part.statusbar',
+					);
+					const colors = await statusbar.evaluate((element) => ({
 						background: getComputedStyle(element).backgroundColor,
 						foreground: getComputedStyle(element).color,
 					}));
@@ -482,27 +630,56 @@ test(
 					});
 					await host.size(1440, 900);
 				}
-				await host.command('workbench.action.debug.showLoadedScripts', 'Debug: Open Loaded Script');
-				const sourcePicker = page.locator(host.kind === 'ash' ? '.ash-quick-pick' : '.quick-input-widget');
+				await host.command(
+					'workbench.action.debug.showLoadedScripts',
+					'Debug: Open Loaded Script',
+				);
+				const sourcePicker = page.locator(
+					host.kind === 'ash' ? '.ash-quick-pick' : '.quick-input-widget',
+				);
 				await sourcePicker.locator('input').fill('paired-generated');
 				await expect(sourcePicker).toContainText('paired-generated.js');
 				await sourcePicker.locator('input').press('Enter');
 				await expect(host.editor).toContainText('pairedGenerated');
-				await expect.poll(async () => (await requests()).filter(request => request.command === 'source').map(request => request.arguments?.sourceReference)).toContain(25);
+				await expect
+					.poll(async () =>
+						(await requests())
+							.filter((request) => request.command === 'source')
+							.map((request) => request.arguments?.sourceReference),
+					)
+					.toContain(25);
 				await capture(host, 'loaded-source', {
 					sourceReference: 25,
 					content: 'const pairedGenerated = 25;',
 				});
 				await host.command('workbench.action.debug.stop', 'Debug: Stop');
-				await expect.poll(async () => (await requests()).filter(request => request.command === 'disconnect').length).toBe(1);
+				await expect
+					.poll(
+						async () =>
+							(await requests()).filter(
+								(request) => request.command === 'disconnect',
+							).length,
+					)
+					.toBe(1);
 				await expect(host.variables).not.toContainText('answer');
 				await capture(host, 'stop', {
 					disconnected: true,
 					variablesRetired: true,
 				});
 			}
-			for (const step of ['hidden-stack-source', 'variable-edit', 'step-watch', 'source-selection', 'source-scroll', 'console-input', 'loaded-source', 'stop']) {
-				const results = (snapshots as { step: string; result: unknown }[]).filter(snapshot => snapshot.step === step).map(snapshot => snapshot.result);
+			for (const step of [
+				'hidden-stack-source',
+				'variable-edit',
+				'step-watch',
+				'source-selection',
+				'source-scroll',
+				'console-input',
+				'loaded-source',
+				'stop',
+			]) {
+				const results = (snapshots as { step: string; result: unknown; }[])
+					.filter((snapshot) => snapshot.step === step)
+					.map((snapshot) => snapshot.result);
 				expect(results, step).toHaveLength(2);
 				expect(results[0], step).toEqual(results[1]);
 			}
@@ -512,7 +689,9 @@ test(
 				if (upstream) {
 					for (const page of upstream.windows()) {
 						if (!page.isClosed()) {
-							await page.screenshot({ path: testInfo.outputPath('reference-final.png') }).catch(() => undefined);
+							await page
+								.screenshot({ path: testInfo.outputPath('reference-final.png') })
+								.catch(() => undefined);
 							evidence.referenceFinalText = await page
 								.locator('body')
 								.innerText()
@@ -525,10 +704,16 @@ test(
 						.catch(() => undefined);
 				}
 				for (const host of ['ash', 'vscode']) {
-					const log = await readFile(join(directory, `${host}-requests.jsonl`), 'utf8').catch(() => '');
+					const log = await readFile(
+						join(directory, `${host}-requests.jsonl`),
+						'utf8',
+					).catch(() => '');
 					await writeFile(testInfo.outputPath(`${host}-requests.jsonl`), log);
 				}
-				await writeFile(testInfo.outputPath('paired-debug.json'), JSON.stringify(evidence, null, 2));
+				await writeFile(
+					testInfo.outputPath('paired-debug.json'),
+					JSON.stringify(evidence, null, 2),
+				);
 				await testInfo.attach('paired-debug', {
 					path: testInfo.outputPath('paired-debug.json'),
 					contentType: 'application/json',

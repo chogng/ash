@@ -10,9 +10,7 @@ export interface IChangesDetailsViewState {
 	readonly scrollTop: number;
 }
 
-export interface IChangesViewSectionCollapseState {
-	readonly checks: boolean;
-}
+export interface IChangesViewSectionCollapseState { readonly checks: boolean; }
 export type ChangesViewSection = keyof IChangesViewSectionCollapseState;
 
 /** Owns reconstructable Changes presentation state; Turn contents remain in ChatService. */

@@ -9,51 +9,31 @@ let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
 	onDidShowDialog: Event.None,
-	about: async () => {
-		throw new Error('Unexpected about dialog');
-	},
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
+	about: async () => { throw new Error('Unexpected about dialog'); },
+	showMessage: async () => { },
+	info: async () => { },
+	warn: async () => { },
+	error: async () => { },
 	confirm: async () => ({ confirmed: true }),
-	prompt: async () => {
-		throw new Error('Unexpected prompt');
-	},
+	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: true, values: dialogValues }),
 };
 
 test('Stanza collaboration contribution keeps a newly issued invitation available until its owner dismisses it', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	dialogValues = ['Writer', 'viewer'];
-	const invitations: { readonly displayName: string; readonly role: string }[] = [];
-	using contribution = new CollaborationContribution(
-		environment.window.document.body,
-		{
-			onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
-			onStop: () => undefined,
-			onInvite: async (displayName, role) => {
-				invitations.push({ displayName, role });
-				return {
-					roomId: 'stanza-room',
-					principalId: 'member-1',
-					displayName,
-					role,
-					accessToken: 'member-token',
-				};
-			},
-			onListMembers: async () => [],
-			onRotateMemberAccessToken: async () => ({
-				roomId: 'stanza-room',
-				principalId: 'member-1',
-				displayName: 'Writer',
-				role: 'viewer',
-				accessToken: 'member-token',
-			}),
-			onRevokeMember: async () => undefined,
+	const invitations: { readonly displayName: string; readonly role: string; }[] = [];
+	using contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async (displayName, role) => {
+			invitations.push({ displayName, role });
+			return { roomId: 'stanza-room', principalId: 'member-1', displayName, role, accessToken: 'member-token' };
 		},
-		testDialogs,
-	);
+		onListMembers: async () => [],
+		onRotateMemberAccessToken: async () => ({ roomId: 'stanza-room', principalId: 'member-1', displayName: 'Writer', role: 'viewer', accessToken: 'member-token' }),
+		onRevokeMember: async () => undefined,
+	}, testDialogs);
 	environment.window.document.body.append(contribution.element);
 	contribution.setState('connected', {
 		roomId: 'stanza-room',
@@ -81,38 +61,22 @@ test('Stanza collaboration contribution lets a room owner inspect, rotate, and r
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const rotations: string[] = [];
 	const revocations: string[] = [];
-	using contribution = new CollaborationContribution(
-		environment.window.document.body,
-		{
-			onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
-			onStop: () => undefined,
-			onInvite: async () => ({
-				roomId: 'stanza-room',
-				principalId: 'member-1',
-				displayName: 'Writer',
-				role: 'editor',
-				accessToken: 'member-token',
-			}),
-			onListMembers: async () => [
-				{ principalId: 'owner-1', displayName: 'Owner', role: 'owner' },
-				{ principalId: 'member-1', displayName: 'Writer', role: 'editor' },
-			],
-			onRotateMemberAccessToken: async principalId => {
-				rotations.push(principalId);
-				return {
-					roomId: 'stanza-room',
-					principalId,
-					displayName: 'Writer',
-					role: 'editor',
-					accessToken: 'rotated-token',
-				};
-			},
-			onRevokeMember: async principalId => {
-				revocations.push(principalId);
-			},
+	using contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async () => ({ roomId: 'stanza-room', principalId: 'member-1', displayName: 'Writer', role: 'editor', accessToken: 'member-token' }),
+		onListMembers: async () => [
+			{ principalId: 'owner-1', displayName: 'Owner', role: 'owner' },
+			{ principalId: 'member-1', displayName: 'Writer', role: 'editor' },
+		],
+		onRotateMemberAccessToken: async principalId => {
+			rotations.push(principalId);
+			return { roomId: 'stanza-room', principalId, displayName: 'Writer', role: 'editor', accessToken: 'rotated-token' };
 		},
-		testDialogs,
-	);
+		onRevokeMember: async principalId => {
+			revocations.push(principalId);
+		},
+	}, testDialogs);
 	environment.window.document.body.append(contribution.element);
 	contribution.setState('connected', {
 		roomId: 'stanza-room',
@@ -145,29 +109,17 @@ test('Stanza collaboration contribution releases replaced and disposed member ac
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const rotations: string[] = [];
 	const revocations: string[] = [];
-	const contribution = new CollaborationContribution(
-		environment.window.document.body,
-		{
-			onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
-			onStop: () => undefined,
-			onInvite: async () => ({
-				roomId: 'room',
-				principalId: 'member',
-				displayName: 'Writer',
-				role: 'editor',
-				accessToken: 'token',
-			}),
-			onListMembers: async () => [{ principalId: 'member', displayName: 'Writer', role: 'editor' }],
-			onRotateMemberAccessToken: async principalId => {
-				rotations.push(principalId);
-				return { roomId: 'room', principalId, displayName: 'Writer', role: 'editor', accessToken: 'token' };
-			},
-			onRevokeMember: async principalId => {
-				revocations.push(principalId);
-			},
+	const contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onListMembers: async () => [{ principalId: 'member', displayName: 'Writer', role: 'editor' }],
+		onRotateMemberAccessToken: async principalId => {
+			rotations.push(principalId);
+			return { roomId: 'room', principalId, displayName: 'Writer', role: 'editor', accessToken: 'token' };
 		},
-		testDialogs,
-	);
+		onRevokeMember: async principalId => { revocations.push(principalId); },
+	}, testDialogs);
 	try {
 		contribution.setState('connected', { roomId: 'room', principalId: 'owner', canManageMembers: true });
 		const manage = contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button")!;
@@ -196,34 +148,15 @@ test('Stanza collaboration contribution releases replaced and disposed member ac
 
 test('Stanza collaboration contribution ignores member results after disposal', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor' }[]) => void;
-	const contribution = new CollaborationContribution(
-		environment.window.document.body,
-		{
-			onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
-			onStop: () => undefined,
-			onInvite: async () => ({
-				roomId: 'room',
-				principalId: 'member',
-				displayName: 'Writer',
-				role: 'editor',
-				accessToken: 'token',
-			}),
-			onListMembers: () =>
-				new Promise(resolve => {
-					resolveMembers = resolve;
-				}),
-			onRotateMemberAccessToken: async () => ({
-				roomId: 'room',
-				principalId: 'member',
-				displayName: 'Writer',
-				role: 'editor',
-				accessToken: 'token',
-			}),
-			onRevokeMember: async () => undefined,
-		},
-		testDialogs,
-	);
+	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor'; }[]) => void;
+	const contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onListMembers: () => new Promise(resolve => { resolveMembers = resolve; }),
+		onRotateMemberAccessToken: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onRevokeMember: async () => undefined,
+	}, testDialogs);
 	try {
 		contribution.setState('connected', { roomId: 'room', principalId: 'owner', canManageMembers: true });
 		contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button")?.click();

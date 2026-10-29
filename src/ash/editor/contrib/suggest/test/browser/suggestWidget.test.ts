@@ -40,7 +40,7 @@ test('Completion widget projects named options, focus, ARIA, and content coordin
 		contributions: [],
 	});
 	const viewport = editor.view;
-	editor.setPosition(new Position(0 + 1, 3 + 1));
+	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(service.results, editor);
 	using languages = new LanguageService();
 	viewport.layout({ width: 300, height: 40 });
@@ -63,31 +63,28 @@ test('Completion widget projects named options, focus, ARIA, and content coordin
 	assert.equal(input.element.getAttribute('aria-haspopup'), 'true');
 	assert.equal(input.element.getAttribute('aria-controls'), null);
 	assert.equal(input.element.getAttribute('aria-activedescendant'), options[1]!.id);
-	assert.deepEqual(
-		options.map(option => ({
-			selected: option.getAttribute('aria-selected'),
-			focused: option.classList.contains('focused'),
-			text: option.textContent,
-		})),
-		[
-			{
-				selected: 'false',
-				focused: false,
-				text: 'Keywordconstdeclaration',
-			},
-			{
-				selected: 'true',
-				focused: true,
-				text: 'Variableconsoleglobal',
-			},
-		],
-	);
+	assert.deepEqual(options.map(option => ({
+		selected: option.getAttribute('aria-selected'),
+		focused: option.classList.contains('focused'),
+		text: option.textContent,
+	})), [{
+		selected: 'false',
+		focused: false,
+		text: 'Keywordconstdeclaration',
+	}, {
+		selected: 'true',
+		focused: true,
+		text: 'Variableconsoleglobal',
+	}]);
 	dom.window.close();
 });
 
 test('File and folder completions use resource icon classes in the Editor widget', () => {
 	using fixture = createFixture('con');
-	accept(fixture.store, fixture.model, 1, [completion('file', 'README.ts', LanguageCompletionItemKind.File), completion('folder', 'src', LanguageCompletionItemKind.Folder)]);
+	accept(fixture.store, fixture.model, 1, [
+		completion('file', 'README.ts', LanguageCompletionItemKind.File),
+		completion('folder', 'src', LanguageCompletionItemKind.Folder),
+	]);
 	const options = [...fixture.suggest.widget.element.querySelectorAll<HTMLElement>('.stanza-editor-completion-option')];
 	const fileKind = options[0]?.querySelector('.stanza-editor-completion-kind');
 	const folderKind = options[1]?.querySelector('.stanza-editor-completion-kind');
@@ -104,7 +101,10 @@ test('File and folder completions use resource icon classes in the Editor widget
 test('Completion keyboard navigation accepts one item before ordinary input routing', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [completion('constant', 'const', LanguageCompletionItemKind.Keyword), completion('console', 'console', LanguageCompletionItemKind.Variable)]);
+	accept(fixture.store, fixture.model, 1, [
+		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
+		completion('console', 'console', LanguageCompletionItemKind.Variable),
+	]);
 	const down = keyboardEvent(fixture.dom.window, 'ArrowDown');
 	fixture.input.element.dispatchEvent(down);
 	assert.equal(down.defaultPrevented, true);
@@ -114,7 +114,7 @@ test('Completion keyboard navigation accepts one item before ordinary input rout
 	fixture.input.element.dispatchEvent(enter);
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), 'console');
-	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position(0 + 1, 7 + 1)), 0);
+	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute('aria-autocomplete'), 'both');
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
@@ -126,19 +126,17 @@ test('Completion keyboard navigation accepts one item before ordinary input rout
 test('Typing a declared completion commit character accepts it atomically before normal input', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [
-		{
-			...completion('console', 'console', LanguageCompletionItemKind.Variable),
-			commitCharacters: ['.'],
-		},
-	]);
+	accept(fixture.store, fixture.model, 1, [{
+		...completion('console', 'console', LanguageCompletionItemKind.Variable),
+		commitCharacters: ['.'],
+	}]);
 
 	const commit = beforeInput(fixture.dom.window, '.');
 	fixture.input.element.dispatchEvent(commit);
 
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), 'console.');
-	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position(0 + 1, 8 + 1)), 0);
+	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	fixture.model.undo();
 	assert.equal(fixture.model.getText(), 'con');
@@ -147,38 +145,33 @@ test('Typing a declared completion commit character accepts it atomically before
 test('Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeholder navigation', () => {
 	const fixture = createFixture('fn');
 	using resources = fixture;
-	fixture.editor.setSelections([Selection.fromPositions(new Position(0 + 1, 2 + 1))]);
-	assert.equal(
-		fixture.store.accept({
-			requestId: 1,
-			textModel: fixture.model,
-			modelVersion: fixture.model.version,
-			value: {
-				position: new Position(0 + 1, 2 + 1),
-				items: [
-					{
-						...completion('function', 'function', LanguageCompletionItemKind.Function),
-						range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 2 + 1)),
-						insertText: 'function ${1:name}(${2:value}) { $0 }',
-						insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
-					},
-				],
-				isIncomplete: false,
-			},
-		}),
-		LanguageResultAcceptance.Applied,
-	);
+	fixture.editor.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
+	assert.equal(fixture.store.accept({
+		requestId: 1,
+		textModel: fixture.model,
+		modelVersion: fixture.model.version,
+		value: {
+			position: new Position((0) + 1, (2) + 1),
+			items: [{
+				...completion('function', 'function', LanguageCompletionItemKind.Function),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
+				insertText: 'function ${1:name}(${2:value}) { $0 }',
+				insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+			}],
+			isIncomplete: false,
+		},
+	}), LanguageResultAcceptance.Applied);
 	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
 	assert.equal(fixture.model.getText(), 'function name(value) {  }');
 
 	const next = keyboardEvent(fixture.dom.window, 'Tab');
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 19 + 1)));
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	const previous = keyboardEvent(fixture.dom.window, 'Tab', true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position(0 + 1, 9 + 1), new Position(0 + 1, 13 + 1)));
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	const escape = keyboardEvent(fixture.dom.window, 'Escape');
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
@@ -191,13 +184,11 @@ test('Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 test('Completion snippets cycle choice tabstops through Alt+Arrow', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [
-		{
-			...completion('choice', 'choice', LanguageCompletionItemKind.Value),
-			insertText: '${1|one,two|}=$1',
-			insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
-		},
-	]);
+	accept(fixture.store, fixture.model, 1, [{
+		...completion('choice', 'choice', LanguageCompletionItemKind.Value),
+		insertText: '${1|one,two|}=$1',
+		insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+	}]);
 
 	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
 	assert.equal(fixture.model.getText(), 'one=one');
@@ -214,15 +205,23 @@ test('Completion snippets cycle choice tabstops through Alt+Arrow', () => {
 test('Escape cancels locally while clicking accepts the selected option', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [completion('constant', 'const', LanguageCompletionItemKind.Keyword)]);
+	accept(fixture.store, fixture.model, 1, [
+		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
+	]);
 	const escape = keyboardEvent(fixture.dom.window, 'Escape');
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.store.result, undefined);
 
-	accept(fixture.store, fixture.model, 2, [completion('constant', 'const', LanguageCompletionItemKind.Keyword), completion('continue', 'continue', LanguageCompletionItemKind.Keyword)]);
-	const option = requiredElement<HTMLElement>(fixture.suggest.widget.element, '[data-completion-index="1"]');
+	accept(fixture.store, fixture.model, 2, [
+		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
+		completion('continue', 'continue', LanguageCompletionItemKind.Keyword),
+	]);
+	const option = requiredElement<HTMLElement>(
+		fixture.suggest.widget.element,
+		'[data-completion-index="1"]',
+	);
 	option.dispatchEvent(mouseEvent(fixture.dom.window, 'mousedown'));
 	option.dispatchEvent(mouseEvent(fixture.dom.window, 'click'));
 	assert.equal(fixture.model.getText(), 'continue');
@@ -235,7 +234,7 @@ test('Completion widget validates ownership and clears its active descendant on 
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using model = new TextModel('con');
 	using otherModel = new TextModel('other');
-	using otherEditor = editorAt(otherModel, new Position(0 + 1, 5 + 1));
+	using otherEditor = editorAt(otherModel, new Position((0) + 1, (5) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using otherRegistry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
@@ -248,7 +247,7 @@ test('Completion widget validates ownership and clears its active descendant on 
 		contributions: [],
 	});
 	const viewport = editor.view;
-	editor.setPosition(new Position(0 + 1, 3 + 1));
+	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(service.results, editor);
 	using languages = new LanguageService();
 	const input = viewport.controller;
@@ -259,7 +258,9 @@ test('Completion widget validates ownership and clears its active descendant on 
 	assert.equal(input.element.getAttribute('aria-autocomplete'), 'both');
 	assert.equal(input.element.getAttribute('aria-controls'), null);
 
-	accept(service.results, model, 1, [completion('constant', 'const', LanguageCompletionItemKind.Keyword)]);
+	accept(service.results, model, 1, [
+		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
+	]);
 	assert.notEqual(session.state, undefined);
 	dom.window.close();
 });
@@ -267,7 +268,9 @@ test('Completion widget validates ownership and clears its active descendant on 
 test('Disposing the common session immediately hides a surviving widget', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [completion('constant', 'const', LanguageCompletionItemKind.Keyword)]);
+	accept(fixture.store, fixture.model, 1, [
+		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
+	]);
 	assert.equal(fixture.suggest.widget.visible, true);
 
 	fixture.session.dispose();
@@ -302,7 +305,10 @@ test('Completion widget projects resolved details only for the focused option', 
 	]);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	await new Promise<void>(resolve => setImmediate(resolve));
-	const selected = requiredElement<HTMLElement>(fixture.suggest.widget.element, '[data-completion-index="0"]');
+	const selected = requiredElement<HTMLElement>(
+		fixture.suggest.widget.element,
+		'[data-completion-index="0"]',
+	);
 
 	assert.deepEqual(requests, ['console']);
 	assert.equal(fixture.session.state!.detailsStatus, LanguageCompletionDetailsStatus.Complete);
@@ -333,16 +339,10 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
-		contributions: [
-			{
-				id: SnippetController2.ID,
-				ctor: SnippetController2,
-				instantiation: EditorContributionInstantiation.Eager,
-			},
-		],
+		contributions: [{ id: SnippetController2.ID, ctor: SnippetController2, instantiation: EditorContributionInstantiation.Eager }],
 	});
 	const viewport = editor.view;
-	editor.setPosition(new Position(0 + 1, text.length + 1));
+	editor.setPosition(new Position((0) + 1, (text.length) + 1));
 	const session = new SuggestModel(service.results, editor, sessionOptions);
 	const languages = new LanguageService();
 	const languageRegistration = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
@@ -373,20 +373,22 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	};
 }
 
-function accept(store: ReturnType<typeof createLanguageCompletionStore>, model: TextModel, requestId: number, items: readonly LanguageCompletionItem[]): void {
-	assert.equal(
-		store.accept({
-			requestId,
-			textModel: model,
-			modelVersion: model.version,
-			value: {
-				position: new Position(0 + 1, 3 + 1),
-				items,
-				isIncomplete: false,
-			},
-		}),
-		LanguageResultAcceptance.Applied,
-	);
+function accept(
+	store: ReturnType<typeof createLanguageCompletionStore>,
+	model: TextModel,
+	requestId: number,
+	items: readonly LanguageCompletionItem[],
+): void {
+	assert.equal(store.accept({
+		requestId,
+		textModel: model,
+		modelVersion: model.version,
+		value: {
+			position: new Position((0) + 1, (3) + 1),
+			items,
+			isIncomplete: false,
+		},
+	}), LanguageResultAcceptance.Applied);
 }
 
 function completion(id: string, label: string, kind: LanguageCompletionItemKind, detail?: string, preselect = false): LanguageCompletionItem {
@@ -395,7 +397,7 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 		id,
 		label,
 		kind,
-		range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 3 + 1)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		insertText: label,
 		...(detail === undefined ? {} : { detail }),
 		...(preselect ? { preselect } : {}),

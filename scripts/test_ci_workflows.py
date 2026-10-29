@@ -49,6 +49,7 @@ class CiWorkflowTests(unittest.TestCase):
             "build/format.ts",
             ".prettierignore",
             ".prettierrc.toml",
+            "tsfmt.json",
             ".editorconfig",
             ".gitignore",
             ".vscode/settings.json",

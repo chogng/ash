@@ -11,7 +11,7 @@ const browserMode = process.env.ASH_PLAYWRIGHT_SERVER === 'development' ? 'devel
 await withProcessRun(desktopDirectory, async (run, environment) => {
 	environment.ASH_PLAYWRIGHT_SERVER = project === 'browser-ui' ? browserMode : project === 'browser-app-server' ? 'full' : undefined;
 	const cli = ['node_modules/@playwright/test/cli.js', 'test', `--project=${project}`, ...args];
-	if (!(await collectTests(run, cli, args, environment))) return;
+	if (!await collectTests(run, cli, args, environment)) return;
 	if (project.includes('app-server')) {
 		const languageServer = join(environment.ASH_SMOKE_RUN_DIRECTORY!, process.platform === 'win32' ? 'ash-test-language-server.exe' : 'ash-test-language-server');
 		const result = await run.command('rustc', ['--edition=2024', 'test/fixtures/language_server.rs', '-o', languageServer], environment);

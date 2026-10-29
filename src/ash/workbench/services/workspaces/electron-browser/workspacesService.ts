@@ -14,10 +14,7 @@ export class ElectronWorkspacesService extends Disposable implements IWorkspaces
 	private migration: Promise<void> | undefined;
 	private readonly history: IChannel;
 
-	constructor(
-		@IStorageService private readonly storage: IStorageService,
-		@IMainProcessService mainProcessService: IMainProcessService,
-	) {
+	constructor(@IStorageService private readonly storage: IStorageService, @IMainProcessService mainProcessService: IMainProcessService) {
 		super();
 		this.history = mainProcessService.getChannel('workspaces');
 		const subscription = this.history.listen('onDidChangeRecentlyOpened')(() => this.changed.fire());
@@ -36,10 +33,7 @@ export class ElectronWorkspacesService extends Disposable implements IWorkspaces
 
 	public async removeRecentlyOpened(paths: readonly URI[]): Promise<void> {
 		await this.migrate();
-		await this.history.call(
-			'removeRecentlyOpened',
-			paths.map(path => path.toString()),
-		);
+		await this.history.call('removeRecentlyOpened', paths.map(path => path.toString()));
 	}
 
 	public async clearRecentlyOpened(): Promise<void> {

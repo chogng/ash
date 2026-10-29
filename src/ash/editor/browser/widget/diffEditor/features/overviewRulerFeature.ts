@@ -27,11 +27,7 @@ export class OverviewRulerFeature extends Disposable {
 	private viewportWidth = 0;
 	private viewportHeight = 0;
 
-	constructor(
-		private readonly rootElement: HTMLElement,
-		private readonly original: CodeEditorWidget,
-		private readonly modified: CodeEditorWidget,
-	) {
+	constructor(private readonly rootElement: HTMLElement, private readonly original: CodeEditorWidget, private readonly modified: CodeEditorWidget) {
 		super();
 		const ownerDocument = rootElement.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -50,31 +46,20 @@ export class OverviewRulerFeature extends Disposable {
 		this.rootElement.classList.add('has-diff-overview');
 		this.rootElement.append(this.domNode);
 		for (const editor of [original, modified]) {
-			this._register(
-				editor.onDidLayoutChange(() => {
-					this.renderRows();
-					this.updateViewport(this.modified.getContentHeight(), this.modified.getScrollTop());
-				}),
-			);
+			this._register(editor.onDidLayoutChange(() => {
+				this.renderRows();
+				this.updateViewport(this.modified.getContentHeight(), this.modified.getScrollTop());
+			}));
 		}
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => this.modified.delegateVerticalScrollbarPointerDown(event)));
-		this._register(
-			addDisposableListener(
-				this.domNode,
-				'wheel',
-				event => {
-					if (this.modified.getOption(EditorOption.scrollbar).handleMouseWheel) this.modified.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
-				},
-				{ passive: false },
-			),
-		);
+		this._register(addDisposableListener(this.domNode, 'wheel', event => {
+			if (this.modified.getOption(EditorOption.scrollbar).handleMouseWheel) this.modified.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
+		}, { passive: false }));
 
-		this._register(
-			toDisposable(() => {
-				this.rootElement.classList.remove('has-diff-overview');
-				this.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.rootElement.classList.remove('has-diff-overview');
+			this.domNode.remove();
+		}));
 	}
 
 	public setRows(rows: LineDiffRows): void {
@@ -86,7 +71,8 @@ export class OverviewRulerFeature extends Disposable {
 
 	private renderRows(): void {
 		// Text layout changes before the new diff arrives; old rows belong to the old versions.
-		const rows = this.originalVersion === this.original.getModel()!.getVersionId() && this.modifiedVersion === this.modified.getModel()!.getVersionId() ? this.rows : LineDiffRows.empty;
+		const rows = this.originalVersion === this.original.getModel()!.getVersionId()
+			&& this.modifiedVersion === this.modified.getModel()!.getVersionId() ? this.rows : LineDiffRows.empty;
 		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, 'original', this.original));
 		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, 'modified', this.modified));
 	}
@@ -123,8 +109,8 @@ function createMarkers(ownerDocument: Document, rows: LineDiffRows, side: 'origi
 		const top = editor.getTopForLineNumber(first);
 		const bottom = editor.getBottomForLineNumber(last);
 		const height = editor.getContentHeight();
-		marker.style.top = `${height > 0 ? (top / height) * 100 : 0}%`;
-		marker.style.height = `${height > 0 ? ((bottom - top) / height) * 100 : 0}%`;
+		marker.style.top = `${height > 0 ? top / height * 100 : 0}%`;
+		marker.style.height = `${height > 0 ? (bottom - top) / height * 100 : 0}%`;
 		fragment.append(marker);
 	}
 	return fragment;

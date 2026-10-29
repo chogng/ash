@@ -39,9 +39,9 @@ export type ChatContextPick = IChatContextPickerPickItem | IQuickPickSeparator;
 
 export interface IChatContextPicker {
 	readonly placeholder: string;
-	readonly picks: Promise<ChatContextPick[]> | ((query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>);
+	readonly picks: Promise<ChatContextPick[]> | ((query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown; }>);
 	readonly goBack?: () => boolean;
-	readonly configure?: { readonly label: string; readonly commandId: string };
+	readonly configure?: { readonly label: string; readonly commandId: string; };
 	readonly dispose?: () => void;
 }
 
@@ -51,31 +51,22 @@ export interface IChatContextPickerItem extends IChatContextItem {
 }
 
 /** Gives a query one cancellable acquisition; only its current result can replace the displayed choices. */
-export function picksWithPromiseFn(
-	fn: (query: string, token: CancellationToken) => Promise<ChatContextPick[]>,
-): (query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }> {
+export function picksWithPromiseFn(fn: (query: string, token: CancellationToken) => Promise<ChatContextPick[]>): (query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown; }> {
 	return (query, token) => {
 		if (token.isCancellationRequested) return constObservable({ busy: false, picks: [] });
-		const result = observableValue<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>('chatContextPicks', { busy: true, picks: [] });
+		const result = observableValue<{ busy: boolean; picks: ChatContextPick[]; error?: unknown; }>('chatContextPicks', { busy: true, picks: [] });
 		const lifetime = new DisposableStore();
-		lifetime.add(
-			autorunWithStore((reader, store) => {
-				const value = query.read(reader);
-				const request = new CancellationTokenSource(token);
-				store.add(toDisposable(() => request.dispose(true)));
-				result.set({ busy: true, picks: [] });
-				void Promise.resolve()
-					.then(() => (request.token.isCancellationRequested ? [] : fn(value, request.token)))
-					.then(
-						picks => {
-							if (!request.token.isCancellationRequested) result.set({ busy: false, picks });
-						},
-						error => {
-							if (!request.token.isCancellationRequested) result.set({ busy: false, picks: [], error });
-						},
-					);
-			}),
-		);
+		lifetime.add(autorunWithStore((reader, store) => {
+			const value = query.read(reader);
+			const request = new CancellationTokenSource(token);
+			store.add(toDisposable(() => request.dispose(true)));
+			result.set({ busy: true, picks: [] });
+			void Promise.resolve().then(() => request.token.isCancellationRequested ? [] : fn(value, request.token)).then(picks => {
+				if (!request.token.isCancellationRequested) result.set({ busy: false, picks });
+			}, error => {
+				if (!request.token.isCancellationRequested) result.set({ busy: false, picks: [], error });
+			});
+		}));
 		lifetime.add(token.onCancellationRequested(() => lifetime.dispose()));
 		return result;
 	};

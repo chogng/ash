@@ -36,13 +36,9 @@ export function defineComponentFixture(options: ComponentFixture): ComponentFixt
 }
 
 /** Expands each named scenario across all four product color schemes. */
-export function defineThemedFixtureGroup(options: { readonly path: string }, scenarios: Readonly<Record<string, ComponentFixture>>): readonly ThemedFixture[] {
+export function defineThemedFixtureGroup(options: { readonly path: string; }, scenarios: Readonly<Record<string, ComponentFixture>>): readonly ThemedFixture[] {
 	return Object.entries(scenarios).flatMap(([name, fixture]) =>
 		[darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].map(theme => ({
-			...fixture,
-			id: `${options.path}${name}/${theme.id}`,
-			name,
-			theme,
-		})),
-	);
+			...fixture, id: `${options.path}${name}/${theme.id}`, name, theme,
+		})));
 }

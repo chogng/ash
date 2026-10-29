@@ -16,25 +16,21 @@ export class BrowserURLService extends AbstractURLService {
 		@IOpenerService openerService: IOpenerService,
 	) {
 		super();
-		this._register(
-			openerService.registerOpener({
-				open: async (target, options) => {
-					const uri = typeof target === 'string' ? URI.parse(target) : target;
-					if (options?.openExternal || uri.scheme !== 'ash') {
-						return false;
-					}
-					return this.open(uri, { trusted: true });
-				},
-			}),
-		);
+		this._register(openerService.registerOpener({
+			open: async (target, options) => {
+				const uri = typeof target === 'string' ? URI.parse(target) : target;
+				if (options?.openExternal || uri.scheme !== 'ash') {
+					return false;
+				}
+				return this.open(uri, { trusted: true });
+			},
+		}));
 		if (provider) {
-			this._register(
-				provider.onCallback(uri => {
-					if (uri.scheme === 'ash') {
-						void this.open(uri).catch(onUnexpectedError);
-					}
-				}),
-			);
+			this._register(provider.onCallback(uri => {
+				if (uri.scheme === 'ash') {
+					void this.open(uri).catch(onUnexpectedError);
+				}
+			}));
 		}
 	}
 

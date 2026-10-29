@@ -31,31 +31,25 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		super();
 		this.inQuickInput = inQuickInputContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.inQuickInput.reset()));
-		this._register(
-			layoutService.onDidLayoutActiveContainer(() => {
-				this.inputControllers.get(layoutService.activeContainer)?.layout(layoutService.activeContainerDimension, layoutService.activeContainerOffset.quickInputTop);
-			}),
-		);
-		this._register(
-			layoutService.onDidChangeActiveContainer(() => {
-				// A provider captures the editor at invocation; dismiss it before another window takes over.
-				for (const [container, controller] of this.inputControllers) {
-					if (container !== layoutService.activeContainer) controller.currentQuickInput?.hide();
-				}
-			}),
-		);
-		this._register(
-			onWillUnregisterWindow(({ window }) => {
-				for (const [container] of this.inputControllers) {
-					if (container.ownerDocument.defaultView === window) this.inputControllers.deleteAndDispose(container);
-				}
-			}),
-		);
+		this._register(layoutService.onDidLayoutActiveContainer(() => {
+			this.inputControllers.get(layoutService.activeContainer)?.layout(layoutService.activeContainerDimension, layoutService.activeContainerOffset.quickInputTop);
+		}));
+		this._register(layoutService.onDidChangeActiveContainer(() => {
+			// A provider captures the editor at invocation; dismiss it before another window takes over.
+			for (const [container, controller] of this.inputControllers) {
+				if (container !== layoutService.activeContainer) controller.currentQuickInput?.hide();
+			}
+		}));
+		this._register(onWillUnregisterWindow(({ window }) => {
+			for (const [container] of this.inputControllers) {
+				if (container.ownerDocument.defaultView === window) this.inputControllers.deleteAndDispose(container);
+			}
+		}));
 	}
 
 	public get quickAccess(): IQuickAccessController {
 		this.assertNotDisposed();
-		return (this.accessController ??= this._register(this.instantiationService.createInstance(QuickAccessController)));
+		return this.accessController ??= this._register(this.instantiationService.createInstance(QuickAccessController));
 	}
 
 	protected get controller(): QuickInputController {
@@ -81,16 +75,11 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 			},
 			onHide: input => {
 				this.visibleInputs.delete(input);
-				type.reset();
-				focus.reset();
-				end.reset();
+				type.reset(); focus.reset(); end.reset();
 				if (!this.visibleInputs.size) this.inQuickInput.reset();
 				this.hidden.fire();
 			},
-			onFocus: (withinInput, atEnd) => {
-				focus.set(withinInput);
-				end.set(atEnd);
-			},
+			onFocus: (withinInput, atEnd) => { focus.set(withinInput); end.set(atEnd); },
 			getContext: target => this.contextKeyService.getContext(target),
 			// Dismissing an overlay during a window switch must leave focus in the new window.
 			shouldRestoreFocus: () => this.layoutService.activeContainer.contains(controller.getDomNode()),
@@ -117,11 +106,9 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		return this.controller.input(options, token);
 	}
 
-	public focus(): void {
-		this.currentQuickInput?.focus();
-	}
+	public focus(): void { this.currentQuickInput?.focus(); }
 
-	public setAlignment(alignment: 'top' | 'center' | { top: number; left: number }): void {
+	public setAlignment(alignment: 'top' | 'center' | { top: number; left: number; }): void {
 		this.controller.setAlignment(alignment);
 	}
 
@@ -141,7 +128,5 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		await current?.accept();
 	}
 
-	public async cancel(): Promise<void> {
-		this.currentQuickInput?.hide();
-	}
+	public async cancel(): Promise<void> { this.currentQuickInput?.hide(); }
 }

@@ -3,7 +3,11 @@ import { isNode } from '../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { getFlatContextMenuActions, resolveAlternativeMenuActions, shouldUseAlternativeMenuActions } from '../../actions/browser/menuEntryActionViewItem.js';
+import {
+	getFlatContextMenuActions,
+	resolveAlternativeMenuActions,
+	shouldUseAlternativeMenuActions,
+} from '../../actions/browser/menuEntryActionViewItem.js';
 import { MenuId, IMenuService } from '../../actions/common/actions.js';
 import { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
 import { IKeybindingService } from '../../keybinding/common/keybinding.js';
@@ -12,7 +16,8 @@ import { ContextMenuHandler } from './contextMenuHandler.js';
 import { type IContextMenuMenuDelegate, type IContextMenuService, IContextViewService } from './contextView.js';
 
 /** Transforms menu contributions and delegates browser rendering to one handler. */
-export class BrowserContextMenuService extends Disposable implements IContextMenuService {
+export class BrowserContextMenuService extends Disposable
+	implements IContextMenuService {
 	readonly contextMenuStyle = 'custom';
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
@@ -29,26 +34,33 @@ export class BrowserContextMenuService extends Disposable implements IContextMen
 		@INotificationService notificationService: INotificationService,
 	) {
 		super();
-		this.handler = new ContextMenuHandler(contextViewService, keybindingService, notificationService);
+		this.handler = new ContextMenuHandler(
+			contextViewService,
+			keybindingService,
+			notificationService,
+		);
 		this._register(this.handler);
 	}
 
-	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
-		const resolved = transformContextMenuDelegate(delegate, this.menuService, this.contextKeyService);
-		let didShow = false;
-		this.handler.showContextMenu(
-			{
-				...resolved,
-				onHide: didCancel => {
-					resolved.onHide?.(didCancel);
-					if (didShow) this._onDidHideContextMenu.fire();
-				},
-			},
-			() => {
-				didShow = true;
-				this._onDidShowContextMenu.fire();
-			},
+	showContextMenu(
+		delegate: IContextMenuDelegate | IContextMenuMenuDelegate,
+	): void {
+		const resolved = transformContextMenuDelegate(
+			delegate,
+			this.menuService,
+			this.contextKeyService,
 		);
+		let didShow = false;
+		this.handler.showContextMenu({
+			...resolved,
+			onHide: (didCancel) => {
+				resolved.onHide?.(didCancel);
+				if (didShow) this._onDidHideContextMenu.fire();
+			},
+		}, () => {
+			didShow = true;
+			this._onDidShowContextMenu.fire();
+		});
 	}
 
 	hideContextMenu(): void {
@@ -56,17 +68,30 @@ export class BrowserContextMenuService extends Disposable implements IContextMen
 	}
 }
 
-export function transformContextMenuDelegate(delegate: IContextMenuDelegate | IContextMenuMenuDelegate, menuService: IMenuService, globalContextKeyService: IContextKeyService): IContextMenuDelegate {
+export function transformContextMenuDelegate(
+	delegate: IContextMenuDelegate | IContextMenuMenuDelegate,
+	menuService: IMenuService,
+	globalContextKeyService: IContextKeyService,
+): IContextMenuDelegate {
 	return {
 		...delegate,
 		getActions: () => {
 			const targetWindow = getAnchorWindow(delegate.getAnchor());
-			const explicit = delegate.getActions ? resolveAlternativeMenuActions(delegate.getActions(), shouldUseAlternativeMenuActions(targetWindow)) : [];
+			const explicit = delegate.getActions
+				? resolveAlternativeMenuActions(
+					delegate.getActions(),
+					shouldUseAlternativeMenuActions(targetWindow),
+				)
+				: [];
 			if (!('menuId' in delegate) || !(delegate.menuId instanceof MenuId)) {
 				return trimSeparators(explicit);
 			}
 			const contributed = getFlatContextMenuActions(
-				menuService.getMenuActions(delegate.menuId, delegate.menuActionOptions, delegate.contextKeyService ?? globalContextKeyService),
+				menuService.getMenuActions(
+					delegate.menuId,
+					delegate.menuActionOptions,
+					delegate.contextKeyService ?? globalContextKeyService,
+				),
 				undefined,
 				targetWindow,
 			);
@@ -83,7 +108,10 @@ function getAnchorWindow(anchor: ReturnType<IContextMenuDelegate['getAnchor']>):
 function trimSeparators(actions: readonly IAction[]): readonly IAction[] {
 	const result: IAction[] = [];
 	for (const action of actions) {
-		if (action instanceof Separator && (result.length === 0 || result[result.length - 1] instanceof Separator)) continue;
+		if (
+			action instanceof Separator &&
+			(result.length === 0 || result[result.length - 1] instanceof Separator)
+		) continue;
 		result.push(action);
 	}
 	if (result[result.length - 1] instanceof Separator) result.pop();

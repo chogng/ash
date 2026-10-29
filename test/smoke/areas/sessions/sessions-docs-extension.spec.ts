@@ -10,11 +10,7 @@ const test = base.extend({
 	backendFixture: async ({ testWorkspace }, use) => {
 		if (!distribution || !trustedRoot) throw new Error('Provide a signed Academy editor distribution and its trusted root.');
 		const registry = await SignedExtensionRegistry.createEditor(join(testWorkspace.directory, 'docs-registry'), distribution, trustedRoot, 'ash.academy@ash');
-		try {
-			await use(registry);
-		} finally {
-			await registry.close();
-		}
+		try { await use(registry); } finally { await registry.close(); }
 	},
 });
 test.skip(!distribution || !trustedRoot, 'Optional real editor package acceptance; supply ASH_ACADEMY_DISTRIBUTION and ASH_ACADEMY_TRUSTED_ROOT.');

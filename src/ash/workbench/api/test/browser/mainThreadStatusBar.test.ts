@@ -11,43 +11,17 @@ import { MainThreadStatusBar } from '../../browser/mainThreadStatusBar.js';
 import { StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
 
 const source = { extensionId: 'acme.status', activationGeneration: 1, incarnation: 1 };
-const entry = (value: number): ExtensionStatusBarEntry => ({
-	id: 'item',
-	text: `Status ${value}`,
-	tooltip: 'Run status',
-	ariaLabel: 'Run extension status',
-	alignment: 'right',
-	priority: 1.5,
-	command: { command: 'acme.run', arguments: [{ value }] },
-});
+const entry = (value: number): ExtensionStatusBarEntry => ({ id: 'item', text: `Status ${value}`, tooltip: 'Run status', ariaLabel: 'Run extension status', alignment: 'right', priority: 1.5, command: { command: 'acme.run', arguments: [{ value }] } });
 function commandService(callback: (...args: unknown[]) => Promise<void>): ICommandService {
-	return {
-		onWillExecuteCommand: Event.None,
-		onDidExecuteCommand: Event.None,
-		executeCommand: async <T>(id: string, ...args: readonly unknown[]) => {
-			await callback(id, ...args);
-			return undefined as T;
-		},
-	};
+	return { onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: readonly unknown[]) => { await callback(id, ...args); return undefined as T; } };
 }
 function snapshot(incarnation = 1, entries: readonly ExtensionStatusBarEntry[] = [entry(0)]) {
 	return normalizeExtensionHostSnapshot({
-		generation: incarnation,
-		extensions: [
-			{
-				id: source.extensionId,
-				version: '1',
-				packageDigest: `sha256:${'a'.repeat(64)}`,
-				runtimeApiVersion: 1,
-				activationGeneration: 1,
-				incarnation,
-				lifecycle: 'ready',
-				failure: null,
-				stderr: '',
-				outputEvents: [],
-				registrations: [{ kind: 'statusBar', registrationId: 'status', revision: 1, entries }],
-			},
-		],
+		generation: incarnation, extensions: [{
+			id: source.extensionId, version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+			activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
+			registrations: [{ kind: 'statusBar', registrationId: 'status', revision: 1, entries }],
+		}]
 	});
 }
 
@@ -57,16 +31,11 @@ suite('Extension status bar', () => {
 	test('replacements reuse one accessor, hidden entries disappear and stale snapshots cannot restore them', async () => {
 		using statusbar = new StatusbarService();
 		const calls: unknown[][] = [];
-		const commands = commandService(async (...args) => {
-			calls.push(args);
-		});
+		const commands = commandService(async (...args) => { calls.push(args); });
 		using bridge = new MainThreadStatusBar(error => assert.fail(String(error)), statusbar, commands);
 		let additions = 0;
 		const add = statusbar.addEntry.bind(statusbar);
-		statusbar.addEntry = (value, options) => {
-			additions++;
-			return add(value, options);
-		};
+		statusbar.addEntry = (value, options) => { additions++; return add(value, options); };
 		bridge.update(snapshot());
 		for (let revision = 2; revision <= 100; revision++) bridge.set(source, 'status', revision, [entry(revision)]);
 		assert.equal(additions, 1);
@@ -84,10 +53,7 @@ suite('Extension status bar', () => {
 		using statusbar = new StatusbarService();
 		const pending = new DeferredPromise<void>();
 		const calls: unknown[][] = [];
-		const commands = commandService(async (...args) => {
-			calls.push(args);
-			await pending.p;
-		});
+		const commands = commandService(async (...args) => { calls.push(args); await pending.p; });
 		using bridge = new MainThreadStatusBar(error => assert.fail(String(error)), statusbar, commands);
 		bridge.update(snapshot());
 		const oldRun = statusbar.getEntries(StatusbarAlignment.Right)[0]!.entry.run!;
@@ -104,30 +70,16 @@ suite('Extension status bar', () => {
 
 	test('malformed updates fail before changing live entries', () => {
 		using statusbar = new StatusbarService();
-		using bridge = new MainThreadStatusBar(
-			error => assert.fail(String(error)),
-			statusbar,
-			commandService(async () => undefined),
-		);
+		using bridge = new MainThreadStatusBar(error => assert.fail(String(error)), statusbar, commandService(async () => undefined));
 		bridge.update(snapshot());
-		const operation = {
-			operation: 'setStatusBarEntries',
-			registrationId: 'status',
-			revision: 2,
-			entries: [entry(2)],
-		};
+		const operation = { operation: 'setStatusBarEntries', registrationId: 'status', revision: 2, entries: [entry(2)] };
 		for (const invalid of [
-			{ ...operation, extensionId: 'other' },
-			{ ...operation, revision: 0 },
+			{ ...operation, extensionId: 'other' }, { ...operation, revision: 0 },
 			{ ...operation, entries: [entry(2), entry(2)] },
 			{ ...operation, entries: [{ ...entry(2), priority: Infinity }] },
 			{ ...operation, entries: [{ ...entry(2), text: '😀'.repeat(3000) }] },
-			{
-				...operation,
-				entries: [{ ...entry(2), command: { command: 'acme.run', arguments: Array(1025).fill(null) } }],
-			},
-		])
-			assert.throws(() => normalizeExtensionStatusBarUpdate(invalid));
+			{ ...operation, entries: [{ ...entry(2), command: { command: 'acme.run', arguments: Array(1025).fill(null) } }] },
+		]) assert.throws(() => normalizeExtensionStatusBarUpdate(invalid));
 		assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]!.entry.text, 'Status 0');
 	});
 
@@ -135,11 +87,7 @@ suite('Extension status bar', () => {
 		using statusbar = new StatusbarService();
 		const pending = new DeferredPromise<void>();
 		const errors: unknown[] = [];
-		using bridge = new MainThreadStatusBar(
-			error => errors.push(error),
-			statusbar,
-			commandService(() => pending.p),
-		);
+		using bridge = new MainThreadStatusBar(error => errors.push(error), statusbar, commandService(() => pending.p));
 		bridge.update(snapshot());
 		const click = statusbar.getEntries(StatusbarAlignment.Right)[0]!.entry.run!();
 		bridge.dispose();

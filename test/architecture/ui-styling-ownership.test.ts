@@ -69,7 +69,7 @@ test('CSS does not style action identity attributes', async () => {
 });
 
 async function partCssFiles(directory: string): Promise<string[]> {
-	return (await cssFiles(directory)).filter(file => /part\.css$/i.test(file));
+	return (await cssFiles(directory)).filter((file) => /part\.css$/i.test(file));
 }
 
 async function cssFiles(directory: string): Promise<string[]> {
@@ -77,7 +77,7 @@ async function cssFiles(directory: string): Promise<string[]> {
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
 		if (entry.name === '.build') continue;
 		const path = join(directory, entry.name);
-		if (entry.isDirectory()) result.push(...(await cssFiles(path)));
+		if (entry.isDirectory()) result.push(...await cssFiles(path));
 		else if (entry.name.endsWith('.css')) result.push(path);
 	}
 	return result;

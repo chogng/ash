@@ -35,61 +35,39 @@ export class AppServerIdeHost extends Disposable {
 		@INativeHostService private readonly windowHost: INativeHostApi,
 	) {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.lifetime.abort();
-				// Retire discovery after an in-flight registration, even if the connection stays open.
-				void this.registration
-					.schedule(async () => {
-						if (client.state === 'ready') await client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
-					})
-					.catch(error => {
-						if (client.state === 'ready') onUnexpectedError(error);
-					});
-			}),
-		);
-		this._register(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['ide/hostRequest'], async (params, context) => {
-				const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
-				throwIfCancelled(signal);
-				switch (params.type) {
-					case 'openConversation':
-						// The window service waits for Sessions to load the exact durable identity.
-						// It carries no prompt, draft or permission changes into the receiving window.
-						await this.windowHost.openAgentsWindow({
-							conversation: { sessionId: params.sessionId, threadId: params.threadId },
-						});
-						break;
-					case 'context':
-						return { type: 'context', context: this.capture(params.roots) };
-					case 'openFile': {
-						const resource = this.displayResource(params.path);
-						await this.editors.openEditor(
-							{ resource },
-							{
-								ignoreError: true,
-								...(params.line ? { selection: new Range(params.line, 1, params.line, 1) } : {}),
-							},
-						);
-						break;
-					}
-					case 'openReview': {
-						const original = this.displayResource(params.original);
-						const modified = this.displayResource(params.modified);
-						await this.editors.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }), { ignoreError: true });
-						break;
-					}
+		this._register(toDisposable(() => {
+			this.lifetime.abort();
+			// Retire discovery after an in-flight registration, even if the connection stays open.
+			void this.registration.schedule(async () => {
+				if (client.state === 'ready') await client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
+			}).catch(error => { if (client.state === 'ready') onUnexpectedError(error); });
+		}));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['ide/hostRequest'], async (params, context) => {
+			const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
+			throwIfCancelled(signal);
+			switch (params.type) {
+				case 'openConversation':
+					// The window service waits for Sessions to load the exact durable identity.
+					// It carries no prompt, draft or permission changes into the receiving window.
+					await this.windowHost.openAgentsWindow({ conversation: { sessionId: params.sessionId, threadId: params.threadId } });
+					break;
+				case 'context': return { type: 'context', context: this.capture(params.roots) };
+				case 'openFile': {
+					const resource = this.displayResource(params.path);
+					await this.editors.openEditor({ resource }, { ignoreError: true, ...(params.line ? { selection: new Range(params.line, 1, params.line, 1) } : {}) });
+					break;
 				}
-				throwIfCancelled(signal);
-				return { type: 'opened' };
-			}),
-		);
-		this._register(
-			client.onStateChange(state => {
-				this.registered = false;
-				if (state === 'ready') this.publish();
-			}),
-		);
+				case 'openReview': {
+					const original = this.displayResource(params.original);
+					const modified = this.displayResource(params.modified);
+					await this.editors.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }), { ignoreError: true });
+					break;
+				}
+			}
+			throwIfCancelled(signal);
+			return { type: 'opened' };
+		}));
+		this._register(client.onStateChange(state => { this.registered = false; if (state === 'ready') this.publish(); }));
 		this._register(workspace.onDidChangeWorkspace(() => this.publish()));
 		this._register(editors.onDidActiveEditorChange(() => this.publish()));
 		if (client.state === 'ready') this.publish();
@@ -97,39 +75,30 @@ export class AppServerIdeHost extends Disposable {
 
 	/** Terminal launch waits for this window's registration; the desktop owns environment setup. */
 	async readTerminalWindowKey(): Promise<string | undefined> {
-		await this.registration.schedule(async () => {});
+		await this.registration.schedule(async () => { });
 		return this.registered && !this.lifetime.signal.aborted ? this.windowKey : undefined;
 	}
 
 	private publish(): void {
 		const generation = this.client.generation;
-		void this.registration
-			.schedule(async () => {
-				if (this.lifetime.signal.aborted || this.client.state !== 'ready' || this.client.generation !== generation) return;
+		void this.registration.schedule(async () => {
+			if (this.lifetime.signal.aborted || this.client.state !== 'ready' || this.client.generation !== generation) return;
+			this.registered = false;
+			const workspace = this.workspace.getWorkspace();
+			const roots = workspace.folders.filter(folder => folder.uri.scheme === 'file').map(folder => folder.uri.fsPath);
+			// Remote windows require an execution-environment contract before they can attach.
+			if (workspace.remoteAuthority || roots.length === 0) {
 				this.registered = false;
-				const workspace = this.workspace.getWorkspace();
-				const roots = workspace.folders.filter(folder => folder.uri.scheme === 'file').map(folder => folder.uri.fsPath);
-				// Remote windows require an execution-environment contract before they can attach.
-				if (workspace.remoteAuthority || roots.length === 0) {
-					this.registered = false;
-					await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
-				} else {
-					const project = workspace.name ?? workspace.folders.map(folder => folder.name).join(', ');
-					const active = this.editors.activeEditor;
-					const label = active?.resource.scheme === 'file' ? basename(active.resource) : active?.label;
-					const title = (label ? `${project} · ${label}` : project).replace(/\p{Cc}/gu, ' ').slice(0, 256);
-					await this.client.request(APP_SERVER_METHODS['ide/request'], {
-						type: 'register',
-						title,
-						roots,
-						windowKey: this.windowKey,
-					});
-					this.registered = true;
-				}
-			})
-			.catch(error => {
-				if (!this.lifetime.signal.aborted && this.client.state === 'ready') onUnexpectedError(error);
-			});
+				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
+			} else {
+				const project = workspace.name ?? workspace.folders.map(folder => folder.name).join(', ');
+				const active = this.editors.activeEditor;
+				const label = active?.resource.scheme === 'file' ? basename(active.resource) : active?.label;
+				const title = (label ? `${project} · ${label}` : project).replace(/\p{Cc}/gu, ' ').slice(0, 256);
+				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'register', title, roots, windowKey: this.windowKey });
+				this.registered = true;
+			}
+		}).catch(error => { if (!this.lifetime.signal.aborted && this.client.state === 'ready') onUnexpectedError(error); });
 	}
 
 	private displayResource(path: string): URI {
@@ -155,34 +124,12 @@ export class AppServerIdeHost extends Disposable {
 					text += character;
 					remaining--;
 				}
-				return {
-					startLine: range.startLineNumber,
-					startColumn: range.startColumn,
-					endLine: range.endLineNumber,
-					endColumn: range.endColumn,
-					text,
-					truncated: text.length < selected.length,
-				};
+				return { startLine: range.startLineNumber, startColumn: range.startColumn, endLine: range.endLineNumber, endColumn: range.endColumn, text, truncated: text.length < selected.length };
 			});
 			activeFile = { path: model.uri.fsPath, version: model.getVersionId(), selections };
 		}
-		const openTabs = [
-			...new Set(
-				this.groups.groups
-					.flatMap(group => group.inputs)
-					.map(input => input.resource)
-					.filter(allowed)
-					.map(resource => resource.fsPath),
-			),
-		].slice(0, 100);
-		const dirtyFiles = [
-			...new Set(
-				this.workingCopies
-					.getAll()
-					.filter(copy => copy.isDirty && allowed(copy.resource))
-					.map(copy => copy.resource.fsPath),
-			),
-		].slice(0, 100);
+		const openTabs = [...new Set(this.groups.groups.flatMap(group => group.inputs).map(input => input.resource).filter(allowed).map(resource => resource.fsPath))].slice(0, 100);
+		const dirtyFiles = [...new Set(this.workingCopies.getAll().filter(copy => copy.isDirty && allowed(copy.resource)).map(copy => copy.resource.fsPath))].slice(0, 100);
 		return { activeFile, openTabs, dirtyFiles };
 	}
 }

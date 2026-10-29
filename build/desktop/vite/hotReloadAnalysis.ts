@@ -98,14 +98,12 @@ export function unsafeHotReloadChangeReason(previous: HotReloadModuleAnalysis, n
 }
 
 function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, source: ts.SourceFile, isWidget: boolean): HotReloadClassAnalysis {
-	const initialization = declaration.members
-		.filter(member => {
-			if (isPrototypePatchableMember(member)) return false;
-			if (!isWidget) return true;
-			// Widgets recreate instance initialization; static state and decorators still require a page reload.
-			return hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasRuntimeDecorator(member) || ts.isClassStaticBlockDeclaration(member);
-		})
-		.map(member => member.getText(source));
+	const initialization = declaration.members.filter(member => {
+		if (isPrototypePatchableMember(member)) return false;
+		if (!isWidget) return true;
+		// Widgets recreate instance initialization; static state and decorators still require a page reload.
+		return hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasRuntimeDecorator(member) || ts.isClassStaticBlockDeclaration(member);
+	}).map(member => member.getText(source));
 	if (isWidget) {
 		const constructor = declaration.members.find(ts.isConstructorDeclaration);
 		initialization.push(JSON.stringify(constructor?.parameters.map(parameter => parameter.getText(source)) ?? []));
@@ -121,7 +119,7 @@ function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, sou
 }
 
 function sourceParseDiagnostics(source: ts.SourceFile): readonly ts.Diagnostic[] {
-	return (source as ts.SourceFile & { readonly parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics;
+	return (source as ts.SourceFile & { readonly parseDiagnostics: readonly ts.Diagnostic[]; }).parseDiagnostics;
 }
 
 function extendsClause(declaration: ts.ClassDeclaration): ts.HeritageClause | undefined {

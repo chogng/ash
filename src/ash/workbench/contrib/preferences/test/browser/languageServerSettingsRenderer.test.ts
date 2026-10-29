@@ -14,12 +14,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	ILanguageServerService,
-	OPEN_LANGUAGE_SERVERS_COMMAND_ID,
-	type LanguageServerConfiguration,
-	type LanguageServerSnapshot,
-} from '../../../../../platform/language/common/languageServerService.js';
+import { ILanguageServerService, OPEN_LANGUAGE_SERVERS_COMMAND_ID, type LanguageServerConfiguration, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -41,11 +36,7 @@ class SettingsFixture extends DisposableStore {
 	public readonly connection = this.add(new Emitter<RemoteConnectionState>());
 	public readonly localeChanged = this.add(new Emitter<void>());
 	public locale: string;
-	public snapshot: LanguageServerSnapshot = {
-		revision: 7,
-		configurations: {},
-		servers: [{ id: 'rust-analyzer', languageIds: ['rust'] }],
-	};
+	public snapshot: LanguageServerSnapshot = { revision: 7, configurations: {}, servers: [{ id: 'rust-analyzer', languageIds: ['rust'] }] };
 	public pending: Promise<LanguageServerSnapshot> | undefined;
 	public rejectWrites = false;
 	public readonly writes: unknown[] = [];
@@ -58,42 +49,22 @@ class SettingsFixture extends DisposableStore {
 		this.locale = locale;
 		browserEnvironment.window.document.body.append(this.root);
 		this.add(toDisposable(() => this.root.remove()));
-		this.services.registerInstance(ICodeEditorService, {
-			getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'rust' }) }),
-		} as unknown as ICodeEditorService);
+		this.services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'rust' }) }) } as unknown as ICodeEditorService);
 		this.services.registerInstance(ILanguageServerService, {
-			control: async () => {
-				throw new Error('Process control is outside the settings fixture');
-			},
-			read: async () => {
-				const pending = this.pending;
-				this.pending = undefined;
-				return pending ?? this.snapshot;
-			},
+			control: async () => { throw new Error('Process control is outside the settings fixture'); },
+			read: async () => { const pending = this.pending; this.pending = undefined; return pending ?? this.snapshot; },
 			configure: async (id, configuration, revision) => {
 				this.writes.push(['save', id, configuration, revision]);
-				if (this.rejectWrites) {
-					throw new Error('revision conflict');
-				}
-				this.snapshot = {
-					...this.snapshot,
-					revision: revision + 1,
-					configurations: { ...this.snapshot.configurations, [id]: configuration },
-				};
+				if (this.rejectWrites) { throw new Error('revision conflict'); }
+				this.snapshot = { ...this.snapshot, revision: revision + 1, configurations: { ...this.snapshot.configurations, [id]: configuration } };
 			},
 			removeConfiguration: async (id, revision) => {
 				this.writes.push(['reset', id, revision]);
 				this.snapshot = { ...this.snapshot, revision: revision + 1, configurations: {} };
 			},
 		});
-		this.services.registerInstance(IExtensionManagementService, {
-			onDidChangeInstalled: this.installed.event,
-		} as IExtensionManagementService);
-		this.services.registerInstance(ICommandService, {
-			executeCommand: async (id: string, ...args: unknown[]) => {
-				this.commands.push([id, ...args]);
-			},
-		} as unknown as ICommandService);
+		this.services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: this.installed.event } as IExtensionManagementService);
+		this.services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => { this.commands.push([id, ...args]); } } as unknown as ICommandService);
 		this.services.registerInstance(IWorkspaceContextService, this.add(new TestWorkspaceService({ id: 'test', folders: [] })));
 		this.services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
@@ -102,26 +73,11 @@ class SettingsFixture extends DisposableStore {
 				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
 			},
 		});
-		this.services.registerInstance(IAppServerRemoteAgentService, {
-			onDidChangeConnection: Event.None,
-			onDidChangeConnectionState: this.connection.event,
-		} as IAppServerRemoteAgentService);
+		this.services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: this.connection.event } as IAppServerRemoteAgentService);
 		this.services.registerInstance(IContextViewService, this.add(new BrowserContextViewService(this.root)));
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
-		this.services.registerInstance(IAccessibleViewService, {
-			show: () => true,
-			getOpenAriaHint: () => undefined,
-			disableHint: async () => {},
-			showAccessibleViewHelp: () => {},
-			dispose() {},
-			[Symbol.dispose]() {},
-		});
-		this.services.registerInstance(IEditorService, {
-			openEditor: async (input: IResourceEditorInput) => {
-				this.inputs.push(input);
-				this.content.setInput(input);
-			},
-		} as IEditorService);
+		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+		this.services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
 		this.content = this.add(this.services.createInstance(LanguageServerSettingsRenderer, this.root));
 		this.root.append(this.content.domNode);
 		this.content.setInput(createSettingsEditorInput());
@@ -142,9 +98,7 @@ class SettingsFixture extends DisposableStore {
 	}
 }
 
-async function settle(): Promise<void> {
-	await new Promise<void>(resolve => setImmediate(resolve));
-}
+async function settle(): Promise<void> { await new Promise<void>(resolve => setImmediate(resolve)); }
 
 test('LSP command opens the editor Settings section with the requested language', async () => {
 	using fixture = new SettingsFixture();
@@ -275,8 +229,7 @@ test('custom language server JSON configuration round-trips and malformed drafts
 	fixture.edit('Executable path (optional)', '/tools/server');
 	const advanced = fixture.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Advanced configuration (JSON)"]')!;
 	assert.ok(advanced);
-	advanced.value =
-		'{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"value"},"initializationOptions":{"features":true},"settings":{"python":{"analysis":{"typeCheckingMode":"strict"}}}}';
+	advanced.value = '{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"value"},"initializationOptions":{"features":true},"settings":{"python":{"analysis":{"typeCheckingMode":"strict"}}}}';
 	advanced.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	fixture.button('Save server configuration').click();
 	await settle();

@@ -17,9 +17,7 @@ suite('Document style isolation guard', () => {
 				assert.ok(compareDocumentStyles(before, captureDocumentStyles(document.documentElement)).includes('stylesheet nodes changed'));
 				node.remove();
 				assert.deepEqual(compareDocumentStyles(before, captureDocumentStyles(document.documentElement)), []);
-			} finally {
-				dom.window.close();
-			}
+			} finally { dom.window.close(); }
 		});
 	}
 
@@ -34,9 +32,7 @@ suite('Document style isolation guard', () => {
 			assert.ok(changes.includes('stylesheet nodes changed'));
 			assert.ok(changes.includes('stylesheet identities changed'));
 			assert.equal(changes.includes('stylesheet markup changed'), false);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 
 	test('detects CSSOM rule changes without a change to style markup', () => {
@@ -49,9 +45,7 @@ suite('Document style isolation guard', () => {
 			assert.deepEqual(compareDocumentStyles(before, captureDocumentStyles(document.documentElement)), ['stylesheet rules changed']);
 			sheet.deleteRule(sheet.cssRules.length - 1);
 			assert.deepEqual(compareDocumentStyles(before, captureDocumentStyles(document.documentElement)), []);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 
 	test('detects root and body inline style changes', () => {
@@ -62,8 +56,6 @@ suite('Document style isolation guard', () => {
 			document.documentElement.style.setProperty('--test-color', 'red');
 			document.body.style.color = 'blue';
 			assert.deepEqual(compareDocumentStyles(before, captureDocumentStyles(document.documentElement)), ['root inline style changed', 'body inline style changed']);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 });

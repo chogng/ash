@@ -10,7 +10,14 @@ import type { ModelRef } from '../../../services/chat/common/chatService.js';
 const MaximumHiddenModels = 2_048;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
-const DefaultVisibleModels = new Set(['openai\0gpt-6.1-sol', 'openai\0gpt-6-astra', 'openai\0gpt-6-luna', 'anthropic\0claude-opus-5-5', 'anthropic\0claude-sonnet-5-5', 'xai\0grok-4.7']);
+const DefaultVisibleModels = new Set([
+	'openai\0gpt-6.1-sol',
+	'openai\0gpt-6-astra',
+	'openai\0gpt-6-luna',
+	'anthropic\0claude-opus-5-5',
+	'anthropic\0claude-sonnet-5-5',
+	'xai\0grok-4.7',
+]);
 
 /** Existing models.hidden entries remain explicit exclusions; visible enables a model over the product default. */
 export interface ModelVisibilityPreference extends ModelRef {
@@ -38,10 +45,7 @@ export const ModelCatalogConfiguration = Object.freeze({
 		},
 		setting: {
 			title: localize('chat.defaultModel.title', 'Default chat model'),
-			description: localize(
-				'chat.defaultModel.description',
-				'The model for new chats. Use auto for automatic selection, or enter a provider/model ID. You can still change the model within a chat.',
-			),
+			description: localize('chat.defaultModel.description', 'The model for new chats. Use auto for automatic selection, or enter a provider/model ID. You can still change the model within a chat.'),
 			valueType: 'text',
 			placeholder: localize('chat.defaultModel.placeholder', 'auto or provider/model'),
 		},
@@ -50,7 +54,9 @@ export const ModelCatalogConfiguration = Object.freeze({
 		key: 'models.hidden',
 		defaultValue: Object.freeze([]),
 		parse: parseHiddenModels,
-		serialize: models => models.map(model => (model.visible ? { provider: model.provider, model: model.model, visible: true } : { provider: model.provider, model: model.model })),
+		serialize: models => models.map(model => model.visible
+			? { provider: model.provider, model: model.model, visible: true }
+			: { provider: model.provider, model: model.model }),
 	}),
 });
 

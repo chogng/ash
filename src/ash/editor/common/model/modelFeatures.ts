@@ -24,8 +24,5 @@ export const createTextModelFeatures: TextModelFeatureFactory = (model, options)
 			decorations: resources.add(new ColorizedBracketPairsDecorationProvider(model)),
 		});
 		return parts;
-	} catch (error) {
-		resources.dispose();
-		throw error;
-	}
+	} catch (error) { resources.dispose(); throw error; }
 };

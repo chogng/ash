@@ -10,7 +10,10 @@ test('platform registry exposes add, knows, and as', () => {
 	assert.equal(Registry.knows('test.platform.registry.missing'), false);
 	assert.equal(Registry.as('test.platform.registry.api'), contribution);
 	assert.equal(Registry.as('test.platform.registry.missing'), null);
-	assert.throws(() => Registry.add('test.platform.registry.api', { enabled: false }), /There is already an extension with this id/u);
+	assert.throws(
+		() => Registry.add('test.platform.registry.api', { enabled: false }),
+		/There is already an extension with this id/u,
+	);
 });
 
 test('platform registry disposes registered contributions and clears itself', () => {

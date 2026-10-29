@@ -11,10 +11,7 @@ export interface IEditorCommandsContext {
 }
 
 export interface IResolvedEditorCommandsContext {
-	readonly groupedEditors: readonly {
-		readonly group: IEditorGroup;
-		readonly editors: readonly IResourceEditorInput[];
-	}[];
+	readonly groupedEditors: readonly { readonly group: IEditorGroup; readonly editors: readonly IResourceEditorInput[]; }[];
 	readonly preserveFocus: boolean;
 }
 
@@ -52,7 +49,7 @@ export function resolveCommandsContext(commandArgs: readonly unknown[], editorGr
 	};
 }
 
-function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput | undefined; preserveFocus: boolean } | undefined {
+function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput | undefined; preserveFocus: boolean; } | undefined {
 	if (argument instanceof URI) {
 		for (const group of editorGroups.groups) {
 			const editor = group.inputs.find(input => extUri.isEqual(input.resource, argument));
@@ -79,11 +76,7 @@ function isEditorCommandsContext(value: unknown): value is IEditorCommandsContex
 		return false;
 	}
 	const context = value as Partial<IEditorCommandsContext>;
-	return (
-		typeof context.groupId === 'number' &&
-		Number.isSafeInteger(context.groupId) &&
-		context.groupId >= 0 &&
-		(context.editorIndex === undefined || (Number.isInteger(context.editorIndex) && context.editorIndex >= 0)) &&
-		(context.preserveFocus === undefined || typeof context.preserveFocus === 'boolean')
-	);
+	return typeof context.groupId === 'number' && Number.isSafeInteger(context.groupId) && context.groupId >= 0
+		&& (context.editorIndex === undefined || Number.isInteger(context.editorIndex) && context.editorIndex >= 0)
+		&& (context.preserveFocus === undefined || typeof context.preserveFocus === 'boolean');
 }

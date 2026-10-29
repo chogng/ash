@@ -34,12 +34,8 @@ export const DesignConfiguration = Object.freeze({
 		setting: {
 			included: false,
 			valueType: 'boolean',
-			get title() {
-				return localize('sessions.design.usePointerCursor.title', 'Use pointer cursor on the canvas');
-			},
-			get description() {
-				return localize('sessions.design.usePointerCursor.description', 'Show the cursor icon on the Design canvas. Turn this off to use a hand cursor. Dragging shows a grabbing hand.');
-			},
+			get title() { return localize('sessions.design.usePointerCursor.title', 'Use pointer cursor on the canvas'); },
+			get description() { return localize('sessions.design.usePointerCursor.description', 'Show the cursor icon on the Design canvas. Turn this off to use a hand cursor. Dragging shows a grabbing hand.'); }
 		},
 	}),
 });

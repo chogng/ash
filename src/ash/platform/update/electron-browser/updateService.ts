@@ -13,9 +13,7 @@ export class ElectronUpdateService extends Disposable implements IUpdateService 
 	private readonly stateChanges = this._register(new Emitter<UpdateState>());
 	readonly onDidChangeState = this.stateChanges.event;
 	private currentState: UpdateState = 'idle';
-	get state(): UpdateState {
-		return this.currentState;
-	}
+	get state(): UpdateState { return this.currentState; }
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IMainProcessService mainProcessService: IMainProcessService,
@@ -24,19 +22,14 @@ export class ElectronUpdateService extends Disposable implements IUpdateService 
 		super();
 		this.updates = mainProcessService.getChannel('update');
 		let changed = false;
-		this._register(
-			this.updates.listen<unknown>('onDidChangeState')(value => {
-				changed = true;
-				this.acceptState(value);
-			}),
-		);
-		void this.updates
-			.call<unknown>('state')
-			.then(value => {
-				// A pushed state is newer than the startup snapshot, including in newly opened windows.
-				if (!changed) this.acceptState(value);
-			})
-			.catch(error => console.error('Could not read update state', error));
+		this._register(this.updates.listen<unknown>('onDidChangeState')(value => {
+			changed = true;
+			this.acceptState(value);
+		}));
+		void this.updates.call<unknown>('state').then(value => {
+			// A pushed state is newer than the startup snapshot, including in newly opened windows.
+			if (!changed) this.acceptState(value);
+		}).catch(error => console.error('Could not read update state', error));
 	}
 
 	private acceptState(value: unknown): void {

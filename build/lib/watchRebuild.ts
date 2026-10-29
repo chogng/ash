@@ -7,8 +7,8 @@ export interface RebuildServer {
 		once(event: 'close', listener: () => void): unknown;
 		off(event: 'close', listener: () => void): unknown;
 	} | null;
-	readonly config: { readonly logger: { error(message: string, options?: { error?: unknown }): void } };
-	readonly ws: { send(message: { type: 'full-reload' }): void };
+	readonly config: { readonly logger: { error(message: string, options?: { error?: unknown; }): void; }; };
+	readonly ws: { send(message: { type: 'full-reload'; }): void; };
 }
 
 /** Coalesces changes for generators that reread all their inputs on every run. */
@@ -21,42 +21,32 @@ export function watchRebuild(server: RebuildServer, accepts: (path: string) => b
 	let closed = false;
 
 	async function rebuild(): Promise<void> {
-		if (closed || running || !dirty) {
-			return;
-		}
+		if (closed || running || !dirty) { return; }
 		dirty = false;
 		running = true;
 		try {
-			changed = (await build()) || changed;
+			changed = await build() || changed;
 			// Keep changes from earlier passes, including when the final pass is a no-op.
 			if (!closed && !dirty && changed) {
 				server.ws.send({ type: 'full-reload' });
 				changed = false;
 			}
 		} catch (error) {
-			if (!closed) {
-				server.config.logger.error(error instanceof Error ? error.message : String(error), { error });
-			}
+			if (!closed) { server.config.logger.error(error instanceof Error ? error.message : String(error), { error }); }
 		} finally {
 			running = false;
 			// Keep one rerun for edits received during generation, respecting any remaining debounce.
-			if (dirty && timer === undefined && !closed) {
-				completion = rebuild();
-			}
+			if (dirty && timer === undefined && !closed) { completion = rebuild(); }
 		}
 	}
 
 	function onChange(event: string, path: string): void {
-		if (closed || !['add', 'change', 'unlink'].includes(event) || !accepts(path)) {
-			return;
-		}
+		if (closed || !['add', 'change', 'unlink'].includes(event) || !accepts(path)) { return; }
 		dirty = true;
 		clearTimeout(timer);
 		timer = setTimeout(() => {
 			timer = undefined;
-			if (!running) {
-				completion = rebuild();
-			}
+			if (!running) { completion = rebuild(); }
 		}, debounceMilliseconds);
 	}
 

@@ -1,7 +1,7 @@
 export class IdGenerator {
 	private lastId = 0;
 
-	constructor(private readonly prefix: string) {}
+	constructor(private readonly prefix: string) { }
 
 	nextId(): string {
 		this.lastId += 1;

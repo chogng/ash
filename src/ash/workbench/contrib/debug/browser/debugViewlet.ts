@@ -60,10 +60,7 @@ export class DebugViewPaneContainer extends PaneComposite {
 		};
 		updateConditions();
 		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus, configuration, instantiation, contextKeys);
-		this.resetConditions = () => {
-			ux.reset();
-			breakpoints.reset();
-		};
+		this.resetConditions = () => { ux.reset(); breakpoints.reset(); };
 		this._register(debug.onDidChangeConfigurations(updateConditions));
 		this._register(debug.onDidChangeSession(updateConditions));
 		this._register(debug.onDidChangeBreakpoints(updateConditions));
@@ -78,37 +75,27 @@ export class DebugViewPaneContainer extends PaneComposite {
 			if (this.element.clientHeight > 0) this.layout({ width: this.element.clientWidth, height: this.element.clientHeight });
 		};
 		const relayoutFrame = this._register(new MutableDisposable<IDisposable>());
-		this._register(
-			observeElementSize(this.chrome, () => {
-				if (relayoutFrame.value) return;
-				// Layout writes can resize the observed controls. Leave the observer's
-				// delivery cycle before applying their latest height to the panes.
-				relayoutFrame.value = scheduleAtNextAnimationFrame(container.ownerDocument.defaultView!, () => {
-					relayoutFrame.clear();
-					relayout();
-				});
-			}),
-		);
+		this._register(observeElementSize(this.chrome, () => {
+			if (relayoutFrame.value) return;
+			// Layout writes can resize the observed controls. Leave the observer's
+			// delivery cycle before applying their latest height to the panes.
+			relayoutFrame.value = scheduleAtNextAnimationFrame(container.ownerDocument.defaultView!, () => {
+				relayoutFrame.clear();
+				relayout();
+			});
+		}));
 		void debug.refresh().catch(error => {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error));
 		});
 		const startLabel = localize('debug.start', 'Start Debugging');
 		this.startAction = {
-			id: START_DEBUG_COMMAND_ID,
-			label: startLabel,
-			tooltip: startLabel,
-			icon: debugStart,
-			enabled: true,
-			run: () => this.commands.executeCommand(START_DEBUG_COMMAND_ID, true),
+			id: START_DEBUG_COMMAND_ID, label: startLabel, tooltip: startLabel, icon: debugStart, enabled: true,
+			run: () => this.commands.executeCommand(START_DEBUG_COMMAND_ID, true)
 		};
 		const configureLabel = localize('debug.configure', 'Open launch.json');
 		this.configureAction = {
-			id: DEBUG_CONFIGURE_COMMAND_ID,
-			label: configureLabel,
-			tooltip: configureLabel,
-			icon: debugConfigure,
-			enabled: true,
-			run: () => this.configure(),
+			id: DEBUG_CONFIGURE_COMMAND_ID, label: configureLabel, tooltip: configureLabel, icon: debugConfigure, enabled: true,
+			run: () => this.configure()
 		};
 		this._register(debug.onDidChangeConfigurations(() => this.updateTitleArea()));
 		this._register(debug.onDidChangeSession(() => this.updateTitleArea()));
@@ -116,20 +103,21 @@ export class DebugViewPaneContainer extends PaneComposite {
 	}
 
 	override layout(dimension: IDimension): void {
-		super.layout({
-			width: dimension.width,
-			height: Math.max(0, dimension.height - (this.chrome?.offsetHeight ?? 0)),
-		});
+		super.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.chrome?.offsetHeight ?? 0)) });
 	}
 
 	override getActions(): readonly IAction[] {
 		const hasConfigurations = this.debug.getConfigurationManager().getAllConfigurations().length > 0;
-		return [...(hasConfigurations ? [this.startAction] : []), ...(this.workspace.getWorkspace().folders.length > 0 ? [this.configureAction] : []), ...super.getActions()];
+		return [
+			...(hasConfigurations ? [this.startAction] : []),
+			...(this.workspace.getWorkspace().folders.length > 0 ? [this.configureAction] : []),
+			...super.getActions(),
+		];
 	}
 
 	override getActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {
 		if (action.id !== START_DEBUG_COMMAND_ID) return super.getActionViewItem(action, options);
-		return (this.startItem = this.instantiation.createInstance(StartDebugActionViewItem, action, options));
+		return this.startItem = this.instantiation.createInstance(StartDebugActionViewItem, action, options);
 	}
 
 	override setVisible(visible: boolean): void {

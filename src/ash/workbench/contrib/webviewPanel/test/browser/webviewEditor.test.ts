@@ -16,19 +16,11 @@ import { IWorkingCopyService } from '../../../../services/workingCopy/common/wor
 import { createTestEditorServices, getWebviewHtml } from '../../../../test/common/testEditorServices.js';
 import { WebviewEditor, type CustomTextEditorContent, type CustomTextEditorProvider } from '../../browser/webviewEditor.js';
 
-function createEditor(
-	store: DisposableStore,
-	options: {
-		acquire?: ITextModelResourceService['acquire'];
-		stat?: IFileService['stat'];
-		render?: CustomTextEditorProvider['render'];
-	} = {},
-): {
-	pane: WebviewEditor;
-	models: IFileTextModelService;
-	container: HTMLDivElement;
-	workingCopies: IWorkingCopyService;
-} {
+function createEditor(store: DisposableStore, options: {
+	acquire?: ITextModelResourceService['acquire'];
+	stat?: IFileService['stat'];
+	render?: CustomTextEditorProvider['render'];
+} = {}): { pane: WebviewEditor; models: IFileTextModelService; container: HTMLDivElement; workingCopies: IWorkingCopyService; } {
 	const parent = store.add(createTestEditorServices());
 	const models = parent.get(IFileTextModelService);
 	const services = store.add(parent.createChild());
@@ -38,37 +30,17 @@ function createEditor(
 	});
 	services.registerInstance(IFileService, {
 		onDidChangeFiles: Event.None,
-		stat:
-			options.stat ??
-			(async resource => ({
-				resource,
-				kind: FileKind.File,
-				sizeBytes: 0,
-				readonly: false,
-				modifiedAtMillis: undefined,
-			})),
+		stat: options.stat ?? (async resource => ({ resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined })),
 	} as IFileService);
 	services.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None } as IKeybindingService);
-	services.registerInstance(IAccessibleViewService, {
-		getOpenAriaHint: () => 'Accessibility help',
-	} as unknown as IAccessibleViewService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Accessibility help' } as unknown as IAccessibleViewService);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(INotificationService, {
-		error: () => {
-			throw new Error('Unexpected notification');
-		},
-	} as unknown as INotificationService);
-	const pane = store.add(
-		services.createInstance(
-			WebviewEditor,
-			{
-				viewType: 'test.preview',
-				displayName: 'Test preview',
-				render: options.render ?? (async document => ({ html: `<h1>${document.text}</h1>` })),
-			},
-			undefined,
-		),
-	);
+	services.registerInstance(INotificationService, { error: () => { throw new Error('Unexpected notification'); } } as unknown as INotificationService);
+	const pane = store.add(services.createInstance(WebviewEditor, {
+		viewType: 'test.preview',
+		displayName: 'Test preview',
+		render: options.render ?? (async document => ({ html: `<h1>${document.text}</h1>` })),
+	}, undefined));
 	const container = document.createElement('div');
 	document.body.append(container);
 	store.add(toDisposable(() => container.remove()));
@@ -106,10 +78,7 @@ suite('Webview editor input lifecycle', () => {
 		await release.complete(reference);
 		await rejected;
 		assert.equal(firstSignal?.aborted, true);
-		assert.deepEqual(
-			editor.workingCopies.getAll().map(copy => copy.backup()),
-			['Second'],
-		);
+		assert.deepEqual(editor.workingCopies.getAll().map(copy => copy.backup()), ['Second']);
 		assert.equal(editor.models.getModel(first.resource), null);
 		assert.match(getWebviewHtml(editor.pane.getControl()!.element), /<h1>Second<\/h1>/u);
 	});
@@ -133,20 +102,11 @@ suite('Webview editor input lifecycle', () => {
 		const rejected = assert.rejects(editor.pane.setInput(file, abortSignal()), isAbortError);
 		await started.p;
 		await editor.pane.setInput(second, abortSignal());
-		await stat.complete({
-			resource: file.resource,
-			kind: FileKind.File,
-			sizeBytes: 0,
-			readonly: false,
-			modifiedAtMillis: undefined,
-		});
+		await stat.complete({ resource: file.resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });
 		await rejected;
 		assert.deepEqual(rendered, ['Second']);
 		assert.equal(editor.models.getModel(file.resource), null);
-		assert.deepEqual(
-			editor.workingCopies.getAll().map(copy => copy.backup()),
-			['Second'],
-		);
+		assert.deepEqual(editor.workingCopies.getAll().map(copy => copy.backup()), ['Second']);
 	});
 
 	for (const close of ['clear', 'dispose', 'abort'] as const) {
@@ -204,10 +164,7 @@ suite('Webview editor input lifecycle', () => {
 		assert.equal(signal.aborted, true);
 		assert.equal(editor.pane.getControl()!.element, frame);
 		assert.match(getWebviewHtml(frame), /<h1>Second<\/h1>/u);
-		assert.deepEqual(
-			editor.workingCopies.getAll().map(copy => copy.backup()),
-			['Second'],
-		);
+		assert.deepEqual(editor.workingCopies.getAll().map(copy => copy.backup()), ['Second']);
 	});
 
 	test('provider failure releases the model and the next open succeeds', async () => {

@@ -10,11 +10,7 @@ import { commitChatSession } from '../../browser/chatSessions/chatSessionCommit.
 import { getInProgressSessionDescription } from '../../browser/chatSessions/chatSessionDescription.js';
 
 test('Session descriptions use current activity and clear terminal-state operation text', () => {
-	const activity = (status: AgentSessionActivity['status'], text?: string): AgentSessionActivity => ({
-		status,
-		statusChangedAtUnixMs: 0,
-		activity: text === undefined ? undefined : { type: 'operation', text },
-	});
+	const activity = (status: AgentSessionActivity['status'], text?: string): AgentSessionActivity => ({ status, statusChangedAtUnixMs: 0, activity: text === undefined ? undefined : { type: 'operation', text } });
 	assert.equal(getInProgressSessionDescription(undefined), undefined);
 	assert.equal(getInProgressSessionDescription(activity('working', '  Reading\n\tfiles  ')), 'Reading files');
 	assert.equal(getInProgressSessionDescription(activity('needsInput', 'Approve the command')), 'Approve the command');
@@ -26,9 +22,7 @@ test('Session descriptions use current activity and clear terminal-state operati
 		setNlsMessages('zh-CN', chinese.bundles);
 		assert.equal(getInProgressSessionDescription(activity('working', ' \n ')), '进行中…');
 		assert.equal(getInProgressSessionDescription(activity('needsInput')), '等待回应…');
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });
 
 test('A committed session adopts its composer before publication and retains it until subscription settles', async () => {
@@ -40,21 +34,9 @@ test('A committed session adopts its composer before publication and retains it 
 	const committed = commitChatSession({
 		resolve: async () => 'durable',
 		isCurrent: () => true,
-		adopt: session => {
-			composer = session;
-			adoptionActive = true;
-			return toDisposable(() => {
-				adoptionActive = false;
-			});
-		},
-		promote: session => {
-			assert.equal(composer, session);
-			published = session;
-		},
-		subscribe: async () => {
-			await subscribing.complete();
-			await subscribed.p;
-		},
+		adopt: session => { composer = session; adoptionActive = true; return toDisposable(() => { adoptionActive = false; }); },
+		promote: session => { assert.equal(composer, session); published = session; },
+		subscribe: async () => { await subscribing.complete(); await subscribed.p; },
 	});
 	await subscribing.p;
 	assert.equal(published, 'durable');
@@ -72,15 +54,9 @@ test('Late session creation publishes the durable identity without adopting or s
 	const committed = commitChatSession({
 		resolve: () => created.p,
 		isCurrent: () => generation === captured,
-		adopt: () => {
-			throw new Error('Retired composer adopted');
-		},
-		promote: session => {
-			published.push(session);
-		},
-		subscribe: async () => {
-			throw new Error('Retired composer subscribed');
-		},
+		adopt: () => { throw new Error('Retired composer adopted'); },
+		promote: session => { published.push(session); },
+		subscribe: async () => { throw new Error('Retired composer subscribed'); },
 	});
 	// Leaving and returning is a new lifetime even when the selected identity matches.
 	generation += 2;
@@ -93,24 +69,13 @@ test('Navigation during catalog publication keeps the durable identity without s
 	let current = true;
 	let released = false;
 	let published = false;
-	await assert.rejects(
-		commitChatSession({
-			resolve: async () => 'durable',
-			isCurrent: () => current,
-			adopt: () =>
-				toDisposable(() => {
-					released = true;
-				}),
-			promote: () => {
-				published = true;
-				current = false;
-			},
-			subscribe: async () => {
-				throw new Error('Retired composer subscribed');
-			},
-		}),
-		isCancellationError,
-	);
+	await assert.rejects(commitChatSession({
+		resolve: async () => 'durable',
+		isCurrent: () => current,
+		adopt: () => toDisposable(() => { released = true; }),
+		promote: () => { published = true; current = false; },
+		subscribe: async () => { throw new Error('Retired composer subscribed'); },
+	}), isCancellationError);
 	assert.equal(published, true);
 	assert.equal(released, true);
 });
@@ -124,22 +89,13 @@ test('Navigation or failure during committed-session subscription releases adopt
 		const committed = commitChatSession({
 			resolve: async () => 'durable',
 			isCurrent: () => current,
-			adopt: () =>
-				toDisposable(() => {
-					released = true;
-				}),
-			promote: () => {},
-			subscribe: async () => {
-				await subscribing.complete();
-				await subscribed.p;
-			},
+			adopt: () => toDisposable(() => { released = true; }),
+			promote: () => { },
+			subscribe: async () => { await subscribing.complete(); await subscribed.p; },
 		});
 		await subscribing.p;
 		if (failure) await subscribed.error(new Error('Subscription failed'));
-		else {
-			current = false;
-			await subscribed.complete();
-		}
+		else { current = false; await subscribed.complete(); }
 		await assert.rejects(committed, failure ? /Subscription failed/ : isCancellationError);
 		assert.equal(released, true);
 	}

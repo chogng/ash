@@ -29,13 +29,9 @@ export class GitHubCommitResolver extends Disposable {
 
 	public async resolve(target: IGitHubCommitTarget): Promise<GitHubCommit> {
 		const entry = this.entry(target);
-		if (entry.pending) {
-			return entry.pending;
-		}
+		if (entry.pending) { return entry.pending; }
 		const cached = entry.value.get();
-		if (cached) {
-			return cached;
-		}
+		if (cached) { return cached; }
 		const token = entry.cancellation.token;
 		entry.pending = this.github.readCommit({ host: 'github.com', owner: target.owner, name: target.repo }, target.sha, token);
 		try {
@@ -67,10 +63,7 @@ export class GitHubCommitResolver extends Disposable {
 		}
 		const cancellation = new CancellationTokenSource();
 		const value = observableValue<GitHubCommit | undefined>(this, undefined);
-		const entry = Object.assign(
-			toDisposable(() => cancellation.dispose(true)),
-			{ value, cancellation, pending: undefined },
-		);
+		const entry = Object.assign(toDisposable(() => cancellation.dispose(true)), { value, cancellation, pending: undefined });
 		this.entries.set(key, entry);
 		return entry;
 	}

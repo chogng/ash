@@ -8,9 +8,7 @@ import { prepareReleaseNotesMarkdown, releaseNotesTryoutId } from '../../browser
 suite('ReleaseNotesTryouts', () => {
 	test('only a registered ID becomes a clickable link', () => {
 		using tryout = registerOnboardingTryout({
-			id: 'test.releaseNotes.open',
-			title: 'Open',
-			description: 'Opens a test command',
+			id: 'test.releaseNotes.open', title: 'Open', description: 'Opens a test command',
 			presentation: { kind: 'command', commandId: 'test.command' },
 		});
 		const markdown = '[Known](ash://tryout/test.releaseNotes.open) [Unknown](ash://tryout/test.releaseNotes.missing) [Malformed](ash://tryout/test.releaseNotes.open?command=other)';

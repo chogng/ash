@@ -1,5 +1,11 @@
 /** JSON-compatible data accepted across trusted host boundaries. */
-export type JsonValue = null | boolean | number | string | readonly JsonValue[] | Readonly<{ [key: string]: JsonValue }>;
+export type JsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly JsonValue[]
+	| Readonly<{ [key: string]: JsonValue; }>;
 
 export interface JsonValueValidationOptions {
 	readonly path?: string;
@@ -17,22 +23,39 @@ interface ValidationState {
 	readonly maxStringLength: number;
 }
 
-const unsafeObjectKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const unsafeObjectKeys = new Set([
+	'__proto__',
+	'constructor',
+	'prototype',
+]);
 
 /**
  * Validates and clones untrusted JSON-compatible data under explicit bounds.
  */
-export function validateJsonValue(value: unknown, options: JsonValueValidationOptions = {}): JsonValue {
-	return validateValue(value, options.path ?? 'value', 0, {
-		nodes: 0,
-		maxDepth: options.maxDepth ?? 16,
-		maxNodes: options.maxNodes ?? 8_192,
-		maxCollectionSize: options.maxCollectionSize ?? 1_024,
-		maxStringLength: options.maxStringLength ?? 64 * 1_024,
-	});
+export function validateJsonValue(
+	value: unknown,
+	options: JsonValueValidationOptions = {},
+): JsonValue {
+	return validateValue(
+		value,
+		options.path ?? 'value',
+		0,
+		{
+			nodes: 0,
+			maxDepth: options.maxDepth ?? 16,
+			maxNodes: options.maxNodes ?? 8_192,
+			maxCollectionSize: options.maxCollectionSize ?? 1_024,
+			maxStringLength: options.maxStringLength ?? 64 * 1_024,
+		},
+	);
 }
 
-function validateValue(value: unknown, path: string, depth: number, state: ValidationState): JsonValue {
+function validateValue(
+	value: unknown,
+	path: string,
+	depth: number,
+	state: ValidationState,
+): JsonValue {
 	state.nodes += 1;
 	if (state.nodes > state.maxNodes) {
 		throw new Error(`${path} contains too many values`);
@@ -59,7 +82,9 @@ function validateValue(value: unknown, path: string, depth: number, state: Valid
 		if (value.length > state.maxCollectionSize) {
 			throw new Error(`${path} contains too many array items`);
 		}
-		return value.map((item, index) => validateValue(item, `${path}[${index}]`, depth + 1, state));
+		return value.map((item, index) =>
+			validateValue(item, `${path}[${index}]`, depth + 1, state)
+		);
 	}
 
 	const source = asRecord(value, path);
@@ -69,15 +94,27 @@ function validateValue(value: unknown, path: string, depth: number, state: Valid
 	}
 	const result: Record<string, JsonValue> = {};
 	for (const [key, candidate] of entries) {
-		if (key.length === 0 || key.length > 256 || unsafeObjectKeys.has(key)) {
+		if (
+			key.length === 0 ||
+			key.length > 256 ||
+			unsafeObjectKeys.has(key)
+		) {
 			throw new Error(`${path} contains an unsafe object key`);
 		}
-		result[key] = validateValue(candidate, `${path}.${key}`, depth + 1, state);
+		result[key] = validateValue(
+			candidate,
+			`${path}.${key}`,
+			depth + 1,
+			state,
+		);
 	}
 	return result;
 }
 
-function asRecord(value: unknown, path: string): Record<string, unknown> {
+function asRecord(
+	value: unknown,
+	path: string,
+): Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new Error(`${path} must be an object`);
 	}

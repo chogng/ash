@@ -6,16 +6,7 @@ import { Schemas } from '../../../base/common/network.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 import { IStateService } from '../../state/node/state.js';
-import {
-	mergeRecentlyOpened,
-	recentWorkspaceUri,
-	restoreRecentlyOpened,
-	toStoreData,
-	RECENTLY_OPENED_STORAGE_KEY,
-	type IRecent,
-	type IRecentlyOpened,
-	type IWorkspacesService,
-} from '../common/workspaces.js';
+import { mergeRecentlyOpened, recentWorkspaceUri, restoreRecentlyOpened, toStoreData, RECENTLY_OPENED_STORAGE_KEY, type IRecent, type IRecentlyOpened, type IWorkspacesService } from '../common/workspaces.js';
 import { basename } from 'node:path';
 import type { JumpListCategory } from 'electron';
 import { windowsCommandLine } from '../../environment/node/argvHelper.js';
@@ -26,30 +17,20 @@ export function workspacesHistoryChannel(service: IWorkspacesService): IServerCh
 		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
 			switch (command) {
 				case 'getRecentlyOpened':
-					if (arg !== undefined) {
-						throw new TypeError('Recent projects read takes no arguments');
-					}
+					if (arg !== undefined) { throw new TypeError('Recent projects read takes no arguments'); }
 					return toStoreData(await service.getRecentlyOpened()) as T;
-				case 'addRecentlyOpened':
-					return (await service.addRecentlyOpened(restoreRecentlyOpened(arg).workspaces)) as T;
+				case 'addRecentlyOpened': return await service.addRecentlyOpened(restoreRecentlyOpened(arg).workspaces) as T;
 				case 'removeRecentlyOpened':
-					if (!Array.isArray(arg)) {
-						throw new TypeError('Recent project removal requires URI paths');
-					}
-					return (await service.removeRecentlyOpened(restoreRecentlyOpened({ workspaces: arg.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri))) as T;
+					if (!Array.isArray(arg)) { throw new TypeError('Recent project removal requires URI paths'); }
+					return await service.removeRecentlyOpened(restoreRecentlyOpened({ workspaces: arg.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri)) as T;
 				case 'clearRecentlyOpened':
-					if (arg !== undefined) {
-						throw new TypeError('Recent projects clear takes no arguments');
-					}
-					return (await service.clearRecentlyOpened()) as T;
-				default:
-					throw new Error(`Unknown workspaces command: ${command}`);
+					if (arg !== undefined) { throw new TypeError('Recent projects clear takes no arguments'); }
+					return await service.clearRecentlyOpened() as T;
+				default: throw new Error(`Unknown workspaces command: ${command}`);
 			}
 		},
 		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-			if (event !== 'onDidChangeRecentlyOpened' || arg !== undefined) {
-				throw new TypeError('Invalid recent projects subscription');
-			}
+			if (event !== 'onDidChangeRecentlyOpened' || arg !== undefined) { throw new TypeError('Invalid recent projects subscription'); }
 			return service.onDidChangeRecentlyOpened as Event<T>;
 		},
 	};
@@ -60,7 +41,7 @@ export interface IWindowsJumpListOptions {
 	readonly launchArguments: readonly string[];
 	readonly iconPath: string;
 	readonly recentProjectsTitle: string;
-	readonly tasks: readonly { readonly title: string; readonly description: string; readonly argument: string }[];
+	readonly tasks: readonly { readonly title: string; readonly description: string; readonly argument: string; }[];
 }
 
 /** Owns the Desktop history shared by every window, the taskbar, and the tray. */
@@ -103,24 +84,20 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 		this.assertNotDisposed();
 		const { app } = await import('electron/main');
 		const { executable, launchArguments, iconPath } = options;
-		const categories: JumpListCategory[] = [
-			{
-				type: 'tasks',
-				items: options.tasks.map(task => ({
-					type: 'task',
-					program: executable,
-					args: windowsCommandLine([...launchArguments, task.argument]),
-					iconPath,
-					iconIndex: 0,
-					title: task.title,
-					description: task.description,
-				})),
-			},
-		];
+		const categories: JumpListCategory[] = [{
+			type: 'tasks',
+			items: options.tasks.map(task => ({
+				type: 'task',
+				program: executable,
+				args: windowsCommandLine([...launchArguments, task.argument]),
+				iconPath,
+				iconIndex: 0,
+				title: task.title,
+				description: task.description,
+			})),
+		}];
 		const settings = app.getJumpListSettings();
-		const removed = this.recentlyOpened.workspaces.filter(recent =>
-			settings.removedItems.some(item => item.args === windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)])),
-		);
+		const removed = this.recentlyOpened.workspaces.filter(recent => settings.removedItems.some(item => item.args === windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)])));
 		// Explorer rejects a whole category if it contains an item the user removed.
 		if (removed.length > 0) await this.removeRecentlyOpened(removed.map(recentWorkspaceUri));
 		const items = this.recentlyOpened.workspaces.slice(0, settings.minItems).map(recent => ({

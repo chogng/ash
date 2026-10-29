@@ -13,7 +13,7 @@ export function findChangesEditorFileChange(resource: URI, changes: readonly ISe
 	return changes.find(change => [change.uri, change.originalUri, change.modifiedUri].some(candidate => extUri.isEqual(candidate, resource)));
 }
 
-export function getChangesEditorFileStats(resource: URI, changes: readonly ISessionFileChange[]): { readonly insertions: number; readonly deletions: number } | undefined {
+export function getChangesEditorFileStats(resource: URI, changes: readonly ISessionFileChange[]): { readonly insertions: number; readonly deletions: number; } | undefined {
 	const change = findChangesEditorFileChange(resource, changes);
 	return change && { insertions: change.insertions, deletions: change.deletions };
 }
@@ -28,8 +28,5 @@ export function getChangesEditorLabels(resource: URI, labels: Pick<ILabelService
 	const fullLabel = labels.getUriLabel(resource, { relative: true });
 	const separator = labels.getSeparator(resource.scheme, resource.authority);
 	const lastSeparator = fullLabel.lastIndexOf(separator);
-	return {
-		label,
-		description: lastSeparator < 0 ? (fullLabel === label ? '' : fullLabel) : fullLabel.slice(0, lastSeparator),
-	};
+	return { label, description: lastSeparator < 0 ? (fullLabel === label ? '' : fullLabel) : fullLabel.slice(0, lastSeparator) };
 }

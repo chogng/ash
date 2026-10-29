@@ -13,16 +13,12 @@ import type { IAgentCanvasHost, IAgentCanvasOpenRequest } from '../../../../plat
 export interface ICanvasProvider {
 	readonly definition: ICanvasDefinition;
 	readonly signal: AbortSignal;
-	open(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string }>;
+	open(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string; }>;
 	close(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<void>;
 	resolve?(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<CanvasSource | null | undefined | 'unchanged'>;
 }
 
-interface CanvasSource {
-	readonly url: string;
-	readonly title?: string;
-	readonly status?: string;
-}
+interface CanvasSource { readonly url: string; readonly title?: string; readonly status?: string; }
 
 export const IAgentHostCanvasCollection = createServiceIdentifier<IAgentHostCanvasCollection>('agentHostCanvasCollection');
 export interface IAgentHostCanvasCollection extends IAgentCanvasHost {
@@ -59,73 +55,41 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	beginDefinitionRefresh(): IDisposable {
 		this.definitionLoads++;
 		this.changed.fire();
-		return toDisposable(() => {
-			this.definitionLoads--;
-			this.changed.fire();
-		});
+		return toDisposable(() => { this.definitionLoads--; this.changed.fire(); });
 	}
 
-	constructor(
-		@IBrowserViewService private readonly browser: IBrowserViewService,
-		@IExtensionService private readonly extensions: IExtensionService,
-	) {
+	constructor(@IBrowserViewService private readonly browser: IBrowserViewService, @IExtensionService private readonly extensions: IExtensionService) {
 		super();
-		this._register(
-			browser.onDidEvent(event => {
-				if (!this.initialized) {
-					this.buffered.push(event);
-				} else {
-					this.accept(event);
-				}
-			}),
-		);
-		void browser.getBrowserViews().then(
-			snapshot => {
-				if (this.isDisposed) {
-					return;
-				}
-				for (const page of snapshot) {
-					this.hideUnknownSource(page);
-				}
-				this.pages.set(
-					snapshot.filter(page => page.canvas),
-					undefined,
-				);
-				this.initialized = true;
-				for (const event of this.buffered.splice(0)) {
-					this.accept(event);
-				}
-			},
-			() => {
-				if (this.isDisposed) {
-					return;
-				}
-				this.initialized = true;
-				for (const event of this.buffered.splice(0)) {
-					this.accept(event);
-				}
-			},
-		);
+		this._register(browser.onDidEvent(event => {
+			if (!this.initialized) { this.buffered.push(event); } else { this.accept(event); }
+		}));
+		void browser.getBrowserViews().then(snapshot => {
+			if (this.isDisposed) { return; }
+			for (const page of snapshot) { this.hideUnknownSource(page); }
+			this.pages.set(snapshot.filter(page => page.canvas), undefined);
+			this.initialized = true;
+			for (const event of this.buffered.splice(0)) { this.accept(event); }
+		}, () => {
+			if (this.isDisposed) { return; }
+			this.initialized = true;
+			for (const event of this.buffered.splice(0)) { this.accept(event); }
+		});
 	}
 
 	register(provider: ICanvasProvider): IDisposable {
 		const key = JSON.stringify([provider.definition.extensionId, provider.definition.canvasId]);
-		if (this.providers.has(key)) {
-			throw new Error('Canvas provider is already registered');
-		}
+		if (this.providers.has(key)) { throw new Error('Canvas provider is already registered'); }
 		this.providers.set(key, provider);
 		this.suspended.delete(key);
 		this.changed.fire();
 		return toDisposable(() => {
-			if (this.providers.get(key) !== provider) {
-				return;
-			}
+			if (this.providers.get(key) !== provider) { return; }
 			this.providers.delete(key);
 			this.providerRevisions.delete(provider);
 			this.changed.fire();
 			for (const page of this.pages.get() ?? []) {
 				if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
-					void this.browser.destroyBrowserView(page.id).catch(() => {});
+					void this.browser.destroyBrowserView(page.id).catch(() => { });
 				}
 			}
 		});
@@ -134,66 +98,43 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	/** A disconnected provider has unknown membership. Keep opaque live identities, but never expose its old source. */
 	suspendProvider(provider: ICanvasProvider): void {
 		const key = JSON.stringify([provider.definition.extensionId, provider.definition.canvasId]);
-		if (this.providers.get(key) !== provider) {
-			return;
-		}
+		if (this.providers.get(key) !== provider) { return; }
 		this.providers.delete(key);
 		this.providerRevisions.delete(provider);
 		this.suspended.set(key, provider.definition);
 		const presentations = new Map(this.presentations.get());
 		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
-				presentations.set(page.id, undefined);
-				this.disconnectedPages.add(page.id);
-			}
+			if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) { presentations.set(page.id, undefined); this.disconnectedPages.add(page.id); }
 		}
 		this.presentations.set(presentations, undefined);
 		this.changed.fire();
 	}
 
 	retireExtension(extensionId: string): void {
-		for (const [key, definition] of this.suspended) {
-			if (definition.extensionId === extensionId) {
-				this.suspended.delete(key);
-			}
-		}
-		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === extensionId) {
-				void this.browser.destroyBrowserView(page.id).catch(() => {});
-			}
-		}
+		for (const [key, definition] of this.suspended) { if (definition.extensionId === extensionId) { this.suspended.delete(key); } }
+		for (const page of this.pages.get() ?? []) { if (page.canvas?.extensionId === extensionId) { void this.browser.destroyBrowserView(page.id).catch(() => { }); } }
 		this.changed.fire();
 	}
 
 	settleExtension(extensionId: string): void {
 		let changed = false;
 		for (const [key, definition] of this.suspended) {
-			if (definition.extensionId !== extensionId || this.providers.has(key)) {
-				continue;
-			}
+			if (definition.extensionId !== extensionId || this.providers.has(key)) { continue; }
 			this.suspended.delete(key);
 			changed = true;
 			for (const page of this.pages.get() ?? []) {
-				if (page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) {
-					void this.browser.destroyBrowserView(page.id).catch(() => {});
-				}
+				if (page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) { void this.browser.destroyBrowserView(page.id).catch(() => { }); }
 			}
 		}
-		if (changed) {
-			this.changed.fire();
-		}
+		if (changed) { this.changed.fire(); }
 		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) {
-				void this.browser.destroyBrowserView(page.id).catch(() => {});
-			}
+			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) { void this.browser.destroyBrowserView(page.id).catch(() => { }); }
 		}
 	}
 
 	reconcileExtensions(present: ReadonlySet<string>): void {
-		for (const extensionId of new Set((this.pages.get() ?? []).flatMap(page => (page.canvas?.extensionId ? [page.canvas.extensionId] : [])))) {
-			if (!present.has(extensionId)) {
-				this.retireExtension(extensionId);
-			}
+		for (const extensionId of new Set((this.pages.get() ?? []).flatMap(page => page.canvas?.extensionId ? [page.canvas.extensionId] : []))) {
+			if (!present.has(extensionId)) { this.retireExtension(extensionId); }
 		}
 	}
 
@@ -206,29 +147,19 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 				owner,
 				canvases: derived(reader => {
 					const presentations = this.presentations.read(reader);
-					return this.pages
-						.read(reader)
-						?.filter(page => this.owns(page, owner))
-						.map(page => new AgentHostCanvas(page, presentations.has(page.id) ? (presentations.get(page.id) ?? null) : undefined));
+					return this.pages.read(reader)?.filter(page => this.owns(page, owner)).map(page => new AgentHostCanvas(page, presentations.has(page.id) ? presentations.get(page.id) ?? null : undefined));
 				}),
 				openRequests: derived(reader => this.requests.read(reader).get(key) ?? new Map()),
-				definitionProvider:
-					owner.providerId !== 'local-agent-host'
-						? undefined
-						: {
-								onDidChangeDefinitions: this.changed.event,
-								listCanvases: async () => {
-									await this.extensions.activateByEvent('onCanvas');
-									if (this.isDisposed) {
-										throw new CancellationError();
-									}
-									if (this.definitionLoads || this.suspended.size) {
-										return undefined;
-									}
-									return [...this.providers.values()].filter(provider => !provider.signal.aborted).map(provider => provider.definition);
-								},
-								openCanvas: (definition, instanceId) => this.open(owner, definition, instanceId),
-							},
+				definitionProvider: owner.providerId !== 'local-agent-host' ? undefined : {
+					onDidChangeDefinitions: this.changed.event,
+					listCanvases: async () => {
+						await this.extensions.activateByEvent('onCanvas');
+						if (this.isDisposed) { throw new CancellationError(); }
+						if (this.definitionLoads || this.suspended.size) { return undefined; }
+						return [...this.providers.values()].filter(provider => !provider.signal.aborted).map(provider => provider.definition);
+					},
+					openCanvas: (definition, instanceId) => this.open(owner, definition, instanceId),
+				},
 				closeCanvas: canvas => this.close(owner, canvas),
 			};
 			this.contexts.set(key, context);
@@ -239,21 +170,14 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	async listCanvases(sessionId: string, threadId: string, signal: AbortSignal) {
 		const definitions = await this.createContext(this.owner(sessionId, threadId)).definitionProvider!.listCanvases();
 		signal.throwIfAborted();
-		return definitions?.map(definition => ({
-			id: { extensionId: definition.extensionId, canvasId: definition.canvasId },
-			displayName: definition.displayName,
-			description: definition.description,
-			requiresInput: definition.requiresInput,
-		}));
+		return definitions?.map(definition => ({ id: { extensionId: definition.extensionId, canvasId: definition.canvasId }, displayName: definition.displayName, description: definition.description, requiresInput: definition.requiresInput }));
 	}
 
 	async openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal): Promise<CanvasSource> {
 		await this.extensions.activateByEvent('onCanvas');
 		signal.throwIfAborted();
 		const provider = this.providers.get(JSON.stringify([request.definition.extensionId, request.definition.canvasId]));
-		if (!provider || provider.signal.aborted || provider.definition.requiresInput) {
-			throw new Error('CanvasProviderUnavailable');
-		}
+		if (!provider || provider.signal.aborted || provider.definition.requiresInput) { throw new Error('CanvasProviderUnavailable'); }
 		const owner = this.owner(request.sessionId, request.threadId);
 		const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
 		const operationSignal = AbortSignal.any([signal, provider.signal, ...(ownerSignal ? [ownerSignal] : [])]);
@@ -265,33 +189,23 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 
 	async closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal): Promise<void> {
 		const page = this.pages.get()?.find(page => page.id === targetId && page.owner.type === 'agent' && page.owner.sessionId === threadId);
-		if (!page?.canvas?.extensionId || !page.canvas.canvasId) {
-			return;
-		}
+		if (!page?.canvas?.extensionId || !page.canvas.canvasId) { return; }
 		const provider = this.providers.get(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]));
-		if (provider) {
-			await provider.close(this.owner(page.canvas.sessionId, threadId), page.canvas.instanceId, AbortSignal.any([signal, provider.signal]));
-		}
+		if (provider) { await provider.close(this.owner(page.canvas.sessionId, threadId), page.canvas.instanceId, AbortSignal.any([signal, provider.signal])); }
 	}
 
-	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string }, state: ICanvasOpenRequest, source?: CanvasSource): void {
+	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string; }, state: ICanvasOpenRequest, source?: CanvasSource): void {
 		const owner = this.owner(request.sessionId, request.threadId);
 		this.createContext(owner);
 		if (state.succeeded && source) {
 			const page = this.pages.get()?.find(page => this.owns(page, owner) && page.canvas?.instanceId === request.instanceId);
-			if (page) {
-				this.setPresentation(page.id, source);
-			}
+			if (page) { this.setPresentation(page.id, source); }
 		}
 		this.setRequest(owner, request.instanceId, state);
 	}
 
 	private owner(sessionId: string, threadId: string): ICanvasOwner {
-		return {
-			providerId: 'local-agent-host',
-			session: URI.from({ scheme: 'ash-session', path: '/' + sessionId }),
-			chat: URI.from({ scheme: 'ash-thread', path: '/' + threadId }),
-		};
+		return { providerId: 'local-agent-host', session: URI.from({ scheme: 'ash-session', path: '/' + sessionId }), chat: URI.from({ scheme: 'ash-thread', path: '/' + threadId }) };
 	}
 
 	removeOwner(owner: ICanvasOwner): void {
@@ -302,63 +216,37 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const requests = new Map(this.requests.get());
 		requests.delete(key);
 		this.requests.set(requests, undefined);
-		for (const page of this.pages.get() ?? []) {
-			if (this.owns(page, owner)) {
-				void this.browser.destroyBrowserView(page.id).catch(() => {});
-			}
-		}
+		for (const page of this.pages.get() ?? []) { if (this.owns(page, owner)) { void this.browser.destroyBrowserView(page.id).catch(() => { }); } }
 	}
 
 	async refreshProvider(provider: ICanvasProvider): Promise<void> {
 		const revision = (this.providerRevisions.get(provider) ?? 0) + 1;
 		this.providerRevisions.set(provider, revision);
 		this.changed.fire();
-		if (!provider.resolve) {
-			return;
-		}
-		await Promise.all(
-			(this.pages.get() ?? [])
-				.filter(page => page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId)
-				.map(async page => {
-					const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas!.threadId!;
-					const owner = this.owner(page.canvas!.sessionId, thread);
-					const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
-					const signal = ownerSignal ? AbortSignal.any([provider.signal, ownerSignal]) : provider.signal;
-					let source = await provider.resolve!(owner, page.canvas!.instanceId, signal);
-					if (source === 'unchanged' && this.disconnectedPages.has(page.id)) {
-						// A new provider incarnation must confirm a source before an old page can be presented again.
-						source = await provider.open(owner, page.canvas!.instanceId, signal);
-					}
-					if (this.isDisposed || signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) {
-						return;
-					}
-					if (source === 'unchanged') {
-						return;
-					}
-					if (source === null) {
-						await this.browser.destroyBrowserView(page.id);
-						return;
-					}
-					if (source && !this.hasSource(page, source.url)) {
-						await this.browser.loadURL(page.id, normalizeBrowserViewUrl(source.url));
-					}
-					if (signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) {
-						return;
-					}
-					if (source) {
-						this.disconnectedPages.delete(page.id);
-					}
-					this.setPresentation(page.id, source);
-				}),
-		);
+		if (!provider.resolve) { return; }
+		await Promise.all((this.pages.get() ?? []).filter(page => page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId).map(async page => {
+			const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas!.threadId!;
+			const owner = this.owner(page.canvas!.sessionId, thread);
+			const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
+			const signal = ownerSignal ? AbortSignal.any([provider.signal, ownerSignal]) : provider.signal;
+			let source = await provider.resolve!(owner, page.canvas!.instanceId, signal);
+			if (source === 'unchanged' && this.disconnectedPages.has(page.id)) {
+				// A new provider incarnation must confirm a source before an old page can be presented again.
+				source = await provider.open(owner, page.canvas!.instanceId, signal);
+			}
+			if (this.isDisposed || signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) { return; }
+			if (source === 'unchanged') { return; }
+			if (source === null) { await this.browser.destroyBrowserView(page.id); return; }
+			if (source && !this.hasSource(page, source.url)) { await this.browser.loadURL(page.id, normalizeBrowserViewUrl(source.url)); }
+			if (signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) { return; }
+			if (source) { this.disconnectedPages.delete(page.id); }
+			this.setPresentation(page.id, source);
+		}));
 	}
 
 	private owns(page: IBrowserViewInfo, owner: ICanvasOwner): boolean {
-		return (
-			owner.providerId === 'local-agent-host' &&
-			page.canvas?.sessionId === owner.session.path.slice(1) &&
-			(page.owner.type === 'agent' ? page.owner.sessionId : page.canvas.threadId) === owner.chat.path.slice(1)
-		);
+		return owner.providerId === 'local-agent-host' && page.canvas?.sessionId === owner.session.path.slice(1)
+			&& (page.owner.type === 'agent' ? page.owner.sessionId : page.canvas.threadId) === owner.chat.path.slice(1);
 	}
 
 	private open(owner: ICanvasOwner, definition: ICanvasDefinition, instanceId: string): Promise<void> {
@@ -366,84 +254,50 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
 		const operationKey = JSON.stringify([canvasOwnerKey(owner), instanceId]);
 		const pending = this.operations.get(operationKey) ?? Promise.resolve();
-		const opening = pending
-			.catch(() => {})
-			.then(async () => {
-				const provider = this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId]));
-				if (!provider || provider.signal.aborted || definition.requiresInput || !context || this.contexts.get(canvasOwnerKey(owner)) !== context) {
-					throw new CancellationError();
-				}
-				this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
-				const request = { id: crypto.randomUUID(), succeeded: false };
-				this.setRequest(owner, instanceId, request);
-				const signal = ownerSignal ? AbortSignal.any([ownerSignal, provider.signal]) : provider.signal;
-				const source = await provider.open(owner, instanceId, signal);
-				this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
-				signal.throwIfAborted();
-				if (this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context || this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId])) !== provider) {
-					throw new CancellationError();
-				}
-				const url = normalizeBrowserViewUrl(source.url);
-				if (url === 'about:blank') {
-					throw new TypeError('Canvas requires an HTTP or HTTPS source');
-				}
-				const existing = this.pages
-					.get()
-					?.find(
-						page => this.owns(page, owner) && page.canvas?.instanceId === instanceId && page.canvas.extensionId === definition.extensionId && page.canvas.canvasId === definition.canvasId,
-					);
-				if (existing && (existing.owner.type === 'user' || this.hasSource(existing, url))) {
-					if (!this.hasSource(existing, url)) {
-						await this.browser.loadURL(existing.id, url);
-					}
-					this.setPresentation(existing.id, source);
-				} else {
-					// A user-selected extension page has user navigation authority, isolated from normal browser storage.
-					const info = await this.browser.getOrCreateBrowserView('browser_target_' + crypto.randomUUID(), {
-						initialUrl: url,
-						owner: { type: 'user' },
-						session: { scope: BrowserViewStorageScope.Ephemeral },
-						canvas: {
-							sessionId: owner.session.path.slice(1),
-							threadId: owner.chat.path.slice(1),
-							instanceId,
-							title: source.title ?? definition.displayName,
-							extensionId: definition.extensionId,
-							canvasId: definition.canvasId,
-						},
-					});
-					if (provider.signal.aborted || this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context) {
-						await this.browser.destroyBrowserView(info.id);
-						throw new CancellationError();
-					}
-					// User navigation cannot extend an Agent execution's network lease. Replace that page when its source changes.
-					if (existing) {
-						await this.browser.destroyBrowserView(existing.id);
-					}
-					this.setPresentation(info.id, source);
-				}
-				this.setRequest(owner, instanceId, { ...request, succeeded: true });
-			});
+		const opening = pending.catch(() => { }).then(async () => {
+			const provider = this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId]));
+			if (!provider || provider.signal.aborted || definition.requiresInput || !context || this.contexts.get(canvasOwnerKey(owner)) !== context) { throw new CancellationError(); }
+			this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
+			const request = { id: crypto.randomUUID(), succeeded: false };
+			this.setRequest(owner, instanceId, request);
+			const signal = ownerSignal ? AbortSignal.any([ownerSignal, provider.signal]) : provider.signal;
+			const source = await provider.open(owner, instanceId, signal);
+			this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
+			signal.throwIfAborted();
+			if (this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context || this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId])) !== provider) { throw new CancellationError(); }
+			const url = normalizeBrowserViewUrl(source.url);
+			if (url === 'about:blank') { throw new TypeError('Canvas requires an HTTP or HTTPS source'); }
+			const existing = this.pages.get()?.find(page => this.owns(page, owner) && page.canvas?.instanceId === instanceId && page.canvas.extensionId === definition.extensionId && page.canvas.canvasId === definition.canvasId);
+			if (existing && (existing.owner.type === 'user' || this.hasSource(existing, url))) {
+				if (!this.hasSource(existing, url)) { await this.browser.loadURL(existing.id, url); }
+				this.setPresentation(existing.id, source);
+			}
+			else {
+				// A user-selected extension page has user navigation authority, isolated from normal browser storage.
+				const info = await this.browser.getOrCreateBrowserView('browser_target_' + crypto.randomUUID(), {
+					initialUrl: url, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral },
+					canvas: {
+						sessionId: owner.session.path.slice(1), threadId: owner.chat.path.slice(1), instanceId, title: source.title ?? definition.displayName,
+						extensionId: definition.extensionId, canvasId: definition.canvasId
+					},
+				});
+				if (provider.signal.aborted || this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context) { await this.browser.destroyBrowserView(info.id); throw new CancellationError(); }
+				// User navigation cannot extend an Agent execution's network lease. Replace that page when its source changes.
+				if (existing) { await this.browser.destroyBrowserView(existing.id); }
+				this.setPresentation(info.id, source);
+			}
+			this.setRequest(owner, instanceId, { ...request, succeeded: true });
+		});
 		this.operations.set(operationKey, opening);
-		void opening
-			.finally(() => {
-				if (this.operations.get(operationKey) === opening) {
-					this.operations.delete(operationKey);
-				}
-			})
-			.catch(() => {});
+		void opening.finally(() => { if (this.operations.get(operationKey) === opening) { this.operations.delete(operationKey); } }).catch(() => { });
 		return opening;
 	}
 
 	private async close(owner: ICanvasOwner, canvas: ICanvas): Promise<void> {
 		const page = this.pages.get()?.find(page => page.id === canvas.resource.path.slice(1) && this.owns(page, owner));
-		if (!page?.canvas) {
-			throw new CancellationError();
-		}
+		if (!page?.canvas) { throw new CancellationError(); }
 		const provider = this.providers.get(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]));
-		if (provider && canvas.instanceId) {
-			await provider.close(owner, canvas.instanceId, provider.signal);
-		}
+		if (provider && canvas.instanceId) { await provider.close(owner, canvas.instanceId, provider.signal); }
 		await this.browser.destroyBrowserView(page.id);
 	}
 
@@ -453,18 +307,10 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		this.requests.set(all, undefined);
 	}
 
-	private sourceHash(url: string): string {
-		const hash = new StringSHA1();
-		hash.update(normalizeBrowserViewUrl(url));
-		return hash.digest();
-	}
-	private hasSource(page: IBrowserViewInfo, url: string): boolean {
-		return this.sourceHashes.get(page.id) === this.sourceHash(url) || (!this.sourceHashes.has(page.id) && page.state.url === normalizeBrowserViewUrl(url));
-	}
+	private sourceHash(url: string): string { const hash = new StringSHA1(); hash.update(normalizeBrowserViewUrl(url)); return hash.digest(); }
+	private hasSource(page: IBrowserViewInfo, url: string): boolean { return this.sourceHashes.get(page.id) === this.sourceHash(url) || !this.sourceHashes.has(page.id) && page.state.url === normalizeBrowserViewUrl(url); }
 	private setPresentation(id: string, source: CanvasSource | undefined): void {
-		if (source) {
-			this.sourceHashes.set(id, this.sourceHash(source.url));
-		}
+		if (source) { this.sourceHashes.set(id, this.sourceHash(source.url)); }
 		this.presentations.set(new Map(this.presentations.get()).set(id, source), undefined);
 	}
 
@@ -490,27 +336,16 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 					const owner = this.owner(event.info.canvas.sessionId, thread);
 					// The typed renderer host publishes pending before navigation. Native-only callers have no pending request.
 					const previous = this.requests.get().get(canvasOwnerKey(owner))?.get(event.info.canvas.instanceId);
-					if (!previous || previous.succeeded) {
-						this.setRequest(owner, event.info.canvas.instanceId, {
-							id: crypto.randomUUID(),
-							succeeded: true,
-						});
-					}
+					if (!previous || previous.succeeded) { this.setRequest(owner, event.info.canvas.instanceId, { id: crypto.randomUUID(), succeeded: true }); }
 				}
 			}
 		} else if (event.type === 'stateChanged' && pages.some(page => page.id === event.state.targetId)) {
-			this.pages.set(
-				pages.map(page => (page.id === event.state.targetId ? { ...page, state: event.state } : page)),
-				undefined,
-			);
+			this.pages.set(pages.map(page => page.id === event.state.targetId ? { ...page, state: event.state } : page), undefined);
 		} else if (event.type === 'closed') {
 			this.sourceHashes.delete(event.targetId);
 			this.disconnectedPages.delete(event.targetId);
 			const page = pages.find(page => page.id === event.targetId);
-			this.pages.set(
-				pages.filter(page => page.id !== event.targetId),
-				undefined,
-			);
+			this.pages.set(pages.filter(page => page.id !== event.targetId), undefined);
 			if (page?.canvas) {
 				const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas.threadId;
 				if (thread) {
@@ -518,24 +353,16 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 					const all = new Map(this.requests.get());
 					const requests = new Map(all.get(key));
 					requests.delete(page.canvas.instanceId);
-					if (requests.size) {
-						all.set(key, requests);
-					} else {
-						all.delete(key);
-					}
+					if (requests.size) { all.set(key, requests); } else { all.delete(key); }
 					this.requests.set(all, undefined);
 				}
 			}
-			const presentations = new Map(this.presentations.get());
-			presentations.delete(event.targetId);
-			this.presentations.set(presentations, undefined);
+			const presentations = new Map(this.presentations.get()); presentations.delete(event.targetId); this.presentations.set(presentations, undefined);
 		}
 	}
 
 	protected override disposeCore(): void {
-		for (const controller of this.ownerControllers.values()) {
-			controller.abort();
-		}
+		for (const controller of this.ownerControllers.values()) { controller.abort(); }
 		this.ownerControllers.clear();
 		this.contexts.clear();
 		super.disposeCore();
@@ -553,11 +380,6 @@ export class AgentHostCanvas implements ICanvas {
 		this.instanceId = info.canvas?.instanceId;
 		this.title = presentation?.title ?? info.canvas?.title ?? info.state.title;
 		this.status = presentation?.status;
-		try {
-			const url = normalizeBrowserViewUrl(presentation?.url ?? info.state.url);
-			this.source = presentation === null || url === 'about:blank' ? undefined : URI.parse(url);
-		} catch {
-			this.source = undefined;
-		}
+		try { const url = normalizeBrowserViewUrl(presentation?.url ?? info.state.url); this.source = presentation === null || url === 'about:blank' ? undefined : URI.parse(url); } catch { this.source = undefined; }
 	}
 }

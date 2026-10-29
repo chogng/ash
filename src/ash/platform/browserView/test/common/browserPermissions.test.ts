@@ -8,9 +8,7 @@ suite('Browser site permission decisions', () => {
 
 	test('camera and microphone remain independent and malformed or opaque sites have no decision identity', () => {
 		using store = new BrowserPermissionStore();
-		for (const category of electronPermissionToCategories('media', ['video'])) {
-			store.set('https://example.test/path', category, 'allow');
-		}
+		for (const category of electronPermissionToCategories('media', ['video'])) { store.set('https://example.test/path', category, 'allow'); }
 		assert.equal(store.getDecision('https://example.test:443/other', PermissionCategory.Camera), 'allow');
 		assert.equal(store.getDecision('https://example.test/', PermissionCategory.Microphone), undefined);
 		assert.deepEqual(['null', 'about:blank', 'not a url', undefined].map(toOriginKey), ['', '', '', '']);

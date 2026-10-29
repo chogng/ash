@@ -32,7 +32,7 @@ export class LineTokens implements IViewLineTokens {
 		return new LineTokens(tokens, lineContent, decoder);
 	}
 
-	public static createFromTextAndMetadata(data: { text: string; metadata: number }[], decoder: ILanguageIdCodec): LineTokens {
+	public static createFromTextAndMetadata(data: { text: string; metadata: number; }[], decoder: ILanguageIdCodec): LineTokens {
 		let offset = 0;
 		let fullText = '';
 		const tokens = new Array<number>();
@@ -82,9 +82,11 @@ export class LineTokens implements IViewLineTokens {
 
 	public readonly languageIdCodec: ILanguageIdCodec;
 
-	public static defaultTokenMetadata =
-		((FontStyle.None << MetadataConsts.FONT_STYLE_OFFSET) | (ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET) | (ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)) >>>
-		0;
+	public static defaultTokenMetadata = (
+		(FontStyle.None << MetadataConsts.FONT_STYLE_OFFSET)
+		| (ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET)
+		| (ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)
+	) >>> 0;
 
 	public constructor(tokens: Uint32Array, text: string, decoder: ILanguageIdCodec) {
 		const tokensLength = tokens.length > 1 ? tokens[tokens.length - 2] : 0;
@@ -197,7 +199,7 @@ export class LineTokens implements IViewLineTokens {
 	}
 
 	/** @param insertTokens Must be sorted by offset. */
-	public withInserted(insertTokens: { offset: number; text: string; tokenMetadata: number }[]): LineTokens {
+	public withInserted(insertTokens: { offset: number; text: string; tokenMetadata: number; }[]): LineTokens {
 		if (insertTokens.length === 0) {
 			return this;
 		}
@@ -264,7 +266,7 @@ export class LineTokens implements IViewLineTokens {
 
 	public toString(): string {
 		let result = '';
-		this.forEach(i => {
+		this.forEach((i) => {
 			result += `[${this.getTokenText(i)}]{${this.getClassName(i)}}`;
 		});
 		return result;
@@ -312,12 +314,10 @@ class SliceLineTokens implements IViewLineTokens {
 
 	public equals(other: IViewLineTokens): boolean {
 		if (other instanceof SliceLineTokens) {
-			return (
-				this._startOffset === other._startOffset &&
-				this._endOffset === other._endOffset &&
-				this._deltaOffset === other._deltaOffset &&
-				this._source.slicedEquals(other._source, this._firstTokenIndex, this._tokensCount)
-			);
+			return this._startOffset === other._startOffset
+				&& this._endOffset === other._endOffset
+				&& this._deltaOffset === other._deltaOffset
+				&& this._source.slicedEquals(other._source, this._firstTokenIndex, this._tokensCount);
 		}
 		return false;
 	}
@@ -390,13 +390,10 @@ export class TokenArray {
 		return new TokenArray(tokenInfo);
 	}
 
-	private constructor(private readonly _tokenInfo: TokenInfo[]) {}
+	private constructor(private readonly _tokenInfo: TokenInfo[]) { }
 
 	public toLineTokens(lineContent: string, decoder: ILanguageIdCodec): LineTokens {
-		return LineTokens.createFromTextAndMetadata(
-			this.map((range, token) => ({ text: range.substring(lineContent), metadata: token.metadata })),
-			decoder,
-		);
+		return LineTokens.createFromTextAndMetadata(this.map((range, token) => ({ text: range.substring(lineContent), metadata: token.metadata })), decoder);
 	}
 
 	public forEach(callback: (range: OffsetRange, tokenInfo: TokenInfo) => void): void {
@@ -449,7 +446,7 @@ export class TokenInfo {
 	public constructor(
 		public readonly length: number,
 		public readonly metadata: ITokenMetadata,
-	) {}
+	) { }
 }
 
 export class TokenArrayBuilder {

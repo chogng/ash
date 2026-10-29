@@ -15,18 +15,10 @@ export class TerminalEditorInput implements IResourceEditorInput {
 	readonly showBreadcrumbs = false;
 	closeHandler: IEditorCloseHandler | undefined;
 
-	constructor(
-		readonly resource: URI,
-		readonly terminalInstance?: ITerminalInstance,
-		readonly onDidChangeLabel?: Event<void>,
-	) {
+	constructor(readonly resource: URI, readonly terminalInstance?: ITerminalInstance, readonly onDidChangeLabel?: Event<void>) {
 		parseTerminalUri(resource);
 	}
 
-	get label(): string {
-		return this.terminalInstance?.title ?? (this.resource.fragment || terminalStrings.terminal);
-	}
-	getIcon(): ITerminalInstance['profile']['icon'] {
-		return this.terminalInstance?.profile.icon;
-	}
+	get label(): string { return this.terminalInstance?.title ?? (this.resource.fragment || terminalStrings.terminal); }
+	getIcon(): ITerminalInstance['profile']['icon'] { return this.terminalInstance?.profile.icon; }
 }

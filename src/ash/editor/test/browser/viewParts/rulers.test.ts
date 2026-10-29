@@ -16,13 +16,10 @@ import { RulersGpu } from '../../../browser/viewParts/rulersGpu/rulersGpu.js';
 
 test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
-	const state = configurationState(
-		[
-			{ column: 4, color: null },
-			{ column: 8, color: '#ff0000' },
-		],
-		8,
-	);
+	const state = configurationState([
+		{ column: 4, color: null },
+		{ column: 8, color: '#ff0000' },
+	], 8);
 	const rulers = new Rulers(testViewContext(state), {
 		host: dom.window.document.querySelector('main')!,
 		readTextLeft: () => 20,
@@ -34,18 +31,9 @@ test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 	assert.equal(rulers.domNode.domNode.ownerDocument, dom.window.document);
 	assert.equal(rulers.domNode.domNode.getAttribute('role'), 'presentation');
 	assert.equal(rulers.domNode.domNode.getAttribute('aria-hidden'), 'true');
-	assert.deepEqual(
-		initial.map(node => node.style.left),
-		['52px', '84px'],
-	);
-	assert.deepEqual(
-		initial.map(node => node.style.height),
-		['1200px', '1200px'],
-	);
-	assert.deepEqual(
-		initial.map(node => node.style.getPropertyValue('--stanza-editor-ruler-color')),
-		['', '#ff0000'],
-	);
+	assert.deepEqual(initial.map(node => node.style.left), ['52px', '84px']);
+	assert.deepEqual(initial.map(node => node.style.height), ['1200px', '1200px']);
+	assert.deepEqual(initial.map(node => node.style.getPropertyValue('--stanza-editor-ruler-color')), ['', '#ff0000']);
 
 	state.rulers = [
 		{ column: 5, color: '#00ff00' },
@@ -58,10 +46,7 @@ test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 	const expanded = [...rulers.domNode.domNode.querySelectorAll<HTMLElement>('.stanza-editor-ruler')];
 	assert.strictEqual(expanded[0], initial[0]);
 	assert.strictEqual(expanded[1], initial[1]);
-	assert.deepEqual(
-		expanded.map(node => node.style.left),
-		['70px', '140px', '220px'],
-	);
+	assert.deepEqual(expanded.map(node => node.style.left), ['70px', '140px', '220px']);
 	assert.equal(expanded[1]!.style.getPropertyValue('--stanza-editor-ruler-color'), '');
 
 	state.rulers = [{ column: 3, color: null }];
@@ -79,13 +64,10 @@ test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 });
 
 test('RulersGpu updates and disposes stable rectangle entries', () => {
-	const state = configurationState(
-		[
-			{ column: 4, color: null },
-			{ column: 8, color: '#ff000080' },
-		],
-		7,
-	);
+	const state = configurationState([
+		{ column: 4, color: null },
+		{ column: 8, color: '#ff000080' },
+	], 7);
 	const context = testViewContext(state);
 	const entries: TestRectangleEntry[] = [];
 	const gpuContext = {
@@ -106,10 +88,7 @@ test('RulersGpu updates and disposes stable rectangle entries', () => {
 	assert.deepEqual(entries[0]!.data.slice(4), [90 / 255, 90 / 255, 90 / 255, 1]);
 	assert.deepEqual(entries[1]!.data.slice(4), [1, 0, 0, 0.502]);
 	rulers.render(renderingContext(640, 1_200));
-	assert.deepEqual(
-		entries.map(entry => entry.rawUpdateCount),
-		[0, 0],
-	);
+	assert.deepEqual(entries.map(entry => entry.rawUpdateCount), [0, 0]);
 
 	state.rulers = [{ column: 2, color: null }];
 	state.typicalHalfwidthCharacterWidth = 5;
@@ -162,7 +141,10 @@ function propertyIndex(name: RectangleRendererEntrySpec[number]['name']): number
 	return ['x', 'y', 'width', 'height', 'red', 'green', 'blue', 'alpha'].indexOf(name);
 }
 
-function configurationState(rulers: readonly IRulerOption[], typicalHalfwidthCharacterWidth: number): { rulers: readonly IRulerOption[]; typicalHalfwidthCharacterWidth: number } {
+function configurationState(rulers: readonly IRulerOption[], typicalHalfwidthCharacterWidth: number): {
+	rulers: readonly IRulerOption[];
+	typicalHalfwidthCharacterWidth: number;
+} {
 	return { rulers, typicalHalfwidthCharacterWidth };
 }
 
@@ -178,8 +160,8 @@ function testViewContext(state: ReturnType<typeof configurationState>): ViewCont
 			},
 		},
 		theme: new EditorTheme(darkColorTheme),
-		addEventHandler() {},
-		removeEventHandler() {},
+		addEventHandler() { },
+		removeEventHandler() { },
 	} as unknown as ViewContext;
 }
 

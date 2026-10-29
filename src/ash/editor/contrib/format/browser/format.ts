@@ -20,7 +20,7 @@ export function getRealAndSyntheticDocumentFormattersOrdered(
 ): DocumentFormattingEditProvider[] {
 	const providers = documentFormattingEditProvider.ordered(model);
 	const seen = new Set<DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(providers);
-	const extensions = new Set(providers.flatMap(provider => (provider.extensionId ? [ExtensionIdentifier.toKey(provider.extensionId)] : [])));
+	const extensions = new Set(providers.flatMap(provider => provider.extensionId ? [ExtensionIdentifier.toKey(provider.extensionId)] : []));
 	for (const provider of documentRangeFormattingEditProvider.ordered(model)) {
 		// Adapters can implement both contracts without claiming an extension identity.
 		if (seen.has(provider)) continue;
@@ -52,17 +52,11 @@ export const enum FormattingMode {
 }
 
 export interface IFormattingEditProviderSelector {
-	<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(
-		formatters: T[],
-		document: ITextModel,
-		mode: FormattingMode,
-		kind: FormattingKind,
-		token: CancellationToken,
-	): Promise<T | undefined>;
+	<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind, token: CancellationToken): Promise<T | undefined>;
 }
 
 export abstract class FormattingConflicts {
-	private static readonly selectors: { select: IFormattingEditProviderSelector }[] = [];
+	private static readonly selectors: { select: IFormattingEditProviderSelector; }[] = [];
 
 	public static setFormatterSelector(selector: IFormattingEditProviderSelector): IDisposable {
 		const registration = { select: selector };
@@ -75,13 +69,7 @@ export abstract class FormattingConflicts {
 		});
 	}
 
-	public static async select<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(
-		formatters: T[],
-		document: ITextModel,
-		mode: FormattingMode,
-		kind: FormattingKind,
-		token: CancellationToken = CancellationToken.None,
-	): Promise<T | undefined> {
+	public static async select<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind, token: CancellationToken = CancellationToken.None): Promise<T | undefined> {
 		if (formatters.length === 0) {
 			return undefined;
 		}
@@ -104,45 +92,27 @@ export async function formatEditor(
 }
 
 /** Formats only declared trigger characters after the keyboard edit has committed. */
-export async function formatEditorOnType(
-	editor: ICodeEditor,
-	features: ILanguageFeaturesService,
-	worker: IVersionedEditorWorkerClient,
-	text: string,
-	token: CancellationToken = CancellationToken.None,
-): Promise<boolean> {
+export async function formatEditorOnType(editor: ICodeEditor, features: ILanguageFeaturesService, worker: IVersionedEditorWorkerClient, text: string, token: CancellationToken = CancellationToken.None): Promise<boolean> {
 	const model = editor.getModel();
 	if (!model || !editor.getOption(EditorOption.formatOnType) || !text) return false;
 	const ch = [...text].at(-1)!;
 	const provider = features.onTypeFormattingEditProvider.ordered(model).find(provider => provider.autoFormatTriggerCharacters.includes(ch));
 	if (!provider) return false;
 	const positions = (editor.getSelections() ?? []).map(selection => selection.getPosition());
-	return runFormatting(
-		editor,
-		worker,
-		async (model, token) => {
-			const batches = await Promise.all(positions.map(position => provider.provideOnTypeFormattingEdits(model, position, ch, model.getFormattingOptions(), token)));
-			const edits: TextEdit[] = [];
-			for (const edit of batches.flatMap(batch => batch ?? [])) {
-				if (edits.some(other => Range.equalsRange(edit.range, other.range) && edit.text === other.text && edit.eol === other.eol)) continue;
-				// Independent cursors must not submit conflicting replacements.
-				if (edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range))) return undefined;
-				edits.push(edit);
-			}
-			return edits;
-		},
-		false,
-		token,
-	);
+	return runFormatting(editor, worker, async (model, token) => {
+		const batches = await Promise.all(positions.map(position => provider.provideOnTypeFormattingEdits(model, position, ch, model.getFormattingOptions(), token)));
+		const edits: TextEdit[] = [];
+		for (const edit of batches.flatMap(batch => batch ?? [])) {
+			if (edits.some(other => Range.equalsRange(edit.range, other.range) && edit.text === other.text && edit.eol === other.eol)) continue;
+			// Independent cursors must not submit conflicting replacements.
+			if (edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range))) return undefined;
+			edits.push(edit);
+		}
+		return edits;
+	}, false, token);
 }
 
-async function runFormatting(
-	editor: ICodeEditor,
-	worker: IVersionedEditorWorkerClient,
-	provide: (model: ITextModel, token: CancellationToken) => Promise<TextEdit[] | null | undefined>,
-	addUndoStops: boolean,
-	token: CancellationToken = CancellationToken.None,
-): Promise<boolean> {
+async function runFormatting(editor: ICodeEditor, worker: IVersionedEditorWorkerClient, provide: (model: ITextModel, token: CancellationToken) => Promise<TextEdit[] | null | undefined>, addUndoStops: boolean, token: CancellationToken = CancellationToken.None): Promise<boolean> {
 	const model = editor.getModel();
 	if (!model || editor.getOption(EditorOption.readOnly) || token.isCancellationRequested) {
 		return false;
@@ -152,20 +122,16 @@ async function runFormatting(
 	requests.set(editor, source);
 	using resources = new DisposableStore();
 	const abort = new AbortController();
-	resources.add(
-		toDisposable(() => {
-			abort.abort();
-			source.dispose(true);
-		}),
-	);
+	resources.add(toDisposable(() => {
+		abort.abort();
+		source.dispose(true);
+	}));
 	resources.add(source.token.onCancellationRequested(() => abort.abort()));
 	resources.add(token.onCancellationRequested(() => source.cancel()));
 	resources.add(model.onDidChangeLanguage(() => source.cancel()));
-	resources.add(
-		editor.onDidChangeConfiguration(() => {
-			if (editor.getOption(EditorOption.readOnly)) source.cancel();
-		}),
-	);
+	resources.add(editor.onDidChangeConfiguration(() => {
+		if (editor.getOption(EditorOption.readOnly)) source.cancel();
+	}));
 	try {
 		const edits = await raceCancellationError(provide(model, source.token), source.token);
 		if (abort.signal.aborted || !edits?.length) {
@@ -199,7 +165,11 @@ async function provideEdits(
 	token: CancellationToken,
 ): Promise<TextEdit[] | null | undefined> {
 	if (kind === FormattingKind.File) {
-		const providers = getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model);
+		const providers = getRealAndSyntheticDocumentFormattersOrdered(
+			features.documentFormattingEditProvider,
+			features.documentRangeFormattingEditProvider,
+			model,
+		);
 		const provider = await raceCancellationError(FormattingConflicts.select(providers, model, mode, FormattingKind.File, token), token);
 		if (!provider || token.isCancellationRequested) {
 			return undefined;
@@ -207,9 +177,9 @@ async function provideEdits(
 		return provider.provideDocumentFormattingEdits(model, options, token);
 	}
 	const ranges: Range[] = [];
-	const selections = (editor.getSelections() ?? []).map(selection =>
-		selection.isEmpty() ? new Range(selection.startLineNumber, 1, selection.startLineNumber, model.getLineMaxColumn(selection.startLineNumber)) : Range.lift(selection),
-	);
+	const selections = (editor.getSelections() ?? []).map(selection => selection.isEmpty()
+		? new Range(selection.startLineNumber, 1, selection.startLineNumber, model.getLineMaxColumn(selection.startLineNumber))
+		: Range.lift(selection));
 	for (const range of selections.sort(Range.compareRangesUsingStarts)) {
 		const previous = ranges[ranges.length - 1];
 		if (previous && Range.areIntersectingOrTouching(previous, range)) {
@@ -230,13 +200,15 @@ async function provideEdits(
 		return provider.provideDocumentRangesFormattingEdits(model, ranges, options, token);
 	}
 	const pending = [...ranges];
-	const completed: { range: Range; edits: TextEdit[] }[] = [];
+	const completed: { range: Range; edits: TextEdit[]; }[] = [];
 	while (pending.length > 0) {
 		if (token.isCancellationRequested) {
 			return undefined;
 		}
 		let range = pending.shift()!;
-		const edits = (await raceCancellationError(Promise.resolve(provider.provideDocumentRangeFormattingEdits(model, range, options, token)), token)) ?? [];
+		const edits = await raceCancellationError(Promise.resolve(
+			provider.provideDocumentRangeFormattingEdits(model, range, options, token),
+		), token) ?? [];
 		let merged = false;
 		for (let index = completed.length - 1; index >= 0; index--) {
 			const previous = completed[index];

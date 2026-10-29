@@ -35,9 +35,7 @@ test('global styles follow live windows and release each window independently', 
 });
 
 test('document style mirror retains loaded links while synchronizing changed styles', async () => {
-	const source = new JSDOM('<!doctype html><head><link id="sheet" rel="stylesheet" href="/editor.css"><style id="theme">.editor { color: red; }</style></head><body></body>', {
-		url: 'https://ash.test/workbench',
-	});
+	const source = new JSDOM('<!doctype html><head><link id="sheet" rel="stylesheet" href="/editor.css"><style id="theme">.editor { color: red; }</style></head><body></body>', { url: 'https://ash.test/workbench' });
 	const target = new JSDOM('<!doctype html><head></head><body></body>', { url: 'https://ash.test/popup' });
 	using mirror = cloneDocumentStyles(source.window.document, target.window.document);
 	try {
@@ -45,9 +43,7 @@ test('document style mirror retains loaded links while synchronizing changed sty
 		const theme = target.window.document.head.querySelector<HTMLStyleElement>('#theme')!;
 		assert.equal(link.href, 'https://ash.test/editor.css');
 		let ready = false;
-		const loaded = mirror.whenStylesHaveLoaded.then(() => {
-			ready = true;
-		});
+		const loaded = mirror.whenStylesHaveLoaded.then(() => { ready = true; });
 		await Promise.resolve();
 		assert.equal(ready, false);
 		link.dispatchEvent(new target.window.Event('load'));
@@ -65,9 +61,7 @@ test('document style mirror retains loaded links while synchronizing changed sty
 		assert.equal(target.window.document.head.querySelector('#sheet'), link);
 		assert.equal(link.href, 'https://ash.test/updated.css');
 		ready = false;
-		const reloaded = mirror.whenStylesHaveLoaded.then(() => {
-			ready = true;
-		});
+		const reloaded = mirror.whenStylesHaveLoaded.then(() => { ready = true; });
 		await Promise.resolve();
 		assert.equal(ready, false);
 		link.dispatchEvent(new target.window.Event('load'));

@@ -1,20 +1,8 @@
 import type {
-	TeamCommandParams,
-	TeamCommandResult,
-	TeamListResult,
-	TeamMessageListParams,
-	TeamMessageListResult,
-	TeamMessagePostParams,
-	TeamMessagePostResult,
-	TeamReadParams,
-	TeamReadResult,
-	TeamRunListParams,
-	TeamRunListResult,
-	TeamRunReadParams,
-	TeamRunReadResult,
-	TeamRunAttachParams,
-	TeamRunStartParams,
-	TeamRunStartResult,
+	TeamCommandParams, TeamCommandResult, TeamListResult, TeamMessageListParams, TeamMessageListResult,
+	TeamMessagePostParams, TeamMessagePostResult, TeamReadParams, TeamReadResult,
+	TeamRunListParams, TeamRunListResult, TeamRunReadParams, TeamRunReadResult,
+	TeamRunAttachParams, TeamRunStartParams, TeamRunStartResult,
 } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Product-host Team operations exposed to browser and Electron renderers. */

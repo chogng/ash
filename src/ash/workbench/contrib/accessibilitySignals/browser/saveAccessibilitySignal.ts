@@ -6,10 +6,6 @@ export class SaveAccessibilitySignal extends Disposable {
 	constructor(@ITextFileService files: ITextFileService, @IAccessibilitySignalService signals: IAccessibilitySignalService) {
 		super();
 		// Saving has one owner, including retries and Save As; failures never emit this event.
-		this._register(
-			files.onDidSave(() => {
-				void signals.playSignal(AccessibilitySignal.save);
-			}),
-		);
+		this._register(files.onDidSave(() => { void signals.playSignal(AccessibilitySignal.save); }));
 	}
 }

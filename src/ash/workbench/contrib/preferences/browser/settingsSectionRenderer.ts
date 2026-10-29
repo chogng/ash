@@ -1,5 +1,10 @@
 import { SettingsPageRenderer } from './settingsRenderers.js';
-import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+	defaultToggleStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsSection.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -10,13 +15,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewType,
-	type AccessibleViewProviderId,
-	type AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewType, type AccessibleViewProviderId, type AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -26,12 +25,8 @@ import type { SettingsSectionReference, SettingsSectionField, SettingsSectionMod
 
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
 export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectionReference> {
-	public get categoryId(): string {
-		return this.model.categoryId;
-	}
-	public override get settingIds(): readonly string[] | undefined {
-		return this.model.settingIds;
-	}
+	public get categoryId(): string { return this.model.categoryId; }
+	public override get settingIds(): readonly string[] | undefined { return this.model.settingIds; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly domNode: HTMLElement;
@@ -42,11 +37,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private readonly fields = new Map<string, SettingsSectionField>();
 	private isVisible = false;
 
-	constructor(
-		container: HTMLElement,
-		private readonly model: SettingsSectionModel,
-		providerId: AccessibleViewProviderId,
-		verbosity: AccessibilityVerbositySettingId,
+	constructor(container: HTMLElement, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
 		@IContextViewService private readonly contextView: IContextViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -54,243 +45,110 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	) {
 		super();
 		const document = container.ownerDocument;
-		this.domNode = h(document, 'div');
-		this.domNode.className = 'ash-settings-section';
-		this.titleDomNode = h(document, 'h5');
-		this.descriptionDomNode = h(document, 'p');
-		this.domNode.append(this.titleDomNode, this.descriptionDomNode);
-		this.actionsDomNode = h(document, 'div');
-		this.actionsDomNode.className = 'ash-settings-section-actions';
-		this._register(
-			model.onDidChange(() => {
-				this.render();
-				this.changed.fire();
-			}),
-		);
+		this.domNode = h(document, 'div'); this.domNode.className = 'ash-settings-section';
+		this.titleDomNode = h(document, 'h5'); this.descriptionDomNode = h(document, 'p'); this.domNode.append(this.titleDomNode, this.descriptionDomNode);
+		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
+		this._register(model.onDidChange(() => { this.render(); this.changed.fire(); }));
 		const key = `settingsSection-${generateUuid()}`;
-		const scope = this._register(contextKeys.createScoped(this.domNode));
-		scope.createKey(key, true);
+		const scope = this._register(contextKeys.createScoped(this.domNode)); scope.createKey(key, true);
 		const updateHint = (): void => {
 			const hint = accessibleView.getOpenAriaHint(verbosity);
-			if (hint) {
-				this.domNode.setAttribute('aria-description', hint);
-			} else {
-				this.domNode.removeAttribute('aria-description');
-			}
+			if (hint) { this.domNode.setAttribute('aria-description', hint); } else { this.domNode.removeAttribute('aria-description'); }
 		};
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(verbosity)) {
-					updateHint();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(verbosity)) { updateHint(); } }));
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			this._register(
-				AccessibleViewRegistry.register({
-					type,
-					priority: 110,
-					name: `${key}-${type}`,
-					when: ContextKeyExpr.has(key),
-					getProvider: () => {
-						const focused = document.activeElement;
-						if (!this.isVisible || !isHTMLElement(focused) || !this.domNode.contains(focused)) {
-							return undefined;
-						}
-						return new AccessibleContentProvider(
-							providerId,
-							{ type },
-							() => (type === AccessibleViewType.Help ? model.help : this.accessibleContent()),
-							() => {
-								if (focused.isConnected) {
-									focused.focus();
-								}
-							},
-							verbosity,
-						);
-					},
-				}),
-			);
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 110, name: `${key}-${type}`, when: ContextKeyExpr.has(key),
+				getProvider: () => {
+					const focused = document.activeElement;
+					if (!this.isVisible || !isHTMLElement(focused) || !this.domNode.contains(focused)) { return undefined; }
+					return new AccessibleContentProvider(providerId, { type },
+						() => type === AccessibleViewType.Help ? model.help : this.accessibleContent(),
+						() => { if (focused.isConnected) { focused.focus(); } }, verbosity);
+				},
+			}));
 		}
 		updateHint();
-		this._register(
-			toDisposable(() => {
-				this.model.setVisible(false);
-				this.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
 	}
 
 	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.render();
-		return [
-			{
-				element: {
-					kind: 'group',
-					id: this.model.groupId ?? `${this.categoryId}.services`,
-					title: this.model.groupTitle ?? this.model.title,
-					description: '',
-				},
-				children: [
-					{
-						element: {
-							kind: 'item',
-							id: this.model.itemId ?? `${this.categoryId}.section`,
-							title: this.model.title,
-							description: this.model.description,
-							keywords: [this.categoryId, ...(this.model.keywords ?? []), ...this.model.fields.flatMap(field => (field.kind === 'status' ? [] : [field.label]))],
-							value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode),
-						},
-					},
-				],
-			},
-		];
+		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [{ element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } }] }];
 	}
 
-	public setVisible(visible: boolean): void {
-		this.isVisible = visible;
-		this.model.setVisible(visible);
-	}
+	public setVisible(visible: boolean): void { this.isVisible = visible; this.model.setVisible(visible); }
 
 	private accessibleContent(): string {
 		const content = this.model.fields.map(field => {
 			switch (field.kind) {
-				case 'status':
-					return field.text;
-				case 'action':
-					return field.label;
-				case 'text':
-					return `${field.label}: ${field.value}`;
-				case 'select':
-					return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
-				case 'boolean':
-					return `${field.label}: ${field.value ? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On') : localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')}`;
+				case 'status': return field.text;
+				case 'action': return field.label;
+				case 'text': return `${field.label}: ${field.value}`;
+				case 'select': return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
+				case 'boolean': return `${field.label}: ${field.value
+					? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On')
+					: localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')}`;
 			}
 		});
 		return [this.model.title, this.model.description, ...content].join('\n');
 	}
 
 	private render(): void {
-		this.titleDomNode.textContent = this.model.title;
-		this.descriptionDomNode.textContent = this.model.description;
+		this.titleDomNode.textContent = this.model.title; this.descriptionDomNode.textContent = this.model.description;
 		for (const field of this.model.fields) {
 			this.fields.set(field.id, field);
 			let control = this.controls.get(field.id);
 			if (!control) {
 				if (field.kind === 'status') {
-					control = h(this.domNode.ownerDocument, 'p');
-					control.setAttribute('role', 'status');
-					control.setAttribute('aria-live', 'polite');
-					this.domNode.append(control);
+					control = h(this.domNode.ownerDocument, 'p'); control.setAttribute('role', 'status'); control.setAttribute('aria-live', 'polite'); this.domNode.append(control);
 				} else if (field.kind === 'text') {
 					const label = h(this.domNode.ownerDocument, 'label');
 					label.textContent = field.label;
 					this.domNode.append(label);
-					const input = this._register(
-						new InputBox(this.domNode, {
-							inputBoxStyles: defaultInputBoxStyles,
-							ariaLabel: field.label,
-							placeholder: field.placeholder,
-							presentation: 'field',
-						}),
-					);
+					const input = this._register(new InputBox(this.domNode, {
+						inputBoxStyles: defaultInputBoxStyles,
+						ariaLabel: field.label,
+						placeholder: field.placeholder,
+						presentation: 'field',
+					}));
 					input.inputElement.id = `settingsField-${generateUuid()}`;
 					label.htmlFor = input.inputElement.id;
 					// InputBox also emits when the renderer restores a saved value. Only a
 					// value different from the model is a user edit, otherwise a read dirties the draft.
-					this._register(
-						input.onDidChange(value => {
-							const current = this.fields.get(field.id);
-							if (current?.kind === 'text' && current.value !== value) {
-								current.setValue(value);
-							}
-						}),
-					);
-					control = input;
+					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
 				} else if (field.kind === 'boolean') {
-					const toggle = this._register(
-						new Switch(this.domNode, {
-							...defaultToggleStyles,
-							label: field.label,
-							ariaLabel: field.label,
-						}),
-					);
-					this._register(
-						toggle.onDidChange(value => {
-							const current = this.fields.get(field.id);
-							if (current?.kind === 'boolean') {
-								current.setValue(value);
-							}
-						}),
-					);
+					const toggle = this._register(new Switch(this.domNode, {
+						...defaultToggleStyles,
+						label: field.label,
+						ariaLabel: field.label,
+					}));
+					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
 				} else if (field.kind === 'select') {
 					const label = h(this.domNode.ownerDocument, 'p');
 					label.textContent = field.label;
 					this.domNode.append(label);
-					const select = this._register(
-						new SelectBox(
-							this.domNode,
-							{
-								options: field.options,
-								ariaLabel: field.label,
-								contextViewProvider: this.contextView,
-							},
-							defaultSelectBoxStyles,
-						),
-					);
-					this._register(
-						select.onDidSelect(({ value }) => {
-							const current = this.fields.get(field.id);
-							if (current?.kind === 'select') {
-								current.setValue(value);
-							}
-						}),
-					);
-					control = select;
+					const select = this._register(new SelectBox(this.domNode, {
+						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView
+					}, defaultSelectBoxStyles));
+					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 				} else {
-					if (!this.actionsDomNode.isConnected) {
-						this.domNode.append(this.actionsDomNode);
-					}
-					const button = this._register(
-						new Button(this.actionsDomNode, {
-							...defaultButtonStyles,
-							label: field.label,
-							presentation: 'secondary',
-						}),
-					);
-					this._register(
-						button.onDidClick(() => {
-							const current = this.fields.get(field.id);
-							if (current?.kind === 'action' && current.enabled) {
-								void current.run();
-							}
-						}),
-					);
-					control = button;
+					if (!this.actionsDomNode.isConnected) { this.domNode.append(this.actionsDomNode); }
+					const button = this._register(new Button(this.actionsDomNode, {
+						...defaultButtonStyles,
+						label: field.label,
+						presentation: 'secondary',
+					}));
+					this._register(button.onDidClick(() => { const current = this.fields.get(field.id); if (current?.kind === 'action' && current.enabled) { void current.run(); } })); control = button;
 				}
 				this.controls.set(field.id, control);
 			}
-			if (field.kind === 'status' && isHTMLElement(control)) {
-				if (control.textContent !== field.text) {
-					control.textContent = field.text;
-				}
-			} else if (field.kind === 'text' && control instanceof InputBox) {
-				control.value = field.value;
-				control.enabled = field.enabled;
-			} else if (field.kind === 'boolean' && control instanceof Switch) {
-				control.checked = field.value;
-				control.enabled = field.enabled;
-			} else if (field.kind === 'select' && control instanceof SelectBox) {
-				if (JSON.stringify(control.options) !== JSON.stringify(field.options)) {
-					control.setOptions(field.options);
-				}
-				control.value = field.value;
-				control.enabled = field.enabled;
-			} else if (field.kind === 'action' && control instanceof Button) {
-				control.label = field.label;
-				control.enabled = field.enabled;
-			}
+			if (field.kind === 'status' && isHTMLElement(control)) { if (control.textContent !== field.text) { control.textContent = field.text; } }
+			else if (field.kind === 'text' && control instanceof InputBox) { control.value = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'boolean' && control instanceof Switch) { control.checked = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'select' && control instanceof SelectBox) { if (JSON.stringify(control.options) !== JSON.stringify(field.options)) { control.setOptions(field.options); } control.value = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'action' && control instanceof Button) { control.label = field.label; control.enabled = field.enabled; }
 		}
 	}
 }

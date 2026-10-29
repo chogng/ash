@@ -5,10 +5,19 @@ import type { IWindowFileOpen } from '../../window/common/window.js';
 
 import { Color } from '../../../base/common/color.js';
 import type { INativeWindowTheme } from '../../native/common/nativeHost.js';
-import { WINDOW_MINIMUM_SIZE } from '../../window/common/window.js';
-import type { WorkbenchState } from '../../workspace/common/workspace.js';
+import {
+	WINDOW_MINIMUM_SIZE,
+} from '../../window/common/window.js';
+import type {
+	WorkbenchState,
+} from '../../workspace/common/workspace.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
-import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
+import {
+	defaultWindowState,
+	WindowMode,
+	type IWindowBounds,
+	type IWindowState,
+} from '../../window/electron-main/window.js';
 
 export interface IOpenConfiguration {
 	readonly workspace?: IWorkspaceOpenTarget;
@@ -20,7 +29,7 @@ export interface IOpenConfiguration {
 }
 
 export interface IWindowsMainService {
-	open(configuration: IOpenConfiguration): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void> }>;
+	open(configuration: IOpenConfiguration): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void>; }>;
 }
 
 export const IWindowsMainService = createServiceIdentifier<IWindowsMainService>('windowsMainService');
@@ -37,7 +46,11 @@ export interface IWindowConstructorOptions {
 	minHeight: number;
 	frame?: boolean;
 	titleBarStyle?: 'hidden' | 'hiddenInset';
-	titleBarOverlay?: boolean | { readonly color: string; readonly symbolColor: string; readonly height: number };
+	titleBarOverlay?: boolean | {
+		readonly color: string;
+		readonly symbolColor: string;
+		readonly height: number;
+	};
 	webPreferences: IWindowWebPreferences;
 }
 
@@ -90,7 +103,7 @@ export function resolveBrowserWindowOptions({
 }
 
 /** Applies saved outer DIP bounds after Windows has selected the window's display. */
-export function restoreWindowBounds(window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds }, bounds: IWindowBounds): void {
+export function restoreWindowBounds(window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds; }, bounds: IWindowBounds): void {
 	let requestedWidth = bounds.width;
 	let requestedHeight = bounds.height;
 	for (let attempt = 0; attempt < 4; attempt++) {
@@ -137,16 +150,10 @@ export class WindowControlsOverlay {
 	private theme: INativeWindowTheme | undefined;
 	private dimmed = false;
 
-	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number }) => void) {}
+	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void) { }
 
 	setTheme(theme: Partial<INativeWindowTheme>): INativeWindowTheme {
-		this.theme = {
-			backgroundColor: '#000000',
-			symbolColor: '#ffffff',
-			backdropColor: '#00000000',
-			...this.theme,
-			...theme,
-		};
+		this.theme = { backgroundColor: '#000000', symbolColor: '#ffffff', backdropColor: '#00000000', ...this.theme, ...theme };
 		this.update();
 		return this.theme;
 	}
@@ -177,7 +184,10 @@ export interface IWindowStateTarget {
 }
 
 /** Applies the mode that cannot be represented by constructor bounds alone. */
-export function applyWindowState(target: IWindowStateTarget, state: IWindowState): void {
+export function applyWindowState(
+	target: IWindowStateTarget,
+	state: IWindowState,
+): void {
 	if (state.mode === WindowMode.Maximized) {
 		target.maximize();
 	} else if (state.mode === WindowMode.Fullscreen) {
@@ -186,13 +196,28 @@ export function applyWindowState(target: IWindowStateTarget, state: IWindowState
 }
 
 /** Validates and adjusts restored state against the displays available now. */
-export function validateWindowState(state: IWindowState, displays: readonly IWindowDisplay[], workbenchState: WorkbenchState): IWindowState | undefined {
+export function validateWindowState(
+	state: IWindowState,
+	displays: readonly IWindowDisplay[],
+	workbenchState: WorkbenchState,
+): IWindowState | undefined {
 	const { x, y, width: stateWidth, height: stateHeight } = state;
-	if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(stateWidth) || !isFiniteNumber(stateHeight) || stateWidth <= 0 || stateHeight <= 0) {
+	if (
+		!isFiniteNumber(x) ||
+		!isFiniteNumber(y) ||
+		!isFiniteNumber(stateWidth) ||
+		!isFiniteNumber(stateHeight) ||
+		stateWidth <= 0 ||
+		stateHeight <= 0
+	) {
 		return undefined;
 	}
 
-	const usableDisplays = displays.map(display => ({ display, area: getWorkingArea(display) })).filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds } => entry.area !== undefined);
+	const usableDisplays = displays
+		.map((display) => ({ display, area: getWorkingArea(display) }))
+		.filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds; } =>
+			entry.area !== undefined
+		);
 	if (usableDisplays.length === 0) {
 		return undefined;
 	}
@@ -206,8 +231,8 @@ export function validateWindowState(state: IWindowState, displays: readonly IWin
 			const dy = Math.max(area.y - previousCenterY, 0, previousCenterY - area.y - area.height);
 			return dx * dx + dy * dy;
 		};
-		const target =
-			usableDisplays.find(({ display }) => display.id === state.displayId) ?? usableDisplays.reduce((nearest, entry) => (distance(entry.area) < distance(nearest.area) ? entry : nearest));
+		const target = usableDisplays.find(({ display }) => display.id === state.displayId) ??
+			usableDisplays.reduce((nearest, entry) => distance(entry.area) < distance(nearest.area) ? entry : nearest);
 		const { display, area } = target;
 		// User-requested Ash policy: restoring recorded display placement keeps the
 		// whole window in the target work area so controls and content remain reachable.
@@ -230,7 +255,9 @@ export function validateWindowState(state: IWindowState, displays: readonly IWin
 	}
 
 	if (state.mode === WindowMode.Fullscreen && state.displayId !== undefined) {
-		const fullscreenDisplay = usableDisplays.find(({ display }) => display.id === state.displayId);
+		const fullscreenDisplay = usableDisplays.find(
+			({ display }) => display.id === state.displayId,
+		);
 		if (fullscreenDisplay) {
 			return {
 				...defaultWindowState(workbenchState, WindowMode.Fullscreen),
@@ -255,7 +282,12 @@ export function validateWindowState(state: IWindowState, displays: readonly IWin
 		};
 	}
 
-	const intersectsCurrentDisplay = usableDisplays.some(({ area }) => x + stateWidth > area.x && y + stateHeight > area.y && x < area.x + area.width && y < area.y + area.height);
+	const intersectsCurrentDisplay = usableDisplays.some(({ area }) =>
+		x + stateWidth > area.x &&
+		y + stateHeight > area.y &&
+		x < area.x + area.width &&
+		y < area.y + area.height
+	);
 	return intersectsCurrentDisplay ? { ...state } : undefined;
 }
 

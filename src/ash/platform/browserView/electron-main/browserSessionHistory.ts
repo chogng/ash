@@ -41,7 +41,7 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 
 	/** Ash's storage reads are asynchronous. The page manager waits here before navigation can record a visit. */
 	initialize(): Promise<void> {
-		return (this.initialization ??= this.restore());
+		return this.initialization ??= this.restore();
 	}
 
 	private async restore(): Promise<void> {
@@ -55,29 +55,18 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 	}
 
 	private changed(part: HistoryPart): void {
-		if (!this.loaded || !this.storageKeys[part]) {
-			return;
-		}
+		if (!this.loaded || !this.storageKeys[part]) { return; }
 		this.dirty.add(part);
 		// Additional visits share the first pending deadline instead of postponing persistence indefinitely.
-		if (!this.scheduledSave.isScheduled()) {
-			this.scheduledSave.schedule();
-		}
+		if (!this.scheduledSave.isScheduled()) { this.scheduledSave.schedule(); }
 	}
 
 	async delete(entryIds?: readonly number[]): Promise<void> {
 		if (entryIds === undefined) {
 			this.clear();
 			this.favicons.clear();
-			if (this.storageKeys.history) {
-				this.dirty.add('history');
-				this.dirty.add('favicons');
-			}
-		} else {
-			for (const id of entryIds) {
-				this.entries.delete(id);
-			}
-		}
+			if (this.storageKeys.history) { this.dirty.add('history'); this.dirty.add('favicons'); }
+		} else { for (const id of entryIds) { this.entries.delete(id); } }
 		await this.flushNow();
 	}
 
@@ -90,19 +79,15 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 			const snapshot = part === 'history' ? this.entries.serialize() : this.favicons.serialize();
 			const empty = part === 'history' ? this.entries.items.length === 0 : Object.keys(this.favicons.serialize().map).length === 0;
 			try {
-				writes.push(
-					this.storage.updateItems(applicationStorage, key, empty ? null : { value: JSON.stringify(snapshot), target: StorageTarget.MACHINE }).catch(error => {
-						this.dirty.add(part);
-						throw error;
-					}),
-				);
+				writes.push(this.storage.updateItems(applicationStorage, key, empty ? null : { value: JSON.stringify(snapshot), target: StorageTarget.MACHINE }).catch(error => {
+					this.dirty.add(part);
+					throw error;
+				}));
 				this.dirty.delete(part);
-			} catch (error) {
-				writes.push(Promise.reject(error));
-			}
+			} catch (error) { writes.push(Promise.reject(error)); }
 		}
 		const writing = Promise.all([this.writing, ...writes]).then(() => undefined);
-		this.writing = writing.catch(() => {});
+		this.writing = writing.catch(() => { });
 		return writing;
 	}
 
@@ -117,15 +102,9 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 }
 
 function parse(raw: string | undefined): Record<string, unknown> | undefined {
-	if (!raw || raw.length > 16 * 1024 * 1024) {
-		return undefined;
-	}
-	try {
-		const value: unknown = JSON.parse(raw);
-		return isRecord(value) ? value : undefined;
-	} catch {
-		return undefined;
-	}
+	if (!raw || raw.length > 16 * 1024 * 1024) { return undefined; }
+	try { const value: unknown = JSON.parse(raw); return isRecord(value) ? value : undefined; }
+	catch { return undefined; }
 }
 
 function decodeFavicons(raw: string | undefined): ISerializedBrowserFaviconsSnapshot {
@@ -133,9 +112,7 @@ function decodeFavicons(raw: string | undefined): ISerializedBrowserFaviconsSnap
 	const map: Record<string, string> = Object.create(null);
 	if (isRecord(value)) {
 		for (const [hash, image] of Object.entries(value)) {
-			if (/^[0-9a-f]{40}$/.test(hash) && typeof image === 'string' && image.startsWith('data:image/') && image.length <= 64 * 1024) {
-				map[hash] = image;
-			}
+			if (/^[0-9a-f]{40}$/.test(hash) && typeof image === 'string' && image.startsWith('data:image/') && image.length <= 64 * 1024) { map[hash] = image; }
 		}
 	}
 	return { map };
@@ -145,40 +122,20 @@ function decodeEntries(raw: string | undefined, favicons: ISerializedBrowserFavi
 	const value = parse(raw)?.items;
 	const items: ISerializedBrowserHistoryEntriesSnapshot['items'][number][] = [];
 	const ids = new Set<number>();
-	if (!Array.isArray(value)) {
-		return { items };
-	}
+	if (!Array.isArray(value)) { return { items }; }
 	for (const entry of value.slice(-maxEntries)) {
-		if (
-			!isRecord(entry) ||
-			!Number.isSafeInteger(entry.id) ||
-			(entry.id as number) < 1 ||
-			(entry.id as number) >= Number.MAX_SAFE_INTEGER ||
-			ids.has(entry.id as number) ||
-			typeof entry.time !== 'number' ||
-			!Number.isFinite(entry.time) ||
-			entry.time < 0 ||
-			typeof entry.title !== 'string'
-		) {
-			continue;
-		}
+		if (!isRecord(entry) || !Number.isSafeInteger(entry.id) || (entry.id as number) < 1 || (entry.id as number) >= Number.MAX_SAFE_INTEGER || ids.has(entry.id as number)
+			|| typeof entry.time !== 'number' || !Number.isFinite(entry.time) || entry.time < 0 || typeof entry.title !== 'string') { continue; }
 		try {
 			const url = normalizeBrowserViewUrl(entry.url);
-			if (url === 'about:blank') {
-				continue;
-			}
+			if (url === 'about:blank') { continue; }
 			ids.add(entry.id as number);
 			items.push({
-				id: entry.id as number,
-				url,
-				time: entry.time,
-				title: entry.title,
+				id: entry.id as number, url, time: entry.time, title: entry.title,
 				...(entry.explicit === true ? { explicit: true } : {}),
 				...(typeof entry.icon === 'string' && Object.hasOwn(favicons.map, entry.icon) ? { icon: entry.icon } : {}),
 			});
-		} catch {
-			/* Invalid persisted URLs cannot become navigation suggestions. */
-		}
+		} catch { /* Invalid persisted URLs cannot become navigation suggestions. */ }
 	}
 	return { items };
 }

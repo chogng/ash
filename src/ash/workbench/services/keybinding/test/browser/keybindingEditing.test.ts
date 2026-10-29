@@ -9,42 +9,25 @@ import { KeybindingTestServices } from './keybindingTestServices.js';
 
 function userItem(source: string, index = 0): ResolvedKeybindingItem {
 	const entry = parseUserKeybindings(source)[index]!;
-	return new ResolvedKeybindingItem(undefined, entry.command, entry.args, undefined, false, null, false, {
-		index,
-		entry,
-	});
+	return new ResolvedKeybindingItem(undefined, entry.command, entry.args, undefined, false, null, false, { index, entry });
 }
 
 test('keybindings JSONC validates complete ordered rules before installation', () => {
-	const source =
-		'// user shortcuts\n[{"key":"primary+k primary+c","command":"ash.comment","when":"editorFocus && mode == edit","args":{"source":"keyboard"},"mac":"cmd+k cmd+c","linux":null,"systemWide":true},]';
-	assert.deepEqual(parseUserKeybindings(source)[0], {
-		key: 'primary+k primary+c',
-		command: 'ash.comment',
-		when: 'editorFocus && mode == edit',
-		args: { source: 'keyboard' },
-		mac: 'cmd+k cmd+c',
-		linux: null,
-		systemWide: true,
-	});
+	const source = '// user shortcuts\n[{"key":"primary+k primary+c","command":"ash.comment","when":"editorFocus && mode == edit","args":{"source":"keyboard"},"mac":"cmd+k cmd+c","linux":null,"systemWide":true},]';
+	assert.deepEqual(parseUserKeybindings(source)[0], { key: 'primary+k primary+c', command: 'ash.comment', when: 'editorFocus && mode == edit', args: { source: 'keyboard' }, mac: 'cmd+k cmd+c', linux: null, systemWide: true });
 	assert.deepEqual(parseUserKeybindings('// no shortcuts'), []);
 	for (const invalid of [
 		[{ key: 'ctrl+k', command: 'ash.test', unknown: true }],
 		[{ key: 'ctrl+k', command: 'ash.test', when: 'editorFocus &&' }],
 		[{ key: 'ctrl+k', command: 'ash.test', systemWide: 'yes' }],
 		[{ key: 'ctrl+k', command: null, args: {} }],
-		[
-			{ key: 'ctrl+k', command: 'ash.test' },
-			{ key: 'invalid+', command: 'ash.test' },
-		],
-	])
-		assert.throws(() => parseUserKeybindings(JSON.stringify(invalid)));
+		[{ key: 'ctrl+k', command: 'ash.test' }, { key: 'invalid+', command: 'ash.test' }],
+	]) assert.throws(() => parseUserKeybindings(JSON.stringify(invalid)));
 });
 
 test('shortcut editing preserves comments, arguments and OS overrides in the shared JSON model', async () => {
 	using fixture = new KeybindingTestServices();
-	const source =
-		'// user shortcuts\n[\n  /* keep list note */\n  {"key":"ctrl+k", /* explain binding */ "command":"ash.test","args":{"kind":"text"},"mac":"cmd+k","systemWide":true},\n  // keep trailing note\n]\n';
+	const source = '// user shortcuts\n[\n  /* keep list note */\n  {"key":"ctrl+k", /* explain binding */ "command":"ash.test","args":{"kind":"text"},"mac":"cmd+k","systemWide":true},\n  // keep trailing note\n]\n';
 	await fixture.writeSource(source);
 	const resource = fixture.profiles.currentProfile.keybindingsResource;
 	using reference = await fixture.models.acquire({ resource, languageId: 'jsonc' }, new AbortController().signal);
@@ -55,16 +38,7 @@ test('shortcut editing preserves comments, arguments and OS overrides in the sha
 	assert.match(result.content, /\/\* explain binding \*\//u);
 	assert.equal(reference.model.getValue(), result.content);
 	assert.equal(reference.isDirty, false);
-	assert.deepEqual(await fixture.read(), [
-		{
-			key: 'ctrl+j',
-			command: 'ash.test',
-			args: { kind: 'text' },
-			mac: 'cmd+k',
-			systemWide: true,
-			when: 'editorFocus',
-		},
-	]);
+	assert.deepEqual(await fixture.read(), [{ key: 'ctrl+j', command: 'ash.test', args: { kind: 'text' }, mac: 'cmd+k', systemWide: true, when: 'editorFocus' }]);
 	assert.equal(await readFile(join(fixture.directory, 'keybindings.json'), 'utf8'), result.content);
 	await assert.rejects(editing.removeKeybinding(userItem(source)), /changed/u);
 	await editing.removeKeybinding(userItem(result.content));

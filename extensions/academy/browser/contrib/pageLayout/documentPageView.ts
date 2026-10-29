@@ -35,11 +35,7 @@ export class DocumentPageView extends Disposable {
 	private document: DocumentNode | undefined;
 	private zoom = 1;
 
-	constructor(
-		private readonly container: HTMLDivElement,
-		onMetricsChanged: () => void,
-		watchMetrics = true,
-	) {
+	constructor(private readonly container: HTMLDivElement, onMetricsChanged: () => void, watchMetrics = true) {
 		super();
 		this._register(toDisposable(() => this.clear()));
 		if (watchMetrics) this._register(addDisposableListener(container, 'load', onMetricsChanged, true));
@@ -72,24 +68,18 @@ export class DocumentPageView extends Disposable {
 				const content = this.container.ownerDocument.createDocumentFragment();
 				if (section) content.append(...elements.find(element => element.dataset.nodeId === section.id)!.childNodes);
 				else for (const node of nodes) content.append(elements.find(element => element.dataset.nodeId === node.id)!);
-				const view = this.sectionStore.add(new DocumentPageView(container, () => {}, false));
+				const view = this.sectionStore.add(new DocumentPageView(container, () => { }, false));
 				view.setZoom(this.zoom);
 				this.sectionViews.set(container, view);
 				// Attach before measuring; detached ranges do not carry line geometry.
 				this.container.append(container);
-				view.render(content, {
-					...document,
-					attrs: { ...document.attrs, ...section?.attrs },
-					content: section?.content ?? nodes,
-				});
+				view.render(content, { ...document, attrs: { ...document.attrs, ...section?.attrs }, content: section?.content ?? nodes });
 				nodes = [];
 			};
 			this.container.replaceChildren();
 			for (const node of document.content) {
-				if (node.type === 'documentSection') {
-					flush();
-					flush(node);
-				} else if (node.type !== 'reviewComment' && node.type !== 'reviewChange') nodes.push(node);
+				if (node.type === 'documentSection') { flush(); flush(node); }
+				else if (node.type !== 'reviewComment' && node.type !== 'reviewChange') nodes.push(node);
 			}
 			flush();
 			this.container.classList.add('ash-document-paged');
@@ -143,14 +133,10 @@ export class DocumentPageView extends Disposable {
 	layout(): void {
 		if (this.sectionViews.size) {
 			let total = 0;
-			for (const view of this.sectionViews.values()) {
-				view.layout();
-				total += Number(view.shell?.dataset.pageCount ?? 0);
-			}
+			for (const view of this.sectionViews.values()) { view.layout(); total += Number(view.shell?.dataset.pageCount ?? 0); }
 			let offset = 0;
 			for (const view of this.sectionViews.values()) {
-				view.pageOffset = offset;
-				view.pageTotal = total;
+				view.pageOffset = offset; view.pageTotal = total;
 				for (const [index, page] of [...(view.backgrounds?.children ?? [])].entries()) view.renderRunningText(page as HTMLElement, index, total, view.paper!.margin);
 				offset += Number(view.shell?.dataset.pageCount ?? 0);
 			}
@@ -200,7 +186,7 @@ export class DocumentPageView extends Disposable {
 		const end = (lines.at(-1)!.bottom - origin) / this.zoom;
 		const page = Math.floor(start / stride);
 		let shift = 0;
-		const breaks: { line: MeasuredLine; height: number }[] = [];
+		const breaks: { line: MeasuredLine; height: number; }[] = [];
 		let requiredEnd = end;
 		if (unit.dataset.keepWithNext === 'true') {
 			// Resolve the entire keep chain before moving its first paragraph. A later
@@ -280,9 +266,8 @@ export class DocumentPageView extends Disposable {
 	}
 
 	private getUnits(root: HTMLElement, row: HTMLElement | null): HTMLElement[] {
-		return [
-			...root.querySelectorAll<HTMLElement>('.stanza-document-paragraph, .stanza-document-heading, .stanza-document-code-block, .stanza-document-table-row, .stanza-document-horizontal-rule'),
-		].filter(unit => unit.parentElement?.closest('.stanza-document-table-row') === row);
+		return [...root.querySelectorAll<HTMLElement>('.stanza-document-paragraph, .stanza-document-heading, .stanza-document-code-block, .stanza-document-table-row, .stanza-document-horizontal-rule')]
+			.filter(unit => unit.parentElement?.closest('.stanza-document-table-row') === row);
 	}
 
 	private renderRunningText(page: HTMLElement, index: number, count: number, margin: number): void {

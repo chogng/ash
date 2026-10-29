@@ -29,36 +29,26 @@ test('Same-text forced replacements move markers and keep their alternative vers
 test('TextModel applyEdits bypasses history and returns identified inverse operations', () => {
 	using model = new TextModel('abc');
 	const identifier = { major: 7, minor: 3 };
-	const inverse = model.applyEdits(
-		[
-			{
-				identifier,
-				range: new Range(1, 2, 1, 3),
-				text: 'X',
-				forceMoveMarkers: true,
-				isAutoWhitespaceEdit: true,
-				_isTracked: true,
-			},
-		],
-		true,
-	);
+	const inverse = model.applyEdits([{
+		identifier,
+		range: new Range(1, 2, 1, 3),
+		text: 'X',
+		forceMoveMarkers: true,
+		isAutoWhitespaceEdit: true,
+		_isTracked: true,
+	}], true);
 
 	assert.equal(model.getText(), 'aXc');
 	assert.equal(model.canUndo(), false);
-	assert.deepEqual(
-		inverse.map(operation => ({
-			identifier: operation.identifier,
-			range: operation.range,
-			text: operation.text,
-		})),
-		[
-			{
-				identifier,
-				range: new Range(1, 2, 1, 3),
-				text: 'b',
-			},
-		],
-	);
+	assert.deepEqual(inverse.map(operation => ({
+		identifier: operation.identifier,
+		range: operation.range,
+		text: operation.text,
+	})), [{
+		identifier,
+		range: new Range(1, 2, 1, 3),
+		text: 'b',
+	}]);
 
 	model.applyEdits(inverse);
 	assert.equal(model.getText(), 'abc');
@@ -73,20 +63,11 @@ test('restoring history preserves current logical line identities and cached sna
 	using reopened = new TextModel(original.getText());
 	void reopened.lineDocument;
 	assert.equal(reopened.restoreUndoRedoSnapshot(original.createUndoRedoSnapshot()!), true);
-	assert.deepEqual(
-		[0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id),
-		ids,
-	);
-	assert.deepEqual(
-		ids.map(id => reopened.getLineIndex(id)),
-		[0, 1, 2],
-	);
+	assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
+	assert.deepEqual(ids.map(id => reopened.getLineIndex(id)), [0, 1, 2]);
 	reopened.undo();
 	reopened.redo();
-	assert.deepEqual(
-		[0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id),
-		ids,
-	);
+	assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
 });
 
 test('restored line identity generation skips a large retired history without exhausting retries', () => {
@@ -123,18 +104,12 @@ for (const direction of ['undo', 'redo'] as const) {
 		const ids = [0, 1, 2].map(index => reopened.getLineId(index));
 		assert.equal(new Set(ids).size, 3);
 		assert.deepEqual(ids.slice(0, 2), retainedIds);
-		assert.deepEqual(
-			ids.map(id => reopened.getLineIndex(id)),
-			[0, 1, 2],
-		);
+		assert.deepEqual(ids.map(id => reopened.getLineIndex(id)), [0, 1, 2]);
 		assert.equal(reopened.lineDocument.getText(), 'a\n\n');
 		reopened.undo();
 		assert.equal(reopened.getText(), 'a\n');
 		reopened.redo();
-		assert.deepEqual(
-			[0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id),
-			ids,
-		);
+		assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
 	});
 }
 
@@ -143,23 +118,14 @@ test('TextModel history restores cursor state through undo, redo, and cancellati
 	const before = [new Selection(1, 2, 1, 2)];
 	const after = [new Selection(1, 3, 1, 3)];
 	const identifier = { major: 2, minor: 4 };
-	const resulting = model.pushEditOperations(
-		before,
-		[
-			{
-				identifier,
-				range: new Range(1, 2, 1, 2),
-				text: 'X',
-			},
-		],
-		inverseOperations => {
-			assert.deepEqual(
-				inverseOperations.map(operation => operation.identifier),
-				[identifier],
-			);
-			return after;
-		},
-	);
+	const resulting = model.pushEditOperations(before, [{
+		identifier,
+		range: new Range(1, 2, 1, 2),
+		text: 'X',
+	}], inverseOperations => {
+		assert.deepEqual(inverseOperations.map(operation => operation.identifier), [identifier]);
+		return after;
+	});
 	model.pushStackElement();
 
 	assert.deepEqual(resulting, after);
@@ -175,17 +141,10 @@ test('TextModel history restores cursor state through undo, redo, and cancellati
 	const group = new UndoRedoGroup();
 	const cancellationBefore = [new Selection(1, 1, 1, 1)];
 	model.beginHistoryRevision(group);
-	model.pushEditOperations(
-		cancellationBefore,
-		[
-			{
-				range: new Range(1, 1, 1, 1),
-				text: 'Y',
-			},
-		],
-		() => [new Selection(1, 2, 1, 2)],
-		group,
-	);
+	model.pushEditOperations(cancellationBefore, [{
+		range: new Range(1, 1, 1, 1),
+		text: 'Y',
+	}], () => [new Selection(1, 2, 1, 2)], group);
 	const cancellation = model.cancelHistoryRevision(group);
 
 	assert.equal(model.getText(), 'aXbc');
@@ -214,14 +173,10 @@ test('Rejected and empty edit batches preserve an open undo step and its selecti
 	model.pushEditOperations(before, [{ range: new Range(1, 1, 1, 1), text: 'a' }], () => afterFirst);
 	const version = model.getVersionId();
 
-	assert.throws(
-		() =>
-			model.applyOperations([
-				{ range: new Range(1, 2, 1, 2), text: 'X' },
-				{ range: new Range(1, 2, 1, 2), text: 'Y' },
-			]),
-		/must not overlap/,
-	);
+	assert.throws(() => model.applyOperations([
+		{ range: new Range(1, 2, 1, 2), text: 'X' },
+		{ range: new Range(1, 2, 1, 2), text: 'Y' },
+	]), /must not overlap/);
 	assert.equal(model.applyOperations([]), undefined);
 	assert.deepEqual({ text: model.getText(), version: model.getVersionId() }, { text: 'a', version });
 
@@ -240,14 +195,21 @@ test('TextModel replays deterministic history across changing line maps', () => 
 	for (let index = 0; index < 200; index += 1) {
 		const length = model.getText().length;
 		const startOffset = Math.floor(random() * (length + 1));
-		const deleteLength = index % 3 === 0 && startOffset < length ? 1 : 0;
-		const insertedText = deleteLength > 0 ? '' : index % 5 === 0 ? `\r\n${index}` : String.fromCharCode(97 + (index % 26));
-		model.applyOperations([
-			{
-				range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + deleteLength)),
-				text: insertedText,
-			},
-		]);
+		const deleteLength = index % 3 === 0 && startOffset < length
+			? 1
+			: 0;
+		const insertedText = deleteLength > 0
+			? ''
+			: index % 5 === 0
+				? `\r\n${index}`
+				: String.fromCharCode(97 + index % 26);
+		model.applyOperations([{
+			range: Range.fromPositions(
+				model.positionAt(startOffset),
+				model.positionAt(startOffset + deleteLength),
+			),
+			text: insertedText,
+		}]);
 		states.push(model.getText());
 	}
 
@@ -263,38 +225,31 @@ test('TextModel replays deterministic history across changing line maps', () => 
 
 test('TextModel keeps transaction identity across undo and redo', () => {
 	using model = new TextModel('abc');
-	const first = model.applyOperations([
-		{
-			range: Range.fromPositions(model.positionAt(0)),
-			text: 'X',
-		},
-	]);
-	const second = model.applyOperations([
-		{
-			range: Range.fromPositions(model.positionAt(2)),
-			text: 'Y',
-		},
-	]);
+	const first = model.applyOperations([{
+		range: Range.fromPositions(model.positionAt(0)),
+		text: 'X',
+	}]);
+	const second = model.applyOperations([{
+		range: Range.fromPositions(model.positionAt(2)),
+		text: 'Y',
+	}]);
 	const undoSecond = model.undo();
 	const undoFirst = model.undo();
 	const redoFirst = model.redo();
 
-	assert.deepEqual(
-		{
-			first: first?.transactionId,
-			second: second?.transactionId,
-			undoSecond: undoSecond?.transactionId,
-			undoFirst: undoFirst?.transactionId,
-			redoFirst: redoFirst?.transactionId,
-		},
-		{
-			first: 1,
-			second: 2,
-			undoSecond: 2,
-			undoFirst: 1,
-			redoFirst: 1,
-		},
-	);
+	assert.deepEqual({
+		first: first?.transactionId,
+		second: second?.transactionId,
+		undoSecond: undoSecond?.transactionId,
+		undoFirst: undoFirst?.transactionId,
+		redoFirst: redoFirst?.transactionId,
+	}, {
+		first: 1,
+		second: 2,
+		undoSecond: 2,
+		undoFirst: 1,
+		redoFirst: 1,
+	});
 });
 
 function createRandom(seed: number): () => number {

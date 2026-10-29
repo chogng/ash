@@ -9,46 +9,33 @@ import type { IAppToolsHost } from './appTools.js';
 export class AppServerAppToolsHost extends Disposable {
 	private readonly lifetime = new AbortController();
 
-	constructor(
-		client: AppServerProtocolClient,
-		private readonly host: IAppToolsHost,
-	) {
+	constructor(client: AppServerProtocolClient, private readonly host: IAppToolsHost) {
 		super();
 		// Removing the handler prevents new calls; this also cancels calls already running in this window.
 		this._register(toDisposable(() => this.lifetime.abort()));
 		this._register(host);
-		this._register(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['app/request'], async (params, context) => {
-				const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
-				throwIfCancelled(signal);
-				const result = await this.execute(params.operation, signal);
-				throwIfCancelled(signal);
-				return { json: JSON.stringify(result) };
-			}),
-		);
-		this._register(
-			client.onStateChange(state => {
-				if (state !== 'ready') {
-					host.clearTransientState();
-				}
-			}),
-		);
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['app/request'], async (params, context) => {
+			const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
+			throwIfCancelled(signal);
+			const result = await this.execute(params.operation, signal);
+			throwIfCancelled(signal);
+			return { json: JSON.stringify(result) };
+		}));
+		this._register(client.onStateChange(state => {
+			if (state !== 'ready') {
+				host.clearTransientState();
+			}
+		}));
 	}
 
 	private async execute(operation: AppHostOperation, signal: AbortSignal): Promise<unknown> {
 		switch (operation.type) {
-			case 'tasksList':
-				return this.host.listTasks(operation.directory, signal);
-			case 'tasksDescribe':
-				return this.host.describeTask(operation.directory, operation.taskId, operation.revision, signal);
-			case 'tasksRun':
-				return this.host.runTask(operation.directory, operation.taskId, operation.revision, signal);
-			case 'tasksStatus':
-				return this.host.taskStatus(operation.directory, operation.runId);
-			case 'tasksOutput':
-				return this.host.taskOutput(operation.directory, operation.runId, operation.cursor, operation.maxCharacters);
-			case 'tasksCancel':
-				return this.host.cancelTask(operation.directory, operation.runId);
+			case 'tasksList': return this.host.listTasks(operation.directory, signal);
+			case 'tasksDescribe': return this.host.describeTask(operation.directory, operation.taskId, operation.revision, signal);
+			case 'tasksRun': return this.host.runTask(operation.directory, operation.taskId, operation.revision, signal);
+			case 'tasksStatus': return this.host.taskStatus(operation.directory, operation.runId);
+			case 'tasksOutput': return this.host.taskOutput(operation.directory, operation.runId, operation.cursor, operation.maxCharacters);
+			case 'tasksCancel': return this.host.cancelTask(operation.directory, operation.runId);
 			case 'openFile':
 				await this.host.openFile(URI.file(operation.path), operation.line ?? undefined);
 				return { opened: true, path: operation.path };

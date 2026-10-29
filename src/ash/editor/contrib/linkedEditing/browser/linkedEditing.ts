@@ -42,30 +42,16 @@ export class LinkedEditingContribution extends Disposable {
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError('Linked editing dependencies must share a text model');
-		this._register(
-			addDisposableListener(
-				input,
-				'keydown',
-				event => {
-					if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key !== 'F2') return;
-					stopEvent(event);
-					void this.activate();
-				},
-				true,
-			),
-		);
-		this._register(
-			addDisposableListener(
-				input,
-				'keydown',
-				event => {
-					if (event.key !== 'Escape' || !this.isActive) return;
-					stopEvent(event);
-					this.clear();
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key !== 'F2') return;
+			stopEvent(event);
+			void this.activate();
+		}, true));
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.key !== 'Escape' || !this.isActive) return;
+			stopEvent(event);
+			this.clear();
+		}, true));
 		this._register(viewport.textModel.onDidChangeContent(change => this.onDidChangeContent(change)));
 		this._register(editor.onDidChangeCursorPosition(() => this.scheduleActivation()));
 		this._register(providers.onDidChange(() => this.scheduleActivation()));
@@ -76,7 +62,7 @@ export class LinkedEditingContribution extends Disposable {
 	private async activate(): Promise<void> {
 		if (this.isDisposed) return;
 		this.request?.dispose(true);
-		const request = (this.request = new CancellationTokenSource());
+		const request = this.request = new CancellationTokenSource();
 		try {
 			const primary = this.editor.getSelection();
 			if (!primary) return;
@@ -90,7 +76,7 @@ export class LinkedEditingContribution extends Disposable {
 			let result: LinkedEditingRanges | undefined;
 			for (const provider of this.providers.ordered(model)) {
 				try {
-					result = (await Promise.resolve(provider.provideLinkedEditingRanges(model, primary.getPosition(), request.token))) ?? undefined;
+					result = await Promise.resolve(provider.provideLinkedEditingRanges(model, primary.getPosition(), request.token)) ?? undefined;
 				} catch (error) {
 					if (request.token.isCancellationRequested) return;
 					this.onError(error);
@@ -132,7 +118,10 @@ export class LinkedEditingContribution extends Disposable {
 	private onDidChangeContent(change: TextModelChange): void {
 		if (this.syncing || !this.isActive || change.reason !== TextModelChangeReason.Edit || change.changes.length === 0) return;
 		const model = this.viewport.textModel;
-		const changedRanges = change.changes.map(item => Range.fromPositions(model.positionAt(item.rangeOffset), model.positionAt(item.rangeOffset + item.text.length)));
+		const changedRanges = change.changes.map(item => Range.fromPositions(
+			model.positionAt(item.rangeOffset),
+			model.positionAt(item.rangeOffset + item.text.length),
+		));
 		const source = this.trackedRanges.find(candidate => changedRanges.every(range => candidate.range.containsRange(range)));
 		if (!source) return;
 		const token = ++this.syncToken;

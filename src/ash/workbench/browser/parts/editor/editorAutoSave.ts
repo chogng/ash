@@ -13,7 +13,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 
 	private readonly registrations = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
 	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
-	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number }>();
+	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number; }>();
 	private readonly saving = new Set<IWorkingCopy>();
 	private activeWorkingCopy: IWorkingCopy | undefined;
 
@@ -26,25 +26,21 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 		for (const workingCopy of workingCopies.getAll()) this.attach(workingCopy);
 		this._register(workingCopies.onDidRegister(workingCopy => this.attach(workingCopy)));
 		this._register(workingCopies.onDidUnregister(workingCopy => this.detach(workingCopy)));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
-				this.clearTimers();
-				if (event.affectsConfiguration(EditorAutoSaveConfiguration) && this.mode !== 'off') {
-					for (const workingCopy of workingCopies.getAll()) void this.save(workingCopy, SaveReason.AUTO);
-				}
-				if (this.mode === 'afterDelay') {
-					for (const workingCopy of workingCopies.getAll()) this.schedule(workingCopy);
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
+			this.clearTimers();
+			if (event.affectsConfiguration(EditorAutoSaveConfiguration) && this.mode !== 'off') {
+				for (const workingCopy of workingCopies.getAll()) void this.save(workingCopy, SaveReason.AUTO);
+			}
+			if (this.mode === 'afterDelay') {
+				for (const workingCopy of workingCopies.getAll()) this.schedule(workingCopy);
+			}
+		}));
 		this.activeWorkingCopy = editorPart.activePane?.workingCopy;
-		this._register(
-			editorPart.onDidChangeEditors(() => {
-				this.attachWindow(editorPart.domNode.ownerDocument.defaultView);
-				this.handleActiveEditorChange();
-			}),
-		);
+		this._register(editorPart.onDidChangeEditors(() => {
+			this.attachWindow(editorPart.domNode.ownerDocument.defaultView);
+			this.handleActiveEditorChange();
+		}));
 		this.attachWindow(editorPart.domNode.ownerDocument.defaultView);
 		this._register(toDisposable(() => this.clearTimers()));
 	}
@@ -57,12 +53,10 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 		if (this.registrations.has(workingCopy)) return;
 		const resources = new DisposableStore();
 		resources.add(workingCopy.onDidChangeContent(() => this.schedule(workingCopy)));
-		resources.add(
-			workingCopy.onDidChangeDirty(() => {
-				if (workingCopy.isDirty) this.schedule(workingCopy);
-				else this.clearTimer(workingCopy);
-			}),
-		);
+		resources.add(workingCopy.onDidChangeDirty(() => {
+			if (workingCopy.isDirty) this.schedule(workingCopy);
+			else this.clearTimer(workingCopy);
+		}));
 		resources.add(toDisposable(() => this.clearTimer(workingCopy)));
 		this.registrations.set(workingCopy, resources);
 		this.schedule(workingCopy);
@@ -71,12 +65,10 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 	private attachWindow(ownerWindow: Window | null): void {
 		if (!ownerWindow || this.windowListeners.has(ownerWindow)) return;
 		const listeners = new DisposableStore();
-		listeners.add(
-			addDisposableListener(ownerWindow, 'blur', () => {
-				if (this.mode !== 'onWindowChange' && this.mode !== 'onFocusChange') return;
-				for (const workingCopy of this.workingCopies.getAll()) void this.save(workingCopy, this.mode === 'onWindowChange' ? SaveReason.WINDOW_CHANGE : SaveReason.FOCUS_CHANGE);
-			}),
-		);
+		listeners.add(addDisposableListener(ownerWindow, 'blur', () => {
+			if (this.mode !== 'onWindowChange' && this.mode !== 'onFocusChange') return;
+			for (const workingCopy of this.workingCopies.getAll()) void this.save(workingCopy, this.mode === 'onWindowChange' ? SaveReason.WINDOW_CHANGE : SaveReason.FOCUS_CHANGE);
+		}));
 		listeners.add(addDisposableListener(ownerWindow, 'unload', () => this.windowListeners.deleteAndDispose(ownerWindow)));
 		this.windowListeners.set(ownerWindow, listeners);
 	}

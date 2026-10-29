@@ -9,25 +9,10 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 suite('Session Canvas persistence', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('only admitted live identities round-trip and cold restoration cannot recreate a source', () => {
-		const owner = {
-			providerId: 'local-agent-host',
-			session: URI.parse('ash-session:/source'),
-			chat: URI.parse('ash-thread:/source'),
-		};
-		using input = new CanvasInput(
-			{ ...owner, canvas: URI.parse('agent-host-canvas:/page') },
-			{
-				resource: URI.parse('agent-host-canvas:/page'),
-				instanceId: 'board',
-				title: 'Board',
-				source: URI.parse('https://example.test/private?token=secret'),
-			},
-			{} as IEditorGroupsService,
-		);
+		const owner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/source'), chat: URI.parse('ash-thread:/source') };
+		using input = new CanvasInput({ ...owner, canvas: URI.parse('agent-host-canvas:/page') }, { resource: URI.parse('agent-host-canvas:/page'), instanceId: 'board', title: 'Board', source: URI.parse('https://example.test/private?token=secret') }, {} as IEditorGroupsService);
 		let admitted = false;
-		const serializer = new SessionCanvasSerializer({
-			restoreCanvasInput: id => (admitted && id === input.serializationId ? input : undefined),
-		} as ICanvasService);
+		const serializer = new SessionCanvasSerializer({ restoreCanvasInput: id => admitted && id === input.serializationId ? input : undefined } as ICanvasService);
 		assert.equal(serializer.canSerialize(input), true, 'intercept unadmitted inputs before the generic URI serializer');
 		assert.equal(serializer.serialize(input), null);
 		admitted = true;
@@ -41,16 +26,9 @@ suite('Session Canvas persistence', () => {
 
 	test('invalid versions, identities and extra fields are rejected before admission lookup', () => {
 		let lookups = 0;
-		const serializer = new SessionCanvasSerializer({
-			restoreCanvasInput: () => {
-				lookups++;
-				return undefined;
-			},
-		} as unknown as ICanvasService);
+		const serializer = new SessionCanvasSerializer({ restoreCanvasInput: () => { lookups++; return undefined; } } as unknown as ICanvasService);
 		const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		for (const value of [undefined, null, [], id, { version: 2, id }, { version: 1, id: 'canvas:/page' }, { version: 1, id, source: 'https://example.test' }]) {
-			assert.throws(() => serializer.deserialize(value));
-		}
+		for (const value of [undefined, null, [], id, { version: 2, id }, { version: 1, id: 'canvas:/page' }, { version: 1, id, source: 'https://example.test' }]) { assert.throws(() => serializer.deserialize(value)); }
 		assert.equal(lookups, 0);
 	});
 });

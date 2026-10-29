@@ -32,21 +32,12 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 	let activeEditor: IResourceEditorInput | undefined = { resource: URI.file('/workspace/current.ts') };
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IEditorService, {
-		...emptyEditorServiceState,
-		onDidActiveEditorChange: changed.event,
-		get activeEditor() {
-			return activeEditor;
-		},
-		openEditor: async () => {},
-		focusActiveEditor() {},
+		...emptyEditorServiceState, onDidActiveEditorChange: changed.event,
+		get activeEditor() { return activeEditor; },
+		openEditor: async () => { }, focusActiveEditor() { },
 	});
-	services.registerInstance(IFileService, {
-		hasProvider: () => true,
-		readFile: async (resource: URI) => ({ content: await read(resource) }),
-	} as unknown as IFileService);
-	services.registerInstance(IWorkingCopyService, {
-		get: () => (unsaved === undefined ? [] : [{ backupKind: 'text', backup: () => unsaved }]),
-	} as unknown as IWorkingCopyService);
+	services.registerInstance(IFileService, { hasProvider: () => true, readFile: async (resource: URI) => ({ content: await read(resource) }) } as unknown as IFileService);
+	services.registerInstance(IWorkingCopyService, { get: () => unsaved === undefined ? [] : [{ backupKind: 'text', backup: () => unsaved }] } as unknown as IWorkingCopyService);
 	services.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 	services.registerInstance(IFileSearchService, {} as IFileSearchService);
 	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
@@ -57,39 +48,22 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 	host.append(input);
 	const widget = resources.add(services.createInstance(ImplicitContextAttachmentWidget, host, attachments, () => input.focus()));
 	return {
-		widget,
-		attachments,
-		input,
-		notifications,
-		activate(resource?: URI) {
-			activeEditor = resource ? { resource } : undefined;
-			changed.fire();
-		},
-		activateInput(editor: IResourceEditorInput) {
-			activeEditor = editor;
-			changed.fire();
-		},
+		widget, attachments, input, notifications,
+		activate(resource?: URI) { activeEditor = resource ? { resource } : undefined; changed.fire(); },
+		activateInput(editor: IResourceEditorInput) { activeEditor = editor; changed.fire(); },
 	};
 }
 
 test('Suggested context follows active files without adding draft context and hides attached files', () => {
 	using resources = new DisposableStore();
-	const { widget, attachments, activate, input } = setup(resources, async () => {
-		assert.fail('Suggestions must not read files');
-	});
+	const { widget, attachments, activate, input } = setup(resources, async () => { assert.fail('Suggestions must not read files'); });
 	assert.equal(widget.domNode.textContent, 'current.ts');
 	assert.equal(attachments.size, 0);
 	const resource = URI.file('/workspace/next.ts');
 	activate(resource);
 	assert.equal(widget.domNode.textContent, 'next.ts');
 	widget.domNode.querySelector('button')!.focus();
-	attachments.addContext({
-		id: 'manual',
-		kind: 'file',
-		name: 'next.ts',
-		resource,
-		resolve: async () => ({ name: 'next.ts', content: 'existing' }),
-	});
+	attachments.addContext({ id: 'manual', kind: 'file', name: 'next.ts', resource, resolve: async () => ({ name: 'next.ts', content: 'existing' }) });
 	assert.equal(widget.domNode.hidden, true);
 	assert.equal(document.activeElement, input);
 	attachments.clear();
@@ -102,13 +76,7 @@ test('Suggested context follows active files without adding draft context and hi
 
 test('Adding suggested context captures unsaved text and restores input focus', async () => {
 	using resources = new DisposableStore();
-	const { widget, attachments, input } = setup(
-		resources,
-		async () => {
-			assert.fail('Unsaved text must take precedence');
-		},
-		'const unsaved = true;',
-	);
+	const { widget, attachments, input } = setup(resources, async () => { assert.fail('Unsaved text must take precedence'); }, 'const unsaved = true;');
 	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.focus();
 	widget.domNode.querySelector('button')!.click();
@@ -116,23 +84,15 @@ test('Adding suggested context captures unsaved text and restores input focus', 
 	assert.equal(widget.domNode.hidden, true);
 	assert.equal(document.activeElement, input);
 	assert.equal(attachments.size, 1);
-	assert.deepEqual(await attachments.attachments[0]!.resolve(), {
-		name: 'current.ts',
-		content: 'const unsaved = true;',
-	});
+	assert.deepEqual(await attachments.attachments[0]!.resolve(), { name: 'current.ts', content: 'const unsaved = true;' });
 });
 
 test('A pending suggested file keeps its clicked identity and ignores completion after disposal', async () => {
 	using resources = new DisposableStore();
 	let complete!: (text: string) => void;
-	const pending = new Promise<string>(resolve => {
-		complete = resolve;
-	});
+	const pending = new Promise<string>(resolve => { complete = resolve; });
 	const reads: string[] = [];
-	const { widget, attachments, activate } = setup(resources, async resource => {
-		reads.push(resource.path);
-		return pending;
-	});
+	const { widget, attachments, activate } = setup(resources, async resource => { reads.push(resource.path); return pending; });
 	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	activate(URI.file('/workspace/other.ts'));
@@ -151,9 +111,7 @@ test('A pending suggested file keeps its clicked identity and ignores completion
 
 test('An unreadable suggested file reports failure and leaves the draft and suggestion available', async () => {
 	using resources = new DisposableStore();
-	const { widget, attachments, notifications } = setup(resources, async () => {
-		throw new Error('File unavailable');
-	});
+	const { widget, attachments, notifications } = setup(resources, async () => { throw new Error('File unavailable'); });
 	const failed = new Promise<string>(resolve => resources.add(notifications.model.onDidAdd(item => resolve(item.message))));
 	widget.domNode.querySelector('button')!.click();
 	assert.match(await failed, /File unavailable/);
@@ -164,19 +122,9 @@ test('An unreadable suggested file reports failure and leaves the draft and sugg
 
 test('SCM diff suggestions attach the modified snapshot instead of the synthetic tab or working file', async () => {
 	using resources = new DisposableStore();
-	const { widget, attachments, activateInput } = setup(resources, async () => {
-		assert.fail('A staged snapshot must not read the working file');
-	});
-	const original = {
-		resource: URI.parse('git-change:/staged/current.ts?side=original'),
-		initialText: 'HEAD contents',
-		readOnly: true,
-	};
-	const modified = {
-		resource: URI.parse('git-change:/staged/current.ts?side=modified'),
-		initialText: 'Index contents',
-		readOnly: true,
-	};
+	const { widget, attachments, activateInput } = setup(resources, async () => { assert.fail('A staged snapshot must not read the working file'); });
+	const original = { resource: URI.parse('git-change:/staged/current.ts?side=original'), initialText: 'HEAD contents', readOnly: true };
+	const modified = { resource: URI.parse('git-change:/staged/current.ts?side=modified'), initialText: 'Index contents', readOnly: true };
 	activateInput(createDiffEditorInput(original, modified));
 	assert.equal(widget.domNode.hidden, false);
 	assert.equal(widget.domNode.textContent, 'current.ts');
@@ -186,11 +134,7 @@ test('SCM diff suggestions attach the modified snapshot instead of the synthetic
 	assert.equal(widget.domNode.hidden, true);
 	assert.equal(attachments.attachments[0]!.resource?.toString(), modified.resource.toString());
 	assert.deepEqual(await attachments.attachments[0]!.resolve(), { name: 'current.ts', content: 'Index contents' });
-	activateInput({
-		resource: modified.resource,
-		initialBytes: new Uint8Array([0, 1]),
-		contentType: 'application/octet-stream',
-	});
+	activateInput({ resource: modified.resource, initialBytes: new Uint8Array([0, 1]), contentType: 'application/octet-stream' });
 	assert.equal(widget.domNode.hidden, true);
 	activateInput(createBinaryDiffEditorInput({ resource: URI.file('/workspace/before.bin') }, { resource: URI.file('/workspace/after.bin') }));
 	assert.equal(widget.domNode.hidden, true);
@@ -198,33 +142,22 @@ test('SCM diff suggestions attach the modified snapshot instead of the synthetic
 
 test('A file diff suggestion uses its modified working copy rather than the comparison URI', async () => {
 	using resources = new DisposableStore();
-	const { widget, attachments, activateInput } = setup(
-		resources,
-		async () => {
-			assert.fail('Read the modified working copy');
-		},
-		'Unsaved modified text',
-	);
+	const { widget, attachments, activateInput } = setup(resources, async () => { assert.fail('Read the modified working copy'); }, 'Unsaved modified text');
 	activateInput(createDiffEditorInput({ resource: URI.file('/workspace/before.ts') }, { resource: URI.file('/workspace/after.ts') }));
 	assert.equal(widget.domNode.textContent, 'after.ts');
 	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(attachments.attachments[0]!.resource?.path, '/workspace/after.ts');
-	assert.deepEqual(await attachments.attachments[0]!.resolve(), {
-		name: 'after.ts',
-		content: 'Unsaved modified text',
-	});
+	assert.deepEqual(await attachments.attachments[0]!.resolve(), { name: 'after.ts', content: 'Unsaved modified text' });
 });
+
 
 test('Suggested context joins the pending submission and cannot reenter a cleared draft', async () => {
 	using resources = new DisposableStore();
 	const result = new DeferredPromise<string>();
 	const started = new DeferredPromise<void>();
-	const { widget, attachments, notifications } = setup(resources, async () => {
-		await started.complete();
-		return result.p;
-	});
+	const { widget, attachments, notifications } = setup(resources, async () => { await started.complete(); return result.p; });
 	widget.domNode.querySelector('button')!.click();
 	assert.equal(attachments.hasPendingContext, true);
 	const captured = attachments.resolvePendingContext();
@@ -242,10 +175,7 @@ test('Disposing a suggested-context widget cancels its borrowed draft preparatio
 	using resources = new DisposableStore();
 	const result = new DeferredPromise<string>();
 	const started = new DeferredPromise<void>();
-	const { widget, attachments, notifications } = setup(resources, async () => {
-		await started.complete();
-		return result.p;
-	});
+	const { widget, attachments, notifications } = setup(resources, async () => { await started.complete(); return result.p; });
 	widget.domNode.querySelector('button')!.click();
 	const captured = attachments.resolvePendingContext();
 	await started.p;

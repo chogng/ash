@@ -1,5 +1,6 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
+
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.keylayout.Italian-Pro', lang: 'it', localizedName: 'Italian' },
 	secondaryLayouts: [],
@@ -121,6 +122,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: [],
-	},
+		MetaRight: []
+	}
 });

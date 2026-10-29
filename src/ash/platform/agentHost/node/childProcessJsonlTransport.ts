@@ -1,5 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { type IDisposable, markAsDisposed, trackDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import {
+	type IDisposable,
+	markAsDisposed,
+	trackDisposable,
+	toDisposable,
+} from '../../../base/common/lifecycle.js';
 
 export const DEFAULT_MAX_JSONL_FRAME_BYTES = 320 * 1024 * 1024;
 export const DEFAULT_MAX_STDERR_BYTES = 65_536;
@@ -47,9 +52,21 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		options: ChildProcessJsonlTransportOptions = {},
 	) {
 		this.stdoutMode = options.stdoutMode ?? 'jsonl';
-		this.maxFrameBytes = positiveInteger(options.maxFrameBytes, DEFAULT_MAX_JSONL_FRAME_BYTES, 'maxFrameBytes');
-		this.maxStderrBytes = positiveInteger(options.maxStderrBytes, DEFAULT_MAX_STDERR_BYTES, 'maxStderrBytes');
-		this.maxPendingWrites = positiveInteger(options.maxPendingWrites, DEFAULT_MAX_PENDING_WRITES, 'maxPendingWrites');
+		this.maxFrameBytes = positiveInteger(
+			options.maxFrameBytes,
+			DEFAULT_MAX_JSONL_FRAME_BYTES,
+			'maxFrameBytes',
+		);
+		this.maxStderrBytes = positiveInteger(
+			options.maxStderrBytes,
+			DEFAULT_MAX_STDERR_BYTES,
+			'maxStderrBytes',
+		);
+		this.maxPendingWrites = positiveInteger(
+			options.maxPendingWrites,
+			DEFAULT_MAX_PENDING_WRITES,
+			'maxPendingWrites',
+		);
 		this.closeTimeoutMs = positiveInteger(options.closeTimeoutMs, 2_000, 'closeTimeoutMs');
 
 		process.stdout.on('data', this.onStdoutData);
@@ -126,7 +143,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		this.pendingWrites += 1;
 		this.pendingWriteBytes += owned.byteLength;
 		const write = this.writeTail.then(() => this.writeFrame(owned));
-		this.writeTail = write.catch(() => {});
+		this.writeTail = write.catch(() => { });
 		return write.finally(() => {
 			this.pendingWrites -= 1;
 			this.pendingWriteBytes -= owned.byteLength;
@@ -145,7 +162,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			return this.closePromise;
 		}
 
-		this.closePromise = new Promise<void>(resolve => {
+		this.closePromise = new Promise<void>((resolve) => {
 			let settled = false;
 			const finish = (): void => {
 				if (settled) return;
@@ -221,7 +238,10 @@ export class ChildProcessJsonlTransport implements IDisposable {
 
 	private readonly onStdoutEnd = (): void => {
 		if (this.terminalError) return;
-		const message = this.frameBytes === 0 ? 'App Server stdout ended' : 'App Server stdout ended with an unterminated JSONL frame';
+		const message =
+			this.frameBytes === 0
+				? 'App Server stdout ended'
+				: 'App Server stdout ended with an unterminated JSONL frame';
 		this.fail(new Error(message));
 	};
 
@@ -241,8 +261,17 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		this.fail(new Error(`App Server process error: ${error.message}`));
 	};
 
-	private readonly onProcessExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-		this.finish(new Error(signal ? `Ash app-server exited from signal ${signal}` : `Ash app-server exited with code ${code ?? 'unknown'}`));
+	private readonly onProcessExit = (
+		code: number | null,
+		signal: NodeJS.Signals | null,
+	): void => {
+		this.finish(
+			new Error(
+				signal
+					? `Ash app-server exited from signal ${signal}`
+					: `Ash app-server exited with code ${code ?? 'unknown'}`,
+			),
+		);
 	};
 
 	private appendFramePart(part: Buffer): void {
@@ -279,7 +308,9 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			try {
 				listener(frame);
 			} catch (error) {
-				this.fail(error instanceof Error ? error : new Error('JSONL frame listener failed'));
+				this.fail(
+					error instanceof Error ? error : new Error('JSONL frame listener failed'),
+				);
 				return;
 			}
 		}
@@ -380,6 +411,9 @@ function streamError(stream: string, error: Error): Error {
 function redactSecrets(value: string): string {
 	return value
 		.replace(/(bearer\s+)[^\s"',}]+/giu, '$1[REDACTED]')
-		.replace(/((?:api[-_ ]?key|authorization|token|secret|password)["']?\s*[:=]\s*["']?)[^"'\s,}]+/giu, '$1[REDACTED]')
+		.replace(
+			/((?:api[-_ ]?key|authorization|token|secret|password)["']?\s*[:=]\s*["']?)[^"'\s,}]+/giu,
+			'$1[REDACTED]',
+		)
 		.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, '[REDACTED]');
 }

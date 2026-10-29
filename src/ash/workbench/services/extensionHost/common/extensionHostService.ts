@@ -5,35 +5,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 /** Aggregate lifecycle of the extension-process fleet owned by the service. */
 export type ExtensionHostState = 'stopped' | 'starting' | 'ready' | 'degraded' | 'failed';
 export type ExtensionRuntimeState = 'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
-export type ExtensionHostRegistrationKind =
-	| 'treeDataProvider'
-	| 'terminalCompletionProvider'
-	| 'terminalQuickFixProvider'
-	| 'terminalLinkProvider'
-	| 'terminalEnvironment'
-	| 'terminalProfileProvider'
-	| 'terminalPty'
-	| 'remoteConnectionResolver'
-	| 'remoteAuthorityResolver'
-	| 'workspaceEvents'
-	| 'outputEvents'
-	| 'statusBar'
-	| 'sourceControl'
-	| 'textDocumentEvents'
-	| 'taskEvents'
-	| 'debugEvents'
-	| 'customTextEditor'
-	| 'command'
-	| 'languageProvider'
-	| 'debugAdapter'
-	| 'debugConfigurationProvider'
-	| 'debugAdapterTracker'
-	| 'taskProvider'
-	| 'testProfileProvider'
-	| 'speechProvider'
-	| 'dataChannel'
-	| 'linkPresentationProvider'
-	| 'externalUriOpener';
+export type ExtensionHostRegistrationKind = 'treeDataProvider' | 'terminalCompletionProvider' | 'terminalQuickFixProvider' | 'terminalLinkProvider' | 'terminalEnvironment' | 'terminalProfileProvider' | 'terminalPty' | 'remoteConnectionResolver' | 'remoteAuthorityResolver' | 'workspaceEvents' | 'outputEvents' | 'statusBar' | 'sourceControl' | 'textDocumentEvents' | 'taskEvents' | 'debugEvents' | 'customTextEditor' | 'command' | 'languageProvider' | 'debugAdapter' | 'debugConfigurationProvider' | 'debugAdapterTracker' | 'taskProvider' | 'testProfileProvider' | 'speechProvider' | 'dataChannel' | 'linkPresentationProvider' | 'externalUriOpener';
 
 /** Stable frontend identity for one registration owned by exactly one extension process. */
 export interface ExtensionHostRegistration {

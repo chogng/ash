@@ -5,7 +5,13 @@ export type FacetId = string;
 export type RegionId = string;
 export type RelationId = string;
 
-export type LineSemanticValue = string | number | boolean | null | readonly LineSemanticValue[] | { readonly [key: string]: LineSemanticValue };
+export type LineSemanticValue =
+	| string
+	| number
+	| boolean
+	| null
+	| readonly LineSemanticValue[]
+	| { readonly [key: string]: LineSemanticValue; };
 export type LineSemanticAttributes = Readonly<Record<string, LineSemanticValue>>;
 
 export interface ModelLine {
@@ -51,10 +57,10 @@ export interface LineRegion {
 }
 
 export type LineRelationTarget =
-	| { readonly kind: 'line'; readonly lineId: LineId }
-	| { readonly kind: 'atom'; readonly atomId: AtomId }
-	| { readonly kind: 'region'; readonly regionId: RegionId }
-	| { readonly kind: 'external'; readonly targetId: string };
+	| { readonly kind: 'line'; readonly lineId: LineId; }
+	| { readonly kind: 'atom'; readonly atomId: AtomId; }
+	| { readonly kind: 'region'; readonly regionId: RegionId; }
+	| { readonly kind: 'external'; readonly targetId: string; };
 
 export interface LineRelation {
 	readonly id: RelationId;
@@ -129,10 +135,7 @@ export class RangeStore {
 	public readonly values: readonly PersistentMark[];
 	private readonly valuesById: ReadonlyMap<MarkId, PersistentMark>;
 
-	constructor(
-		private readonly lines: LineSequence,
-		marks: readonly PersistentMark[] = [],
-	) {
+	constructor(private readonly lines: LineSequence, marks: readonly PersistentMark[] = []) {
 		const values = marks.map(mark => freezeMark(mark));
 		this.values = Object.freeze(values);
 		this.valuesById = indexIdentities(values, 'mark');
@@ -288,12 +291,7 @@ function freezeFacet(facet: LineFacet): LineFacet {
 	assertIdentity(facet.id, 'Facet');
 	assertKind(facet.kind, 'Facet');
 	assertIdentity(facet.lineId, 'Line');
-	return Object.freeze({
-		id: facet.id,
-		kind: facet.kind,
-		lineId: facet.lineId,
-		attrs: freezeLineSemanticAttributes(facet.attrs),
-	});
+	return Object.freeze({ id: facet.id, kind: facet.kind, lineId: facet.lineId, attrs: freezeLineSemanticAttributes(facet.attrs) });
 }
 
 function freezeRegion(region: LineRegion): LineRegion {
@@ -429,7 +427,11 @@ function validateAtoms(lines: LineSequence, atoms: PointStore): void {
 		}
 	}
 	for (const line of lines.values) {
-		for (let offset = line.text.indexOf(OBJECT_REPLACEMENT_CHARACTER); offset >= 0; offset = line.text.indexOf(OBJECT_REPLACEMENT_CHARACTER, offset + 1)) {
+		for (
+			let offset = line.text.indexOf(OBJECT_REPLACEMENT_CHARACTER);
+			offset >= 0;
+			offset = line.text.indexOf(OBJECT_REPLACEMENT_CHARACTER, offset + 1)
+		) {
 			if (!atomsByPoint.has(`${line.id}\u0000${offset}`)) {
 				throw new RangeError(`Object replacement character at ${line.id}:${offset} has no atom`);
 			}
@@ -444,7 +446,7 @@ function validateFacets(lines: LineSequence, facets: LineFacetStore): void {
 }
 
 function validateRegions(lines: LineSequence, regions: RegionStore): void {
-	const intervals = new Map<RegionId, { readonly start: number; readonly end: number }>();
+	const intervals = new Map<RegionId, { readonly start: number; readonly end: number; }>();
 	for (const region of regions.values) {
 		const start = lines.indexOf(region.startLineId);
 		const end = lines.indexOf(region.endLineId);
@@ -485,7 +487,14 @@ function validateRelations(lines: LineSequence, atoms: PointStore, regions: Regi
 	}
 }
 
-function validateRelationTarget(target: LineRelationTarget, canBeMissing: boolean, relation: LineRelation, lines: LineSequence, atoms: PointStore, regions: RegionStore): void {
+function validateRelationTarget(
+	target: LineRelationTarget,
+	canBeMissing: boolean,
+	relation: LineRelation,
+	lines: LineSequence,
+	atoms: PointStore,
+	regions: RegionStore,
+): void {
 	let exists = false;
 	switch (target.kind) {
 		case 'line':
@@ -504,7 +513,13 @@ function validateRelationTarget(target: LineRelationTarget, canBeMissing: boolea
 	if (!exists && !canBeMissing) throw new RangeError(`Relation '${relation.id}' has an unresolved ${target.kind} endpoint`);
 }
 
-function validateSemanticIdentities(marks: RangeStore, atoms: PointStore, facets: LineFacetStore, regions: RegionStore, relations: RelationStore): void {
+function validateSemanticIdentities(
+	marks: RangeStore,
+	atoms: PointStore,
+	facets: LineFacetStore,
+	regions: RegionStore,
+	relations: RelationStore,
+): void {
 	const identities = new Map<string, string>();
 	for (const [kind, values] of [
 		['mark', marks.values],
@@ -539,7 +554,7 @@ function pointsEqual(left: LinePoint, right: LinePoint): boolean {
 	return left.lineId === right.lineId && left.offset === right.offset;
 }
 
-function indexIdentities<T extends { readonly id: string }>(values: readonly T[], kind: string): ReadonlyMap<string, T> {
+function indexIdentities<T extends { readonly id: string; }>(values: readonly T[], kind: string): ReadonlyMap<string, T> {
 	const valuesById = new Map<string, T>();
 	for (const value of values) {
 		if (valuesById.has(value.id)) throw new TypeError(`Duplicate ${kind} id '${value.id}'`);

@@ -9,12 +9,8 @@ import { EditorInputSerializers } from '../../../../workbench/services/editor/co
 export class EmptyFileEditorInput extends DockedEditorInput {
 	public readonly resource = URI.parse('ash-sessions-files:/');
 	public readonly contentType = 'application/vnd.ash.sessions-files';
-	public get label(): string {
-		return localize('sessions.files.title', 'Files');
-	}
-	public getIcon(): typeof Lxicon.files {
-		return Lxicon.files;
-	}
+	public get label(): string { return localize('sessions.files.title', 'Files'); }
+	public getIcon(): typeof Lxicon.files { return Lxicon.files; }
 }
 
 EditorInputSerializers.registerStatic({

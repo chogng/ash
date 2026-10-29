@@ -47,11 +47,7 @@ export class CollaborationContribution extends Disposable {
 	private startGeneration = 0;
 	private readonly memberActionListeners = this._register(new MutableDisposable<DisposableStore>());
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: CollaborationContributionOptions,
-		private readonly dialogs: IDialogService,
-	) {
+	constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions, private readonly dialogs: IDialogService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
@@ -62,14 +58,12 @@ export class CollaborationContribution extends Disposable {
 		this.element = element;
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
-		this.toolbar = this._register(
-			new ToolBar(element, {
-				buttonStyles: defaultButtonStyles,
-				contextMenuProvider: emptyCollaborationContextMenuProvider,
-				ariaLabel: 'Document collaboration',
-				highlightToggledItems: true,
-			}),
-		);
+		this.toolbar = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
+			contextMenuProvider: emptyCollaborationContextMenuProvider,
+			ariaLabel: 'Document collaboration',
+			highlightToggledItems: true,
+		}));
 		this.toolbar.element.classList.add('stanza-document-collaboration-actions');
 		this._register(addDisposableListener(this.toolbar.element, 'mousedown', event => event.preventDefault()));
 		const status = h(ownerDocument, 'span');
@@ -108,15 +102,7 @@ export class CollaborationContribution extends Disposable {
 		this.render();
 	}
 
-	setState(
-		state: CollaborationToolbarState,
-		options: {
-			readonly roomId?: string;
-			readonly message?: string;
-			readonly principalId?: string;
-			readonly canManageMembers?: boolean;
-		} = {},
-	): void {
+	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean; } = {}): void {
 		this.startGeneration += 1;
 		this._state = state;
 		this.roomId = options.roomId;
@@ -137,16 +123,14 @@ export class CollaborationContribution extends Disposable {
 		const busy = this._state === 'connecting';
 		const enabled = this._state !== 'unavailable' && !busy;
 		this.element.dataset.state = this._state;
-		const actions = [
-			createAction(
-				connected ? 'stopCollaboration' : 'startCollaboration',
-				connected ? 'Stop collaborating' : 'Collaborate',
-				connected ? 'Leave this collaboration room' : 'Create or join a collaboration room',
-				enabled,
-				connected,
-				() => this.toggle(),
-			),
-		];
+		const actions = [createAction(
+			connected ? 'stopCollaboration' : 'startCollaboration',
+			connected ? 'Stop collaborating' : 'Collaborate',
+			connected ? 'Leave this collaboration room' : 'Create or join a collaboration room',
+			enabled,
+			connected,
+			() => this.toggle(),
+		)];
 		if (connected && this.canManageMembers) {
 			actions.push(createAction('inviteCollaborator', 'Invite collaborator', 'Create a room invitation', true, false, () => this.createInvite()));
 			actions.push(createAction('manageCollaborators', 'Manage collaborators', 'View, rotate, or revoke active room members', true, false, () => this.manageCollaborators()));
@@ -157,20 +141,15 @@ export class CollaborationContribution extends Disposable {
 
 	private statusText(): string {
 		switch (this._state) {
-			case 'unavailable':
-				return 'Collaboration unavailable';
-			case 'inactive':
-				return 'Share a room ID to collaborate';
-			case 'connecting':
-				return 'Connecting…';
+			case 'unavailable': return 'Collaboration unavailable';
+			case 'inactive': return 'Share a room ID to collaborate';
+			case 'connecting': return 'Connecting…';
 			case 'connected': {
 				const connected = this.roomId ? `Room: ${this.roomId}` : 'Connected';
 				return this.message ? `${connected} — ${this.message}` : connected;
 			}
-			case 'resyncRequired':
-				return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'rejoin required'}` : (this.message ?? 'Collaboration requires a resync');
-			case 'error':
-				return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'collaboration failed'}` : (this.message ?? 'Collaboration failed');
+			case 'resyncRequired': return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'rejoin required'}` : this.message ?? 'Collaboration requires a resync';
+			case 'error': return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'collaboration failed'}` : this.message ?? 'Collaboration failed';
 		}
 	}
 
@@ -185,13 +164,11 @@ export class CollaborationContribution extends Disposable {
 		}
 		const generationBeforeInput = this.startGeneration;
 		const fixedRoom = this.options.fixedRoom?.();
-		const response = fixedRoom
-			? { confirmed: true, values: [fixedRoom] }
-			: await this.dialogs.input({
-					title: 'Collaborate',
-					message: 'Enter a collaboration room ID to join, or leave it blank to create one.',
-					inputs: [{ value: '' }],
-				});
+		const response = fixedRoom ? { confirmed: true, values: [fixedRoom] } : await this.dialogs.input({
+			title: 'Collaborate',
+			message: 'Enter a collaboration room ID to join, or leave it blank to create one.',
+			inputs: [{ value: '' }],
+		});
 		if (!response.confirmed || this.isDisposed || generationBeforeInput !== this.startGeneration) return;
 		const entered = response.values?.[0] ?? '';
 		this.setState('connecting');
@@ -201,21 +178,14 @@ export class CollaborationContribution extends Disposable {
 				if (this.isDisposed || generation !== this.startGeneration || this._state !== 'connecting') {
 					return;
 				}
-				this.setState('connected', {
-					roomId: result.roomId,
-					principalId: result.principalId,
-					canManageMembers: result.canManageMembers,
-				});
+				this.setState('connected', { roomId: result.roomId, principalId: result.principalId, canManageMembers: result.canManageMembers });
 			},
 			error => {
 				if (this.isDisposed || generation !== this.startGeneration || this._state !== 'connecting') {
 					return;
 				}
 				if (isCancellationError(error)) this.setState('inactive');
-				else
-					this.setState('error', {
-						message: error instanceof Error ? error.message : 'Collaboration could not be started',
-					});
+				else this.setState('error', { message: error instanceof Error ? error.message : 'Collaboration could not be started' });
 			},
 		);
 	}
@@ -238,12 +208,7 @@ export class CollaborationContribution extends Disposable {
 				if (!this.isCurrentRoom(roomId, principalId)) {
 					return;
 				}
-				this.setState('connected', {
-					roomId,
-					principalId,
-					canManageMembers: true,
-					message: `Invitation created for ${invite.displayName}`,
-				});
+				this.setState('connected', { roomId, principalId, canManageMembers: true, message: `Invitation created for ${invite.displayName}` });
 				this.showInvitation(invite);
 			},
 			error => {
@@ -347,12 +312,7 @@ export class CollaborationContribution extends Disposable {
 				if (!this.isCurrentRoom(roomId, principalId)) {
 					return;
 				}
-				this.setState('connected', {
-					roomId,
-					principalId,
-					canManageMembers: true,
-					message: `Access token rotated for ${invite.displayName}`,
-				});
+				this.setState('connected', { roomId, principalId, canManageMembers: true, message: `Access token rotated for ${invite.displayName}` });
 				this.showInvitation(invite);
 				this.refreshMembers();
 			},
@@ -381,12 +341,7 @@ export class CollaborationContribution extends Disposable {
 				if (!this.isCurrentRoom(roomId, principalId)) {
 					return;
 				}
-				this.setState('connected', {
-					roomId,
-					principalId,
-					canManageMembers: true,
-					message: `Access revoked for ${member.displayName}`,
-				});
+				this.setState('connected', { roomId, principalId, canManageMembers: true, message: `Access revoked for ${member.displayName}` });
 				this.refreshMembers();
 			},
 			error => {
@@ -406,13 +361,7 @@ export class CollaborationContribution extends Disposable {
 	private parseInviteRole(entered: string): DocumentCollaborationRoomRole | undefined {
 		const role = entered.trim().toLowerCase();
 		if (role === 'owner' || role === 'editor' || role === 'viewer') return role;
-		if (this.roomId)
-			this.setState('connected', {
-				roomId: this.roomId,
-				principalId: this.principalId,
-				canManageMembers: true,
-				message: 'Collaboration role must be owner, editor, or viewer',
-			});
+		if (this.roomId) this.setState('connected', { roomId: this.roomId, principalId: this.principalId, canManageMembers: true, message: 'Collaboration role must be owner, editor, or viewer' });
 		return undefined;
 	}
 

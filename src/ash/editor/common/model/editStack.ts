@@ -34,7 +34,7 @@ export class TextModelHistory {
 	constructor(
 		private readonly transactionLimit: number,
 		private readonly textUnitLimit: number,
-	) {}
+	) { }
 
 	get canUndo(): boolean {
 		return this.undoStack.length > 0;
@@ -93,10 +93,14 @@ export class TextModelHistory {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
 		this.trim();
-		return this.undoStack.some(entry => entry.historyGroup === historyGroup);
+		return this.undoStack.some(
+			entry => entry.historyGroup === historyGroup,
+		);
 	}
 
-	getRevisionEntry(historyGroup: UndoRedoGroup): TextModelHistoryEntry | undefined {
+	getRevisionEntry(
+		historyGroup: UndoRedoGroup,
+	): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		const entry = this.undoStack[this.undoStack.length - 1];
 		return entry?.historyGroup === historyGroup ? entry : undefined;
@@ -106,7 +110,9 @@ export class TextModelHistory {
 		this.cancelRevision(historyGroup);
 	}
 
-	cancelRevision(historyGroup: UndoRedoGroup): TextModelHistoryEntry | undefined {
+	cancelRevision(
+		historyGroup: UndoRedoGroup,
+	): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
 		const entry = this.undoStack[this.undoStack.length - 1];
@@ -117,14 +123,26 @@ export class TextModelHistory {
 		return this.takeUndo();
 	}
 
-	findUndoEntry(historyGroup: UndoRedoGroup | undefined, accepts: (entry: TextModelHistoryEntry) => boolean): TextModelHistoryEntry | undefined {
+	findUndoEntry(
+		historyGroup: UndoRedoGroup | undefined,
+		accepts: (entry: TextModelHistoryEntry) => boolean,
+	): TextModelHistoryEntry | undefined {
 		if (this.redoStack.length > 0) return undefined;
 		const previous = this.undoStack[this.undoStack.length - 1];
-		const canAppend = this.stackElementOpen && (historyGroup === undefined || previous?.historyGroup === historyGroup);
-		return previous && canAppend && accepts(previous) ? previous : undefined;
+		const canAppend = this.stackElementOpen && (
+			historyGroup === undefined || previous?.historyGroup === historyGroup
+		);
+		return previous && canAppend && accepts(previous)
+			? previous
+			: undefined;
 	}
 
-	replaceUndoEntry(previous: TextModelHistoryEntry, edits: readonly OffsetTextEdit[], textChanges: readonly TextChange[], afterCursorState: Selection[] | null = previous.afterCursorState): void {
+	replaceUndoEntry(
+		previous: TextModelHistoryEntry,
+		edits: readonly OffsetTextEdit[],
+		textChanges: readonly TextChange[],
+		afterCursorState: Selection[] | null = previous.afterCursorState,
+	): void {
 		if (this.undoStack[this.undoStack.length - 1] !== previous) {
 			throw new Error('Only the latest undo entry can be replaced');
 		}
@@ -221,7 +239,9 @@ export class TextModelHistory {
 		this.historyTextUnits += entry.textUnits;
 	}
 
-	private take(stack: TextModelHistoryEntry[]): TextModelHistoryEntry | undefined {
+	private take(
+		stack: TextModelHistoryEntry[],
+	): TextModelHistoryEntry | undefined {
 		const entry = stack.pop();
 		if (entry) {
 			this.historyTextUnits -= entry.textUnits;
@@ -238,11 +258,21 @@ export class TextModelHistory {
 	}
 
 	private trim(): void {
-		while (this.undoStack.length + this.redoStack.length > this.transactionLimit || this.historyTextUnits > this.textUnitLimit) {
-			if (this.protectedGroup && this.undoStack.length === 1 && this.undoStack[0].historyGroup === this.protectedGroup) {
+		while (
+			this.undoStack.length + this.redoStack.length >
+			this.transactionLimit ||
+			this.historyTextUnits > this.textUnitLimit
+		) {
+			if (
+				this.protectedGroup &&
+				this.undoStack.length === 1 &&
+				this.undoStack[0].historyGroup === this.protectedGroup
+			) {
 				break;
 			}
-			const stack = this.undoStack.length > 0 ? this.undoStack : this.redoStack;
+			const stack = this.undoStack.length > 0
+				? this.undoStack
+				: this.redoStack;
 			const [removed] = stack.splice(0, 1);
 			this.historyTextUnits -= removed.textUnits;
 		}
@@ -270,7 +300,10 @@ function createEntry(
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => Object.freeze({ ...edit }))),
 		textChanges: Object.freeze(textChanges.map(change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText))),
-		textUnits: edits.reduce((total, edit) => total + edit.text.length, 0),
+		textUnits: edits.reduce(
+			(total, edit) => total + edit.text.length,
+			0,
+		),
 		transactionId,
 		alternativeVersionId,
 		editsEOL,
@@ -285,18 +318,7 @@ function createEntry(
 }
 
 function cloneEntry(entry: TextModelHistoryEntry): TextModelHistoryEntry {
-	return createEntry(
-		entry.edits,
-		entry.transactionId,
-		entry.alternativeVersionId,
-		entry.editsEOL,
-		entry.eol,
-		entry.historyGroup,
-		entry.lineIds,
-		entry.beforeCursorState,
-		entry.afterCursorState,
-		entry.textChanges,
-	);
+	return createEntry(entry.edits, entry.transactionId, entry.alternativeVersionId, entry.editsEOL, entry.eol, entry.historyGroup, entry.lineIds, entry.beforeCursorState, entry.afterCursorState, entry.textChanges);
 }
 
 function cloneSelections(selections: Selection[] | null): Selection[] | null {

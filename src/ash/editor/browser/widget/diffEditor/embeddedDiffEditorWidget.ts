@@ -22,28 +22,12 @@ export class EmbeddedDiffEditorWidget extends DiffEditorWidget {
 		@IAccessibilitySignalService signals: IAccessibilitySignalService,
 	) {
 		const inherited = parentPresentation(parentEditor);
-		super(
-			{
-				...inherited,
-				fontLigatures: inherited.fontLigatures === true,
-				showLineNumbers: inherited.lineNumbers !== 'off',
-				...options,
-			},
-			instantiationService,
-			codeEditorService,
-			configuration,
-			signals,
-		);
+		super({ ...inherited, fontLigatures: inherited.fontLigatures === true, showLineNumbers: inherited.lineNumbers !== 'off', ...options }, instantiationService, codeEditorService, configuration, signals);
 		const { container: _container, model: _model, wordWrap: _wordWrap, showLineNumbers, ...overrides } = options;
-		this.overrides = {
-			...overrides,
-			...(showLineNumbers === undefined ? {} : { lineNumbers: showLineNumbers ? 'on' : 'off' }),
-		};
-		this._register(
-			parentEditor.onDidChangeConfiguration(() => {
-				super.updateOptions({ ...parentPresentation(parentEditor), ...this.overrides });
-			}),
-		);
+		this.overrides = { ...overrides, ...(showLineNumbers === undefined ? {} : { lineNumbers: showLineNumbers ? 'on' : 'off' }) };
+		this._register(parentEditor.onDidChangeConfiguration(() => {
+			super.updateOptions({ ...parentPresentation(parentEditor), ...this.overrides });
+		}));
 	}
 
 	public override updateOptions(options: EmbeddedOptions): void {
@@ -52,9 +36,7 @@ export class EmbeddedDiffEditorWidget extends DiffEditorWidget {
 	}
 }
 
-function parentPresentation(editor: ICodeEditor): Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures'> & {
-	lineNumbers: 'on' | 'off';
-} {
+function parentPresentation(editor: ICodeEditor): Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures'> & { lineNumbers: 'on' | 'off'; } {
 	const font = editor.getOption(EditorOption.fontInfo);
 	return {
 		lineHeight: font.lineHeight,

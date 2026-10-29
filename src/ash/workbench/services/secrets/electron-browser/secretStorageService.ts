@@ -13,16 +13,8 @@ export class SecretStorageService extends Disposable implements ISecretStorageSe
 		this.channel = main.getChannel('secretStorage');
 		this.onDidChangeSecret = this.channel.listen<string>('onDidChangeSecret');
 	}
-	get(key: string): Promise<string | undefined> {
-		return this.channel.call('get', [key]);
-	}
-	set(key: string, value: string): Promise<void> {
-		return this.channel.call('set', [key, value]);
-	}
-	delete(key: string): Promise<void> {
-		return this.channel.call('delete', [key]);
-	}
-	keys(): Promise<string[]> {
-		return this.channel.call('keys');
-	}
+	get(key: string): Promise<string | undefined> { return this.channel.call('get', [key]); }
+	set(key: string, value: string): Promise<void> { return this.channel.call('set', [key, value]); }
+	delete(key: string): Promise<void> { return this.channel.call('delete', [key]); }
+	keys(): Promise<string[]> { return this.channel.call('keys'); }
 }

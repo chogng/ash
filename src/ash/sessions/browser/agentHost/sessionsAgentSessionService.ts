@@ -5,26 +5,15 @@ import { mapAgentSession, mapAgentExecutionNode, mapAgentThreadRead } from '../.
 
 /** Shared session commands borrow the same raw backend ports as the owning Sessions provider. */
 export class SessionsAgentSessionService implements IAgentSessionService {
-	constructor(@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService) {}
+	constructor(@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService) { }
 	private async run<T>(sessionId: string | undefined, operation: (scope: ISessionProviderScope) => Promise<T>): Promise<T> {
-		const scope = this.scopes.getScope(sessionId);
-		scope.assertCurrent();
-		const result = await operation(scope);
-		scope.assertCurrent();
-		return result;
+		const scope = this.scopes.getScope(sessionId); scope.assertCurrent();
+		const result = await operation(scope); scope.assertCurrent(); return result;
 	}
 	get invokeRuntime(): IAgentSessionService['invokeRuntime'] {
 		const scope = this.scopes.getScope();
 		const invoke = scope.services.host.session.invokeRuntime;
-		return (
-			invoke &&
-			(async (...args) => {
-				scope.assertCurrent();
-				const result = await invoke(...args);
-				scope.assertCurrent();
-				return result;
-			})
-		);
+		return invoke && (async (...args) => { scope.assertCurrent(); const result = await invoke(...args); scope.assertCurrent(); return result; });
 	}
 	collectDebugLogs(...args: Parameters<IAgentSessionService['collectDebugLogs']>): ReturnType<IAgentSessionService['collectDebugLogs']> {
 		return this.run(args[0].sessionId, async scope => {
@@ -51,17 +40,7 @@ export class SessionsAgentSessionService implements IAgentSessionService {
 		return this.run(args[0].sessionId, async scope => {
 			const [params, ...rest] = args;
 			const result = await scope.services.host.session.subscribe({ ...params, sessionId: scope.backendIdentity(params.sessionId) }, ...rest);
-			return {
-				...projectResult(result, scope),
-				threadSnapshots: result.threadSnapshots.map(snapshot => ({
-					...mapAgentThreadRead(snapshot, scope.identity),
-					updates: snapshot.updates.map(update => ({
-						...update,
-						sessionId: scope.identity(update.sessionId),
-						threadId: scope.identity(update.threadId),
-					})),
-				})),
-			};
+			return { ...projectResult(result, scope), threadSnapshots: result.threadSnapshots.map(snapshot => ({ ...mapAgentThreadRead(snapshot, scope.identity), updates: snapshot.updates.map(update => ({ ...update, sessionId: scope.identity(update.sessionId), threadId: scope.identity(update.threadId) })) })) };
 		});
 	}
 	unsubscribe(...args: Parameters<IAgentSessionService['unsubscribe']>): ReturnType<IAgentSessionService['unsubscribe']> {
@@ -75,11 +54,7 @@ export class SessionsAgentSessionService implements IAgentSessionService {
 		return this.run(args[0].sessionId, async scope => {
 			const [params, ...rest] = args;
 			const result = await scope.services.host.session.createThread({ ...params, sessionId: scope.backendIdentity(params.sessionId) }, ...rest);
-			return {
-				...result,
-				session: mapAgentSession(result.session, scope.identity),
-				threadId: scope.identity(result.threadId),
-			};
+			return { ...result, session: mapAgentSession(result.session, scope.identity), threadId: scope.identity(result.threadId) };
 		});
 	}
 	archive(...args: Parameters<IAgentSessionService['archive']>): ReturnType<IAgentSessionService['archive']> {
@@ -149,12 +124,5 @@ export class SessionsAgentSessionService implements IAgentSessionService {
 	}
 }
 function projectResult<T extends SessionResult>(value: T, scope: ISessionProviderScope): T {
-	return {
-		...value,
-		session: mapAgentSession(value.session, scope.identity),
-		agentTree: {
-			...value.agentTree,
-			roots: value.agentTree.roots.map(node => mapAgentExecutionNode(node, scope.identity)),
-		},
-	};
+	return { ...value, session: mapAgentSession(value.session, scope.identity), agentTree: { ...value.agentTree, roots: value.agentTree.roots.map(node => mapAgentExecutionNode(node, scope.identity)) } };
 }

@@ -23,45 +23,26 @@ export class AgentHostConnectionsService extends Disposable implements IAgentHos
 		this._register(toDisposable(() => subscription.dispose()));
 		if (renderer.agentHosts) this._register(renderer.agentHosts.onDidChangeConnections(() => this.changed.fire()));
 		const revision = this.ambientRevision;
-		void renderer.appServer.getConnectionState().then(
-			state => {
-				if (this.isDisposed || revision !== this.ambientRevision) return;
-				this.ambientState = state;
-				this.changed.fire();
-			},
-			() => {
-				if (this.isDisposed || revision !== this.ambientRevision) return;
-				this.ambientState = 'crashed';
-				this.changed.fire();
-			},
-		);
+		void renderer.appServer.getConnectionState().then(state => {
+			if (this.isDisposed || revision !== this.ambientRevision) return;
+			this.ambientState = state;
+			this.changed.fire();
+		}, () => {
+			if (this.isDisposed || revision !== this.ambientRevision) return;
+			this.ambientState = 'crashed';
+			this.changed.fire();
+		});
 	}
 
 	get connections(): readonly IAgentHostConnectionInfo[] {
-		return [
-			{
-				id: AMBIENT_AGENT_HOST_AUTHORITY,
-				authority: AMBIENT_AGENT_HOST_AUTHORITY,
-				address: undefined,
-				name: localize({ bundle: 'ash.workbench', key: 'agentHosts.currentWindow' }, 'Current Window'),
-				isAmbient: true,
-				state: this.ambientState,
-				connection: this.renderer,
-				remoteConnection: undefined,
-			},
-			...(this.renderer.agentHosts?.connections ?? []).map(entry => {
-				const address = agentHostConnectionAddress(entry.connection);
-				return {
-					id: entry.id,
-					authority: address,
-					address,
-					name: entry.connection.name,
-					isAmbient: false,
-					state: entry.state,
-					connection: entry.host?.api,
-					remoteConnection: entry.connection,
-				};
-			}),
-		];
+		return [{
+			id: AMBIENT_AGENT_HOST_AUTHORITY, authority: AMBIENT_AGENT_HOST_AUTHORITY, address: undefined,
+			name: localize({ bundle: 'ash.workbench', key: 'agentHosts.currentWindow' }, 'Current Window'),
+			isAmbient: true, state: this.ambientState, connection: this.renderer, remoteConnection: undefined,
+		}, ...(this.renderer.agentHosts?.connections ?? []).map(entry => {
+			const address = agentHostConnectionAddress(entry.connection);
+			return { id: entry.id, authority: address, address, name: entry.connection.name, isAmbient: false, state: entry.state, connection: entry.host?.api, remoteConnection: entry.connection };
+		})];
 	}
+
 }

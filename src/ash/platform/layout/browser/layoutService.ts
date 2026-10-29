@@ -47,7 +47,9 @@ export interface ILayoutService {
 	focus(): void;
 }
 
-export const ILayoutService = createServiceIdentifier<ILayoutService>('layoutService');
+export const ILayoutService = createServiceIdentifier<ILayoutService>(
+	'layoutService',
+);
 
 const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({
 	top: 0,
@@ -66,7 +68,9 @@ export interface BrowserLayoutServiceOptions {
  * The service owns the root container's ResizeObserver and geometry events. It
  * deliberately does not know about Sidebar, Panel, Editor, or Grid topology.
  */
-export class BrowserLayoutService extends Disposable implements ILayoutService {
+export class BrowserLayoutService
+	extends Disposable
+	implements ILayoutService {
 	private readonly root: HTMLElement;
 	private readonly targetWindow: BrowserWindow;
 	private readonly getOffset: () => ILayoutOffsetInfo;
@@ -77,10 +81,14 @@ export class BrowserLayoutService extends Disposable implements ILayoutService {
 	protected readonly _onDidChangeActiveContainer = this._register(new Emitter<void>());
 	private dimension: Dimension;
 
-	readonly onDidLayoutMainContainer: Event<IDimension> = this._onDidLayoutMainContainer.event;
-	readonly onDidLayoutContainer: Event<ILayoutContainerEvent> = this._onDidLayoutContainer.event;
-	readonly onDidLayoutActiveContainer: Event<IDimension> = this._onDidLayoutActiveContainer.event;
-	readonly onDidChangeActiveContainer: Event<void> = this._onDidChangeActiveContainer.event;
+	readonly onDidLayoutMainContainer: Event<IDimension> =
+		this._onDidLayoutMainContainer.event;
+	readonly onDidLayoutContainer: Event<ILayoutContainerEvent> =
+		this._onDidLayoutContainer.event;
+	readonly onDidLayoutActiveContainer: Event<IDimension> =
+		this._onDidLayoutActiveContainer.event;
+	readonly onDidChangeActiveContainer: Event<void> =
+		this._onDidChangeActiveContainer.event;
 
 	constructor(options: BrowserLayoutServiceOptions) {
 		super();
@@ -153,7 +161,14 @@ export class BrowserLayoutService extends Disposable implements ILayoutService {
 }
 
 function assertDimension(dimension: IDimension): void {
-	if (!Number.isFinite(dimension.width) || dimension.width < 0 || !Number.isFinite(dimension.height) || dimension.height < 0) {
-		throw new RangeError('Layout container dimensions must be non-negative and finite');
+	if (
+		!Number.isFinite(dimension.width) ||
+		dimension.width < 0 ||
+		!Number.isFinite(dimension.height) ||
+		dimension.height < 0
+	) {
+		throw new RangeError(
+			'Layout container dimensions must be non-negative and finite',
+		);
 	}
 }

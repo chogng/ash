@@ -10,7 +10,7 @@ export class ModelPickerDetailsMenu extends Disposable {
 	private model: ModelRef | undefined;
 	private readonly cardScope = this._register(new MutableDisposable<DisposableStore>());
 	private card: ModelCard | undefined;
-	private active: { entry: ModelCatalogEntry; row: HTMLElement } | undefined;
+	private active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;
 
 	constructor(private readonly picker: HTMLElement) {
 		super();
@@ -22,10 +22,7 @@ export class ModelPickerDetailsMenu extends Disposable {
 	}
 
 	public show(entry: ModelCatalogEntry, row: HTMLElement): void {
-		if (!entry.description?.trim()) {
-			this.hide();
-			return;
-		}
+		if (!entry.description?.trim()) { this.hide(); return; }
 		this.active = { entry, row };
 		if (!this.card || this.model?.provider !== entry.model.provider || this.model.model !== entry.model.model) {
 			const scope = new DisposableStore();
@@ -34,20 +31,14 @@ export class ModelPickerDetailsMenu extends Disposable {
 			const cards = ModelCard.createObservable(scope, this.picker.ownerDocument);
 			this.card = cards.get();
 			this.domNode.append(this.card.element);
-			scope.add(
-				cards.onDidChange(card => {
-					const previous = this.card!;
-					const hadFocus = previous.element.contains(this.picker.ownerDocument.activeElement);
-					previous.element.replaceWith(card.element);
-					this.card = card;
-					if (this.active) {
-						this.show(this.active.entry, this.active.row);
-					}
-					if (hadFocus) {
-						card.focus();
-					}
-				}),
-			);
+			scope.add(cards.onDidChange(card => {
+				const previous = this.card!;
+				const hadFocus = previous.element.contains(this.picker.ownerDocument.activeElement);
+				previous.element.replaceWith(card.element);
+				this.card = card;
+				if (this.active) { this.show(this.active.entry, this.active.row); }
+				if (hadFocus) { card.focus(); }
+			}));
 		}
 		this.card.update(entry);
 		this.domNode.hidden = false;

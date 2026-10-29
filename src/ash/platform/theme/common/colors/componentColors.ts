@@ -4,17 +4,9 @@ import { contrastBorder, foreground, widgetBorder } from './baseColors.js';
 const owner = 'platform.theme.components';
 const color = (id: string, dark: string, light: string, hcDark: string | null, hcLight: string | null, description: string): string =>
 	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
-const alias = (id: string, value: string, description: string): string =>
-	registerColor(
-		id,
-		{
-			dark: value,
-			light: value,
-			hcDark: value,
-			hcLight: value,
-		},
-		{ description, owner },
-	);
+const alias = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, hcDark: value, hcLight: value,
+}, { description, owner });
 
 export const hoverForeground = color('hover.foreground', '#cccccc', '#616161', '#ffffff', '#292929', 'Foreground for managed Hovers.');
 export const hoverBackground = color('hover.background', '#252526', '#f3f3f3', '#0c141f', '#ffffff', 'Background for managed Hovers.');

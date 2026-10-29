@@ -33,36 +33,26 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>(this, new Map());
 
 	private readonly providerListeners = new Map<ISessionsProvider, DisposableStore>();
 
-	constructor(
-		private readonly provider: ISessionsProvider,
-		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
-	) {
+	constructor(private readonly provider: ISessionsProvider, @ISessionsProvidersService private readonly providers: ISessionsProvidersService) {
 		super();
 		this._register(provider);
 		for (const entry of this.availableProviders()) this.observeProvider(entry);
-		this._register(
-			providers.onDidChangeProviders(({ added, removed }) => {
-				for (const entry of removed) {
-					this.providerListeners.get(entry)?.dispose();
-					this.providerListeners.delete(entry);
-					this._sessions = this._sessions.filter(session => session.providerId !== entry.id);
-					if (this._active?.session.providerId === entry.id) this._active = undefined;
-				}
-				for (const entry of added) this.observeProvider(entry);
-				if (this.initializePromise) this.initializePromise = this.loadSessions();
-				else this._onDidChange.fire();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				for (const listeners of this.providerListeners.values()) listeners.dispose();
-				this.providerListeners.clear();
-			}),
-		);
+		this._register(providers.onDidChangeProviders(({ added, removed }) => {
+			for (const entry of removed) {
+				this.providerListeners.get(entry)?.dispose();
+				this.providerListeners.delete(entry);
+				this._sessions = this._sessions.filter(session => session.providerId !== entry.id);
+				if (this._active?.session.providerId === entry.id) this._active = undefined;
+			}
+			for (const entry of added) this.observeProvider(entry);
+			if (this.initializePromise) this.initializePromise = this.loadSessions();
+			else this._onDidChange.fire();
+		}));
+		this._register(toDisposable(() => { for (const listeners of this.providerListeners.values()) listeners.dispose(); this.providerListeners.clear(); }));
 	}
 
 	private availableProviders(): readonly ISessionsProvider[] {
@@ -73,30 +63,23 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (this.providerListeners.has(provider)) return;
 		const listeners = new DisposableStore();
 		this.providerListeners.set(provider, listeners);
-		listeners.add(
-			provider.onDidChangeCatalog(() => {
-				if (this.initializePromise) this.initializePromise = this.loadSessions();
-			}),
-		);
-		listeners.add(
-			provider.onDidChangeSession(({ sessionId, detailChanged }) => {
-				const identity = sessionIdentity(provider.id, sessionId, this.provider.id);
-				this.pendingRefreshes.add(identity);
-				if (detailChanged) this.pendingDetailRefreshes.add(identity);
-				if (this._state !== 'loading') this.scheduleRefresh(identity);
-			}),
-		);
-		if (provider.connectionStatus)
-			listeners.add(
-				provider.connectionStatus.onDidChange(status => {
-					if (!this.initializePromise) return;
-					if (status !== 'connected' && this.availableProviders().every(provider => provider.connectionStatus?.get() !== 'connected')) {
-						this._state = status === 'connecting' ? 'loading' : 'error';
-						this._error = status === 'disconnected' ? localize('sessions.connection.disconnected', 'The session host is disconnected. Reconnect to load your sessions.') : undefined;
-					}
-					this._onDidChange.fire();
-				}),
-			);
+		listeners.add(provider.onDidChangeCatalog(() => {
+			if (this.initializePromise) this.initializePromise = this.loadSessions();
+		}));
+		listeners.add(provider.onDidChangeSession(({ sessionId, detailChanged }) => {
+			const identity = sessionIdentity(provider.id, sessionId, this.provider.id);
+			this.pendingRefreshes.add(identity);
+			if (detailChanged) this.pendingDetailRefreshes.add(identity);
+			if (this._state !== 'loading') this.scheduleRefresh(identity);
+		}));
+		if (provider.connectionStatus) listeners.add(provider.connectionStatus.onDidChange(status => {
+			if (!this.initializePromise) return;
+			if (status !== 'connected' && this.availableProviders().every(provider => provider.connectionStatus?.get() !== 'connected')) {
+				this._state = status === 'connecting' ? 'loading' : 'error';
+				this._error = status === 'disconnected' ? localize('sessions.connection.disconnected', 'The session host is disconnected. Reconnect to load your sessions.') : undefined;
+			}
+			this._onDidChange.fire();
+		}));
 	}
 
 	private owner(sessionId: SessionId): ISessionsProvider {
@@ -105,6 +88,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (!provider) throw new Error(localize('sessions.provider.unavailable', 'The session host is unavailable: {0}', providerId));
 		return provider;
 	}
+
 
 	private project(session: ISession, provider: ISessionsProvider): ISession {
 		return projectSession(session, provider.id, provider.label, this.provider.id);
@@ -136,66 +120,39 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			return provider;
 		}
 		if (workspace?.type === 'ssh') {
-			const provider = this.availableProviders().find(provider => {
-				const selected = provider.currentWorkspace();
-				return selected.type === 'ssh' && selected.host === workspace.host && selected.root === workspace.root;
-			});
+			const provider = this.availableProviders().find(provider => { const selected = provider.currentWorkspace(); return selected.type === 'ssh' && selected.host === workspace.host && selected.root === workspace.root; });
 			if (!provider) throw new Error(localize('sessions.provider.unavailable', 'The session host is unavailable: {0}', workspace.host));
 			return provider;
 		}
-		return this.activeUntitledSession?.providerId
-			? this.creationProvider(undefined, this.activeUntitledSession.providerId)
-			: this._active
-				? this.owner(this._active.session.sessionId)
-				: this.provider;
+		return this.activeUntitledSession?.providerId ? this.creationProvider(undefined, this.activeUntitledSession.providerId)
+			: this._active ? this.owner(this._active.session.sessionId) : this.provider;
 	}
 
-	get sessions(): readonly ISession[] {
-		return this._sessions;
-	}
-	get navigationRevision(): number {
-		return this.selectionRevision;
-	}
-	get active(): IActiveSessionThread | undefined {
-		return this._active;
-	}
-	get untitledSessions(): readonly IUntitledChatSession[] {
-		return this._untitledSessions;
-	}
-	get activeUntitledSession(): IUntitledChatSession | undefined {
-		return this._untitledSessions.find(session => session.untitledSessionId === this._activeUntitledSessionId);
-	}
-	get state(): SessionsManagementState {
-		return this._state;
-	}
-	get error(): string | undefined {
-		return this._error;
-	}
+	get sessions(): readonly ISession[] { return this._sessions; }
+	get navigationRevision(): number { return this.selectionRevision; }
+	get active(): IActiveSessionThread | undefined { return this._active; }
+	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
+	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this._activeUntitledSessionId); }
+	get state(): SessionsManagementState { return this._state; }
+	get error(): string | undefined { return this._error; }
 
 	initialize(): Promise<void> {
 		if (!this.initializePromise || this._state === 'error') this.initializePromise = this.loadSessions();
 		return this.initializePromise;
 	}
 
+
 	public whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
-		if (this.isDisposed || signal?.aborted) {
-			return Promise.reject(canceled());
-		}
+		if (this.isDisposed || signal?.aborted) { return Promise.reject(canceled()); }
 		const ready = (async () => {
 			await this.initialize();
-			if (this.isDisposed) {
-				throw canceled();
-			}
-			if (this._state === 'error') {
-				throw new Error(this._error);
-			}
+			if (this.isDisposed) { throw canceled(); }
+			if (this._state === 'error') { throw new Error(this._error); }
 			const generation = this.catalogGeneration;
 			// File restoration can refer to another known Session. Hydrate canonical
 			// snapshots rather than inferring a directory from the requested URI.
 			await Promise.all(this._sessions.filter(session => session.status === 'active').map(session => this.hydrateSession(session.sessionId)));
-			if (this.isDisposed || generation !== this.catalogGeneration) {
-				throw canceled();
-			}
+			if (this.isDisposed || generation !== this.catalogGeneration) { throw canceled(); }
 		})();
 		return signal ? raceCancellationError(ready, signal) : ready;
 	}
@@ -246,14 +203,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
 		this.selectionRevision++;
-		const session = {
-			untitledSessionId: createUuid(),
-			providerId: provider.id,
-			title,
-			model: undefined,
-			agent: undefined,
-			workspace,
-		};
+		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._error = undefined;
@@ -291,14 +241,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		if (current.modelSelectionKind === 'manual' && sameModel(current.model, model)) return;
-		this._untitledSessions = this._untitledSessions.map(session => (session.untitledSessionId === untitledSessionId ? { ...session, model, modelSelectionKind: 'manual' as const } : session));
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model, modelSelectionKind: 'manual' as const } : session);
 		this._onDidChange.fire();
 	}
 
 	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current || current.modelSelectionKind === 'manual' || sameModel(current.model, model)) return;
-		this._untitledSessions = this._untitledSessions.map(session => (session.untitledSessionId === untitledSessionId ? { ...session, model } : session));
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
 		this._onDidChange.fire();
 	}
 
@@ -306,7 +256,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		if (current.agent?.name === agent?.name && current.agent?.sourceId === agent?.sourceId) return;
-		this._untitledSessions = this._untitledSessions.map(session => (session.untitledSessionId === untitledSessionId ? { ...session, agent } : session));
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, agent } : session);
 		this._onDidChange.fire();
 	}
 
@@ -336,7 +286,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId }]]));
-		if (wasActive || (!this._active && !this.activeUntitledSession)) this._active = active;
+		if (wasActive || !this._active && !this.activeUntitledSession) this._active = active;
 		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
 	}
@@ -365,12 +315,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return active;
 	}
 
-	async archiveSession(sessionId: SessionId): Promise<void> {
-		await this.finishSession(sessionId, 'archiving');
-	}
-	async stopSession(sessionId: SessionId): Promise<void> {
-		await this.finishSession(sessionId, 'stopping');
-	}
+	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'archiving'); }
+	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'stopping'); }
 
 	async restoreSession(sessionId: SessionId): Promise<void> {
 		await this.initialize();
@@ -432,10 +378,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const provider = this.creationProvider(workspace, providerId);
 			const created = await provider.create(title, workspace, agent, creationId);
 			if (this.creationProvider(undefined, provider.id) !== provider) throw canceled();
-			const active = {
-				session: this.project(created.session, provider),
-				threadId: threadIdentity(provider.id, created.threadId, this.provider.id),
-			};
+			const active = { session: this.project(created.session, provider), threadId: threadIdentity(provider.id, created.threadId, this.provider.id) };
 			if (this.isDisposed) throw canceled();
 			return active;
 		} catch (error) {
@@ -484,7 +427,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const active = this._active;
 			this._sessions = sessions;
 			const selected = sessions.find(session => session.sessionId === active?.session.sessionId && session.status === 'active');
-			this._active = selected && active ? (activeThread(selected, active.threadId) ?? this.firstActiveThread()) : this.firstActiveThread();
+			this._active = selected && active ? activeThread(selected, active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 			this.restoreSelection();
 			this.setState('ready');
 			for (const sessionId of this.pendingRefreshes) this.scheduleRefresh(sessionId);
@@ -497,16 +440,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private async loadProviderCatalogs(providers: readonly ISessionsProvider[]): Promise<readonly ISession[]> {
 		let successful = 0;
-		const results = await Promise.allSettled(
-			providers.map(async provider => {
-				const listed = await provider.list();
-				if (!this.availableProviders().includes(provider)) throw canceled();
-				successful++;
-				return listed.map(session => this.project(session, provider));
-			}),
-		);
+		const results = await Promise.allSettled(providers.map(async provider => {
+			const listed = await provider.list();
+			if (!this.availableProviders().includes(provider)) throw canceled();
+			successful++;
+			return listed.map(session => this.project(session, provider));
+		}));
 		if (!successful) throw results.find(result => result.status === 'rejected')?.reason;
-		return results.flatMap((result, index) => (result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id)));
+		return results.flatMap((result, index) => result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id));
 	}
 
 	private scheduleRefresh(sessionId: SessionId): void {
@@ -528,15 +469,17 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				const detailChanged = this.pendingDetailRefreshes.delete(sessionId);
 				if (current?.agentTree && listed?.status !== 'active') await this.unsubscribe(sessionId);
-				const membershipChanged =
-					listed && current && (listed.chats.length !== current.chats.length || listed.chats.some(chat => !current.chats.some(previous => previous.threadId === chat.threadId)));
-				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === 'active' ? await this.subscribe(listed) : listed;
+				const membershipChanged = listed && current && (listed.chats.length !== current.chats.length
+					|| listed.chats.some(chat => !current.chats.some(previous => previous.threadId === chat.threadId)));
+				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === 'active'
+					? await this.subscribe(listed)
+					: listed;
 				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				if (sameSession(current, refreshed)) continue;
 				if (refreshed) this.replaceSession(refreshed);
 				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
 				if (this._active?.session.sessionId === sessionId) {
-					this._active = refreshed?.status === 'active' ? (activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread()) : this.firstActiveThread();
+					this._active = refreshed?.status === 'active' ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 				}
 				this.restoreSelection();
 				this._error = undefined;
@@ -554,7 +497,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const generation = this.catalogGeneration;
 		const hydrate = (async () => {
 			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
-			if (!current || (current.agentTree && current.chats.every(chat => chat.status !== 'active' || chat.workspace !== undefined))) return;
+			if (!current || current.agentTree && current.chats.every(chat => chat.status !== 'active' || chat.workspace !== undefined)) return;
 			const session = await this.subscribe(current);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
 			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === 'active')) {
@@ -570,9 +513,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			if (!this.isDisposed && generation === this.catalogGeneration) throw error;
 		});
 		this.hydrating.set(sessionId, hydrate);
-		const finish = (): void => {
-			if (this.hydrating.get(sessionId) === hydrate) this.hydrating.delete(sessionId);
-		};
+		const finish = (): void => { if (this.hydrating.get(sessionId) === hydrate) this.hydrating.delete(sessionId); };
 		void hydrate.then(finish, finish);
 		return hydrate;
 	}
@@ -584,13 +525,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private replaceSession(session: ISession): void {
 		this._sessions = this._sessions.some(candidate => candidate.sessionId === session.sessionId)
-			? this._sessions.map(candidate => (candidate.sessionId === session.sessionId ? session : candidate))
+			? this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate)
 			: [session, ...this._sessions];
 	}
 
-	private firstActiveThread(): IActiveSessionThread | undefined {
-		return firstActiveThread(this._sessions);
-	}
+	private firstActiveThread(): IActiveSessionThread | undefined { return firstActiveThread(this._sessions); }
 
 	private setState(state: SessionsManagementState): void {
 		this._state = state;
@@ -625,34 +564,16 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 }
 
 function sameManagement(left: SessionManagementInfo | undefined, right: SessionManagementInfo | undefined): boolean {
-	return (
-		left?.status === right?.status &&
-		left?.statusChangedAtUnixMs === right?.statusChangedAtUnixMs &&
-		left?.activity?.type === right?.activity?.type &&
-		left?.activity?.text === right?.activity?.text &&
-		left?.summary === right?.summary
-	);
+	return left?.status === right?.status && left?.statusChangedAtUnixMs === right?.statusChangedAtUnixMs
+		&& left?.activity?.type === right?.activity?.type && left?.activity?.text === right?.activity?.text && left?.summary === right?.summary;
 }
 
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
 	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
-	if (
-		left.nextApprovalMode !== right.nextApprovalMode ||
-		!sameManagement(left.management, right.management) ||
-		!sameModel(left.model, right.model) ||
-		left.workspace?.authorityId !== right.workspace?.authorityId ||
-		left.workspace?.root !== right.workspace?.root
-	)
-		return false;
+	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
-		return (
-			next?.threadId === chat.threadId &&
-			next.status === chat.status &&
-			next.title === chat.title &&
-			next.executionStatus === chat.executionStatus &&
-			sameManagement(next.management, chat.management)
-		);
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
 	});
 }

@@ -8,13 +8,7 @@ import { createDisconnectedIssueReporterService } from '../../platform/issue/bro
 import { createDisconnectedGitHubService } from '../../platform/github/browser/appServerGitHubService.js';
 import { Event } from '../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from '../../platform/language/browser/languageServerService.js';
-import {
-	createDisconnectedAppServerApi,
-	createDisconnectedResourceApi,
-	createDisconnectedServerEventApi,
-	createDisconnectedSkillOperations,
-	createDisconnectedHookOperations,
-} from '../../platform/agentHost/browser/appServerApi.js';
+import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi, createDisconnectedSkillOperations, createDisconnectedHookOperations } from '../../platform/agentHost/browser/appServerApi.js';
 import { createDisconnectedFileApi } from '../../platform/files/browser/fileApi.js';
 import { createDisconnectedExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createDisconnectedSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
@@ -74,16 +68,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
-		projects: {
-			addSession: () => unavailableOperation('project/session/link'),
-			onDidChange: Event.None,
-			list: () => unavailableOperation('project/list'),
-			read: () => unavailableOperation('project/read'),
-			create: () => unavailableOperation('project/create'),
-			update: () => unavailableOperation('project/details/update'),
-			archive: () => unavailableOperation('project/archive'),
-			remove: () => unavailableOperation('project/delete'),
-		},
+		projects: { addSession: () => unavailableOperation('project/session/link'), onDidChange: Event.None, list: () => unavailableOperation('project/list'), read: () => unavailableOperation('project/read'), create: () => unavailableOperation('project/create'), update: () => unavailableOperation('project/details/update'), archive: () => unavailableOperation('project/archive'), remove: () => unavailableOperation('project/delete') },
 		assets: {
 			getCatalog: () => unavailableOperation('asset/catalog'),
 			updateEntry: () => unavailableOperation('asset/catalog/update'),
@@ -93,16 +78,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 			getVersion: () => unavailableOperation('asset/version'),
 			readVersion: () => unavailableOperation('asset/read'),
 		},
-		testing: {
-			onDidUpdate: Event.None,
-			onDidDisconnect: Event.None,
-			discover: unavailableOperation,
-			run: unavailableOperation,
-			prepareDebug: unavailableOperation,
-			read: unavailableOperation,
-			cancel: unavailableOperation,
-			release: unavailableOperation,
-		},
+		testing: { onDidUpdate: Event.None, onDidDisconnect: Event.None, discover: unavailableOperation, run: unavailableOperation, prepareDebug: unavailableOperation, read: unavailableOperation, cancel: unavailableOperation, release: unavailableOperation },
 		events: createDisconnectedServerEventApi(),
 		codebase: createDisconnectedCodebaseApi(unavailableOperation),
 		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),

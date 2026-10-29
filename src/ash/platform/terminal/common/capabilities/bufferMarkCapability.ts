@@ -14,17 +14,13 @@ export class BufferMarkCapability extends Disposable implements IBufferMarkCapab
 	readonly onMarkAdded = this.added.event;
 	private readonly registrations = new Map<string | number, MarkRegistration>();
 
-	constructor(private readonly terminal: { registerMarker(cursorYOffset?: number): IMarkProperties['marker'] }) {
-		super();
-	}
+	constructor(private readonly terminal: { registerMarker(cursorYOffset?: number): IMarkProperties['marker']; }) { super(); }
 
 	*markers(): IterableIterator<NonNullable<IMarkProperties['marker']>> {
 		for (const { marker } of this.registrations.values()) yield marker;
 	}
 
-	getMark(id: string): IMarkProperties['marker'] {
-		return this.registrations.get(id)?.marker;
-	}
+	getMark(id: string): IMarkProperties['marker'] { return this.registrations.get(id)?.marker; }
 
 	addMark(properties: IMarkProperties = {}): void {
 		if (this.isDisposed) return;
@@ -35,17 +31,13 @@ export class BufferMarkCapability extends Disposable implements IBufferMarkCapab
 		const lifetime = new DisposableStore();
 		const registration = { marker, lifetime };
 		this.registrations.set(key, registration);
-		lifetime.add(
-			toDisposable(() => {
-				if (this.registrations.get(key) === registration) this.registrations.delete(key);
-			}),
-		);
-		lifetime.add(
-			Event.once<void>(listener => {
-				const subscription = marker.onDispose(listener);
-				return toDisposable(() => subscription.dispose());
-			})(() => lifetime.dispose()),
-		);
+		lifetime.add(toDisposable(() => {
+			if (this.registrations.get(key) === registration) this.registrations.delete(key);
+		}));
+		lifetime.add(Event.once<void>(listener => {
+			const subscription = marker.onDispose(listener);
+			return toDisposable(() => subscription.dispose());
+		})(() => lifetime.dispose()));
 		if (!properties.marker) lifetime.add(toDisposable(() => marker.dispose()));
 		this.added.fire({ ...properties, marker });
 	}

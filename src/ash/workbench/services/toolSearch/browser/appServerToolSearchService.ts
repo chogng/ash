@@ -3,7 +3,7 @@ import type { IToolSearchApi } from '../../../../platform/toolSearch/common/tool
 import type { IToolSearchService, ToolSearchConfiguration, ToolSearchEmbeddingStatus, ToolSearchSettings } from '../../../../platform/toolSearch/common/toolSearchService.js';
 
 export class AppServerToolSearchService implements IToolSearchService {
-	constructor(private readonly api: IToolSearchApi) {}
+	constructor(private readonly api: IToolSearchApi) { }
 
 	async readConfig(): Promise<ToolSearchSettings> {
 		const config = await this.api.readConfig();
@@ -31,16 +31,13 @@ function toolSearchSettings(revision: number, config: ToolSearchConfigDto): Tool
 
 function embeddingStatus(status: ToolSearchConfigDto['embeddingStatus']): ToolSearchEmbeddingStatus {
 	switch (status.type) {
-		case 'disabled':
-			return { type: 'disabled' };
-		case 'ready':
-			return { type: 'ready', model: modelRef(status.model) };
-		case 'unavailable':
-			return {
-				type: 'unavailable',
-				model: status.model ? modelRef(status.model) : undefined,
-				reason: status.reason,
-			};
+		case 'disabled': return { type: 'disabled' };
+		case 'ready': return { type: 'ready', model: modelRef(status.model) };
+		case 'unavailable': return {
+			type: 'unavailable',
+			model: status.model ? modelRef(status.model) : undefined,
+			reason: status.reason,
+		};
 	}
 }
 

@@ -19,7 +19,7 @@ export class StickyScrollWidgetState {
 		public readonly endLineNumbers: number[],
 		public readonly lastLineRelativePosition: number,
 		public readonly showEndForLine: number | null = null,
-	) {}
+	) { }
 
 	public static get Empty(): StickyScrollWidgetState {
 		return new StickyScrollWidgetState([], [], 0);
@@ -42,10 +42,7 @@ export class StickyScrollWidget extends Disposable {
 	private readonly rows = new Map<string, HeaderRow>();
 	private readonly characterMappings = new WeakMap<HTMLElement, CharacterMapping>();
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		private readonly model: TextModel,
-	) {
+	constructor(private readonly editor: ICodeEditor, private readonly model: TextModel) {
 		super();
 		this.domNode = h(editor.getContainerDomNode().ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-sticky-scroll empty';
@@ -146,9 +143,16 @@ export class StickyScrollWidget extends Disposable {
 			button.style.paddingLeft = `${layout.contentLeft}px`;
 			text.style.textIndent = `${options.scrollWithEditor ? -this.editor.getScrollLeft() : 0}px`;
 			element.style.marginTop = `${index === this.lines.length - 1 ? state.lastLineRelativePosition : 0}px`;
-			element.style.clipPath = index === this.lines.length - 1 && state.lastLineRelativePosition < 0 ? `inset(${-state.lastLineRelativePosition}px 0 0)` : '';
+			element.style.clipPath = index === this.lines.length - 1 && state.lastLineRelativePosition < 0
+				? `inset(${-state.lastLineRelativePosition}px 0 0)`
+				: '';
 			const label = this.model.getLineContent(displayLine);
-			const mapping = projectStanzaSemanticTokenLine(text, label, this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1), this.model.getOptions().tabSize);
+			const mapping = projectStanzaSemanticTokenLine(
+				text,
+				label,
+				this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1),
+				this.model.getOptions().tabSize,
+			);
 			this.characterMappings.set(text, mapping);
 			button.title = localize('stickyScroll.reveal', 'Reveal line {0}: {1}', displayLine, label);
 			button.setAttribute('aria-label', button.title);

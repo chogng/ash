@@ -15,26 +15,14 @@ interface Snapshot {
 }
 
 /** Local feedback only: filesystem scans and computed loads need the full CI suites. */
-export function planAffectedTests(root: string, base: string, tests: readonly string[], options: { head?: string; preloads?: readonly string[] } = {}): TestPlan {
-	const git = (args: string[], input?: string): Buffer =>
-		execFileSync('git', args, {
-			cwd: root,
-			input,
-			maxBuffer: 256 * 1024 * 1024,
-			stdio: ['pipe', 'pipe', 'pipe'],
-		});
+export function planAffectedTests(root: string, base: string, tests: readonly string[], options: { head?: string; preloads?: readonly string[]; } = {}): TestPlan {
+	const git = (args: string[], input?: string): Buffer => execFileSync('git', args, {
+		cwd: root, input, maxBuffer: 256 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'],
+	});
 	// Resolve user input before it can become an option to another Git command.
-	const revision = git(['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`])
-		.toString()
-		.trim();
-	const target = options.head
-		? git(['rev-parse', '--verify', '--end-of-options', `${options.head}^{commit}`])
-				.toString()
-				.trim()
-		: undefined;
-	const comparison = git(['merge-base', revision, target ?? 'HEAD'])
-		.toString()
-		.trim();
+	const revision = git(['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]).toString().trim();
+	const target = options.head ? git(['rev-parse', '--verify', '--end-of-options', `${options.head}^{commit}`]).toString().trim() : undefined;
+	const comparison = git(['merge-base', revision, target ?? 'HEAD']).toString().trim();
 	const split = (value: Buffer): string[] => value.toString().split('\0').filter(Boolean);
 	const changed = new Set(split(git(['diff', '--name-only', '--no-renames', '-z', comparison, ...(target ? [target] : []), '--'])));
 	if (!target) for (const path of split(git(['ls-files', '--others', '--exclude-standard', '-z']))) changed.add(path);
@@ -42,17 +30,16 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 	if (changed.size === 0) return full('no changed inputs; running the complete suite');
 	// The dependency graph cannot describe toolchains, generated contracts, preload code,
 	// packages or test data loaded through arbitrary filesystem paths.
-	const outside = [...changed].find(path => /(?:^|\/)(?:package(?:-lock)?|tsconfig[^/]*)\.json$/u.test(path) || !/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path));
+	const outside = [...changed].find(path => /(?:^|\/)(?:package(?:-lock)?|tsconfig[^/]*)\.json$/u.test(path)
+		|| !/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path));
 	if (outside) return full(`input outside the source graph: ${outside}`);
 
 	try {
 		const before = snapshot(comparison);
-		const after = target
-			? snapshot(target)
-			: {
-					paths: new Set(split(git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']))),
-					read: (path: string) => readFileSync(resolve(root, path), 'utf8'),
-				};
+		const after = target ? snapshot(target) : {
+			paths: new Set(split(git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']))),
+			read: (path: string) => readFileSync(resolve(root, path), 'utf8'),
+		};
 		const sources = tests.map(path => path.replace(/\.js$/u, '.ts'));
 		const affected = new Set<string>();
 		const reached = new Set<string>();
@@ -64,7 +51,7 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 			const host: ts.ModuleResolutionHost = {
 				getCurrentDirectory: () => root,
 				fileExists: path => tree.paths.has(local(path)),
-				readFile: path => (tree.paths.has(local(path)) ? tree.read(local(path)) : undefined),
+				readFile: path => tree.paths.has(local(path)) ? tree.read(local(path)) : undefined,
 			};
 			const cache = ts.createModuleResolutionCache(root, path => path, compiler.options);
 			const importers = new Map<string, Set<string>>();
@@ -96,7 +83,7 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 					const target = module ? local(module.resolvedFileName) : reference.startsWith('.') && tree.paths.has(asset) ? asset : undefined;
 					if (!target) continue;
 					let parents = importers.get(target);
-					if (!parents) importers.set(target, (parents = new Set()));
+					if (!parents) importers.set(target, parents = new Set());
 					parents.add(file);
 					pending.push(target);
 				}
@@ -128,11 +115,7 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 		// implementation, so runtime or type import edges cannot select them reliably.
 		const files = tests.filter((path, index) => affected.has(sources[index]) || path.startsWith('test/architecture/'));
 		if (files.length > tests.length / 2) return full('more than half of the test files are affected');
-		return {
-			files,
-			full: false,
-			reason: `${changed.size} changed inputs; ${files.length} of ${tests.length} test files, including architecture checks`,
-		};
+		return { files, full: false, reason: `${changed.size} changed inputs; ${files.length} of ${tests.length} test files, including architecture checks` };
 	} catch (error) {
 		return full(`dependency analysis unavailable: ${error instanceof Error ? error.message : String(error)}`);
 	}
@@ -152,8 +135,7 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 			const end = contents.indexOf(10, offset);
 			const [actual, kind, size] = contents.subarray(offset, end).toString().split(' ');
 			const length = Number(size);
-			if (actual !== oid || kind !== 'blob' || !Number.isSafeInteger(length) || length < 0 || end < offset || end + length + 1 >= contents.length)
-				throw new Error('incomplete Git source snapshot');
+			if (actual !== oid || kind !== 'blob' || !Number.isSafeInteger(length) || length < 0 || end < offset || end + length + 1 >= contents.length) throw new Error('incomplete Git source snapshot');
 			offset = end + 1;
 			blobs.set(oid, contents.subarray(offset, offset + length).toString());
 			offset += length + 1;

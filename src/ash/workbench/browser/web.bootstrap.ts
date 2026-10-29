@@ -14,29 +14,11 @@ export async function startBrowserWorkbench(options: Pick<IStartWorkbenchOptions
 	let connectedHost: IDisposable | undefined;
 	try {
 		let documentClient: AppServerProtocolClient | undefined;
-		connectedHost = await connectBrowserWorkbenchHost(
-			[
-				...rendererCapabilities,
-				client => {
-					documentClient = client;
-					return {};
-				},
-			],
-			true,
-		);
-		await startWebWorkbench(
-			options,
-			connectedHost,
-			documentClient
-				? services => {
-						const editing = services.get(IChatEditingService);
-						return services.createInstance(AppServerTextDocumentHost, documentClient!, {
-							applyEdits: editing.applyEdits.bind(editing),
-							finishTurn: editing.finishTurn.bind(editing),
-						});
-					}
-				: undefined,
-		);
+		connectedHost = await connectBrowserWorkbenchHost([...rendererCapabilities, client => { documentClient = client; return {}; }], true);
+		await startWebWorkbench(options, connectedHost, documentClient ? services => {
+			const editing = services.get(IChatEditingService);
+			return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
+		} : undefined);
 	} catch (error) {
 		connectedHost?.dispose();
 		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));

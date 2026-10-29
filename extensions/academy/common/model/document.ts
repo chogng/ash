@@ -24,12 +24,10 @@ export function createDocumentNode(options: DocumentNodeOptions): DocumentNode {
 	}
 	const content = Object.freeze([...(options.content ?? [])]);
 	const marks = Object.freeze(
-		(options.marks ?? []).map(mark =>
-			Object.freeze({
-				type: mark.type,
-				attrs: Object.freeze({ ...(mark.attrs ?? {}) }),
-			}),
-		),
+		(options.marks ?? []).map(mark => Object.freeze({
+			type: mark.type,
+			attrs: Object.freeze({ ...(mark.attrs ?? {}) }),
+		})),
 	);
 	const node: DocumentNode = {
 		id: options.id,
@@ -55,17 +53,28 @@ export function freezeDocumentNode(node: DocumentNode): DocumentNode {
 }
 
 /** Creates a text leaf. Schema validation decides whether empty text is allowed. */
-export function createTextNode(id: DocumentNodeId, text: string, marks: readonly DocumentMark[] = []): DocumentNode {
+export function createTextNode(
+	id: DocumentNodeId,
+	text: string,
+	marks: readonly DocumentMark[] = [],
+): DocumentNode {
 	return createDocumentNode({ id, type: 'text', text, marks });
 }
 
 /** Creates the root node for one structured document. */
-export function createDocumentRoot(id: DocumentNodeId, content: readonly DocumentNode[] = [], type = 'doc'): DocumentNode {
+export function createDocumentRoot(
+	id: DocumentNodeId,
+	content: readonly DocumentNode[] = [],
+	type = 'doc',
+): DocumentNode {
 	return createDocumentNode({ id, type, content });
 }
 
 /** Finds a node and its direct parent without mutating the tree. */
-export function findDocumentNode(root: DocumentNode, id: DocumentNodeId): DocumentNodeLocation | undefined {
+export function findDocumentNode(
+	root: DocumentNode,
+	id: DocumentNodeId,
+): DocumentNodeLocation | undefined {
 	if (root.id === id) return { node: root, parent: undefined, index: -1 };
 	for (let index = 0; index < root.content.length; index += 1) {
 		const child = root.content[index];
@@ -77,13 +86,20 @@ export function findDocumentNode(root: DocumentNode, id: DocumentNodeId): Docume
 }
 
 /** Returns true when `candidateId` is the node itself or a descendant. */
-export function containsDocumentNode(root: DocumentNode, candidateId: DocumentNodeId): boolean {
+export function containsDocumentNode(
+	root: DocumentNode,
+	candidateId: DocumentNodeId,
+): boolean {
 	if (root.id === candidateId) return true;
 	return root.content.some(child => containsDocumentNode(child, candidateId));
 }
 
 /** Returns a structurally shared tree with one node replaced. */
-export function replaceDocumentNode(root: DocumentNode, id: DocumentNodeId, replacement: DocumentNode): DocumentNode {
+export function replaceDocumentNode(
+	root: DocumentNode,
+	id: DocumentNodeId,
+	replacement: DocumentNode,
+): DocumentNode {
 	if (root.id === id) return replacement;
 	for (let index = 0; index < root.content.length; index += 1) {
 		const child = root.content[index];
@@ -104,7 +120,10 @@ export interface RemovedDocumentNode {
 }
 
 /** Removes one non-root node and returns its original parent location. */
-export function removeDocumentNode(root: DocumentNode, id: DocumentNodeId): RemovedDocumentNode {
+export function removeDocumentNode(
+	root: DocumentNode,
+	id: DocumentNodeId,
+): RemovedDocumentNode {
 	if (root.id === id) throw new RangeError('The document root cannot be removed');
 	const result = removeFromChildren(root, id);
 	if (!result) throw new RangeError(`Document node '${id}' does not exist`);
@@ -112,7 +131,12 @@ export function removeDocumentNode(root: DocumentNode, id: DocumentNodeId): Remo
 }
 
 /** Inserts one node at an index in an existing parent. */
-export function insertDocumentNode(root: DocumentNode, parentId: DocumentNodeId, index: number, child: DocumentNode): DocumentNode {
+export function insertDocumentNode(
+	root: DocumentNode,
+	parentId: DocumentNodeId,
+	index: number,
+	child: DocumentNode,
+): DocumentNode {
 	const parent = findDocumentNode(root, parentId)?.node;
 	if (!parent) throw new RangeError(`Document parent '${parentId}' does not exist`);
 	if (!Number.isSafeInteger(index) || index < 0 || index > parent.content.length) {
@@ -135,7 +159,11 @@ function collectIds(node: DocumentNode, ids: Set<DocumentNodeId>): void {
 	for (const child of node.content) collectIds(child, ids);
 }
 
-function replaceDocumentNodeIfPresent(root: DocumentNode, id: DocumentNodeId, replacement: DocumentNode): DocumentNode | undefined {
+function replaceDocumentNodeIfPresent(
+	root: DocumentNode,
+	id: DocumentNodeId,
+	replacement: DocumentNode,
+): DocumentNode | undefined {
 	if (root.id === id) return replacement;
 	for (let index = 0; index < root.content.length; index += 1) {
 		const child = root.content[index];
@@ -148,7 +176,10 @@ function replaceDocumentNodeIfPresent(root: DocumentNode, id: DocumentNodeId, re
 	return undefined;
 }
 
-function removeFromChildren(parent: DocumentNode, id: DocumentNodeId): RemovedDocumentNode | undefined {
+function removeFromChildren(
+	parent: DocumentNode,
+	id: DocumentNodeId,
+): RemovedDocumentNode | undefined {
 	for (let index = 0; index < parent.content.length; index += 1) {
 		const child = parent.content[index];
 		if (child.id === id) {
@@ -175,7 +206,11 @@ function removeFromChildren(parent: DocumentNode, id: DocumentNodeId): RemovedDo
 	return undefined;
 }
 
-function recreateNode(node: DocumentNode, content: readonly DocumentNode[], attrs: DocumentAttributes = node.attrs): DocumentNode {
+function recreateNode(
+	node: DocumentNode,
+	content: readonly DocumentNode[],
+	attrs: DocumentAttributes = node.attrs,
+): DocumentNode {
 	return createDocumentNode({
 		id: node.id,
 		type: node.type,
@@ -194,5 +229,5 @@ function assertNodeIdentity(id: string): void {
 
 /** A section boundary changes page intent, not the linear order used by text selections. */
 export function getDocumentBodyContent(document: DocumentNode): readonly DocumentNode[] {
-	return document.content.flatMap(node => (node.type === 'documentSection' ? node.content : node.type === 'reviewComment' || node.type === 'reviewChange' ? [] : [node]));
+	return document.content.flatMap(node => node.type === 'documentSection' ? node.content : node.type === 'reviewComment' || node.type === 'reviewChange' ? [] : [node]);
 }

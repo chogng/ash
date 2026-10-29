@@ -2,22 +2,31 @@ import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type DebugAdapterConnection = { readonly type: 'client' } | { readonly type: 'server'; readonly port: number; readonly host?: string } | { readonly type: 'namedPipe'; readonly path: string };
+export type DebugAdapterConnection = {
+	readonly type: 'client';
+} | {
+	readonly type: 'server';
+	readonly port: number;
+	readonly host?: string;
+} | {
+	readonly type: 'namedPipe';
+	readonly path: string;
+};
 
-export type IDebugAdapterProcessStartOptions = { readonly dirId?: string; readonly arguments: readonly string[] } & (
-	| {
-			readonly program: string;
-			readonly connection?: never;
-			readonly cwd?: string;
-			readonly env?: Readonly<Record<string, string | null>>;
-	  }
-	| {
-			readonly connection: DebugAdapterConnection;
-			readonly program?: never;
-			readonly cwd?: never;
-			readonly env?: never;
-	  }
-);
+export type IDebugAdapterProcessStartOptions = {
+	readonly dirId?: string;
+	readonly arguments: readonly string[];
+} & ({
+	readonly program: string;
+	readonly connection?: never;
+	readonly cwd?: string;
+	readonly env?: Readonly<Record<string, string | null>>;
+} | {
+	readonly connection: DebugAdapterConnection;
+	readonly program?: never;
+	readonly cwd?: never;
+	readonly env?: never;
+});
 
 export interface IDebugAdapterProcessMessage {
 	readonly sequence: number;
@@ -49,7 +58,7 @@ export interface IDebugAdapterProcessService {
 	prepareSession(id: string, noDebug: boolean | undefined): Promise<DebugSessionRelation>;
 	reserveSession(options: DebugSessionAdmission): Promise<DebugSessionRelation>;
 	manageSession(id: string, action: 'read' | 'route' | 'end'): Promise<DebugSessionRelation>;
-	readConsole(id: string, options?: { readonly clear?: boolean; readonly diagnostic?: string }): Promise<DebugConsoleSnapshot>;
+	readConsole(id: string, options?: { readonly clear?: boolean; readonly diagnostic?: string; }): Promise<DebugConsoleSnapshot>;
 	start(options: IDebugAdapterProcessStartOptions): Promise<string>;
 	send(sessionId: string, message: unknown): Promise<void>;
 	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult>;
@@ -70,7 +79,7 @@ export interface IDebugAdapterProcessService {
 }
 
 /** Request pairing and deadlines belong to the Rust client, independently of view reads. */
-export type DebugAdapterResponseResult = { readonly state: 'pending' } | { readonly state: 'complete'; readonly response: unknown } | { readonly state: 'failed'; readonly message: string };
+export type DebugAdapterResponseResult = { readonly state: 'pending'; } | { readonly state: 'complete'; readonly response: unknown; } | { readonly state: 'failed'; readonly message: string; };
 
 /** Debug composition registers its selected capability; undefined means the host cannot launch DAP processes. */
 export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService | undefined>('debugAdapterProcessService');
@@ -112,33 +121,16 @@ export interface DebugSessionSnapshot {
 		readonly supportsCompletionsRequest: boolean;
 		readonly supportsCancelRequest: boolean;
 		readonly completionTriggerCharacters: readonly string[];
-		readonly exceptionBreakpointFilters: readonly {
-			readonly filter: string;
-			readonly label: string;
-			readonly description?: string;
-			readonly default: boolean;
-		}[];
+		readonly exceptionBreakpointFilters: readonly { readonly filter: string; readonly label: string; readonly description?: string; readonly default: boolean; }[];
 	};
 }
 
-export type DebugSourceAddress = { readonly path?: string; readonly sourceReference?: number };
+export type DebugSourceAddress = { readonly path?: string; readonly sourceReference?: number; };
 export type DebugBreakpointLocation =
-	| { readonly kind: 'source'; readonly source: DebugSourceAddress; readonly line: number; readonly column?: number }
-	| { readonly kind: 'function'; readonly name: string }
-	| {
-			readonly kind: 'data';
-			readonly dataId: string;
-			readonly accessType: 'read' | 'write' | 'readWrite';
-			readonly adapterType: string;
-			readonly canPersist: boolean;
-			readonly sessionId?: string;
-	  }
-	| {
-			readonly kind: 'instruction';
-			readonly instructionReference: string;
-			readonly offset?: number;
-			readonly sessionId: string;
-	  };
+	| { readonly kind: 'source'; readonly source: DebugSourceAddress; readonly line: number; readonly column?: number; }
+	| { readonly kind: 'function'; readonly name: string; }
+	| { readonly kind: 'data'; readonly dataId: string; readonly accessType: 'read' | 'write' | 'readWrite'; readonly adapterType: string; readonly canPersist: boolean; readonly sessionId?: string; }
+	| { readonly kind: 'instruction'; readonly instructionReference: string; readonly offset?: number; readonly sessionId: string; };
 export interface DebugBreakpointIntent {
 	readonly id: string;
 	readonly enabled: boolean;
@@ -166,38 +158,16 @@ export interface DebugBreakpointsSnapshot {
 	readonly bindings: readonly DebugBreakpointBinding[];
 	readonly error: string | null;
 }
-export type DebugInspection =
-	| { readonly kind: 'stack'; readonly threadId?: number }
-	| { readonly kind: 'frame'; readonly frameId: number }
-	| { readonly kind: 'variables'; readonly variablesReference: number }
-	| { readonly kind: 'watch'; readonly expressions: readonly string[]; readonly frameId?: number };
+export type DebugInspection = { readonly kind: 'stack'; readonly threadId?: number; }
+	| { readonly kind: 'frame'; readonly frameId: number; }
+	| { readonly kind: 'variables'; readonly variablesReference: number; }
+	| { readonly kind: 'watch'; readonly expressions: readonly string[]; readonly frameId?: number; };
 export type DebugInspectionValue =
-	| {
-			readonly kind: 'stack';
-			readonly threads: readonly unknown[];
-			readonly frames: readonly unknown[];
-			readonly threadId: number | null;
-	  }
-	| {
-			readonly kind: 'frame';
-			readonly scopes: readonly {
-				readonly scope: unknown;
-				readonly variables: readonly unknown[];
-				readonly variablesLoaded: boolean;
-				readonly error: string | null;
-			}[];
-	  }
-	| { readonly kind: 'variables'; readonly variables: readonly unknown[] }
-	| {
-			readonly kind: 'watch';
-			readonly values: readonly {
-				readonly expression: string;
-				readonly result: unknown;
-				readonly error: string | null;
-			}[];
-	  };
-export type DebugInspectionResult =
-	{ readonly state: 'pending' } | { readonly state: 'complete'; readonly value: DebugInspectionValue } | { readonly state: 'failed'; readonly message: string } | { readonly state: 'invalidated' };
+	| { readonly kind: 'stack'; readonly threads: readonly unknown[]; readonly frames: readonly unknown[]; readonly threadId: number | null; }
+	| { readonly kind: 'frame'; readonly scopes: readonly { readonly scope: unknown; readonly variables: readonly unknown[]; readonly variablesLoaded: boolean; readonly error: string | null; }[]; }
+	| { readonly kind: 'variables'; readonly variables: readonly unknown[]; }
+	| { readonly kind: 'watch'; readonly values: readonly { readonly expression: string; readonly result: unknown; readonly error: string | null; }[]; };
+export type DebugInspectionResult = { readonly state: 'pending'; } | { readonly state: 'complete'; readonly value: DebugInspectionValue; } | { readonly state: 'failed'; readonly message: string; } | { readonly state: 'invalidated'; };
 
 /** Durable definitions have no adapter verification or session-owned address. */
 export interface DebugBreakpointDefinition {
@@ -208,47 +178,25 @@ export interface DebugBreakpointDefinition {
 	readonly logMessage?: string;
 }
 export interface DebugWorkspaceState {
-	readonly breakpoints: readonly (DebugBreakpointDefinition & {
-		readonly resource: string;
-		readonly lineNumber: number;
-		readonly columnNumber?: number;
-	})[];
-	readonly functionBreakpoints: readonly (DebugBreakpointDefinition & { readonly name: string })[];
-	readonly dataBreakpoints: readonly (DebugBreakpointDefinition & {
-		readonly dataId: string;
-		readonly description: string;
-		readonly adapterType: string;
-		readonly accessType: 'read' | 'write' | 'readWrite';
-		readonly accessTypes: readonly ('read' | 'write' | 'readWrite')[];
-	})[];
+	readonly breakpoints: readonly (DebugBreakpointDefinition & { readonly resource: string; readonly lineNumber: number; readonly columnNumber?: number; })[];
+	readonly functionBreakpoints: readonly (DebugBreakpointDefinition & { readonly name: string; })[];
+	readonly dataBreakpoints: readonly (DebugBreakpointDefinition & { readonly dataId: string; readonly description: string; readonly adapterType: string; readonly accessType: 'read' | 'write' | 'readWrite'; readonly accessTypes: readonly ('read' | 'write' | 'readWrite')[]; })[];
 	readonly watchExpressions: readonly string[];
 	readonly exceptionBreakpoints: Readonly<Record<string, readonly string[]>>;
 }
-export interface DebugWorkspaceSnapshot {
-	readonly revision: number;
-	readonly state: DebugWorkspaceState;
-}
-export interface DebugWorkspaceResult {
-	readonly status: 'current' | 'applied' | 'conflict';
-	readonly snapshot: DebugWorkspaceSnapshot;
-}
+export interface DebugWorkspaceSnapshot { readonly revision: number; readonly state: DebugWorkspaceState; }
+export interface DebugWorkspaceResult { readonly status: 'current' | 'applied' | 'conflict'; readonly snapshot: DebugWorkspaceSnapshot; }
 export type DebugWorkspaceEdit =
-	| { readonly kind: 'clearBreakpoints' }
-	| { readonly kind: 'setEnabled'; readonly enabled: boolean }
-	| { readonly kind: 'source'; readonly point: DebugWorkspaceState['breakpoints'][number] }
-	| { readonly kind: 'function'; readonly point: DebugWorkspaceState['functionBreakpoints'][number] }
-	| { readonly kind: 'data'; readonly point: DebugWorkspaceState['dataBreakpoints'][number] }
-	| { readonly kind: 'remove'; readonly ids: readonly string[] }
-	| { readonly kind: 'addWatch' | 'removeWatch'; readonly expression: string }
-	| { readonly kind: 'exceptions'; readonly adapterType: string; readonly filters: readonly string[] };
+	| { readonly kind: 'clearBreakpoints'; }
+	| { readonly kind: 'setEnabled'; readonly enabled: boolean; }
+	| { readonly kind: 'source'; readonly point: DebugWorkspaceState['breakpoints'][number]; }
+	| { readonly kind: 'function'; readonly point: DebugWorkspaceState['functionBreakpoints'][number]; }
+	| { readonly kind: 'data'; readonly point: DebugWorkspaceState['dataBreakpoints'][number]; }
+	| { readonly kind: 'remove'; readonly ids: readonly string[]; }
+	| { readonly kind: 'addWatch' | 'removeWatch'; readonly expression: string; }
+	| { readonly kind: 'exceptions'; readonly adapterType: string; readonly filters: readonly string[]; };
 
-export interface DebugExceptionsSnapshot {
-	readonly version: number;
-	readonly appliedVersion: number;
-	readonly appliedFilters: readonly string[];
-	readonly filters: readonly string[];
-	readonly error: string | null;
-}
+export interface DebugExceptionsSnapshot { readonly version: number; readonly appliedVersion: number; readonly appliedFilters: readonly string[]; readonly filters: readonly string[]; readonly error: string | null; }
 
 export interface DebugSessionAdmission {
 	readonly id: string;
@@ -284,7 +232,4 @@ export interface DebugConsoleEntry {
 	readonly column: number | null;
 	readonly data: unknown;
 }
-export interface DebugConsoleSnapshot {
-	readonly revision: number;
-	readonly entries: readonly DebugConsoleEntry[];
-}
+export interface DebugConsoleSnapshot { readonly revision: number; readonly entries: readonly DebugConsoleEntry[]; }

@@ -14,7 +14,13 @@ export class Cursor {
 	private trackSelection = true;
 
 	constructor(context: CursorContext) {
-		const initial = new SingleCursorState(new Range(1, 1, 1, 1), SelectionStartKind.Simple, 0, new Position(1, 1), 0);
+		const initial = new SingleCursorState(
+			new Range(1, 1, 1, 1),
+			SelectionStartKind.Simple,
+			0,
+			new Position(1, 1),
+			0,
+		);
 		this.applyState(context, initial, initial);
 	}
 
@@ -40,7 +46,9 @@ export class Cursor {
 		if (this.selectionTrackedRange === null) throw new ReferenceError('Cursor selection is not being tracked');
 		const tracked = context.model._getTrackedRange(this.selectionTrackedRange);
 		if (!tracked) throw new ReferenceError('Cursor selection marker no longer exists');
-		const range = this.modelState.selection.isEmpty() && !tracked.isEmpty() ? tracked.collapseToEnd() : tracked;
+		const range = this.modelState.selection.isEmpty() && !tracked.isEmpty()
+			? tracked.collapseToEnd()
+			: tracked;
 		return Selection.fromRange(range, this.modelState.selection.getDirection());
 	}
 
@@ -54,19 +62,31 @@ export class Cursor {
 
 	private updateTrackedRange(context: CursorContext): void {
 		if (!this.trackSelection) return;
-		this.selectionTrackedRange = context.model._setTrackedRange(this.selectionTrackedRange, this.modelState.selection, TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges);
+		this.selectionTrackedRange = context.model._setTrackedRange(
+			this.selectionTrackedRange,
+			this.modelState.selection,
+			TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+		);
 	}
 
 	private removeTrackedRange(context: CursorContext): void {
-		this.selectionTrackedRange = context.model._setTrackedRange(this.selectionTrackedRange, null, TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges);
+		this.selectionTrackedRange = context.model._setTrackedRange(
+			this.selectionTrackedRange,
+			null,
+			TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+		);
 	}
 
 	private applyState(context: CursorContext, modelState: SingleCursorState | null, viewState: SingleCursorState | null): void {
 		if (!modelState && !viewState) return;
 		const validViewState = viewState ? Cursor.validateViewState(context.viewModel, viewState) : null;
-		const validModelState = modelState ? Cursor.validateModelState(context, modelState) : Cursor.modelStateFromViewState(context, validViewState!);
+		const validModelState = modelState
+			? Cursor.validateModelState(context, modelState)
+			: Cursor.modelStateFromViewState(context, validViewState!);
 		this.modelState = validModelState;
-		this.viewState = validViewState ? Cursor.reconcileViewState(context, validModelState, validViewState) : Cursor.viewStateFromModelState(context, validModelState);
+		this.viewState = validViewState
+			? Cursor.reconcileViewState(context, validModelState, validViewState)
+			: Cursor.viewStateFromModelState(context, validModelState);
 		this.updateTrackedRange(context);
 	}
 

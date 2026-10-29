@@ -1,16 +1,24 @@
 /**
  * Narrows code after a caller-defined condition or fails with its context.
  */
-export function assert(condition: unknown, messageOrError: string | Error): asserts condition {
+export function assert(
+	condition: unknown,
+	messageOrError: string | Error,
+): asserts condition {
 	if (!condition) {
-		throw typeof messageOrError === 'string' ? new Error(messageOrError) : messageOrError;
+		throw typeof messageOrError === 'string'
+			? new Error(messageOrError)
+			: messageOrError;
 	}
 }
 
 /**
  * Narrows a value to its non-nullable type or fails with caller-owned context.
  */
-export function assertDefined<T>(value: T, messageOrError: string | Error): asserts value is NonNullable<T> {
+export function assertDefined<T>(
+	value: T,
+	messageOrError: string | Error,
+): asserts value is NonNullable<T> {
 	assert(value !== undefined && value !== null, messageOrError);
 }
 
@@ -32,7 +40,9 @@ export function isNonEmptyString(value: unknown): value is string {
 	return typeof value === 'string' && value.trim().length > 0;
 }
 
-export type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+export type Mutable<T> = {
+	-readonly [K in keyof T]: T[K];
+};
 
 export function isString(value: unknown): value is string {
 	return typeof value === 'string';

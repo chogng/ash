@@ -20,9 +20,7 @@ suite('Terminal Quick Access', () => {
 	test('command opens the registered terminal provider', async () => {
 		using services = new InstantiationService();
 		const shown: string[] = [];
-		services.registerInstance(IQuickInputService, {
-			quickAccess: { show: (value: string) => shown.push(value) },
-		} as unknown as IQuickInputService);
+		services.registerInstance(IQuickInputService, { quickAccess: { show: (value: string) => shown.push(value) } } as unknown as IQuickInputService);
 		using commands = new CommandService(services, CommandsRegistry);
 		await commands.executeCommand('workbench.action.quickOpenTerm');
 		assert.deepEqual(shown, ['term ']);
@@ -34,8 +32,7 @@ suite('Terminal Quick Access', () => {
 		const directions: boolean[] = [];
 		const picker = { type: QuickInputType.QuickPick, value: '>other picker' };
 		services.registerInstance(IQuickInputService, {
-			currentQuickInput: picker,
-			navigate: (next: boolean) => directions.push(next),
+			currentQuickInput: picker, navigate: (next: boolean) => directions.push(next),
 		} as unknown as IQuickInputService);
 		using commands = new CommandService(services, CommandsRegistry);
 		await commands.executeCommand('workbench.action.quickOpenNavigateNextInTerminalPicker');
@@ -55,56 +52,25 @@ suite('Terminal Quick Access', () => {
 		let active: ITerminalInstance | undefined = panel;
 		const effects: unknown[] = [];
 		services.registerInstance(ITerminalService, {
-			get instances() {
-				return instances;
-			},
-			get activeInstance() {
-				return active;
-			},
-			onDidChangeInstances: changed.event,
-			onDidChangeActiveInstance: Event.None,
-			setActiveInstance(instance: ITerminalInstance) {
-				active = instance;
-				effects.push(instance);
-			},
-			async safeDisposeTerminal(instance: ITerminalInstance) {
-				effects.push(['close', instance]);
-			},
+			get instances() { return instances; }, get activeInstance() { return active; },
+			onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
+			setActiveInstance(instance: ITerminalInstance) { active = instance; effects.push(instance); },
+			async safeDisposeTerminal(instance: ITerminalInstance) { effects.push(['close', instance]); },
 		} as unknown as ITerminalService);
-		services.registerInstance(ITerminalGroupService, {
-			async showPanel(focus: boolean) {
-				effects.push(['panel', focus]);
-			},
-		} as ITerminalGroupService);
-		services.registerInstance(ITerminalEditorService, {
-			async openEditor(instance: ITerminalInstance) {
-				effects.push(['editor', instance]);
-			},
-		} as ITerminalEditorService);
-		services.registerInstance(ITerminalEditingService, {
-			async rename(instance: ITerminalInstance) {
-				effects.push(['rename', instance]);
-			},
-		} as ITerminalEditingService);
+		services.registerInstance(ITerminalGroupService, { async showPanel(focus: boolean) { effects.push(['panel', focus]); } } as ITerminalGroupService);
+		services.registerInstance(ITerminalEditorService, { async openEditor(instance: ITerminalInstance) { effects.push(['editor', instance]); } } as ITerminalEditorService);
+		services.registerInstance(ITerminalEditingService, { async rename(instance: ITerminalInstance) { effects.push(['rename', instance]); } } as ITerminalEditingService);
 		using provider = services.createInstance(TerminalQuickAccessProvider);
 		using typed = new Emitter<string>();
 		const picker = {
-			value: 'term ',
-			items: [] as IQuickPickItem[],
-			selectedItems: [],
-			onDidChangeValue: typed.event,
-			onDidAccept: Event.None,
-			onDidTriggerItemButton: Event.None,
+			value: 'term ', items: [] as IQuickPickItem[], selectedItems: [],
+			onDidChangeValue: typed.event, onDidAccept: Event.None, onDidTriggerItemButton: Event.None,
 		} as unknown as IQuickPick<IPickerQuickAccessItem>;
 		using showing = provider.provide(picker, CancellationToken.None);
 		const items = (): IPickerQuickAccessItem[] => picker.items.filter((item): item is IPickerQuickAccessItem => !('type' in item));
-		assert.deepEqual(
-			items().map(item => [item.label, item.description, item.picked]),
-			[
-				['Build shell', 'Panel', true],
-				['Remote editor', 'Editor', false],
-			],
-		);
+		assert.deepEqual(items().map(item => [item.label, item.description, item.picked]), [
+			['Build shell', 'Panel', true], ['Remote editor', 'Editor', false],
+		]);
 		const oldPanel = items()[0]!;
 		const oldEditor = items()[1]!;
 		oldEditor.accept!({ ctrlCmd: false, alt: false, shift: false }, { inBackground: false });
@@ -115,22 +81,13 @@ suite('Terminal Quick Access', () => {
 		effects.length = 0;
 		assert.equal(await oldEditor.trigger!(0, { ctrlCmd: false, alt: false, shift: false }), TriggerAction.REFRESH_PICKER);
 		assert.equal(await oldEditor.trigger!(1, { ctrlCmd: false, alt: false, shift: false }), TriggerAction.REFRESH_PICKER);
-		assert.deepEqual(effects, [
-			['rename', editor],
-			['close', editor],
-		]);
+		assert.deepEqual(effects, [['rename', editor], ['close', editor]]);
 		picker.value = 'term rmed';
 		typed.fire(picker.value);
-		assert.deepEqual(
-			items().map(item => item.label),
-			['Remote editor'],
-		);
+		assert.deepEqual(items().map(item => item.label), ['Remote editor']);
 		instances.splice(1, 1);
 		changed.fire();
-		assert.deepEqual(
-			items().map(item => item.label),
-			['No matching terminals'],
-		);
+		assert.deepEqual(items().map(item => item.label), ['No matching terminals']);
 		effects.length = 0;
 		oldEditor.accept!({ ctrlCmd: false, alt: false, shift: false }, { inBackground: false });
 		await oldEditor.trigger!(1, { ctrlCmd: false, alt: false, shift: false });
@@ -152,41 +109,20 @@ suite('Terminal Quick Access', () => {
 		let active = instances[0];
 		const revealed: ITerminalInstance[] = [];
 		services.registerInstance(ITerminalService, {
-			get instances() {
-				return instances;
-			},
-			get activeInstance() {
-				return active;
-			},
-			onDidChangeInstances: changed.event,
-			onDidChangeActiveInstance: Event.None,
-			setActiveInstance(instance: ITerminalInstance) {
-				active = instance;
-				revealed.push(instance);
-			},
+			get instances() { return instances; }, get activeInstance() { return active; },
+			onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
+			setActiveInstance(instance: ITerminalInstance) { active = instance; revealed.push(instance); },
 		} as unknown as ITerminalService);
-		services.registerInstance(ITerminalGroupService, { async showPanel() {} } as ITerminalGroupService);
+		services.registerInstance(ITerminalGroupService, { async showPanel() { } } as ITerminalGroupService);
 		services.registerInstance(ITerminalEditorService, {
-			async openEditor() {
-				throw new Error('This scenario reveals panel terminals');
-			},
-			async splitInstance() {
-				throw new Error('Quick Access does not split terminals');
-			},
-			async detachInstance() {
-				throw new Error('Quick Access does not move terminals');
-			},
-			getInstanceFromResource() {
-				throw new Error('Quick Access uses instance identity');
-			},
+			async openEditor() { throw new Error('This scenario reveals panel terminals'); },
+			async splitInstance() { throw new Error('Quick Access does not split terminals'); },
+			async detachInstance() { throw new Error('Quick Access does not move terminals'); },
+			getInstanceFromResource() { throw new Error('Quick Access uses instance identity'); },
 		});
 		services.registerInstance(ITerminalEditingService, {
-			async rename() {
-				throw new Error('This scenario renames through the instance owner');
-			},
-			getEditingTerminal() {
-				return undefined;
-			},
+			async rename() { throw new Error('This scenario renames through the instance owner'); },
+			getEditingTerminal() { return undefined; },
 		});
 		const container = browserEnvironment.window.document.createElement('div');
 		browserEnvironment.window.document.body.append(container);
@@ -201,10 +137,7 @@ suite('Terminal Quick Access', () => {
 		assert.equal(browsedPick.label, 'Browsed shell');
 		instances.shift();
 		changed.fire();
-		assert.deepEqual(
-			picker.items.map(item => item.label),
-			['Browsed shell', 'Last shell'],
-		);
+		assert.deepEqual(picker.items.map(item => item.label), ['Browsed shell', 'Last shell']);
 		assert.equal(picker.activeItems[0], browsedPick);
 		browsed.title = 'Renamed browsed shell';
 		changed.fire();

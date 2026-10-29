@@ -34,7 +34,7 @@ export class TextAreaState {
 		readonly selection: Range | null,
 		/** Visible line count before the selection in the projected textarea value. */
 		readonly newlineCountBeforeSelection: number | undefined,
-	) {}
+	) { }
 
 	toString(): string {
 		return `[ <${this.value}>, selectionStart: ${this.selectionStart}, selectionEnd: ${this.selectionEnd}]`;
@@ -62,7 +62,10 @@ export class TextAreaState {
 
 	isWrittenToTextArea(textArea: ITextAreaWrapper, select: boolean): boolean {
 		if (this.value !== textArea.getValue()) return false;
-		return !select || (this.selectionStart === textArea.getSelectionStart() && this.selectionEnd === textArea.getSelectionEnd());
+		return !select || (
+			this.selectionStart === textArea.getSelectionStart() &&
+			this.selectionEnd === textArea.getSelectionEnd()
+		);
 	}
 
 	writeToTextArea(reason: string, textArea: ITextAreaWrapper, select: boolean): void {
@@ -105,7 +108,11 @@ export class TextAreaState {
 			console.log(`CURRENT STATE: ${currentState.toString()}`);
 		}
 
-		const prefixLength = Math.min(commonPrefixLength(previousState.value, currentState.value), previousState.selectionStart, currentState.selectionStart);
+		const prefixLength = Math.min(
+			commonPrefixLength(previousState.value, currentState.value),
+			previousState.selectionStart,
+			currentState.selectionStart,
+		);
 		const suffixLength = Math.min(
 			commonSuffixLength(previousState.value, currentState.value),
 			previousState.value.length - previousState.selectionEnd,
@@ -160,6 +167,12 @@ export class TextAreaState {
 	}
 
 	static fromScreenReaderContentState(state: ISimpleScreenReaderContentState) {
-		return new TextAreaState(state.value, state.selectionStart, state.selectionEnd, state.selection, state.newlineCountBeforeSelection);
+		return new TextAreaState(
+			state.value,
+			state.selectionStart,
+			state.selectionEnd,
+			state.selection,
+			state.newlineCountBeforeSelection,
+		);
 	}
 }

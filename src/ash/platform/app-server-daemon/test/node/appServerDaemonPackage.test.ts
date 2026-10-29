@@ -18,25 +18,14 @@ test('development and production resolve the same canonical package entrypoint',
 	try {
 		const connection = createAppServerDaemonLauncher({
 			packageLocation: { appPath, isPackaged: false, platform: 'linux', resourcesPath: '/installed/resources' },
-			sourceEnvironment: {},
-			profileRoot: '/profile',
-			electronExecutable: '/electron',
-			role: 'workbench',
+			sourceEnvironment: {}, profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
 		});
-		assert.deepStrictEqual(
-			{
-				executable: connection.launcher.executable,
-				args: connection.launcher.options.args,
-				backend: connection.launcher.environment.ASH_APP_SERVER_PATH,
-				generationFile: connection.generationFile,
-			},
-			{
-				executable: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server-daemon'),
-				args: ['connect-selected'],
-				backend: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server'),
-				generationFile: undefined,
-			},
-		);
+		assert.deepStrictEqual({ executable: connection.launcher.executable, args: connection.launcher.options.args, backend: connection.launcher.environment.ASH_APP_SERVER_PATH, generationFile: connection.generationFile }, {
+			executable: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server-daemon'),
+			args: ['connect-selected'],
+			backend: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server'),
+			generationFile: undefined,
+		});
 		assert.equal(
 			appServerDaemonExecutablePath({
 				appPath,
@@ -63,13 +52,8 @@ test('development and production resolve the same canonical package entrypoint',
 		for (const reloadBackend of [false, true]) {
 			const development = createAppServerDaemonLauncher({
 				packageLocation: { appPath, isPackaged: false, platform: 'linux', resourcesPath: '' },
-				sourceEnvironment: {
-					ASH_RENDERER_URL: 'http://127.0.0.1:5173',
-					ASH_DEV_APP_SERVER_RELOAD: reloadBackend ? '1' : '0',
-				},
-				profileRoot: '/profile',
-				electronExecutable: '/electron',
-				role: 'workbench',
+				sourceEnvironment: { ASH_RENDERER_URL: 'http://127.0.0.1:5173', ASH_DEV_APP_SERVER_RELOAD: reloadBackend ? '1' : '0' },
+				profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
 			});
 			using launcher = development.launcher;
 			assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(generationDirectory, generation));
@@ -116,10 +100,7 @@ test('packaged server host digest is bound to the canonical package entrypoint',
 	try {
 		const metadata = {
 			buildId: `sha256:${'b'.repeat(64)}`,
-			components: {
-				appServerDaemon: { binarySha256: 'a'.repeat(64) },
-				appServer: { binarySha256: 'c'.repeat(64) },
-			},
+			components: { appServerDaemon: { binarySha256: 'a'.repeat(64) }, appServer: { binarySha256: 'c'.repeat(64) } },
 			entrypoint: 'bin/ash-app-server.exe',
 			layoutVersion: 2,
 			protocol: {
@@ -130,20 +111,14 @@ test('packaged server host digest is bound to the canonical package entrypoint',
 		};
 		writeFileSync(join(resourcesPath, 'ash-package.json'), JSON.stringify(metadata));
 		assert.equal(packagedAppServerSha256({ appPath: '/workspace', isPackaged: true, platform: 'win32', resourcesPath }), 'c'.repeat(64));
-		assert.equal(
-			packagedAppServerDaemonSha256({
-				appPath: '/unused',
-				expectedVersion: '1.2.3',
-				isPackaged: true,
-				platform: 'win32',
-				resourcesPath,
-			}),
-			'a'.repeat(64),
-		);
-		const incompatible = {
-			...metadata,
-			protocol: { ...metadata.protocol, schemaHash: `sha256:${'0'.repeat(64)}` },
-		};
+		assert.equal(packagedAppServerDaemonSha256({
+			appPath: '/unused',
+			expectedVersion: '1.2.3',
+			isPackaged: true,
+			platform: 'win32',
+			resourcesPath,
+		}), 'a'.repeat(64));
+		const incompatible = { ...metadata, protocol: { ...metadata.protocol, schemaHash: `sha256:${'0'.repeat(64)}` } };
 		writeFileSync(join(resourcesPath, 'ash-package.json'), JSON.stringify(incompatible));
 		assert.throws(() => packagedAppServerSha256({ appPath: '/unused', isPackaged: true, platform: 'win32', resourcesPath }), /Invalid Ash package metadata/);
 	} finally {

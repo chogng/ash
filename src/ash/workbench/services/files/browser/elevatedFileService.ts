@@ -5,9 +5,7 @@ import { IElevatedFileService } from '../common/elevatedFileService.js';
 
 /** Browser directory handles confer user-selected access, never OS administrator rights. */
 export class BrowserElevatedFileService implements IElevatedFileService {
-	public isSupported(_resource: URI): boolean {
-		return false;
-	}
+	public isSupported(_resource: URI): boolean { return false; }
 
 	public async writeFileElevated(resource: URI, _value: VSBuffer): Promise<IFileWriteResult> {
 		throw new FileOperationNotSupportedError(resource, 'writeFileElevated');

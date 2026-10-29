@@ -18,27 +18,20 @@ export class TerminalWindowLifetimeHost extends Disposable {
 
 	constructor(private readonly launch: () => Promise<TerminalOwnerLaunch>) {
 		super();
-		this._register(
-			toDisposable(() => {
-				// Closing the pipe also works when the business backend is unavailable.
-				// Main process death closes it in the OS, without a JS shutdown handler.
-				this.child?.stdin?.destroy();
-				this.child = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			// Closing the pipe also works when the business backend is unavailable.
+			// Main process death closes it in the OS, without a JS shutdown handler.
+			this.child?.stdin?.destroy();
+			this.child = undefined;
+		}));
 	}
 
 	routes(): IpcRoute<unknown, string>[] {
-		return [
-			{
-				channel: TERMINAL_WINDOW_LIFETIME_CHANNEL,
-				validate: value => {
-					if (value !== undefined) throw new TypeError('Terminal lifetime accepts no arguments');
-					return undefined;
-				},
-				invoke: () => this.getToken(),
-			},
-		];
+		return [{
+			channel: TERMINAL_WINDOW_LIFETIME_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Terminal lifetime accepts no arguments'); return undefined; },
+			invoke: () => this.getToken(),
+		}];
 	}
 
 	private getToken(): Promise<string> {
@@ -46,9 +39,7 @@ export class TerminalWindowLifetimeHost extends Disposable {
 		if (!this.pending) {
 			const pending = this.start();
 			this.pending = pending;
-			void pending.catch(() => {
-				if (this.pending === pending) this.pending = undefined;
-			});
+			void pending.catch(() => { if (this.pending === pending) this.pending = undefined; });
 		}
 		return this.pending;
 	}
@@ -58,16 +49,11 @@ export class TerminalWindowLifetimeHost extends Disposable {
 		if (this.isDisposed) throw new Error(localize('terminal.windowLifetime.closed', 'Terminal window is closed'));
 		const token = randomBytes(32).toString('hex');
 		const child = spawn(launch.executable, ['--terminal-owner', launch.profile], {
-			env: launch.environment,
-			stdio: ['pipe', 'pipe', 'inherit'],
-			windowsHide: true,
+			env: launch.environment, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true,
 		});
 		this.child = child;
 		child.once('exit', () => {
-			if (this.child === child) {
-				this.child = undefined;
-				this.pending = undefined;
-			}
+			if (this.child === child) { this.child = undefined; this.pending = undefined; }
 		});
 		try {
 			await new Promise<void>((resolve, reject) => {
@@ -77,8 +63,7 @@ export class TerminalWindowLifetimeHost extends Disposable {
 					child.stdout!.removeListener('data', onData);
 					child.removeListener('error', onError);
 					child.removeListener('exit', onExit);
-					if (error) reject(error);
-					else resolve();
+					if (error) reject(error); else resolve();
 				};
 				const onError = (error: Error): void => finish(error);
 				const onExit = (): void => finish(new Error(localize('terminal.windowLifetime.registrationExited', 'Terminal lifetime process exited before registration')));
@@ -91,9 +76,7 @@ export class TerminalWindowLifetimeHost extends Disposable {
 				child.stdout!.on('data', onData);
 				child.once('error', onError);
 				child.once('exit', onExit);
-				child.stdin!.on('error', () => {
-					/* Exit/error owns the registration result. */
-				});
+				child.stdin!.on('error', () => { /* Exit/error owns the registration result. */ });
 				// Never put a lifetime credential in argv, environment, or logs.
 				child.stdin!.write(`${token}\n`);
 			});

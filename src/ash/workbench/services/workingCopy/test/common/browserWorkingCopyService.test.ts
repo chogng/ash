@@ -60,9 +60,9 @@ test('BrowserWorkingCopyService reports initially dirty registrations and remova
 
 test('file aliases find every format-specific working copy and unregister through their original lifetime', () => {
 	using files = new FileService();
-	const provider = new (class extends MemoryFileService {
+	const provider = new class extends MemoryFileService {
 		public override capabilities = FileSystemProviderCapabilities.FileReadWrite;
-	})([]);
+	}([]);
 	using registeredProvider = files.registerProvider('file', provider);
 	using services = new TestUriIdentityServices(files);
 	using copies = services.createInstance(BrowserWorkingCopyService);
@@ -102,11 +102,9 @@ class FakeWorkingCopy extends Disposable implements IWorkingCopy {
 		this.dirtyEmitter.fire();
 	}
 
-	async save(_signal: AbortSignal): Promise<void> {}
-	backup(): string {
-		return '';
-	}
-	restoreBackup(): void {}
-	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
-	async revert(_signal: AbortSignal): Promise<void> {}
+	async save(_signal: AbortSignal): Promise<void> { }
+	backup(): string { return ''; }
+	restoreBackup(): void { }
+	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
+	async revert(_signal: AbortSignal): Promise<void> { }
 }

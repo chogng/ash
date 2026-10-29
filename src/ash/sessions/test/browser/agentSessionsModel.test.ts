@@ -11,63 +11,26 @@ test('The Chat session catalog shows current activity and restores its workspace
 	using changed = new Emitter<void>();
 	const threadId = 'root';
 	let session: ISession = {
-		sessionId: 'session',
-		providerId: 'provider',
-		title: 'Review',
-		status: 'active',
-		nextApprovalMode: 'manual',
+		sessionId: 'session', providerId: 'provider', title: 'Review', status: 'active', nextApprovalMode: 'manual',
 		workspace: { root: '/workspace', authorityId: 'local' },
-		chats: [
-			{
-				threadId,
-				status: 'active',
-				origin: { type: 'root' },
-				management: {
-					status: 'working',
-					statusChangedAtUnixMs: 0,
-					activity: { type: 'operation', text: 'Reading files' },
-				},
-			},
-		],
+		chats: [{ threadId, status: 'active', origin: { type: 'root' }, management: { status: 'working', statusChangedAtUnixMs: 0, activity: { type: 'operation', text: 'Reading files' } } }],
 	};
 	const opened: string[][] = [];
 	const sessions = {
-		onDidChange: changed.event,
-		untitledSessions: [],
-		state: 'ready',
-		get sessions() {
-			return [session];
-		},
-		get active() {
-			return { session, threadId };
-		},
-		selectThread: (sessionId: string, threadId: string) => {
-			opened.push([sessionId, threadId]);
-		},
+		onDidChange: changed.event, untitledSessions: [], state: 'ready',
+		get sessions() { return [session]; },
+		get active() { return { session, threadId }; },
+		selectThread: (sessionId: string, threadId: string) => { opened.push([sessionId, threadId]); },
 	} as unknown as ISessionsManagementService;
 	const storage = { getBoolean: () => false, onDidChangeValue: Event.None } as unknown as IStorageService;
 	const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 	const model = createAgentSessionsModel(sessions, storage, groups, () => []);
 	let updates = 0;
-	using listener = model.onDidChange(() => {
-		updates++;
-	});
+	using listener = model.onDidChange(() => { updates++; });
 	assert.equal(model.items[0]!.description, 'Reading files');
 	model.items[0]!.open();
 	assert.deepEqual(opened, [['session', 'root']]);
-	session = {
-		...session,
-		chats: [
-			{
-				...session.chats[0]!,
-				management: {
-					status: 'completed',
-					statusChangedAtUnixMs: 1,
-					activity: { type: 'operation', text: 'Old operation' },
-				},
-			},
-		],
-	};
+	session = { ...session, chats: [{ ...session.chats[0]!, management: { status: 'completed', statusChangedAtUnixMs: 1, activity: { type: 'operation', text: 'Old operation' } } }] };
 	changed.fire();
 	assert.equal(updates, 1);
 	assert.equal(model.items[0]!.description, '/workspace');

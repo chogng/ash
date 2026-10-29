@@ -12,11 +12,7 @@ import { Range } from '../../../../common/core/range.js';
 import { type ITextModel } from '../../../../common/model.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 
-const diffOptions: IDocumentDiffProviderOptions = {
-	ignoreTrimWhitespace: false,
-	maxComputationTimeMs: 0,
-	computeMoves: false,
-};
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 test('DiffModel publishes only version-pinned computation results', async () => {
 	using original = new TextModel('before');
@@ -26,12 +22,10 @@ test('DiffModel publishes only version-pinned computation results', async () => 
 
 	assert.equal(model.state.kind, 'loading');
 	const first = computationService.takeRequest();
-	original.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 6 + 1)),
-			text: 'current',
-		},
-	]);
+	original.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (6) + 1)),
+		text: 'current',
+	}]);
 	const second = computationService.takeRequest();
 	assert.equal(first.token.isCancellationRequested, true);
 	first.resolve(createModifiedDiff());
@@ -137,9 +131,7 @@ class ControlledDiffComputationService implements IDocumentDiffProvider {
 		return new Promise(resolve => this.requests.push({ original, modified, options, token, resolve }));
 	}
 
-	changeSettings(): void {
-		this.changed.fire(undefined);
-	}
+	changeSettings(): void { this.changed.fire(undefined); }
 
 	takeRequest(): ControlledRequest {
 		const request = this.requests.shift();
@@ -147,9 +139,7 @@ class ControlledDiffComputationService implements IDocumentDiffProvider {
 		return request;
 	}
 
-	dispose(): void {
-		this.changed.dispose();
-	}
+	dispose(): void { this.changed.dispose(); }
 
 	[Symbol.dispose](): void {
 		this.dispose();
@@ -170,7 +160,7 @@ class ResolvedDiffComputationService implements IDocumentDiffProvider {
 		});
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

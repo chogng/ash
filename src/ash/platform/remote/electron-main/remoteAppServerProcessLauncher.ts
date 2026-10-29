@@ -41,10 +41,7 @@ export interface RemoteAppServerProcessLauncherOptions {
 
 /** Classifies a failed Desktop-side runtime availability check before App Server startup. */
 export class SshRuntimeProbeError extends Error {
-	constructor(
-		readonly kind: 'runtime-unavailable' | 'transport',
-		message: string,
-	) {
+	constructor(readonly kind: 'runtime-unavailable' | 'transport', message: string) {
 		super(message);
 		this.name = 'SshRuntimeProbeError';
 	}
@@ -67,8 +64,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 	constructor(readonly options: RemoteAppServerProcessLauncherOptions) {
 		const authority = options.workspace instanceof URI ? getRemoteAuthority(options.workspace) : options.workspace;
 		if (!authority || authority.type !== 'ssh') throw new Error('SSH App Server launcher requires an SSH Remote workspace');
-		if (!validLocalCommand(options.sshExecutable) || !validLocalCommand(options.remoteExecutable))
-			throw new Error('SSH and Remote Ash executable names must be non-empty and contain no control characters');
+		if (!validLocalCommand(options.sshExecutable) || !validLocalCommand(options.remoteExecutable)) throw new Error('SSH and Remote Ash executable names must be non-empty and contain no control characters');
 		this.host = authority.host;
 		this.workspacePath = options.workspace instanceof URI ? getRemoteWorkspacePath(options.workspace) : undefined;
 		this.profileWorkspacePath = this.workspacePath;
@@ -141,11 +137,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
-		const environment: Record<string, string> = {
-			...this.options.carrier.environment,
-			ASH_REMOTE_HOST: this.host,
-			ASH_REMOTE_RUNTIME: this.remoteExecutable,
-		};
+		const environment: Record<string, string> = { ...this.options.carrier.environment, ASH_REMOTE_HOST: this.host, ASH_REMOTE_RUNTIME: this.remoteExecutable };
 		delete environment.ASH_WORKSPACE_ROOT;
 		delete environment.ASH_DIR_GRANT_SOURCE;
 		if (this.workspacePath === undefined) delete environment.ASH_REMOTE_ROOT;
@@ -181,13 +173,15 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 
 	private async probe(executable: string): Promise<SshRuntimeProbeResult> {
 		const windows = isWindowsRemotePath(this.workspacePath ?? executable);
-		const result = await this.probeRuntime(this.options.sshExecutable, sshRuntimeProbeArguments(this.host, executable, windows), { environment: this.options.localEnvironment });
+		const result = await this.probeRuntime(
+			this.options.sshExecutable,
+			sshRuntimeProbeArguments(this.host, executable, windows),
+			{ environment: this.options.localEnvironment },
+		);
 		if (windows || this.workspacePath !== undefined || resolvedRuntime(result) !== undefined || runtimeMissing(result)) return result;
 		// An authority can be opened before its workspace is selected. Windows OpenSSH
 		// may use cmd.exe or PowerShell, so a failed POSIX probe needs an OS-safe fallback.
-		return this.probeRuntime(this.options.sshExecutable, sshRuntimeProbeArguments(this.host, executable, true), {
-			environment: this.options.localEnvironment,
-		});
+		return this.probeRuntime(this.options.sshExecutable, sshRuntimeProbeArguments(this.host, executable, true), { environment: this.options.localEnvironment });
 	}
 }
 
@@ -196,7 +190,15 @@ const RUNTIME_MISSING_MARKER = '__ASH_REMOTE_RUNTIME_MISSING__';
 
 /** Builds the non-interactive SSH command used by Main to classify runtime availability. */
 export function sshRuntimeProbeArguments(host: string, executable: string, windows = false): readonly string[] {
-	return ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', host, remoteRuntimeProbeCommand(executable, windows)];
+	return [
+		'-T',
+		'-o',
+		'BatchMode=yes',
+		'-o',
+		'ConnectTimeout=10',
+		host,
+		remoteRuntimeProbeCommand(executable, windows),
+	];
 }
 
 function remoteRuntimeProbeCommand(executable: string, windows: boolean): string {
@@ -215,10 +217,7 @@ function quotePosixShellArgument(value: string): string {
 }
 
 function resolvedRuntime(result: SshRuntimeProbeResult): string | undefined {
-	const resolved = result.stdout
-		.split(/\r?\n/u)
-		.map(line => line.trim())
-		.find(line => line.startsWith(RUNTIME_FOUND_MARKER));
+	const resolved = result.stdout.split(/\r?\n/u).map(line => line.trim()).find(line => line.startsWith(RUNTIME_FOUND_MARKER));
 	if (resolved === undefined) return undefined;
 	const executable = resolved.slice(RUNTIME_FOUND_MARKER.length).trim();
 	if (!isCanonicalAbsoluteRemotePath(executable)) throw new SshRuntimeProbeError('transport', 'Remote runtime probe returned a non-canonical executable path');
@@ -231,7 +230,10 @@ function runtimeMissing(result: SshRuntimeProbeResult): boolean {
 
 function runtimeProbeTransportError(result: SshRuntimeProbeResult): SshRuntimeProbeError {
 	const diagnostic = result.stderr.trim();
-	return new SshRuntimeProbeError('transport', diagnostic ? `Remote runtime probe failed: ${diagnostic}` : `Remote runtime probe exited with code ${result.exitCode ?? 'unknown'}`);
+	return new SshRuntimeProbeError(
+		'transport',
+		diagnostic ? `Remote runtime probe failed: ${diagnostic}` : `Remote runtime probe exited with code ${result.exitCode ?? 'unknown'}`,
+	);
 }
 
 function defaultProbe(executable: string, args: readonly string[], options: SshRuntimeProbeOptions): Promise<SshRuntimeProbeResult> {
@@ -241,14 +243,10 @@ function defaultProbe(executable: string, args: readonly string[], options: SshR
 		let stderr = '';
 		child.stdout.setEncoding('utf8');
 		child.stderr.setEncoding('utf8');
-		child.stdout.on('data', chunk => {
-			stdout = appendBounded(stdout, String(chunk));
-		});
-		child.stderr.on('data', chunk => {
-			stderr = appendBounded(stderr, String(chunk));
-		});
+		child.stdout.on('data', chunk => { stdout = appendBounded(stdout, String(chunk)); });
+		child.stderr.on('data', chunk => { stderr = appendBounded(stderr, String(chunk)); });
 		child.once('error', reject);
-		child.once('close', exitCode => resolve({ exitCode, stdout, stderr }));
+		child.once('close', (exitCode) => resolve({ exitCode, stdout, stderr }));
 	});
 }
 

@@ -2,7 +2,12 @@ import { toDisposable, type IDisposable, type IReference } from '../../../base/c
 import type { URI } from '../../../base/common/uri.js';
 import type { ITextModel } from '../model.js';
 import { IModelService, type IModelService as IModelServiceContract } from './model.js';
-import { createResolvedTextEditorModelReference, type IResolvedTextEditorModel, type ITextModelContentProvider, type ITextModelService } from './resolverService.js';
+import {
+	createResolvedTextEditorModelReference,
+	type IResolvedTextEditorModel,
+	type ITextModelContentProvider,
+	type ITextModelService,
+} from './resolverService.js';
 
 /** Resolves standalone models by resource without taking ownership of caller-created models. */
 export class InMemoryTextModelService implements ITextModelService {
@@ -10,11 +15,11 @@ export class InMemoryTextModelService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@IModelService private readonly models: IModelServiceContract) {}
+	constructor(@IModelService private readonly models: IModelServiceContract) { }
 
 	async createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>> {
 		const existing = this.models.getModel(resource);
-		if (existing) return createResolvedTextEditorModelReference(existing, () => {});
+		if (existing) return createResolvedTextEditorModelReference(existing, () => { });
 		const provider = this.contentProviders.get(resource.scheme);
 		if (!provider) throw new ReferenceError(`Text model not found: ${resource.toString()}`);
 		const model = await provider.provideTextContent(resource);

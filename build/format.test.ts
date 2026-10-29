@@ -8,7 +8,10 @@ const repositoryRoot = resolve(import.meta.dirname, '..');
 const bun = join(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 
 function format(file: string, input: string): string {
-	const result = spawnSync(bun, ['fmt', '--no-script', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file], {
+	const arguments_ = /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file)
+		? [join(repositoryRoot, 'build/format.ts'), '--stdin-filepath', file]
+		: ['fmt', '--no-script', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file];
+	const result = spawnSync(bun, arguments_, {
 		cwd: repositoryRoot,
 		input,
 		encoding: 'utf8',
@@ -17,19 +20,19 @@ function format(file: string, input: string): string {
 	return result.stdout;
 }
 
-test('Bun formats source buffers with the repository rules without writing files', () => {
+test('TypeScript formats source buffers without changing quotes or writing files', () => {
 	const input = 'function example(){\n  const message="hello"\n  consume(message,1)\n}\n';
-	const expected = "function example() {\n\tconst message = 'hello';\n\tconsume(message, 1);\n}\n";
+	const expected = 'function example() {\n\tconst message = "hello";\n\tconsume(message, 1);\n}\n';
 	assert.equal(format('test/example.ts', input), expected);
 	assert.equal(format('test/example.ts', expected), expected);
 });
 
-test('Bun keeps long imports on one line within the source print width', () => {
+test('TypeScript preserves single-line imports without imposing a print width', () => {
 	const input = "import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';\n";
 	assert.equal(format('test/example.ts', input), input);
 });
 
-test('Bun preserves multiline settings objects within the source print width', () => {
+test('TypeScript preserves both compact objects and multiline settings', () => {
 	const input = `const compact = { id: 'on', label: 'On' };
 const configuration = {
 	setting: {
@@ -43,11 +46,35 @@ const configuration = {
 	assert.equal(format('test/example.ts', input), input);
 });
 
-test('Bun formats nested call chains to stable output in one pass', () => {
+test('TypeScript preserves multiline imports, signatures, and calls', () => {
+	const input = `import type {
+	ISessionProviderScope,
+	ISessionProviderScopeService,
+} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+
+function example(
+	value: string,
+	options: Options,
+): void {
+	consume(
+		value,
+		options,
+	);
+}
+`;
+	assert.equal(format('test/example.ts', input), input);
+});
+
+test('TypeScript formats nested call chains to stable output in one pass', () => {
 	const input = `class Preview {
 	async example() {
 		try {
-			return lines.map((_, index) => preview.getLanguageTokens(lineNumber + index).map(token => ({ ...token, range: new Range(index + 1, token.range.startColumn, index + 1, token.range.endColumn) })));
+			return lines.map((_, index) =>
+				preview.getLanguageTokens(lineNumber+index).map(token => ({
+					...token,
+					range: new Range(index + 1, token.range.startColumn, index + 1, token.range.endColumn),
+				})),
+			);
 		} finally { preview.dispose(); }
 	}
 }
@@ -61,14 +88,16 @@ test('the formatting CLI checks TypeScript SDK and extension author sources', t 
 	for (const root of ['sdk/typescript', 'examples/extensions']) {
 		const directory = mkdtempSync(join(repositoryRoot, root, '.formatter-test-'));
 		t.after(() => rmSync(directory, { recursive: true, force: true }));
-		for (const name of ['entry.ts', 'runtime.js']) writeFileSync(join(directory, name), 'export const value=1\n');
+		writeFileSync(join(directory, 'entry.ts'), 'export const value=1\n');
+		writeFileSync(join(directory, 'runtime.js'), 'export const label="runtime"\n');
 		const source = relative(repositoryRoot, directory);
 		const checked = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--check', source], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(checked.status, 1, checked.stdout + checked.stderr);
 		assert.match(checked.stdout, /checked 2 TypeScript\/JavaScript files/u);
 		const fixed = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--write', source], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
-		for (const name of ['entry.ts', 'runtime.js']) assert.equal(readFileSync(join(directory, name), 'utf8'), 'export const value = 1;\n');
+		assert.equal(readFileSync(join(directory, 'entry.ts'), 'utf8'), 'export const value = 1;\n');
+		assert.equal(readFileSync(join(directory, 'runtime.js'), 'utf8'), 'export const label = "runtime";\n');
 	}
 });
 
@@ -189,9 +218,8 @@ test('Bun leaves generated JSON to its owning serializers and checks neighboring
 	for (const file of handwritten) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), input);
 });
 
-test('the Bun buffer command and CI formatter produce identical bytes for every supported frontend language', t => {
+test('the workspace buffer commands and CI formatters produce identical bytes for every supported frontend language', t => {
 	const settings = JSON.parse(readFileSync(join(repositoryRoot, '.vscode/settings.json'), 'utf8'));
-	const editor = settings['simpleLspClient.formatters'].bun;
 	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const workspaceJsonc = join(repositoryRoot, '.vscode', `${basename(directory)}.jsonc`);
@@ -214,9 +242,10 @@ test('the Bun buffer command and CI formatter produce identical bytes for every 
 	];
 	t.after(() => rmSync(workspaceJsonc, { force: true }));
 	for (const [language, file, input] of cases) {
-		assert.ok(editor.filetypes.includes(language), language);
 		// Resolve the same language override the editor uses, including single-language settings.
 		const source = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'].includes(language);
+		const editor = settings['simpleLspClient.formatters'][source ? 'typescript' : 'bun'];
+		assert.ok(editor.filetypes.includes(language), language);
 		const group = settings[source ? '[typescript][typescriptreact][javascript][javascriptreact]' : '[json][jsonc][yaml][markdown][css][html]'];
 		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], 'wdomitrz.simple-lsp-client');
 		writeFileSync(file, input);
@@ -229,10 +258,11 @@ test('the Bun buffer command and CI formatter produce identical bytes for every 
 		assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
 		assert.notEqual(formatted.stdout, input, language);
 		assert.equal(readFileSync(file, 'utf8'), input, 'Editor formatting must use the unsaved buffer without writing files.');
-		const written = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--write', '--', file], { cwd: repositoryRoot, encoding: 'utf8' });
+		const arguments_ = source ? [join(repositoryRoot, 'build/format.ts')] : ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore'];
+		const written = spawnSync(bun, [...arguments_, '--write', ...(source ? [] : ['--']), file], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(written.status, 0, written.stdout + written.stderr);
 		assert.equal(readFileSync(file, 'utf8'), formatted.stdout, language);
-		const checked = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--check', '--', file], { cwd: repositoryRoot, encoding: 'utf8' });
+		const checked = spawnSync(bun, [...arguments_, '--check', ...(source ? [] : ['--']), file], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(checked.status, 0, checked.stdout + checked.stderr);
 		if (language === 'jsonc') assert.ok(formatted.stdout.includes('\n\t"value": 1,'), 'Workspace JSON keeps tab indentation.');
 		if (language === 'markdown') assert.ok(formatted.stdout.includes('```ts\nconst value=1\n```'), 'Fenced code retains its owning language formatting.');

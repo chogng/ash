@@ -104,20 +104,11 @@ function parseAnnotation(value: unknown, path: string): PdfAnnotation {
 			if (!Array.isArray(annotation.points) || annotation.points.length < 2 || annotation.points.length > 8192) {
 				throw new RangeError(`${path}.points must contain between 2 and 8192 points`);
 			}
-			return Object.freeze({
-				...base,
-				kind,
-				points: Object.freeze(annotation.points.map((point, index) => pointValue(point, `${path}.points[${index}]`))),
-			});
+			return Object.freeze({ ...base, kind, points: Object.freeze(annotation.points.map((point, index) => pointValue(point, `${path}.points[${index}]`))) });
 		}
 		case 'note':
 			requireExactKeys(annotation, ['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'point', 'text'], path);
-			return Object.freeze({
-				...base,
-				kind,
-				point: pointValue(annotation.point, `${path}.point`),
-				text: text(annotation.text, `${path}.text`),
-			});
+			return Object.freeze({ ...base, kind, point: pointValue(annotation.point, `${path}.point`), text: text(annotation.text, `${path}.text`) });
 		default:
 			throw new RangeError(`${path}.kind is not supported: ${kind}`);
 	}

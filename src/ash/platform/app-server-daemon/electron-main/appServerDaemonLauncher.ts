@@ -7,14 +7,7 @@ import { AbstractDisposable, type IDisposable, toDisposable } from '../../../bas
 import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppServerHostPlatform } from '../../agentHost/common/appServerEnvironment.js';
 import type { IAppServerProcessLauncher } from '../../agentHost/electron-main/appServerProcessLauncher.js';
 import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../agentHost/common/appServerTransport.js';
-import {
-	appServerDaemonExecutablePath,
-	appServerExecutablePath,
-	developmentAppServerGenerationPath,
-	packagedAppServerDaemonSha256,
-	packagedAppServerSha256,
-	type AppServerDaemonPackageLocation,
-} from '../node/appServerDaemonPackage.js';
+import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
 import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
 import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
 
@@ -28,25 +21,19 @@ interface AppServerDaemonConnectionOptions {
 }
 
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
-export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): {
-	readonly launcher: AppServerDaemonLauncher;
-	readonly generationFile: string | undefined;
-} {
+export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined; } {
 	const { packageLocation, sourceEnvironment } = options;
 	const reloadBackend = sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1';
-	const generationFile =
-		!packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
-			? (sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath))
-			: undefined;
+	const generationFile = !packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
+		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)
+		: undefined;
 	if (generationFile && !isAbsolute(generationFile)) throw new Error('Development generation path must be absolute');
 	const developmentRuntime = generationFile ? readDevelopmentAppServerGenerationSync(generationFile) : undefined;
 	if (generationFile && !developmentRuntime) throw new Error('Development runtime is not prepared. Run pnpm prepare:backend.');
 	const backendSha256 = packagedAppServerSha256(packageLocation);
 	const productEnvironment: Record<string, string> = {
 		ASH_ELECTRON_RUN_AS_NODE_PATH: options.electronExecutable,
-		ASH_APP_SERVER_PATH: developmentRuntime
-			? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server')
-			: appServerExecutablePath(packageLocation),
+		ASH_APP_SERVER_PATH: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') : appServerExecutablePath(packageLocation),
 		ASH_HOME: options.profileRoot,
 	};
 	if (developmentRuntime) productEnvironment.ASH_DEV_RUNTIME_ROOT = developmentRuntime;
@@ -68,17 +55,10 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 	}
 	let hostPlatform: AppServerHostPlatform;
 	switch (packageLocation.platform) {
-		case 'win32':
-			hostPlatform = 'windows';
-			break;
-		case 'darwin':
-			hostPlatform = 'macos';
-			break;
-		case 'linux':
-			hostPlatform = 'linux';
-			break;
-		default:
-			throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
+		case 'win32': hostPlatform = 'windows'; break;
+		case 'darwin': hostPlatform = 'macos'; break;
+		case 'linux': hostPlatform = 'linux'; break;
+		default: throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
 	}
 	return {
 		launcher: new AppServerDaemonLauncher({
@@ -161,10 +141,7 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 			await this.developmentStartupBarrier();
 		} else if (this.options.generationFile && !this.developmentRuntime) {
 			const lease = await this.acquireDevelopmentRuntime();
-			if (this.isDisposed) {
-				lease.dispose();
-				this.assertNotDisposed();
-			}
+			if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
 			this.ownedDevelopmentRuntime = lease;
 			this.selectDevelopmentRuntime(lease);
 		}
@@ -185,19 +162,13 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 	selectDevelopmentRuntime(lease: IDevelopmentAppServerRuntime): void {
 		lease.assertActive();
 		this.developmentRuntime = lease;
-		this.replaceEnvironment({
-			...this.environmentValue,
-			ASH_DEV_RUNTIME_ROOT: lease.runtime,
-			ASH_APP_SERVER_PATH: join(lease.runtime, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'),
-		});
+		this.replaceEnvironment({ ...this.environmentValue, ASH_DEV_RUNTIME_ROOT: lease.runtime, ASH_APP_SERVER_PATH: join(lease.runtime, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') });
 	}
 
 	/** Gates connection startup while the profile-wide development daemon is restarting. */
 	setDevelopmentStartupBarrier(barrier: () => Promise<void>): IDisposable {
 		this.developmentStartupBarrier = barrier;
-		return toDisposable(() => {
-			this.developmentStartupBarrier = undefined;
-		});
+		return toDisposable(() => { this.developmentStartupBarrier = undefined; });
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
@@ -215,10 +186,7 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 	async getLogPath(): Promise<string> {
 		await this.validate();
 		const { stdout } = await promisify(execFile)(this.executable, ['version'], {
-			env: { ...this.environmentValue },
-			timeout: 5_000,
-			maxBuffer: 64 * 1024,
-			windowsHide: true,
+			env: { ...this.environmentValue }, timeout: 5_000, maxBuffer: 64 * 1024, windowsHide: true,
 		});
 		const value: unknown = JSON.parse(stdout);
 		if (!value || typeof value !== 'object' || !('logPath' in value) || typeof value.logPath !== 'string' || !isAbsolute(value.logPath)) {

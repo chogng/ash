@@ -13,11 +13,7 @@ test('remote agent events supersede a stale initial App Server read', async () =
 	using services = new InstantiationService();
 	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	using service = services.createInstance(AppServerRemoteAgentService, {
-		onReadError: (error: unknown) => {
-			throw error;
-		},
-	});
+	using service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	api.emit('restarting');
@@ -34,11 +30,7 @@ test('remote agent collapses backend states into the frontend connection lifecyc
 	using services = new InstantiationService();
 	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	using service = services.createInstance(AppServerRemoteAgentService, {
-		onReadError: (error: unknown) => {
-			throw error;
-		},
-	});
+	using service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	api.resolveInitial('starting');
@@ -56,11 +48,7 @@ test('remote agent suppresses pending reads and events after disposal', async ()
 	using services = new InstantiationService();
 	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	const service = services.createInstance(AppServerRemoteAgentService, {
-		onReadError: (error: unknown) => {
-			throw error;
-		},
-	});
+	const service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	await Promise.resolve();
@@ -78,12 +66,7 @@ test('remote agent metadata events supersede a stale connection read', async () 
 	using services = new InstantiationService();
 	services.registerInstance(IAppServerApi, api);
 	using remoteApi = new TestRemoteAgentApi();
-	using service = services.createInstance(AppServerRemoteAgentService, {
-		remoteApi,
-		onReadError: (error: unknown) => {
-			throw error;
-		},
-	});
+	using service = services.createInstance(AppServerRemoteAgentService, { remoteApi, onReadError: (error: unknown) => { throw error; } });
 	const connections: RemoteAgentConnection[] = [];
 	service.onDidChangeConnection(connection => connections.push(connection));
 
@@ -100,12 +83,7 @@ test('remote agent delegates path-free runtime rollback only for SSH connections
 	using services = new InstantiationService();
 	services.registerInstance(IAppServerApi, api);
 	using remoteApi = new TestRemoteAgentApi();
-	using service = services.createInstance(AppServerRemoteAgentService, {
-		remoteApi,
-		onReadError: (error: unknown) => {
-			throw error;
-		},
-	});
+	using service = services.createInstance(AppServerRemoteAgentService, { remoteApi, onReadError: (error: unknown) => { throw error; } });
 	remoteApi.emit({ kind: 'ssh', generation: 2, authority: 'ssh+work-server', host: 'work-server' });
 
 	assert.deepEqual(await service.reconnect(), { kind: 'reconnected' });
@@ -126,22 +104,11 @@ class TestAppServerApi extends Disposable implements IAppServerApi {
 	private readonly initial = deferred<AppServerConnectionState>();
 	connectionStateReads = 0;
 
-	getConnectionState(): Promise<AppServerConnectionState> {
-		this.connectionStateReads += 1;
-		return this.initial.promise;
-	}
-	async getSlashCommands() {
-		return [];
-	}
-	onConnectionState(listener: (state: AppServerConnectionState) => void) {
-		return this.stateEmitter.event(listener);
-	}
-	emit(state: AppServerConnectionState): void {
-		this.stateEmitter.fire(state);
-	}
-	resolveInitial(state: AppServerConnectionState): void {
-		this.initial.resolve(state);
-	}
+	getConnectionState(): Promise<AppServerConnectionState> { this.connectionStateReads += 1; return this.initial.promise; }
+	async getSlashCommands() { return []; }
+	onConnectionState(listener: (state: AppServerConnectionState) => void) { return this.stateEmitter.event(listener); }
+	emit(state: AppServerConnectionState): void { this.stateEmitter.fire(state); }
+	resolveInitial(state: AppServerConnectionState): void { this.initial.resolve(state); }
 }
 
 class TestRemoteAgentApi extends Disposable implements IRemoteAgentApi {
@@ -150,33 +117,17 @@ class TestRemoteAgentApi extends Disposable implements IRemoteAgentApi {
 	reconnects = 0;
 	rollbacks = 0;
 
-	getConnection(): Promise<RemoteAgentConnection> {
-		return this.initial.promise;
-	}
-	async reconnect() {
-		this.reconnects += 1;
-		return { kind: 'reconnected' } as const;
-	}
-	async rollbackRuntime() {
-		this.rollbacks += 1;
-		return { kind: 'rolledBack' } as const;
-	}
-	onDidChangeConnection(listener: (connection: RemoteAgentConnection) => void) {
-		return this.connectionEmitter.event(listener);
-	}
-	emit(connection: RemoteAgentConnection): void {
-		this.connectionEmitter.fire(connection);
-	}
-	resolveInitial(connection: RemoteAgentConnection): void {
-		this.initial.resolve(connection);
-	}
+	getConnection(): Promise<RemoteAgentConnection> { return this.initial.promise; }
+	async reconnect() { this.reconnects += 1; return { kind: 'reconnected' } as const; }
+	async rollbackRuntime() { this.rollbacks += 1; return { kind: 'rolledBack' } as const; }
+	onDidChangeConnection(listener: (connection: RemoteAgentConnection) => void) { return this.connectionEmitter.event(listener); }
+	emit(connection: RemoteAgentConnection): void { this.connectionEmitter.fire(connection); }
+	resolveInitial(connection: RemoteAgentConnection): void { this.initial.resolve(connection); }
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>(accept => {
-		resolve = accept;
-	});
+	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };
 }
 

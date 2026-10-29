@@ -19,22 +19,10 @@ export interface DocumentNode {
 	readonly text?: string;
 }
 
-export interface DocumentPoint {
-	readonly nodeId: string;
-	readonly offset: number;
-}
-export interface DocumentTextSelection {
-	readonly kind: 'text';
-	readonly anchor: DocumentPoint;
-	readonly head: DocumentPoint;
-}
-export interface NodeSelection {
-	readonly kind: 'node';
-	readonly nodeId: string;
-}
-export interface AllSelection {
-	readonly kind: 'all';
-}
+export interface DocumentPoint { readonly nodeId: string; readonly offset: number; }
+export interface DocumentTextSelection { readonly kind: 'text'; readonly anchor: DocumentPoint; readonly head: DocumentPoint; }
+export interface NodeSelection { readonly kind: 'node'; readonly nodeId: string; }
+export interface AllSelection { readonly kind: 'all'; }
 export type DocumentSelection = DocumentTextSelection | NodeSelection | AllSelection;
 
 export interface DocumentOutlineEntry {

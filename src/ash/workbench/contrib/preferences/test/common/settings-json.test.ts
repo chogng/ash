@@ -57,11 +57,7 @@ suiteTeardown(() => keybindingProfile.dispose());
 test('Reset removes explicitly saved scalar and structured defaults while preserving unrelated JSONC', async () => {
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'editor.fontSize', defaultValue: 14, parse: value => Number(value) });
-	registry.registerConfiguration({
-		key: 'workbench.colors',
-		defaultValue: {},
-		parse: value => value as Record<string, unknown>,
-	});
+	registry.registerConfiguration({ key: 'workbench.colors', defaultValue: {}, parse: value => value as Record<string, unknown> });
 	using configuration = new WorkbenchConfigurationService({ registry });
 	await configuration.write('{\n\t// Keep unrelated settings.\n\t"editor.fontSize": 14,\n\t"workbench.colors": {},\n\t"extension.data": 99,\n}\n');
 
@@ -77,16 +73,11 @@ test('Reset removes explicitly saved scalar and structured defaults while preser
 
 test('SettingModel announces explicit user overrides when the value stays at the default', async () => {
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({
-		key: 'status.flag',
-		defaultValue: true,
-		parse: value => value as boolean,
-		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
-	});
+	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE });
 	const registered = registry.getConfiguration('status.flag') as IRegisteredConfiguration<boolean>;
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using model = new SettingModel(configurationSettingBinding(configuration, registered));
-	const states: { value: boolean; isDefault: boolean; isPending: boolean }[] = [];
+	const states: { value: boolean; isDefault: boolean; isPending: boolean; }[] = [];
 	using listener = model.onDidChange(state => states.push({ value: state.value, isDefault: state.isDefault, isPending: state.isPending }));
 
 	await configuration.write('{ "status.flag": true }');
@@ -113,20 +104,15 @@ test('SettingModel keeps the configured status when the persistence layer reject
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean });
 	const snapshot = { revision: 1, document: { version: 1 as const, source: '{ "status.flag": false }' } };
-	using files = new (class extends TestConfigurationFiles {
-		override async writeFile(..._args: Parameters<TestConfigurationFiles['writeFile']>): ReturnType<TestConfigurationFiles['writeFile']> {
-			throw new Error('Configuration write rejected');
-		}
-	})(snapshot.document.source);
+	using files = new class extends TestConfigurationFiles {
+		override async writeFile(..._args: Parameters<TestConfigurationFiles['writeFile']>): ReturnType<TestConfigurationFiles['writeFile']> { throw new Error('Configuration write rejected'); }
+	}(snapshot.document.source);
 	using configuration = new WorkbenchConfigurationService({ registry, files, source: snapshot.document.source });
 	using model = new SettingModel(configurationSettingBinding(configuration, registry.getConfiguration('status.flag') as IRegisteredConfiguration<boolean>));
-	const states: { value: boolean; isDefault: boolean; isPending: boolean }[] = [];
+	const states: { value: boolean; isDefault: boolean; isPending: boolean; }[] = [];
 	using listener = model.onDidChange(state => states.push({ value: state.value, isDefault: state.isDefault, isPending: state.isPending }));
 	await assert.rejects(model.reset(), /Configuration write rejected/u);
-	assert.deepEqual(states, [
-		{ value: true, isDefault: false, isPending: true },
-		{ value: false, isDefault: false, isPending: false },
-	]);
+	assert.deepEqual(states, [{ value: true, isDefault: false, isPending: true }, { value: false, isDefault: false, isPending: false }]);
 	assert.equal((await configuration.read()).source, snapshot.document.source);
 	assert.equal(configuration.inspect('status.flag').userLocalValue, false);
 });
@@ -135,16 +121,9 @@ test('Domain setting bindings retain their own default and reset behavior', asyn
 	let current = 3;
 	let resets = 0;
 	using model = new SettingModel({
-		id: 'domain.setting',
-		defaultValue: 3,
-		getValue: () => current,
-		updateValue: async value => {
-			current = value;
-		},
-		resetValue: async () => {
-			current = 3;
-			resets++;
-		},
+		id: 'domain.setting', defaultValue: 3, getValue: () => current,
+		updateValue: async value => { current = value; },
+		resetValue: async () => { current = 3; resets++; },
 	});
 	assert.equal(model.isDefault(), true);
 	await model.update(4);
@@ -155,26 +134,18 @@ test('Domain setting bindings retain their own default and reset behavior', asyn
 
 test('profile settings use the ordinary file service and its opaque revision contract', async () => {
 	const registry = testRegistry();
-	using configuration = new WorkbenchConfigurationService({ registry, onError() {} });
+	using configuration = new WorkbenchConfigurationService({ registry, onError() { } });
 	const files = configuration.fileService;
 	const initial = await files.readFile(UserSettingsResource);
 	const source = '{\n\t// Preserve this explanation.\n\t"editor.enabled": false,\n\t"extension.unregistered": 1,\n}\n';
-	const saved = await files.writeFile({
-		resource: UserSettingsResource,
-		content: source,
-		expectedRevision: initial.revision,
-	});
+	const saved = await files.writeFile({ resource: UserSettingsResource, content: source, expectedRevision: initial.revision });
 	await configuration.reloadConfiguration();
 	assert.notEqual(saved.revision, initial.revision);
 	assert.equal((await files.readFile(UserSettingsResource)).content, source);
 	assert.equal(configuration.getValue('editor.enabled'), false);
 	assert.equal((await files.stat(UserSettingsResource)).readonly, false);
 	await assert.rejects(files.writeFile({ resource: UserSettingsResource, content: '{}', expectedRevision: initial.revision }), FileRevisionConflictError);
-	await files.writeFile({
-		resource: UserSettingsResource,
-		content: '{ "editor.enabled": "yes" }',
-		expectedRevision: saved.revision,
-	});
+	await files.writeFile({ resource: UserSettingsResource, content: '{ "editor.enabled": "yes" }', expectedRevision: saved.revision });
 	await assert.rejects(configuration.reloadConfiguration(), /editor\.enabled/);
 	assert.equal(configuration.getValue('editor.enabled'), false);
 });
@@ -190,132 +161,79 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 	"editor.enabled": true,
 	"editor.
 }`);
-	const position = new Position(2 + 1, model.getLineLength(2 + 1) + 1);
-	const result = await provider.provideCompletions(
-		{
-			requestId: 1,
-			languageId: 'jsonc',
-			resource: UserSettingsResource,
-			position,
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: model.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
+	const position = new Position((2) + 1, (model.getLineLength((2) + 1)) + 1);
+	const result = await provider.provideCompletions({
+		requestId: 1,
+		languageId: 'jsonc',
+		resource: UserSettingsResource,
+		position,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
 
-	assert.deepEqual(
-		result?.items.map(item => item.label),
-		['editor.fontFamily'],
-	);
+	assert.deepEqual(result?.items.map(item => item.label), ['editor.fontFamily']);
 	assert.equal(result?.items[0]?.insertText, '"editor.fontFamily": ""');
 	using triggeredModel = new TextModel(`{
 	"
 }`);
-	const triggered = await provider.provideCompletions(
-		{
-			requestId: 2,
-			languageId: 'jsonc',
-			resource: UserSettingsResource,
-			position: new Position(1 + 1, triggeredModel.getLineLength(1 + 1) + 1),
-			context: { kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter: '"' },
-			snapshot: triggeredModel.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
-	assert.deepEqual(
-		triggered?.items.map(item => item.label),
-		['editor.enabled', 'editor.fontFamily'],
-	);
-	const unassociated = await provider.provideCompletions(
-		{
-			requestId: 3,
-			languageId: 'jsonc',
-			resource: UserSettingsResource.with({ path: '/user/other.json' }),
-			position,
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: model.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
-	assert.deepEqual(
-		unassociated?.items.map(item => item.label),
-		['$schema'],
-	);
+	const triggered = await provider.provideCompletions({
+		requestId: 2,
+		languageId: 'jsonc',
+		resource: UserSettingsResource,
+		position: new Position((1) + 1, (triggeredModel.getLineLength((1) + 1)) + 1),
+		context: { kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter: '"' },
+		snapshot: triggeredModel.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(triggered?.items.map(item => item.label), ['editor.enabled', 'editor.fontFamily']);
+	const unassociated = await provider.provideCompletions({
+		requestId: 3,
+		languageId: 'jsonc',
+		resource: UserSettingsResource.with({ path: '/user/other.json' }),
+		position,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(unassociated?.items.map(item => item.label), ['$schema']);
 
 	using valueModel = new TextModel('{ "editor.fontFamily": "editor. }');
-	const valuePosition = valueModel.getLineContent(0 + 1).lastIndexOf('editor.') + 'editor.'.length;
-	const valueResult = await provider.provideCompletions(
-		{
-			requestId: 4,
-			languageId: 'jsonc',
-			resource: UserSettingsResource,
-			position: new Position(0 + 1, valuePosition + 1),
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: valueModel.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
-	assert.deepEqual(
-		valueResult?.items.map(item => item.insertText),
-		['""'],
-	);
+	const valuePosition = valueModel.getLineContent((0) + 1).lastIndexOf('editor.') + 'editor.'.length;
+	const valueResult = await provider.provideCompletions({
+		requestId: 4,
+		languageId: 'jsonc',
+		resource: UserSettingsResource,
+		position: new Position((0) + 1, (valuePosition) + 1),
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: valueModel.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(valueResult?.items.map(item => item.insertText), ['""']);
 	using nestedModel = new TextModel(`{
 	"nested": {
 		"editor.
 	}
 }`);
-	assert.equal(
-		await provider.provideCompletions(
-			{
-				requestId: 5,
-				languageId: 'jsonc',
-				resource: UserSettingsResource,
-				position: new Position(2 + 1, nestedModel.getLineLength(2 + 1) + 1),
-				context: { kind: LanguageCompletionTriggerKind.Invoke },
-				snapshot: nestedModel.createVersionedSnapshot(),
-			},
-			new AbortController().signal,
-		),
-		undefined,
-	);
+	assert.equal(await provider.provideCompletions({
+		requestId: 5,
+		languageId: 'jsonc',
+		resource: UserSettingsResource,
+		position: new Position((2) + 1, (nestedModel.getLineLength((2) + 1)) + 1),
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: nestedModel.createVersionedSnapshot(),
+	}, new AbortController().signal), undefined);
 });
 
 test('PreferencesService opens User Settings JSON as a pinned JSON editor input', async () => {
-	let opened:
-		| {
-				readonly input: IResourceEditorInput;
-				readonly options: EditorOpenOptions | undefined;
-				readonly target: EditorOpenTarget | undefined;
-		  }
-		| undefined;
+	let opened: { readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined; } | undefined;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
 		openEditor(input, options, target): Promise<void> {
 			opened = { input, options, target };
 			return Promise.resolve();
 		},
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	};
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: Event.None,
-			resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }),
-			save: async () => ({ revision: undefined }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using configuration = new WorkbenchConfigurationService();
-	using preferences = new PreferencesService(
-		editorService,
-		models,
-		keybindingProfile.files,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		emptyEditorGroupsService,
-	);
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, emptyEditorGroupsService);
 
 	await preferences.openUserSettings({ jsonEditor: true });
 	assert.equal((await keybindingProfile.files.readFile(UserSettingsResource)).content, '{}\n');
@@ -334,23 +252,12 @@ test('PreferencesService honors the persisted default and explicit UI or JSON re
 	using configuration = new WorkbenchConfigurationService();
 	using textFiles = createTestTextFileService(configuration.fileService);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
-	const opens: { input: IResourceEditorInput; options?: EditorOpenOptions; target?: EditorOpenTarget }[] = [];
-	using preferences = new PreferencesService(
-		{
-			...emptyEditorServiceState,
-			openEditor: async (input, options, target) => {
-				opens.push({ input, options, target });
-			},
-			focusActiveEditor() {},
-		},
-		models,
-		configuration.fileService,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		emptyEditorGroupsService,
-	);
+	const opens: { input: IResourceEditorInput; options?: EditorOpenOptions; target?: EditorOpenTarget; }[] = [];
+	using preferences = new PreferencesService({
+		...emptyEditorServiceState,
+		openEditor: async (input, options, target) => { opens.push({ input, options, target }); },
+		focusActiveEditor() { },
+	}, models, configuration.fileService, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, emptyEditorGroupsService);
 	assert.equal(configuration.getValue(WorkbenchConfiguration.settingsEditor), 'ui');
 	await preferences.openSettings();
 	assert.ok(opens.at(-1)?.input instanceof SettingsEditorInput);
@@ -404,69 +311,24 @@ test('PreferencesService passes graphical queries and sections while rejecting u
 			opened.push(input);
 			return Promise.resolve();
 		},
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	};
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		{
-			onDidChange: Event.None,
-			resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }),
-			save: async () => ({ revision: undefined }),
-		} satisfies ITextResourceStore,
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using configuration = new WorkbenchConfigurationService();
-	using preferences = new PreferencesService(
-		editorService,
-		models,
-		keybindingProfile.files,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		emptyEditorGroupsService,
-	);
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, emptyEditorGroupsService);
 	for (const query of ['editor.fontFamily', 'font & 中文 + @id:editor.font*', '']) {
 		await preferences.openSettings({ query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
-		assert.deepEqual(requests.at(-1), {
-			query,
-			section: 'models',
-			target: ConfigurationTarget.USER_LOCAL,
-			pinned: true,
-			preserveFocus: false,
-			ignoreError: true,
-		});
+		assert.deepEqual(requests.at(-1), { query, section: 'models', target: ConfigurationTarget.USER_LOCAL, pinned: true, preserveFocus: false, ignoreError: true });
 		assert.deepEqual(Object.fromEntries(new URLSearchParams(createSettingsEditorInput('models', { query }).resource.query)), { query, target: 'models' });
 	}
 	await preferences.openSettings({ target: ConfigurationTarget.USER });
 	assert.equal(opened.at(-1)!.resource.query, '');
-	for (const options of [
-		null,
-		[],
-		true,
-		{ query: 1 },
-		{ focusSearch: 'yes' },
-		{ folderUri: '/not-a-uri' },
-		{ target: ConfigurationTarget.WORKSPACE_FOLDER },
-		{ groupId: '1' },
-		{ groupId: -1 },
-		{ groupId: 1.5 },
-		{ openToSide: 'yes' },
-		{ section: '' },
-		{ section: 1 },
-		{ revealSetting: { key: 3 } },
-		{ jsonEditor: 'json' },
-		{ target: ConfigurationTarget.WORKSPACE },
-		{ target: ConfigurationTarget.USER_REMOTE },
-	]) {
+	for (const options of [null, [], true, { query: 1 }, { focusSearch: 'yes' }, { folderUri: '/not-a-uri' }, { target: ConfigurationTarget.WORKSPACE_FOLDER }, { groupId: '1' }, { groupId: -1 }, { groupId: 1.5 }, { openToSide: 'yes' }, { section: '' }, { section: 1 }, { revealSetting: { key: 3 } }, { jsonEditor: 'json' }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
 		await assert.rejects(preferences.openSettings(options as IOpenSettingsOptions));
 	}
 	assert.equal(opened.length, 4, 'rejected requests never reach EditorService');
 	assert.equal(requests.length, 4);
-	assert.ok(
-		opened.every(input => input === opened[0]),
-		'opening options retain the same Settings resource identity',
-	);
+	assert.ok(opened.every(input => input === opened[0]), 'opening options retain the same Settings resource identity');
 	const input = opened[0]!;
 	assert.ok(input instanceof SettingsEditorInput);
 	preferences.dispose();
@@ -478,28 +340,14 @@ test('Preferences routes UI and JSON to numeric groups, falls back for closed gr
 	using configuration = new WorkbenchConfigurationService();
 	using textFiles = createTestTextFileService(configuration.fileService);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
-	const opens: { input: IResourceEditorInput; target?: EditorOpenTarget }[] = [];
+	const opens: { input: IResourceEditorInput; target?: EditorOpenTarget; }[] = [];
 	const chosen = { ...emptyEditorGroupsService.activeGroup, id: 7 };
-	const groups: IEditorGroupsService = {
-		...emptyEditorGroupsService,
-		getGroup: id => (id === chosen.id ? chosen : undefined),
-	};
-	using preferences = new PreferencesService(
-		{
-			...emptyEditorServiceState,
-			openEditor: async (input, _options, target) => {
-				opens.push({ input, target });
-			},
-			focusActiveEditor() {},
-		},
-		models,
-		configuration.fileService,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		groups,
-	);
+	const groups: IEditorGroupsService = { ...emptyEditorGroupsService, getGroup: id => id === chosen.id ? chosen : undefined };
+	using preferences = new PreferencesService({
+		...emptyEditorServiceState,
+		openEditor: async (input, _options, target) => { opens.push({ input, target }); },
+		focusActiveEditor() { },
+	}, models, configuration.fileService, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, groups);
 	await preferences.openSettings({ groupId: 7 });
 	assert.deepEqual(opens.at(-1)?.target, { groupId: 7 });
 	await preferences.openSettings({ groupId: 999 });
@@ -511,12 +359,7 @@ test('Preferences routes UI and JSON to numeric groups, falls back for closed gr
 	await preferences.openSettings({ jsonEditor: true, groupId: 7 });
 	assert.deepEqual(opens.at(-1)?.target, { groupId: 7 });
 	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
-	await preferences.openSettings({
-		jsonEditor: true,
-		groupId: 7,
-		openToSide: true,
-		revealSetting: { key: 'editor.fontSize', edit: true },
-	});
+	await preferences.openSettings({ jsonEditor: true, groupId: 7, openToSide: true, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(opens.at(-1)?.target, 'sideGroup');
 });
 
@@ -569,12 +412,10 @@ test('the text-model save path updates configuration and accepts later external 
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
-	reference.model.applyOperations([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 0 + 1), reference.model.positionAt(reference.model.length)),
-			text: '{\n\t// Keep me.\n\t"editor.enabled": false,\n}\n',
-		},
-	]);
+	reference.model.applyOperations([{
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), reference.model.positionAt(reference.model.length)),
+		text: '{\n\t// Keep me.\n\t"editor.enabled": false,\n}\n',
+	}]);
 
 	assert.equal(reference.isDirty, true);
 	const savedConfiguration = new Promise<void>(resolve => Event.once(configuration.onDidChangeConfiguration)(() => resolve()));
@@ -606,10 +447,8 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	using services = new InstantiationService();
 	services.registerInstance(EditorServiceId, {
 		...emptyEditorServiceState,
-		openEditor: async (_input, options) => {
-			selection = options?.selection;
-		},
-		focusActiveEditor() {},
+		openEditor: async (_input, options) => { selection = options?.selection; },
+		focusActiveEditor() { },
 	});
 	assert.throws(() => services.createInstance(PreferencesService), /Unknown service: fileTextModelService/u);
 	services.registerInstance(IFileTextModelService, models);
@@ -620,11 +459,7 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	services.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	using preferences = services.createInstance(PreferencesService);
 
-	await preferences.openUserSettings({
-		jsonEditor: true,
-		target: ConfigurationTarget.USER_LOCAL,
-		revealSetting: { key: 'editor.fontSize', edit: true },
-	});
+	await preferences.openUserSettings({ jsonEditor: true, target: ConfigurationTarget.USER_LOCAL, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.isDirty, true);
 	assert.equal((await configuration.read()).source, '{}\n');
 	assert.match(reference.model.getText(), /extension.data.*99/u);
@@ -652,22 +487,11 @@ test('revealing existing settings preserves edits and real external conflicts re
 	const source = '{ "editor.fontSize": 18, "extension.pending": true }';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: source }]);
 	let selection: Range | undefined;
-	using preferences = new PreferencesService(
-		{
-			...emptyEditorServiceState,
-			openEditor: async (_input, options) => {
-				selection = options?.selection;
-			},
-			focusActiveEditor() {},
-		},
-		models,
-		keybindingProfile.files,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		emptyEditorGroupsService,
-	);
+	using preferences = new PreferencesService({
+		...emptyEditorServiceState,
+		openEditor: async (_input, options) => { selection = options?.selection; },
+		focusActiveEditor() { },
+	}, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, emptyEditorGroupsService);
 	await preferences.openUserSettings({ jsonEditor: true, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.model.getText(), source);
 	assert.equal(reference.model.getValueInRange(selection!), '18');
@@ -686,8 +510,8 @@ test('revealing existing settings preserves edits and real external conflicts re
 
 test('SmartSnippetInserter preserves object-array punctuation around the cursor', () => {
 	using empty = new TextModel('[]');
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(empty, new Position(0 + 1, 0 + 1)), {
-		position: new Position(0 + 1, 1 + 1),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(empty, new Position((0) + 1, (0) + 1)), {
+		position: new Position((0) + 1, (1) + 1),
 		prepend: '',
 		append: '',
 	});
@@ -695,20 +519,20 @@ test('SmartSnippetInserter preserves object-array punctuation around the cursor'
 	using populated = new TextModel(`[
 {}
 ]`);
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position(1 + 1, 1 + 1)), {
-		position: new Position(1 + 1, 0 + 1),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position((1) + 1, (1) + 1)), {
+		position: new Position((1) + 1, (0) + 1),
 		prepend: '',
 		append: ',',
 	});
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position(1 + 1, 2 + 1)), {
-		position: new Position(1 + 1, 2 + 1),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position((1) + 1, (2) + 1)), {
+		position: new Position((1) + 1, (2) + 1),
 		prepend: ',',
 		append: '',
 	});
 
 	using invalid = new TextModel('// no array');
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(invalid, new Position(0 + 1, 0 + 1)), {
-		position: new Position(0 + 1, 11 + 1),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(invalid, new Position((0) + 1, (0) + 1)), {
+		position: new Position((0) + 1, (11) + 1),
 		prepend: '\n[',
 		append: ']',
 	});
@@ -750,6 +574,7 @@ async function nextTurn(): Promise<void> {
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
+
 test('Settings bindings keep target and language writes isolated through reset and resource changes', async () => {
 	using files = new TestConfigurationFiles('{ "scope.size": 17, "scope.null": null, "[plaintext]": { "scope.size": 18 } }');
 	using provider = new InMemoryFileSystemProvider();
@@ -758,35 +583,12 @@ test('Settings bindings keep target and language writes isolated through reset a
 	const root = URI.parse('settings-test:/work/root');
 	const folderFile = URI.joinPath(root, '.vscode', 'settings.json');
 	await files.createDirectory(URI.joinPath(root, '.vscode'));
-	await files.writeFile({
-		resource: workspaceFile,
-		content: '// retain workspace\n{ "folders": [], "settings": { "scope.size": 21, "[plaintext]": { "scope.size": 22 } }, "unrelated": true }',
-	});
-	await files.writeFile({
-		resource: folderFile,
-		content: '{ "scope.size": 25, "[plaintext]": { "scope.size": 26 } }',
-	});
+	await files.writeFile({ resource: workspaceFile, content: '// retain workspace\n{ "folders": [], "settings": { "scope.size": 21, "[plaintext]": { "scope.size": 22 } }, "unrelated": true }' });
+	await files.writeFile({ resource: folderFile, content: '{ "scope.size": 25, "[plaintext]": { "scope.size": 26 } }' });
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({
-		key: 'scope.size',
-		defaultValue: 14,
-		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
-		parse: Number,
-	});
-	registry.registerConfiguration<string | null>({
-		key: 'scope.null',
-		defaultValue: 'fallback',
-		parse: value => (value === null ? null : String(value)),
-	});
-	using configuration = new WorkbenchConfigurationService({
-		files,
-		registry,
-		workspace: {
-			id: 'settings',
-			configuration: workspaceFile,
-			folders: [{ id: 'root', index: 0, name: 'Root', uri: root }],
-		},
-	});
+	registry.registerConfiguration({ key: 'scope.size', defaultValue: 14, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, parse: Number });
+	registry.registerConfiguration<string | null>({ key: 'scope.null', defaultValue: 'fallback', parse: value => value === null ? null : String(value) });
+	using configuration = new WorkbenchConfigurationService({ files, registry, workspace: { id: 'settings', configuration: workspaceFile, folders: [{ id: 'root', index: 0, name: 'Root', uri: root }] } });
 	await configuration.initialize(files);
 	assert.equal(configurationSettingBinding(configuration, registry.getConfiguration('scope.null')!).getValue(), null);
 	const setting = registry.getConfiguration('scope.size') as IRegisteredConfiguration<number>;
@@ -813,6 +615,7 @@ test('Settings bindings keep target and language writes isolated through reset a
 	configuration.updateWorkspace({ id: 'replacement', folders: [] });
 	await assert.rejects(pending, /Cancel/i);
 	assert.doesNotMatch((await files.readFile(workspaceFile)).content, /33/);
+
 });
 
 test('Preferences resolves folder and nested workspace JSON without replacing dirty models or unrelated workspace data', async () => {
@@ -822,81 +625,31 @@ test('Preferences resolves folder and nested workspace JSON without replacing di
 	const root = URI.parse('settings-json-test:/work/root');
 	const workspaceFile = URI.parse('settings-json-test:/work/project.ash-workspace');
 	await files.createDirectory(root);
-	await files.writeFile({
-		resource: workspaceFile,
-		content: '// keep workspace\n{ "folders": [], "settings": { /* keep setting */ "editor.fontSize": 19 }, "unrelated": true }',
-	});
-	using configuration = new WorkbenchConfigurationService({
-		files,
-		workspace: {
-			id: 'settings',
-			configuration: workspaceFile,
-			folders: [{ id: 'root', index: 0, name: 'Root', uri: root }],
-		},
-	});
+	await files.writeFile({ resource: workspaceFile, content: '// keep workspace\n{ "folders": [], "settings": { /* keep setting */ "editor.fontSize": 19 }, "unrelated": true }' });
+	using configuration = new WorkbenchConfigurationService({ files, workspace: { id: 'settings', configuration: workspaceFile, folders: [{ id: 'root', index: 0, name: 'Root', uri: root }] } });
 	using textFiles = createTestTextFileService(files, configuration);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
-	const opened: { input: IResourceEditorInput; options?: EditorOpenOptions }[] = [];
-	using preferences = new PreferencesService(
-		{
-			...emptyEditorServiceState,
-			openEditor: async (input, options) => {
-				opened.push({ input, options });
-			},
-			focusActiveEditor() {},
-		},
-		models,
-		files,
-		keybindingProfile.profiles,
-		keybindingProfile.services,
-		configuration,
-		configuration,
-		emptyEditorGroupsService,
-	);
-	await preferences.openSettings({
-		target: ConfigurationTarget.WORKSPACE,
-		jsonEditor: true,
-		revealSetting: { key: 'editor.fontSize', edit: true },
-	});
+	const opened: { input: IResourceEditorInput; options?: EditorOpenOptions; }[] = [];
+	using preferences = new PreferencesService({ ...emptyEditorServiceState, openEditor: async (input, options) => { opened.push({ input, options }); }, focusActiveEditor() { } }, models, files, keybindingProfile.profiles, keybindingProfile.services, configuration, configuration, emptyEditorGroupsService);
+	await preferences.openSettings({ target: ConfigurationTarget.WORKSPACE, jsonEditor: true, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(opened.at(-1)!.input.resource.toString(), workspaceFile.toString());
 	using reference = await models.acquire(opened.at(-1)!.input, new AbortController().signal);
 	assert.equal(reference.model.getValueInRange(opened.at(-1)!.options!.selection!), '19');
 	const before = reference.model.getValue();
-	await preferences.openSettings({
-		target: ConfigurationTarget.WORKSPACE,
-		jsonEditor: true,
-		revealSetting: { key: 'editor.fontFamily', edit: true },
-	});
+	await preferences.openSettings({ target: ConfigurationTarget.WORKSPACE, jsonEditor: true, revealSetting: { key: 'editor.fontFamily', edit: true } });
 	assert.equal(reference.isDirty, true);
 	assert.match(reference.model.getValue(), /keep setting/u);
 	assert.match(reference.model.getValue(), /"unrelated": true/u);
 	assert.equal((await files.readFile(workspaceFile)).content, before);
 	reference.model.setValue('{ "settings": "repair me", "unrelated": true }');
-	await preferences.openSettings({
-		target: ConfigurationTarget.WORKSPACE,
-		jsonEditor: true,
-		query: '@id:editor.fontSize',
-	});
+	await preferences.openSettings({ target: ConfigurationTarget.WORKSPACE, jsonEditor: true, query: '@id:editor.fontSize' });
 	assert.equal(opened.at(-1)!.options?.selection, undefined, 'a search hint still opens a malformed settings object for repair');
-	await assert.rejects(
-		preferences.openSettings({
-			target: ConfigurationTarget.WORKSPACE,
-			jsonEditor: true,
-			revealSetting: { key: 'editor.fontSize', edit: true },
-		}),
-		/JSON errors/u,
-	);
+	await assert.rejects(preferences.openSettings({ target: ConfigurationTarget.WORKSPACE, jsonEditor: true, revealSetting: { key: 'editor.fontSize', edit: true } }), /JSON errors/u);
 	assert.equal(reference.model.getValue(), '{ "settings": "repair me", "unrelated": true }');
 
 	await preferences.openSettings({ target: ConfigurationTarget.WORKSPACE_FOLDER, folderUri: root, jsonEditor: true });
 	assert.equal(opened.at(-1)!.input.resource.toString(), URI.joinPath(root, '.vscode', 'settings.json').toString());
 	const count = opened.length;
-	await assert.rejects(
-		preferences.openSettings({
-			target: ConfigurationTarget.WORKSPACE_FOLDER,
-			folderUri: URI.parse('settings-json-test:/elsewhere'),
-			query: 'should not open',
-		}),
-	);
+	await assert.rejects(preferences.openSettings({ target: ConfigurationTarget.WORKSPACE_FOLDER, folderUri: URI.parse('settings-json-test:/elsewhere'), query: 'should not open' }));
 	assert.equal(opened.length, count);
 });

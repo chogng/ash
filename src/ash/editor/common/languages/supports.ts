@@ -17,7 +17,14 @@ export function createScopedLineTokens(context: LineTokens, offset: number): Sco
 		firstTokenIndex--;
 	}
 
-	return new ScopedLineTokens(context, desiredLanguageId, firstTokenIndex, lastTokenIndex + 1, context.getStartOffset(firstTokenIndex), context.getEndOffset(lastTokenIndex));
+	return new ScopedLineTokens(
+		context,
+		desiredLanguageId,
+		firstTokenIndex,
+		lastTokenIndex + 1,
+		context.getStartOffset(firstTokenIndex),
+		context.getEndOffset(lastTokenIndex)
+	);
 }
 
 export class ScopedLineTokens {
@@ -31,7 +38,14 @@ export class ScopedLineTokens {
 	public readonly firstCharOffset: number;
 	private readonly _lastCharOffset: number;
 
-	constructor(actual: LineTokens, languageId: string, firstTokenIndex: number, lastTokenIndex: number, firstCharOffset: number, lastCharOffset: number) {
+	constructor(
+		actual: LineTokens,
+		languageId: string,
+		firstTokenIndex: number,
+		lastTokenIndex: number,
+		firstCharOffset: number,
+		lastCharOffset: number
+	) {
 		this._actual = actual;
 		this.languageId = languageId;
 		this._firstTokenIndex = firstTokenIndex;
@@ -73,7 +87,7 @@ export class ScopedLineTokens {
 }
 
 const enum IgnoreBracketsInTokens {
-	value = StandardTokenType.Comment | StandardTokenType.String | StandardTokenType.RegEx,
+	value = StandardTokenType.Comment | StandardTokenType.String | StandardTokenType.RegEx
 }
 
 export function ignoreBracketsInToken(standardTokenType: StandardTokenType): boolean {

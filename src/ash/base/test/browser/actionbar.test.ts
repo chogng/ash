@@ -23,14 +23,9 @@ suite('ActionBar open dropdown updates', () => {
 				let menu: IContextMenuDelegate | undefined;
 				using bar = new ActionBar(dom.window.document.body, {
 					actions: [action('menu'), action('before')],
-					actionViewItemProvider: item =>
-						item.id === 'menu'
-							? new DropdownMenuActionViewItem(item, [action('choice')], {
-									showContextMenu(options) {
-										menu = options;
-									},
-								})
-							: undefined,
+					actionViewItemProvider: item => item.id === 'menu' ? new DropdownMenuActionViewItem(item, [action('choice')], {
+						showContextMenu(options) { menu = options; },
+					}) : undefined,
 				});
 				const trigger = bar.element.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
 				trigger.focus();
@@ -72,12 +67,9 @@ suite('ActionBar open dropdown updates', () => {
 			let menu: IContextMenuDelegate | undefined;
 			using bar = new ActionBar(dom.window.document.body, {
 				actions: [action('menu')],
-				actionViewItemProvider: item =>
-					new DropdownMenuActionViewItem(item, [action('choice')], {
-						showContextMenu(options) {
-							menu = options;
-						},
-					}),
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action('choice')], {
+					showContextMenu(options) { menu = options; },
+				}),
 			});
 			const trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
 			trigger.click();
@@ -101,14 +93,13 @@ suite('ActionBar open dropdown updates', () => {
 			let trigger: HTMLButtonElement;
 			using bar = new ActionBar(dom.window.document.body, {
 				actions: [action('menu')],
-				actionViewItemProvider: item =>
-					new DropdownMenuActionViewItem(item, [action('choice')], {
-						showContextMenu(options) {
-							bar.updateActions([{ ...action('menu'), label: 'Updated menu' }]);
-							options.onHide?.(true);
-							assert.equal(trigger.isConnected, true);
-						},
-					}),
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action('choice')], {
+					showContextMenu(options) {
+						bar.updateActions([{ ...action('menu'), label: 'Updated menu' }]);
+						options.onHide?.(true);
+						assert.equal(trigger.isConnected, true);
+					},
+				}),
 			});
 			trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
 			trigger.click();
@@ -126,12 +117,9 @@ suite('ActionBar open dropdown updates', () => {
 			let menu: IContextMenuDelegate | undefined;
 			using bar = new ActionBar(dom.window.document.body, {
 				actions: [action('first'), action('second')],
-				actionViewItemProvider: item =>
-					new DropdownMenuActionViewItem(item, [action(item.id + '.choice')], {
-						showContextMenu(options) {
-							menu = options;
-						},
-					}),
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action(item.id + '.choice')], {
+					showContextMenu(options) { menu = options; },
+				}),
 			});
 			const [first, second] = [...bar.element.querySelectorAll('button')];
 			const icon = dom.window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -148,10 +136,7 @@ suite('ActionBar open dropdown updates', () => {
 			assert.equal(second!.isConnected, true);
 			second!.click();
 			await Promise.resolve();
-			assert.deepEqual(
-				menu!.getActions().map(item => item.id),
-				['second.choice'],
-			);
+			assert.deepEqual(menu!.getActions().map(item => item.id), ['second.choice']);
 			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
 			assert.equal(second!.getAttribute('aria-expanded'), 'true');
 			menu!.onHide?.(true);
@@ -186,13 +171,8 @@ suite('ActionBar open dropdown updates', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
 			let timeout: (() => void) | undefined;
-			dom.window.setTimeout = ((callback: () => void) => {
-				timeout = callback;
-				return 1;
-			}) as typeof dom.window.setTimeout;
-			dom.window.clearTimeout = () => {
-				timeout = undefined;
-			};
+			dom.window.setTimeout = ((callback: () => void) => { timeout = callback; return 1; }) as typeof dom.window.setTimeout;
+			dom.window.clearTimeout = () => { timeout = undefined; };
 			using bar = new ActionBar(dom.window.document.body, { actions: [action('first')] });
 			const trigger = bar.element.querySelector('button')!;
 			using consumed = addDisposableListener(trigger, 'click', event => event.stopImmediatePropagation(), true);
@@ -249,9 +229,7 @@ test('ActionViewItem routes its tooltip through the shared action Hover group', 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const setups: HoverDelegateSetupOptions[] = [];
 	using delegateRegistration = setHoverDelegate({
-		setupDelayedHover() {
-			throw new Error('Unexpected delayed hover registration');
-		},
+		setupDelayedHover() { throw new Error('Unexpected delayed hover registration'); },
 		setupHover(options) {
 			setups.push(options);
 			options.target.removeAttribute('title');
@@ -288,13 +266,12 @@ test('LabelActionViewItem owns compact icon-and-text action markup', () => {
 	};
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [activeAction],
-		actionViewItemProvider: action =>
-			new LabelActionViewItem(action, {
-				label: 'cmd',
-				icon: Lxicon.terminalCmd,
-				ariaLabel: 'Active terminal: cmd',
-				tooltip: 'Active terminal: cmd',
-			}),
+		actionViewItemProvider: (action) => new LabelActionViewItem(action, {
+			label: 'cmd',
+			icon: Lxicon.terminalCmd,
+			ariaLabel: 'Active terminal: cmd',
+			tooltip: 'Active terminal: cmd',
+		}),
 	});
 	dom.window.document.body.append(actionBar.element);
 
@@ -315,10 +292,9 @@ test('ActionBar enables native drag sources only when its view item opts in', ()
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action('drag-source'), action('ordinary')],
-		actionViewItemProvider: item =>
-			new LabelActionViewItem(item, {
-				draggable: item.id === 'drag-source',
-			}),
+		actionViewItemProvider: (item) => new LabelActionViewItem(item, {
+			draggable: item.id === 'drag-source',
+		}),
 	});
 	dom.window.document.body.append(actionBar.element);
 
@@ -335,11 +311,11 @@ test('ActionBar enables native drag sources only when its view item opts in', ()
 
 test('ActionBar reports drop targets without enabling ordinary toolbars', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const dropped: Array<{ target: string | undefined; position: string }> = [];
+	const dropped: Array<{ target: string | undefined; position: string; }> = [];
 	let dragging = false;
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action('first'), action('second')],
-		actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: true }),
+		actionViewItemProvider: (item) => new LabelActionViewItem(item, { draggable: true }),
 		dragAndDrop: {
 			canDrop: () => dragging,
 			onDragStart: () => {
@@ -376,7 +352,7 @@ test('ActionBar keeps insertion feedback continuous across gaps and hides no-op 
 	let dragging = false;
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action('first'), action('second'), action('third')],
-		actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: true }),
+		actionViewItemProvider: (item) => new LabelActionViewItem(item, { draggable: true }),
 		dragAndDrop: {
 			canDrop: () => dragging,
 			onDragStart: () => {
@@ -393,9 +369,9 @@ test('ActionBar keeps insertion feedback continuous across gaps and hides no-op 
 	assert.ok(first);
 	assert.ok(second);
 	assert.ok(third);
-	first.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect;
-	second.getBoundingClientRect = () => ({ left: 104, width: 100 }) as DOMRect;
-	third.getBoundingClientRect = () => ({ left: 208, width: 100 }) as DOMRect;
+	first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
+	second.getBoundingClientRect = () => ({ left: 104, width: 100 } as DOMRect);
+	third.getBoundingClientRect = () => ({ left: 208, width: 100 } as DOMRect);
 
 	third.dispatchEvent(dragEvent(dom.window, 'dragstart'));
 	actionBar.element.dispatchEvent(dragEvent(dom.window, 'dragover', 102));
@@ -417,7 +393,12 @@ test('ActionBar keeps insertion feedback continuous across gaps and hides no-op 
 test('ActionBar owns horizontal keyboard navigation', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const actionBar = new ActionBar(dom.window.document.body, {
-		actions: [action('first'), new Separator(), action('disabled', false), action('last')],
+		actions: [
+			action('first'),
+			new Separator(),
+			action('disabled', false),
+			action('last'),
+		],
 	});
 	dom.window.document.body.append(actionBar.element);
 	const buttons = actionBar.element.querySelectorAll('button');
@@ -430,7 +411,7 @@ test('ActionBar owns horizontal keyboard navigation', () => {
 	assert.equal(actionBar.element.getAttribute('role'), 'toolbar');
 	assert.equal(actionBar.element.getAttribute('aria-orientation'), 'horizontal');
 	assert.deepEqual(
-		[...buttons].map(button => button.tabIndex),
+		[...buttons].map((button) => button.tabIndex),
 		[0, -1, -1],
 	);
 
@@ -438,7 +419,7 @@ test('ActionBar owns horizontal keyboard navigation', () => {
 	first.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	assert.equal(dom.window.document.activeElement, last);
 	assert.deepEqual(
-		[...buttons].map(button => button.tabIndex),
+		[...buttons].map((button) => button.tabIndex),
 		[-1, -1, 0],
 	);
 	last.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
@@ -507,17 +488,23 @@ test('ActionBar retains focus when an action view item is updated', () => {
 	dom.window.close();
 });
 
-function action(id: string, enabled = true): IAction {
+function action(
+	id: string,
+	enabled = true,
+): IAction {
 	return {
 		id,
 		label: id,
 		tooltip: id,
 		enabled,
-		run() {},
+		run() { },
 	};
 }
 
-function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent }, key: string): KeyboardEvent {
+function keyboardEvent(
+	targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent; },
+	key: string,
+): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -525,7 +512,7 @@ function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEv
 	});
 }
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0, dataTransfer?: DataTransfer): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0, dataTransfer?: DataTransfer): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, 'clientX', { value: clientX });
 	if (dataTransfer) Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
@@ -533,16 +520,16 @@ function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string,
 }
 
 function testDataTransfer(): DataTransfer {
-	return { dropEffect: 'none', effectAllowed: 'none', setData() {} } as unknown as DataTransfer;
+	return { dropEffect: 'none', effectAllowed: 'none', setData() { } } as unknown as DataTransfer;
 }
 
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }

@@ -3,26 +3,10 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { localize } from '../../../../nls.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IConfigurationSettingSchema,
-	type IRegisteredConfiguration,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget, getConfigValueInTarget, merge, type IConfigurationOverrides, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import type {
-	IBooleanSetting,
-	INumberSetting,
-	INumberWithOptionsSetting,
-	ISelectSetting,
-	ISetting,
-	ISettingsEditorModel,
-	ITextSetting,
-	SettingReference,
-	SettingsStatus,
-	SettingValueBinding,
-} from './preferences.js';
+import type { IBooleanSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
 	readonly id: string;
@@ -125,17 +109,17 @@ export function configurationSettingBinding<T>(
 	const configuredValue = (): Readonly<T> | undefined => {
 		const value = inspect();
 		if (!address.overrideIdentifier) return getConfigValueInTarget(value, target);
-		const layer = target === ConfigurationTarget.WORKSPACE_FOLDER ? value.workspaceFolder : target === ConfigurationTarget.WORKSPACE ? value.workspace : value.userLocal;
+		const layer = target === ConfigurationTarget.WORKSPACE_FOLDER ? value.workspaceFolder
+			: target === ConfigurationTarget.WORKSPACE ? value.workspace : value.userLocal;
 		return layer?.override;
 	};
 	return {
 		id: configuration.key,
 		defaultValue: inspect().defaultValue! as T,
-		onDidChange: listener =>
-			configurationService.onDidChangeConfiguration(event => {
-				// Catalog withdrawal can notify configuration consumers before the editor releases controls.
-				if (event.affectsConfiguration(configuration.key) && configurationService.keys().default.includes(configuration.key)) listener();
-			}),
+		onDidChange: listener => configurationService.onDidChangeConfiguration(event => {
+			// Catalog withdrawal can notify configuration consumers before the editor releases controls.
+			if (event.affectsConfiguration(configuration.key) && configurationService.keys().default.includes(configuration.key)) listener();
+		}),
 		getValue: () => {
 			const value = inspect();
 			if (value.policyValue !== undefined) return value.policyValue as T;
@@ -168,11 +152,7 @@ export class DefaultSettings {
 			if (schema) {
 				this.settings.set(configuration.key, registeredSetting(configuration, schema));
 			} else if (configuration.source) {
-				this.settings.set(configuration.key, {
-					...contributedSettingCopy(configuration),
-					valueType: 'complex',
-					configuration,
-				});
+				this.settings.set(configuration.key, { ...contributedSettingCopy(configuration), valueType: 'complex', configuration });
 			}
 		}
 	}
@@ -193,7 +173,7 @@ function contributedNumberSetting(configuration: IRegisteredConfiguration): INum
 	const schema = configuration.schema;
 	if (!schema || schema.enum) return undefined;
 	let numeric: JsonSchema | undefined;
-	const options: { value: string | null; label: string }[] = [];
+	const options: { value: string | null; label: string; }[] = [];
 	for (const branch of schema.anyOf ?? [schema]) {
 		if (branch.anyOf || branch.oneOf || branch.$ref) return undefined;
 		const types = Array.isArray(branch.type) ? branch.type : [branch.type];
@@ -203,10 +183,7 @@ function contributedNumberSetting(configuration: IRegisteredConfiguration): INum
 				if (numeric || branch.enum) return undefined;
 				numeric = { ...branch, type };
 			} else if (type === 'null') {
-				options.push({
-					value: null,
-					label: localize({ bundle: 'ash.settings', key: 'number.automatic' }, 'Automatic'),
-				});
+				options.push({ value: null, label: localize({ bundle: 'ash.settings', key: 'number.automatic' }, 'Automatic') });
 			} else if (type === 'string' && branch.enum?.length && branch.enum.every(value => typeof value === 'string')) {
 				for (const [index, value] of branch.enum.entries()) {
 					options.push({ value: value as string, label: branch.enumDescriptions?.[index] ?? String(value) });
@@ -234,37 +211,18 @@ function contributedSettingSchema(configuration: IRegisteredConfiguration): ICon
 	if (!schema) return undefined;
 	const base = contributedSettingCopy(configuration);
 	if (schema.enum?.length && schema.enum.every(value => typeof value === 'string' || typeof value === 'boolean')) {
-		return {
-			...base,
-			valueType: 'select',
-			options: schema.enum.map(value => ({ value: value as string | boolean, label: String(value) })),
-		};
+		return { ...base, valueType: 'select', options: schema.enum.map(value => ({ value: value as string | boolean, label: String(value) })) };
 	}
 	switch (schema.type) {
-		case 'boolean':
-			return { ...base, valueType: 'boolean' };
+		case 'boolean': return { ...base, valueType: 'boolean' };
 		case 'integer':
-		case 'number':
-			return {
-				...base,
-				valueType: 'number',
-				minimum: schema.minimum ?? -Number.MAX_VALUE,
-				maximum: schema.maximum ?? Number.MAX_VALUE,
-			};
-		case 'string':
-			return { ...base, valueType: 'text', placeholder: '' };
-		default:
-			return undefined;
+		case 'number': return { ...base, valueType: 'number', minimum: schema.minimum ?? -Number.MAX_VALUE, maximum: schema.maximum ?? Number.MAX_VALUE };
+		case 'string': return { ...base, valueType: 'text', placeholder: '' };
+		default: return undefined;
 	}
 }
 
-function contributedSettingCopy(configuration: IRegisteredConfiguration): {
-	id: string;
-	title: string;
-	description: string;
-	keywords: readonly string[];
-	tags?: readonly string[];
-} {
+function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: string; title: string; description: string; keywords: readonly string[]; tags?: readonly string[]; } {
 	return {
 		id: configuration.key,
 		tags: configuration.tags,
@@ -286,42 +244,18 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 		case 'boolean':
 			return { ...base, valueType: 'boolean', configuration: configuration as IRegisteredConfiguration<boolean> };
 		case 'number':
-			return {
-				...base,
-				valueType: 'number',
-				configuration: configuration as IRegisteredConfiguration<number>,
-				minimum: schema.minimum,
-				maximum: schema.maximum,
-			};
+			return { ...base, valueType: 'number', configuration: configuration as IRegisteredConfiguration<number>, minimum: schema.minimum, maximum: schema.maximum };
 		case 'select':
 			return {
 				...base,
 				valueType: 'select',
 				configuration: configuration as IRegisteredConfiguration<string | boolean>,
-				get options() {
-					return schema.options;
-				},
+				get options() { return schema.options; },
 			};
 		case 'text':
-			return {
-				...base,
-				valueType: 'text',
-				configuration: configuration as IRegisteredConfiguration<string>,
-				placeholder: schema.placeholder,
-			};
+			return { ...base, valueType: 'text', configuration: configuration as IRegisteredConfiguration<string>, placeholder: schema.placeholder };
 		case 'stringMap':
-			return {
-				...base,
-				valueType: 'stringMap',
-				structuredValues: schema.structuredValues,
-				configuration: configuration as IRegisteredConfiguration<Record<string, unknown>>,
-				keyLabel: schema.keyLabel,
-				valueLabel: schema.valueLabel,
-				addLabel: schema.addLabel,
-				removeLabel: schema.removeLabel,
-				incompleteMessage: schema.incompleteMessage,
-				duplicateMessage: schema.duplicateMessage,
-			};
+			return { ...base, valueType: 'stringMap', structuredValues: schema.structuredValues, configuration: configuration as IRegisteredConfiguration<Record<string, unknown>>, keyLabel: schema.keyLabel, valueLabel: schema.valueLabel, addLabel: schema.addLabel, removeLabel: schema.removeLabel, incompleteMessage: schema.incompleteMessage, duplicateMessage: schema.duplicateMessage };
 	}
 }
 

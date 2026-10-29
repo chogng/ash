@@ -17,10 +17,7 @@ export class ReplaceAllCommand implements ICommand {
 	}
 
 	public getEditOperations(_model: TextModel, builder: IEditOperationBuilder): void {
-		const edits = this.ranges.map((range, index) => ({
-			range,
-			text: normalizeTextLineEndings(this.replaceStrings[index]!),
-		}));
+		const edits = this.ranges.map((range, index) => ({ range, text: normalizeTextLineEndings(this.replaceStrings[index]!) }));
 		edits.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range));
 		let previous = edits[0];
 		for (let index = 1; index < edits.length; index++) {

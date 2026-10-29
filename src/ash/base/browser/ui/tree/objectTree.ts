@@ -6,20 +6,7 @@ import type { ListScrolling } from '../list/list.js';
 import { AbstractTree } from './abstractTree.js';
 import { CompressibleObjectTreeModel, type CompressibleObjectTreeModelOptions, type CompressibleTreeElement, type CompressedTreeNode } from './compressedObjectTreeModel.js';
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, type ObjectTreeNode } from './objectTreeModel.js';
-import {
-	flattenTreeNodes,
-	mapTreeDragData,
-	type TreeDragAndDrop,
-	type TreeFindMatchType,
-	type TreeFindMode,
-	type TreeFindResult,
-	type TreeIndentGuides,
-	type TreeKeyboardNavigationLabelProvider,
-	type TreePointerTarget,
-	type TreeSelectionPresentation,
-	type TreeTwistieState,
-	type TreeVisibleSplice,
-} from './tree.js';
+import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeSelectionPresentation, type TreeTwistieState, type TreeVisibleSplice } from './tree.js';
 
 export interface ObjectTreeOptions<TNode> {
 	readonly styles?: IListStyles;
@@ -108,7 +95,7 @@ export class ObjectTree<TNode> extends Disposable {
 	private readonly _onDidActivate = this._register(new Emitter<ObjectTreeActivateEvent<TNode>>());
 	private readonly _onDidChangeFind = this._register(new Emitter<ObjectTreeFindResult<TNode>>());
 	private readonly onWillRender: (() => void) | undefined;
-	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent } | undefined;
+	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 
 	readonly onPointer: Event<ObjectTreePointerEvent<TNode>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<ObjectTreePointerEvent<TNode>> = this._onDidDoubleClick.event;
@@ -122,10 +109,7 @@ export class ObjectTree<TNode> extends Disposable {
 	readonly onDidScroll: Event<number>;
 
 	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
-		this.tree.updateOptions({
-			...options,
-			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
-		});
+		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
 	}
 
 	constructor(container: HTMLElement, options: ObjectTreeOptions<TNode>) {
@@ -133,110 +117,77 @@ export class ObjectTree<TNode> extends Disposable {
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.onWillRender = options.onWillRender;
 		this.model = this._register(new ObjectTreeModel(options.modelOptions));
-		this.tree = this._register(
-			new AbstractTree(container, {
-				styles: options.styles,
-				findWidgetStyles: options.findWidgetStyles,
-				ariaLabel: options.ariaLabel,
-				scrolling: options.scrolling,
-				smoothScrolling: options.smoothScrolling,
-				indent: options.indent,
-				indentGuides: options.indentGuides,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
-				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
-				getHeight: options.getHeight ? node => options.getHeight!(node.element) : undefined,
-				dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
-				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider
-					? {
-							getKeyboardNavigationLabel: element => options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element),
-						}
-					: undefined,
-				findMode: options.findMode,
-				findMatchType: options.findMatchType,
-				selectionPresentation: options.selectionPresentation,
-				multipleSelectionSupport: options.multipleSelectionSupport,
-				enableStickyScroll: options.enableStickyScroll,
-				stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-				reuseRows: options.reuseRows,
-				onDidRemoveRow: options.onDidRemoveRow,
-				renderElement: node => options.renderElement(node.element, node),
-				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
-			}),
-		);
+		this.tree = this._register(new AbstractTree(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
+			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
+			indent: options.indent,
+			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
+			expandOnDoubleClick: options.expandOnDoubleClick,
+			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
+			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
+			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
+			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider ? { getKeyboardNavigationLabel: (element) => options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element) } : undefined,
+			findMode: options.findMode,
+			findMatchType: options.findMatchType,
+			selectionPresentation: options.selectionPresentation,
+			multipleSelectionSupport: options.multipleSelectionSupport,
+			enableStickyScroll: options.enableStickyScroll,
+			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			reuseRows: options.reuseRows,
+			onDidRemoveRow: options.onDidRemoveRow,
+			renderElement: (node) => options.renderElement(node.element, node),
+			renderTwistie: options.renderTwistie
+				? (node, state, container) => options.renderTwistie!(node.element, state, container)
+				: undefined,
+		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this.onDidScroll = this.tree.onDidScroll;
-		this._register(
-			this.model.onDidChange(({ kind, node, visibleSplice }) => {
-				if (kind === 'rerender' && node) {
-					this.onWillRender?.();
-					this.tree.rerender(node.id);
-					return;
-				}
-				this.render(kind === 'structure' || kind === 'sort', visibleSplice);
-			}),
-		);
-		this._register(
-			this.model.onDidChangeCollapseState(({ node, collapsed }) => {
-				this._onDidChangeCollapseState.fire({
-					element: node.element,
-					node,
-					collapsed,
-					browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
-				});
-			}),
-		);
-		this._register(
-			this.tree.onPointer(({ element: node, target, browserEvent }) => {
-				this._onPointer.fire({ element: node.element, node, target, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => {
-				this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidAccept(({ element: node, browserEvent }) => {
-				this._onDidAccept.fire({ element: node.element, node, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeFocus(({ element: node, browserEvent }) => {
-				this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => {
-				this._onDidChangeSelection.fire({ elements: nodes.map(node => node.element), nodes, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
-				this.collapseBrowserEvent = { id: node.id, event: browserEvent };
-				try {
-					if (expanded) this.model.expand(node.id);
-					else this.model.collapse(node.id);
-				} finally {
-					this.collapseBrowserEvent = undefined;
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidActivate(({ element: node, browserEvent }) => {
-				this._onDidActivate.fire({ element: node.element, node, browserEvent });
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeFind((event: TreeFindResult<ObjectTreeNode<TNode>>) => {
-				this._onDidChangeFind.fire({
-					pattern: event.pattern,
-					matches: event.matches.map(node => node.element),
-					activeMatch: event.activeMatch?.element,
-				});
-			}),
-		);
+		this._register(this.model.onDidChange(({ kind, node, visibleSplice }) => {
+			if (kind === 'rerender' && node) {
+				this.onWillRender?.();
+				this.tree.rerender(node.id);
+				return;
+			}
+			this.render(kind === 'structure' || kind === 'sort', visibleSplice);
+		}));
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
+			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
+		}));
+		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => {
+			this._onPointer.fire({ element: node.element, node, target, browserEvent });
+		}));
+		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => {
+			this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent });
+		}));
+		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => {
+			this._onDidAccept.fire({ element: node.element, node, browserEvent });
+		}));
+		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => {
+			this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent });
+		}));
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => {
+			this._onDidChangeSelection.fire({ elements: nodes.map((node) => node.element), nodes, browserEvent });
+		}));
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
+			this.collapseBrowserEvent = { id: node.id, event: browserEvent };
+			try {
+				if (expanded) this.model.expand(node.id);
+				else this.model.collapse(node.id);
+			} finally {
+				this.collapseBrowserEvent = undefined;
+			}
+		}));
+		this._register(this.tree.onDidActivate(({ element: node, browserEvent }) => {
+			this._onDidActivate.fire({ element: node.element, node, browserEvent });
+		}));
+		this._register(this.tree.onDidChangeFind((event: TreeFindResult<ObjectTreeNode<TNode>>) => {
+			this._onDidChangeFind.fire({ pattern: event.pattern, matches: event.matches.map((node) => node.element), activeMatch: event.activeMatch?.element });
+		}));
 		this.render(true);
 	}
 
@@ -271,80 +222,44 @@ export class ObjectTree<TNode> extends Disposable {
 	expandTo(id: string): boolean {
 		return this.model.expandTo(id);
 	}
-	isCollapsed(id: string): boolean | undefined {
-		return this.model.getNode(id)?.collapsed;
-	}
+	isCollapsed(id: string): boolean | undefined { return this.model.getNode(id)?.collapsed; }
 
 	get focus(): TNode | undefined {
 		return this.tree.focus?.element;
 	}
 
 	get selection(): readonly TNode[] {
-		return this.tree.selection.map(node => node.element);
+		return this.tree.selection.map((node) => node.element);
 	}
-	getVisibleElements(): readonly TNode[] {
-		return this.model.visibleNodes.map(node => node.element);
-	}
-	openFind(): void {
-		this.tree.openFind();
-	}
-	closeFind(): void {
-		this.tree.closeFind();
-	}
-	get findMode(): TreeFindMode {
-		return this.tree.findMode;
-	}
-	set findMode(mode: TreeFindMode) {
-		this.tree.findMode = mode;
-	}
+	getVisibleElements(): readonly TNode[] { return this.model.visibleNodes.map((node) => node.element); }
+	openFind(): void { this.tree.openFind(); }
+	closeFind(): void { this.tree.closeFind(); }
+	get findMode(): TreeFindMode { return this.tree.findMode; }
+	set findMode(mode: TreeFindMode) { this.tree.findMode = mode; }
 
-	domFocus(): void {
-		this.tree.domFocus();
-	}
-	rerender(id?: string): void {
-		this.model.rerender(id);
-	}
+	domFocus(): void { this.tree.domFocus(); }
+	rerender(id?: string): void { this.model.rerender(id); }
 
 	setFocus(id: string, browserEvent?: UIEvent): void {
 		this.tree.setFocus(id, browserEvent);
 	}
 
-	get scrollTop(): number {
-		return this.tree.scrollTop;
-	}
-	set scrollTop(top: number) {
-		this.tree.scrollTop = top;
-	}
-	reveal(id: string, relativeTop?: number): void {
-		this.tree.reveal(id, relativeTop);
-	}
-	getRelativeTop(id: string): number | null {
-		return this.tree.getRelativeTop(id);
-	}
+	get scrollTop(): number { return this.tree.scrollTop; }
+	set scrollTop(top: number) { this.tree.scrollTop = top; }
+	reveal(id: string, relativeTop?: number): void { this.tree.reveal(id, relativeTop); }
+	getRelativeTop(id: string): number | null { return this.tree.getRelativeTop(id); }
 
 	setSelection(ids: readonly string[], browserEvent?: UIEvent): void {
 		this.tree.setSelection(ids, browserEvent);
 	}
 
-	setFindPattern(pattern: string): void {
-		this.tree.setFindPattern(pattern);
-	}
-	findNext(): TNode | undefined {
-		return this.tree.findNext()?.element;
-	}
-	findPrevious(): TNode | undefined {
-		return this.tree.findPrevious()?.element;
-	}
-	clearFind(): void {
-		this.tree.clearFind();
-	}
+	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+	findNext(): TNode | undefined { return this.tree.findNext()?.element; }
+	findPrevious(): TNode | undefined { return this.tree.findPrevious()?.element; }
+	clearFind(): void { this.tree.clearFind(); }
 
-	updateElementHeight(id: string, height: number | undefined): void {
-		this.tree.updateElementHeight(id, height);
-	}
-	getElementTop(id: string): number | undefined {
-		return this.tree.getElementTop(id);
-	}
+	updateElementHeight(id: string, height: number | undefined): void { this.tree.updateElementHeight(id, height); }
+	getElementTop(id: string): number | undefined { return this.tree.getElementTop(id); }
 
 	private render(structureChanged: boolean, visibleSplice?: TreeVisibleSplice<ObjectTreeNode<TNode>>): void {
 		this.onWillRender?.();
@@ -357,42 +272,14 @@ export class ObjectTree<TNode> extends Disposable {
 }
 
 function mapDragAndDrop<T>(dnd: TreeDragAndDrop<T>): TreeDragAndDrop<ObjectTreeNode<T>> {
-	const elements = (nodes: readonly ObjectTreeNode<T>[]) => nodes.map(node => node.element);
+	const elements = (nodes: readonly ObjectTreeNode<T>[]) => nodes.map((node) => node.element);
 	return {
-		getDragURI: node => dnd.getDragURI(node.element),
+		getDragURI: (node) => dnd.getDragURI(node.element),
 		getDragLabel: dnd.getDragLabel ? (nodes, event) => dnd.getDragLabel!(elements(nodes), event) : undefined,
-		onDragStart: dnd.onDragStart
-			? (data, event) =>
-					dnd.onDragStart!(
-						mapTreeDragData(data, node => node.element),
-						event,
-					)
-			: undefined,
-		onDragOver: (data, target, index, sector, event) =>
-			dnd.onDragOver(
-				mapTreeDragData(data, node => node.element),
-				target?.element,
-				index,
-				sector,
-				event,
-			),
-		onDragLeave: dnd.onDragLeave
-			? (data, target, index, event) =>
-					dnd.onDragLeave!(
-						mapTreeDragData(data, node => node.element),
-						target?.element,
-						index,
-						event,
-					)
-			: undefined,
-		drop: (data, target, index, sector, event) =>
-			dnd.drop(
-				mapTreeDragData(data, node => node.element),
-				target?.element,
-				index,
-				sector,
-				event,
-			),
+		onDragStart: dnd.onDragStart ? (data, event) => dnd.onDragStart!(mapTreeDragData(data, (node) => node.element), event) : undefined,
+		onDragOver: (data, target, index, sector, event) => dnd.onDragOver(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
+		onDragLeave: dnd.onDragLeave ? (data, target, index, event) => dnd.onDragLeave!(mapTreeDragData(data, (node) => node.element), target?.element, index, event) : undefined,
+		drop: (data, target, index, sector, event) => dnd.drop(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
 		onDragEnd: dnd.onDragEnd,
 	};
 }
@@ -467,205 +354,87 @@ export class CompressibleObjectTree<T> extends Disposable {
 	private readonly _onDidAccept = this._register(new Emitter<CompressibleTreeAcceptEvent<T>>());
 	private readonly _onDidChangeFocus = this._register(new Emitter<CompressibleTreeFocusChangeEvent<T>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<CompressibleTreeSelectionChangeEvent<T>>());
-	private readonly _onDidChangeCollapseState = this._register(
-		new Emitter<{
-			readonly element: T;
-			readonly elements: readonly T[];
-			readonly collapsed: boolean;
-			readonly browserEvent: MouseEvent | KeyboardEvent | undefined;
-		}>(),
-	);
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }>());
 
 	readonly onPointer: Event<CompressibleTreePointerEvent<T>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<CompressibleTreePointerEvent<T>> = this._onDidDoubleClick.event;
 	readonly onDidAccept: Event<CompressibleTreeAcceptEvent<T>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<CompressibleTreeFocusChangeEvent<T>> = this._onDidChangeFocus.event;
 	readonly onDidChangeSelection: Event<CompressibleTreeSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
-	readonly onDidChangeCollapseState: Event<{
-		readonly element: T;
-		readonly elements: readonly T[];
-		readonly collapsed: boolean;
-		readonly browserEvent: MouseEvent | KeyboardEvent | undefined;
-	}> = this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }> = this._onDidChangeCollapseState.event;
 
 	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
-		this.tree.updateOptions({
-			...options,
-			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
-		});
+		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined });
 	}
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: CompressibleObjectTreeOptions<T>,
-	) {
+	constructor(container: HTMLElement, private readonly options: CompressibleObjectTreeOptions<T>) {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.model = this._register(new CompressibleObjectTreeModel(options.modelOptions));
-		this.tree = this._register(
-			new AbstractTree(container, {
-				styles: options.styles,
-				findWidgetStyles: options.findWidgetStyles,
-				ariaLabel: options.ariaLabel,
-				multipleSelectionSupport: options.multipleSelectionSupport,
-				scrolling: options.scrolling,
-				smoothScrolling: options.smoothScrolling,
-				indent: options.indent,
-				indentGuides: options.indentGuides,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
-				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
-				getHeight: options.getHeight ? node => options.getHeight!(node.element.elements) : undefined,
-				dnd: options.dnd ? mapCompressedDragAndDrop(options.dnd) : undefined,
-				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider
-					? {
-							getKeyboardNavigationLabel: compressed => options.keyboardNavigationLabelProvider!.getCompressedNodeKeyboardNavigationLabel(compressed.elements),
-						}
-					: undefined,
-				findMode: options.findMode,
-				findMatchType: options.findMatchType,
-				enableStickyScroll: options.enableStickyScroll,
-				stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-				reuseRows: options.reuseRows,
-				onDidRemoveRow: options.onDidRemoveRow,
-				renderElement: node => options.renderCompressedElements(node.element.elements, node),
-				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
-			}),
-		);
+		this.tree = this._register(new AbstractTree(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
+			ariaLabel: options.ariaLabel,
+			multipleSelectionSupport: options.multipleSelectionSupport,
+			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
+			indent: options.indent,
+			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
+			expandOnDoubleClick: options.expandOnDoubleClick,
+			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? (node) => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
+			getHeight: options.getHeight ? (node) => options.getHeight!(node.element.elements) : undefined,
+			dnd: options.dnd ? mapCompressedDragAndDrop(options.dnd) : undefined,
+			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider ? { getKeyboardNavigationLabel: (compressed) => options.keyboardNavigationLabelProvider!.getCompressedNodeKeyboardNavigationLabel(compressed.elements) } : undefined,
+			findMode: options.findMode,
+			findMatchType: options.findMatchType,
+			enableStickyScroll: options.enableStickyScroll,
+			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			reuseRows: options.reuseRows,
+			onDidRemoveRow: options.onDidRemoveRow,
+			renderElement: (node) => options.renderCompressedElements(node.element.elements, node),
+			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
+		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(() => this.render()));
-		this._register(
-			this.model.onDidChangeCollapseState(({ node, collapsed }) =>
-				this._onDidChangeCollapseState.fire({
-					element: lastCompressedElement(node.element.elements),
-					elements: node.element.elements,
-					collapsed,
-					browserEvent: undefined,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onPointer(({ element: node, target, browserEvent }) =>
-				this._onPointer.fire({
-					element: lastCompressedElement(node.element.elements),
-					elements: node.element.elements,
-					node,
-					target,
-					browserEvent,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) =>
-				this._onDidDoubleClick.fire({
-					element: lastCompressedElement(node.element.elements),
-					elements: node.element.elements,
-					node,
-					target,
-					browserEvent,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onDidAccept(({ element: node, browserEvent }) =>
-				this._onDidAccept.fire({
-					element: lastCompressedElement(node.element.elements),
-					elements: node.element.elements,
-					node,
-					browserEvent,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onDidChangeFocus(({ element: node, browserEvent }) =>
-				this._onDidChangeFocus.fire({
-					element: node ? lastCompressedElement(node.element.elements) : undefined,
-					elements: node?.element.elements ?? [],
-					browserEvent,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) =>
-				this._onDidChangeSelection.fire({
-					elements: nodes.map(node => lastCompressedElement(node.element.elements)),
-					compressedElements: nodes.map(node => node.element.elements),
-					browserEvent,
-				}),
-			),
-		);
-		this._register(
-			this.tree.onDidRequestCollapseChange(({ element: node, expanded }) => {
-				const element = lastCompressedElement(node.element.elements);
-				if (expanded) this.model.expand(element);
-				else this.model.collapse(element);
-			}),
-		);
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: undefined })));
+		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
+		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
+		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, browserEvent })));
+		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node ? lastCompressedElement(node.element.elements) : undefined, elements: node?.element.elements ?? [], browserEvent })));
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map((node) => lastCompressedElement(node.element.elements)), compressedElements: nodes.map((node) => node.element.elements), browserEvent })));
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded }) => {
+			const element = lastCompressedElement(node.element.elements);
+			if (expanded) this.model.expand(element);
+			else this.model.collapse(element);
+		}));
 		this.render();
 	}
 
-	setChildren(children: readonly CompressibleTreeElement<T>[]): void {
-		this.model.setChildren(children);
-	}
-	setNodeChildren(element: T, children: readonly CompressibleTreeElement<T>[]): void {
-		this.model.setNodeChildren(element, children);
-	}
-	setCompressionEnabled(enabled: boolean): void {
-		this.model.setCompressionEnabled(enabled);
-	}
-	getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined {
-		return this.model.getCompressedNode(element);
-	}
-	collapse(element: T): boolean {
-		return this.model.collapse(element);
-	}
-	expand(element: T): boolean {
-		return this.model.expand(element);
-	}
-	expandTo(element: T): boolean {
-		return this.model.expandTo(element);
-	}
-	openFind(): void {
-		this.tree.openFind();
-	}
-	setFindPattern(pattern: string): void {
-		this.tree.setFindPattern(pattern);
-	}
-	findNext(): T | undefined {
-		return this.tree.findNext()?.element.elements.at(-1);
-	}
-	findPrevious(): T | undefined {
-		return this.tree.findPrevious()?.element.elements.at(-1);
-	}
-	clearFind(): void {
-		this.tree.clearFind();
-	}
-	get focus(): T | undefined {
-		return this.tree.focus ? lastCompressedElement(this.tree.focus.element.elements) : undefined;
-	}
-	get selection(): readonly T[] {
-		return this.tree.selection.map(node => lastCompressedElement(node.element.elements));
-	}
-	getVisibleElements(): readonly T[] {
-		return this.model.visibleNodes.map(node => lastCompressedElement(node.element.elements));
-	}
-	domFocus(): void {
-		this.tree.domFocus();
-	}
-	rerender(element?: T): void {
-		this.model.rerender(element);
-	}
+	setChildren(children: readonly CompressibleTreeElement<T>[]): void { this.model.setChildren(children); }
+	setNodeChildren(element: T, children: readonly CompressibleTreeElement<T>[]): void { this.model.setNodeChildren(element, children); }
+	setCompressionEnabled(enabled: boolean): void { this.model.setCompressionEnabled(enabled); }
+	getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined { return this.model.getCompressedNode(element); }
+	collapse(element: T): boolean { return this.model.collapse(element); }
+	expand(element: T): boolean { return this.model.expand(element); }
+	expandTo(element: T): boolean { return this.model.expandTo(element); }
+	openFind(): void { this.tree.openFind(); }
+	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+	findNext(): T | undefined { return this.tree.findNext()?.element.elements.at(-1); }
+	findPrevious(): T | undefined { return this.tree.findPrevious()?.element.elements.at(-1); }
+	clearFind(): void { this.tree.clearFind(); }
+	get focus(): T | undefined { return this.tree.focus ? lastCompressedElement(this.tree.focus.element.elements) : undefined; }
+	get selection(): readonly T[] { return this.tree.selection.map((node) => lastCompressedElement(node.element.elements)); }
+	getVisibleElements(): readonly T[] { return this.model.visibleNodes.map((node) => lastCompressedElement(node.element.elements)); }
+	domFocus(): void { this.tree.domFocus(); }
+	rerender(element?: T): void { this.model.rerender(element); }
 	setFocus(element: T, browserEvent?: UIEvent): void {
 		const node = this.model.getNode(element);
 		if (node) this.tree.setFocus(node.id, browserEvent);
 	}
-	get scrollTop(): number {
-		return this.tree.scrollTop;
-	}
-	set scrollTop(top: number) {
-		this.tree.scrollTop = top;
-	}
+	get scrollTop(): number { return this.tree.scrollTop; }
+	set scrollTop(top: number) { this.tree.scrollTop = top; }
 	reveal(element: T, relativeTop?: number): void {
 		const node = this.model.getNode(element);
 		if (node) this.tree.reveal(node.id, relativeTop);
@@ -675,14 +444,10 @@ export class CompressibleObjectTree<T> extends Disposable {
 		return node ? this.tree.getRelativeTop(node.id) : null;
 	}
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void {
-		const ids = [
-			...new Set(
-				elements.flatMap(element => {
-					const node = this.model.getNode(element);
-					return node ? [node.id] : [];
-				}),
-			),
-		];
+		const ids = [...new Set(elements.flatMap((element) => {
+			const node = this.model.getNode(element);
+			return node ? [node.id] : [];
+		}))];
 		this.tree.setSelection(ids, browserEvent);
 	}
 	updateElementHeight(element: T, height: number | undefined): void {
@@ -698,42 +463,14 @@ export class CompressibleObjectTree<T> extends Disposable {
 }
 
 function mapCompressedDragAndDrop<T>(dnd: TreeDragAndDrop<T>): TreeDragAndDrop<ObjectTreeNode<CompressedTreeNode<T>>> {
-	const originals = (nodes: readonly ObjectTreeNode<CompressedTreeNode<T>>[]) => nodes.map(node => lastCompressedElement(node.element.elements));
+	const originals = (nodes: readonly ObjectTreeNode<CompressedTreeNode<T>>[]) => nodes.map((node) => lastCompressedElement(node.element.elements));
 	return {
-		getDragURI: node => dnd.getDragURI(lastCompressedElement(node.element.elements)),
+		getDragURI: (node) => dnd.getDragURI(lastCompressedElement(node.element.elements)),
 		getDragLabel: dnd.getDragLabel ? (nodes, event) => dnd.getDragLabel!(originals(nodes), event) : undefined,
-		onDragStart: dnd.onDragStart
-			? (data, event) =>
-					dnd.onDragStart!(
-						mapTreeDragData(data, node => lastCompressedElement(node.element.elements)),
-						event,
-					)
-			: undefined,
-		onDragOver: (data, target, index, sector, event) =>
-			dnd.onDragOver(
-				mapTreeDragData(data, node => lastCompressedElement(node.element.elements)),
-				target ? lastCompressedElement(target.element.elements) : undefined,
-				index,
-				sector,
-				event,
-			),
-		onDragLeave: dnd.onDragLeave
-			? (data, target, index, event) =>
-					dnd.onDragLeave!(
-						mapTreeDragData(data, node => lastCompressedElement(node.element.elements)),
-						target ? lastCompressedElement(target.element.elements) : undefined,
-						index,
-						event,
-					)
-			: undefined,
-		drop: (data, target, index, sector, event) =>
-			dnd.drop(
-				mapTreeDragData(data, node => lastCompressedElement(node.element.elements)),
-				target ? lastCompressedElement(target.element.elements) : undefined,
-				index,
-				sector,
-				event,
-			),
+		onDragStart: dnd.onDragStart ? (data, event) => dnd.onDragStart!(mapTreeDragData(data, (node) => lastCompressedElement(node.element.elements)), event) : undefined,
+		onDragOver: (data, target, index, sector, event) => dnd.onDragOver(mapTreeDragData(data, (node) => lastCompressedElement(node.element.elements)), target ? lastCompressedElement(target.element.elements) : undefined, index, sector, event),
+		onDragLeave: dnd.onDragLeave ? (data, target, index, event) => dnd.onDragLeave!(mapTreeDragData(data, (node) => lastCompressedElement(node.element.elements)), target ? lastCompressedElement(target.element.elements) : undefined, index, event) : undefined,
+		drop: (data, target, index, sector, event) => dnd.drop(mapTreeDragData(data, (node) => lastCompressedElement(node.element.elements)), target ? lastCompressedElement(target.element.elements) : undefined, index, sector, event),
 		onDragEnd: dnd.onDragEnd,
 	};
 }

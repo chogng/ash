@@ -29,6 +29,7 @@ const { createTestCodeEditor } = await import('../../../../test/browser/testCode
 const { MessageController } = await import('../../browser/messageController.js');
 const { ReadOnlyMessageController } = await import('../../../readOnlyMessage/browser/contribution.js');
 
+
 test('read-only edit attempts use MessageController and close after cursor movement', () => {
 	const container = h(environment.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
@@ -94,10 +95,10 @@ test('Markdown resource links open through the code editor service', async () =>
 	assert.ok(ashLink);
 	ashLink.dispatchEvent(new environment.window.MouseEvent('click', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
-	assert.deepEqual(
-		openedResources.map(resource => resource.toString()),
-		['vscode-remote://ssh-remote+host/src/file.ts', 'ash-remote://ssh+host/src/ash.ts'],
-	);
+	assert.deepEqual(openedResources.map(resource => resource.toString()), [
+		'vscode-remote://ssh-remote+host/src/file.ts',
+		'ash-remote://ssh+host/src/ash.ts',
+	]);
 	messages.dispose();
 });
 
@@ -113,15 +114,8 @@ test('Markdown message URLs reach contributed openers and dismiss the message', 
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	let resolveOpened!: (href: string) => void;
-	const opened = new Promise<string>(resolve => {
-		resolveOpened = resolve;
-	});
-	using registration = opener.registerExternalOpener({
-		openExternal: async href => {
-			resolveOpened(href);
-			return true;
-		},
-	});
+	const opened = new Promise<string>(resolve => { resolveOpened = resolve; });
+	using registration = opener.registerExternalOpener({ openExternal: async href => { resolveOpened(href); return true; } });
 	using editor = createTestCodeEditor({ container, model, instantiationService: services });
 	editor.layout({ width: 400, height: 100 });
 	const messages = MessageController.get(editor)!;
@@ -142,9 +136,7 @@ test('Markdown message commands pass through opener validation and retain their 
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	const calls: (readonly unknown[])[] = [];
-	using command = CommandsRegistry.register('test.markdown.message', (_accessor, ...args) => {
-		calls.push(args);
-	});
+	using command = CommandsRegistry.register('test.markdown.message', (_accessor, ...args) => { calls.push(args); });
 	let allowed = false;
 	let validations = 0;
 	using validator = opener.registerValidator({
@@ -152,7 +144,7 @@ test('Markdown message commands pass through opener validation and retain their 
 			validations += 1;
 			assert.deepEqual(options?.allowCommands, ['test.markdown.message']);
 			return allowed;
-		},
+		}
 	});
 	using editor = createTestCodeEditor({ container, model, instantiationService: services });
 	editor.layout({ width: 400, height: 100 });

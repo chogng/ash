@@ -23,7 +23,9 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { ScrollableElement, Scrollbar } = await import('../../browser/ui/scrollbar/scrollbar.js');
+const { ScrollableElement, Scrollbar } = await import(
+	'../../browser/ui/scrollbar/scrollbar.js'
+);
 
 test('ScrollableElement exposes a persistent directional content container', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -46,12 +48,16 @@ test('ScrollableElement exposes a persistent directional content container', () 
 
 	assert.equal(scrollable.state.maximumLeft, 200);
 	assert.equal(scrollable.state.maximumTop, 0);
-	assert.equal(requireElement(scrollable.element, '.ash-scrollbar-track-vertical').hidden, true);
-	scrollable.scrollableElement.dispatchEvent(
-		wheelEvent(dom.window, {
-			deltaY: 25,
-		}),
+	assert.equal(
+		requireElement(
+			scrollable.element,
+			'.ash-scrollbar-track-vertical',
+		).hidden,
+		true,
 	);
+	scrollable.scrollableElement.dispatchEvent(wheelEvent(dom.window, {
+		deltaY: 25,
+	}));
 	assert.equal(scrollable.state.left, 25);
 	assert.equal(scrollable.state.top, 0);
 
@@ -96,10 +102,7 @@ test('ScrollableElement animates wheel targets cumulatively and lets direct inpu
 test('ScrollableElement stops wheel animations on changed dimensions, reduced motion and disposal', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using clock = animationClock(dom);
-	using scrollable = new ScrollableElement(dom.window.document.body, {
-		direction: 'vertical',
-		mouseWheelSmoothScroll: true,
-	});
+	using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'vertical', mouseWheelSmoothScroll: true });
 	const viewport = scrollable.scrollableElement;
 	installMetrics(viewport, { width: 100, height: 100, scrollWidth: 100, scrollHeight: 1_000 });
 	scrollable.layout();
@@ -133,19 +136,14 @@ function animationClock(dom: JSDOM) {
 	const previous = Date.now;
 	Date.now = () => now;
 	dom.window.requestAnimationFrame = callback => callbacks.push(callback);
-	return Object.assign(
-		toDisposable(() => {
-			Date.now = previous;
-		}),
-		{
-			frame(elapsed: number): void {
-				now += elapsed;
-				const pending = callbacks;
-				callbacks = [];
-				for (const callback of pending) callback(now);
-			},
+	return Object.assign(toDisposable(() => { Date.now = previous; }), {
+		frame(elapsed: number): void {
+			now += elapsed;
+			const pending = callbacks;
+			callbacks = [];
+			for (const callback of pending) callback(now);
 		},
-	);
+	});
 }
 
 test('ScrollableElement reveals a descendant at the nearest horizontal edge', () => {
@@ -169,7 +167,10 @@ test('ScrollableElement reveals a descendant at the nearest horizontal edge', ()
 
 	assert.equal(scrollable.state.left, 100);
 	assert.equal(scrollable.state.top, 0);
-	assert.throws(() => scrollable.reveal(h(dom.window.document, 'span')), /only reveal its descendants/);
+	assert.throws(
+		() => scrollable.reveal(h(dom.window.document, 'span')),
+		/only reveal its descendants/,
+	);
 	scrollable.dispose();
 	dom.window.close();
 });
@@ -187,16 +188,8 @@ test('ScrollableElement updates thin scrollbar presentation without replacing sc
 	assert.equal(horizontal.hidden, true);
 	assert.equal(requireElement(scrollable.element, '.ash-scrollbar-track-vertical').hidden, true);
 	scrollable.updateOptions({ horizontal: 'auto' });
-	assert.deepEqual(
-		{
-			viewport: scrollable.scrollableElement === viewport,
-			position: scrollable.state.left,
-			size: scrollable.element.style.getPropertyValue('--ash-scrollbar-size'),
-			focus: dom.window.document.activeElement === horizontal,
-			visibility: horizontal.dataset.visibility,
-		},
-		{ viewport: true, position: 80, size: '10px', focus: true, visibility: 'visible' },
-	);
+	assert.deepEqual({ viewport: scrollable.scrollableElement === viewport, position: scrollable.state.left, size: scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), focus: dom.window.document.activeElement === horizontal, visibility: horizontal.dataset.visibility },
+		{ viewport: true, position: 80, size: '10px', focus: true, visibility: 'visible' });
 	dom.window.close();
 });
 
@@ -206,7 +199,10 @@ test('Scrollbar owns two-axis state, elements, visibility, and ARIA', () => {
 		ariaLabel: 'Scrollable test',
 	});
 	dom.window.document.body.append(scrollbar.element);
-	const viewport = requireElement(scrollbar.element, '.ash-scrollbar-viewport');
+	const viewport = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-viewport',
+	);
 	installMetrics(viewport, {
 		width: 200,
 		height: 100,
@@ -226,15 +222,30 @@ test('Scrollbar owns two-axis state, elements, visibility, and ARIA', () => {
 		maximumLeft: 400,
 		maximumTop: 300,
 	});
-	const horizontal = requireElement(scrollbar.element, '.ash-scrollbar-track-horizontal');
-	const vertical = requireElement(scrollbar.element, '.ash-scrollbar-track-vertical');
-	const horizontalThumb = requireElement(horizontal, '.ash-scrollbar-thumb');
-	const verticalThumb = requireElement(vertical, '.ash-scrollbar-thumb');
+	const horizontal = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-track-horizontal',
+	);
+	const vertical = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-track-vertical',
+	);
+	const horizontalThumb = requireElement(
+		horizontal,
+		'.ash-scrollbar-thumb',
+	);
+	const verticalThumb = requireElement(
+		vertical,
+		'.ash-scrollbar-thumb',
+	);
 	assert.equal(horizontal.hidden, false);
 	assert.equal(vertical.hidden, false);
 	assert.equal(horizontal.getAttribute('role'), 'scrollbar');
 	assert.equal(horizontal.getAttribute('aria-orientation'), 'horizontal');
-	assert.equal(horizontal.getAttribute('aria-controls'), viewport.id);
+	assert.equal(
+		horizontal.getAttribute('aria-controls'),
+		viewport.id,
+	);
 	assert.equal(horizontalThumb.style.width, '63.333333333333336px');
 	assert.equal(verticalThumb.style.height, '22.5px');
 
@@ -244,22 +255,25 @@ test('Scrollbar owns two-axis state, elements, visibility, and ARIA', () => {
 
 test('Scrollbar normalizes wheel input and propagates at boundaries', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const positions: Array<{ readonly left: number; readonly top: number }> = [];
+	const positions: Array<{ readonly left: number; readonly top: number; }> = [];
 	const changes: Array<{
-		readonly previous: { readonly left: number; readonly top: number };
-		readonly current: { readonly left: number; readonly top: number };
+		readonly previous: { readonly left: number; readonly top: number; };
+		readonly current: { readonly left: number; readonly top: number; };
 	}> = [];
 	const scrollbar = new Scrollbar(dom.window.document.body, {
-		onScroll: position => positions.push(position),
+		onScroll: (position) => positions.push(position),
 	});
-	const registration = scrollbar.onDidScroll(event => {
+	const registration = scrollbar.onDidScroll((event) => {
 		changes.push({
 			previous: event.previous,
 			current: event.current,
 		});
 	});
 	dom.window.document.body.append(scrollbar.element);
-	const viewport = requireElement(scrollbar.element, '.ash-scrollbar-viewport');
+	const viewport = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-viewport',
+	);
 	installMetrics(viewport, {
 		width: 200,
 		height: 100,
@@ -326,7 +340,10 @@ test('Scrollbar supports keyboard, track clicks, and thumb dragging', () => {
 		vertical: 'visible',
 	});
 	dom.window.document.body.append(scrollbar.element);
-	const viewport = requireElement(scrollbar.element, '.ash-scrollbar-viewport');
+	const viewport = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-viewport',
+	);
 	installMetrics(viewport, {
 		width: 200,
 		height: 100,
@@ -334,8 +351,14 @@ test('Scrollbar supports keyboard, track clicks, and thumb dragging', () => {
 		scrollHeight: 400,
 	});
 	scrollbar.layout();
-	const vertical = requireElement(scrollbar.element, '.ash-scrollbar-track-vertical');
-	const horizontal = requireElement(scrollbar.element, '.ash-scrollbar-track-horizontal');
+	const vertical = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-track-vertical',
+	);
+	const horizontal = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-track-horizontal',
+	);
 	const thumb = requireElement(vertical, '.ash-scrollbar-thumb');
 	assert.equal(horizontal.hidden, true);
 	assert.equal(vertical.hidden, false);
@@ -348,25 +371,39 @@ test('Scrollbar supports keyboard, track clicks, and thumb dragging', () => {
 		left: 190,
 		width: 10,
 		height: 100,
-		toJSON() {},
+		toJSON() { },
 	});
 
-	vertical.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			cancelable: true,
-			key: 'PageDown',
-		}),
-	);
+	vertical.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'PageDown',
+	}));
 	assert.equal(scrollbar.state.top, 100);
 
-	vertical.dispatchEvent(pointerEvent(dom.window, 'pointerdown', 75));
+	vertical.dispatchEvent(pointerEvent(
+		dom.window,
+		'pointerdown',
+		75,
+	));
 	assert.equal(scrollbar.state.top, 250);
 
 	scrollbar.scrollTo(0, 0);
-	thumb.dispatchEvent(pointerEvent(dom.window, 'pointerdown', 0));
-	dom.window.dispatchEvent(pointerEvent(dom.window, 'pointermove', 25));
-	dom.window.dispatchEvent(pointerEvent(dom.window, 'pointerup', 25));
+	thumb.dispatchEvent(pointerEvent(
+		dom.window,
+		'pointerdown',
+		0,
+	));
+	dom.window.dispatchEvent(pointerEvent(
+		dom.window,
+		'pointermove',
+		25,
+	));
+	dom.window.dispatchEvent(pointerEvent(
+		dom.window,
+		'pointerup',
+		25,
+	));
 	assert.equal(scrollbar.state.top, 100);
 	assert.equal(vertical.dataset.active, undefined);
 
@@ -381,7 +418,10 @@ test('Horizontal scrollbar supports keyboard, track clicks, and thumb dragging',
 		horizontal: 'visible',
 	});
 	dom.window.document.body.append(scrollbar.element);
-	const viewport = requireElement(scrollbar.element, '.ash-scrollbar-viewport');
+	const viewport = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-viewport',
+	);
 	installMetrics(viewport, {
 		width: 200,
 		height: 100,
@@ -389,17 +429,18 @@ test('Horizontal scrollbar supports keyboard, track clicks, and thumb dragging',
 		scrollHeight: 100,
 	});
 	scrollbar.layout();
-	const horizontal = requireElement(scrollbar.element, '.ash-scrollbar-track-horizontal');
+	const horizontal = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-track-horizontal',
+	);
 	const thumb = requireElement(horizontal, '.ash-scrollbar-thumb');
 	horizontal.getBoundingClientRect = () => rect(0, 90, 200, 100);
 
-	horizontal.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			cancelable: true,
-			key: 'ArrowRight',
-		}),
-	);
+	horizontal.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'ArrowRight',
+	}));
 	assert.equal(scrollbar.state.left, 40);
 
 	horizontal.dispatchEvent(horizontalPointerEvent(dom.window, 'pointerdown', 150));
@@ -421,7 +462,10 @@ test('Scrollbar can always consume wheel input', () => {
 	const scrollbar = new Scrollbar(dom.window.document.body, {
 		wheel: { consume: 'always' },
 	});
-	const viewport = requireElement(scrollbar.element, '.ash-scrollbar-viewport');
+	const viewport = requireElement(
+		scrollbar.element,
+		'.ash-scrollbar-viewport',
+	);
 	installMetrics(viewport, {
 		width: 100,
 		height: 100,
@@ -438,7 +482,10 @@ test('Scrollbar can always consume wheel input', () => {
 	dom.window.close();
 });
 
-function requireElement(parent: ParentNode, selector: string): HTMLElement {
+function requireElement(
+	parent: ParentNode,
+	selector: string,
+): HTMLElement {
 	const element = parent.querySelector<HTMLElement>(selector);
 	assert.ok(element);
 	return element;
@@ -473,7 +520,10 @@ function installMetrics(
 	});
 }
 
-function wheelEvent(targetWindow: typeof browserEnvironment.window, options: WheelEventInit): WheelEvent {
+function wheelEvent(
+	targetWindow: typeof browserEnvironment.window,
+	options: WheelEventInit,
+): WheelEvent {
 	return new targetWindow.WheelEvent('wheel', {
 		bubbles: true,
 		cancelable: true,
@@ -481,7 +531,11 @@ function wheelEvent(targetWindow: typeof browserEnvironment.window, options: Whe
 	}) as unknown as WheelEvent;
 }
 
-function pointerEvent(targetWindow: typeof browserEnvironment.window, type: string, clientY: number): PointerEvent {
+function pointerEvent(
+	targetWindow: typeof browserEnvironment.window,
+	type: string,
+	clientY: number,
+): PointerEvent {
 	return new targetWindow.MouseEvent(type, {
 		bubbles: true,
 		button: 0,
@@ -491,7 +545,11 @@ function pointerEvent(targetWindow: typeof browserEnvironment.window, type: stri
 	}) as unknown as PointerEvent;
 }
 
-function horizontalPointerEvent(targetWindow: typeof browserEnvironment.window, type: string, clientX: number): PointerEvent {
+function horizontalPointerEvent(
+	targetWindow: typeof browserEnvironment.window,
+	type: string,
+	clientX: number,
+): PointerEvent {
 	return new targetWindow.MouseEvent(type, {
 		bubbles: true,
 		button: 0,

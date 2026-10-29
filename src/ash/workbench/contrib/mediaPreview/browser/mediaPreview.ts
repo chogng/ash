@@ -67,73 +67,55 @@ export class MediaPreview extends EditorPane {
 		this.failureDomNode.setAttribute('role', 'alert');
 		this.failureDomNode.hidden = true;
 		this.domNode.append(this.viewportDomNode, this.failureDomNode);
-		this.retryButton = this._register(
-			new Button(this.domNode, {
-				...defaultButtonStyles,
-				label: localize('media.playback.retry', 'Retry'),
-				ariaLabel: localize('media.playback.retry', 'Retry'),
-				presentation: 'secondary',
-				onClick: () => this.retry(),
-			}),
-		);
+		this.retryButton = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
+			label: localize('media.playback.retry', 'Retry'),
+			ariaLabel: localize('media.playback.retry', 'Retry'),
+			presentation: 'secondary',
+			onClick: () => this.retry(),
+		}));
 		this.retryButton.hidden = true;
 		this.domNode.append(this.summaryDomNode);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		MediaPreview.instances.set(this.domNode, this);
-		this._register(
-			toDisposable(() => {
-				this.clearInput();
-				MediaPreview.instances.delete(this.domNode);
-				this.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.clearInput();
+			MediaPreview.instances.delete(this.domNode);
+			this.domNode.remove();
+		}));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('mediaPreviewFocused', true);
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.updateLabels()));
-		this._register(
-			this.configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('mediaPreview.video')) this.updatePlaybackSettings();
-			}),
-		);
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('mediaPreview.video')) this.updatePlaybackSettings();
+		}));
 		// Browser playback controls own their keys; handle Space only on the surrounding region.
-		this._register(
-			addDisposableListener(this.domNode, 'keydown', event => {
-				if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.target !== this.domNode || !this.source.value) {
-					return;
-				}
-				event.preventDefault();
-				event.stopPropagation();
-				if (!this.playerDomNode.paused) {
-					this.playerDomNode.pause();
-					return;
-				}
-				const input = this.input;
-				const player = this.playerDomNode;
-				const generation = this.generation;
-				void player.play().catch(error => {
-					if (!this.isCurrentPlayer(player, generation) || !input || this.input !== input || error.name === 'AbortError') {
-						return;
-					}
-					this.failure = localize('media.playback.failed', 'Could not play media: {0}', String(error));
-					this.updateLabels();
-				});
-			}),
-		);
-		this._register(
-			this.files.onDidChangeFiles(event => {
-				const input = this.input;
-				if (!input || (event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))) {
-					return;
-				}
-				void this.setInput(input, new AbortController().signal).catch(error => {
-					if (this.isDisposed || error instanceof CancellationError || this.input !== input) {
-						return;
-					}
-					this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', String(error));
-					this.updateLabels();
-				});
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.target !== this.domNode || !this.source.value) { return; }
+			event.preventDefault();
+			event.stopPropagation();
+			if (!this.playerDomNode.paused) {
+				this.playerDomNode.pause();
+				return;
+			}
+			const input = this.input;
+			const player = this.playerDomNode;
+			const generation = this.generation;
+			void player.play().catch(error => {
+				if (!this.isCurrentPlayer(player, generation) || !input || this.input !== input || error.name === 'AbortError') { return; }
+				this.failure = localize('media.playback.failed', 'Could not play media: {0}', String(error));
+				this.updateLabels();
+			});
+		}));
+		this._register(this.files.onDidChangeFiles(event => {
+			const input = this.input;
+			if (!input || event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource))) { return; }
+			void this.setInput(input, new AbortController().signal).catch(error => {
+				if (this.isDisposed || error instanceof CancellationError || this.input !== input) { return; }
+				this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', String(error));
+				this.updateLabels();
+			});
+		}));
 		this.updateLabels();
 	}
 
@@ -148,9 +130,7 @@ export class MediaPreview extends EditorPane {
 		try {
 			const file = await raceCancellationError(this.files.readFileBytes(input.resource), combined);
 			combined.throwIfAborted();
-			if (!this.isCurrentInput(input, generation)) {
-				throw new CancellationError();
-			}
+			if (!this.isCurrentInput(input, generation)) { throw new CancellationError(); }
 			this.byteLength = file.bytes.length;
 			const url = URL.createObjectURL(new Blob([new Uint8Array(file.bytes)], { type: input.contentType ?? '' }));
 			const player = this.playerDomNode;
@@ -165,14 +145,10 @@ export class MediaPreview extends EditorPane {
 			this.updateLabels();
 		} catch (error) {
 			if (error instanceof CancellationError) {
-				if (this.isCurrentInput(input, generation)) {
-					this.clearInput();
-				}
+				if (this.isCurrentInput(input, generation)) { this.clearInput(); }
 				throw error;
 			}
-			if (!this.isCurrentInput(input, generation)) {
-				return;
-			}
+			if (!this.isCurrentInput(input, generation)) { return; }
 			this.showLoadFailure(input, error, generation);
 		}
 	}
@@ -191,37 +167,20 @@ export class MediaPreview extends EditorPane {
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.domNode.classList.toggle('hidden', !visible);
-		if (!visible) {
-			this.playerDomNode.pause();
-		}
+		if (!visible) { this.playerDomNode.pause(); }
 	}
 
-	public override layout(_dimension: IDimension): void {}
-	public override focus(): void {
-		this.playerDomNode.focus();
-	}
+	public override layout(_dimension: IDimension): void { }
+	public override focus(): void { this.playerDomNode.focus(); }
 
 	public getAccessibleContent(): string {
-		if (this.failure) {
-			return this.failure;
-		}
-		if (!this.input) {
-			return localize('media.playback.empty', 'No media loaded.');
-		}
+		if (this.failure) { return this.failure; }
+		if (!this.input) { return localize('media.playback.empty', 'No media loaded.'); }
 		const duration = Number.isFinite(this.playerDomNode.duration)
 			? localize('media.playback.duration', '{0} seconds', Math.round(this.playerDomNode.duration * 100) / 100)
 			: localize('media.playback.durationUnknown', 'Duration unavailable');
 		const state = this.playerDomNode.paused ? localize('media.playback.paused', 'Paused') : localize('media.playback.playing', 'Playing');
-		return localize(
-			'media.playback.content',
-			'{0}: {1}\nResource: {2}\nFile size: {3} bytes\nDuration: {4}\nPlayback: {5}',
-			this.name,
-			this.input.label ?? basename(this.input.resource),
-			this.input.resource.toString(),
-			this.byteLength,
-			duration,
-			state,
-		);
+		return localize('media.playback.content', '{0}: {1}\nResource: {2}\nFile size: {3} bytes\nDuration: {4}\nPlayback: {5}', this.name, this.input.label ?? basename(this.input.resource), this.input.resource.toString(), this.byteLength, duration, state);
 	}
 
 	private updateLabels(): void {
@@ -231,8 +190,7 @@ export class MediaPreview extends EditorPane {
 		this.failureDomNode.hidden = this.failure === undefined;
 		this.failureDomNode.textContent = this.failure ?? '';
 		this.retryButton.hidden = this.failure === undefined || this.input === undefined;
-		this.summaryDomNode.textContent =
-			this.input && this.failure === undefined ? localize('media.playback.summary', '{0} · {1} bytes', this.input.label ?? basename(this.input.resource), this.byteLength) : '';
+		this.summaryDomNode.textContent = this.input && this.failure === undefined ? localize('media.playback.summary', '{0} · {1} bytes', this.input.label ?? basename(this.input.resource), this.byteLength) : '';
 		this.summaryDomNode.title = this.summaryDomNode.textContent;
 	}
 
@@ -248,23 +206,15 @@ export class MediaPreview extends EditorPane {
 		this.viewportDomNode.replaceChildren(player);
 		const generation = this.generation;
 		for (const event of ['loadedmetadata', 'durationchange', 'play', 'pause', 'ended']) {
-			this.playerListeners.add(
-				addDisposableListener(player, event, () => {
-					if (this.isCurrentPlayer(player, generation)) {
-						this.updateLabels();
-					}
-				}),
-			);
+			this.playerListeners.add(addDisposableListener(player, event, () => {
+				if (this.isCurrentPlayer(player, generation)) { this.updateLabels(); }
+			}));
 		}
-		this.playerListeners.add(
-			addDisposableListener(player, 'error', () => {
-				if (!this.isCurrentPlayer(player, generation) || !this.input) {
-					return;
-				}
-				this.failure = localize('media.playback.unsupported', 'This media file could not be played. Its data or codec may not be supported.');
-				this.updateLabels();
-			}),
-		);
+		this.playerListeners.add(addDisposableListener(player, 'error', () => {
+			if (!this.isCurrentPlayer(player, generation) || !this.input) { return; }
+			this.failure = localize('media.playback.unsupported', 'This media file could not be played. Its data or codec may not be supported.');
+			this.updateLabels();
+		}));
 	}
 
 	private isCurrentPlayer(player: HTMLMediaElement, generation: number): boolean {
@@ -282,9 +232,7 @@ export class MediaPreview extends EditorPane {
 	}
 
 	private showLoadFailure(input: IResourceEditorInput, error: unknown, generation: number): void {
-		if (!this.isCurrentInput(input, generation)) {
-			return;
-		}
+		if (!this.isCurrentInput(input, generation)) { return; }
 		this.clearInput();
 		this.input = input;
 		this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', String(error));
@@ -293,13 +241,9 @@ export class MediaPreview extends EditorPane {
 
 	private retry(): void {
 		const input = this.input;
-		if (!input || this.failure === undefined) {
-			return;
-		}
+		if (!input || this.failure === undefined) { return; }
 		void this.setInput(input, new AbortController().signal).catch(error => {
-			if (error instanceof CancellationError || this.isDisposed || this.input !== input) {
-				return;
-			}
+			if (error instanceof CancellationError || this.isDisposed || this.input !== input) { return; }
 			this.showLoadFailure(input, error, this.generation);
 		});
 	}

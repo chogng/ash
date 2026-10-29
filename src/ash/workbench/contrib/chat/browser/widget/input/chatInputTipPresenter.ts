@@ -14,11 +14,7 @@ export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<DisposableStore>());
 	private currentPart: ChatTipContentPart | undefined;
 
-	constructor(
-		private readonly options: IChatInputTipPresenterOptions,
-		@IChatTipService private readonly tips: IChatTipService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) {
+	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this._register(tips.onDidDismissTip(() => this.update()));
 		this.update();
@@ -56,10 +52,6 @@ export class ChatInputTipPresenter extends Disposable {
 		};
 		scope.add(parts.onDidChange(render));
 		render(parts.get());
-		scope.add(
-			toDisposable(() => {
-				this.currentPart = undefined;
-			}),
-		);
+		scope.add(toDisposable(() => { this.currentPart = undefined; }));
 	}
 }

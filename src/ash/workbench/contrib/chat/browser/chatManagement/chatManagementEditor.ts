@@ -38,27 +38,17 @@ export class ModelsManagementEditor extends EditorPane {
 		const title = h(document, 'h2');
 		title.textContent = localize('modelsManagementEditorInputName', 'Language Models');
 		root.append(title);
-		const settings = this._register(
-			new Button(root, {
-				...defaultButtonStyles,
-				label: localize('chat.modelPicker.openSettings', 'Open Settings'),
-				presentation: 'secondary',
-			}),
-		);
-		this._register(
-			settings.onDidClick(() => {
-				void this.preferences.openSettings({ section: 'models' });
-			}),
-		);
+		const settings = this._register(new Button(root, {
+			...defaultButtonStyles,
+			label: localize('chat.modelPicker.openSettings', 'Open Settings'),
+			presentation: 'secondary',
+		}));
+		this._register(settings.onDidClick(() => { void this.preferences.openSettings({ section: 'models' }); }));
 		this.widget = this._register(this.instantiation.createInstance(ChatModelsWidget, document, {}));
 		const count = h(document, 'p');
 		count.className = 'ash-models-count';
 		count.setAttribute('role', 'status');
-		this._register(
-			this.widget.onDidChangeItemCount(value => {
-				count.textContent = localize('models.catalog.count', 'Showing {0} models', value);
-			}),
-		);
+		this._register(this.widget.onDidChangeItemCount(value => { count.textContent = localize('models.catalog.count', 'Showing {0} models', value); }));
 		root.append(count);
 		root.append(this.widget.element);
 		this.widget.fireItemCount();
@@ -73,40 +63,25 @@ export class ModelsManagementEditor extends EditorPane {
 		this.widget.fireItemCount();
 	}
 
-	public override clearInput(): void {
-		this.widget.element.hidden = true;
-	}
+	public override clearInput(): void { this.widget.element.hidden = true; }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		const wasHidden = this.widget.element.hidden;
 		this.widget.element.hidden = !visible;
 		// EditorPanes lays out a hidden host before revealing it. Measure its chrome only after reveal.
-		if (visible && this.dimension) {
-			this.layout(this.dimension);
-		}
-		if (visible && wasHidden) {
-			this.widget.render();
-			this.widget.fireItemCount();
-		}
+		if (visible && this.dimension) { this.layout(this.dimension); }
+		if (visible && wasHidden) { this.widget.render(); this.widget.fireItemCount(); }
 	}
-	public override focus(): void {
-		this.widget.focusSearch();
-	}
-	public search(query: string): void {
-		this.widget.search(query);
-	}
-	public clearSearch(): void {
-		this.widget.clearSearch();
-	}
+	public override focus(): void { this.widget.focusSearch(); }
+	public search(query: string): void { this.widget.search(query); }
+	public clearSearch(): void { this.widget.clearSearch(); }
 
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		const root = this.getContainer()!;
 		root.style.width = `${dimension.width}px`;
 		root.style.height = `${dimension.height}px`;
-		if (!root.clientWidth || !root.clientHeight) {
-			return;
-		}
+		if (!root.clientWidth || !root.clientHeight) { return; }
 		const style = root.ownerDocument.defaultView!.getComputedStyle(root);
 		const offset = this.widget.element.getBoundingClientRect().top - root.getBoundingClientRect().top;
 		this.widget.layout(

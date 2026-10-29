@@ -35,7 +35,7 @@ test('current-frame scheduling remains cancellable', () => {
 	const targetWindow = new TestAnimationWindow();
 	let called = false;
 	scheduleAtNextAnimationFrame(targetWindow.value, () => {
-		const registration = runAtThisOrScheduleAtNextAnimationFrame(targetWindow.value, () => (called = true));
+		const registration = runAtThisOrScheduleAtNextAnimationFrame(targetWindow.value, () => called = true);
 		registration.dispose();
 	});
 
@@ -47,7 +47,7 @@ test('current-frame scheduling remains cancellable', () => {
 test('animation-frame scheduling falls back to an owned window timer', () => {
 	const targetWindow = new TestTimerWindow();
 	let calls = 0;
-	scheduleAtNextAnimationFrame(targetWindow.value, () => (calls += 1));
+	scheduleAtNextAnimationFrame(targetWindow.value, () => calls += 1);
 
 	assert.equal(targetWindow.pendingTimers, 1);
 	targetWindow.flush();
@@ -57,7 +57,7 @@ test('animation-frame scheduling falls back to an owned window timer', () => {
 test('window timeouts remain cancellable', () => {
 	const targetWindow = new TestTimerWindow();
 	let called = false;
-	const registration = disposableWindowTimeout(targetWindow.value, () => (called = true), 10);
+	const registration = disposableWindowTimeout(targetWindow.value, () => called = true, 10);
 
 	registration.dispose();
 	targetWindow.flush();
@@ -67,23 +67,12 @@ test('window timeouts remain cancellable', () => {
 test('window intervals stop on a result or iteration limit', () => {
 	const targetWindow = new TestTimerWindow();
 	let selfStopping = 0;
-	disposableWindowInterval(
-		targetWindow.value,
-		() => {
-			selfStopping += 1;
-			return true;
-		},
-		10,
-	);
+	disposableWindowInterval(targetWindow.value, () => {
+		selfStopping += 1;
+		return true;
+	}, 10);
 	let limited = 0;
-	disposableWindowInterval(
-		targetWindow.value,
-		() => {
-			limited += 1;
-		},
-		10,
-		2,
-	);
+	disposableWindowInterval(targetWindow.value, () => { limited += 1; }, 10, 2);
 
 	targetWindow.flushIntervals();
 	targetWindow.flushIntervals();
@@ -112,7 +101,7 @@ test('WindowIntervalTimer scopes cancellation to the selected window', () => {
 	const targetWindow = new TestTimerWindow();
 	const timer = new WindowIntervalTimer();
 	let calls = 0;
-	timer.cancelAndSet(() => (calls += 1), 10, targetWindow.value);
+	timer.cancelAndSet(() => calls += 1, 10, targetWindow.value);
 	targetWindow.flushIntervals();
 	assert.equal(calls, 1);
 	timer.dispose();

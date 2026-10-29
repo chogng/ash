@@ -59,14 +59,7 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 	const load = (name, parent = null) => {
 		const retained = cache.get(name);
 		if (retained) return retained;
-		const module = {
-			id: filename(name),
-			filename: filename(name),
-			exports: {},
-			loaded: false,
-			parent,
-			children: [],
-		};
+		const module = { id: filename(name), filename: filename(name), exports: {}, loaded: false, parent, children: [] };
 		const require = request => {
 			const target = resolve(request, name);
 			if (target === '@ash/sdk') return ash;
@@ -86,14 +79,7 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 			if (name.endsWith('.json')) {
 				module.exports = JSON.parse(text);
 			} else {
-				Function('exports', 'require', 'module', '__filename', '__dirname', text).call(
-					module.exports,
-					module.exports,
-					require,
-					module,
-					module.filename,
-					directory(name) ? filename(directory(name)) : root,
-				);
+				Function('exports', 'require', 'module', '__filename', '__dirname', text).call(module.exports, module.exports, require, module, module.filename, directory(name) ? filename(directory(name)) : root);
 			}
 			module.loaded = true;
 			return module;

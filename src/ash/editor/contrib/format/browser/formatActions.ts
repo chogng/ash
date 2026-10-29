@@ -24,14 +24,10 @@ export class FormatOnType extends Disposable {
 		@IVersionedEditorWorkerClient private readonly worker: IVersionedEditorWorkerClient,
 	) {
 		super();
-		this._register(
-			editor.onDidType(text => {
-				this.cancel();
-				void this.trigger(text).catch(error => {
-					if (!this.isDisposed) this.onError(error);
-				});
-			}),
-		);
+		this._register(editor.onDidType(text => {
+			this.cancel();
+			void this.trigger(text).catch(error => { if (!this.isDisposed) this.onError(error); });
+		}));
 		this._register(editor.onDidChangeConfiguration(() => this.cancel()));
 		this._register(features.onTypeFormattingEditProvider.onDidChange(() => this.cancel()));
 		const model = editor.getModel();
@@ -48,15 +44,8 @@ export class FormatOnType extends Disposable {
 	private async trigger(text: string): Promise<void> {
 		const model = this.editor.getModel();
 		const selections = this.editor.getSelections();
-		if (
-			!model ||
-			!text ||
-			!this.editor.getOption(EditorOption.formatOnType) ||
-			this.editor.getOption(EditorOption.readOnly) ||
-			!selections?.length ||
-			selections.some(selection => !selection.isEmpty())
-		)
-			return;
+		if (!model || !text || !this.editor.getOption(EditorOption.formatOnType) || this.editor.getOption(EditorOption.readOnly)
+			|| !selections?.length || selections.some(selection => !selection.isEmpty())) return;
 		const source = new CancellationTokenSource();
 		this.pending = source;
 		try {
@@ -95,9 +84,7 @@ class FormatDocumentAction extends EditorAction {
 		}
 		const signals = accessor.get(IAccessibilitySignalService);
 		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.File);
-		if (applied) {
-			void signals.playSignal(AccessibilitySignal.format);
-		}
+		if (applied) { void signals.playSignal(AccessibilitySignal.format); }
 	}
 }
 
@@ -107,11 +94,7 @@ class FormatSelectionAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.action.formatSelection',
-			contextMenuOpts: {
-				group: '1_modification',
-				order: 1.31,
-				when: EditorContextKeys.hasNonEmptySelection.isEqualTo(true),
-			},
+			contextMenuOpts: { group: '1_modification', order: 1.31, when: EditorContextKeys.hasNonEmptySelection.isEqualTo(true) },
 			label: localize2('formatSelection.label', 'Format Selection'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasDocumentSelectionFormattingProvider.isEqualTo(true)),
 			kbOpts: {
@@ -128,36 +111,29 @@ class FormatSelectionAction extends EditorAction {
 		}
 		const signals = accessor.get(IAccessibilitySignalService);
 		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.Selection);
-		if (applied) {
-			void signals.playSignal(AccessibilitySignal.format);
-		}
+		if (applied) { void signals.playSignal(AccessibilitySignal.format); }
 	}
 }
 
 registerEditorAction(FormatSelectionAction);
 
 registerEditorContribution({
-	id: 'editor.contrib.format',
-	install: context => {
+	id: 'editor.contrib.format', install: context => {
 		if (context.kind !== 'text') {
 			return;
 		}
-		context.register(
-			context.editor.onKeyDown(event => {
-				if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
-				const action = context.editor.getAction(formatDocumentAction.id);
-				if (!action?.isSupported()) return;
-				event.stop();
-				void action.run().catch(context.onLanguageError);
-			}),
-		);
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
+			const action = context.editor.getAction(formatDocumentAction.id);
+			if (!action?.isSupported()) return;
+			event.stop();
+			void action.run().catch(context.onLanguageError);
+		}));
 		if (!context.options.formatOnSave || !context.registerBeforeSave) {
 			return;
 		}
-		context.register(
-			context.registerBeforeSave(async () => {
-				await formatEditor(context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent).catch(context.onLanguageError);
-			}),
-		);
-	},
+		context.register(context.registerBeforeSave(async () => {
+			await formatEditor(context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent).catch(context.onLanguageError);
+		}));
+	}
 });

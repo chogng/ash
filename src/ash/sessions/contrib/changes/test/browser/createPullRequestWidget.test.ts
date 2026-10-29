@@ -19,38 +19,20 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { Event } from '../../../../../base/common/event.js';
 
 const details: ISessionPullRequestDetails = {
-	title: 'Suggested title',
-	description: 'Suggested description',
-	branchName: 'feature',
-	baseBranchName: 'main',
-	repository: 'github.com/team/repo',
-	autoMergeAllowed: true,
-	mergeMethods: ['SQUASH'],
-	context: {
-		workingDirectory: '/workspace',
-		repository: 'github.com/team/repo',
-		branchName: 'feature',
-		baseBranchName: 'main',
-	},
+	title: 'Suggested title', description: 'Suggested description', branchName: 'feature', baseBranchName: 'main', repository: 'github.com/team/repo', autoMergeAllowed: true, mergeMethods: ['SQUASH'],
+	context: { workingDirectory: '/workspace', repository: 'github.com/team/repo', branchName: 'feature', baseBranchName: 'main' },
 };
 
 function create(services: InstantiationService, options: ICreatePullRequestWidgetOptions): CreatePullRequestWidget {
 	registerTestComponentServices(services);
 	services.registerInstance(IContextMenuService, {
-		contextMenuStyle: 'custom',
-		onDidShowContextMenu: Event.None,
-		onDidHideContextMenu: Event.None,
-		showContextMenu: () => {},
-		hideContextMenu: () => {},
+		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+		showContextMenu: () => { }, hideContextMenu: () => { },
 	});
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-	services.registerInstance(IAccessibleViewService, {
-		getOpenAriaHint: () => undefined,
-	} as unknown as IAccessibleViewService);
-	services.registerInstance(IConfigurationService, {
-		onDidChangeConfiguration: Event.None,
-	} as unknown as IConfigurationService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IConfigurationService, { onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
 	return services.createInstance(CreatePullRequestWidget, options, document);
 }
 
@@ -59,32 +41,11 @@ suite('Changes Create PR form', () => {
 
 	test('stored preferences cannot restore a disallowed merge method or an unavailable agent action', async () => {
 		using services = registerTestComponentServices(new InstantiationService());
-		services.get(IStorageService).store(
-			'sessions.createPullRequest.preferences',
-			JSON.stringify({
-				draft: true,
-				mergeMode: 'auto',
-				mergeMethod: 'REBASE',
-				primaryAction: 'sendToChat',
-				title: 'Private old title',
-			}),
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
+		services.get(IStorageService).store('sessions.createPullRequest.preferences', JSON.stringify({ draft: true, mergeMode: 'auto', mergeMethod: 'REBASE', primaryAction: 'sendToChat', title: 'Private old title' }), StorageScope.PROFILE, StorageTarget.MACHINE);
 		const calls: ISessionPullRequestOptions[] = [];
 		using widget = create(services, {
-			creation: {
-				prepare: async () => details,
-				create: async options => {
-					calls.push(options);
-					return 'Created';
-				},
-			},
-			onCancel: () => undefined,
-			onCreated: () => undefined,
-			onDetachedError: error => {
-				throw error;
-			},
+			creation: { prepare: async () => details, create: async options => { calls.push(options); return 'Created'; } },
+			onCancel: () => undefined, onCreated: () => undefined, onDetachedError: error => { throw error; },
 		});
 		await widget.ready;
 		assert.equal(widget.domNode.querySelector<HTMLInputElement>('input[aria-label="Title"]')!.value, details.title);
@@ -105,18 +66,8 @@ suite('Changes Create PR form', () => {
 		const calls: ISessionPullRequestOptions[] = [];
 		const results: string[] = [];
 		using widget = create(services, {
-			creation: {
-				prepare: async () => prepared.p,
-				create: async options => {
-					calls.push(options);
-					return submitted.p;
-				},
-			},
-			onCancel: () => undefined,
-			onCreated: (_options, message) => results.push(message),
-			onDetachedError: error => {
-				throw error;
-			},
+			creation: { prepare: async () => prepared.p, create: async options => { calls.push(options); return submitted.p; } },
+			onCancel: () => undefined, onCreated: (_options, message) => results.push(message), onDetachedError: error => { throw error; },
 		});
 		document.body.append(widget.domNode);
 		services.registerInstance(IContextViewService, { container: document.body } as IContextViewService);
@@ -135,14 +86,7 @@ suite('Changes Create PR form', () => {
 		assert.match(reader.provideContent(), /Title: Edited title/u);
 		widget.domNode.dispatchEvent(new document.defaultView!.Event('submit', { bubbles: true, cancelable: true }));
 		widget.domNode.dispatchEvent(new document.defaultView!.Event('submit', { bubbles: true, cancelable: true }));
-		assert.deepEqual(calls, [
-			{
-				title: 'Edited title',
-				description: 'Edited description',
-				draft: false,
-				expectedContext: details.context,
-			},
-		]);
+		assert.deepEqual(calls, [{ title: 'Edited title', description: 'Edited description', draft: false, expectedContext: details.context }]);
 		widget.dispose();
 		assert.equal(reader.provideContent(), 'Pull request form closed.');
 		await submitted.complete('Created PR #8');
@@ -154,20 +98,8 @@ suite('Changes Create PR form', () => {
 		using services = new InstantiationService();
 		let writes = 0;
 		using widget = create(services, {
-			creation: {
-				prepare: async () => details,
-				create: async () => {
-					writes++;
-					throw new GitHubError(GitHubErrorCode.SubmissionUncertain);
-				},
-			},
-			onCancel: () => undefined,
-			onCreated: () => {
-				throw new Error('Uncertain outcomes are not success');
-			},
-			onDetachedError: error => {
-				throw error;
-			},
+			creation: { prepare: async () => details, create: async () => { writes++; throw new GitHubError(GitHubErrorCode.SubmissionUncertain); } },
+			onCancel: () => undefined, onCreated: () => { throw new Error('Uncertain outcomes are not success'); }, onDetachedError: error => { throw error; },
 		});
 		await widget.ready;
 		widget.domNode.dispatchEvent(new document.defaultView!.Event('submit', { cancelable: true }));

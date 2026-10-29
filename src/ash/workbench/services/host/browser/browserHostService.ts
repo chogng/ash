@@ -25,26 +25,14 @@ export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 /** The embedding host owns directory handles or the authenticated server session. */
 export interface BrowserHostServiceOptions {
 	readonly workspaceProvider?:
-		| {
-				readonly kind: 'local';
-				readonly provider: HTMLFileSystemProvider;
-				readonly updateWorkspace: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>;
-		  }
-		| {
-				readonly kind: 'server';
-				readonly client: IWebWorkspaceClient;
-				readonly prepareSwitch: () => Promise<boolean>;
-				readonly updateWorkspace?: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>;
-				readonly validateFolders?: (folders: readonly URI[]) => void;
-		  };
+	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly updateWorkspace: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>; }
+	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; readonly prepareSwitch: () => Promise<boolean>; readonly updateWorkspace?: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>; readonly validateFolders?: (folders: readonly URI[]) => void; };
 }
 
 export class BrowserHostService extends Disposable implements IHostService {
 	private readonly focusChanged = this._register(new Emitter<boolean>());
 	public readonly onDidChangeFocus = this.focusChanged.event;
-	public get hasFocus(): boolean {
-		return hasAppFocus();
-	}
+	public get hasFocus(): boolean { return hasAppFocus(); }
 	private readonly ownerWindow = window;
 	constructor(
 		private readonly options: BrowserHostServiceOptions,
@@ -56,16 +44,14 @@ export class BrowserHostService extends Disposable implements IHostService {
 		super();
 		let lastFocus = this.hasFocus;
 		// Blur and focus can arrive in one window handoff; publish the aggregate after that handoff.
-		const scheduler = this._register(
-			new RunOnceScheduler(() => {
-				const focus = this.hasFocus;
-				if (focus === lastFocus) {
-					return;
-				}
-				lastFocus = focus;
-				this.focusChanged.fire(focus);
-			}, 0),
-		);
+		const scheduler = this._register(new RunOnceScheduler(() => {
+			const focus = this.hasFocus;
+			if (focus === lastFocus) {
+				return;
+			}
+			lastFocus = focus;
+			this.focusChanged.fire(focus);
+		}, 0));
 		const listeners = this._register(new DisposableMap<Window, DisposableStore>());
 		const observe = (targetWindow: Window): void => {
 			const resources = new DisposableStore();
@@ -77,12 +63,10 @@ export class BrowserHostService extends Disposable implements IHostService {
 			observe(registered.window);
 		}
 		this._register(onDidRegisterWindow(registered => observe(registered.window)));
-		this._register(
-			onDidUnregisterWindow(targetWindow => {
-				listeners.deleteAndDispose(targetWindow);
-				scheduler.schedule();
-			}),
-		);
+		this._register(onDidUnregisterWindow(targetWindow => {
+			listeners.deleteAndDispose(targetWindow);
+			scheduler.schedule();
+		}));
 	}
 
 	public async restart(): Promise<void> {
@@ -91,14 +75,8 @@ export class BrowserHostService extends Disposable implements IHostService {
 
 	public async reload(): Promise<void> {
 		// A restart retains the workspace and dirty backups; 'load' replaces it.
-		try {
-			await this.lifecycle.shutdown('reload');
-		} catch (error) {
-			if (error instanceof ShutdownVetoError) {
-				return;
-			}
-			throw error;
-		}
+		try { await this.lifecycle.shutdown('reload'); }
+		catch (error) { if (error instanceof ShutdownVetoError) { return; } throw error; }
 		this.ownerWindow.location.reload();
 	}
 
@@ -179,58 +157,33 @@ export class BrowserHostService extends Disposable implements IHostService {
 			if (provider.kind === 'server') {
 				if (!provider.client.updateWorkspace || !provider.updateWorkspace) throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
 				provider.validateFolders?.(folders.map(folder => folder.uri));
-				const selected = await Promise.all(
-					folders.map(async folder => {
-						const path = await this.paths.getHostPath(folder.uri);
-						if (path === undefined) throw new TypeError(localize('path.platformUnavailable', 'Resource path platform is unavailable'));
-						return { path, name: folder.name };
-					}),
-				);
-				if (!options.preserveEditors && !(await provider.prepareSwitch())) return;
+				const selected = await Promise.all(folders.map(async folder => {
+					const path = await this.paths.getHostPath(folder.uri);
+					if (path === undefined) throw new TypeError(localize('path.platformUnavailable', 'Resource path platform is unavailable'));
+					return { path, name: folder.name };
+				}));
+				if (!options.preserveEditors && !await provider.prepareSwitch()) return;
 				const transition = await provider.client.updateWorkspace(resource, selected);
-				try {
-					await provider.updateWorkspace(transition.workspace, options.preserveEditors);
-				} catch (error) {
+				try { await provider.updateWorkspace(transition.workspace, options.preserveEditors); }
+				catch (error) {
 					if (error instanceof WorkspaceTransitionCommittedError) {
-						try {
-							await transition.complete(true);
-						} catch {
-							/* The recorded outcome is recovered before the next page starts. */
-						}
+						try { await transition.complete(true); } catch { /* The recorded outcome is recovered before the next page starts. */ }
 						throw error;
 					}
-					try {
-						await transition.complete(false);
-					} catch (rollback) {
-						throw new AggregateError([error, rollback], localize('workspace.rollbackFailed', 'Could not restore workspace authorization after the window transition failed.'));
-					}
+					try { await transition.complete(false); }
+					catch (rollback) { throw new AggregateError([error, rollback], localize('workspace.rollbackFailed', 'Could not restore workspace authorization after the window transition failed.')); }
 					throw error;
 				}
-				try {
-					await transition.complete(true);
-				} catch (error) {
-					throw new WorkspaceTransitionCommittedError(
-						localize('workspace.authorizationRecovery', 'The workspace changed. Authorization confirmation will be retried when this page reconnects.'),
-						error,
-					);
-				}
+				try { await transition.complete(true); }
+				catch (error) { throw new WorkspaceTransitionCommittedError(localize('workspace.authorizationRecovery', 'The workspace changed. Authorization confirmation will be retried when this page reconnects.'), error); }
 				return;
 			}
 			for (const folder of folders) {
-				if (folder.uri.scheme !== 'file' || !folder.uri.path.startsWith('/@browser/'))
-					throw new TypeError(localize('workspace.browserFoldersOnly', 'Browser workspaces require folders selected through the browser.'));
+				if (folder.uri.scheme !== 'file' || !folder.uri.path.startsWith('/@browser/')) throw new TypeError(localize('workspace.browserFoldersOnly', 'Browser workspaces require folders selected through the browser.'));
 				await provider.provider.openDirectory(folder.uri);
 				if ((await this.files.stat(folder.uri)).kind !== FileKind.Directory) throw new TypeError(localize('workspace.folderNotDirectory', 'Workspace folder must be a directory.'));
 			}
-			await provider.updateWorkspace(
-				{
-					id: resource.toString(),
-					configuration: resource,
-					name: basename(resource).replace(/\.(ash|code)-workspace$/i, ''),
-					folders,
-				},
-				options.preserveEditors,
-			);
+			await provider.updateWorkspace({ id: resource.toString(), configuration: resource, name: basename(resource).replace(/\.(ash|code)-workspace$/i, ''), folders }, options.preserveEditors);
 			return;
 		}
 		if (provider.kind === 'local') {
@@ -252,4 +205,5 @@ export class BrowserHostService extends Disposable implements IHostService {
 		const activate = await provider.client.authorize(selected.path);
 		if (await provider.prepareSwitch()) activate();
 	}
+
 }

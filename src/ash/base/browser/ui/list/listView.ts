@@ -14,15 +14,10 @@ import { RangeMap } from './rangeMap.js';
 import { RowCache, type IRow } from './rowCache.js';
 import { CombinedSpliceable } from './splice.js';
 import {
-	ListDragOverPosition,
-	ListDragTargetSector,
-	type IListRenderer,
-	type ListAccessibilityProvider,
-	type ListDragAndDrop,
-	type ListDragOverReaction,
-	type ListDragOverPosition as DragOverPosition,
-	type ListScrolling,
-	type ListDragTargetSector as DragTargetSector,
+	ListDragOverPosition, ListDragTargetSector,
+	type IListRenderer, type ListAccessibilityProvider, type ListDragAndDrop,
+	type ListDragOverReaction, type ListDragOverPosition as DragOverPosition,
+	type ListScrolling, type ListDragTargetSector as DragTargetSector,
 } from './list.js';
 
 export interface ListViewOptions<T> {
@@ -71,15 +66,12 @@ export class ListView<T> extends Disposable {
 	private readonly rowCache: RowCache<T>;
 	private readonly rowTemplates = new WeakMap<HTMLDivElement, IRow>();
 	private readonly renderer: IListRenderer<T, HTMLDivElement>;
-	private readonly spliceable: CombinedSpliceable<{ readonly item: T; readonly id: string }>;
+	private readonly spliceable: CombinedSpliceable<{ readonly item: T; readonly id: string; }>;
 
 	readonly onDidScroll: Event<number> = this._onDidScroll.event;
 	readonly onDidRenderRows: Event<void> = this._onDidRenderRows.event;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: ListViewOptions<T>,
-	) {
+	constructor(container: HTMLElement, private readonly options: ListViewOptions<T>) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.spliceable = new CombinedSpliceable([
@@ -94,17 +86,9 @@ export class ListView<T> extends Disposable {
 			{
 				splice: (start, deleteCount, inserted) => {
 					if (options.getId) {
-						this.rangeMap.splice(
-							start,
-							deleteCount,
-							inserted.map((entry, offset) => ({ size: this.itemHeight(entry.item, start + offset) })),
-						);
+						this.rangeMap.splice(start, deleteCount, inserted.map((entry, offset) => ({ size: this.itemHeight(entry.item, start + offset) })));
 					} else {
-						this.rangeMap.splice(
-							0,
-							this.rangeMap.count,
-							this._items.map((item, index) => ({ size: this.itemHeight(item, index) })),
-						);
+						this.rangeMap.splice(0, this.rangeMap.count, this._items.map((item, index) => ({ size: this.itemHeight(item, index) })));
 					}
 				},
 			},
@@ -129,13 +113,7 @@ export class ListView<T> extends Disposable {
 		this.element.style.overflow = options.scrolling === 'external' || options.scrolling === 'managed' ? 'visible' : 'auto';
 		if (options.scrolling === 'managed') {
 			if (options.getHeight) this.element.style.position = 'relative';
-			this.scrollable = this._register(
-				new ScrollableElement(container, {
-					direction: 'vertical',
-					tabIndex: -1,
-					mouseWheelSmoothScroll: options.smoothScrolling,
-				}),
-			);
+			this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
 			this.domNode.classList.add('ash-list-scrollable');
@@ -145,37 +123,27 @@ export class ListView<T> extends Disposable {
 			container.append(this.element);
 		}
 		this._register(toDisposable(() => this.element.remove()));
-		this._register(
-			toDisposable(() => {
-				for (const [id, rendered] of [...this.renderedRows]) this.removeRenderedRow(id, rendered);
-				this.clearRetainedRows();
-			}),
-		);
-		if (this.scrollable)
-			this._register(
-				this.scrollable.onDidScroll(event => {
-					if (this.isVirtualized) this.renderRows('viewport');
-					this._onDidScroll.fire(event.current.top);
-				}),
-			);
+		this._register(toDisposable(() => {
+			for (const [id, rendered] of [...this.renderedRows]) this.removeRenderedRow(id, rendered);
+			this.clearRetainedRows();
+		}));
+		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => {
+			if (this.isVirtualized) this.renderRows('viewport');
+			this._onDidScroll.fire(event.current.top);
+		}));
 		else this._register(addDisposableListener(this.element, 'scroll', () => this._onDidScroll.fire(this.element.scrollTop)));
-		if (this.scrollable)
-			this._register(
-				observeResize([this.domNode], () => {
-					this.scrollable?.layout();
-					this.renderRows('viewport');
-				}),
-			);
-		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? (item => [item])));
+		if (this.scrollable) this._register(observeResize([this.domNode], () => {
+			this.scrollable?.layout();
+			this.renderRows('viewport');
+		}));
+		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
 	}
 
 	updateOptions(options: Pick<ListViewOptions<T>, 'smoothScrolling'>): void {
 		if (options.smoothScrolling !== undefined) this.scrollable?.updateOptions({ mouseWheelSmoothScroll: options.smoothScrolling });
 	}
 
-	get items(): readonly T[] {
-		return this._items;
-	}
+	get items(): readonly T[] { return this._items; }
 	clearRetainedRows(): void {
 		for (const retained of this.retainedRows.values()) this.releaseRow(retained.row, retained.item, retained.index);
 		this.retainedRows.clear();
@@ -204,7 +172,9 @@ export class ListView<T> extends Disposable {
 		const deleted = this._items.slice(start, start + boundedDeleteCount);
 		const getId = this.options.getId;
 		const insertedIds = getId ? elements.map(getId) : [];
-		const nextIds = getId ? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(deleteEnd)] : [];
+		const nextIds = getId
+			? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(deleteEnd)]
+			: [];
 
 		if (getId) {
 			if (insertedIds.length > 0) {
@@ -237,11 +207,7 @@ export class ListView<T> extends Disposable {
 				this.removeRenderedRow(itemId, rendered);
 			}
 		}
-		this.spliceable.splice(
-			start,
-			boundedDeleteCount,
-			elements.map((item, index) => ({ item, id: getId ? insertedIds[index]! : String(start + index) })),
-		);
+		this.spliceable.splice(start, boundedDeleteCount, elements.map((item, index) => ({ item, id: getId ? insertedIds[index]! : String(start + index) })));
 
 		if (this.isVirtualized) {
 			this.element.style.height = `${this.rangeMap.size}px`;
@@ -420,7 +386,7 @@ export class ListView<T> extends Disposable {
 		this.releaseRow(evicted.row, evicted.item, evicted.index);
 	}
 
-	private renderRange(): { readonly start: number; readonly end: number } {
+	private renderRange(): { readonly start: number; readonly end: number; } {
 		const scrollable = this.scrollable;
 		if (!this.isVirtualized || !scrollable) return { start: 0, end: this._items.length };
 		if (scrollable.state.height <= 0) return { start: 0, end: 0 };
@@ -452,16 +418,12 @@ export class ListView<T> extends Disposable {
 		return this.renderedRows.get(this.itemIds[index]!)?.row;
 	}
 
-	get scrollTop(): number {
-		return this.scrollable?.state.top ?? this.element.scrollTop;
-	}
+	get scrollTop(): number { return this.scrollable?.state.top ?? this.element.scrollTop; }
 	set scrollTop(top: number) {
 		if (this.scrollable) this.scrollable.scrollTo(this.scrollable.state.left, top);
 		else this.element.scrollTop = top;
 	}
-	get renderHeight(): number {
-		return this.scrollable?.state.height ?? this.element.clientHeight;
-	}
+	get renderHeight(): number { return this.scrollable?.state.height ?? this.element.clientHeight; }
 
 	reveal(index: number, relativeTop?: number): void {
 		if (!this.scrollable || index < 0 || index >= this._items.length) return;
@@ -480,9 +442,7 @@ export class ListView<T> extends Disposable {
 		else if (bottom > viewport.top + viewport.height) this.scrollable.scrollTo(viewport.left, bottom - viewport.height);
 	}
 
-	get scrollElement(): HTMLElement {
-		return this.scrollable?.scrollableElement ?? this.element;
-	}
+	get scrollElement(): HTMLElement { return this.scrollable?.scrollableElement ?? this.element; }
 	scrollBy(delta: number): void {
 		if (this.scrollable) this.scrollable.scrollBy(0, delta);
 		else this.element.scrollTop += delta;
@@ -548,15 +508,9 @@ export class ListView<T> extends Disposable {
 		return Math.min(Math.max(0, this.rangeMap.indexAt(position)), this._items.length - 1);
 	}
 
-	private itemHeight(item: T, index: number): number {
-		return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? DefaultRowHeight;
-	}
-	private get isVirtualized(): boolean {
-		return this.scrollable !== undefined && this.options.getHeight !== undefined;
-	}
-	private itemId(item: T, index: number): string {
-		return this.options.getId?.(item) ?? String(index);
-	}
+	private itemHeight(item: T, index: number): number { return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? DefaultRowHeight; }
+	private get isVirtualized(): boolean { return this.scrollable !== undefined && this.options.getHeight !== undefined; }
+	private itemId(item: T, index: number): string { return this.options.getId?.(item) ?? String(index); }
 	private setNumericAria(row: HTMLElement, name: string, value: number | undefined): void {
 		if (value !== undefined) row.setAttribute(name, String(value));
 		else row.removeAttribute(name);
@@ -584,25 +538,19 @@ class ListViewDragAndDrop<T> extends Disposable {
 	private readonly autoScroll = this._register(new MutableDisposable<IDisposable>());
 	private dragPointerY: number | undefined;
 
-	constructor(
-		private readonly view: ListView<T>,
-		private readonly dnd: ListDragAndDrop<T>,
-		private readonly getDragElements: (item: T, index: number) => readonly T[],
-	) {
+	constructor(private readonly view: ListView<T>, private readonly dnd: ListDragAndDrop<T>, private readonly getDragElements: (item: T, index: number) => readonly T[]) {
 		super();
 		this._register(addDisposableListener(view.element, 'dragstart', (event: DragEvent) => this.onDragStart(event)));
 		this._register(addDisposableListener(view.element, 'dragover', (event: DragEvent) => this.onDragOver(event)));
 		this._register(addDisposableListener(view.element, 'dragleave', (event: DragEvent) => this.onDragLeave(event)));
 		this._register(addDisposableListener(view.element, 'drop', (event: DragEvent) => this.onDrop(event)));
 		this._register(addDisposableListener(view.element, 'dragend', (event: DragEvent) => this.onDragEnd(event)));
-		this._register(
-			toDisposable(() => {
-				this.cancelDragLeave();
-				this.stopAutoScroll();
-				this.clearFeedback();
-				this.clearActiveSession();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.cancelDragLeave();
+			this.stopAutoScroll();
+			this.clearFeedback();
+			this.clearActiveSession();
+		}));
 	}
 
 	private onDragStart(event: DragEvent): void {
@@ -655,14 +603,10 @@ class ListViewDragAndDrop<T> extends Disposable {
 			this.finishDragLeave(event);
 			return;
 		}
-		this.dragLeave.value = disposableWindowTimeout(
-			ownerWindow,
-			() => {
-				this.dragLeave.clear();
-				this.finishDragLeave(event);
-			},
-			100,
-		);
+		this.dragLeave.value = disposableWindowTimeout(ownerWindow, () => {
+			this.dragLeave.clear();
+			this.finishDragLeave(event);
+		}, 100);
 	}
 
 	private finishDragLeave(event: DragEvent): void {
@@ -728,7 +672,7 @@ class ListViewDragAndDrop<T> extends Disposable {
 
 	private applyFeedback(indexes: readonly number[], position: DragOverPosition): void {
 		const length = this.view.items.length;
-		let normalized = [...new Set(indexes)].filter(index => index >= -1 && index < length).sort((left, right) => left - right);
+		let normalized = [...new Set(indexes)].filter((index) => index >= -1 && index < length).sort((left, right) => left - right);
 		if (normalized.includes(-1)) normalized = [-1];
 		if (normalized.length > 1 && position !== ListDragOverPosition.Over) throw new TypeError('Multiple List drag feedback rows require the over position');
 		if (position === ListDragOverPosition.After && normalized.length === 1 && normalized[0] !== -1 && normalized[0]! < length - 1) {
@@ -806,9 +750,7 @@ class ListViewDragAndDrop<T> extends Disposable {
 		this.dragLeave.clear();
 	}
 
-	private clearActiveSession(): void {
-		if (activeListDragSession?.source === this) activeListDragSession = undefined;
-	}
+	private clearActiveSession(): void { if (activeListDragSession?.source === this) activeListDragSession = undefined; }
 }
 
 class MutableElementDragAndDropData<T> implements MutableDragAndDropData<T> {
@@ -816,12 +758,7 @@ class MutableElementDragAndDropData<T> implements MutableDragAndDropData<T> {
 	readonly types: string[];
 	readonly files: File[];
 
-	constructor(
-		readonly kind: DragDataKind,
-		elements: readonly T[],
-		types: readonly string[] = [],
-		files: readonly File[] = [],
-	) {
+	constructor(readonly kind: DragDataKind, elements: readonly T[], types: readonly string[] = [], files: readonly File[] = []) {
 		this.elements = [...elements];
 		this.types = [...types];
 		this.files = [...files];
@@ -853,8 +790,6 @@ function feedbackClass(position: DragOverPosition): string {
 	return DndCssClasses.DropTarget;
 }
 
-function normalizeHeight(value: number | undefined): number | undefined {
-	return isFiniteNumber(value) && value > 0 ? value : undefined;
-}
+function normalizeHeight(value: number | undefined): number | undefined { return isFiniteNumber(value) && value > 0 ? value : undefined; }
 
 let listSequence = 1;

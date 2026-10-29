@@ -50,7 +50,7 @@ class MutableToken implements CancellationToken {
 				return shortcutEvent(listener, thisArgs, disposables);
 			}
 			const callback = (): unknown => listener.call(thisArgs, undefined);
-			const listeners = (this.listeners ??= new Set<() => unknown>());
+			const listeners = this.listeners ??= new Set<() => unknown>();
 			listeners.add(callback);
 			const disposable = toDisposable(() => listeners.delete(callback));
 			disposables?.push(disposable);
@@ -199,5 +199,7 @@ function subscribeCancellation(cancellation: AbortSignal | CancellationToken, li
 
 function isAbortSignal(cancellation: AbortSignal | CancellationToken): cancellation is AbortSignal {
 	const candidate = cancellation as AbortSignal;
-	return typeof candidate.aborted === 'boolean' && typeof candidate.addEventListener === 'function' && typeof candidate.removeEventListener === 'function';
+	return typeof candidate.aborted === 'boolean'
+		&& typeof candidate.addEventListener === 'function'
+		&& typeof candidate.removeEventListener === 'function';
 }

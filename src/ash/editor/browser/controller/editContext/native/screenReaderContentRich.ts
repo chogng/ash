@@ -40,17 +40,34 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 		const fragment = createFragment(ownerDocument);
 		for (const [index, segment] of state.segments.entries()) {
 			if (index > 0) {
-				fragment.append(createText(ownerDocument, text.slice(state.segments[index - 1]!.contentEndOffset, segment.contentStartOffset)));
+				fragment.append(createText(ownerDocument, text.slice(
+					state.segments[index - 1]!.contentEndOffset,
+					segment.contentStartOffset,
+				)));
 			}
 			const segmentText = text.slice(segment.contentStartOffset, segment.contentEndOffset);
 			const startPosition = this.richContext.viewModel.model.getPositionAt(segment.modelStartOffset);
-			renderSegment(fragment, segmentText, startPosition.lineNumber - 1, startPosition.column - 1, this.options, this.richContext);
+			renderSegment(
+				fragment,
+				segmentText,
+				startPosition.lineNumber - 1,
+				startPosition.column - 1,
+				this.options,
+				this.richContext,
+			);
 		}
 		this.element.replaceChildren(fragment);
 	}
 }
 
-function renderSegment(fragment: DocumentFragment, text: string, startLineIndex: number, startColumn: number, options: RichScreenReaderContentOptions, context: ViewContext): void {
+function renderSegment(
+	fragment: DocumentFragment,
+	text: string,
+	startLineIndex: number,
+	startColumn: number,
+	options: RichScreenReaderContentOptions,
+	context: ViewContext,
+): void {
 	const ownerDocument = fragment.ownerDocument;
 	const lines = text.split('\n');
 	const lineCount = text.endsWith('\n') ? lines.length - 1 : lines.length;
@@ -88,28 +105,22 @@ function renderSegment(fragment: DocumentFragment, text: string, startLineIndex:
 	}
 }
 
-function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
-	return Object.freeze(
-		tokens.flatMap(token => {
-			const start = Math.max(token.startColumn, startColumn);
-			const end = Math.min(token.endColumn, endColumn);
-			if (end <= start) return [];
-			return [
-				Object.freeze({
-					startColumn: start - startColumn,
-					endColumn: end - startColumn,
-					...(token.presentation === undefined ? {} : { presentation: token.presentation }),
-					...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
-					...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
-					...(token.semanticType === undefined
-						? {}
-						: {
-								semanticType: token.semanticType,
-								semanticModifiers: token.semanticModifiers,
-								semanticLanguage: token.semanticLanguage,
-							}),
-				}),
-			];
-		}),
-	);
+function clipSemanticTokens(
+	tokens: readonly ResolvedSemanticToken[],
+	startColumn: number,
+	endColumn: number,
+): readonly ResolvedSemanticToken[] {
+	return Object.freeze(tokens.flatMap(token => {
+		const start = Math.max(token.startColumn, startColumn);
+		const end = Math.min(token.endColumn, endColumn);
+		if (end <= start) return [];
+		return [Object.freeze({
+			startColumn: start - startColumn,
+			endColumn: end - startColumn,
+			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
+			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
+		})];
+	}));
 }

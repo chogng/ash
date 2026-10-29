@@ -47,22 +47,16 @@ function recordFromFields(fields: readonly RisField[]): RisRecord {
 		}
 		return '';
 	};
-	const all = (...tags: readonly string[]): readonly string[] =>
-		Object.freeze(
-			fields
-				.filter(field => tags.includes(field.tag))
-				.map(field => field.value.trim())
-				.filter(value => value !== ''),
-		);
+	const all = (...tags: readonly string[]): readonly string[] => Object.freeze(
+		fields.filter(field => tags.includes(field.tag))
+			.map(field => field.value.trim()).filter(value => value !== ''),
+	);
 	const date = first('PY', 'Y1', 'DA');
 	return Object.freeze({
 		type: first('TY'),
 		title: first('TI', 'T1', 'CT'),
 		year: /\d{4}/.exec(date)?.[0] ?? date,
-		doi: first('DO')
-			.replace(/^(?:doi:\s*|https?:\/\/(?:dx\.)?doi\.org\/)/i, '')
-			.trim()
-			.toLowerCase(),
+		doi: first('DO').replace(/^(?:doi:\s*|https?:\/\/(?:dx\.)?doi\.org\/)/i, '').trim().toLowerCase(),
 		journal: first('T2', 'JO', 'JF'),
 		volume: first('VL'),
 		issue: first('IS'),

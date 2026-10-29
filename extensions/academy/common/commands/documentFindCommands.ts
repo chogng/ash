@@ -69,9 +69,12 @@ export function getDocumentFindMatchIndex(document: DocumentNode, matches: reado
 			for (const child of node.content) visit(child);
 		};
 		visit(document);
-		const compare = (left: DocumentPoint, right: DocumentPoint): number => (left.nodeId === right.nodeId ? left.offset - right.offset : order.get(left.nodeId)! - order.get(right.nodeId)!);
+		const compare = (left: DocumentPoint, right: DocumentPoint): number => left.nodeId === right.nodeId
+			? left.offset - right.offset : order.get(left.nodeId)! - order.get(right.nodeId)!;
 		const forward = compare(selection.anchor, selection.head) <= 0;
-		const boundary = direction > 0 ? (forward ? selection.head : selection.anchor) : forward ? selection.anchor : selection.head;
+		const boundary = direction > 0
+			? forward ? selection.head : selection.anchor
+			: forward ? selection.anchor : selection.head;
 		if (direction > 0) {
 			const next = matches.findIndex(match => compare(match.selection.anchor, boundary) >= 0);
 			if (next >= 0) return next;
@@ -95,13 +98,12 @@ export function createReplaceDocumentMatchesCommand(schema: DocumentSchema, docu
 		const { anchor, head } = match.selection;
 		const point = { nodeId: anchor.nodeId, offset: anchor.offset + text.length };
 		const remaining = (findDocumentNode(current, anchor.nodeId)?.node.text?.length ?? 0) - (head.offset - anchor.offset) + text.length;
-		const command =
-			anchor.nodeId === head.nodeId
-				? {
-						transaction: new DocumentTransaction().replaceText(anchor.nodeId, anchor.offset, head.offset, text).withSelection(remaining ? textSelection(point) : undefined),
-						focus: { blockId: match.blockId, ...(remaining ? { point } : {}) },
-					}
-				: createReplaceTextCommand(schema, current, match.blockId, match.selection, text);
+		const command = anchor.nodeId === head.nodeId
+			? {
+				transaction: new DocumentTransaction().replaceText(anchor.nodeId, anchor.offset, head.offset, text).withSelection(remaining ? textSelection(point) : undefined),
+				focus: { blockId: match.blockId, ...(remaining ? { point } : {}) },
+			}
+			: createReplaceTextCommand(schema, current, match.blockId, match.selection, text);
 		if (!command) return undefined;
 		current = applyDocumentTransaction(current, schema, command.transaction).document;
 		transaction = new DocumentTransaction([...transaction.steps, ...command.transaction.steps]);

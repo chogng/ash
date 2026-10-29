@@ -24,20 +24,9 @@ export function parseOpenSessionLinkUri(resource: URI): OpenSessionLink {
 	const query = new URLSearchParams(resource.query);
 	const sessionId = query.get('sessionId');
 	const threadId = query.get('threadId');
-	if (
-		resource.scheme !== OPEN_SESSION_LINK_SCHEME ||
-		!resource.authority ||
-		resource.path !== '/open' ||
-		resource.fragment ||
-		[...query.keys()].length !== 2 ||
-		query.getAll('sessionId').length !== 1 ||
-		query.getAll('threadId').length !== 1 ||
-		!sessionId ||
-		!threadId ||
-		sessionId.length > 256 ||
-		threadId.length > 256 ||
-		/[\x00-\x1f\x7f]/u.test(sessionId + threadId)
-	) {
+	if (resource.scheme !== OPEN_SESSION_LINK_SCHEME || !resource.authority || resource.path !== '/open' || resource.fragment
+		|| [...query.keys()].length !== 2 || query.getAll('sessionId').length !== 1 || query.getAll('threadId').length !== 1
+		|| !sessionId || !threadId || sessionId.length > 256 || threadId.length > 256 || /[\x00-\x1f\x7f]/u.test(sessionId + threadId)) {
 		throw new TypeError('Invalid conversation link');
 	}
 	return { connectionAuthority: resource.authority, sessionId, threadId };

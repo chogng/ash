@@ -51,10 +51,7 @@ export class OutlineModel extends TreeElement {
 	public readonly parent = undefined;
 	public readonly children = new Map<string, OutlineGroup>();
 
-	private constructor(
-		public readonly uri: URI,
-		public readonly version: number,
-	) {
+	private constructor(public readonly uri: URI, public readonly version: number) {
 		super();
 	}
 
@@ -71,24 +68,22 @@ export class OutlineModel extends TreeElement {
 		if (!isLanguageFeatureRequestCurrent(request)) return null;
 
 		const providers = registry.ordered(model);
-		const results = await Promise.all(
-			providers.map(async (provider, order) => {
-				try {
-					const symbols = await provider.provideDocumentSymbols(request, signal);
-					if (!Array.isArray(symbols)) throw new TypeError('Document symbols must be an array');
-					const normalized: LanguageDocumentSymbol[] = [];
-					for (let start = 0; start < symbols.length; start += 4096) {
-						if (!isLanguageFeatureRequestCurrent(request)) return undefined;
-						normalized.push(...normalizeSymbols(symbols.slice(start, start + 4096), model));
-						if (start + 4096 < symbols.length) await new Promise<void>(resolve => setTimeout(resolve, 0));
-					}
-					return { provider, order, symbols: normalized };
-				} catch (error) {
-					if (isLanguageFeatureRequestCurrent(request)) onError(error);
-					return undefined;
+		const results = await Promise.all(providers.map(async (provider, order) => {
+			try {
+				const symbols = await provider.provideDocumentSymbols(request, signal);
+				if (!Array.isArray(symbols)) throw new TypeError('Document symbols must be an array');
+				const normalized: LanguageDocumentSymbol[] = [];
+				for (let start = 0; start < symbols.length; start += 4096) {
+					if (!isLanguageFeatureRequestCurrent(request)) return undefined;
+					normalized.push(...normalizeSymbols(symbols.slice(start, start + 4096), model));
+					if (start + 4096 < symbols.length) await new Promise<void>(resolve => setTimeout(resolve, 0));
 				}
-			}),
-		);
+				return { provider, order, symbols: normalized };
+			} catch (error) {
+				if (isLanguageFeatureRequestCurrent(request)) onError(error);
+				return undefined;
+			}
+		}));
 		if (!isLanguageFeatureRequestCurrent(request)) return null;
 		if (!sameProviders(providers, registry.ordered(model))) return null;
 
@@ -137,9 +132,7 @@ function appendSymbol(parent: OutlineGroup | OutlineElement, symbol: LanguageDoc
 		// Repeated labels (for example HTML tags) share a request-local suffix cursor.
 		// Starting at one for every sibling makes large outlines quadratic.
 		let suffix = collisionSuffixes.get(base) ?? 1;
-		do {
-			id = `${base}_${suffix++}`;
-		} while (parent.children.has(id));
+		do { id = `${base}_${suffix++}`; } while (parent.children.has(id));
 		collisionSuffixes.set(base, suffix);
 	}
 	const element = new OutlineElement(id, parent, symbol);
@@ -149,26 +142,30 @@ function appendSymbol(parent: OutlineGroup | OutlineElement, symbol: LanguageDoc
 
 function normalizeSymbols(symbols: readonly LanguageDocumentSymbol[], model: TextModel): readonly LanguageDocumentSymbol[] {
 	if (!Array.isArray(symbols)) throw new TypeError('Document symbols must be an array');
-	return Object.freeze(
-		symbols.map(symbol => {
-			if (!symbol || typeof symbol.name !== 'string' || (typeof symbol.kind !== 'string' && typeof symbol.kind !== 'number')) {
-				throw new TypeError('Document symbol has invalid identity');
-			}
-			const range = new Range(symbol.range.startLineNumber, symbol.range.startColumn, symbol.range.endLineNumber, symbol.range.endColumn);
-			const selectionRange = new Range(symbol.selectionRange.startLineNumber, symbol.selectionRange.startColumn, symbol.selectionRange.endLineNumber, symbol.selectionRange.endColumn);
-			if (!model.isValidRange(range) || !model.isValidRange(selectionRange) || !range.containsRange(selectionRange)) {
-				throw new RangeError('Document symbol range is outside its document scope');
-			}
-			return Object.freeze({
-				name: symbol.name,
-				kind: symbol.kind,
-				...(symbol.detail !== undefined ? { detail: symbol.detail } : {}),
-				range,
-				selectionRange,
-				...(symbol.children ? { children: normalizeSymbols(symbol.children, model) } : {}),
-			});
-		}),
-	);
+	return Object.freeze(symbols.map(symbol => {
+		if (!symbol || typeof symbol.name !== 'string' || (typeof symbol.kind !== 'string' && typeof symbol.kind !== 'number')) {
+			throw new TypeError('Document symbol has invalid identity');
+		}
+		const range = new Range(
+			symbol.range.startLineNumber, symbol.range.startColumn,
+			symbol.range.endLineNumber, symbol.range.endColumn,
+		);
+		const selectionRange = new Range(
+			symbol.selectionRange.startLineNumber, symbol.selectionRange.startColumn,
+			symbol.selectionRange.endLineNumber, symbol.selectionRange.endColumn,
+		);
+		if (!model.isValidRange(range) || !model.isValidRange(selectionRange) || !range.containsRange(selectionRange)) {
+			throw new RangeError('Document symbol range is outside its document scope');
+		}
+		return Object.freeze({
+			name: symbol.name,
+			kind: symbol.kind,
+			...(symbol.detail !== undefined ? { detail: symbol.detail } : {}),
+			range,
+			selectionRange,
+			...(symbol.children ? { children: normalizeSymbols(symbol.children, model) } : {}),
+		});
+	}));
 }
 
 function idForProvider(provider: LanguageDocumentSymbolProvider): number {

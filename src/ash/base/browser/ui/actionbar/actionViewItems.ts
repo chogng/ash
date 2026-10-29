@@ -47,20 +47,18 @@ export abstract class ActionViewItem extends Disposable {
 	/** Controls whether this item is the ActionBar's page-level Tab stop. */
 	abstract setTabbable(tabbable: boolean): void;
 
-	focus(): void {}
+	focus(): void { }
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
 	protected createButton(container: HTMLElement, options: IButtonOptions): Button {
-		const button = this._register(
-			new Button(container, {
-				...this.actionViewItemOptions.buttonStyles,
-				presentation: this.actionViewItemOptions.buttonPresentation,
-				...options,
-				title: undefined,
-				hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
-				hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
-			}),
-		);
+		const button = this._register(new Button(container, {
+			...this.actionViewItemOptions.buttonStyles,
+			presentation: this.actionViewItemOptions.buttonPresentation,
+			...options,
+			title: undefined,
+			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
+		}));
 		if (options.title) {
 			this.setupDelayedHover(button.domNode, options.title);
 		}
@@ -69,30 +67,20 @@ export abstract class ActionViewItem extends Disposable {
 
 	/** Installs an action tooltip for view items that render a custom target. */
 	protected setupDelayedHover(target: HTMLElement, content: string): IDisposable {
-		return this._register(
-			getHoverDelegate().setupDelayedHover(
-				target,
-				() => ({
-					content,
-					...this.getHoverOptions(),
-				}),
-				{
-					groupId: ActionHoverGroupId,
-				},
-			),
-		);
+		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
+			content,
+			...this.getHoverOptions(),
+		}), { groupId: ActionHoverGroupId }));
 	}
 
 	/** Mutable tooltips are retained for items whose labels change while visible. */
 	protected setupHover(target: HTMLElement, content: string): IManagedHover {
-		return this._register(
-			getHoverDelegate().setupHover({
-				target,
-				content,
-				groupId: ActionHoverGroupId,
-				anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
-			}),
-		);
+		return this._register(getHoverDelegate().setupHover({
+			target,
+			content,
+			groupId: ActionHoverGroupId,
+			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
+		}));
 	}
 
 	protected getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
@@ -160,10 +148,7 @@ export interface LabelActionViewItemOptions extends ActionViewItemOptions {
 export class LabelActionViewItem extends ActionViewItem {
 	private button: HTMLButtonElement | undefined;
 
-	constructor(
-		action: IAction,
-		private readonly options: LabelActionViewItemOptions = {},
-	) {
+	constructor(action: IAction, private readonly options: LabelActionViewItemOptions = {}) {
 		super(action, options);
 	}
 
@@ -226,10 +211,12 @@ export class SeparatorActionViewItem extends ActionViewItem {
 		container.setAttribute('role', 'separator');
 	}
 
-	override setTabbable(_tabbable: boolean): void {}
+	override setTabbable(_tabbable: boolean): void { }
 }
 
 /** Creates the base representation used when a platform has no override. */
 export function createActionViewItem(action: IAction, options: ActionViewItemOptions = {}): ActionViewItem {
-	return action instanceof Separator ? new SeparatorActionViewItem(action) : new ButtonActionViewItem(action, options);
+	return action instanceof Separator
+		? new SeparatorActionViewItem(action)
+		: new ButtonActionViewItem(action, options);
 }

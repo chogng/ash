@@ -27,11 +27,9 @@ import { Position } from '../../../workbench/services/layout/browser/layoutServi
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 class TestPart extends Part {
-	public getTabsHeight(): number {
-		return 35;
-	}
-	public setContentRightInset(_inset: number): void {}
-	public setEditorContentVisible(_visible: boolean): void {}
+	public getTabsHeight(): number { return 35; }
+	public setContentRightInset(_inset: number): void { }
+	public setEditorContentVisible(_visible: boolean): void { }
 	constructor(container: HTMLElement, id: SessionsPartId) {
 		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
 		super(container, id, services.get(IThemeService), services.get(IStorageService));
@@ -53,90 +51,45 @@ test('Sessions layout commands update menu state from their owners and release w
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
-		getSelection() {
-			return { visibleSelections: [], activeSelection: undefined };
-		},
-		async openThread() {},
+		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,
-		get canNavigateBack() {
-			return historyIndex === 1;
-		},
-		get canNavigateForward() {
-			return historyIndex === 0;
-		},
-		async initialize() {},
-		openSession() {},
-		openUntitledSession() {},
-		openNewSession() {
-			throw new Error('This scenario does not create sessions');
-		},
-		activateSelection() {},
-		closeVisibleSelection() {},
-		navigateBack() {
-			historyIndex = 0;
-			changed.fire();
-		},
-		navigateForward() {
-			historyIndex = 1;
-			changed.fire();
-		},
+		get canNavigateBack() { return historyIndex === 1; },
+		get canNavigateForward() { return historyIndex === 0; },
+		async initialize() { },
+		openSession() { },
+		openUntitledSession() { },
+		openNewSession() { throw new Error('This scenario does not create sessions'); },
+		activateSelection() { },
+		closeVisibleSelection() { },
+		navigateBack() { historyIndex = 0; changed.fire(); },
+		navigateForward() { historyIndex = 1; changed.fire(); },
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
-	const state = (): unknown =>
-		menu
-			.getActions()
-			.flatMap(([, actions]) => actions)
-			.filter(action => action.id !== 'ash.sessions.togglePanel')
-			.map(action => [action.label, action.tooltip, action.enabled, action.checked]);
+	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
-		assert.equal(
-			layoutMenu
-				.getActions()
-				.flatMap(([, actions]) => actions)
-				.find(action => action.id === 'ash.sessions.togglePanel')?.enabled,
-			true,
-		);
-		assert.deepEqual(state(), [
-			['Hide sidebar', 'Hide sidebar', true, true],
-			['Back', 'Back', true, undefined],
-			['Forward', 'Forward', false, undefined],
-		]);
+		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		using goMenu = new MenuService(commands, contextKeys).createMenu(MenuId.MenubarGoMenu);
-		assert.deepEqual(
-			goMenu
-				.getActions()
-				.flatMap(([, actions]) => actions)
-				.filter(action => action.id.startsWith('ash.sessions.'))
-				.map(action => [action.id, action.enabled]),
-			[
-				['ash.sessions.back', true],
-				['ash.sessions.forward', false],
-			],
-		);
+		assert.deepEqual(goMenu.getActions().flatMap(([, actions]) => actions).filter(action => action.id.startsWith('ash.sessions.')).map(action => [action.id, action.enabled]), [
+			['ash.sessions.back', true], ['ash.sessions.forward', false],
+		]);
 		await commands.executeCommand('ash.sessions.toggleSidebar');
 		assert.equal(layout.isPartVisible('sidebar'), false);
-		assert.deepEqual(state(), [
-			['Show sidebar', 'Show sidebar', true, false],
-			['Back', 'Back', true, undefined],
-			['Forward', 'Forward', false, undefined],
-		]);
+		assert.deepEqual(state(), [['Show sidebar', 'Show sidebar', true, false], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		layout.showPart('sidebar');
 		const opened: string[] = [];
-		using openChat = CommandsRegistry.register('sessions.open.chat', () => {
-			opened.push('chat');
-		});
-		using openCode = CommandsRegistry.register('sessions.open.code', () => {
-			opened.push('code');
-		});
+		using openChat = CommandsRegistry.register('sessions.open.chat', () => { opened.push('chat'); });
+		using openCode = CommandsRegistry.register('sessions.open.code', () => { opened.push('code'); });
 		contextKeys.setContext('sessions.activity.projectsSelected', true);
 		for (const mode of ['chat', 'code']) {
 			contextKeys.setContext(SessionsWorkspaceModeContext.key, mode);
@@ -148,27 +101,13 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(opened, [], 'Expanding navigation never opens a different page');
 		await commands.executeCommand('ash.sessions.back');
 		assert.deepEqual(navigationState(), [false, true]);
-		assert.deepEqual(state(), [
-			['Hide sidebar', 'Hide sidebar', true, true],
-			['Back', 'Back', false, undefined],
-			['Forward', 'Forward', true, undefined],
-		]);
+		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', false, undefined], ['Forward', 'Forward', true, undefined]]);
 		await commands.executeCommand('ash.sessions.forward');
 		assert.deepEqual(navigationState(), [true, false]);
-		assert.deepEqual(state(), [
-			['Hide sidebar', 'Hide sidebar', true, true],
-			['Back', 'Back', true, undefined],
-			['Forward', 'Forward', false, undefined],
-		]);
+		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		layout.toggleMaximizedPanel();
 		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), true);
-		assert.equal(
-			layoutMenu
-				.getActions()
-				.flatMap(([, actions]) => actions)
-				.find(action => action.id === 'ash.sessions.togglePanel')?.enabled,
-			true,
-		);
+		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		layout.toggleMaximizedPanel();
 		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
 		actions.dispose();
@@ -189,23 +128,8 @@ test('Sessions layout commands update menu state from their owners and release w
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(
-	container: HTMLElement,
-	parts: ReadonlyMap<SessionsPartId, Part>,
-	options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & {
-		storageService?: import('../../../platform/storage/common/storage.js').IStorageService;
-	} = {},
-): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService
-		? undefined
-		: layoutTestResources.add(
-				new BrowserStorageService({
-					ownerWindow: container.ownerDocument.defaultView!,
-					workspaceId: 'sessions',
-					flushInterval: 0,
-					onError: () => {},
-				}),
-			);
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

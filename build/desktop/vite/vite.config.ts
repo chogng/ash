@@ -67,7 +67,9 @@ export default defineConfig(({ mode, command }) => {
 		</script>
 	</body>
 </html>`;
-	const browserEntryPath = agentsWindow ? `/${sessionsWebEntry}.html` : '/browser/workbench/workbench.html';
+	const browserEntryPath = agentsWindow
+		? `/${sessionsWebEntry}.html`
+		: '/browser/workbench/workbench.html';
 	const browserEntry = 'browser/workbench/workbench';
 	const electronEntry = 'electron-browser/workbench/workbench';
 	const browserInputs = {
@@ -83,89 +85,58 @@ export default defineConfig(({ mode, command }) => {
 		'electron-browser/remote-runtime-install/remoteRuntimeInstall': resolve(sourceRoot, 'electron-browser/remote-runtime-install/remoteRuntimeInstall.html'),
 	};
 	const verificationScript = `(${installChatGPTVerification.toString()})();`;
-	const inputs = webOnly
-		? browserInputs
-		: {
-				...browserInputs,
-				[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
-				...sessionsInputs,
-				...remoteRuntimeInstallInput,
-				'electron-browser/imageView/imageView': resolve(sourceRoot, 'electron-browser/imageView/imageView.html'),
-			};
+	const inputs = webOnly ? browserInputs : {
+		...browserInputs,
+		[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
+		...sessionsInputs,
+		...remoteRuntimeInstallInput,
+		'electron-browser/imageView/imageView': resolve(sourceRoot, 'electron-browser/imageView/imageView.html'),
+	};
 
 	return {
 		base: './',
 		root: sourceRoot,
 		publicDir: resolve(repositoryRoot, 'resources/server'),
 		define: {
-			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || (command === 'build' && !webOnly)),
+			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || command === 'build' && !webOnly),
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [
 			...(webOnly ? [webUpdatePlugin()] : []),
-			...(webOnly
-				? []
-				: [
-						{
-							name: 'ash-chatgpt-verification',
-							generateBundle() {
-								this.emitFile({
-									type: 'asset' as const,
-									fileName: 'browser/chatgpt/verification.js',
-									source: verificationScript,
-								});
-							},
-							configureServer(server) {
-								server.middlewares.use('/browser/chatgpt/verification.js', (request, response, next) => {
-									if (request.method !== 'GET') {
-										next();
-										return;
-									}
-									response.setHeader('Content-Type', 'text/javascript');
-									response.setHeader('Cache-Control', 'no-store');
-									response.end(verificationScript);
-								});
-							},
-						} satisfies Plugin,
-					]),
+			...(webOnly ? [] : [{
+				name: 'ash-chatgpt-verification',
+				generateBundle() { this.emitFile({ type: 'asset' as const, fileName: 'browser/chatgpt/verification.js', source: verificationScript }); },
+				configureServer(server) {
+					server.middlewares.use('/browser/chatgpt/verification.js', (request, response, next) => {
+						if (request.method !== 'GET') { next(); return; }
+						response.setHeader('Content-Type', 'text/javascript');
+						response.setHeader('Cache-Control', 'no-store');
+						response.end(verificationScript);
+					});
+				},
+			} satisfies Plugin]),
 			buildMetricsPlugin(),
 			hotReloadPlugin({ desktopRoot }),
-			workbenchEntryPlugin(
-				browserEntryPath,
-				[
-					{
-						url: `/${sessionsWebEntry}.html`,
-						inputFile: browserInputs[sessionsWebEntry],
-						html: sessionsWebHtml,
-					},
-					{
-						url: '/browser/theme-preview/themePreview.html',
-						inputFile: browserInputs['browser/theme-preview/themePreview'],
-						sourceFile: resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
-					},
-					{
-						url: '/browser/theme-preview/sessionsThemePreview.html',
-						inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
-						sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
-					},
-					...(webOnly
-						? []
-						: [
-								{
-									url: '/sessions/electron-browser/sessions.html',
-									sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
-									inputFile: sessionsInputs['sessions/electron-browser/sessions'],
-								},
-							]),
-				],
-				{
-					sourceRoot: resolve(repositoryRoot, 'src'),
-					service: new CSSDevelopmentService({
-						sourceRoot: resolve(repositoryRoot, 'src'),
-						isBuilt: command === 'build',
-					}),
-				},
-			),
+			workbenchEntryPlugin(browserEntryPath, [{
+				url: `/${sessionsWebEntry}.html`,
+				inputFile: browserInputs[sessionsWebEntry],
+				html: sessionsWebHtml,
+			}, {
+				url: '/browser/theme-preview/themePreview.html',
+				inputFile: browserInputs['browser/theme-preview/themePreview'],
+				sourceFile: resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
+			}, {
+				url: '/browser/theme-preview/sessionsThemePreview.html',
+				inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
+				sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
+			}, ...(webOnly ? [] : [{
+				url: '/sessions/electron-browser/sessions.html',
+				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
+				inputFile: sessionsInputs['sessions/electron-browser/sessions'],
+			}])], {
+				sourceRoot: resolve(repositoryRoot, 'src'),
+				service: new CSSDevelopmentService({ sourceRoot: resolve(repositoryRoot, 'src'), isBuilt: command === 'build' }),
+			}),
 			productIconsPlugin(),
 			// Extension preparation publishes localization first and owns the shared resource watcher.
 			browserExtensionsPlugin(),

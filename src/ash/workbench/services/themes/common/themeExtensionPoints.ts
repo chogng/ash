@@ -11,7 +11,7 @@ class WorkbenchFileIconThemeRegistry {
 		return [...this.registrations.values()].flat();
 	}
 
-	public registerThemes(): IDisposable & { replace(themes: readonly IWorkbenchFileIconTheme[]): void } {
+	public registerThemes(): IDisposable & { replace(themes: readonly IWorkbenchFileIconTheme[]): void; } {
 		const owner = {};
 		let disposed = false;
 		const registration = toDisposable(() => {
@@ -41,7 +41,7 @@ class WorkbenchFileIconThemeRegistry {
 				}
 				this.registrations.set(owner, Object.freeze([...themes]));
 				this.changed.fire();
-			},
+			}
 		});
 	}
 }
@@ -57,7 +57,7 @@ class WorkbenchProductIconThemeRegistry {
 		return [...this.registrations.values()].flat();
 	}
 
-	public registerThemes(): IDisposable & { replace(themes: readonly IWorkbenchProductIconTheme[]): void } {
+	public registerThemes(): IDisposable & { replace(themes: readonly IWorkbenchProductIconTheme[]): void; } {
 		const owner = {};
 		let disposed = false;
 		const registration = toDisposable(() => {
@@ -77,7 +77,7 @@ class WorkbenchProductIconThemeRegistry {
 				}
 				this.registrations.set(owner, Object.freeze([...themes]));
 				this.changed.fire();
-			},
+			}
 		});
 	}
 }

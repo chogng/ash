@@ -11,11 +11,7 @@ export function resolveSemanticTokenPresentation(token: ResolvedSemanticToken, t
 	for (const property of ['bold', 'italic', 'underline', 'strikethrough'] as const) {
 		if (semantic?.[property] !== undefined) {
 			hasStyle = true;
-			if (semantic[property]) {
-				flags.add(property);
-			} else {
-				flags.delete(property);
-			}
+			if (semantic[property]) { flags.add(property); } else { flags.delete(property); }
 		}
 	}
 	return { ...syntax, foreground, ...(hasStyle ? { fontStyle: [...flags] } : {}) };

@@ -33,59 +33,47 @@ import { Event } from '../../../../../base/common/event.js';
 suite('Changes editor overlapping opens', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const cancelFirst of [false, true])
-		test(`a ${cancelFirst ? 'cancelled' : 'replaced'} open finishes without clearing a retry of the same input`, async () => {
-			const dom = new JSDOM('<!doctype html><body></body>');
-			using domOwner = toDisposable(() => dom.window.close());
-			using services = registerTestComponentServices(new InstantiationService());
-			using context = new ContextKeyService();
-			services.registerInstance(IContextKeyService, context);
-			using configuration = new InMemoryConfigurationService();
-			services.registerInstance(IConfigurationService, configuration);
-			using changes = new Emitter<{ sessionId: string; threadId: string }>();
-			const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
-			let requests = 0;
-			const counts: (number | undefined)[] = [];
-			services.registerInstance(ISessionChangesService, {
-				setChangesCount: (_resource: URI, count: number | undefined) => {
-					counts.push(count);
-				},
-			} as unknown as ISessionChangesService);
-			services.registerInstance(ISessionsManagementService, {
-				sessions: [{ sessionId: 'a' }],
-			} as unknown as ISessionsManagementService);
-			services.registerInstance(IChatService, {
-				onDidUpdateTurnChanges: changes.event,
-				onDidBecomeReady: Event.None,
-				listTurnChanges: async () => (++requests === 1 ? pending.p : []),
-			} as unknown as IChatService);
-			services.registerInstance(IAccessibleViewService, {
-				getOpenAriaHint: () => undefined,
-			} as unknown as IAccessibleViewService);
-			using pane = services.createInstance(SessionChangesEditor, {});
-			pane.create(dom.window.document.body);
-			pane.setVisible(true);
-			const input = { resource: URI.parse('ash-session-changes:/a?thread=a-thread') };
-			const controller = new AbortController();
-			const first = pane.setInput(input, controller.signal);
-			const rejected = assert.rejects(first, { name: 'CancellationError' });
-			if (cancelFirst) {
-				controller.abort();
-			}
-			await pane.setInput(input, new AbortController().signal);
-			await rejected;
-			controller.abort();
-			await pending.error(new Error('Old ledger failed'));
-			changes.fire({ sessionId: 'a', threadId: 'a-thread' });
-			await new Promise<void>(resolve => setImmediate(resolve));
-			assert.equal(requests, 3);
-			assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
-			assert.deepEqual(counts, [undefined, undefined, 0, undefined, 0]);
-			pane.dispose();
-			await assert.rejects(pane.setInput(input, new AbortController().signal), { name: 'CancellationError' });
-			changes.fire({ sessionId: 'a', threadId: 'a-thread' });
-			assert.equal(requests, 3);
-		});
+	for (const cancelFirst of [false, true]) test(`a ${cancelFirst ? 'cancelled' : 'replaced'} open finishes without clearing a retry of the same input`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using domOwner = toDisposable(() => dom.window.close());
+		using services = registerTestComponentServices(new InstantiationService());
+		using context = new ContextKeyService();
+		services.registerInstance(IContextKeyService, context);
+		using configuration = new InMemoryConfigurationService();
+		services.registerInstance(IConfigurationService, configuration);
+		using changes = new Emitter<{ sessionId: string; threadId: string; }>();
+		const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
+		let requests = 0;
+		const counts: (number | undefined)[] = [];
+		services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => { counts.push(count); } } as unknown as ISessionChangesService);
+		services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'a' }] } as unknown as ISessionsManagementService);
+		services.registerInstance(IChatService, {
+			onDidUpdateTurnChanges: changes.event, onDidBecomeReady: Event.None,
+			listTurnChanges: async () => ++requests === 1 ? pending.p : [],
+		} as unknown as IChatService);
+		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		using pane = services.createInstance(SessionChangesEditor, {});
+		pane.create(dom.window.document.body);
+		pane.setVisible(true);
+		const input = { resource: URI.parse('ash-session-changes:/a?thread=a-thread') };
+		const controller = new AbortController();
+		const first = pane.setInput(input, controller.signal);
+		const rejected = assert.rejects(first, { name: 'CancellationError' });
+		if (cancelFirst) { controller.abort(); }
+		await pane.setInput(input, new AbortController().signal);
+		await rejected;
+		controller.abort();
+		await pending.error(new Error('Old ledger failed'));
+		changes.fire({ sessionId: 'a', threadId: 'a-thread' });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(requests, 3);
+		assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
+		assert.deepEqual(counts, [undefined, undefined, 0, undefined, 0]);
+		pane.dispose();
+		await assert.rejects(pane.setInput(input, new AbortController().signal), { name: 'CancellationError' });
+		changes.fire({ sessionId: 'a', threadId: 'a-thread' });
+		assert.equal(requests, 3);
+	});
 });
 
 test('a hidden Changes editor ignores a late ledger result and loads fresh content when shown', async () => {
@@ -93,37 +81,25 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	using services = new InstantiationService();
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 	let decorations: IDecorationsProvider | undefined;
-	services.registerInstance(IEditorService, {
-		...emptyEditorServiceState,
-		openEditor: async () => {},
-	} as unknown as IEditorService);
-	services.registerInstance(IDecorationsService, {
-		registerDecorationsProvider: (provider: IDecorationsProvider) => {
-			decorations = provider;
-			return toDisposable(() => {});
-		},
-	} as unknown as IDecorationsService);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { } } as unknown as IEditorService);
+	services.registerInstance(IDecorationsService, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorations = provider; return toDisposable(() => { }); } } as unknown as IDecorationsService);
 	services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 	using configuration = new InMemoryConfigurationService();
 	using context = new ContextKeyService();
-	using changes = new Emitter<{ sessionId: string; threadId: string }>();
+	using changes = new Emitter<{ sessionId: string; threadId: string; }>();
 	using ready = new Emitter<void>();
 	const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
 	let requests = 0;
 	let failed = false;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, context);
-	services.registerInstance(IAccessibleViewService, {
-		getOpenAriaHint: () => undefined,
-	} as unknown as IAccessibleViewService);
-	services.registerInstance(ISessionsManagementService, {
-		sessions: [{ sessionId: 'a' }],
-	} as unknown as ISessionsManagementService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'a' }] } as unknown as ISessionsManagementService);
 	services.registerInstance(IChatService, {
 		onDidUpdateTurnChanges: changes.event,
 		onDidBecomeReady: ready.event,
-		listTurnChanges: () => (++requests === 1 ? pending.p : failed ? Promise.reject(new Error('Unavailable')) : Promise.resolve([])),
+		listTurnChanges: () => ++requests === 1 ? pending.p : failed ? Promise.reject(new Error('Unavailable')) : Promise.resolve([]),
 	} as unknown as IChatService);
 	using pane = registerTestComponentServices(services).createInstance(SessionChangesEditor, {});
 	pane.create(dom.window.document.body);
@@ -134,25 +110,11 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	pane.setVisible(true);
 	assert.equal(await decorations!.provideDecorations(resource, CancellationToken.None), undefined);
 	pane.setVisible(false);
-	await pending.complete([
-		{
-			changeSetId: 'change-a',
-			sessionId: 'a',
-			threadId: 'a-thread',
-			turnId: 'turn-a',
-			repositoryId: 'repository-a',
-			captureState: 'sealed',
-			messageState: 'unconfigured',
-			commitState: 'idle',
-			committedPaths: [],
-			revision: 1,
-			statistics: { files: 1, additions: 1, deletions: 0 },
-			dependencies: [],
-			externalDependencyPaths: [],
-			warnings: [],
-			conflictPaths: [],
-		},
-	]);
+	await pending.complete([{
+		changeSetId: 'change-a', sessionId: 'a', threadId: 'a-thread', turnId: 'turn-a', repositoryId: 'repository-a',
+		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
+		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
+	}]);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(requests, 1);
 	assert.equal(pane.getAccessibleContent(), 'Loading changes…');

@@ -5,7 +5,7 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorksp
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 
-export interface ISessionsProviderAutomations extends IAutomationStore {}
+export interface ISessionsProviderAutomations extends IAutomationStore { }
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {
@@ -18,7 +18,7 @@ export interface ISessionsProvider extends IDisposable {
 	readonly connectionStatus?: IObservable<'connecting' | 'connected' | 'disconnected'>;
 	/** The catalog and its detail subscriptions must be read again; selection remains frontend-owned. */
 	readonly onDidChangeCatalog: Event<void>;
-	readonly onDidChangeSession: Event<{ sessionId: SessionId; detailChanged: boolean }>;
+	readonly onDidChangeSession: Event<{ sessionId: SessionId; detailChanged: boolean; }>;
 	list(): Promise<readonly ISession[]>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined>;

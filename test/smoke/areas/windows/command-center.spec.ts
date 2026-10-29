@@ -56,14 +56,12 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 // Expected titles follow the actual Desktop privilege; Browser has no OS suffix.
-const titleTest = test.extend<{ privilegeSuffix: string }>({
+const titleTest = test.extend<{ privilegeSuffix: string; }>({
 	privilegeSuffix: async ({ target, workbench }, use) => {
-		const isAdmin =
-			target.kind === 'electron' &&
-			(await workbench.page.evaluate(async () => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-				return ipc.invoke('ash:native-host:is-admin');
-			}));
+		const isAdmin = target.kind === 'electron' && await workbench.page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			return ipc.invoke('ash:native-host:is-admin');
+		});
 		expect(typeof isAdmin).toBe('boolean');
 		await use(isAdmin ? ` ${process.platform === 'win32' ? '[Administrator]' : '[Superuser]'}` : '');
 	},
@@ -72,7 +70,7 @@ const titleTest = test.extend<{ privilegeSuffix: string }>({
 test('desktop privileges reach the window title through the Main process', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const isAdmin = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:is-admin');
 	});
 	expect(typeof isAdmin).toBe('boolean');
@@ -143,10 +141,7 @@ test('activity bar badge colors follow theme customizations and survive reopenin
 	await workbench.settingsEditor.selectGroup('workbench');
 	await workbench.settingsEditor.selectCategory('appearance');
 	const colors = workbench.page.locator('[data-configuration-key="workbench.colorCustomizations"]');
-	for (const [id, value] of [
-		['activityBarBadge.background', '#123456'],
-		['activityBarBadge.foreground', '#fedcba'],
-	]) {
+	for (const [id, value] of [['activityBarBadge.background', '#123456'], ['activityBarBadge.foreground', '#fedcba']]) {
 		await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 		const row = colors.locator('.ash-string-map-row').last();
 		const key = row.getByRole('combobox');
@@ -163,11 +158,7 @@ test('activity bar badge colors follow theme customizations and survive reopenin
 	await expect(badge()).toHaveCSS('color', 'rgb(254, 220, 186)');
 	await workbench.page.getByRole('dialog', { name: 'Ash Settings' }).locator('.ash-modal-editor-close').click();
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
-	await workbench.editors
-		.groupAt(0)
-		.editor.waitForEditorContents(
-			content => content.includes('activityBarBadge.background') && content.includes('#123456') && content.includes('activityBarBadge.foreground') && content.includes('#fedcba'),
-		);
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('activityBarBadge.background') && content.includes('#123456') && content.includes('activityBarBadge.foreground') && content.includes('#fedcba'));
 	({ application, workbench } = await reloadWorkbench());
 	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -191,7 +182,7 @@ test('activity bar badge setting updates immediately and persists in settings.js
 	const explorer = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
 	const badge = (): Locator => explorer().locator('.ash-composite-bar-badge');
 	const createActivity = async (): Promise<void> => {
-		if ((await explorer().getAttribute('aria-selected')) !== 'true' || !(await workbench.page.locator('[data-part="sidebar"]').isVisible())) {
+		if (await explorer().getAttribute('aria-selected') !== 'true' || !await workbench.page.locator('[data-part="sidebar"]').isVisible()) {
 			await explorer().click();
 		}
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -334,9 +325,7 @@ test('Manage Accounts command opens the account picker when the account service 
 
 test('desktop GitHub connection error uses a window dialog', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
 	const page = workbench.page;
-	const message = await workbench.dialogs.expectMessage(application, 'Connect GitHub', () =>
-		workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Connect GitHub']),
-	);
+	const message = await workbench.dialogs.expectMessage(application, 'Connect GitHub', () => workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Connect GitHub']));
 	expect(message.message).toBe('Could not connect GitHub. Try again.');
 	await expect(page.locator('.ash-notification')).toHaveCount(0);
 });
@@ -345,73 +334,59 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ shell }) => {
 		const original = shell.openExternal.bind(shell);
-		const state = globalThis as typeof globalThis & {
-			ashGitHubBrowser?: { url?: string; restore: () => void };
-		};
-		state.ashGitHubBrowser = {
-			restore: () => {
-				shell.openExternal = original;
-			},
-		};
-		shell.openExternal = async url => {
-			state.ashGitHubBrowser!.url = url;
-		};
+		const state = globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; restore: () => void; }; };
+		state.ashGitHubBrowser = { restore: () => { shell.openExternal = original; } };
+		shell.openExternal = async url => { state.ashGitHubBrowser!.url = url; };
 	});
 	try {
 		const page = workbench.page;
 		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Connect GitHub']);
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url)).toBeTruthy();
-		const authorizationUrl = await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; }; }).ashGitHubBrowser?.url)).toBeTruthy();
+		const authorizationUrl = await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; }; }).ashGitHubBrowser?.url);
 		const url = new URL(authorizationUrl!);
 		expect(url.origin).toBe('https://ash-github-auth.lanxiang0901.workers.dev');
 		expect(url.pathname).toBe('/v1/oauth/github/authorize');
 		expect(url.searchParams.get('client_id')).toBe('Iv23lieaFUjG1LamZy3K');
 		expect(url.searchParams.get('code_challenge_method')).toBe('S256');
 		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Cancel GitHub connection']);
-		expect(await workbench.menus.inspect(application, () => page.getByRole('button', { name: 'Accounts' }).click())).toEqual(
-			expect.arrayContaining([expect.objectContaining({ label: 'Connect GitHub', enabled: true })]),
-		);
+		expect(await workbench.menus.inspect(application, () => page.getByRole('button', { name: 'Accounts' }).click())).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Connect GitHub', enabled: true })]));
 		await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toHaveCount(0);
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { restore: () => void } }).ashGitHubBrowser?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { restore: () => void; }; }).ashGitHubBrowser?.restore());
 	}
 });
 
-test(
-	'primary sidebar toggle sits immediately after the application menu',
-	{
-		tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'],
-	},
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		const actionId = 'workbench.action.toggleSideBar';
-		const toggle = page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"] button`);
-		const toolbar = page.getByRole('toolbar', { name: 'Title bar left actions' });
-		const menu = toolbar.getByRole('button', { name: 'Application menu' });
-		await expect(page.locator(`.ash-titlebar-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
-		await expect(toggle).toBeVisible();
-		await expect(menu).toBeVisible();
-		expect(await toolbar.locator('.ash-action-view-item').evaluateAll(elements => elements.slice(0, 2).map(element => element.getAttribute('data-action-id')))).toEqual([
+test('primary sidebar toggle sits immediately after the application menu', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	const actionId = 'workbench.action.toggleSideBar';
+	const toggle = page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"] button`);
+	const toolbar = page.getByRole('toolbar', { name: 'Title bar left actions' });
+	const menu = toolbar.getByRole('button', { name: 'Application menu' });
+	await expect(page.locator(`.ash-titlebar-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
+	await expect(toggle).toBeVisible();
+	await expect(menu).toBeVisible();
+	expect(await toolbar.locator('.ash-action-view-item').evaluateAll(elements =>
+		elements.slice(0, 2).map(element => element.getAttribute('data-action-id')))).toEqual([
 			'ash.applicationMenu',
 			actionId,
 		]);
-		const rightGap = await page.locator('.ash-titlebar-actions .ash-action-bar').evaluate(element => Number.parseFloat(getComputedStyle(element).columnGap));
-		const [menuBounds, toggleBounds] = await Promise.all([menu.boundingBox(), toggle.boundingBox()]);
-		expect(menuBounds).not.toBeNull();
-		expect(toggleBounds).not.toBeNull();
-		expect(toggleBounds!.x - menuBounds!.x - menuBounds!.width).toBeCloseTo(rightGap, 0);
-		const sidebar = page.locator('[data-part="sidebar"]');
-		const wasVisible = await sidebar.isVisible();
-		await toggle.click();
-		await expect(toggle).toBeFocused();
-		if (wasVisible) {
-			await expect(sidebar).toBeHidden();
-		} else {
-			await expect(sidebar).toBeVisible();
-		}
-	},
-);
+	const rightGap = await page.locator('.ash-titlebar-actions .ash-action-bar').evaluate(element =>
+		Number.parseFloat(getComputedStyle(element).columnGap));
+	const [menuBounds, toggleBounds] = await Promise.all([menu.boundingBox(), toggle.boundingBox()]);
+	expect(menuBounds).not.toBeNull();
+	expect(toggleBounds).not.toBeNull();
+	expect(toggleBounds!.x - menuBounds!.x - menuBounds!.width).toBeCloseTo(rightGap, 0);
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const wasVisible = await sidebar.isVisible();
+	await toggle.click();
+	await expect(toggle).toBeFocused();
+	if (wasVisible) {
+		await expect(sidebar).toBeHidden();
+	} else {
+		await expect(sidebar).toBeVisible();
+	}
+});
 
 test('activity bar remains visible and reopens a selected sidebar view in the light theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
@@ -441,9 +416,7 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 		expect(accountsBounds).not.toBeNull();
 		expect(accountsBounds!.y).toBeGreaterThan(searchBounds!.y);
 		expect(manageBounds!.y).toBeGreaterThan(accountsBounds!.y);
-		expect(await workbench.menus.inspect(application, () => accounts.click())).toEqual(
-			expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))),
-		);
+		expect(await workbench.menus.inspect(application, () => accounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
 	} else {
 		await expect(accounts).toHaveCount(0);
 	}
@@ -512,7 +485,10 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(activitybar).toBeVisible();
 	await expect(activitybar).not.toHaveClass(/sidebar-open/);
 	await expect(activitybar).toHaveCSS('border-top-right-radius', '8px');
-	const [closedRailBounds, editorBounds] = await Promise.all([activitybar.boundingBox(), page.locator('[data-part="editor"]').boundingBox()]);
+	const [closedRailBounds, editorBounds] = await Promise.all([
+		activitybar.boundingBox(),
+		page.locator('[data-part="editor"]').boundingBox(),
+	]);
 	expect(closedRailBounds).not.toBeNull();
 	expect(editorBounds).not.toBeNull();
 	expect(editorBounds!.x - closedRailBounds!.x - closedRailBounds!.width).toBe(4);
@@ -586,7 +562,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 		}
 		const tooltip = page.getByRole('tooltip');
 		await expect(tooltip).toBeVisible();
-		await expect(tooltip).toHaveText((await trigger.getAttribute('aria-label')) ?? '');
+		await expect(tooltip).toHaveText(await trigger.getAttribute('aria-label') ?? '');
 		const [anchor, hover] = await Promise.all([trigger.boundingBox(), page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox()]);
 		expect(anchor).not.toBeNull();
 		expect(hover).not.toBeNull();
@@ -594,7 +570,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 		if (direction === 'left') expect(hover!.x + hover!.width).toBeLessThanOrEqual(anchor!.x);
 		if (direction === 'below') expect(hover!.y).toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
 		if (direction === 'above') expect(hover!.y + hover!.height).toBeLessThanOrEqual(anchor!.y);
-		await expect(trigger).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id')) ?? '');
+		await expect(trigger).toHaveAttribute('aria-describedby', await tooltip.getAttribute('id') ?? '');
 		await page.keyboard.press('Escape');
 		await expect(tooltip).toHaveCount(0);
 		await expect(trigger).not.toHaveAttribute('aria-describedby');
@@ -676,9 +652,10 @@ test('activity bar context menu hides and restores view icons', async ({ applica
 	const explorer = activitybar.getByRole('tab', { name: 'Explorer' });
 	const search = activitybar.getByRole('tab', { name: 'Search' });
 	const openSearchMenu = () => search.click({ button: 'right' });
-	expect(await workbench.menus.inspect(application, openSearchMenu)).toEqual(
-		expect.arrayContaining([expect.objectContaining({ label: "Hide 'Search'", enabled: true }), expect.objectContaining({ label: 'Search', checked: true })]),
-	);
+	expect(await workbench.menus.inspect(application, openSearchMenu)).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: "Hide 'Search'", enabled: true }),
+		expect.objectContaining({ label: 'Search', checked: true }),
+	]));
 	await workbench.menus.select(application, openSearchMenu, ["Hide 'Search'"]);
 	await expect(search).toBeHidden();
 	const openExplorerMenu = () => explorer.click({ button: 'right' });
@@ -762,152 +739,65 @@ test('macOS custom right activity bar menus open beside their buttons', { tag: [
 	}
 });
 
-test(
-	'macOS context menu converts pointer and activity bar anchors at the current window zoom',
-	{ tag: ['@electron-ui', '@electron-app-server', '@darwin'] },
-	async ({ target, application, workbench }) => {
-		const electron = application as ElectronApplication;
-		const windowId = await (await electron.browserWindow(workbench.page)).evaluate(window => window.id);
-		await electron.evaluate(({ BrowserWindow, Menu }, windowId) => {
-			const window = BrowserWindow.fromId(windowId)!;
-			const originalPopup = Menu.prototype.popup;
-			const originalZoom = window.webContents.getZoomLevel();
-			const state = globalThis as typeof globalThis & {
-				ashMenuPosition?: {
-					options?: { x?: number; y?: number; positioningItem?: number; zoom: number };
-					restore: () => void;
-				};
-			};
-			state.ashMenuPosition = {
-				restore: () => {
-					Menu.prototype.popup = originalPopup;
-					window.webContents.setZoomLevel(originalZoom);
-				},
-			};
-			Menu.prototype.popup = function (options) {
-				if (!options) throw new Error('Expected context menu popup options');
-				state.ashMenuPosition!.options = {
-					x: options.x,
-					y: options.y,
-					positioningItem: options.positioningItem,
-					zoom: window.webContents.getZoomFactor(),
-				};
-				options.callback?.();
-			};
-			window.webContents.setZoomLevel(2);
-		}, windowId);
-		try {
-			const search = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search' });
-			await workbench.page.evaluate(() => {
-				window.addEventListener(
-					'contextmenu',
-					event => {
-						(window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer = {
-							x: event.clientX,
-							y: event.clientY,
-						};
-					},
-					{ capture: true, once: true },
-				);
-			});
-			await search.click({ button: 'right', position: { x: 2, y: 2 } });
-			await expect
-				.poll(() =>
-					electron.evaluate(
-						() =>
-							(
-								globalThis as typeof globalThis & {
-									ashMenuPosition?: { options?: { x?: number; y?: number } };
-								}
-							).ashMenuPosition?.options,
-					),
-				)
-				.toBeDefined();
-			const actual = await electron.evaluate(
-				() =>
-					(
-						globalThis as typeof globalThis & {
-							ashMenuPosition?: {
-								options?: { x?: number; y?: number; positioningItem?: number; zoom: number };
-							};
-						}
-					).ashMenuPosition?.options,
-			);
-			const pointer = await workbench.page.evaluate(() => (window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer);
-			expect(pointer).toBeDefined();
-			expect(actual!.zoom).toBeGreaterThan(1);
-			expect(actual).toEqual({
-				x: Math.floor(pointer!.x * actual!.zoom),
-				y: Math.floor(pointer!.y * actual!.zoom),
-				positioningItem: undefined,
-				zoom: actual!.zoom,
-			});
-			await electron.evaluate(() => {
-				(globalThis as typeof globalThis & { ashMenuPosition: { options?: unknown } }).ashMenuPosition.options = undefined;
-			});
-			const accounts = workbench.page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' });
-			await accounts.evaluate(element => {
-				element.addEventListener(
-					'mousedown',
-					() => {
-						const bounds = element.getBoundingClientRect();
-						(window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor = {
-							x: bounds.right,
-							y: bounds.top,
-						};
-					},
-					{ once: true },
-				);
-			});
-			await accounts.click();
-			await expect
-				.poll(() =>
-					electron.evaluate(
-						() =>
-							(
-								globalThis as typeof globalThis & {
-									ashMenuPosition?: { options?: { x?: number; y?: number } };
-								}
-							).ashMenuPosition?.options,
-					),
-				)
-				.toBeDefined();
-			const elementMenu = await electron.evaluate(
-				() =>
-					(
-						globalThis as typeof globalThis & {
-							ashMenuPosition?: {
-								options?: { x?: number; y?: number; positioningItem?: number; zoom: number };
-							};
-						}
-					).ashMenuPosition?.options,
-			);
-			const anchor = await workbench.page.evaluate(() => (window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor);
-			expect(anchor).toBeDefined();
-			expect(elementMenu).toEqual({
-				x: Math.floor(anchor!.x * elementMenu!.zoom),
-				y: Math.floor(anchor!.y * elementMenu!.zoom) + 4,
-				positioningItem: undefined,
-				zoom: elementMenu!.zoom,
-			});
-		} finally {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void } }).ashMenuPosition?.restore());
-		}
-	},
-);
+test('macOS context menu converts pointer and activity bar anchors at the current window zoom', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
+	const electron = application as ElectronApplication;
+	const windowId = await (await electron.browserWindow(workbench.page)).evaluate(window => window.id);
+	await electron.evaluate(({ BrowserWindow, Menu }, windowId) => {
+		const window = BrowserWindow.fromId(windowId)!;
+		const originalPopup = Menu.prototype.popup;
+		const originalZoom = window.webContents.getZoomLevel();
+		const state = globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; restore: () => void; }; };
+		state.ashMenuPosition = {
+			restore: () => { Menu.prototype.popup = originalPopup; window.webContents.setZoomLevel(originalZoom); },
+		};
+		Menu.prototype.popup = function (options) {
+			if (!options) throw new Error('Expected context menu popup options');
+			state.ashMenuPosition!.options = { x: options.x, y: options.y, positioningItem: options.positioningItem, zoom: window.webContents.getZoomFactor() };
+			options.callback?.();
+		};
+		window.webContents.setZoomLevel(2);
+	}, windowId);
+	try {
+		const search = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search' });
+		await workbench.page.evaluate(() => {
+			window.addEventListener('contextmenu', event => {
+				(window as Window & { ashMenuPointer?: { x: number; y: number; }; }).ashMenuPointer = { x: event.clientX, y: event.clientY };
+			}, { capture: true, once: true });
+		});
+		await search.click({ button: 'right', position: { x: 2, y: 2 } });
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; }; }; }).ashMenuPosition?.options)).toBeDefined();
+		const actual = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; }; }).ashMenuPosition?.options);
+		const pointer = await workbench.page.evaluate(() => (window as Window & { ashMenuPointer?: { x: number; y: number; }; }).ashMenuPointer);
+		expect(pointer).toBeDefined();
+		expect(actual!.zoom).toBeGreaterThan(1);
+		expect(actual).toEqual({ x: Math.floor(pointer!.x * actual!.zoom), y: Math.floor(pointer!.y * actual!.zoom), positioningItem: undefined, zoom: actual!.zoom });
+		await electron.evaluate(() => { (globalThis as typeof globalThis & { ashMenuPosition: { options?: unknown; }; }).ashMenuPosition.options = undefined; });
+		const accounts = workbench.page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' });
+		await accounts.evaluate(element => {
+			element.addEventListener('mousedown', () => {
+				const bounds = element.getBoundingClientRect();
+				(window as Window & { ashMenuAnchor?: { x: number; y: number; }; }).ashMenuAnchor = { x: bounds.right, y: bounds.top };
+			}, { once: true });
+		});
+		await accounts.click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; }; }; }).ashMenuPosition?.options)).toBeDefined();
+		const elementMenu = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; }; }).ashMenuPosition?.options);
+		const anchor = await workbench.page.evaluate(() => (window as Window & { ashMenuAnchor?: { x: number; y: number; }; }).ashMenuAnchor);
+		expect(anchor).toBeDefined();
+		expect(elementMenu).toEqual({ x: Math.floor(anchor!.x * elementMenu!.zoom), y: Math.floor(anchor!.y * elementMenu!.zoom) + 4, positioningItem: undefined, zoom: elementMenu!.zoom });
+	} finally {
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void; }; }).ashMenuPosition?.restore());
+	}
+});
 
 test('a late macOS menu close callback leaves the next menu open', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ Menu }) => {
 		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & {
-			ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void };
-		};
+		const state = globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void; }; };
 		state.ashMenuCallbacks = {
 			callbacks: [],
-			restore: () => {
-				Menu.prototype.popup = originalPopup;
-			},
+			restore: () => { Menu.prototype.popup = originalPopup; },
 		};
 		Menu.prototype.popup = function (options) {
 			if (!options) throw new Error('Expected context menu popup options');
@@ -919,25 +809,19 @@ test('a late macOS menu close callback leaves the next menu open', { tag: ['@ele
 		const accounts = activitybar.getByRole('button', { name: 'Accounts' });
 		const manage = activitybar.getByRole('button', { name: 'Manage' });
 		await accounts.click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(1);
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; }; }).ashMenuCallbacks?.callbacks.length)).toBe(1);
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[0]!());
 		await expect(accounts).toHaveAttribute('aria-expanded', 'false');
 		await manage.click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(2);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; }; }).ashMenuCallbacks?.callbacks.length)).toBe(2);
 		await expect(manage).toHaveAttribute('aria-expanded', 'true');
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[0]!());
 		await workbench.page.waitForTimeout(100);
 		await expect(manage).toHaveAttribute('aria-expanded', 'true');
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[1]!());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[1]!());
 		await expect(manage).toHaveAttribute('aria-expanded', 'false');
 	} finally {
-		await electron.evaluate(() =>
-			(
-				globalThis as typeof globalThis & {
-					ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void };
-				}
-			).ashMenuCallbacks?.restore(),
-		);
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void; }; }).ashMenuCallbacks?.restore());
 	}
 });
 
@@ -970,12 +854,10 @@ test('activity bar context menu changes size and position', async ({ application
 	await workbench.openExplorer();
 	await expect(sidebar).toBeVisible();
 	const openGlobalMenu = () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
-	expect(await workbench.menus.inspect(application, openGlobalMenu)).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({ label: 'Accounts', checked: true }),
-			...['Activity Bar Position', 'Activity Bar Size', 'Move Primary Side Bar Right'].map(label => expect.objectContaining({ label, enabled: true })),
-		]),
-	);
+	expect(await workbench.menus.inspect(application, openGlobalMenu)).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: 'Accounts', checked: true }),
+		...['Activity Bar Position', 'Activity Bar Size', 'Move Primary Side Bar Right'].map(label => expect.objectContaining({ label, enabled: true })),
+	]));
 	await workbench.menus.select(application, openGlobalMenu, ['Activity Bar Size', 'Compact']);
 	await expect(activitybar).toHaveCSS('width', '36px');
 	const compactExplorer = activitybar.getByRole('tab', { name: 'Explorer' });
@@ -987,12 +869,10 @@ test('activity bar context menu changes size and position', async ({ application
 	} else {
 		await expect(activitybar.getByRole('button', { name: 'Accounts' })).toHaveCount(0);
 	}
-	expect(
-		await compactExplorer.evaluate(element => {
-			const style = getComputedStyle(element, '::after');
-			return { width: style.width, height: style.height, radius: style.borderRadius };
-		}),
-	).toEqual({ width: '24px', height: '24px', radius: '4px' });
+	expect(await compactExplorer.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { width: style.width, height: style.height, radius: style.borderRadius };
+	})).toEqual({ width: '24px', height: '24px', radius: '4px' });
 	const [compactOuterBox, compactItemBox] = await Promise.all([activitybar.boundingBox(), compactExplorer.boundingBox()]);
 	expect(compactOuterBox).not.toBeNull();
 	expect(compactItemBox).not.toBeNull();
@@ -1011,10 +891,8 @@ test('activity bar context menu changes size and position', async ({ application
 	const openManageMenu = () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	const positions = await workbench.menus.inspect(application, openManageMenu, ['Activity Bar Position']);
 	expect(positions.map(item => ({ label: item.label, checked: item.checked }))).toEqual([
-		{ label: 'Default', checked: true },
-		{ label: 'Top', checked: false },
-		{ label: 'Bottom', checked: false },
-		{ label: 'Hidden', checked: false },
+		{ label: 'Default', checked: true }, { label: 'Top', checked: false },
+		{ label: 'Bottom', checked: false }, { label: 'Hidden', checked: false },
 	]);
 	await workbench.menus.select(application, openManageMenu, ['Activity Bar Position', 'Top']);
 	await expect(activitybar).toBeHidden();
@@ -1027,9 +905,7 @@ test('activity bar context menu changes size and position', async ({ application
 	expect(workbenchBounds).not.toBeNull();
 	expect(workbenchBounds!.x + workbenchBounds!.width - rightSidebar!.x - rightSidebar!.width).toBe(4);
 	await expect(topSelector.getByRole('tab', { name: 'Explorer' }).locator('.ash-icon')).toHaveCSS('width', '16px');
-	expect(await workbench.menus.inspect(application, () => topSelector.getByRole('tab', { name: 'Explorer' }).click({ button: 'right' }))).toEqual(
-		expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]),
-	);
+	expect(await workbench.menus.inspect(application, () => topSelector.getByRole('tab', { name: 'Explorer' }).click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]));
 	await expect(sidebar).toHaveCSS('border-top-width', '1px');
 	const titlebarAccounts = titlebar.getByRole('button', { name: 'Accounts' });
 	const titlebarManage = titlebar.getByRole('button', { name: 'Manage' });
@@ -1046,17 +922,10 @@ test('activity bar context menu changes size and position', async ({ application
 	await expect(panelToggle).toHaveCSS('width', '22px');
 	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.accounts"]')).toHaveCount(hasAccounts ? 1 : 0);
 	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.manage"]')).toHaveCount(1);
-	const appearance = async (button: typeof panelToggle) =>
-		button.evaluate(element => {
-			const style = getComputedStyle(element);
-			return {
-				width: style.width,
-				height: style.height,
-				color: style.color,
-				background: style.backgroundColor,
-				radius: style.borderRadius,
-			};
-		});
+	const appearance = async (button: typeof panelToggle) => button.evaluate(element => {
+		const style = getComputedStyle(element);
+		return { width: style.width, height: style.height, color: style.color, background: style.backgroundColor, radius: style.borderRadius };
+	});
 	if (hasAccounts) expect(await appearance(titlebarAccounts)).toEqual(await appearance(panelToggle));
 	expect(await appearance(titlebarManage)).toEqual(await appearance(panelToggle));
 	if (hasAccounts) {
@@ -1069,9 +938,7 @@ test('activity bar context menu changes size and position', async ({ application
 		expect(accountBounds).not.toBeNull();
 		expect(manageBounds).not.toBeNull();
 		expect(accountBounds!.x).toBeLessThan(manageBounds!.x);
-		expect(await workbench.menus.inspect(application, () => titlebarAccounts.click())).toEqual(
-			expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))),
-		);
+		expect(await workbench.menus.inspect(application, () => titlebarAccounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
 	}
 	const [titlebarBounds, manageBounds] = await Promise.all([titlebar.boundingBox(), titlebarManage.boundingBox()]);
 	expect(titlebarBounds).not.toBeNull();
@@ -1081,25 +948,19 @@ test('activity bar context menu changes size and position', async ({ application
 	expect(await workbench.menus.inspect(application, () => titlebarManage.click())).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Settings', enabled: true })]));
 	await titlebarManage.focus();
 	const systemMenu = await workbench.menus.isSystemMenu(application);
-	expect(
-		await workbench.menus.inspect(application, async () => {
-			await titlebarManage.press('Shift+F10');
-			if (!systemMenu) {
-				const bounds = await page.getByRole('menu').last().boundingBox();
-				expect(bounds).not.toBeNull();
-				expect(bounds!.x + bounds!.width).toBeGreaterThan(manageBounds!.x);
-			}
-		}),
-	).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]));
+	expect(await workbench.menus.inspect(application, async () => {
+		await titlebarManage.press('Shift+F10');
+		if (!systemMenu) {
+			const bounds = await page.getByRole('menu').last().boundingBox();
+			expect(bounds).not.toBeNull();
+			expect(bounds!.x + bounds!.width).toBeGreaterThan(manageBounds!.x);
+		}
+	})).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]));
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Accounts']);
 	await expect(titlebarAccounts).toHaveCount(0);
-	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(
-		expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: false })]),
-	);
+	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: false })]));
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Accounts']);
-	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(
-		expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: true })]),
-	);
+	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: true })]));
 	if (hasAccounts) await expect(titlebarAccounts).toBeVisible();
 	else await expect(titlebarAccounts).toHaveCount(0);
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Activity Bar Position', 'Bottom']);
@@ -1210,18 +1071,17 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	expect(nextSidebar!.x).toBe(4);
 	await expect(sidebar).toHaveCSS('border-left-width', '1px');
 	await expect(sidebar).toHaveCSS('border-bottom-left-radius', '8px');
-	const leftInsets = () =>
-		sidebar.evaluate(root => {
-			const left = root.getBoundingClientRect().x;
-			const title = root.querySelector<HTMLElement>('.ash-sidebar-title-label')!;
-			const titleText = document.createRange();
-			titleText.selectNodeContents(title);
-			return {
-				tab: root.querySelector<HTMLElement>('.ash-sidebar-composite-bar-top .ash-composite-bar-item')!.getBoundingClientRect().x - left,
-				title: titleText.getBoundingClientRect().x - left,
-				paneTwisty: root.querySelector<HTMLElement>('.ash-pane-view-header-twisty-container')!.getBoundingClientRect().x - left,
-			};
-		});
+	const leftInsets = () => sidebar.evaluate(root => {
+		const left = root.getBoundingClientRect().x;
+		const title = root.querySelector<HTMLElement>('.ash-sidebar-title-label')!;
+		const titleText = document.createRange();
+		titleText.selectNodeContents(title);
+		return {
+			tab: root.querySelector<HTMLElement>('.ash-sidebar-composite-bar-top .ash-composite-bar-item')!.getBoundingClientRect().x - left,
+			title: titleText.getBoundingClientRect().x - left,
+			paneTwisty: root.querySelector<HTMLElement>('.ash-pane-view-header-twisty-container')!.getBoundingClientRect().x - left,
+		};
+	});
 	// Modern adds the sidebar border; the header keeps 4px padding and the twisty its 2px margin.
 	await expect.poll(leftInsets).toEqual({ tab: 9, title: 17, paneTwisty: 7 });
 	await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), ['Settings']);
@@ -1245,10 +1105,7 @@ test('macOS sidebar toggle starts at the window control safe area', { tag: ['@el
 		document.body.append(probe);
 		const safeArea = probe.getBoundingClientRect().width;
 		probe.remove();
-		return {
-			safeArea,
-			gap: button.getBoundingClientRect().left - titlebar.getBoundingClientRect().left - safeArea,
-		};
+		return { safeArea, gap: button.getBoundingClientRect().left - titlebar.getBoundingClientRect().left - safeArea };
 	});
 	expect(safeArea).toBeGreaterThan(0);
 	expect(gap).toBeGreaterThanOrEqual(0);
@@ -1338,20 +1195,16 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	await expect(mark.locator('svg')).toHaveCount(0);
 	const expandedLabel = entry.locator('.ash-icon-label-container');
 	const checkExpandedSpacing = async (): Promise<void> => {
-		await expect
-			.poll(() =>
-				entry.evaluate(button => {
-					const bounds = button.getBoundingClientRect();
-					const iconBounds = button.querySelector('.ash-icon-label-icon')!.getBoundingClientRect();
-					const labelBounds = button.querySelector('.ash-icon-label-container')!.getBoundingClientRect();
-					return {
-						left: Math.round(iconBounds.left - bounds.left),
-						iconToText: Math.round(labelBounds.left - iconBounds.right),
-						right: Math.round(bounds.right - labelBounds.right),
-					};
-				}),
-			)
-			.toEqual({ left: 4, iconToText: 6, right: 4 });
+		await expect.poll(() => entry.evaluate(button => {
+			const bounds = button.getBoundingClientRect();
+			const iconBounds = button.querySelector('.ash-icon-label-icon')!.getBoundingClientRect();
+			const labelBounds = button.querySelector('.ash-icon-label-container')!.getBoundingClientRect();
+			return {
+				left: Math.round(iconBounds.left - bounds.left),
+				iconToText: Math.round(labelBounds.left - iconBounds.right),
+				right: Math.round(bounds.right - labelBounds.right),
+			};
+		})).toEqual({ left: 4, iconToText: 6, right: 4 });
 	};
 	if (target.kind === 'electron') {
 		await expect(expandedLabel).toHaveText('Open in Agents');
@@ -1360,17 +1213,18 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 
 	for (const width of [1200, 700]) {
 		await page.setViewportSize({ width, height: 800 });
-		await expect
-			.poll(async () => {
-				const searchBounds = await commandCenter.boundingBox();
-				const entryBounds = await entry.boundingBox();
-				if (!searchBounds || !entryBounds) return -Infinity;
-				if (width >= 800) {
-					return entryBounds.x - searchBounds.x - searchBounds.width;
-				}
-				return Math.max(entryBounds.x - searchBounds.x - searchBounds.width, searchBounds.x - entryBounds.x - entryBounds.width);
-			})
-			.toBeGreaterThanOrEqual(6);
+		await expect.poll(async () => {
+			const searchBounds = await commandCenter.boundingBox();
+			const entryBounds = await entry.boundingBox();
+			if (!searchBounds || !entryBounds) return -Infinity;
+			if (width >= 800) {
+				return entryBounds.x - searchBounds.x - searchBounds.width;
+			}
+			return Math.max(
+				entryBounds.x - searchBounds.x - searchBounds.width,
+				searchBounds.x - entryBounds.x - entryBounds.width,
+			);
+		}).toBeGreaterThanOrEqual(6);
 		const searchBounds = await commandCenter.boundingBox();
 		const entryBounds = await entry.boundingBox();
 		expect(searchBounds).not.toBeNull();
@@ -1478,26 +1332,24 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 	await expect(fontIcon.locator('svg')).toHaveCount(0);
 	const buttons = page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
 	await expect(buttons.first()).toBeVisible();
-	const iconBounds = await buttons.evaluateAll(elements =>
-		elements.map(button => {
-			const label = button.querySelector('.ash-icon-label');
-			const icon = label?.querySelector('.ash-icon');
-			if (!label || !icon) throw new Error('Toolbar icon button is missing its icon');
-			const labelRect = label.getBoundingClientRect();
-			const iconRect = icon.getBoundingClientRect();
-			const buttonRect = button.getBoundingClientRect();
-			return {
-				action: button.closest('[data-action-id]')?.getAttribute('data-action-id'),
-				buttonWidth: buttonRect.width,
-				labelWidth: labelRect.width,
-				iconWidth: iconRect.width,
-				leftInset: iconRect.left - labelRect.left,
-				rightInset: labelRect.right - iconRect.right,
-				buttonLeftInset: iconRect.left - buttonRect.left,
-				buttonRightInset: buttonRect.right - iconRect.right,
-			};
-		}),
-	);
+	const iconBounds = await buttons.evaluateAll(elements => elements.map(button => {
+		const label = button.querySelector('.ash-icon-label');
+		const icon = label?.querySelector('.ash-icon');
+		if (!label || !icon) throw new Error('Toolbar icon button is missing its icon');
+		const labelRect = label.getBoundingClientRect();
+		const iconRect = icon.getBoundingClientRect();
+		const buttonRect = button.getBoundingClientRect();
+		return {
+			action: button.closest('[data-action-id]')?.getAttribute('data-action-id'),
+			buttonWidth: buttonRect.width,
+			labelWidth: labelRect.width,
+			iconWidth: iconRect.width,
+			leftInset: iconRect.left - labelRect.left,
+			rightInset: labelRect.right - iconRect.right,
+			buttonLeftInset: iconRect.left - buttonRect.left,
+			buttonRightInset: buttonRect.right - iconRect.right,
+		};
+	}));
 	for (const bounds of iconBounds) {
 		// The expandable Agents entry owns a wider collapsed hit target.
 		const actionSize = bounds.action === 'workbench.action.chat.openAgentsWindow.titleBar' ? 24 : 22;
@@ -1511,25 +1363,19 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 	}
 });
 
-test(
-	'Quick Access has no backdrop and lets workbench controls receive clicks',
-	{
-		tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'],
-	},
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		await page.keyboard.press('F1');
-		const host = page.locator('.ash-quick-input-host');
-		const picker = page.locator('.ash-quick-pick');
-		await expect(picker.getByRole('combobox')).toBeFocused();
-		await expect(host).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(host).toHaveCSS('pointer-events', 'none');
-		await expect(picker).toHaveCSS('pointer-events', 'auto');
-		await page.getByRole('button', { name: 'Application menu' }).click();
-		await expect(picker).toHaveCount(0);
-		await expect(page.getByRole('menu').first()).toBeVisible();
-	},
-);
+test('Quick Access has no backdrop and lets workbench controls receive clicks', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	const host = page.locator('.ash-quick-input-host');
+	const picker = page.locator('.ash-quick-pick');
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await expect(host).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(host).toHaveCSS('pointer-events', 'none');
+	await expect(picker).toHaveCSS('pointer-events', 'auto');
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await expect(picker).toHaveCount(0);
+	await expect(page.getByRole('menu').first()).toBeVisible();
+});
 
 // Exact CSS breakpoint probes need whole display pixels for each requested viewport pixel.
 const responsiveTitleTest = titleTest.extend({ electronArgs: ['--force-device-scale-factor=1'] });
@@ -1538,9 +1384,7 @@ responsiveTitleTest('titlebar command center opens file search, switches to comm
 	const page = workbench.page;
 	// UI-only hosts have bootstrap colors but no App Server extension theme catalog.
 	if (target.kind === 'electron') {
-		await (application as ElectronApplication).evaluate(({ nativeTheme }) => {
-			nativeTheme.themeSource = 'light';
-		});
+		await (application as ElectronApplication).evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
 	} else {
 		await page.emulateMedia({ colorScheme: 'light' });
 	}
@@ -1578,9 +1422,7 @@ responsiveTitleTest('titlebar command center opens file search, switches to comm
 	await page.mouse.move(0, 100);
 	await commandCenter.hover();
 	await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
-	await expect(page.getByRole('tooltip')).toHaveText(
-		target.kind === 'browser' && target.appServerMode === 'required' ? `Welcome — ${testWorkspace.directory.split(/[\\/]/u).at(-1)} — Ash Code` : `Welcome — Ash Code${privilegeSuffix}`,
-	);
+	await expect(page.getByRole('tooltip')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required' ? `Welcome — ${testWorkspace.directory.split(/[\\/]/u).at(-1)} — Ash Code` : `Welcome — Ash Code${privilegeSuffix}`);
 
 	await commandCenter.click();
 	await expect(commandCenter).toHaveAttribute('aria-expanded', 'true');
@@ -1628,14 +1470,7 @@ responsiveTitleTest('titlebar command center opens file search, switches to comm
 				const left = titlebar.querySelector('.ash-workbench-part-title')!.getBoundingClientRect();
 				const control = element.getBoundingClientRect();
 				const right = titlebar.querySelector('.ash-workbench-part-content')!.getBoundingClientRect();
-				return {
-					titlebarWidth: titlebar.getBoundingClientRect().width,
-					leftRight: left.right,
-					controlLeft: control.left,
-					controlRight: control.right,
-					controlWidth: control.width,
-					rightLeft: right.left,
-				};
+				return { titlebarWidth: titlebar.getBoundingClientRect().width, leftRight: left.right, controlLeft: control.left, controlRight: control.right, controlWidth: control.width, rightLeft: right.left };
 			});
 			expect(bounds.titlebarWidth).toBe(width);
 			expect(bounds.leftRight).toBeLessThanOrEqual(bounds.controlLeft);

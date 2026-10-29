@@ -1,18 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	NotificationPriority,
-	NotificationsFilter,
-	Severity,
-	type INotificationService,
-	type INotificationHandle,
-	type INotification,
-	type NotificationMessage,
-	type INotificationSource,
-	type INotificationSourceFilter,
-	type IStatusMessageOptions,
-	type IStatusHandle,
-} from '../../../../platform/notification/common/notification.js';
+import { NotificationPriority, NotificationsFilter, Severity, type INotificationService, type INotificationHandle, type INotification, type NotificationMessage, type INotificationSource, type INotificationSourceFilter, type IStatusMessageOptions, type IStatusHandle } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { NotificationsModel } from '../../../common/notifications.js';
 
@@ -30,53 +18,35 @@ export class NotificationService extends Disposable implements INotificationServ
 		super();
 		this.filter = this.readFilter();
 		this.sources = this.readSources();
-		this._register(
-			storageService.onDidChangeValue(event => {
-				if (event.scope !== StorageScope.APPLICATION) {
-					return;
-				}
-				if (event.key === NotificationService.sourcesKey) {
-					const sources = this.readSources();
-					if (JSON.stringify([...sources.values()]) === JSON.stringify([...this.sources.values()])) {
-						return;
-					}
-					this.sources = sources;
-					this.filterChanges.fire();
-					return;
-				}
-				if (event.key !== NotificationService.filterKey) {
-					return;
-				}
-				const filter = this.readFilter();
-				if (filter === this.filter) {
-					return;
-				}
-				this.filter = filter;
+		this._register(storageService.onDidChangeValue(event => {
+			if (event.scope !== StorageScope.APPLICATION) { return; }
+			if (event.key === NotificationService.sourcesKey) {
+				const sources = this.readSources();
+				if (JSON.stringify([...sources.values()]) === JSON.stringify([...this.sources.values()])) { return; }
+				this.sources = sources;
 				this.filterChanges.fire();
-			}),
-		);
+				return;
+			}
+			if (event.key !== NotificationService.filterKey) { return; }
+			const filter = this.readFilter();
+			if (filter === this.filter) { return; }
+			this.filter = filter;
+			this.filterChanges.fire();
+		}));
 	}
 
 	setFilter(filter: NotificationsFilter | INotificationSourceFilter): void {
 		this.assertNotDisposed();
 		if (typeof filter === 'object') {
-			if (!isSourceFilter(filter)) {
-				throw new TypeError('Invalid notification source filter');
-			}
+			if (!isSourceFilter(filter)) { throw new TypeError('Invalid notification source filter'); }
 			const previous = this.sources.get(filter.id);
-			if (previous?.label === filter.label && previous.filter === filter.filter) {
-				return;
-			}
+			if (previous?.label === filter.label && previous.filter === filter.filter) { return; }
 			this.sources.set(filter.id, { id: filter.id, label: filter.label, filter: filter.filter });
 			this.saveSources();
 			return;
 		}
-		if (filter !== NotificationsFilter.OFF && filter !== NotificationsFilter.ERROR) {
-			throw new TypeError('Unknown notification filter');
-		}
-		if (this.filter === filter) {
-			return;
-		}
+		if (filter !== NotificationsFilter.OFF && filter !== NotificationsFilter.ERROR) { throw new TypeError('Unknown notification filter'); }
+		if (this.filter === filter) { return; }
 		this.storageService.store(NotificationService.filterKey, filter === NotificationsFilter.ERROR, StorageScope.APPLICATION, StorageTarget.MACHINE);
 		// Storage implementations may deliver the local change synchronously.
 		if (this.filter !== filter) {
@@ -85,19 +55,13 @@ export class NotificationService extends Disposable implements INotificationServ
 		}
 	}
 
-	getFilter(source?: INotificationSource): NotificationsFilter {
-		return source ? (this.sources.get(source.id)?.filter ?? NotificationsFilter.OFF) : this.filter;
-	}
+	getFilter(source?: INotificationSource): NotificationsFilter { return source ? this.sources.get(source.id)?.filter ?? NotificationsFilter.OFF : this.filter; }
 
-	getFilters(): INotificationSourceFilter[] {
-		return [...this.sources.values()].map(source => ({ ...source }));
-	}
+	getFilters(): INotificationSourceFilter[] { return [...this.sources.values()].map(source => ({ ...source })); }
 
 	removeFilter(sourceId: string): void {
 		this.assertNotDisposed();
-		if (this.sources.delete(sourceId)) {
-			this.saveSources();
-		}
+		if (this.sources.delete(sourceId)) { this.saveSources(); }
 	}
 
 	private saveSources(): void {
@@ -108,12 +72,8 @@ export class NotificationService extends Disposable implements INotificationServ
 	private readSources(): Map<string, INotificationSourceFilter> {
 		try {
 			const stored: unknown = JSON.parse(this.storageService.get(NotificationService.sourcesKey, StorageScope.APPLICATION, '[]'));
-			if (Array.isArray(stored) && stored.every(isSourceFilter)) {
-				return new Map(stored.map(source => [source.id, { id: source.id, label: source.label, filter: source.filter }]));
-			}
-		} catch {
-			/* A damaged state entry must not prevent the workbench from starting. */
-		}
+			if (Array.isArray(stored) && stored.every(isSourceFilter)) { return new Map(stored.map(source => [source.id, { id: source.id, label: source.label, filter: source.filter }])); }
+		} catch { /* A damaged state entry must not prevent the workbench from starting. */ }
 		return new Map();
 	}
 
@@ -127,11 +87,7 @@ export class NotificationService extends Disposable implements INotificationServ
 		if (typeof options.source === 'object') {
 			this.setFilter({ ...options.source, filter: this.getFilter(options.source) });
 		}
-		if (
-			options.priority !== NotificationPriority.URGENT &&
-			options.severity !== Severity.Error &&
-			(this.filter === NotificationsFilter.ERROR || (typeof options.source === 'object' && this.getFilter(options.source) === NotificationsFilter.ERROR))
-		) {
+		if (options.priority !== NotificationPriority.URGENT && options.severity !== Severity.Error && (this.filter === NotificationsFilter.ERROR || (typeof options.source === 'object' && this.getFilter(options.source) === NotificationsFilter.ERROR))) {
 			return this.model.addNotification({ ...options, priority: NotificationPriority.SILENT });
 		}
 		return this.model.addNotification(options);
@@ -158,30 +114,19 @@ export class NotificationService extends Disposable implements INotificationServ
 	status(message: NotificationMessage, options?: IStatusMessageOptions): IStatusHandle {
 		this.assertNotDisposed();
 		const text = message instanceof Error ? message.message : message;
-		if (typeof text !== 'string' || !text.trim()) {
-			throw new TypeError('Status message must not be empty');
-		}
+		if (typeof text !== 'string' || !text.trim()) { throw new TypeError('Status message must not be empty'); }
 		for (const delay of [options?.showAfter, options?.hideAfter]) {
-			if (delay !== undefined && (!Number.isFinite(delay) || delay < 0)) {
-				throw new TypeError('Status message delay must be a non-negative number');
-			}
+			if (delay !== undefined && (!Number.isFinite(delay) || delay < 0)) { throw new TypeError('Status message delay must be a non-negative number'); }
 		}
 		return this.model.showStatusMessage(text, options);
 	}
 }
 
 function isSourceFilter(value: unknown): value is INotificationSourceFilter {
-	if (!value || typeof value !== 'object') {
-		return false;
-	}
+	if (!value || typeof value !== 'object') { return false; }
 	const source = value as Partial<INotificationSourceFilter>;
-	return (
-		typeof source.id === 'string' &&
-		!!source.id.trim() &&
-		typeof source.label === 'string' &&
-		!!source.label.trim() &&
-		(source.filter === NotificationsFilter.OFF || source.filter === NotificationsFilter.ERROR)
-	);
+	return typeof source.id === 'string' && !!source.id.trim() && typeof source.label === 'string' && !!source.label.trim()
+		&& (source.filter === NotificationsFilter.OFF || source.filter === NotificationsFilter.ERROR);
 }
 
 function validateNotification(options: INotification): void {

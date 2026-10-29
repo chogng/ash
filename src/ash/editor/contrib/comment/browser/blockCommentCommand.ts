@@ -14,7 +14,7 @@ export class BlockCommentCommand implements ICommand {
 		private readonly selection: Selection,
 		private readonly insertSpace: boolean,
 		private readonly languageConfigurationService: ILanguageConfigurationService,
-	) {}
+	) { }
 
 	public static _haystackHasNeedleAtOffset(haystack: string, needle: string, offset: number): boolean {
 		if (offset < 0 || offset + needle.length > haystack.length) return false;
@@ -23,22 +23,14 @@ export class BlockCommentCommand implements ICommand {
 
 	public static _createRemoveBlockCommentOperations(range: Range, startToken: string, endToken: string): ISingleEditOperation[] {
 		if (range.isEmpty()) {
-			return [
-				{
-					range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.endLineNumber, range.endColumn + endToken.length),
-					text: '',
-				},
-			];
+			return [{
+				range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.endLineNumber, range.endColumn + endToken.length),
+				text: '',
+			}];
 		}
 		return [
-			{
-				range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.startLineNumber, range.startColumn),
-				text: '',
-			},
-			{
-				range: new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn + endToken.length),
-				text: '',
-			},
+			{ range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.startLineNumber, range.startColumn), text: '' },
+			{ range: new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn + endToken.length), text: '' },
 		];
 	}
 
@@ -93,7 +85,12 @@ export class BlockCommentCommand implements ICommand {
 			effectiveEnd = ` ${effectiveEnd}`;
 			endIndex -= 1;
 		}
-		const inner = new Range(this.selection.startLineNumber, startIndex + effectiveStart.length + 1, this.selection.endLineNumber, endIndex + 1);
+		const inner = new Range(
+			this.selection.startLineNumber,
+			startIndex + effectiveStart.length + 1,
+			this.selection.endLineNumber,
+			endIndex + 1,
+		);
 		return BlockCommentCommand._createRemoveBlockCommentOperations(inner, effectiveStart, effectiveEnd);
 	}
 }

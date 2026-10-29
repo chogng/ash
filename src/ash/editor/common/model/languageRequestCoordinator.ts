@@ -122,23 +122,17 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			this.dispose();
 			throw new TypeError('Language worker factory must be a function');
 		}
-		this._register(
-			model.onDidChangeContent(change => {
-				this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
-				this.synchronizeWorker(change);
-			}),
-		);
-		this._register(
-			model.onWillDispose(() => {
-				this.cancelAll(LanguageRequestCancellationReason.ModelUnavailable);
-				this.workerSlot.clear();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
-			}),
-		);
+		this._register(model.onDidChangeContent(change => {
+			this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
+			this.synchronizeWorker(change);
+		}));
+		this._register(model.onWillDispose(() => {
+			this.cancelAll(LanguageRequestCancellationReason.ModelUnavailable);
+			this.workerSlot.clear();
+		}));
+		this._register(toDisposable(() => {
+			this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
+		}));
 	}
 
 	startWorker(): void {
@@ -215,17 +209,15 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 				value = await raceCancellationError(computation, active.controller.signal);
 			} catch (error) {
 				if (active.cancellation) {
-					void computation
-						?.then(
-							() => settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded),
-							() => undefined,
-						)
-						.catch(onUnexpectedError);
+					void computation?.then(() => settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded), () => undefined).catch(onUnexpectedError);
 					return cancelledOutcome(requestId, snapshot.version, active.cancellation);
 				}
 				const disposalError = this.invalidateWorker(worker, active);
 				if (disposalError !== undefined) {
-					throw new AggregateError([error, disposalError], 'Language worker request and disposal both failed');
+					throw new AggregateError(
+						[error, disposalError],
+						'Language worker request and disposal both failed',
+					);
 				}
 				throw error;
 			}
@@ -253,14 +245,12 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 			this.activeRequests.delete(lane);
 			try {
-				apply(
-					Object.freeze({
-						requestId,
-						textModel: this.model,
-						modelVersion: snapshot.version,
-						value,
-					}),
-				);
+				apply(Object.freeze({
+					requestId,
+					textModel: this.model,
+					modelVersion: snapshot.version,
+					value,
+				}));
 			} catch (error) {
 				settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded);
 				throw error;
@@ -286,7 +276,12 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		const current = this.workerSlot.value;
 		if (current) return current;
 		const worker = this.createWorker();
-		if (!worker || typeof worker.run !== 'function' || typeof worker.dispose !== 'function' || typeof worker[Symbol.dispose] !== 'function') {
+		if (
+			!worker ||
+			typeof worker.run !== 'function' ||
+			typeof worker.dispose !== 'function' ||
+			typeof worker[Symbol.dispose] !== 'function'
+		) {
 			throw new TypeError('Language worker factory returned an invalid worker');
 		}
 		this.workerSlot.value = worker;
@@ -346,6 +341,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			if (this.workerSlot.value === worker) this.workerSlot.clear();
 		}
 	}
+
 }
 
 function supportsModelSynchronization(value: IDisposable): value is IDisposable & LanguageWorkerModelSynchronizer {
@@ -358,22 +354,18 @@ function settleWorkerResult(value: IDisposable, requestId: number, disposition: 
 }
 
 function cancelledOutcome(requestId: number, modelVersion: number, cancellation: RequestCancellation): LanguageRequestCancelled {
-	return Object.freeze(
-		cancellation.cause === undefined
-			? {
-					status: LanguageRequestStatus.Cancelled,
-					requestId,
-					modelVersion,
-					reason: cancellation.reason,
-				}
-			: {
-					status: LanguageRequestStatus.Cancelled,
-					requestId,
-					modelVersion,
-					reason: cancellation.reason,
-					cause: cancellation.cause,
-				},
-	);
+	return Object.freeze(cancellation.cause === undefined ? {
+		status: LanguageRequestStatus.Cancelled,
+		requestId,
+		modelVersion,
+		reason: cancellation.reason,
+	} : {
+		status: LanguageRequestStatus.Cancelled,
+		requestId,
+		modelVersion,
+		reason: cancellation.reason,
+		cause: cancellation.cause,
+	});
 }
 
 function assertLane(lane: string): void {

@@ -34,31 +34,13 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 		isIOS: false,
 	});
 	assert.equal(getBrowserFeatures('AppleWebKit/605.1.15').isWebkitWebView, true);
-	assert.equal(
-		getBrowserFeatures({
-			userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15',
-			maxTouchPoints: 5,
-		}).isIOS,
-		true,
-	);
-	assert.equal(
-		getBrowserFeatures({
-			userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
-			maxTouchPoints: 5,
-		}).isIOS,
-		true,
-	);
-	assert.equal(
-		getBrowserFeatures({
-			userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
-			maxTouchPoints: 0,
-		}).isIOS,
-		false,
-	);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15', maxTouchPoints: 5 }).isIOS, true);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 5 }).isIOS, true);
+	assert.equal(getBrowserFeatures({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 0 }).isIOS, false);
 });
 
 test('getMonacoEnvironment reads the current embedding environment', () => {
-	const globalWithEnvironment = globalThis as typeof globalThis & { MonacoEnvironment?: { globalAPI?: boolean } };
+	const globalWithEnvironment = globalThis as typeof globalThis & { MonacoEnvironment?: { globalAPI?: boolean; }; };
 	const previous = globalWithEnvironment.MonacoEnvironment;
 	try {
 		globalWithEnvironment.MonacoEnvironment = { globalAPI: true };

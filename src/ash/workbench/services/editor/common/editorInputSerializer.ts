@@ -69,7 +69,7 @@ const BaseEditorInputSerializer = Object.freeze({ typeId: 'workbench.editorInput
 
 function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 	const icon = input.getIcon?.();
-	let serializedIcon: string | { id: string; color?: string } | undefined;
+	let serializedIcon: string | { id: string; color?: string; } | undefined;
 	if (icon instanceof URI) {
 		serializedIcon = icon.toString();
 	} else if (icon) {
@@ -133,7 +133,9 @@ function deserializeIcon(value: unknown): ThemeIcon | URI | undefined {
 }
 
 export function isSerializedEditorInput(value: unknown): value is SerializedEditorInput {
-	return typeof value === 'object' && value !== null && 'typeId' in value && typeof value.typeId === 'string' && value.typeId.length > 0 && 'value' in value;
+	return typeof value === 'object' && value !== null &&
+		'typeId' in value && typeof value.typeId === 'string' && value.typeId.length > 0 &&
+		'value' in value;
 }
 
 export function requireSerializedEditorInput(value: unknown, label: string): SerializedEditorInput {

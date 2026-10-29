@@ -31,10 +31,7 @@ test('CursorCollection tracks edits and can remove secondary cursors', () => {
 	using cleanup = toDisposable(() => cursors.dispose());
 	cursors.setSelections([new Selection(1, 2, 1, 2), new Selection(1, 5, 1, 5)]);
 	model.applyEdits([{ range: new Selection(1, 1, 1, 1), text: 'x' }]);
-	assert.deepEqual(
-		cursors.readSelectionFromMarkers().map(selection => selection.positionColumn),
-		[3, 6],
-	);
+	assert.deepEqual(cursors.readSelectionFromMarkers().map(selection => selection.positionColumn), [3, 6]);
 	cursors.killSecondaryCursors();
 	assert.equal(cursors.getSelections().length, 1);
 });

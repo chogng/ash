@@ -56,15 +56,7 @@ function createOpenInput(): DocumentCollaborationOpenInput {
 		clientId: 'client-a',
 		schemaId: 'stanza-document-v1',
 
-		document: schema.createDocument(
-			[
-				schema.createNode('paragraph', {
-					id: 'paragraph-1',
-					content: [schema.createText('Hello', { id: 'text-1' })],
-				}),
-			],
-			'document-1',
-		),
+		document: schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] })], 'document-1'),
 	};
 }
 
@@ -78,10 +70,7 @@ test('a call document uses its selected host and still requires a separate docum
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, dialogs);
 	using service = services.createInstance(DocumentCollaborationService, undefined);
-	await assert.rejects(
-		service.open({ ...createOpenInput(), roomId: 'document-call', serverUrl: 'https://documents.example' }, new AbortController().signal),
-		/bearer token must contain at least 32/,
-	);
+	await assert.rejects(service.open({ ...createOpenInput(), roomId: 'document-call', serverUrl: 'https://documents.example' }, new AbortController().signal), /bearer token must contain at least 32/);
 	assert.equal(prompts.length, 1);
 	assert.match(prompts[0]!, /https:\/\/documents\.example/);
 	assert.match(prompts[0]!, /does not grant access/);

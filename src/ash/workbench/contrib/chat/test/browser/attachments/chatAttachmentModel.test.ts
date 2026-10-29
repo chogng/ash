@@ -55,27 +55,17 @@ test('Attachment preparation waits for every batch and adds each batch atomicall
 	await first.complete([attachment('first')]);
 	await acquiringFirst;
 	assert.equal(model.hasPendingContext, true);
-	assert.deepEqual(
-		model.attachments.map(entry => entry.id),
-		['first'],
-	);
+	assert.deepEqual(model.attachments.map(entry => entry.id), ['first']);
 	await second.complete([attachment('second')]);
 	await Promise.all([acquiringSecond, waiting]);
 	assert.equal(model.hasPendingContext, false);
-	assert.deepEqual(
-		model.attachments.map(entry => entry.id),
-		['first', 'second'],
-	);
+	assert.deepEqual(model.attachments.map(entry => entry.id), ['first', 'second']);
 });
 
 test('Reference preparation commits through the message owner without adding a bar attachment', async () => {
 	using model = new ChatAttachmentModel();
 	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
-	const acquiring = model.acquireContext(
-		() => prepared.p,
-		undefined,
-		contexts => contexts.map(context => ({ ...context, reference: { start: 0, end: context.name.length } })),
-	);
+	const acquiring = model.acquireContext(() => prepared.p, undefined, contexts => contexts.map(context => ({ ...context, reference: { start: 0, end: context.name.length } })));
 	assert.equal(model.hasPendingMessageContext, true);
 	const waiting = model.resolvePendingContext();
 	await prepared.complete([attachment('file.ts')]);
@@ -99,10 +89,7 @@ test('Clearing an empty draft cancels waiters and rejects results that ignore ca
 	assert.deepEqual([...model.attachments], []);
 	assert.equal(model.hasPendingContext, false);
 	await model.acquireContext(async () => [attachment('new-draft')]);
-	assert.deepEqual(
-		model.attachments.map(entry => entry.id),
-		['new-draft'],
-	);
+	assert.deepEqual(model.attachments.map(entry => entry.id), ['new-draft']);
 });
 
 test('Preparation failure rejects a waiting submission and retains existing context', async () => {
@@ -114,10 +101,7 @@ test('Preparation failure rejects a waiting submission and retains existing cont
 	const rejected = Promise.all([assert.rejects(acquiring, /invalid file/u), assert.rejects(waiting, /invalid file/u)]);
 	await result.error(new Error('invalid file'));
 	await rejected;
-	assert.deepEqual(
-		model.attachments.map(entry => entry.id),
-		['existing'],
-	);
+	assert.deepEqual(model.attachments.map(entry => entry.id), ['existing']);
 	assert.equal(model.hasPendingContext, false);
 });
 
@@ -129,12 +113,10 @@ test('Disposing the composer cancels unfinished context and rejects later acquis
 	model.dispose();
 	await rejected;
 	await result.complete([attachment('stale')]);
-	await assert.rejects(
-		model.acquireContext(async () => [attachment('new')]),
-		isCancellationError,
-	);
+	await assert.rejects(model.acquireContext(async () => [attachment('new')]), isCancellationError);
 	assert.deepEqual([...model.attachments], []);
 });
+
 
 test('A captured request excludes batches acquired after submission starts', async () => {
 	using model = new ChatAttachmentModel();
@@ -144,14 +126,8 @@ test('A captured request excludes batches acquired after submission starts', asy
 	const captured = model.resolvePendingContext();
 	const acquiringSecond = model.acquireContext(() => second.p);
 	await first.complete([attachment('submitted')]);
-	assert.deepEqual(
-		(await captured).map(entry => entry.id),
-		['submitted'],
-	);
+	assert.deepEqual((await captured).map(entry => entry.id), ['submitted']);
 	await second.complete([attachment('next-draft')]);
 	await Promise.all([acquiringFirst, acquiringSecond]);
-	assert.deepEqual(
-		model.attachments.map(entry => entry.id),
-		['submitted', 'next-draft'],
-	);
+	assert.deepEqual(model.attachments.map(entry => entry.id), ['submitted', 'next-draft']);
 });

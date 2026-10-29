@@ -12,21 +12,11 @@ export function readNewChatDraftState(storage: IStorageService, draftId: string)
 
 function parseChatDraft(raw: string): ChatDraft {
 	const draft: unknown = JSON.parse(raw);
-	if (
-		!isRecord(draft) ||
-		!['agent', 'plan', 'debug', 'multitask', 'ask'].includes(draft.mode as string) ||
-		typeof draft.text !== 'string' ||
-		!Array.isArray(draft.contexts) ||
-		!draft.contexts.every(
-			context =>
-				isRecord(context) &&
-				typeof context.id === 'string' &&
-				typeof context.kind === 'string' &&
-				typeof context.name === 'string' &&
-				typeof context.content === 'string' &&
-				(context.resource === undefined || typeof context.resource === 'string'),
-		)
-	) {
+	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'multitask', 'ask'].includes(draft.mode as string)
+		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
+		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'
+			&& typeof context.kind === 'string' && typeof context.name === 'string' && typeof context.content === 'string'
+			&& (context.resource === undefined || typeof context.resource === 'string'))) {
 		throw new TypeError('Invalid stored Chat draft');
 	}
 	validateOpenAgentsWindow({ draft });
@@ -43,17 +33,17 @@ export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraf
 }
 
 /** Conflicting legacy drafts get their own session before their old entry is removed. */
-export function migrateNewChatDraftState(storage: IStorageService, onError?: (error: unknown) => void): readonly { readonly draft: ChatDraft; readonly key: string }[] {
-	const prefixes =
-		storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code' ? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
-	const recovered: { draft: ChatDraft; key: string }[] = [];
+export function migrateNewChatDraftState(storage: IStorageService, onError?: (error: unknown) => void): readonly { readonly draft: ChatDraft; readonly key: string; }[] {
+	const prefixes = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code'
+		? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
+	const recovered: { draft: ChatDraft; key: string; }[] = [];
 	for (const prefix of prefixes) {
 		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
 			try {
 				const draft = parseChatDraft(storage.get(key, StorageScope.WORKSPACE)!);
 				const identity = key.slice(prefix.length + 1);
 				const existing = identity ? readNewChatDraftState(storage, identity) : undefined;
-				if (!identity || (existing && JSON.stringify(existing) !== JSON.stringify(draft))) {
+				if (!identity || existing && JSON.stringify(existing) !== JSON.stringify(draft)) {
 					recovered.push({ draft, key });
 					continue;
 				}

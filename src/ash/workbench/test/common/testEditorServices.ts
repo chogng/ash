@@ -115,9 +115,7 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
-	if (!services.has(IElevatedFileService)) {
-		services.registerInstance(IElevatedFileService, new BrowserElevatedFileService());
-	}
+	if (!services.has(IElevatedFileService)) { services.registerInstance(IElevatedFileService, new BrowserElevatedFileService()); }
 	if (!services.has(IWorkbenchEnvironmentService)) {
 		const location = document.defaultView!.location;
 		services.registerInstance(IWorkbenchEnvironmentService, new BrowserWorkbenchEnvironmentService(location, `http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`));
@@ -133,16 +131,7 @@ export function registerTestComponentServices(services: InstantiationService, do
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	}
 	if (!services.has(IStorageService)) {
-		services.registerSingleton(
-			IStorageService,
-			() =>
-				new BrowserStorageService({
-					ownerWindow: document.defaultView!,
-					workspaceId: 'test-components',
-					backend: new TestStorageBackend(),
-					flushInterval: 0,
-				}),
-		);
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'test-components', backend: new TestStorageBackend(), flushInterval: 0 }));
 	}
 	if (!services.has(IAuxiliaryWindowService)) services.registerSingleton(IAuxiliaryWindowService, () => services.createInstance(BrowserAuxiliaryWindowService, document.defaultView!, document.body));
 	return services;
@@ -150,24 +139,12 @@ export function registerTestComponentServices(services: InstantiationService, do
 
 class TestStorageBackend implements Storage {
 	private readonly values = new Map<string, string>();
-	public get length(): number {
-		return this.values.size;
-	}
-	public clear(): void {
-		this.values.clear();
-	}
-	public getItem(key: string): string | null {
-		return this.values.get(key) ?? null;
-	}
-	public key(index: number): string | null {
-		return [...this.values.keys()][index] ?? null;
-	}
-	public removeItem(key: string): void {
-		this.values.delete(key);
-	}
-	public setItem(key: string, value: string): void {
-		this.values.set(key, value);
-	}
+	public get length(): number { return this.values.size; }
+	public clear(): void { this.values.clear(); }
+	public getItem(key: string): string | null { return this.values.get(key) ?? null; }
+	public key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
+	public removeItem(key: string): void { this.values.delete(key); }
+	public setItem(key: string, value: string): void { this.values.set(key, value); }
 }
 
 /** Observes the document handed to the real bootstrap across the iframe message boundary. */
@@ -177,18 +154,12 @@ export function getWebviewHtml(element: HTMLIFrameElement): string {
 	const url = new URL(element.src);
 	const channel = new URLSearchParams(url.hash.slice(1)).get('channel');
 	let html: string | undefined;
-	target.postMessage = (message: { type: string; html: string }) => {
+	target.postMessage = (message: { type: string; html: string; }) => {
 		if (message.type === 'document') html = message.html;
 	};
 	try {
 		const ownerWindow = element.ownerDocument.defaultView!;
-		ownerWindow.dispatchEvent(
-			new mainWindow.MessageEvent('message', {
-				source: target,
-				origin: `${url.protocol}//${url.host}`,
-				data: { channel, type: 'bootstrap-ready' },
-			}),
-		);
+		ownerWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source: target, origin: `${url.protocol}//${url.host}`, data: { channel, type: 'bootstrap-ready' } }));
 		if (html === undefined) throw new Error('Webview did not send its current document');
 		return html;
 	} finally {
@@ -197,12 +168,7 @@ export function getWebviewHtml(element: HTMLIFrameElement): string {
 }
 
 /** Assembles the real label owner for editor tests without an extension icon theme. */
-export function createTestEditorServices(
-	configuration?: IConfigurationService,
-	parent?: InstantiationService,
-	document: Document = globalThis.document,
-	storage?: IStorageService,
-): InstantiationService {
+export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document, storage?: IStorageService): InstantiationService {
 	const services = createTestComponentServices(storage, parent, document);
 	if (!services.has(IWebWorkerService)) services.registerInstance(IWebWorkerService, new WebWorkerService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
@@ -214,24 +180,10 @@ export function createTestEditorServices(
 	}
 	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'test-editor', folders: [] }));
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
-	if (!services.has(IResourceIconRenderer))
-		services.registerInstance(IResourceIconRenderer, {
-			onDidChangeResourceIcons: Event.None,
-			getFileIconTheme: () => noFileIconTheme,
-			renderFileIcon() {},
-		});
+	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(IStatusbarService)) services.registerSingleton(IStatusbarService, () => new StatusbarService());
 	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
-	if (!services.has(IQuickInputService))
-		services.registerSingleton(
-			IQuickInputService,
-			() =>
-				new TestQuickInputService({
-					instantiationService: services,
-					container: document.body,
-					contextKeyService: services.get(IContextKeyService),
-				}),
-		);
+	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) }));
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
@@ -243,22 +195,7 @@ export function createTestEditorServices(
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
-	if (!services.has(IFileTextModelService))
-		services.registerSingleton(IFileTextModelService, () =>
-			services.createInstance(
-				BrowserTextModelService,
-				{
-					onDidChange: Event.None,
-					resolve: async request => ({
-						resource: request.resource,
-						text: request.bootstrapText ?? '',
-						revision: undefined,
-					}),
-					save: async () => ({ revision: undefined }),
-				} satisfies ITextResourceStore,
-				{},
-			),
-		);
+	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => services.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {}));
 	if (!services.has(ITextModelResourceService)) services.registerSingleton(ITextModelResourceService, () => services.get(IFileTextModelService));
 	if (!services.has(ITextModelService)) services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));

@@ -17,6 +17,7 @@ let nextConnectionId = 0;
 
 /** Owns one of the window's App Server leases; the Rust process remains owned by Main. */
 export class LocalAgentHostServiceClient extends Disposable {
+
 	private readonly carrier: AppServerMessagePortTransport;
 	private readonly factoryRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly reconnected = this._register(new Emitter<void>());
@@ -29,7 +30,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 	private hasInitialized = false;
 
 	constructor(
-		options: AppServerProtocolClientOptions & { readonly connection?: AppServerConnectionTarget },
+		options: AppServerProtocolClientOptions & { readonly connection?: AppServerConnectionTarget; },
 		@IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IWebWorkerService workers: IWebWorkerService,
@@ -38,34 +39,21 @@ export class LocalAgentHostServiceClient extends Disposable {
 		super();
 		this.channelPrefix = appServerConnectionChannel(options.connection ?? 'workspace');
 		// Main validates the runtime before transferring the port, including cold SSH deployment.
-		this.carrier = this._register(
-			new AppServerMessagePortTransport(
-				() => {
-					// Recovery owns rejection reporting and the bounded retry budget.
-					void this.connect().catch(() => {});
-				},
-				options.connection,
-				options.initializeTimeoutMs,
-			),
-		);
-		const transport = this._register(
-			instantiationService.createInstance(AppServerSocketTransport, {
-				getAddress: async () => ({
-					connectTo: new ManagedRemoteConnection(this.connectionId),
-					connectionToken: undefined,
-				}),
-				getMetadata: () => this.connectionMetadata,
-			}),
-		);
+		this.carrier = this._register(new AppServerMessagePortTransport(() => {
+			// Recovery owns rejection reporting and the bounded retry budget.
+			void this.connect().catch(() => { });
+		}, options.connection, options.initializeTimeoutMs));
+		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, {
+			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(this.connectionId), connectionToken: undefined }),
+			getMetadata: () => this.connectionMetadata,
+		}));
 		this.client = new AppServerProtocolClient(transport, options, createAppServerFrameDecoder(workers));
 		this._register(toDisposable(() => this.client.dispose()));
-		this.recovery = this._register(
-			new AppServerConnectionRecovery(
-				this.client,
-				() => this.open(),
-				(message, error) => this.logService.error('app-server', message, error),
-			),
-		);
+		this.recovery = this._register(new AppServerConnectionRecovery(
+			this.client,
+			() => this.open(),
+			(message, error) => this.logService.error('app-server', message, error),
+		));
 	}
 
 	public get connectionMetadata(): unknown {
@@ -89,15 +77,13 @@ export class LocalAgentHostServiceClient extends Disposable {
 		this.assertNotDisposed();
 		performance.mark('ash.appServer.acquired');
 		if (enabled) {
-			const id = (this.connectionId = ++nextConnectionId);
+			const id = this.connectionId = ++nextConnectionId;
 			const socket = this.carrier.socket;
 			let leased = false;
 			this.factoryRegistration.value = this.factories.register(RemoteConnectionType.Managed, {
 				supports: connection => connection.id === id,
 				connect: async (_connection, path, query) => {
-					if (leased || path || query || this.carrier.socket !== socket) {
-						throw new Error('App Server connection endpoint was superseded');
-					}
+					if (leased || path || query || this.carrier.socket !== socket) { throw new Error('App Server connection endpoint was superseded'); }
 					// A port may be leased by one protocol incarnation only.
 					leased = true;
 					return socket;
@@ -111,15 +97,12 @@ export class LocalAgentHostServiceClient extends Disposable {
 		this.assertNotDisposed();
 		this.client.disconnect();
 		this.isEnabled = await this.acquire();
-		if (!this.isEnabled) {
-			return;
-		}
+		if (!this.isEnabled) { return; }
 		try {
 			await this.client.connect();
 		} catch (error) {
-			if (!(error instanceof AppServerProtocolIncompatibleError) || (await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility)) !== true) {
-				throw error;
-			}
+			if (!(error instanceof AppServerProtocolIncompatibleError)
+				|| await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility) !== true) { throw error; }
 			this.assertNotDisposed();
 			await this.acquire();
 			await this.client.connect();
@@ -129,9 +112,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		this.assertNotDisposed();
 		performance.mark('ash.appServer.initialized');
 		this.logService.debug('app-server', 'App Server connection initialized');
-		if (this.hasInitialized) {
-			this.reconnected.fire();
-		}
+		if (this.hasInitialized) { this.reconnected.fire(); }
 		this.hasInitialized = true;
 	}
 }

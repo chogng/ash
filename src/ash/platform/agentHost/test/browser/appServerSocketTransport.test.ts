@@ -13,15 +13,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
 import { ManagedRemoteConnection, RemoteConnectionType, WebSocketRemoteConnection } from '../../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSocketTransport } from '../../browser/appServerSocketTransport.js';
-import {
-	AppServerFrame,
-	getAppServerReadConsumption,
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	WEB_APP_SERVER_CLOSED_EVENT,
-	WEB_APP_SERVER_DISCONNECT_EVENT,
-} from '../../common/appServerTransport.js';
+import { AppServerFrame, getAppServerReadConsumption, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT } from '../../common/appServerTransport.js';
 
 class PeerSocket extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -45,20 +37,18 @@ class PeerSocket extends Disposable implements ISocket {
 		this.data.fire(buffer);
 		return buffer;
 	}
-	public endPeer(): void {
-		this.endEvent.fire();
-	}
+	public endPeer(): void { this.endEvent.fire(); }
 	public closePeer(): void {
 		this.close.fire({ type: SocketCloseEventType.NodeSocketCloseEvent, hadError: false, error: undefined });
 	}
 	public end(): void {
 		this.closePeer();
 	}
-	public async drain(): Promise<void> {}
-	public traceSocketEvent(_type: SocketDiagnosticsEventType): void {}
+	public async drain(): Promise<void> { }
+	public traceSocketEvent(_type: SocketDiagnosticsEventType): void { }
 }
 
-function assemble(socket: PeerSocket, webSocket = false): { services: InstantiationService; transport: AppServerSocketTransport } {
+function assemble(socket: PeerSocket, webSocket = false): { services: InstantiationService; transport: AppServerSocketTransport; } {
 	const services = new InstantiationService();
 	services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 	const registration = services.get(IRemoteSocketFactoryService).register(webSocket ? RemoteConnectionType.WebSocket : RemoteConnectionType.Managed, {
@@ -67,10 +57,7 @@ function assemble(socket: PeerSocket, webSocket = false): { services: Instantiat
 	});
 	socket.own(registration);
 	const transport = services.createInstance(AppServerSocketTransport, {
-		getAddress: async () => ({
-			connectTo: webSocket ? new WebSocketRemoteConnection('localhost', 9) : new ManagedRemoteConnection(9),
-			connectionToken: undefined,
-		}),
+		getAddress: async () => ({ connectTo: webSocket ? new WebSocketRemoteConnection('localhost', 9) : new ManagedRemoteConnection(9), connectionToken: undefined }),
 		getMetadata: () => ({ protocolVersion: 1, workspaceId: 'w', workspaceRoot: '/workspace' }),
 	});
 	return { services, transport };
@@ -91,9 +78,7 @@ test('async frame consumption retains read credit for following partial chunks a
 	const first = new DeferredPromise<void>();
 	const second = new DeferredPromise<void>();
 	let frames = 0;
-	transport.on(WEB_APP_SERVER_FRAME_EVENT, value => {
-		(value as AppServerFrame).consumed = ++frames === 1 ? first.p : second.p;
-	});
+	transport.on(WEB_APP_SERVER_FRAME_EVENT, value => { (value as AppServerFrame).consumed = ++frames === 1 ? first.p : second.p; });
 	const receive = (text: string): VSBuffer => socket.receive(new TextEncoder().encode(text));
 	assert.equal(getAppServerReadConsumption(receive('{')), undefined, 'first frame fragments must release credit to avoid deadlock');
 	assert.equal(getAppServerReadConsumption(receive('}\n{')), first.p);
@@ -118,13 +103,10 @@ test('App Server socket adapter preserves split UTF-8 frames and serializes one 
 	socket.receive(bytes.slice(0, 11));
 	socket.receive(bytes.slice(11, 14));
 	socket.receive(bytes.slice(14));
-	assert.deepEqual(
-		{ sent: socket.written, frames },
-		{
-			sent: ['{"id":1}\n'],
-			frames: [new AppServerFrame('{"text":"你好"}', Buffer.byteLength('{"text":"你好"}')), new AppServerFrame('{"id":2}', 8)],
-		},
-	);
+	assert.deepEqual({ sent: socket.written, frames }, {
+		sent: ['{"id":1}\n'],
+		frames: [new AppServerFrame('{"text":"你好"}', Buffer.byteLength('{"text":"你好"}')), new AppServerFrame('{"id":2}', 8)],
+	});
 });
 
 test('malformed or unfinished peer frames close the socket and never reach the protocol client', async () => {
@@ -210,9 +192,7 @@ test('complete frames and WebSocket message boundaries need no fragment copies',
 			socket.receive(input);
 			assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame))]);
 			assert.equal(allocate.mock.calls.length, 0);
-		} finally {
-			allocate.mock.restore();
-		}
+		} finally { allocate.mock.restore(); }
 	}
 });
 
@@ -258,20 +238,14 @@ test('disconnect during factory connection disposes a late socket without publis
 	const entered = new DeferredPromise<void>();
 	using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 		supports: () => true,
-		connect: () =>
-			new Promise(resolve => {
-				finish = resolve;
-				void entered.complete();
-			}),
+		connect: () => new Promise(resolve => { finish = resolve; void entered.complete(); }),
 	});
 	using transport = services.createInstance(AppServerSocketTransport, {
 		getAddress: async () => ({ connectTo: new ManagedRemoteConnection(1), connectionToken: undefined }),
 		getMetadata: () => ({}),
 	});
 	let ready = false;
-	transport.on(WEB_APP_SERVER_CONNECTED_EVENT, () => {
-		ready = true;
-	});
+	transport.on(WEB_APP_SERVER_CONNECTED_EVENT, () => { ready = true; });
 	transport.send(WEB_APP_SERVER_CONNECT_EVENT);
 	await entered.p;
 	transport.send(WEB_APP_SERVER_DISCONNECT_EVENT);
@@ -281,15 +255,14 @@ test('disconnect during factory connection disposes a late socket without publis
 	assert.deepEqual({ ready, disposed: socket.isDisposed }, { ready: false, disposed: true });
 });
 
+
 test('repeated connect events publish one socket and peer end closes its carrier', async () => {
 	using socket = new PeerSocket();
 	const assembly = assemble(socket);
 	using services = assembly.services;
 	using transport = assembly.transport;
 	let ready = 0;
-	transport.on(WEB_APP_SERVER_CONNECTED_EVENT, () => {
-		ready++;
-	});
+	transport.on(WEB_APP_SERVER_CONNECTED_EVENT, () => { ready++; });
 	const connected = connect(transport);
 	transport.send(WEB_APP_SERVER_CONNECT_EVENT);
 	await connected;
@@ -300,13 +273,14 @@ test('repeated connect events publish one socket and peer end closes its carrier
 	assert.throws(() => transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: '{}' }), /Invalid App Server/);
 });
 
+
 test('the real protocol client initializes through the socket adapter and peer close rejects pending requests', async () => {
 	using socket = new PeerSocket();
 	const assembly = assemble(socket);
 	using services = assembly.services;
 	using transport = assembly.transport;
 	socket.respondToWrite = frame => {
-		const request = JSON.parse(frame) as { method: string; id?: number };
+		const request = JSON.parse(frame) as { method: string; id?: number; };
 		if (request.method === 'initialize') {
 			socket.receive(new TextEncoder().encode(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result: createTestInitializeResult() })}\n`));
 		}
@@ -325,15 +299,14 @@ test('the real protocol client initializes through the socket adapter and peer c
 	}
 });
 
+
 test('a managed peer end retires the protocol lease even without a close event', async () => {
 	using socket = new PeerSocket();
 	const assembly = assemble(socket);
 	using services = assembly.services;
 	using transport = assembly.transport;
 	let closed = 0;
-	transport.on(WEB_APP_SERVER_CLOSED_EVENT, () => {
-		closed++;
-	});
+	transport.on(WEB_APP_SERVER_CLOSED_EVENT, () => { closed++; });
 	await connect(transport);
 	socket.endPeer();
 	assert.equal(closed, 1);

@@ -7,13 +7,7 @@ import { Disposable, type IDisposable } from '../../../../../base/common/lifecyc
 import { URI } from '../../../../../base/common/uri.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
-import type {
-	TextResourceChangeEvent,
-	TextResourceContent,
-	TextResourceResolveRequest,
-	TextResourceSaveRequest,
-	ITextResourceStore,
-} from '../../../../services/textmodelResolver/common/textResourceStore.js';
+import type { TextResourceChangeEvent, TextResourceContent, TextResourceResolveRequest, TextResourceSaveRequest, ITextResourceStore } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -31,13 +25,9 @@ export class TestEditorService implements IEditorService {
 	public async openEditor(input: IResourceEditorInput): Promise<void> {
 		this.opened.push(input);
 	}
-	public focusActiveEditor(): void {}
-	public async save() {
-		return { success: true, editors: [] };
-	}
-	public async saveAll() {
-		return { success: true, editors: [] };
-	}
+	public focusActiveEditor(): void { }
+	public async save() { return { success: true, editors: [] }; }
+	public async saveAll() { return { success: true, editors: [] }; }
 }
 
 export class TestDialogService implements IDialogService {
@@ -46,23 +36,14 @@ export class TestDialogService implements IDialogService {
 	public confirmed = true;
 	public readonly confirmations: IConfirmationDialogOptions[] = [];
 	public readonly errors: string[] = [];
-	public async confirm(options: IConfirmationDialogOptions) {
-		this.confirmations.push(options);
-		return { confirmed: this.confirmed };
-	}
-	public async showMessage(): Promise<void> {}
-	public async info(): Promise<void> {}
-	public async warn(): Promise<void> {}
-	public async error(message: string): Promise<void> {
-		this.errors.push(message);
-	}
-	public async prompt<T>(): Promise<{ result?: T }> {
-		return {};
-	}
-	public async input() {
-		return { confirmed: false };
-	}
-	public async about(): Promise<void> {}
+	public async confirm(options: IConfirmationDialogOptions) { this.confirmations.push(options); return { confirmed: this.confirmed }; }
+	public async showMessage(): Promise<void> { }
+	public async info(): Promise<void> { }
+	public async warn(): Promise<void> { }
+	public async error(message: string): Promise<void> { this.errors.push(message); }
+	public async prompt<T>(): Promise<{ result?: T; }> { return {}; }
+	public async input() { return { confirmed: false }; }
+	public async about(): Promise<void> { }
 }
 
 export class BulkEditTestServices extends Disposable {
@@ -88,7 +69,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 	private readonly changes = new Emitter<TextResourceChangeEvent>();
 	readonly onDidChange = this.changes.event;
 	readonly saved: string[] = [];
-	private readonly resources = new Map<string, { text: string; revision: number }>();
+	private readonly resources = new Map<string, { text: string; revision: number; }>();
 
 	constructor(resources: readonly (readonly [URI, string])[]) {
 		for (const [resource, text] of resources) this.resources.set(resource.toString(), { text, revision: 1 });
@@ -105,7 +86,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 		return { resource: request.resource, text: entry.text, revision: String(entry.revision) };
 	}
 
-	async save(request: TextResourceSaveRequest): Promise<{ readonly revision: string }> {
+	async save(request: TextResourceSaveRequest): Promise<{ readonly revision: string; }> {
 		if (this.failNextSave) {
 			const error = this.failNextSave;
 			this.failNextSave = undefined;
@@ -130,7 +111,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 		this.dispose();
 	}
 
-	private require(resource: URI): { text: string; revision: number } {
+	private require(resource: URI): { text: string; revision: number; } {
 		const entry = this.resources.get(resource.toString());
 		if (!entry) throw new Error(`Unknown resource ${resource.toString()}`);
 		return entry;
@@ -140,9 +121,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 export class MemoryFileService implements IFileSystemProvider {
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
-	public watch(): IDisposable {
-		return Disposable.None;
-	}
+	public watch(): IDisposable { return Disposable.None; }
 
 	readonly onDidChangeFiles = Event.None;
 	private readonly resources = new Map<string, string>();
@@ -152,42 +131,15 @@ export class MemoryFileService implements IFileSystemProvider {
 		for (const [resource, text] of resources) this.resources.set(resource.toString(), text);
 	}
 
-	has(resource: URI): boolean {
-		return this.resources.has(resource.toString());
-	}
-	text(resource: URI): string {
-		const text = this.resources.get(resource.toString());
-		if (text === undefined) throw new Error(`Unknown resource ${resource.toString()}`);
-		return text;
-	}
-	async stat(resource: URI) {
-		if (!this.has(resource)) throw new FileNotFoundError(resource);
-		return {
-			resource,
-			kind: FileKind.File,
-			sizeBytes: this.text(resource).length,
-			readonly: false,
-			modifiedAtMillis: undefined,
-		};
-	}
-	async readDirectory(): Promise<readonly never[]> {
-		return [];
-	}
-	async readFile(resource: URI) {
-		return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) };
-	}
+	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
+	text(resource: URI): string { const text = this.resources.get(resource.toString()); if (text === undefined) throw new Error(`Unknown resource ${resource.toString()}`); return text; }
+	async stat(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.text(resource).length, readonly: false, modifiedAtMillis: undefined }; }
+	async readDirectory(): Promise<readonly never[]> { return []; }
+	async readFile(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) {
-			this.resources.set(resource.toString(), new TextDecoder().decode(bytes));
-			return { stat: await this.stat(resource), revision: 'bytes' };
-		}
-		const request = {
-			resource,
-			content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
-			...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
-		};
-		this.resources.set(request.resource.toString(), request.content);
-		return { stat: await this.stat(request.resource), revision: request.content };
+		if (!options.overwrite) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content };
 	}
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {
@@ -197,12 +149,8 @@ export class MemoryFileService implements IFileSystemProvider {
 		this.resources.set(resource.toString(), '');
 		return this.stat(resource);
 	}
-	async createDirectory(): Promise<never> {
-		throw new Error('Workspace edit tests do not create directories');
-	}
-	async copy(): Promise<void> {
-		throw new Error('Copy is not used in this test');
-	}
+	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		if (this.failRename) throw new Error('injected rename failure');
 		const sourceText = this.text(source);

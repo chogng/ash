@@ -21,74 +21,40 @@ suite('PathService', () => {
 		initializeTestLocalization('zh-CN');
 		try {
 			await assert.rejects(services.get(IPathService).fileURI('relative'), { message: '文件路径必须为绝对路径' });
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 	});
 	for (const { label, os, root, input, expected, hostPath } of [
 		{
-			label: 'Windows drive',
-			os: OperatingSystem.Windows,
-			root: URI.parse('file:///C:/work'),
-			input: 'src\\notes #1.rs',
-			expected: URI.parse('file:///C:/work/src/notes%20%231.rs'),
-			hostPath: 'C:\\work\\src\\notes #1.rs',
+			label: 'Windows drive', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: 'src\\notes #1.rs',
+			expected: URI.parse('file:///C:/work/src/notes%20%231.rs'), hostPath: 'C:\\work\\src\\notes #1.rs',
 		},
 		{
-			label: 'Windows UNC',
-			os: OperatingSystem.Windows,
-			root: URI.parse('file://build/share/work'),
-			input: '..\\notes.rs',
-			expected: URI.parse('file://build/share/notes.rs'),
-			hostPath: '\\\\build\\share\\notes.rs',
+			label: 'Windows UNC', os: OperatingSystem.Windows, root: URI.parse('file://build/share/work'), input: '..\\notes.rs',
+			expected: URI.parse('file://build/share/notes.rs'), hostPath: '\\\\build\\share\\notes.rs',
 		},
 		{
-			label: 'verbatim drive',
-			os: OperatingSystem.Windows,
-			root: URI.parse('file:///C:/work'),
-			input: '\\\\?\\D:\\code\\notes.rs',
-			expected: URI.parse('file:///D:/code/notes.rs'),
-			hostPath: 'D:\\code\\notes.rs',
+			label: 'verbatim drive', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: '\\\\?\\D:\\code\\notes.rs',
+			expected: URI.parse('file:///D:/code/notes.rs'), hostPath: 'D:\\code\\notes.rs',
 		},
 		{
-			label: 'verbatim UNC',
-			os: OperatingSystem.Windows,
-			root: URI.parse('file:///C:/work'),
-			input: '\\\\?\\UNC\\build\\share\\notes.rs',
-			expected: URI.parse('file://build/share/notes.rs'),
-			hostPath: '\\\\build\\share\\notes.rs',
+			label: 'verbatim UNC', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: '\\\\?\\UNC\\build\\share\\notes.rs',
+			expected: URI.parse('file://build/share/notes.rs'), hostPath: '\\\\build\\share\\notes.rs',
 		},
 		{
-			label: 'POSIX literal backslash',
-			os: OperatingSystem.Linux,
-			root: URI.parse('file:///work'),
-			input: 'part\\name.rs ',
-			expected: URI.parse('file:///work/part%5Cname.rs%20'),
-			hostPath: '/work/part\\name.rs ',
+			label: 'POSIX literal backslash', os: OperatingSystem.Linux, root: URI.parse('file:///work'), input: 'part\\name.rs ',
+			expected: URI.parse('file:///work/part%5Cname.rs%20'), hostPath: '/work/part\\name.rs ',
 		},
 		{
-			label: 'Windows remote on Mac',
-			os: OperatingSystem.Macintosh,
-			root: createSshRemoteWorkspaceUri('windows', 'C:/work'),
-			input: 'src\\notes #1.rs',
-			expected: createSshRemoteWorkspaceUri('windows', 'C:/work/src/notes #1.rs'),
-			hostPath: 'C:\\work\\src\\notes #1.rs',
+			label: 'Windows remote on Mac', os: OperatingSystem.Macintosh, root: createSshRemoteWorkspaceUri('windows', 'C:/work'), input: 'src\\notes #1.rs',
+			expected: createSshRemoteWorkspaceUri('windows', 'C:/work/src/notes #1.rs'), hostPath: 'C:\\work\\src\\notes #1.rs',
 		},
 		{
-			label: 'remote UNC on Mac',
-			os: OperatingSystem.Macintosh,
-			root: createSshRemoteWorkspaceUri('windows', '//build/share/work'),
-			input: '\\\\build\\other\\notes.rs',
-			expected: createSshRemoteWorkspaceUri('windows', '//build/other/notes.rs'),
-			hostPath: '\\\\build\\other\\notes.rs',
+			label: 'remote UNC on Mac', os: OperatingSystem.Macintosh, root: createSshRemoteWorkspaceUri('windows', '//build/share/work'), input: '\\\\build\\other\\notes.rs',
+			expected: createSshRemoteWorkspaceUri('windows', '//build/other/notes.rs'), hostPath: '\\\\build\\other\\notes.rs',
 		},
 		{
-			label: 'POSIX remote on Windows',
-			os: OperatingSystem.Windows,
-			root: createSshRemoteWorkspaceUri('linux', '/work'),
-			input: 'part\\name.rs',
-			expected: createSshRemoteWorkspaceUri('linux', '/work/part\\name.rs'),
-			hostPath: '/work/part\\name.rs',
+			label: 'POSIX remote on Windows', os: OperatingSystem.Windows, root: createSshRemoteWorkspaceUri('linux', '/work'), input: 'part\\name.rs',
+			expected: createSshRemoteWorkspaceUri('linux', '/work/part\\name.rs'), hostPath: '/work/part\\name.rs',
 		},
 	]) {
 		test(`renders ${label} paths through their resource owner`, async () => {
@@ -117,18 +83,15 @@ suite('PathService', () => {
 		const disk = URI.parse('file:///work');
 		const remote = createSshRemoteWorkspaceUri('build', '/work');
 		const browser = URI.parse('file:///@browser/id/work');
-		assert.deepEqual(
-			await Promise.all([
-				paths.hasValidBasename(disk, 'CON.txt'),
-				paths.hasValidBasename(disk, 'part\\name.txt'),
-				paths.hasValidBasename(remote, 'CON.txt'),
-				paths.hasValidBasename(remote, 'part\\name.txt'),
-				paths.hasValidBasename(browser, 'CON.txt'),
-				paths.hasValidBasename(browser, 'part\\name.txt'),
-				paths.hasValidBasename(remote, '../escape'),
-			]),
-			[false, false, true, true, true, false, false],
-		);
+		assert.deepEqual(await Promise.all([
+			paths.hasValidBasename(disk, 'CON.txt'),
+			paths.hasValidBasename(disk, 'part\\name.txt'),
+			paths.hasValidBasename(remote, 'CON.txt'),
+			paths.hasValidBasename(remote, 'part\\name.txt'),
+			paths.hasValidBasename(browser, 'CON.txt'),
+			paths.hasValidBasename(browser, 'part\\name.txt'),
+			paths.hasValidBasename(remote, '../escape'),
+		]), [false, false, true, true, true, false, false]);
 	});
 
 	test('reads changed connection facts instead of retaining retired OS rules', async () => {
@@ -172,39 +135,23 @@ suite('PathService', () => {
 	test('reports only known disk OS facts and leaves SSH and browser storage unspecified', async () => {
 		using services = createServices(() => OperatingSystem.Windows);
 		const paths = services.get(IPathService);
-		assert.deepEqual(
-			await Promise.all([
-				paths.getOperatingSystem(URI.parse('file:///C:/work')),
-				paths.getOperatingSystem(createSshRemoteWorkspaceUri('build', '/work')),
-				paths.getOperatingSystem(URI.parse('file:///@browser/id/work')),
-				paths.getOperatingSystem(URI.parse('mem:/work')),
-			]),
-			[OperatingSystem.Windows, undefined, undefined, undefined],
-		);
+		assert.deepEqual(await Promise.all([
+			paths.getOperatingSystem(URI.parse('file:///C:/work')),
+			paths.getOperatingSystem(createSshRemoteWorkspaceUri('build', '/work')),
+			paths.getOperatingSystem(URI.parse('file:///@browser/id/work')),
+			paths.getOperatingSystem(URI.parse('mem:/work')),
+		]), [OperatingSystem.Windows, undefined, undefined, undefined]);
 	});
 });
 
 function createServices(getOS: () => OperatingSystem | undefined, getHome: () => string | undefined = () => undefined, localUserHome?: URI): InstantiationService {
 	const host = createDisconnectedRendererApi();
-	const services = new InstantiationService(
-		new ServiceCollection(...getSingletonServiceDescriptors(), [
-			IRendererHostService,
-			{
-				...host,
-				hasAppServer: true,
-				localUserHome,
-				appServer: {
-					...host.appServer,
-					get operatingSystem() {
-						return getOS();
-					},
-					get userHome() {
-						return getHome();
-					},
-				},
-			},
-		]),
-	);
+	const services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IRendererHostService, {
+		...host,
+		hasAppServer: true,
+		localUserHome,
+		appServer: { ...host.appServer, get operatingSystem() { return getOS(); }, get userHome() { return getHome(); } },
+	}]));
 	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'path-test', folders: [] }));
 	return services;
 }
@@ -213,11 +160,7 @@ test('PathService separates local and target homes and follows replacement conne
 	let os: OperatingSystem | undefined = OperatingSystem.Windows;
 	let home: string | undefined = 'C:\\Users\\remote';
 	const local = URI.parse('file:///Users/local');
-	using services = createServices(
-		() => os,
-		() => home,
-		local,
-	);
+	using services = createServices(() => os, () => home, local);
 	const paths = services.get(IPathService);
 	assert.deepEqual([paths.userHome({ preferLocal: true }), await paths.userHome(), (await paths.path).sep], [local, URI.parse('file:///C:/Users/remote'), '\\']);
 	os = OperatingSystem.Linux;
@@ -240,11 +183,9 @@ test('PathService uses POSIX operations for SSH resources and browser handles in
 		paths.getPath(URI.parse('file:///C:/work')),
 		paths.getPath(URI.parse('mem:/work')),
 	]);
-	assert.deepEqual(
-		results.map(path => path?.normalize('/work/part\\name/../notes')),
-		['/work/notes', '/work/notes', '\\work\\part\\notes', undefined],
-	);
+	assert.deepEqual(results.map(path => path?.normalize('/work/part\\name/../notes')), ['/work/notes', '/work/notes', '\\work\\part\\notes', undefined]);
 });
+
 
 test('PathService recognizes Windows drive and UNC Remote resources independently of the current host', async () => {
 	using services = createServices(() => OperatingSystem.Macintosh);

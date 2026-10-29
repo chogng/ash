@@ -7,7 +7,5 @@ export class TokenClassificationExtensionPoint extends AbstractDisposable {
 	public replace(types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[]): void {
 		getTokenClassificationRegistry().replaceContributions(this.owner, types, modifiers);
 	}
-	protected override disposeCore(): void {
-		getTokenClassificationRegistry().replaceContributions(this.owner, [], []);
-	}
+	protected override disposeCore(): void { getTokenClassificationRegistry().replaceContributions(this.owner, [], []); }
 }

@@ -59,10 +59,7 @@ function createContext(resources: DisposableStore): TestContext {
 	const contextKeys = resources.add(new ContextKeyService());
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, contextKeys);
-	services.registerInstance(ILocalizationService, {
-		whenReady: Promise.resolve(),
-		translate: (_bundle, _key, fallback) => fallback,
-	});
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	return { dom, services, workspace, workingCopies, labels, editors, configuration, contextKeys };
 }
 
@@ -72,17 +69,9 @@ test('WindowTitle replaces the startup title and follows workspace changes in ea
 		const context = createContext(resources);
 		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, product, context.editors));
 		assert.equal(context.dom.window.document.title, product);
-		context.workspace.updateWorkspace({
-			id: 'project',
-			folders: [{ id: 'root', index: 0, name: '研究项目', uri: URI.file('/project') }],
-		});
+		context.workspace.updateWorkspace({ id: 'project', folders: [{ id: 'root', index: 0, name: '研究项目', uri: URI.file('/project') }] });
 		assert.equal(context.dom.window.document.title, `研究项目 — ${product}`);
-		context.workspace.updateWorkspace({
-			id: 'multi',
-			name: 'Research',
-			configuration: URI.file('/research.ash-workspace'),
-			folders: [],
-		});
+		context.workspace.updateWorkspace({ id: 'multi', name: 'Research', configuration: URI.file('/research.ash-workspace'), folders: [] });
 		assert.equal(context.dom.window.document.title, `Research — ${product}`);
 		context.workspace.updateWorkspace({ id: 'empty', folders: [] });
 		assert.equal(context.dom.window.document.title, product);
@@ -93,11 +82,7 @@ test('WindowTitle follows active resources, labels, dirty registrations, save an
 	using resources = new DisposableStore();
 	const context = createContext(resources);
 	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
-	const input = {
-		resource: URI.file('/project/draft.ts'),
-		label: '草稿.ts',
-		onDidChangeLabel: resources.add(new Emitter<void>()).event,
-	};
+	const input = { resource: URI.file('/project/draft.ts'), label: '草稿.ts', onDidChangeLabel: resources.add(new Emitter<void>()).event };
 	await context.editors.openEditor(input);
 	assert.equal(context.dom.window.document.title, '草稿.ts — Ash Code');
 	const copy = resources.add(new TestWorkingCopy(input.resource));
@@ -165,10 +150,7 @@ test('WindowTitle rejects creation without its required services', () => {
 test('WindowTitle renders path variables and updates templates, separators and context values live', async () => {
 	using resources = new DisposableStore();
 	const context = createContext(resources);
-	context.workspace.updateWorkspace({
-		id: 'project',
-		folders: [{ id: 'root', index: 0, name: 'Project', uri: URI.file('/project') }],
-	});
+	context.workspace.updateWorkspace({ id: 'project', folders: [{ id: 'root', index: 0, name: 'Project', uri: URI.file('/project') }] });
 	await context.editors.openEditor({ resource: URI.file('/project/src/main.ts') });
 	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	await context.configuration.updateValue('window.title', '${activeEditorMedium}${separator}${activeFolderShort}${separator}${folderName}${separator}${folderPath}${separator}${rootPath}');
@@ -221,29 +203,17 @@ class TestEditorService extends Disposable implements IEditorGroupsContainer {
 		super();
 		const owner = this;
 		this.activeGroup = {
-			get activeInput() {
-				return owner.activeEditor;
-			},
+			get activeInput() { return owner.activeEditor; },
 			onDidChangeEditors: this.activeChanged.event,
 		} as IEditorGroup;
 	}
 	public readonly onDidVisibleEditorsChange = Event.None;
 	public activeEditor: IResourceEditorInput | undefined;
-	public get visibleEditors(): readonly IResourceEditorInput[] {
-		return this.activeEditor ? [this.activeEditor] : [];
-	}
-	public get hasListeners(): boolean {
-		return this.activeChanged.hasListeners();
-	}
-	public async openEditor(input: IResourceEditorInput): Promise<void> {
-		this.activeEditor = input;
-		this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined });
-	}
-	public close(): void {
-		this.activeEditor = undefined;
-		this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined });
-	}
-	public focusActiveEditor(): void {}
+	public get visibleEditors(): readonly IResourceEditorInput[] { return this.activeEditor ? [this.activeEditor] : []; }
+	public get hasListeners(): boolean { return this.activeChanged.hasListeners(); }
+	public async openEditor(input: IResourceEditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
+	public close(): void { this.activeEditor = undefined; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
+	public focusActiveEditor(): void { }
 }
 
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
@@ -254,24 +224,13 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	public readonly hasExternalChange = false;
 	public readonly backupKind = 'text';
 	public isDirty = false;
-	constructor(public readonly resource: URI) {
-		super();
-	}
-	public setDirty(value: boolean): void {
-		this.isDirty = value;
-		this.dirtyChanged.fire();
-	}
-	public backup(): string {
-		return '';
-	}
-	public restoreBackup(): void {}
-	public async save(_signal: AbortSignal): Promise<void> {
-		this.setDirty(false);
-	}
-	public async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
-	public async revert(_signal: AbortSignal): Promise<void> {
-		this.setDirty(false);
-	}
+	constructor(public readonly resource: URI) { super(); }
+	public setDirty(value: boolean): void { this.isDirty = value; this.dirtyChanged.fire(); }
+	public backup(): string { return ''; }
+	public restoreBackup(): void { }
+	public async save(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
+	public async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
+	public async revert(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
 }
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {

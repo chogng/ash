@@ -9,7 +9,9 @@ export function jumpToMatchingBrackets(bracketPairs: IBracketPairsTextModelPart,
 	const nextSelections = selections.map(selection => {
 		const match = matchAtOrAfter(bracketPairs, selection.getPosition());
 		if (!match) return selection;
-		const next = Selection.fromPositions(isAtOpening(match[0].getStartPosition(), match[0].getEndPosition(), selection.getPosition()) ? match[1].getStartPosition() : match[0].getStartPosition());
+		const next = Selection.fromPositions(isAtOpening(match[0].getStartPosition(), match[0].getEndPosition(), selection.getPosition())
+			? match[1].getStartPosition()
+			: match[0].getStartPosition());
 		changed ||= Position.compare(next.getPosition(), selection.getPosition()) !== 0 || !selection.isEmpty();
 		return next;
 	});

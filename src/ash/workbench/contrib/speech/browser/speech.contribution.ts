@@ -6,6 +6,8 @@ import { SpeechAccessibilitySignalContribution } from './speechAccessibilitySign
 import { SpeechService } from './speechService.js';
 
 registerSingleton(ISpeechService, SpeechService, InstantiationType.Delayed);
-registerWorkbenchContribution(SpeechAccessibilitySignalContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(SpeechAccessibilitySignalContribution),
+registerWorkbenchContribution(
+	SpeechAccessibilitySignalContribution.ID,
+	WorkbenchPhase.AfterRestored,
+	accessor => accessor.get(IInstantiationService).createInstance(SpeechAccessibilitySignalContribution),
 );

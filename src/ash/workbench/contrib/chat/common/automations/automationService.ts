@@ -22,7 +22,8 @@ export interface IUpdateAutomationOptions {
 }
 
 export type IGuardedAutomationUpdateResult =
-	{ readonly kind: 'updated'; readonly automation: IAutomationDescriptor } | { readonly kind: 'conflict'; readonly current: IAutomationDescriptor | undefined };
+	| { readonly kind: 'updated'; readonly automation: IAutomationDescriptor; }
+	| { readonly kind: 'conflict'; readonly current: IAutomationDescriptor | undefined; };
 
 export type IAutomationRunRequestResult = {
 	readonly kind: 'dispatched';
@@ -31,10 +32,7 @@ export type IAutomationRunRequestResult = {
 	cancel(): void;
 };
 
-export interface IAutomationProviderDescriptor {
-	readonly id: string;
-	readonly label: string;
-}
+export interface IAutomationProviderDescriptor { readonly id: string; readonly label: string; }
 
 /** Provider-owned frontend catalogues; persistence and execution remain on the host. */
 export interface IAutomationStore {

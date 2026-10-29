@@ -10,23 +10,16 @@ import { TerminalCompletionService, type ITerminalCompletion } from '../../brows
 test('Terminal completions isolate synchronous and asynchronous provider failures', async () => {
 	using service = new TerminalCompletionService();
 	using broken = service.registerTerminalCompletionProvider('extension', 'broken', {
-		provideCompletions: () => {
-			throw new Error('Synchronous failure');
-		},
+		provideCompletions: () => { throw new Error('Synchronous failure'); },
 	});
 	using rejected = service.registerTerminalCompletionProvider('extension', 'rejected', {
-		provideCompletions: async () => {
-			throw new Error('Asynchronous failure');
-		},
+		provideCompletions: async () => { throw new Error('Asynchronous failure'); },
 	});
 	using healthy = service.registerTerminalCompletionProvider('extension', 'healthy', {
 		provideCompletions: async () => [{ label: 'status', replacementRange: [4, 6] }],
 	});
 	const results = await service.provideCompletions({} as ITerminalInstance, 'git st', 6, new AbortController().signal);
-	assert.deepEqual(
-		results.map(({ isValid, ...item }) => item),
-		[{ label: 'status', replacementRange: [4, 6] }],
-	);
+	assert.deepEqual(results.map(({ isValid, ...item }) => item), [{ label: 'status', replacementRange: [4, 6] }]);
 	assert.equal(results[0]!.isValid?.(), true);
 });
 
@@ -34,10 +27,7 @@ test('Terminal completions do not dispatch an already cancelled request', async 
 	using service = new TerminalCompletionService();
 	let calls = 0;
 	using registration = service.registerTerminalCompletionProvider('extension', 'provider', {
-		provideCompletions: async () => {
-			calls++;
-			return [];
-		},
+		provideCompletions: async () => { calls++; return []; },
 	});
 	const request = new AbortController();
 	request.abort();
@@ -67,10 +57,7 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 		const pending = new DeferredPromise<readonly ITerminalCompletion[]>();
 		let providerSignal: AbortSignal | undefined;
 		using registration = service.registerTerminalCompletionProvider('extension', 'pending', {
-			provideCompletions: (_instance, _value, _cursor, signal) => {
-				providerSignal = signal;
-				return pending.p;
-			},
+			provideCompletions: (_instance, _value, _cursor, signal) => { providerSignal = signal; return pending.p; },
 		});
 		using healthy = service.registerTerminalCompletionProvider('extension', 'healthy', {
 			provideCompletions: async () => [{ label: 'healthy', replacementRange: [0, 0] }],
@@ -82,10 +69,7 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 		else service.dispose();
 		const result = await operation;
 		assert.equal(providerSignal?.aborted, true);
-		assert.deepEqual(
-			result.map(item => item.label),
-			transition === 'unregister' ? ['healthy'] : [],
-		);
+		assert.deepEqual(result.map(item => item.label), transition === 'unregister' ? ['healthy'] : []);
 		// The original work remains observed after cancellation, including late failures.
 		await pending.error(new Error('Late provider failure'));
 	});
@@ -105,15 +89,8 @@ suite('terminalSuggest browser component', () => {
 		await page.waitForFunction(() => !!window.ashTerminalSuggestIntegration && !!window.ashTerminalInputIntegration);
 		await page.evaluate(async () => {
 			const feed = window.ashTerminalInputIntegration.feed;
-			feed('', {
-				type: 'processReady',
-				isWindowsPty: false,
-				shellType: 'bash' as import('../../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash,
-			});
-			feed('', { type: 'promptStart' });
-			feed('$ ');
-			feed('', { type: 'commandStart' });
-			feed('ec');
+			feed('', { type: 'processReady', isWindowsPty: false, shellType: 'bash' as import('../../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash });
+			feed('', { type: 'promptStart' }); feed('$ '); feed('', { type: 'commandStart' }); feed('ec');
 			window.ashTerminalSuggestIntegration.history('echo accepted');
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('ec|');
@@ -155,14 +132,10 @@ suite('terminalSuggest browser component', () => {
 		const { page } = browserTests;
 
 		await prompt(page);
-		await page.evaluate(async () => {
-			await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.enabled', false);
-		});
+		await page.evaluate(async () => { await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.enabled', false); });
 		await confirmed(page, 'h');
 		await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
-		await page.evaluate(async () => {
-			await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.enabled', true);
-		});
+		await page.evaluate(async () => { await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.enabled', true); });
 		const ime = await page.context().newCDPSession(page);
 		await ime.send('Input.imeSetComposition', { text: 'o', selectionStart: 1, selectionEnd: 1 });
 		await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
@@ -189,10 +162,7 @@ suite('terminalSuggest browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests().length)).toBe(1);
 		await page.locator('.xterm-helper-textarea').press('Escape');
 		await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
-		await page.evaluate(() => {
-			window.ashTerminalSuggestIntegration.disposeProvider();
-			window.ashTerminalSuggestIntegration.releaseProvider();
-		});
+		await page.evaluate(() => { window.ashTerminalSuggestIntegration.disposeProvider(); window.ashTerminalSuggestIntegration.releaseProvider(); });
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests()[0]?.cancelled)).toBe(true);
 		await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['h']);
@@ -206,33 +176,23 @@ suite('terminalSuggest browser component', () => {
 		const dimensions = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
 		await page.evaluate(() => {
 			const terminal = document.querySelector<HTMLElement>('.ash-terminal-instance')!;
-			terminal.style.maxHeight = '110px';
-			terminal.style.maxWidth = '270px';
+			terminal.style.maxHeight = '110px'; terminal.style.maxWidth = '270px';
 			const input = terminal.querySelector('textarea')!;
-			input.setAttribute('aria-controls', 'original-owner');
-			input.setAttribute('aria-autocomplete', 'none');
+			input.setAttribute('aria-controls', 'original-owner'); input.setAttribute('aria-autocomplete', 'none');
 			for (let index = 0; index < 12; index++) window.ashTerminalSuggestIntegration.history(`echo long-history-${index}-with-a-full-readable-description`);
 		});
 		// Fitting the split dismisses suggestions; finish that resize before typing opens them.
-		await expect
-			.poll(async () => {
-				const fitted = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
-				return fitted.cols < dimensions.cols && fitted.rows < dimensions.rows;
-			})
-			.toBe(true);
+		await expect.poll(async () => {
+			const fitted = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
+			return fitted.cols < dimensions.cols && fitted.rows < dimensions.rows;
+		}).toBe(true);
 		await confirmed(page, 'h');
 		const popup = page.locator('.ash-terminal-suggest');
 		await expect(popup).toBeVisible();
 		await expect(page.locator('.xterm-helper-textarea')).toHaveAttribute('aria-autocomplete', 'list');
 		const geometry = await popup.evaluate(element => {
-			const bounds = element.getBoundingClientRect(),
-				parent = element.closest('.ash-terminal-instance')!.getBoundingClientRect();
-			return {
-				left: bounds.left >= parent.left,
-				right: bounds.right <= parent.right + 1,
-				top: bounds.top >= parent.top,
-				bottom: bounds.bottom <= parent.bottom + 1,
-			};
+			const bounds = element.getBoundingClientRect(), parent = element.closest('.ash-terminal-instance')!.getBoundingClientRect();
+			return { left: bounds.left >= parent.left, right: bounds.right <= parent.right + 1, top: bounds.top >= parent.top, bottom: bounds.bottom <= parent.bottom + 1 };
 		});
 		expect(geometry).toEqual({ left: true, right: true, top: true, bottom: true });
 		await expect(popup.locator('.ash-terminal-suggest-item').first()).toHaveAttribute('title', /echo long-history-/);
@@ -261,10 +221,7 @@ suite('terminalSuggest browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('ec|');
 		await confirmed(page, 'h');
 		await expect(popup).toBeVisible();
-		await page.evaluate(async () => {
-			await window.ashTerminalClipboardIntegration.switchAway();
-			window.ashTerminalClipboardIntegration.switchBack();
-		});
+		await page.evaluate(async () => { await window.ashTerminalClipboardIntegration.switchAway(); window.ashTerminalClipboardIntegration.switchBack(); });
 		await expect(popup).toBeHidden();
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});

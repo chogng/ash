@@ -25,38 +25,30 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 const compactWindowCommands = new WeakMap<Window, (compact?: boolean) => void>();
 
 for (const compact of [undefined, true, false]) {
-	registerAction2(
-		class extends Action2 {
-			constructor() {
-				super({
-					id: `workbench.action.${compact === undefined ? 'toggle' : compact ? 'enable' : 'disable'}CompactAuxiliaryWindow`,
-					title:
-						compact === undefined
-							? localize2('toggleCompactAuxiliaryWindow', 'Toggle Window Compact Mode')
-							: compact
-								? localize2('enableCompactAuxiliaryWindow', 'Turn On Compact Mode')
-								: localize2('disableCompactAuxiliaryWindow', 'Turn Off Compact Mode'),
-					f1: compact === undefined,
-					icon: compact === false ? Lxicon.screenNormal : Lxicon.screenFull,
-					menu:
-						compact === undefined
-							? undefined
-							: {
-									id: MenuId.LayoutControlMenu,
-									when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsCompactTitleBarContext.isEqualTo(!compact)),
-									group: 'navigation',
-									order: 0,
-								},
-				});
-			}
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.action.${compact === undefined ? 'toggle' : compact ? 'enable' : 'disable'}CompactAuxiliaryWindow`,
+				title: compact === undefined
+					? localize2('toggleCompactAuxiliaryWindow', 'Toggle Window Compact Mode')
+					: compact ? localize2('enableCompactAuxiliaryWindow', 'Turn On Compact Mode') : localize2('disableCompactAuxiliaryWindow', 'Turn Off Compact Mode'),
+				f1: compact === undefined,
+				icon: compact === false ? Lxicon.screenNormal : Lxicon.screenFull,
+				menu: compact === undefined ? undefined : {
+					id: MenuId.LayoutControlMenu,
+					when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsCompactTitleBarContext.isEqualTo(!compact)),
+					group: 'navigation',
+					order: 0,
+				},
+			});
+		}
 
-			override run(accessor: ServicesAccessor): void {
-				const focused = getActiveWindow();
-				const target = focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
-				compactWindowCommands.get(target)?.(compact);
-			}
-		},
-	);
+		override run(accessor: ServicesAccessor): void {
+			const focused = getActiveWindow();
+			const target = focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
+			compactWindowCommands.get(target)?.(compact);
+		}
+	});
 }
 
 export interface AuxiliaryEditorPartCreation {
@@ -115,25 +107,20 @@ export class AuxiliaryEditorPart extends Disposable {
 				if (focusedElement && !focusedElement.isConnected) creation.part.focus();
 			});
 			this._register(toDisposable(() => compactWindowCommands.delete(window.window)));
-			this._register(
-				creation.part.onDidChangeEditors(() => {
-					// Resource replacement briefly opens a second input. Derive navigation
-					// from the live inputs without changing the user's presentation choice.
-					updateWindowChrome();
-				}),
-			);
-			this._register(
-				configuration.onDidChangeConfiguration(event => {
-					if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) updateWindowChrome();
-				}),
-			);
-			this._register(
-				window.onDidLayout(dimension => {
-					const statusbarHeight = statusbarPart.domNode.hidden ? 0 : StatusbarHeight;
-					creation.part.layout(new Dimension(dimension.width, Math.max(0, dimension.height - statusbarHeight - creation.titlebar.height)));
-					statusbarPart.layout(new Dimension(dimension.width, statusbarHeight));
-				}),
-			);
+			this._register(creation.part.onDidChangeEditors(() => {
+				// Resource replacement briefly opens a second input. Derive navigation
+				// from the live inputs without changing the user's presentation choice.
+				updateWindowChrome();
+			}));
+			this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) updateWindowChrome(); }));
+			this._register(window.onDidLayout(dimension => {
+				const statusbarHeight = statusbarPart.domNode.hidden ? 0 : StatusbarHeight;
+				creation.part.layout(new Dimension(
+					dimension.width,
+					Math.max(0, dimension.height - statusbarHeight - creation.titlebar.height),
+				));
+				statusbarPart.layout(new Dimension(dimension.width, statusbarHeight));
+			}));
 			updateWindowChrome();
 			window.layout();
 		} catch (error) {

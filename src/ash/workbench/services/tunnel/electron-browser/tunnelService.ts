@@ -15,7 +15,7 @@ interface Forward {
 	readonly state: 'open' | 'recovering' | 'failed';
 }
 
-type ForwardChange = { readonly kind: 'upsert'; readonly tunnel: Forward } | { readonly kind: 'removed'; readonly id: string };
+type ForwardChange = { readonly kind: 'upsert'; readonly tunnel: Forward; } | { readonly kind: 'removed'; readonly id: string; };
 
 /** Owns Desktop tunnel leases above the authenticated Main channel. */
 export class TunnelService extends Disposable implements ITunnelService {
@@ -23,7 +23,7 @@ export class TunnelService extends Disposable implements ITunnelService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly opened = this._register(new Emitter<RemoteTunnel>());
-	private readonly closed = this._register(new Emitter<{ host: string; port: number }>());
+	private readonly closed = this._register(new Emitter<{ host: string; port: number; }>());
 	private readonly forwards = new Map<string, Forward>();
 	private readonly references = new Map<string, number>();
 	private revision = 0;
@@ -36,29 +36,18 @@ export class TunnelService extends Disposable implements ITunnelService {
 		super();
 		this.channel = mainProcessService.getChannel('remotePortForwarding');
 		this._register(this.channel.listen<unknown>('ash:remote:tunnel:changed')(value => this.acceptChange(validateChange(value))));
-		this._register(
-			toDisposable(() => {
-				this.forwards.clear();
-				this.references.clear();
-				this.pendingOpens.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.forwards.clear();
+			this.references.clear();
+			this.pendingOpens.clear();
+		}));
 	}
 
 	public get tunnels(): Promise<readonly RemoteTunnel[]> {
 		return this.readTunnels();
 	}
 
-	public async openTunnel(
-		_addressProvider: IAddressProvider | undefined,
-		remoteHost: string | undefined,
-		remotePort: number,
-		localHost?: string,
-		localPort?: number,
-		elevateIfNeeded?: boolean,
-		privacy?: string,
-		protocol?: string,
-	): Promise<RemoteTunnel | string | undefined> {
+	public async openTunnel(_addressProvider: IAddressProvider | undefined, remoteHost: string | undefined, remotePort: number, localHost?: string, localPort?: number, elevateIfNeeded?: boolean, privacy?: string, protocol?: string): Promise<RemoteTunnel | string | undefined> {
 		this.assertNotDisposed();
 		if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
 			throw new TypeError(localize('tunnel.invalidPort', 'Remote port must be an integer from 1 to 65535.'));
@@ -95,14 +84,10 @@ export class TunnelService extends Disposable implements ITunnelService {
 
 	public async getExistingTunnel(remoteHost: string, remotePort: number): Promise<RemoteTunnel | undefined> {
 		this.assertNotDisposed();
-		if (!isLoopback(remoteHost)) {
-			return undefined;
-		}
+		if (!isLoopback(remoteHost)) { return undefined; }
 		await this.readTunnels();
 		const forward = [...this.forwards.values()].find(candidate => candidate.remotePort === remotePort);
-		if (!forward) {
-			return undefined;
-		}
+		if (!forward) { return undefined; }
 		this.references.set(forward.id, (this.references.get(forward.id) ?? 0) + 1);
 		return this.createTunnel(forward, true);
 	}
@@ -213,26 +198,12 @@ function isLoopback(host: string | undefined): boolean {
 }
 
 function validateForward(value: unknown): Forward {
-	if (
-		!isRecord(value) ||
-		typeof value.id !== 'string' ||
-		!value.id ||
-		value.id.length > 512 ||
-		/[\0\r\n]/.test(value.id) ||
-		value.remoteHost !== '127.0.0.1' ||
-		!isPort(value.remotePort) ||
-		!isPort(value.localPort) ||
-		(value.state !== 'open' && value.state !== 'recovering' && value.state !== 'failed')
-	) {
+	if (!isRecord(value) || typeof value.id !== 'string' || !value.id || value.id.length > 512 || /[\0\r\n]/.test(value.id)
+		|| value.remoteHost !== '127.0.0.1' || !isPort(value.remotePort) || !isPort(value.localPort)
+		|| (value.state !== 'open' && value.state !== 'recovering' && value.state !== 'failed')) {
 		throw new TypeError('Invalid Remote tunnel reply');
 	}
-	return {
-		id: value.id,
-		remoteHost: value.remoteHost,
-		remotePort: value.remotePort,
-		localPort: value.localPort,
-		state: value.state,
-	};
+	return { id: value.id, remoteHost: value.remoteHost, remotePort: value.remotePort, localPort: value.localPort, state: value.state };
 }
 
 function validateChange(value: unknown): ForwardChange {

@@ -84,19 +84,15 @@ export class Toggle extends Disposable {
 		if (options.contentPlacement === 'before-control') element.classList.add('ash-toggle-content-before-control');
 		container.append(element);
 
-		this._register(
-			addDisposableListener(input, 'change', () => {
-				this.syncState();
-				this._onDidChange.fire(input.checked);
-				options.onChange?.(input.checked);
-			}),
-		);
+		this._register(addDisposableListener(input, 'change', () => {
+			this.syncState();
+			this._onDidChange.fire(input.checked);
+			options.onChange?.(input.checked);
+		}));
 		this.syncState();
 	}
 
-	get checked(): boolean {
-		return this.input.checked;
-	}
+	get checked(): boolean { return this.input.checked; }
 
 	set checked(value: boolean) {
 		if (value === this.input.checked) return;
@@ -104,9 +100,7 @@ export class Toggle extends Disposable {
 		this.syncState();
 	}
 
-	get enabled(): boolean {
-		return this.enabledState;
-	}
+	get enabled(): boolean { return this.enabledState; }
 
 	set enabled(value: boolean) {
 		if (value === this.enabledState) return;
@@ -114,9 +108,7 @@ export class Toggle extends Disposable {
 		this.syncState();
 	}
 
-	get busy(): boolean {
-		return this.busyState;
-	}
+	get busy(): boolean { return this.busyState; }
 
 	set busy(value: boolean) {
 		if (value === this.busyState) return;
@@ -124,13 +116,9 @@ export class Toggle extends Disposable {
 		this.syncState();
 	}
 
-	focus(): void {
-		this.input.focus();
-	}
+	focus(): void { this.input.focus(); }
 
-	blur(): void {
-		this.input.blur();
-	}
+	blur(): void { this.input.blur(); }
 
 	setAriaLabel(label: string): void {
 		this.input.setAttribute('aria-label', label);

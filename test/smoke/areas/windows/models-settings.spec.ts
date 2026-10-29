@@ -15,9 +15,7 @@ test('Models management opens from the command palette with search, accessible h
 	if (target.appServerMode === 'required') {
 		await expect(editor.locator('.ash-models-settings-model-copy > span').first()).toBeVisible();
 		const names = await editor.locator('.ash-models-settings-model-copy > span').allTextContents();
-		for (const name of defaultVisibleModelNames) {
-			expect(names).toContain(name);
-		}
+		for (const name of defaultVisibleModelNames) { expect(names).toContain(name); }
 		const modelRows = editor.locator('.ash-models-settings-model-row');
 		await editor.getByRole('button', { name: 'Collapse All', exact: true }).click();
 		await expect(modelRows).toHaveCount(0);
@@ -64,14 +62,10 @@ test('Models management opens from the command palette with search, accessible h
 		await commands.input.press('Enter');
 		await expect(commands.element).toHaveCount(0);
 		await search.focus();
-		await expect
-			.poll(() =>
-				search.locator('..').evaluate(element => {
-					const style = getComputedStyle(element);
-					return style.borderTopStyle === 'solid' && Number.parseFloat(style.borderTopWidth) > 0;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => search.locator('..').evaluate(element => {
+			const style = getComputedStyle(element);
+			return style.borderTopStyle === 'solid' && Number.parseFloat(style.borderTopWidth) > 0;
+		})).toBe(true);
 	}
 	const geometry = await editor.evaluate(element => ({
 		overflow: getComputedStyle(element).overflowY,
@@ -97,15 +91,11 @@ test('Models management opens from the command palette with search, accessible h
 
 test('Add Models in the chat picker reaches the registered models management editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
-		await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
-	}
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) { await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar'); }
 	await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
 	const picker = page.locator('.ash-chat-model-picker');
 	const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
-	if (await automatic.isChecked()) {
-		await automatic.press('Space');
-	}
+	if (await automatic.isChecked()) { await automatic.press('Space'); }
 	await picker.getByRole('menuitem', { name: 'Add Models', exact: true }).click();
 	await expect(picker).toBeHidden();
 	const editor = page.locator('.ash-models-management-editor');
@@ -114,50 +104,46 @@ test('Add Models in the chat picker reaches the registered models management edi
 	await expect(editor.getByRole('button', { name: 'Collapse All', exact: true })).toBeEnabled();
 });
 
-test(
-	'Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, workbench, restartWorkbench }) => {
-		let page = workbench.page;
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await workbench.settingsEditor.selectGroup('agents');
-		await workbench.settingsEditor.selectCategory('models');
-		const names = settings.locator('.ash-models-settings-model-copy > span');
-		const baseline = defaultVisibleModelNames;
-		await expect(names).toHaveText(baseline);
-		const gemini = settings.getByRole('switch', { name: 'Show Gemini 3.8 Flash in model picker', exact: true });
-		await gemini.focus();
-		await gemini.press('Space');
-		await expect(gemini).toBeChecked();
-		await expect(gemini).not.toHaveAttribute('aria-busy', 'true');
-		await expect(gemini).toBeFocused();
-		await settings.getByRole('button', { name: 'viewall models', exact: true }).click();
-		const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
-		await search.fill('Gemini');
-		const originalSearchOrder = await names.allTextContents();
-		await search.focus();
-		await search.press('Alt+F2');
-		const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
-		await expect(accessible.getByRole('textbox')).toHaveValue(originalSearchOrder.join('\n'));
-		await accessible.getByRole('button', { name: 'Close', exact: true }).click();
-		await workbench.settingsEditor.selectCategory('general');
-		await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
-		await page.getByRole('option', { name: '简体中文', exact: true }).click();
-		({ workbench } = await restartWorkbench());
-		page = workbench.page;
-		await workbench.settingsEditor.openUserSettingsUI();
-		const chineseSettings = page.locator('.ash-settings-editor');
-		await workbench.settingsEditor.selectGroup('agents');
-		await workbench.settingsEditor.selectCategory('models');
-		const chineseSearch = chineseSettings.getByRole('searchbox', { name: '搜索模型', exact: true });
-		await expect(chineseSettings.getByRole('switch', { name: '在模型选择器中显示Gemini 3.8 Flash', exact: true })).toBeChecked();
-		await chineseSearch.focus();
-		await chineseSearch.press('Alt+F1');
-		await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/已开启的模型排在前面，两组内部保持目录原序/);
-		await page.keyboard.press('Escape');
-	},
-);
+test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
+	let page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await workbench.settingsEditor.selectGroup('agents');
+	await workbench.settingsEditor.selectCategory('models');
+	const names = settings.locator('.ash-models-settings-model-copy > span');
+	const baseline = defaultVisibleModelNames;
+	await expect(names).toHaveText(baseline);
+	const gemini = settings.getByRole('switch', { name: 'Show Gemini 3.8 Flash in model picker', exact: true });
+	await gemini.focus();
+	await gemini.press('Space');
+	await expect(gemini).toBeChecked();
+	await expect(gemini).not.toHaveAttribute('aria-busy', 'true');
+	await expect(gemini).toBeFocused();
+	await settings.getByRole('button', { name: 'viewall models', exact: true }).click();
+	const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
+	await search.fill('Gemini');
+	const originalSearchOrder = await names.allTextContents();
+	await search.focus();
+	await search.press('Alt+F2');
+	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(accessible.getByRole('textbox')).toHaveValue(originalSearchOrder.join('\n'));
+	await accessible.getByRole('button', { name: 'Close', exact: true }).click();
+	await workbench.settingsEditor.selectCategory('general');
+	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
+	await page.getByRole('option', { name: '简体中文', exact: true }).click();
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	const chineseSettings = page.locator('.ash-settings-editor');
+	await workbench.settingsEditor.selectGroup('agents');
+	await workbench.settingsEditor.selectCategory('models');
+	const chineseSearch = chineseSettings.getByRole('searchbox', { name: '搜索模型', exact: true });
+	await expect(chineseSettings.getByRole('switch', { name: '在模型选择器中显示Gemini 3.8 Flash', exact: true })).toBeChecked();
+	await chineseSearch.focus();
+	await chineseSearch.press('Alt+F1');
+	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/已开启的模型排在前面，两组内部保持目录原序/);
+	await page.keyboard.press('Escape');
+});
 
 test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ workbench, target }) => {
 	const page = workbench.page;
@@ -217,7 +203,7 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 });
 
 test('Models Settings saves custom model IDs and keys and tests the configured endpoint', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const requests: { path: string; model?: string; key: string | undefined }[] = [];
+	const requests: { path: string; model?: string; key: string | undefined; }[] = [];
 	let rejectDiscovery = false;
 	const server = createServer(async (request, response) => {
 		if (request.method === 'GET') {
@@ -228,17 +214,11 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		}
 		const chunks: Buffer[] = [];
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
-		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string };
+		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; };
 		requests.push({ path: request.url!, model: body.model, key: request.headers.authorization });
-		if (body.model === 'rejected-model') {
-			response.writeHead(403);
-			response.end();
-			return;
-		}
+		if (body.model === 'rejected-model') { response.writeHead(403); response.end(); return; }
 		response.writeHead(200, { 'content-type': 'text/event-stream' });
-		response.end(
-			'data: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}\n\ndata: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-		);
+		response.end('data: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}\n\ndata: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	try {
@@ -307,21 +287,16 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		await expect(page.locator('.ash-notification', { hasText: '1 of 2 models passed' })).toBeVisible();
 		expect(requests.filter(request => request.path === '/v1/models')).toHaveLength(1);
 		expect(requests.filter(request => request.model).map(request => request.model)).toEqual(['private-model', 'rejected-model']);
-		for (const [theme, id] of [
-			['Ash High Contrast Dark', 'ash-high-contrast-dark'],
-			['Ash High Contrast Light', 'ash-high-contrast-light'],
-		]) {
+		for (const [theme, id] of [['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
 			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 			const themeSearch = page.locator('.ash-quick-pick').getByRole('combobox');
 			await themeSearch.fill(theme);
 			await themeSearch.press('Enter');
 			await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
-			const statusStyles = await table.locator('.ash-chat-models-test-status').evaluateAll(elements =>
-				elements.map(element => {
-					const dot = getComputedStyle(element, '::before');
-					return { color: dot.backgroundColor, border: dot.borderStyle, width: parseFloat(dot.width) };
-				}),
-			);
+			const statusStyles = await table.locator('.ash-chat-models-test-status').evaluateAll(elements => elements.map(element => {
+				const dot = getComputedStyle(element, '::before');
+				return { color: dot.backgroundColor, border: dot.borderStyle, width: parseFloat(dot.width) };
+			}));
 			expect(statusStyles[0]!.color).not.toBe(statusStyles[1]!.color);
 			for (const style of statusStyles) {
 				expect(style.border).toBe('solid');
@@ -403,22 +378,21 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		await expect(testModels).toBeEnabled();
 		expect(requests.filter(request => request.model).at(-2)?.key).toBeUndefined();
 	} finally {
-		await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
+		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 	}
 });
+
 
 test('Model descriptions retain provider copy after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	const openModelCard = async (chinese: boolean): Promise<void> => {
 		const page = workbench.page;
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
 		}
 		await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
 		const picker = page.locator('.ash-chat-model-picker');
 		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
-		if (await automatic.isChecked()) {
-			await automatic.press('Space');
-		}
+		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
 		await search.fill('GPT-6.1 Sol');
 		await search.press('ArrowRight');

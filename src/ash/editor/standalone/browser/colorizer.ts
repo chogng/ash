@@ -41,7 +41,7 @@ export class Colorizer {
 			languageService.requestBasicLanguageFeatures(languageId);
 			support = await TokenizationRegistry.getOrCreate(languageId);
 		}
-		for (;;) {
+		for (; ;) {
 			let state = support?.getInitialState();
 			const html = lines.map((line, index) => {
 				let tokens: LineTokens;

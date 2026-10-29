@@ -26,30 +26,31 @@ interface ScrollableElementBaseOptions {
 	readonly trackClickBehavior?: 'jump' | 'page';
 	readonly wheel?: ScrollbarWheelOptions;
 	readonly mouseWheelSmoothScroll?: boolean;
-	readonly onScroll?: (position: { readonly left: number; readonly top: number }) => void;
+	readonly onScroll?: (
+		position: { readonly left: number; readonly top: number; },
+	) => void;
 }
 
-export type ScrollableElementOptions = ScrollableElementBaseOptions &
-	(
-		| {
-				/** Only horizontal user and programmatic scrolling is allowed. */
-				readonly direction: 'horizontal';
-				readonly horizontal?: ScrollbarVisibility;
-				readonly vertical?: never;
-		  }
-		| {
-				/** Only vertical user and programmatic scrolling is allowed. */
-				readonly direction: 'vertical';
-				readonly horizontal?: never;
-				readonly vertical?: ScrollbarVisibility;
-		  }
-		| {
-				/** Both scroll axes are allowed. This is the compatibility default. */
-				readonly direction?: 'both';
-				readonly horizontal?: ScrollbarVisibility;
-				readonly vertical?: ScrollbarVisibility;
-		  }
-	);
+export type ScrollableElementOptions = ScrollableElementBaseOptions & (
+	| {
+		/** Only horizontal user and programmatic scrolling is allowed. */
+		readonly direction: 'horizontal';
+		readonly horizontal?: ScrollbarVisibility;
+		readonly vertical?: never;
+	}
+	| {
+		/** Only vertical user and programmatic scrolling is allowed. */
+		readonly direction: 'vertical';
+		readonly horizontal?: never;
+		readonly vertical?: ScrollbarVisibility;
+	}
+	| {
+		/** Both scroll axes are allowed. This is the compatibility default. */
+		readonly direction?: 'both';
+		readonly horizontal?: ScrollbarVisibility;
+		readonly vertical?: ScrollbarVisibility;
+	}
+);
 
 export interface ResolvedScrollableElementOptions {
 	readonly mouseWheelSmoothScroll: boolean;
@@ -76,19 +77,28 @@ export interface ScrollableElementUpdateOptions {
 	readonly scrollbarSize?: number;
 }
 
-export function resolveScrollableElementOptions(options: ScrollableElementOptions): ResolvedScrollableElementOptions {
+export function resolveScrollableElementOptions(
+	options: ScrollableElementOptions,
+): ResolvedScrollableElementOptions {
 	const direction = options.direction ?? 'both';
 	return {
 		mouseWheelSmoothScroll: options.mouseWheelSmoothScroll ?? false,
 		direction,
-		horizontal: direction === 'vertical' ? 'hidden' : (options.horizontal ?? 'auto'),
-		vertical: direction === 'horizontal' ? 'hidden' : (options.vertical ?? 'auto'),
+		horizontal: direction === 'vertical'
+			? 'hidden'
+			: options.horizontal ?? 'auto',
+		vertical: direction === 'horizontal'
+			? 'hidden'
+			: options.vertical ?? 'auto',
 		scrollbarSize: positiveFinite(options.scrollbarSize, 10),
 		minimumThumbSize: positiveFinite(options.minimumThumbSize, 20),
 		trackClickBehavior: options.trackClickBehavior ?? 'jump',
 		wheel: {
 			sensitivity: nonNegativeFinite(options.wheel?.sensitivity, 1),
-			fastSensitivity: nonNegativeFinite(options.wheel?.fastSensitivity, 5),
+			fastSensitivity: nonNegativeFinite(
+				options.wheel?.fastSensitivity,
+				5,
+			),
 			axis: options.wheel?.axis ?? 'predominant',
 			shift: options.wheel?.shift ?? 'horizontal',
 			consume: options.wheel?.consume ?? 'when-scrolling',
@@ -96,12 +106,22 @@ export function resolveScrollableElementOptions(options: ScrollableElementOption
 	};
 }
 
-function positiveFinite(value: number | undefined, fallback: number): number {
-	return isFiniteNumber(value) && value > 0 ? value : fallback;
+function positiveFinite(
+	value: number | undefined,
+	fallback: number,
+): number {
+	return isFiniteNumber(value) && value > 0
+		? value
+		: fallback;
 }
 
-function nonNegativeFinite(value: number | undefined, fallback: number): number {
-	return isFiniteNumber(value) && value >= 0 ? value : fallback;
+function nonNegativeFinite(
+	value: number | undefined,
+	fallback: number,
+): number {
+	return isFiniteNumber(value) && value >= 0
+		? value
+		: fallback;
 }
 
 /** Options for a DOM view backed by an existing Scrollable. */

@@ -32,52 +32,19 @@ class IdeTransport implements AppServerTransport {
 	readonly registered = new DeferredPromise<void>();
 	readonly requests: Record<string, unknown>[] = [];
 	private next = 0;
-	on(event: string, listener: (value: unknown) => void): void {
-		const listeners = this.listeners.get(event) ?? new Set();
-		listeners.add(listener);
-		this.listeners.set(event, listeners);
-	}
-	off(event: string, listener: (value: unknown) => void): void {
-		this.listeners.get(event)?.delete(listener);
-	}
-	private emit(event: string, value: unknown): void {
-		for (const listener of this.listeners.get(event) ?? []) listener(value);
-	}
-	private frame(value: Record<string, unknown>): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...value }) });
-	}
+	on(event: string, listener: (value: unknown) => void): void { const listeners = this.listeners.get(event) ?? new Set(); listeners.add(listener); this.listeners.set(event, listeners); }
+	off(event: string, listener: (value: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
+	private emit(event: string, value: unknown): void { for (const listener of this.listeners.get(event) ?? []) listener(value); }
+	private frame(value: Record<string, unknown>): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...value }) }); }
 	send(event: string, payload?: unknown): void {
-		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
-				protocolVersion: 1,
-				workspaceId: 'project',
-				workspaceRoot: '/project',
-			});
-			return;
-		}
+		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'project', workspaceRoot: '/project' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) return;
-		const frame = JSON.parse((payload as { frame: string }).frame) as Record<string, unknown>;
-		if (frame.method === 'initialize') {
-			this.frame({ id: frame.id, result: createTestInitializeResult() });
-			return;
-		}
+		const frame = JSON.parse((payload as { frame: string; }).frame) as Record<string, unknown>;
+		if (frame.method === 'initialize') { this.frame({ id: frame.id, result: createTestInitializeResult() }); return; }
 		if (frame.method === 'ide/request') {
 			this.requests.push(frame);
-			const params = frame.params as { type: string; title?: string; roots?: string[] };
-			this.frame({
-				id: frame.id,
-				result:
-					params.type === 'register'
-						? {
-								type: 'registered',
-								window: {
-									id: '01234567890123456789012345678901',
-									title: params.title,
-									roots: params.roots,
-								},
-							}
-						: { type: 'connected', window: null },
-			});
+			const params = frame.params as { type: string; title?: string; roots?: string[]; };
+			this.frame({ id: frame.id, result: params.type === 'register' ? { type: 'registered', window: { id: '01234567890123456789012345678901', title: params.title, roots: params.roots } } : { type: 'connected', window: null } });
 			if (params.type === 'register') void this.registered.complete();
 		} else if (typeof frame.id === 'string') {
 			void this.replies.get(frame.id)?.complete(frame);
@@ -99,56 +66,23 @@ async function fixture() {
 		const services = lifetime.add(new TestUriIdentityServices());
 		const resource = URI.file('/project/lib.rs');
 		const model = lifetime.add(new TextModel('unsaved selection', { resource }));
-		const workspace = lifetime.add(
-			new TestWorkspaceService({
-				id: 'project',
-				name: 'Project',
-				folders: [{ id: 'folder', name: 'Project', index: 0, uri: URI.file('/project') }],
-			}),
-		);
+		const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', name: 'Project', folders: [{ id: 'folder', name: 'Project', index: 0, uri: URI.file('/project') }] }));
 		const workingCopies = lifetime.add(services.createInstance(BrowserWorkingCopyService));
-		lifetime.add(
-			workingCopies.register({
-				resource,
-				backupKind: 'text',
-				isDirty: true,
-				hasExternalChange: false,
-				onDidChangeDirty: Event.None,
-				onDidChangeExternalChange: Event.None,
-				onDidChangeContent: Event.None,
-				backup: () => model.getValue(),
-				restoreBackup: () => assert.fail('context must not mutate the model'),
-				save: async () => assert.fail('context must not save'),
-				saveAs: async () => assert.fail('context must not save'),
-				revert: async () => assert.fail('context must not revert'),
-				...toDisposable(() => {}),
-			}),
-		);
+		lifetime.add(workingCopies.register({ resource, backupKind: 'text', isDirty: true, hasExternalChange: false, onDidChangeDirty: Event.None, onDidChangeExternalChange: Event.None, onDidChangeContent: Event.None, backup: () => model.getValue(), restoreBackup: () => assert.fail('context must not mutate the model'), save: async () => assert.fail('context must not save'), saveAs: async () => assert.fail('context must not save'), revert: async () => assert.fail('context must not revert'), ...toDisposable(() => { }) }));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		let selection = new Selection(1, 1, 1, 8);
-		services.registerInstance(ICodeEditorService, {
-			getActiveCodeEditor: () => ({ getModel: () => model, getSelections: () => [selection] }) as unknown as ICodeEditor,
-		} as ICodeEditorService);
-		services.registerInstance(IEditorGroupsService, {
-			groups: [{ inputs: [{ resource }, { resource: URI.file('/other/private.rs') }] }],
-		} as unknown as IEditorGroupsService);
-		const opened: Array<{ input: IResourceEditorInput; options?: EditorOpenOptions }> = [];
-		let open: () => Promise<void> = async () => {};
-		services.registerInstance(IEditorService, {
-			onDidActiveEditorChange: Event.None,
-			openEditor: async (input, options) => {
-				opened.push({ input, options });
-				await open();
-			},
-		} as IEditorService);
+		services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => model, getSelections: () => [selection] } as unknown as ICodeEditor) } as ICodeEditorService);
+		services.registerInstance(IEditorGroupsService, { groups: [{ inputs: [{ resource }, { resource: URI.file('/other/private.rs') }] }] } as unknown as IEditorGroupsService);
+		const opened: Array<{ input: IResourceEditorInput; options?: EditorOpenOptions; }> = [];
+		let open: () => Promise<void> = async () => { };
+		services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, openEditor: async (input, options) => { opened.push({ input, options }); await open(); } } as IEditorService);
 		const conversations: IOpenAgentsWindowOptions[] = [];
-		let openConversation: () => Promise<void> = async () => {};
+		let openConversation: () => Promise<void> = async () => { };
 		services.registerInstance(INativeHostService, {
 			openAgentsWindow: async options => {
-				conversations.push(options!);
-				await openConversation();
-			},
+				conversations.push(options!); await openConversation();
+			}
 		} as INativeHostApi);
 		const transport = new IdeTransport();
 		const client = new AppServerProtocolClient(transport);
@@ -156,60 +90,22 @@ async function fixture() {
 		await client.connect();
 		const host = lifetime.add(services.createInstance(AppServerIdeHost, client));
 		await transport.registered.p;
-		return {
-			lifetime,
-			transport,
-			host,
-			workspace,
-			model,
-			opened,
-			conversations,
-			setOpenConversation: (next: () => Promise<void>) => {
-				openConversation = next;
-			},
-			setSelection: (next: Selection) => {
-				selection = next;
-			},
-			setOpen: (next: () => Promise<void>) => {
-				open = next;
-			},
-		};
-	} catch (error) {
-		lifetime.dispose();
-		throw error;
-	}
+		return { lifetime, transport, host, workspace, model, opened, conversations, setOpenConversation: (next: () => Promise<void>) => { openConversation = next; }, setSelection: (next: Selection) => { selection = next; }, setOpen: (next: () => Promise<void>) => { open = next; } };
+	} catch (error) { lifetime.dispose(); throw error; }
 }
 
 test('IDE registration and context use the live editor model and filter unrelated files', async () => {
 	const f = await fixture();
 	using cleanup = f.lifetime;
-	const registration = f.transport.requests[0]!.params as { windowKey: string };
+	const registration = f.transport.requests[0]!.params as { windowKey: string; };
 	assert.match(registration.windowKey, /^[0-9a-f]{32}$/i);
-	assert.deepEqual(f.transport.requests[0]!.params, {
-		type: 'register',
-		title: 'Project',
-		roots: ['/project'],
-		windowKey: registration.windowKey,
-	});
+	assert.deepEqual(f.transport.requests[0]!.params, { type: 'register', title: 'Project', roots: ['/project'], windowKey: registration.windowKey });
 	assert.equal(await f.host.readTerminalWindowKey(), registration.windowKey);
 	const first = await f.transport.call({ type: 'context', roots: ['/project'] });
-	assert.deepEqual(first.result, {
-		type: 'context',
-		context: {
-			activeFile: {
-				path: '/project/lib.rs',
-				version: 1,
-				selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }],
-			},
-			openTabs: ['/project/lib.rs'],
-			dirtyFiles: ['/project/lib.rs'],
-		},
-	});
+	assert.deepEqual(first.result, { type: 'context', context: { activeFile: { path: '/project/lib.rs', version: 1, selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }] }, openTabs: ['/project/lib.rs'], dirtyFiles: ['/project/lib.rs'] } });
 	f.model.setValue('changed selection');
 	const second = await f.transport.call({ type: 'context', roots: ['/project'] });
-	const result = second.result as {
-		context: { activeFile: { version: number; selections: Array<{ text: string }> } };
-	};
+	const result = second.result as { context: { activeFile: { version: number; selections: Array<{ text: string; }>; }; }; };
 	assert.equal(result.context.activeFile.version, f.model.getVersionId());
 	assert.equal(result.context.activeFile.selections[0]!.text, 'changed');
 	const excluded = await f.transport.call({ type: 'context', roots: ['/other'] });
@@ -219,9 +115,7 @@ test('IDE registration and context use the live editor model and filter unrelate
 test('IDE display uses the existing file and diff editor owners and rejects another workspace', async () => {
 	const f = await fixture();
 	using cleanup = f.lifetime;
-	assert.deepEqual((await f.transport.call({ type: 'openFile', path: '/project/lib.rs', line: 4 })).result, {
-		type: 'opened',
-	});
+	assert.deepEqual((await f.transport.call({ type: 'openFile', path: '/project/lib.rs', line: 4 })).result, { type: 'opened' });
 	assert.equal(f.opened[0]!.input.resource.fsPath, '/project/lib.rs');
 	assert.equal(f.opened[0]!.options!.selection!.startLineNumber, 4);
 	assert.deepEqual((await f.transport.call({ type: 'openReview', original: '/project/old.rs', modified: '/project/lib.rs' })).result, { type: 'opened' });
@@ -235,18 +129,16 @@ test('disposing the IDE host withdraws discovery and cancels a late display resu
 	using cleanup = f.lifetime;
 	const entered = new DeferredPromise<void>();
 	const finish = new DeferredPromise<void>();
-	f.setOpen(async () => {
-		void entered.complete();
-		await finish.p;
-	});
+	f.setOpen(async () => { void entered.complete(); await finish.p; });
 	const pending = f.transport.call({ type: 'openFile', path: '/project/lib.rs', line: null });
 	await entered.p;
 	f.host.dispose();
 	void finish.complete();
 	assert.ok((await pending).error);
-	assert.equal((f.transport.requests.at(-1)!.params as { type: string }).type, 'unregister');
+	assert.equal((f.transport.requests.at(-1)!.params as { type: string; }).type, 'unregister');
 	assert.equal(await f.host.readTerminalWindowKey(), undefined);
 });
+
 
 test('IDE selection context marks truncation and preserves complete Unicode characters', async () => {
 	const f = await fixture();
@@ -254,27 +146,21 @@ test('IDE selection context marks truncation and preserves complete Unicode char
 	f.model.setValue('🙂'.repeat(40_001));
 	f.setSelection(new Selection(1, 1, 1, f.model.getLineMaxColumn(1)));
 	const response = await f.transport.call({ type: 'context', roots: ['/project'] });
-	const result = response.result as {
-		context: { activeFile: { selections: Array<{ text: string; truncated: boolean }> } };
-	};
+	const result = response.result as { context: { activeFile: { selections: Array<{ text: string; truncated: boolean; }>; }; }; };
 	assert.equal(result.context.activeFile.selections[0]!.text, '🙂'.repeat(40_000));
 	assert.equal(result.context.activeFile.selections[0]!.truncated, true);
 });
+
 
 test('desktop handoff waits for the existing window service to acknowledge the exact conversation', async () => {
 	const f = await fixture();
 	using cleanup = f.lifetime;
 	const entered = new DeferredPromise<void>();
 	const finish = new DeferredPromise<void>();
-	f.setOpenConversation(async () => {
-		void entered.complete();
-		await finish.p;
-	});
+	f.setOpenConversation(async () => { void entered.complete(); await finish.p; });
 	let acknowledged = false;
 	const pending = f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' });
-	void pending.then(() => {
-		acknowledged = true;
-	});
+	void pending.then(() => { acknowledged = true; });
 	await entered.p;
 	assert.equal(acknowledged, false);
 	assert.deepEqual(f.conversations, [{ conversation: { sessionId: 'session', threadId: 'thread' } }]);
@@ -286,16 +172,11 @@ test('desktop handoff waits for the existing window service to acknowledge the e
 test('desktop handoff does not acknowledge failed navigation or a disposed source window', async () => {
 	const f = await fixture();
 	using cleanup = f.lifetime;
-	f.setOpenConversation(async () => {
-		throw new Error('Session unavailable');
-	});
+	f.setOpenConversation(async () => { throw new Error('Session unavailable'); });
 	assert.ok((await f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' })).error);
 	const entered = new DeferredPromise<void>();
 	const finish = new DeferredPromise<void>();
-	f.setOpenConversation(async () => {
-		void entered.complete();
-		await finish.p;
-	});
+	f.setOpenConversation(async () => { void entered.complete(); await finish.p; });
 	const pending = f.transport.call({ type: 'openConversation', sessionId: 'session', threadId: 'thread' });
 	await entered.p;
 	f.host.dispose();

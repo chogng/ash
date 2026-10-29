@@ -12,25 +12,14 @@ suite('OutlineModel', () => {
 	test('large outlines allow an edit to cancel conversion before any stale tree is published', async () => {
 		using model = new TextModel('x\n'.repeat(5000), { languageId: 'typescript' });
 		using features = new LanguageFeaturesService();
-		using provider = features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => Array.from({ length: 5000 }, (_, index) => symbol(`item${index}`, index + 1, 1, index + 1, 2)),
-		});
+		using provider = features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => Array.from({ length: 5000 }, (_, index) => symbol(`item${index}`, index + 1, 1, index + 1, 2)) });
 		const timer = setTimeout(() => model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'y' }]), 0);
 		try {
-			assert.equal(
-				await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
-					throw error;
-				}),
-				null,
-			);
-			const current = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
-				throw error;
-			});
+			assert.equal(await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => { throw error; }), null);
+			const current = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => { throw error; });
 			assert.equal(current?.version, model.version);
 			assert.equal(current?.asListOfDocumentSymbols().length, 5000);
-		} finally {
-			clearTimeout(timer);
-		}
+		} finally { clearTimeout(timer); }
 	});
 	test('groups every provider and sorts flattened symbols by document position', async () => {
 		using model = new TextModel('first second\nnested', { languageId: 'typescript' });
@@ -44,35 +33,21 @@ suite('OutlineModel', () => {
 		const errors: unknown[] = [];
 		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => errors.push(error));
 		assert.ok(outline);
-		assert.deepEqual(
-			{
-				groups: outline.children.size,
-				topLevel: outline.getTopLevelSymbols().map(entry => entry.name),
-				flattened: outline.asListOfDocumentSymbols().map(entry => entry.name),
-				parents: [...outline.children.values()].every(group => [...group.children.values()].every(entry => entry.parent === group)),
-				errors,
-			},
-			{
-				groups: 2,
-				topLevel: ['first', 'second'],
-				flattened: ['first', 'second', 'nested'],
-				parents: true,
-				errors: [],
-			},
-		);
+		assert.deepEqual({
+			groups: outline.children.size,
+			topLevel: outline.getTopLevelSymbols().map(entry => entry.name),
+			flattened: outline.asListOfDocumentSymbols().map(entry => entry.name),
+			parents: [...outline.children.values()].every(group => [...group.children.values()].every(entry => entry.parent === group)),
+			errors,
+		}, { groups: 2, topLevel: ['first', 'second'], flattened: ['first', 'second', 'nested'], parents: true, errors: [] });
 	});
 
 	test('thousands of repeated labels retain unique stable identities alongside literal suffix names', async () => {
 		using model = new TextModel('x\n'.repeat(10_004));
 		using features = new LanguageFeaturesService();
 		const names = ['section', 'section_1', 'section', 'section_2', ...Array<string>(10_000).fill('section')];
-		using provider = features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => names.map((name, index) => symbol(name, index + 1, 1, index + 1, 2)),
-		});
-		const create = () =>
-			OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
-				throw error;
-			});
+		using provider = features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => names.map((name, index) => symbol(name, index + 1, 1, index + 1, 2)) });
+		const create = () => OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => { throw error; });
 		const first = await create();
 		const second = await create();
 		const ids = (outline: OutlineModel) => [...outline.children.values()].flatMap(group => [...group.children.keys()]);
@@ -81,14 +56,8 @@ suite('OutlineModel', () => {
 		assert.equal(actual.length, names.length);
 		assert.equal(new Set(actual).size, names.length);
 		assert.deepEqual(actual, ids(second));
-		assert.deepEqual(
-			actual.slice(0, 4).map(id => id.slice(id.lastIndexOf('/') + 1)),
-			['section', 'section_1', 'section_2', 'section_2_1'],
-		);
-		assert.deepEqual(
-			first.asListOfDocumentSymbols().map(symbol => symbol.name),
-			names,
-		);
+		assert.deepEqual(actual.slice(0, 4).map(id => id.slice(id.lastIndexOf('/') + 1)), ['section', 'section_1', 'section_2', 'section_2_1']);
+		assert.deepEqual(first.asListOfDocumentSymbols().map(symbol => symbol.name), names);
 	});
 
 	test('cancels concurrent providers and rejects their late results', async () => {
@@ -101,9 +70,7 @@ suite('OutlineModel', () => {
 		using first = features.documentSymbolProvider.register('*', provider);
 		using second = features.documentSymbolProvider.register('*', provider);
 		const controller = new AbortController();
-		const outline = OutlineModel.create(features.documentSymbolProvider, model, controller.signal, error => {
-			throw error;
-		});
+		const outline = OutlineModel.create(features.documentSymbolProvider, model, controller.signal, error => { throw error; });
 		assert.equal(pending.length, 2);
 		controller.abort();
 		for (const finish of pending) finish([symbol('first', 1, 1, 1, 6)]);
@@ -116,9 +83,7 @@ suite('OutlineModel', () => {
 		const provider = { provideDocumentSymbols: () => [symbol('first', 1, 1, 1, 6)] };
 		using first = features.documentSymbolProvider.register('*', provider);
 		using second = features.documentSymbolProvider.register('*', provider);
-		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
-			throw error;
-		});
+		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => { throw error; });
 		assert.equal(outline?.children.size, 2);
 	});
 
@@ -130,9 +95,7 @@ suite('OutlineModel', () => {
 			provideDocumentSymbols: () => [symbol('first', 1, 1, 1, 6)],
 		});
 		using broken = features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => {
-				throw failure;
-			},
+			provideDocumentSymbols: () => { throw failure; },
 		});
 		const errors: unknown[] = [];
 		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => errors.push(error));

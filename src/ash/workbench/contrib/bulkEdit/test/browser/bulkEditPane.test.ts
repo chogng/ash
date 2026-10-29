@@ -40,16 +40,8 @@ test('bulk edit preview applies only the selected valid entries', async () => {
 	const second = URI.file('C:\\workspace\\second.ts');
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{
-				kind: 'textDocument',
-				resource: first,
-				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'one' }],
-			},
-			{
-				kind: 'textDocument',
-				resource: second,
-				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'two' }],
-			},
+			{ kind: 'textDocument', resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'one' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'two' }] },
 		],
 	};
 	const model = {
@@ -66,12 +58,9 @@ test('bulk edit preview applies only the selected valid entries', async () => {
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using fixture = new BulkEditTestServices([
-			[URI.file('C:\\workspace\\first.ts'), ''],
-			[URI.file('C:\\workspace\\second.ts'), ''],
+			[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
 			[URI.file('C:\\workspace\\independent.ts'), ''],
-			[URI.file('/workspace/one.ts'), 'ab'],
-			[URI.file('/workspace/sequential.ts'), 'a'],
-			[URI.file('/workspace/independent.ts'), ''],
+			[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
 		]);
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
@@ -80,10 +69,7 @@ test('bulk edit preview applies only the selected valid entries', async () => {
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		using pane = services.createInstance(BulkEditPane, browser.window.document.body, {
-			id: BulkEditPane.ID,
-			title: 'Refactor Preview',
-		});
+		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		browser.window.document.body.append(pane.element);
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		await previewReady(pane);
@@ -122,12 +108,9 @@ test('disposing a bulk edit preview settles the pending approval', async () => {
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using fixture = new BulkEditTestServices([
-			[URI.file('C:\\workspace\\first.ts'), ''],
-			[URI.file('C:\\workspace\\second.ts'), ''],
+			[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
 			[URI.file('C:\\workspace\\independent.ts'), ''],
-			[URI.file('/workspace/one.ts'), 'ab'],
-			[URI.file('/workspace/sequential.ts'), 'a'],
-			[URI.file('/workspace/independent.ts'), ''],
+			[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
 		]);
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
@@ -136,10 +119,7 @@ test('disposing a bulk edit preview settles the pending approval', async () => {
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		const pane = services.createInstance(BulkEditPane, browser.window.document.body, {
-			id: BulkEditPane.ID,
-			title: 'Refactor Preview',
-		});
+		const pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		pane.dispose();
 		assert.equal(await pending, undefined);
@@ -157,16 +137,8 @@ test('bulk edit preview keeps resource operations linked to dependent text edits
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: 'create', resource: created, existing: 'error' },
-			{
-				kind: 'textDocument',
-				resource: created,
-				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'created' }],
-			},
-			{
-				kind: 'textDocument',
-				resource: independent,
-				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'independent' }],
-			},
+			{ kind: 'textDocument', resource: created, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'created' }] },
+			{ kind: 'textDocument', resource: independent, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'independent' }] },
 		],
 	};
 	const model = {
@@ -184,12 +156,9 @@ test('bulk edit preview keeps resource operations linked to dependent text edits
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using fixture = new BulkEditTestServices([
-			[URI.file('C:\\workspace\\first.ts'), ''],
-			[URI.file('C:\\workspace\\second.ts'), ''],
+			[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
 			[URI.file('C:\\workspace\\independent.ts'), ''],
-			[URI.file('/workspace/one.ts'), 'ab'],
-			[URI.file('/workspace/sequential.ts'), 'a'],
-			[URI.file('/workspace/independent.ts'), ''],
+			[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
 		]);
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
@@ -198,10 +167,7 @@ test('bulk edit preview keeps resource operations linked to dependent text edits
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		using pane = services.createInstance(BulkEditPane, browser.window.document.body, {
-			id: BulkEditPane.ID,
-			title: 'Refactor Preview',
-		});
+		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		await previewReady(pane);
 		const createCheckbox = pane.element.querySelectorAll<HTMLInputElement>('input[type=checkbox]')[0]!;
@@ -224,10 +190,7 @@ test('bulk edit preview keeps resource operations linked to dependent text edits
 test('individual replacements preserve focus, expanded text and selection across grouping', async () => {
 	await withPane(async (pane, browser) => {
 		const resource = URI.file('/workspace/one.ts');
-		const edits = [
-			{ range: new Range(1, 1, 1, 2), text: 'A' },
-			{ range: new Range(1, 2, 1, 3), text: 'B' },
-		];
+		const edits = [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }];
 		const pending = pane.setInput(ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }), new AbortController().signal);
 		await previewReady(pane);
 		const details = pane.element.querySelector('details')!;
@@ -245,10 +208,7 @@ test('individual replacements preserve focus, expanded text and selection across
 		assert.equal(pane.element.querySelector('details'), details);
 		assert.equal(details.open, true);
 		pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
-		assert.deepEqual(
-			(await pending)?.map(edit => (edit instanceof ResourceTextEdit ? edit.textEdit : edit)),
-			[edits[1]],
-		);
+		assert.deepEqual((await pending)?.map(edit => edit instanceof ResourceTextEdit ? edit.textEdit : edit), [edits[1]]);
 	});
 });
 
@@ -256,18 +216,8 @@ test('excluding an earlier replacement blocks dependent document steps until the
 	await withPane(async pane => {
 		const resource = URI.file('/workspace/sequential.ts');
 		const entries: LanguageWorkspaceEdit['entries'] = [
-			{
-				kind: 'textDocument',
-				resource,
-				expectedText: 'a',
-				edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }],
-			},
-			{
-				kind: 'textDocument',
-				resource,
-				expectedText: 'long',
-				edits: [{ range: new Range(1, 5, 1, 5), text: '!' }],
-			},
+			{ kind: 'textDocument', resource, expectedText: 'a', edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }] },
+			{ kind: 'textDocument', resource, expectedText: 'long', edits: [{ range: new Range(1, 5, 1, 5), text: '!' }] },
 		];
 		const pending = pane.setInput(ResourceEdit.convert({ entries }), new AbortController().signal);
 		await previewReady(pane);
@@ -292,11 +242,7 @@ test('unchecking a create operation excludes every dependent rename and text cha
 			{ kind: 'rename', source: first, target: second, existing: 'error' },
 			{ kind: 'rename', source: second, target: third, existing: 'error' },
 			{ kind: 'textDocument', resource: third, edits: [{ range: new Range(1, 1, 1, 1), text: 'dependent' }] },
-			{
-				kind: 'textDocument',
-				resource: independent,
-				edits: [{ range: new Range(1, 1, 1, 1), text: 'independent' }],
-			},
+			{ kind: 'textDocument', resource: independent, edits: [{ range: new Range(1, 1, 1, 1), text: 'independent' }] },
 		];
 		const pending = pane.setInput(ResourceEdit.convert({ entries }), new AbortController().signal);
 		await previewReady(pane);
@@ -315,14 +261,7 @@ test('Escape cancels the preview and restores the previously focused control', a
 		const pending = pane.setInput(ResourceEdit.convert({ entries: [{ kind: 'create', resource, existing: 'error' }] }), new AbortController().signal);
 		await previewReady(pane);
 		pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		assert.deepEqual(
-			{
-				result: await pending,
-				focused: browser.window.document.activeElement === origin,
-				hasInput: pane.hasInput,
-			},
-			{ result: undefined, focused: true, hasInput: false },
-		);
+		assert.deepEqual({ result: await pending, focused: browser.window.document.activeElement === origin, hasInput: pane.hasInput }, { result: undefined, focused: true, hasInput: false });
 	});
 });
 
@@ -334,10 +273,7 @@ test('Chinese preview labels and accessibility verbosity follow the registered l
 			const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration('files.refactoring.autoSave')!.setting!;
 			assert.equal(setting.title, '重构后保存文件');
 			assert.equal(setting.description, '控制是否自动保存重构修改的文件。');
-			assert.deepEqual(
-				[...pane.element.querySelectorAll('.ash-bulk-edit-toolbar button')].map(button => button.textContent),
-				['全部选择', '按类型分组', '打开修改', '应用所选修改', '取消'],
-			);
+			assert.deepEqual([...pane.element.querySelectorAll('.ash-bulk-edit-toolbar button')].map(button => button.textContent), ['全部选择', '按类型分组', '打开修改', '应用所选修改', '取消']);
 			await configuration.updateValue(AccessibilityVerbositySettingId.BulkEditPreview, false);
 			assert.equal(pane.element.querySelector('.ash-bulk-edit')!.hasAttribute('aria-description'), false);
 		});
@@ -353,12 +289,9 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	using fixture = new BulkEditTestServices([
-		[URI.file('C:\\workspace\\first.ts'), ''],
-		[URI.file('C:\\workspace\\second.ts'), ''],
+		[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
 		[URI.file('C:\\workspace\\independent.ts'), ''],
-		[URI.file('/workspace/one.ts'), 'ab'],
-		[URI.file('/workspace/sequential.ts'), 'a'],
-		[URI.file('/workspace/independent.ts'), ''],
+		[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
 	]);
 	services.registerInstance(ITextModelResourceService, fixture.models);
 	services.registerInstance(IFileTextModelService, fixture.models);
@@ -368,10 +301,7 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IEditorService, new TestEditorService());
 	try {
-		using pane = services.createInstance(BulkEditPane, browser.window.document.body, {
-			id: BulkEditPane.ID,
-			title: 'Refactor Preview',
-		});
+		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		browser.window.document.body.append(pane.element);
 		pane.setVisible(true);
 		await run(pane, browser, configuration, services);
@@ -383,27 +313,9 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 
 test('standard preview commands change grouping, selection and the accepted edits', async () => {
 	await withPane(async (pane, _browser, _configuration, services) => {
-		services.registerInstance(IViewsService, {
-			openView: async () => pane,
-			getViewWithId: () => pane,
-			focusView: async () => {
-				pane.focus();
-				return true;
-			},
-		} as unknown as IViewsService);
+		services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } } as unknown as IViewsService);
 		using commands = new CommandService(services);
-		const edits = ResourceEdit.convert({
-			entries: [
-				{
-					kind: 'textDocument',
-					resource: URI.file('/workspace/one.ts'),
-					edits: [
-						{ range: new Range(1, 1, 1, 2), text: 'A' },
-						{ range: new Range(1, 2, 1, 3), text: 'B' },
-					],
-				},
-			],
-		});
+		const edits = ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource: URI.file('/workspace/one.ts'), edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }] }] });
 		const pending = pane.setInput(edits, new AbortController().signal);
 		await previewReady(pane);
 		await commands.executeCommand('refactorPreview.groupByType');
@@ -422,35 +334,13 @@ test('standard preview commands change grouping, selection and the accepted edit
 test('Open changes sends the selected replacements as read-only snapshots to the real editor contract', async () => {
 	await withPane(async (pane, _browser, _configuration, services) => {
 		const resource = URI.file('/workspace/one.ts');
-		const pending = pane.setInput(
-			ResourceEdit.convert({
-				entries: [
-					{
-						kind: 'textDocument',
-						resource,
-						edits: [
-							{ range: new Range(1, 1, 1, 2), text: 'A' },
-							{ range: new Range(1, 2, 1, 3), text: 'B' },
-						],
-					},
-				],
-			}),
-			new AbortController().signal,
-		);
+		const pending = pane.setInput(ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }] }] }), new AbortController().signal);
 		await previewReady(pane);
 		pane.element.querySelector<HTMLInputElement>('input[data-text-edit-index="0"]')!.click();
 		pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-toolbar .ash-bulk-edit-open-diff')!.click();
 		const input = (services.get(IEditorService) as TestEditorService).opened[0]!;
 		assert.ok(isMultiDiffEditorInput(input));
-		assert.deepEqual(
-			input.items.map(item => ({
-				before: item.original.initialText,
-				after: item.modified.initialText,
-				readonly: [item.original.readOnly, item.modified.readOnly],
-				target: item.goToFile!.resource.toString(),
-			})),
-			[{ before: 'ab', after: 'aB', readonly: [true, true], target: resource.toString() }],
-		);
+		assert.deepEqual(input.items.map(item => ({ before: item.original.initialText, after: item.modified.initialText, readonly: [item.original.readOnly, item.modified.readOnly], target: item.goToFile!.resource.toString() })), [{ before: 'ab', after: 'aB', readonly: [true, true], target: resource.toString() }]);
 		using reference = await services.get(ITextModelResourceService).acquire({ resource }, new AbortController().signal);
 		assert.equal(reference.model.getText(), 'ab');
 		pane.discard();
@@ -466,7 +356,7 @@ test('preview selection distinguishes two insertions that reuse the same text ed
 			entries: [
 				{ kind: 'textDocument', resource, expectedText: 'ab', edits: [payload] },
 				{ kind: 'textDocument', resource, expectedText: '!ab', edits: [payload] },
-			],
+			]
 		});
 		const pending = pane.setInput(edits, new AbortController().signal);
 		await previewReady(pane);
@@ -483,15 +373,10 @@ function installDomGlobals(browser: JSDOM) {
 }
 
 async function previewReady(pane: BulkEditPane): Promise<void> {
-	if (pane.hasInput) {
-		return;
-	}
+	if (pane.hasInput) { return; }
 	await new Promise<void>(resolve => {
 		const observer = new pane.element.ownerDocument.defaultView!.MutationObserver(() => {
-			if (pane.hasInput) {
-				observer.disconnect();
-				resolve();
-			}
+			if (pane.hasInput) { observer.disconnect(); resolve(); }
 		});
 		observer.observe(pane.element, { childList: true, subtree: true });
 	});

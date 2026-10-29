@@ -30,40 +30,21 @@ export class TestQuickInputService extends QuickInputService {
 
 /** Unused service controls fail loudly in headless tests of input/pick consumers. */
 export const quickInputServiceTestControls: Omit<IQuickInputService, 'input' | 'createQuickPick'> = {
-	quickAccess: {
-		onDidChangeVisibility: Event.None,
-		show() {
-			throw new Error('Unexpected Quick Access');
-		},
-	},
-	onShow: Event.None,
-	onHide: Event.None,
-	currentQuickInput: undefined,
-	focus() {
-		throw new Error('Unexpected Quick Input focus');
-	},
-	toggle() {
-		throw new Error('Unexpected Quick Input toggle');
-	},
-	setAlignment() {
-		throw new Error('Unexpected Quick Input alignment');
-	},
-	navigate() {
-		throw new Error('Unexpected Quick Input navigation');
-	},
-	async accept() {
-		throw new Error('Unexpected Quick Input acceptance');
-	},
-	async cancel() {
-		throw new Error('Unexpected Quick Input cancellation');
-	},
+	quickAccess: { onDidChangeVisibility: Event.None, show() { throw new Error('Unexpected Quick Access'); } },
+	onShow: Event.None, onHide: Event.None, currentQuickInput: undefined,
+	focus() { throw new Error('Unexpected Quick Input focus'); },
+	toggle() { throw new Error('Unexpected Quick Input toggle'); },
+	setAlignment() { throw new Error('Unexpected Quick Input alignment'); },
+	navigate() { throw new Error('Unexpected Quick Input navigation'); },
+	async accept() { throw new Error('Unexpected Quick Input acceptance'); },
+	async cancel() { throw new Error('Unexpected Quick Input cancellation'); },
 };
 
 /** Scope-local storage for tests that do not supply a persistence adapter. */
 class TestStorageService implements IStorageService {
 	readonly onDidChangeValue = Event.None;
 	readonly onWillSaveState = Event.None;
-	private readonly entries = new Map<string, { value: string; target: StorageTarget }>();
+	private readonly entries = new Map<string, { value: string; target: StorageTarget; }>();
 	get(key: string, scope: StorageScope, fallbackValue: string): string;
 	get(key: string, scope: StorageScope): string | undefined;
 	get(key: string, scope: StorageScope, fallbackValue?: string): string | undefined {
@@ -85,14 +66,10 @@ class TestStorageService implements IStorageService {
 		if (value === undefined || value === null) this.remove(key, scope);
 		else this.entries.set(`${scope}:${key}`, { value: String(value), target });
 	}
-	remove(key: string, scope: StorageScope): void {
-		this.entries.delete(`${scope}:${key}`);
-	}
+	remove(key: string, scope: StorageScope): void { this.entries.delete(`${scope}:${key}`); }
 	keys(scope: StorageScope, target: StorageTarget): readonly string[] {
 		return [...this.entries].filter(([key, entry]) => key.startsWith(`${scope}:`) && entry.target === target).map(([key]) => key.slice(scope.length + 1));
 	}
-	isNew(): boolean {
-		return this.entries.size === 0;
-	}
-	async flush(): Promise<void> {}
+	isNew(): boolean { return this.entries.size === 0; }
+	async flush(): Promise<void> { }
 }

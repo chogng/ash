@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import {
+	mkdtemp,
+	rm,
+	writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
@@ -15,7 +19,10 @@ test('state service persists and reloads values', async () => {
 		await stateService.close();
 
 		const reopenedStateService = await StateService.create(statePath);
-		assert.deepEqual(reopenedStateService.getItem('windowState'), { version: 1, width: 1200 });
+		assert.deepEqual(reopenedStateService.getItem('windowState'), {
+			version: 1,
+			width: 1200,
+		});
 		await reopenedStateService.close();
 	} finally {
 		await rm(directory, { recursive: true, force: true });

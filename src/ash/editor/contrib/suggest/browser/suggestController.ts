@@ -68,12 +68,17 @@ export class SuggestController extends Disposable {
 			this.onRequestError = options.onRequestError ?? reportRequestError;
 			const results = service.results;
 			this.completionIsIncomplete = results.result?.value.isIncomplete === true;
-			this._register(
-				results.onDidChange(change => {
-					if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
-				}),
-			);
-			this.widget = this._register(new CompletionWidget(editor, view, view.viewport, session, languageService, options.widgetContainer));
+			this._register(results.onDidChange(change => {
+				if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
+			}));
+			this.widget = this._register(new CompletionWidget(
+				editor,
+				view,
+				view.viewport,
+				session,
+				languageService,
+				options.widgetContainer,
+			));
 			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
 			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
@@ -84,20 +89,16 @@ export class SuggestController extends Disposable {
 			this._register(service.textModel.onDidChangeLanguage(() => this.cancel()));
 			this._register(service.onDidChangeProviderCatalog(() => this.cancel()));
 			this._register(editor.onDidBlurEditorText(() => this.cancel()));
-			this._register(
-				editor.onDidChangeCursorSelection(event => {
-					if (event.modelVersionId === event.oldModelVersionId) {
-						this.cancel();
-					}
-				}),
-			);
-			this._register(
-				editor.onDidChangeConfiguration(event => {
-					if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
-						this.cancel();
-					}
-				}),
-			);
+			this._register(editor.onDidChangeCursorSelection(event => {
+				if (event.modelVersionId === event.oldModelVersionId) {
+					this.cancel();
+				}
+			}));
+			this._register(editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
+					this.cancel();
+				}
+			}));
 			this._register(toDisposable(() => this.cancelCompletionRequest()));
 		} catch (error) {
 			this.dispose();
@@ -127,18 +128,38 @@ export class SuggestController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (this.isDisposed || event.defaultPrevented || event.isComposing) return;
 		const state = this.readState();
-		if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && state && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+		if (
+			!event.shiftKey &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			state &&
+			(event.key === 'ArrowDown' || event.key === 'ArrowUp')
+		) {
 			stopEvent(event);
 			if (event.key === 'ArrowDown') this.session.selectNext();
 			else this.session.selectPrevious();
 			return;
 		}
-		if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && event.key === 'Enter' && state && state.selectedIndex >= 0) {
+		if (
+			!event.shiftKey &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			event.key === 'Enter' &&
+			state && state.selectedIndex >= 0
+		) {
 			stopEvent(event);
 			this.acceptSelected();
 			return;
 		}
-		if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && event.key === 'Escape') {
+		if (
+			!event.shiftKey &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			event.key === 'Escape'
+		) {
 			if (state || this.completionRequest) {
 				if (state) {
 					stopEvent(event);
@@ -147,7 +168,12 @@ export class SuggestController extends Disposable {
 			}
 			return;
 		}
-		if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key === 'Tab') {
+		if (
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			event.key === 'Tab'
+		) {
 			if (!event.shiftKey && state && state.selectedIndex >= 0) {
 				stopEvent(event);
 				this.acceptSelected();
@@ -202,28 +228,27 @@ export class SuggestController extends Disposable {
 			const position = selections[0]!.getPosition();
 			const modelVersion = this.view.viewport.textModel.version;
 			const request = this.beginCompletionRequest();
-			void this.service
-				.requestTriggerCharacter(this.service.textModel.getLanguageId(), position, insertedText, {
-					signal: request.signal,
-				})
-				.then(outcome => {
-					const selections = this.editor.getSelections();
-					if (
-						!request.signal.aborted &&
-						outcome === undefined &&
-						refreshIncomplete &&
-						this.view.viewport.textModel.version === modelVersion &&
-						selections?.length === 1 &&
-						selections[0]!.isEmpty() &&
-						Position.compare(selections[0]!.getPosition(), position) === 0
-					) {
-						this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
-					}
-				})
-				.catch(error => {
-					if (!request.signal.aborted) this.reportRequestError(error);
-				})
-				.finally(() => this.releaseCompletionRequest(request));
+			void this.service.requestTriggerCharacter(
+				this.service.textModel.getLanguageId(),
+				position,
+				insertedText,
+				{ signal: request.signal },
+			).then(outcome => {
+				const selections = this.editor.getSelections();
+				if (
+					!request.signal.aborted &&
+					outcome === undefined &&
+					refreshIncomplete &&
+					this.view.viewport.textModel.version === modelVersion &&
+					selections?.length === 1 &&
+					selections[0]!.isEmpty() &&
+					Position.compare(selections[0]!.getPosition(), position) === 0
+				) {
+					this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
+				}
+			}).catch(error => {
+				if (!request.signal.aborted) this.reportRequestError(error);
+			}).finally(() => this.releaseCompletionRequest(request));
 			return;
 		}
 		if (refreshIncomplete) this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
@@ -240,14 +265,14 @@ export class SuggestController extends Disposable {
 		}
 		const request = this.beginCompletionRequest();
 		try {
-			void this.service
-				.request(this.service.textModel.getLanguageId(), selections[0]!.getPosition(), context, {
-					signal: request.signal,
-				})
-				.catch(error => {
-					if (!request.signal.aborted) this.reportRequestError(error);
-				})
-				.finally(() => this.releaseCompletionRequest(request));
+			void this.service.request(
+				this.service.textModel.getLanguageId(),
+				selections[0]!.getPosition(),
+				context,
+				{ signal: request.signal },
+			).catch(error => {
+				if (!request.signal.aborted) this.reportRequestError(error);
+			}).finally(() => this.releaseCompletionRequest(request));
 		} catch (error) {
 			this.releaseCompletionRequest(request);
 			if (!request.signal.aborted) this.reportRequestError(error);
@@ -299,29 +324,28 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.model.getLanguageId())) return;
-		const completions = context.register(
-			new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
-				resource: context.model.uri,
-				providers: context.options.completionProviders ?? [new WordBasedCompletionItemProvider(context.editorWorker)],
-				...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
-			}),
-		);
+		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
+			resource: context.model.uri,
+			providers: context.options.completionProviders ?? [new WordBasedCompletionItemProvider(context.editorWorker)],
+			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
+		}));
 		const fileVariables = createSnippetVariables(context.model.uri);
-		const session = context.register(
-			new SuggestModel(completions.results, context.editor, {
-				resolver: completions,
-				onResolveError: context.onLanguageError,
-				onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
-				snippetVariables: {
-					// Completion acceptance requires a collapsed selection, so selected text is empty.
-					resolveVariable: name => (name === 'TM_SELECTED_TEXT' ? '' : fileVariables.resolveVariable(name)),
-				},
-			}),
+		const session = context.register(new SuggestModel(completions.results, context.editor, {
+			resolver: completions,
+			onResolveError: context.onLanguageError,
+			onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
+			snippetVariables: {
+				// Completion acceptance requires a collapsed selection, so selected text is empty.
+				resolveVariable: name => name === 'TM_SELECTED_TEXT' ? '' : fileVariables.resolveVariable(name),
+			},
+		}));
+		return context.instantiationService.createInstance(SuggestController,
+			context.editor,
+			context.controller,
+			completions,
+			session,
+			{ onRequestError: context.onLanguageError, widgetContainer: context.options.completionWidgetContainer },
 		);
-		return context.instantiationService.createInstance(SuggestController, context.editor, context.controller, completions, session, {
-			onRequestError: context.onLanguageError,
-			widgetContainer: context.options.completionWidgetContainer,
-		});
 	},
 });
 

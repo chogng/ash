@@ -8,12 +8,8 @@ import { pythonCommand } from '../python.ts';
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const require = createRequire(join(repositoryRoot, 'package.json'));
 const addons = [
-	{
-		name: 'native-keymap',
-		binary: 'keymapping.node',
-		exports: ['getKeyMap', 'getCurrentKeyboardLayout', 'onDidChangeKeyboardLayout'],
-	},
-	...(process.platform === 'win32' ? [{ name: 'native-is-elevated', binary: 'iselevated.node', exports: ['isElevated'] }] : []),
+	{ name: 'native-keymap', binary: 'keymapping.node', exports: ['getKeyMap', 'getCurrentKeyboardLayout', 'onDidChangeKeyboardLayout'] },
+	...process.platform === 'win32' ? [{ name: 'native-is-elevated', binary: 'iselevated.node', exports: ['isElevated'] }] : [],
 ];
 
 // Load the binding directly: both upstream JS wrappers hide load errors. Do not
@@ -28,7 +24,7 @@ for (const name of exports) {
 `;
 
 /** Validate with the actual host; only missing or unloadable bindings reach the compiler. */
-export async function prepareElectronAddons(applicationRoot: string, options: { force?: boolean } = {}): Promise<void> {
+export async function prepareElectronAddons(applicationRoot: string, options: { force?: boolean; } = {}): Promise<void> {
 	const electron: string = require('electron');
 	const { version } = require('electron/package.json');
 	if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u.test(version)) throw new Error('Invalid Electron package version');
@@ -40,35 +36,16 @@ export async function prepareElectronAddons(applicationRoot: string, options: { 
 		const cache = join(repositoryRoot, '.build/desktop-addons/v1', `${process.platform}-${process.arch}`, version, `${addon.name}-${fingerprint}.json`);
 		const validate = async (): Promise<void> => {
 			await new Promise<void>((done, fail) => {
-				childProcess.execFile(
-					electron,
-					['-e', probe, binary, version, process.arch, ...addon.exports],
-					{
-						cwd: applicationRoot,
-						env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-						windowsHide: true,
-						timeout: 15_000,
-						maxBuffer: 1024 * 1024,
-					},
-					error => (error ? fail(error) : done()),
-				);
+				childProcess.execFile(electron, ['-e', probe, binary, version, process.arch, ...addon.exports], {
+					cwd: applicationRoot, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+				}, error => error ? fail(error) : done());
 			});
 		};
 		let available = false;
 		if (!options.force) {
-			try {
-				await validate();
-				available = true;
-			} catch {
-				/* Try the exact source/runtime cache before rebuilding. */
-			}
-			if (!available && (await restoreBinding(cache, binary))) {
-				try {
-					await validate();
-					available = true;
-				} catch {
-					/* A load failure also invalidates cached artifacts. */
-				}
+			try { await validate(); available = true; } catch { /* Try the exact source/runtime cache before rebuilding. */ }
+			if (!available && await restoreBinding(cache, binary)) {
+				try { await validate(); available = true; } catch { /* A load failure also invalidates cached artifacts. */ }
 			}
 		}
 		if (!available) {
@@ -81,15 +58,7 @@ export async function prepareElectronAddons(applicationRoot: string, options: { 
 			const previousPython = process.env.PYTHON;
 			process.env.PYTHON = pythonCommand([]).command;
 			try {
-				await rebuild({
-					buildPath: applicationRoot,
-					electronVersion: version,
-					platform: process.platform,
-					arch: process.arch,
-					onlyModules: [addon.name],
-					force: true,
-					disablePreGypCopy: true,
-				});
+				await rebuild({ buildPath: applicationRoot, electronVersion: version, platform: process.platform, arch: process.arch, onlyModules: [addon.name], force: true, disablePreGypCopy: true });
 			} finally {
 				if (previousPython === undefined) delete process.env.PYTHON;
 				else process.env.PYTHON = previousPython;
@@ -118,15 +87,11 @@ async function sourceFingerprint(packageRoot: string): Promise<string> {
 	return hash.digest('hex');
 }
 
-function digest(bytes: Buffer): string {
-	return createHash('sha256').update(bytes).digest('hex');
-}
+function digest(bytes: Buffer): string { return createHash('sha256').update(bytes).digest('hex'); }
 
 async function restoreBinding(cache: string, binary: string): Promise<boolean> {
 	let record: unknown;
-	try {
-		record = JSON.parse(await readFile(cache, 'utf8'));
-	} catch (error) {
+	try { record = JSON.parse(await readFile(cache, 'utf8')); } catch (error) {
 		if (error.code === 'ENOENT' || error instanceof SyntaxError) return false;
 		throw error;
 	}
@@ -140,11 +105,7 @@ async function restoreBinding(cache: string, binary: string): Promise<boolean> {
 async function cacheBinding(cache: string, binary: string): Promise<void> {
 	const bytes = await readFile(binary);
 	const record = JSON.stringify({ sha256: digest(bytes), data: bytes.toString('base64') });
-	try {
-		if ((await readFile(cache, 'utf8')) === record) return;
-	} catch (error) {
-		if (error.code !== 'ENOENT') throw error;
-	}
+	try { if (await readFile(cache, 'utf8') === record) return; } catch (error) { if (error.code !== 'ENOENT') throw error; }
 	await publish(cache, record);
 }
 
@@ -154,9 +115,7 @@ async function publish(path: string, content: Buffer | string): Promise<void> {
 	try {
 		await writeFile(temporary, content);
 		await rename(temporary, path);
-	} finally {
-		await rm(temporary, { force: true });
-	}
+	} finally { await rm(temporary, { force: true }); }
 }
 
 if (import.meta.main) {

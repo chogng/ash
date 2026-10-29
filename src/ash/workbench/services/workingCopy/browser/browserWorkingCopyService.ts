@@ -66,16 +66,7 @@ function validateWorkingCopy(workingCopy: IWorkingCopy): void {
 	if (!workingCopy || typeof workingCopy !== 'object' || !workingCopy.resource || typeof workingCopy.resource.toString !== 'function') {
 		throw new TypeError('Working copy registration requires a resource');
 	}
-	if (
-		typeof workingCopy.isDirty !== 'boolean' ||
-		typeof workingCopy.onDidChangeDirty !== 'function' ||
-		typeof workingCopy.onDidChangeContent !== 'function' ||
-		typeof workingCopy.backup !== 'function' ||
-		typeof workingCopy.restoreBackup !== 'function' ||
-		typeof workingCopy.save !== 'function' ||
-		typeof workingCopy.saveAs !== 'function' ||
-		typeof workingCopy.revert !== 'function'
-	) {
+	if (typeof workingCopy.isDirty !== 'boolean' || typeof workingCopy.onDidChangeDirty !== 'function' || typeof workingCopy.onDidChangeContent !== 'function' || typeof workingCopy.backup !== 'function' || typeof workingCopy.restoreBackup !== 'function' || typeof workingCopy.save !== 'function' || typeof workingCopy.saveAs !== 'function' || typeof workingCopy.revert !== 'function') {
 		throw new TypeError('Working copy registration requires content events, backup restoration, save, saveAs, and revert operations');
 	}
 }

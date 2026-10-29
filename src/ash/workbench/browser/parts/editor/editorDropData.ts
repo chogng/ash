@@ -26,8 +26,9 @@ export async function extractExternalEditorInputs(dataTransfer: DataTransfer): P
 	}
 	for (const file of files) {
 		const nativePath = getPathForFile(file);
-		const resource =
-			typeof nativePath === 'string' && nativePath.length > 0 ? URI.file(nativePath) : URI.parse(`untitled:/dropped/${createUuid()}/${encodeURIComponent(file.name || 'Dropped file')}`);
+		const resource = typeof nativePath === 'string' && nativePath.length > 0
+			? URI.file(nativePath)
+			: URI.parse(`untitled:/dropped/${createUuid()}/${encodeURIComponent(file.name || 'Dropped file')}`);
 		if (resources.has(resource.toString())) continue;
 		resources.add(resource.toString());
 		inputs.push({

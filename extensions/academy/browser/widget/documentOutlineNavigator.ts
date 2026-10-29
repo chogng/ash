@@ -12,10 +12,7 @@ export class DocumentOutlineNavigator extends Disposable {
 	readonly element: HTMLElement;
 	private readonly list: HTMLOListElement;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: DocumentOutlineNavigatorOptions,
-	) {
+	constructor(container: HTMLElement, private readonly options: DocumentOutlineNavigatorOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'nav');

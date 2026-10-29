@@ -59,7 +59,7 @@ jobs:
       - name: Install the locked native Bun and formatter dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Match editor arguments with CI formatting
-        run: node --test --test-name-pattern "Bun buffer command and CI formatter" build/format.test.ts
+        run: pnpm exec node --test --test-name-pattern "workspace buffer commands and CI formatters" build/format.test.ts
 
   rust:
     runs-on: ubuntu-24.04

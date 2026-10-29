@@ -58,10 +58,7 @@ test('Workbench tree settings update retained rows and highlight only the select
 	]);
 	const child = tree.domNode.querySelector<HTMLElement>('[data-tree-id="child"].ash-tree-row')!;
 	tree.setSelection(['child']);
-	assert.deepEqual(
-		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId),
-		['first'],
-	);
+	assert.deepEqual([...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId), ['first']);
 	await configuration.updateValue(ListConfiguration.treeIndent, 20);
 	await configuration.updateValue(ListConfiguration.treeRenderIndentGuides, 'none');
 	assert.equal(tree.domNode.style.getPropertyValue('--ash-tree-indent'), '20px');
@@ -71,10 +68,7 @@ test('Workbench tree settings update retained rows and highlight only the select
 	tree.setFocus('second');
 	assert.equal(tree.domNode.querySelectorAll('.ash-tree-indent-guide.active').length, 2);
 	tree.collapse('second');
-	assert.deepEqual(
-		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId),
-		['first'],
-	);
+	assert.deepEqual([...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId), ['first']);
 	dom.window.close();
 });
 
@@ -87,45 +81,25 @@ test('Workbench trees apply smooth scrolling at creation and on setting changes 
 		scrolling: 'managed' as const,
 		getHeight: () => 22,
 		modelOptions: { identityProvider: { getId: (item: TestItem) => item.id } },
-		renderElement: (item: TestItem) => {
-			const label = h(dom.window.document, 'span');
-			label.textContent = item.id;
-			return label;
-		},
+		renderElement: (item: TestItem) => { const label = h(dom.window.document, 'span'); label.textContent = item.id; return label; },
 	};
 	using configured = new WorkbenchObjectTree<TestItem>(dom.window.document.body, options);
-	using overridden = new WorkbenchObjectTree<TestItem>(dom.window.document.body, {
-		...options,
-		smoothScrolling: false,
-	});
+	using overridden = new WorkbenchObjectTree<TestItem>(dom.window.document.body, { ...options, smoothScrolling: false });
 	const viewports = [configured, overridden].map(tree => {
 		const viewport = tree.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
-		Object.defineProperties(viewport, {
-			clientWidth: { value: 100 },
-			clientHeight: { value: 100 },
-			scrollHeight: { value: 2_200 },
-		});
+		Object.defineProperties(viewport, { clientWidth: { value: 100 }, clientHeight: { value: 100 }, scrollHeight: { value: 2_200 } });
 		tree.setChildren(Array.from({ length: 100 }, (_, index) => ({ element: { id: String(index) } })));
 		return viewport;
 	});
 	const wheel = () => new dom.window.WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 });
 	for (const viewport of viewports) viewport.dispatchEvent(wheel());
-	assert.deepEqual(
-		viewports.map(viewport => viewport.scrollTop),
-		[0, 120],
-	);
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [0, 120]);
 	await configuration.updateValue(ListConfiguration.smoothScrolling, false);
 	for (const viewport of viewports) viewport.dispatchEvent(wheel());
-	assert.deepEqual(
-		viewports.map(viewport => viewport.scrollTop),
-		[120, 240],
-	);
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [120, 240]);
 	await configuration.updateValue(ListConfiguration.smoothScrolling, true);
 	for (const viewport of viewports) viewport.dispatchEvent(wheel());
-	assert.deepEqual(
-		viewports.map(viewport => viewport.scrollTop),
-		[120, 360],
-	);
+	assert.deepEqual(viewports.map(viewport => viewport.scrollTop), [120, 360]);
 	dom.window.close();
 });
 
@@ -135,8 +109,8 @@ test('WorkbenchObjectTree derives preview, pinned, and side-by-side open intent'
 	using tree = new WorkbenchObjectTree<TestItem>(dom.window.document.body, {
 		ariaLabel: 'Resources',
 		configurationService: configuration,
-		modelOptions: { identityProvider: { getId: item => item.id } },
-		renderElement: item => {
+		modelOptions: { identityProvider: { getId: (item) => item.id } },
+		renderElement: (item) => {
 			const label = h(dom.window.document, 'span');
 			label.textContent = item.id;
 			return label;
@@ -146,7 +120,7 @@ test('WorkbenchObjectTree derives preview, pinned, and side-by-side open intent'
 	const second = { id: 'source' };
 	tree.setChildren([{ element: first }, { element: second }]);
 	const opens: ResourceOpenEvent<TestItem>[] = [];
-	using listener = tree.onDidOpen(event => opens.push(event));
+	using listener = tree.onDidOpen((event) => opens.push(event));
 	const firstRow = tree.element.querySelector<HTMLElement>('[data-tree-id="readme"]')!;
 
 	firstRow.dispatchEvent(mouse(dom, 'click', { detail: 1 }));

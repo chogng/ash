@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('Model options combine thinking effort and context size and save the context choice', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const model = page.locator('.ash-chat-input-model-action');
@@ -47,7 +47,7 @@ test('Model options combine thinking effort and context size and save the contex
 
 test('Model visibility changes in Settings refresh the existing Chat catalog', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
@@ -74,7 +74,7 @@ test('Model visibility changes in Settings refresh the existing Chat catalog', {
 
 test('Disconnected model picker explains the empty catalog and opens settings', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
@@ -109,7 +109,7 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 
 test('Model catalog descriptions reach keyboard help and accessible view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
@@ -167,16 +167,14 @@ test('Model picker details and keyboard help follow the Chinese display language
 	await expect(language).toHaveCount(0);
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-input-model-action');
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: '选择聊天模型' });
 	const auto = picker.getByRole('switch', { name: '自动' });
-	if (await auto.isChecked()) {
-		await auto.press('Space');
-	}
+	if (await auto.isChecked()) { await auto.press('Space'); }
 	const search = picker.getByRole('combobox');
 	await search.fill('Astra');
 	await search.press('Enter');
@@ -199,7 +197,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 
 test('New Chat starts with the last model chosen in the picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) .ash-chat-input-model-action');
@@ -232,7 +230,10 @@ async function expectModelPickerAnchored(picker: import('@playwright/test').Loca
 	const popup = await picker.boundingBox();
 	expect(button).not.toBeNull();
 	expect(popup).not.toBeNull();
-	const verticalGap = Math.min(Math.abs(popup!.y + popup!.height - button!.y), Math.abs(popup!.y - button!.y - button!.height));
+	const verticalGap = Math.min(
+		Math.abs(popup!.y + popup!.height - button!.y),
+		Math.abs(popup!.y - button!.y - button!.height),
+	);
 	expect(verticalGap).toBeLessThan(16);
 	expect(popup!.x).toBeLessThan(button!.x + button!.width);
 	expect(popup!.x + popup!.width).toBeGreaterThan(button!.x);
@@ -240,7 +241,7 @@ async function expectModelPickerAnchored(picker: import('@playwright/test').Loca
 
 test('Advisor settings and direct questions use one chat command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
@@ -268,11 +269,11 @@ test('Advisor settings and direct questions use one chat command', { tag: ['@bro
 
 test('Model provider key entry uses the App Server and shows only saved status', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
-	const electron = target.kind === 'electron' ? (application as ElectronApplication) : undefined;
+	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
 	const chatInput = page.locator('.ash-chat-input-editor .stanza-editor-input');
 	await chatInput.focus();
 	await page.keyboard.insertText('/config');
@@ -309,9 +310,10 @@ test('Model provider key entry uses the App Server and shows only saved status',
 	await expect(savedProviders.getByRole('option', { name: /Use OpenAI/ })).toHaveCount(0);
 });
 
+
 test('Model connections support Chinese labels and keyboard navigation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	await page.keyboard.press('F1');

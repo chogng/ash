@@ -32,9 +32,9 @@ export class MarkdownString implements IMarkdownString {
 		if (typeof value !== 'string') throw new TypeError('Markdown value must be a string');
 		this.value = value;
 		this.isTrusted = typeof options === 'boolean' ? options : options.isTrusted;
-		this.supportThemeIcons = typeof options === 'boolean' ? false : (options.supportThemeIcons ?? false);
-		this.supportHtml = typeof options === 'boolean' ? false : (options.supportHtml ?? false);
-		this.supportAlertSyntax = typeof options === 'boolean' ? false : (options.supportAlertSyntax ?? false);
+		this.supportThemeIcons = typeof options === 'boolean' ? false : options.supportThemeIcons ?? false;
+		this.supportHtml = typeof options === 'boolean' ? false : options.supportHtml ?? false;
+		this.supportAlertSyntax = typeof options === 'boolean' ? false : options.supportAlertSyntax ?? false;
 		this.baseUri = typeof options === 'boolean' ? undefined : options.baseUri;
 	}
 
@@ -44,14 +44,8 @@ export class MarkdownString implements IMarkdownString {
 		return this;
 	}
 
-	appendMarkdown(value: string): this {
-		this.value += value;
-		return this;
-	}
-	appendCodeblock(languageId: string, code: string): this {
-		this.value += `\n${escapedCodeBlock(code, languageId)}\n`;
-		return this;
-	}
+	appendMarkdown(value: string): this { this.value += value; return this; }
+	appendCodeblock(languageId: string, code: string): this { this.value += `\n${escapedCodeBlock(code, languageId)}\n`; return this; }
 	appendLink(target: URI | string, label: string, title?: string): this {
 		const escapedLabel = label.replace(/[\\\]]/g, '\\$&');
 		const escapedTarget = String(target).replace(/[\\)]/g, '\\$&');
@@ -64,28 +58,27 @@ export class MarkdownString implements IMarkdownString {
 export function isMarkdownString(value: unknown): value is IMarkdownString {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IMarkdownString;
-	return (
-		typeof candidate.value === 'string' &&
-		isMarkdownStringTrust(candidate.isTrusted) &&
-		(candidate.supportThemeIcons === undefined || typeof candidate.supportThemeIcons === 'boolean') &&
-		(candidate.supportHtml === undefined || typeof candidate.supportHtml === 'boolean') &&
-		(candidate.supportAlertSyntax === undefined || typeof candidate.supportAlertSyntax === 'boolean') &&
-		(candidate.baseUri === undefined || URI.isUri(candidate.baseUri))
-	);
+	return typeof candidate.value === 'string'
+		&& isMarkdownStringTrust(candidate.isTrusted)
+		&& (candidate.supportThemeIcons === undefined || typeof candidate.supportThemeIcons === 'boolean')
+		&& (candidate.supportHtml === undefined || typeof candidate.supportHtml === 'boolean')
+		&& (candidate.supportAlertSyntax === undefined || typeof candidate.supportAlertSyntax === 'boolean')
+		&& (candidate.baseUri === undefined || URI.isUri(candidate.baseUri));
 }
 
 function isMarkdownStringTrust(value: unknown): boolean {
 	if (value === undefined || typeof value === 'boolean') return true;
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 	const enabledCommands = (value as MarkdownStringTrustedOptions).enabledCommands;
-	return enabledCommands === undefined || (Array.isArray(enabledCommands) && enabledCommands.every(command => typeof command === 'string'));
+	return enabledCommands === undefined
+		|| Array.isArray(enabledCommands) && enabledCommands.every(command => typeof command === 'string');
 }
 
 export function escapeMarkdownSyntaxTokens(value: string): string {
 	return value.replace(/[\\`*_{}[\]()#+!~]/g, '\\$&').replace(/^([ \t]*)-/gm, '$1\\-');
 }
 
-export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[] } {
+export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[]; } {
 	const [source, parameters = ''] = href.split('|', 2);
 	const dimensions: string[] = [];
 	for (const name of ['width', 'height'] as const) {

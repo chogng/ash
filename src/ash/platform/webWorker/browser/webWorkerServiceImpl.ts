@@ -12,7 +12,8 @@ export class WebWorkerService implements IWebWorkerService {
 	}
 
 	protected _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
-		return Promise.resolve(descriptor.createWorker ? descriptor.createWorker() : new Worker(this.getWorkerUrl(descriptor), { type: 'module', name: descriptor.label }));
+		return Promise.resolve(descriptor.createWorker ? descriptor.createWorker()
+			: new Worker(this.getWorkerUrl(descriptor), { type: 'module', name: descriptor.label }));
 	}
 
 	getWorkerUrl(descriptor: WebWorkerDescriptor): string {

@@ -72,38 +72,19 @@ class TestSCMProvider implements ISCMProvider {
 	readonly providerId = 'test';
 	readonly label = 'project';
 	readonly groups = [];
-	readonly input = {
-		value: '',
-		placeholder: '',
-		enabled: false,
-		canAccept: false,
-		buttonLabel: '',
-		buttonTooltip: '',
-		accept: async () => undefined,
-	};
+	readonly input = { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined };
 	readonly statusBarCommands = [];
 	readonly statusMessage = '';
 	readonly isBusy = false;
 	private readonly changed = new Emitter<void>();
 	readonly onDidChangeResources = this.changed.event;
 
-	constructor(public activeRepositoryName: string) {}
-	accept(ref: string): void {
-		this.activeRepositoryName = ref;
-		this.changed.fire();
-	}
-	refresh(): Promise<void> {
-		return Promise.resolve();
-	}
-	activate(): Promise<void> {
-		return Promise.resolve();
-	}
-	dispose(): void {
-		this.changed.dispose();
-	}
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	constructor(public activeRepositoryName: string) { }
+	accept(ref: string): void { this.activeRepositoryName = ref; this.changed.fire(); }
+	refresh(): Promise<void> { return Promise.resolve(); }
+	activate(): Promise<void> { return Promise.resolve(); }
+	dispose(): void { this.changed.dispose(); }
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
 class TestStorageService {

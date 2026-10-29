@@ -83,15 +83,16 @@ export function findTextMatches(model: TextModel, query: TextModelSearchQuery, o
 		const relativeStart = match.index;
 		const relativeEnd = relativeStart + match[0].length;
 		if (!query.wholeWord || isWholeWordMatch(text, relativeStart, relativeEnd, query.wordSeparators)) {
-			matches.push(
-				Object.freeze({
-					modelVersion: snapshot.version,
-					range: Range.fromPositions(model.positionAt(startOffset + relativeStart), model.positionAt(startOffset + relativeEnd)),
-					text: match[0],
-					captures: Object.freeze(match.slice(1)),
-					namedCaptures: Object.freeze({ ...match.groups }),
-				}),
-			);
+			matches.push(Object.freeze({
+				modelVersion: snapshot.version,
+				range: Range.fromPositions(
+					model.positionAt(startOffset + relativeStart),
+					model.positionAt(startOffset + relativeEnd),
+				),
+				text: match[0],
+				captures: Object.freeze(match.slice(1)),
+				namedCaptures: Object.freeze({ ...match.groups }),
+			}));
 		}
 		if (match[0].length === 0) {
 			if (expression.lastIndex >= text.length) break;
@@ -111,7 +112,7 @@ export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery,
 	})[0];
 	if (following || !wrap || model.offsetAt(from) === 0) return following;
 	return findTextMatches(model, query, {
-		range: Range.fromPositions(new Position(0 + 1, 0 + 1), from),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), from),
 		resultLimit: 1,
 	})[0];
 }
@@ -137,7 +138,9 @@ function readResultLimit(value: number | undefined): number {
 }
 
 function compileQuery(query: TextModelSearchQuery): RegExp {
-	const source = query.patternKind === TextSearchPatternKind.RegularExpression ? query.pattern : escapeRegExpCharacters(query.pattern);
+	const source = query.patternKind === TextSearchPatternKind.RegularExpression
+		? query.pattern
+		: escapeRegExpCharacters(query.pattern);
 	try {
 		return new RegExp(source, `gmu${query.matchCase ? '' : 'i'}`);
 	} catch (error) {
@@ -151,7 +154,8 @@ function isWholeWordMatch(text: string, start: number, end: number, wordSeparato
 	const before = codePointBefore(text, start);
 	const after = codePointAt(text, end);
 	const classifier = wordSeparators === undefined ? undefined : getMapForWordSeparators(wordSeparators, []);
-	return !(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) && !(isWordCharacter(last, classifier) && isWordCharacter(after, classifier));
+	return !(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) &&
+		!(isWordCharacter(last, classifier) && isWordCharacter(after, classifier));
 }
 
 function isWordCharacter(value: string | undefined, classifier: WordCharacterClassifier | undefined): boolean {

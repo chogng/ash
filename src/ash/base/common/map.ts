@@ -60,7 +60,10 @@ export class LRUCache<K, V> implements Map<K, V> {
 		return this.entriesByAge.delete(key);
 	}
 
-	forEach(callback: (value: V, key: K, map: Map<K, V>) => void, thisArg?: unknown): void {
+	forEach(
+		callback: (value: V, key: K, map: Map<K, V>) => void,
+		thisArg?: unknown,
+	): void {
 		new Map(this.entriesByAge).forEach((value, key) => {
 			callback.call(thisArg, value, key, this);
 		});
@@ -184,7 +187,10 @@ export class ResourceMap<T> implements Map<URI, T> {
 		this._entries.clear();
 	}
 
-	forEach(callback: (value: T, key: URI, map: Map<URI, T>) => void, thisArg?: unknown): void {
+	forEach(
+		callback: (value: T, key: URI, map: Map<URI, T>) => void,
+		thisArg?: unknown,
+	): void {
 		for (const entry of this._entries.values()) {
 			callback.call(thisArg, entry.value, entry.resource, this);
 		}
@@ -244,7 +250,10 @@ export class ResourceSet implements Set<URI> {
 		this.resources.clear();
 	}
 
-	forEach(callback: (value: URI, value2: URI, set: Set<URI>) => void, thisArg?: unknown): void {
+	forEach(
+		callback: (value: URI, value2: URI, set: Set<URI>) => void,
+		thisArg?: unknown,
+	): void {
 		this.resources.forEach((_value, resource) => {
 			callback.call(thisArg, resource, resource, this);
 		});
@@ -352,12 +361,8 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return node;
 	}
 
-	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
-		const path: Array<{
-			readonly parent: NKeyMapNode<TValue>;
-			readonly key: NKey;
-			readonly node: NKeyMapNode<TValue>;
-		}> = [];
+	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> {
+		const path: Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> = [];
 		let parent = this.root;
 		for (const key of keys) {
 			const node = parent.children.get(key);
@@ -368,13 +373,7 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return path;
 	}
 
-	private prune(
-		path: readonly {
-			readonly parent: NKeyMapNode<TValue>;
-			readonly key: NKey;
-			readonly node: NKeyMapNode<TValue>;
-		}[],
-	): void {
+	private prune(path: readonly { readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }[]): void {
 		for (let index = path.length - 1; index >= 0; index -= 1) {
 			const entry = path[index]!;
 			if (entry.node.hasValue || entry.node.children.size > 0) return;

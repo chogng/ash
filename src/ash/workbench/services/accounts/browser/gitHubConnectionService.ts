@@ -90,22 +90,17 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 	}
 
 	private showError(error: unknown): void {
-		this.showMessage(
-			DialogSeverity.Error,
-			error instanceof AppServerRemoteError && error.errorName === 'AccountUnavailable'
-				? this.label('account.githubUnavailable', 'GitHub connection is unavailable. Check this build’s GitHub configuration.')
-				: this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'),
-		);
+		this.showMessage(DialogSeverity.Error, error instanceof AppServerRemoteError && error.errorName === 'AccountUnavailable'
+			? this.label('account.githubUnavailable', 'GitHub connection is unavailable. Check this build’s GitHub configuration.')
+			: this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'));
 	}
 
 	private showMessage(severity: DialogSeverity, message: string): void {
-		void this.dialogs
-			.showMessage({
-				title: this.label('workbench.connectGitHub', 'Connect GitHub'),
-				message,
-				severity,
-			})
-			.catch(error => this.log.error('github', 'Could not show GitHub connection dialog', error));
+		void this.dialogs.showMessage({
+			title: this.label('workbench.connectGitHub', 'Connect GitHub'),
+			message,
+			severity,
+		}).catch(error => this.log.error('github', 'Could not show GitHub connection dialog', error));
 	}
 
 	private label(key: string, fallback: string): string {

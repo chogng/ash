@@ -110,9 +110,7 @@ test('Remote Ports does not let an initial list overwrite a newer tunnel event',
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
 	let resolveInitialList!: (tunnels: readonly RemoteTunnel[]) => void;
-	const initialList = new Promise<readonly RemoteTunnel[]>(resolve => {
-		resolveInitialList = resolve;
-	});
+	const initialList = new Promise<readonly RemoteTunnel[]>(resolve => { resolveInitialList = resolve; });
 	using tunnels = new TestTunnelService([], initialList);
 	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
@@ -138,9 +136,7 @@ test('Remote Ports releases an open result from a retired connection generation'
 	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
 	let finish!: () => void;
-	tunnels.pendingOpen = new Promise(resolve => {
-		finish = resolve;
-	});
+	tunnels.pendingOpen = new Promise(resolve => { finish = resolve; });
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
 		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.retired.test', title: 'Ports' }, tunnelService, remoteAgent);
@@ -166,7 +162,7 @@ interface TestTunnel extends RemoteTunnel {
 class TestTunnelService extends Disposable implements ITunnelService {
 	declare public readonly _serviceBrand: undefined;
 	private readonly opened = this._register(new Emitter<RemoteTunnel>());
-	private readonly closed = this._register(new Emitter<{ host: string; port: number }>());
+	private readonly closed = this._register(new Emitter<{ host: string; port: number; }>());
 	private readonly entries = new Map<string, TestTunnel>();
 	private initialList: Promise<readonly RemoteTunnel[]> | undefined;
 	public readonly openedPorts: number[] = [];
@@ -196,23 +192,13 @@ class TestTunnelService extends Disposable implements ITunnelService {
 		this.openedPorts.push(remotePort);
 		await this.pendingOpen;
 		const opened = tunnel(`tunnel-${remotePort}`, remotePort + 10_000, remotePort, 'open');
-		const handle = {
-			...opened,
-			dispose: async () => {
-				this.closedIds.push(opened.id);
-				this.remove(opened.id);
-			},
-		};
+		const handle = { ...opened, dispose: async () => { this.closedIds.push(opened.id); this.remove(opened.id); } };
 		this.upsert(handle);
 		return handle;
 	}
 
-	public async getExistingTunnel(host: string, port: number): Promise<RemoteTunnel | undefined> {
-		return [...this.entries.values()].find(t => t.tunnelRemoteHost === host && t.tunnelRemotePort === port);
-	}
-	public async closeAll(): Promise<void> {
-		await Promise.all([...this.entries.values()].map(t => this.closeTunnel(t.tunnelRemoteHost, t.tunnelRemotePort)));
-	}
+	public async getExistingTunnel(host: string, port: number): Promise<RemoteTunnel | undefined> { return [...this.entries.values()].find(t => t.tunnelRemoteHost === host && t.tunnelRemotePort === port); }
+	public async closeAll(): Promise<void> { await Promise.all([...this.entries.values()].map(t => this.closeTunnel(t.tunnelRemoteHost, t.tunnelRemotePort))); }
 	public async closeTunnel(remoteHost: string, remotePort: number): Promise<void> {
 		const entry = [...this.entries.values()].find(entry => entry.tunnelRemoteHost === remoteHost && entry.tunnelRemotePort === remotePort);
 		if (entry) {
@@ -241,19 +227,10 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 
-	constructor(
-		public connection: RemoteAgentConnection | undefined,
-		public connectionState: RemoteConnectionState | undefined,
-	) {
-		super();
-	}
+	constructor(public connection: RemoteAgentConnection | undefined, public connectionState: RemoteConnectionState | undefined) { super(); }
 
-	async reconnect() {
-		return { kind: 'reconnected' } as const;
-	}
-	async rollbackRuntime() {
-		return { kind: 'rolledBack' } as const;
-	}
+	async reconnect() { return { kind: 'reconnected' } as const; }
+	async rollbackRuntime() { return { kind: 'rolledBack' } as const; }
 
 	emitConnection(connection: RemoteAgentConnection): void {
 		this.connection = connection;
@@ -267,16 +244,7 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 }
 
 function tunnel(id: string, localPort: number, remotePort: number, state: RemoteTunnel['state']): TestTunnel {
-	return Object.freeze({
-		id,
-		tunnelLocalPort: localPort,
-		tunnelRemoteHost: '127.0.0.1',
-		tunnelRemotePort: remotePort,
-		localAddress: `127.0.0.1:${localPort}`,
-		privacy: TunnelPrivacyId.ConstantPrivate,
-		state,
-		dispose: async () => {},
-	});
+	return Object.freeze({ id, tunnelLocalPort: localPort, tunnelRemoteHost: '127.0.0.1', tunnelRemotePort: remotePort, localAddress: `127.0.0.1:${localPort}`, privacy: TunnelPrivacyId.ConstantPrivate, state, dispose: async () => { } });
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

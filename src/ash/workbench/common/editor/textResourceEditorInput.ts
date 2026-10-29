@@ -10,11 +10,7 @@ export class TextResourceEditorInput extends AbstractResourceEditorInput {
 	public readonly readOnly = true;
 	private resolution: Promise<IResolvedTextEditorModel> | undefined;
 
-	constructor(
-		resource: URI,
-		private readonly name: string | undefined,
-		@ITextModelService private readonly textModelService: ITextModelService,
-	) {
+	constructor(resource: URI, private readonly name: string | undefined, @ITextModelService private readonly textModelService: ITextModelService) {
 		super(resource);
 	}
 
@@ -24,7 +20,7 @@ export class TextResourceEditorInput extends AbstractResourceEditorInput {
 
 	public resolve(): Promise<IResolvedTextEditorModel> {
 		this.assertNotDisposed();
-		return (this.resolution ??= this.resolveModel());
+		return this.resolution ??= this.resolveModel();
 	}
 
 	protected override disposeCore(): void {

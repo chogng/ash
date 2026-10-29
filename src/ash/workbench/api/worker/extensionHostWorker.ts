@@ -13,31 +13,19 @@ let currentInvocation: number | undefined;
 // Bundled extensions downlevel await to Promise.then. Each continuation carries its
 // originating invocation, including concurrent callbacks and cancelled late replies.
 const originalThen = Promise.prototype.then;
-Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(
-	fulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null,
-	rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-): Promise<TResult1 | TResult2> {
+Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(fulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null, rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
 	const owner = currentInvocation;
-	const bind = <TResult>(callback: ((value: unknown) => TResult | PromiseLike<TResult>) | null | undefined): typeof callback =>
-		callback &&
-		function (value: unknown): TResult | PromiseLike<TResult> {
-			const previous = currentInvocation;
-			currentInvocation = owner;
-			try {
-				return callback(value);
-			} finally {
-				currentInvocation = previous;
-			}
-		};
+	const bind = <TResult>(callback: ((value: unknown) => TResult | PromiseLike<TResult>) | null | undefined): typeof callback => callback && function (value: unknown): TResult | PromiseLike<TResult> {
+		const previous = currentInvocation;
+		currentInvocation = owner;
+		try { return callback(value); } finally { currentInvocation = previous; }
+	};
 	return originalThen.call(this, bind(fulfilled), bind(rejected)) as Promise<TResult1 | TResult2>;
 };
-const commands = new Map<number, { request: JsonValue; sent: boolean; resolve(value: JsonValue): void; reject(error: Error): void }>();
+const commands = new Map<number, { request: JsonValue; sent: boolean; resolve(value: JsonValue): void; reject(error: Error): void; }>();
 let sentCommands = 0;
 let nextCommand = 1;
-const scope = globalThis as unknown as {
-	onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void;
-	postMessage(value: unknown): void;
-};
+const scope = globalThis as unknown as { onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void; postMessage(value: unknown): void; };
 
 scope.onmessage = event => {
 	const message = event.data;
@@ -45,23 +33,15 @@ scope.onmessage = event => {
 		const command = commands.get(message.id);
 		commands.delete(message.id);
 		if (command?.sent) sentCommands--;
-		if (message.success) command?.resolve(message.result);
-		else command?.reject(new Error(message.error));
+		if (message.success) command?.resolve(message.result); else command?.reject(new Error(message.error));
 		pumpClientRequests();
 		return;
 	}
-	if (message.type === 'cancel') {
-		invocations.get(message.invocationId)?.abort();
-		runtime?.cancel(message.invocationId);
-		return;
-	}
-	void dispatch(message).then(
-		result => scope.postMessage({ id: message.id, success: true, result }),
-		error => scope.postMessage({ id: message.id, success: false, error: String(error) }),
-	);
+	if (message.type === 'cancel') { invocations.get(message.invocationId)?.abort(); runtime?.cancel(message.invocationId); return; }
+	void dispatch(message).then(result => scope.postMessage({ id: message.id, success: true, result }), error => scope.postMessage({ id: message.id, success: false, error: String(error) }));
 };
 
-async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult' }>): Promise<JsonValue> {
+async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult'; }>): Promise<JsonValue> {
 	if (message.type === 'activate') {
 		const globals = globalThis as unknown as Record<string, unknown>;
 		globals.__ashConfiguration = message.configuration;
@@ -82,14 +62,13 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 		globals.__ashWebviewResource = (url: string): void => scope.postMessage({ type: 'webviewResource', url });
 		globals.__ashRegistrationsChanged = (snapshot: JsonValue): void => scope.postMessage({ type: 'registrationsChanged', snapshot });
 		// Immutable bundled package code executes in a separate Worker realm.
-		runtime = (await import(/* @vite-ignore */ message.entryPoint)) as BrowserRuntime;
+		runtime = await import(/* @vite-ignore */ message.entryPoint) as BrowserRuntime;
 		return runtime.activate();
 	}
 	if (message.type === 'deactivate') {
 		for (const invocation of invocations.values()) invocation.abort();
-		try {
-			await runtime?.deactivate();
-		} finally {
+		try { await runtime?.deactivate(); }
+		finally {
 			runtime = undefined;
 			for (const [id, command] of commands) {
 				scope.postMessage({ type: 'clientCancel', id });
@@ -107,16 +86,10 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 	const previous = currentInvocation;
 	currentInvocation = message.id;
 	let result: Promise<JsonValue>;
-	try {
-		result = runtime.invoke(message.request.registrationId, message.request.payload, message.id, message.request.operation);
-	} finally {
-		currentInvocation = previous;
-	}
-	try {
-		return await result;
-	} finally {
-		invocations.delete(message.id);
-	}
+	try { result = runtime.invoke(message.request.registrationId, message.request.payload, message.id, message.request.operation); }
+	finally { currentInvocation = previous; }
+	try { return await result; }
+	finally { invocations.delete(message.id); }
 }
 
 function clientRequest(request: JsonValue, signal?: AbortSignal): Promise<JsonValue> {
@@ -126,26 +99,12 @@ function clientRequest(request: JsonValue, signal?: AbortSignal): Promise<JsonVa
 		const abort = (): void => {
 			const command = commands.get(id);
 			if (!commands.delete(id)) return;
-			if (command?.sent) {
-				sentCommands--;
-				scope.postMessage({ type: 'clientCancel', id });
-			}
+			if (command?.sent) { sentCommands--; scope.postMessage({ type: 'clientCancel', id }); }
 			reject(signal!.reason);
 			pumpClientRequests();
 		};
 		signal?.addEventListener('abort', abort, { once: true });
-		commands.set(id, {
-			request,
-			sent: false,
-			resolve: value => {
-				signal?.removeEventListener('abort', abort);
-				resolve(value);
-			},
-			reject: error => {
-				signal?.removeEventListener('abort', abort);
-				reject(error);
-			},
-		});
+		commands.set(id, { request, sent: false, resolve: value => { signal?.removeEventListener('abort', abort); resolve(value); }, reject: error => { signal?.removeEventListener('abort', abort); reject(error); } });
 		pumpClientRequests();
 	});
 }

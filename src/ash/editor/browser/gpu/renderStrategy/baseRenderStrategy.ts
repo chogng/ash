@@ -11,15 +11,13 @@ export abstract class BaseRenderStrategy extends ViewEventHandler implements IGp
 	public abstract readonly type: string;
 	public abstract readonly wgsl: string;
 	public abstract readonly bindGroupEntries: GPUBindGroupEntry[];
-	public get glyphRasterizer(): GlyphRasterizer {
-		return this._glyphRasterizer.value;
-	}
+	public get glyphRasterizer(): GlyphRasterizer { return this._glyphRasterizer.value; }
 
 	constructor(
 		protected readonly _context: ViewContext,
 		protected readonly _viewGpuContext: ViewGpuContext,
 		protected readonly _device: GPUDevice,
-		protected readonly _glyphRasterizer: { value: GlyphRasterizer },
+		protected readonly _glyphRasterizer: { value: GlyphRasterizer; },
 	) {
 		super();
 		this._context.addEventHandler(this);

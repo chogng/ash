@@ -11,7 +11,7 @@ import { registerRunResource } from '../../build/processes.ts';
 
 export interface WebLaunchResult {
 	readonly profileDirectory: string;
-	readonly connection: { readonly endpoint: string; readonly token: string };
+	readonly connection: { readonly endpoint: string; readonly token: string; };
 	close(): Promise<void>;
 }
 
@@ -21,16 +21,13 @@ export interface GitHubBrowserTestConfiguration {
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(
-	workspaceDirectory: string,
-	options: {
-		readonly reportIssueUrl?: string;
-		readonly backendConfiguration?: string;
-		readonly githubAccount?: GitHubBrowserTestConfiguration;
-		readonly preparedBackend?: boolean;
-		readonly useInMemorySecretStorage?: boolean;
-	} = {},
-): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, options: {
+	readonly reportIssueUrl?: string;
+	readonly backendConfiguration?: string;
+	readonly githubAccount?: GitHubBrowserTestConfiguration;
+	readonly preparedBackend?: boolean;
+	readonly useInMemorySecretStorage?: boolean;
+} = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -44,10 +41,7 @@ export async function launchWeb(
 	};
 	const resource = await registerRunResource(() => {
 		const packageRoot = developmentAshPackagePath(root, 'packaged-node');
-		return {
-			executable: join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon'),
-			profile: profileDirectory,
-		};
+		return { executable: join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon'), profile: profileDirectory };
 	});
 	let launch: Awaited<ReturnType<typeof startWeb>> | undefined;
 	const close = async (): Promise<void> => {
@@ -57,11 +51,7 @@ export async function launchWeb(
 			try {
 				const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 				const daemon = join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
-				await promisify(execFile)(daemon, ['stop'], {
-					env: { ...environment, ASH_HOME: profileDirectory },
-					windowsHide: true,
-					timeout: 30_000,
-				});
+				await promisify(execFile)(daemon, ['stop'], { env: { ...environment, ASH_HOME: profileDirectory }, windowsHide: true, timeout: 30_000 });
 				await resource.dispose();
 			} finally {
 				await rm(profileDirectory, { force: true, recursive: true });
@@ -69,40 +59,16 @@ export async function launchWeb(
 		}
 	};
 	try {
-		await writeFile(
-			productServicesPath,
-			JSON.stringify({
-				schemaVersion: 3,
-				reportIssueUrl: options.reportIssueUrl,
-				githubAccount: options.githubAccount,
-			}) + '\n',
-		);
-		if (options.backendConfiguration) {
-			await writeFile(join(profileDirectory, 'config.toml'), options.backendConfiguration);
-		}
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3, reportIssueUrl: options.reportIssueUrl, githubAccount: options.githubAccount }) + '\n');
+		if (options.backendConfiguration) { await writeFile(join(profileDirectory, 'config.toml'), options.backendConfiguration); }
 		const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 		if (languageServer) {
-			await writeFile(
-				join(profileDirectory, 'config.toml'),
-				`${options.backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`,
-			);
+			await writeFile(join(profileDirectory, 'config.toml'), `${options.backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
 		}
-		launch = await startWeb({
-			port: 0,
-			assets: join(root, '.build/desktop/web/ash'),
-			environment,
-			preparedBackend: options.preparedBackend,
-		});
+		launch = await startWeb({ port: 0, assets: join(root, '.build/desktop/web/ash'), environment, preparedBackend: options.preparedBackend });
 		const { endpoint, ticket } = launch.info;
-		const response = await fetch(new URL('/ash/session', endpoint), {
-			method: 'POST',
-			headers: { Origin: new URL(endpoint).origin },
-			body: ticket,
-			signal: AbortSignal.timeout(10_000),
-		});
-		if (!response.ok) {
-			throw new Error(`Web test authentication failed: ${response.status}`);
-		}
+		const response = await fetch(new URL('/ash/session', endpoint), { method: 'POST', headers: { Origin: new URL(endpoint).origin }, body: ticket, signal: AbortSignal.timeout(10_000) });
+		if (!response.ok) { throw new Error(`Web test authentication failed: ${response.status}`); }
 		const session = decodeWebSessionInfo(await response.json());
 		return { connection: { endpoint, token: session.token }, profileDirectory, close };
 	} catch (error) {

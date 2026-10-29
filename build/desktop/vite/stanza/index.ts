@@ -32,22 +32,20 @@ const container = requiredElement('editor-root');
 const resource = stanzaApi.URI.parse('inmemory://stanza/standalone.ts');
 const disposables = new DisposableStore();
 const model = disposables.add(stanzaApi.editor.createModel(initialText, 'typescript', resource));
-const editor = disposables.add(
-	stanzaApi.editor.create(container, {
-		model,
-		lineWrapping: stanzaApi.EditorLineWrapping.On,
-		lineNumbers: 'on',
-		guides: { indentation: true },
-		bracketPairColorization: { enabled: true },
-		stickyScroll: { enabled: true },
-		suggestions: true,
-		inlineCompletions: true,
-		parameterHints: { enabled: true },
-		inlayHints: { enabled: 'on' },
-		codeLens: true,
-		placeholder: 'Start typing…',
-	}),
-);
+const editor = disposables.add(stanzaApi.editor.create(container, {
+	model,
+	lineWrapping: stanzaApi.EditorLineWrapping.On,
+	lineNumbers: 'on',
+	guides: { indentation: true },
+	bracketPairColorization: { enabled: true },
+	stickyScroll: { enabled: true },
+	suggestions: true,
+	inlineCompletions: true,
+	parameterHints: { enabled: true },
+	inlayHints: { enabled: 'on' },
+	codeLens: true,
+	placeholder: 'Start typing…',
+}));
 
 const resizeObserver = new ResizeObserver(() => layoutEditor());
 resizeObserver.observe(container);

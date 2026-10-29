@@ -18,41 +18,48 @@ test('PieceTreeTextBuffer matches a string oracle and red-black invariants acros
 
 	for (let iteration = 0; iteration < 1_000; iteration += 1) {
 		const startOffset = integer(random, oracle.length + 1);
-		const endOffset = startOffset + integer(random, oracle.length - startOffset + 1);
+		const endOffset = startOffset +
+			integer(random, oracle.length - startOffset + 1);
 		const insertedText = insertions[integer(random, insertions.length)];
 		applyOffsetEdit(buffer, startOffset, endOffset, insertedText);
 		assertTreeInvariants(buffer);
-		oracle = oracle.slice(0, startOffset) + insertedText + oracle.slice(endOffset);
+		oracle =
+			oracle.slice(0, startOffset) +
+			insertedText +
+			oracle.slice(endOffset);
 
 		const rangeStart = integer(random, oracle.length + 1);
-		const rangeEnd = rangeStart + integer(random, oracle.length - rangeStart + 1);
+		const rangeEnd = rangeStart +
+			integer(random, oracle.length - rangeStart + 1);
 		const offset = integer(random, oracle.length + 1);
 		const expectedPosition = positionAt(oracle, offset);
 		const lineStarts = computeLineStarts(oracle);
 		const lineIndex = integer(random, lineStarts.length);
-		const lineEndOffset = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1] - 1 : oracle.length;
-		const columnIndex = integer(random, lineEndOffset - lineStarts[lineIndex] + 1);
-
-		assert.deepEqual(
-			{
-				text: buffer.createSnapshot().getText(),
-				length: buffer.getLength(),
-				lineCount: buffer.getLineCount(),
-				range: buffer.getValueInRange(buffer.getRangeAt(rangeStart, rangeEnd - rangeStart)),
-				position: buffer.getPositionAt(offset),
-				offset: buffer.getOffsetAt(lineIndex + 1, columnIndex + 1),
-				line: buffer.getLineContent(lineIndex + 1),
-			},
-			{
-				text: oracle,
-				length: oracle.length,
-				lineCount: lineStarts.length,
-				range: oracle.slice(rangeStart, rangeEnd),
-				position: expectedPosition,
-				offset: lineStarts[lineIndex] + columnIndex,
-				line: oracle.slice(lineStarts[lineIndex], lineEndOffset),
-			},
+		const lineEndOffset = lineIndex + 1 < lineStarts.length
+			? lineStarts[lineIndex + 1] - 1
+			: oracle.length;
+		const columnIndex = integer(
+			random,
+			lineEndOffset - lineStarts[lineIndex] + 1,
 		);
+
+		assert.deepEqual({
+			text: buffer.createSnapshot().getText(),
+			length: buffer.getLength(),
+			lineCount: buffer.getLineCount(),
+			range: buffer.getValueInRange(buffer.getRangeAt(rangeStart, rangeEnd - rangeStart)),
+			position: buffer.getPositionAt(offset),
+			offset: buffer.getOffsetAt(lineIndex + 1, columnIndex + 1),
+			line: buffer.getLineContent(lineIndex + 1),
+		}, {
+			text: oracle,
+			length: oracle.length,
+			lineCount: lineStarts.length,
+			range: oracle.slice(rangeStart, rangeEnd),
+			position: expectedPosition,
+			offset: lineStarts[lineIndex] + columnIndex,
+			line: oracle.slice(lineStarts[lineIndex], lineEndOffset),
+		});
 	}
 });
 
@@ -64,18 +71,15 @@ test('PieceTreeTextBufferBuilder constructs one buffer from ordered chunks', () 
 	const factory = builder.finish();
 	const { textBuffer: buffer } = factory.create(DefaultEndOfLine.LF);
 
-	assert.deepEqual(
-		{
-			text: buffer.createSnapshot().getText(),
-			lineCount: buffer.getLineCount(),
-			position: buffer.getPositionAt(8),
-		},
-		{
-			text: 'first\nsecond😀',
-			lineCount: 2,
-			position: new Position(2, 3),
-		},
-	);
+	assert.deepEqual({
+		text: buffer.createSnapshot().getText(),
+		lineCount: buffer.getLineCount(),
+		position: buffer.getPositionAt(8),
+	}, {
+		text: 'first\nsecond😀',
+		lineCount: 2,
+		position: new Position(2, 3),
+	});
 	assert.equal(factory.getFirstLineText(100), 'first');
 });
 
@@ -110,7 +114,7 @@ test('PieceTreeTextBufferBuilder joins split surrogate pairs without normalizing
 	assert.equal(buffer.getEOL(), '\n');
 	assert.equal(buffer.createSnapshot().getText(), 'alpha\r\nbeta😃\ngamma');
 	assert.equal(buffer.getLineContent(2), 'beta😃');
-	assert.deepEqual([buffer.getLineCharCode(2, 4), buffer.getLineCharCode(2, 5)], [0xd83d, 0xde03]);
+	assert.deepEqual([buffer.getLineCharCode(2, 4), buffer.getLineCharCode(2, 5)], [0xD83D, 0xDE03]);
 	assert.equal(Number.isNaN(buffer.getLineCharCode(2, 6)), true);
 	disposable.dispose();
 });
@@ -127,18 +131,17 @@ test('PieceTreeTextBuffer exposes the ITextBuffer query contract', () => {
 	assert.equal(buffer.getNearestChunk(6), '\u05D0mega');
 	assert.equal(buffer.getNearestChunk(buffer.getLength()), '');
 	assert.deepEqual(buffer.getRangeAt(6, 5), new Range(2, 1, 2, 6));
-	assert.deepEqual(buffer.findMatchesLineByLine(new Range(1, 1, 2, 6), new SearchData(/mega/gu, null, 'mega'), true, 10), [new FindMatch(new Range(2, 2, 2, 6), ['mega'])]);
+	assert.deepEqual(buffer.findMatchesLineByLine(new Range(1, 1, 2, 6), new SearchData(/mega/gu, null, 'mega'), true, 10), [
+		new FindMatch(new Range(2, 2, 2, 6), ['mega']),
+	]);
 });
 
 test('PieceTreeTextBuffer character queries reuse full-text scans between edits', () => {
 	using buffer = new PieceTreeTextBuffer('ascii\ntext');
-	const reader = buffer as unknown as { getText(): string };
+	const reader = buffer as unknown as { getText(): string; };
 	const original = reader.getText;
 	let scans = 0;
-	reader.getText = () => {
-		scans++;
-		return original.call(buffer);
-	};
+	reader.getText = () => { scans++; return original.call(buffer); };
 	try {
 		for (let iteration = 0; iteration < 1000; iteration++) {
 			assert.equal(buffer.mightContainRTL(), false);
@@ -166,14 +169,12 @@ test('PieceTreeTextBuffer character flags refresh before change callbacks and in
 	const observations: ReturnType<typeof flags>[] = [];
 	using listener = buffer.onDidChangeContent(() => observations.push(flags()));
 	assert.deepEqual(flags(), { rtl: false, nonASCII: false });
-	const result = buffer.applyEdits([new ValidAnnotatedEditOperation(null, new Range(1, 6, 1, 6), '\u05D0😀', false, false, false)], false, true);
+	const result = buffer.applyEdits([
+		new ValidAnnotatedEditOperation(null, new Range(1, 6, 1, 6), '\u05D0😀', false, false, false),
+	], false, true);
 	assert.deepEqual(flags(), { rtl: true, nonASCII: true });
 	assert.ok(result.reverseEdits);
-	buffer.applyEdits(
-		result.reverseEdits.map(edit => new ValidAnnotatedEditOperation(edit.identifier, edit.range, edit.text, false, false, false)),
-		false,
-		false,
-	);
+	buffer.applyEdits(result.reverseEdits.map(edit => new ValidAnnotatedEditOperation(edit.identifier, edit.range, edit.text, false, false, false)), false, false);
 	assert.deepEqual(flags(), { rtl: false, nonASCII: false });
 	applyOffsetEdit(buffer, 0, buffer.getLength(), '中文😀');
 	assert.deepEqual(flags(), { rtl: false, nonASCII: true });
@@ -190,28 +191,17 @@ test('PieceTreeTextBuffer character flags refresh before change callbacks and in
 test('PieceTreeTextBuffer applies one atomic edit batch and returns inverse edits', () => {
 	using buffer = new PieceTreeTextBuffer('abc\ndef');
 	let changeEvents = 0;
-	using listener = buffer.onDidChangeContent(() => (changeEvents += 1));
-	const result = buffer.applyEdits(
-		[
-			new ValidAnnotatedEditOperation({ major: 1, minor: 0 }, new Range(2, 1, 2, 2), 'D', false, false, false),
-			new ValidAnnotatedEditOperation({ major: 0, minor: 0 }, new Range(1, 2, 1, 3), 'B', false, false, false),
-		],
-		false,
-		true,
-	);
+	using listener = buffer.onDidChangeContent(() => changeEvents += 1);
+	const result = buffer.applyEdits([
+		new ValidAnnotatedEditOperation({ major: 1, minor: 0 }, new Range(2, 1, 2, 2), 'D', false, false, false),
+		new ValidAnnotatedEditOperation({ major: 0, minor: 0 }, new Range(1, 2, 1, 3), 'B', false, false, false),
+	], false, true);
 
 	assert.equal(buffer.createSnapshot().getText(), 'aBc\nDef');
 	assert.equal(changeEvents, 1);
-	assert.deepEqual(
-		result.changes.map(change => change.range),
-		[new Range(2, 1, 2, 2), new Range(1, 2, 1, 3)],
-	);
+	assert.deepEqual(result.changes.map(change => change.range), [new Range(2, 1, 2, 2), new Range(1, 2, 1, 3)]);
 	assert.ok(result.reverseEdits);
-	buffer.applyEdits(
-		result.reverseEdits.map(edit => new ValidAnnotatedEditOperation(edit.identifier, edit.range, edit.text, false, false, false)),
-		false,
-		false,
-	);
+	buffer.applyEdits(result.reverseEdits.map(edit => new ValidAnnotatedEditOperation(edit.identifier, edit.range, edit.text, false, false, false)), false, false);
 	assert.equal(buffer.createSnapshot().getText(), 'abc\ndef');
 	assert.equal(changeEvents, 2);
 });
@@ -222,16 +212,13 @@ test('PieceTreeTextBuffer coalesces contiguous source pieces', () => {
 		applyOffsetEdit(typed, typed.getLength(), typed.getLength(), character);
 		assertTreeInvariants(typed);
 	}
-	assert.deepEqual(
-		{
-			text: typed.createSnapshot().getText(),
-			pieceCount: typed.pieceCount,
-		},
-		{
-			text: 'continuous',
-			pieceCount: 1,
-		},
-	);
+	assert.deepEqual({
+		text: typed.createSnapshot().getText(),
+		pieceCount: typed.pieceCount,
+	}, {
+		text: 'continuous',
+		pieceCount: 1,
+	});
 
 	const restoredOriginal = new PieceTreeTextBuffer('abcdef');
 	applyOffsetEdit(restoredOriginal, 3, 3, 'X');
@@ -239,16 +226,13 @@ test('PieceTreeTextBuffer coalesces contiguous source pieces', () => {
 	assert.equal(restoredOriginal.pieceCount, 3);
 	applyOffsetEdit(restoredOriginal, 3, 4, '');
 	assertTreeInvariants(restoredOriginal);
-	assert.deepEqual(
-		{
-			text: restoredOriginal.createSnapshot().getText(),
-			pieceCount: restoredOriginal.pieceCount,
-		},
-		{
-			text: 'abcdef',
-			pieceCount: 1,
-		},
-	);
+	assert.deepEqual({
+		text: restoredOriginal.createSnapshot().getText(),
+		pieceCount: restoredOriginal.pieceCount,
+	}, {
+		text: 'abcdef',
+		pieceCount: 1,
+	});
 });
 
 test('PieceTreeTextBuffer compaction preserves captured sources', () => {
@@ -266,34 +250,32 @@ test('PieceTreeTextBuffer compaction preserves captured sources', () => {
 	assertTreeInvariants(buffer);
 	const after = buffer.getStatistics();
 
-	assert.deepEqual(
-		{
-			text: buffer.createSnapshot().getText(),
-			lineCount: buffer.getLineCount(),
-			before,
-			after,
-			capturedText: snapshot.getText(),
-			secondCompaction: buffer.compactIfNeeded(),
+	assert.deepEqual({
+		text: buffer.createSnapshot().getText(),
+		lineCount: buffer.getLineCount(),
+		before,
+		after,
+		capturedText: snapshot.getText(),
+		secondCompaction: buffer.compactIfNeeded(),
+	}, {
+		text: retainedText,
+		lineCount: 2_001,
+		before: {
+			liveTextUnits: retainedText.length,
+			retainedTextUnits: insertedText.length,
+			reclaimableTextUnits:
+				insertedText.length - retainedText.length,
+			pieceCount: 1,
 		},
-		{
-			text: retainedText,
-			lineCount: 2_001,
-			before: {
-				liveTextUnits: retainedText.length,
-				retainedTextUnits: insertedText.length,
-				reclaimableTextUnits: insertedText.length - retainedText.length,
-				pieceCount: 1,
-			},
-			after: {
-				liveTextUnits: retainedText.length,
-				retainedTextUnits: retainedText.length,
-				reclaimableTextUnits: 0,
-				pieceCount: 1,
-			},
-			capturedText: insertedText,
-			secondCompaction: false,
+		after: {
+			liveTextUnits: retainedText.length,
+			retainedTextUnits: retainedText.length,
+			reclaimableTextUnits: 0,
+			pieceCount: 1,
 		},
-	);
+		capturedText: insertedText,
+		secondCompaction: false,
+	});
 });
 
 function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
@@ -303,18 +285,15 @@ function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
 		assert.equal(root.parent, undefined, 'red-black root must not have a parent');
 	}
 	const aggregate = assertNode(root, undefined);
-	assert.deepEqual(
-		{
-			length: aggregate.length,
-			lineFeeds: aggregate.lineFeeds,
-			pieces: aggregate.pieces,
-		},
-		{
-			length: buffer.getLength(),
-			lineFeeds: buffer.getLineCount() - 1,
-			pieces: buffer.pieceCount,
-		},
-	);
+	assert.deepEqual({
+		length: aggregate.length,
+		lineFeeds: aggregate.lineFeeds,
+		pieces: aggregate.pieces,
+	}, {
+		length: buffer.getLength(),
+		lineFeeds: buffer.getLineCount() - 1,
+		pieces: buffer.pieceCount,
+	});
 }
 
 function assertNode(node: PieceNode | undefined, parent: PieceNode | undefined): TreeAggregate {
@@ -355,14 +334,28 @@ function applyOffsetEdit(buffer: PieceTreeTextBuffer, startOffset: number, endOf
 	buffer.applyEdits([new ValidAnnotatedEditOperation(null, buffer.getRangeAt(startOffset, endOffset - startOffset), text, false, false, false)], false, false);
 }
 
-function positionAt(text: string, offset: number): Position {
+function positionAt(
+	text: string,
+	offset: number,
+): Position {
 	const lineStarts = computeLineStarts(text);
 	let lineIndex = 0;
-	while (lineIndex + 1 < lineStarts.length && lineStarts[lineIndex + 1] <= offset) {
+	while (
+		lineIndex + 1 < lineStarts.length &&
+		lineStarts[lineIndex + 1] <= offset
+	) {
 		lineIndex += 1;
 	}
-	const lineEndOffset = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1] - 1 : text.length;
-	return new Position(lineIndex + 1, Math.min(offset - lineStarts[lineIndex], lineEndOffset - lineStarts[lineIndex]) + 1);
+	const lineEndOffset = lineIndex + 1 < lineStarts.length
+		? lineStarts[lineIndex + 1] - 1
+		: text.length;
+	return new Position(
+		lineIndex + 1,
+		Math.min(
+			offset - lineStarts[lineIndex],
+			lineEndOffset - lineStarts[lineIndex],
+		) + 1,
+	);
 }
 
 function computeLineStarts(text: string): number[] {

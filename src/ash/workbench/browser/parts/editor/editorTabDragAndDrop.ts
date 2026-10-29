@@ -24,7 +24,7 @@ export class DraggedEditorIdentifier {
 	constructor(
 		readonly source: EditorGroupView,
 		readonly input: IResourceEditorInput,
-	) {}
+	) { }
 }
 
 /** The resolved target of an editor tab drag. */
@@ -46,10 +46,13 @@ export interface EditorTabDropEvent {
 export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 	private readonly transfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
 
-	constructor(private readonly onDrop: (event: EditorTabDropEvent) => void) {}
+	constructor(private readonly onDrop: (event: EditorTabDropEvent) => void) { }
 
 	start(source: EditorGroupView, input: IResourceEditorInput): void {
-		this.transfer.setData([new DraggedEditorIdentifier(source, input)], DraggedEditorIdentifier.prototype);
+		this.transfer.setData(
+			[new DraggedEditorIdentifier(source, input)],
+			DraggedEditorIdentifier.prototype,
+		);
 	}
 
 	isDragging(): boolean {

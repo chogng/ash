@@ -48,10 +48,7 @@ export class DiffEditorOptions {
 	private defaultSplitViewRatio: number;
 	private featureOptions: IDiffEditorOptions;
 
-	constructor(
-		options: DiffEditorWidgetOptions,
-		@IConfigurationService private readonly configuration: IConfigurationService,
-	) {
+	constructor(options: DiffEditorWidgetOptions, @IConfigurationService private readonly configuration: IConfigurationService) {
 		validateOptions(options);
 		this.configuredWordWrap = options.wordWrap ?? 'off';
 		this.diffWordWrap = options.diffWordWrap ?? 'inherit';
@@ -92,11 +89,7 @@ export class DiffEditorOptions {
 	public updateOptions(options: IDiffEditorOptions): void {
 		if (options.wordWrap !== undefined) this.configuredWordWrap = options.wordWrap;
 		if (options.diffWordWrap !== undefined) this.diffWordWrap = options.diffWordWrap;
-		this.featureOptions = {
-			...this.featureOptions,
-			...options,
-			experimental: { ...this.featureOptions.experimental, ...options.experimental },
-		};
+		this.featureOptions = { ...this.featureOptions, ...options, experimental: { ...this.featureOptions.experimental, ...options.experimental } };
 	}
 
 	public get wordWrap(): NonNullable<IEditorOptions['wordWrap']> {
@@ -172,7 +165,8 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}
-	if (options.renderSideBySideInlineBreakpoint !== undefined && (!Number.isSafeInteger(options.renderSideBySideInlineBreakpoint) || options.renderSideBySideInlineBreakpoint < 0)) {
+	if (options.renderSideBySideInlineBreakpoint !== undefined
+		&& (!Number.isSafeInteger(options.renderSideBySideInlineBreakpoint) || options.renderSideBySideInlineBreakpoint < 0)) {
 		throw new RangeError('Diff editor inline breakpoint must be a non-negative integer');
 	}
 	if (options.wordWrap !== undefined && !['off', 'on', 'bounded', 'wordWrapColumn'].includes(options.wordWrap)) {

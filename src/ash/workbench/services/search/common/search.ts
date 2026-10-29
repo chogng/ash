@@ -86,5 +86,5 @@ export type ISearchProgressItem = IFileMatch | IProgressMessage;
 export interface ISearchComplete {
 	results: IFileMatch[];
 	limitHit?: boolean;
-	messages: { text: string }[];
+	messages: { text: string; }[];
 }

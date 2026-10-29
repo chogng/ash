@@ -12,22 +12,18 @@ interface BufferedProcess {
 export class TerminalDataBufferer extends Disposable {
 	private readonly processes = new Map<number, BufferedProcess>();
 
-	constructor(private readonly callback: (id: number, data: string) => void) {
-		super();
-	}
+	constructor(private readonly callback: (id: number, data: string) => void) { super(); }
 
 	startBuffering(id: number, event: Event<string | IProcessDataEvent>, throttleBy = 5): IDisposable {
 		this.assertNotDisposed();
 		this.stopBuffering(id);
 		const process: BufferedProcess = { lifetime: new DisposableStore(), chunks: [], timer: undefined };
 		this.processes.set(id, process);
-		process.lifetime.add(
-			event(data => {
-				if (this.processes.get(id) !== process) return;
-				process.chunks.push(typeof data === 'string' ? data : data.data);
-				if (process.timer === undefined) process.timer = setTimeout(() => this.flushBuffer(id), throttleBy);
-			}),
-		);
+		process.lifetime.add(event(data => {
+			if (this.processes.get(id) !== process) return;
+			process.chunks.push(typeof data === 'string' ? data : data.data);
+			if (process.timer === undefined) process.timer = setTimeout(() => this.flushBuffer(id), throttleBy);
+		}));
 		return toDisposable(() => {
 			if (this.processes.get(id) === process) this.stopBuffering(id);
 		});
@@ -47,9 +43,8 @@ export class TerminalDataBufferer extends Disposable {
 	stopBuffering(id: number): void {
 		const process = this.processes.get(id);
 		if (!process) return;
-		try {
-			this.flushBuffer(id);
-		} finally {
+		try { this.flushBuffer(id); }
+		finally {
 			if (this.processes.get(id) === process) this.processes.delete(id);
 			process.lifetime.dispose();
 		}

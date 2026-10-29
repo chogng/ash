@@ -18,6 +18,7 @@ import * as strings from '../../../base/common/strings.js';
  * **NOTE**: These methods work and make sense both on the model and on the view model.
  */
 export class CursorColumns {
+
 	private static _nextVisibleColumn(codePoint: number, visibleColumn: number, tabSize: number): number {
 		if (codePoint === CharCode.Tab) {
 			return CursorColumns.nextRenderTabStop(visibleColumn, tabSize);
@@ -114,7 +115,7 @@ export class CursorColumns {
 	 * @see {@link CursorColumns}
 	 */
 	public static nextRenderTabStop(visibleColumn: number, tabSize: number): number {
-		return visibleColumn + tabSize - (visibleColumn % tabSize);
+		return visibleColumn + tabSize - visibleColumn % tabSize;
 	}
 
 	/**
@@ -130,7 +131,7 @@ export class CursorColumns {
 	 * @see {@link CursorColumns}
 	 */
 	public static prevRenderTabStop(column: number, tabSize: number): number {
-		return Math.max(0, column - 1 - ((column - 1) % tabSize));
+		return Math.max(0, column - 1 - (column - 1) % tabSize);
 	}
 
 	/**

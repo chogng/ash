@@ -21,30 +21,21 @@ test('Problems status projects and updates workspace error and warning counts', 
 	]);
 	const focusedViews: string[] = [];
 	const viewsService = {
-		focusView: async (viewId: string) => {
-			focusedViews.push(viewId);
-			return true;
-		},
+		focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
 	} as unknown as IViewsService;
 	using statusbar = new StatusbarService();
 	using contribution = new ProblemsStatusContribution({ statusbarService: statusbar, markerService, viewsService });
 
-	assert.deepEqual(
-		statusbar.getEntries(StatusbarAlignment.Left).map(item => item.id),
-		['ash.status.problems'],
-	);
-	assert.deepEqual(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text),
-		['2', '1'],
-	);
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left).map(item => item.id), ['ash.status.problems']);
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text), ['2', '1']);
 	assert.equal(await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
 	assert.deepEqual(focusedViews, ['ash.problems']);
 
-	markerService.changeAll('fixture', [marker(resource, MarkerSeverity.Warning, 'fifth'), marker(resource, MarkerSeverity.Warning, 'sixth')]);
-	assert.deepEqual(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text),
-		['0', '2'],
-	);
+	markerService.changeAll('fixture', [
+		marker(resource, MarkerSeverity.Warning, 'fifth'),
+		marker(resource, MarkerSeverity.Warning, 'sixth'),
+	]);
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text), ['0', '2']);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, 'Warnings: 2');
 
 	try {
@@ -63,8 +54,5 @@ test('Problems status projects and updates workspace error and warning counts', 
 });
 
 function marker(resource: URI, severity: MarkerSeverity, message: string) {
-	return {
-		resource,
-		marker: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity, message },
-	};
+	return { resource, marker: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity, message } };
 }

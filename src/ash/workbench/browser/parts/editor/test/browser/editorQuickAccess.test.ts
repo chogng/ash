@@ -37,15 +37,11 @@ test('Show All Editors opens the MRU quick access mode and activates the chosen 
 	try {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 		assert.ok(chinese);
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		setNlsResolver((bundle, key, fallback, parameters) =>
+			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		await import('../../editor.contribution.js');
 		const { ShowAllEditorsCommandId } = await import('../../editorActions.js');
-		const selected = {
-			groupId: 1,
-			instanceId: 'editor-1',
-			paneId: 'pane-1',
-			input: { resource: URI.parse('file:///C:/project/main.ts') },
-		};
+		const selected = { groupId: 1, instanceId: 'editor-1', paneId: 'pane-1', input: { resource: URI.parse('file:///C:/project/main.ts') } };
 		const changes = new Emitter<EditorPartChangeEvent>();
 		let activated: string | undefined;
 		let focused = false;
@@ -53,23 +49,15 @@ test('Show All Editors opens the MRU quick access mode and activates the chosen 
 			editorsMru: [selected],
 			groups: [{ id: selected.groupId, editors: [{ instanceId: selected.instanceId, isDirty: false }] }],
 			onDidChangeEditors: changes.event,
-			activateEditorIdentifier: (editor: typeof selected) => {
-				activated = editor.instanceId;
-			},
-			focus: () => {
-				focused = true;
-			},
+			activateEditorIdentifier: (editor: typeof selected) => { activated = editor.instanceId; },
+			focus: () => { focused = true; },
 		} as unknown as EditorPartContract;
 
 		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
-		using quickInput = new TestQuickInputService({
-			instantiationService: services,
-			container: dom.window.document.body,
-			contextKeyService: contextKeys,
-		});
+		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
 		const quickAccess = services.get(IQuickInputService).quickAccess;
 		using commands = new CommandService(services);
@@ -121,34 +109,13 @@ test('breadcrumb symbol picker reveals a nested outline item', () => {
 	}
 	try {
 		using contextKeys = new ContextKeyService();
-		using quickInput = new TestQuickInputService({
-			container: dom.window.document.body,
-			contextKeyService: contextKeys,
-		});
+		using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 		const outerRange = new Range(1, 1, 3, 1);
 		const innerRange = new Range(2, 1, 2, 10);
-		const inner: LanguageDocumentSymbol = {
-			name: 'Beta',
-			kind: 'method',
-			range: innerRange,
-			selectionRange: innerRange,
-		};
-		const outer: LanguageDocumentSymbol = {
-			name: 'Alpha',
-			kind: 'class',
-			range: outerRange,
-			selectionRange: outerRange,
-			children: [inner],
-		};
+		const inner: LanguageDocumentSymbol = { name: 'Beta', kind: 'method', range: innerRange, selectionRange: innerRange };
+		const outer: LanguageDocumentSymbol = { name: 'Alpha', kind: 'class', range: outerRange, selectionRange: outerRange, children: [inner] };
 		let revealed: Range | undefined;
-		const picker = new BreadcrumbsSymbolPicker(
-			[outer],
-			inner,
-			range => {
-				revealed = range;
-			},
-			quickInput,
-		);
+		const picker = new BreadcrumbsSymbolPicker([outer], inner, range => { revealed = range; }, quickInput);
 		picker.show();
 		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(input);

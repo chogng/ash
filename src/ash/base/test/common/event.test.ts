@@ -11,15 +11,11 @@ suite('Event.once lifetime', () => {
 		using emitter = new Emitter<number>();
 		using owner = new DisposableStore();
 		const context = { values: [] as number[] };
-		Event.once(emitter.event)(
-			function (this: typeof context, value) {
-				assert.equal(emitter.hasListeners(), false);
-				this.values.push(value);
-				emitter.fire(2);
-			},
-			context,
-			owner,
-		);
+		Event.once(emitter.event)(function (this: typeof context, value) {
+			assert.equal(emitter.hasListeners(), false);
+			this.values.push(value);
+			emitter.fire(2);
+		}, context, owner);
 		emitter.fire(1);
 		assert.deepEqual(context.values, [1]);
 	});
@@ -31,9 +27,7 @@ suite('Event.once lifetime', () => {
 		const source: Event<number> = listener => {
 			listener(1);
 			listener(2);
-			return toDisposable(() => {
-				released++;
-			});
+			return toDisposable(() => { released++; });
 		};
 		Event.once(source)(value => values.push(value), undefined, owner);
 		assert.deepEqual(values, [1]);
@@ -48,10 +42,7 @@ suite('Event.once lifetime', () => {
 });
 
 test('Event.None returns the reusable empty disposable', () => {
-	assert.equal(
-		Event.None(() => undefined),
-		noneDisposable,
-	);
+	assert.equal(Event.None(() => undefined), noneDisposable);
 });
 
 test('Event.any subscriptions belong to each consumer and release all source listeners', () => {
@@ -61,13 +52,7 @@ test('Event.any subscriptions belong to each consumer and release all source lis
 	assert.deepEqual([first.hasListeners(), second.hasListeners()], [false, false]);
 	using owner = new DisposableStore();
 	const context = { total: 0 };
-	combined(
-		function (this: typeof context, value) {
-			this.total += value;
-		},
-		context,
-		owner,
-	);
+	combined(function (this: typeof context, value) { this.total += value; }, context, owner);
 	const received: number[] = [];
 	using other = combined(value => received.push(value));
 	first.fire(1);
@@ -90,13 +75,9 @@ test('Emitter binds listener context and registers subscriptions with their owne
 	using emitter = new Emitter<number>();
 	const context = { total: 1 };
 	const subscriptions: IDisposable[] = [];
-	emitter.event(
-		function (this: typeof context, event) {
-			this.total += event;
-		},
-		context,
-		subscriptions,
-	);
+	emitter.event(function (this: typeof context, event) {
+		this.total += event;
+	}, context, subscriptions);
 
 	assert.equal(emitter.hasListeners(), true);
 	emitter.fire(2);
@@ -106,7 +87,7 @@ test('Emitter binds listener context and registers subscriptions with their owne
 	assert.equal(emitter.hasListeners(), false);
 
 	using store = new DisposableStore();
-	emitter.event(() => (context.total += 1), undefined, store);
+	emitter.event(() => context.total += 1, undefined, store);
 	store.clear();
 	assert.equal(emitter.hasListeners(), false);
 });
@@ -114,7 +95,7 @@ test('Emitter binds listener context and registers subscriptions with their owne
 test('Emitter delivers synchronously and subscriptions are disposable', () => {
 	const emitter = new Emitter<number>();
 	const received: number[] = [];
-	const subscription = emitter.event(event => received.push(event));
+	const subscription = emitter.event((event) => received.push(event));
 
 	emitter.fire(1);
 	assert.deepEqual(received, [1]);
@@ -175,12 +156,12 @@ test('Emitter snapshots registrations before delivering an event', () => {
 	const emitter = new Emitter<number>();
 	const received: string[] = [];
 	let second: IDisposable;
-	const first = emitter.event(event => {
+	const first = emitter.event((event) => {
 		received.push(`first:${event}`);
 		second.dispose();
-		second = emitter.event(next => received.push(`late:${next}`));
+		second = emitter.event((next) => received.push(`late:${next}`));
 	});
-	second = emitter.event(event => received.push(`second:${event}`));
+	second = emitter.event((event) => received.push(`second:${event}`));
 
 	emitter.fire(1);
 	assert.deepEqual(received, ['first:1']);
@@ -196,17 +177,22 @@ test('Emitter snapshots registrations before delivering an event', () => {
 test('Emitter queues reentrant events in FIFO order', () => {
 	const emitter = new Emitter<number>();
 	const received: string[] = [];
-	const first = emitter.event(event => {
+	const first = emitter.event((event) => {
 		received.push(`first:${event}`);
 		if (event === 1) emitter.fire(2);
 	});
-	const second = emitter.event(event => {
+	const second = emitter.event((event) => {
 		received.push(`second:${event}`);
 	});
 
 	emitter.fire(1);
 
-	assert.deepEqual(received, ['first:1', 'second:1', 'first:2', 'second:2']);
+	assert.deepEqual(received, [
+		'first:1',
+		'second:1',
+		'first:2',
+		'second:2',
+	]);
 	first.dispose();
 	second.dispose();
 	emitter.dispose();
@@ -216,7 +202,7 @@ test('Emitter reports listener errors and continues delivery', () => {
 	const expected = new Error('listener failed');
 	const errors: unknown[] = [];
 	const emitter = new Emitter<void>({
-		onListenerError: error => errors.push(error),
+		onListenerError: (error) => errors.push(error),
 	});
 	const failing = emitter.event(() => {
 		throw expected;
@@ -259,18 +245,12 @@ test('runWithBufferedEvents publishes only after every state mutation completes'
 test('runWithBufferedEvents discards notifications from failed mutations', () => {
 	const emitter = new Emitter<void>();
 	let calls = 0;
-	emitter.event(() => {
-		calls += 1;
-	});
+	emitter.event(() => { calls += 1; });
 
-	assert.throws(
-		() =>
-			runWithBufferedEvents(() => {
-				emitter.fire();
-				throw new Error('failed');
-			}),
-		/failed/,
-	);
+	assert.throws(() => runWithBufferedEvents(() => {
+		emitter.fire();
+		throw new Error('failed');
+	}), /failed/);
 
 	assert.equal(calls, 0);
 	emitter.dispose();
@@ -322,7 +302,7 @@ test('PauseableEmitter preserves nesting and optionally merges queued events', (
 test('ValueWithChangeEvent emits only for changed values', () => {
 	const value = new ValueWithChangeEvent(1);
 	let changes = 0;
-	value.onDidChange(() => (changes += 1));
+	value.onDidChange(() => changes += 1);
 	value.value = 1;
 	value.value = 2;
 	assert.equal(value.value, 2);

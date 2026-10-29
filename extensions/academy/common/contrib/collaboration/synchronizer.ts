@@ -166,12 +166,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 
 	private beginSubmission(transaction: DocumentTransaction): DocumentCollaborationEnvelope {
 		this._sequence += 1;
-		const envelope = Object.freeze({
-			clientId: this.clientId,
-			sequence: this._sequence,
-			baseVersion: this._version,
-			transaction,
-		});
+		const envelope = Object.freeze({ clientId: this.clientId, sequence: this._sequence, baseVersion: this._version, transaction });
 		this._inFlight = envelope;
 		return envelope;
 	}
@@ -180,28 +175,17 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 		if (!envelope || typeof envelope !== 'object') throw new TypeError('A collaboration envelope is required');
 		if (typeof envelope.clientId !== 'string' || envelope.clientId.trim().length === 0) throw new TypeError('A collaboration envelope requires a client id');
 		if (!Number.isSafeInteger(envelope.sequence) || envelope.sequence < 1) throw new RangeError('A collaboration envelope sequence must be a positive safe integer');
-		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version)
-			throw new DocumentCollaborationError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
+		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version) throw new DocumentCollaborationError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
 		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion) throw new DocumentCollaborationError('A collaboration update must advance the document version');
 		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError('A collaboration envelope requires a Stanza transaction');
 	}
 
-	private emitChange(options: {
-		readonly kind: DocumentCollaborationSynchronizationChange['kind'];
-		readonly envelope: DocumentCollaborationEnvelope;
-		readonly droppedSteps: readonly DocumentStep[];
-	}): DocumentCollaborationSynchronizationChange {
-		const change = Object.freeze({
-			kind: options.kind,
-			document: this._document,
-			canonicalDocument: this._canonicalDocument,
-			pending: this.pending,
-			envelope: options.envelope,
-			droppedSteps: Object.freeze([...options.droppedSteps]),
-		});
+	private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange['kind']; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[]; }): DocumentCollaborationSynchronizationChange {
+		const change = Object.freeze({ kind: options.kind, document: this._document, canonicalDocument: this._canonicalDocument, pending: this.pending, envelope: options.envelope, droppedSteps: Object.freeze([...options.droppedSteps]) });
 		this.changeEmitter.fire(change);
 		return change;
 	}
+
 }
 
 export class DocumentCollaborationError extends Error {
@@ -211,7 +195,7 @@ export class DocumentCollaborationError extends Error {
 	}
 }
 
-function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode } {
+function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode; } {
 	const applied = applyDocumentTransaction(document, schema, transaction);
 	if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
 	return applied;

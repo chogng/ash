@@ -4,20 +4,9 @@ import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export enum GitHubIssueState {
-	Open = 'open',
-	Closed = 'closed',
-}
-export enum GitHubMergeMethod {
-	Merge = 'merge',
-	Squash = 'squash',
-	Rebase = 'rebase',
-}
-export enum GitHubReviewEvent {
-	Approve = 'approve',
-	RequestChanges = 'requestChanges',
-	Comment = 'comment',
-}
+export enum GitHubIssueState { Open = 'open', Closed = 'closed' }
+export enum GitHubMergeMethod { Merge = 'merge', Squash = 'squash', Rebase = 'rebase' }
+export enum GitHubReviewEvent { Approve = 'approve', RequestChanges = 'requestChanges', Comment = 'comment' }
 export enum GitHubErrorCode {
 	InvalidInput = 'invalidInput',
 	AuthenticationRequired = 'authenticationRequired',
@@ -39,73 +28,29 @@ export class GitHubError extends Error {
 	}
 }
 
-export interface GitHubAccount {
-	readonly id: string;
-	readonly host: string;
-	readonly login: string;
-	readonly status: AccountStatus;
-	readonly credentialRevision: bigint;
-}
+export interface GitHubAccount { readonly id: string; readonly host: string; readonly login: string; readonly status: AccountStatus; readonly credentialRevision: bigint; }
 
 /** Durable association without account credentials or cached remote status. */
 export interface GitHubPullRequestReference {
-	readonly repository: { readonly host: string; readonly owner: string; readonly name: string };
+	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
 	readonly number: number;
 }
 /** Durable association without account credentials or cached remote status. */
 export interface GitHubIssueReference {
-	readonly repository: { readonly host: string; readonly owner: string; readonly name: string };
+	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
 	readonly number: number;
 }
-export enum GitHubNotificationFilter {
-	Unread = 'unread',
-	All = 'all',
-	Participating = 'participating',
-}
-export enum GitHubForkBranches {
-	All = 'all',
-	Default = 'default',
-}
-export interface GitHubNotification {
-	readonly id: string;
-	readonly title: string;
-	readonly subjectType: string;
-	readonly reason: string;
-	readonly unread: boolean;
-	readonly updatedAt: string;
-	readonly repository: GitHubRepository;
-	readonly url: string;
-}
-export interface GitHubCreateFork {
-	readonly organization: string | null;
-	readonly name: string;
-	readonly branches: GitHubForkBranches;
-}
+export enum GitHubNotificationFilter { Unread = 'unread', All = 'all', Participating = 'participating' }
+export enum GitHubForkBranches { All = 'all', Default = 'default' }
+export interface GitHubNotification { readonly id: string; readonly title: string; readonly subjectType: string; readonly reason: string; readonly unread: boolean; readonly updatedAt: string; readonly repository: GitHubRepository; readonly url: string; }
+export interface GitHubCreateFork { readonly organization: string | null; readonly name: string; readonly branches: GitHubForkBranches; }
 /** Creation has been accepted; GitHub may still be copying Git objects. */
-export interface GitHubFork {
-	readonly fullName: string;
-	readonly url: string;
-	readonly defaultBranch: string;
-}
-export enum GitHubReviewerChange {
-	Request = 'request',
-	Remove = 'remove',
-}
-export interface GitHubRequestedReviewers {
-	readonly users: readonly string[];
-	readonly teams: readonly string[];
-}
+export interface GitHubFork { readonly fullName: string; readonly url: string; readonly defaultBranch: string; }
+export enum GitHubReviewerChange { Request = 'request', Remove = 'remove' }
+export interface GitHubRequestedReviewers { readonly users: readonly string[]; readonly teams: readonly string[]; }
 /** Account selection is captured with a repository operation; omitted selection uses the login default. */
-export interface GitHubRepository {
-	readonly accountId?: string;
-	readonly host: string;
-	readonly owner: string;
-	readonly name: string;
-}
-export interface GitHubPage<T> {
-	readonly items: readonly T[];
-	readonly nextPage: number | null;
-}
+export interface GitHubRepository { readonly accountId?: string; readonly host: string; readonly owner: string; readonly name: string; }
+export interface GitHubPage<T> { readonly items: readonly T[]; readonly nextPage: number | null; }
 export interface GitHubRemoteRepository {
 	readonly repository: GitHubRepository;
 	readonly description: string | null;
@@ -117,18 +62,9 @@ export interface GitHubRemoteRepository {
 	readonly sshUrl: string;
 }
 export type GitHubRepositoryVisibility = 'private' | 'public';
-export interface GitHubRepositoryBranch {
-	readonly name: string;
-	readonly default: boolean;
-}
-export interface GitHubBranchProtectionRule {
-	readonly include: readonly string[];
-	readonly exclude: readonly string[];
-}
-export interface GitHubBranchProtection {
-	readonly defaultBranch: string | null;
-	readonly rules: readonly GitHubBranchProtectionRule[];
-}
+export interface GitHubRepositoryBranch { readonly name: string; readonly default: boolean; }
+export interface GitHubBranchProtectionRule { readonly include: readonly string[]; readonly exclude: readonly string[]; }
+export interface GitHubBranchProtection { readonly defaultBranch: string | null; readonly rules: readonly GitHubBranchProtectionRule[]; }
 export interface GitHubShareLink {
 	readonly pathKind?: 'file' | 'directory';
 	readonly repository: GitHubRepository;
@@ -136,7 +72,7 @@ export interface GitHubShareLink {
 	readonly referenceKind: 'commit' | 'branch';
 	readonly target: 'gitHub' | 'vscodeDev';
 	readonly path?: string;
-	readonly lines?: { readonly start: number; readonly end: number };
+	readonly lines?: { readonly start: number; readonly end: number; };
 	readonly notebookCell?: number;
 }
 export interface GitHubRepositoryInfo {
@@ -157,34 +93,12 @@ export interface GitHubIssueSummary {
 	readonly labels: readonly string[];
 	readonly assignees: readonly string[];
 }
-export interface GitHubIssue extends GitHubIssueSummary {
-	readonly body: string;
-}
-export interface GitHubIssueDetails extends GitHubIssue {
-	readonly comments: readonly GitHubComment[];
-}
-export interface GitHubIssuePage extends GitHubPage<GitHubIssueSummary> {
-	readonly notice: string;
-}
-export interface GitHubComment {
-	readonly id: number;
-	readonly body: string;
-	readonly url: string;
-	readonly updatedAt: string;
-}
-export interface GitHubCreateIssue {
-	readonly title: string;
-	readonly body: string;
-	readonly labels: readonly string[];
-	readonly assignees: readonly string[];
-}
-export interface GitHubUpdateIssue {
-	readonly title?: string;
-	readonly body?: string;
-	readonly state?: GitHubIssueState;
-	readonly labels?: readonly string[];
-	readonly assignees?: readonly string[];
-}
+export interface GitHubIssue extends GitHubIssueSummary { readonly body: string; }
+export interface GitHubIssueDetails extends GitHubIssue { readonly comments: readonly GitHubComment[]; }
+export interface GitHubIssuePage extends GitHubPage<GitHubIssueSummary> { readonly notice: string; }
+export interface GitHubComment { readonly id: number; readonly body: string; readonly url: string; readonly updatedAt: string; }
+export interface GitHubCreateIssue { readonly title: string; readonly body: string; readonly labels: readonly string[]; readonly assignees: readonly string[]; }
+export interface GitHubUpdateIssue { readonly title?: string; readonly body?: string; readonly state?: GitHubIssueState; readonly labels?: readonly string[]; readonly assignees?: readonly string[]; }
 export interface GitHubPullRequest {
 	readonly number: number;
 	readonly title: string;
@@ -201,19 +115,8 @@ export interface GitHubPullRequest {
 	readonly baseBranch: string;
 	readonly autoMerge: boolean;
 }
-export interface GitHubCreatePullRequest {
-	readonly title: string;
-	readonly body: string;
-	readonly head: string;
-	readonly base: string;
-	readonly draft: boolean;
-}
-export interface GitHubUpdatePullRequest {
-	readonly title?: string;
-	readonly body?: string;
-	readonly state?: GitHubIssueState;
-	readonly base?: string;
-}
+export interface GitHubCreatePullRequest { readonly title: string; readonly body: string; readonly head: string; readonly base: string; readonly draft: boolean; }
+export interface GitHubUpdatePullRequest { readonly title?: string; readonly body?: string; readonly state?: GitHubIssueState; readonly base?: string; }
 export interface GitHubPullRequestFile {
 	readonly filename: string;
 	readonly status: string;
@@ -223,50 +126,15 @@ export interface GitHubPullRequestFile {
 	readonly patch: string | null;
 	readonly previousFilename: string | null;
 }
-export interface GitHubPullRequestFiles extends GitHubPage<GitHubPullRequestFile> {
-	readonly limitReached: boolean;
-}
-export interface GitHubPullRequestReview {
-	readonly id: number;
-	readonly body: string;
-	readonly state: string;
-	readonly url: string;
-	readonly commit: string;
-	readonly submittedAt: string | null;
-}
-export enum GitHubDiffSide {
-	Left = 'LEFT',
-	Right = 'RIGHT',
-}
-export enum GitHubReviewThreadState {
-	Resolved = 'resolved',
-	Unresolved = 'unresolved',
-}
-export interface GitHubReviewCommentInput {
-	readonly path: string;
-	readonly line: number;
-	readonly side: GitHubDiffSide;
-	readonly body: string;
-}
-export interface GitHubReview {
-	readonly commit: string;
-	readonly event: GitHubReviewEvent;
-	readonly body: string;
-	readonly comments?: readonly GitHubReviewCommentInput[];
-}
-export type GitHubFileContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'binary' | 'tooLarge' };
-export interface GitHubReviewComment {
-	readonly id: string;
-	readonly body: string;
-	readonly url: string;
-	readonly author: string | null;
-	readonly canUpdate: boolean;
-	readonly canDelete: boolean;
-}
-export interface GitHubReviewComments {
-	readonly comments: readonly GitHubReviewComment[];
-	readonly nextCursor: string | null;
-}
+export interface GitHubPullRequestFiles extends GitHubPage<GitHubPullRequestFile> { readonly limitReached: boolean; }
+export interface GitHubPullRequestReview { readonly id: number; readonly body: string; readonly state: string; readonly url: string; readonly commit: string; readonly submittedAt: string | null; }
+export enum GitHubDiffSide { Left = 'LEFT', Right = 'RIGHT' }
+export enum GitHubReviewThreadState { Resolved = 'resolved', Unresolved = 'unresolved' }
+export interface GitHubReviewCommentInput { readonly path: string; readonly line: number; readonly side: GitHubDiffSide; readonly body: string; }
+export interface GitHubReview { readonly commit: string; readonly event: GitHubReviewEvent; readonly body: string; readonly comments?: readonly GitHubReviewCommentInput[]; }
+export type GitHubFileContent = { readonly kind: 'text'; readonly text: string; } | { readonly kind: 'binary' | 'tooLarge'; };
+export interface GitHubReviewComment { readonly id: string; readonly body: string; readonly url: string; readonly author: string | null; readonly canUpdate: boolean; readonly canDelete: boolean; }
+export interface GitHubReviewComments { readonly comments: readonly GitHubReviewComment[]; readonly nextCursor: string | null; }
 export interface GitHubReviewThread {
 	readonly id: string;
 	readonly path: string;
@@ -277,30 +145,12 @@ export interface GitHubReviewThread {
 	readonly canResolve: boolean;
 	readonly comments: GitHubReviewComments;
 }
-export interface GitHubReviewThreads {
-	readonly threads: readonly GitHubReviewThread[];
-	readonly nextCursor: string | null;
-}
-export interface GitHubReviewDiff {
-	readonly baseCommit: string;
-	readonly files: GitHubPullRequestFiles;
-}
+export interface GitHubReviewThreads { readonly threads: readonly GitHubReviewThread[]; readonly nextCursor: string | null; }
+export interface GitHubReviewDiff { readonly baseCommit: string; readonly files: GitHubPullRequestFiles; }
 /** The commit identifies the head the caller actually reviewed; GitHub enforces it during submission. */
-export interface GitHubMerge {
-	readonly commit: string;
-	readonly method: GitHubMergeMethod;
-}
-export interface GitHubMergeResult {
-	readonly commit: string;
-	readonly merged: boolean;
-	readonly message: string;
-}
-export interface GitHubCommitStatus {
-	readonly context: string;
-	readonly state: string;
-	readonly description: string | null;
-	readonly targetUrl: string | null;
-}
+export interface GitHubMerge { readonly commit: string; readonly method: GitHubMergeMethod; }
+export interface GitHubMergeResult { readonly commit: string; readonly merged: boolean; readonly message: string; }
+export interface GitHubCommitStatus { readonly context: string; readonly state: string; readonly description: string | null; readonly targetUrl: string | null; }
 export interface GitHubCommit {
 	readonly sha: string;
 	readonly url: string;
@@ -310,45 +160,13 @@ export interface GitHubCommit {
 	readonly additions: number;
 	readonly deletions: number;
 }
-export interface GitHubCheckRun {
-	readonly id: number;
-	readonly name: string;
-	readonly status: string;
-	readonly conclusion: string | null;
-	readonly detailsUrl: string | null;
-}
-export interface GitHubCheckAnnotation {
-	readonly path: string;
-	readonly startLine: number;
-	readonly endLine: number;
-	readonly annotationLevel: string;
-	readonly message: string;
-	readonly title: string | null;
-}
-export interface GitHubCheckDetails {
-	readonly title: string;
-	readonly summary: string;
-	readonly text: string;
-	readonly annotations: readonly GitHubCheckAnnotation[];
-	readonly nextPage: number | null;
-	readonly actionsJob: boolean;
-}
+export interface GitHubCheckRun { readonly id: number; readonly name: string; readonly status: string; readonly conclusion: string | null; readonly detailsUrl: string | null; }
+export interface GitHubCheckAnnotation { readonly path: string; readonly startLine: number; readonly endLine: number; readonly annotationLevel: string; readonly message: string; readonly title: string | null; }
+export interface GitHubCheckDetails { readonly title: string; readonly summary: string; readonly text: string; readonly annotations: readonly GitHubCheckAnnotation[]; readonly nextPage: number | null; readonly actionsJob: boolean; }
 /** Captures both the PR head and its check; operations reject a moved PR. */
-export interface GitHubCheckTarget {
-	readonly number: number;
-	readonly commit: string;
-	readonly checkId: number;
-}
-export interface GitHubChecks {
-	readonly state: string;
-	readonly statuses: readonly GitHubCommitStatus[];
-	readonly checks: readonly GitHubCheckRun[];
-	readonly nextPage: number | null;
-}
-export interface GitHubLabel {
-	readonly name: string;
-	readonly color: string;
-}
+export interface GitHubCheckTarget { readonly number: number; readonly commit: string; readonly checkId: number; }
+export interface GitHubChecks { readonly state: string; readonly statuses: readonly GitHubCommitStatus[]; readonly checks: readonly GitHubCheckRun[]; readonly nextPage: number | null; }
+export interface GitHubLabel { readonly name: string; readonly color: string; }
 
 /** GitHub business operations use the account grant owned by the backend login service. */
 export interface IGitHubService {
@@ -369,14 +187,7 @@ export interface IGitHubService {
 	markNotificationsRead(accountId: string, token?: CancellationToken): Promise<void>;
 	createFork(repository: GitHubRepository, fork: GitHubCreateFork, token?: CancellationToken): Promise<GitHubFork>;
 	requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers>;
-	changeReviewers(
-		repository: GitHubRepository,
-		number: number,
-		change: GitHubReviewerChange,
-		users: readonly string[],
-		teams: readonly string[],
-		token?: CancellationToken,
-	): Promise<GitHubRequestedReviewers>;
+	changeReviewers(repository: GitHubRepository, number: number, change: GitHubReviewerChange, users: readonly string[], teams: readonly string[], token?: CancellationToken): Promise<GitHubRequestedReviewers>;
 	updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
 	deleteReviewComment(repository: GitHubRepository, number: number, commentId: string, token?: CancellationToken): Promise<void>;
 	readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit>;
@@ -394,7 +205,7 @@ export interface IGitHubService {
 	createComment(repository: GitHubRepository, number: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
 	updateComment(repository: GitHubRepository, commentId: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
 	deleteComment(repository: GitHubRepository, commentId: number, token?: CancellationToken): Promise<void>;
-	listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken, options?: { readonly head: string }): Promise<GitHubPage<GitHubPullRequest>>;
+	listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken, options?: { readonly head: string; }): Promise<GitHubPage<GitHubPullRequest>>;
 	readPullRequest(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubPullRequest>;
 	createPullRequest(repository: GitHubRepository, request: GitHubCreatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;
 	updatePullRequest(repository: GitHubRepository, number: number, update: GitHubUpdatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;

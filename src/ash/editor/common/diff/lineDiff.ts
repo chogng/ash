@@ -73,15 +73,12 @@ export class LineDiffRows implements Iterable<LineDiffRow> {
 
 	private row(segment: RowSegment, index: number): LineDiffRow {
 		const offset = index - segment.start;
-		return (
-			segment.changed?.[offset] ?? {
-				kind: LineDiffKind.Unchanged,
-				originalLineIndex: segment.originalStart + offset,
-				modifiedLineIndex: segment.modifiedStart + offset,
-				originalChanges: noChanges,
-				modifiedChanges: noChanges,
-			}
-		);
+		return segment.changed?.[offset] ?? {
+			kind: LineDiffKind.Unchanged,
+			originalLineIndex: segment.originalStart + offset,
+			modifiedLineIndex: segment.modifiedStart + offset,
+			originalChanges: noChanges, modifiedChanges: noChanges,
+		};
 	}
 
 	/** Materializes only a requested hunk, never the entire unchanged document. */
@@ -129,12 +126,7 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, origi
 	const appendUnchanged = (originalEnd: number, modifiedEnd: number): void => {
 		const count = Math.min(originalEnd - originalIndex, modifiedEnd - modifiedIndex);
 		if (count <= 0) return;
-		segments.push({
-			start: rowCount,
-			end: rowCount + count,
-			originalStart: originalIndex,
-			modifiedStart: modifiedIndex,
-		});
+		segments.push({ start: rowCount, end: rowCount + count, originalStart: originalIndex, modifiedStart: modifiedIndex });
 		rowCount += count;
 	};
 	for (const change of diff.changes) {
@@ -147,17 +139,15 @@ export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, origi
 		rowCount += changed.length;
 		if (changed.length) segments.push({ start: rowStart, end: rowCount, originalStart, modifiedStart, changed });
 		hunks.push({
-			rowStart,
-			rowEnd: rowCount,
-			originalStartLineIndex: originalStart,
-			originalLineCount: change.original.length,
-			modifiedStartLineIndex: modifiedStart,
-			modifiedLineCount: change.modified.length,
+			rowStart, rowEnd: rowCount,
+			originalStartLineIndex: originalStart, originalLineCount: change.original.length,
+			modifiedStartLineIndex: modifiedStart, modifiedLineCount: change.modified.length,
 		});
 		originalIndex = change.original.endLineNumberExclusive - 1;
 		modifiedIndex = change.modified.endLineNumberExclusive - 1;
 	}
-	appendUnchanged(range ? range.original.endLineNumberExclusive - 1 : originalLineCount, range ? range.modified.endLineNumberExclusive - 1 : modifiedLineCount);
+	appendUnchanged(range ? range.original.endLineNumberExclusive - 1 : originalLineCount,
+		range ? range.modified.endLineNumberExclusive - 1 : modifiedLineCount);
 	return { rows: new LineDiffRows(segments), hunks, changes: diff.changes, moves: diff.moves };
 }
 
@@ -194,6 +184,8 @@ function appendChangedRows(rows: LineDiffRow[], change: DetailedLineRangeMapping
 function changesForLine(changes: readonly RangeMapping[] | undefined, lineNumber: number, side: 'original' | 'modified'): DiffRange[] {
 	return (changes ?? []).flatMap(change => {
 		const range = side === 'original' ? change.originalRange : change.modifiedRange;
-		return range.startLineNumber === lineNumber ? [{ startColumn: range.startColumn - 1, endColumn: range.endColumn - 1 }] : [];
+		return range.startLineNumber === lineNumber
+			? [{ startColumn: range.startColumn - 1, endColumn: range.endColumn - 1 }]
+			: [];
 	});
 }

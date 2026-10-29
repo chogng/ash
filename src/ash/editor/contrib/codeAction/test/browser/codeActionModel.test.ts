@@ -23,23 +23,11 @@ for (const [command, args, expected] of [
 		using fixture = createLanguageFeatureEditor();
 		const original = fixture.model.getValue();
 		using provider = fixture.features.codeActionProvider.register('typescript', {
-			provideCodeActions: () =>
-				[
-					{ title: 'Ordinary fix', kind: 'quickfix', text: 'ordinary' },
-					{ title: 'Preferred fix', kind: 'quickfix', isPreferred: true, text: 'preferred' },
-					{ title: 'Fix all', kind: 'source.fixAll', text: 'fixed' },
-				].map(action => ({
-					...action,
-					edit: {
-						entries: [
-							{
-								kind: 'textDocument',
-								resource: fixture.model.uri,
-								edits: [{ range: fixture.model.getFullModelRange(), text: action.text }],
-							},
-						],
-					},
-				})),
+			provideCodeActions: () => [
+				{ title: 'Ordinary fix', kind: 'quickfix', text: 'ordinary' },
+				{ title: 'Preferred fix', kind: 'quickfix', isPreferred: true, text: 'preferred' },
+				{ title: 'Fix all', kind: 'source.fixAll', text: 'fixed' },
+			].map(action => ({ ...action, edit: { entries: [{ kind: 'textDocument', resource: fixture.model.uri, edits: [{ range: fixture.model.getFullModelRange(), text: action.text }] }] } })),
 		});
 		fixture.editor.focus();
 		await fixture.editor.getAction(command)!.run(args);
@@ -60,28 +48,19 @@ test('code action filtering excludes families unless the user explicitly request
 		],
 	});
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-	using model = fixture.editor.invokeWithinContext(accessor =>
-		accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-	);
+	using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+		CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
 	const excluded = model.trigger({
-		type: CodeActionTriggerType.Invoke,
-		triggerAction: CodeActionTriggerSource.QuickFix,
-		filter: { excludes: [new HierarchicalKind('refactor')] },
+		type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix,
+		filter: { excludes: [new HierarchicalKind('refactor')] }
 	})!;
-	assert.deepEqual(
-		(await excluded.actions).validActions.map(item => item.action.title),
-		['Quick fixing extension kind'],
-	);
+	assert.deepEqual((await excluded.actions).validActions.map(item => item.action.title), ['Quick fixing extension kind']);
 	assert.equal((await excluded.actions).hasAutoFix, false);
 	const explicit = model.trigger({
-		type: CodeActionTriggerType.Invoke,
-		triggerAction: CodeActionTriggerSource.Refactor,
-		filter: { include: new HierarchicalKind('refactor.extract'), excludes: [new HierarchicalKind('refactor')] },
+		type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.Refactor,
+		filter: { include: new HierarchicalKind('refactor.extract'), excludes: [new HierarchicalKind('refactor')] }
 	})!;
-	assert.deepEqual(
-		(await explicit.actions).validActions.map(item => item.action.title),
-		['Extract'],
-	);
+	assert.deepEqual((await explicit.actions).validActions.map(item => item.action.title), ['Extract']);
 	assert.deepEqual(fixture.errors, []);
 });
 
@@ -94,29 +73,15 @@ test('code action model keeps filters, disabled actions and the original provide
 			assert.deepEqual(request.only, ['refactor']);
 			return [original, { title: 'Unavailable', kind: 'refactor', disabledReason: 'No selection' }, { title: 'Fix', kind: 'quickfix' }];
 		},
-		resolveCodeAction: action => {
-			resolvedOriginal = action;
-			return action;
-		},
+		resolveCodeAction: action => { resolvedOriginal = action; return action; },
 	});
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-	using model = fixture.editor.invokeWithinContext(accessor =>
-		accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-	);
-	const state = model.trigger({
-		type: CodeActionTriggerType.Invoke,
-		triggerAction: CodeActionTriggerSource.QuickFix,
-		filter: { include: new HierarchicalKind('refactor') },
-	})!;
+	using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+		CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+	const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix, filter: { include: new HierarchicalKind('refactor') } })!;
 	const actions = await state.actions;
-	assert.deepEqual(
-		actions.allActions.map(item => item.action.title),
-		['Extract', 'Unavailable'],
-	);
-	assert.deepEqual(
-		actions.validActions.map(item => item.action.title),
-		['Extract'],
-	);
+	assert.deepEqual(actions.allActions.map(item => item.action.title), ['Extract', 'Unavailable']);
+	assert.deepEqual(actions.validActions.map(item => item.action.title), ['Extract']);
 	await actions.validActions[0]!.resolve(state.context);
 	assert.equal(resolvedOriginal, original);
 	assert.deepEqual(fixture.errors, []);
@@ -137,28 +102,14 @@ for (const change of ['content', 'language', 'selection', 'provider', 'dispose']
 			},
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-		);
-		const state = model.trigger({
-			type: CodeActionTriggerType.Invoke,
-			triggerAction: CodeActionTriggerSource.QuickFix,
-		})!;
-		if (change === 'content') {
-			fixture.model.setValue('changed');
-		}
-		if (change === 'language') {
-			fixture.model.setLanguage('javascript');
-		}
-		if (change === 'selection') {
-			fixture.editor.setPosition({ lineNumber: 1, column: 2 });
-		}
-		if (change === 'provider') {
-			provider.dispose();
-		}
-		if (change === 'dispose') {
-			model.dispose();
-		}
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+			CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+		const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
+		if (change === 'content') { fixture.model.setValue('changed'); }
+		if (change === 'language') { fixture.model.setLanguage('javascript'); }
+		if (change === 'selection') { fixture.editor.setPosition({ lineNumber: 1, column: 2 }); }
+		if (change === 'provider') { provider.dispose(); }
+		if (change === 'dispose') { model.dispose(); }
 		assert.equal(signal.aborted, true);
 		assert.equal(model.state.type, CodeActionsState.Type.Empty);
 		finish();
@@ -172,9 +123,7 @@ suite('Code action result ownership and AI markers', () => {
 	let fixture: ReturnType<typeof createLanguageFeatureEditor>;
 	// The shared editor fixture creates a window-wide ARIA region. Track the
 	// action request resources after that window infrastructure is installed.
-	setup(() => {
-		fixture = createLanguageFeatureEditor();
-	});
+	setup(() => { fixture = createLanguageFeatureEditor(); });
 	teardown(() => fixture[Symbol.dispose]());
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -182,44 +131,21 @@ suite('Code action result ownership and AI markers', () => {
 		['empty', [], [false, true, false]],
 		['ordinary', [{ title: 'Fix' }], [false, false, false]],
 		['AI only', [{ title: 'AI fix', isAI: true }], [true, true, false]],
-		[
-			'mixed',
-			[
-				{ title: 'AI fix', isAI: true },
-				{ title: 'Fix', isAI: false },
-			],
-			[true, false, false],
-		],
+		['mixed', [{ title: 'AI fix', isAI: true }, { title: 'Fix', isAI: false }], [true, false, false]],
 		['disabled AI', [{ title: 'AI fix', isAI: true, disabledReason: 'Unavailable' }, { title: 'Fix' }], [false, false, false]],
-		[
-			'disabled ordinary',
-			[
-				{ title: 'AI fix', isAI: true },
-				{ title: 'Fix', disabledReason: 'Unavailable' },
-			],
-			[true, true, false],
-		],
+		['disabled ordinary', [{ title: 'AI fix', isAI: true }, { title: 'Fix', disabledReason: 'Unavailable' }], [true, true, false]],
 		['all disabled', [{ title: 'AI fix', isAI: true, disabledReason: 'Unavailable' }], [false, true, false]],
 		['preferred AI quick fix', [{ title: 'AI fix', kind: 'quickfix', isAI: true, isPreferred: true }], [true, true, true]],
 	] as const) {
 		test('computes flags from valid actions: ' + label, async () => {
-			using provider = fixture.features.codeActionProvider.register('typescript', {
-				provideCodeActions: () => entries,
-			});
+			using provider = fixture.features.codeActionProvider.register('typescript', { provideCodeActions: () => entries });
 			using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-			using model = fixture.editor.invokeWithinContext(accessor =>
-				accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-			);
-			const state = model.trigger({
-				type: CodeActionTriggerType.Invoke,
-				triggerAction: CodeActionTriggerSource.QuickFix,
-			})!;
+			using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+				CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+			const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
 			const actions = await state.actions;
 			assert.deepEqual([actions.hasAIFix, actions.allAIFixes, actions.hasAutoFix], expected);
-			assert.deepEqual(
-				actions.allActions.map(item => item.action.isAI),
-				entries.map(item => (item as LanguageCodeAction).isAI),
-			);
+			assert.deepEqual(actions.allActions.map(item => item.action.isAI), entries.map(item => (item as LanguageCodeAction).isAI));
 			assert.deepEqual(fixture.errors, []);
 		});
 	}
@@ -228,37 +154,21 @@ suite('Code action result ownership and AI markers', () => {
 		test('releases resolved provider resources on ' + change, async () => {
 			let released = 0;
 			using provider = fixture.features.codeActionProvider.register('typescript', {
-				provideCodeActions: () => ({
-					actions: [{ title: 'AI fix', isAI: true }],
-					...toDisposable(() => released++),
-				}),
+				provideCodeActions: () => ({ actions: [{ title: 'AI fix', isAI: true }], ...toDisposable(() => released++) }),
 			});
 			using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-			using model = fixture.editor.invokeWithinContext(accessor =>
-				accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-			);
+			using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+				CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
 			const trigger = { type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix };
 			const state = model.trigger(trigger)!;
 			const actions = await state.actions;
 			assert.equal(released, 0);
-			if (change === 'replace') {
-				await model.trigger(trigger)!.actions;
-			}
-			if (change === 'content') {
-				fixture.model.setValue('changed');
-			}
-			if (change === 'language') {
-				fixture.model.setLanguage('javascript');
-			}
-			if (change === 'selection') {
-				fixture.editor.setPosition({ lineNumber: 1, column: 2 });
-			}
-			if (change === 'provider') {
-				provider.dispose();
-			}
-			if (change === 'dispose') {
-				model.dispose();
-			}
+			if (change === 'replace') { await model.trigger(trigger)!.actions; }
+			if (change === 'content') { fixture.model.setValue('changed'); }
+			if (change === 'language') { fixture.model.setLanguage('javascript'); }
+			if (change === 'selection') { fixture.editor.setPosition({ lineNumber: 1, column: 2 }); }
+			if (change === 'provider') { provider.dispose(); }
+			if (change === 'dispose') { model.dispose(); }
 			assert.equal(released, 1);
 			actions.dispose();
 			assert.equal(released, 1, 'result disposal is idempotent');
@@ -272,9 +182,7 @@ suite('Code action result ownership and AI markers', () => {
 		let released = 0;
 		let finish!: () => void;
 		let started!: () => void;
-		const pending = new Promise<void>(resolve => {
-			started = resolve;
-		});
+		const pending = new Promise<void>(resolve => { started = resolve; });
 		using slow = fixture.features.codeActionProvider.register('typescript', {
 			provideCodeActions: () => {
 				started();
@@ -287,13 +195,9 @@ suite('Code action result ownership and AI markers', () => {
 			provideCodeActions: () => ({ actions: [{ title: 'Ready' }], ...toDisposable(() => released++) }),
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-		);
-		const state = model.trigger({
-			type: CodeActionTriggerType.Invoke,
-			triggerAction: CodeActionTriggerSource.QuickFix,
-		})!;
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+			CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+		const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
 		await pending;
 		model.reset();
 		assert.equal(released, 1);
@@ -306,23 +210,15 @@ suite('Code action result ownership and AI markers', () => {
 		let released = 0;
 		using provider = fixture.features.codeActionProvider.register('typescript', {
 			provideCodeActions: () => ({
-				actions: [{ title: 'Invalid', isAI: 'yes' as unknown as boolean }],
-				...toDisposable(() => released++),
+				actions: [{ title: 'Invalid', isAI: 'yes' as unknown as boolean }], ...toDisposable(() => released++),
 			}),
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-		);
-		const state = model.trigger({
-			type: CodeActionTriggerType.Invoke,
-			triggerAction: CodeActionTriggerSource.QuickFix,
-		})!;
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+			CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+		const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
 		assert.deepEqual((await state.actions).allActions, []);
-		assert.deepEqual(
-			fixture.errors.map(error => (error as Error).message),
-			['Code action AI marker must be boolean'],
-		);
+		assert.deepEqual(fixture.errors.map(error => (error as Error).message), ['Code action AI marker must be boolean']);
 		assert.equal(released, 1);
 	});
 
@@ -336,13 +232,9 @@ suite('Code action result ownership and AI markers', () => {
 			},
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
-		);
-		const state = model.trigger({
-			type: CodeActionTriggerType.Invoke,
-			triggerAction: CodeActionTriggerSource.QuickFix,
-		})!;
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+			CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)));
+		const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
 		const actions = await state.actions;
 		assert.deepEqual([actions.hasAIFix, actions.allAIFixes], [false, false]);
 		await actions.validActions[0]!.resolve(state.context);
@@ -352,27 +244,16 @@ suite('Code action result ownership and AI markers', () => {
 
 	test('releases preceding providers when error reporting throws', async () => {
 		let released = 0;
-		using failed = fixture.features.codeActionProvider.register('typescript', {
-			provideCodeActions: () => {
-				throw new Error('provider failed');
-			},
-		});
+		using failed = fixture.features.codeActionProvider.register('typescript', { provideCodeActions: () => { throw new Error('provider failed'); } });
 		using first = fixture.features.codeActionProvider.register('typescript', {
 			provideCodeActions: () => ({ actions: [{ title: 'Ready' }], ...toDisposable(() => released++) }),
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, () => {}));
-		const state = model.trigger({
-			type: CodeActionTriggerType.Invoke,
-			triggerAction: CodeActionTriggerSource.QuickFix,
-		})!;
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(
+			CodeActionModel, fixture.editor, diagnostics, () => { }));
+		const state = model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix })!;
 		await state.actions;
-		await assert.rejects(
-			getCodeActions(fixture.features.codeActionProvider, state.context, {}, error => {
-				throw error;
-			}),
-			/provider failed/,
-		);
+		await assert.rejects(getCodeActions(fixture.features.codeActionProvider, state.context, {}, error => { throw error; }), /provider failed/);
 		assert.equal(released, 1);
 		model.reset();
 		assert.equal(released, 2);
@@ -383,21 +264,7 @@ suite('Code action result ownership and AI markers', () => {
 			let released = 0;
 			using provider = fixture.features.codeActionProvider.register('typescript', {
 				provideCodeActions: () => ({
-					actions: [
-						{
-							title: 'AI fix',
-							isAI: true,
-							edit: {
-								entries: [
-									{
-										kind: 'textDocument',
-										resource: fixture.model.uri,
-										edits: [{ range: fixture.model.getFullModelRange(), text: 'fixed' }],
-									},
-								],
-							},
-						},
-					],
+					actions: [{ title: 'AI fix', isAI: true, edit: { entries: [{ kind: 'textDocument', resource: fixture.model.uri, edits: [{ range: fixture.model.getFullModelRange(), text: 'fixed' }] }] } }],
 					...toDisposable(() => released++),
 				}),
 			});
@@ -406,24 +273,15 @@ suite('Code action result ownership and AI markers', () => {
 			assert.equal(released, 0);
 			const widget = fixture.editor.invokeWithinContext(accessor => accessor.get(IActionWidgetService));
 			assert.equal(widget.isVisible, true);
-			if (outcome === 'dismiss') {
-				widget.hide();
-			}
-			if (outcome === 'replace') {
-				await fixture.editor.getAction('editor.action.quickFix')!.run();
-			}
+			if (outcome === 'dismiss') { widget.hide(); }
+			if (outcome === 'replace') { await fixture.editor.getAction('editor.action.quickFix')!.run(); }
 			if (outcome === 'apply') {
 				await fixture.editor.getAction('editor.action.codeAction')!.run({ apply: 'first' });
 				assert.equal(fixture.model.getValue(), 'fixed');
 			}
-			if (outcome === 'dispose') {
-				fixture.editor.dispose();
-			}
+			if (outcome === 'dispose') { fixture.editor.dispose(); }
 			assert.equal(released, outcome === 'apply' ? 2 : 1);
-			if (outcome === 'replace') {
-				widget.hide();
-				assert.equal(released, 2);
-			}
+			if (outcome === 'replace') { widget.hide(); assert.equal(released, 2); }
 			assert.deepEqual(fixture.errors, []);
 		});
 	}

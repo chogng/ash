@@ -24,15 +24,8 @@ function themeData(base: BuiltinTheme, theme: IColorTheme): IStandaloneThemeData
 		inherit: false,
 		colors: {},
 		rules: [
-			{
-				token: '',
-				foreground: Color.Format.CSS.formatHex(foreground),
-				background: Color.Format.CSS.formatHex(background),
-			},
-			...scopes.map(([token, color]) => ({
-				token,
-				foreground: Color.Format.CSS.formatHex(theme.getColor(color)!),
-			})),
+			{ token: '', foreground: Color.Format.CSS.formatHex(foreground), background: Color.Format.CSS.formatHex(background) },
+			...scopes.map(([token, color]) => ({ token, foreground: Color.Format.CSS.formatHex(theme.getColor(color)!) })),
 		],
 	};
 }

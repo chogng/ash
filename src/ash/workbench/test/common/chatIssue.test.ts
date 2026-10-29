@@ -13,10 +13,7 @@ suite('Chat Issue icons', () => {
 			{ state: 'closed', reason: undefined, id: 'issue-closed', color: 'charts.purple' },
 			{ state: 'closed', reason: 'future_reason', id: 'issue-closed', color: 'charts.purple' },
 		];
-		assert.deepEqual(
-			cases.map(({ state, reason }) => computeIssueIcon(state, reason)),
-			cases.map(({ id, color }) => ({ id, color: { id: color } })),
-		);
+		assert.deepEqual(cases.map(({ state, reason }) => computeIssueIcon(state, reason)), cases.map(({ id, color }) => ({ id, color: { id: color } })));
 	});
 
 	test('collections stay active until all states resolve, and distinguish completed from discarded issues', () => {
@@ -25,22 +22,16 @@ suite('Chat Issue icons', () => {
 			[undefined, { state: 'closed', stateReason: 'completed' }],
 			[{ state: 'open' }, { state: 'closed' }],
 			[{ state: 'closed', stateReason: 'not_planned' }, { state: 'closed' }],
-			[
-				{ state: 'closed', stateReason: 'not_planned' },
-				{ state: 'closed', stateReason: 'duplicate' },
-			],
+			[{ state: 'closed', stateReason: 'not_planned' }, { state: 'closed', stateReason: 'duplicate' }],
 			[{ state: 'future' }],
 		];
-		assert.deepEqual(
-			cases.map(issues => computeAggregateIssueIcon(issues)),
-			[
-				{ id: 'issue-opened', color: { id: 'charts.green' } },
-				{ id: 'issue-opened', color: { id: 'charts.green' } },
-				{ id: 'issue-opened', color: { id: 'charts.green' } },
-				{ id: 'issue-closed', color: { id: 'charts.purple' } },
-				{ id: 'issue-closed', color: { id: 'description.foreground' } },
-				{ id: 'issue-opened', color: { id: 'charts.green' } },
-			],
-		);
+		assert.deepEqual(cases.map(issues => computeAggregateIssueIcon(issues)), [
+			{ id: 'issue-opened', color: { id: 'charts.green' } },
+			{ id: 'issue-opened', color: { id: 'charts.green' } },
+			{ id: 'issue-opened', color: { id: 'charts.green' } },
+			{ id: 'issue-closed', color: { id: 'charts.purple' } },
+			{ id: 'issue-closed', color: { id: 'description.foreground' } },
+			{ id: 'issue-opened', color: { id: 'charts.green' } },
+		]);
 	});
 });

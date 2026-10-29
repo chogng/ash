@@ -29,15 +29,9 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'text',
-			get title() {
-				return localize('editor.fontFamily.title', 'Font family');
-			},
-			get description() {
-				return localize('editor.fontFamily.description', 'Use a font family or comma-separated list. Leave empty to use {0}.', EDITOR_FONT_DEFAULTS.fontFamily);
-			},
-			get placeholder() {
-				return localize('editor.fontFamily.default', 'System default');
-			},
+			get title() { return localize('editor.fontFamily.title', 'Font family'); },
+			get description() { return localize('editor.fontFamily.description', 'Use a font family or comma-separated list. Leave empty to use {0}.', EDITOR_FONT_DEFAULTS.fontFamily); },
+			get placeholder() { return localize('editor.fontFamily.default', 'System default'); },
 		},
 	}),
 	fontSize: configurationRegistry.registerConfiguration<number>({
@@ -50,12 +44,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'number',
-			get title() {
-				return localize('editor.fontSize.title', 'Font size');
-			},
-			get description() {
-				return localize('editor.fontSize.description', 'Set the editor text size in pixels. The default is {0}.', EDITOR_FONT_DEFAULTS.fontSize);
-			},
+			get title() { return localize('editor.fontSize.title', 'Font size'); },
+			get description() { return localize('editor.fontSize.description', 'Set the editor text size in pixels. The default is {0}.', EDITOR_FONT_DEFAULTS.fontSize); },
 			minimum: 8,
 			maximum: 40,
 		},
@@ -69,12 +59,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'number',
-			get title() {
-				return localize('editor.lineHeight.title', 'Line height');
-			},
-			get description() {
-				return localize('editor.lineHeight.description', 'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.');
-			},
+			get title() { return localize('editor.lineHeight.title', 'Line height'); },
+			get description() { return localize('editor.lineHeight.description', 'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.'); },
 			minimum: 0,
 			maximum: 80,
 		},
@@ -85,12 +71,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'editor.fontLigatures'),
 		setting: {
 			valueType: 'boolean',
-			get title() {
-				return localize('editor.fontLigatures.title', 'Font ligatures');
-			},
-			get description() {
-				return localize('editor.fontLigatures.description', 'Use programming ligatures when the selected font supports them.');
-			},
+			get title() { return localize('editor.fontLigatures.title', 'Font ligatures'); },
+			get description() { return localize('editor.fontLigatures.description', 'Use programming ligatures when the selected font supports them.'); },
 		},
 	}),
 	experimentalGpuAcceleration: configurationRegistry.registerConfiguration<'on' | 'off'>({
@@ -113,12 +95,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseEnum(value, 'editor.wordWrap', ['off', 'on', 'wordWrapColumn', 'bounded']),
 		setting: {
 			valueType: 'select',
-			get title() {
-				return localize('editor.wordWrap.title', 'Word wrap');
-			},
-			get description() {
-				return localize('editor.wordWrap.description', 'Wrap long lines at the viewport, the configured column, or the smaller of both.');
-			},
+			get title() { return localize('editor.wordWrap.title', 'Word wrap'); },
+			get description() { return localize('editor.wordWrap.description', 'Wrap long lines at the viewport, the configured column, or the smaller of both.'); },
 			get options() {
 				return [
 					{ value: 'off', label: localize('editor.wordWrap.off', 'Off') },
@@ -138,15 +116,9 @@ export const CodeEditorConfiguration = Object.freeze({
 			throw new TypeError(localize('editor.wordWrapColumn.invalid', 'Word wrap column must be a positive integer.'));
 		},
 		setting: {
-			valueType: 'number',
-			minimum: 1,
-			maximum: Number.MAX_SAFE_INTEGER,
-			get title() {
-				return localize('editor.wordWrapColumn.title', 'Word wrap column');
-			},
-			get description() {
-				return localize('editor.wordWrapColumn.description', 'Maximum column used by column and bounded word wrapping.');
-			},
+			valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER,
+			get title() { return localize('editor.wordWrapColumn.title', 'Word wrap column'); },
+			get description() { return localize('editor.wordWrapColumn.description', 'Maximum column used by column and bounded word wrapping.'); },
 		},
 	}),
 	wrappingIndent: configurationRegistry.registerConfiguration<WrappingIndentSetting>({
@@ -350,15 +322,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'editor.selectionClipboard'),
 		setting: {
 			valueType: 'boolean',
-			get title() {
-				return localize({ bundle: 'ash.editor.clipboard', key: 'selection.title' }, 'Selection clipboard');
-			},
-			get description() {
-				return localize(
-					{ bundle: 'ash.editor.clipboard', key: 'selection.description' },
-					'On Linux, copy editor selections to the selection clipboard and paste with the middle mouse button.',
-				);
-			},
+			get title() { return localize({ bundle: 'ash.editor.clipboard', key: 'selection.title' }, 'Selection clipboard'); },
+			get description() { return localize({ bundle: 'ash.editor.clipboard', key: 'selection.description' }, 'On Linux, copy editor selections to the selection clipboard and paste with the middle mouse button.'); },
 		},
 	}),
 	findGlobalClipboard: configurationRegistry.registerConfiguration<boolean>({
@@ -367,12 +332,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'editor.find.globalFindClipboard'),
 		setting: {
 			valueType: 'boolean',
-			get title() {
-				return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.title' }, 'Share find text');
-			},
-			get description() {
-				return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.description' }, 'Share Find queries across editors. On macOS desktop, use the system find pasteboard.');
-			},
+			get title() { return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.title' }, 'Share find text'); },
+			get description() { return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.description' }, 'Share Find queries across editors. On macOS desktop, use the system find pasteboard.'); },
 		},
 	}),
 	findAutoFindInSelection: configurationRegistry.registerConfiguration<boolean>({
@@ -488,12 +449,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'diffEditor.codeLens'),
 		setting: {
 			valueType: 'boolean',
-			get title() {
-				return localize('diffEditor.codeLens.title', 'CodeLens in diff editor');
-			},
-			get description() {
-				return localize('diffEditor.codeLens.description', 'Show provider actions and references in diff editors.');
-			},
+			get title() { return localize('diffEditor.codeLens.title', 'CodeLens in diff editor'); },
+			get description() { return localize('diffEditor.codeLens.description', 'Show provider actions and references in diff editors.'); },
 		},
 	}),
 	diffWordWrap: configurationRegistry.registerConfiguration<'off' | 'on' | 'inherit'>({
@@ -552,7 +509,7 @@ function numberSetting(title: string, description: string, minimum: number, maxi
 	return { valueType: 'number', title, description, minimum, maximum } as const;
 }
 
-function selectSetting<T extends string>(title: string, description: string, options: readonly { readonly value: T; readonly label: string }[]) {
+function selectSetting<T extends string>(title: string, description: string, options: readonly { readonly value: T; readonly label: string; }[]) {
 	return { valueType: 'select', title, description, options } as const;
 }
 

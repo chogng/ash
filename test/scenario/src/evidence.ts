@@ -37,7 +37,7 @@ interface EvidenceRun {
 	readonly runPath: string;
 	readonly application: RunningApplication;
 	readonly steps: EvidenceStep[];
-	readonly artifacts: { report?: string; videos: string[]; logs: string[]; finalizationError?: string };
+	readonly artifacts: { report?: string; videos: string[]; logs: string[]; finalizationError?: string; };
 }
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
@@ -46,7 +46,7 @@ const evidenceRoot = join(repositoryRoot, '.build', 'ash-playwright-mcp', 'evide
 export class EvidenceService {
 	private currentRun: EvidenceRun | undefined;
 
-	constructor(private readonly applications: ApplicationService) {}
+	constructor(private readonly applications: ApplicationService) { }
 
 	async start(
 		scenarioId: string,
@@ -66,15 +66,7 @@ export class EvidenceService {
 		const id = `${sanitizePathSegment(scenarioId)}-${startedAt.replace(/[:.]/gu, '-')}`;
 		const runPath = join(evidenceRoot, id);
 		await mkdir(runPath, { recursive: true });
-		const application = await this.applications.start({
-			runPath,
-			workspacePath,
-			userSettings,
-			extraArgs,
-			externalCodexHome,
-			profileFixturePath,
-			startupTimeout,
-		});
+		const application = await this.applications.start({ runPath, workspacePath, userSettings, extraArgs, externalCodexHome, profileFixturePath, startupTimeout });
 		const run: EvidenceRun = {
 			id,
 			scenarioId,
@@ -120,14 +112,7 @@ export class EvidenceService {
 		const sequence = String(run.steps.indexOf(step) + 1).padStart(2, '0');
 		const screenshot = `${sequence}-${sanitizePathSegment(id)}-${status}.png`;
 		await this.capture(screenshot);
-		step.captures.push({
-			status,
-			timestamp: new Date().toISOString(),
-			screenshot,
-			windowUrl: run.application.page.url(),
-			details,
-			blockedOn,
-		});
+		step.captures.push({ status, timestamp: new Date().toISOString(), screenshot, windowUrl: run.application.page.url(), details, blockedOn });
 		this.writeManifest();
 	}
 
@@ -185,13 +170,11 @@ export class EvidenceService {
 
 	private async saveVideos(videos: readonly ReturnType<RunningApplication['videoFiles']>[number][]): Promise<void> {
 		const run = this.requireRun();
-		await Promise.all(
-			videos.map(async (video, index) => {
-				const relativePath = `videos/recording-${index + 1}.webm`;
-				await video.saveAs(join(run.runPath, relativePath));
-				run.artifacts.videos.push(relativePath);
-			}),
-		);
+		await Promise.all(videos.map(async (video, index) => {
+			const relativePath = `videos/recording-${index + 1}.webm`;
+			await video.saveAs(join(run.runPath, relativePath));
+			run.artifacts.videos.push(relativePath);
+		}));
 	}
 
 	private async writeDiagnostics(): Promise<void> {
@@ -204,48 +187,39 @@ export class EvidenceService {
 
 	private writeManifest(): void {
 		const run = this.requireRun();
-		writeFileSync(
-			join(run.runPath, 'manifest.json'),
-			`${JSON.stringify(
-				{
-					id: run.id,
-					scenarioId: run.scenarioId,
-					title: run.title,
-					source: run.source,
-					scenarioPath: run.scenarioPath,
-					workspacePath: run.workspacePath,
-					startedAt: run.startedAt,
-					videoStartedAt: run.videoStartedAt,
-					completedAt: run.completedAt,
-					outcome: run.outcome,
-					notes: run.notes,
-					environment: {
-						platform: process.platform,
-						architecture: process.arch,
-						nodeVersion: process.version,
-						ashVersion: readAshVersion(),
-						target: run.application.target,
-						commit: process.env.GITHUB_SHA ?? process.env.BUILD_SOURCEVERSION,
-					},
-					artifacts: run.artifacts,
-					steps: run.steps,
-				},
-				undefined,
-				2,
-			)}\n`,
-		);
+		writeFileSync(join(run.runPath, 'manifest.json'), `${JSON.stringify({
+			id: run.id,
+			scenarioId: run.scenarioId,
+			title: run.title,
+			source: run.source,
+			scenarioPath: run.scenarioPath,
+			workspacePath: run.workspacePath,
+			startedAt: run.startedAt,
+			videoStartedAt: run.videoStartedAt,
+			completedAt: run.completedAt,
+			outcome: run.outcome,
+			notes: run.notes,
+			environment: {
+				platform: process.platform,
+				architecture: process.arch,
+				nodeVersion: process.version,
+				ashVersion: readAshVersion(),
+				target: run.application.target,
+				commit: process.env.GITHUB_SHA ?? process.env.BUILD_SOURCEVERSION,
+			},
+			artifacts: run.artifacts,
+			steps: run.steps,
+		}, undefined, 2)}\n`);
 	}
 
 	private writeReport(): string {
 		const run = this.requireRun();
-		const rows = run.steps
-			.map(step => {
-				const result = step.captures.at(-1);
-				const screenshots = step.captures.map(capture => `<a href="${escapeHtml(capture.screenshot)}">${escapeHtml(capture.status)}</a>`).join(', ');
-				const blocker = result?.blockedOn ? ` <span class="blocked">(needs ${escapeHtml(result.blockedOn)})</span>` : '';
-				return `<tr><td>${escapeHtml(step.id)}</td><td>${escapeHtml(step.title)}</td><td class="${escapeHtml(result?.status ?? '')}">${escapeHtml(result?.status ?? 'unknown')}${blocker}</td><td>${screenshots}</td><td>${escapeHtml(result?.details ?? '')}</td></tr>`;
-			})
-			.join('');
+		const rows = run.steps.map(step => {
+			const result = step.captures.at(-1);
+			const screenshots = step.captures.map(capture => `<a href="${escapeHtml(capture.screenshot)}">${escapeHtml(capture.status)}</a>`).join(', ');
+			const blocker = result?.blockedOn ? ` <span class="blocked">(needs ${escapeHtml(result.blockedOn)})</span>` : '';
+			return `<tr><td>${escapeHtml(step.id)}</td><td>${escapeHtml(step.title)}</td><td class="${escapeHtml(result?.status ?? '')}">${escapeHtml(result?.status ?? 'unknown')}${blocker}</td><td>${screenshots}</td><td>${escapeHtml(result?.details ?? '')}</td></tr>`;
+		}).join('');
 		const blocked = run.steps.flatMap(step => {
 			const capture = step.captures.at(-1);
 			return capture?.blockedOn ? [{ step, capture }] : [];
@@ -273,12 +247,7 @@ ${blockedSection}<h2>Video</h2>${videos}<h2>Trace and logs</h2>${logs ? `<ul>${l
 }
 
 function sanitizePathSegment(value: string): string {
-	return (
-		value
-			.trim()
-			.replace(/[^a-zA-Z0-9._-]+/gu, '-')
-			.replace(/^-+|-+$/gu, '') || 'unnamed'
-	);
+	return value.trim().replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'unnamed';
 }
 
 function escapeHtml(value: string): string {
@@ -286,16 +255,12 @@ function escapeHtml(value: string): string {
 }
 
 function isHttpUrl(value: string): boolean {
-	try {
-		return ['http:', 'https:'].includes(new URL(value).protocol);
-	} catch {
-		return false;
-	}
+	try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
 }
 
 function readAshVersion(): string {
 	const packagePath = join(repositoryRoot, '.', 'package.json');
-	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string }).version : 'unknown';
+	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string; }).version : 'unknown';
 }
 
 function toRelativePath(root: string, path: string): string {

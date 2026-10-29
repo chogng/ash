@@ -21,7 +21,7 @@ export function screenshotRectangle(start: ScreenshotPoint, end: ScreenshotPoint
 		x,
 		y,
 		width: Math.max(1, Math.round(Math.max(start.x, end.x)) - x),
-		height: Math.max(1, Math.round(Math.max(start.y, end.y)) - y),
+		height: Math.max(1, Math.round(Math.max(start.y, end.y)) - y)
 	};
 }
 
@@ -32,7 +32,7 @@ export function clampScreenshotRectangle(rect: IRectangle, width: number, height
 		x,
 		y,
 		width: Math.max(1, Math.min(width - x, Math.round(rect.width))),
-		height: Math.max(1, Math.min(height - y, Math.round(rect.height))),
+		height: Math.max(1, Math.min(height - y, Math.round(rect.height)))
 	};
 }
 
@@ -52,7 +52,9 @@ export function paintScreenshotAnnotation(context: CanvasRenderingContext2D, ann
 		const patch = context.canvas.ownerDocument.createElement('canvas');
 		patch.width = Math.max(1, Math.ceil(rect.width / 14));
 		patch.height = Math.max(1, Math.ceil(rect.height / 14));
-		patch.getContext('2d')!.drawImage(context.canvas, rect.x, rect.y, rect.width, rect.height, 0, 0, patch.width, patch.height);
+		patch
+			.getContext('2d')!
+			.drawImage(context.canvas, rect.x, rect.y, rect.width, rect.height, 0, 0, patch.width, patch.height);
 		context.imageSmoothingEnabled = false;
 		context.drawImage(patch, 0, 0, patch.width, patch.height, rect.x, rect.y, rect.width, rect.height);
 	} else if (annotation.tool === 'rectangle') {
@@ -70,9 +72,15 @@ export function paintScreenshotAnnotation(context: CanvasRenderingContext2D, ann
 			const angle = Math.atan2(end.y - start.y, end.x - start.x);
 			const length = Math.max(12, annotation.width * 4);
 			context.beginPath();
-			context.moveTo(end.x - length * Math.cos(angle - Math.PI / 6), end.y - length * Math.sin(angle - Math.PI / 6));
+			context.moveTo(
+				end.x - length * Math.cos(angle - Math.PI / 6),
+				end.y - length * Math.sin(angle - Math.PI / 6)
+			);
 			context.lineTo(end.x, end.y);
-			context.lineTo(end.x - length * Math.cos(angle + Math.PI / 6), end.y - length * Math.sin(angle + Math.PI / 6));
+			context.lineTo(
+				end.x - length * Math.cos(angle + Math.PI / 6),
+				end.y - length * Math.sin(angle + Math.PI / 6)
+			);
 			context.stroke();
 		}
 	}

@@ -35,14 +35,7 @@ export class DefaultFormatter extends Disposable {
 		if (mode === FormattingMode.Silent || model.isDisposed() || token.isCancellationRequested) return;
 		const lifetime = new DisposableStore();
 		this.selection.value = lifetime;
-		const picker = lifetime.add(
-			this.quickInput.createQuickPick<{
-				label: string;
-				description?: string;
-				provider?: T;
-				configure?: boolean;
-			}>(),
-		);
+		const picker = lifetime.add(this.quickInput.createQuickPick<{ label: string; description?: string; provider?: T; configure?: boolean; }>());
 		const focused = this.codeEditors.getFocusedCodeEditor();
 		const choices = providers.map((provider, index) => ({
 			label: provider.displayName ?? provider.extensionId?.value ?? localize('format.numbered', 'Formatter {0}', index + 1),
@@ -55,19 +48,17 @@ export class DefaultFormatter extends Disposable {
 		let saveDefault = false;
 		try {
 			const picked = await new Promise<T | undefined>(resolve => {
-				lifetime.add(
-					picker.onDidAccept(() => {
-						const item = picker.selectedItems[0] ?? picker.activeItems[0];
-						if (item?.configure) {
-							saveDefault = true;
-							picker.placeholder = localize('format.default.select', 'Select the Default Formatter for {0}', model.getLanguageId());
-							picker.items = choices.filter(item => item.provider.extensionId);
-							picker.value = '';
-							return;
-						}
-						if (item?.provider) resolve(item.provider);
-					}),
-				);
+				lifetime.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0] ?? picker.activeItems[0];
+					if (item?.configure) {
+						saveDefault = true;
+						picker.placeholder = localize('format.default.select', 'Select the Default Formatter for {0}', model.getLanguageId());
+						picker.items = choices.filter(item => item.provider.extensionId);
+						picker.value = '';
+						return;
+					}
+					if (item?.provider) resolve(item.provider);
+				}));
 				lifetime.add(picker.onDidHide(() => resolve(undefined)));
 				lifetime.add(model.onWillDispose(() => picker.hide()));
 				lifetime.add(token.onCancellationRequested(() => picker.hide()));
@@ -76,9 +67,7 @@ export class DefaultFormatter extends Disposable {
 			});
 			if (!picked || this.isDisposed || model.isDisposed() || token.isCancellationRequested) return;
 			if (saveDefault && picked.extensionId) {
-				await this.configuration.updateValue(DefaultFormatter.configName, picked.extensionId.value, {
-					overrideIdentifiers: [model.getLanguageId()],
-				});
+				await this.configuration.updateValue(DefaultFormatter.configName, picked.extensionId.value, { overrideIdentifiers: [model.getLanguageId()] });
 			}
 			return token.isCancellationRequested ? undefined : picked;
 		} finally {

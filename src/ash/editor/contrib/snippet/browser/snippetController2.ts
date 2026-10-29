@@ -85,7 +85,8 @@ export class SnippetController2 extends Disposable implements IEditorContributio
 		let handled = false;
 		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			handled = event.shiftKey ? this.retreat() : this.advance();
-		} else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+		} else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp')
+			&& event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 			handled = event.key === 'ArrowDown' ? this.nextChoice() : this.prevChoice();
 		} else if (event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
 			this.cancel(true);

@@ -27,11 +27,13 @@ const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
-const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent'], { ResizeObserver: TestResizeObserver });
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent',
+], { ResizeObserver: TestResizeObserver });
 
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
@@ -41,11 +43,7 @@ suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
 });
-const diffOptions: IDocumentDiffProviderOptions = {
-	ignoreTrimWhitespace: false,
-	maxComputationTimeMs: 0,
-	computeMoves: false,
-};
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 suite('MultiDiff comparison retention', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -63,10 +61,7 @@ suite('MultiDiff comparison retention', () => {
 		assert.equal(plain.height, 6000);
 		assert.equal(plain.getOffset(257), 5140);
 		const wrapped = computeDiffRowLayout(model, 20, { fontInfo: TEST_FONT_INFO, column: 10 });
-		assert.deepEqual(
-			[254, 255, 256, 257, 300].map(index => wrapped.getOffset(index)),
-			[5080, 5140, 5160, 5260, 6120],
-		);
+		assert.deepEqual([254, 255, 256, 257, 300].map(index => wrapped.getOffset(index)), [5080, 5140, 5160, 5260, 6120]);
 		assert.equal(wrapped.height, 6120);
 	});
 
@@ -78,17 +73,11 @@ suite('MultiDiff comparison retention', () => {
 		let current: InstanceType<typeof DiffModel> | undefined;
 		let loads = 0;
 		const loaded = new DeferredPromise<void>();
-		const item = resources.add(
-			new DocumentDiffItem(
-				{ id: 'retained', label: 'retained.txt' },
-				async () => {
-					loads++;
-					await loaded.p;
-					return (current = resources.add(new DiffModel({ original, modified, diffProvider: provider, diffOptions })));
-				},
-				{ onDidChange: () => {}, release: () => current?.dispose() },
-			),
-		);
+		const item = resources.add(new DocumentDiffItem({ id: 'retained', label: 'retained.txt' }, async () => {
+			loads++;
+			await loaded.p;
+			return current = resources.add(new DiffModel({ original, modified, diffProvider: provider, diffOptions }));
+		}, { onDidChange: () => { }, release: () => current?.dispose() }));
 		const viewport = item.retain();
 		const navigation = item.retain();
 		const pending = item.resolve();
@@ -175,12 +164,7 @@ test('source replacement releases readiness waits for disposed models during ini
 		await editor.resolveVisible();
 		assert.equal(editor.domNode.querySelector('.stanza-multi-diff-editor-title')?.textContent, 'new.ts');
 		assert.equal(editor.currentChange, undefined);
-		await computation.complete(
-			await provider.computeDiff(original, modified, diffOptions, {
-				isCancellationRequested: false,
-				onCancellationRequested: Event.None,
-			}),
-		);
+		await computation.complete(await provider.computeDiff(original, modified, diffOptions, { isCancellationRequested: false, onCancellationRequested: Event.None }));
 	} finally {
 		container.remove();
 	}
@@ -206,11 +190,7 @@ for (const restore of [false, true]) {
 			using model = new DiffModel({ original: before, modified: after, diffProvider: provider, diffOptions });
 			using item = new DocumentDiffItem({ id: 'first', label: 'first.ts' }, model);
 			using collection = new MultiDiffEditorModel([item]);
-			using editor = services.createInstance(MultiDiffEditorWidget, {
-				container,
-				model: collection,
-				lineHeight: 20,
-			});
+			using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20 });
 			editor.layout({ width: 800, height: 300 });
 			if (restore) editor.restoreViewState({ scrollTop: 0, collapsedItemIds: ['first'], itemViewStates: [] });
 			await editor.resolveVisible();
@@ -259,18 +239,8 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	using secondOriginal = new TextModel(lines('before', 100));
 	using secondModified = new TextModel(lines('after', 100));
 	using computationService = new MultiDiffTestComputationService();
-	using firstModel = new DiffModel({
-		original: firstOriginal,
-		modified: firstModified,
-		diffProvider: computationService,
-		diffOptions,
-	});
-	using secondModel = new DiffModel({
-		original: secondOriginal,
-		modified: secondModified,
-		diffProvider: computationService,
-		diffOptions,
-	});
+	using firstModel = new DiffModel({ original: firstOriginal, modified: firstModified, diffProvider: computationService, diffOptions });
+	using secondModel = new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computationService, diffOptions });
 	using firstItem = new DocumentDiffItem({ id: 'first', label: 'src/first.ts', originalLabel: 'HEAD', modifiedLabel: 'Working Tree' }, firstModel);
 	using secondItem = new DocumentDiffItem({ id: 'second', label: 'src/second.ts', originalLabel: 'HEAD', modifiedLabel: 'Working Tree' }, secondModel);
 	using collection = new MultiDiffEditorModel([firstItem, secondItem]);
@@ -295,15 +265,15 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 					disposedItemActions += 1;
 				};
 				return { dispose, [Symbol.dispose]: dispose };
-			},
+			}
 		},
 	});
 	editor.layout({ width: 480, height: 80 });
 
 	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
-	assert.ok([...editor.domNode.querySelectorAll<HTMLElement>('.stanza-multi-diff-editor-section')].every(section => section.style.transform === ''));
+	assert.ok([...editor.domNode.querySelectorAll<HTMLElement>('.stanza-multi-diff-editor-section')].every((section) => section.style.transform === ''));
 	assert.deepEqual(
-		[...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-title')].map(element => element.textContent),
+		[...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-title')].map((element) => element.textContent),
 		['src/first.ts', 'src/second.ts'],
 	);
 	assert.equal(editor.domNode.classList.contains('hide-line-numbers'), true);
@@ -318,9 +288,9 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	requiredElement<HTMLButtonElement>(editor.domNode, '.stanza-multi-diff-editor-file-actions button').click();
 	assert.equal(firstHeader.getAttribute('aria-expanded'), 'true');
 	editor.collapseAll();
-	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'false'));
+	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every((header) => header.getAttribute('aria-expanded') === 'false'));
 	editor.expandAll();
-	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
+	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every((header) => header.getAttribute('aria-expanded') === 'true'));
 	firstHeader.click();
 	assert.equal(firstHeader.getAttribute('aria-expanded'), 'false');
 	assert.equal((await editor.nextChange())?.itemId, 'first');
@@ -340,13 +310,7 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	assert.equal(editor.domNode.scrollTop, 52);
 	assert.equal(editor.getActiveItem()?.id, 'second');
 	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
-	editor.updateOptions({
-		fontSize: 18,
-		lineHeight: 30,
-		showLineNumbers: true,
-		showInlineChanges: false,
-		loopChanges: false,
-	});
+	editor.updateOptions({ fontSize: 18, lineHeight: 30, showLineNumbers: true, showInlineChanges: false, loopChanges: false });
 	assert.equal(editor.domNode.classList.contains('hide-line-numbers'), false);
 	for (const child of services.get(ICodeEditorService).listCodeEditors()) {
 		assert.equal(child.getOption(EditorOption.fontInfo).fontSize, 18);
@@ -365,15 +329,10 @@ class MultiDiffTestComputationService implements IDocumentDiffProvider {
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
 		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
-		return {
-			identical: original.getValue() === modified.getValue(),
-			quitEarly: result.hitTimeout,
-			changes: result.changes,
-			moves: result.moves,
-		};
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();
@@ -405,7 +364,7 @@ function waitForText(element: Element, value: string): Promise<void> {
 function waitForReady(model: InstanceType<typeof DiffModel>): Promise<void> {
 	if (model.state.kind === 'ready') return Promise.resolve();
 	return new Promise((resolve, reject) => {
-		const listener = model.onDidChange(state => {
+		const listener = model.onDidChange((state) => {
 			if (state.kind === 'loading') return;
 			listener.dispose();
 			if (state.kind === 'error') reject(state.error);

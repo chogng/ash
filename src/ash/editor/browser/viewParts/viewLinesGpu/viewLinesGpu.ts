@@ -63,24 +63,21 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		super(context);
 		this._register(toDisposable(() => this.initialization.dispose(true)));
 		this.canvas = this.viewGpuContext.canvas.domNode;
-		this._register(
-			autorun(reader => {
-				this.viewGpuContext.canvasDevicePixelDimensions.read(reader);
-				// Canvas changes require a fresh host frame; cached ranges refer to a live model.
-				this.setShouldRender();
-				this.requestRender();
-			}),
-		);
-		this._register(
-			autorun(reader => {
-				this.viewGpuContext.devicePixelRatio.read(reader);
-				if (this.device) this.refreshGlyphRasterizer();
-			}),
-		);
+		this._register(autorun(reader => {
+			this.viewGpuContext.canvasDevicePixelDimensions.read(reader);
+			// Canvas changes require a fresh host frame; cached ranges refer to a live model.
+			this.setShouldRender();
+			this.requestRender();
+		}));
+		this._register(autorun(reader => {
+			this.viewGpuContext.devicePixelRatio.read(reader);
+			if (this.device) this.refreshGlyphRasterizer();
+		}));
 		void this.initWebgpu().catch(() => this.fallbackToDom());
 	}
 
-	public prepareRender(_context: RenderingContext): void {}
+	public prepareRender(_context: RenderingContext): void {
+	}
 
 	public override onConfigurationChanged(): boolean {
 		if (!this.initialized) return true;
@@ -88,39 +85,17 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		this.renderStrategy.value?.reset();
 		return true;
 	}
-	public override onCursorStateChanged(): boolean {
-		return true;
-	}
-	public override onDecorationsChanged(): boolean {
-		return true;
-	}
-	public override onFlushed(): boolean {
-		return true;
-	}
-	public override onLinesChanged(): boolean {
-		return true;
-	}
-	public override onLinesDeleted(): boolean {
-		return true;
-	}
-	public override onLinesInserted(): boolean {
-		return true;
-	}
-	public override onLineMappingChanged(): boolean {
-		return true;
-	}
-	public override onRevealRangeRequest(_event: ViewRevealRangeRequestEvent): boolean {
-		return true;
-	}
-	public override onScrollChanged(): boolean {
-		return true;
-	}
-	public override onThemeChanged(): boolean {
-		return true;
-	}
-	public override onZonesChanged(): boolean {
-		return true;
-	}
+	public override onCursorStateChanged(): boolean { return true; }
+	public override onDecorationsChanged(): boolean { return true; }
+	public override onFlushed(): boolean { return true; }
+	public override onLinesChanged(): boolean { return true; }
+	public override onLinesDeleted(): boolean { return true; }
+	public override onLinesInserted(): boolean { return true; }
+	public override onLineMappingChanged(): boolean { return true; }
+	public override onRevealRangeRequest(_event: ViewRevealRangeRequestEvent): boolean { return true; }
+	public override onScrollChanged(): boolean { return true; }
+	public override onThemeChanged(): boolean { return true; }
+	public override onZonesChanged(): boolean { return true; }
 
 	public render(context: RenderingContext): void {
 		this.renderText(context.viewportData);
@@ -130,7 +105,9 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		const lineGeometries = this.lastLineGeometries;
 		if (!lineGeometries || !this.lastViewportData || !Range.areIntersectingOrTouching(range, this.lastViewportData.visibleRange)) return null;
 		const result: LineVisibleRanges[] = [];
-		let nextModelLineNumber = includeNewLines ? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(range.startLineNumber, 1)).lineNumber : 0;
+		let nextModelLineNumber = includeNewLines
+			? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(range.startLineNumber, 1)).lineNumber
+			: 0;
 		for (let lineNumber = range.startLineNumber; lineNumber <= range.endLineNumber; lineNumber += 1) {
 			const currentModelLineNumber = nextModelLineNumber;
 			const continuesInNextLine = lineNumber !== range.endLineNumber;
@@ -148,7 +125,12 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			if (includeNewLines && continuesInNextLine) {
 				if (currentModelLineNumber !== nextModelLineNumber) newLineWidth = geometry.newLineWidth;
 			}
-			result.push(new LineVisibleRanges(false, lineNumber, [new HorizontalRange(left, Math.max(0, right - left) + newLineWidth)], continuesInNextLine));
+			result.push(new LineVisibleRanges(
+				false,
+				lineNumber,
+				[new HorizontalRange(left, Math.max(0, right - left) + newLineWidth)],
+				continuesInNextLine,
+			));
 		}
 		return result.length > 0 ? result : null;
 	}
@@ -248,48 +230,37 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		if (!this.pipeline) {
 			const presentationFormat = this.canvas.ownerDocument.defaultView!.navigator.gpu.getPreferredCanvasFormat();
 			this.viewGpuContext.ctx.configure({ device, format: presentationFormat, alphaMode: 'premultiplied' });
-			const shader = device.createShaderModule({
-				label: 'Ash ViewLinesGpu shader',
-				code: this.renderStrategy.value!.wgsl,
-			});
+			const shader = device.createShaderModule({ label: 'Ash ViewLinesGpu shader', code: this.renderStrategy.value!.wgsl });
 			this.pipeline = device.createRenderPipeline({
 				label: 'Ash ViewLinesGpu pipeline',
 				layout: 'auto',
 				vertex: {
 					module: shader,
 					entryPoint: 'vs',
-					buffers: [
-						{
-							arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT,
-							attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }],
-						},
-					],
+					buffers: [{
+						arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT,
+						attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }],
+					}],
 				},
 				fragment: {
 					module: shader,
 					entryPoint: 'fs',
-					targets: [
-						{
-							format: presentationFormat,
-							blend: {
-								color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-								alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-							},
+					targets: [{
+						format: presentationFormat,
+						blend: {
+							color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+							alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
 						},
-					],
+					}],
 				},
 				primitive: { topology: 'triangle-list' },
 			});
 			this.sampler = device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-			this.vertexBuffer.value = GPULifecycle.createBuffer(
-				device,
-				{
-					label: 'Ash ViewLinesGpu quad',
-					size: quadVertices.byteLength,
-					usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-				},
-				quadVertices as Float32Array<ArrayBuffer>,
-			);
+			this.vertexBuffer.value = GPULifecycle.createBuffer(device, {
+				label: 'Ash ViewLinesGpu quad',
+				size: quadVertices.byteLength,
+				usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+			}, quadVertices as Float32Array<ArrayBuffer>);
 			this.layoutInfoBuffer.value = GPULifecycle.createBuffer(device, {
 				label: 'Ash ViewLinesGpu layout',
 				size: 6 * Float32Array.BYTES_PER_ELEMENT,
@@ -330,10 +301,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			layout: this.pipeline!.getBindGroupLayout(0),
 			entries: [
 				{ binding: BindingId.GlyphInfo, resource: { buffer: this.glyphStorageBuffer.value.object } },
-				{
-					binding: BindingId.Texture,
-					resource: this.atlasTexture.value.object.createView({ dimension: '2d-array' }),
-				},
+				{ binding: BindingId.Texture, resource: this.atlasTexture.value.object.createView({ dimension: '2d-array' }) },
 				{ binding: BindingId.TextureSampler, resource: this.sampler! },
 				{ binding: BindingId.LayoutInfoUniform, resource: { buffer: this.layoutInfoBuffer.value.object } },
 				{ binding: BindingId.AtlasDimensionsUniform, resource: { buffer: this.atlasInfoBuffer.value.object } },
@@ -357,7 +325,11 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 				glyphValues[offset + 4] = glyph.originOffsetX;
 				glyphValues[offset + 5] = glyph.originOffsetY;
 			}
-			this.device!.queue.writeBuffer(this.glyphStorageBuffer.value!.object, pageIndex * glyphValues.byteLength, glyphValues as Float32Array<ArrayBuffer>);
+			this.device!.queue.writeBuffer(
+				this.glyphStorageBuffer.value!.object,
+				pageIndex * glyphValues.byteLength,
+				glyphValues as Float32Array<ArrayBuffer>,
+			);
 			if (page.usedArea.right > 0 && page.usedArea.bottom > 0) {
 				this.device!.queue.copyExternalImageToTexture(
 					{ source: page.source },
@@ -372,24 +344,25 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private draw(viewportData: ViewportData): void {
 		const dimensions = this.viewGpuContext.canvasDevicePixelDimensions.get();
 		const contentLeft = Math.ceil(this.viewGpuContext.contentLeft.get() * this.viewGpuContext.devicePixelRatio.get());
-		this.device!.queue.writeBuffer(
-			this.layoutInfoBuffer.value!.object,
+		this.device!.queue.writeBuffer(this.layoutInfoBuffer.value!.object, 0, new Float32Array([
+			dimensions.width,
+			dimensions.height,
+			contentLeft,
 			0,
-			new Float32Array([dimensions.width, dimensions.height, contentLeft, 0, Math.max(0, dimensions.width - contentLeft), dimensions.height]),
-		);
+			Math.max(0, dimensions.width - contentLeft),
+			dimensions.height,
+		]));
 		const encoder = this.device!.createCommandEncoder({ label: 'Stanza ViewLinesGpu frame' });
 		const textureView = this.viewGpuContext.ctx.getCurrentTexture().createView();
 		this.viewGpuContext.rectangleRenderer.draw(viewportData);
 		const pass = encoder.beginRenderPass({
 			label: 'Stanza ViewLinesGpu pass',
-			colorAttachments: [
-				{
-					view: textureView,
-					clearValue: { r: 0, g: 0, b: 0, a: 0 },
-					loadOp: 'load',
-					storeOp: 'store',
-				},
-			],
+			colorAttachments: [{
+				view: textureView,
+				clearValue: { r: 0, g: 0, b: 0, a: 0 },
+				loadOp: 'load',
+				storeOp: 'store',
+			}],
 		});
 		if (this.visibleObjectCount > 0 && contentLeft < dimensions.width) {
 			pass.setPipeline(this.pipeline!);
@@ -438,7 +411,9 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 				if (chars === undefined) continue;
 				const start = deviceX / devicePixelRatio;
 				const useFixedAdvance = lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations;
-				const advance = useFixedAdvance ? viewLineOptions.spaceWidth * devicePixelRatio : this.renderStrategy.value!.glyphRasterizer.getTextMetrics(chars === '\t' ? ' ' : chars).width;
+				const advance = useFixedAdvance
+					? viewLineOptions.spaceWidth * devicePixelRatio
+					: this.renderStrategy.value!.glyphRasterizer.getTextMetrics(chars === '\t' ? ' ' : chars).width;
 				if (chars === '\t') {
 					const previousColumn = index + tabColumnOffset;
 					const nextColumn = CursorColumns.nextRenderTabStop(previousColumn, lineData.tabSize);
@@ -450,13 +425,10 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 				for (let offset = index; offset < index + chars.length; offset++) leftByOffset[offset] = start;
 				leftByOffset[index + chars.length] = deviceX / devicePixelRatio;
 			}
-			result.set(
-				lineIndex,
-				Object.freeze({
-					leftByOffset: Object.freeze(leftByOffset),
-					newLineWidth: viewLineOptions.spaceWidth,
-				}),
-			);
+			result.set(lineIndex, Object.freeze({
+				leftByOffset: Object.freeze(leftByOffset),
+				newLineWidth: viewLineOptions.spaceWidth,
+			}));
 		}
 		return result;
 	}
@@ -466,7 +438,9 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 		if (this.renderStrategy.value?.type === expectedType) return;
 		const strategy = this.createRenderStrategy(this.rasterizer.value!, viewportData);
 		this.renderStrategy.value = strategy;
-		this.renderStrategyBindGroupListener.value = strategy instanceof ViewportRenderStrategy ? strategy.onDidChangeBindGroupEntries(() => this.rebuildBindGroup()) : undefined;
+		this.renderStrategyBindGroupListener.value = strategy instanceof ViewportRenderStrategy
+			? strategy.onDidChangeBindGroupEntries(() => this.rebuildBindGroup())
+			: undefined;
 		this.rebuildBindGroup();
 	}
 

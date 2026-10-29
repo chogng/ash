@@ -5,7 +5,11 @@ type ChangedSide = Exclude<MergeEditorSide, 'base'>;
 type LineAlignment = Readonly<Partial<Record<MergeEditorSide, number>>>;
 
 /** Pairs lines inside one conflict using the same line pairs as the document diff. */
-export function getAlignments(hunk: MergeEditorHunk, changes: Readonly<Record<ChangedSide, readonly LineRangeMapping[]>>, visibleSides: readonly MergeEditorSide[]): readonly LineAlignment[] {
+export function getAlignments(
+	hunk: MergeEditorHunk,
+	changes: Readonly<Record<ChangedSide, readonly LineRangeMapping[]>>,
+	visibleSides: readonly MergeEditorSide[],
+): readonly LineAlignment[] {
 	const nextChange: Record<ChangedSide, number> = { current: 0, incoming: 0, result: 0 };
 	const canPairResultChanges = hunk.resolution === 'current' || hunk.resolution === 'incoming' || hunk.resolution === 'base';
 	const alignments: LineAlignment[] = [];

@@ -10,7 +10,7 @@ export class CopyLinesCommand implements ICommand {
 		private readonly selection: Selection,
 		private readonly isCopyingDown: boolean,
 		private readonly noop = false,
-	) {}
+	) { }
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		if (this.noop) return;
@@ -29,8 +29,10 @@ export class CopyLinesCommand implements ICommand {
 	}
 }
 
-function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number } {
-	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1 ? Math.max(selection.startLineNumber, selection.endLineNumber - 1) : selection.endLineNumber;
+function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number; } {
+	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1
+		? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
+		: selection.endLineNumber;
 	return { startLineNumber: selection.startLineNumber, endLineNumber };
 }
 
@@ -43,5 +45,10 @@ function lineText(model: ITextModel, startLineNumber: number, endLineNumber: num
 }
 
 function shiftSelection(selection: Selection, lineDelta: number): Selection {
-	return new Selection(selection.selectionStartLineNumber + lineDelta, selection.selectionStartColumn, selection.positionLineNumber + lineDelta, selection.positionColumn);
+	return new Selection(
+		selection.selectionStartLineNumber + lineDelta,
+		selection.selectionStartColumn,
+		selection.positionLineNumber + lineDelta,
+		selection.positionColumn,
+	);
 }

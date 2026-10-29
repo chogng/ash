@@ -28,46 +28,18 @@ test('EditorGroupView retains its dirty pane when a disabled editor fails to reo
 		const resource = URI.file('/draft.ash-academy');
 		let dirty = true;
 		const copy: IWorkingCopy = {
-			...toDisposable(() => {}),
-			resource,
-			backupKind: 'structuredDocument',
-			get isDirty() {
-				return dirty;
-			},
-			hasExternalChange: false,
-			onDidChangeDirty: Event.None,
-			onDidChangeContent: Event.None,
-			onDidChangeExternalChange: Event.None,
-			backup: () => 'unsaved document',
-			restoreBackup() {},
-			async save() {},
-			async saveAs() {},
-			async revert() {
-				dirty = false;
-			},
+			...toDisposable(() => { }), resource, backupKind: 'structuredDocument', get isDirty() { return dirty; }, hasExternalChange: false,
+			onDidChangeDirty: Event.None, onDidChangeContent: Event.None, onDidChangeExternalChange: Event.None,
+			backup: () => 'unsaved document', restoreBackup() { }, async save() { }, async saveAs() { }, async revert() { dirty = false; },
 		};
-		const pane = new (class extends TestEditorPane {
-			readonly workingCopy = copy;
-		})();
-		const registration = registry.registerEditorPane({
-			id: pane.id,
-			name: 'Academy',
-			canOpen: () => EditorPaneMatch.Default,
-			create: () => pane,
-		});
+		const pane = new class extends TestEditorPane { readonly workingCopy = copy; }();
+		const registration = registry.registerEditorPane({ id: pane.id, name: 'Academy', canOpen: () => EditorPaneMatch.Default, create: () => pane });
 		let confirmations = 0;
 		let errors = 0;
 		let recoveryPending = false;
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		using group = services.createInstance(EditorGroupView, dom.window.document.body, {
-			registry,
-			onOpenError: () => {
-				errors++;
-			},
-			onWillCloseEditor: () => {
-				confirmations++;
-				return !dirty && !recoveryPending;
-			},
+			registry, onOpenError: () => { errors++; }, onWillCloseEditor: () => { confirmations++; return !dirty && !recoveryPending; },
 		});
 		await group.openEditor({ resource }, { pinned: true });
 		registration.dispose();
@@ -105,7 +77,7 @@ test('EditorGroupView keeps the caller language when resource detection has no l
 		registry.registerEditorPane({
 			id: 'test.editor',
 			name: 'Explicit text language',
-			canOpen: input => (input.languageId === 'jsonc' ? EditorPaneMatch.Default : EditorPaneMatch.None),
+			canOpen: input => input.languageId === 'jsonc' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 			create: () => new TestEditorPane(),
 		});
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
@@ -118,7 +90,7 @@ test('EditorGroupView keeps the caller language when resource detection has no l
 		assert.deepEqual(group.inputs, [input]);
 	} finally {
 		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
-		else delete (globalThis as { window?: Window }).window;
+		else delete (globalThis as { window?: Window; }).window;
 		dom.window.close();
 	}
 });
@@ -164,15 +136,7 @@ test('EditorGroupView reorders tabs and moves them between groups', async () => 
 		target.stickEditor(second);
 		assert.deepEqual(changes, []);
 		await source.moveEditorTo(second, target, 0);
-		assert.deepEqual(
-			{
-				source: source.inputs,
-				target: target.inputs,
-				sticky: target.isSticky(second),
-				identity: target.editors[0]!.instanceId,
-			},
-			{ source: [first], target: [second], sticky: true, identity: targetInstanceId },
-		);
+		assert.deepEqual({ source: source.inputs, target: target.inputs, sticky: target.isSticky(second), identity: target.editors[0]!.instanceId }, { source: [first], target: [second], sticky: true, identity: targetInstanceId });
 		await target.openEditor(first);
 		target.stickEditor(first);
 		await target.replaceEditor(second, first);
@@ -197,12 +161,7 @@ test('EditorGroupView selects a range of tabs and resolves close-command targets
 		const { EditorPaneRegistry } = await import('../../browser/editor.js');
 		const { resolveCommandsContext } = await import('../../browser/parts/editor/editorCommandsContext.js');
 		const registry = new EditorPaneRegistry();
-		registry.registerEditorPane({
-			id: 'test.editor',
-			name: 'Test Editor',
-			canOpen: () => EditorPaneMatch.Default,
-			create: () => new TestEditorPane(),
-		});
+		registry.registerEditorPane({ id: 'test.editor', name: 'Test Editor', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const group = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		try {
@@ -223,10 +182,7 @@ test('EditorGroupView selects a range of tabs and resolves close-command targets
 			assert.equal(tab('first').getAttribute('aria-selected'), 'true');
 			assert.equal(tab('second').getAttribute('aria-selected'), 'true');
 			assert.equal(tab('third').getAttribute('aria-selected'), 'false');
-			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], {
-				groups: [group],
-				getGroup: (id: number) => (id === group.id ? group : undefined),
-			} as unknown as IEditorGroupsService);
+			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group], getGroup: (id: number) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 			assert.deepEqual(context.groupedEditors[0]?.editors, [first, second]);
 			for (const editor of context.groupedEditors[0]!.editors) await group.closeEditor(editor);
 			assert.deepEqual(group.inputs, [third]);
@@ -262,29 +218,13 @@ test('binary comparisons select the diff association using the modified file pat
 		await configuration.updateValue(EditorAssociationsConfiguration, { '*.bin': 'regular.editor' });
 		await configuration.updateValue(DiffEditorAssociationsConfiguration, { '*.bin': 'comparison.editor' });
 		const registry = new EditorPaneRegistry();
-		using regular = registry.registerEditorPane({
-			id: 'regular.editor',
-			name: 'Regular',
-			canOpen: () => EditorPaneMatch.Default,
-			create: () => new TestEditorPane('regular.editor'),
-		});
-		using comparison = registry.registerEditorPane({
-			id: 'comparison.editor',
-			name: 'Comparison',
-			canOpen: () => EditorPaneMatch.Default,
-			create: () => new TestEditorPane('comparison.editor'),
-		});
+		using regular = registry.registerEditorPane({ id: 'regular.editor', name: 'Regular', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane('regular.editor') });
+		using comparison = registry.registerEditorPane({ id: 'comparison.editor', name: 'Comparison', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane('comparison.editor') });
 		using services = createTestEditorServices(configuration, undefined, dom.window.document);
-		using group = services.createInstance(EditorGroupView, dom.window.document.body, {
-			registry,
-			configurationService: configuration,
-		});
+		using group = services.createInstance(EditorGroupView, dom.window.document.body, { registry, configurationService: configuration });
 		const input = createBinaryDiffEditorInput({ resource: URI.file('/project/before.dat') }, { resource: URI.file('/project/after.bin') });
 		await group.openEditor(input, { pinned: true, ignoreError: true });
-		assert.deepEqual(
-			group.editors.map(editor => ({ paneId: editor.paneId, input: editor.input })),
-			[{ paneId: 'comparison.editor', input }],
-		);
+		assert.deepEqual(group.editors.map(editor => ({ paneId: editor.paneId, input: editor.input })), [{ paneId: 'comparison.editor', input }]);
 	} finally {
 		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
 		else Reflect.deleteProperty(globalThis, 'window');
@@ -302,10 +242,10 @@ class TestEditorPane extends EditorPane {
 	public override create(_parent: HTMLElement): void {
 		super.create(_parent);
 	}
-	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {}
-	public override clearInput(): void {}
-	public override layout(_dimension: { readonly width: number; readonly height: number }): void {}
-	public override focus(): void {}
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(_dimension: { readonly width: number; readonly height: number; }): void { }
+	public override focus(): void { }
 }
 
 function input(name: string): IResourceEditorInput {

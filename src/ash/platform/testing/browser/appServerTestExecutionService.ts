@@ -11,22 +11,14 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 	public readonly onDidDisconnect: Event<void>;
 
 	constructor(private readonly connection: AppServerProtocolClient) {
-		this.onDidUpdate = listener =>
-			connection.onNotification(notification => {
-				if (notification.method === 'testing/updated') {
-					listener({
-						...notification.params,
-						tests: notification.params.tests?.map(test => ({ ...test })) ?? null,
-						result: notification.params.result ? { ...notification.params.result } : null,
-					});
-				}
-			});
-		this.onDidDisconnect = listener =>
-			connection.onStateChange(state => {
-				if (state === 'stopped' || state === 'crashed') {
-					listener();
-				}
-			});
+		this.onDidUpdate = listener => connection.onNotification(notification => {
+			if (notification.method === 'testing/updated') {
+				listener({ ...notification.params, tests: notification.params.tests?.map(test => ({ ...test })) ?? null, result: notification.params.result ? { ...notification.params.result } : null });
+			}
+		});
+		this.onDidDisconnect = listener => connection.onStateChange(state => {
+			if (state === 'stopped' || state === 'crashed') { listener(); }
+		});
 	}
 
 	public discover(operationId: string, dirId: string): Promise<void> {
@@ -34,16 +26,7 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 	}
 
 	public run(operationId: string, dirId: string, catalogId: string, testIds: readonly string[]): Promise<void> {
-		return this.request(
-			voidResult(
-				appServerRequest(this.connection, 'testing/run', {
-					operationId,
-					dirId,
-					catalogId,
-					testIds: [...testIds],
-				}),
-			),
-		);
+		return this.request(voidResult(appServerRequest(this.connection, 'testing/run', { operationId, dirId, catalogId, testIds: [...testIds] })));
 	}
 
 	public prepareDebug(operationId: string, dirId: string, catalogId: string, testId: string): Promise<void> {
@@ -63,9 +46,8 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 	}
 
 	private async request<T>(request: Promise<T>): Promise<T> {
-		try {
-			return await request;
-		} catch (error) {
+		try { return await request; }
+		catch (error) {
 			if (error instanceof AppServerRemoteError) {
 				throw new Error(localize('testing.backendError', 'Could not complete the test operation ({0}).', error.errorName), { cause: error });
 			}

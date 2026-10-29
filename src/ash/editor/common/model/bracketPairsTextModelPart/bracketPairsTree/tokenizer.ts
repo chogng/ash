@@ -42,7 +42,7 @@ export class Token {
 		 */
 		readonly bracketIds: SmallImmutableSet<OpeningBracketId>,
 		readonly astNode: BracketAstNode | TextAstNode | undefined,
-	) {}
+	) { }
 }
 
 export interface ITokenizerSource {
@@ -50,7 +50,9 @@ export interface ITokenizerSource {
 	getLineCount(): number;
 	getLineLength(lineNumber: number): number;
 
-	tokenization: { getLineTokens(lineNumber: number): IViewLineTokens };
+	tokenization: {
+		getLineTokens(lineNumber: number): IViewLineTokens;
+	};
 }
 
 export class TextBufferTokenizer implements Tokenizer {
@@ -61,7 +63,7 @@ export class TextBufferTokenizer implements Tokenizer {
 
 	constructor(
 		private readonly textModel: ITokenizerSource,
-		private readonly bracketTokens: LanguageAgnosticBracketTokens,
+		private readonly bracketTokens: LanguageAgnosticBracketTokens
 	) {
 		this.reader = new NonPeekableTextBufferTokenizer(this.textModel, this.bracketTokens);
 		this._offset = lengthZero;
@@ -120,15 +122,12 @@ export class TextBufferTokenizer implements Tokenizer {
 
 /**
  * Does not support peek.
- */
+*/
 class NonPeekableTextBufferTokenizer {
 	private readonly textBufferLineCount: number;
 	private readonly textBufferLastLineLength: number;
 
-	constructor(
-		private readonly textModel: ITokenizerSource,
-		private readonly bracketTokens: LanguageAgnosticBracketTokens,
-	) {
+	constructor(private readonly textModel: ITokenizerSource, private readonly bracketTokens: LanguageAgnosticBracketTokens) {
 		this.textBufferLineCount = textModel.getLineCount();
 		this.textBufferLastLineLength = textModel.getLineLength(this.textBufferLineCount);
 	}
@@ -280,10 +279,7 @@ export class FastTokenizer implements Tokenizer {
 	private readonly tokens: readonly Token[];
 	private idx = 0;
 
-	constructor(
-		private readonly text: string,
-		brackets: BracketTokens,
-	) {
+	constructor(private readonly text: string, brackets: BracketTokens) {
 		const regExpStr = brackets.getRegExpStr();
 		const regexp = regExpStr ? new RegExp(regExpStr + '|\n', 'gi') : null;
 
@@ -298,12 +294,22 @@ export class FastTokenizer implements Tokenizer {
 
 		const smallTextTokens0Line: Token[] = [];
 		for (let i = 0; i < 60; i++) {
-			smallTextTokens0Line.push(new Token(toLength(0, i), TokenKind.Text, -1, SmallImmutableSet.getEmpty(), new TextAstNode(toLength(0, i))));
+			smallTextTokens0Line.push(
+				new Token(
+					toLength(0, i), TokenKind.Text, -1, SmallImmutableSet.getEmpty(),
+					new TextAstNode(toLength(0, i))
+				)
+			);
 		}
 
 		const smallTextTokens1Line: Token[] = [];
 		for (let i = 0; i < 60; i++) {
-			smallTextTokens1Line.push(new Token(toLength(1, i), TokenKind.Text, -1, SmallImmutableSet.getEmpty(), new TextAstNode(toLength(1, i))));
+			smallTextTokens1Line.push(
+				new Token(
+					toLength(1, i), TokenKind.Text, -1, SmallImmutableSet.getEmpty(),
+					new TextAstNode(toLength(1, i))
+				)
+			);
 		}
 
 		if (regexp) {
@@ -351,7 +357,9 @@ export class FastTokenizer implements Tokenizer {
 		const offset = text.length;
 
 		if (lastTokenEndOffset !== offset) {
-			const length = lastTokenEndLine === curLineCount ? toLength(0, offset - lastTokenEndOffset) : toLength(curLineCount - lastTokenEndLine, offset - lastLineBreakOffset);
+			const length = (lastTokenEndLine === curLineCount)
+				? toLength(0, offset - lastTokenEndOffset)
+				: toLength(curLineCount - lastTokenEndLine, offset - lastLineBreakOffset);
 			tokens.push(new Token(length, TokenKind.Text, -1, SmallImmutableSet.getEmpty(), new TextAstNode(length)));
 		}
 

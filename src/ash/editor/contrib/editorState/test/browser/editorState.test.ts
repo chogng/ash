@@ -80,12 +80,7 @@ test('Escape cancels nested operations one at a time and releases its handler', 
 	using outer = new EditorKeybindingCancellationTokenSource(editor);
 	using inner = new EditorKeybindingCancellationTokenSource(editor);
 	const escape = (): boolean => {
-		const event = new environment.window.KeyboardEvent('keydown', {
-			key: 'Escape',
-			code: 'Escape',
-			bubbles: true,
-			cancelable: true,
-		});
+		const event = new environment.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
 		editor.controller.element.dispatchEvent(event);
 		return event.defaultPrevented;
 	};

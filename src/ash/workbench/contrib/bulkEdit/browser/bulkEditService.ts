@@ -12,16 +12,7 @@ import { IWorkingCopyService } from '../../../services/workingCopy/common/workin
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry, type WorkspaceEdit } from '../../../../editor/common/languages.js';
-import {
-	type IBulkEditOptions,
-	type IBulkEditPreviewHandler,
-	type IBulkEditResult,
-	IBulkEditService,
-	ResourceEdit,
-	ResourceFileEdit,
-	ResourceTextEdit,
-	WorkspaceEditConflictError,
-} from '../../../../editor/browser/services/bulkEditService.js';
+import { type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult, IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit, WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -43,12 +34,8 @@ const autoSaveSetting = Registry.as<IConfigurationRegistry>(Extensions.Configura
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('bulkEdit.autoSaveTitle', 'Save files after refactoring');
-		},
-		get description() {
-			return localize('bulkEdit.autoSaveDescription', 'Controls whether files changed by a refactoring are saved automatically.');
-		},
+		get title() { return localize('bulkEdit.autoSaveTitle', 'Save files after refactoring'); },
+		get description() { return localize('bulkEdit.autoSaveDescription', 'Controls whether files changed by a refactoring are saved automatically.'); },
 	},
 });
 
@@ -105,7 +92,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 	private previewHandler: IBulkEditPreviewHandler | undefined;
 
 	private readonly retainedFailedSaves = this._register(new DisposableMap<string, TextModelReference>());
-	private readonly undoGroups = new Map<number, { readonly edits: WorkspaceEditResult[]; reverted: boolean }>();
+	private readonly undoGroups = new Map<number, { readonly edits: WorkspaceEditResult[]; reverted: boolean; }>();
 
 	constructor(
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
@@ -115,12 +102,10 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		@IDialogService private readonly dialogs: IDialogService,
 	) {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.previewHandler = undefined;
-				this.undoGroups.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.previewHandler = undefined;
+			this.undoGroups.clear();
+		}));
 	}
 
 	hasPreviewHandler(): boolean {
@@ -163,12 +148,8 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			if (signal.aborted || edits.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
 		}
 		const editorModel = options.editor?.getModel();
-		if (
-			!sourceEdit &&
-			editorModel instanceof TextModel &&
-			!this.files.hasProvider(editorModel.uri) &&
-			edits.every((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && edit.resource.toString() === editorModel.uri.toString())
-		) {
+		if (!sourceEdit && editorModel instanceof TextModel && !this.files.hasProvider(editorModel.uri)
+			&& edits.every((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && edit.resource.toString() === editorModel.uri.toString())) {
 			// Embedded inputs own their models, not a persisted file. Keep their text,
 			// cursor history and reference metadata on that exact model's undo stack.
 			return this.applyToEmbeddedEditor(options.editor!, editorModel, edits, signal);
@@ -180,7 +161,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		// the originating language request, which must not cancel an approved multi-file commit.
 		const result: WorkspaceEditResult = await this.applyTransaction(edit, previewed ? new AbortController().signal : signal, options);
 		if (result.resources.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
-		let group: { readonly edits: WorkspaceEditResult[]; reverted: boolean };
+		let group: { readonly edits: WorkspaceEditResult[]; reverted: boolean; };
 		if (options.undoRedoGroupId !== undefined) {
 			group = this.undoGroups.get(options.undoRedoGroupId) ?? { edits: [], reverted: false };
 			group.edits.push(result);
@@ -218,29 +199,20 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				this.undoGroups.delete(options.undoRedoGroupId);
 			}
 		};
-		return {
-			ariaSummary: localize('bulkEdit.resourcesChanged', '{0} resources changed', result.resources.length),
-			isApplied: true,
-			undo,
-			resources: result.resources,
-		};
+		return { ariaSummary: localize('bulkEdit.resourcesChanged', '{0} resources changed', result.resources.length), isApplied: true, undo, resources: result.resources };
 	}
 
 	private applyToEmbeddedEditor(editor: ICodeEditor, model: TextModel, edits: readonly ResourceTextEdit[], signal: AbortSignal): IBulkEditResult {
 		throwIfCancelled(signal);
 		for (const edit of edits) {
-			if ((edit.versionId !== undefined && edit.versionId !== model.getVersionId()) || !model.isValidRange(edit.textEdit.range)) {
+			if (edit.versionId !== undefined && edit.versionId !== model.getVersionId() || !model.isValidRange(edit.textEdit.range)) {
 				throw new WorkspaceEditConflictError(localize('bulkEdit.embeddedStale', 'The input changed before the edit could be applied.'));
 			}
 		}
 		const before = model.getAlternativeVersionId();
 		const appliedVersion = model.getVersionId() + 1;
 		model.pushStackElement();
-		model.pushEditOperations(
-			editor.getSelections(),
-			edits.map(edit => EditOperation.replaceMove(Range.lift(edit.textEdit.range), edit.textEdit.text)),
-			() => null,
-		);
+		model.pushEditOperations(editor.getSelections(), edits.map(edit => EditOperation.replaceMove(Range.lift(edit.textEdit.range), edit.textEdit.text)), () => null);
 		model.pushStackElement();
 		if (before === model.getAlternativeVersionId()) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
 		// A content listener may retire this input and install a newer draft. Never
@@ -279,7 +251,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				throwIfCancelled(signal, 'Workspace edit was cancelled');
 				prepared.push(await this.preflight(entry, states, acquired, signal));
 			}
-			const operations = prepared.filter(operation => (operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies));
+			const operations = prepared.filter(operation => operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies);
 			for (const operation of operations) {
 				for (const resource of entryResources(operation.entry)) touched.set(resource.toString(), resource);
 			}
@@ -329,12 +301,10 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 					resource,
 					expected: { ...states.get(resource.toString())! },
 					textModel,
-					...(textModel
-						? {
-								alternativeVersionId: acquired.get(resource.toString())!.reference.model.getAlternativeVersionId(),
-								undoRedoSnapshot: acquired.get(resource.toString())!.undoRedoSnapshot,
-							}
-						: {}),
+					...(textModel ? {
+						alternativeVersionId: acquired.get(resource.toString())!.reference.model.getAlternativeVersionId(),
+						undoRedoSnapshot: acquired.get(resource.toString())!.undoRedoSnapshot,
+					} : {}),
 				};
 			});
 			let reverted = false;
@@ -388,8 +358,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				if (!state.exists || state.text === undefined) throw new Error(`Workspace edit target '${entry.resource.toString()}' does not exist`);
 				const model = acquired.get(entry.resource.toString())!;
 				if (entry.version !== undefined && model.reference.model.version !== entry.version) throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is stale`);
-				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== normalizeTextLineEndings(state.text))
-					throw new WorkspaceEditConflictError(`Workspace edit content for '${entry.resource.toString()}' is stale`);
+				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== normalizeTextLineEndings(state.text)) throw new WorkspaceEditConflictError(`Workspace edit content for '${entry.resource.toString()}' is stale`);
 				using snapshot = new TextModel(state.text);
 				for (const edit of entry.edits) {
 					if (!snapshot.isValidRange(edit.range)) throw new Error('Workspace edit range is outside the document: ' + entry.resource.toString());
@@ -406,12 +375,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				if (target.exists && entry.existing === 'error') throw new Error(`Workspace create target '${entry.resource.toString()}' already exists`);
 				const applies = !target.exists || entry.existing === 'overwrite';
 				const targetBefore = target.exists ? target.text : undefined;
-				if (applies)
-					states.set(entry.resource.toString(), {
-						exists: true,
-						text: entry.contents ?? '',
-						synthetic: true,
-					});
+				if (applies) states.set(entry.resource.toString(), { exists: true, text: entry.contents ?? '', synthetic: true });
 				return { kind: entry.kind, entry, applies, targetBefore };
 			}
 			case 'rename': {
@@ -449,25 +413,12 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		if (!model) {
 			const wasOpen = this.workingCopies.get(resource).length > 0;
 			const retained = this.retainedFailedSaves.get(key);
-			const reference =
-				retained ??
-				(await this.models.acquire(
-					{
-						resource,
-						...(existing?.synthetic && existing.text !== undefined ? { initialText: existing.text } : {}),
-					},
-					signal,
-				));
+			const reference = retained ?? await this.models.acquire({ resource, ...(existing?.synthetic && existing.text !== undefined ? { initialText: existing.text } : {}) }, signal);
 			if (retained) this.retainedFailedSaves.deleteAndLeak(key);
 			model = { reference, wasOpen, version: reference.model.version };
 			acquired.set(key, model);
 		}
-		const state: VirtualFile = existing ?? {
-			exists: true,
-			text: model.reference.model.getText(),
-			synthetic: false,
-			document: model,
-		};
+		const state: VirtualFile = existing ?? { exists: true, text: model.reference.model.getText(), synthetic: false, document: model };
 		if (!state.document && state.text !== undefined) {
 			state.serializedText = state.text;
 			using snapshot = new TextModel(state.text);
@@ -487,7 +438,9 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				// File operations and their inverse use serialized bytes. A model snapshot omits
 				// the BOM and normalizes mixed EOLs, so an unchanged document keeps its original bytes.
 				const original = current.serializedText ?? (await this.files.readFile(resource)).content;
-				current.text = current.text === current.document.reference.model.getText() ? original : (original.startsWith('\uFEFF') ? '\uFEFF' : '') + current.text;
+				current.text = current.text === current.document.reference.model.getText()
+					? original
+					: (original.startsWith('\uFEFF') ? '\uFEFF' : '') + current.text;
 				current.serializedText = current.text;
 				delete current.document;
 			}
@@ -515,16 +468,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 
 export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): Promise<LanguageWorkspaceEdit> {
 	const entries: LanguageWorkspaceEditEntry[] = [];
-	const groups = new Map<
-		string,
-		{
-			kind: 'textDocument';
-			resource: ResourceTextEdit['resource'];
-			version?: number;
-			expectedText?: string;
-			edits: ResourceTextEdit['textEdit'][];
-		}
-	>();
+	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; expectedText?: string; edits: ResourceTextEdit['textEdit'][]; }>();
 	let snapshot: LanguageTextDocumentEdit | undefined;
 	const flushText = (): void => {
 		entries.push(...groups.values());
@@ -540,13 +484,7 @@ export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): P
 			const key = edit.resource.toString();
 			let group = groups.get(key);
 			if (!group) {
-				group = {
-					kind: 'textDocument',
-					resource: edit.resource,
-					version: edit.versionId,
-					expectedText: snapshot?.expectedText,
-					edits: [],
-				};
+				group = { kind: 'textDocument', resource: edit.resource, version: edit.versionId, expectedText: snapshot?.expectedText, edits: [] };
 				groups.set(key, group);
 			} else if (edit.versionId !== undefined) {
 				if (group.version !== undefined && group.version !== edit.versionId) throw new Error(`Conflicting workspace edit versions for ${key}`);
@@ -558,27 +496,9 @@ export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): P
 		flushText();
 		snapshot = undefined;
 		if (!(edit instanceof ResourceFileEdit)) throw new TypeError('Unknown resource edit');
-		if (edit.oldResource && edit.newResource)
-			entries.push({
-				kind: 'rename',
-				source: edit.oldResource,
-				target: edit.newResource,
-				existing: existing(edit.options),
-			});
-		else if (edit.newResource)
-			entries.push({
-				kind: 'create',
-				resource: edit.newResource,
-				existing: existing(edit.options),
-				...(edit.options.contents ? { contents: (await edit.options.contents).toString() } : {}),
-			});
-		else
-			entries.push({
-				kind: 'delete',
-				resource: edit.oldResource!,
-				missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error',
-				mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory',
-			});
+		if (edit.oldResource && edit.newResource) entries.push({ kind: 'rename', source: edit.oldResource, target: edit.newResource, existing: existing(edit.options) });
+		else if (edit.newResource) entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options), ...(edit.options.contents ? { contents: (await edit.options.contents).toString() } : {}) });
+		else entries.push({ kind: 'delete', resource: edit.oldResource!, missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error', mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory' });
 	}
 	flushText();
 	return normalizeLanguageWorkspaceEdit({ entries });
@@ -595,11 +515,7 @@ function entryResources(entry: LanguageWorkspaceEditEntry): readonly URI[] {
 async function rollback(operations: readonly UndoOperation[]): Promise<unknown[]> {
 	const errors: unknown[] = [];
 	for (let index = operations.length - 1; index >= 0; index--) {
-		try {
-			await operations[index]!();
-		} catch (error) {
-			errors.push(error);
-		}
+		try { await operations[index]!(); } catch (error) { errors.push(error); }
 	}
 	return errors;
 }

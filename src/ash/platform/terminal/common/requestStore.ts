@@ -7,16 +7,13 @@ import { ILogService } from '../../log/common/log.js';
 
 /** Pairs terminal domain callbacks. Transport request IDs remain with the protocol client. */
 export class RequestStore<T, RequestArgs> extends Disposable {
-	private readonly requested = this._register(new Emitter<RequestArgs & { requestId: number }>());
+	private readonly requested = this._register(new Emitter<RequestArgs & { requestId: number; }>());
 	readonly onCreateRequest = this.requested.event;
-	private readonly waiting = new Map<number, { completion: DeferredPromise<T>; timer: ReturnType<typeof setTimeout> }>();
+	private readonly waiting = new Map<number, { completion: DeferredPromise<T>; timer: ReturnType<typeof setTimeout>; }>();
 	private nextId = 0;
 	private readonly timeout: number;
 
-	constructor(
-		timeout: number | undefined,
-		@ILogService private readonly log: ILogService,
-	) {
+	constructor(timeout: number | undefined, @ILogService private readonly log: ILogService) {
 		super();
 		this.timeout = timeout ?? 15_000;
 	}

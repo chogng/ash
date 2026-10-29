@@ -8,11 +8,13 @@ const codePolicy = createTrustedTypesPolicy('ashMarkdownCodeBlocks', { createHTM
 
 /** Uses the existing editor tokenizer without creating a code model or editor widget. */
 export class EditorMarkdownCodeBlockRenderer implements IMarkdownCodeBlockRenderer {
-	constructor(@ILanguageService private readonly languages: ILanguageService) {}
+	constructor(@ILanguageService private readonly languages: ILanguageService) { }
 
 	async renderCodeBlock(languageAlias: string | undefined, value: string, options: IMarkdownRendererExtraOptions): Promise<HTMLElement> {
 		const code = h(options.ownerDocument ?? getDocument(), 'code');
-		const languageId = languageAlias ? (this.languages.getLanguageIdByLanguageName(languageAlias) ?? languageAlias) : 'plaintext';
+		const languageId = languageAlias
+			? this.languages.getLanguageIdByLanguageName(languageAlias) ?? languageAlias
+			: 'plaintext';
 		const html = await Colorizer.colorize(this.languages, value, languageId, {});
 		code.innerHTML = codePolicy?.createHTML?.(html) ?? html;
 		return code;

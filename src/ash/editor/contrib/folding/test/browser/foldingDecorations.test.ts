@@ -19,18 +19,11 @@ test('tokenization batches coalesce whole-document folding provider requests', a
 	using features = new LanguageFeaturesService();
 	let calls = 0;
 	using registration = features.foldingRangeProvider.register('typescript', {
-		provideFoldingRanges: () => {
-			calls++;
-			return [];
-		},
+		provideFoldingRanges: () => { calls++; return []; },
 	});
 	using tokens = registerTestTokens(new Map());
 	using model = new TextModel('function root() {\n  value\n}', { languageId: 'typescript' });
-	using editor = createTestCodeEditor({
-		container: document.createElement('main'),
-		model,
-		languageFeaturesService: features,
-	});
+	using editor = createTestCodeEditor({ container: document.createElement('main'), model, languageFeaturesService: features });
 	const initial = calls;
 	assert.ok(initial > 0);
 	let changes = 0;
@@ -44,6 +37,7 @@ test('tokenization batches coalesce whole-document folding provider requests', a
 	await new Promise(resolve => setTimeout(resolve, 350));
 	assert.equal(calls, initial + 1);
 });
+
 
 test('FoldingDecorationProvider selects controls, highlights, and editor-owned decoration lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -108,14 +102,8 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.strictEqual(FoldingController.get(editor)?.constructor, FoldingController);
 	const saved = editor.saveViewState();
 	assert.ok(saved);
-	assert.deepEqual(
-		(
-			saved.contributionsState[FoldingController.ID] as {
-				collapsedRegions: { startLineNumber: number; endLineNumber: number }[];
-			}
-		).collapsedRegions.map(range => [range.startLineNumber, range.endLineNumber]),
-		[[1, 2]],
-	);
+	assert.deepEqual((saved.contributionsState[FoldingController.ID] as { collapsedRegions: { startLineNumber: number; endLineNumber: number; }[]; }).collapsedRegions
+		.map(range => [range.startLineNumber, range.endLineNumber]), [[1, 2]]);
 	await editor.getAction('editor.unfold')!.run();
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
 	editor.restoreViewState(saved);
@@ -123,15 +111,12 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	dom.window.close();
 });
 
+
 test('fold headers stay on their physical line after Enter moves a tracked gutter decoration into the body', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('{\n  value\n}');
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineHeight: 20 });
 	editor.layout({ width: 320, height: 120 });
 	editor.view.render(true, false);
 	const firstHeader = () => model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded')?.range.startLineNumber;

@@ -5,14 +5,7 @@ import type { LanguageFeatureRegistry, SyntaxProviderRegistry } from './language
 import type { ILanguageIdCodec, LanguageSemanticTokensProvider, SyntaxServiceOptions } from './languages.js';
 import type { LanguageTokenizationSource, SemanticTokenModelSource, SemanticTokenSource, LanguageToken } from './tokens/languageTokens.js';
 import type { LanguageRequestOptions, LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
-import type {
-	TreeSitterBracket,
-	TreeSitterFacts,
-	RelativeToken,
-	TreeSitterSyntaxSession,
-	TreeSitterTokenStyle,
-	TreeSitterTokenizationMeasure,
-} from './services/treeSitter/treeSitterLibraryService.js';
+import type { TreeSitterBracket, TreeSitterFacts, RelativeToken, TreeSitterSyntaxSession, TreeSitterTokenStyle, TreeSitterTokenizationMeasure } from './services/treeSitter/treeSitterLibraryService.js';
 import { type Range } from './core/range.js';
 import { type StandardTokenType } from './encodedTokenAttributes.js';
 import { type LineTokens } from './tokens/lineTokens.js';
@@ -68,14 +61,14 @@ export interface ISyntaxTreeTextModelPart extends IDisposable {
 	readonly modelVersion: number;
 	readonly tokenCount: number;
 	readonly backgroundTokenizationState: BackgroundTokenizationState;
-	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[] }[];
-	readonly onDidChangeTokens: Event<readonly { fromLineNumber: number; toLineNumber: number }[]>;
+	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[];
+	readonly onDidChangeTokens: Event<readonly { fromLineNumber: number; toLineNumber: number; }[]>;
 	readonly onDidEncounterError: Event<unknown>;
 	whenReady(signal: AbortSignal): Promise<void>;
 	hasAccurateTokensForLine(line: number): boolean;
 	isCheapToTokenize(line: number): boolean;
 	forceTokenization(line: number): void;
-	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void;
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void;
 	refreshRange(startLineNumber: number, endLineNumber: number): void;
 	getTokenCaptures(line: number): readonly RelativeToken[];
 	getLanguageTokens(line: number): readonly LanguageToken[];
@@ -109,13 +102,13 @@ export interface IModelTokenization extends ITokenizationTextModelPart, IDisposa
 	readonly textModel: TextModel;
 	readonly modelVersion: number;
 	readonly tokenCount: number;
-	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[] }[];
-	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>;
+	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[];
+	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number; }[] | undefined>;
 	readonly onDidEncounterError: Event<unknown>;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 	readonly semanticTokens?: SemanticTokenModelSource & {
 		readonly onDidEncounterError: Event<unknown>;
 		requestTokens(languageId: string, options?: LanguageRequestOptions): Promise<LanguageRequestOutcome>;
 	};
-	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void;
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void;
 }

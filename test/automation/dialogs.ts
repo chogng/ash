@@ -10,12 +10,16 @@ export interface DialogMessage {
 }
 
 interface DialogCaptureGlobal {
-	ashTestMessage?: { options?: MessageBoxOptions; finish?: (response: number) => void; restore: () => void };
+	ashTestMessage?: {
+		options?: MessageBoxOptions;
+		finish?: (response: number) => void;
+		restore: () => void;
+	};
 }
 
 /** Exercises the product dialog boundary on both supported hosts. */
 export class Dialogs {
-	constructor(private readonly page: Page) {}
+	constructor(private readonly page: Page) { }
 
 	async expectMessage(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, timeout?: number): Promise<DialogMessage> {
 		return this.respond(application, title, open, undefined, timeout);
@@ -42,9 +46,8 @@ export class Dialogs {
 					throw new Error(`Expected dialog button: ${button}`);
 				}
 				await dialog.getByRole('button', { name: button, exact: true }).click();
-			} else {
-				await this.page.keyboard.press('Escape');
 			}
+			else { await this.page.keyboard.press('Escape'); }
 			return message;
 		}
 		// Playwright cannot drive OS dialogs. Keep Main's actual request pending
@@ -53,17 +56,11 @@ export class Dialogs {
 			const original = dialog.showMessageBox;
 			const state = globalThis as DialogCaptureGlobal;
 			if (state.ashTestMessage) throw new Error('Another test dialog capture is active');
-			state.ashTestMessage = {
-				restore: () => {
-					dialog.showMessageBox = original;
-					delete state.ashTestMessage;
-				},
-			};
-			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) =>
-				new Promise(resolve => {
-					state.ashTestMessage!.options = args.length === 1 ? args[0] : args[1];
-					state.ashTestMessage!.finish = response => resolve({ response, checkboxChecked: false });
-				})) as typeof dialog.showMessageBox;
+			state.ashTestMessage = { restore: () => { dialog.showMessageBox = original; delete state.ashTestMessage; } };
+			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => new Promise(resolve => {
+				state.ashTestMessage!.options = args.length === 1 ? args[0] : args[1];
+				state.ashTestMessage!.finish = response => resolve({ response, checkboxChecked: false });
+			})) as typeof dialog.showMessageBox;
 		});
 		let response: number | undefined;
 		try {
@@ -71,12 +68,7 @@ export class Dialogs {
 			await expect.poll(() => application.evaluate(() => (globalThis as DialogCaptureGlobal).ashTestMessage?.options?.title), { timeout }).toBe(title);
 			const message = await application.evaluate(() => {
 				const options = (globalThis as DialogCaptureGlobal).ashTestMessage!.options!;
-				return {
-					title: options.title!,
-					message: options.message,
-					detail: options.detail ?? '',
-					buttons: options.buttons ?? [],
-				};
+				return { title: options.title!, message: options.message, detail: options.detail ?? '', buttons: options.buttons ?? [] };
 			});
 			if (button) {
 				const selected = message.buttons.indexOf(button);

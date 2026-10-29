@@ -8,11 +8,7 @@ import { IInstantiationService } from '../../../../../../platform/instantiation/
 import { ActionWidgetDropdownActionViewItem } from '../../../../../../platform/actions/browser/actionWidgetDropdownActionViewItem.js';
 
 /** Creates the input picker's two triggers; the caller owns activation and disposal. */
-export function renderChatInputPickerSplit(
-	container: HTMLElement,
-	primaryButton: HTMLElement = h(container.ownerDocument, 'a'),
-	secondaryButton: HTMLElement = h(container.ownerDocument, 'a'),
-): { primaryButton: HTMLElement; secondaryButton: HTMLElement } {
+export function renderChatInputPickerSplit(container: HTMLElement, primaryButton: HTMLElement = h(container.ownerDocument, 'a'), secondaryButton: HTMLElement = h(container.ownerDocument, 'a')): { primaryButton: HTMLElement; secondaryButton: HTMLElement; } {
 	container.classList.add('ash-chat-input-picker-split');
 	container.setAttribute('role', 'group');
 	container.tabIndex = -1;
@@ -23,12 +19,8 @@ export function renderChatInputPickerSplit(
 		button.classList.add('ash-chat-input-picker-button');
 		button.setAttribute('role', 'button');
 		button.setAttribute('aria-disabled', String(disabled));
-		if (!button.hasAttribute('aria-haspopup')) {
-			button.setAttribute('aria-haspopup', 'true');
-		}
-		if (!button.hasAttribute('aria-expanded')) {
-			button.setAttribute('aria-expanded', 'false');
-		}
+		if (!button.hasAttribute('aria-haspopup')) { button.setAttribute('aria-haspopup', 'true'); }
+		if (!button.hasAttribute('aria-expanded')) { button.setAttribute('aria-expanded', 'false'); }
 		button.tabIndex = disabled ? -1 : 0;
 		if (!button.querySelector('.ash-chat-input-picker-label')) {
 			const label = h(container.ownerDocument, 'span');
@@ -58,15 +50,7 @@ export abstract class ChatInputPickerActionViewItem extends ActionWidgetDropdown
 	private externalAnchor: HTMLElement | undefined;
 
 	constructor(action: IAction, options: Omit<IActionWidgetDropdownOptions, 'label' | 'ariaLabel' | 'labelRenderer'>, @IInstantiationService instantiationService: IInstantiationService) {
-		super(
-			action,
-			{
-				...options,
-				getAnchor: () => this.getAnchorElement(),
-				listOptions: { ...options.listOptions, anchorPosition: AnchorPosition.Above },
-			},
-			instantiationService,
-		);
+		super(action, { ...options, getAnchor: () => this.getAnchorElement(), listOptions: { ...options.listOptions, anchorPosition: AnchorPosition.Above } }, instantiationService);
 	}
 
 	protected getAnchorElement(): HTMLElement {

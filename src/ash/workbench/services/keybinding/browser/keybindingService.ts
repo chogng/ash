@@ -14,23 +14,64 @@ import { type KeybindingsSchemaContribution } from '../../../../platform/keybind
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from '../../../../base/browser/window.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
-import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import {
+	isModifierKey,
+	StandardKeyboardEvent,
+} from '../../../../base/browser/keyboardEvent.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { IME } from '../../../../base/common/ime.js';
-import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
+import {
+	getKeybindingLabel,
+} from '../../../../base/common/keybindingLabels.js';
 import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
-import { type Keybinding, KeybindingChordKind, type KeybindingEvent, ResolvedKeybinding } from '../../../../base/common/keybindings.js';
-import { combinedDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type CommandId, type ICommandService, type CommandRegistry, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import {
+	type Keybinding,
+	KeybindingChordKind,
+	type KeybindingEvent,
+	ResolvedKeybinding,
+} from '../../../../base/common/keybindings.js';
+import {
+	combinedDisposable,
+	Disposable,
+	DisposableMap,
+	DisposableStore,
+	MutableDisposable,
+	type IDisposable,
+
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
+import {
+	type CommandId,
+	type ICommandService,
+	type CommandRegistry,
+	CommandsRegistry,
+} from '../../../../platform/commands/common/commands.js';
 import { type Context, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { type IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { IKeybindingService, KeybindingContextKeys } from '../../../../platform/keybinding/common/keybinding.js';
-import { KeybindingResolveKind, KeybindingResolver, type KeybindingResolveResult } from '../../../../platform/keybinding/common/keybindingResolver.js';
-import { KeybindingRuleKind, KeybindingSource, type KeybindingRegistry, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import {
+	IKeybindingService,
+	KeybindingContextKeys,
+} from '../../../../platform/keybinding/common/keybinding.js';
+import {
+	KeybindingResolveKind,
+	KeybindingResolver,
+	type KeybindingResolveResult,
+} from '../../../../platform/keybinding/common/keybindingResolver.js';
+import {
+	KeybindingRuleKind,
+	KeybindingSource,
+	type KeybindingRegistry,
+	KeybindingsRegistry,
+} from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import type {
+	IKeyboardLayoutService,
+} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { Severity, INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { IStatusbarEntryAccessor, IStatusbarService } from '../../statusbar/browser/statusbar.js';
+import type {
+	IStatusbarEntryAccessor,
+	IStatusbarService,
+} from '../../statusbar/browser/statusbar.js';
 import { StatusbarAlignment } from '../../statusbar/browser/statusbar.js';
 import type { IKeyboardShortcutTroubleshootingService } from '../common/keyboardShortcutTroubleshooting.js';
 
@@ -54,7 +95,9 @@ export interface WorkbenchKeybindingServiceOptions {
  * keyboard layout mapping, ContextKey scopes, command execution, and browser
  * event lifecycle.
  */
-export class WorkbenchKeybindingService extends Disposable implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
+export class WorkbenchKeybindingService
+	extends Disposable
+	implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
 	private userBindings: readonly IUserFriendlyKeybinding[] = [];
 	private readonly userRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly registry: KeybindingRegistry;
@@ -72,7 +115,9 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 	private readonly _onDidUpdateKeybindings = this._register(new Emitter<void>());
 	private readonly _onDidLog = this._register(new Emitter<string>());
 	private readonly chordTimeout = this._register(new MutableDisposable<IDisposable>());
-	private readonly chordStatus = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly chordStatus = this._register(
+		new MutableDisposable<IStatusbarEntryAccessor>(),
+	);
 	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly inChordModeKey: IContextKey<boolean>;
 	private readonly isComposingKey: IContextKey<boolean>;
@@ -80,8 +125,8 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 	private singleModifierCandidate: SingleModifierKey | undefined;
 	private disabledIme = false;
 	private troubleshootingEnabled = false;
-	private currentDispatch: { readonly command: string; readonly event: KeyboardEvent } | undefined;
-	private holdMode: { readonly event: KeyboardEvent; readonly promise: Promise<void>; readonly finish: () => void } | undefined;
+	private currentDispatch: { readonly command: string; readonly event: KeyboardEvent; } | undefined;
+	private holdMode: { readonly event: KeyboardEvent; readonly promise: Promise<void>; readonly finish: () => void; } | undefined;
 
 	readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 	readonly onDidLog = this._onDidLog.event;
@@ -104,61 +149,50 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
 		this.resolver = new KeybindingResolver({
 			registry: this.registry,
-			resolveKeybinding: keybinding => this.keyboardLayoutService.getKeyboardMapper().resolveKeybinding(keybinding),
+			resolveKeybinding: (keybinding) => this.keyboardLayoutService
+				.getKeyboardMapper()
+				.resolveKeybinding(keybinding),
 		});
 		this.chordTimeoutMs = options.chordTimeoutMs ?? 5_000;
-		this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(this.contextKeyService);
-		this.isComposingKey = KeybindingContextKeys.isComposing.bindTo(this.contextKeyService);
+		this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(
+			this.contextKeyService,
+		);
+		this.isComposingKey = KeybindingContextKeys.isComposing.bindTo(
+			this.contextKeyService,
+		);
 
-		this._register(
-			toDisposable(() => {
-				this.finishHoldMode();
-				this.leaveChordMode();
-				this.isComposingKey.reset();
-			}),
-		);
-		this._register(
-			this.resolver.onDidChangeKeybindings(() => {
-				this._onDidUpdateKeybindings.fire();
-			}),
-		);
-		this._register(
-			this.keyboardLayoutService.onDidChangeKeyboardLayout(() => {
-				this.leaveChordMode();
-				this._onDidUpdateKeybindings.fire();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.finishHoldMode();
+			this.leaveChordMode();
+			this.isComposingKey.reset();
+		}));
+		this._register(this.resolver.onDidChangeKeybindings(() => {
+			this._onDidUpdateKeybindings.fire();
+		}));
+		this._register(this.keyboardLayoutService.onDidChangeKeyboardLayout(() => {
+			this.leaveChordMode();
+			this._onDidUpdateKeybindings.fire();
+		}));
 		this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
 		this.updateKeybindingsSchema();
 		this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
 		this._register(files.watch(profiles.currentProfile.keybindingsResource));
-		this._register(
-			files.onDidChangeFiles(event => {
-				if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
-					void this.initialize().catch(error =>
-						notificationService.notify({
-							severity: Severity.Warning,
-							message: localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)),
-						}),
-					);
-				}
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				for (const listener of this.schemaContributions.values()) listener?.dispose();
-				this.schemaContributions.clear();
-			}),
-		);
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
+				void this.initialize().catch(error => notificationService.notify({ severity: Severity.Warning, message: localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)) }));
+			}
+		}));
+		this._register(toDisposable(() => {
+			for (const listener of this.schemaContributions.values()) listener?.dispose();
+			this.schemaContributions.clear();
+		}));
 		this.attachWindow(this.ownerWindow);
 		for (const { window } of getWindows()) this.attachWindow(window);
 		this._register(onDidRegisterWindow(({ window }) => this.attachWindow(window)));
-		this._register(
-			onWillUnregisterWindow(({ window }) => {
-				if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === window) this.finishHoldMode();
-				this.windowListeners.deleteAndDispose(window);
-			}),
-		);
+		this._register(onWillUnregisterWindow(({ window }) => {
+			if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === window) this.finishHoldMode();
+			this.windowListeners.deleteAndDispose(window);
+		}));
 	}
 
 	/** Called by the window owner after service registration; file events use the same load queue. */
@@ -168,9 +202,8 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 				return;
 			}
 			let source: string;
-			try {
-				source = (await this.files.readFile(this.profiles.currentProfile.keybindingsResource)).content;
-			} catch (error) {
+			try { source = (await this.files.readFile(this.profiles.currentProfile.keybindingsResource)).content; }
+			catch (error) {
 				if (!(error instanceof FileNotFoundError)) {
 					throw error;
 				}
@@ -188,71 +221,37 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 				}
 				const keybinding = parseKeybinding(key)!;
 				const when = binding.when ? ContextKeyExpr.deserialize(binding.when) : undefined;
-				registrations.push(
-					binding.command === null
-						? this.registry.registerKeybindingBlocker({ keybinding, when, source: KeybindingSource.User })
-						: this.registry.registerKeybindingRule({
-								command: binding.command,
-								keybinding,
-								when,
-								args: binding.args === undefined ? undefined : [binding.args],
-								source: KeybindingSource.User,
-							}),
-				);
+				registrations.push(binding.command === null
+					? this.registry.registerKeybindingBlocker({ keybinding, when, source: KeybindingSource.User })
+					: this.registry.registerKeybindingRule({ command: binding.command, keybinding, when, args: binding.args === undefined ? undefined : [binding.args], source: KeybindingSource.User }));
 			}
 			this.userBindings = bindings;
 			this.userRegistration.value = combinedDisposable(...registrations);
 			this._onDidUpdateKeybindings.fire();
 		});
-		this.loadQueue = result.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.loadQueue = result.then(() => undefined, () => undefined);
 		return result;
 	}
 
 	public getKeybindings(): readonly ResolvedKeybindingItem[] {
-		const defaults = this.registry
-			.getKeybindings()
-			.filter(rule => rule.source !== KeybindingSource.User)
-			.map(
-				rule =>
-					new ResolvedKeybindingItem(
-						this.resolveKeybinding(rule.keybinding),
-						rule.kind === KeybindingRuleKind.Command ? rule.command : null,
-						rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined,
-						rule.when,
-						true,
-						null,
-						true,
-					),
-			);
+		const defaults = this.registry.getKeybindings().filter(rule => rule.source !== KeybindingSource.User).map(rule =>
+			new ResolvedKeybindingItem(this.resolveKeybinding(rule.keybinding), rule.kind === KeybindingRuleKind.Command ? rule.command : null,
+				rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true));
 		const users = this.userBindings.map((entry, index) => {
 			const key = this.userKey(entry);
-			return new ResolvedKeybindingItem(
-				key === null ? undefined : this.resolveUserBinding(key),
-				entry.command,
-				entry.args,
-				entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined,
-				false,
-				null,
-				false,
-				{ index, entry },
-			);
+			return new ResolvedKeybindingItem(key === null ? undefined : this.resolveUserBinding(key), entry.command, entry.args,
+				entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, false, null, false,
+				{ index, entry });
 		});
 		return [...defaults, ...users];
 	}
 
 	private userKey(binding: IUserFriendlyKeybinding): string | null {
 		switch (environment.os) {
-			case 'mac':
-				return binding.mac === undefined ? binding.key : binding.mac;
-			case 'windows':
-				return binding.win === undefined ? binding.key : binding.win;
-			case 'linux':
-				return binding.linux === undefined ? binding.key : binding.linux;
-			case 'unknown':
-				return binding.key;
+			case 'mac': return binding.mac === undefined ? binding.key : binding.mac;
+			case 'windows': return binding.win === undefined ? binding.key : binding.win;
+			case 'linux': return binding.linux === undefined ? binding.key : binding.linux;
+			case 'unknown': return binding.key;
 		}
 	}
 
@@ -304,26 +303,22 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 			allOf: [{ $ref: '#/definitions/commandsSchemas' }],
 		};
 		const registration = new DisposableStore();
-		jsonRegistry.registerSchema(
-			'ash://schemas/keybindings',
-			{
-				id: 'ash://schemas/keybindings',
-				type: 'array',
-				definitions: {
-					commandNames: {
-						type: 'string',
-						enum: commandNames.map(command => command.id),
-						enumDescriptions: commandNames.map(command => {
-							const description = command.metadata?.description;
-							return typeof description === 'string' ? description : (description?.value ?? '');
-						}),
-					},
-					commandsSchemas: { allOf: commandSchemas },
+		jsonRegistry.registerSchema('ash://schemas/keybindings', {
+			id: 'ash://schemas/keybindings',
+			type: 'array',
+			definitions: {
+				commandNames: {
+					type: 'string',
+					enum: commandNames.map(command => command.id),
+					enumDescriptions: commandNames.map(command => {
+						const description = command.metadata?.description;
+						return typeof description === 'string' ? description : description?.value ?? '';
+					}),
 				},
-				items: keybindingsSchema,
+				commandsSchemas: { allOf: commandSchemas },
 			},
-			registration,
-		);
+			items: keybindingsSchema,
+		}, registration);
 		this.schemaRegistration.value = registration;
 	}
 
@@ -334,27 +329,18 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 		const document = targetWindow.document;
 		listeners.add(addDisposableListener(document, 'keydown', (event: KeyboardEvent) => this.dispatchEvent(event), true));
 		listeners.add(addDisposableListener(document, 'keyup', (event: KeyboardEvent) => this.dispatchKeyupEvent(event), true));
-		listeners.add(
-			addDisposableListener(
-				document,
-				'compositionstart',
-				() => {
-					this.finishHoldMode();
-					this.isComposingKey.set(true);
-					this.singleModifierCandidate = undefined;
-					this.leaveChordMode();
-				},
-				true,
-			),
-		);
+		listeners.add(addDisposableListener(document, 'compositionstart', () => {
+			this.finishHoldMode();
+			this.isComposingKey.set(true);
+			this.singleModifierCandidate = undefined;
+			this.leaveChordMode();
+		}, true));
 		listeners.add(addDisposableListener(document, 'compositionend', () => this.isComposingKey.set(false), true));
-		listeners.add(
-			addDisposableListener(targetWindow, 'blur', () => {
-				if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === targetWindow) this.finishHoldMode();
-				this.singleModifierCandidate = undefined;
-				this.leaveChordMode();
-			}),
-		);
+		listeners.add(addDisposableListener(targetWindow, 'blur', () => {
+			if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === targetWindow) this.finishHoldMode();
+			this.singleModifierCandidate = undefined;
+			this.leaveChordMode();
+		}));
 	}
 
 	get inChordMode(): boolean {
@@ -367,28 +353,40 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 
 	toggle(): boolean {
 		this.troubleshootingEnabled = !this.troubleshootingEnabled;
-		this._onDidLog.fire(`Keyboard shortcuts troubleshooting ${this.troubleshootingEnabled ? 'enabled' : 'disabled'}.`);
+		this._onDidLog.fire(
+			`Keyboard shortcuts troubleshooting ${this.troubleshootingEnabled ? 'enabled' : 'disabled'}.`,
+		);
 		return this.troubleshootingEnabled;
 	}
 
 	resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding {
-		const resolved = this.keyboardLayoutService.getKeyboardMapper().resolveKeybinding(keybinding);
+		const resolved = this.keyboardLayoutService
+			.getKeyboardMapper()
+			.resolveKeybinding(keybinding);
 		if (!resolved[0]) {
 			throw new Error('Keyboard mapper could not resolve the keybinding');
 		}
 		return resolved[0];
 	}
 
-	resolveUserBinding(userBinding: string): ResolvedKeybinding | undefined {
+	resolveUserBinding(
+		userBinding: string,
+	): ResolvedKeybinding | undefined {
 		const keybinding = parseKeybinding(userBinding);
 		return keybinding ? this.resolveKeybinding(keybinding) : undefined;
 	}
 
-	lookupKeybindings(command: CommandId, context: Context = this.contextKeyService): readonly ResolvedKeybinding[] {
+	lookupKeybindings(
+		command: CommandId,
+		context: Context = this.contextKeyService,
+	): readonly ResolvedKeybinding[] {
 		return this.resolver.lookupKeybindings(command, context);
 	}
 
-	lookupKeybinding(command: CommandId, context: Context = this.contextKeyService): ResolvedKeybinding | undefined {
+	lookupKeybinding(
+		command: CommandId,
+		context: Context = this.contextKeyService,
+	): ResolvedKeybinding | undefined {
 		return this.resolver.lookupKeybinding(command, context);
 	}
 
@@ -398,9 +396,7 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 		if (this.holdMode?.event === invocation.event) return this.holdMode.promise;
 		this.finishHoldMode();
 		let finish!: () => void;
-		const promise = new Promise<void>(resolve => {
-			finish = resolve;
-		});
+		const promise = new Promise<void>(resolve => { finish = resolve; });
 		this.holdMode = { event: invocation.event, promise, finish };
 		return promise;
 	}
@@ -441,18 +437,31 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 		this.keyboardLayoutService.validateCurrentKeyboardMapping(nextEvent);
 		if (isModifierKey(browserEvent)) {
 			this.singleModifierCandidate = singleModifierCandidate(event);
-			this.logTroubleshooting(this.singleModifierCandidate ? `Modifier candidate: ${this.singleModifierCandidate}` : 'Modifier key is not eligible for a single-modifier binding.');
+			this.logTroubleshooting(
+				this.singleModifierCandidate
+					? `Modifier candidate: ${this.singleModifierCandidate}`
+					: 'Modifier key is not eligible for a single-modifier binding.',
+			);
 			return false;
 		}
 		if (this.singleModifierCandidate) {
-			this.logTroubleshooting(`Modifier candidate cancelled: ${this.singleModifierCandidate} was used with another key.`);
+			this.logTroubleshooting(
+				`Modifier candidate cancelled: ${this.singleModifierCandidate} was used with another key.`,
+			);
 		}
 		this.singleModifierCandidate = undefined;
-		if (event.isComposing || (event.altGraphKey && !this.keyboardLayoutService.getKeyboardMapperConfiguration().mapAltGrToCtrlAlt) || event.key === 'Process') {
+		if (
+			event.isComposing ||
+			(event.altGraphKey && !this.keyboardLayoutService.getKeyboardMapperConfiguration().mapAltGrToCtrlAlt) ||
+			event.key === 'Process'
+		) {
 			return false;
 		}
 
-		const dispatchEvent = toDispatchEvent(this.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent(nextEvent), nextEvent);
+		const dispatchEvent = toDispatchEvent(
+			this.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent(nextEvent),
+			nextEvent,
+		);
 		this.logTroubleshooting(`Mapper: ${formatKeyboardEvent(dispatchEvent)}`);
 		return this.dispatchResolvedEvent(browserEvent, event, dispatchEvent);
 	}
@@ -460,15 +469,11 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 	/** Dispatches a modifier-only binding after the key is released unused. */
 	dispatchKeyupEvent(browserEvent: KeyboardEvent): boolean {
 		const held = this.holdMode?.event;
-		if (
-			held &&
-			keyboardEventWindow(held, this.ownerWindow) === keyboardEventWindow(browserEvent, this.ownerWindow) &&
-			(sameKeyboardKey(held, browserEvent) ||
-				(held.ctrlKey && !browserEvent.ctrlKey) ||
-				(held.altKey && !browserEvent.altKey) ||
-				(held.shiftKey && !browserEvent.shiftKey) ||
-				(held.metaKey && !browserEvent.metaKey))
-		) {
+		if (held && keyboardEventWindow(held, this.ownerWindow) === keyboardEventWindow(browserEvent, this.ownerWindow) && (sameKeyboardKey(held, browserEvent)
+			|| (held.ctrlKey && !browserEvent.ctrlKey)
+			|| (held.altKey && !browserEvent.altKey)
+			|| (held.shiftKey && !browserEvent.shiftKey)
+			|| (held.metaKey && !browserEvent.metaKey))) {
 			this.finishHoldMode();
 		}
 		if (this.contextKeyService.getContext(keyboardEventTarget(browserEvent)).getValue(KeybindingContextKeys.isRecording.key)) {
@@ -505,7 +510,11 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 		return this.dispatchResolvedEvent(browserEvent, event, dispatchEvent);
 	}
 
-	private dispatchResolvedEvent(browserEvent: KeyboardEvent, event: StandardKeyboardEvent, dispatchEvent: KeybindingEvent): boolean {
+	private dispatchResolvedEvent(
+		browserEvent: KeyboardEvent,
+		event: StandardKeyboardEvent,
+		dispatchEvent: KeybindingEvent,
+	): boolean {
 		const events = [...this.currentEvents, dispatchEvent];
 		const target = keyboardEventTarget(browserEvent);
 		const context = this.contextKeyService.getContext(target);
@@ -531,10 +540,11 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 				const previousDispatch = this.currentDispatch;
 				this.currentDispatch = { command: result.command, event: browserEvent };
 				try {
-					void this.commandService.executeCommand(result.command, ...result.args).catch((error: unknown) => {
-						if (this.holdMode?.event === browserEvent) this.finishHoldMode();
-						this.notificationService.warn(getErrorMessage(error));
-					});
+					void this.commandService.executeCommand(result.command, ...result.args)
+						.catch((error: unknown) => {
+							if (this.holdMode?.event === browserEvent) this.finishHoldMode();
+							this.notificationService.warn(getErrorMessage(error));
+						});
 				} finally {
 					this.currentDispatch = previousDispatch;
 				}
@@ -557,10 +567,17 @@ export class WorkbenchKeybindingService extends Disposable implements IKeybindin
 			IME.disable();
 			this.disabledIme = true;
 		}
-		this.chordTimeout.value = disposableWindowTimeout(this.ownerWindow, () => this.leaveChordMode(), this.chordTimeoutMs);
+		this.chordTimeout.value = disposableWindowTimeout(
+			this.ownerWindow,
+			() => this.leaveChordMode(),
+			this.chordTimeoutMs,
+		);
 
 		if (this.statusbarService) {
-			const prefix = new ResolvedKeybinding(keybinding.chords.slice(0, this.currentEvents.length), keybinding.operatingSystem);
+			const prefix = new ResolvedKeybinding(
+				keybinding.chords.slice(0, this.currentEvents.length),
+				keybinding.operatingSystem,
+			);
 			const label = getKeybindingLabel(prefix);
 			this.chordStatus.clear();
 			this.chordStatus.value = this.statusbarService.addEntry(
@@ -599,16 +616,11 @@ type SingleModifierKey = 'ctrl' | 'shift' | 'alt' | 'meta';
 
 function modifierKey(key: string): SingleModifierKey | undefined {
 	switch (key) {
-		case 'Control':
-			return 'ctrl';
-		case 'Shift':
-			return 'shift';
-		case 'Alt':
-			return 'alt';
-		case 'Meta':
-			return 'meta';
-		default:
-			return undefined;
+		case 'Control': return 'ctrl';
+		case 'Shift': return 'shift';
+		case 'Alt': return 'alt';
+		case 'Meta': return 'meta';
+		default: return undefined;
 	}
 }
 
@@ -628,7 +640,10 @@ function hasAnyModifier(event: KeyboardEvent): boolean {
 	return event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.getModifierState?.('AltGraph') === true;
 }
 
-function toDispatchEvent(resolved: ResolvedKeybinding, original: KeybindingEvent): KeybindingEvent {
+function toDispatchEvent(
+	resolved: ResolvedKeybinding,
+	original: KeybindingEvent,
+): KeybindingEvent {
 	const chord = resolved.chords[0];
 	if (!chord) {
 		return original;
@@ -648,11 +663,15 @@ function toDispatchEvent(resolved: ResolvedKeybinding, original: KeybindingEvent
 
 function keyboardEventTarget(event: KeyboardEvent): Node | null {
 	const first = event.composedPath?.()[0];
-	return isNodeLike(first) ? first : isNodeLike(event.target) ? event.target : null;
+	return isNodeLike(first)
+		? first
+		: isNodeLike(event.target) ? event.target : null;
 }
 
 function isNodeLike(value: unknown): value is Node {
-	return typeof value === 'object' && value !== null && 'nodeType' in value;
+	return typeof value === 'object' &&
+		value !== null &&
+		'nodeType' in value;
 }
 
 function formatKeyboardEvent(event: KeybindingEvent): string {

@@ -40,11 +40,7 @@ export class EditorGroupModel {
 	private selectionAnchor: EditorInstanceId | undefined;
 	private locked = false;
 
-	constructor(
-		id?: EditorGroupId,
-		public readonly editorLimit?: 1,
-		private readonly resourceIdentity: IExtUri = extUri,
-	) {
+	constructor(id?: EditorGroupId, public readonly editorLimit?: 1, private readonly resourceIdentity: IExtUri = extUri) {
 		this.id = id ?? ++editorGroupId;
 		editorGroupId = Math.max(editorGroupId, this.id);
 	}
@@ -122,9 +118,7 @@ export class EditorGroupModel {
 		if (replaced) {
 			if (replaced.instanceId !== editor.instanceId) {
 				const recentIndex = this.recentEditors.indexOf(replaced.instanceId);
-				if (recentIndex >= 0) {
-					this.recentEditors.splice(recentIndex, 1);
-				}
+				if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
 			}
 			this.editors[this.editors.indexOf(replaced)] = editor;
 			this.selection.delete(replaced.instanceId);
@@ -145,7 +139,8 @@ export class EditorGroupModel {
 			return existing;
 		}
 		if (this.editorLimit === 1) {
-			const excluded = (candidate: IResourceEditorInput): boolean => ((candidate.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.ExcludeFromEditorLimit) !== 0;
+			const excluded = (candidate: IResourceEditorInput): boolean =>
+				((candidate.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.ExcludeFromEditorLimit) !== 0;
 			return excluded(input) ? undefined : this.editors.find(editor => !excluded(editor.input));
 		}
 		return options.pinned === false ? this.editors.find(editor => editor.preview) : undefined;
@@ -191,9 +186,7 @@ export class EditorGroupModel {
 		const changed = this.active !== editor;
 		this.active = editor;
 		const recentIndex = this.recentEditors.indexOf(editor.instanceId);
-		if (recentIndex >= 0) {
-			this.recentEditors.splice(recentIndex, 1);
-		}
+		if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
 		this.recentEditors.unshift(editor.instanceId);
 		this.selection.clear();
 		this.selection.add(editor.instanceId);
@@ -201,7 +194,7 @@ export class EditorGroupModel {
 		return changed;
 	}
 
-	public setSelection(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): void {
+	public setSelection(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): void {
 		const editor = this.requireEditor(input);
 		if (modifiers.range) {
 			const anchor = this.editors.findIndex(candidate => candidate.instanceId === this.selectionAnchor);
@@ -229,14 +222,12 @@ export class EditorGroupModel {
 		const index = this.editors.indexOf(editor);
 		this.editors.splice(index, 1);
 		const recentIndex = this.recentEditors.indexOf(editor.instanceId);
-		if (recentIndex >= 0) {
-			this.recentEditors.splice(recentIndex, 1);
-		}
+		if (recentIndex >= 0) { this.recentEditors.splice(recentIndex, 1); }
 		this.selection.delete(editor.instanceId);
-		const next = focusRecentEditorAfterClose ? this.editors.find(candidate => candidate.instanceId === this.recentEditors[0]) : undefined;
-		if (this.active === editor) {
-			this.active = undefined;
-		}
+		const next = focusRecentEditorAfterClose
+			? this.editors.find(candidate => candidate.instanceId === this.recentEditors[0])
+			: undefined;
+		if (this.active === editor) { this.active = undefined; }
 		if (this.selectionAnchor === editor.instanceId) {
 			this.selectionAnchor = this.active?.instanceId;
 		}

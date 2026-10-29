@@ -42,16 +42,10 @@ export class WebContentsViewHost extends Disposable {
 
 	public onContainerCreated(container: HTMLElement): void {
 		this.assertNotDisposed();
-		if (this.container) {
-			throw new Error('Browser container is already attached');
-		}
+		if (this.container) { throw new Error('Browser container is already attached'); }
 		this.container = container;
 		this._register(addDisposableListener(container, 'focus', () => this.tryFocus()));
-		this._register(
-			addDisposableListener(container, 'blur', () => {
-				this.focusRequested = false;
-			}),
-		);
+		this._register(addDisposableListener(container, 'blur', () => { this.focusRequested = false; }));
 		const observer = new container.ownerDocument.defaultView!.ResizeObserver(() => this.layout());
 		observer.observe(container);
 		this._register(toDisposable(() => observer.disconnect()));
@@ -59,9 +53,7 @@ export class WebContentsViewHost extends Disposable {
 	}
 
 	public setModel(model: IBrowserViewModel | undefined): void {
-		if (this.model === model) {
-			return;
-		}
+		if (this.model === model) { return; }
 		const previous = this.model;
 		this.modelListeners.clear();
 		this.model = model;
@@ -73,57 +65,39 @@ export class WebContentsViewHost extends Disposable {
 		if (model) {
 			let presentation = presentations.get(model);
 			if (!presentation) {
-				presentation = {
-					hosts: new Set(),
-					update: Promise.resolve(),
-					queued: false,
-					closed: false,
-					revision: 0,
-				};
+				presentation = { hosts: new Set(), update: Promise.resolve(), queued: false, closed: false, revision: 0 };
 				presentations.set(model, presentation);
 			}
 			presentation.hosts.add(this);
-			this.modelListeners.add(
-				model.onDidClose(() => {
-					presentation.closed = true;
-					this.setModel(undefined);
-				}),
-			);
+			this.modelListeners.add(model.onDidClose(() => {
+				presentation.closed = true;
+				this.setModel(undefined);
+			}));
 			this.schedule(model);
 		}
 	}
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
-		if (visible && this.model) {
-			this.claim(this.model);
-		}
+		if (visible && this.model) { this.claim(this.model); }
 		this.layout();
 	}
 
 	public layout(): void {
-		if (this.model && !this.isDisposed) {
-			this.schedule(this.model);
-		}
+		if (this.model && !this.isDisposed) { this.schedule(this.model); }
 	}
 
 	public tryFocus(): boolean {
-		if (!this.model || !this.visible || !this.container || this.overlays.getOverlappingOverlays(this.container).length > 0) {
-			return false;
-		}
+		if (!this.model || !this.visible || !this.container || this.overlays.getOverlappingOverlays(this.container).length > 0) { return false; }
 		this.claim(this.model);
 		this.focusRequested = true;
-		if (this.container.ownerDocument.activeElement !== this.container) {
-			focusWebContentsViewContainer(this.container);
-		}
+		if (this.container.ownerDocument.activeElement !== this.container) { focusWebContentsViewContainer(this.container); }
 		this.schedule(this.model);
 		return true;
 	}
 
 	/** Input follows the same host that owns the page's current compositor placement. */
-	public get isActive(): boolean {
-		return !!this.model && WebContentsViewHost.getActiveHost(this.model) === this;
-	}
+	public get isActive(): boolean { return !!this.model && WebContentsViewHost.getActiveHost(this.model) === this; }
 	private static getActiveHost(model: IBrowserViewModel): WebContentsViewHost | undefined {
 		return [...presentations.get(model)!.hosts].reverse().find(host => host.visible && host.container && !host.isDisposed);
 	}
@@ -142,50 +116,28 @@ export class WebContentsViewHost extends Disposable {
 	private schedule(model: IBrowserViewModel): void {
 		const presentation = presentations.get(model)!;
 		presentation.revision++;
-		if (presentation.queued || presentation.closed) {
-			return;
-		}
+		if (presentation.queued || presentation.closed) { return; }
 		presentation.queued = true;
-		presentation.update = presentation.update
-			.then(async () => {
-				presentation.queued = false;
-				if (presentation.closed) {
-					return;
-				}
-				const revision = presentation.revision;
-				const host = WebContentsViewHost.getActiveHost(model);
-				const container = host?.container;
-				const bounds = container?.getBoundingClientRect();
-				const visible = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);
-				if (visible && bounds) {
-					await model.layout({
-						x: Math.round(bounds.x),
-						y: Math.round(bounds.y),
-						width: Math.round(bounds.width),
-						height: Math.round(bounds.height),
-					});
-				}
-				if (presentation.closed || revision !== presentation.revision) {
-					return;
-				}
-				await model.setVisible(visible);
-				// IPC can finish after the pane switches input or an overlay takes keyboard focus.
-				if (
-					visible &&
-					host?.focusRequested &&
-					host.model === model &&
-					host.visible &&
-					container?.ownerDocument.activeElement === container &&
-					host.overlays.getOverlappingOverlays(container).length === 0
-				) {
-					host.focusRequested = false;
-					await model.focus();
-				}
-			})
-			.catch(error => {
-				if (!presentation.closed) {
-					this.logService.error('browserView', 'Failed to present browser page', error);
-				}
-			});
+		presentation.update = presentation.update.then(async () => {
+			presentation.queued = false;
+			if (presentation.closed) { return; }
+			const revision = presentation.revision;
+			const host = WebContentsViewHost.getActiveHost(model);
+			const container = host?.container;
+			const bounds = container?.getBoundingClientRect();
+			const visible = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);
+			if (visible && bounds) {
+				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
+			}
+			if (presentation.closed || revision !== presentation.revision) { return; }
+			await model.setVisible(visible);
+			// IPC can finish after the pane switches input or an overlay takes keyboard focus.
+			if (visible && host?.focusRequested && host.model === model && host.visible && container?.ownerDocument.activeElement === container && host.overlays.getOverlappingOverlays(container).length === 0) {
+				host.focusRequested = false;
+				await model.focus();
+			}
+		}).catch(error => {
+			if (!presentation.closed) { this.logService.error('browserView', 'Failed to present browser page', error); }
+		});
 	}
 }

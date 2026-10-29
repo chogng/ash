@@ -41,30 +41,20 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		const button = h(parent.ownerDocument, 'button');
 		button.type = 'button';
 		button.className = 'ash-button ash-button-secondary ash-binary-open-as-text';
-		const updateLabel = () => {
-			button.textContent = localize('files.openBinaryAsText', 'Open as Read-Only Text');
-		};
+		const updateLabel = () => { button.textContent = localize('files.openBinaryAsText', 'Open as Read-Only Text'); };
 		updateLabel();
 		this.container?.prepend(button);
-		this._register(
-			addDisposableListener(button, 'click', () => {
-				void this.openAsText();
-			}),
-		);
+		this._register(addDisposableListener(button, 'click', () => { void this.openAsText(); }));
 		const encodingButton = h(parent.ownerDocument, 'button');
 		this.encodingButton = encodingButton;
 		encodingButton.type = 'button';
 		encodingButton.className = 'ash-button ash-button-secondary ash-binary-open-with-encoding';
 		encodingButton.textContent = localize('files.openWithEncoding', 'Open with Encoding');
 		this.container?.prepend(encodingButton);
-		this._register(
-			addDisposableListener(encodingButton, 'click', () => {
-				void this.openWithEncoding();
-			}),
-		);
+		this._register(addDisposableListener(encodingButton, 'click', () => { void this.openWithEncoding(); }));
 	}
 
-	override async setInput(input: { readonly resource: URI; readonly initialBytes?: Uint8Array }, signal: AbortSignal): Promise<void> {
+	override async setInput(input: { readonly resource: URI; readonly initialBytes?: Uint8Array; }, signal: AbortSignal): Promise<void> {
 		await super.setInput(input, signal);
 		this.resource = input.resource;
 		this.initialBytes = input.initialBytes;
@@ -87,22 +77,17 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		const resources = new DisposableStore();
 		this.encodingPicker.value = resources;
 		try {
-			const picker = resources.add(this.quickInput.createQuickPick<{ label: string; id: string }>());
-			picker.items = Object.keys(SUPPORTED_ENCODINGS)
-				.filter(id => !SUPPORTED_ENCODINGS[id].hidden && !SUPPORTED_ENCODINGS[id].encodeOnly)
-				.map(id => ({ label: getEncodingLabel(id), id, description: id }));
+			const picker = resources.add(this.quickInput.createQuickPick<{ label: string; id: string; }>());
+			picker.items = Object.keys(SUPPORTED_ENCODINGS).filter(id => !SUPPORTED_ENCODINGS[id].hidden && !SUPPORTED_ENCODINGS[id].encodeOnly).map(id => ({ label: getEncodingLabel(id), id, description: id }));
 			picker.sortByLabel = false;
 			picker.placeholder = picker.ariaLabel = localize('status.editor.selectEncoding', 'Select File Encoding');
-			const selected = await new Promise<{ id: string } | undefined>(resolve => {
+			const selected = await new Promise<{ id: string; } | undefined>(resolve => {
 				resources.add(toDisposable(() => resolve(undefined)));
-				resources.add(
-					picker.onDidAccept(() => {
-						const item = picker.selectedItems[0];
-						if (!item) return;
-						resolve(item);
-						picker.hide();
-					}),
-				);
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					resolve(item); picker.hide();
+				}));
 				resources.add(picker.onDidHide(() => resolve(undefined)));
 				picker.show();
 			});
@@ -110,11 +95,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 			await this.editors.openEditor({ resource, encoding: selected.id }, { preferredEditorId: CODE_EDITOR_ID });
 		} catch (error) {
 			if (this.isDisposed || this.resource !== resource) return;
-			await this.dialogs.showMessage({
-				severity: DialogSeverity.Error,
-				title: localize('files.openWithEncoding', 'Open with Encoding'),
-				message: localize('files.openWithEncodingFailed', 'Could not open this file with the selected encoding: {0}', error instanceof Error ? error.message : String(error)),
-			});
+			await this.dialogs.showMessage({ severity: DialogSeverity.Error, title: localize('files.openWithEncoding', 'Open with Encoding'), message: localize('files.openWithEncodingFailed', 'Could not open this file with the selected encoding: {0}', error instanceof Error ? error.message : String(error)) });
 		} finally {
 			if (this.encodingPicker.value === resources) this.encodingPicker.clear();
 		}
@@ -126,12 +107,19 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		try {
 			const content = this.initialBytes ? { bytes: this.initialBytes } : await this.files.readFileBytes(resource);
 			const text = new TextDecoder('utf-8').decode(content.bytes.subarray(0, MAX_TEXT_PREVIEW_BYTES));
-			await this.editors.openEditor({ resource, languageId: 'plaintext', contentType: 'text/plain', initialText: text, readOnly: true }, { preferredEditorId: CODE_EDITOR_ID });
+			await this.editors.openEditor(
+				{ resource, languageId: 'plaintext', contentType: 'text/plain', initialText: text, readOnly: true },
+				{ preferredEditorId: CODE_EDITOR_ID },
+			);
 		} catch (error) {
 			await this.dialogs.showMessage({
 				severity: DialogSeverity.Error,
 				title: localize('files.binaryTextPreviewFailedTitle', 'Could not open text preview'),
-				message: localize('files.binaryTextPreviewFailed', 'Could not open a text preview of this file: {0}', error instanceof Error ? error.message : String(error)),
+				message: localize(
+					'files.binaryTextPreviewFailed',
+					'Could not open a text preview of this file: {0}',
+					error instanceof Error ? error.message : String(error),
+				),
 			});
 		}
 	}

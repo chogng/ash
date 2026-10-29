@@ -15,47 +15,32 @@ const execute = promisify(execFile);
 
 async function freePort(): Promise<number> {
 	const server = createServer();
-	await new Promise<void>((resolveReady, reject) => {
-		server.once('error', reject);
-		server.listen(0, '127.0.0.1', resolveReady);
-	});
+	await new Promise<void>((resolveReady, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolveReady); });
 	const address = server.address();
 	if (!address || typeof address === 'string') throw new Error('Missing test port');
-	await new Promise<void>((resolveClosed, reject) => server.close(error => (error ? reject(error) : resolveClosed())));
+	await new Promise<void>((resolveClosed, reject) => server.close(error => error ? reject(error) : resolveClosed()));
 	return address.port;
 }
 
 async function inspect(port: number, expression: string): Promise<unknown> {
-	const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as Array<{
-		webSocketDebuggerUrl: string;
-	}>;
+	const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as Array<{ webSocketDebuggerUrl: string; }>;
 	const socket = new WebSocket(targets[0]!.webSocketDebuggerUrl);
 	try {
-		await new Promise<void>((resolveOpen, reject) => {
-			socket.addEventListener('open', () => resolveOpen(), { once: true });
-			socket.addEventListener('error', reject, { once: true });
-		});
+		await new Promise<void>((resolveOpen, reject) => { socket.addEventListener('open', () => resolveOpen(), { once: true }); socket.addEventListener('error', reject, { once: true }); });
 		return await new Promise((resolveResult, reject) => {
 			const timeout = setTimeout(() => reject(new Error('Main inspector timed out')), 5_000);
 			socket.addEventListener('message', event => {
-				const message = JSON.parse(String(event.data)) as {
-					id?: number;
-					result?: { result?: { value?: unknown } };
-					error?: unknown;
-				};
+				const message = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: unknown; }; }; error?: unknown; };
 				if (message.id !== 1) return;
 				clearTimeout(timeout);
-				if (message.error) reject(message.error);
-				else resolveResult(message.result?.result?.value);
+				if (message.error) reject(message.error); else resolveResult(message.result?.result?.value);
 			});
 			socket.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }));
 		});
-	} finally {
-		socket.close();
-	}
+	} finally { socket.close(); }
 }
 
-test('full checkout self-hosting retains edits across Renderer HMR, Main restart and Rust replacement', { tag: ['@electron-app-server'] }, async ({}, info) => {
+test('full checkout self-hosting retains edits across Renderer HMR, Main restart and Rust replacement', { tag: ['@electron-app-server'] }, async ({ }, info) => {
 	test.skip(process.env.ASH_SELFHOST_ACCEPTANCE !== '1', 'Opt in to the exclusive checkout source-mutation scenario.');
 	test.setTimeout(900_000);
 	const directory = await mkdtemp(join(tmpdir(), 'ash-selfhost-'));
@@ -78,31 +63,18 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 	const registration = await registerRunResource({ executable: daemon, profile });
 	let output = '';
 	const start = async (arguments_: string[]) => {
-		const child = spawn(process.execPath, arguments_, {
-			cwd: repository,
-			env: environment,
-			stdio: ['ignore', 'pipe', 'pipe'],
-			windowsHide: true,
-		});
-		child.stdout.on('data', (chunk: Buffer) => {
-			output += chunk.toString();
-		});
-		child.stderr.on('data', (chunk: Buffer) => {
-			output += chunk.toString();
-		});
-		child.on('exit', (code, signal) => {
-			output += `\n[${arguments_[0]}] exited: ${code ?? signal}\n`;
-		});
+		const child = spawn(process.execPath, arguments_, { cwd: repository, env: environment, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+		child.stdout.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+		child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+		child.on('exit', (code, signal) => { output += `\n[${arguments_[0]}] exited: ${code ?? signal}\n`; });
 		await run.own(child);
 		return child;
 	};
-	const sources = await Promise.all(
-		['src/ash/workbench/browser/parts/statusbar/statusbarPart.ts', 'src/ash/code/electron-main/main.ts', 'crates/app-server/src/startup.rs'].map(async path => ({
-			path: join(repository, path),
-			original: await readFile(join(repository, path), 'utf8'),
-			written: '',
-		})),
-	);
+	const sources = await Promise.all([
+		'src/ash/workbench/browser/parts/statusbar/statusbarPart.ts',
+		'src/ash/code/electron-main/main.ts',
+		'crates/app-server/src/startup.rs',
+	].map(async path => ({ path: join(repository, path), original: await readFile(join(repository, path), 'utf8'), written: '' })));
 	for (const source of sources) source.written = source.original;
 	const patch = async (index: number, next: string) => {
 		const source = sources[index]!;
@@ -114,21 +86,16 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 	const backendStatus = async () => {
 		// The daemon owns runtime paths, which need not be beneath the profile on
 		// Unix. Its read-only lifecycle result also identifies the actual server.
-		const { stdout } = await execute(daemon, ['version'], {
-			env: environment,
-			windowsHide: true,
-			timeout: 30_000,
-		});
-		const status = JSON.parse(stdout) as { status: string; pid?: number; logPath: string };
+		const { stdout } = await execute(daemon, ['version'], { env: environment, windowsHide: true, timeout: 30_000 });
+		const status = JSON.parse(stdout) as { status: string; pid?: number; logPath: string; };
 		expect(typeof status.logPath).toBe('string');
 		expect(isAbsolute(status.logPath)).toBe(true);
 		return status;
 	};
-	const backendLog = async () =>
-		readFile((await backendStatus()).logPath, 'utf8').catch(error => {
-			if (error.code === 'ENOENT') return '';
-			throw error;
-		});
+	const backendLog = async () => readFile((await backendStatus()).logPath, 'utf8').catch(error => {
+		if (error.code === 'ENOENT') return '';
+		throw error;
+	});
 	const backendPid = async () => (await backendStatus()).pid ?? 0;
 	let browser: Browser | undefined;
 	let page: Page | undefined;
@@ -137,98 +104,41 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 		// Each Electron generation owns a new ephemeral port. Reusing the old
 		// listener on Windows can fail while its CDP sockets are still closing.
 		let cdpPort = 0;
-		await expect
-			.poll(
-				async () => {
-					try {
-						cdpPort = Number([...output.matchAll(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//g)].at(-1)?.[1]);
-						return (
-							await fetch(`http://127.0.0.1:${cdpPort}/json/version`, {
-								signal: AbortSignal.timeout(2_000),
-							})
-						).ok;
-					} catch {
-						return false;
-					}
-				},
-				{ timeout: 180_000 },
-			)
-			.toBe(true);
+		await expect.poll(async () => {
+			try {
+				cdpPort = Number([...output.matchAll(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//g)].at(-1)?.[1]);
+				return (await fetch(`http://127.0.0.1:${cdpPort}/json/version`, { signal: AbortSignal.timeout(2_000) })).ok;
+			} catch { return false; }
+		}, { timeout: 180_000 }).toBe(true);
 		browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
-		await expect
-			.poll(
-				() =>
-					browser!
-						.contexts()[0]!
-						.pages()
-						.filter(candidate => candidate.url().includes('workbench')).length,
-				{ timeout: 60_000 },
-			)
-			.toBe(1);
-		page = browser
-			.contexts()[0]!
-			.pages()
-			.find(candidate => candidate.url().includes('workbench'))!;
-		page.on('pageerror', error => {
-			output += `\n[renderer] ${error.stack ?? error.message}\n`;
-		});
-		page.on('console', message => {
-			if (message.type() === 'error' || message.text().startsWith('[selfhost-rpc]')) output += `\n[renderer console] ${message.text()}\n`;
-		});
-		page.on('close', () => {
-			output += '\n[renderer] page closed\n';
-		});
+		await expect.poll(() => browser!.contexts()[0]!.pages().filter(candidate => candidate.url().includes('workbench')).length, { timeout: 60_000 }).toBe(1);
+		page = browser.contexts()[0]!.pages().find(candidate => candidate.url().includes('workbench'))!;
+		page.on('pageerror', error => { output += `\n[renderer] ${error.stack ?? error.message}\n`; });
+		page.on('console', message => { if (message.type() === 'error' || message.text().startsWith('[selfhost-rpc]')) output += `\n[renderer console] ${message.text()}\n`; });
+		page.on('close', () => { output += '\n[renderer] page closed\n'; });
 		await page.evaluate(() => {
 			const saved = MessagePort.prototype.postMessage;
 			const observed = new WeakSet<MessagePort>();
 			const pending = new Map<number, string>();
-			const bytes = (value: unknown) => (value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined);
+			const bytes = (value: unknown) => value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined;
 			MessagePort.prototype.postMessage = function (message: unknown, options?: Transferable[] | StructuredSerializeOptions) {
 				const raw = bytes(message);
 				if (raw) {
-					const request = JSON.parse(new TextDecoder().decode(raw)) as {
-						id: number;
-						method?: string;
-						params?: { extensionId?: string; event?: unknown };
-					};
+					const request = JSON.parse(new TextDecoder().decode(raw)) as { id: number; method?: string; params?: { extensionId?: string; event?: unknown; }; };
 					if (request.method === 'extensionHost/activate') {
 						pending.set(request.id, request.params?.extensionId ?? 'unknown');
-						console.info(
-							'[selfhost-rpc]',
-							JSON.stringify({
-								id: request.id,
-								method: request.method,
-								extension: request.params?.extensionId,
-								event: request.params?.event,
-							}),
-						);
+						console.info('[selfhost-rpc]', JSON.stringify({ id: request.id, method: request.method, extension: request.params?.extensionId, event: request.params?.event }));
 					}
 					if (!observed.has(this)) {
 						observed.add(this);
 						let buffer = '';
 						this.addEventListener('message', event => {
-							const raw = bytes(event.data);
-							if (!raw) return;
+							const raw = bytes(event.data); if (!raw) return;
 							buffer += new TextDecoder().decode(raw);
 							let end: number;
 							while ((end = buffer.indexOf('\n')) >= 0) {
-								const response = JSON.parse(buffer.slice(0, end)) as {
-									id?: number;
-									error?: unknown;
-								};
-								buffer = buffer.slice(end + 1);
-								if (response.id !== undefined && pending.has(response.id)) {
-									console.info(
-										'[selfhost-rpc]',
-										JSON.stringify({
-											id: response.id,
-											extension: pending.get(response.id),
-											completed: true,
-											failed: Boolean(response.error),
-										}),
-									);
-									pending.delete(response.id);
-								}
+								const response = JSON.parse(buffer.slice(0, end)) as { id?: number; error?: unknown; }; buffer = buffer.slice(end + 1);
+								if (response.id !== undefined && pending.has(response.id)) { console.info('[selfhost-rpc]', JSON.stringify({ id: response.id, extension: pending.get(response.id), completed: true, failed: Boolean(response.error) })); pending.delete(response.id); }
 							}
 						});
 					}
@@ -237,11 +147,7 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 			};
 		});
 		const trust = page.getByRole('button', { name: 'Trust Folder', exact: true });
-		await expect
-			.poll(async () => (await trust.isVisible()) || (await page!.locator('.ash-workbench').isVisible()), {
-				timeout: 60_000,
-			})
-			.toBe(true);
+		await expect.poll(async () => await trust.isVisible() || await page!.locator('.ash-workbench').isVisible(), { timeout: 60_000 }).toBe(true);
 		if (await trust.isVisible()) await trust.click();
 		workbench = new Workbench(page);
 		await workbench.waitForReady();
@@ -250,63 +156,23 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 	try {
 		await test.step('start the actual development Renderer, Electron launcher and Rust watcher', async () => {
 			await start(['node_modules/vite/bin/vite.js', '--config', 'build/desktop/vite/vite.config.ts', '--port', String(vitePort), '--strictPort']);
-			await expect
-				.poll(
-					async () => {
-						try {
-							return (
-								await fetch(`${environment.ASH_RENDERER_URL}/@vite/client`, {
-									signal: AbortSignal.timeout(2_000),
-								})
-							).ok;
-						} catch {
-							return false;
-						}
-					},
-					{ timeout: 180_000 },
-				)
-				.toBe(true);
-			await start([
-				'build/desktop/launch/electron.ts',
-				'--watch',
-				`--inspect=${mainPort}`,
-				'--remote-debugging-port=0',
-				`--user-data-dir=${userData}`,
-				`--folder=${workspace}`,
-				'--use-inmemory-secretstorage',
-				'--disable-gpu',
-				'--in-process-gpu',
-			]);
+			await expect.poll(async () => { try { return (await fetch(`${environment.ASH_RENDERER_URL}/@vite/client`, { signal: AbortSignal.timeout(2_000) })).ok; } catch { return false; } }, { timeout: 180_000 }).toBe(true);
+			await start(['build/desktop/launch/electron.ts', '--watch', `--inspect=${mainPort}`, '--remote-debugging-port=0', `--user-data-dir=${userData}`, `--folder=${workspace}`, '--use-inmemory-secretstorage', '--disable-gpu', '--in-process-gpu']);
 			await connect();
 			await start(['build/desktop/watch-app-server.ts', '--skip-initial']);
 			await workbench!.quickaccess.open('selfhost.txt');
-			await expect(page!.getByRole('option').filter({ hasText: 'selfhost.txt' })).toHaveCount(1, {
-				timeout: 90_000,
-			});
+			await expect(page!.getByRole('option').filter({ hasText: 'selfhost.txt' })).toHaveCount(1, { timeout: 90_000 });
 			await workbench!.quickaccess.select('selfhost.txt');
 			const editor = workbench!.editors.groupAt(0).editor;
-			await editor.waitForEditorFocus();
-			await editor.input.press('ControlOrMeta+A');
-			await page!.keyboard.insertText(draft);
+			await editor.waitForEditorFocus(); await editor.input.press('ControlOrMeta+A'); await page!.keyboard.insertText(draft);
 			await editor.waitForEditorContents(value => value === draft);
 			await page!.evaluate(() => Object.assign(globalThis, { ashSelfhostRealm: 'renderer-preserved' }));
 		});
 		const mainPid = Number(await inspect(mainPort, 'process.pid'));
 		await test.step('patch a live Workbench method without replacing the Renderer or editor draft', async () => {
-			await patch(
-				0,
-				sources[0]!.original.replace('focus(preserveEntryFocus = true): void {', 'focus(preserveEntryFocus = true): void {\n\t\tthis.domNode.dataset.selfhostHotReload = "applied";'),
-			);
-			await expect
-				.poll(
-					async () => {
-						await workbench!.quickaccess.runCommand('workbench.action.focusStatusBar');
-						return page!.locator('[data-part="statusbar"]').getAttribute('data-selfhost-hot-reload');
-					},
-					{ timeout: 30_000 },
-				)
-				.toBe('applied');
-			expect(await page!.evaluate(() => (globalThis as typeof globalThis & { ashSelfhostRealm: string }).ashSelfhostRealm)).toBe('renderer-preserved');
+			await patch(0, sources[0]!.original.replace('focus(preserveEntryFocus = true): void {', 'focus(preserveEntryFocus = true): void {\n\t\tthis.domNode.dataset.selfhostHotReload = "applied";'));
+			await expect.poll(async () => { await workbench!.quickaccess.runCommand('workbench.action.focusStatusBar'); return page!.locator('[data-part="statusbar"]').getAttribute('data-selfhost-hot-reload'); }, { timeout: 30_000 }).toBe('applied');
+			expect(await page!.evaluate(() => (globalThis as typeof globalThis & { ashSelfhostRealm: string; }).ashSelfhostRealm)).toBe('renderer-preserved');
 			await workbench!.editors.groupAt(0).editor.waitForEditorContents(value => value === draft);
 			expect(await inspect(mainPort, 'process.pid')).toBe(mainPid);
 		});
@@ -314,18 +180,7 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 			await browser!.close();
 			expect(isProcessRunning(mainPid)).toBe(true);
 			await patch(1, sources[1]!.original.replace('const developmentLauncher =', 'process.env.ASH_SELFHOST_MAIN_REVISION = "applied";\n\tconst developmentLauncher ='));
-			await expect
-				.poll(
-					async () => {
-						try {
-							return await inspect(mainPort, 'process.env.ASH_SELFHOST_MAIN_REVISION');
-						} catch {
-							return undefined;
-						}
-					},
-					{ timeout: 90_000 },
-				)
-				.toBe('applied');
+			await expect.poll(async () => { try { return await inspect(mainPort, 'process.env.ASH_SELFHOST_MAIN_REVISION'); } catch { return undefined; } }, { timeout: 90_000 }).toBe('applied');
 			expect(await inspect(mainPort, 'process.pid')).not.toBe(mainPid);
 			await expect.poll(() => isProcessRunning(mainPid)).toBe(false);
 			await connect();
@@ -337,20 +192,15 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 		await test.step('a failed Rust build keeps the current backend and editor usable', async () => {
 			await patch(2, sources[2]!.original + '\ncompile_error!("ASH_SELFHOST_EXPECTED_BUILD_FAILURE");\n');
 			await expect.poll(() => output.includes('error: ASH_SELFHOST_EXPECTED_BUILD_FAILURE'), { timeout: 300_000 }).toBe(true);
-			expect(await backendPid()).toBe(previousBackend);
-			expect(isProcessRunning(previousBackend)).toBe(true);
+			expect(await backendPid()).toBe(previousBackend); expect(isProcessRunning(previousBackend)).toBe(true);
 			await workbench!.editors.groupAt(0).editor.waitForEditorContents(value => value === draft);
 		});
 		await test.step('a corrected Rust save replaces the backend and reconnects the same Renderer', async () => {
 			await patch(2, sources[2]!.original.replace('let arguments = arguments.into_iter()', 'eprintln!("ASH_SELFHOST_BACKEND_APPLIED");\n    let arguments = arguments.into_iter()'));
-			await expect
-				.poll(async () => (await backendLog()).includes('ASH_SELFHOST_BACKEND_APPLIED'), {
-					timeout: 300_000,
-				})
-				.toBe(true);
+			await expect.poll(async () => (await backendLog()).includes('ASH_SELFHOST_BACKEND_APPLIED'), { timeout: 300_000 }).toBe(true);
 			expect(await backendPid()).not.toBe(previousBackend);
 			await expect.poll(() => isProcessRunning(previousBackend)).toBe(false);
-			expect(await page!.evaluate(() => (globalThis as typeof globalThis & { ashSelfhostRealm: string }).ashSelfhostRealm)).toBe('backend-reconnect-preserved');
+			expect(await page!.evaluate(() => (globalThis as typeof globalThis & { ashSelfhostRealm: string; }).ashSelfhostRealm)).toBe('backend-reconnect-preserved');
 			const editor = workbench!.editors.groupAt(0).editor;
 			await editor.waitForEditorContents(value => value === draft);
 			// The new process publishes its marker before protocol initialization.
@@ -364,30 +214,9 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 		await test.step('restore source files and accept the restored Main and backend generations', async () => {
 			const backend = await backendPid();
 			await browser!.close();
-			await patch(0, sources[0]!.original);
-			await patch(1, sources[1]!.original);
-			await patch(2, sources[2]!.original);
-			await expect
-				.poll(
-					async () => {
-						try {
-							return (await inspect(mainPort, 'process.env.ASH_SELFHOST_MAIN_REVISION')) === undefined;
-						} catch {
-							return false;
-						}
-					},
-					{ timeout: 90_000 },
-				)
-				.toBe(true);
-			await expect
-				.poll(
-					async () => {
-						const current = await backendPid();
-						return current > 0 && current !== backend;
-					},
-					{ timeout: 300_000 },
-				)
-				.toBe(true);
+			await patch(0, sources[0]!.original); await patch(1, sources[1]!.original); await patch(2, sources[2]!.original);
+			await expect.poll(async () => { try { return await inspect(mainPort, 'process.env.ASH_SELFHOST_MAIN_REVISION') === undefined; } catch { return false; } }, { timeout: 90_000 }).toBe(true);
+			await expect.poll(async () => { const current = await backendPid(); return current > 0 && current !== backend; }, { timeout: 300_000 }).toBe(true);
 			await connect();
 			const editor = workbench!.editors.groupAt(0).editor;
 			await editor.waitForEditorContents(value => value === draft);
@@ -412,12 +241,9 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 		for (const source of sources) {
 			try {
 				const current = await readFile(source.path, 'utf8');
-				if (current === source.written) {
-					if (current !== source.original) await writeFile(source.path, source.original);
-				} else throw new Error(`Source changed concurrently; preserving ${source.path}`);
-			} catch (error) {
-				restoreErrors.push(error);
-			}
+				if (current === source.written) { if (current !== source.original) await writeFile(source.path, source.original); }
+				else throw new Error(`Source changed concurrently; preserving ${source.path}`);
+			} catch (error) { restoreErrors.push(error); }
 		}
 		try {
 			const processLog = info.outputPath('selfhost-development.log');
@@ -426,11 +252,11 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 			await writeFile(serverLog, await backendLog());
 			await info.attach('selfhost-development-processes', { path: processLog, contentType: 'text/plain' });
 			await info.attach('selfhost-backend', { path: serverLog, contentType: 'text/plain' });
-		} finally {
-			try {
-				await run.stop('SIGTERM');
-			} finally {
-				await browser?.close().catch(() => {});
+		}
+		finally {
+			try { await run.stop('SIGTERM'); }
+			finally {
+				await browser?.close().catch(() => { });
 				await execute(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
 				await registration.dispose();
 				const owned = relative(tmpdir(), directory);

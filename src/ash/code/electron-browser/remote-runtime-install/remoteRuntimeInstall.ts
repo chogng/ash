@@ -27,18 +27,16 @@ const progressSubscription = api.onDidChange(render);
 resources.add(toDisposable(() => progressSubscription.dispose()));
 resources.add(addDisposableListener(preferredColorScheme, 'change', updateColorScheme));
 resources.add(addDisposableListener(window, 'beforeunload', () => resources.dispose(), { once: true }));
-resources.add(
-	addDisposableListener(cancel, 'click', () => {
-		cancel.disabled = true;
-		cancel.textContent = 'Cancelling…';
-		void api.cancel().catch(error => {
-			stage.textContent = 'Could not cancel Remote startup';
-			detail.textContent = error instanceof Error ? error.message : String(error);
-			cancel.disabled = false;
-			cancel.textContent = 'Try Again';
-		});
-	}),
-);
+resources.add(addDisposableListener(cancel, 'click', () => {
+	cancel.disabled = true;
+	cancel.textContent = 'Cancelling…';
+	void api.cancel().catch(error => {
+		stage.textContent = 'Could not cancel Remote startup';
+		detail.textContent = error instanceof Error ? error.message : String(error);
+		cancel.disabled = false;
+		cancel.textContent = 'Try Again';
+	});
+}));
 
 render(await api.getState());
 
@@ -64,7 +62,7 @@ function render(state: RemoteRuntimeInstallProgressState | undefined): void {
 			showIndeterminate('Checking runtime release…', 'Downloading the catalog bound to this signed Ash release.');
 			break;
 		case 'downloadingArtifact': {
-			const percent = Math.floor((state.transferredBytes * 100) / state.totalBytes);
+			const percent = Math.floor(state.transferredBytes * 100 / state.totalBytes);
 			stage.textContent = `Downloading runtime… ${percent}%`;
 			detail.textContent = `${formatBytes(state.transferredBytes)} of ${formatBytes(state.totalBytes)} downloaded to the local cache.`;
 			progress.value = percent;
@@ -85,7 +83,7 @@ function render(state: RemoteRuntimeInstallProgressState | undefined): void {
 			showIndeterminate('Detecting Remote platform…', 'Selecting the compatible Linux or macOS runtime package.');
 			break;
 		case 'uploading': {
-			const percent = Math.floor((state.transferredBytes * 100) / state.totalBytes);
+			const percent = Math.floor(state.transferredBytes * 100 / state.totalBytes);
 			stage.textContent = `Uploading runtime… ${percent}%`;
 			detail.textContent = `${formatBytes(state.transferredBytes)} of ${formatBytes(state.totalBytes)} transferred over SSH.`;
 			progress.value = percent;

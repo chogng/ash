@@ -14,11 +14,7 @@ export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvi
 	readonly argvResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' });
 	public readonly webviewExternalEndpoint: string;
 
-	constructor(
-		location: Location,
-		webviewEndpoint?: string,
-		public readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'> = {},
-	) {
+	constructor(location: Location, webviewEndpoint?: string, public readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'> = {}) {
 		if (options.updateProvider !== undefined && (options.updateProvider === null || typeof options.updateProvider !== 'object' || typeof options.updateProvider.checkForUpdate !== 'function')) {
 			throw new TypeError('Web updateProvider must provide checkForUpdate()');
 		}

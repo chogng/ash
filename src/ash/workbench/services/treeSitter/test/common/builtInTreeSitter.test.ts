@@ -25,21 +25,11 @@ import type { LanguageDiagnostic } from '../../../../../editor/common/languages.
 import { acquireJsonLanguageDiagnostics } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { TreeSitterSyntaxProviders } from '../../browser/treeSitterLibraryService.js';
 
-const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
-interface Grammar {
-	name: string;
-	languages: { id: string }[];
-	highlights: string[];
-	tags: string[];
-	folds: string[];
-	injections: string[];
-}
-const grammarRelease = JSON.parse(readFileSync('third_party/ash-grammars/runtime-lock.json', 'utf8')) as {
-	version: string;
-	wasm: { sha256: string };
-};
+const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
+interface Grammar { name: string; languages: { id: string; }[]; highlights: string[]; tags: string[]; folds: string[]; injections: string[]; }
+const grammarRelease = JSON.parse(readFileSync('third_party/ash-grammars/runtime-lock.json', 'utf8')) as { version: string; wasm: { sha256: string; }; };
 const grammarDirectory = resolve('third_party/.cache/ash-grammars', grammarRelease.version, `wasm-${grammarRelease.wasm.sha256}`, 'wasm');
-const grammars = new Map<string, { directory: string; grammar: Grammar }>();
+const grammars = new Map<string, { directory: string; grammar: Grammar; }>();
 for (const directory of readdirSync('extensions')) {
 	const file = resolve('extensions', directory, 'tree-sitter/grammars.json');
 	if (!existsSync(file)) continue;
@@ -48,17 +38,10 @@ for (const directory of readdirSync('extensions')) {
 	}
 }
 const loaded = new Map<string, Promise<TreeSitterTokenizationRuntime>>();
-before(async () => {
-	await runtime.Parser.init();
-});
+before(async () => { await runtime.Parser.init(); });
 after(async () => {
 	for (const result of await Promise.allSettled(loaded.values())) {
-		if (result.status === 'fulfilled') {
-			result.value.query.delete();
-			result.value.symbols?.delete();
-			result.value.folds?.delete();
-			result.value.injections?.delete();
-		}
+		if (result.status === 'fulfilled') { result.value.query.delete(); result.value.symbols?.delete(); result.value.folds?.delete(); result.value.injections?.delete(); }
 	}
 });
 
@@ -69,25 +52,12 @@ async function load(id: string): Promise<TreeSitterTokenizationRuntime | undefin
 	if (!pending) {
 		pending = (async () => {
 			const { directory, grammar } = grammars.get(language)!;
-			const resource = (file: string) => (file.startsWith('@') ? resolve('extensions', file.slice(1)) : resolve('extensions', directory, file));
+			const resource = (file: string) => file.startsWith('@') ? resolve('extensions', file.slice(1)) : resolve('extensions', directory, file);
 			const queries = (files: string[]) => files.map(file => readFileSync(resource(file), 'utf8')).join('\n');
 			const wasm = resolve(grammarDirectory, `${grammar.name}.wasm`);
-			const highlights = queries(grammar.highlights),
-				tags = queries(grammar.tags),
-				folds = queries(grammar.folds),
-				injections = queries(grammar.injections);
+			const highlights = queries(grammar.highlights), tags = queries(grammar.tags), folds = queries(grammar.folds), injections = queries(grammar.injections);
 			const parserLanguage = await runtime.Language.load(new Uint8Array(readFileSync(wasm)));
-			return {
-				Parser: runtime.Parser,
-				language: parserLanguage,
-				languageId: editorLanguageForSyntaxLanguage(language),
-				foldingRules: getLanguageFoldingRules(editorLanguageForSyntaxLanguage(language)),
-				query: new runtime.Query(parserLanguage, highlights),
-				folds: new runtime.Query(parserLanguage, folds),
-				...(tags ? { symbols: new runtime.Query(parserLanguage, tags) } : {}),
-				...(injections ? { injections: new runtime.Query(parserLanguage, injections) } : {}),
-				loadEmbeddedLanguage: load,
-			};
+			return { Parser: runtime.Parser, language: parserLanguage, languageId: editorLanguageForSyntaxLanguage(language), foldingRules: getLanguageFoldingRules(editorLanguageForSyntaxLanguage(language)), query: new runtime.Query(parserLanguage, highlights), folds: new runtime.Query(parserLanguage, folds), ...(tags ? { symbols: new runtime.Query(parserLanguage, tags) } : {}), ...(injections ? { injections: new runtime.Query(parserLanguage, injections) } : {}), loadEmbeddedLanguage: load };
 		})();
 		loaded.set(language, pending);
 	}
@@ -100,24 +70,12 @@ const library: ITreeSitterLibraryService = {
 	supportsLanguage: id => syntaxLanguageForEditorLanguage(id) !== undefined,
 	createSession(model) {
 		const worker = new TreeSitterWorker(async language => (await load(language))!);
-		worker.handleNotification({
-			kind: 'open',
-			document: 1,
-			text: model.getValue(),
-			eol: model.getEOL(),
-			revision: model.version,
-			language: model.getLanguageId(),
-		});
+		worker.handleNotification({ kind: 'open', document: 1, text: model.getValue(), eol: model.getEOL(), revision: model.version, language: model.getLanguageId() });
 		const edits = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
 		return {
-			...toDisposable(() => {
-				edits.dispose();
-				worker.dispose();
-			}),
+			...toDisposable(() => { edits.dispose(); worker.dispose(); }),
 			setTabSize: tabSize => worker.handleNotification({ kind: 'options', document: 1, tabSize }),
-			update: () => {
-				/* The model listener synchronizes this in-process session. */
-			},
+			update: () => { /* The model listener synchronizes this in-process session. */ },
 			request: (operation, data, signal) => worker.handleRequest({ ...data, document: 1, revision: model.version, operation }, signal),
 		};
 	},
@@ -149,35 +107,24 @@ for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-c
 	});
 	test(`Git and INI Tree-sitter preserve meaningful colors in ${id}`, async () => {
 		for (const [language, text, lexeme] of [
-			['ignore', '# comment', '# comment'],
-			['ignore', '!keep.log', '!'],
-			['ignore', '*.log', '*'],
-			['ignore', String.raw`\#literal`, String.raw`\#`],
-			['git-rebase', 'pick abc1234 Fix', 'pick'],
-			['git-rebase', 'pick abc1234 Fix', 'abc1234'],
-			['git-rebase', 'exec echo "hello"', 'hello'],
+			['ignore', '# comment', '# comment'], ['ignore', '!keep.log', '!'], ['ignore', '*.log', '*'],
+			['ignore', String.raw`\#literal`, String.raw`\#`], ['git-rebase', 'pick abc1234 Fix', 'pick'],
+			['git-rebase', 'pick abc1234 Fix', 'abc1234'], ['git-rebase', 'exec echo "hello"', 'hello'],
 			['git-commit', 'Fix\n\n#\tnew file: file', 'new file: file'],
-			['properties', '[core]\neditor = "ash"', 'editor'],
-			['ini', '[core]\neditor = "ash"', 'editor'],
-			['diff', '@@ -1 +1 @@\n-old\n+new', 'old'],
-			['diff', '@@ -1 +1 @@\n-old\n+new', 'new'],
+			['properties', '[core]\neditor = "ash"', 'editor'], ['ini', '[core]\neditor = "ash"', 'editor'],
+			['diff', '@@ -1 +1 @@\n-old\n+new', 'old'], ['diff', '@@ -1 +1 @@\n-old\n+new', 'new'],
 		]) {
 			const tokens = await highlighted(language, text, id);
 			const token = tokens.find(token => token.text.includes(lexeme));
 			assert.ok(token?.presentation?.foreground, `${id}: ${language} ${lexeme} has a syntax color`);
-			assert.notEqual(
-				token.presentation.foreground.toLowerCase(),
-				getWorkbenchColorTheme(id).getColorCss('editor.foreground')?.toLowerCase(),
-				`${id}: ${language} ${lexeme} differs from plain text`,
-			);
+			assert.notEqual(token.presentation.foreground.toLowerCase(), getWorkbenchColorTheme(id).getColorCss('editor.foreground')?.toLowerCase(), `${id}: ${language} ${lexeme} differs from plain text`);
 		}
 	});
 }
 
+
 test('Git commit WASM matches the unmodified parser on all 64 upstream corpus examples', async () => {
-	const corpus = JSON.parse(readFileSync('test/fixtures/tree-sitter/gitcommit.json', 'utf8')) as {
-		cases: { name: string; source: string; tree: string }[];
-	};
+	const corpus = JSON.parse(readFileSync('test/fixtures/tree-sitter/gitcommit.json', 'utf8')) as { cases: { name: string; source: string; tree: string; }[]; };
 	assert.equal(corpus.cases.length, 64);
 	const grammar = (await load('gitcommit'))!;
 	const parser = new grammar.Parser();
@@ -185,21 +132,14 @@ test('Git commit WASM matches the unmodified parser on all 64 upstream corpus ex
 	try {
 		for (const sample of corpus.cases) {
 			const tree = parser.parse(sample.source)!;
-			try {
-				assert.equal(tree.rootNode.toString(), sample.tree, sample.name);
-			} finally {
-				tree.delete();
-			}
+			try { assert.equal(tree.rootNode.toString(), sample.tree, sample.name); }
+			finally { tree.delete(); }
 		}
-	} finally {
-		parser.delete();
-	}
+	} finally { parser.delete(); }
 });
 
 test('CoffeeScript parses the official-compiler-validated corpus through edits and undo', async () => {
-	const corpus = JSON.parse(readFileSync('test/fixtures/tree-sitter/coffeescript.json', 'utf8')) as {
-		cases: { name: string; source: string; topLevelStatements: number }[];
-	};
+	const corpus = JSON.parse(readFileSync('test/fixtures/tree-sitter/coffeescript.json', 'utf8')) as { cases: { name: string; source: string; topLevelStatements: number; }[]; };
 	assert.equal(corpus.cases.length, 41);
 	const grammar = (await load('coffeescript'))!;
 	const parser = new grammar.Parser();
@@ -214,37 +154,19 @@ test('CoffeeScript parses the official-compiler-validated corpus through edits a
 			};
 			try {
 				check();
-				tree.edit({
-					startIndex: 0,
-					oldEndIndex: 0,
-					newEndIndex: 1,
-					startPosition: { row: 0, column: 0 },
-					oldEndPosition: { row: 0, column: 0 },
-					newEndPosition: { row: 1, column: 0 },
-				});
+				tree.edit({ startIndex: 0, oldEndIndex: 0, newEndIndex: 1, startPosition: { row: 0, column: 0 }, oldEndPosition: { row: 0, column: 0 }, newEndPosition: { row: 1, column: 0 } });
 				const edited = parser.parse('\n' + sample.source, tree)!;
 				tree.delete();
 				tree = edited;
 				check();
-				tree.edit({
-					startIndex: 0,
-					oldEndIndex: 1,
-					newEndIndex: 0,
-					startPosition: { row: 0, column: 0 },
-					oldEndPosition: { row: 1, column: 0 },
-					newEndPosition: { row: 0, column: 0 },
-				});
+				tree.edit({ startIndex: 0, oldEndIndex: 1, newEndIndex: 0, startPosition: { row: 0, column: 0 }, oldEndPosition: { row: 1, column: 0 }, newEndPosition: { row: 0, column: 0 } });
 				const restored = parser.parse(sample.source, tree)!;
 				tree.delete();
 				tree = restored;
 				check();
-			} finally {
-				tree.delete();
-			}
+			} finally { tree.delete(); }
 		}
-	} finally {
-		parser.delete();
-	}
+	} finally { parser.delete(); }
 });
 
 test('CoffeeScript recovers from an incomplete parameter list and excessive indentation', async () => {
@@ -255,71 +177,37 @@ test('CoffeeScript recovers from an incomplete parameter list and excessive inde
 		const source = 'greet = (name) ->\n  name\nfollowing = yes\n';
 		let tree = parser.parse(source)!;
 		try {
-			tree.edit({
-				startIndex: 13,
-				oldEndIndex: 14,
-				newEndIndex: 13,
-				startPosition: { row: 0, column: 13 },
-				oldEndPosition: { row: 0, column: 14 },
-				newEndPosition: { row: 0, column: 13 },
-			});
+			tree.edit({ startIndex: 13, oldEndIndex: 14, newEndIndex: 13, startPosition: { row: 0, column: 13 }, oldEndPosition: { row: 0, column: 14 }, newEndPosition: { row: 0, column: 13 } });
 			const incomplete = parser.parse(source.slice(0, 13) + source.slice(14), tree)!;
 			tree.delete();
 			tree = incomplete;
 			assert.equal(tree.rootNode.hasError, true);
-			tree.edit({
-				startIndex: 13,
-				oldEndIndex: 13,
-				newEndIndex: 14,
-				startPosition: { row: 0, column: 13 },
-				oldEndPosition: { row: 0, column: 13 },
-				newEndPosition: { row: 0, column: 14 },
-			});
+			tree.edit({ startIndex: 13, oldEndIndex: 13, newEndIndex: 14, startPosition: { row: 0, column: 13 }, oldEndPosition: { row: 0, column: 13 }, newEndPosition: { row: 0, column: 14 } });
 			const restored = parser.parse(source, tree)!;
 			tree.delete();
 			tree = restored;
 			assert.equal(tree.rootNode.hasError, false);
-		} finally {
-			tree.delete();
-		}
+		} finally { tree.delete(); }
 		// Beyond the scanner's serialized-state budget, malformed trees must remain recoverable.
 		const deep = parser.parse(Array.from({ length: 520 }, (_, depth) => '  '.repeat(depth) + 'if yes\n').join('') + '  '.repeat(520) + 'value = 1\n')!;
-		try {
-			assert.equal(deep.rootNode.hasError, true);
-		} finally {
-			deep.delete();
-		}
+		try { assert.equal(deep.rootNode.hasError, true); }
+		finally { deep.delete(); }
 		const clean = parser.parse(source)!;
-		try {
-			assert.equal(clean.rootNode.hasError, false);
-		} finally {
-			clean.delete();
-		}
-	} finally {
-		parser.delete();
-	}
+		try { assert.equal(clean.rootNode.hasError, false); }
+		finally { clean.delete(); }
+	} finally { parser.delete(); }
 });
 
 test('Git ignore distinguishes escaped prefixes, operators and complete character classes', async () => {
 	for (const text of [String.raw`\#literal`, String.raw`\!literal`, String.raw`\*literal`, 'prefix#!literal']) {
 		const tokens = await highlighted('ignore', text);
-		assert.equal(
-			tokens.some(token => token.tokenType === 'operator' || token.tokenType === 'comment'),
-			false,
-			text,
-		);
+		assert.equal(tokens.some(token => token.tokenType === 'operator' || token.tokenType === 'comment'), false, text);
 	}
 	const operators = await highlighted('ignore', '!**/file[0-9]?.txt');
-	assert.deepEqual(
-		operators.filter(token => token.tokenType === 'operator').map(token => token.text),
-		['!', '**', '?'],
-	);
+	assert.deepEqual(operators.filter(token => token.tokenType === 'operator').map(token => token.text), ['!', '**', '?']);
 	for (const text of ['[[:digit:]]', '[!a-z]', '[]a]']) {
 		const tokens = await highlighted('ignore', text);
-		assert.ok(
-			tokens.some(token => token.tokenType === 'constant' && token.text === text),
-			text,
-		);
+		assert.ok(tokens.some(token => token.tokenType === 'constant' && token.text === text), text);
 	}
 });
 
@@ -345,10 +233,7 @@ test('Embedded script preserves language identity through unstyled text and supp
 test('Multiline embedded strings cannot consume Diff change markers', async () => {
 	const tokens = await highlighted('diff', 'diff --git a/main.js b/main.js\n--- a/main.js\n+++ b/main.js\n@@ -1,2 +1,2 @@\n-const old = `one\n-two`;\n+const value = `three\n+four`;\n');
 	assert.ok(tokens.some(token => token.languageId === 'javascript' && token.tokenType === 'string' && token.text.includes('four')));
-	assert.equal(
-		tokens.some(token => token.languageId === 'javascript' && /^[+-]/.test(token.text)),
-		false,
-	);
+	assert.equal(tokens.some(token => token.languageId === 'javascript' && /^[+-]/.test(token.text)), false);
 });
 
 test('Markdown hypothetical edits preserve embedded language and relative Unicode coordinates', async () => {
@@ -360,6 +245,7 @@ test('Markdown hypothetical edits preserve embedded language and relative Unicod
 	assert.ok(preview[0]!.some(token => token.languageId === 'python' && token.tokenType === 'string' && token.range.startLineNumber === 1 && token.range.endColumn <= 14));
 	assert.equal(model.getLineContent(4), 'print("你好🙂")');
 });
+
 
 test('token inspection reads current UTF-16 captures from the shared backend and excludes stale revisions', async () => {
 	using model = new TextModel('/* 😀 */ function demo() {}', { languageId: 'javascript' });
@@ -377,6 +263,7 @@ test('token inspection reads current UTF-16 captures from the shared backend and
 	assert.notEqual(before, backend.getTokenCaptures(1));
 });
 
+
 test('Every declared syntax language loads its real WASM grammar and themeable captures', async () => {
 	for (const id of syntaxLanguages) {
 		const grammar = (await load(id))!;
@@ -389,19 +276,16 @@ test('Every declared syntax language loads its real WASM grammar and themeable c
 			const tree = parser.parse('');
 			assert.ok(tree, id);
 			tree.delete();
-		} finally {
-			parser.delete();
-		}
+		} finally { parser.delete(); }
 	}
 });
+
 
 test('Hypothetical tokenization uses the shared parser without a legacy token provider', async () => {
 	using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
 	using model = new TextModel('fn main() {}', {
 		languageId: 'rs',
-		tokenization: {
-			createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
-		},
+		tokenization: { createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService) },
 	});
 	await model.tokenization.whenReady(new AbortController().signal);
 	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['fn preview() { "preview"; }'], new AbortController().signal);
@@ -420,11 +304,8 @@ for (const [language, text, valid] of [
 		using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
 		const resource = URI.parse(`test:/validation.${language}`);
 		using model = new TextModel(text, {
-			resource,
-			languageId: language,
-			tokenization: {
-				createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
-			},
+			resource, languageId: language,
+			tokenization: { createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService) },
 		});
 		await model.tokenization.whenReady(new AbortController().signal);
 		const facts = await model.tokenization.syntaxTree!.getFacts(new AbortController().signal);
@@ -436,124 +317,61 @@ for (const [language, text, valid] of [
 		assert.equal(features.documentSymbolProvider.ordered(model).length, 1);
 		let diagnostics: readonly LanguageDiagnostic[] = [];
 		using registration = await acquireJsonLanguageDiagnostics(resource, language, model, () => ({
-			update(_revision, value) {
-				diagnostics = value;
-			},
-			dispose() {},
-			[Symbol.dispose]() {},
+			update(_revision, value) { diagnostics = value; },
+			dispose() { }, [Symbol.dispose]() { },
 		}))!;
 		assert.equal(diagnostics.length === 0, valid);
 	});
 }
 
-interface StructureFixture {
-	language: string;
-	text: string;
-	symbols: string[];
-	folds: [number, number][];
-	noFolds?: boolean;
-	exactSymbols?: boolean;
-}
+interface StructureFixture { language: string; text: string; symbols: string[]; folds: [number, number][]; noFolds?: boolean; exactSymbols?: boolean; }
 const structureFixtures = JSON.parse(readFileSync('test/fixtures/tree-sitter/structure.json', 'utf8')) as StructureFixture[];
 
-interface FoldingFixture {
-	language: string;
-	offSide: boolean;
-	text: string;
-	regions: [number, number][];
-	indentFold?: [number, number];
-}
+interface FoldingFixture { language: string; offSide: boolean; text: string; regions: [number, number][]; indentFold?: [number, number]; }
 const foldingFixtures: FoldingFixture[] = JSON.parse(readFileSync('test/fixtures/languages/folding.json', 'utf8'));
-for (const [index, fixture] of foldingFixtures.entries())
-	test(`Folding ${fixture.language} fixture ${index} follows package rules through edits and undo`, async () => {
-		using model = new TextModel(fixture.text, { languageId: fixture.language });
-		using worker = new TreeSitterWorker(async id => (await load(id))!);
-		worker.handleNotification({
-			kind: 'open',
-			document: 1,
-			text: fixture.text,
-			eol: '\n',
-			revision: model.version,
-			language: fixture.language,
-		});
-		using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
-		assert.equal(getLanguageFoldingRules(fixture.language)?.offSide ?? false, fixture.offSide);
-		for (let revision = 1; revision <= 3; revision++) {
-			const facts = (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
-			const shift = revision === 2 ? 1 : 0;
-			assert.deepEqual(
-				facts.folds.filter(fold => fold.kind === 'region').map(fold => [fold.startLineIndex, fold.endLineIndex]),
-				fixture.regions.map(([start, end]) => [start + shift, end + shift]),
-			);
-			if (fixture.indentFold) {
-				const [start, end] = fixture.indentFold.map(row => row + shift);
-				assert.ok(
-					facts.folds.some(fold => fold.startLineIndex === start && fold.endLineIndex === end),
-					`Missing ${start}..${end}: ${JSON.stringify(facts.folds)}`,
-				);
-			}
-			if (revision === 1) model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
-			else if (revision === 2) model.applyEdits([{ range: new Range(1, 1, 2, 1), text: '' }]);
+for (const [index, fixture] of foldingFixtures.entries()) test(`Folding ${fixture.language} fixture ${index} follows package rules through edits and undo`, async () => {
+	using model = new TextModel(fixture.text, { languageId: fixture.language });
+	using worker = new TreeSitterWorker(async id => (await load(id))!);
+	worker.handleNotification({ kind: 'open', document: 1, text: fixture.text, eol: '\n', revision: model.version, language: fixture.language });
+	using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
+	assert.equal(getLanguageFoldingRules(fixture.language)?.offSide ?? false, fixture.offSide);
+	for (let revision = 1; revision <= 3; revision++) {
+		const facts = (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
+		const shift = revision === 2 ? 1 : 0;
+		assert.deepEqual(facts.folds.filter(fold => fold.kind === 'region').map(fold => [fold.startLineIndex, fold.endLineIndex]), fixture.regions.map(([start, end]) => [start + shift, end + shift]));
+		if (fixture.indentFold) {
+			const [start, end] = fixture.indentFold.map(row => row + shift);
+			assert.ok(facts.folds.some(fold => fold.startLineIndex === start && fold.endLineIndex === end), `Missing ${start}..${end}: ${JSON.stringify(facts.folds)}`);
 		}
-	});
+		if (revision === 1) model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
+		else if (revision === 2) model.applyEdits([{ range: new Range(1, 1, 2, 1), text: '' }]);
+	}
+});
 
-for (const [index, fixture] of structureFixtures.entries())
-	test(`Structure ${fixture.language} fixture ${index}: folds and outline survive edits and undo`, async () => {
-		using model = new TextModel(fixture.text, {
-			languageId: editorLanguageForSyntaxLanguage(fixture.language as (typeof syntaxLanguages)[number]),
-		});
-		const worker = new TreeSitterWorker(async id => (await load(id))!);
+for (const [index, fixture] of structureFixtures.entries()) test(`Structure ${fixture.language} fixture ${index}: folds and outline survive edits and undo`, async () => {
+	using model = new TextModel(fixture.text, { languageId: editorLanguageForSyntaxLanguage(fixture.language as typeof syntaxLanguages[number]) });
+	const worker = new TreeSitterWorker(async id => (await load(id))!);
+	try {
+		worker.handleNotification({ kind: 'open', document: 1, text: fixture.text, eol: '\n', revision: model.version, language: fixture.language });
+		using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
+		const facts = async () => (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
+		const original = await facts();
+		for (const name of fixture.symbols) assert.ok(original.symbols.some(symbol => symbol.name === name), `${fixture.language}: missing ${name}; got ${original.symbols.map(symbol => symbol.name)}`);
+		for (const [start, end] of fixture.folds) assert.ok(original.folds.some(fold => fold.startLineIndex === start && fold.endLineIndex === end), `${fixture.language}: missing ${start}..${end}; got ${JSON.stringify(original.folds)}`);
+		if (fixture.exactSymbols) assert.deepEqual(original.symbols.map(symbol => symbol.name), fixture.symbols);
+		if (fixture.noFolds) assert.deepEqual(original.folds, []);
+		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
+		const shifted = await facts();
+		const fresh = new TreeSitterWorker(async id => (await load(id))!);
 		try {
-			worker.handleNotification({
-				kind: 'open',
-				document: 1,
-				text: fixture.text,
-				eol: '\n',
-				revision: model.version,
-				language: fixture.language,
-			});
-			using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
-			const facts = async () => (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
-			const original = await facts();
-			for (const name of fixture.symbols)
-				assert.ok(
-					original.symbols.some(symbol => symbol.name === name),
-					`${fixture.language}: missing ${name}; got ${original.symbols.map(symbol => symbol.name)}`,
-				);
-			for (const [start, end] of fixture.folds)
-				assert.ok(
-					original.folds.some(fold => fold.startLineIndex === start && fold.endLineIndex === end),
-					`${fixture.language}: missing ${start}..${end}; got ${JSON.stringify(original.folds)}`,
-				);
-			if (fixture.exactSymbols)
-				assert.deepEqual(
-					original.symbols.map(symbol => symbol.name),
-					fixture.symbols,
-				);
-			if (fixture.noFolds) assert.deepEqual(original.folds, []);
-			model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
-			const shifted = await facts();
-			const fresh = new TreeSitterWorker(async id => (await load(id))!);
-			try {
-				fresh.handleNotification({
-					kind: 'open',
-					document: 1,
-					text: model.getValue(),
-					eol: '\n',
-					revision: model.version,
-					language: fixture.language,
-				});
-				const cold = await fresh.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal);
-				assert.deepEqual(shifted, cold.facts);
-			} finally {
-				fresh.dispose();
-			}
-			model.applyEdits([{ range: new Range(1, 1, 2, 1), text: '' }]);
-			assert.deepEqual(await facts(), original);
-		} finally {
-			worker.dispose();
-		}
-	});
+			fresh.handleNotification({ kind: 'open', document: 1, text: model.getValue(), eol: '\n', revision: model.version, language: fixture.language });
+			const cold = await fresh.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal);
+			assert.deepEqual(shifted, cold.facts);
+		} finally { fresh.dispose(); }
+		model.applyEdits([{ range: new Range(1, 1, 2, 1), text: '' }]);
+		assert.deepEqual(await facts(), original);
+	} finally { worker.dispose(); }
+});
 
 const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
 after(() => modelFeatures.dispose());

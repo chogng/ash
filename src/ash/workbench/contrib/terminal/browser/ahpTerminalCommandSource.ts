@@ -19,12 +19,8 @@ export class AhpTerminalCommandSource extends Disposable {
 	readonly promptTypeDetection = this._register(new PromptTypeDetectionCapability());
 	private pendingShellIntegration: ITerminalProcessReadResult['shellIntegration'];
 	private currentShellIntegration: ITerminalShellIntegration | undefined;
-	get shellIntegration(): ITerminalShellIntegration | undefined {
-		return this.currentShellIntegration;
-	}
-	get cwd(): string | undefined {
-		return this.cwdDetection.getCwd() || undefined;
-	}
+	get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
+	get cwd(): string | undefined { return this.cwdDetection.getCwd() || undefined; }
 	/** Earliest boundary, including metadata paginated ahead of its display bytes. */
 	get nextBoundarySequence(): number {
 		return Math.min(
@@ -38,12 +34,7 @@ export class AhpTerminalCommandSource extends Disposable {
 		// A read's snapshot contains only its final cwd. Preserve ordered boundaries
 		// so consumers also observe directories visited between two reads.
 		for (const chunk of result.chunks ?? []) {
-			if (chunk.shellIntegration?.type === 'cwd')
-				this.pendingCwds.push({
-					value: chunk.shellIntegration.value,
-					isTrusted: chunk.shellIntegration.isTrusted,
-					afterOutputSequence: chunk.sequence,
-				});
+			if (chunk.shellIntegration?.type === 'cwd') this.pendingCwds.push({ value: chunk.shellIntegration.value, isTrusted: chunk.shellIntegration.isTrusted, afterOutputSequence: chunk.sequence });
 		}
 		if (result.cwd) this.pendingCwds.push(result.cwd);
 		this.pendingCwds.sort((a, b) => a.afterOutputSequence - b.afterOutputSequence);
@@ -63,14 +54,7 @@ export class AhpTerminalCommandSource extends Disposable {
 			const cwd = this.pendingCwds.shift()!;
 			if (cwd.afterOutputSequence <= this.committedCwdSequence) continue;
 			this.committedCwdSequence = cwd.afterOutputSequence;
-			this.currentShellIntegration = {
-				commandDetection: false,
-				hasRichCommandDetection: false,
-				commandStorageDisabled: false,
-				commands: [],
-				...this.currentShellIntegration,
-				cwdDetection: true,
-			};
+			this.currentShellIntegration = { commandDetection: false, hasRichCommandDetection: false, commandStorageDisabled: false, commands: [], ...this.currentShellIntegration, cwdDetection: true };
 			this.cwdDetection.updateCwd(cwd.value, cwd.isTrusted);
 			this.metadataChanged.fire();
 		}
@@ -102,9 +86,7 @@ export class AhpTerminalCommandSource extends Disposable {
 
 function commandStatusEvent(event: ITerminalProcessCommandStatusEvent): ITerminalCommandStatusEvent {
 	return {
-		commandId: event.commandId,
-		status: event.status,
-		exitCode: event.exitCode,
+		commandId: event.commandId, status: event.status, exitCode: event.exitCode,
 		...(event.cwd === undefined ? {} : { cwd: event.cwd }),
 		...(event.command === undefined ? {} : { command: event.command }),
 		...(event.isTrusted === undefined ? {} : { isTrusted: event.isTrusted }),

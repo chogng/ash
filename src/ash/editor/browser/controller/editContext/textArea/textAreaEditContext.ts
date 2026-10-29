@@ -36,35 +36,21 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	private lastRenderPosition: Position | null = null;
 	private renderPosition: EditContextPosition | undefined;
 
-	get onDidFocus(): Event<void> {
-		return this.textAreaInput.onFocus;
-	}
-	get onDidBlur(): Event<void> {
-		return this.textAreaInput.onBlur;
-	}
-	get onDidBeforeInput(): Event<InputEvent> {
-		return this.textAreaInput.onDidBeforeInput;
-	}
-	get onDidInput(): Event<InputEvent> {
-		return this.textAreaInput.onDidInput;
-	}
-	get onKeyDown(): Event<IKeyboardEvent> {
-		return this.textAreaInput.onKeyDown;
-	}
-	get onKeyUp(): Event<IKeyboardEvent> {
-		return this.textAreaInput.onKeyUp;
-	}
-	get onDidCompositionStart(): Event<ICompositionStartEvent> {
-		return this.textAreaInput.onCompositionStart;
-	}
-	get onDidCompositionUpdate(): Event<ICompositionData> {
-		return this.textAreaInput.onCompositionUpdate;
-	}
-	get onDidCompositionEnd(): Event<ICompositionData> {
-		return this.textAreaInput.onCompositionEnd;
-	}
+	get onDidFocus(): Event<void> { return this.textAreaInput.onFocus; }
+	get onDidBlur(): Event<void> { return this.textAreaInput.onBlur; }
+	get onDidBeforeInput(): Event<InputEvent> { return this.textAreaInput.onDidBeforeInput; }
+	get onDidInput(): Event<InputEvent> { return this.textAreaInput.onDidInput; }
+	get onKeyDown(): Event<IKeyboardEvent> { return this.textAreaInput.onKeyDown; }
+	get onKeyUp(): Event<IKeyboardEvent> { return this.textAreaInput.onKeyUp; }
+	get onDidCompositionStart(): Event<ICompositionStartEvent> { return this.textAreaInput.onCompositionStart; }
+	get onDidCompositionUpdate(): Event<ICompositionData> { return this.textAreaInput.onCompositionUpdate; }
+	get onDidCompositionEnd(): Event<ICompositionData> { return this.textAreaInput.onCompositionEnd; }
 
-	constructor(context: ViewContext, container: HTMLElement, options: TextAreaEditContextOptions) {
+	constructor(
+		context: ViewContext,
+		container: HTMLElement,
+		options: TextAreaEditContextOptions,
+	) {
 		super(context);
 		const ownerDocument = container.ownerDocument;
 		this.textArea = new FastDomNode(h(ownerDocument, 'textarea'));
@@ -83,7 +69,13 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		const inputHost: ITextAreaInputHost = {
 			context: this._context,
 			getScreenReaderContent: () => this.accessibilityController.getScreenReaderContent(),
-			deduceModelPosition: (viewAnchorPosition, deltaOffset, lineFeedCount) => this._context.viewModel.deduceModelPositionRelativeToViewPosition(viewAnchorPosition, deltaOffset, lineFeedCount),
+			deduceModelPosition: (viewAnchorPosition, deltaOffset, lineFeedCount) => (
+				this._context.viewModel.deduceModelPositionRelativeToViewPosition(
+					viewAnchorPosition,
+					deltaOffset,
+					lineFeedCount,
+				)
+			),
 		};
 		this.textAreaInput = this._register(new TextAreaInput(inputHost, this.textArea.domNode));
 		this._register(this.textAreaInput.onFocus(() => this._context.viewModel.setHasFocus(true)));
@@ -110,17 +102,15 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		this._register(this.textAreaInput.onWillCut(event => this._onWillCut.fire(event)));
 		this._register(this.textAreaInput.onWillPaste(event => this._onWillPaste.fire(event)));
 		this._register(this.textAreaInput.onCut(() => this.viewController.cut()));
-		this._register(
-			this.textAreaInput.onPaste(event => {
-				const metadata = event.metadata;
-				this.viewController.paste(
-					event.text,
-					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
-					metadata?.multicursorText ?? null,
-					metadata?.mode ?? null,
-				);
-			}),
-		);
+		this._register(this.textAreaInput.onPaste(event => {
+			const metadata = event.metadata;
+			this.viewController.paste(
+				event.text,
+				this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
+				metadata?.multicursorText ?? null,
+				metadata?.mode ?? null,
+			);
+		}));
 	}
 
 	focus(): void {
@@ -190,7 +180,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	/** Textarea accessibility geometry is maintained by its dedicated controller. */
-	updateBounds(_position: EditContextPosition): void {}
+	updateBounds(_position: EditContextPosition): void { }
 
 	setReadOnly(readOnly: boolean): void {
 		this.textArea.domNode.readOnly = readOnly;
@@ -314,7 +304,12 @@ class TextAreaAccessibilityController extends Disposable {
 		if (model.length > MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {
 			const selectionStartOffset = model.offsetAt(selection.getStartPosition());
 			const selectionEndOffset = model.offsetAt(selection.getEndPosition());
-			const window = accessibleInputWindow(model.length, selectionStartOffset, selectionEndOffset, model.offsetAt(selection.getPosition()));
+			const window = accessibleInputWindow(
+				model.length,
+				selectionStartOffset,
+				selectionEndOffset,
+				model.offsetAt(selection.getPosition()),
+			);
 			const text = model.getTextInRange(Range.fromPositions(model.positionAt(window.startOffset), model.positionAt(window.endOffset)));
 			return new TextAreaState(
 				text,
@@ -328,7 +323,12 @@ class TextAreaAccessibilityController extends Disposable {
 				undefined,
 			);
 		}
-		const contentState = this.screenReaderStrategy.fromEditorSelection(model, selection, ACCESSIBILITY_LINES_PER_PAGE, true);
+		const contentState = this.screenReaderStrategy.fromEditorSelection(
+			model,
+			selection,
+			ACCESSIBILITY_LINES_PER_PAGE,
+			true,
+		);
 		return TextAreaState.fromScreenReaderContentState(contentState);
 	}
 
@@ -339,7 +339,10 @@ class TextAreaAccessibilityController extends Disposable {
 			return;
 		}
 		const primary = selections[0]!.getPosition();
-		this.input.domNode.setAttribute('aria-description', `${selections.length} selections. Primary at line ${primary.lineNumber}, column ${primary.column}.`);
+		this.input.domNode.setAttribute(
+			'aria-description',
+			`${selections.length} selections. Primary at line ${primary.lineNumber}, column ${primary.column}.`,
+		);
 	}
 
 	private scheduleScreenReaderContent(): void {
@@ -352,7 +355,7 @@ class TextAreaAccessibilityController extends Disposable {
 	}
 }
 
-function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number } {
+function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number; } {
 	if (modelLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) return { startOffset: 0, endOffset: modelLength };
 	const selectionLength = selectionEndOffset - selectionStartOffset;
 	if (selectionLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {

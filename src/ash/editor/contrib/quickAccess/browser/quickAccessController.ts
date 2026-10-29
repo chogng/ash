@@ -56,11 +56,9 @@ export class GotoLineController extends Disposable {
 		this._register(addDisposableListener(this.element, 'keydown', event => this.handleWidgetKeydown(event)));
 		this._register(addDisposableListener(this.input, 'input', () => this.preview()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
-		this._register(
-			viewport.textModel.onDidChangeContent(() => {
-				if (this.visible) this.preview();
-			}),
-		);
+		this._register(viewport.textModel.onDidChangeContent(() => {
+			if (this.visible) this.preview();
+		}));
 	}
 
 	private readonly targetOperatingSystem: OperatingSystem;
@@ -75,10 +73,18 @@ export class GotoLineController extends Disposable {
 		this.element.hidden = false;
 		this.element.classList.add('visible');
 		const current = this.viewModel.getSelections()[0]!.getPosition();
-		this.input.value = mode === 'offset' ? String(this.viewport.textModel.offsetAt(current) + 1) : `${current.lineNumber}:${current.column}`;
-		this.element.setAttribute('aria-label', mode === 'offset' ? localize('gotoOffset.dialog', 'Go to Offset') : localize('gotoLine.dialog', 'Go to Line or Column'));
-		this.input.setAttribute('aria-label', mode === 'offset' ? localize('gotoOffset.input', 'Character offset') : localize('gotoLine.input', 'Line number and optional column'));
-		this.input.placeholder = mode === 'offset' ? localize('gotoOffset.placeholder', 'Offset') : localize('gotoLine.placeholder', 'Line[:Column]');
+		this.input.value = mode === 'offset'
+			? String(this.viewport.textModel.offsetAt(current) + 1)
+			: `${current.lineNumber}:${current.column}`;
+		this.element.setAttribute('aria-label', mode === 'offset'
+			? localize('gotoOffset.dialog', 'Go to Offset')
+			: localize('gotoLine.dialog', 'Go to Line or Column'));
+		this.input.setAttribute('aria-label', mode === 'offset'
+			? localize('gotoOffset.input', 'Character offset')
+			: localize('gotoLine.input', 'Line number and optional column'));
+		this.input.placeholder = mode === 'offset'
+			? localize('gotoOffset.placeholder', 'Offset')
+			: localize('gotoLine.placeholder', 'Line[:Column]');
 		this.position();
 		this.preview();
 		this.input.focus({ preventScroll: true });
@@ -152,5 +158,7 @@ registerEditorContribution({
 /** Identifies Ctrl+G on Windows/Linux and Command+G on macOS. */
 export function isStanzaGotoLineChord(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>, targetOperatingSystem: OperatingSystem): boolean {
 	if (event.shiftKey || event.altKey || event.key.toLowerCase() !== 'g') return false;
-	return targetOperatingSystem === OperatingSystem.Macintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+	return targetOperatingSystem === OperatingSystem.Macintosh
+		? event.metaKey && !event.ctrlKey
+		: event.ctrlKey && !event.metaKey;
 }

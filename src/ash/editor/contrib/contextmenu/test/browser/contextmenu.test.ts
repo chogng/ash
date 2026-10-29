@@ -17,12 +17,10 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent'], {
-	ResizeObserver: class TestResizeObserver {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
+const installedGlobals = installEditorTestDom(environment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent',
+], {
+	ResizeObserver: class TestResizeObserver { observe(): void { } unobserve(): void { } disconnect(): void { } },
 });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -45,10 +43,8 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu: request => {
-			requests.push(request);
-		},
-		hideContextMenu() {},
+		showContextMenu: request => { requests.push(request); },
+		hideContextMenu() { },
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
@@ -61,12 +57,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	editor.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 3)));
 	editor.focus();
-	const event = new dom.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'F10',
-		shiftKey: true,
-	});
+	const event = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'F10', shiftKey: true });
 	editor.controller.element.dispatchEvent(event);
 
 	assert.equal(event.defaultPrevented, true);
@@ -109,15 +100,7 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 	editor.layout({ width: 400, height: 100 });
 	const scrollbar = editor.getDomNode()!.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
 	assert.ok(scrollbar);
-	scrollbar.dispatchEvent(
-		new dom.window.MouseEvent('contextmenu', {
-			bubbles: true,
-			cancelable: true,
-			button: 2,
-			clientX: 390,
-			clientY: 20,
-		}),
-	);
+	scrollbar.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
 
 	const menu = requests.at(-1)! as IContextMenuDelegate;
 	assert.equal('getActions' in menu, true);
@@ -129,15 +112,7 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 
 	editor.controller.element.dispatchEvent(new dom.window.WheelEvent('wheel', { bubbles: true, deltaY: 10 }));
 	assert.equal(hideCount, 1);
-	scrollbar.dispatchEvent(
-		new dom.window.MouseEvent('contextmenu', {
-			bubbles: true,
-			cancelable: true,
-			button: 2,
-			clientX: 390,
-			clientY: 20,
-		}),
-	);
+	scrollbar.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
 	const disabledMenu = requests.at(-1)! as IContextMenuDelegate;
 	for (const id of ['editor.minimap.renderCharacters', 'editor.minimap.size', 'editor.minimap.showSlider', 'editor.minimap.side']) {
 		assert.equal(disabledMenu.getActions().find(action => action.id === id)?.enabled, false);

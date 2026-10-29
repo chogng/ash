@@ -30,86 +30,32 @@ class ImageFixture extends Disposable {
 	public readonly revoked: string[] = [];
 	public readonly preview: ImagePreview;
 	public read = async (): Promise<Uint8Array> => png;
-	public decode = async (): Promise<ImageBitmap> =>
-		({
-			width: 800,
-			height: 600,
-			close: () => {
-				this.closedBitmaps++;
-			},
-		}) as ImageBitmap;
+	public decode = async (): Promise<ImageBitmap> => ({ width: 800, height: 600, close: () => { this.closedBitmaps++; } }) as ImageBitmap;
 	public closedBitmaps = 0;
 
 	constructor() {
 		super();
 		this._register(toDisposable(() => this.preview.dispose()));
 		const originalRevoke = URL.revokeObjectURL;
-		this._register(
-			toDisposable(() => {
-				this.browser.window.close();
-				URL.revokeObjectURL = originalRevoke;
-				resetNlsResolver();
-			}),
-		);
-		this._register(
-			installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], {
-				createImageBitmap: () => this.decode(),
-			}),
-		);
-		Object.defineProperty(this.browser.window, 'ResizeObserver', {
-			value: class {
-				observe(): void {}
-				disconnect(): void {}
-			},
-		});
-		URL.revokeObjectURL = url => {
-			this.revoked.push(url);
-			originalRevoke(url);
-		};
-		const unexpected = async (): Promise<never> => {
-			throw new Error('Unexpected file operation');
-		};
-		this.services.registerSingleton(IFileService, () =>
-			createTestFileService({
-				capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
-				onDidChangeCapabilities: Event.None,
-				watch: (): IDisposable => Disposable.None,
+		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
+		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
+		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
+		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
+		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+		this.services.registerSingleton(IFileService, () => createTestFileService({
+			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+			onDidChangeCapabilities: Event.None,
+			watch: (): IDisposable => Disposable.None,
 
-				onDidChangeFiles: this.changes.event,
-				readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
-				stat: async target => ({
-					resource: target,
-					kind: FileKind.File,
-					sizeBytes: png.length,
-					readonly: true,
-					modifiedAtMillis: undefined,
-				}),
-				readDirectory: unexpected,
-				writeFile: unexpected,
-				createFile: unexpected,
-				createDirectory: unexpected,
-				copy: unexpected,
-				rename: unexpected,
-				delete: unexpected,
-			}),
-		);
+			onDidChangeFiles: this.changes.event,
+			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
+			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
+		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
-		this.services.registerInstance(IContextMenuService, {
-			contextMenuStyle: 'custom' as const,
-			onDidShowContextMenu: Event.None,
-			onDidHideContextMenu: Event.None,
-			showContextMenu: () => {},
-			hideContextMenu: () => {},
-		});
-		this.services.registerInstance(IAccessibleViewService, {
-			show: () => false,
-			getOpenAriaHint: () => undefined,
-			disableHint: async () => {},
-			showAccessibleViewHelp: () => {},
-			dispose: () => {},
-			[Symbol.dispose]: () => {},
-		});
+		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
 		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: this.services }, 'Image preview') as ImagePreview);
 		this.preview.create(this.browser.window.document.body);
 		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
@@ -142,9 +88,7 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 
 test('Image preview keeps a first-open read failure in the pane and retries it', async () => {
 	using fixture = new ImageFixture();
-	fixture.read = async () => {
-		throw new Error('Read denied');
-	};
+	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
 
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: Read denied/);
@@ -182,21 +126,12 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 	try {
 		const decoding = new DeferredPromise<ImageBitmap>();
 		const started = new DeferredPromise<void>();
-		fixture.decode = () => {
-			void started.complete();
-			return decoding.p;
-		};
+		fixture.decode = () => { void started.complete(); return decoding.p; };
 		const opening = fixture.preview.setInput({ resource }, new AbortController().signal);
 		const cancelled = assert.rejects(opening, /cancelled/);
 		await started.p;
 		fixture.preview.dispose();
-		await decoding.complete({
-			width: 800,
-			height: 600,
-			close: () => {
-				fixture.closedBitmaps++;
-			},
-		} as ImageBitmap);
+		await decoding.complete({ width: 800, height: 600, close: () => { fixture.closedBitmaps++; } } as ImageBitmap);
 		await cancelled;
 		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 0, null]);
 	} finally {
@@ -214,15 +149,10 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');
 	fixture.preview.clearInput();
-	fixture.read = async () => {
-		throw new Error('Read denied');
-	};
+	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
-	assert.equal(
-		Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'),
-		true,
-	);
+	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'), true);
 });
 
 test('Image preview refreshes a changed resource and revokes the previous URL', async () => {
@@ -230,14 +160,7 @@ test('Image preview refreshes a changed resource and revokes the previous URL', 
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	const image = fixture.browser.window.document.querySelector('img')!;
 	const original = image.src;
-	fixture.decode = async () =>
-		({
-			width: 320,
-			height: 200,
-			close: () => {
-				fixture.closedBitmaps++;
-			},
-		}) as ImageBitmap;
+	fixture.decode = async () => ({ width: 320, height: 200, close: () => { fixture.closedBitmaps++; } }) as ImageBitmap;
 	fixture.changes.fire({ resources: [URI.file('/other.png')] });
 	await setImmediate();
 	assert.equal(image.src, original);
@@ -250,22 +173,13 @@ test('Image preview refreshes a changed resource and revokes the previous URL', 
 test('Image inspection rejects unsupported signatures and preview decoding failures can be retried', async () => {
 	using fixture = new ImageFixture();
 	await assert.rejects(inspectImage(new Uint8Array([137, 80, 78, 71])), /PNG, JPEG or WebP/);
-	fixture.decode = async () => {
-		throw new Error('Invalid encoded image');
-	};
+	fixture.decode = async () => { throw new Error('Invalid encoded image'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: The image data could not be decoded/);
 	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [0, false]);
 	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
 	assert.ok(retry, 'failed image decode should expose a Retry action');
-	fixture.decode = async () =>
-		({
-			width: 320,
-			height: 200,
-			close: () => {
-				fixture.closedBitmaps++;
-			},
-		}) as ImageBitmap;
+	fixture.decode = async () => ({ width: 320, height: 200, close: () => { fixture.closedBitmaps++; } }) as ImageBitmap;
 	retry.click();
 	await setImmediate();
 	assert.match(fixture.preview.getAccessibleContent(), /320 × 200 pixels/);
@@ -276,9 +190,7 @@ test('Image preview reports a failed refresh and loads the resource again on its
 	using fixture = new ImageFixture();
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	const image = fixture.browser.window.document.querySelector('img')!;
-	fixture.read = async () => {
-		throw new Error('Removed file');
-	};
+	fixture.read = async () => { throw new Error('Removed file'); };
 	fixture.changes.fire({ resources: [resource] });
 	await setImmediate();
 	assert.equal(image.hasAttribute('src'), false);

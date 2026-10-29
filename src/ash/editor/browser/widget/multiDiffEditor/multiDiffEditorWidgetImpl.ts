@@ -21,7 +21,11 @@ import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import { type DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
 import { computeDiffRowLayout, type DiffRowLayout } from './compressedVirtualizedScrollLayout.js';
 import { CompressedVirtualizedScrollView } from './compressedVirtualizedScrollView.js';
-import { DiffEditorItemTemplate, MULTI_DIFF_HEADER_HEIGHT, MULTI_DIFF_HORIZONTAL_INSET } from './diffEditorItemTemplate.js';
+import {
+	DiffEditorItemTemplate,
+	MULTI_DIFF_HEADER_HEIGHT,
+	MULTI_DIFF_HORIZONTAL_INSET,
+} from './diffEditorItemTemplate.js';
 import { type IDocumentDiffItem } from './model.js';
 import { extUri } from '../../../../base/common/resources.js';
 import type { IMultiDiffResourceId } from '../../../common/multiDiffEditor.js';
@@ -32,7 +36,13 @@ export interface RevealOptions {
 	readonly highlight: boolean;
 }
 import { MultiDiffEditorLogger } from './multiDiffEditorLogging.js';
-import { DEFAULT_LINE_HEIGHT, DEFAULT_OVERSCAN_ROW_COUNT, hideUnchangedRegions, validateMultiDiffEditorOptions, type IMultiDiffEditorWidgetOptions } from './multiDiffEditorOptions.js';
+import {
+	DEFAULT_LINE_HEIGHT,
+	DEFAULT_OVERSCAN_ROW_COUNT,
+	hideUnchangedRegions,
+	validateMultiDiffEditorOptions,
+	type IMultiDiffEditorWidgetOptions,
+} from './multiDiffEditorOptions.js';
 import { MultiDiffEditorViewModel, type MultiDiffEditorLocation, type MultiDiffEditorViewState } from './multiDiffEditorViewModel.js';
 import { VirtualizedItemManager } from './virtualizedItemManager.js';
 
@@ -112,104 +122,81 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			loopChanges: options.loopChanges,
 			wordWrapColumn: options.wordWrapColumn,
 		};
-		this.fontInfoSettings = createBareFontInfoFromRawSettings(
-			{
-				fontFamily: options.fontFamily,
-				fontSize: options.fontSize,
-				fontLigatures: options.fontLigatures,
-				lineHeight: rawLineHeight,
-			},
-			getWindow(options.container).devicePixelRatio,
-		);
+		this.fontInfoSettings = createBareFontInfoFromRawSettings({
+			fontFamily: options.fontFamily,
+			fontSize: options.fontSize,
+			fontLigatures: options.fontLigatures,
+			lineHeight: rawLineHeight,
+		}, getWindow(options.container).devicePixelRatio);
 		// Virtual rows and child editors must use the same computed height for automatic and relative settings.
 		this.lineHeight = this.fontInfoSettings.lineHeight;
 		const ownerDocument = options.container.ownerDocument;
-		this.scrollView = this._register(
-			new CompressedVirtualizedScrollView(
-				options.container,
-				(contentDomNode, index) => {
-					const item = this.items[index]!;
-					const section = new DiffEditorItemTemplate(
-						contentDomNode,
-						item,
-						() => this.toggleItem(item.id),
-						() => this.activateItem(item.id),
-						this.workbenchUIElementFactory,
-						() => this.scheduleLayoutRefresh(),
-						source => this.handleEditorScroll(index, source),
-					);
-					section.setCollapsed(this.viewModel.isCollapsed(item.id));
-					section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
-					const state = this.viewModel.getItemViewState(item.id);
-					if (state) section.restoreViewState(state.original, state.modified);
-					return section;
-				},
-				(index, section) => {
-					this.viewModel.saveItemViewState(this.items[index]!.id, section.saveViewState());
-					if (section.domNode.contains(section.domNode.ownerDocument.activeElement)) {
-						this.domNode.focus({ preventScroll: true });
-					}
-				},
-			),
-		);
+		this.scrollView = this._register(new CompressedVirtualizedScrollView(
+			options.container,
+			(contentDomNode, index) => {
+				const item = this.items[index]!;
+				const section = new DiffEditorItemTemplate(
+					contentDomNode, item, () => this.toggleItem(item.id),
+					() => this.activateItem(item.id), this.workbenchUIElementFactory, () => this.scheduleLayoutRefresh(),
+					source => this.handleEditorScroll(index, source),
+				);
+				section.setCollapsed(this.viewModel.isCollapsed(item.id));
+				section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
+				const state = this.viewModel.getItemViewState(item.id);
+				if (state) section.restoreViewState(state.original, state.modified);
+				return section;
+			},
+			(index, section) => {
+				this.viewModel.saveItemViewState(this.items[index]!.id, section.saveViewState());
+				if (section.domNode.contains(section.domNode.ownerDocument.activeElement)) {
+					this.domNode.focus({ preventScroll: true });
+				}
+			},
+		));
 		this.domNode = this.scrollView.domNode;
 		this.sections = this.scrollView.sections;
 		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
 		this.domNode.classList.toggle('hide-line-numbers', !this.showLineNumbers);
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
-		this.domNode.setAttribute(
-			'aria-label',
-			options.ariaLabel ??
-				formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), {
-					0: this.items.length,
-				}),
-		);
+		this.domNode.setAttribute('aria-label', options.ariaLabel ?? formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: this.items.length }));
 		this.accessibilityStatusDomNode = h(ownerDocument, 'div');
 		this.accessibilityStatusDomNode.className = 'stanza-multi-diff-editor-accessibility-status';
 		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
 		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
 		this.domNode.append(this.accessibilityStatusDomNode);
-		this._register(
-			addDisposableListener(this.domNode, 'scroll', event => {
-				if (event.target === this.domNode) this.project();
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'scroll', event => {
+			if (event.target === this.domNode) this.project();
+		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
 		this.bindItems();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
-					this.hideUnchangedRegionsEnabled = configuration.getValue('diffEditor.hideUnchangedRegions.enabled');
-				}
-				if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
-					this.updateHideUnchangedRegions();
-				}
-			}),
-		);
-		this._register(
-			options.model.onDidChangeItems(items => {
-				// Source replacement disposes the old models. Their readiness events may
-				// never arrive, so release waits before binding the new item generation.
-				this.cancelPendingNavigation();
-				this.logger.itemsChanged(items);
-				this.scrollView.resetItems();
-				this.itemListeners.clear();
-				this.items = items;
-				this.viewModel.setItems(items);
-				this.measuredHeights.clear();
-				this.rowLayouts = new WeakMap();
-				this.layouts.length = 0;
-				this.bindItems();
-				if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: items.length }));
-				this.refreshLayout();
-			}),
-		);
-		this._register(
-			observeResize(this.domNode, ([entry]) => {
-				if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
+				this.hideUnchangedRegionsEnabled = configuration.getValue('diffEditor.hideUnchangedRegions.enabled');
+			}
+			if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
+				this.updateHideUnchangedRegions();
+			}
+		}));
+		this._register(options.model.onDidChangeItems(items => {
+			// Source replacement disposes the old models. Their readiness events may
+			// never arrive, so release waits before binding the new item generation.
+			this.cancelPendingNavigation();
+			this.logger.itemsChanged(items);
+			this.scrollView.resetItems();
+			this.itemListeners.clear();
+			this.items = items;
+			this.viewModel.setItems(items);
+			this.measuredHeights.clear();
+			this.rowLayouts = new WeakMap();
+			this.layouts.length = 0;
+			this.bindItems();
+			if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: items.length }));
+			this.refreshLayout();
+		}));
+		this._register(observeResize(this.domNode, ([entry]) => {
+			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
+		}));
 		this.layout(getClientArea(this.domNode));
 	}
 
@@ -299,9 +286,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.updateWordWrap();
 	}
 
-	public updateOptions(
-		options: Pick<IMultiDiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>,
-	): void {
+	public updateOptions(options: Pick<IMultiDiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>): void {
 		this.editorOptions = { ...this.editorOptions, ...options };
 		this.loopChanges = this.editorOptions.loopChanges ?? true;
 		this.showLineNumbers = this.editorOptions.showLineNumbers ?? true;
@@ -323,7 +308,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	public toggleWordWrap(): void {
 		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? (this.wordWrap ? 'off' : 'on') : undefined;
 		this.updateWordWrap();
-		this.accessibilityStatusDomNode.textContent = this.wordWrap ? localize('wordWrap.enabled', 'Word wrap on') : localize('wordWrap.disabled', 'Word wrap off');
+		this.accessibilityStatusDomNode.textContent = this.wordWrap
+			? localize('wordWrap.enabled', 'Word wrap on')
+			: localize('wordWrap.disabled', 'Word wrap off');
 	}
 
 	public layout(size: IDimension = getClientArea(this.domNode)): void {
@@ -365,19 +352,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	public async resolveVisible(): Promise<void> {
 		const signal = this.navigationAbortController.signal;
 		// Each item publishes its own load error in the header; one failed file must not close the whole editor.
-		await Promise.allSettled(
-			[...this.sections.entries()].flatMap(([index]) => {
-				if (this.viewModel.isCollapsed(this.items[index]!.id)) return [];
-				const item = this.items[index]!;
-				const retention = item.retain?.();
-				return [
-					item
-						.resolve()
-						.then(model => (model ? this.waitForReady(model, signal) : undefined))
-						.finally(() => retention?.dispose()),
-				];
-			}),
-		);
+		await Promise.allSettled([...this.sections.entries()].flatMap(([index]) => {
+			if (this.viewModel.isCollapsed(this.items[index]!.id)) return [];
+			const item = this.items[index]!;
+			const retention = item.retain?.();
+			return [item.resolve().then(model => model ? this.waitForReady(model, signal) : undefined).finally(() => retention?.dispose())];
+		}));
 		await this.initialNavigation;
 	}
 
@@ -407,13 +387,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	/** Reveal an explicitly requested file through the existing viewport and collapse state. */
 	public reveal(resource: IMultiDiffResourceId, options?: RevealOptions): void {
-		if (!resource.original && !resource.modified) {
-			return;
-		}
+		if (!resource.original && !resource.modified) { return; }
 		const index = this.items.findIndex(item => extUri.isEqual(item.originalUri, resource.original) && extUri.isEqual(item.modifiedUri, resource.modified));
-		if (index < 0) {
-			return;
-		}
+		if (index < 0) { return; }
 		this.cancelPendingNavigation();
 		const item = this.items[index]!;
 		const previous = this.viewModel.activeChange;
@@ -431,27 +407,18 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const generation = this.navigationGeneration;
 			const signal = this.navigationAbortController.signal;
 			// A requested row can be outside the mounted viewport and still resolving.
-			void item
-				.resolve()
-				.then(async model => {
-					if (model) await this.waitForReady(model, signal);
-					if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) {
-						return;
-					}
-					// Loading can replace estimated row heights and move the requested file.
-					this.refreshLayout();
-					this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
-					this.project();
-					const editor = this.sections.get(index)?.editor;
-					const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
-					control?.revealRange(range);
-					if (options.highlight) {
-						control?.setSelection(range);
-					}
-				})
-				.catch(() => {
-					/* The file header owns reporting its resolution error. */
-				});
+			void item.resolve().then(async model => {
+				if (model) await this.waitForReady(model, signal);
+				if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) { return; }
+				// Loading can replace estimated row heights and move the requested file.
+				this.refreshLayout();
+				this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
+				this.project();
+				const editor = this.sections.get(index)?.editor;
+				const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
+				control?.revealRange(range);
+				if (options.highlight) { control?.setSelection(range); }
+			}).catch(() => { /* The file header owns reporting its resolution error. */ });
 		}
 	}
 
@@ -485,13 +452,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				});
 			};
 			observe();
-			this.itemListeners.add(
-				item.onDidChange(() => {
-					observe();
-					this.sections.get(index)?.updateStatus();
-					this.refreshLayout();
-				}),
-			);
+			this.itemListeners.add(item.onDidChange(() => {
+				observe();
+				this.sections.get(index)?.updateStatus();
+				this.refreshLayout();
+			}));
 		}
 	}
 
@@ -502,11 +467,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		}
 		const previousLayouts = this.layouts.slice();
 		const previousScrollTop = this.scrollView.getLogicalScrollTop();
-		let wrapping: { readonly fontInfo: FontInfo; readonly column: number } | undefined;
+		let wrapping: { readonly fontInfo: FontInfo; readonly column: number; } | undefined;
 		if (this.wordWrap) {
 			const gutterWidth = this.showLineNumbers ? 52 : 0;
 			const cellWidth = Math.max(1, (this.viewportWidth - MULTI_DIFF_HORIZONTAL_INSET - SCROLLBAR_RESERVE - 30) / 2 - gutterWidth);
-			const fontInfo = (this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.domNode), this.fontInfoSettings));
+			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.domNode), this.fontInfoSettings);
 			const viewportColumn = Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth));
 			const mode = this.temporaryWordWrap ?? this.configuredWordWrap;
 			const configuredColumn = this.editorOptions.wordWrapColumn ?? 80;
@@ -554,17 +519,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const section = this.sections.get(index)!;
 				const layout = this.layouts[index]!;
 				const rendered = this.scrollView.renderedRange(layout, overscan);
-				section.layout(
-					this.scrollView.isCompressed
-						? {
-								top: rendered.top,
-								height: rendered.height,
-								bodyHeight: Math.max(0, rendered.height - MULTI_DIFF_HEADER_HEIGHT),
-							}
-						: layout,
-					this.viewportWidth,
-					this.viewportHeight,
-				);
+				section.layout(this.scrollView.isCompressed
+					? { top: rendered.top, height: rendered.height, bodyHeight: Math.max(0, rendered.height - MULTI_DIFF_HEADER_HEIGHT) }
+					: layout, this.viewportWidth, this.viewportHeight);
 				if (this.viewModel.isCollapsed(item.id)) {
 					section.unmount();
 					continue;
@@ -575,20 +532,18 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					continue;
 				}
 				if (!section.editor) {
-					section.mount(
-						this.instantiationService.createInstance(DiffEditorWidget, {
-							container: section.editorHostDomNode,
-							model: item.model,
-							originalAriaLabel: item.originalLabel,
-							modifiedAriaLabel: item.modifiedLabel,
-							readOnly: item.readOnly,
-							scrollBeyondLastLine: false,
-							scrollbar: { vertical: 'hidden' },
-							renderOverviewRuler: false,
-							wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
-							...this.editorOptions,
-						}),
-					);
+					section.mount(this.instantiationService.createInstance(DiffEditorWidget, {
+						container: section.editorHostDomNode,
+						model: item.model,
+						originalAriaLabel: item.originalLabel,
+						modifiedAriaLabel: item.modifiedLabel,
+						readOnly: item.readOnly,
+						scrollBeyondLastLine: false,
+						scrollbar: { vertical: 'hidden' },
+						renderOverviewRuler: false,
+						wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
+						...this.editorOptions,
+					}));
 					// Restore the file cursor before hiding regions so mounting does not expand them.
 					section.editor!.setHideUnchangedRegionsOptions(this.getHideUnchangedRegionsOptions());
 					section.layoutEditor(this.viewportWidth);
@@ -658,7 +613,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				}
 				if (this.isDisposed || generation !== this.navigationGeneration) return undefined;
 				const rows = model.diff!.rows;
-				const firstRow = step === 0 && activeIndex === index ? active!.rowIndex + delta : delta > 0 ? 0 : rows.length - 1;
+				const firstRow = step === 0 && activeIndex === index
+					? active!.rowIndex + delta
+					: delta > 0 ? 0 : rows.length - 1;
 				const hunks = model.diff!.hunks;
 				const hunk = delta > 0 ? hunks.find(hunk => hunk.rowEnd > firstRow) : [...hunks].reverse().find(hunk => hunk.rowStart <= firstRow);
 				if (hunk) {
@@ -668,9 +625,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					this.announceChange(location);
 					return location;
 				}
-			} finally {
-				retention?.dispose();
-			}
+			} finally { retention?.dispose(); }
 		}
 		if (active && !this.loopChanges) return active;
 		this.accessibilityStatusDomNode.textContent = localize('diffEditor.noChanges', 'No differences');
@@ -685,21 +640,17 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private waitForReady(model: DiffModel, signal: AbortSignal): Promise<void> {
-		if (signal.aborted || model.isDisposed) {
-			return Promise.reject(new Error('Multi-diff navigation was cancelled'));
-		}
+		if (signal.aborted || model.isDisposed) { return Promise.reject(new Error('Multi-diff navigation was cancelled')); }
 		if (model.state.kind === 'ready') return Promise.resolve();
 		if (model.state.kind === 'error') return Promise.reject(model.state.error);
 		return new Promise<void>((resolve, reject) => {
 			const listeners = new DisposableStore();
-			listeners.add(
-				model.onDidChange(state => {
-					if (state.kind === 'loading') return;
-					listeners.dispose();
-					if (state.kind === 'error') reject(state.error);
-					else resolve();
-				}),
-			);
+			listeners.add(model.onDidChange(state => {
+				if (state.kind === 'loading') return;
+				listeners.dispose();
+				if (state.kind === 'error') reject(state.error);
+				else resolve();
+			}));
 			const abort = (): void => {
 				listeners.dispose();
 				reject(new Error('Multi-diff navigation was cancelled'));
@@ -712,20 +663,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private announceChange(location: MultiDiffEditorLocation): void {
 		const item = this.items.find(candidate => candidate.id === location.itemId)!;
 		if (this.items.every(candidate => candidate.binary || candidate.model?.state.kind === 'ready')) {
-			const changes = this.items.flatMap(candidate =>
-				candidate.binary
-					? []
-					: Array.from(candidate.model!.diff!.rows.changedEntries(), ([rowIndex]) => ({
-							itemId: candidate.id,
-							rowIndex,
-						})),
-			);
+			const changes = this.items.flatMap(candidate => candidate.binary ? [] : Array.from(candidate.model!.diff!.rows.changedEntries(), ([rowIndex]) => ({ itemId: candidate.id, rowIndex })));
 			const selectedIndex = changes.findIndex(change => change.itemId === location.itemId && change.rowIndex === location.rowIndex);
-			this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeLocation', 'Change {0} of {1}, {2}'), {
-				0: selectedIndex + 1,
-				1: changes.length,
-				2: item.label,
-			});
+			this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeLocation', 'Change {0} of {1}, {2}'), { 0: selectedIndex + 1, 1: changes.length, 2: item.label });
 			return;
 		}
 		this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeInFile', 'Change in {0}'), { 0: item.label });
@@ -770,10 +710,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			editor.revealChangeRow(location.rowIndex, false);
 			const row = model.diff.rows.get(location.rowIndex)!;
 			if (!focus) {
-				editor.modifiedEditor.setPosition({
-					lineNumber: Math.min(model.modified.lineCount, lineNumber),
-					column: 1,
-				});
+				editor.modifiedEditor.setPosition({ lineNumber: Math.min(model.modified.lineCount, lineNumber), column: 1 });
 			}
 			if (focus) {
 				if (row.modifiedLineIndex !== undefined) editor.modifiedEditor.focus();
@@ -797,7 +734,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const current = [...this.sections.entries()].find(([_, section]) => section.isHeaderTarget(event.target))?.[0];
 			if (current !== undefined && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
 				stopEvent(event);
-				const target = event.key === 'Home' ? 0 : event.key === 'End' ? this.items.length - 1 : Math.max(0, Math.min(this.items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
+				const target = event.key === 'Home' ? 0
+					: event.key === 'End' ? this.items.length - 1
+						: Math.max(0, Math.min(this.items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
 				if (target !== current) {
 					this.scrollView.setLogicalScrollTop(this.layouts[target]!.top);
 					this.project();
@@ -817,24 +756,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			if (event.key === ' ') distance = event.shiftKey ? -this.viewportHeight : this.viewportHeight;
 			else if (!event.shiftKey) {
 				switch (event.key) {
-					case 'ArrowDown':
-						distance = this.lineHeight;
-						break;
-					case 'ArrowUp':
-						distance = -this.lineHeight;
-						break;
-					case 'PageDown':
-						distance = this.viewportHeight;
-						break;
-					case 'PageUp':
-						distance = -this.viewportHeight;
-						break;
-					case 'Home':
-						distance = -Number.MAX_SAFE_INTEGER;
-						break;
-					case 'End':
-						distance = Number.MAX_SAFE_INTEGER;
-						break;
+					case 'ArrowDown': distance = this.lineHeight; break;
+					case 'ArrowUp': distance = -this.lineHeight; break;
+					case 'PageDown': distance = this.viewportHeight; break;
+					case 'PageUp': distance = -this.viewportHeight; break;
+					case 'Home': distance = -Number.MAX_SAFE_INTEGER; break;
+					case 'End': distance = Number.MAX_SAFE_INTEGER; break;
 				}
 			}
 			if (distance !== undefined) {

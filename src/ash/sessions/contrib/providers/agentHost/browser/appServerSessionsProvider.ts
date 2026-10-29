@@ -10,17 +10,7 @@ import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
-import type {
-	AgentThreadExecutionStatus,
-	AgentTreeNode,
-	IActiveSessionThread,
-	ISession,
-	ModelRef,
-	SessionExecutionTarget,
-	SessionId,
-	SessionWorkspaceSelection,
-	ThreadId,
-} from '../../../../services/sessions/common/session.js';
+import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -32,7 +22,7 @@ export interface AppServerSessionsProviderHost {
 	readonly id?: string;
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
-	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]) => Promise<SessionExecutionTarget | undefined>;
+	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
 /** Adapts shared Agent execution records into Sessions product models. */
@@ -40,29 +30,25 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 	public readonly id: string;
 	public readonly label: string;
 	public readonly order = 0;
-	public get instantiationService(): IInstantiationService {
-		return this.instantiation;
-	}
+	public get instantiationService(): IInstantiationService { return this.instantiation; }
 	private automationStore: AgentHostAutomationStore | undefined;
 	public get automations(): AgentHostAutomationStore | undefined {
 		if (!this.rendererHost.automation) return undefined;
-		return (this.automationStore ??= this._register(this.instantiation.createInstance(AgentHostAutomationStore, this.id, this.connectionStatus)));
+		return this.automationStore ??= this._register(this.instantiation.createInstance(AgentHostAutomationStore, this.id, this.connectionStatus));
 	}
 	public readonly connectionStatus = observableValue<'connecting' | 'connected' | 'disconnected'>(this, 'connecting');
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
 	private connectionEpoch = 0;
-	private get connectionReady(): boolean {
-		return this.connectionStatus.get() === 'connected';
-	}
+	private get connectionReady(): boolean { return this.connectionStatus.get() === 'connected'; }
 	private readonly initialConnectionState: Promise<void>;
 	private catalogSubscription: Promise<readonly ISession[]> | undefined;
-	private readonly subscriptions = new Map<SessionId, { readonly revision: number; readonly promise: Promise<ISession> }>();
+	private readonly subscriptions = new Map<SessionId, { readonly revision: number; readonly promise: Promise<ISession>; }>();
 	private readonly releases = new Map<SessionId, Promise<void>>();
 	private readonly subscriptionRevisions = new Map<SessionId, number>();
 	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
-	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
+	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
 	constructor(
@@ -98,25 +84,17 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		const subscription = events.subscribe(event => {
-			if (event.method === 'session/changed')
-				this._onDidChangeSession.fire({
-					sessionId: event.params.sessionId,
-					detailChanged: event.params.agentTreeChanged,
-				});
+			if (event.method === 'session/changed') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
 			if (event.method === 'session/deleted') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
 		});
 		this._register(toDisposable(() => subscription.dispose()));
-		this._register(
-			toDisposable(() => {
-				if (this.catalogSubscribed) {
-					void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), 'Failed to unsubscribe Session catalog');
-				}
-				for (const sessionId of this.subscribed) {
-					void this.releaseOnDispose(() => this.sessionApi.unsubscribe({ sessionId }), `Failed to unsubscribe Session '${sessionId}'`);
-				}
-				this.subscribed.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), 'Failed to unsubscribe Session catalog'); }
+			for (const sessionId of this.subscribed) {
+				void this.releaseOnDispose(() => this.sessionApi.unsubscribe({ sessionId }), `Failed to unsubscribe Session '${sessionId}'`);
+			}
+			this.subscribed.clear();
+		}));
 	}
 
 	private async releaseOnDispose(release: () => Promise<void>, message: string): Promise<void> {
@@ -127,7 +105,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			// Our listener has already been removed when the parent closes the client.
 			// A closed carrier releases its own leases; an unknown state still needs reporting.
 			const state = await this.appServer.getConnectionState().catch(() => undefined);
-			if (generation !== this.appServer.connectionGeneration || (state !== undefined && state !== 'ready')) return;
+			if (generation !== this.appServer.connectionGeneration || state !== undefined && state !== 'ready') return;
 			console.error(message, error);
 		}
 	}
@@ -139,9 +117,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const result = this.readList(subscribing);
 		if (subscribing) {
 			this.catalogSubscription = result;
-			const finish = (): void => {
-				if (this.catalogSubscription === result) this.catalogSubscription = undefined;
-			};
+			const finish = (): void => { if (this.catalogSubscription === result) this.catalogSubscription = undefined; };
 			void result.then(finish, finish);
 		}
 		return result;
@@ -166,7 +142,9 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const epoch = this.connectionEpoch;
 		const result = await this.sessionApi.listAgents();
 		this.assertCurrentConnection(generation, epoch);
-		return result.agents.flatMap(agent => (agent.source.type === 'directory' ? [{ name: agent.name, description: agent.description, sourceId: agent.source.id }] : []));
+		return result.agents.flatMap(agent => agent.source.type === 'directory'
+			? [{ name: agent.name, description: agent.description, sourceId: agent.source.id }]
+			: []);
 	}
 
 	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
@@ -186,9 +164,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (pending?.revision === revision) return pending.promise;
 		const promise = this.subscribeSession(session, revision);
 		this.subscriptions.set(session.sessionId, { revision, promise });
-		const finish = (): void => {
-			if (this.subscriptions.get(session.sessionId)?.promise === promise) this.subscriptions.delete(session.sessionId);
-		};
+		const finish = (): void => { if (this.subscriptions.get(session.sessionId)?.promise === promise) this.subscriptions.delete(session.sessionId); };
 		void promise.then(finish, finish);
 		return promise;
 	}
@@ -203,7 +179,8 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertCurrentConnection(generation, epoch);
 		if ((this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) throw canceled();
 		const result = await this.sessionApi.subscribe({ sessionId: session.sessionId });
-		if ((this.isDisposed || (this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision) && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
+		if ((this.isDisposed || (this.subscriptionRevisions.get(session.sessionId) ?? 0) !== revision)
+			&& generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
 		}
 		this.assertCurrentConnection(generation, epoch);
@@ -236,35 +213,28 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const epoch = this.connectionEpoch;
 		const release = (async () => {
 			// An in-flight acquire observes the revision and releases itself before settling.
-			await pending?.catch(() => {});
+			await pending?.catch(() => { });
 			if (owned && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) await this.sessionApi.unsubscribe({ sessionId });
 		})();
 		this.releases.set(sessionId, release);
-		const finish = (): void => {
-			if (this.releases.get(sessionId) === release) this.releases.delete(sessionId);
-		};
+		const finish = (): void => { if (this.releases.get(sessionId) === release) this.releases.delete(sessionId); };
 		void release.then(finish, finish);
 		return release;
 	}
 
-	currentWorkspace(): SessionWorkspaceSelection {
-		return this.host.workspace();
-	}
+	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
 	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid()): Promise<IActiveSessionThread> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const executionTarget = workspace.type === 'multiple' ? await this.host.selectWorkspace(workspace.folders) : workspace.type === 'current' ? null : workspace;
+		const executionTarget = workspace.type === 'multiple'
+			? await this.host.selectWorkspace(workspace.folders)
+			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
 		if (!this.connectionReady) await this.initialConnectionState;
 		this.assertCurrentConnection(generation, epoch);
-		const created = await this.sessionApi.create({
-			commandId: `desktop-session-${creationId}`,
-			title,
-			executionTarget,
-			agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' },
-		});
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
@@ -302,10 +272,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.archive({
-			commandId: commandId('archive-session'),
-			sessionId: session.sessionId,
-		});
+		const result = await this.sessionApi.archive({ commandId: commandId('archive-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
@@ -316,10 +283,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.stop({
-			commandId: commandId('stop-session'),
-			sessionId: session.sessionId,
-		});
+		const result = await this.sessionApi.stop({ commandId: commandId('stop-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
@@ -330,11 +294,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.rename({
-			commandId: commandId('rename-session'),
-			sessionId: session.sessionId,
-			title,
-		});
+		const result = await this.sessionApi.rename({ commandId: commandId('rename-session'), sessionId: session.sessionId, title });
 		this.assertCurrentConnection(generation, epoch);
 		return toSession(result.session, [], session, result.agentTree.roots);
 	}
@@ -352,10 +312,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.restore({
-			commandId: commandId('restore-session'),
-			sessionId: session.sessionId,
-		});
+		const result = await this.sessionApi.restore({ commandId: commandId('restore-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
 		return toSession(result.session, [], session);
 	}
@@ -383,12 +340,8 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 }
 
 function connectionStatus(state: AppServerConnectionState): 'connecting' | 'connected' | 'disconnected' {
-	if (state === 'ready') {
-		return 'connected';
-	}
-	if (state === 'starting' || state === 'initializing' || state === 'restarting') {
-		return 'connecting';
-	}
+	if (state === 'ready') { return 'connected'; }
+	if (state === 'starting' || state === 'initializing' || state === 'restarting') { return 'connecting'; }
 	return 'disconnected';
 }
 
@@ -410,21 +363,16 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 			return {
 				threadId: thread.threadId,
 				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
-				origin:
-					thread.parentThreadId || thread.forkedFromId
-						? {
-								type: 'fork' as const,
-								parentThreadId: thread.parentThreadId ?? thread.forkedFromId!,
-								parentSequence: detail?.sequence ?? 0,
-							}
-						: { type: 'root' as const },
+				origin: thread.parentThreadId || thread.forkedFromId
+					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
+					: { type: 'root' as const },
 				status: thread.status,
 				title: detail?.title ?? thread.title,
 				management: thread.manager ? { ...thread.manager } : undefined,
-				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : (prior?.executionStatus ?? 'idle'),
+				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? 'idle',
 			};
 		}),
-		agentTree: session.status === 'active' ? (agentTree?.map(toAgentTreeNode) ?? previous?.agentTree) : undefined,
+		agentTree: session.status === 'active' ? agentTree?.map(toAgentTreeNode) ?? previous?.agentTree : undefined,
 	};
 }
 
@@ -433,14 +381,9 @@ function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 		threadId: node.threadId,
 		threadSequence: node.threadSequence,
 		title: node.title,
-		origin:
-			node.parentThreadId || node.forkedFromId
-				? {
-						type: 'fork',
-						parentThreadId: node.parentThreadId ?? node.forkedFromId!,
-						parentSequence: node.threadSequence,
-					}
-				: { type: 'root' },
+		origin: node.parentThreadId || node.forkedFromId
+			? { type: 'fork', parentThreadId: node.parentThreadId ?? node.forkedFromId!, parentSequence: node.threadSequence }
+			: { type: 'root' },
 		membershipStatus: 'active',
 		executionStatus: node.executionStatus,
 		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),
@@ -456,23 +399,16 @@ function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 
 function executionStatus(status: TurnStatus | undefined): AgentThreadExecutionStatus {
 	switch (status) {
-		case 'created':
-			return 'queued';
+		case 'created': return 'queued';
 		case 'running':
-		case 'cancelling':
-			return 'running';
+		case 'cancelling': return 'running';
 		case 'waitingForApproval':
 		case 'waitingForUserInput':
-		case 'waitingForCapability':
-			return 'waiting';
-		case 'completed':
-			return 'completed';
-		case 'failed':
-			return 'failed';
-		case 'interrupted':
-			return 'cancelled';
-		case undefined:
-			return 'idle';
+		case 'waitingForCapability': return 'waiting';
+		case 'completed': return 'completed';
+		case 'failed': return 'failed';
+		case 'interrupted': return 'cancelled';
+		case undefined: return 'idle';
 	}
 }
 
@@ -489,6 +425,4 @@ function canInterrupt(node: AgentTreeNode): boolean {
 	return node.membershipStatus === 'active' && (node.executionStatus === 'queued' || node.executionStatus === 'running' || node.executionStatus === 'waiting');
 }
 
-function commandId(kind: string): string {
-	return `desktop-${kind}-${createUuid()}`;
-}
+function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }

@@ -20,31 +20,19 @@ export class DecorationStyleCache {
 	private readonly _cacheById = new Map<number, IDecorationStyleCacheEntry>();
 	private readonly _cacheByStyle = new NKeyMap<IDecorationStyleCacheEntry, DecorationStyleKey>();
 
-	getOrCreateEntry(
-		color: number | undefined,
-		bold: boolean | undefined,
-		opacity: number | undefined,
-		strikethrough: boolean | undefined,
-		strikethroughThickness: number | undefined,
-		strikethroughColor: number | undefined,
-	): number {
+	getOrCreateEntry(color: number | undefined, bold: boolean | undefined, opacity: number | undefined, strikethrough: boolean | undefined, strikethroughThickness: number | undefined, strikethroughColor: number | undefined): number {
 		if (color === undefined && bold === undefined && opacity === undefined && strikethrough === undefined && strikethroughThickness === undefined && strikethroughColor === undefined) {
 			return 0;
 		}
 		// Inheritance must not reuse an entry that explicitly clears a style or makes it transparent.
-		const key: DecorationStyleKey = [color ?? '', bold ?? '', opacity?.toFixed(2) ?? '', strikethrough ?? '', strikethroughThickness?.toFixed(2) ?? '', strikethroughColor ?? ''];
+		const key: DecorationStyleKey = [
+			color ?? '', bold ?? '', opacity?.toFixed(2) ?? '',
+			strikethrough ?? '', strikethroughThickness?.toFixed(2) ?? '', strikethroughColor ?? '',
+		];
 		const result = this._cacheByStyle.get(...key);
 		if (result) return result.id;
 		const id = this._nextId++;
-		const entry: IDecorationStyleCacheEntry = {
-			id,
-			color,
-			bold,
-			opacity,
-			strikethrough,
-			strikethroughThickness,
-			strikethroughColor,
-		};
+		const entry: IDecorationStyleCacheEntry = { id, color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor };
 		this._cacheById.set(id, entry);
 		this._cacheByStyle.set(entry, ...key);
 		return id;

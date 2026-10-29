@@ -38,7 +38,7 @@ export interface IOutputChannelDescriptor {
 	readonly extensionId?: string;
 	readonly languageId?: string;
 	/** Optional control owned by the producer; display filtering never changes it. */
-	readonly logger?: { readonly label: string; readonly control: ILogger };
+	readonly logger?: { readonly label: string; readonly control: ILogger; };
 }
 
 /** One atomic content-model transition. */

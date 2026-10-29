@@ -6,7 +6,7 @@ export interface IRelativePattern {
 }
 
 export interface IExpression {
-	[pattern: string]: boolean | { when: string };
+	[pattern: string]: boolean | { when: string; };
 }
 
 export type ParsedPattern = (path: string, basename?: string) => boolean;
@@ -15,7 +15,7 @@ export type ParsedExpression = (path: string, basename?: string, hasSibling?: (n
 export function parse(pattern: string | IRelativePattern): ParsedPattern;
 export function parse(expression: IExpression): ParsedExpression;
 export function parse(input: string | IRelativePattern | IExpression): ParsedPattern | ParsedExpression {
-	if (typeof input === 'string' || (typeof input.base === 'string' && typeof input.pattern === 'string')) {
+	if (typeof input === 'string' || typeof input.base === 'string' && typeof input.pattern === 'string') {
 		const pattern = input as string | IRelativePattern;
 		const regexp = globRegExp((typeof pattern === 'string' ? pattern : pattern.pattern).replaceAll('\\', '/'));
 		return (path: string): boolean => {
@@ -24,9 +24,7 @@ export function parse(input: string | IRelativePattern | IExpression): ParsedPat
 			return candidate !== undefined && regexp.test(candidate);
 		};
 	}
-	const rules = Object.entries(input)
-		.filter(([, value]) => value !== false)
-		.map(([pattern, value]) => ({ pattern, value, matches: parse(pattern) }));
+	const rules = Object.entries(input).filter(([, value]) => value !== false).map(([pattern, value]) => ({ pattern, value, matches: parse(pattern) }));
 	return (path: string, name?: string, hasSibling?: (name: string) => boolean): string | null => {
 		for (const rule of rules) {
 			if (!rule.matches(path)) {
@@ -91,7 +89,7 @@ function globSource(pattern: string): string {
 				} else if (pattern[end] === '}') {
 					depth -= 1;
 				}
-				if (depth === 0 || (depth === 1 && pattern[end] === ',')) {
+				if (depth === 0 || depth === 1 && pattern[end] === ',') {
 					alternatives.push(globSource(pattern.slice(start, end)));
 					start = end + 1;
 				}

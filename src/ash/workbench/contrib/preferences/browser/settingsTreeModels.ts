@@ -52,40 +52,11 @@ export interface SettingsSectionModel {
 }
 
 export type SettingsSectionField =
-	| { readonly id: string; readonly kind: 'status'; readonly text: string }
-	| {
-			readonly id: string;
-			readonly kind: 'boolean';
-			readonly label: string;
-			readonly value: boolean;
-			readonly enabled: boolean;
-			readonly setValue: (value: boolean) => void;
-	  }
-	| {
-			readonly id: string;
-			readonly kind: 'text';
-			readonly label: string;
-			readonly value: string;
-			readonly placeholder: string;
-			readonly enabled: boolean;
-			readonly setValue: (value: string) => void;
-	  }
-	| {
-			readonly id: string;
-			readonly kind: 'select';
-			readonly label: string;
-			readonly value: string | undefined;
-			readonly options: readonly { readonly value: string; readonly label: string }[];
-			readonly enabled: boolean;
-			readonly setValue: (value: string) => void;
-	  }
-	| {
-			readonly id: string;
-			readonly kind: 'action';
-			readonly label: string;
-			readonly enabled: boolean;
-			readonly run: () => Promise<void>;
-	  };
+	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
+	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
+	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; };
 
 /** Settings group/item model with query filtering over canonical item metadata. */
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
@@ -94,8 +65,8 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	private searchQuery = new SettingsSearchQuery('');
 
 	constructor(private readonly isConfigured: (id: string) => boolean = () => false) {
-		super({ identityProvider: { getId: node => node.id } });
-		this.setFilter({ filter: node => this.filterNode(node) });
+		super({ identityProvider: { getId: (node) => node.id } });
+		this.setFilter({ filter: (node) => this.filterNode(node) });
 	}
 
 	get query(): string {
@@ -111,7 +82,9 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	get visibleItems(): readonly SettingsTreeItem<T>[] {
-		return this.visibleNodes.map(node => node.element).filter((node): node is SettingsTreeItem<T> => node.kind === 'item');
+		return this.visibleNodes
+			.map((node) => node.element)
+			.filter((node): node is SettingsTreeItem<T> => node.kind === 'item');
 	}
 
 	setChildren(children: readonly SettingsTreeNode<T>[]): void {
@@ -160,7 +133,9 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	countVisibleItems(groupId?: string): number {
-		const roots = groupId === undefined ? this.visibleChildren : (this.getNode(groupId)?.children.filter(node => node.visible) ?? []);
+		const roots = groupId === undefined
+			? this.visibleChildren
+			: this.getNode(groupId)?.children.filter((node) => node.visible) ?? [];
 		return roots.reduce((count, node) => count + countVisibleItems(node), 0);
 	}
 
@@ -208,7 +183,7 @@ function validateSettingsNodes<T>(nodes: readonly SettingsTreeNode<T>[]): void {
 }
 
 function asNonCollapsibleSettingsTree<T>(nodes: readonly SettingsTreeNode<T>[]): readonly SettingsTreeNode<T>[] {
-	return nodes.map(node => ({
+	return nodes.map((node) => ({
 		element: node.element,
 		collapsible: false,
 		children: asNonCollapsibleSettingsTree(node.children ?? []),

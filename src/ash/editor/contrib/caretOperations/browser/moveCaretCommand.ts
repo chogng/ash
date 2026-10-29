@@ -6,10 +6,7 @@ import type { ITextModel } from '../../../common/model.js';
 export class MoveCaretCommand implements ICommand {
 	private nextSelection: Selection;
 
-	constructor(
-		private readonly selection: Selection,
-		private readonly isMovingLeft: boolean,
-	) {
+	constructor(private readonly selection: Selection, private readonly isMovingLeft: boolean) {
 		this.nextSelection = selection;
 	}
 
@@ -18,8 +15,12 @@ export class MoveCaretCommand implements ICommand {
 		if (startLineNumber !== endLineNumber || this.selection.isEmpty()) return;
 		if (this.isMovingLeft ? startColumn === 1 : endColumn === model.getLineMaxColumn(endLineNumber)) return;
 
-		const neighbor = this.isMovingLeft ? new Range(startLineNumber, startColumn - 1, startLineNumber, startColumn) : new Range(endLineNumber, endColumn, endLineNumber, endColumn + 1);
-		const affected = this.isMovingLeft ? new Range(startLineNumber, startColumn - 1, endLineNumber, endColumn) : new Range(startLineNumber, startColumn, endLineNumber, endColumn + 1);
+		const neighbor = this.isMovingLeft
+			? new Range(startLineNumber, startColumn - 1, startLineNumber, startColumn)
+			: new Range(endLineNumber, endColumn, endLineNumber, endColumn + 1);
+		const affected = this.isMovingLeft
+			? new Range(startLineNumber, startColumn - 1, endLineNumber, endColumn)
+			: new Range(startLineNumber, startColumn, endLineNumber, endColumn + 1);
 		const selectedText = model.getValueInRange(this.selection);
 		const neighborText = model.getValueInRange(neighbor);
 		builder.addEditOperation(affected, this.isMovingLeft ? selectedText + neighborText : neighborText + selectedText);

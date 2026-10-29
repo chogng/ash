@@ -21,6 +21,6 @@ export function matchDiffEditor(input: IResourceEditorInput): EditorPaneMatch {
 }
 
 /** Resolves the language identity shared by editor input, syntax, and completion. */
-export function languageForEditorInput(input: IResourceEditorInput & { readonly firstLine?: string }, resolver?: TextResourceLanguageResolver): string {
+export function languageForEditorInput(input: IResourceEditorInput & { readonly firstLine?: string; }, resolver?: TextResourceLanguageResolver): string {
 	return input.languageId ?? resolveTextResourceLanguageId(input, resolver);
 }

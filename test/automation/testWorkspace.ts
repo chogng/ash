@@ -59,10 +59,7 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 			await writeFile(file, 'const value = 3;\n');
 			await run('git', ['add', 'main.ts'], { cwd: directory });
 			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Main'], { cwd: directory });
-			const rejected = await run('git', ['merge', 'topic'], { cwd: directory }).then(
-				() => false,
-				() => true,
-			);
+			const rejected = await run('git', ['merge', 'topic'], { cwd: directory }).then(() => false, () => true);
 			if (!rejected || !(await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: directory })).stdout.trim()) {
 				throw new Error('Test repository did not produce a merge conflict');
 			}

@@ -78,17 +78,7 @@ const { BrowserTextModelService } = await import('../../../../services/textmodel
 const { BrowserTextResourceStore } = await import('../../browser/browserTextResourceStore.js');
 const { createDiffEditorInput, isDiffEditorInput } = await import('../../../../common/editor/diffEditorInput.js');
 const { DiffEditorCommandsService, IDiffEditorCommandsService } = await import('../../../../browser/parts/editor/diffEditorCommandsService.js');
-const {
-	DIFF_FOCUS_SECONDARY_SIDE,
-	DIFF_OPEN_SIDE,
-	DIFF_SWAP_SIDES,
-	GOTO_NEXT_CHANGE,
-	SET_DIFF_VIEW_MODE_INLINE,
-	SET_DIFF_VIEW_MODE_SIDE_BY_SIDE,
-	SET_DIFF_VIEW_MODE_AUTOMATIC,
-	TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE,
-	registerDiffEditorCommands,
-} = await import('../../../../browser/parts/editor/diffEditorCommands.js');
+const { DIFF_FOCUS_SECONDARY_SIDE, DIFF_OPEN_SIDE, DIFF_SWAP_SIDES, GOTO_NEXT_CHANGE, SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, registerDiffEditorCommands } = await import('../../../../browser/parts/editor/diffEditorCommands.js');
 registerDiffEditorCommands();
 
 test('Diff pane prepares its provider before resolving models and owns it across input changes', async () => {
@@ -98,35 +88,30 @@ test('Diff pane prepares its provider before resolving models and owns it across
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using resources = new DisposableStore();
 		const services = createDiffServices(resources);
-		let created = 0,
-			disposed = 0;
+		let created = 0, disposed = 0;
 		using pane = services.createInstance(DiffEditorPane, resourceStore, {
 			modelService: models,
 			createComputationService: () => {
 				created++;
-				return new (class extends PaneTestDiffComputationService {
-					override dispose(): void {
-						disposed++;
-					}
-				})();
+				return new class extends PaneTestDiffComputationService {
+					override dispose(): void { disposed++; }
+				}();
 			},
 		});
 		assert.equal(created, 1, 'preparation begins before setInput acquires either model');
 		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 		for (let index = 0; index < 2; index++) {
-			await pane.setInput(
-				createDiffEditorInput({ resource: URI.file(`/provider-before-${index}.txt`), initialText: 'before' }, { resource: URI.file(`/provider-after-${index}.txt`), initialText: 'after' }),
-				new AbortController().signal,
-			);
+			await pane.setInput(createDiffEditorInput(
+				{ resource: URI.file(`/provider-before-${index}.txt`), initialText: 'before' },
+				{ resource: URI.file(`/provider-after-${index}.txt`), initialText: 'after' },
+			), new AbortController().signal);
 			pane.clearInput();
 			assert.equal(created, 1);
 			assert.equal(disposed, 0, 'clearing a session cancels its model without closing the pane provider');
 		}
 		pane.dispose();
 		assert.equal(disposed, 1);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('Diff commands navigate and focus the active comparison through the Workbench service', async () => {
@@ -154,27 +139,17 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	container.registerInstance(IEditorPart, {
 		activeInput: input,
 		activePane: pane,
-		closeEditor: async (editor: unknown) => {
-			closed.push(editor);
-			return true;
-		},
+		closeEditor: async (editor: unknown) => { closed.push(editor); return true; },
 		activateGroup: (id: number) => activatedGroups.push(id),
 	} as never);
-	container.registerInstance(IEditorService, {
-		openEditor: async (next: unknown) => {
-			opened.push(next);
-		},
-	} as never);
+	container.registerInstance(IEditorService, { openEditor: async (next: unknown) => { opened.push(next); } } as never);
 	container.registerSingleton(IDiffEditorCommandsService, () => container.createInstance(DiffEditorCommandsService));
 	const commands = container.get(ICommandService);
 	const menuContext = container.get(IContextKeyService);
 	menuContext.setContext(ActiveEditorContext.key, pane.id);
 	const menus = container.get(IMenuService);
 	const runMenuAction = async (menu: MenuId, id: string): Promise<void> => {
-		const action = menus
-			.getMenuActions(menu, { arg: { groupId: 1 } })
-			.flatMap(([, actions]) => actions)
-			.find(action => action.id === id);
+		const action = menus.getMenuActions(menu, { arg: { groupId: 1 } }).flatMap(([, actions]) => actions).find(action => action.id === id);
 		assert.ok(action?.enabled);
 		await action.run();
 	};
@@ -186,15 +161,12 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, 28);
 	await fontConfiguration.updateValue(CodeEditorConfiguration.fontLigatures, true);
 	assert.equal(pane.getControl(), widget);
-	assert.deepEqual(
-		[widget.originalEditor, widget.modifiedEditor].map(editor => ({
-			family: editor.getOption(EditorOption.fontFamily),
-			size: editor.getOption(EditorOption.fontSize),
-			lineHeight: editor.getOption(EditorOption.lineHeight),
-			ligatures: editor.getOption(EditorOption.fontLigatures),
-		})),
-		Array(2).fill({ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' }),
-	);
+	assert.deepEqual([widget.originalEditor, widget.modifiedEditor].map(editor => ({
+		family: editor.getOption(EditorOption.fontFamily),
+		size: editor.getOption(EditorOption.fontSize),
+		lineHeight: editor.getOption(EditorOption.lineHeight),
+		ligatures: editor.getOption(EditorOption.fontLigatures),
+	})), Array(2).fill({ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' }));
 	await fontConfiguration.updateValue(CodeEditorConfiguration.fontSize, undefined);
 	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, undefined);
 	await commands.executeCommand(GOTO_NEXT_CHANGE, { groupId: 1 });
@@ -231,15 +203,11 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	assert.equal(sash.hidden, false);
 	await commands.executeCommand(DIFF_FOCUS_SECONDARY_SIDE);
 	assert.equal(widget.originalEditor.getDomNode().contains(dom.window.document.activeElement), true);
-	const help = AccessibleViewRegistry.getImplementations()
-		.find(implementation => implementation.name === 'diffEditorHelp')
-		?.getProvider(container);
+	const help = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'diffEditorHelp')?.getProvider(container);
 	assert.match(help?.provideContent() ?? '', /Press F7/);
 	assert.match(help?.provideContent() ?? '', /More Actions menu/);
 	help?.dispose();
-	const view = AccessibleViewRegistry.getImplementations()
-		.find(implementation => implementation.name === 'diffEditorView')
-		?.getProvider(container);
+	const view = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'diffEditorView')?.getProvider(container);
 	assert.match(view?.provideContent() ?? '', /Original line 1: before/);
 	assert.match(view?.provideContent() ?? '', /Modified line 1: after/);
 	view?.dispose();
@@ -270,10 +238,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 
 test('Stanza diff pane rejects a missing Workbench diff computation service', () => {
 	using services = new DisposableStore();
-	assert.throws(
-		() => createDiffServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never),
-		/requires a Workbench diff computation service/,
-	);
+	assert.throws(() => createDiffServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
 });
 
 test('Stanza diff pane acquires both models, lays out the review view, and releases both references', async () => {
@@ -298,13 +263,10 @@ test('Stanza diff pane acquires both models, lays out the review view, and relea
 	});
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
-	await pane.setInput(
-		createDiffEditorInput(
-			{ resource: URI.file('C:\\project\\before.ts'), initialText: 'const oldValue = 1;', label: 'before.ts' },
-			{ resource: URI.file('C:\\project\\after.ts'), initialText: 'const newValue = 2;', label: 'after.ts' },
-		),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('C:\\project\\before.ts'), initialText: 'const oldValue = 1;', label: 'before.ts' },
+		{ resource: URI.file('C:\\project\\after.ts'), initialText: 'const newValue = 2;', label: 'after.ts' },
+	), new AbortController().signal);
 
 	assert.equal(parent.querySelectorAll('.stanza-diff-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-diff-editor').length, 1);
@@ -368,7 +330,9 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 		const modified = { resource: URI.file('/readonly-after.ts'), initialText: 'after', readOnly: true };
 		using shared = await models.acquire(modified, new AbortController().signal);
 		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
-		await pane.setInput(createDiffEditorInput({ resource: URI.file('/readonly-before.ts'), initialText: 'before' }, modified), new AbortController().signal);
+		await pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/readonly-before.ts'), initialText: 'before' }, modified,
+		), new AbortController().signal);
 		const widget = pane.getControl();
 		assert.ok(widget);
 		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
@@ -411,27 +375,24 @@ for (const failedSide of ['original', 'modified'] as const) {
 					acquire: (input: IResourceEditorInput, signal: AbortSignal) => {
 						const side = input.resource.path.includes('original') ? 'original' : 'modified';
 						started.push(side);
-						if (side === failedSide)
-							return failureGate.p.then(() => {
-								throw failure;
-							});
+						if (side === failedSide) return failureGate.p.then(() => { throw failure; });
 						siblingSignal = signal;
 						// Model providers may settle a successful acquisition after cancellation.
-						return (sibling = models.acquire(input, new AbortController().signal).then(async reference => {
+						return sibling = models.acquire(input, new AbortController().signal).then(async reference => {
 							await lateGate.p;
 							return reference;
-						}));
+						});
 					},
-					dispose() {},
-					[Symbol.dispose]() {},
+					dispose() { },
+					[Symbol.dispose]() { },
 				},
 				createComputationService: () => new PaneTestDiffComputationService(),
 			});
 			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
-			const loading = pane.setInput(
-				createDiffEditorInput({ resource: URI.file('/parallel-original.ts'), initialText: 'before' }, { resource: URI.file('/parallel-modified.ts'), initialText: 'after' }),
-				new AbortController().signal,
-			);
+			const loading = pane.setInput(createDiffEditorInput(
+				{ resource: URI.file('/parallel-original.ts'), initialText: 'before' },
+				{ resource: URI.file('/parallel-modified.ts'), initialText: 'after' },
+			), new AbortController().signal);
 			const rejected = assert.rejects(loading, error => error === failure);
 			assert.deepEqual(started, ['original', 'modified']);
 			await failureGate.complete();
@@ -442,9 +403,7 @@ for (const failedSide of ['original', 'modified'] as const) {
 			await Promise.resolve();
 			assert.equal(reference.model.isDisposed(), true);
 			assert.equal(pane.getControl(), undefined);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 }
 
@@ -469,32 +428,23 @@ for (const phase of ['acquisition', 'computation']) {
 						}
 						return reference;
 					},
-					dispose() {},
-					[Symbol.dispose]() {},
+					dispose() { },
+					[Symbol.dispose]() { },
 				},
-				createComputationService: () =>
-					phase === 'acquisition'
-						? new PaneTestDiffComputationService()
-						: new (class extends PaneTestDiffComputationService {
-								override async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
-									await Promise.resolve();
-									cancellation.abort();
-									return super.computeDiff(original, modified, options, token);
-								}
-							})(),
+				createComputationService: () => phase === 'acquisition' ? new PaneTestDiffComputationService() : new class extends PaneTestDiffComputationService {
+					override async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+						await Promise.resolve();
+						cancellation.abort();
+						return super.computeDiff(original, modified, options, token);
+					}
+				}(),
 			});
 			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
-			await assert.rejects(
-				pane.setInput(
-					createDiffEditorInput({ resource: URI.file('/cancelled-before.ts'), initialText: 'before' }, { resource: URI.file('/cancelled-after.ts'), initialText: 'after' }),
-					cancellation.signal,
-				),
-				{ name: 'CancellationError' },
-			);
-			assert.deepEqual(
-				acquired.map(model => model.isDisposed()),
-				[true, true],
-			);
+			await assert.rejects(pane.setInput(createDiffEditorInput(
+				{ resource: URI.file('/cancelled-before.ts'), initialText: 'before' },
+				{ resource: URI.file('/cancelled-after.ts'), initialText: 'after' },
+			), cancellation.signal), { name: 'CancellationError' });
+			assert.deepEqual(acquired.map(model => model.isDisposed()), [true, true]);
 			assert.equal(pane.getControl(), undefined);
 		} finally {
 			dom.window.close();
@@ -502,81 +452,57 @@ for (const phase of ['acquisition', 'computation']) {
 	});
 }
 
-for (const cancelled of [false, true])
-	test(`Diff pane overlaps control creation with lexical setup and ${cancelled ? 'releases a cancelled candidate' : 'waits for syntax before publication'}`, async () => {
-		const dom = createTestDom();
-		try {
-			using modelFeatures = registerTextModelFeatures(createTextModelFeatures);
-			using languageService = new LanguageService();
-			using language = languageService.registerLanguage({ id: 'demo' });
-			using languageFeaturesService = new LanguageFeaturesService();
-			const tokens = new DeferredPromise<LanguageTokenResult>();
-			let tokenCalls = 0;
-			using provider = languageFeaturesService.syntaxProvider.register({
-				id: 'test.diff-syntax-overlap',
-				languageIds: ['demo'],
-				provideTokens: () => {
-					tokenCalls++;
-					return tokens.p;
-				},
-			});
-			const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-			using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
-				languageService,
-				languageFeaturesService,
-			});
-			using services = new DisposableStore();
-			const container = createDiffServices(services);
-			const editors = container.get(ICodeEditorService);
-			const created = new DeferredPromise<void>();
-			services.add(
-				editors.onDiffEditorAdd(() => {
-					void created.complete();
-				}),
-			);
-			using pane = container.createInstance(DiffEditorPane, resourceStore, {
-				modelService: models,
-				createComputationService: () => new PaneTestDiffComputationService(),
-			});
-			const host = requiredElement<HTMLElement>(dom.window.document, 'main');
-			host.hidden = true;
-			pane.create(host);
-			const controller = new AbortController();
-			const opening = pane.setInput(
-				createDiffEditorInput(
-					{ resource: URI.file('/syntax-before.demo'), initialText: 'const before = 1;', languageId: 'demo' },
-					{ resource: URI.file('/syntax-after.demo'), initialText: 'const after = 2;', languageId: 'demo' },
-				),
-				controller.signal,
-			);
-			await Promise.race([
-				created.p,
-				opening.then(() => {
-					throw new Error('Input published before syntax readiness');
-				}),
-			]);
-			assert.equal(pane.getControl(), undefined, 'pending controls do not publish the input before lexical setup');
-			assert.equal(editors.listDiffEditors().length, 1, 'the control is already constructed while syntax is blocked');
-			if (cancelled) {
-				controller.abort();
-				await assert.rejects(opening, { name: 'CancellationError' });
-				assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
-				await tokens.complete({ tokens: [] });
-			} else {
-				await tokens.complete({
-					tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'keyword', modifiers: [] }],
-				});
-				await opening;
-				assert.equal(tokenCalls, 2);
-				const model = pane.getControl()?.modifiedEditor.getModel();
-				assert.equal(model?.tokenization.getLanguageTokens(0)[0]?.tokenType, 'keyword');
-				pane.clearInput();
-				assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
-			}
-		} finally {
-			dom.window.close();
+for (const cancelled of [false, true]) test(`Diff pane overlaps control creation with lexical setup and ${cancelled ? 'releases a cancelled candidate' : 'waits for syntax before publication'}`, async () => {
+	const dom = createTestDom();
+	try {
+		using modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+		using languageService = new LanguageService();
+		using language = languageService.registerLanguage({ id: 'demo' });
+		using languageFeaturesService = new LanguageFeaturesService();
+		const tokens = new DeferredPromise<LanguageTokenResult>();
+		let tokenCalls = 0;
+		using provider = languageFeaturesService.syntaxProvider.register({
+			id: 'test.diff-syntax-overlap', languageIds: ['demo'], provideTokens: () => { tokenCalls++; return tokens.p; },
+		});
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService });
+		using services = new DisposableStore();
+		const container = createDiffServices(services);
+		const editors = container.get(ICodeEditorService);
+		const created = new DeferredPromise<void>();
+		services.add(editors.onDiffEditorAdd(() => { void created.complete(); }));
+		using pane = container.createInstance(DiffEditorPane, resourceStore, {
+			modelService: models, createComputationService: () => new PaneTestDiffComputationService(),
+		});
+		const host = requiredElement<HTMLElement>(dom.window.document, 'main');
+		host.hidden = true;
+		pane.create(host);
+		const controller = new AbortController();
+		const opening = pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/syntax-before.demo'), initialText: 'const before = 1;', languageId: 'demo' },
+			{ resource: URI.file('/syntax-after.demo'), initialText: 'const after = 2;', languageId: 'demo' },
+		), controller.signal);
+		await Promise.race([created.p, opening.then(() => { throw new Error('Input published before syntax readiness'); })]);
+		assert.equal(pane.getControl(), undefined, 'pending controls do not publish the input before lexical setup');
+		assert.equal(editors.listDiffEditors().length, 1, 'the control is already constructed while syntax is blocked');
+		if (cancelled) {
+			controller.abort();
+			await assert.rejects(opening, { name: 'CancellationError' });
+			assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
+			await tokens.complete({ tokens: [] });
+		} else {
+			await tokens.complete({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'keyword', modifiers: [] }] });
+			await opening;
+			assert.equal(tokenCalls, 2);
+			const model = pane.getControl()?.modifiedEditor.getModel();
+			assert.equal(model?.tokenization.getLanguageTokens(0)[0]?.tokenType, 'keyword');
+			pane.clearInput();
+			assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
 		}
-	});
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
 	const dom = createTestDom();
@@ -592,10 +518,10 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 		createComputationService: () => new PaneTestDiffComputationService(options => seenLimits.push(options.maxComputationTimeMs)),
 	});
 	pane.create(parent);
-	await pane.setInput(
-		createDiffEditorInput({ resource: URI.file('/before.ts'), initialText: 'word', label: 'before.ts' }, { resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' }),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/before.ts'), initialText: 'word', label: 'before.ts' },
+		{ resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' },
+	), new AbortController().signal);
 	await Promise.resolve();
 	const diffWidget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
 	assert.equal(diffWidget.diff?.hunks.length, 0);
@@ -622,21 +548,10 @@ test('Diff pane recomputes moved blocks when the setting changes in an open comp
 	});
 	pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 	pane.layout({ width: 1200, height: 300 });
-	await pane.setInput(
-		createDiffEditorInput(
-			{
-				resource: URI.file('/before.ts'),
-				initialText: 'head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail',
-				label: 'before.ts',
-			},
-			{
-				resource: URI.file('/after.ts'),
-				initialText: 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail',
-				label: 'after.ts',
-			},
-		),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/before.ts'), initialText: 'head\nmove A\nmove B\nkeep A\nkeep B\nkeep C\ntail', label: 'before.ts' },
+		{ resource: URI.file('/after.ts'), initialText: 'head\nkeep A\nkeep B\nkeep C\nmove A\nmove B\ntail', label: 'after.ts' },
+	), new AbortController().signal);
 	await Promise.resolve();
 	const widget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
 	assert.equal(widget.diff?.moves.length, 0);
@@ -659,38 +574,30 @@ test('Diff pane follows the modified language override and language changes', as
 	using services = new DisposableStore();
 	const container = createDiffServices(services);
 	const configuration = container.get(IConfigurationService);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, {
-		overrideIdentifier: 'typescript',
-	});
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	let computations = 0;
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(() => computations++),
 	});
 	pane.create(parent);
-	const modifiedInput = {
-		resource: URI.file('/language-after.ts'),
-		initialText: 'word ',
-		languageId: 'typescript',
-		label: 'after.ts',
-	};
-	await pane.setInput(createDiffEditorInput({ resource: URI.file('/language-before.ts'), initialText: 'word', label: 'before.ts' }, modifiedInput), new AbortController().signal);
+	const modifiedInput = { resource: URI.file('/language-after.ts'), initialText: 'word ', languageId: 'typescript', label: 'after.ts' };
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/language-before.ts'), initialText: 'word', label: 'before.ts' },
+		modifiedInput,
+	), new AbortController().signal);
 	await Promise.resolve();
 	const diffWidget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
 	assert.equal(diffWidget.diff?.hunks.length, 1);
 	assert.equal(computations, 1);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, {
-		overrideIdentifier: 'javascript',
-	});
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'javascript' });
 	assert.equal(computations, 1);
 	using modified = await models.acquire(modifiedInput, new AbortController().signal);
 	modified.model.setLanguage('javascript');
 	await Promise.resolve();
 	assert.equal(diffWidget.diff?.hunks.length, 0);
 	assert.equal(computations, 2);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, {
-		overrideIdentifier: 'javascript',
-	});
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'javascript' });
 	await Promise.resolve();
 	assert.equal(diffWidget.diff?.hunks.length, 1);
 	pane.dispose();
@@ -712,13 +619,10 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	});
 	pane.create(parent);
 	pane.layout({ width: 400, height: 200 });
-	await pane.setInput(
-		createDiffEditorInput(
-			{ resource: URI.file('/wrap-before.ts'), initialText: 'old ' + 'value '.repeat(40) },
-			{ resource: URI.file('/wrap-after.ts'), initialText: 'new ' + 'value '.repeat(40) },
-		),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/wrap-before.ts'), initialText: 'old ' + 'value '.repeat(40) },
+		{ resource: URI.file('/wrap-after.ts'), initialText: 'new ' + 'value '.repeat(40) },
+	), new AbortController().signal);
 	await Promise.resolve();
 	const editor = requiredElement<HTMLElement>(dom.window.document, '.stanza-diff-editor');
 	assert.equal(editor.classList.contains('word-wrapped'), true);
@@ -752,13 +656,10 @@ test('Diff pane preserves language-specific wrapping modes and columns through c
 	try {
 		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 		pane.layout({ width: 1000, height: 300 });
-		await pane.setInput(
-			createDiffEditorInput(
-				{ resource: URI.file('/before.md'), initialText: 'old ' + 'word '.repeat(50), languageId: 'markdown' },
-				{ resource: URI.file('/after.md'), initialText: 'new ' + 'word '.repeat(50), languageId: 'markdown' },
-			),
-			new AbortController().signal,
-		);
+		await pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/before.md'), initialText: 'old ' + 'word '.repeat(50), languageId: 'markdown' },
+			{ resource: URI.file('/after.md'), initialText: 'new ' + 'word '.repeat(50), languageId: 'markdown' },
+		), new AbortController().signal);
 		const diff = pane.getControl()!;
 		for (const editor of [diff.originalEditor, diff.modifiedEditor]) {
 			assert.equal(editor.getOption(EditorOption.wordWrap), 'bounded');
@@ -800,7 +701,10 @@ test('Diff pane reveals its first change after layout and keeps an explicit sele
 		const modified = [...lines];
 		modified[59] = 'first change';
 		modified[89] = 'second change';
-		const input = createDiffEditorInput({ resource: URI.file('/initial-before.ts'), initialText: lines.join('\n') }, { resource: URI.file('/initial-after.ts'), initialText: modified.join('\n') });
+		const input = createDiffEditorInput(
+			{ resource: URI.file('/initial-before.ts'), initialText: lines.join('\n') },
+			{ resource: URI.file('/initial-after.ts'), initialText: modified.join('\n') },
+		);
 		await pane.setInput(input, new AbortController().signal);
 		const editor = pane.getControl()!;
 		assert.equal(editor.currentChangeRow, -1);
@@ -836,13 +740,10 @@ test('Diff collapse command toggles hidden unchanged regions and follows setting
 	pane.create(parent);
 	pane.layout({ width: 800, height: 300 });
 	const lines = Array.from({ length: 36 }, (_, index) => `shared ${index + 1}`);
-	await pane.setInput(
-		createDiffEditorInput(
-			{ resource: URI.file('/hidden-before.ts'), initialText: lines.join('\n') },
-			{ resource: URI.file('/hidden-after.ts'), initialText: [...lines.slice(0, -1), 'changed'].join('\n') },
-		),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput(
+		{ resource: URI.file('/hidden-before.ts'), initialText: lines.join('\n') },
+		{ resource: URI.file('/hidden-after.ts'), initialText: [...lines.slice(0, -1), 'changed'].join('\n') },
+	), new AbortController().signal);
 	await Promise.resolve();
 	const regions = () => parent.querySelectorAll('.ash-diff-hidden-region');
 	assert.equal(regions().length, 0);
@@ -867,7 +768,7 @@ test('Diff collapse command toggles hidden unchanged regions and follows setting
 
 class BootstrapTextFiles implements ITextFileService {
 	readonly onDidSave = Event.None;
-	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
+	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
@@ -879,28 +780,23 @@ class BootstrapTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(): Promise<{ readonly revision: string | undefined }> {
+	async save(): Promise<{ readonly revision: string | undefined; }> {
 		return { revision: undefined };
 	}
 }
 
 class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
-	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
+	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) { }
 
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
 		this.observe?.(options);
 		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
-		return {
-			identical: original.getValue() === modified.getValue(),
-			quitEarly: result.hitTimeout,
-			changes: result.changes,
-			moves: result.moves,
-		};
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();
@@ -919,6 +815,7 @@ function requiredElement<T extends Element>(ownerDocument: Document, selector: s
 	return element;
 }
 
+
 test('Diff editor status follows the selected side and ignores the inactive side', async () => {
 	const dom = createTestDom();
 	using closeWindow = toDisposable(() => dom.window.close());
@@ -928,10 +825,7 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = createDiffServices(services);
-	using pane = container.createInstance(DiffEditorPane, resourceStore, {
-		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	});
+	using pane = container.createInstance(DiffEditorPane, resourceStore, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() });
 	pane.create(parent);
 	pane.layout({ width: 600, height: 300 });
 	const input = createDiffEditorInput(
@@ -943,12 +837,7 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	assert.ok(widget);
 	using statusbar = new StatusbarService();
 	container.registerInstance(IFileTextModelService, models);
-	const statusPart = {
-		domNode: parent,
-		activeInput: input,
-		activePane: pane,
-		onDidChangeEditors: Event.None,
-	} as unknown as IEditorPart;
+	const statusPart = { domNode: parent, activeInput: input, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	using status = container.createInstance(EditorStatusContribution, statusPart, statusbar);
 	const cursorStatus = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;
 	assert.equal(cursorStatus(), 'Ln 1, Col 1');

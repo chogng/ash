@@ -30,13 +30,11 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super(processes);
-		this._register(
-			toDisposable(() => {
-				for (const pty of this.handles.values()) pty.shutdown(false);
-				this.handles.clear();
-				this.backends.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const pty of this.handles.values()) pty.shutdown(false);
+			this.handles.clear();
+			this.backends.clear();
+		}));
 	}
 
 	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<AgentHostPty> {
@@ -51,25 +49,14 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 			}
 			return backend.createProcess(options, id, attached, ownership);
 		}
-		const creation = attached ?? (await this.processes.create(options));
+		const creation = attached ?? await this.processes.create(options);
 		if (this.isDisposed) {
-			if (ownership?.canTerminate !== false)
-				await this.processes.close({
-					terminalId: creation.terminalId,
-					...(options.dirId === undefined ? {} : { dirId: options.dirId }),
-				});
+			if (ownership?.canTerminate !== false) await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();
 		}
-		const pty = this.instantiation.createInstance(
-			AgentHostPty,
-			id,
-			creation,
-			options.dirId,
-			() => {
-				if (this.handles.get(id) === pty) this.handles.delete(id);
-			},
-			ownership,
-		);
+		const pty = this.instantiation.createInstance(AgentHostPty, id, creation, options.dirId, () => {
+			if (this.handles.get(id) === pty) this.handles.delete(id);
+		}, ownership);
 		this.handles.set(id, pty);
 		return pty;
 	}

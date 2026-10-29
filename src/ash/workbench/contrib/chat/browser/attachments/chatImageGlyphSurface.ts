@@ -11,10 +11,9 @@ export class GlyphSurface extends Disposable {
 	private readonly frame = this._register(new MutableDisposable());
 	private visible = true;
 	private loadingTime = 0;
-	private revealState: { readonly options: ITextureRevealOptions; readonly clock: Animation } | undefined;
+	private revealState: { readonly options: ITextureRevealOptions; readonly clock: Animation; } | undefined;
 
-	constructor(
-		container: HTMLElement,
+	constructor(container: HTMLElement,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 		@IThemeService private readonly themes: IThemeService,
 	) {
@@ -26,14 +25,7 @@ export class GlyphSurface extends Disposable {
 		const window = getWindow(container);
 		const observer = new window.ResizeObserver(() => this.schedule());
 		observer.observe(this.canvas);
-		this._register(
-			toDisposable(() => {
-				observer.disconnect();
-				this.revealState?.clock.cancel();
-				this.canvas.remove();
-				this.canvas.width = this.canvas.height = 0;
-			}),
-		);
+		this._register(toDisposable(() => { observer.disconnect(); this.revealState?.clock.cancel(); this.canvas.remove(); this.canvas.width = this.canvas.height = 0; }));
 		this._register(accessibility.onDidChangeReducedMotion(() => this.schedule()));
 		this._register(themes.onDidColorThemeChange(() => this.schedule()));
 		this._register(addDisposableListener(window.document, 'visibilitychange', () => this.schedule()));
@@ -52,10 +44,7 @@ export class GlyphSurface extends Disposable {
 
 	reveal(options: ITextureRevealOptions): void {
 		this.revealState?.clock.cancel();
-		this.revealState = {
-			options,
-			clock: this.canvas.animate([], { duration: options.duration, fill: 'forwards' }),
-		};
+		this.revealState = { options, clock: this.canvas.animate([], { duration: options.duration, fill: 'forwards' }) };
 		this.paint();
 	}
 
@@ -90,13 +79,12 @@ export class GlyphSurface extends Disposable {
 		context.textBaseline = 'middle';
 		const time = reveal?.options.timing.loadingTime ?? (animated ? window.performance.now() : 0);
 		this.loadingTime = time;
-		for (let y = 6; y < height; y += 12)
-			for (let x = 6; x < width; x += 10) {
-				const wave = (Math.sin(x / 24 - time / 260) + Math.cos(y / 31 + time / 410) + 2) / 4;
-				context.globalAlpha = 0.2 + wave * 0.8;
-				context.fillStyle = reveal && progress > 0 ? reveal.options.samples.colorAt(x / width, y / height) : style.color;
-				context.fillText('01·:+*#'[Math.floor((x + y) / 10 + wave * 6) % 7]!, x, y);
-			}
+		for (let y = 6; y < height; y += 12) for (let x = 6; x < width; x += 10) {
+			const wave = (Math.sin(x / 24 - time / 260) + Math.cos(y / 31 + time / 410) + 2) / 4;
+			context.globalAlpha = 0.2 + wave * 0.8;
+			context.fillStyle = reveal && progress > 0 ? reveal.options.samples.colorAt(x / width, y / height) : style.color;
+			context.fillText('01·:+*#'[Math.floor((x + y) / 10 + wave * 6) % 7]!, x, y);
+		}
 		if (reveal) reveal.options.onFrame({ width, height, imageOpacity: eased, textureOpacity: 1 - eased });
 		if (animated && (!reveal || progress < 1)) this.schedule();
 	}

@@ -1,16 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	ClientCoordinates,
-	DynamicCssRules,
-	EditorDom,
-	EditorMouseEventFactory,
-	GlobalEditorPointerMoveMonitor,
-	PageCoordinates,
-	createCoordinatesRelativeToEditor,
-	createEditorPagePosition,
-} from '../../browser/editorDom.js';
+import { ClientCoordinates, DynamicCssRules, EditorDom, EditorMouseEventFactory, GlobalEditorPointerMoveMonitor, PageCoordinates, createCoordinatesRelativeToEditor, createEditorPagePosition } from '../../browser/editorDom.js';
 import { type ICodeEditor } from '../../browser/editorBrowser.js';
 
 test('EditorDom owns stable roots, layout writes, and attachment lifecycle', () => {
@@ -65,17 +56,7 @@ test('editor coordinate contracts preserve page/client identity and undo element
 		offsetWidth: { configurable: true, value: 200 },
 		offsetHeight: { configurable: true, value: 100 },
 	});
-	editor.getBoundingClientRect = () => ({
-		x: 10,
-		y: 20,
-		left: 10,
-		top: 20,
-		right: 410,
-		bottom: 220,
-		width: 400,
-		height: 200,
-		toJSON: () => ({}),
-	});
+	editor.getBoundingClientRect = () => ({ x: 10, y: 20, left: 10, top: 20, right: 410, bottom: 220, width: 400, height: 200, toJSON: () => ({}) });
 
 	const page = new ClientCoordinates(20, 35).toPageCoordinates(dom.window as unknown as Window);
 	assert.deepEqual(page, new PageCoordinates(50, 75));
@@ -91,17 +72,7 @@ test('editor relative coordinates remain finite before layout dimensions are ava
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const editor = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(editor);
-	editor.getBoundingClientRect = () => ({
-		x: 5,
-		y: 7,
-		left: 5,
-		top: 7,
-		right: 5,
-		bottom: 7,
-		width: 0,
-		height: 0,
-		toJSON: () => ({}),
-	});
+	editor.getBoundingClientRect = () => ({ x: 5, y: 7, left: 5, top: 7, right: 5, bottom: 7, width: 0, height: 0, toJSON: () => ({}) });
 	const editorPosition = createEditorPagePosition(editor);
 	assert.deepEqual({ ...createCoordinatesRelativeToEditor(editor, editorPosition, new PageCoordinates(15, 27)) }, { x: 10, y: 20 });
 	dom.window.close();
@@ -113,7 +84,7 @@ test('EditorMouseEventFactory listeners stop publishing after disposal', () => {
 	const button = dom.window.document.querySelector<HTMLElement>('button');
 	assert.ok(editor && button);
 	const events = new EditorMouseEventFactory(editor);
-	const positions: Array<{ readonly x: number; readonly y: number }> = [];
+	const positions: Array<{ readonly x: number; readonly y: number; }> = [];
 	const listener = events.onMouseDown(editor, event => positions.push({ x: event.relativePos.x, y: event.relativePos.y }));
 	button.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 12, clientY: 18 }));
 	listener.dispose();
@@ -129,13 +100,7 @@ test('GlobalEditorPointerMoveMonitor replaces sessions and stops on pointer rele
 	const monitor = new GlobalEditorPointerMoveMonitor(editor);
 	const moves: number[] = [];
 	const stops: string[] = [];
-	monitor.startMonitoring(
-		editor,
-		7,
-		1,
-		event => moves.push(event.clientX),
-		event => stops.push(event?.type ?? 'manual'),
-	);
+	monitor.startMonitoring(editor, 7, 1, event => moves.push(event.clientX), event => stops.push(event?.type ?? 'manual'));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 7, 1, 14));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 8, 1, 20));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointerup', 7, 0, 14));
@@ -152,13 +117,7 @@ test('GlobalEditorPointerMoveMonitor cancels a pointer session on a non-modifier
 	const monitor = new GlobalEditorPointerMoveMonitor(editor);
 	const moves: number[] = [];
 	const stops: string[] = [];
-	monitor.startMonitoring(
-		editor,
-		9,
-		1,
-		event => moves.push(event.clientX),
-		event => stops.push(event?.type ?? 'manual'),
-	);
+	monitor.startMonitoring(editor, 9, 1, event => moves.push(event.clientX), event => stops.push(event?.type ?? 'manual'));
 	editor.ownerDocument.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 9, 1, 40));
 	assert.deepEqual({ moves, stops }, { moves: [], stops: ['keydown'] });
@@ -167,7 +126,7 @@ test('GlobalEditorPointerMoveMonitor cancels a pointer session on a non-modifier
 });
 
 function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number): Event {
-	const event = new dom.window.MouseEvent(type, { buttons, clientX }) as unknown as Event & { pointerId: number };
+	const event = new dom.window.MouseEvent(type, { buttons, clientX }) as unknown as Event & { pointerId: number; };
 	Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
 	return event;
 }

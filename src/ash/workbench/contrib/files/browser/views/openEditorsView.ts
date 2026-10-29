@@ -18,13 +18,8 @@ import { IDecorationsService } from '../../../../services/decorations/common/dec
 import { OpenEditorsFocusedContext } from '../../common/files.js';
 
 type OpenEditorsRow =
-	| { readonly kind: 'group'; readonly id: string; readonly label: string }
-	| {
-			readonly kind: 'editor';
-			readonly id: string;
-			readonly editor: EditorInstanceState;
-			readonly isActive: boolean;
-	  };
+	| { readonly kind: 'group'; readonly id: string; readonly label: string; }
+	| { readonly kind: 'editor'; readonly id: string; readonly editor: EditorInstanceState; readonly isActive: boolean; };
 
 /** Shows the editor instances already owned by the Workbench editor groups. */
 export class OpenEditorsView extends ViewPane {
@@ -52,19 +47,17 @@ export class OpenEditorsView extends ViewPane {
 		this.emptyDomNode.className = 'ash-open-editors-empty';
 		this.emptyDomNode.setAttribute('role', 'status');
 		this.emptyDomNode.tabIndex = 0;
-		this.tree = this._register(
-			new ObjectTree<OpenEditorsRow>(this.contentElement, {
-				styles: defaultListStyles,
-				findWidgetStyles: defaultFindWidgetStyles,
-				ariaLabel: localize('files.openEditors.title', 'Open Editors'),
-				modelOptions: {
-					defaultCollapseState: 'expanded',
-					identityProvider: { getId: row => row.id },
-				},
-				onWillRender: () => this.rowDisposables.clear(),
-				renderElement: row => this.renderRow(row, document),
-			}),
-		);
+		this.tree = this._register(new ObjectTree<OpenEditorsRow>(this.contentElement, {
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
+			ariaLabel: localize('files.openEditors.title', 'Open Editors'),
+			modelOptions: {
+				defaultCollapseState: 'expanded',
+				identityProvider: { getId: row => row.id },
+			},
+			onWillRender: () => this.rowDisposables.clear(),
+			renderElement: row => this.renderRow(row, document),
+		}));
 		this.tree.element.classList.add('ash-open-editors-tree');
 		this.contentElement.append(this.emptyDomNode);
 		const scopedContext = this._register(contextKeys.createScoped(this.contentElement));
@@ -76,32 +69,24 @@ export class OpenEditorsView extends ViewPane {
 			this.emptyDomNode.textContent = localize('files.openEditors.empty', 'No open editors');
 			this.refresh();
 		};
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.OpenEditors)) updateLabel();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.OpenEditors)) updateLabel();
+		}));
 		this._register(editorPart.onDidChangeEditors(() => this.refresh()));
-		this._register(
-			this.tree.onPointer(({ element, browserEvent }) => {
-				if (browserEvent.button === 0 && element.kind === 'editor') this.activate(element.editor);
-			}),
-		);
-		this._register(
-			this.tree.onDidAccept(({ element }) => {
-				if (element.kind === 'group') this.tree.toggleCollapsed(element.id);
-				else this.activate(element.editor);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.tree.element, 'keydown', (event: KeyboardEvent) => {
-				if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-				const row = this.tree.focus;
-				if (row?.kind !== 'editor') return;
-				event.preventDefault();
-				void this.close(row.editor);
-			}),
-		);
+		this._register(this.tree.onPointer(({ element, browserEvent }) => {
+			if (browserEvent.button === 0 && element.kind === 'editor') this.activate(element.editor);
+		}));
+		this._register(this.tree.onDidAccept(({ element }) => {
+			if (element.kind === 'group') this.tree.toggleCollapsed(element.id);
+			else this.activate(element.editor);
+		}));
+		this._register(addDisposableListener(this.tree.element, 'keydown', (event: KeyboardEvent) => {
+			if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+			const row = this.tree.focus;
+			if (row?.kind !== 'editor') return;
+			event.preventDefault();
+			void this.close(row.editor);
+		}));
 		updateLabel();
 	}
 
@@ -136,18 +121,13 @@ export class OpenEditorsView extends ViewPane {
 		const activeGroup = this.editorPart.activeGroup;
 		const activeEditor = activeGroup.editors.find(editor => editor.isActive);
 		const activeId = activeEditor ? `editor:${activeGroup.id}:${activeEditor.instanceId}` : undefined;
-		const rows =
-			groups.length === 1
-				? groups[0]!.editors.map(editor => ({ element: this.editorRow(editor, groups[0]!.id) }))
-				: groups.map((group, index) => ({
-						element: {
-							kind: 'group',
-							id: `group:${group.id}`,
-							label: localize('files.openEditors.group', 'Group {0}', index + 1),
-						} as OpenEditorsRow,
-						children: group.editors.map(editor => ({ element: this.editorRow(editor, group.id) })),
-						collapsible: true,
-					}));
+		const rows = groups.length === 1
+			? groups[0]!.editors.map(editor => ({ element: this.editorRow(editor, groups[0]!.id) }))
+			: groups.map((group, index) => ({
+				element: { kind: 'group', id: `group:${group.id}`, label: localize('files.openEditors.group', 'Group {0}', index + 1) } as OpenEditorsRow,
+				children: group.editors.map(editor => ({ element: this.editorRow(editor, group.id) })),
+				collapsible: true,
+			}));
 		this.tree.setChildren(rows);
 		if (previousFocus && this.tree.model.has(previousFocus)) this.tree.setFocus(previousFocus);
 		else if (activeId && this.tree.model.has(activeId)) this.tree.setFocus(activeId);
@@ -159,12 +139,7 @@ export class OpenEditorsView extends ViewPane {
 	}
 
 	private editorRow(editor: EditorInstanceState, groupId: number): OpenEditorsRow {
-		return {
-			kind: 'editor',
-			id: `editor:${groupId}:${editor.instanceId}`,
-			editor,
-			isActive: this.editorPart.activeGroup.id === groupId && editor.isActive,
-		};
+		return { kind: 'editor', id: `editor:${groupId}:${editor.instanceId}`, editor, isActive: this.editorPart.activeGroup.id === groupId && editor.isActive };
 	}
 
 	private renderRow(row: OpenEditorsRow, document: Document): HTMLElement {
@@ -193,17 +168,13 @@ export class OpenEditorsView extends ViewPane {
 		close.setAttribute('aria-label', localize('files.openEditors.close', 'Close {0}', name));
 		close.title = close.getAttribute('aria-label') ?? '';
 		appendIcon(Lxicon.close, close).setAttribute('aria-hidden', 'true');
-		this.rowDisposables.add(
-			addDisposableListener(close, 'click', (event: MouseEvent) => {
-				event.stopPropagation();
-				void this.close(row.editor);
-			}),
-		);
-		this.rowDisposables.add(
-			addDisposableListener(close, 'keydown', (event: KeyboardEvent) => {
-				if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-			}),
-		);
+		this.rowDisposables.add(addDisposableListener(close, 'click', (event: MouseEvent) => {
+			event.stopPropagation();
+			void this.close(row.editor);
+		}));
+		this.rowDisposables.add(addDisposableListener(close, 'keydown', (event: KeyboardEvent) => {
+			if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+		}));
 		content.append(close);
 		return content;
 	}

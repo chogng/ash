@@ -9,10 +9,11 @@ import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 
 class CursorState {
-	constructor(readonly selections: readonly Selection[]) {}
+	constructor(readonly selections: readonly Selection[]) { }
 
 	equals(other: CursorState): boolean {
-		return this.selections.length === other.selections.length && this.selections.every((selection, index) => selection.equalsSelection(other.selections[index]!));
+		return this.selections.length === other.selections.length
+			&& this.selections.every((selection, index) => selection.equalsSelection(other.selections[index]!));
 	}
 }
 
@@ -21,7 +22,7 @@ class StackElement {
 		readonly cursorState: CursorState,
 		readonly scrollTop: number,
 		readonly scrollLeft: number,
-	) {}
+	) { }
 }
 
 /** Owns bounded cursor-only undo and redo for one editor instance. */

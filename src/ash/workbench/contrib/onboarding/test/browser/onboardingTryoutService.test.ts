@@ -22,59 +22,36 @@ suite('OnboardingTryoutService', () => {
 		let shown = 0;
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IOnboardingScenarioService, {
-			start() {},
-			async run() {
-				return 'unavailable' as const;
-			},
-			async showSteps() {
-				shown += 1;
-				return 'completed' as const;
-			},
-			resetAll() {},
+			start() { },
+			async run() { return 'unavailable' as const; },
+			async showSteps() { shown += 1; return 'completed' as const; },
+			resetAll() { },
 		});
-		services.registerInstance(IViewsService, {
-			openView: async () => undefined,
-			focusView: async () => false,
-			getViewWithId: () => undefined,
-		} as unknown as IViewsService);
+		services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: Event.None,
 			onDidShowDialog: Event.None,
-			about: async () => {
-				throw new Error('Unexpected about dialog');
-			},
-			async showMessage() {},
-			async info() {},
-			async warn() {},
-			async error() {},
-			async confirm(_options: IConfirmationDialogOptions) {
-				return { confirmed };
-			},
-			async input() {
-				throw new Error('Unexpected input dialog');
-			},
-			async prompt(): Promise<never> {
-				throw new Error('Unexpected prompt');
-			},
+			about: async () => { throw new Error('Unexpected about dialog'); },
+			async showMessage() { },
+			async info() { },
+			async warn() { },
+			async error() { },
+			async confirm(_options: IConfirmationDialogOptions) { return { confirmed }; },
+			async input() { throw new Error('Unexpected input dialog'); },
+			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
-		services.registerSingleton(
-			INotificationService,
-			() =>
-				new (class extends TestNotificationService {
-					override notify(options: INotification) {
-						notifications.push(options);
-						return super.notify(options);
-					}
-				})(),
-		);
+		services.registerSingleton(INotificationService, () => new class extends TestNotificationService {
+			override notify(options: INotification) {
+				notifications.push(options);
+				return super.notify(options);
+			}
+		}());
 		return {
 			services,
 			commands,
 			notifications,
 			getShown: () => shown,
-			confirm: () => {
-				confirmed = true;
-			},
+			confirm: () => { confirmed = true; },
 		};
 	}
 
@@ -83,9 +60,7 @@ suite('OnboardingTryoutService', () => {
 		using services = fixture.services;
 		using command = CommandsRegistry.register('test.onboarding.command', (_accessor, value) => value);
 		using tryout = registerOnboardingTryout({
-			id: 'test.command',
-			title: 'Test',
-			description: 'A test command',
+			id: 'test.command', title: 'Test', description: 'A test command',
 			presentation: { kind: 'command', commandId: 'test.onboarding.command', arguments: ['installed'] },
 		});
 		const service = services.createInstance(OnboardingTryoutService);
@@ -100,19 +75,14 @@ suite('OnboardingTryoutService', () => {
 		using services = fixture.services;
 		using command = CommandsRegistry.register('test.onboarding.setup', () => assert.fail('setup ran automatically'));
 		using tryout = registerOnboardingTryout({
-			id: 'test.setup',
-			title: 'Test',
-			description: 'A test setup',
+			id: 'test.setup', title: 'Test', description: 'A test setup',
 			presentation: { kind: 'command', commandId: 'test.onboarding.setup' },
 			isAvailable: () => false,
 			setup: { label: 'Open setup', commandId: 'test.onboarding.setup' },
 		});
 		const service = services.createInstance(OnboardingTryoutService);
 		assert.equal(await service.run('test.setup'), 'unavailable');
-		assert.deepEqual(
-			fixture.notifications.map(item => item.actions?.primary?.[0]?.label),
-			['Open setup'],
-		);
+		assert.deepEqual(fixture.notifications.map(item => item.actions?.primary?.[0]?.label), ['Open setup']);
 	});
 
 	test('cancellation during preparation prevents late guidance', async () => {
@@ -120,18 +90,10 @@ suite('OnboardingTryoutService', () => {
 		using services = fixture.services;
 		using source = new CancellationTokenSource();
 		let release!: () => void;
-		const preparing = new Promise<void>(resolve => {
-			release = resolve;
-		});
+		const preparing = new Promise<void>(resolve => { release = resolve; });
 		using tryout = registerOnboardingTryout({
-			id: 'test.guided',
-			title: 'Test',
-			description: 'A test guide',
-			presentation: {
-				kind: 'guided',
-				steps: [{ target: 'test.target', title: 'Test', description: 'Step' }],
-				prepare: () => preparing,
-			},
+			id: 'test.guided', title: 'Test', description: 'A test guide',
+			presentation: { kind: 'guided', steps: [{ target: 'test.target', title: 'Test', description: 'Step' }], prepare: () => preparing },
 		});
 		const service = services.createInstance(OnboardingTryoutService);
 		const running = service.run('test.guided', source.token);
@@ -145,9 +107,7 @@ suite('OnboardingTryoutService', () => {
 		using services = fixture.services;
 		using command = CommandsRegistry.register('test.onboarding.external', () => undefined);
 		using tryout = registerOnboardingTryout({
-			id: 'test.external',
-			title: 'Test',
-			description: 'External test',
+			id: 'test.external', title: 'Test', description: 'External test',
 			presentation: { kind: 'command', commandId: 'test.onboarding.external' },
 		});
 		const service = services.createInstance(OnboardingTryoutService);

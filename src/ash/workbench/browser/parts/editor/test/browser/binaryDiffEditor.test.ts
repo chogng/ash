@@ -46,16 +46,8 @@ test('historical binary comparisons restore immutable bytes without a filesystem
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	try {
 		const input = createBinaryDiffEditorInput(
-			{
-				resource: URI.parse('git-commit:/repo/base/image.bin'),
-				initialBytes: new Uint8Array([0, 1]),
-				readOnly: true,
-			},
-			{
-				resource: URI.parse('git-commit:/repo/head/image.bin'),
-				initialBytes: new Uint8Array([0, 255, 2]),
-				readOnly: true,
-			},
+			{ resource: URI.parse('git-commit:/repo/base/image.bin'), initialBytes: new Uint8Array([0, 1]), readOnly: true },
+			{ resource: URI.parse('git-commit:/repo/head/image.bin'), initialBytes: new Uint8Array([0, 255, 2]), readOnly: true },
 		);
 		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 		using services = new InstantiationService();
@@ -72,14 +64,7 @@ test('historical binary comparisons restore immutable bytes without a filesystem
 		assert.match(after.getControl()!.getModel()!.getValue(), /00 ff 02/);
 		assert.equal(before.getControl()!.getModel()!.getAllDecorations().length, 2);
 		assert.equal(after.getControl()!.getModel()!.getAllDecorations().length, 2);
-		assert.deepEqual(
-			before
-				.getControl()!
-				.getModel()!
-				.getAllDecorations()
-				.map(decoration => decoration.range.toString()),
-			['[1,14 -> 1,19]', '[1,62 -> 1,64]'],
-		);
+		assert.deepEqual(before.getControl()!.getModel()!.getAllDecorations().map(decoration => decoration.range.toString()), ['[1,14 -> 1,19]', '[1,62 -> 1,64]']);
 		assert.match(dom.window.document.querySelector('.ash-binary-editor-summary')!.textContent!, /Original.*2 differing bytes/);
 		initializeTestLocalization('zh-CN');
 		try {
@@ -87,19 +72,8 @@ test('historical binary comparisons restore immutable bytes without a filesystem
 			const summaries = dom.window.document.querySelectorAll('.ash-binary-editor-summary');
 			assert.equal(summaries[0].textContent, '原始 · 2 B · 预览中 2 个字节不同（按偏移比较）');
 			assert.equal(summaries[1].textContent, '修改后 · 3 B · 预览中 2 个字节不同（按偏移比较）');
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 		pane.dispose();
-		assert.throws(
-			() =>
-				EditorInputSerializers.deserialize({
-					typeId: 'workbench.editorInput.resource',
-					value: { resource: 'git-commit:/broken', initialBytes: '!not base64!' },
-				}),
-			/bounded base64/,
-		);
-	} finally {
-		dom.window.close();
-	}
+		assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'workbench.editorInput.resource', value: { resource: 'git-commit:/broken', initialBytes: '!not base64!' } }), /bounded base64/);
+	} finally { dom.window.close(); }
 });

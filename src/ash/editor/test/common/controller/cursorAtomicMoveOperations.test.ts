@@ -67,7 +67,11 @@ suite('Cursor move command test', () => {
 			const maxPosition = testCase.expectedVisibleColumn.length;
 			for (let position = 0; position < maxPosition; position++) {
 				const actual = AtomicTabMoveOperations.whitespaceVisibleColumn(testCase.lineContent, position, testCase.tabSize);
-				const expected = [testCase.expectedPrevTabStopPosition[position], testCase.expectedPrevTabStopVisibleColumn[position], testCase.expectedVisibleColumn[position]];
+				const expected = [
+					testCase.expectedPrevTabStopPosition[position],
+					testCase.expectedPrevTabStopVisibleColumn[position],
+					testCase.expectedVisibleColumn[position],
+				];
 				assert.deepStrictEqual(actual, expected);
 			}
 		}

@@ -55,13 +55,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 		let reads = 0;
 		class OversizedFileService extends BinaryEditorTestFileSystemProvider {
 			override async stat(resource: URI) {
-				return {
-					resource,
-					kind: FileKind.File,
-					sizeBytes: 129 * 1024 * 1024,
-					readonly: true,
-					modifiedAtMillis: undefined,
-				};
+				return { resource, kind: FileKind.File, sizeBytes: 129 * 1024 * 1024, readonly: true, modifiedAtMillis: undefined };
 			}
 			override async readFile(resource: URI) {
 				reads++;
@@ -87,10 +81,7 @@ test('Binary preview translates complete and truncated summaries in Chinese', as
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	initializeTestLocalization('zh-CN');
 	try {
-		for (const [size, expected] of [
-			[4, '4 B · 只读十六进制预览'],
-			[65537, '64.0 KiB · 只读十六进制预览 · 前 64.0 KiB'],
-		] as const) {
+		for (const [size, expected] of [[4, '4 B · 只读十六进制预览'], [65537, '64.0 KiB · 只读十六进制预览 · 前 64.0 KiB']] as const) {
 			using services = new InstantiationService();
 			services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array(size))));
 			registerTestComponentServices(services, dom.window.document);

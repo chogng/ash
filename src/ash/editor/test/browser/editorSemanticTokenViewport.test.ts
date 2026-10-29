@@ -18,7 +18,11 @@ test('Viewport projects tokens only for virtualized lines and preserves overlapp
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using model = new TextModel(lines(12).join('\n'));
 	using store = createLanguageTokenStore(model);
-	acceptTokens(store, model, 1, [token(0, 0, 4, 'keyword'), token(3, 0, 4, 'string'), token(10, 0, 4, 'number')]);
+	acceptTokens(store, model, 1, [
+		token(0, 0, 4, 'keyword'),
+		token(3, 0, 4, 'string'),
+		token(10, 0, 4, 'number'),
+	]);
 	using index = new LanguageTokenLineIndex(store);
 	using source = new StyledTokenSource(index, 'semantic');
 	using viewport = new View({
@@ -68,25 +72,18 @@ test('Same-version token replacement rerenders visible text and model edits clea
 	acceptTokens(store, model, 2, [token(0, 6, 11, 'variable')]);
 	viewport.render(true, false);
 	assert.equal(textElement.textContent, '<tag> value');
-	assert.deepEqual(
-		[...textElement.querySelectorAll('.stanza-editor-token')].map(element => ({
-			className: element.className,
-			text: element.textContent,
-		})),
-		[
-			{
-				className: 'stanza-editor-token token-variable',
-				text: 'value',
-			},
-		],
-	);
+	assert.deepEqual([...textElement.querySelectorAll('.stanza-editor-token')].map(element => ({
+		className: element.className,
+		text: element.textContent,
+	})), [{
+		className: 'stanza-editor-token token-variable',
+		text: 'value',
+	}]);
 
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 0 + 1)),
-			text: 'X',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
+		text: 'X',
+	}]);
 	assert.equal(store.result, undefined);
 	viewport.render(true, false);
 	assert.equal(textElement.textContent, 'X<tag> value');
@@ -99,12 +96,10 @@ test('Viewport clips semantic token spans to every soft-wrapped text fragment', 
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using model = new TextModel('abcdef');
 	using store = createLanguageTokenStore(model);
-	acceptTokens(store, model, 1, [
-		{
-			...token(0, 1, 5, 'keyword'),
-			presentation: { foreground: '#123456', fontStyle: ['italic'] },
-		},
-	]);
+	acceptTokens(store, model, 1, [{
+		...token(0, 1, 5, 'keyword'),
+		presentation: { foreground: '#123456', fontStyle: ['italic'] },
+	}]);
 	using index = new LanguageTokenLineIndex(store);
 	using source = new StyledTokenSource(index, 'semantic');
 	using viewport = new View({
@@ -120,27 +115,20 @@ test('Viewport clips semantic token spans to every soft-wrapped text fragment', 
 	viewport.layout({ width: 70, height: 60 });
 	viewport.render(true, false);
 
-	assert.deepEqual(lineTokenFragments(viewport.domNode.domNode), [
-		{
-			lineIndex: '0',
-			text: 'b',
-		},
-		{
-			lineIndex: '1',
-			text: 'cd',
-		},
-		{
-			lineIndex: '2',
-			text: 'e',
-		},
-	]);
-	assert.deepEqual(
-		[...viewport.domNode.domNode.querySelectorAll<HTMLElement>('.stanza-editor-token')].map(element => ({
-			color: element.style.getPropertyValue('--ash-editor-token-foreground'),
-			fontStyle: element.style.fontStyle,
-		})),
-		Array.from({ length: 3 }, () => ({ color: '#123456', fontStyle: 'italic' })),
-	);
+	assert.deepEqual(lineTokenFragments(viewport.domNode.domNode), [{
+		lineIndex: '0',
+		text: 'b',
+	}, {
+		lineIndex: '1',
+		text: 'cd',
+	}, {
+		lineIndex: '2',
+		text: 'e',
+	}]);
+	assert.deepEqual([...viewport.domNode.domNode.querySelectorAll<HTMLElement>('.stanza-editor-token')].map(element => ({
+		color: element.style.getPropertyValue('--ash-editor-token-foreground'),
+		fontStyle: element.style.fontStyle,
+	})), Array.from({ length: 3 }, () => ({ color: '#123456', fontStyle: 'italic' })));
 
 	dom.window.close();
 });
@@ -157,17 +145,13 @@ test('Viewport rejects cross-model token sources and owns none of their common s
 	using source = new StyledTokenSource(index, 'semantic');
 	using otherSource = new StyledTokenSource(otherIndex, 'semantic');
 
-	assert.throws(
-		() =>
-			new View({
-				container,
-				model,
-				lineHeight: 20,
-				textMeasurer: new FixedTextMeasurer(),
-				semanticTokenSource: otherSource,
-			}),
-		/must share one text model/,
-	);
+	assert.throws(() => new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		semanticTokenSource: otherSource,
+	}), /must share one text model/);
 	const viewport = new View({
 		container,
 		model,
@@ -179,12 +163,10 @@ test('Viewport rejects cross-model token sources and owns none of their common s
 
 	acceptTokens(store, model, 1, [token(0, 0, 5, 'keyword')]);
 	assert.equal(index.getLineTokens(0).length, 1);
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 5 + 1)),
-			text: '!',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
+		text: '!',
+	}]);
 	assert.equal(model.getText(), 'alpha!');
 	dom.window.close();
 });
@@ -194,28 +176,18 @@ test('Viewport resolves semantic tokens only for virtualized lines', () => {
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using model = new TextModel(lines(1_000).join('\n'));
 	using store = createLanguageTokenStore(model);
-	acceptTokens(
-		store,
-		model,
-		1,
-		Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, 'keyword')),
-	);
+	acceptTokens(store, model, 1, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, 'keyword')));
 	using index = new LanguageTokenLineIndex(store);
 	let requestedLines = 0;
-	using source = new StyledTokenSource(
-		{
-			textModel: index.textModel,
-			onDidChange: index.onDidChange,
-			get lines() {
-				return index.lines;
-			},
-			getLineTokens: lineIndex => {
-				requestedLines += 1;
-				return index.getLineTokens(lineIndex);
-			},
+	using source = new StyledTokenSource({
+		textModel: index.textModel,
+		onDidChange: index.onDidChange,
+		get lines() { return index.lines; },
+		getLineTokens: lineIndex => {
+			requestedLines += 1;
+			return index.getLineTokens(lineIndex);
 		},
-		'semantic',
-	);
+	}, 'semantic');
 	using viewport = new View({
 		container,
 		model,
@@ -229,32 +201,32 @@ test('Viewport resolves semantic tokens only for virtualized lines', () => {
 	assert.equal(requestedLines, 1);
 	viewport.scrollTo({ left: 0, top: 500 * 20 });
 	assert.equal(requestedLines, 2);
-	acceptTokens(
-		store,
-		model,
-		2,
-		Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, 'keyword')),
-	);
+	acceptTokens(store, model, 2, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, 'keyword')));
 	viewport.render(true, false);
 	assert.equal(requestedLines, 3);
 	dom.window.close();
 });
 
-function acceptTokens(store: ReturnType<typeof createLanguageTokenStore>, model: TextModel, requestId: number, tokens: readonly LanguageToken[]): void {
-	assert.equal(
-		store.accept({
-			requestId,
-			textModel: model,
-			modelVersion: model.version,
-			value: { tokens },
-		}),
-		LanguageResultAcceptance.Applied,
-	);
+function acceptTokens(
+	store: ReturnType<typeof createLanguageTokenStore>,
+	model: TextModel,
+	requestId: number,
+	tokens: readonly LanguageToken[],
+): void {
+	assert.equal(store.accept({
+		requestId,
+		textModel: model,
+		modelVersion: model.version,
+		value: { tokens },
+	}), LanguageResultAcceptance.Applied);
 }
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
 	return {
-		range: Range.fromPositions(new Position(lineIndex + 1, startColumn + 1), new Position(lineIndex + 1, endColumn + 1)),
+		range: Range.fromPositions(
+			new Position((lineIndex) + 1, (startColumn) + 1),
+			new Position((lineIndex) + 1, (endColumn) + 1),
+		),
 		tokenType,
 		modifiers: [],
 	};
@@ -265,10 +237,12 @@ function lines(count: number): string[] {
 }
 
 function renderedTokenLines(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.stanza-editor-token')].map(element => (element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!);
+	return [...root.querySelectorAll('.stanza-editor-token')].map(element => (
+		(element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!
+	));
 }
 
-function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
+function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null; }[] {
 	return [...root.querySelectorAll<HTMLElement>('.stanza-editor-token')].map(element => ({
 		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
 		text: element.textContent,

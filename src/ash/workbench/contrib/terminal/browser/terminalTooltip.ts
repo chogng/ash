@@ -31,7 +31,7 @@ function getShellProcessTooltip(instance: ITerminalInstance, showDetailed: boole
 	}
 	if (executable) {
 		const processArgs = instance.injectedArgs ?? shell?.args;
-		const args = typeof processArgs === 'string' ? processArgs : processArgs?.map(argument => (/\s|^$/.test(argument) ? JSON.stringify(argument) : argument)).join(' ');
+		const args = typeof processArgs === 'string' ? processArgs : processArgs?.map(argument => /\s|^$/.test(argument) ? JSON.stringify(argument) : argument).join(' ');
 		if (!showDetailed && executable.length > 32) {
 			// Execution hosts can use Windows paths even when this window runs on macOS.
 			const separator = Math.max(executable.lastIndexOf('/'), executable.lastIndexOf('\\'));
@@ -70,25 +70,15 @@ export class TerminalInstanceHover extends Disposable {
 		@IEnvironmentVariableService private readonly environment: IEnvironmentVariableService,
 	) {
 		super();
-		this.hover = this._register(
-			hoverService.setupHover({
-				target,
-				content: () => this.createContent(),
-				groupId: 'terminal-instances',
-				trapFocus: true,
-				onDidHide: () => {
-					this.contentLifetime.clear();
-					this.content = undefined;
-					this.hidden.fire();
-				},
-			}),
-		);
-		this._register(
-			storage.onDidChangeValue(event => {
-				if (event.scope !== StorageScope.APPLICATION || event.key !== TerminalStorageKeys.TabsShowDetailed) return;
-				this.refresh();
-			}),
-		);
+		this.hover = this._register(hoverService.setupHover({
+			target, content: () => this.createContent(), groupId: 'terminal-instances',
+			trapFocus: true,
+			onDidHide: () => { this.contentLifetime.clear(); this.content = undefined; this.hidden.fire(); },
+		}));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope !== StorageScope.APPLICATION || event.key !== TerminalStorageKeys.TabsShowDetailed) return;
+			this.refresh();
+		}));
 		this._register(environment.onDidChangeCollections(() => this.refresh()));
 		if (instance.statusList) {
 			this._register(instance.statusList.onDidAddStatus(() => this.refresh()));
@@ -97,19 +87,12 @@ export class TerminalInstanceHover extends Disposable {
 		this._register(instance.onDidChangeState(() => this.refresh()));
 		// Enter retains terminal activation/menu semantics. This separate shortcut
 		// enters the card from either the title toolbar or a focused terminal row.
-		this._register(
-			addDisposableListener(
-				target,
-				'keydown',
-				event => {
-					if (!event.altKey || event.key !== 'ArrowDown') return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					this.focus();
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(target, 'keydown', event => {
+			if (!event.altKey || event.key !== 'ArrowDown') return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.focus();
+		}, true));
 	}
 
 	public focus(): void {
@@ -127,7 +110,7 @@ export class TerminalInstanceHover extends Disposable {
 	private createContent(): HTMLElement {
 		this.contentLifetime.clear();
 		const document = this.target.ownerDocument;
-		const card = (this.content = h(document, 'div'));
+		const card = this.content = h(document, 'div');
 		card.className = 'ash-terminal-instance-hover';
 		const title = h(document, 'div');
 		title.className = 'ash-terminal-instance-hover-title';
@@ -145,7 +128,7 @@ export class TerminalInstanceHover extends Disposable {
 				appendIcon(status.icon, section);
 				section.append(' ');
 			}
-			section.append(details ? (status.detailedTooltip ?? status.tooltip) : status.tooltip);
+			section.append(details ? status.detailedTooltip ?? status.tooltip : status.tooltip);
 			if (status.severity === Severity.Error) {
 				section.dataset.severity = 'error';
 			} else if (status.severity === Severity.Warning) {

@@ -7,7 +7,11 @@ import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focu
 import { getViewport } from '../../geometry.js';
 import { observeResize } from '../../observer.js';
 
-export { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../common/layout.js';
+export {
+	AnchorAlignment,
+	AnchorAxisAlignment,
+	AnchorPosition,
+} from '../../../common/layout.js';
 
 export type ContextViewAnchor = Element | IRectangle;
 
@@ -57,7 +61,9 @@ export interface IContextViewProvider {
 }
 
 /** An anchored, transient host for menus, hovers, and other overlays. */
-export class ContextView extends Disposable implements IContextViewProvider {
+export class ContextView
+	extends Disposable
+	implements IContextViewProvider {
 	readonly element: HTMLDivElement;
 	private readonly _onDidHide = this._register(new Emitter<ContextViewHideReason>());
 	readonly onDidHide = this._onDidHide.event;
@@ -86,19 +92,28 @@ export class ContextView extends Disposable implements IContextViewProvider {
 			this.hide(ContextViewHideReason.Replaced);
 		}
 		this.visibleListeners.clear();
-		const ownerDocument = getAnchorDocument(options.anchor, this.element.ownerDocument);
+		const ownerDocument = getAnchorDocument(
+			options.anchor,
+			this.element.ownerDocument,
+		);
 		const targetWindow = getWindow(ownerDocument);
 		if (this.element.ownerDocument !== ownerDocument) {
 			ownerDocument.adoptNode(this.element);
 			ownerDocument.body.append(this.element);
 		}
 		const activeElement = getActiveElement(ownerDocument);
-		this.restoreFocusTo = isHTMLElement(activeElement) ? activeElement : undefined;
+		this.restoreFocusTo = isHTMLElement(activeElement)
+			? activeElement
+			: undefined;
 
 		this.options = options;
 		this.element.replaceChildren(options.content);
-		this.element.className = `ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
-		this.element.style.setProperty('--ash-context-view-layer', String(options.layer ?? 0));
+		this.element.className =
+			`ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
+		this.element.style.setProperty(
+			'--ash-context-view-layer',
+			String(options.layer ?? 0),
+		);
 		this.element.style.visibility = 'hidden';
 		this.element.hidden = false;
 		this.layout();
@@ -106,44 +121,74 @@ export class ContextView extends Disposable implements IContextViewProvider {
 		this.element.style.visibility = '';
 		registerVisibleContextView(this);
 
-		this.visibleListeners.add(
-			addDisposableListener(
-				ownerDocument,
-				'pointerdown',
-				(event: PointerEvent) => {
-					const target = event.target;
-					if (isTargetInAnotherModal(target, this.element)) return;
-					if (isNode(target) && !this.element.contains(target) && !anchorContains(options.anchor, target) && !options.isTargetWithin?.(target)) {
-						this.hide(ContextViewHideReason.OutsidePointer);
-					}
-				},
-				true,
-			),
-		);
-		this.visibleListeners.add(
-			addDisposableListener(
-				ownerDocument,
-				'keydown',
-				(event: KeyboardEvent) => {
-					if (event.isComposing || event.key !== 'Escape' || !isTopmostContextView(this) || isTargetInAnotherModal(event.target, this.element)) {
-						return;
-					}
-					event.preventDefault();
-					event.stopPropagation();
-					this.hide(ContextViewHideReason.Escape);
-				},
-				true,
-			),
-		);
-		this.visibleListeners.add(addDisposableListener(targetWindow, 'blur', () => this.hide(ContextViewHideReason.WindowBlur)));
-		this.visibleListeners.add(addDisposableListener(targetWindow, 'resize', () => this.layout()));
+		this.visibleListeners.add(addDisposableListener(
+			ownerDocument,
+			'pointerdown',
+			(event: PointerEvent) => {
+				const target = event.target;
+				if (isTargetInAnotherModal(target, this.element)) return;
+				if (
+					isNode(target) &&
+					!this.element.contains(target) &&
+					!anchorContains(options.anchor, target) &&
+					!options.isTargetWithin?.(target)
+				) {
+					this.hide(ContextViewHideReason.OutsidePointer);
+				}
+			},
+			true,
+		));
+		this.visibleListeners.add(addDisposableListener(
+			ownerDocument,
+			'keydown',
+			(event: KeyboardEvent) => {
+				if (
+					event.isComposing ||
+					event.key !== 'Escape' ||
+					!isTopmostContextView(this) ||
+					isTargetInAnotherModal(event.target, this.element)
+				) {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				this.hide(ContextViewHideReason.Escape);
+			},
+			true,
+		));
+		this.visibleListeners.add(addDisposableListener(
+			targetWindow,
+			'blur',
+			() => this.hide(ContextViewHideReason.WindowBlur),
+		));
+		this.visibleListeners.add(addDisposableListener(
+			targetWindow,
+			'resize',
+			() => this.layout(),
+		));
 		const visualViewport = targetWindow.visualViewport;
 		if (visualViewport) {
-			this.visibleListeners.add(addDisposableListener(visualViewport, 'resize', () => this.layout()));
-			this.visibleListeners.add(addDisposableListener(visualViewport, 'scroll', () => this.layout()));
+			this.visibleListeners.add(addDisposableListener(
+				visualViewport,
+				'resize',
+				() => this.layout(),
+			));
+			this.visibleListeners.add(addDisposableListener(
+				visualViewport,
+				'scroll',
+				() => this.layout(),
+			));
 		}
-		this.visibleListeners.add(addDisposableListener(ownerDocument, 'scroll', () => this.layout(), true));
-		this.visibleListeners.add(observeResize(isElementAnchor(options.anchor) ? [this.element, options.anchor] : this.element, () => this.layout()));
+		this.visibleListeners.add(addDisposableListener(
+			ownerDocument,
+			'scroll',
+			() => this.layout(),
+			true,
+		));
+		this.visibleListeners.add(observeResize(
+			isElementAnchor(options.anchor) ? [this.element, options.anchor] : this.element,
+			() => this.layout(),
+		));
 		return true;
 	}
 
@@ -158,32 +203,57 @@ export class ContextView extends Disposable implements IContextViewProvider {
 		const targetWindow = getWindow(this.element);
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();
-		const result = layout2d(getViewport(targetWindow), { width: bounds.width, height: bounds.height }, anchor, options);
-		this.element.classList.toggle('ash-context-view-above', result.anchorPosition === AnchorPosition.Above);
-		this.element.classList.toggle('ash-context-view-below', result.anchorPosition === AnchorPosition.Below);
-		this.element.classList.toggle('ash-context-view-align-right', result.anchorAlignment === AnchorAlignment.Right);
-		this.element.classList.toggle('ash-context-view-align-left', result.anchorAlignment === AnchorAlignment.Left);
-		this.element.classList.toggle('ash-context-view-align-center', result.anchorAlignment === AnchorAlignment.Center);
+		const result = layout2d(
+			getViewport(targetWindow),
+			{ width: bounds.width, height: bounds.height },
+			anchor,
+			options,
+		);
+		this.element.classList.toggle(
+			'ash-context-view-above',
+			result.anchorPosition === AnchorPosition.Above,
+		);
+		this.element.classList.toggle(
+			'ash-context-view-below',
+			result.anchorPosition === AnchorPosition.Below,
+		);
+		this.element.classList.toggle(
+			'ash-context-view-align-right',
+			result.anchorAlignment === AnchorAlignment.Right,
+		);
+		this.element.classList.toggle(
+			'ash-context-view-align-left',
+			result.anchorAlignment === AnchorAlignment.Left,
+		);
+		this.element.classList.toggle(
+			'ash-context-view-align-center',
+			result.anchorAlignment === AnchorAlignment.Center,
+		);
 		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
 			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - result.left}px`);
 		} else {
 			this.element.style.removeProperty('--ash-context-view-anchor-offset');
 		}
-		this.element.classList.toggle('ash-context-view-axis-horizontal', options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal);
+		this.element.classList.toggle(
+			'ash-context-view-axis-horizontal',
+			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
+		);
 		this.element.style.left = `${result.left}px`;
 		this.element.style.top = `${result.top}px`;
 	}
 
-	hide(reason: ContextViewHideReason = ContextViewHideReason.Programmatic): void {
+	hide(
+		reason: ContextViewHideReason = ContextViewHideReason.Programmatic,
+	): void {
 		const options = this.options;
 		if (!options) return;
 		// Removing content loses its active element; a newer view or modal owns its own focus.
 		const activeElement = getActiveElement(this.element.ownerDocument);
 		// Related hosts such as submenus delegate focus return even when mounted outside this DOM.
-		const shouldRestoreFocus =
-			options.focusRestore === ContextViewFocusRestore.Previous &&
+		const shouldRestoreFocus = options.focusRestore === ContextViewFocusRestore.Previous &&
 			!isTargetInAnotherModal(activeElement, this.element) &&
-			((isTopmostContextView(this) && isAncestorOfActiveElement(this.element)) || (activeElement !== null && options.isTargetWithin?.(activeElement) === true));
+			((isTopmostContextView(this) && isAncestorOfActiveElement(this.element)) ||
+				(activeElement !== null && options.isTargetWithin?.(activeElement) === true));
 		this.options = undefined;
 		unregisterVisibleContextView(this);
 		this.visibleListeners.clear();
@@ -193,7 +263,11 @@ export class ContextView extends Disposable implements IContextViewProvider {
 		const restoreFocusTo = this.restoreFocusTo;
 		this.restoreFocusTo = undefined;
 		try {
-			if (shouldRestoreFocus && restoreFocusTo && isFocusable(restoreFocusTo)) {
+			if (
+				shouldRestoreFocus &&
+				restoreFocusTo &&
+				isFocusable(restoreFocusTo)
+			) {
 				restoreFocus(restoreFocusTo);
 			}
 		} finally {
@@ -230,14 +304,19 @@ function isTopmostContextView(contextView: ContextView): boolean {
 /** A modal above the anchored view owns its clicks and Escape until it closes. */
 function isTargetInAnotherModal(target: EventTarget | null, view: HTMLElement): boolean {
 	if (!isNode(target)) return false;
-	const element = target.nodeType === 1 ? (target as Element) : target.parentElement;
+	const element = target.nodeType === 1 ? target as Element : target.parentElement;
 	const modal = element?.closest('dialog:modal');
 	return !!modal && !modal.contains(view);
 }
 
-function getAnchorDocument(anchor: ContextViewAnchor, fallback: Document): Document {
+function getAnchorDocument(
+	anchor: ContextViewAnchor,
+	fallback: Document,
+): Document {
 	if (isElementAnchor(anchor)) return anchor.ownerDocument;
-	const targetWindow = 'targetWindow' in anchor ? (anchor as IRectangle & { readonly targetWindow?: Window }).targetWindow : undefined;
+	const targetWindow = 'targetWindow' in anchor
+		? (anchor as IRectangle & { readonly targetWindow?: Window; }).targetWindow
+		: undefined;
 	return targetWindow?.document ?? fallback;
 }
 
@@ -256,6 +335,10 @@ function anchorContains(anchor: ContextViewAnchor, target: Node): boolean {
 	return isElementAnchor(anchor) && anchor.contains(target);
 }
 
-function isElementAnchor(anchor: ContextViewAnchor): anchor is Element {
-	return isNode(anchor) && anchor.nodeType === 1 && typeof (anchor as Element).getBoundingClientRect === 'function';
+function isElementAnchor(
+	anchor: ContextViewAnchor,
+): anchor is Element {
+	return isNode(anchor) &&
+		anchor.nodeType === 1 &&
+		typeof (anchor as Element).getBoundingClientRect === 'function';
 }

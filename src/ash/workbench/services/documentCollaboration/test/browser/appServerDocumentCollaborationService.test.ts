@@ -39,14 +39,7 @@ test('Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	const received: DocumentCollaborationRemoteEnvelope[] = [];
 	connection.onDidReceiveUpdate(update => received.push(update));
 	const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'R');
-	events.fire({
-		roomId: 'room-a',
-		clientId: 'client-b',
-		sequence: 1,
-		baseVersion: 0,
-		version: 1,
-		transaction: serializeDocumentTransaction(remote, schema),
-	});
+	events.fire({ roomId: 'room-a', clientId: 'client-b', sequence: 1, baseVersion: 0, version: 1, transaction: serializeDocumentTransaction(remote, schema) });
 	assert.equal(received.length, 1);
 	assert.equal(received[0]?.version, 1);
 	assert.ok(received[0]?.transaction instanceof DocumentTransaction);
@@ -64,46 +57,21 @@ test('Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	connection.onDidReceivePresence(presences => receivedPresence.push(...presences.map(presence => presence.clientId)));
 	await connection.updatePresence(textSelection({ nodeId: 'text-1', offset: 1 }), new AbortController().signal);
 	assert.equal(api.presenceUpdates[0]?.clientId, 'client-a');
-	events.firePresence({
-		roomId: 'room-a',
-		generation: 1,
-		presences: [
-			{
-				clientId: 'client-b',
-				selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 })),
-			},
-		],
-	});
+	events.firePresence({ roomId: 'room-a', generation: 1, presences: [{ clientId: 'client-b', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 })) }] });
 	assert.deepEqual(receivedPresence, ['client-b']);
 });
 
 function createDocument(schema: DocumentSchema): DocumentNode {
-	return schema.createDocument(
-		[
-			schema.createNode('paragraph', {
-				id: 'paragraph-1',
-				content: [schema.createText('Hello', { id: 'text-1' })],
-			}),
-		],
-		'document-1',
-	);
+	return schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] })], 'document-1');
 }
 
 class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 	readonly submissions: DocumentCollaborationSubmitParams[] = [];
 	readonly presenceUpdates: DocumentCollaborationPresenceParams[] = [];
-	readonly initialPresence: DocumentCollaborationPresenceSnapshot = {
-		roomId: 'room-a',
-		generation: 0,
-		presences: [{ clientId: 'client-c', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 })) }],
-	};
+	readonly initialPresence: DocumentCollaborationPresenceSnapshot = { roomId: 'room-a', generation: 0, presences: [{ clientId: 'client-c', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 })) }] };
 
 	async open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult> {
-		return {
-			clientId: params.clientId,
-			schemaId: params.schemaId,
-			snapshot: { roomId: 'room-a', version: 0, document: params.document },
-		};
+		return { clientId: params.clientId, schemaId: params.schemaId, snapshot: { roomId: 'room-a', version: 0, document: params.document } };
 	}
 
 	async submit(params: DocumentCollaborationSubmitParams): Promise<DocumentCollaborationSubmitResult> {
@@ -135,7 +103,7 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 class FakeServerEvents implements IServerEventApi {
 	private readonly listeners = new Set<(event: ServerNotification) => void>();
 
-	subscribe(listener: (event: ServerNotification) => void): { dispose(): void } {
+	subscribe(listener: (event: ServerNotification) => void): { dispose(): void; } {
 		this.listeners.add(listener);
 		return { dispose: () => this.listeners.delete(listener) };
 	}

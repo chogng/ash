@@ -3,9 +3,9 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import './media/decorationCssRuleExtractor.css';
 
 export class DecorationCssRuleExtractor extends Disposable {
-	private _dom: { readonly container: HTMLElement; readonly dummyElement: HTMLSpanElement } | undefined;
-	private _ruleCache: Map</* className */ string, CSSStyleRule[]> = new Map();
-	private _cssVariableCache: Map</* variableName */ string, /* value */ string> = new Map();
+	private _dom: { readonly container: HTMLElement; readonly dummyElement: HTMLSpanElement; } | undefined;
+	private _ruleCache: Map</* className */string, CSSStyleRule[]> = new Map();
+	private _cssVariableCache: Map</* variableName */string, /* value */string> = new Map();
 
 	constructor() {
 		super();

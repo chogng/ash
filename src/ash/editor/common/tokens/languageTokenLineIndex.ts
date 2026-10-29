@@ -106,19 +106,15 @@ export class LanguageTokenLineIndex extends Disposable {
 		this.indexedModelVersion = initialResult?.modelVersion ?? this.model.version;
 		this.indexedRequestId = initialResult?.requestId;
 		this.state = initialResult ? buildState(initialResult.value.tokens) : EMPTY_STATE;
-		this._register(
-			store.onDidChange(change => {
-				if (change.reason === LanguageResultStoreChangeReason.ModelChanged) return;
-				this.acceptStoreChange(change.reason, change.modelVersion, change.result);
-			}),
-		);
+		this._register(store.onDidChange(change => {
+			if (change.reason === LanguageResultStoreChangeReason.ModelChanged) return;
+			this.acceptStoreChange(change.reason, change.modelVersion, change.result);
+		}));
 		this._register(this.model.onDidChangeContent(change => this.acceptModelChange(this.model.version, change)));
-		this._register(
-			toDisposable(() => {
-				this.state = EMPTY_STATE;
-				this.invalidatedBase = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.state = EMPTY_STATE;
+			this.invalidatedBase = undefined;
+		}));
 	}
 
 	get textModel(): TextModel {
@@ -149,7 +145,7 @@ export class LanguageTokenLineIndex extends Disposable {
 	getLineTokens(lineIndex: number): readonly LanguageToken[] {
 		this.assertNotDisposed();
 		assertLineIndex(lineIndex);
-		this.model.getLineContent(lineIndex + 1);
+		this.model.getLineContent((lineIndex) + 1);
 		return this.state.statesByLine.get(lineIndex)?.line.tokens ?? EMPTY_TOKENS;
 	}
 
@@ -187,17 +183,16 @@ export class LanguageTokenLineIndex extends Disposable {
 	}
 
 	private emit(reason: LanguageResultStoreChangeReason, rebuiltLineCount: number, reusedLineCount: number): void {
-		this.changeEmitter.fire(
-			Object.freeze({
-				reason,
-				modelVersion: this.indexedModelVersion,
-				requestId: this.indexedRequestId,
-				tokenCount: this.state.tokenCount,
-				rebuiltLineCount,
-				reusedLineCount,
-			}),
-		);
+		this.changeEmitter.fire(Object.freeze({
+			reason,
+			modelVersion: this.indexedModelVersion,
+			requestId: this.indexedRequestId,
+			tokenCount: this.state.tokenCount,
+			rebuiltLineCount,
+			reusedLineCount,
+		}));
 	}
+
 }
 
 function fullUpdate(tokens: readonly LanguageToken[]): LanguageTokenIndexUpdate {
@@ -273,28 +268,18 @@ function createUnchangedSegments(baseTokenCount: number, resultTokenCount: numbe
 	let resultItemIndex = 0;
 	let lineDelta = 0;
 	for (const splice of splices) {
-		if (
-			splice.baseStartItemIndex < baseItemIndex ||
-			splice.baseStartItemIndex > baseTokenCount ||
-			splice.baseDeleteItemCount > baseTokenCount - splice.baseStartItemIndex ||
-			splice.resultStartItemIndex < resultItemIndex ||
-			splice.resultStartItemIndex > resultTokenCount ||
-			splice.resultInsertItemCount > resultTokenCount - splice.resultStartItemIndex ||
-			splice.lineDeltaBefore !== lineDelta
-		) {
+		if (splice.baseStartItemIndex < baseItemIndex || splice.baseStartItemIndex > baseTokenCount || splice.baseDeleteItemCount > baseTokenCount - splice.baseStartItemIndex || splice.resultStartItemIndex < resultItemIndex || splice.resultStartItemIndex > resultTokenCount || splice.resultInsertItemCount > resultTokenCount - splice.resultStartItemIndex || splice.lineDeltaBefore !== lineDelta) {
 			return undefined;
 		}
 		const baseUnchangedCount = splice.baseStartItemIndex - baseItemIndex;
 		if (splice.resultStartItemIndex - resultItemIndex !== baseUnchangedCount) return undefined;
 		if (baseUnchangedCount > 0) {
-			segments.push(
-				Object.freeze({
-					baseStartItemIndex: baseItemIndex,
-					baseEndItemIndex: splice.baseStartItemIndex,
-					resultStartItemIndex: resultItemIndex,
-					lineDelta,
-				}),
-			);
+			segments.push(Object.freeze({
+				baseStartItemIndex: baseItemIndex,
+				baseEndItemIndex: splice.baseStartItemIndex,
+				resultStartItemIndex: resultItemIndex,
+				lineDelta,
+			}));
 		}
 		baseItemIndex = splice.baseStartItemIndex + splice.baseDeleteItemCount;
 		resultItemIndex = splice.resultStartItemIndex + splice.resultInsertItemCount;
@@ -302,14 +287,12 @@ function createUnchangedSegments(baseTokenCount: number, resultTokenCount: numbe
 	}
 	if (baseTokenCount - baseItemIndex !== resultTokenCount - resultItemIndex) return undefined;
 	if (baseItemIndex < baseTokenCount) {
-		segments.push(
-			Object.freeze({
-				baseStartItemIndex: baseItemIndex,
-				baseEndItemIndex: baseTokenCount,
-				resultStartItemIndex: resultItemIndex,
-				lineDelta,
-			}),
-		);
+		segments.push(Object.freeze({
+			baseStartItemIndex: baseItemIndex,
+			baseEndItemIndex: baseTokenCount,
+			resultStartItemIndex: resultItemIndex,
+			lineDelta,
+		}));
 	}
 	return Object.freeze(segments);
 }
@@ -330,12 +313,10 @@ function createReusedLineCandidates(base: LanguageTokenIndexState, tokens: reado
 		const previousToken = tokens[resultStartItemIndex - 1];
 		const nextToken = tokens[resultEndItemIndex];
 		if (previousToken?.range.startLineNumber - 1 === shiftedLineIndex || nextToken?.range.startLineNumber - 1 === shiftedLineIndex) continue;
-		candidates.push(
-			Object.freeze({
-				state: segment.lineDelta === 0 ? line : createLineState(shiftedLineIndex, line.payload),
-				range: Object.freeze({ startItemIndex: resultStartItemIndex, endItemIndex: resultEndItemIndex }),
-			}),
-		);
+		candidates.push(Object.freeze({
+			state: segment.lineDelta === 0 ? line : createLineState(shiftedLineIndex, line.payload),
+			range: Object.freeze({ startItemIndex: resultStartItemIndex, endItemIndex: resultEndItemIndex }),
+		}));
 	}
 	return Object.freeze(candidates);
 }
@@ -345,11 +326,7 @@ function buildState(tokens: readonly LanguageToken[]): LanguageTokenIndexState {
 	return createState(tokens.length, built.states, built.ranges);
 }
 
-function buildLineStates(
-	tokens: readonly LanguageToken[],
-	startItemIndex: number,
-	endItemIndex: number,
-): { readonly states: readonly LanguageTokenLineState[]; readonly ranges: readonly LanguageTokenLineItemRange[] } {
+function buildLineStates(tokens: readonly LanguageToken[], startItemIndex: number, endItemIndex: number): { readonly states: readonly LanguageTokenLineState[]; readonly ranges: readonly LanguageTokenLineItemRange[]; } {
 	const states: LanguageTokenLineState[] = [];
 	const ranges: LanguageTokenLineItemRange[] = [];
 	for (let index = startItemIndex; index < endItemIndex;) {
@@ -366,19 +343,15 @@ function buildLineStates(
 
 function createLinePayload(tokens: readonly LanguageToken[]): LanguageTokenLinePayload {
 	return Object.freeze({
-		tokens: Object.freeze(
-			tokens.map(token =>
-				Object.freeze({
-					startColumn: token.range.startColumn - 1,
-					endColumn: token.range.endColumn - 1,
-					tokenType: token.tokenType,
-					modifiers: token.modifiers,
-					...(token.languageId === undefined ? {} : { languageId: token.languageId }),
-					...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
-					...(token.presentation === undefined ? {} : { presentation: token.presentation }),
-				}),
-			),
-		),
+		tokens: Object.freeze(tokens.map(token => Object.freeze({
+			startColumn: token.range.startColumn - 1,
+			endColumn: token.range.endColumn - 1,
+			tokenType: token.tokenType,
+			modifiers: token.modifiers,
+			...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+			...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
+			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+		}))),
 	});
 }
 
@@ -387,18 +360,14 @@ function createLineState(lineIndex: number, payload: LanguageTokenLinePayload): 
 	const line = Object.freeze({
 		lineIndex,
 		get tokens(): readonly LanguageToken[] {
-			materializedTokens ??= Object.freeze(
-				payload.tokens.map(token =>
-					Object.freeze({
-						range: Range.fromPositions(new Position(lineIndex + 1, token.startColumn + 1), new Position(lineIndex + 1, token.endColumn + 1)),
-						tokenType: token.tokenType,
-						modifiers: token.modifiers,
-						...(token.languageId === undefined ? {} : { languageId: token.languageId }),
-						...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
-						...(token.presentation === undefined ? {} : { presentation: token.presentation }),
-					}),
-				),
-			);
+			materializedTokens ??= Object.freeze(payload.tokens.map(token => Object.freeze({
+				range: Range.fromPositions(new Position((lineIndex) + 1, (token.startColumn) + 1), new Position((lineIndex) + 1, (token.endColumn) + 1)),
+				tokenType: token.tokenType,
+				modifiers: token.modifiers,
+				...(token.languageId === undefined ? {} : { languageId: token.languageId }),
+				...(token.balancedBrackets === undefined ? {} : { balancedBrackets: token.balancedBrackets }),
+				...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+			})));
 			return materializedTokens;
 		},
 	});
@@ -422,8 +391,7 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
 	if (endItemIndex - startItemIndex !== payload.tokens.length) return false;
 	return payload.tokens.every((relative, index) => {
 		const token = tokens[startItemIndex + index]!;
-		return (
-			token.range.startLineNumber - 1 === lineIndex &&
+		return token.range.startLineNumber - 1 === lineIndex &&
 			token.range.endLineNumber - 1 === lineIndex &&
 			token.range.startColumn - 1 === relative.startColumn &&
 			token.range.endColumn - 1 === relative.endColumn &&
@@ -431,8 +399,7 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
 			arraysEqual(token.modifiers, relative.modifiers) &&
 			token.languageId === relative.languageId &&
 			token.balancedBrackets === relative.balancedBrackets &&
-			presentationsEqual(token.presentation, relative.presentation)
-		);
+			presentationsEqual(token.presentation, relative.presentation);
 	});
 }
 
@@ -460,17 +427,12 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
 
-	constructor(
-		private readonly source: SemanticTokenModelSource,
-		private readonly kind: 'syntax' | 'semantic' = 'syntax',
-	) {
+	constructor(private readonly source: SemanticTokenModelSource, private readonly kind: 'syntax' | 'semantic' = 'syntax') {
 		super();
-		this._register(
-			source.onDidChange(() => {
-				this.lineTokens.clear();
-				this.changeEmitter.fire();
-			}),
-		);
+		this._register(source.onDidChange(() => {
+			this.lineTokens.clear();
+			this.changeEmitter.fire();
+		}));
 	}
 
 	public get textModel(): TextModel {
@@ -527,22 +489,18 @@ function resolveLineTokens(tokens: readonly LanguageToken[], kind: 'syntax' | 's
 	for (const token of tokens) {
 		const tokenStyling = resolveSemanticTokenStyling(token);
 		if (kind === 'syntax' && tokenStyling.presentation === undefined && token.presentation === undefined) continue;
-		resolved.push(
-			Object.freeze({
-				startColumn: token.range.startColumn - 1,
-				endColumn: token.range.endColumn - 1,
-				...(kind === 'semantic'
-					? {
-							semanticType: token.tokenType,
-							semanticModifiers: token.modifiers,
-							semanticLanguage: token.languageId ?? languageId,
-						}
-					: {}),
-				...(tokenStyling.presentation === undefined ? {} : { presentation: tokenStyling.presentation }),
-				...(tokenStyling.modifiers.length === 0 ? {} : { modifiers: tokenStyling.modifiers }),
-				...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),
-			}),
-		);
+		resolved.push(Object.freeze({
+			startColumn: token.range.startColumn - 1,
+			endColumn: token.range.endColumn - 1,
+			...(kind === 'semantic' ? {
+				semanticType: token.tokenType,
+				semanticModifiers: token.modifiers,
+				semanticLanguage: token.languageId ?? languageId,
+			} : {}),
+			...(tokenStyling.presentation === undefined ? {} : { presentation: tokenStyling.presentation }),
+			...(tokenStyling.modifiers.length === 0 ? {} : { modifiers: tokenStyling.modifiers }),
+			...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),
+		}));
 	}
 	return Object.freeze(resolved);
 }
@@ -550,9 +508,7 @@ function resolveLineTokens(tokens: readonly LanguageToken[], kind: 'syntax' | 's
 function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay: readonly ResolvedSemanticToken[]): readonly ResolvedSemanticToken[] {
 	if (overlay.length === 0) return base;
 	if (base.length === 0) return overlay;
-	const boundaries = [...new Set([...base.flatMap(token => [token.startColumn, token.endColumn]), ...overlay.flatMap(token => [token.startColumn, token.endColumn])])].sort(
-		(left, right) => left - right,
-	);
+	const boundaries = [...new Set([...base.flatMap(token => [token.startColumn, token.endColumn]), ...overlay.flatMap(token => [token.startColumn, token.endColumn])])].sort((left, right) => left - right);
 	const result: ResolvedSemanticToken[] = [];
 	for (let index = 0; index + 1 < boundaries.length; index += 1) {
 		const startColumn = boundaries[index]!;
@@ -561,22 +517,14 @@ function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay
 		const lexical = base.find(token => token.startColumn <= startColumn && token.endColumn >= endColumn);
 		const token = semantic ?? lexical;
 		if (!token) continue;
-		result.push(
-			Object.freeze({
-				startColumn,
-				endColumn,
-				...(token.presentation === undefined ? {} : { presentation: token.presentation }),
-				...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
-				...(token.semanticType === undefined
-					? {}
-					: {
-							semanticType: token.semanticType,
-							semanticModifiers: token.semanticModifiers,
-							semanticLanguage: token.semanticLanguage,
-						}),
-				...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
-			}),
-		);
+		result.push(Object.freeze({
+			startColumn,
+			endColumn,
+			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
+			...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+		}));
 	}
 	return Object.freeze(result);
 }

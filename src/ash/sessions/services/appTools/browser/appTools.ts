@@ -16,14 +16,7 @@ export interface TaskRunSummary {
 }
 
 export interface TaskCatalog {
-	readonly tasks: readonly {
-		taskId: string;
-		label: string;
-		source: string;
-		group: string;
-		revision: string | null;
-		unavailableReason: string | null;
-	}[];
+	readonly tasks: readonly { taskId: string; label: string; source: string; group: string; revision: string | null; unavailableReason: string | null; }[];
 	readonly runs: readonly TaskRunSummary[];
 }
 

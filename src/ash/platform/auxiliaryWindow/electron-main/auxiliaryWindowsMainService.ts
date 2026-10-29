@@ -8,7 +8,7 @@ import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windows.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
-	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent }>());
+	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());
 	readonly onDidChangeWindowState = this.stateChanged.event;
 	private readonly windows = this._register(new DisposableMap<number, AuxiliaryWindow>());
 	private readonly listeners = this._register(new DisposableMap<number, DisposableStore>());
@@ -69,15 +69,9 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		const parent = this.windows.get(parentId);
 		const auxiliary = this.windows.set(window.id, new AuxiliaryWindow(window, parent?.parentId ?? parentId));
 		const resources = this.listeners.set(window.id, new DisposableStore());
-		resources.add(
-			auxiliary.onDidChangeState(() => {
-				if (!window.isDestroyed())
-					this.stateChanged.fire({
-						parentId: auxiliary.parentId,
-						event: { windowName: webContents.mainFrame.name, state: auxiliary.getState() },
-					});
-			}),
-		);
+		resources.add(auxiliary.onDidChangeState(() => {
+			if (!window.isDestroyed()) this.stateChanged.fire({ parentId: auxiliary.parentId, event: { windowName: webContents.mainFrame.name, state: auxiliary.getState() } });
+		}));
 		// Only restored maximized popups are created with show:false by createWindow.
 		if (options.show === false) {
 			window.maximize();
@@ -94,13 +88,11 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		window.on('closed', release);
 		resources.add(toDisposable(() => window.off('closed', release)));
 		webContents.on('render-process-gone', release);
-		resources.add(
-			toDisposable(() => {
-				if (!webContents.isDestroyed()) {
-					webContents.off('render-process-gone', release);
-				}
-			}),
-		);
+		resources.add(toDisposable(() => {
+			if (!webContents.isDestroyed()) {
+				webContents.off('render-process-gone', release);
+			}
+		}));
 		return toDisposable(release);
 	}
 

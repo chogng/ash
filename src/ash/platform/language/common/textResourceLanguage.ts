@@ -12,7 +12,8 @@ export interface TextResourceLanguageResolver {
 
 /** Returns whether an input carries an explicit text or known source-language hint. */
 export function isTextResourceLanguageInput(input: TextResourceLanguageInput, resolver?: TextResourceLanguageResolver): boolean {
-	return input.contentType?.startsWith('text/') === true || resolver?.resolveLanguageId(input) !== undefined;
+	return input.contentType?.startsWith('text/') === true ||
+		resolver?.resolveLanguageId(input) !== undefined;
 }
 
 /** Resolves the canonical language identity for one text resource. */

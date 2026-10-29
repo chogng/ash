@@ -19,10 +19,7 @@ const maximumValueBytes = 2 * 1024 * 1024 + 2;
 /** Read one complete snapshot. The service owns polling, recovery and publication. */
 export function readWindowsRegistryPolicies(
 	definitions: IStringDictionary<PolicyDefinition>,
-	location: { readonly hive: 'machine' | 'user'; readonly path: string } = {
-		hive: 'machine',
-		path: 'SOFTWARE\\Policies\\Ash',
-	},
+	location: { readonly hive: 'machine' | 'user'; readonly path: string; } = { hive: 'machine', path: 'SOFTWARE\\Policies\\Ash' },
 ): IStringDictionary<unknown> {
 	const root = BigInt.asUintN(process.arch === 'ia32' ? 32 : 64, location.hive === 'machine' ? -2147483646n : -2147483647n);
 	const handle: [bigint | null] = [null];

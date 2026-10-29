@@ -22,11 +22,7 @@ suite('Sessions notification presentation', () => {
 			await expect(close).toHaveCSS('height', '28px');
 			const geometry = await toast.evaluate(element => {
 				const bounds = element.getBoundingClientRect();
-				return {
-					bottom: innerHeight - bounds.bottom,
-					right: innerWidth - bounds.right,
-					shadow: getComputedStyle(element).boxShadow,
-				};
+				return { bottom: innerHeight - bounds.bottom, right: innerWidth - bounds.right, shadow: getComputedStyle(element).boxShadow };
 			});
 			expect(geometry.bottom).toBe(12);
 			expect(geometry.right).toBe(12);
@@ -40,10 +36,7 @@ suite('Sessions notification presentation', () => {
 			await page.keyboard.press('Tab');
 			await expect(close).toBeFocused();
 			await expect(close).toHaveCSS('outline-style', 'solid');
-			await browser.info.attach(`sessions-notification-theme-${theme}`, {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await browser.info.attach(`sessions-notification-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 		}
 		await close.click();
 		await expect(toast).toHaveCount(0);
@@ -61,13 +54,7 @@ suite('Sessions notification presentation', () => {
 			await page.evaluate(value => window.ashNotificationsIntegration.setPosition(value), position);
 			const geometry = await toast.evaluate(element => {
 				const bounds = element.getBoundingClientRect();
-				return {
-					left: bounds.left,
-					top: bounds.top,
-					right: innerWidth - bounds.right,
-					bottom: innerHeight - bounds.bottom,
-					fits: element.scrollWidth <= element.clientWidth,
-				};
+				return { left: bounds.left, top: bounds.top, right: innerWidth - bounds.right, bottom: innerHeight - bounds.bottom, fits: element.scrollWidth <= element.clientWidth };
 			});
 			expect(geometry.fits).toBe(true);
 			if (position === 'top-right') expect(geometry.top).toBe(43);

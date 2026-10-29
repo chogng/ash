@@ -4,7 +4,7 @@ import { CachedFunction, LRUCachedFunction, WeakCachedFunction } from '../../com
 
 test('CachedFunction memoizes every computed key', () => {
 	let calls = 0;
-	const cached = new CachedFunction({ getCacheKey: value => value.id }, (value: { readonly id: number }) => {
+	const cached = new CachedFunction({ getCacheKey: value => value.id }, (value: { readonly id: number; }) => {
 		calls += 1;
 		return value.id * 2;
 	});

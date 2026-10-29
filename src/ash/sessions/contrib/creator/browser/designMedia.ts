@@ -14,9 +14,7 @@ export interface DesignImageSource {
 
 export function encodeDesignMedia(bytes: Uint8Array): string {
 	let value = '';
-	for (let offset = 0; offset < bytes.length; offset += 8192) {
-		value += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-	}
+	for (let offset = 0; offset < bytes.length; offset += 8192) { value += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); }
 	return btoa(value);
 }
 
@@ -34,9 +32,7 @@ export class DesignMediaPreview extends Disposable {
 		const needsEmbedded = flattenDesignShapes(document.shapes).some(shape => shape.blendMode === 'plus-darker' || !!shape.effects);
 		const used = new Set<string>();
 		for (const shape of flattenDesignShapes(document.shapes)) {
-			if (shape.kind !== 'image') {
-				continue;
-			}
+			if (shape.kind !== 'image') { continue; }
 			const version = document.assets.find(asset => asset.id === shape.assetId)!.versions.find(version => version.id === shape.assetVersionId)!;
 			used.add(version.sha256);
 			let resource = this.urls.get(version.sha256);
@@ -44,21 +40,10 @@ export class DesignMediaPreview extends Disposable {
 				resource = new ImageResource(read(version), version.mediaType);
 				this.urls.set(version.sha256, resource);
 			}
-			if (needsEmbedded && !this.embedded.has(resource)) {
-				this.embedded.set(resource, `data:${version.mediaType};base64,${encodeDesignMedia(read(version))}`);
-			}
-			sources.set(shape.assetVersionId, {
-				url: resource.url,
-				...(needsEmbedded ? { embeddedUrl: this.embedded.get(resource) } : {}),
-				width: version.width,
-				height: version.height,
-			});
+			if (needsEmbedded && !this.embedded.has(resource)) { this.embedded.set(resource, `data:${version.mediaType};base64,${encodeDesignMedia(read(version))}`); }
+			sources.set(shape.assetVersionId, { url: resource.url, ...(needsEmbedded ? { embeddedUrl: this.embedded.get(resource) } : {}), width: version.width, height: version.height });
 		}
-		for (const [key] of this.urls) {
-			if (!used.has(key)) {
-				this.urls.deleteAndDispose(key);
-			}
-		}
+		for (const [key] of this.urls) { if (!used.has(key)) { this.urls.deleteAndDispose(key); } }
 		return sources;
 	}
 }

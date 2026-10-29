@@ -17,7 +17,9 @@ export interface IRuntimeEnvironment {
 }
 
 /** @internal */
-export function operatingSystemFromNodePlatform(platform: string): HostOperatingSystem {
+export function operatingSystemFromNodePlatform(
+	platform: string,
+): HostOperatingSystem {
 	switch (platform) {
 		case 'win32':
 			return 'windows';
@@ -31,9 +33,15 @@ export function operatingSystemFromNodePlatform(platform: string): HostOperating
 }
 
 /** @internal */
-export function operatingSystemFromUserAgent(userAgent: string): HostOperatingSystem {
+export function operatingSystemFromUserAgent(
+	userAgent: string,
+): HostOperatingSystem {
 	if (userAgent.includes('Windows')) return 'windows';
-	if (userAgent.includes('Macintosh') || userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+	if (
+		userAgent.includes('Macintosh')
+		|| userAgent.includes('iPhone')
+		|| userAgent.includes('iPad')
+	) {
 		return 'mac';
 	}
 	if (userAgent.includes('Linux')) return 'linux';

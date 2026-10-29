@@ -36,7 +36,7 @@ class TrimWhitespaceParticipant implements ITextModelSaveParticipant {
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
-	) {}
+	) { }
 
 	public async participate(model: TextModel, reason: SaveReason, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal, 'Save whitespace cleanup was cancelled');
@@ -67,7 +67,7 @@ class FinalNewLineParticipant implements ITextModelSaveParticipant {
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
-	) {}
+	) { }
 
 	public async participate(model: TextModel, _reason: SaveReason, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal, 'Save final newline insertion was cancelled');
@@ -88,28 +88,21 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		@ILanguageFeaturesService private readonly features: ILanguageFeaturesService,
 		@IBulkEditService private readonly edits: IBulkEditService,
 		@IMarkerService private readonly markers: IMarkerService,
-	) {}
+	) { }
 
 	public async participate(model: TextModel, reason: SaveReason, signal: AbortSignal): Promise<void> {
-		if (reason === SaveReason.AUTO) {
-			return;
-		}
+		if (reason === SaveReason.AUTO) { return; }
 		const contribution = EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.codeActionController'])[0];
 		if (!contribution) return;
 		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>('editor.codeActionsOnSave', { overrideIdentifier: model.getLanguageId() });
 		const selected = Object.entries(settings)
-			.filter(([, mode]) => mode === 'always' || (mode === 'explicit' && reason === SaveReason.EXPLICIT))
+			.filter(([, mode]) => mode === 'always' || mode === 'explicit' && reason === SaveReason.EXPLICIT)
 			.map(([kind]) => new HierarchicalKind(kind));
 		const kinds = selected.filter(kind => !selected.some(parent => !parent.equals(kind) && parent.contains(kind)));
 		kinds.sort((left, right) => Number(CodeActionKind.SourceFixAll.contains(right)) - Number(CodeActionKind.SourceFixAll.contains(left)));
-		const excludes = Object.entries(settings)
-			.filter(([, mode]) => mode === 'never')
-			.map(([kind]) => new HierarchicalKind(kind));
+		const excludes = Object.entries(settings).filter(([, mode]) => mode === 'never').map(([kind]) => new HierarchicalKind(kind));
 		const lifetime = new AbortController();
-		using release = combinedDisposable(
-			model.onWillDispose(() => lifetime.abort()),
-			toDisposable(() => lifetime.abort()),
-		);
+		using release = combinedDisposable(model.onWillDispose(() => lifetime.abort()), toDisposable(() => lifetime.abort()));
 		const requestSignal = AbortSignal.any([signal, lifetime.signal, ...(contribution.providerSignal ? [contribution.providerSignal] : [])]);
 		const { getCodeActions } = await import('../../../../editor/contrib/codeAction/browser/codeAction.js');
 		requestSignal.throwIfAborted();
@@ -117,34 +110,18 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 			// Providers must query after preceding providers' edits, rather than share stale versions.
 			for (const provider of this.features.codeActionProvider.ordered(model)) {
 				const context = this.request(model, kind, requestSignal);
-				using actions = await raceCancellationError(
-					getCodeActions(
-						{ ordered: () => [provider] },
-						context,
-						{
-							include: kind,
-							excludes,
-							includeSourceActions: true,
-						},
-						error => {
-							throw error;
-						},
-					),
-					requestSignal,
-				);
+				using actions = await raceCancellationError(getCodeActions({ ordered: () => [provider] }, context, {
+					include: kind, excludes, includeSourceActions: true,
+				}, error => { throw error; }), requestSignal);
 				assertCurrent(context);
 				for (const item of actions.validActions) {
 					// Each resolver receives the current model after preceding save actions have applied.
 					const actionContext = this.request(model, kind, requestSignal);
 					const action = (await raceCancellationError(item.resolve(actionContext), requestSignal)).action;
 					assertCurrent(actionContext);
-					if (!action.edit || action.disabledReason !== undefined) {
-						continue;
-					}
+					if (!action.edit || action.disabledReason !== undefined) { continue; }
 					await this.edits.apply(action.edit, {
-						token: requestSignal,
-						label: action.title,
-						code: 'undoredo.codeActionOnSave',
+						token: requestSignal, label: action.title, code: 'undoredo.codeActionOnSave',
 						reason: EditSources.codeAction({ kind: action.kind, providerId: undefined }),
 						respectAutoSaveConfig: false,
 						skipSaveForResources: [model.uri],
@@ -158,14 +135,10 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 	private request(model: TextModel, kind: HierarchicalKind, signal: AbortSignal): LanguageCodeActionRequest {
 		return {
 			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-			resource: model.uri,
-			range: model.getFullModelRange(),
-			only: [kind.value],
+			resource: model.uri, range: model.getFullModelRange(), only: [kind.value],
 			diagnostics: this.markers.read({ resource: model.uri }).map(marker => ({
 				range: new Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn),
-				severity: diagnosticSeverity[marker.severity],
-				message: marker.message,
-				source: marker.source,
+				severity: diagnosticSeverity[marker.severity], message: marker.message, source: marker.source,
 				code: typeof marker.code === 'object' ? marker.code.value : marker.code,
 			})),
 		};
@@ -182,7 +155,10 @@ function assertCurrent(request: LanguageCodeActionRequest): void {
 export class SaveParticipantsContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'workbench.contrib.saveParticipants';
 
-	constructor(@IFileTextModelService models: IFileTextModelService, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(
+		@IFileTextModelService models: IFileTextModelService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
 		super();
 		this._register(models.addSaveParticipant(instantiation.createInstance(TrimWhitespaceParticipant)));
 		this._register(models.addSaveParticipant(instantiation.createInstance(CodeActionOnSaveParticipant)));

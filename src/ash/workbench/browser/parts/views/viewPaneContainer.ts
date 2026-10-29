@@ -31,7 +31,10 @@ export interface IViewPaneContainerOptions {
 	readonly paneLayout?: 'stack' | 'fill' | 'content';
 	/** Layout state follows the workspace unless the contribution explicitly chooses another UI state scope. */
 	readonly stateScope?: StorageScope;
-	readonly onDidFailCreateView?: (error: unknown, viewId: string) => void;
+	readonly onDidFailCreateView?: (
+		error: unknown,
+		viewId: string,
+	) => void;
 }
 
 /**
@@ -44,7 +47,10 @@ export class ViewPaneContainer extends Composite {
 	readonly viewContainer: IViewContainerDescriptor;
 	private readonly model: IViewContainerModel;
 	private readonly localizationService: ILocalizationService | undefined;
-	private readonly onDidFailCreateView: (error: unknown, viewId: string) => void;
+	private readonly onDidFailCreateView: (
+		error: unknown,
+		viewId: string,
+	) => void;
 	private readonly _panes = this._register(new DisposableMap<string, ViewPaneItem>());
 	private readonly paneView: PaneView;
 	protected readonly scrollable: ScrollableElement | undefined;
@@ -60,7 +66,7 @@ export class ViewPaneContainer extends Composite {
 	private readonly menuActions: ViewMenuActions;
 	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
-	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean }>());
+	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean; }>());
 	private readonly viewFocus = this._register(new Emitter<ViewPane>());
 	private readonly viewBlur = this._register(new Emitter<ViewPane>());
 	public readonly onDidAddViews = this.viewsAdded.event;
@@ -90,22 +96,21 @@ export class ViewPaneContainer extends Composite {
 			element.classList.toggle('always-show-header-actions', configurationService.getValue<boolean>(WorkbenchConfiguration.alwaysShowHeaderActions));
 		};
 		updateHeaderActions();
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.alwaysShowHeaderActions)) {
-					updateHeaderActions();
-				}
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.alwaysShowHeaderActions)) { updateHeaderActions(); }
+		}));
 		element.dataset.viewContainerId = options.viewContainer.id;
 		container.append(element);
 		super.create(element);
 		this.id = options.viewContainer.id;
 		this.viewContainer = options.viewContainer;
-		const menuContext = (this.scopedContextKeyService = this._register(contextKeyService.createScoped(element)));
+		const menuContext = this.scopedContextKeyService = this._register(contextKeyService.createScoped(element));
 		menuContext.setContext('viewContainer', this.id);
 		menuContext.setContext('viewContainerLocation', this.viewContainer.location);
-		const menuServices = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, menuContext], [IMenuService, menuService])));
+		const menuServices = this._register(instantiationService.createChild(new ServiceCollection(
+			[IContextKeyService, menuContext],
+			[IMenuService, menuService],
+		)));
 		this.menuActions = this._register(menuServices.createInstance(ViewMenuActions, MenuId.ViewContainerTitle, MenuId.ViewContainerTitleContext, { arg: this.id }, undefined));
 		this._register(this.menuActions.onDidChange(() => this.updateTitleArea()));
 		this.headersVisible = options.paneHeaders !== 'hidden';
@@ -119,38 +124,29 @@ export class ViewPaneContainer extends Composite {
 		this.paneView = this._register(new PaneView(this.scrollable?.contentElement ?? element));
 		this.model = options.model;
 		this.localizationService = options.localizationService;
-		this.onDidFailCreateView =
-			options.onDidFailCreateView ??
+		this.onDidFailCreateView = options.onDidFailCreateView ??
 			((error, viewId) => {
 				console.error(`Unable to create view pane '${viewId}'`, error);
 			});
-		this._register(
-			toDisposable(() => {
-				this._panes.clearAndDisposeAll();
-				this.mountedPanes.length = 0;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this._panes.clearAndDisposeAll();
+			this.mountedPanes.length = 0;
+		}));
 		this._register(this.paneView.onDidSashChange(() => this.saveState()));
 		this._register(this.model.onDidChangeAllViewDescriptors(() => this.syncPanes()));
-		this._register(
-			this.model.onDidChangeVisibleViewDescriptors(() => {
-				this.syncPanes();
-			}),
-		);
+		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
+			this.syncPanes();
+		}));
 		this.syncPanes();
 		// The flex host resolves title slots and activity bars before publishing its content size.
-		this._register(
-			observeElementSize(element, size => {
-				if (size.height > 0 && size.width > 0) this.layout(size);
-			}),
-		);
+		this._register(observeElementSize(element, size => {
+			if (size.height > 0 && size.width > 0) this.layout(size);
+		}));
 		if (this.contentSized) {
 			// Content insets can change the pane width without resizing the outer container.
-			this._register(
-				observeElementSize(this.paneView.element, size => {
-					if (size.width > 0 && this.dimension) this.layout(this.dimension);
-				}),
-			);
+			this._register(observeElementSize(this.paneView.element, size => {
+				if (size.width > 0 && this.dimension) this.layout(this.dimension);
+			}));
 		}
 	}
 
@@ -161,9 +157,7 @@ export class ViewPaneContainer extends Composite {
 			this.paneView.element.style.height = `${height}px`;
 			this.paneView.layout(height, this.paneView.element.clientWidth || dimension.width);
 			this.scrollable!.layout();
-		} else {
-			this.paneView.layout(dimension.height, dimension.width);
-		}
+		} else { this.paneView.layout(dimension.height, dimension.width); }
 		this.didLayout = true;
 		this.saveState();
 	}
@@ -177,7 +171,9 @@ export class ViewPaneContainer extends Composite {
 	}
 
 	get panes(): readonly ViewPane[] {
-		return this.model.visibleViewDescriptors.map(descriptor => this._panes.get(descriptor.id)?.pane).filter((pane): pane is ViewPane => pane !== undefined);
+		return this.model.visibleViewDescriptors
+			.map((descriptor) => this._panes.get(descriptor.id)?.pane)
+			.filter((pane): pane is ViewPane => pane !== undefined);
 	}
 
 	getOptimalWidth(): number {
@@ -223,9 +219,9 @@ export class ViewPaneContainer extends Composite {
 	}
 
 	public override getSecondaryActions(): readonly IAction[] {
-		return this.menuActions
-			.getSecondaryActions()
-			.filter(action => !(action instanceof SubmenuItemAction && action.item.submenu === MenuId.for('ViewsSubMenu') && !action.actions.some(item => item.enabled)));
+		return this.menuActions.getSecondaryActions().filter(action =>
+			!(action instanceof SubmenuItemAction && action.item.submenu === MenuId.for('ViewsSubMenu') && !action.actions.some(item => item.enabled)),
+		);
 	}
 
 	public override getContextMenuActions(): readonly IAction[] {
@@ -350,18 +346,26 @@ export class ViewPaneContainer extends Composite {
 	}
 
 	private createView(descriptor: IViewDescriptor): ViewPane {
-		const view = this.instantiationService.createInstance(descriptor.ctorDescriptor, this.element, {
-			id: descriptor.id,
-			canMoveView: descriptor.canMoveView,
-			title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
-			collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, 'collapsed'), this.stateScope) ?? descriptor.collapsed,
-		});
+		const view = this.instantiationService.createInstance(
+			descriptor.ctorDescriptor,
+			this.element,
+			{
+				id: descriptor.id,
+				canMoveView: descriptor.canMoveView,
+				title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
+				collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, 'collapsed'), this.stateScope) ?? descriptor.collapsed,
+			},
+		);
 		if (!(view instanceof ViewPane)) {
-			throw new TypeError(`View constructor did not create a ViewPane: ${descriptor.id}`);
+			throw new TypeError(
+				`View constructor did not create a ViewPane: ${descriptor.id}`,
+			);
 		}
 		if (view.id !== descriptor.id) {
 			view.dispose();
-			throw new Error(`View constructor returned '${view.id}' for '${descriptor.id}'`);
+			throw new Error(
+				`View constructor returned '${view.id}' for '${descriptor.id}'`,
+			);
 		}
 		if (!this.headersVisible) {
 			view.setHeaderVisible(false);
@@ -383,12 +387,10 @@ class ViewPaneItem extends Disposable {
 		this._register(this.pane.onDidChangeBodyVisibility(visibility));
 		this._register(this.pane.onDidFocus(focus));
 		this._register(this.pane.onDidBlur(blur));
-		this._register(
-			this.pane.onDidChangeVisibility(visible => {
-				// Hiding a focused pane does not consistently produce a DOM blur event.
-				if (!visible) blur();
-			}),
-		);
+		this._register(this.pane.onDidChangeVisibility(visible => {
+			// Hiding a focused pane does not consistently produce a DOM blur event.
+			if (!visible) blur();
+		}));
 		this._register(toDisposable(blur));
 	}
 
@@ -396,10 +398,7 @@ class ViewPaneItem extends Disposable {
 		this._register(contentSized ? this.pane.onDidChange(listener) : this.pane.onDidChangeExpansionState(listener));
 	}
 
-	constructor(
-		readonly pane: ViewPane,
-		public size: number,
-	) {
+	constructor(readonly pane: ViewPane, public size: number) {
 		super();
 		this._register(pane);
 	}

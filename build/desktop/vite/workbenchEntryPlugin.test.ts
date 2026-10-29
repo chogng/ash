@@ -57,12 +57,7 @@ test('Sessions HTML is served and built from its owning layer with working modul
 	const page = { url, inputFile: input, sourceFile: source };
 	let server: Awaited<ReturnType<typeof createServer>> | undefined;
 	try {
-		server = await createServer({
-			configFile: false,
-			root,
-			plugins: [workbenchEntryPlugin(undefined, [page])],
-			server: { host: '127.0.0.1', port: 0 },
-		});
+		server = await createServer({ configFile: false, root, plugins: [workbenchEntryPlugin(undefined, [page])], server: { host: '127.0.0.1', port: 0 } });
 		await server.listen();
 		const address = server.httpServer!.address();
 		assert.ok(address && typeof address !== 'string');
@@ -79,13 +74,7 @@ test('Sessions HTML is served and built from its owning layer with working modul
 		await server.close();
 		server = undefined;
 		assert.equal(dirname(resolve(output)), resolve(directory));
-		await build({
-			configFile: false,
-			root,
-			base: './',
-			plugins: [workbenchEntryPlugin(undefined, [page])],
-			build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } },
-		});
+		await build({ configFile: false, root, base: './', plugins: [workbenchEntryPlugin(undefined, [page])], build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } } });
 		const builtHtml = await readFile(join(output, url.slice(1)), 'utf8');
 		const builtModule = /src="([^"]+\.js)"/u.exec(builtHtml)?.[1];
 		assert.ok(builtModule, builtHtml);
@@ -116,13 +105,7 @@ for (const preserveSymlinks of [false, true]) {
 		const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: linkedSource });
 		let server: Awaited<ReturnType<typeof createServer>> | undefined;
 		try {
-			server = await createServer({
-				configFile: false,
-				root,
-				resolve: { preserveSymlinks },
-				plugins: [plugin()],
-				server: { host: '127.0.0.1', port: 0 },
-			});
+			server = await createServer({ configFile: false, root, resolve: { preserveSymlinks }, plugins: [plugin()], server: { host: '127.0.0.1', port: 0 } });
 			await server.listen();
 			const address = server.httpServer!.address();
 			assert.ok(address && typeof address !== 'string');
@@ -131,22 +114,14 @@ for (const preserveSymlinks of [false, true]) {
 			assert.match(html, /ash-workbench-css-modules/u);
 			const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
 			assert.ok(data, html);
-			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string }[];
+			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];
 			assert.equal(modules.length, 1);
 			const transformed = await (await fetch(`${origin}/entry.ts`)).text();
-			assert.ok(
-				modules[0].specifiers.some(specifier => transformed.includes(specifier)),
-				transformed,
-			);
+			assert.ok(modules[0].specifiers.some(specifier => transformed.includes(specifier)), transformed);
 			assert.match(await (await fetch(new URL(modules[0].stylesheet, origin))).text(), /color: red/u);
 			await server.close();
 			server = undefined;
-			await build({
-				configFile: false,
-				root: await realpath(join(source, 'code')),
-				plugins: [plugin()],
-				build: { outDir: output, emptyOutDir: true },
-			});
+			await build({ configFile: false, root: await realpath(join(source, 'code')), plugins: [plugin()], build: { outDir: output, emptyOutDir: true } });
 			const built = await readFile(join(output, 'index.html'), 'utf8');
 			assert.doesNotMatch(built, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
 			assert.match(built, /rel="stylesheet"/u);
@@ -195,7 +170,7 @@ function configuredMiddleware(entryPath?: string): Connect.NextHandleFunction {
 	return middleware;
 }
 
-function invoke(middleware: Connect.NextHandleFunction, request: { readonly method: string; readonly url: string }) {
+function invoke(middleware: Connect.NextHandleFunction, request: { readonly method: string; readonly url: string; }) {
 	const headers: Record<string, string | readonly string[] | number> = {};
 	let ended = false;
 	let nextCalled = false;

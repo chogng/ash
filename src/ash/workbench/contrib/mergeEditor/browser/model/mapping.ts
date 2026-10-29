@@ -5,7 +5,7 @@ export class LineRangeMapping {
 	constructor(
 		public readonly inputRange: LineRange,
 		public readonly outputRange: LineRange,
-	) {}
+	) { }
 
 	public reverse(): LineRangeMapping {
 		return new LineRangeMapping(this.outputRange, this.inputRange);
@@ -14,7 +14,11 @@ export class LineRangeMapping {
 
 /** Maps both changed spans and the unchanged lines between them. */
 export class DocumentLineRangeMap {
-	public static betweenOutputs(inputToOutput1: readonly LineRangeMapping[], inputToOutput2: readonly LineRangeMapping[], inputLineCount: number): DocumentLineRangeMap {
+	public static betweenOutputs(
+		inputToOutput1: readonly LineRangeMapping[],
+		inputToOutput2: readonly LineRangeMapping[],
+		inputLineCount: number,
+	): DocumentLineRangeMap {
 		const first = new DocumentLineRangeMap(inputToOutput1, inputLineCount);
 		const second = new DocumentLineRangeMap(inputToOutput2, inputLineCount);
 		const changes = [...inputToOutput1, ...inputToOutput2]
@@ -29,10 +33,7 @@ export class DocumentLineRangeMap {
 				groups.push(change);
 			}
 		}
-		return new DocumentLineRangeMap(
-			groups.map(group => new LineRangeMapping(first.mapRange(group), second.mapRange(group))),
-			first.outputLineCount,
-		);
+		return new DocumentLineRangeMap(groups.map(group => new LineRangeMapping(first.mapRange(group), second.mapRange(group))), first.outputLineCount);
 	}
 
 	constructor(
@@ -54,10 +55,7 @@ export class DocumentLineRangeMap {
 	}
 
 	public reverse(): DocumentLineRangeMap {
-		return new DocumentLineRangeMap(
-			this.lineRangeMappings.map(mapping => mapping.reverse()),
-			this.outputLineCount,
-		);
+		return new DocumentLineRangeMap(this.lineRangeMappings.map(mapping => mapping.reverse()), this.outputLineCount);
 	}
 
 	public project(lineNumber: number): LineRangeMapping {

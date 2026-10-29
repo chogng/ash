@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { RemoteConnectionProfiles } from '../../../../platform/remote/electron-main/remoteConnectionProfiles.js';
 
 test('Electron Main delegates Remote profile reads, activation, and rollback to the shared Rust store', async () => {
-	const invocations: Array<{ executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv }> = [];
+	const invocations: Array<{ executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; }> = [];
 	const profiles = new RemoteConnectionProfiles({
 		remoteExecutable: '/Applications/Ash.app/Contents/Resources/bin/ash-remote',
 		environment: { ASH_HOME: '/Users/test/Library/Application Support/Ash/state' },
@@ -23,14 +23,11 @@ test('Electron Main delegates Remote profile reads, activation, and rollback to 
 	assert.deepEqual(await profiles.rollback('Build-Linux', '/srv/project', '/usr/bin/ssh'), {
 		activeRuntime: '/srv/ash/runtime/one/bin/ash-remote-server',
 	});
-	assert.deepEqual(
-		invocations.map(invocation => invocation.args),
-		[
-			['profile', 'get', '--host', 'build-linux', '--dir', '/srv/project'],
-			['profile', 'activate', '--host', 'build-linux', '--dir', '/srv/project', '--runtime', '/srv/ash/runtime/two/bin/ash-remote-server', '--ssh', '/usr/bin/ssh'],
-			['profile', 'rollback', '--host', 'build-linux', '--dir', '/srv/project', '--ssh', '/usr/bin/ssh'],
-		],
-	);
+	assert.deepEqual(invocations.map(invocation => invocation.args), [
+		['profile', 'get', '--host', 'build-linux', '--dir', '/srv/project'],
+		['profile', 'activate', '--host', 'build-linux', '--dir', '/srv/project', '--runtime', '/srv/ash/runtime/two/bin/ash-remote-server', '--ssh', '/usr/bin/ssh'],
+		['profile', 'rollback', '--host', 'build-linux', '--dir', '/srv/project', '--ssh', '/usr/bin/ssh'],
+	]);
 	assert.equal(invocations[0]?.environment.ASH_HOME, '/Users/test/Library/Application Support/Ash/state');
 });
 
@@ -45,11 +42,7 @@ test('Remote profile adapter fails closed on command and record errors', async (
 	const invalid = new RemoteConnectionProfiles({
 		remoteExecutable: 'ash-remote',
 		environment: {},
-		runCommand: async () => ({
-			exitCode: 0,
-			stdout: '{"activeRuntime":"relative/ash","password":"secret"}',
-			stderr: '',
-		}),
+		runCommand: async () => ({ exitCode: 0, stdout: '{"activeRuntime":"relative/ash","password":"secret"}', stderr: '' }),
 	});
 	await assert.rejects(() => invalid.get('build-linux', '/srv/project'), /invalid record/);
 

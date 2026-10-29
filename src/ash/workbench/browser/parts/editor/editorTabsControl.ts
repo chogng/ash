@@ -21,7 +21,7 @@ export interface EditorTabDescriptor {
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */
 export interface EditorTabsDelegate {
 	activate(input: IResourceEditorInput): void;
-	select?(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): boolean;
+	select?(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): boolean;
 	preview(input: IResourceEditorInput): void;
 	close(input: IResourceEditorInput): void;
 	showContextMenu?(input: IResourceEditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void;

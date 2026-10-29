@@ -37,7 +37,7 @@ export class Workbench {
 	async waitForReady(): Promise<void> {
 		await waitForWindowLoad(this.page);
 		await this.element.waitFor({ state: 'visible' });
-		if (!(await this.page.locator('.ash-sessions-window').isVisible())) {
+		if (!await this.page.locator('.ash-sessions-window').isVisible()) {
 			// Restored layouts can legitimately give the Panel or Auxiliary Bar
 			// the content area. Module restoration above still owns readiness.
 			if (await this.editors.element.isVisible()) await this.editors.waitForReady();
@@ -58,9 +58,7 @@ export class Workbench {
 	/** System appearance belongs to Main on Electron and media queries on Browser. */
 	async setAppearance(application: Browser | ElectronApplication, colorScheme: 'light' | 'dark', page = this.page): Promise<void> {
 		if ('windows' in application) {
-			await application.evaluate(({ nativeTheme }, scheme) => {
-				nativeTheme.themeSource = scheme;
-			}, colorScheme);
+			await application.evaluate(({ nativeTheme }, scheme) => { nativeTheme.themeSource = scheme; }, colorScheme);
 		} else {
 			await page.emulateMedia({ colorScheme });
 		}
@@ -69,7 +67,7 @@ export class Workbench {
 	async openExplorer(): Promise<void> {
 		const sidebar = this.page.locator('[data-part="sidebar"]');
 		const explorer = this.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
-		if ((await explorer.getAttribute('aria-selected')) !== 'true' || !(await sidebar.isVisible())) {
+		if (await explorer.getAttribute('aria-selected') !== 'true' || !await sidebar.isVisible()) {
 			await explorer.click();
 		}
 		await sidebar.waitFor({ state: 'visible' });
@@ -93,12 +91,12 @@ export class Workbench {
 	async openAgentsWindow(kind: PlaywrightTarget['kind']): Promise<Page> {
 		let page = this.page;
 		if (kind === 'browser') {
-			await Promise.all([page.waitForURL('**/sessions/sessions.html'), page.locator('[data-action-id="ash.code.open-sessions"] button').click()]);
+			await Promise.all([
+				page.waitForURL('**/sessions/sessions.html'),
+				page.locator('[data-action-id="ash.code.open-sessions"] button').click(),
+			]);
 		} else {
-			const existing = page
-				.context()
-				.pages()
-				.find(candidate => new URL(candidate.url()).pathname.endsWith('/sessions/electron-browser/sessions.html'));
+			const existing = page.context().pages().find(candidate => new URL(candidate.url()).pathname.endsWith('/sessions/electron-browser/sessions.html'));
 			[page] = await Promise.all([
 				existing ? Promise.resolve(existing) : page.context().waitForEvent('page'),
 				page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click(),
@@ -110,12 +108,9 @@ export class Workbench {
 	}
 
 	async waitForUiIdle(): Promise<void> {
-		await this.page.evaluate(
-			() =>
-				new Promise<void>(resolve => {
-					requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-				}),
-		);
+		await this.page.evaluate(() => new Promise<void>(resolve => {
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+		}));
 	}
 }
 

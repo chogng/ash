@@ -24,16 +24,14 @@ export class RelayURLService extends AbstractURLService implements IURLHandler {
 		super();
 		this.mainHandler = new URLHandlerChannelClient(mainProcessService.getChannel('url'));
 		mainProcessService.registerChannel('urlHandler', new URLHandlerChannel(this));
-		this._register(
-			openerService.registerOpener({
-				open: async (target, options?: OpenOptions) => {
-					if (options?.openExternal) {
-						return false;
-					}
-					return this.open(target, { trusted: true });
-				},
-			}),
-		);
+		this._register(openerService.registerOpener({
+			open: async (target, options?: OpenOptions) => {
+				if (options?.openExternal) {
+					return false;
+				}
+				return this.open(target, { trusted: true });
+			},
+		}));
 	}
 
 	public override create(options: Partial<UriComponents> = {}): URI {

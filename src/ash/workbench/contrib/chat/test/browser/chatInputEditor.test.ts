@@ -64,25 +64,11 @@ for (const method of ['copy', 'cut'] as const) {
 		using resources = new DisposableStore();
 		const target = createSnapshotComposer(resources);
 		const features = target.services.get(ILanguageFeaturesService);
-		resources.add(
-			features.documentPasteEditProvider.register(
-				{ scheme: '*', hasAccessToAllModels: true },
-				new CopyTextProvider({
-					getChannel: () => undefined,
-				} as unknown as import('../../../../services/output/common/output.js').IOutputService),
-			),
-		);
-		using model = new TextModel('first\nconst unsaved = 42;\nlast', {
-			resource: URI.file('/workspace/source.ts'),
-			languageId: 'typescript',
-		});
+		resources.add(features.documentPasteEditProvider.register({ scheme: '*', hasAccessToAllModels: true }, new CopyTextProvider({ getChannel: () => undefined } as unknown as import('../../../../services/output/common/output.js').IOutputService)));
+		using model = new TextModel('first\nconst unsaved = 42;\nlast', { resource: URI.file('/workspace/source.ts'), languageId: 'typescript' });
 		const container = target.editor.element.ownerDocument.createElement('section');
 		target.editor.element.ownerDocument.body.append(container);
-		using source = target.services.createInstance(CodeEditorWidget, {
-			container,
-			model,
-			contributionIds: ['editor.contrib.codeServices', CopyPasteController.ID],
-		});
+		using source = target.services.createInstance(CodeEditorWidget, { container, model, contributionIds: ['editor.contrib.codeServices', CopyPasteController.ID] });
 		source.setSelection(new Selection(2, 1, 3, 1));
 		const clipboard = new SnapshotClipboard();
 		dispatchSnapshotClipboard({ codeEditor: source, focus: () => source.focus() }, method, clipboard);
@@ -120,13 +106,7 @@ test('Malformed copied editor coordinates leave only the ordinary text paste', a
 	const target = createSnapshotComposer(resources);
 	const clipboard = new SnapshotClipboard();
 	clipboard.setData('text/plain', 'actual clipboard text');
-	clipboard.setData(
-		'application/vnd.code.additional-editor-data',
-		JSON.stringify({
-			uri: URI.file('/code.ts').toJSON(),
-			range: { startLineNumber: 9, startColumn: 1, endLineNumber: 2, endColumn: 1 },
-		}),
-	);
+	clipboard.setData('application/vnd.code.additional-editor-data', JSON.stringify({ uri: URI.file('/code.ts').toJSON(), range: { startLineNumber: 9, startColumn: 1, endLineNumber: 2, endColumn: 1 } }));
 	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
 	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
 	assert.equal(target.editor.value, 'actual clipboard text');
@@ -140,13 +120,7 @@ test('Chat reference copy keeps the captured content after the source is cleared
 	const target = createSnapshotComposer(resources);
 	source.editor.value = 'Review  please';
 	source.editor.setSelection({ anchor: 7, active: 7 });
-	source.references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'sample.ts',
-		resource: URI.file('/sample.ts'),
-		resolve: async () => ({ name: 'sample.ts', content: 'Original unsaved code' }),
-	});
+	source.references.addReference({ id: 'file', kind: 'file', name: 'sample.ts', resource: URI.file('/sample.ts'), resolve: async () => ({ name: 'sample.ts', content: 'Original unsaved code' }) });
 	source.editor.setSelection({ anchor: 0, active: source.editor.value.length });
 	const clipboard = new SnapshotClipboard();
 	dispatchSnapshotClipboard(source.editor, 'copy', clipboard);
@@ -173,12 +147,7 @@ test('Chat reference cut captures before deletion and repeated paste has indepen
 	using resources = new DisposableStore();
 	const source = createSnapshotComposer(resources);
 	const target = createSnapshotComposer(resources);
-	const entry = source.references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'same.ts',
-		resolve: async () => ({ name: 'same.ts', content: 'Cut snapshot' }),
-	});
+	const entry = source.references.addReference({ id: 'file', kind: 'file', name: 'same.ts', resolve: async () => ({ name: 'same.ts', content: 'Cut snapshot' }) });
 	source.editor.setSelection({ anchor: entry.reference!.start, active: entry.reference!.end });
 	const clipboard = new SnapshotClipboard();
 	dispatchSnapshotClipboard(source.editor, 'cut', clipboard);
@@ -203,25 +172,7 @@ test('Chat ignores forged clipboard reference ranges and preserves the ordinary 
 	const target = createSnapshotComposer(resources);
 	const clipboard = new SnapshotClipboard();
 	clipboard.setData('text/plain', 'actual text');
-	clipboard.setData(
-		CHAT_ATTACHMENT_MIME_TYPE,
-		JSON.stringify({
-			version: 1,
-			draft: {
-				mode: 'agent',
-				text: 'actual text',
-				contexts: [
-					{
-						id: 'forged',
-						kind: 'file',
-						name: 'other',
-						content: 'Hidden snapshot',
-						reference: { start: 0, end: 5 },
-					},
-				],
-			},
-		}),
-	);
+	clipboard.setData(CHAT_ATTACHMENT_MIME_TYPE, JSON.stringify({ version: 1, draft: { mode: 'agent', text: 'actual text', contexts: [{ id: 'forged', kind: 'file', name: 'other', content: 'Hidden snapshot', reference: { start: 0, end: 5 } }] } }));
 	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
 	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
 	assert.equal(target.editor.value, 'actual text');
@@ -232,18 +183,8 @@ test('Copying a tool configuration label cannot replace or duplicate the destina
 	using resources = new DisposableStore();
 	const source = createSnapshotComposer(resources);
 	const target = createSnapshotComposer(resources);
-	source.references.addReference({
-		id: 'source-tools',
-		kind: 'toolSelection',
-		name: 'Source tools',
-		resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '["disabled"]' }),
-	});
-	const original = target.references.addReference({
-		id: 'target-tools',
-		kind: 'toolSelection',
-		name: 'Target tools',
-		resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '[]' }),
-	});
+	source.references.addReference({ id: 'source-tools', kind: 'toolSelection', name: 'Source tools', resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '["disabled"]' }) });
+	const original = target.references.addReference({ id: 'target-tools', kind: 'toolSelection', name: 'Target tools', resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '[]' }) });
 	source.editor.setSelection({ anchor: 0, active: source.editor.value.length });
 	const clipboard = new SnapshotClipboard();
 	dispatchSnapshotClipboard(source.editor, 'copy', clipboard);
@@ -261,12 +202,7 @@ test('Chat copies only selected references and keeps same-name snapshots indepen
 	const source = createSnapshotComposer(sourceResources);
 	const target = createSnapshotComposer(targetResources);
 	for (const content of ['First snapshot', 'Second snapshot']) {
-		source.references.addReference({
-			id: 'file',
-			kind: 'file',
-			name: 'same.ts',
-			resolve: async () => ({ name: 'same.ts', content }),
-		});
+		source.references.addReference({ id: 'file', kind: 'file', name: 'same.ts', resolve: async () => ({ name: 'same.ts', content }) });
 	}
 	const selected = source.references.variables[1]!.reference!;
 	source.editor.setSelection({ anchor: selected.start, active: selected.end });
@@ -284,18 +220,8 @@ test('Pasting an identical reference label replaces its snapshot and restores th
 	using resources = new DisposableStore();
 	const source = createSnapshotComposer(resources);
 	const target = createSnapshotComposer(resources);
-	const copied = source.references.addReference({
-		id: 'copied',
-		kind: 'file',
-		name: 'same.ts',
-		resolve: async () => ({ name: 'same.ts', content: 'Copied contents' }),
-	});
-	const original = target.references.addReference({
-		id: 'original',
-		kind: 'file',
-		name: 'same.ts',
-		resolve: async () => ({ name: 'same.ts', content: 'Original contents' }),
-	});
+	const copied = source.references.addReference({ id: 'copied', kind: 'file', name: 'same.ts', resolve: async () => ({ name: 'same.ts', content: 'Copied contents' }) });
+	const original = target.references.addReference({ id: 'original', kind: 'file', name: 'same.ts', resolve: async () => ({ name: 'same.ts', content: 'Original contents' }) });
 	source.editor.setSelection({ anchor: copied.reference!.start, active: copied.reference!.end });
 	target.editor.setSelection({ anchor: original.reference!.start, active: original.reference!.end });
 	const before = target.editor.value;
@@ -320,12 +246,7 @@ test('Reference paste maps LF copy offsets into every CRLF destination selection
 	const target = createSnapshotComposer(resources);
 	source.editor.value = 'Before\n';
 	source.editor.setSelection({ anchor: source.editor.value.length, active: source.editor.value.length });
-	source.references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'file.ts',
-		resolve: async () => ({ name: 'file.ts', content: 'Multiline snapshot' }),
-	});
+	source.references.addReference({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'Multiline snapshot' }) });
 	source.editor.setSelection({ anchor: 0, active: source.editor.value.length });
 	target.editor.value = 'old\r\nold';
 	target.editor.getModel().setEOL(EndOfLineSequence.CRLF);
@@ -353,15 +274,8 @@ test('A delayed Chat snapshot cannot paste into text edited while copy preparati
 	const source = createSnapshotComposer(resources);
 	const target = createSnapshotComposer(resources);
 	let release!: () => void;
-	const snapshot = new Promise<{ name: string; content: string }>(resolve => {
-		release = () => resolve({ name: 'held.ts', content: 'Held contents' });
-	});
-	const entry = source.references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'held.ts',
-		resolve: () => snapshot,
-	});
+	const snapshot = new Promise<{ name: string; content: string; }>(resolve => { release = () => resolve({ name: 'held.ts', content: 'Held contents' }); });
+	const entry = source.references.addReference({ id: 'file', kind: 'file', name: 'held.ts', resolve: () => snapshot });
 	source.editor.setSelection({ anchor: entry.reference!.start, active: entry.reference!.end });
 	const clipboard = new SnapshotClipboard();
 	dispatchSnapshotClipboard(source.editor, 'copy', clipboard);
@@ -378,12 +292,7 @@ test('Chat paste options retain their snapshot session until switching and dismi
 	using resources = new DisposableStore();
 	const source = createSnapshotComposer(resources);
 	const target = createSnapshotComposer(resources);
-	const entry = source.references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'file.ts',
-		resolve: async () => ({ name: 'file.ts', content: 'Saved snapshot' }),
-	});
+	const entry = source.references.addReference({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'Saved snapshot' }) });
 	source.editor.setSelection({ anchor: entry.reference!.start, active: entry.reference!.end });
 	const clipboard = new SnapshotClipboard();
 	dispatchSnapshotClipboard(source.editor, 'copy', clipboard);
@@ -412,59 +321,34 @@ test('Chat paste options retain their snapshot session until switching and dismi
 
 function createSnapshotComposer(resources: DisposableStore) {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
-	resources.add(
-		toDisposable(() => {
-			dom.window.dispatchEvent(new dom.window.Event('pagehide'));
-			ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
-			dom.window.close();
-		}),
-	);
+	resources.add(toDisposable(() => {
+		dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+		ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
+		dom.window.close();
+	}));
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const services = createChatInputServices(resources);
-	const editor = resources.add(
-		services.createInstance(ChatInputEditor, {
-			container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-			placeholder: 'Ask Ash',
-			ariaLabel: 'Chat message',
-			slashCommands: new SlashCommandCatalog([], []),
-			skills: new SkillSelectorCatalog(),
-		}),
-	);
+	const editor = resources.add(services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog(),
+	}));
 	const attachmentModel = resources.add(new ChatAttachmentModel());
 	const references = resources.add(new ChatDynamicVariableModel(editor, attachmentModel));
 	resources.add(services.createInstance(ChatWidgetPasteTarget, editor, references, attachmentModel));
 	const lifecycle = new AbortController();
-	resources.add(
-		services.createInstance(
-			ChatPasteProvidersFeature,
-			editor,
-			() => lifecycle.signal,
-			() => true,
-		),
-	);
+	resources.add(services.createInstance(ChatPasteProvidersFeature, editor, () => lifecycle.signal, () => true));
 	return { editor, references, lifecycle, services, attachmentModel };
 }
 
 class SnapshotClipboard {
 	private readonly values = new Map<string, string>();
 	readonly files: readonly File[] = [];
-	get types(): string[] {
-		return [...this.values.keys()];
-	}
+	get types(): string[] { return [...this.values.keys()]; }
 	get items() {
-		return [...this.values].map(([type, value]) => ({
-			kind: 'string',
-			type,
-			getAsString: (read: (text: string) => void) => read(value),
-			getAsFile: () => null,
-		}));
+		return [...this.values].map(([type, value]) => ({ kind: 'string', type, getAsString: (read: (text: string) => void) => read(value), getAsFile: () => null }));
 	}
-	setData(type: string, text: string): void {
-		this.values.set(type, text);
-	}
-	getData(type: string): string {
-		return this.values.get(type) ?? '';
-	}
+	setData(type: string, text: string): void { this.values.set(type, text); }
+	getData(type: string): string { return this.values.get(type) ?? ''; }
 }
 
 function dispatchSnapshotClipboard(editor: Pick<InstanceType<typeof ChatInputEditor>, 'codeEditor' | 'focus'>, type: 'copy' | 'cut' | 'paste', clipboard: SnapshotClipboard): void {
@@ -479,58 +363,23 @@ function dispatchSnapshotClipboard(editor: Pick<InstanceType<typeof ChatInputEdi
 test('Registered session references keep their snapshot through source activation, deletion and undo', async () => {
 	using resources = new DisposableStore();
 	const opened: string[][] = [];
-	const services = createChatInputServices(resources, undefined, async (session, thread) => {
-		opened.push([session, thread]);
-	});
+	const services = createChatInputServices(resources, undefined, async (session, thread) => { opened.push([session, thread]); });
 	const container = browserEnvironment.window.document.createElement('main');
 	browserEnvironment.window.document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
-	using editor = services.createInstance(ChatInputEditor, {
-		container,
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Explain  please';
 	editor.setSelection({ anchor: 8, active: 8 });
 	let reads = 0;
-	const reference = references.addReference({
-		id: 'session',
-		kind: 'sessionReference',
-		name: 'Earlier design',
-		resource: URI.from({
-			scheme: Schemas.internal,
-			authority: 'chat-session',
-			query: 'sessionId=previous&threadId=thread',
-		}),
-		resolve: async () => {
-			reads++;
-			return { name: 'Earlier design', content: 'Original conversation snapshot' };
-		},
-	});
-	const decoration = editor
-		.getModel()
-		.getAllDecorations()
-		.find(entry => entry.options.description === 'chat-context-reference')!;
+	const reference = references.addReference({ id: 'session', kind: 'sessionReference', name: 'Earlier design', resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: 'sessionId=previous&threadId=thread' }), resolve: async () => { reads++; return { name: 'Earlier design', content: 'Original conversation snapshot' }; } });
+	const decoration = editor.getModel().getAllDecorations().find(entry => entry.options.description === 'chat-context-reference')!;
 	assert.equal(decoration.options.before?.replaceLength, reference.name.length);
 	let submits = 0;
-	resources.add(
-		editor.onDidSubmit(() => {
-			submits++;
-		}),
-	);
+	resources.add(editor.onDidSubmit(() => { submits++; }));
 	editor.setSelection({ anchor: reference.reference!.start, active: reference.reference!.start });
-	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', {
-			key: 'Enter',
-			altKey: true,
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
+	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	assert.deepEqual(opened, [['previous', 'thread']]);
 	assert.equal(reads, 0);
@@ -554,42 +403,17 @@ test('A mixed attachment batch keeps the caret after each reference and retains 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Review  please';
 	editor.setSelection({ anchor: 7, active: 7 });
-	const file = references.addReference(
-		{
-			id: 'file',
-			kind: 'file',
-			name: 'sample.ts',
-			resolve: async () => ({ name: 'sample.ts', content: 'Captured source' }),
-		},
-		false,
-	);
+	const file = references.addReference({ id: 'file', kind: 'file', name: 'sample.ts', resolve: async () => ({ name: 'sample.ts', content: 'Captured source' }) }, false);
 	assert.equal(editor.value, 'Review sample.ts please');
 	assert.deepEqual(editor.getSelection(), { anchor: file.reference!.end, active: file.reference!.end });
-	const image = references.addReference(
-		{
-			id: 'image',
-			kind: 'image',
-			name: 'preview.png',
-			resolve: async () => ({ name: 'preview.png', kind: 'image', content: 'data:image/png;base64,captured' }),
-		},
-		false,
-	);
+	const image = references.addReference({ id: 'image', kind: 'image', name: 'preview.png', resolve: async () => ({ name: 'preview.png', kind: 'image', content: 'data:image/png;base64,captured' }) }, false);
 	assert.equal(editor.value, 'Review sample.ts preview.png please');
-	assert.deepEqual(
-		references.variables.map(entry => entry.id),
-		[file.id, image.id],
-	);
+	assert.deepEqual(references.variables.map(entry => entry.id), [file.id, image.id]);
 	assert.deepEqual(await references.variables[0]!.resolve(), { name: 'sample.ts', content: 'Captured source' });
 });
 
@@ -609,15 +433,7 @@ suite('Native attachment controls', () => {
 		browserEnvironment.window.document.body.append(container);
 		resources.add(toDisposable(() => container.remove()));
 		const services = createChatInputServices(resources, openEditor);
-		const editor = resources.add(
-			services.createInstance(ChatInputEditor, {
-				container,
-				placeholder: 'Ask Ash',
-				ariaLabel: 'Chat message',
-				slashCommands: new SlashCommandCatalog([], []),
-				skills: new SkillSelectorCatalog(),
-			}),
-		);
+		const editor = resources.add(services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
 		const attachmentModel = resources.add(new ChatAttachmentModel());
 		const references = resources.add(new ChatDynamicVariableModel(editor, attachmentModel));
 		return { editor, references, services };
@@ -626,16 +442,9 @@ suite('Native attachment controls', () => {
 	test('Tab skips a pending image preview and reaches removal with one snapshot-preserving undo', async () => {
 		using resources = new DisposableStore();
 		const { editor, references } = createControlComposer(resources);
-		let complete!: (value: { name: string; content: string }) => void;
-		const pending = new Promise<{ name: string; content: string }>(resolve => {
-			complete = resolve;
-		});
-		const image = references.addReference({
-			id: 'image',
-			kind: 'image',
-			name: 'pending.png',
-			resolve: () => pending,
-		});
+		let complete!: (value: { name: string; content: string; }) => void;
+		const pending = new Promise<{ name: string; content: string; }>(resolve => { complete = resolve; });
+		const image = references.addReference({ id: 'image', kind: 'image', name: 'pending.png', resolve: () => pending });
 		const input = editor.codeEditor.controller.element;
 		const window = input.ownerDocument.defaultView!;
 		const buttons = editor.element.querySelectorAll<HTMLButtonElement>('.ash-chat-image-reference-control button');
@@ -659,166 +468,95 @@ suite('Native attachment controls', () => {
 		assert.equal(references.variables.length, 0);
 	});
 
-	for (const kind of ['file', 'terminalCommand'])
-		test(`${kind} removal owns its focused control while preserving another reference at the caret`, async () => {
-			using resources = new DisposableStore();
-			const { editor, references } = createControlComposer(resources);
-			const first = references.addReference({
-				id: 'first',
-				kind: 'file',
-				name: 'first.ts',
-				resolve: async () => ({ name: 'first.ts', content: 'First snapshot' }),
-			});
-			const target = references.addReference({
-				id: 'second',
-				kind,
-				name: 'Saved source',
-				resource: kind === 'file' ? URI.file('/workspace/second.ts') : URI.parse('private://terminal?id=original'),
-				resolve: async () => ({ name: 'Saved source', content: 'Second snapshot' }),
-			});
-			editor.setSelection({ anchor: first.reference!.start, active: first.reference!.start });
-			const remove = editor.element.querySelectorAll<HTMLButtonElement>('.ash-chat-attachment-remove')[1]!;
-			remove.focus();
-			remove.click();
-			assert.deepEqual(
-				references.variables.map(entry => entry.id),
-				['first'],
-			);
-			editor.getModel().undo();
-			assert.equal(references.variables[1]!.resolve, target.resolve);
-			assert.equal((await references.variables[1]!.resolve()).content, 'Second snapshot');
-			editor.getModel().redo();
-			assert.deepEqual(
-				references.variables.map(entry => entry.id),
-				['first'],
-			);
-		});
+	for (const kind of ['file', 'terminalCommand']) test(`${kind} removal owns its focused control while preserving another reference at the caret`, async () => {
+		using resources = new DisposableStore();
+		const { editor, references } = createControlComposer(resources);
+		const first = references.addReference({ id: 'first', kind: 'file', name: 'first.ts', resolve: async () => ({ name: 'first.ts', content: 'First snapshot' }) });
+		const target = references.addReference({ id: 'second', kind, name: 'Saved source', resource: kind === 'file' ? URI.file('/workspace/second.ts') : URI.parse('private://terminal?id=original'), resolve: async () => ({ name: 'Saved source', content: 'Second snapshot' }) });
+		editor.setSelection({ anchor: first.reference!.start, active: first.reference!.start });
+		const remove = editor.element.querySelectorAll<HTMLButtonElement>('.ash-chat-attachment-remove')[1]!;
+		remove.focus();
+		remove.click();
+		assert.deepEqual(references.variables.map(entry => entry.id), ['first']);
+		editor.getModel().undo();
+		assert.equal(references.variables[1]!.resolve, target.resolve);
+		assert.equal((await references.variables[1]!.resolve()).content, 'Second snapshot');
+		editor.getModel().redo();
+		assert.deepEqual(references.variables.map(entry => entry.id), ['first']);
+	});
 
-	for (const kind of ['debug', 'scmHistoryItem', 'scmHistoryItemChange', 'custom'])
-		test(`${kind} captured context opens the original readonly snapshot through removal and undo`, async () => {
-			using resources = new DisposableStore();
-			const opened: { resource: string; text: string }[] = [];
-			const { editor, references } = createControlComposer(resources, async input => {
-				assert.ok(input && 'initialText' in input);
-				assert.equal(input.readOnly, true);
-				opened.push({ resource: input.resource.toString(), text: input.initialText! });
-			});
-			const context = references.addReference({
-				id: 'context',
-				kind,
-				name: 'Captured source',
-				resolve: async () => ({ name: 'Captured source', content: 'Captured before source disposal' }),
-			});
-			editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
-			await waitFor(() => opened.length === 1);
-			assert.equal(opened[0]!.text, 'Captured before source disposal');
-			editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-remove')!.click();
-			assert.equal(references.variables.length, 0);
-			editor.getModel().undo();
-			assert.equal(references.variables[0]!.resolve, context.resolve);
-			editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
-			await waitFor(() => opened.length === 2);
-			assert.deepEqual(opened[0], opened[1]);
-			editor.getModel().redo();
-			assert.equal(references.variables.length, 0);
+	for (const kind of ['debug', 'scmHistoryItem', 'scmHistoryItemChange', 'custom']) test(`${kind} captured context opens the original readonly snapshot through removal and undo`, async () => {
+		using resources = new DisposableStore();
+		const opened: { resource: string; text: string; }[] = [];
+		const { editor, references } = createControlComposer(resources, async input => {
+			assert.ok(input && 'initialText' in input);
+			assert.equal(input.readOnly, true);
+			opened.push({ resource: input.resource.toString(), text: input.initialText! });
 		});
+		const context = references.addReference({ id: 'context', kind, name: 'Captured source', resolve: async () => ({ name: 'Captured source', content: 'Captured before source disposal' }) });
+		editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
+		await waitFor(() => opened.length === 1);
+		assert.equal(opened[0]!.text, 'Captured before source disposal');
+		editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-remove')!.click();
+		assert.equal(references.variables.length, 0);
+		editor.getModel().undo();
+		assert.equal(references.variables[0]!.resolve, context.resolve);
+		editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
+		await waitFor(() => opened.length === 2);
+		assert.deepEqual(opened[0], opened[1]);
+		editor.getModel().redo();
+		assert.equal(references.variables.length, 0);
+	});
 
-	for (const kind of ['browserElement', 'scmHistoryItem', 'scmHistoryItemChange'])
-		test(`${kind} dedicated control opens the same captured content despite a separate source URI`, async () => {
-			using resources = new DisposableStore();
-			const opened: unknown[] = [];
-			const { editor, references } = createControlComposer(resources, async input => {
-				assert.equal(input.readOnly, true);
-				assert.equal(input.initialText, '<button onclick="captured()">Saved HTML</button>');
-				opened.push(input);
-			});
-			const resource =
-				kind === 'browserElement'
-					? URI.parse('https://example.test/original')
-					: SCMHistoryItemUri.toUri({
-							repositoryId: 'original',
-							revision: 'captured',
-							...(kind === 'scmHistoryItemChange' ? { path: 'saved.ts' } : {}),
-						});
-			const context = references.addReference({
-				id: 'context',
-				kind,
-				name: 'Saved source',
-				resource,
-				resolve: async () => ({
-					name: 'Saved source',
-					content: '<button onclick="captured()">Saved HTML</button>',
-				}),
-			});
-			const chip = editor.element.querySelector<HTMLElement>('.ash-chat-attachment-chip')!;
-			assert.equal(chip.dataset.attachmentKind, kind);
-			assert.equal(chip.querySelectorAll('button').length, 3);
-			chip.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
-			await waitFor(() => opened.length === 1);
-			assert.equal(editor.element.querySelector('[onclick]'), null);
-			chip.querySelector<HTMLButtonElement>('.ash-chat-attachment-remove')!.click();
-			editor.getModel().undo();
-			assert.equal(references.variables[0]!.resolve, context.resolve);
-			assert.equal(references.variables[0]!.resource!.toString(), resource.toString());
+	for (const kind of ['browserElement', 'scmHistoryItem', 'scmHistoryItemChange']) test(`${kind} dedicated control opens the same captured content despite a separate source URI`, async () => {
+		using resources = new DisposableStore();
+		const opened: unknown[] = [];
+		const { editor, references } = createControlComposer(resources, async input => {
+			assert.equal(input.readOnly, true);
+			assert.equal(input.initialText, '<button onclick="captured()">Saved HTML</button>');
+			opened.push(input);
 		});
+		const resource = kind === 'browserElement' ? URI.parse('https://example.test/original') : SCMHistoryItemUri.toUri({ repositoryId: 'original', revision: 'captured', ...(kind === 'scmHistoryItemChange' ? { path: 'saved.ts' } : {}) });
+		const context = references.addReference({ id: 'context', kind, name: 'Saved source', resource, resolve: async () => ({ name: 'Saved source', content: '<button onclick="captured()">Saved HTML</button>' }) });
+		const chip = editor.element.querySelector<HTMLElement>('.ash-chat-attachment-chip')!;
+		assert.equal(chip.dataset.attachmentKind, kind);
+		assert.equal(chip.querySelectorAll('button').length, 3);
+		chip.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
+		await waitFor(() => opened.length === 1);
+		assert.equal(editor.element.querySelector('[onclick]'), null);
+		chip.querySelector<HTMLButtonElement>('.ash-chat-attachment-remove')!.click();
+		editor.getModel().undo();
+		assert.equal(references.variables[0]!.resolve, context.resolve);
+		assert.equal(references.variables[0]!.resource!.toString(), resource.toString());
+	});
 
-	for (const kind of ['browserElement', 'scmHistoryItem', 'scmHistoryItemChange', 'debug', 'custom'])
-		test(`${kind} native and keyboard hover share a bounded captured snapshot`, async () => {
-			using resources = new DisposableStore();
-			const { editor, references } = createControlComposer(resources);
-			let reads = 0;
-			const resource =
-				kind === 'browserElement'
-					? URI.parse('https://example.test/original')
-					: kind.startsWith('scm')
-						? SCMHistoryItemUri.toUri({
-								repositoryId: 'repo:opaque',
-								revision: 'revision:opaque',
-								...(kind === 'scmHistoryItemChange' ? { path: 'source.ts' } : {}),
-							})
-						: undefined;
-			const content = Array.from({ length: 20 }, (_, index) => `Captured line ${index + 1}`).join('\n');
-			const entry = references.addReference({
-				id: 'context',
-				kind,
-				name: 'Captured context',
-				resource,
-				resolve: async () => {
-					reads++;
-					return { name: 'Captured context', content };
-				},
-			});
-			const message = () =>
-				editor
-					.getModel()
-					.getAllDecorations()
-					.find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string } | undefined;
-			await waitFor(() => message()?.value.includes('Captured line 12') === true);
-			assert.doesNotMatch(message()!.value, /Captured line 13|repo:opaque|revision:opaque/u);
-			const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!;
-			assert.match(source.title, /Captured line 12/u);
-			editor.setSelection({ anchor: 0, active: 0 });
-			editor.insertText('Explain ');
-			await waitFor(() => message()?.value.includes('Captured line 12') === true);
-			assert.equal((await entry.resolve()).content, content);
-			assert.equal(reads, 1);
-		});
+	for (const kind of ['browserElement', 'scmHistoryItem', 'scmHistoryItemChange', 'debug', 'custom']) test(`${kind} native and keyboard hover share a bounded captured snapshot`, async () => {
+		using resources = new DisposableStore();
+		const { editor, references } = createControlComposer(resources);
+		let reads = 0;
+		const resource = kind === 'browserElement' ? URI.parse('https://example.test/original') : kind.startsWith('scm') ? SCMHistoryItemUri.toUri({ repositoryId: 'repo:opaque', revision: 'revision:opaque', ...(kind === 'scmHistoryItemChange' ? { path: 'source.ts' } : {}) }) : undefined;
+		const content = Array.from({ length: 20 }, (_, index) => `Captured line ${index + 1}`).join('\n');
+		const entry = references.addReference({ id: 'context', kind, name: 'Captured context', resource, resolve: async () => { reads++; return { name: 'Captured context', content }; } });
+		const message = () => editor.getModel().getAllDecorations().find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string; } | undefined;
+		await waitFor(() => message()?.value.includes('Captured line 12') === true);
+		assert.doesNotMatch(message()!.value, /Captured line 13|repo:opaque|revision:opaque/u);
+		const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!;
+		assert.match(source.title, /Captured line 12/u);
+		editor.setSelection({ anchor: 0, active: 0 });
+		editor.insertText('Explain ');
+		await waitFor(() => message()?.value.includes('Captured line 12') === true);
+		assert.equal((await entry.resolve()).content, content);
+		assert.equal(reads, 1);
+	});
 
 	test('a replaced same-ID control cannot receive a retired preview', async () => {
 		using resources = new DisposableStore();
 		const { editor, references } = createControlComposer(resources);
-		let finish!: (value: { name: string; content: string }) => void;
-		const pending = new Promise<{ name: string; content: string }>(resolve => {
-			finish = resolve;
-		});
+		let finish!: (value: { name: string; content: string; }) => void;
+		const pending = new Promise<{ name: string; content: string; }>(resolve => { finish = resolve; });
 		references.addReference({ id: 'context', kind: 'debug', name: 'Captured context', resolve: () => pending });
 		const retired = editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!;
-		references.addReference({
-			id: 'context',
-			kind: 'debug',
-			name: 'Captured context',
-			resolve: async () => ({ name: 'Captured context', content: 'Current captured preview' }),
-		});
+		references.addReference({ id: 'context', kind: 'debug', name: 'Captured context', resolve: async () => ({ name: 'Captured context', content: 'Current captured preview' }) });
 		const current = editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!;
 		assert.notEqual(retired, current);
 		await waitFor(() => current.title.includes('Current captured preview'));
@@ -827,36 +565,16 @@ suite('Native attachment controls', () => {
 		assert.match(current.title, /Current captured preview/u);
 		assert.doesNotMatch(current.title, /Retired captured preview/u);
 		assert.equal(retired.isConnected, false);
-		assert.doesNotMatch(
-			JSON.stringify(
-				editor
-					.getModel()
-					.getAllDecorations()
-					.map(decoration => decoration.options.hoverMessage),
-			),
-			/Retired captured preview/u,
-		);
+		assert.doesNotMatch(JSON.stringify(editor.getModel().getAllDecorations().map(decoration => decoration.options.hoverMessage)), /Retired captured preview/u);
 	});
 
 	test('a removed generic context cannot open a late snapshot', async () => {
 		using resources = new DisposableStore();
-		let complete!: (value: { name: string; content: string }) => void;
-		const pending = new Promise<{ name: string; content: string }>(resolve => {
-			complete = resolve;
-		});
+		let complete!: (value: { name: string; content: string; }) => void;
+		const pending = new Promise<{ name: string; content: string; }>(resolve => { complete = resolve; });
 		let reads = 0;
-		const { editor, references } = createControlComposer(resources, async () => {
-			assert.fail('Retired snapshot opened');
-		});
-		references.addReference({
-			id: 'context',
-			kind: 'debug',
-			name: 'Captured source',
-			resolve: () => {
-				reads++;
-				return pending;
-			},
-		});
+		const { editor, references } = createControlComposer(resources, async () => { assert.fail('Retired snapshot opened'); });
+		references.addReference({ id: 'context', kind: 'debug', name: 'Captured source', resolve: () => { reads++; return pending; } });
 		editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!.click();
 		await waitFor(() => reads === 1);
 		editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-remove')!.click();
@@ -867,30 +585,15 @@ suite('Native attachment controls', () => {
 
 	test('a directory source action cannot also open a saved-content editor', async () => {
 		using resources = new DisposableStore();
-		const { editor, references, services } = createControlComposer(resources, async () => {
-			assert.fail('Directory source opened a snapshot editor');
-		});
+		const { editor, references, services } = createControlComposer(resources, async () => { assert.fail('Directory source opened a snapshot editor'); });
 		const commands = services.get(ICommandService);
 		// The command is deliberately asynchronous so the adapter receives its completed open event.
 		const requests: unknown[] = [];
 		const execute = commands.executeCommand;
-		commands.executeCommand = async (...args: unknown[]) => {
-			requests.push(args);
-			return undefined as never;
-		};
-		resources.add(
-			toDisposable(() => {
-				commands.executeCommand = execute;
-			}),
-		);
+		commands.executeCommand = async (...args: unknown[]) => { requests.push(args); return undefined as never; };
+		resources.add(toDisposable(() => { commands.executeCommand = execute; }));
 		const resource = URI.file('/workspace/src');
-		references.addReference({
-			id: 'folder',
-			kind: 'directory',
-			name: 'src',
-			resource,
-			resolve: async () => ({ name: 'src', content: 'Directory listing' }),
-		});
+		references.addReference({ id: 'folder', kind: 'directory', name: 'src', resource, resolve: async () => ({ name: 'src', content: 'Directory listing' }) });
 		editor.element.querySelector<HTMLButtonElement>('.ash-chat-code-reference-source')!.click();
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
 		assert.deepEqual(requests, [['revealInExplorer', resource]]);
@@ -903,45 +606,18 @@ test('Deleting a focused session control leaves the reference at the text caret 
 	const container = browserEnvironment.window.document.createElement('main');
 	browserEnvironment.window.document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
-	using editor = services.createInstance(ChatInputEditor, {
-		container,
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
-	const file = references.addReference({
-		id: 'first',
-		kind: 'file',
-		name: 'first.ts',
-		resolve: async () => ({ name: 'first.ts', content: 'File snapshot' }),
-	});
-	references.addReference({
-		id: 'second',
-		kind: 'sessionReference',
-		name: 'Earlier design',
-		resource: URI.from({
-			scheme: Schemas.internal,
-			authority: 'chat-session',
-			query: 'sessionId=previous&threadId=thread',
-		}),
-		resolve: async () => ({ name: 'Earlier design', content: 'Conversation snapshot' }),
-	});
+	const file = references.addReference({ id: 'first', kind: 'file', name: 'first.ts', resolve: async () => ({ name: 'first.ts', content: 'File snapshot' }) });
+	references.addReference({ id: 'second', kind: 'sessionReference', name: 'Earlier design', resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: 'sessionId=previous&threadId=thread' }), resolve: async () => ({ name: 'Earlier design', content: 'Conversation snapshot' }) });
 	editor.setSelection({ anchor: file.reference!.start, active: file.reference!.start });
 	const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-reference-attachment-source')!;
 	source.focus();
 	source.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
-	assert.deepEqual(
-		references.variables.map(reference => reference.name),
-		['first.ts'],
-	);
+	assert.deepEqual(references.variables.map(reference => reference.name), ['first.ts']);
 	editor.getModel().undo();
-	assert.deepEqual(
-		references.variables.map(reference => reference.name),
-		['first.ts', 'Earlier design'],
-	);
+	assert.deepEqual(references.variables.map(reference => reference.name), ['first.ts', 'Earlier design']);
 });
 
 test('References constrain mouse, keyboard and API selections to whole model and visual boundaries', () => {
@@ -950,24 +626,12 @@ test('References constrain mouse, keyboard and API selections to whole model and
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Before  after';
 	editor.setSelection({ anchor: 7, active: 7 });
-	const context = references.addReference({
-		id: 'file',
-		kind: 'file',
-		name: 'settings.json (14-15)',
-		resource: URI.file('/settings.json'),
-		resolve: async () => ({ name: 'settings.json', content: 'Saved text' }),
-	});
+	const context = references.addReference({ id: 'file', kind: 'file', name: 'settings.json (14-15)', resource: URI.file('/settings.json'), resolve: async () => ({ name: 'settings.json', content: 'Saved text' }) });
 	const { start, end } = context.reference!;
 	const model = editor.getModel();
 	const native = editor.codeEditor;
@@ -1008,32 +672,13 @@ test('Reference icons borrow the file theme, refresh with it and leave non-file 
 	services.registerInstance(IResourceIconRenderer, {
 		onDidChangeResourceIcons: changed.event,
 		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
-		renderFileIcon: (resource, container) => {
-			container.dataset.fileIcon = `${resource.path}:${version}`;
-		},
+		renderFileIcon: (resource, container) => { container.dataset.fileIcon = `${resource.path}:${version}`; },
 	});
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
-	for (const [id, uri] of [
-		['file', 'file:///workspace/settings.json'],
-		['output', 'output:/rust-analyzer'],
-		['debug', 'inmemory:/debug-console'],
-		['anonymous', 'inmemory:/console'],
-	] as const) {
-		references.addReference({
-			id,
-			kind: 'codeSelection',
-			name: id,
-			resource: URI.parse(uri),
-			resolve: async () => ({ name: id, content: id }),
-		});
+	for (const [id, uri] of [['file', 'file:///workspace/settings.json'], ['output', 'output:/rust-analyzer'], ['debug', 'inmemory:/debug-console'], ['anonymous', 'inmemory:/console']] as const) {
+		references.addReference({ id, kind: 'codeSelection', name: id, resource: URI.parse(uri), resolve: async () => ({ name: id, content: id }) });
 	}
 	const icons = () => [...editor.element.querySelectorAll<HTMLElement>('.ash-chat-code-reference-icon')];
 	assert.equal(icons().length, 4);
@@ -1060,34 +705,15 @@ test('Reference previews shorten the shared snapshot without exposing output ide
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	const resource = URI.parse('output:/language-server.rust-analyzer.internal-id#3,1-33,1');
 	const text = Array.from({ length: 30 }, (_, index) => `Captured line ${index + 1}`).join('\n');
 	const content = `Source: ${resource.toString()}\n\n${text}`;
 	let acquisitions = 0;
-	const entry = references.addReference({
-		id: 'selection',
-		kind: 'codeSelection',
-		name: 'rust-analyzer (3-32)',
-		resource,
-		resolve: async () => {
-			acquisitions++;
-			return { name: 'rust-analyzer (3-32)', content };
-		},
-	});
-	const hover = () =>
-		editor
-			.getModel()
-			.getAllDecorations()
-			.find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string } | undefined;
+	const entry = references.addReference({ id: 'selection', kind: 'codeSelection', name: 'rust-analyzer (3-32)', resource, resolve: async () => { acquisitions++; return { name: 'rust-analyzer (3-32)', content }; } });
+	const hover = () => editor.getModel().getAllDecorations().find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string; } | undefined;
 	await waitFor(() => hover()?.value.includes('Captured line 12') === true);
 	assert.doesNotMatch(hover()!.value, /internal-id|output:\/|Captured line 13/u);
 	assert.match(hover()!.value.replaceAll('&nbsp;', ' '), /Preview shortened/u);
@@ -1104,55 +730,21 @@ test('Late reference previews cannot restore removed references or decorate anot
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const opened: string[] = [];
-	const services = createChatInputServices(editorServices, async input => {
-		opened.push(input.resource.toString());
-	});
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	const services = createChatInputServices(editorServices, async input => { opened.push(input.resource.toString()); });
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
-	let finish!: (value: { name: string; content: string }) => void;
-	const pending = new Promise<{ name: string; content: string }>(resolve => {
-		finish = resolve;
-	});
+	let finish!: (value: { name: string; content: string; }) => void;
+	const pending = new Promise<{ name: string; content: string; }>(resolve => { finish = resolve; });
 	references.addReference({ id: 'old', kind: 'codeSelection', name: 'old.ts (1)', resolve: () => pending });
 	editor.setSelection({ anchor: 0, active: 0 });
 	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
 	references.removeReference('old');
-	references.addReference({
-		id: 'new',
-		kind: 'codeSelection',
-		name: 'new.ts (1)',
-		resolve: async () => ({ name: 'new.ts (1)', content: 'Current snapshot' }),
-	});
+	references.addReference({ id: 'new', kind: 'codeSelection', name: 'new.ts (1)', resolve: async () => ({ name: 'new.ts (1)', content: 'Current snapshot' }) });
 	finish({ name: 'old.ts (1)', content: 'Retired snapshot' });
-	await waitFor(() =>
-		editor
-			.getModel()
-			.getAllDecorations()
-			.some(decoration => JSON.stringify(decoration.options.hoverMessage).includes('Current snapshot')),
-	);
-	assert.equal(
-		editor
-			.getModel()
-			.getAllDecorations()
-			.filter(decoration => decoration.options.description === 'chat-context-reference').length,
-		1,
-	);
-	assert.doesNotMatch(
-		JSON.stringify(
-			editor
-				.getModel()
-				.getAllDecorations()
-				.map(decoration => decoration.options.hoverMessage),
-		),
-		/Retired snapshot/u,
-	);
+	await waitFor(() => editor.getModel().getAllDecorations().some(decoration => JSON.stringify(decoration.options.hoverMessage).includes('Current snapshot')));
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.description === 'chat-context-reference').length, 1);
+	assert.doesNotMatch(JSON.stringify(editor.getModel().getAllDecorations().map(decoration => decoration.options.hoverMessage)), /Retired snapshot/u);
 	assert.deepEqual(opened, []);
 });
 
@@ -1162,47 +754,23 @@ test('Opening saved references isolates same-name snapshots and reuses the same 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
-	const services = createChatInputServices(editorServices, async input => {
-		opened.push(input);
-	});
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	const services = createChatInputServices(editorServices, async input => { opened.push(input); });
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	for (const content of ['First saved version', 'Second saved version']) {
-		references.addReference({
-			id: 'same-file',
-			kind: 'file',
-			name: 'same.ts',
-			resource: URI.file('/same.ts'),
-			resolve: async () => ({ name: 'same.ts', content }),
-		});
+		references.addReference({ id: 'same-file', kind: 'file', name: 'same.ts', resource: URI.file('/same.ts'), resolve: async () => ({ name: 'same.ts', content }) });
 	}
 	const open = async (index: number, count: number): Promise<void> => {
 		const offset = references.variables[index]!.reference!.start;
 		editor.setSelection({ anchor: offset, active: offset });
-		editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', {
-				key: 'Enter',
-				altKey: true,
-				bubbles: true,
-				cancelable: true,
-			}),
-		);
+		editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
 		await waitFor(() => opened.length === count);
 	};
 	await open(0, 1);
 	await open(1, 2);
 	await open(0, 3);
-	assert.deepEqual(
-		opened.map(input => input.initialText),
-		['First saved version', 'Second saved version', 'First saved version'],
-	);
+	assert.deepEqual(opened.map(input => input.initialText), ['First saved version', 'Second saved version', 'First saved version']);
 	assert.notEqual(opened[0]!.resource.toString(), opened[1]!.resource.toString());
 	assert.equal(opened[0]!.resource.toString(), opened[2]!.resource.toString());
 	assert.ok(opened.every(input => input.readOnly && input.resource.scheme === 'chat-context-snapshot' && input.contentType === 'text/plain' && !input.showBreadcrumbs));
@@ -1215,32 +783,15 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog([], []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Explain  please';
 	editor.setSelection({ anchor: 8, active: 8 });
-	references.addReference({
-		id: 'selection',
-		kind: 'codeSelection',
-		name: 'file.ts (6-9)',
-		resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved code' }),
-	});
+	references.addReference({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved code' }) });
 	assert.equal(editor.value, 'Explain file.ts (6-9) please');
 	assert.deepEqual(references.variables[0]?.reference, { start: 8, end: 21 });
-	assert.equal(
-		editor
-			.getModel()
-			.getAllDecorations()
-			.filter(decoration => decoration.options.before?.replaceLength).length,
-		1,
-	);
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.before?.replaceLength).length, 1);
 	editor.setSelection({ anchor: 0, active: 0 });
 	editor.insertText('First: ');
 	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
@@ -1268,13 +819,7 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 test('Source updates project the canonical capture and revoked sources stay detached through undo', async () => {
 	using resources = new DisposableStore();
 	const { editor, references, attachmentModel } = createSnapshotComposer(resources);
-	const capture = (name: string, content: string) => ({
-		id: 'app',
-		kind: 'mcpApp',
-		lifetime: 'source' as const,
-		name,
-		resolve: async () => ({ name, content }),
-	});
+	const capture = (name: string, content: string) => ({ id: 'app', kind: 'mcpApp', lifetime: 'source' as const, name, resolve: async () => ({ name, content }) });
 	const original = capture('App', 'Initial App content');
 	attachmentModel.addContext(original);
 	assert.equal(attachmentModel.attachments[0], original);
@@ -1312,13 +857,7 @@ test('Chat registers its focused editor for global commands and removes it on di
 	using willCreate = editors.onWillCreateCodeEditor(() => lifecycle.push('will'));
 	using added = editors.onCodeEditorAdd(() => lifecycle.push('add'));
 	using removed = editors.onCodeEditorRemove(() => lifecycle.push('remove'));
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	assert.ok(editors.listDecorationTypes().includes(dynamicVariableDecorationType));
 	editor.value = 'message';
 	editor.focus();
@@ -1345,13 +884,7 @@ test('Chat typography updates preserve the draft and selection, resize the input
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
 	const configuration = services.get(IConfigurationService);
-	using editor = services.createInstance(ChatInputEditor, {
-		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 	editor.value = Array.from({ length: 6 }, (_, index) => `Line ${index + 1}`).join('\n');
@@ -1390,71 +923,51 @@ test('Chat completion providers use one-based editor positions and ranges', asyn
 	const slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	using slashModel = new TextModel('/ne');
 	const slashPosition = new Position(1, 4);
-	const slashResult = await createChatCommandCompletionProvider(slashCommands).provideCompletions(
-		{
-			requestId: 1,
-			languageId: 'ash-chat-input',
-			position: slashPosition,
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: slashModel.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
+	const slashResult = await createChatCommandCompletionProvider(slashCommands).provideCompletions({
+		requestId: 1,
+		languageId: 'ash-chat-input',
+		position: slashPosition,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: slashModel.createVersionedSnapshot(),
+	}, new AbortController().signal);
 	assert.deepEqual(slashResult?.items[0]?.range, new Range(1, 1, 1, 4));
 
 	const skills = new SkillSelectorCatalog();
-	skills.setSkills([
-		{
-			name: 'commit',
-			description: 'Draft a commit message',
-			source: 'user',
-			skill: {
-				id: { source: 'user:skill-source:test', name: 'commit' },
-				version: { type: 'pinnedDigest', digest: 'sha256:commit' },
-			},
-		},
-	]);
+	skills.setSkills([{
+		name: 'commit',
+		description: 'Draft a commit message',
+		source: 'user',
+		skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:commit' } },
+	}]);
 	using skillModel = new TextModel('first line\nuse $com here');
 	const skillPosition = new Position(2, 9);
-	const skillResult = await createChatSkillCompletionProvider(skills).provideCompletions(
-		{
-			requestId: 2,
-			languageId: 'ash-chat-input',
-			position: skillPosition,
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: skillModel.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
+	const skillResult = await createChatSkillCompletionProvider(skills).provideCompletions({
+		requestId: 2,
+		languageId: 'ash-chat-input',
+		position: skillPosition,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: skillModel.createVersionedSnapshot(),
+	}, new AbortController().signal);
 	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
 });
 
 test('Chat slash provider finds description text without preselecting it', async () => {
-	const catalog = new SlashCommandCatalog(
-		[],
-		[
-			{ name: 'doctor', description: 'Inspect workspace health', argumentMode: 'none' },
-			{ name: 'config', description: 'Open workspace settings', argumentMode: 'none' },
-		],
-	);
+	const catalog = new SlashCommandCatalog([], [
+		{ name: 'doctor', description: 'Inspect workspace health', argumentMode: 'none' },
+		{ name: 'config', description: 'Open workspace settings', argumentMode: 'none' },
+	]);
 	using model = new TextModel('/workspace');
-	const result = await createChatCommandCompletionProvider(catalog).provideCompletions(
-		{
-			requestId: 1,
-			languageId: 'ash-chat-input',
-			position: new Position(1, 11),
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: model.createVersionedSnapshot(),
-		},
-		new AbortController().signal,
-	);
-	assert.deepEqual(
-		result?.items.map(item => [item.label, item.preselect, item.detailMatchIndices]),
-		[
-			['/config', false, [5, 6, 7, 8, 9, 10, 11, 12, 13]],
-			['/doctor', false, [8, 9, 10, 11, 12, 13, 14, 15, 16]],
-		],
-	);
+	const result = await createChatCommandCompletionProvider(catalog).provideCompletions({
+		requestId: 1,
+		languageId: 'ash-chat-input',
+		position: new Position(1, 11),
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(result?.items.map(item => [item.label, item.preselect, item.detailMatchIndices]), [
+		['/config', false, [5, 6, 7, 8, 9, 10, 11, 12, 13]],
+		['/doctor', false, [8, 9, 10, 11, 12, 13, 14, 15, 16]],
+	]);
 });
 
 test('Chat input completes slash commands before submitting', async () => {
@@ -1462,15 +975,9 @@ test('Chat input completes slash commands before submitting', async () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
-	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, {
-		container,
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	let submissions = 0;
-	using submitListener = editor.onDidSubmit(() => (submissions += 1));
+	using submitListener = editor.onDidSubmit(() => submissions += 1);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
 	editor.focus();
 
@@ -1509,7 +1016,7 @@ test('Chat input shows a missing-character match without choosing it', async () 
 		skills: new SkillSelectorCatalog(),
 	});
 	let submissions = 0;
-	using submitListener = editor.onDidSubmit(() => (submissions += 1));
+	using submitListener = editor.onDidSubmit(() => submissions += 1);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
 	editor.focus();
 	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
@@ -1522,10 +1029,7 @@ test('Chat input shows a missing-character match without choosing it', async () 
 	await waitFor(() => completionLabels(editor.element).length > 0);
 	assert.deepEqual(completionLabels(editor.element), ['/config']);
 	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
-	assert.deepEqual(
-		[...editor.element.querySelectorAll('.stanza-editor-completion-label strong')].map(element => element.textContent),
-		['c', 'o', 'f', 'i', 'g'],
-	);
+	assert.deepEqual([...editor.element.querySelectorAll('.stanza-editor-completion-label strong')].map(element => element.textContent), ['c', 'o', 'f', 'i', 'g']);
 	assert.equal(submissions, 0);
 
 	const navigate = keyboardEvent(dom.window, 'ArrowDown');
@@ -1559,10 +1063,7 @@ test('Chat input emphasizes a description-only command match', async () => {
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
 	assert.deepEqual(completionLabels(editor.element), ['/config']);
 	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
-	assert.deepEqual(
-		[...editor.element.querySelectorAll('.stanza-editor-completion-detail strong')].map(element => element.textContent),
-		[...'settings'],
-	);
+	assert.deepEqual([...editor.element.querySelectorAll('.stanza-editor-completion-detail strong')].map(element => element.textContent), [...'settings']);
 	dom.window.close();
 });
 
@@ -1579,17 +1080,12 @@ test('Chat input discovers Skills through the shared `$` selector', async () => 
 	using editor = services.createInstance(ChatInputEditor, options);
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions++);
-	skills.setSkills([
-		{
-			name: 'commit',
-			description: 'Draft a commit message',
-			source: 'user',
-			skill: {
-				id: { source: 'user:skill-source:test', name: 'commit' },
-				version: { type: 'pinnedDigest', digest: 'sha256:commit' },
-			},
-		},
-	]);
+	skills.setSkills([{
+		name: 'commit',
+		description: 'Draft a commit message',
+		source: 'user',
+		skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:commit' } },
+	}]);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
 	editor.focus();
 
@@ -1610,13 +1106,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, {
-		container,
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 	editor.value = '/history argument';
@@ -1638,13 +1128,7 @@ test('Chat input starts with two lines and grows and shrinks with content', asyn
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
-	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, {
-		container,
-		placeholder: 'Ask Ash',
-		ariaLabel: 'Chat message',
-		slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []),
-		skills: new SkillSelectorCatalog(),
-	});
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 
@@ -1667,20 +1151,11 @@ function completionLabels(root: ParentNode): string[] {
 }
 
 function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = 'insertText'): InputEvent {
-	return new targetWindow.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType,
-		data,
-	}) as unknown as InputEvent;
+	return new targetWindow.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType, data }) as unknown as InputEvent;
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string): KeyboardEvent {
-	return new targetWindow.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key,
-	}) as unknown as KeyboardEvent;
+	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }) as unknown as KeyboardEvent;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -1701,37 +1176,25 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 const { getEditorFeatures } = await import('../../../../../editor/browser/editorFeatures.js');
 const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
 let editorFeatures: import('../../../../../base/common/lifecycle.js').IDisposable;
-setup(() => {
-	editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
-});
+setup(() => { editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures()); });
 teardown(() => editorFeatures.dispose());
 
 function createChatInputServices(
 	resources: DisposableStore,
-	openEditor: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor'] = async () => {},
-	openConversation: import('../../../../services/chat/common/chatSessionNavigationService.js').IChatSessionNavigationService['openConversation'] = async () => {
-		throw new Error('Unexpected conversation navigation');
-	},
+	openEditor: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor'] = async () => { },
+	openConversation: import('../../../../services/chat/common/chatSessionNavigationService.js').IChatSessionNavigationService['openConversation'] = async () => { throw new Error('Unexpected conversation navigation'); },
 ): ReturnType<typeof createCodeEditorServices> {
 	const services = createCodeEditorServices(resources);
-	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor, focusActiveEditor() {} });
-	services.registerInstance(IResourceIconRenderer, {
-		onDidChangeResourceIcons: AshEvent.None,
-		getFileIconTheme: () => noFileIconTheme,
-		renderFileIcon() {},
-	});
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor, focusActiveEditor() { } });
+	services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: AshEvent.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	services.registerInstance(IChatSessionNavigationService, {
 		revision: 0,
 		getConversations: () => [],
 		getActiveConversation: () => undefined,
-		appendToActiveDraft() {
-			throw new Error('Unexpected draft handoff');
-		},
+		appendToActiveDraft() { throw new Error('Unexpected draft handoff'); },
 		captureActiveDraft: async () => undefined,
 		openConversation,
-		startVoiceConversation: async () => {
-			throw new Error('Unexpected voice start');
-		},
+		startVoiceConversation: async () => { throw new Error('Unexpected voice start'); },
 	});
 	resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
 	return services;

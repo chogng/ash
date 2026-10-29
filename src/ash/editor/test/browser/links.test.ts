@@ -30,13 +30,9 @@ test('detected links preserve adjacent provider precedence and update edited row
 		provideLinks: () => [
 			{ range: new Range(1, 1, 1, 16), target: 'custom:first' },
 			{ range: new Range(1, 20, 1, 24), target: 'custom:second' },
-		],
+		]
 	});
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		languageFeaturesService: features,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
 	const detector = LinkDetector.get(editor)!;
 	await waitFor(() => detector.getLinkOccurrence(new Position(3, 3))?.target === 'https://c.test');
 	assert.equal(detector.getLinkOccurrence(new Position(1, 3))?.target, 'custom:first');
@@ -58,11 +54,7 @@ test('an edit during a multi-batch link scan cancels its old coordinates and pre
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('https://first.test\n' + 'plain\n'.repeat(20_000) + 'https://last.test');
 	const errors: unknown[] = [];
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		onLanguageError: error => errors.push(error),
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, onLanguageError: error => errors.push(error) });
 	const detector = LinkDetector.get(editor)!;
 	const edit = setTimeout(() => model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'prefix\n' }]), 0);
 	try {
@@ -70,9 +62,7 @@ test('an edit during a multi-batch link scan cancels its old coordinates and pre
 		assert.equal(detector.getLinkOccurrence(new Position(2, 3))?.target, 'https://first.test');
 		assert.equal(detector.getLinkOccurrence(new Position(1, 3)), null);
 		assert.deepEqual(errors, []);
-	} finally {
-		clearTimeout(edit);
-	}
+	} finally { clearTimeout(edit); }
 });
 
 const codeFeatures = registerTestCodeEditorFeatures();

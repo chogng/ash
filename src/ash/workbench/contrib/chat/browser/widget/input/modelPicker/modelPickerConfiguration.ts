@@ -1,4 +1,8 @@
-import { defaultMenuStyles, defaultButtonStyles, defaultKeybindingLabelStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultMenuStyles,
+	defaultButtonStyles,
+	defaultKeybindingLabelStyles,
+} from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../../base/browser/ui/aria/aria.js';
 import { ActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -7,13 +11,7 @@ import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../../../../../base/common/actions.js';
 import { Disposable, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
@@ -41,44 +39,33 @@ export class ModelPickerConfiguration extends Disposable {
 		super();
 		this.contextView = this._register(new ContextView(contextViewService.container));
 		const button = this.trigger;
-		this._register(
-			delegate.onDidChangePresentation(() => {
-				// The menu captures a model and its options; never leave those actions attached to another selection.
-				if (this.contextView.visible) this.contextView.hide();
-			}),
-		);
+		this._register(delegate.onDidChangePresentation(() => {
+			// The menu captures a model and its options; never leave those actions attached to another selection.
+			if (this.contextView.visible) this.contextView.hide();
+		}));
 		this._register(addDisposableListener(button, 'focus', () => this.updateHelpHint()));
-		this._register(
-			AccessibleViewRegistry.register({
-				type: AccessibleViewType.Help,
-				priority: 100,
-				name: `chatModelConfiguration-${++nextConfigurationId}`,
-				getProvider: () => {
-					const active = button.ownerDocument.activeElement;
-					if (active !== button && (!active || !this.menu.value?.contains(active))) return undefined;
-					return new AccessibleContentProvider(
-						AccessibleViewProviderId.ChatModelConfiguration,
-						{ type: AccessibleViewType.Help },
-						() => {
-							const entry = this.selectedEntry;
-							return [
-								localize(
-									'chat.modelPicker.configurationHelp',
-									'Model options menu. Thinking level and long context are separate groups. Long context is off by default. Tab moves between the model and model options buttons. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.',
-								),
-								...(entry
-									? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort())
-											.filter(option => option.description)
-											.map(option => `${option.label}: ${option.description}`)
-									: []),
-							].join('\n');
-						},
-						() => button.focus(),
-						AccessibilityVerbositySettingId.ChatModelConfiguration,
-					);
-				},
-			}),
-		);
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help,
+			priority: 100,
+			name: `chatModelConfiguration-${++nextConfigurationId}`,
+			getProvider: () => {
+				const active = button.ownerDocument.activeElement;
+				if (active !== button && (!active || !this.menu.value?.contains(active))) return undefined;
+				return new AccessibleContentProvider(
+					AccessibleViewProviderId.ChatModelConfiguration,
+					{ type: AccessibleViewType.Help },
+					() => {
+						const entry = this.selectedEntry;
+						return [
+							localize('chat.modelPicker.configurationHelp', 'Model options menu. Thinking level and long context are separate groups. Long context is off by default. Tab moves between the model and model options buttons. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.'),
+							...(entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).filter(option => option.description).map(option => `${option.label}: ${option.description}`) : []),
+						].join('\n');
+					},
+					() => button.focus(),
+					AccessibilityVerbositySettingId.ChatModelConfiguration,
+				);
+			},
+		}));
 	}
 
 	public renderButton(): void {
@@ -104,11 +91,8 @@ export class ModelPickerConfiguration extends Disposable {
 		const selected = entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).find(option => option.checked) : undefined;
 		const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
 		const description = [selected?.description, hint].filter(Boolean).join(' ');
-		if (description) {
-			this.trigger.setAttribute('aria-description', description);
-		} else {
-			this.trigger.removeAttribute('aria-description');
-		}
+		if (description) { this.trigger.setAttribute('aria-description', description); }
+		else { this.trigger.removeAttribute('aria-description'); }
 	}
 
 	public show(): void {
@@ -122,46 +106,30 @@ export class ModelPickerConfiguration extends Disposable {
 		const headings = new Set<IAction>();
 		const actions: IAction[] = [];
 		if (options.length) {
-			const heading = {
-				id: 'ash.chat.effort.heading',
-				label: localize('chat.modelPicker.thinkingEffort', 'Thinking Level'),
-				tooltip: '',
-				enabled: false,
-				run: () => {},
-			};
+			const heading = { id: 'ash.chat.effort.heading', label: localize('chat.modelPicker.thinkingEffort', 'Thinking Level'), tooltip: '', enabled: false, run: () => { } };
 			headings.add(heading);
 			actions.push(heading);
 		}
 		// Close after saving so reopening reads the updated selection; only close the menu that started the save.
-		actions.push(
-			...options.map(option => ({
-				id: `ash.chat.input.effort.${option.effort ?? 'default'}`,
-				label: option.label,
-				tooltip: option.label,
-				enabled: true,
-				checked: option.checked,
-				run: async () => {
-					try {
-						await this.delegate.selectReasoningEffort(option.value);
-					} catch {
-						status(localize('chat.modelPicker.effortFailed', 'Could not set thinking effort'));
-					} finally {
-						if (this.menu.value === menu) this.contextView.hide();
-					}
-				},
-			})),
-		);
+		actions.push(...options.map(option => ({
+			id: `ash.chat.input.effort.${option.effort ?? 'default'}`,
+			label: option.label,
+			tooltip: option.label,
+			enabled: true,
+			checked: option.checked,
+			run: async () => {
+				try {
+					await this.delegate.selectReasoningEffort(option.value);
+				} catch {
+					status(localize('chat.modelPicker.effortFailed', 'Could not set thinking effort'));
+				} finally {
+					if (this.menu.value === menu) this.contextView.hide();
+				}
+			},
+		})));
 		if (entry.longContext !== null) {
-			if (actions.length) {
-				actions.push(new Separator());
-			}
-			const heading = {
-				id: 'ash.chat.context.heading',
-				label: localize('chat.modelPicker.contextSize', 'Context Size'),
-				tooltip: '',
-				enabled: false,
-				run: () => {},
-			};
+			if (actions.length) { actions.push(new Separator()); }
+			const heading = { id: 'ash.chat.context.heading', label: localize('chat.modelPicker.contextSize', 'Context Size'), tooltip: '', enabled: false, run: () => { } };
 			headings.add(heading);
 			actions.push(heading);
 			for (const longContext of [false, true]) {
@@ -184,24 +152,19 @@ export class ModelPickerConfiguration extends Disposable {
 				});
 			}
 		}
-		const menu = new Menu(
-			this.contextView.element,
-			{
-				buttonStyles: defaultButtonStyles,
-				keybindingLabelStyles: defaultKeybindingLabelStyles,
-				actions,
-				contextViewContainer: this.contextViewService.container,
-				layer: 20,
-				getCheckedActionsRepresentation: () => 'radio',
-				actionViewItemProvider: action => (headings.has(action) ? new ModelConfigurationHeading(action) : undefined),
-			},
-			defaultMenuStyles,
-		);
+		const menu = new Menu(this.contextView.element, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
+			actions,
+			contextViewContainer: this.contextViewService.container,
+			layer: 20,
+			getCheckedActionsRepresentation: () => 'radio',
+			actionViewItemProvider: action => headings.has(action) ? new ModelConfigurationHeading(action) : undefined,
+		}, defaultMenuStyles);
 		menu.element.classList.add('ash-chat-model-configuration-menu');
 		menu.element.setAttribute('aria-label', localize('chat.modelPicker.configuration', 'Model options'));
 		for (const option of options) {
-			if (option.description)
-				menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', option.description);
+			if (option.description) menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', option.description);
 		}
 		for (const longContext of [false, true]) {
 			const description = longContext ? localize('chat.modelPicker.longContextOn', 'Long context on') : localize('chat.modelPicker.longContextOff', 'Long context off');
@@ -244,5 +207,5 @@ class ModelConfigurationHeading extends ActionViewItem {
 		container.append(heading);
 	}
 
-	public override setTabbable(_tabbable: boolean): void {}
+	public override setTabbable(_tabbable: boolean): void { }
 }

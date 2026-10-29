@@ -1,13 +1,18 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../common/colorTheme.js';
+import {
+	darkColorTheme,
+	highContrastDarkColorTheme,
+	highContrastLightColorTheme,
+	lightColorTheme,
+} from '../../common/colorTheme.js';
 import { TestThemeService } from './testThemeService.js';
 import { Colors } from '../../common/colorRegistry.js';
 
 test('TestThemeService exposes its initial theme and emits actual changes', () => {
 	using service = new TestThemeService(darkColorTheme);
 	const changes: string[] = [];
-	using listener = service.onDidColorThemeChange(theme => {
+	using listener = service.onDidColorThemeChange((theme) => {
 		changes.push(theme.id);
 	});
 

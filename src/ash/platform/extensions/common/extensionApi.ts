@@ -33,7 +33,7 @@ export interface ExtensionDescriptor {
 	readonly packageSha256: string;
 	readonly rendererClient?: ExtensionRendererClient;
 	/** Backend-attested executable owner when Plugin and catalog digest domains differ. */
-	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string };
+	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string; };
 }
 
 export interface ExtensionDiagnostic {
@@ -61,7 +61,7 @@ export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 export interface IExtensionApi {
 	readonly onDidChange?: Event<void>;
 	/** Management may include disabled packages; activation consumers use the default enabled view. */
-	list(reload: ExtensionCatalogReload, options?: { readonly includeDisabled?: boolean }): Promise<ExtensionCatalog>;
+	list(reload: ExtensionCatalogReload, options?: { readonly includeDisabled?: boolean; }): Promise<ExtensionCatalog>;
 	readonly resources: IExtensionResourceLoaderService;
 }
 
@@ -91,10 +91,7 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 		if (Object.keys(binding).some(key => key !== 'runtimeId' && key !== 'packageDigest')) throw new TypeError('extension runtime binding has an unknown field');
 		const runtimeId = boundedText(binding.runtimeId, 'extension runtime id', 256);
 		if (/[\u0000-\u001f\u007f]/.test(runtimeId)) throw new TypeError('extension runtime id is invalid');
-		runtimeBinding = Object.freeze({
-			runtimeId,
-			packageDigest: sha256Digest(binding.packageDigest, 'extension runtime package digest'),
-		});
+		runtimeBinding = Object.freeze({ runtimeId, packageDigest: sha256Digest(binding.packageDigest, 'extension runtime package digest') });
 	}
 	return Object.freeze({
 		id: boundedText(extension.id, 'extension id', 160),
@@ -137,14 +134,7 @@ function normalizeDiagnostic(value: unknown): ExtensionDiagnostic {
 	return Object.freeze({
 		source: boundedText(diagnostic.source, 'extension diagnostic source', 64),
 		subject: diagnostic.subject === null ? undefined : boundedText(diagnostic.subject, 'extension diagnostic subject', 256),
-		code: stringEnum(diagnostic.code, 'extension diagnostic code', [
-			'sourceUnavailable',
-			'invalidManifest',
-			'duplicateExtension',
-			'pathEscapesRoot',
-			'resourceNotFound',
-			'resourceTooLarge',
-		] as const),
+		code: stringEnum(diagnostic.code, 'extension diagnostic code', ['sourceUnavailable', 'invalidManifest', 'duplicateExtension', 'pathEscapesRoot', 'resourceNotFound', 'resourceTooLarge'] as const),
 		message: boundedText(diagnostic.message, 'extension diagnostic message', 512),
 	});
 }

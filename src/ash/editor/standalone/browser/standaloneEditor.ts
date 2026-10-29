@@ -13,7 +13,14 @@ import { ILanguageService } from '../../common/languages/language.js';
 import { createTextModel, StandaloneEditor, type IActionDescriptor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from './standaloneServices.js';
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
-import { IMarkerService, MarkerSeverity, MarkerTag, type IMarker, type IMarkerData, type IMarkerReadOptions } from '../../../platform/markers/common/markers.js';
+import {
+	IMarkerService,
+	MarkerSeverity,
+	MarkerTag,
+	type IMarker,
+	type IMarkerData,
+	type IMarkerReadOptions,
+} from '../../../platform/markers/common/markers.js';
 import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
@@ -88,15 +95,29 @@ export function onWillDisposeModel(listener: (model: ITextModel) => void): IDisp
 	return StandaloneServices.get(IModelService).onModelRemoved(listener);
 }
 
-export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string }) => void): IDisposable {
+export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string; }) => void): IDisposable {
 	return StandaloneServices.get(IModelService).onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
 }
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
-export function create(domElement: HTMLElement, options: IStandaloneEditorConstructionOptions = {}, overrides: StandaloneServiceOverrides = {}): IStandaloneCodeEditor {
+export function create(
+	domElement: HTMLElement,
+	options: IStandaloneEditorConstructionOptions = {},
+	overrides: StandaloneServiceOverrides = {},
+): IStandaloneCodeEditor {
 	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError('Standalone editor requires an HTML element');
 	const services = StandaloneServices.initialize(overrides);
-	const { model: suppliedModel, value, language, resource, label, readOnly, theme, autoDetectHighContrast, ...browserOptions } = options;
+	const {
+		model: suppliedModel,
+		value,
+		language,
+		resource,
+		label,
+		readOnly,
+		theme,
+		autoDetectHighContrast,
+		...browserOptions
+	} = options;
 	if (suppliedModel && (value !== undefined || language !== undefined || resource !== undefined)) {
 		throw new TypeError('Standalone editor model cannot be combined with value, language, or resource');
 	}
@@ -106,7 +127,9 @@ export function create(domElement: HTMLElement, options: IStandaloneEditorConstr
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
 	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
-	const model = suppliedModel === undefined ? services.modelService.createModel(value ?? '', services.languageService.createById(languageId), resource) : suppliedModel;
+	const model = suppliedModel === undefined
+		? services.modelService.createModel(value ?? '', services.languageService.createById(languageId), resource)
+		: suppliedModel;
 	const ownsModel = suppliedModel === undefined;
 	try {
 		if (model && services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
@@ -219,7 +242,7 @@ function validateMarkerLocation(marker: Pick<IMarkerData, 'message' | 'startLine
 	if ([marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn].some(value => !Number.isSafeInteger(value) || value < 1)) {
 		throw new RangeError('Marker positions must be positive integers');
 	}
-	if (marker.endLineNumber < marker.startLineNumber || (marker.endLineNumber === marker.startLineNumber && marker.endColumn < marker.startColumn)) {
+	if (marker.endLineNumber < marker.startLineNumber || marker.endLineNumber === marker.startLineNumber && marker.endColumn < marker.startColumn) {
 		throw new RangeError('Marker range end must not precede its start');
 	}
 }
@@ -236,51 +259,44 @@ export function registerCommand(id: string, handler: CommandHandler): IDisposabl
 }
 
 export function addEditorAction(descriptor: IActionDescriptor): IDisposable {
-	if (!descriptor || typeof descriptor.id !== 'string' || !descriptor.id.trim() || typeof descriptor.label !== 'string' || !descriptor.label.trim() || typeof descriptor.run !== 'function') {
+	if (!descriptor || typeof descriptor.id !== 'string' || !descriptor.id.trim()
+		|| typeof descriptor.label !== 'string' || !descriptor.label.trim() || typeof descriptor.run !== 'function') {
 		throw new TypeError('Standalone editor action requires an id, label and run handler');
 	}
 	const precondition = descriptor.precondition === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.precondition);
 	const keybindingContext = descriptor.keybindingContext === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.keybindingContext);
-	if (descriptor.keybindings !== undefined && (!Array.isArray(descriptor.keybindings) || descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))) {
+	if (descriptor.keybindings !== undefined && (!Array.isArray(descriptor.keybindings)
+		|| descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))) {
 		throw new TypeError('Editor action keybindings must be encoded keybindings');
 	}
-	const action = new (class extends EditorAction {
-		constructor() {
-			super({ id: descriptor.id, label: descriptor.label, alias: descriptor.label, precondition });
-		}
+	const action = new class extends EditorAction {
+		constructor() { super({ id: descriptor.id, label: descriptor.label, alias: descriptor.label, precondition }); }
 		override runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
 			return this.run(accessor, editor, args);
 		}
 		run(_accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
 			return descriptor.run(editor, ...(args === undefined ? [] : [args]));
 		}
-	})();
+	}();
 	const resources = new DisposableStore();
 	try {
-		resources.add(
-			CommandsRegistry.register(descriptor.id, (accessor, ...args) =>
-				EditorCommand.runEditorCommand(accessor, args, precondition, (_editorAccessor, editor, commandArgs) => descriptor.run(editor, ...commandArgs)),
-			),
-		);
+		resources.add(CommandsRegistry.register(descriptor.id, (accessor, ...args) =>
+			EditorCommand.runEditorCommand(accessor, args, precondition, (_editorAccessor, editor, commandArgs) => descriptor.run(editor, ...commandArgs))));
 		resources.add(EditorExtensionsRegistry.registerDynamicEditorAction(action));
 		if (descriptor.contextMenuGroupId) {
-			resources.add(
-				MenusRegistry.appendMenuItem(MenuId.EditorContext, {
-					command: { id: descriptor.id, title: descriptor.label },
-					when: precondition,
-					group: descriptor.contextMenuGroupId,
-					order: descriptor.contextMenuOrder ?? 0,
-				}),
-			);
+			resources.add(MenusRegistry.appendMenuItem(MenuId.EditorContext, {
+				command: { id: descriptor.id, title: descriptor.label },
+				when: precondition,
+				group: descriptor.contextMenuGroupId,
+				order: descriptor.contextMenuOrder ?? 0,
+			}));
 		}
 		for (const keybinding of descriptor.keybindings ?? []) {
-			resources.add(
-				KeybindingsRegistry.registerKeybindingRule({
-					command: descriptor.id,
-					keybinding,
-					when: ContextKeyExpr.and(precondition, keybindingContext) ?? undefined,
-				}),
-			);
+			resources.add(KeybindingsRegistry.registerKeybindingRule({
+				command: descriptor.id,
+				keybinding,
+				when: ContextKeyExpr.and(precondition, keybindingContext) ?? undefined,
+			}));
 		}
 		return resources;
 	} catch (error) {
@@ -312,16 +328,9 @@ export function addKeybindingRules(rules: readonly IKeybindingRule[]): IDisposab
 	const resources = new DisposableStore();
 	try {
 		for (const rule of registrations) {
-			resources.add(
-				rule.command == null
-					? KeybindingsRegistry.registerKeybindingBlocker({ keybinding: rule.keybinding, when: rule.when })
-					: KeybindingsRegistry.registerKeybindingRule({
-							command: rule.command,
-							keybinding: rule.keybinding,
-							args: rule.args,
-							when: rule.when,
-						}),
-			);
+			resources.add(rule.command == null
+				? KeybindingsRegistry.registerKeybindingBlocker({ keybinding: rule.keybinding, when: rule.when })
+				: KeybindingsRegistry.registerKeybindingRule({ command: rule.command, keybinding: rule.keybinding, args: rule.args, when: rule.when }));
 		}
 		return resources;
 	} catch (error) {

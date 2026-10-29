@@ -13,7 +13,7 @@ export class SessionsAccountMenu {
 		private readonly preferences: SessionsPreferences,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@ICommandService private readonly commands: ICommandService,
-	) {}
+	) { }
 
 	public show(anchor: HTMLElement): void {
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
@@ -21,38 +21,10 @@ export class SessionsAccountMenu {
 		const ideLabel = localize('sessions.menu.openIde', 'Open IDE');
 		const shortcutsLabel = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
 		const actions: IAction[] = [
-			{
-				id: 'ash.sessions.settings',
-				label: settingsLabel,
-				tooltip: settingsLabel,
-				icon: Lxicon.gear,
-				enabled: true,
-				run: () => this.preferences.open(),
-			},
-			{
-				id: 'workbench.action.manageAccounts',
-				label: accountLabel,
-				tooltip: accountLabel,
-				icon: Lxicon.account,
-				enabled: true,
-				run: () => this.commands.executeCommand('workbench.action.manageAccounts'),
-			},
-			{
-				id: OPEN_ASH_WINDOW_COMMAND_ID,
-				label: ideLabel,
-				tooltip: ideLabel,
-				icon: Lxicon.code,
-				enabled: true,
-				run: () => this.commands.executeCommand(OPEN_ASH_WINDOW_COMMAND_ID),
-			},
-			{
-				id: OpenKeyboardShortcutsCommandId,
-				label: shortcutsLabel,
-				tooltip: shortcutsLabel,
-				icon: Lxicon.command,
-				enabled: true,
-				run: () => this.commands.executeCommand(OpenKeyboardShortcutsCommandId),
-			},
+			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
+			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },
+			{ id: OPEN_ASH_WINDOW_COMMAND_ID, label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: () => this.commands.executeCommand(OPEN_ASH_WINDOW_COMMAND_ID) },
+			{ id: OpenKeyboardShortcutsCommandId, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.command, enabled: true, run: () => this.commands.executeCommand(OpenKeyboardShortcutsCommandId) },
 		];
 		anchor.setAttribute('aria-expanded', 'true');
 		this.contextMenus.showContextMenu({

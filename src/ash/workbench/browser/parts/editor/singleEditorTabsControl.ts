@@ -30,7 +30,9 @@ export class SingleEditorTabsControl extends MultiEditorTabsControl {
 	}
 
 	override setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
-		const active = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput)) : undefined;
+		const active = activeInput
+			? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))
+			: undefined;
 		super.setEditors(active ? [active] : [], activeInput, selectedIds);
 	}
 }

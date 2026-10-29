@@ -17,27 +17,19 @@ import { TerminalLinkProviderService } from './terminalLinkProviderService.js';
 registerSingleton(ITerminalLinkProviderService, TerminalLinkProviderService, InstantiationType.Delayed);
 registerTerminalContribution(TerminalLinkContribution.ID, TerminalLinkContribution);
 
-registerAction2(
-	class OpenDetectedLinkAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.terminal.openDetectedLink',
-				title: localize2('terminal.links.open', 'Terminal: Open Detected Link…'),
-				f1: true,
-				keybinding: {
-					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyO,
-					when: TerminalContextKeys.focus.isEqualTo(true),
-					weight: KeybindingWeight.WorkbenchContrib,
-				},
-			});
-		}
+registerAction2(class OpenDetectedLinkAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.terminal.openDetectedLink', title: localize2('terminal.links.open', 'Terminal: Open Detected Link…'), f1: true,
+			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyO, when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib },
+		});
+	}
 
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(IViewsService).openView<TerminalViewPane>(TERMINAL_VIEW_ID);
-			const instance = accessor.get(ITerminalService).activeInstance;
-			if (!instance) return;
-			await instance.xtermReadyPromise;
-			await TerminalLinkContribution.get(instance)?.showLinkQuickpick();
-		}
-	},
-);
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IViewsService).openView<TerminalViewPane>(TERMINAL_VIEW_ID);
+		const instance = accessor.get(ITerminalService).activeInstance;
+		if (!instance) return;
+		await instance.xtermReadyPromise;
+		await TerminalLinkContribution.get(instance)?.showLinkQuickpick();
+	}
+});

@@ -24,32 +24,23 @@ export class Server extends IPCServer {
 		this.connected = this._register(connected);
 		const hello = (event: IpcMainEvent, ...args: unknown[]): void => {
 			const renderer = this.renderer(event);
-			if (renderer && args.length === 0) {
-				this.connect(renderer);
-			}
+			if (renderer && args.length === 0) { this.connect(renderer); }
 		};
 		const message = (event: IpcMainEvent, value: unknown): void => {
 			const renderer = this.renderer(event);
-			if (!renderer) {
-				return;
-			}
-			if (!(value instanceof Uint8Array)) {
-				renderer.document.clear();
-				return;
-			}
+			if (!renderer) { return; }
+			if (!(value instanceof Uint8Array)) { renderer.document.clear(); return; }
 			renderer.message?.fire(VSBuffer.wrap(new Uint8Array(value)));
 		};
 		const disconnect = (event: IpcMainEvent): void => this.renderer(event)?.document.clear();
 		ipcMain.on('ash:hello', hello);
 		ipcMain.on('ash:message', message);
 		ipcMain.on('ash:disconnect', disconnect);
-		this._register(
-			toDisposable(() => {
-				ipcMain.removeListener('ash:hello', hello);
-				ipcMain.removeListener('ash:message', message);
-				ipcMain.removeListener('ash:disconnect', disconnect);
-			}),
-		);
+		this._register(toDisposable(() => {
+			ipcMain.removeListener('ash:hello', hello);
+			ipcMain.removeListener('ash:message', message);
+			ipcMain.removeListener('ash:disconnect', disconnect);
+		}));
 	}
 
 	public registerClient(sender: WebContents, context: string, allowedEntryUrls: ReadonlySet<string>): IDisposable {
@@ -60,34 +51,24 @@ export class Server extends IPCServer {
 		this.registrations.set(sender.id, resources);
 		this.renderers.set(sender.id, renderer);
 		const remove = (): void => {
-			if (this.renderers.get(sender.id) === renderer) {
-				this.registrations.deleteAndDispose(sender.id);
-			}
+			if (this.renderers.get(sender.id) === renderer) { this.registrations.deleteAndDispose(sender.id); }
 		};
 		// A blocked navigation keeps the current document and its IPC client alive.
 		const navigate = (): void => document.clear();
 		sender.on('did-navigate', navigate);
 		sender.on('destroyed', remove);
-		resources.add(
-			toDisposable(() => {
-				sender.off('did-navigate', navigate);
-				sender.off('destroyed', remove);
-				if (this.renderers.get(sender.id) === renderer) {
-					this.renderers.delete(sender.id);
-				}
-			}),
-		);
+		resources.add(toDisposable(() => {
+			sender.off('did-navigate', navigate);
+			sender.off('destroyed', remove);
+			if (this.renderers.get(sender.id) === renderer) { this.renderers.delete(sender.id); }
+		}));
 		return toDisposable(remove);
 	}
 
 	private renderer(event: IpcMainEvent): RendererConnection | undefined {
 		const renderer = this.renderers.get(event.sender.id);
-		if (!renderer || renderer.sender !== event.sender || event.senderFrame !== renderer.sender.mainFrame) {
-			return undefined;
-		}
-		if (!event.senderFrame || !renderer.allowedEntryUrls.has(event.senderFrame.url)) {
-			return undefined;
-		}
+		if (!renderer || renderer.sender !== event.sender || event.senderFrame !== renderer.sender.mainFrame) { return undefined; }
+		if (!event.senderFrame || !renderer.allowedEntryUrls.has(event.senderFrame.url)) { return undefined; }
 		return renderer;
 	}
 
@@ -100,11 +81,7 @@ export class Server extends IPCServer {
 		resources.add(disconnected);
 		resources.add(messages);
 		renderer.message = messages;
-		resources.add(
-			toDisposable(() => {
-				renderer.message = undefined;
-			}),
-		);
+		resources.add(toDisposable(() => { renderer.message = undefined; }));
 		this.connected.fire({
 			protocol: {
 				onMessage: messages.event,

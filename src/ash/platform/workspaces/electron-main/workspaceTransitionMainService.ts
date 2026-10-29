@@ -73,20 +73,20 @@ export interface IWorkspaceTransitionRecoveryRouter {
 }
 
 export type WorkspaceTransitionState =
-	| { readonly phase: WorkspaceTransitionPhase.Idle }
+	| { readonly phase: WorkspaceTransitionPhase.Idle; }
 	| {
-			readonly phase: WorkspaceTransitionPhase.Resolving;
-			readonly transitionId: number;
-			readonly requestedPath: string;
-			readonly previous: IAnyWorkspaceIdentifier;
-	  }
+		readonly phase: WorkspaceTransitionPhase.Resolving;
+		readonly transitionId: number;
+		readonly requestedPath: string;
+		readonly previous: IAnyWorkspaceIdentifier;
+	}
 	| {
-			readonly phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering;
-			readonly transitionId: number;
-			readonly requestedPath: string;
-			readonly previous: IAnyWorkspaceIdentifier;
-			readonly workspace: ISingleFolderWorkspaceIdentifier;
-	  };
+		readonly phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering;
+		readonly transitionId: number;
+		readonly requestedPath: string;
+		readonly previous: IAnyWorkspaceIdentifier;
+		readonly workspace: ISingleFolderWorkspaceIdentifier;
+	};
 
 export interface IWorkspaceTransitionResult {
 	readonly status: WorkspaceTransitionStatus;
@@ -143,20 +143,14 @@ export class WorkspaceTransitionMainService extends Disposable {
 
 	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, grant));
-		this.transitionQueue = transition.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
 	}
 
 	/** Transitions to an already validated local or Remote single-folder Workspace identity. */
 	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, grant));
-		this.transitionQueue = transition.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
 	}
 
@@ -248,7 +242,9 @@ export class WorkspaceTransitionMainService extends Disposable {
 	private finishBeforeCommit(failure: IWorkspaceTransitionFailure): IWorkspaceTransitionResult {
 		this.setState({ phase: WorkspaceTransitionPhase.Idle });
 		return {
-			status: failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy ? WorkspaceTransitionStatus.Blocked : WorkspaceTransitionStatus.Failed,
+			status: failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy
+				? WorkspaceTransitionStatus.Blocked
+				: WorkspaceTransitionStatus.Failed,
 			previous: failure.previous,
 			workspace: failure.workspace,
 			failure,
@@ -260,13 +256,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 		requestedPath: string,
 		context: IWorkspaceTransitionContext,
 	): void {
-		this.setState({
-			phase,
-			transitionId: context.transitionId,
-			requestedPath,
-			previous: context.previous,
-			workspace: context.workspace,
-		});
+		this.setState({ phase, transitionId: context.transitionId, requestedPath, previous: context.previous, workspace: context.workspace });
 	}
 
 	private setState(state: WorkspaceTransitionState): void {

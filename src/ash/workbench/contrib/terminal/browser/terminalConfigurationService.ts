@@ -13,20 +13,15 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 
 	constructor(@IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION) || event.affectsConfiguration('editor.fontFamily')) this.changed.fire();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION) || event.affectsConfiguration('editor.fontFamily')) this.changed.fire();
+		}));
 	}
 
 	get config(): Readonly<ITerminalConfiguration> {
 		const settings = this.configuration.getValue<ITerminalConfiguration>(TERMINAL_CONFIG_SECTION);
 		const fontFamily = settings.fontFamily || this.configuration.getValue<string>('editor.fontFamily') || EDITOR_FONT_DEFAULTS.fontFamily;
 		// A user-selected face may not exist on this host. Keep terminal cells monospaced.
-		return Object.freeze({
-			...settings,
-			fontFamily: /(?:^|,)\s*monospace\s*(?:,|$)/i.test(fontFamily) ? fontFamily : `${fontFamily}, monospace`,
-		});
+		return Object.freeze({ ...settings, fontFamily: /(?:^|,)\s*monospace\s*(?:,|$)/i.test(fontFamily) ? fontFamily : `${fontFamily}, monospace` });
 	}
 }

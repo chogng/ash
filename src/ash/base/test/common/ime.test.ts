@@ -12,10 +12,7 @@ test('IME can be first imported during tracking without leaking its realm-owned 
 	const changes: boolean[] = [];
 	using listener = IME.onDidChange(enabled => changes.push(enabled));
 	try {
-		assert.deepEqual(
-			tracker.leaks().map(leak => leak.disposable),
-			[listener],
-		);
+		assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [listener]);
 		IME.disable();
 		IME.disable();
 		IME.enable();
@@ -37,13 +34,10 @@ test('ordinary IME instances own their emitter and release it idempotently', asy
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	using state = new InputMethodEditorState();
-	assert.deepEqual(
-		tracker.leaks().map(leak => [leak.label, leak.ownerLabel]),
-		[
-			['InputMethodEditorState', undefined],
-			['Emitter', 'InputMethodEditorState'],
-		],
-	);
+	assert.deepEqual(tracker.leaks().map(leak => [leak.label, leak.ownerLabel]), [
+		['InputMethodEditorState', undefined],
+		['Emitter', 'InputMethodEditorState'],
+	]);
 	const changes: boolean[] = [];
 	using listener = state.onDidChange(enabled => changes.push(enabled));
 	state.disable();
@@ -55,11 +49,8 @@ test('ordinary IME instances own their emitter and release it idempotently', asy
 	state.dispose();
 	state.dispose();
 	assert.throws(() => state.disable(), ReferenceError);
-	assert.throws(() => state.onDidChange(() => {}), ReferenceError);
-	assert.deepEqual(
-		tracker.leaks().map(leak => leak.disposable),
-		[listener],
-	);
+	assert.throws(() => state.onDidChange(() => { }), ReferenceError);
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [listener]);
 	listener.dispose();
 	tracker.assertNoLeaks();
 });

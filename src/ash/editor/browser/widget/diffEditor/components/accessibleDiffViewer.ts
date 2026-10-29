@@ -51,18 +51,12 @@ export class AccessibleDiffViewer extends Disposable {
 		this._register(addDisposableListener(this.previousDomNode, 'click', () => this.previous()));
 		this._register(addDisposableListener(this.nextDomNode, 'click', () => this.next()));
 		this._register(addDisposableListener(this.closeDomNode, 'click', () => this.close()));
-		this._register(
-			addDisposableListener(this.domNode, 'keydown', event => {
-				if (event.key !== 'Escape') return;
-				stopEvent(event);
-				this.close();
-			}),
-		);
-		this._register(
-			model.onDidChange(() => {
-				if (!this.domNode.hidden) this.close();
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key !== 'Escape') return;
+			stopEvent(event);
+			this.close();
+		}));
+		this._register(model.onDidChange(() => { if (!this.domNode.hidden) this.close(); }));
 		this.render();
 	}
 
@@ -99,16 +93,9 @@ export class AccessibleDiffViewer extends Disposable {
 		}
 		for (const move of diff.moves) {
 			const mapping = move.lineRangeMapping;
-			content.push(
-				localize(
-					'diffEditor.movedLines',
-					'Moved original lines {0}–{1} to modified lines {2}–{3}',
-					mapping.original.startLineNumber,
-					mapping.original.endLineNumberExclusive - 1,
-					mapping.modified.startLineNumber,
-					mapping.modified.endLineNumberExclusive - 1,
-				),
-			);
+			content.push(localize('diffEditor.movedLines', 'Moved original lines {0}–{1} to modified lines {2}–{3}',
+				mapping.original.startLineNumber, mapping.original.endLineNumberExclusive - 1,
+				mapping.modified.startLineNumber, mapping.modified.endLineNumberExclusive - 1));
 		}
 		return content.join('\n\n');
 	}

@@ -1,20 +1,7 @@
 import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import type { DocumentAttributes, DocumentMark, DocumentNode } from './document.js';
 import type { DocumentSchema } from './documentSchema.js';
-import {
-	createLineDocumentSnapshot,
-	linePoint,
-	type InlineAtom,
-	type LineDocumentSnapshot,
-	type LineFacet,
-	type LineId,
-	type LineRegion,
-	type LineRelation,
-	type LineSemanticAttributes,
-	type LineSemanticValue,
-	type ModelLine,
-	type PersistentMark,
-} from 'ash:editor/editor/common/model/lineDocument.js';
+import { createLineDocumentSnapshot, linePoint, type InlineAtom, type LineDocumentSnapshot, type LineFacet, type LineId, type LineRegion, type LineRelation, type LineSemanticAttributes, type LineSemanticValue, type ModelLine, type PersistentMark } from 'ash:editor/editor/common/model/lineDocument.js';
 
 /** Converts a schema document into the line-first snapshot consumed by TextModel. */
 export function projectDocumentToLines(schema: DocumentSchema, document: DocumentNode): LineDocumentSnapshot {
@@ -32,10 +19,7 @@ class DocumentLineProjection {
 	private readonly relations: LineRelation[] = [];
 	private readonly lineIds = new Set<LineId>();
 
-	constructor(
-		private readonly schema: DocumentSchema,
-		private readonly document: DocumentNode,
-	) {}
+	constructor(private readonly schema: DocumentSchema, private readonly document: DocumentNode) { }
 
 	public visit(node: DocumentNode, ancestors: readonly DocumentNode[]): void {
 		const kind = this.schema.getNodeSpec(node.type)?.kind;
@@ -179,12 +163,7 @@ class DocumentLineProjection {
 				id: `${node.id}:facet:${lineId}`,
 				kind: node.type,
 				lineId,
-				attrs: {
-					nodeId: node.id,
-					...toSemanticAttributes(
-						node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading') ? resolveDocumentParagraphAttributes(this.document, node) : node.attrs,
-					),
-				},
+				attrs: { nodeId: node.id, ...toSemanticAttributes(node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading') ? resolveDocumentParagraphAttributes(this.document, node) : node.attrs) },
 			});
 		}
 	}
@@ -218,7 +197,9 @@ function isLegacyTextLine(node: DocumentNode): boolean {
 }
 
 function isBlockAtom(node: DocumentNode): boolean {
-	return node.type === 'imageBlock' || node.type === 'horizontalRule' || (typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined));
+	return node.type === 'imageBlock' ||
+		node.type === 'horizontalRule' ||
+		typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined);
 }
 
 function blockAtomKind(node: DocumentNode): string {

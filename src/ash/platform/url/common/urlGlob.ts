@@ -40,13 +40,10 @@ export function testUrlMatchesGlob(uri: string | URI, globUrl: string): boolean 
 }
 
 function matchingPath(path: string): string {
-	return encodeURI(path)
-		.replace(/%25([\da-f]{2})/giu, '%$1')
-		.replace(/%[\da-f]{2}/giu, escape => {
-			const character = String.fromCharCode(parseInt(escape.slice(1), 16));
-			return /^[\w.~-]$/u.test(character) ? character : escape.toUpperCase();
-		})
-		.replace(/\/+$/u, '');
+	return encodeURI(path).replace(/%25([\da-f]{2})/giu, '%$1').replace(/%[\da-f]{2}/giu, escape => {
+		const character = String.fromCharCode(parseInt(escape.slice(1), 16));
+		return /^[\w.~-]$/u.test(character) ? character : escape.toUpperCase();
+	}).replace(/\/+$/u, '');
 }
 
 /** A trailing star consumes at least one character; completed paths include descendants. */

@@ -15,13 +15,11 @@ export class RemoteExtensionRecoveryContribution extends Disposable implements I
 	constructor(options: RemoteExtensionRecoveryContributionOptions) {
 		super();
 		let previousState = options.remoteAgentService.connectionState;
-		this._register(
-			options.remoteAgentService.onDidChangeConnectionState(state => {
-				const previous = previousState;
-				previousState = state;
-				if (state !== 'connected' || previous === undefined || previous === 'connected') return;
-				void options.extensionService.reload().catch(error => console.error('Declarative extension refresh after remote recovery failed', error));
-			}),
-		);
+		this._register(options.remoteAgentService.onDidChangeConnectionState(state => {
+			const previous = previousState;
+			previousState = state;
+			if (state !== 'connected' || previous === undefined || previous === 'connected') return;
+			void options.extensionService.reload().catch(error => console.error('Declarative extension refresh after remote recovery failed', error));
+		}));
 	}
 }

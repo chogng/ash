@@ -6,31 +6,18 @@ import ts from 'typescript';
 export async function prepareIncrementalOutput(configFile: string): Promise<void> {
 	const config = ts.readJsonConfigFile(configFile, ts.sys.readFile);
 	const parsed = ts.parseJsonSourceFileConfigFileContent(config, ts.sys, dirname(configFile), undefined, configFile);
-	if (parsed.errors.length) {
-		throw new Error(
-			ts.formatDiagnostics(parsed.errors, {
-				getCanonicalFileName: path => path,
-				getCurrentDirectory: ts.sys.getCurrentDirectory,
-				getNewLine: () => '\n',
-			}),
-		);
-	}
+	if (parsed.errors.length) { throw new Error(ts.formatDiagnostics(parsed.errors, { getCanonicalFileName: path => path, getCurrentDirectory: ts.sys.getCurrentDirectory, getNewLine: () => '\n' })); }
 	const infoFile = parsed.options.tsBuildInfoFile;
 	const outDir = parsed.options.outDir;
-	if (!infoFile || !outDir) {
-		throw new Error(`Incremental compilation requires tsBuildInfoFile and outDir: ${configFile}`);
-	}
+	if (!infoFile || !outDir) { throw new Error(`Incremental compilation requires tsBuildInfoFile and outDir: ${configFile}`); }
 	const ownedOutput = relative(dirname(configFile), outDir);
 	if (!ownedOutput || isAbsolute(ownedOutput) || ownedOutput === '..' || ownedOutput.startsWith('../') || ownedOutput.startsWith('..\\')) {
 		throw new Error(`Compiler outDir must stay inside the project: ${outDir}`);
 	}
 	let info: unknown;
-	try {
-		info = JSON.parse(await readFile(infoFile, 'utf8'));
-	} catch (error) {
-		if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
-			throw error;
-		}
+	try { info = JSON.parse(await readFile(infoFile, 'utf8')); }
+	catch (error) {
+		if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) { throw error; }
 	}
 	const files = info && typeof info === 'object' && 'fileNames' in info ? info.fileNames : undefined;
 	if (!Array.isArray(files) || !files.every(file => typeof file === 'string')) {
@@ -41,27 +28,18 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 		return;
 	}
 	// Include transitive imports from the compiler's inventory, not just tsconfig roots.
-	const previous = {
-		...parsed,
-		fileNames: files.map(file => resolve(dirname(infoFile), file).replaceAll('\\', '/')),
-	};
+	const previous = { ...parsed, fileNames: files.map(file => resolve(dirname(infoFile), file).replaceAll('\\', '/')) };
 	const roots = info && typeof info === 'object' && 'root' in info ? info.root : undefined;
 	const rootIds: number[] = [];
 	if (Array.isArray(roots)) {
 		for (const root of roots) {
-			if (Number.isInteger(root) && root > 0 && root <= files.length) {
-				rootIds.push(root);
-			} else if (Array.isArray(root) && root.length === 2 && root.every(Number.isInteger) && root[0] > 0 && root[1] >= root[0] && root[1] <= files.length) {
-				for (let id = root[0]; id <= root[1]; id++) {
-					rootIds.push(id);
-				}
-			} else {
-				rootIds.length = 0;
-				break;
-			}
+			if (Number.isInteger(root) && root > 0 && root <= files.length) { rootIds.push(root); }
+			else if (Array.isArray(root) && root.length === 2 && root.every(Number.isInteger) && root[0] > 0 && root[1] >= root[0] && root[1] <= files.length) {
+				for (let id = root[0]; id <= root[1]; id++) { rootIds.push(id); }
+			} else { rootIds.length = 0; break; }
 		}
 	}
-	const canonical = (path: string): string => (ts.sys.useCaseSensitiveFileNames ? path.replaceAll('\\', '/') : path.replaceAll('\\', '/').toLowerCase());
+	const canonical = (path: string): string => ts.sys.useCaseSensitiveFileNames ? path.replaceAll('\\', '/') : path.replaceAll('\\', '/').toLowerCase();
 	const previousRoots = rootIds.map(id => canonical(previous.fileNames[id - 1]!)).sort();
 	const currentRoots = parsed.fileNames.map(canonical).sort();
 	if (JSON.stringify(previousRoots) !== JSON.stringify(currentRoots)) {
@@ -73,15 +51,11 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 	}
 	let complete = true;
 	for (const source of previous.fileNames) {
-		if (/\.d\.[cm]?ts$/.test(source)) {
-			continue;
-		}
+		if (/\.d\.[cm]?ts$/.test(source)) { continue; }
 		const outputs = ts.getOutputFileNames(previous, source, !ts.sys.useCaseSensitiveFileNames);
 		const sourceExists = await exists(source);
 		for (const output of outputs) {
-			if (output === infoFile) {
-				continue;
-			}
+			if (output === infoFile) { continue; }
 			const inside = relative(outDir, output);
 			if (isAbsolute(inside) || inside === '..' || inside.startsWith('../') || inside.startsWith('..\\')) {
 				throw new Error(`Compiler output escapes outDir: ${output}`);
@@ -90,21 +64,13 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 				// Deleted tests must not survive discovery as stale emitted JavaScript.
 				await rm(output, { force: true });
 				complete = false;
-			} else if (!(await exists(output))) {
-				complete = false;
-			}
+			} else if (!await exists(output)) { complete = false; }
 		}
 	}
-	if (!complete) {
-		await rm(infoFile, { force: true });
-	}
+	if (!complete) { await rm(infoFile, { force: true }); }
 }
 
 async function exists(path: string): Promise<boolean> {
-	try {
-		return (await stat(path)).isFile();
-	} catch (error) {
-		if (error.code === 'ENOENT') return false;
-		throw error;
-	}
+	try { return (await stat(path)).isFile(); }
+	catch (error) { if (error.code === 'ENOENT') return false; throw error; }
 }

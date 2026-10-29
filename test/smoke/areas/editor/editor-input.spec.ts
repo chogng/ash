@@ -44,45 +44,41 @@ test('Stanza navigation undo and reopened history preserve subsequent edits in A
 	await page.screenshot({ path: testInfo.outputPath('stanza-restored-history.png') });
 });
 
-test(
-	'Unicode overtype preserves text and undo in Ash',
-	{ tag: ['@electron-ui', '@electron-app-server', '@browser-app-server'] },
-	async ({ target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
-		const page = workbench.page;
-		if (target.appServerMode === 'required') {
-			await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-		} else {
-			await page.keyboard.press('ControlOrMeta+N');
-		}
-		const editor = workbench.editors.groupAt(0).editor;
-		await editor.waitForEditorFocus();
-		await editor.input.press('ControlOrMeta+A');
-		await page.keyboard.insertText('ab😀e\u0301z\nend');
-		await editor.input.press('ControlOrMeta+Home');
-		await editor.input.press('ArrowRight');
-		await editor.input.press('Insert');
-		try {
-			await page.keyboard.insertText('👩‍💻');
-			await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
-			await editor.input.press('ControlOrMeta+z');
-			await editor.waitForEditorContents(text => text === 'ab😀e\u0301z\nend');
-			await editor.input.press('ControlOrMeta+Shift+z');
-			await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
-		} finally {
-			await editor.input.press('Insert');
-		}
-		await expect(editor.input).toBeFocused();
-		if (target.appServerMode !== 'required') return;
-		await editor.input.press('ControlOrMeta+S');
-		await expect.poll(async () => (await readFile(testWorkspace.file, 'utf8')).replace(/\r\n/g, '\n')).toBe('a👩‍💻😀e\u0301z\nend');
-		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+test('Unicode overtype preserves text and undo in Ash', { tag: ['@electron-ui', '@electron-app-server', '@browser-app-server'] }, async ({ target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
+	const page = workbench.page;
+	if (target.appServerMode === 'required') {
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
-		({ workbench } = await reloadWorkbench('quit'));
-		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
-		await workbench.page.screenshot({ path: testInfo.outputPath('stanza-saved-file-after-relaunch.png') });
-	},
-);
+	} else {
+		await page.keyboard.press('ControlOrMeta+N');
+	}
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+A');
+	await page.keyboard.insertText('ab😀e\u0301z\nend');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowRight');
+	await editor.input.press('Insert');
+	try {
+		await page.keyboard.insertText('👩‍💻');
+		await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+		await editor.input.press('ControlOrMeta+z');
+		await editor.waitForEditorContents(text => text === 'ab😀e\u0301z\nend');
+		await editor.input.press('ControlOrMeta+Shift+z');
+		await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	} finally {
+		await editor.input.press('Insert');
+	}
+	await expect(editor.input).toBeFocused();
+	if (target.appServerMode !== 'required') return;
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readFile(testWorkspace.file, 'utf8')).replace(/\r\n/g, '\n')).toBe('a👩‍💻😀e\u0301z\nend');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	({ workbench } = await reloadWorkbench('quit'));
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	await workbench.page.screenshot({ path: testInfo.outputPath('stanza-saved-file-after-relaunch.png') });
+});
 
 for (const inputBackend of ['EditContext', 'textarea'] as const) {
 	test.describe(`Chinese IME with ${inputBackend}`, () => {
@@ -91,9 +87,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 			if (inputBackend === 'textarea') {
 				// Emulate a host without EditContext before the file editor is
 				// constructed; its production factory must select the fallback.
-				await page.evaluate(() => {
-					Reflect.deleteProperty(window, 'EditContext');
-				});
+				await page.evaluate(() => { Reflect.deleteProperty(window, 'EditContext'); });
 			}
 			await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 			const editor = workbench.editors.groupAt(0).editor;
@@ -105,16 +99,8 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 			await editor.input.press('ArrowRight');
 			const session = await page.context().newCDPSession(page);
 			try {
-				for (const [text, offset] of [
-					['你好', 1],
-					['您好', 1],
-					['您们好', 3],
-				] as const) {
-					await session.send('Input.imeSetComposition', {
-						text,
-						selectionStart: offset,
-						selectionEnd: offset,
-					});
+				for (const [text, offset] of [['你好', 1], ['您好', 1], ['您们好', 3]] as const) {
+					await session.send('Input.imeSetComposition', { text, selectionStart: offset, selectionEnd: offset });
 					await editor.waitForEditorContents(value => value === `前${text}后\n第二行`);
 				}
 				await session.send('Input.insertText', { text: '您们好' });
@@ -127,11 +113,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 
 				await editor.input.press('ControlOrMeta+End');
 				await editor.input.press('ControlOrMeta+Shift+Home');
-				await session.send('Input.imeSetComposition', {
-					text: 'zhongwen',
-					selectionStart: 8,
-					selectionEnd: 8,
-				});
+				await session.send('Input.imeSetComposition', { text: 'zhongwen', selectionStart: 8, selectionEnd: 8 });
 				await session.send('Input.insertText', { text: '中文' });
 				await editor.waitForEditorContents(value => value === '中文');
 				await editor.input.press('ControlOrMeta+z');
@@ -166,9 +148,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 				await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 				await editor.waitForEditorContents(value => value === saved);
 				await page.screenshot({ path: testInfo.outputPath(`chinese-ime-${inputBackend}.png`) });
-			} finally {
-				await session.detach();
-			}
+			} finally { await session.detach(); }
 		});
 	});
 }
@@ -182,7 +162,7 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	const defaultSize = process.platform === 'darwin' ? 12 : 14;
 	await expect(editor.element).toHaveCSS('font-size', `${defaultSize}px`);
 	await expect(editor.element).toHaveCSS('line-height', `${Math.round(defaultSize * (process.platform === 'darwin' ? 1.5 : 1.35))}px`);
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat-input-editor .stanza-editor');
@@ -234,20 +214,16 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await page.keyboard.insertText('!');
 	await expect(editor.lines).toHaveText(['iii WWW 中文!']);
 	await expect(editor.input).toBeFocused();
-	await expect
-		.poll(() =>
-			editor.element.evaluate(element => {
-				const line = element.querySelector('.stanza-editor-line-text')!;
-				const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-				let lastText = walker.nextNode()!;
-				while (walker.nextNode()) lastText = walker.currentNode;
-				const range = document.createRange();
-				range.setStart(lastText, lastText.textContent!.length);
-				range.collapse(true);
-				return Math.abs(range.getBoundingClientRect().left - element.querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect().left);
-			}),
-		)
-		.toBeLessThan(2);
+	await expect.poll(() => editor.element.evaluate(element => {
+		const line = element.querySelector('.stanza-editor-line-text')!;
+		const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+		let lastText = walker.nextNode()!;
+		while (walker.nextNode()) lastText = walker.currentNode;
+		const range = document.createRange();
+		range.setStart(lastText, lastText.textContent!.length);
+		range.collapse(true);
+		return Math.abs(range.getBoundingClientRect().left - element.querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect().left);
+	})).toBeLessThan(2);
 	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor'));
 	await expect(editor.input).toHaveCount(0);
 
@@ -287,63 +263,60 @@ test('editor and Chat input font settings apply independently and persist in Chi
 test.describe('custom editor context menus', () => {
 	test.use({ electronUserSettings: { 'window.menuStyle': 'custom' } });
 
-	test(
-		'editor context menu preserves the right-click selection and runs matching edits and Copy As',
-		{ tag: ['@browser-app-server', '@electron-app-server'] },
-		async ({ target, application, workbench }) => {
-			const page = workbench.page;
-			await page.keyboard.press('ControlOrMeta+N');
-			const editor = workbench.editors.groupAt(0).editor;
-			await editor.waitForEditorFocus();
-			await page.keyboard.insertText('alpha beta alpha');
-			await editor.input.press('Home');
-			for (let index = 0; index < 5; index++) await editor.input.press('Shift+ArrowRight');
-			if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-			const readClipboard = (): Promise<string> =>
-				target.kind === 'electron' ? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText()) : page.evaluate(() => navigator.clipboard.readText());
-			const previousClipboard = await readClipboard();
-			try {
-				await editor.lines.first().click({ button: 'right', position: { x: 10, y: 5 } });
-				const copy = page.getByRole('menuitem', { name: 'Copy', exact: true });
-				if (target.kind === 'electron') {
-					const modifier = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
-					await expect(copy.locator('.ash-menu-keybinding')).toHaveText(`${modifier}C`);
-					await expect(page.getByRole('menuitem', { name: 'Cut', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}X`);
-					await expect(page.getByRole('menuitem', { name: 'Paste', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}V`);
-				}
-				await copy.click();
-				await expect.poll(readClipboard).toBe('alpha');
-				await expect(editor.input).toBeFocused();
-				await editor.input.press('Shift+F10');
-				const copyAs = page.getByRole('menuitem', { name: 'Copy As', exact: true });
-				await copyAs.focus();
-				await copyAs.press('ArrowRight');
-				const highlight = page.getByRole('menuitem', { name: 'Copy with Syntax Highlighting', exact: true });
-				await expect(highlight).toBeFocused();
-				await highlight.press('Enter');
-				await expect.poll(readClipboard).toBe('alpha');
-				await expect(editor.input).toBeFocused();
-				await editor.input.press('Shift+F10');
-				await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
-				await page.keyboard.insertText('gamma');
-				await expect(editor.lines).toHaveText(['gamma beta gamma']);
-				await editor.input.press('ControlOrMeta+z');
-				await expect(editor.lines).toHaveText(['alpha beta alpha']);
-				await expect(editor.input).toBeFocused();
-				await editor.input.press('Shift+F10');
-				await page.getByRole('menuitem', { name: 'Command Palette...', exact: true }).click();
-				await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
-				await page.keyboard.press('Escape');
-				await expect(editor.input).toBeFocused();
-			} finally {
-				if (target.kind === 'electron') {
-					await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
-				} else {
-					await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
-				}
+	test('editor context menu preserves the right-click selection and runs matching edits and Copy As', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await page.keyboard.insertText('alpha beta alpha');
+		await editor.input.press('Home');
+		for (let index = 0; index < 5; index++) await editor.input.press('Shift+ArrowRight');
+		if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		const readClipboard = (): Promise<string> => target.kind === 'electron'
+			? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+			: page.evaluate(() => navigator.clipboard.readText());
+		const previousClipboard = await readClipboard();
+		try {
+			await editor.lines.first().click({ button: 'right', position: { x: 10, y: 5 } });
+			const copy = page.getByRole('menuitem', { name: 'Copy', exact: true });
+			if (target.kind === 'electron') {
+				const modifier = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
+				await expect(copy.locator('.ash-menu-keybinding')).toHaveText(`${modifier}C`);
+				await expect(page.getByRole('menuitem', { name: 'Cut', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}X`);
+				await expect(page.getByRole('menuitem', { name: 'Paste', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}V`);
 			}
-		},
-	);
+			await copy.click();
+			await expect.poll(readClipboard).toBe('alpha');
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			const copyAs = page.getByRole('menuitem', { name: 'Copy As', exact: true });
+			await copyAs.focus();
+			await copyAs.press('ArrowRight');
+			const highlight = page.getByRole('menuitem', { name: 'Copy with Syntax Highlighting', exact: true });
+			await expect(highlight).toBeFocused();
+			await highlight.press('Enter');
+			await expect.poll(readClipboard).toBe('alpha');
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
+			await page.keyboard.insertText('gamma');
+			await expect(editor.lines).toHaveText(['gamma beta gamma']);
+			await editor.input.press('ControlOrMeta+z');
+			await expect(editor.lines).toHaveText(['alpha beta alpha']);
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Command Palette...', exact: true }).click();
+			await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(editor.input).toBeFocused();
+		} finally {
+			if (target.kind === 'electron') {
+				await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+			} else {
+				await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+			}
+		}
+	});
 
 	test('editor context menu initializes Chinese actions and accessibility help after restart', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -365,6 +338,7 @@ test.describe('custom editor context menus', () => {
 		await page.keyboard.press('Escape');
 		await expect(editor.input).toBeFocused();
 	});
+
 });
 
 test('multiline paste undo and redo preserve the final editor line', async ({ target, workbench, application }) => {
@@ -434,7 +408,8 @@ test('theme color settings update editor colors and restore defaults when remove
 		await row.locator('[data-pattern-part="key"]').fill(id);
 		await row.locator('[data-pattern-part="value"]').fill(color);
 		await row.locator('[data-pattern-part="value"]').press('Tab');
-		await expect.poll(() => editor.element.evaluate((element, token) => getComputedStyle(element).getPropertyValue(token).trim(), cssVariable)).toBe(color);
+		await expect.poll(() => editor.element.evaluate((element, token) =>
+			getComputedStyle(element).getPropertyValue(token).trim(), cssVariable)).toBe(color);
 	}
 	await settings.locator('.ash-modal-editor-close').click();
 	await editor.waitForEditorFocus();

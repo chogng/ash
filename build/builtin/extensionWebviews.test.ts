@@ -17,9 +17,7 @@ test('Rust extension views bundle static assets and track imported source depend
 		assert.match(result.resources['media/view.css'], /color:red/);
 		assert.ok(result.files.includes(resolve(root, 'src/shared.js')));
 		assert.ok(result.files.includes(resolve(root, 'src/view.css')));
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
+	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('extension view declarations reject resources outside the package and output collisions', async () => {

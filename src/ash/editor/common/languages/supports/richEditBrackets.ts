@@ -132,7 +132,7 @@ function groupFuzzyBrackets(brackets: readonly CharacterPair[]): InternalBracket
 	const areOverlapping = (a: CharacterPair, b: CharacterPair) => {
 		const [aOpen, aClose] = a;
 		const [bOpen, bClose] = b;
-		return aOpen === bOpen || aOpen === bClose || aClose === bOpen || aClose === bClose;
+		return (aOpen === bOpen || aOpen === bClose || aClose === bOpen || aClose === bClose);
 	};
 
 	const mergeGroups = (g1: number, g2: number) => {
@@ -170,7 +170,7 @@ function groupFuzzyBrackets(brackets: readonly CharacterPair[]): InternalBracket
 		if (currentOpen.length > 0) {
 			result.push({
 				open: currentOpen,
-				close: currentClose,
+				close: currentClose
 			});
 		}
 	}
@@ -203,17 +203,24 @@ export class RichEditBrackets {
 	/**
 	 * A map useful for decoding a regex match and finding which bracket group was matched.
 	 */
-	public readonly textIsBracket: { [text: string]: RichEditBracket };
+	public readonly textIsBracket: { [text: string]: RichEditBracket; };
 	/**
 	 * A set useful for decoding if a regex match is the open bracket of a bracket pair.
 	 */
-	public readonly textIsOpenBracket: { [text: string]: boolean };
+	public readonly textIsOpenBracket: { [text: string]: boolean; };
 
 	constructor(languageId: string, _brackets: readonly CharacterPair[]) {
 		const brackets = groupFuzzyBrackets(_brackets);
 
 		this.brackets = brackets.map((b, index) => {
-			return new RichEditBracket(languageId, index, b.open, b.close, getRegexForBracketPair(b.open, b.close, brackets, index), getReversedRegexForBracketPair(b.open, b.close, brackets, index));
+			return new RichEditBracket(
+				languageId,
+				index,
+				b.open,
+				b.close,
+				getRegexForBracketPair(b.open, b.close, brackets, index),
+				getReversedRegexForBracketPair(b.open, b.close, brackets, index)
+			);
 		});
 
 		this.forwardRegex = getRegexForBrackets(this.brackets);
@@ -391,9 +398,9 @@ function getReversedRegexForBrackets(brackets: RichEditBracket[]): RegExp {
 
 function prepareBracketForRegExp(str: string): string {
 	// This bracket pair uses letters like e.g. "begin" - "end"
-	const insertWordBoundaries = /^[\w ]+$/.test(str);
+	const insertWordBoundaries = (/^[\w ]+$/.test(str));
 	str = strings.escapeRegExpCharacters(str);
-	return insertWordBoundaries ? `\\b${str}\\b` : str;
+	return (insertWordBoundaries ? `\\b${str}\\b` : str);
 }
 
 export function createBracketOrRegExp(pieces: string[], options?: strings.RegExpOptions): RegExp {
@@ -402,6 +409,7 @@ export function createBracketOrRegExp(pieces: string[], options?: strings.RegExp
 }
 
 const toReversedString = (function () {
+
 	function reverse(str: string): string {
 		// create a Uint16Array and then use a TextDecoder to create a string
 		const arr = new Uint16Array(str.length);
@@ -424,6 +432,7 @@ const toReversedString = (function () {
 })();
 
 export class BracketsUtils {
+
 	private static _findPrevBracketInText(reversedBracketRegex: RegExp, lineNumber: number, reversedText: string, offset: number): Range | null {
 		const m = reversedText.match(reversedBracketRegex);
 

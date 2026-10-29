@@ -5,7 +5,10 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { EditorTabsModeConfiguration, type EditorTabsMode } from '../../../services/editor/common/editorConfiguration.js';
+import {
+	EditorTabsModeConfiguration,
+	type EditorTabsMode,
+} from '../../../services/editor/common/editorConfiguration.js';
 
 import type { FileElement } from './breadcrumbsModel.js';
 import { EditorHeaderControl, type EditorHeaderActions } from './editorHeaderControl.js';
@@ -59,8 +62,7 @@ export class EditorTitleControl extends Disposable {
 	) {
 		super();
 		this.delegate = delegate;
-		this.tabsMode =
-			model.editorLimit === 1 ? 'single' : (configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration));
+		this.tabsMode = model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-editor-title-control';
@@ -69,36 +71,31 @@ export class EditorTitleControl extends Disposable {
 		this.tabsAndActionsDomNode.className = 'ash-editor-tabs-and-actions';
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-		this.header = this._register(
-			this.instantiationService.createInstance(
-				EditorHeaderControl,
-				this.domNode,
-				this.tabsAndActionsDomNode,
-				titleActions,
-				configurationService,
-				onSelectBreadcrumb,
-				group,
-				breadcrumbsService,
-				languageFeatures,
-				showSymbolPicker,
-			),
-		);
+		this.header = this._register(this.instantiationService.createInstance(EditorHeaderControl,
+			this.domNode,
+			this.tabsAndActionsDomNode,
+			titleActions,
+			configurationService,
+			onSelectBreadcrumb,
+			group,
+			breadcrumbsService,
+			languageFeatures,
+			showSymbolPicker,
+		));
 		this.lockIndicator = h(ownerDocument, 'span');
 		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
 		this.lockIndicator.hidden = true;
 		this.tabsAndActionsDomNode.append(this.lockIndicator);
 		this._register(this.header.onDidChangeHeight(() => this.heightEmitter.fire()));
 		if (configurationService) {
-			this._register(
-				configurationService.onDidChangeConfiguration(event => {
-					if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
-						this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
-						this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-						this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
-						this.heightEmitter.fire();
-					}
-				}),
-			);
+			this._register(configurationService.onDidChangeConfiguration(event => {
+				if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
+					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
+					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
+					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
+					this.heightEmitter.fire();
+				}
+			}));
 		}
 		this.domNode.hidden = model.editorLimit !== 1;
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -119,7 +116,12 @@ export class EditorTitleControl extends Disposable {
 		this.lockIndicator.textContent = locked ? localize('workbench.editorGroupLocked', 'Locked') : '';
 	}
 
-	setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, activePane?: IEditorPane, selectedIds?: ReadonlySet<string>): void {
+	setEditors(
+		editors: readonly EditorTabDescriptor[],
+		activeInput: IResourceEditorInput | undefined,
+		activePane?: IEditorPane,
+		selectedIds?: ReadonlySet<string>,
+	): void {
 		const wasHidden = this.domNode.hidden;
 		this.editors = editors;
 		this.selectedIds = selectedIds;
@@ -127,26 +129,25 @@ export class EditorTitleControl extends Disposable {
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
 		// Single-content hosts retain their group controls even without an editor.
-		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0) || (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
+		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0)
+			|| (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
 		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
 		this.tabsAndActionsDomNode.classList.toggle('multiple', mode === 'multiple');
 		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-title-actions');
-		const control =
-			mode === 'single'
-				? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
-				: mode === 'none'
-					? new NoEditorTabsControl(this.tabsAndActionsDomNode)
-					: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);
-		this.rowsListener.value =
-			control instanceof MultiRowEditorControl
-				? control.onDidChangeRows(() => {
-						this.domNode.style.setProperty('--ash-editor-tab-rows', String(control.rowCount));
-						this.heightEmitter.fire();
-					})
-				: undefined;
+		const control = mode === 'single'
+			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
+			: mode === 'none'
+				? new NoEditorTabsControl(this.tabsAndActionsDomNode)
+				: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);
+		this.rowsListener.value = control instanceof MultiRowEditorControl
+			? control.onDidChangeRows(() => {
+				this.domNode.style.setProperty('--ash-editor-tab-rows', String(control.rowCount));
+				this.heightEmitter.fire();
+			})
+			: undefined;
 		this.domNode.style.setProperty('--ash-editor-tab-rows', control instanceof MultiRowEditorControl ? String(control.rowCount) : '1');
 		if (firstAction) this.tabsAndActionsDomNode.insertBefore(control.domNode, firstAction);
 		return control;

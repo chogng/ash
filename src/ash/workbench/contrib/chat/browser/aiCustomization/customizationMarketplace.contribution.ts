@@ -22,9 +22,6 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
-		description: localize(
-			{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
-			'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
-		),
+		description: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' }, 'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.'),
 	},
 });

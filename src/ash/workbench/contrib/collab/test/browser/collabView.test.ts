@@ -4,9 +4,7 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('collaboration browser component', () => {
 	const browserTests = useBrowserTests();
-	function channel(page: Page, id: string) {
-		return page.getByRole('treeitem').filter({ has: page.locator(`[data-channel-id="${id}"]`) });
-	}
+	function channel(page: Page, id: string) { return page.getByRole('treeitem').filter({ has: page.locator(`[data-channel-id="${id}"]`) }); }
 
 	for (const locale of ['en', 'zh-CN']) {
 		for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
@@ -69,8 +67,7 @@ suite('collaboration browser component', () => {
 		await input.press('Enter');
 		await expect(input).toBeVisible();
 		await expect(page.getByText('A channel with this name already exists here.')).toBeVisible();
-		await input.fill('meeting');
-		await input.press('Enter');
+		await input.fill('meeting'); await input.press('Enter');
 		const meeting = page.getByRole('treeitem').filter({ hasText: 'meeting' });
 		await expect(meeting).toHaveAttribute('aria-level', '2');
 		await expect(channel(page, 'rooms')).toHaveAttribute('aria-expanded', 'true');
@@ -78,8 +75,7 @@ suite('collaboration browser component', () => {
 		await expect(page.getByRole('tree')).toBeFocused();
 		await expect(page.getByRole('tree')).toHaveAttribute('aria-activedescendant', (await meeting.getAttribute('id'))!);
 		await page.keyboard.press('F2');
-		await input.fill('planning');
-		await input.press('Enter');
+		await input.fill('planning'); await input.press('Enter');
 		await expect(page.getByRole('treeitem').filter({ hasText: 'planning' })).toBeVisible();
 		await expect(page.locator('.collaboration-selection-label')).toHaveText('# rooms / planning');
 		await page.keyboard.press('Shift+F10');
@@ -93,11 +89,9 @@ suite('collaboration browser component', () => {
 		await expect(channel(page, 'design')).toHaveCount(0);
 		await expect(channel(page, 'engineering')).toHaveCount(0);
 		await page.getByRole('button', { name: 'New Channel', exact: true }).click();
-		await input.fill('A very long channel name that must truncate inside a narrow collaboration sidebar');
-		await input.press('Enter');
+		await input.fill('A very long channel name that must truncate inside a narrow collaboration sidebar'); await input.press('Enter');
 		await expect(page.getByText('Use 1–80 characters without slashes or control characters.')).toBeVisible();
-		await input.fill('A very long channel name that truncates inside a narrow collaboration sidebar');
-		await input.press('Enter');
+		await input.fill('A very long channel name that truncates inside a narrow collaboration sidebar'); await input.press('Enter');
 		await page.setViewportSize({ width: 260, height: 650 });
 		const label = page.locator('.collaboration-channel-name').filter({ hasText: 'A very long' });
 		await expect(label).toBeVisible();
@@ -119,6 +113,7 @@ suite('collaboration browser component', () => {
 		await expect(page.getByRole('button', { name: 'Create call', exact: true })).toHaveCount(0);
 	});
 
+
 	test('Members support invitations, role changes, revocation and read-only channel controls', async function () {
 		const { page } = browserTests;
 
@@ -128,31 +123,23 @@ suite('collaboration browser component', () => {
 		await members.click();
 		await page.getByRole('option', { name: /Invite Member/ }).click();
 		const input = page.getByRole('textbox', { name: 'Member Display Name' });
-		await input.fill('Bob');
-		await input.press('Enter');
+		await input.fill('Bob'); await input.press('Enter');
 		await page.getByRole('option', { name: 'Editor', exact: true }).click();
 		await page.getByRole('option', { name: 'Copy Invitation', exact: true }).click();
 		expect(JSON.parse(await page.evaluate(() => window.ashCollaboration.clipboard())).credential).toHaveLength(64);
-		await members.click();
-		await page.getByRole('option', { name: /Bob/ }).click();
+		await members.click(); await page.getByRole('option', { name: /Bob/ }).click();
 		await page.getByRole('option', { name: 'Change Role', exact: true }).click();
 		await page.getByRole('option', { name: 'Viewer', exact: true }).click();
-		await members.click();
-		await expect(page.getByRole('option', { name: /Bob/ })).toContainText('Viewer');
+		await members.click(); await expect(page.getByRole('option', { name: /Bob/ })).toContainText('Viewer');
 		await page.getByRole('option', { name: /Bob/ }).click();
 		await page.getByRole('option', { name: 'Remove Member', exact: true }).click();
 		await page.getByRole('option', { name: 'Revoke access for Bob', exact: true }).click();
-		await members.click();
-		await expect(page.getByRole('option', { name: /Bob/ })).toHaveCount(0);
-		await page.keyboard.press('Escape');
+		await members.click(); await expect(page.getByRole('option', { name: /Bob/ })).toHaveCount(0); await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashCollaboration.setRole('viewer'));
 		await expect(page.getByRole('button', { name: 'New Channel', exact: true })).toBeDisabled();
-		await channel(page, 'general').click();
-		await page.keyboard.press('F2');
+		await channel(page, 'general').click(); await page.keyboard.press('F2');
 		await expect(page.getByRole('textbox', { name: 'Rename Channel' })).toHaveCount(0);
-		await members.click();
-		await expect(page.getByRole('option', { name: /Invite Member/ })).toHaveCount(0);
-		await page.keyboard.press('Escape');
+		await members.click(); await expect(page.getByRole('option', { name: /Invite Member/ })).toHaveCount(0); await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashCollaboration.revoke());
 		await expect(page.getByText('Access denied. Your invitation may have been revoked.')).toBeVisible();
 		await expect(page.getByRole('treeitem')).toHaveCount(0);
@@ -165,6 +152,7 @@ suite('collaboration browser component', () => {
 		await expect(page.getByRole('button', { name: 'Connect Channels', exact: true })).toBeDisabled();
 		await expect(page.getByText('Channels require a connected Ash backend.')).toBeVisible();
 	});
+
 
 	test('channel actions are keyboard accessible and start a call using channel access', async function () {
 		const { page } = browserTests;

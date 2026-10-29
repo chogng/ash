@@ -34,24 +34,18 @@ export class DocumentFormattingControls extends Disposable {
 		// Use the shared SelectBox for keyboard navigation, Escape/focus restoration
 		// and theme/HC styling, rather than maintaining a second dropdown behavior.
 		const select = this._register(new SelectBox(wrapper, { options, ariaLabel: label }, defaultSelectBoxStyles));
-		this._register(
-			select.onDidSelect(({ value }) => {
-				if (!select.enabled) return;
-				if (value !== '') run(value);
-				// Mixed describes the selection; choosing it cannot clear document styles.
-				else select.value = this.displayedValues.get(select) ?? '';
-			}),
-		);
+		this._register(select.onDidSelect(({ value }) => {
+			if (!select.enabled) return;
+			if (value !== '') run(value);
+			// Mixed describes the selection; choosing it cannot clear document styles.
+			else select.value = this.displayedValues.get(select) ?? '';
+		}));
 		return select;
 	}
 
 	protected addButton(label: string, run: () => void): Button {
 		const button = this._register(new Button(this.element, { ...defaultButtonStyles, label, size: 'small' }));
-		this._register(
-			button.onDidClick(() => {
-				if (button.enabled) run();
-			}),
-		);
+		this._register(button.onDidClick(() => { if (button.enabled) run(); }));
 		return button;
 	}
 
@@ -66,11 +60,7 @@ export class DocumentFormattingControls extends Disposable {
 	}
 
 	protected onInputCommit(input: InputBox, run: (value: string) => void): void {
-		this._register(
-			addDisposableListener(input.inputElement, 'change', () => {
-				if (input.enabled) run(input.value);
-			}),
-		);
+		this._register(addDisposableListener(input.inputElement, 'change', () => { if (input.enabled) run(input.value); }));
 	}
 
 	protected setSelectValue(select: SelectBox, value: string): void {

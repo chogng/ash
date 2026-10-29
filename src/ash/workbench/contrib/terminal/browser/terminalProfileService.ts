@@ -6,14 +6,7 @@ import { OperatingSystem } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ITerminalProcessService,
-	TerminalSettingPrefix,
-	type ITerminalProfile,
-	type ITerminalProfileObject,
-	type IExtensionTerminalProfile,
-	type IShellLaunchConfig,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalSettingPrefix, type ITerminalProfile, type ITerminalProfileObject, type IExtensionTerminalProfile, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
@@ -32,7 +25,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 	private activated = false;
 	private readonly internalProfiles = new Map<string, IExtensionTerminalProfile>();
 	private readonly providers = new Map<string, ITerminalProfileProvider>();
-	private readonly defaultOverrides: { extensionIdentifier: string; id: string }[] = [];
+	private readonly defaultOverrides: { extensionIdentifier: string; id: string; }[] = [];
 	private readonly changed = this._register(new Emitter<readonly ITerminalProfile[]>());
 	readonly onDidChangeAvailableProfiles = this.changed.event;
 
@@ -44,36 +37,28 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		@ITerminalContributionService private readonly contributions: ITerminalContributionService,
 	) {
 		super();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION)) {
-					// Schema updates are shared across service scopes. Reflect their defaults
-					// without publishing this scope's suggestions back into the same update.
-					this.fireProfilesChanged(event.source !== ConfigurationTarget.DEFAULT);
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION)) {
+				// Schema updates are shared across service scopes. Reflect their defaults
+				// without publishing this scope's suggestions back into the same update.
+				this.fireProfilesChanged(event.source !== ConfigurationTarget.DEFAULT);
+			}
+		}));
 		this._register(contributions.onDidChangeTerminalProfiles(() => this.fireProfilesChanged()));
-		this._register(
-			processes.onConnectionState(state => {
-				this.invalidate();
-				if (state === 'ready' && this.activated) this.refreshInBackground();
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				if (!workspace.getWorkspace().folders.some(folder => folder.id === this.selectedDirId)) this.selectedDirId = undefined;
-				this.invalidate();
-				if (this.activated) this.refreshInBackground();
-			}),
-		);
+		this._register(processes.onConnectionState(state => {
+			this.invalidate();
+			if (state === 'ready' && this.activated) this.refreshInBackground();
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => {
+			if (!workspace.getWorkspace().folders.some(folder => folder.id === this.selectedDirId)) this.selectedDirId = undefined;
+			this.invalidate();
+			if (this.activated) this.refreshInBackground();
+		}));
 		const os = this.processes.operatingSystem;
 		if (os) registerTerminalDefaultProfileConfiguration({ os, profiles: this.availableProfiles }, this.contributedProfiles);
 	}
 
-	get profilesReady(): Promise<void> {
-		return this.refreshAvailableProfiles();
-	}
+	get profilesReady(): Promise<void> { return this.refreshAvailableProfiles(); }
 
 	private fireProfilesChanged(updateSchema = true): void {
 		const profiles = this.availableProfiles;
@@ -100,7 +85,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	getDefaultProfileName(): string | undefined {
 		const platform = platformKey(this.processes.operatingSystem);
-		return platform ? (this.configuration.getValue<string | null>(`${TerminalSettingPrefix.DefaultProfile}${platform}`) ?? undefined) : undefined;
+		return platform ? this.configuration.getValue<string | null>(`${TerminalSettingPrefix.DefaultProfile}${platform}`) ?? undefined : undefined;
 	}
 
 	getDefaultProfile(os = this.processes.operatingSystem, dirId = this.selectedDirId): ITerminalProfile | undefined {
@@ -122,27 +107,15 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const profiles = new Map(detected.filter(profile => definitions[profile.profileName] !== null).map(profile => [profile.profileName, profile]));
 		for (const [name, definition] of Object.entries(definitions)) {
 			if (!definition || 'extensionIdentifier' in definition) continue;
-			const source = definition.source
-				? (detected.find(profile => profile.profileId === (definition.source === 'PowerShell' ? 'powershell' : 'git-bash') || profile.profileName === definition.source) ??
-					(definition.source === 'PowerShell' ? detected.find(profile => profile.profileId === 'windows-powershell') : undefined))
-				: undefined;
+			const source = definition.source ? detected.find(profile => profile.profileId === (definition.source === 'PowerShell' ? 'powershell' : 'git-bash') || profile.profileName === definition.source)
+				?? (definition.source === 'PowerShell' ? detected.find(profile => profile.profileId === 'windows-powershell') : undefined) : undefined;
 			const path = definition.path ?? source?.path;
 			if (!path) continue;
-			profiles.set(
-				name,
-				Object.freeze({
-					profileId: `custom:${name}`,
-					title: name,
-					profileName: name,
-					path,
-					args: definition.args ?? source?.args,
-					env: definition.env,
-					overrideName: definition.overrideName,
-					icon: definition.icon ? ThemeIcon.fromId(definition.icon) : source?.icon,
-					color: definition.color ?? source?.color,
-					isDefault: source?.isDefault ?? false,
-				}),
-			);
+			profiles.set(name, Object.freeze({
+				profileId: `custom:${name}`, title: name, profileName: name, path,
+				args: definition.args ?? source?.args, env: definition.env, overrideName: definition.overrideName,
+				icon: definition.icon ? ThemeIcon.fromId(definition.icon) : source?.icon, color: definition.color ?? source?.color, isDefault: source?.isDefault ?? false,
+			}));
 		}
 		return [...profiles.values()];
 	}
@@ -170,44 +143,21 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		if (existing) return existing;
 		const revision = this.revision;
 
-		const request = this.processes
-			.listProfiles(dirId)
-			.then(async profiles => {
-				const resolved = await Promise.all(
-					profiles.map(async profile => {
-						const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId }, dirId);
-						return Object.freeze({
-							...profile,
-							icon: undefined,
-							profileName: profile.title,
-							path: result.executable,
-							args: typeof result.args === 'string' ? result.args : Object.freeze([...result.args]),
-							isAutoDetected: true,
-						});
-					}),
-				);
-				if (this.isDisposed || revision !== this.revision) throw new CancellationError();
-				const previous = this.catalogs.get(dirId) ?? [];
-				const changed =
-					resolved.length !== previous.length ||
-					resolved.some((profile, index) => {
-						const old = previous[index];
-						return (
-							!old ||
-							profile.profileId !== old.profileId ||
-							profile.title !== old.title ||
-							profile.path !== old.path ||
-							profile.isDefault !== old.isDefault ||
-							!terminalProfileArgsMatch(profile.args, old.args) ||
-							!terminalIconsEqual(profile.icon, old.icon)
-						);
-					});
-				this.catalogs.set(dirId, Object.freeze(resolved));
-				if (changed && (this.selectedDirId === dirId || (!this.selectedDirId && folders.length === 1))) this.fireProfilesChanged();
-			})
-			.finally(() => {
-				if (this.requests.get(dirId) === request) this.requests.delete(dirId);
+		const request = this.processes.listProfiles(dirId).then(async profiles => {
+			const resolved = await Promise.all(profiles.map(async profile => {
+				const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId }, dirId);
+				return Object.freeze({ ...profile, icon: undefined, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
+			}));
+			if (this.isDisposed || revision !== this.revision) throw new CancellationError();
+			const previous = this.catalogs.get(dirId) ?? [];
+			const changed = resolved.length !== previous.length || resolved.some((profile, index) => {
+				const old = previous[index];
+				return !old || profile.profileId !== old.profileId || profile.title !== old.title || profile.path !== old.path || profile.isDefault !== old.isDefault
+					|| !terminalProfileArgsMatch(profile.args, old.args) || !terminalIconsEqual(profile.icon, old.icon);
 			});
+			this.catalogs.set(dirId, Object.freeze(resolved));
+			if (changed && (this.selectedDirId === dirId || !this.selectedDirId && folders.length === 1)) this.fireProfilesChanged();
+		}).finally(() => { if (this.requests.get(dirId) === request) this.requests.delete(dirId); });
 		this.requests.set(dirId, request);
 		return request;
 	}
@@ -223,16 +173,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const definition = definitions[name];
 		if (definition && 'extensionIdentifier' in definition) {
 			const profile = this.contributedProfiles.find(profile => profileKey(profile.extensionIdentifier, profile.id) === profileKey(definition.extensionIdentifier, definition.id));
-			return (
-				profile && {
-					...profile,
-					options: {
-						...profile.options,
-						...(definition.icon ? { icon: ThemeIcon.fromId(definition.icon) } : {}),
-						...(definition.color ? { color: definition.color } : {}),
-					},
-				}
-			);
+			return profile && { ...profile, options: { ...profile.options, ...(definition.icon ? { icon: ThemeIcon.fromId(definition.icon) } : {}), ...(definition.color ? { color: definition.color } : {}) } };
 		}
 		return this.contributedProfiles.find(profile => profile.title === name);
 	}
@@ -241,34 +182,20 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const platform = await this.getPlatformKey();
 		const key = `${TerminalSettingPrefix.Profiles}${platform}`;
 		const profiles = this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(key);
-		await this.configuration.updateValue(
-			key,
-			{
-				...profiles,
-				[args.title]: {
-					extensionIdentifier: args.extensionIdentifier,
-					id: args.id,
-					title: args.title,
-					...(args.options?.icon ? { icon: args.options.icon.id } : {}),
-					...(args.options?.color ? { color: args.options.color } : {}),
-				},
-			},
-			ConfigurationTarget.USER,
-		);
+		await this.configuration.updateValue(key, {
+			...profiles, [args.title]: {
+				extensionIdentifier: args.extensionIdentifier, id: args.id, title: args.title,
+				...(args.options?.icon ? { icon: args.options.icon.id } : {}), ...(args.options?.color ? { color: args.options.color } : {}),
+			}
+		}, ConfigurationTarget.USER);
 	}
 
 	registerInternalContributedProfile(profile: IExtensionTerminalProfile): IDisposable {
 		if (this.isDisposed) throw new CancellationError();
 		const key = profileKey(profile.extensionIdentifier, profile.id);
 		if (this.internalProfiles.has(key)) throw new Error(localize('terminal.profile.duplicate', 'Terminal profile is already registered: {0}', key));
-		this.internalProfiles.set(key, profile);
-		this.fireProfilesChanged();
-		return toDisposable(() => {
-			if (this.internalProfiles.get(key) === profile) {
-				this.internalProfiles.delete(key);
-				if (!this.isDisposed) this.fireProfilesChanged();
-			}
-		});
+		this.internalProfiles.set(key, profile); this.fireProfilesChanged();
+		return toDisposable(() => { if (this.internalProfiles.get(key) === profile) { this.internalProfiles.delete(key); if (!this.isDisposed) this.fireProfilesChanged(); } });
 	}
 
 	getContributedProfileProvider(extensionIdentifier: string, id: string): ITerminalProfileProvider | undefined {
@@ -284,7 +211,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 				// The provider owns cancellation and cleanup once creation begins. Preserve
 				// its result so the caller can place or release that exact instance.
 				return provider.createContributedTerminalProfile(options);
-			},
+			}
 		};
 	}
 
@@ -293,26 +220,19 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		const key = profileKey(extensionIdentifier, id);
 		if (this.providers.has(key)) throw new Error(localize('terminal.profile.duplicate', 'Terminal profile is already registered: {0}', key));
 		this.providers.set(key, provider);
-		return toDisposable(() => {
-			if (this.providers.get(key) === provider) this.providers.delete(key);
-		});
+		return toDisposable(() => { if (this.providers.get(key) === provider) this.providers.delete(key); });
 	}
 
 	overrideDefaultProfile(extensionIdentifier: string, id: string): IDisposable {
 		if (this.isDisposed) throw new CancellationError();
 		const override = { extensionIdentifier, id };
 		this.defaultOverrides.push(override);
-		return toDisposable(() => {
-			const index = this.defaultOverrides.indexOf(override);
-			if (index !== -1) this.defaultOverrides.splice(index, 1);
-		});
+		return toDisposable(() => { const index = this.defaultOverrides.indexOf(override); if (index !== -1) this.defaultOverrides.splice(index, 1); });
 	}
 
 	private refreshInBackground(): void {
 		if (!this.selectedDirId && this.workspace.getWorkspace().folders.length > 1) return;
-		void this.refreshAvailableProfiles().catch(error => {
-			if (!isCancellationError(error)) onUnexpectedError(error);
-		});
+		void this.refreshAvailableProfiles().catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
 	}
 
 	private invalidate(): void {
@@ -323,29 +243,19 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 	}
 
 	protected override disposeCore(): void {
-		this.revision++;
-		this.catalogs.clear();
-		this.requests.clear();
-		this.providers.clear();
-		this.internalProfiles.clear();
-		this.defaultOverrides.length = 0;
+		this.revision++; this.catalogs.clear(); this.requests.clear();
+		this.providers.clear(); this.internalProfiles.clear(); this.defaultOverrides.length = 0;
 		super.disposeCore();
 	}
 }
 
-function profileKey(extensionIdentifier: string, id: string): string {
-	return `${extensionIdentifier}/${id}`;
-}
+function profileKey(extensionIdentifier: string, id: string): string { return `${extensionIdentifier}/${id}`; }
 
 function platformKey(os: OperatingSystem | undefined): 'linux' | 'osx' | 'windows' | undefined {
 	switch (os) {
-		case OperatingSystem.Linux:
-			return 'linux';
-		case OperatingSystem.Macintosh:
-			return 'osx';
-		case OperatingSystem.Windows:
-			return 'windows';
-		default:
-			return undefined;
+		case OperatingSystem.Linux: return 'linux';
+		case OperatingSystem.Macintosh: return 'osx';
+		case OperatingSystem.Windows: return 'windows';
+		default: return undefined;
 	}
 }

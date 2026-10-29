@@ -23,67 +23,32 @@ export class PageLayoutContribution extends DocumentFormattingControls implement
 
 	constructor(context: DocumentEditorContributionContext) {
 		super(context.container, localize('document.page.group', 'Page layout'));
-		this.paper = this.addSelect(
-			localize('document.page.paper', 'Paper'),
-			[
-				{ value: 'continuous', label: localize('document.page.continuous', 'Continuous') },
-				{ value: 'a4', label: 'A4' },
-				{ value: 'letter', label: localize('document.page.letter', 'Letter') },
-			],
-			pageSize =>
-				context.runDocumentCommand((_schema, document, blockId) => ({
-					transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, pageSize }),
-					focus: { blockId },
-				})),
-		);
-		this.margin = this.addSelect(
-			localize('document.page.margin', 'Page margins'),
-			[36, 54, 72, 108, 144].map(value => ({
-				value: String(value),
-				label: localize('document.paragraphFormatting.points', '{0} pt', value),
-			})),
-			value => {
-				context.runDocumentCommand((_schema, document, blockId) => ({
-					transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, {
-						...getDocumentPageOwner(document, blockId).attrs,
-						pageMargin: Number(value),
-					}),
-					focus: { blockId },
-				}));
-			},
-		);
-		this.zoom = this.addSelect(
-			localize('document.page.zoom', 'Page zoom'),
-			[50, 75, 100, 125, 150, 200].map(value => ({
-				value: String(value),
-				label: localize('document.page.percent', '{0}%', value),
-			})),
-			value => context.setPageZoom(Number(value) / 100),
-		);
-		this.startSection = this.addButton(localize('document.section.start', 'Start section here'), () =>
-			context.runDocumentCommand((schema, document, blockId) => createDocumentSectionCommand(schema, document, blockId)),
-		);
-		this.removeSection = this.addButton(localize('document.section.remove', 'Remove section break'), () =>
-			context.runDocumentCommand((_schema, document, blockId) => createRemoveSectionCommand(document, blockId)),
-		);
+		this.paper = this.addSelect(localize('document.page.paper', 'Paper'), [
+			{ value: 'continuous', label: localize('document.page.continuous', 'Continuous') },
+			{ value: 'a4', label: 'A4' }, { value: 'letter', label: localize('document.page.letter', 'Letter') },
+		], pageSize => context.runDocumentCommand((_schema, document, blockId) => ({
+			transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, pageSize }), focus: { blockId },
+		})));
+		this.margin = this.addSelect(localize('document.page.margin', 'Page margins'), [36, 54, 72, 108, 144].map(value => ({ value: String(value), label: localize('document.paragraphFormatting.points', '{0} pt', value) })), value => {
+			context.runDocumentCommand((_schema, document, blockId) => ({
+				transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, pageMargin: Number(value) }), focus: { blockId },
+			}));
+		});
+		this.zoom = this.addSelect(localize('document.page.zoom', 'Page zoom'), [50, 75, 100, 125, 150, 200].map(value => ({ value: String(value), label: localize('document.page.percent', '{0}%', value) })), value => context.setPageZoom(Number(value) / 100));
+		this.startSection = this.addButton(localize('document.section.start', 'Start section here'), () => context.runDocumentCommand((schema, document, blockId) => createDocumentSectionCommand(schema, document, blockId)));
+		this.removeSection = this.addButton(localize('document.section.remove', 'Remove section break'), () => context.runDocumentCommand((_schema, document, blockId) => createRemoveSectionCommand(document, blockId)));
 		const details = h(this.element.ownerDocument, 'details');
 		details.className = 'ash-document-page-options';
 		const summary = h(this.element.ownerDocument, 'summary');
 		summary.textContent = localize('document.page.options', 'Pagination options');
 		details.append(summary);
 		const existing = new Set(this.element.children);
-		this.orientation = this.addSelect(
-			localize('document.page.orientation', 'Orientation'),
-			[
-				{ value: 'portrait', label: localize('document.page.portrait', 'Portrait') },
-				{ value: 'landscape', label: localize('document.page.landscape', 'Landscape') },
-			],
-			pageOrientation =>
-				context.runDocumentCommand((_schema, document, blockId) => ({
-					transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, pageOrientation }),
-					focus: { blockId },
-				})),
-		);
+		this.orientation = this.addSelect(localize('document.page.orientation', 'Orientation'), [
+			{ value: 'portrait', label: localize('document.page.portrait', 'Portrait') },
+			{ value: 'landscape', label: localize('document.page.landscape', 'Landscape') },
+		], pageOrientation => context.runDocumentCommand((_schema, document, blockId) => ({
+			transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, pageOrientation }), focus: { blockId },
+		})));
 		const booleanOptions = [
 			{ value: 'true', label: localize('document.page.on', 'On') },
 			{ value: 'false', label: localize('document.page.off', 'Off') },
@@ -94,12 +59,9 @@ export class PageLayoutContribution extends DocumentFormattingControls implement
 			['keepTogether', localize('document.page.keepTogether', 'Keep paragraph together')],
 			['widowControl', localize('document.page.widows', 'Widow and orphan control')],
 		] as const) {
-			this.rules.set(
-				key,
-				this.addSelect(label, [{ value: '', label: localize('document.paragraph.mixed', 'Mixed') }, ...booleanOptions], value => {
-					context.runDocumentCommand((_schema, document, blockId, selection) => createSetParagraphFormatCommand(document, blockId, selection, { [key]: value === 'true' }));
-				}),
-			);
+			this.rules.set(key, this.addSelect(label, [{ value: '', label: localize('document.paragraph.mixed', 'Mixed') }, ...booleanOptions], value => {
+				context.runDocumentCommand((_schema, document, blockId, selection) => createSetParagraphFormatCommand(document, blockId, selection, { [key]: value === 'true' }));
+			}));
 		}
 		for (const [key, label] of [
 			['pageHeader', localize('document.page.header', 'Page header')],
@@ -110,41 +72,28 @@ export class PageLayoutContribution extends DocumentFormattingControls implement
 			const input = this.addInput(label);
 			input.inputElement.maxLength = 500;
 			this.running.set(key, input);
-			this.onInputCommit(input, value =>
-				context.runDocumentCommand((_schema, document, blockId) => ({
-					transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, [key]: value }),
-					focus: { blockId },
-				})),
-			);
+			this.onInputCommit(input, value => context.runDocumentCommand((_schema, document, blockId) => ({
+				transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, [key]: value }), focus: { blockId },
+			})));
 		}
 		for (const [key, label] of [
 			['pageNumbers', localize('document.page.numbers', 'Page numbers')],
 			['pageDifferentFirst', localize('document.page.first', 'Different first page')],
 			['pageDifferentEven', localize('document.page.even', 'Different even pages')],
 		] as const) {
-			this.options.set(
-				key,
-				this.addSelect(label, booleanOptions, value =>
-					context.runDocumentCommand((_schema, document, blockId) => ({
-						transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, {
-							...getDocumentPageOwner(document, blockId).attrs,
-							[key]: value === 'true',
-						}),
-						focus: { blockId },
-					})),
-				),
-			);
+			this.options.set(key, this.addSelect(label, booleanOptions, value => context.runDocumentCommand((_schema, document, blockId) => ({
+				transaction: new DocumentTransaction().setNodeAttributes(getDocumentPageOwner(document, blockId).id, { ...getDocumentPageOwner(document, blockId).attrs, [key]: value === 'true' }), focus: { blockId },
+			}))));
 		}
 		for (const control of [...this.element.children]) if (!existing.has(control)) details.append(control);
 		this.element.append(details);
-		this._register(
-			addDisposableListener(details, 'keydown', (event: KeyboardEvent) => {
-				if (event.key !== 'Escape') return;
-				event.preventDefault();
-				details.open = false;
-				context.focusEditor();
-			}),
-		);
+		this._register(addDisposableListener(details, 'keydown', (event: KeyboardEvent) => {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			details.open = false;
+			context.focusEditor();
+		}));
+
 	}
 
 	setState(state: DocumentFormattingState): void {
@@ -176,8 +125,7 @@ export class PageLayoutContribution extends DocumentFormattingControls implement
 
 		this.setSelectValue(this.paper, String(attrs.pageSize ?? 'continuous'));
 		const margin = String(attrs.pageMargin ?? 72);
-		if (!this.margin.options.some(option => option.value === margin))
-			this.margin.setOptions([...this.margin.options, { value: margin, label: localize('document.paragraphFormatting.points', '{0} pt', margin) }]);
+		if (!this.margin.options.some(option => option.value === margin)) this.margin.setOptions([...this.margin.options, { value: margin, label: localize('document.paragraphFormatting.points', '{0} pt', margin) }]);
 		this.setSelectValue(this.margin, margin);
 		this.setSelectValue(this.zoom, String((state.pageZoom ?? 1) * 100));
 	}

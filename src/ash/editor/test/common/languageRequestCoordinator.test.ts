@@ -1,15 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	LanguageRequestCancellationReason,
-	LanguageRequestCoordinator,
-	LanguageRequestStatus,
-	LanguageWorkerResultDisposition,
-	type LanguageWorker,
-	type LanguageWorkerRequest,
-	type LanguageWorkerResultSettler,
-	type VersionedLanguageResult,
-} from '../../common/model/languageRequestCoordinator.js';
+import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
@@ -40,7 +31,7 @@ interface PendingWorkerRequest {
 
 class ControlledLanguageWorker implements LanguageWorker<TestLane, TestPayload, TestResult>, LanguageWorkerResultSettler {
 	readonly requests: PendingWorkerRequest[] = [];
-	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition }> = [];
+	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition; }> = [];
 	readonly synchronizedChanges: TextModelChange[] = [];
 	readonly synchronizedAfterCancellation: boolean[] = [];
 	disposed = false;
@@ -81,16 +72,23 @@ class FailingSynchronizationWorker extends ControlledLanguageWorker {
 test('Language requests apply immutable values for the captured model version', async () => {
 	using model = new TextModel('alpha');
 	const workers: ControlledLanguageWorker[] = [];
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
-		const worker = new ControlledLanguageWorker();
-		workers.push(worker);
-		return worker;
-	});
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => {
+			const worker = new ControlledLanguageWorker();
+			workers.push(worker);
+			return worker;
+		},
+	);
 	const applied: VersionedLanguageResult<TestResult>[] = [];
 
-	const first = coordinator.runLatest('tokens', { label: 'first' }, result => {
-		applied.push(result);
-	});
+	const first = coordinator.runLatest(
+		'tokens',
+		{ label: 'first' },
+		result => {
+			applied.push(result);
+		},
+	);
 	const worker = workers[0]!;
 	const pending = worker.requests[0]!;
 	assert.equal(Object.isFrozen(pending.request), true);
@@ -108,18 +106,20 @@ test('Language requests apply immutable values for the captured model version', 
 		modelVersion: 1,
 	});
 	assert.equal(Object.isFrozen(applied[0]), true);
-	assert.deepEqual(applied, [
-		{
-			requestId: 1,
-			textModel: model,
-			modelVersion: 1,
-			value: { label: 'first', text: 'alpha' },
-		},
-	]);
+	assert.deepEqual(applied, [{
+		requestId: 1,
+		textModel: model,
+		modelVersion: 1,
+		value: { label: 'first', text: 'alpha' },
+	}]);
 
-	const second = coordinator.runLatest('tokens', { label: 'second' }, result => {
-		applied.push(result);
-	});
+	const second = coordinator.runLatest(
+		'tokens',
+		{ label: 'second' },
+		result => {
+			applied.push(result);
+		},
+	);
 	assert.equal(workers.length, 1);
 	worker.requests[1]!.completion.resolve({
 		label: 'second',
@@ -131,7 +131,10 @@ test('Language requests apply immutable values for the captured model version', 
 test('Latest language request wins within one lane', async () => {
 	using model = new TextModel('text');
 	const worker = new ControlledLanguageWorker();
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => worker,
+	);
 	const applied: string[] = [];
 
 	const first = coordinator.runLatest('tokens', { label: 'old' }, result => {
@@ -159,7 +162,10 @@ test('Latest language request wins within one lane', async () => {
 test('Independent language lanes may complete concurrently', async () => {
 	using model = new TextModel('text');
 	const worker = new ControlledLanguageWorker();
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => worker,
+	);
 	const applied: string[] = [];
 
 	const tokens = coordinator.runLatest('tokens', { label: 'tokens' }, result => {
@@ -168,10 +174,7 @@ test('Independent language lanes may complete concurrently', async () => {
 	const diagnostics = coordinator.runLatest('diagnostics', { label: 'diagnostics' }, result => {
 		applied.push(result.value.label);
 	});
-	assert.equal(
-		worker.requests.every(request => !request.signal.aborted),
-		true,
-	);
+	assert.equal(worker.requests.every(request => !request.signal.aborted), true);
 
 	worker.requests[1]!.completion.resolve({ label: 'diagnostics', text: 'text' });
 	worker.requests[0]!.completion.resolve({ label: 'tokens', text: 'text' });
@@ -183,7 +186,10 @@ test('Independent language lanes may complete concurrently', async () => {
 test('Model changes cancel every captured language version', async () => {
 	using model = new TextModel('old');
 	const worker = new ControlledLanguageWorker();
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => worker,
+	);
 	const applied: TestResult[] = [];
 
 	const tokens = coordinator.runLatest('tokens', { label: 'tokens' }, result => {
@@ -192,21 +198,13 @@ test('Model changes cancel every captured language version', async () => {
 	const diagnostics = coordinator.runLatest('diagnostics', { label: 'diagnostics' }, result => {
 		applied.push(result.value);
 	});
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
-			text: '!',
-		},
-	]);
-	assert.equal(
-		worker.requests.every(request => request.signal.aborted),
-		true,
-	);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
+		text: '!',
+	}]);
+	assert.equal(worker.requests.every(request => request.signal.aborted), true);
 	assert.equal(worker.requests[0]!.request.snapshot.getText(), 'old');
-	assert.deepEqual(
-		worker.synchronizedChanges.map(change => change.version),
-		[2],
-	);
+	assert.deepEqual(worker.synchronizedChanges.map(change => change.version), [2]);
 	assert.deepEqual(worker.synchronizedAfterCancellation, [true]);
 
 	worker.requests[0]!.completion.resolve({ label: 'tokens', text: 'old' });
@@ -220,19 +218,22 @@ test('Model changes cancel every captured language version', async () => {
 test('Model synchronization failure discards the worker and recovers from a full snapshot', async () => {
 	using model = new TextModel('old');
 	const workers: ControlledLanguageWorker[] = [];
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
-		const worker = workers.length === 0 ? new FailingSynchronizationWorker() : new ControlledLanguageWorker();
-		workers.push(worker);
-		return worker;
-	});
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => {
+			const worker = workers.length === 0
+				? new FailingSynchronizationWorker()
+				: new ControlledLanguageWorker();
+			workers.push(worker);
+			return worker;
+		},
+	);
 	const first = coordinator.runLatest('tokens', { label: 'old' }, () => assert.fail('Old result must not apply'));
 
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
-			text: '!',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
+		text: '!',
+	}]);
 
 	assert.equal(workers[0]!.disposed, true);
 	workers[0]!.requests[0]!.completion.resolve({ label: 'old', text: 'old' });
@@ -247,16 +248,24 @@ test('Model synchronization failure discards the worker and recovers from a full
 test('Caller cancellation is explicit before and during a request', async () => {
 	using model = new TextModel('text');
 	const workers: ControlledLanguageWorker[] = [];
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
-		const worker = new ControlledLanguageWorker();
-		workers.push(worker);
-		return worker;
-	});
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => {
+			const worker = new ControlledLanguageWorker();
+			workers.push(worker);
+			return worker;
+		},
+	);
 	const before = new AbortController();
 	const beforeReason = new Error('not needed');
 	before.abort(beforeReason);
 
-	assert.deepEqual(await coordinator.runLatest('tokens', { label: 'before' }, () => assert.fail('Cancelled request must not apply'), { signal: before.signal }), {
+	assert.deepEqual(await coordinator.runLatest(
+		'tokens',
+		{ label: 'before' },
+		() => assert.fail('Cancelled request must not apply'),
+		{ signal: before.signal },
+	), {
 		status: LanguageRequestStatus.Cancelled,
 		requestId: 1,
 		modelVersion: 1,
@@ -267,7 +276,12 @@ test('Caller cancellation is explicit before and during a request', async () => 
 
 	const during = new AbortController();
 	const duringReason = new Error('superseded by caller');
-	const pending = coordinator.runLatest('tokens', { label: 'during' }, () => assert.fail('Cancelled request must not apply'), { signal: during.signal });
+	const pending = coordinator.runLatest(
+		'tokens',
+		{ label: 'during' },
+		() => assert.fail('Cancelled request must not apply'),
+		{ signal: during.signal },
+	);
 	during.abort(duringReason);
 	assert.equal(workers[0]!.requests[0]!.signal.reason, duringReason);
 	workers[0]!.requests[0]!.completion.resolve({ label: 'during', text: 'text' });
@@ -283,14 +297,25 @@ test('Caller cancellation is explicit before and during a request', async () => 
 test('Active worker failure restarts the worker and cancels peer lanes', async () => {
 	using model = new TextModel('text');
 	const workers: ControlledLanguageWorker[] = [];
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
-		const worker = new ControlledLanguageWorker();
-		workers.push(worker);
-		return worker;
-	});
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => {
+			const worker = new ControlledLanguageWorker();
+			workers.push(worker);
+			return worker;
+		},
+	);
 
-	const failed = coordinator.runLatest('tokens', { label: 'failed' }, () => assert.fail('Failed request must not apply'));
-	const peer = coordinator.runLatest('diagnostics', { label: 'peer' }, () => assert.fail('Restarted peer must not apply'));
+	const failed = coordinator.runLatest(
+		'tokens',
+		{ label: 'failed' },
+		() => assert.fail('Failed request must not apply'),
+	);
+	const peer = coordinator.runLatest(
+		'diagnostics',
+		{ label: 'peer' },
+		() => assert.fail('Restarted peer must not apply'),
+	);
 	const failure = new Error('worker crashed');
 	workers[0]!.requests[0]!.completion.reject(failure);
 	await assert.rejects(failed, failure);
@@ -304,7 +329,11 @@ test('Active worker failure restarts the worker and cancels peer lanes', async (
 		reason: LanguageRequestCancellationReason.WorkerRestarted,
 	});
 
-	const recovered = coordinator.runLatest('tokens', { label: 'recovered' }, () => undefined);
+	const recovered = coordinator.runLatest(
+		'tokens',
+		{ label: 'recovered' },
+		() => undefined,
+	);
 	assert.equal(workers.length, 2);
 	workers[1]!.requests[0]!.completion.resolve({ label: 'recovered', text: 'text' });
 	assert.equal((await recovered).status, LanguageRequestStatus.Applied);
@@ -313,12 +342,19 @@ test('Active worker failure restarts the worker and cancels peer lanes', async (
 test('Coordinator disposal and model disposal prevent late application', async () => {
 	const model = new TextModel('text');
 	const workers: ControlledLanguageWorker[] = [];
-	const coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
-		const worker = new ControlledLanguageWorker();
-		workers.push(worker);
-		return worker;
-	});
-	const afterModel = coordinator.runLatest('tokens', { label: 'model-disposed' }, () => assert.fail('Disposed model result must not apply'));
+	const coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => {
+			const worker = new ControlledLanguageWorker();
+			workers.push(worker);
+			return worker;
+		},
+	);
+	const afterModel = coordinator.runLatest(
+		'tokens',
+		{ label: 'model-disposed' },
+		() => assert.fail('Disposed model result must not apply'),
+	);
 	model.dispose();
 	workers[0]!.requests[0]!.completion.resolve({
 		label: 'model-disposed',
@@ -333,8 +369,15 @@ test('Coordinator disposal and model disposal prevent late application', async (
 
 	const liveModel = new TextModel('live');
 	const liveWorker = new ControlledLanguageWorker();
-	const disposableCoordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(liveModel, () => liveWorker);
-	const afterCoordinator = disposableCoordinator.runLatest('tokens', { label: 'coordinator-disposed' }, () => assert.fail('Disposed coordinator result must not apply'));
+	const disposableCoordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		liveModel,
+		() => liveWorker,
+	);
+	const afterCoordinator = disposableCoordinator.runLatest(
+		'tokens',
+		{ label: 'coordinator-disposed' },
+		() => assert.fail('Disposed coordinator result must not apply'),
+	);
 	disposableCoordinator.dispose();
 	assert.equal(liveWorker.disposed, true);
 	liveWorker.requests[0]!.completion.resolve({
@@ -359,7 +402,10 @@ test('Coordinator disposal and model disposal prevent late application', async (
 test('Application failures do not poison a healthy worker', async () => {
 	using model = new TextModel('text');
 	const worker = new ControlledLanguageWorker();
-	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
+		model,
+		() => worker,
+	);
 	const applicationFailure = new Error('consumer failed');
 
 	const first = coordinator.runLatest('tokens', { label: 'first' }, () => {
@@ -372,10 +418,13 @@ test('Application failures do not poison a healthy worker', async () => {
 	const second = coordinator.runLatest('tokens', { label: 'second' }, () => undefined);
 	worker.requests[1]!.completion.resolve({ label: 'second', text: 'text' });
 	assert.equal((await second).status, LanguageRequestStatus.Applied);
-	assert.deepEqual(worker.settlements, [
-		{ requestId: 1, disposition: LanguageWorkerResultDisposition.Discarded },
-		{ requestId: 2, disposition: LanguageWorkerResultDisposition.Applied },
-	]);
+	assert.deepEqual(worker.settlements, [{
+		requestId: 1,
+		disposition: LanguageWorkerResultDisposition.Discarded,
+	}, {
+		requestId: 2,
+		disposition: LanguageWorkerResultDisposition.Applied,
+	}]);
 });
 
 test('Result confirmation occurs only after the renderer application gate', async () => {
@@ -387,25 +436,20 @@ test('Result confirmation occurs only after the renderer application gate', asyn
 	assert.equal((await first).status, LanguageRequestStatus.Applied);
 
 	const cancelled = coordinator.runLatest('tokens', { label: 'cancelled' }, () => assert.fail('Cancelled result must not apply'));
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 4 + 1)),
-			text: '!',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (4) + 1)),
+		text: '!',
+	}]);
 	worker.requests[1]!.completion.resolve({ label: 'cancelled', text: 'text' });
 	assert.equal((await cancelled).status, LanguageRequestStatus.Cancelled);
 
-	assert.deepEqual(worker.settlements, [
-		{
-			requestId: 1,
-			disposition: LanguageWorkerResultDisposition.Applied,
-		},
-		{
-			requestId: 2,
-			disposition: LanguageWorkerResultDisposition.Discarded,
-		},
-	]);
+	assert.deepEqual(worker.settlements, [{
+		requestId: 1,
+		disposition: LanguageWorkerResultDisposition.Applied,
+	}, {
+		requestId: 2,
+		disposition: LanguageWorkerResultDisposition.Discarded,
+	}]);
 });
 
 function createDeferred<T>(): Deferred<T> {
@@ -464,17 +508,9 @@ test('a model closed during worker creation releases the newly created worker', 
 		return worker;
 	});
 	const outcome = await coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
-	assert.deepEqual(
-		{ outcome, disposed: worker.disposed, requests: worker.requests.length },
-		{
-			outcome: {
-				status: LanguageRequestStatus.Cancelled,
-				requestId: 1,
-				modelVersion: 1,
-				reason: LanguageRequestCancellationReason.ModelUnavailable,
-			},
-			disposed: true,
-			requests: 0,
-		},
-	);
+	assert.deepEqual({ outcome, disposed: worker.disposed, requests: worker.requests.length }, {
+		outcome: { status: LanguageRequestStatus.Cancelled, requestId: 1, modelVersion: 1, reason: LanguageRequestCancellationReason.ModelUnavailable },
+		disposed: true,
+		requests: 0,
+	});
 });

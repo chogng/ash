@@ -7,18 +7,13 @@ import { OnboardingTryoutService } from './onboardingTryoutService.js';
 
 registerSingleton(IOnboardingTryoutService, OnboardingTryoutService, InstantiationType.Delayed);
 
-registerAction2(
-	class RunOnboardingTryoutAction extends Action2 {
-		constructor() {
-			super({
-				id: RUN_ONBOARDING_TRYOUT_COMMAND_ID,
-				title: localize2('onboarding.tryout.run', 'Try Feature Example'),
-			});
-		}
+registerAction2(class RunOnboardingTryoutAction extends Action2 {
+	constructor() {
+		super({ id: RUN_ONBOARDING_TRYOUT_COMMAND_ID, title: localize2('onboarding.tryout.run', 'Try Feature Example') });
+	}
 
-		public run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<unknown> | undefined {
-			const id = parseOnboardingTryoutArguments(args);
-			return id ? accessor.get(IOnboardingTryoutService).run(id) : undefined;
-		}
-	},
-);
+	public run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<unknown> | undefined {
+		const id = parseOnboardingTryoutArguments(args);
+		return id ? accessor.get(IOnboardingTryoutService).run(id) : undefined;
+	}
+});

@@ -54,5 +54,11 @@ test('atomic tab stops only apply inside indentation', () => {
 });
 
 function state(selection: Selection): SingleCursorState {
-	return new SingleCursorState(Range.fromPositions(selection.getSelectionStart()), SelectionStartKind.Simple, 0, new Position(selection.positionLineNumber, selection.positionColumn), 0);
+	return new SingleCursorState(
+		Range.fromPositions(selection.getSelectionStart()),
+		SelectionStartKind.Simple,
+		0,
+		new Position(selection.positionLineNumber, selection.positionColumn),
+		0,
+	);
 }

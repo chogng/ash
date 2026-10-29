@@ -6,18 +6,9 @@ import { TextDecorationCollection } from '../../../common/model/decorationCollec
 import { type LanguageDiagnostic } from '../../../common/languages.js';
 
 registerEditorContribution({
-	id: CodeActionController.ID,
-	install: context => {
+	id: CodeActionController.ID, install: context => {
 		if (context.kind !== 'text') return;
 		const diagnostics = context.getOptionalService(TextEditorCapability.diagnosticDecorations) ?? context.register(new TextDecorationCollection<LanguageDiagnostic>(context.model));
-		return context.instantiationService.createInstance(
-			CodeActionController,
-			context.controller.element,
-			context.editor,
-			context.view,
-			diagnostics,
-			context.options.onApplyWorkspaceEdit,
-			context.onLanguageError,
-		);
-	},
+		return context.instantiationService.createInstance(CodeActionController, context.controller.element, context.editor, context.view, diagnostics, context.options.onApplyWorkspaceEdit, context.onLanguageError);
+	}
 });

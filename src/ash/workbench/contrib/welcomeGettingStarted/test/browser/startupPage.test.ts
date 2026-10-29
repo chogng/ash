@@ -33,16 +33,10 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
-		get activeEditor() {
-			return opened.at(-1);
-		},
-		get visibleEditors() {
-			return opened;
-		},
-		async openEditor(input: IResourceEditorInput) {
-			opened.push(input);
-		},
-		focusActiveEditor() {},
+		get activeEditor() { return opened.at(-1); },
+		get visibleEditors() { return opened; },
+		async openEditor(input: IResourceEditorInput) { opened.push(input); },
+		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
@@ -53,10 +47,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	assert.equal(opened.length, 1);
 
 	opened.length = 0;
-	workspace.updateWorkspace({
-		id: 'folder',
-		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
-	});
+	workspace.updateWorkspace({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);
 	assert.equal(isGettingStartedInput(opened[0]!), true);
@@ -67,10 +58,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	assert.equal(opened.length, 0);
 
 	await configuration.updateValue(StartupEditorConfigurationKey, 'welcomePageInEmptyWorkbench');
-	workspace.updateWorkspace({
-		id: 'folder',
-		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
-	});
+	workspace.updateWorkspace({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 0);
 	await configuration.updateValue(StartupEditorConfigurationKey, 'welcomePage');
@@ -91,21 +79,12 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
-		get activeEditor() {
-			return opened.at(-1);
-		},
-		get visibleEditors() {
-			return opened;
-		},
-		async openEditor(input: IResourceEditorInput) {
-			opened.push(input);
-		},
-		focusActiveEditor() {},
+		get activeEditor() { return opened.at(-1); },
+		get visibleEditors() { return opened; },
+		async openEditor(input: IResourceEditorInput) { opened.push(input); },
+		focusActiveEditor() { },
 	} satisfies IEditorService;
-	using workspace = new TestWorkspaceService({
-		id: 'folder',
-		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
-	});
+	using workspace = new TestWorkspaceService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);

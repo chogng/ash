@@ -5,7 +5,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import type { ISCMRepository } from './scm.js';
 
 /** A history provider cannot serve the current workspace until its repository appears. */
-export class SCMHistoryUnavailableError extends Error {}
+export class SCMHistoryUnavailableError extends Error { }
 
 /** Stable source identity for references restored from drafts or another window's clipboard. */
 export namespace SCMHistoryItemUri {
@@ -17,23 +17,17 @@ export namespace SCMHistoryItemUri {
 	}
 
 	export function toUri(source: Source): URI {
-		return URI.from({
-			scheme: Schemas.internal,
-			authority: 'scm-history',
-			path: source.path === undefined ? '/commit' : '/change',
-			query: JSON.stringify(source),
-		});
+		return URI.from({ scheme: Schemas.internal, authority: 'scm-history', path: source.path === undefined ? '/commit' : '/change', query: JSON.stringify(source) });
 	}
 
 	/** This URI crosses persistence and clipboard boundaries; names and composite IDs are never identities. */
 	export function fromUri(resource: URI | undefined): Source | undefined {
-		if (!resource || resource.scheme !== Schemas.internal || resource.authority !== 'scm-history' || resource.fragment || (resource.path !== '/commit' && resource.path !== '/change'))
-			return undefined;
+		if (!resource || resource.scheme !== Schemas.internal || resource.authority !== 'scm-history' || resource.fragment || (resource.path !== '/commit' && resource.path !== '/change')) return undefined;
 		try {
 			const value: unknown = JSON.parse(resource.query);
 			if (!value || typeof value !== 'object') return undefined;
 			const { repositoryId, revision, baseRevision, path } = value as Record<string, unknown>;
-			if (typeof repositoryId !== 'string' || !repositoryId || typeof revision !== 'string' || !revision || (baseRevision !== undefined && typeof baseRevision !== 'string')) return undefined;
+			if (typeof repositoryId !== 'string' || !repositoryId || typeof revision !== 'string' || !revision || baseRevision !== undefined && typeof baseRevision !== 'string') return undefined;
 			if (resource.path === '/change' ? typeof path !== 'string' || !path : path !== undefined) return undefined;
 			return { repositoryId, revision, baseRevision, path: path as string | undefined };
 		} catch {
@@ -74,8 +68,8 @@ export interface ISCMHistoryItem {
 	readonly tooltip?: ISCMHistoryItemDetails;
 	readonly references?: readonly ISCMHistoryItemRef[];
 	/** A graph summary compares two captured revisions rather than one commit with its parent. */
-	readonly comparison?: { readonly revision: string; readonly baseRevision: string };
-	readonly remoteLinks?: readonly { readonly name: string; readonly uri: URI }[];
+	readonly comparison?: { readonly revision: string; readonly baseRevision: string; };
+	readonly remoteLinks?: readonly { readonly name: string; readonly uri: URI; }[];
 }
 
 export interface ISCMHistoryItemDetails {
@@ -83,7 +77,7 @@ export interface ISCMHistoryItemDetails {
 	readonly authorEmail: string;
 	readonly timestamp: number;
 	readonly message: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
 }
 
 export interface ISCMHistoryItemGraphNode {
@@ -127,7 +121,10 @@ export interface SCMHistoryItemChangeViewModelTreeElement {
 	readonly type: 'historyItemChangeViewModel';
 }
 
-export type ISCMHistoryItemContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'missing' } | { readonly kind: 'binary'; readonly bytes?: Uint8Array };
+export type ISCMHistoryItemContent =
+	| { readonly kind: 'text'; readonly text: string; }
+	| { readonly kind: 'missing'; }
+	| { readonly kind: 'binary'; readonly bytes?: Uint8Array; };
 
 export interface ISCMHistoryItemChangeContents {
 	readonly parentId: string | undefined;
@@ -141,7 +138,7 @@ export interface ISCMHistoryProvider {
 	resolveHistoryItemRefsCommonAncestor?(historyItemRefs: readonly string[]): Promise<string | undefined>;
 
 	/** Silent changes come from background fetch; omitted details denote an active update. */
-	readonly onDidChange: Event<void | { readonly silent: boolean }>;
+	readonly onDidChange: Event<void | { readonly silent: boolean; }>;
 	/** Updated decorations for cached items; their identities and commit traversal remain unchanged. */
 	readonly onDidChangeHistoryItemRefs?: Event<readonly ISCMHistoryItem[]>;
 	readonly historyItemRef: IObservable<ISCMHistoryItemRef | undefined>;

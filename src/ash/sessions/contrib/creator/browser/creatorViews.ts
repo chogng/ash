@@ -23,19 +23,13 @@ export class CreatorWorkspaceView extends ViewPane {
 		views.set(this.contentElement, this);
 		this._register(contextKeys.createScoped(this.contentElement)).createKey('sessionsCreatorNavigationFocused', true);
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Creator);
-		if (hint) {
-			this.contentElement.setAttribute('aria-description', hint);
-		}
-		const button = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: contribution.title,
-				icon: contribution.icon,
-				onClick: () => {
-					void commands.executeCommand('sessions.creator.openMode', contribution.id);
-				},
-			}),
-		);
+		if (hint) { this.contentElement.setAttribute('aria-description', hint); }
+		const button = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: contribution.title,
+			icon: contribution.icon,
+			onClick: () => { void commands.executeCommand('sessions.creator.openMode', contribution.id); },
+		}));
 		button.domNode.setAttribute('aria-description', contribution.description);
 	}
 
@@ -44,10 +38,6 @@ export class CreatorWorkspaceView extends ViewPane {
 		return root ? views.get(root) : undefined;
 	}
 
-	public getAccessibleContent(): string {
-		return `${this.contribution.title}: ${this.contribution.description}\n${this.contribution.help}`;
-	}
-	public focus(): void {
-		this.contentElement.querySelector<HTMLButtonElement>('button')!.focus();
-	}
+	public getAccessibleContent(): string { return `${this.contribution.title}: ${this.contribution.description}\n${this.contribution.help}`; }
+	public focus(): void { this.contentElement.querySelector<HTMLButtonElement>('button')!.focus(); }
 }

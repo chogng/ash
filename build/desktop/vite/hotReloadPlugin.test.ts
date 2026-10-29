@@ -22,35 +22,19 @@ test('Vite hot reload injects setup and a generic export-handler boundary', () =
 	assert.match(transformed, /\$hotReload_applyNewExports/u);
 	assert.match(transformed, /import\.meta\.hot\.accept/u);
 	assert.doesNotMatch(transformed, /\$ashHotReload_registerClass/u);
-	assert.deepEqual(htmlTags, [
-		{
-			tag: 'script',
-			attrs: { type: 'module', src: `/@fs/${normalizePath(setupPath).replace(/^\/+/, '')}` },
-			injectTo: 'head-prepend',
-		},
-	]);
+	assert.deepEqual(htmlTags, [{ tag: 'script', attrs: { type: 'module', src: `/@fs/${normalizePath(setupPath).replace(/^\/+/, '')}` }, injectTo: 'head-prepend' }]);
 });
 
 test('Vite hot reload emits a valid Windows file URL for setup', () => {
-	const plugin = hotReloadPlugin({
-		desktopRoot: 'C:\\workspace',
-		setupPath: 'C:\\workspace\\build\\desktop\\vite\\setup-dev.ts',
-	});
+	const plugin = hotReloadPlugin({ desktopRoot: 'C:\\workspace', setupPath: 'C:\\workspace\\build\\desktop\\vite\\setup-dev.ts' });
 	const htmlTags = plugin.transformIndexHtml.handler();
 
-	assert.deepEqual(htmlTags, [
-		{
-			tag: 'script',
-			attrs: { type: 'module', src: '/@fs/C:/workspace/build/desktop/vite/setup-dev.ts' },
-			injectTo: 'head-prepend',
-		},
-	]);
+	assert.deepEqual(htmlTags, [{ tag: 'script', attrs: { type: 'module', src: '/@fs/C:/workspace/build/desktop/vite/setup-dev.ts' }, injectTo: 'head-prepend' }]);
 });
 
 test('UI hot reload excludes unmarked services that share module-local registries', () => {
 	const plugin = hotReloadPlugin({ desktopRoot: '/workspace' });
-	const code =
-		'const parts = new WeakMap(); export class StatusbarPart extends Part { focus() {} } export class StatusbarService extends Disposable { getPart(element) { return parts.get(element); } }';
+	const code = 'const parts = new WeakMap(); export class StatusbarPart extends Part { focus() {} } export class StatusbarService extends Disposable { getPart(element) { return parts.get(element); } }';
 	const transformed = transform(plugin, code, '/workspace/src/ash/statusbarPart.ts');
 	assert.match(transformed!, /const __ashViteHotReloadExports = \{ StatusbarPart \};/u);
 	assert.doesNotMatch(transformed!, /const __ashViteHotReloadExports = \{[^}]*StatusbarService/u);
@@ -121,15 +105,12 @@ test('Vite hot reload sends a full reload before an unsafe module executes', asy
 	const plugin = hotReloadPlugin({ desktopRoot: '/workspace' });
 	const file = '/workspace/src/ash/sidebarPart.ts';
 	transform(plugin, 'export class SidebarPart extends BasePart { render() {} }', file);
-	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*' }> = [];
+	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*'; }> = [];
 	const logs: string[] = [];
 	const result = await plugin.handleHotUpdate({
 		file,
 		read: async () => 'export class SidebarPart extends OtherPart { render() {} }',
-		server: {
-			config: { logger: { info: message => logs.push(message) } },
-			ws: { send: message => messages.push(message) },
-		},
+		server: { config: { logger: { info: message => logs.push(message) } }, ws: { send: message => messages.push(message) } },
 	});
 
 	assert.deepEqual(result, []);
@@ -141,11 +122,11 @@ test('Vite hot reload keeps HMR for a safe method-only update', async () => {
 	const plugin = hotReloadPlugin({ desktopRoot: '/workspace' });
 	const file = '/workspace/src/ash/sidebarPart.ts';
 	transform(plugin, 'export class SidebarPart extends BasePart { render() { return 1; } }', file);
-	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*' }> = [];
+	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*'; }> = [];
 	const result = await plugin.handleHotUpdate({
 		file,
 		read: async () => 'export class SidebarPart extends BasePart { render() { return 2; } }',
-		server: { config: { logger: { info() {} } }, ws: { send: message => messages.push(message) } },
+		server: { config: { logger: { info() { } } }, ws: { send: message => messages.push(message) } },
 	});
 	assert.equal(result, undefined);
 	assert.deepEqual(messages, []);
@@ -162,9 +143,8 @@ test('Vite registers DomWidget identities and accepts constructor and instance-f
 	assert.match(transformed, /config: \{\}/u);
 	const messages: unknown[] = [];
 	const result = await plugin.handleHotUpdate({
-		file,
-		read: () => after,
-		server: { config: { logger: { info() {} } }, ws: { send: message => messages.push(message) } },
+		file, read: () => after,
+		server: { config: { logger: { info() { } } }, ws: { send: message => messages.push(message) } },
 	});
 	assert.deepEqual({ result, messages }, { result: undefined, messages: [] });
 });
@@ -184,11 +164,11 @@ test('Vite hot reload lets helper-driven modules reach the runtime handler', asy
 	const plugin = hotReloadPlugin({ desktopRoot: '/workspace' });
 	const file = '/workspace/src/ash/feature.ts';
 	transform(plugin, 'export function compute() { return 1; }', file);
-	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*' }> = [];
+	const messages: Array<{ readonly type: 'full-reload'; readonly path: '*'; }> = [];
 	const result = await plugin.handleHotUpdate({
 		file,
 		read: async () => 'export function compute() { return 2; }',
-		server: { config: { logger: { info() {} } }, ws: { send: message => messages.push(message) } },
+		server: { config: { logger: { info() { } } }, ws: { send: message => messages.push(message) } },
 	});
 	assert.equal(result, undefined);
 	assert.deepEqual(messages, []);
@@ -214,25 +194,22 @@ test('Vite watches renderer CSS before its first transform and serves a concurre
 		// Exercise Vite's watch registration and transform invalidation without
 		// native event coalescing hiding the save in this newly created directory.
 		server: { host: '127.0.0.1', port: 0, fs: { allow: [fixture] }, watch: { usePolling: true, interval: 20 } },
-		plugins: [
-			hotReloadPlugin({ desktopRoot: fixture }),
-			{
-				name: 'css-save-during-first-transform',
-				configureServer(server) {
-					server.watcher.on('all', (event, file) => events.push({ event, file }));
-				},
-				transform: {
-					order: 'pre',
-					handler(code, id) {
-						if (id !== normalizePath(source) || saved) return;
-						assert.equal(code, original);
-						saved = true;
-						// Model a save between reading the CSS and caching its first transform.
-						writeFileSync(source, updated);
-					},
+		plugins: [hotReloadPlugin({ desktopRoot: fixture }), {
+			name: 'css-save-during-first-transform',
+			configureServer(server) {
+				server.watcher.on('all', (event, file) => events.push({ event, file }));
+			},
+			transform: {
+				order: 'pre',
+				handler(code, id) {
+					if (id !== normalizePath(source) || saved) return;
+					assert.equal(code, original);
+					saved = true;
+					// Model a save between reading the CSS and caching its first transform.
+					writeFileSync(source, updated);
 				},
 			},
-		],
+		}],
 	});
 	try {
 		await server.listen();
@@ -250,11 +227,7 @@ test('Vite watches renderer CSS before its first transform and serves a concurre
 			if (served.includes(updated)) break;
 			await delay(20);
 		} while (Date.now() < deadline);
-		assert.deepEqual(
-			{ disk: await readFile(source, 'utf8'), servesUpdated: served.includes(updated) },
-			{ disk: updated, servesUpdated: true },
-			JSON.stringify({ events, watched: server.watcher.getWatched() }),
-		);
+		assert.deepEqual({ disk: await readFile(source, 'utf8'), servesUpdated: served.includes(updated) }, { disk: updated, servesUpdated: true }, JSON.stringify({ events, watched: server.watcher.getWatched() }));
 	} finally {
 		await server.close();
 		assert.equal(dirname(fixture), tmpdir());

@@ -15,40 +15,28 @@ import { DocumentWorkingCopy } from './documentWorkingCopy.js';
 export class DocumentEditorTextModelService extends Disposable implements IDocumentEditorTextModelService {
 	private readonly entries = this._register(new DisposableMap<string, DocumentModelEntry>());
 
-	constructor(
-		@ITextFileService private readonly textFiles: ITextFileService,
-		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
-	) {
+	constructor(@ITextFileService private readonly textFiles: ITextFileService, @IWorkingCopyService private readonly workingCopyService: IWorkingCopyService) {
 		super();
 	}
 
 	async acquire(input: TextModelBlockInput, signal: AbortSignal): Promise<TextModelWorkingCopyReference> {
 		this.assertNotDisposed();
 		throwIfCancelled(signal, 'Stanza document editor TextModel acquisition was cancelled');
-		if (!input.contentType) {
-			throw new TypeError('Document acquisition requires a content type');
-		}
+		if (!input.contentType) { throw new TypeError('Document acquisition requires a content type'); }
 		const key = extUri.getComparisonKey(input.resource);
 		const existing = this.entries.get(key);
-		if (existing) {
-			return this.reference(key, existing, input);
-		}
+		if (existing) { return this.reference(key, existing, input); }
 		// Untitled documents have no file provider. Their durable content comes from
 		// a working-copy backup or the collaboration room after the pane opens.
 		const initialText = input.initialText ?? (input.resource.scheme === 'untitled' ? '' : undefined);
-		const content = await this.textFiles.resolve(
-			{
-				resource: input.resource,
-				...(initialText === undefined ? {} : { bootstrapText: initialText }),
-			},
-			signal,
-		);
+		const content = await this.textFiles.resolve({
+			resource: input.resource,
+			...(initialText === undefined ? {} : { bootstrapText: initialText }),
+		}, signal);
 		throwIfCancelled(signal, 'Stanza document editor TextModel acquisition was cancelled');
 		this.assertNotDisposed();
 		const concurrent = this.entries.get(key);
-		if (concurrent) {
-			return this.reference(key, concurrent, input);
-		}
+		if (concurrent) { return this.reference(key, concurrent, input); }
 		const document = input.codec.parse(content.text, input.createEmptyDocument);
 		const model = input.codec.createModel(document);
 		const workingCopy: DocumentWorkingCopy = new DocumentWorkingCopy({
@@ -73,9 +61,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 	}
 
 	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {
-		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.documentType !== input.codec.documentType) {
-			throw new Error('The resource is already open with a different document type');
-		}
+		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.documentType !== input.codec.documentType) { throw new Error('The resource is already open with a different document type'); }
 		if (entry.compatibility !== (input.modelCompatibility ?? input.codec.documentType)) {
 			throw new Error(localize('document.model.incompatible', 'The document is open with a different editor version. Save or recover its existing content before reopening it.'));
 		}
@@ -83,13 +69,9 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		const reference = new TextModelWorkingCopyReferenceImpl(entry.model, entry.workingCopy, () => {
 			entry.saveHandlers.delete(reference);
 			entry.references -= 1;
-			if (entry.references === 0 && this.entries.get(key) === entry) {
-				this.entries.deleteAndDispose(key);
-			}
+			if (entry.references === 0 && this.entries.get(key) === entry) { this.entries.deleteAndDispose(key); }
 		});
-		if (input.onSave) {
-			entry.saveHandlers.set(reference, input.onSave);
-		}
+		if (input.onSave) { entry.saveHandlers.set(reference, input.onSave); }
 		return reference;
 	}
 }
@@ -97,11 +79,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 class DocumentModelEntry extends Disposable {
 	public references = 0;
 	public readonly saveHandlers = new Map<TextModelWorkingCopyReference, () => Promise<void | boolean>>();
-	constructor(
-		public readonly model: DocumentTextModel,
-		public readonly workingCopy: DocumentWorkingCopy,
-		public readonly compatibility: string,
-	) {
+	constructor(public readonly model: DocumentTextModel, public readonly workingCopy: DocumentWorkingCopy, public readonly compatibility: string) {
 		super();
 		this._register(model);
 		this._register(workingCopy);
@@ -111,9 +89,7 @@ class DocumentModelEntry extends Disposable {
 	// the shared working copy calling a disposed editor group's save handler.
 	public saveUntitled(): Promise<void | boolean> {
 		const handler = [...this.saveHandlers.values()].at(-1);
-		if (!handler) {
-			throw new Error('Untitled document has no save handler');
-		}
+		if (!handler) { throw new Error('Untitled document has no save handler'); }
 		return handler();
 	}
 }
@@ -127,11 +103,7 @@ class TextModelWorkingCopyReferenceImpl extends AbstractDisposable implements Te
 	readonly backupKind;
 	readonly backupContentType;
 
-	constructor(
-		model: DocumentTextModel,
-		private readonly workingCopy: DocumentWorkingCopy,
-		private readonly release: () => void,
-	) {
+	constructor(model: DocumentTextModel, private readonly workingCopy: DocumentWorkingCopy, private readonly release: () => void) {
 		super();
 		this.model = model;
 		this.resource = workingCopy.resource;
@@ -142,9 +114,7 @@ class TextModelWorkingCopyReferenceImpl extends AbstractDisposable implements Te
 		this.backupContentType = workingCopy.backupContentType;
 	}
 
-	protected override disposeCore(): void {
-		this.release();
-	}
+	protected override disposeCore(): void { this.release(); }
 
 	get isDirty(): boolean {
 		return this.workingCopy.isDirty;

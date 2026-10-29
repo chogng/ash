@@ -14,6 +14,7 @@ export interface OutputLink {
 const LocationTokenPattern = /[^\s"'<>]+/g;
 const LocationPattern = /^((?:[A-Za-z]:)?[^\s:(),]+\.[A-Za-z0-9_-]+)(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))/;
 
+
 /** Detects file locations and returns only resources authorized by the current workspace. */
 export function detectOutputLinks(text: string, folders: readonly IWorkspaceFolder[]): readonly OutputLink[] {
 	const links: OutputLink[] = [];
@@ -30,15 +31,7 @@ export function detectOutputLinks(text: string, folders: readonly IWorkspaceFold
 		if (!resource) continue;
 		const line = parseCoordinate(match[2] ?? match[4]);
 		const column = parseCoordinate(match[3] ?? match[5]);
-		links.push(
-			Object.freeze({
-				startIndex,
-				endIndex: startIndex + label.length,
-				label,
-				resource,
-				selection: Range.fromPositions(new Position(line + 1, column + 1)),
-			}),
-		);
+		links.push(Object.freeze({ startIndex, endIndex: startIndex + label.length, label, resource, selection: Range.fromPositions(new Position((line) + 1, (column) + 1)) }));
 	}
 	return Object.freeze(links);
 }
@@ -48,11 +41,8 @@ function resolveWorkspaceResource(candidate: string, folders: readonly IWorkspac
 	const absolute = normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized);
 	if (absolute) {
 		let resource: URI;
-		try {
-			resource = URI.file(candidate);
-		} catch {
-			return undefined;
-		}
+		try { resource = URI.file(candidate); }
+		catch { return undefined; }
 		return folders.some(folder => belongsToWorkspace(folder.uri, resource)) ? resource : undefined;
 	}
 	const segments = normalized.split('/');
@@ -65,12 +55,8 @@ function resolveWorkspaceResource(candidate: string, folders: readonly IWorkspac
 }
 
 function belongsToWorkspace(root: URI, resource: URI): boolean {
-	try {
-		workspaceRelativePath(root, resource);
-		return true;
-	} catch {
-		return false;
-	}
+	try { workspaceRelativePath(root, resource); return true; }
+	catch { return false; }
 }
 
 function parseCoordinate(value: string | undefined): number {

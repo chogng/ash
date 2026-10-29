@@ -7,14 +7,7 @@ import type { AppServerConnectionRelay } from '../../agentHost/electron-main/app
 import { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import {
-	type IWorkspaceRuntimeSwitcher,
-	type IWorkspaceTransitionContext,
-	type IWorkspaceTransitionFailure,
-	type IWorkspaceTransitionRecoveryRouter,
-	WorkspaceTransitionFailureKind,
-	WorkspaceTransitionRecovery,
-} from './workspaceTransitionMainService.js';
+import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from './workspaceTransitionMainService.js';
 
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
@@ -29,7 +22,7 @@ export interface IAppServerWorkspaceTransitionHost {
  * rejection remain visible transition failures.
  */
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
-	constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
+	constructor(private readonly host: IAppServerWorkspaceTransitionHost) { }
 
 	switchWorkspace({ root, grant, workspace, previous }: IWorkspaceTransitionContext): Promise<void> {
 		return this.host.switchWorkspace(root, grant, workspace.id, previous.id);
@@ -47,7 +40,10 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 					return WorkspaceTransitionFailureKind.RuntimeRejected;
 			}
 		}
-		if (this.host.getState() !== 'ready' || (error instanceof Error && /connection closed|stdout ended|exited|not ready/i.test(error.message))) {
+		if (
+			this.host.getState() !== 'ready'
+			|| (error instanceof Error && /connection closed|stdout ended|exited|not ready/i.test(error.message))
+		) {
 			return WorkspaceTransitionFailureKind.RuntimeUnavailable;
 		}
 		return WorkspaceTransitionFailureKind.RuntimeRejected;
@@ -86,7 +82,7 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 				finish(new Error('Timed out waiting for App Server recovery'));
 			}, options.timeoutMs);
 			timeout.unref();
-			subscription = this.host.onStateChange(nextState => {
+			subscription = this.host.onStateChange((nextState) => {
 				if (nextState === 'ready') {
 					finish();
 				} else if (nextState === 'stopped' || nextState === 'stopping') {
@@ -101,12 +97,15 @@ interface IWaitUntilReadyOptions {
 	readonly timeoutMs: number;
 }
 
-export function createAppServerWorkspaceTransitionAdapter(supervisor: AppServerConnectionRelay, workspaceHost: RendererWorkspaceHost): AppServerWorkspaceTransitionAdapter {
+export function createAppServerWorkspaceTransitionAdapter(
+	supervisor: AppServerConnectionRelay,
+	workspaceHost: RendererWorkspaceHost,
+): AppServerWorkspaceTransitionAdapter {
 	resolveWorkspaceLauncher(supervisor);
 	return new AppServerWorkspaceTransitionAdapter({
 		getState: () => supervisor.state,
 		switchWorkspace: (root, grant, workspaceId, previousWorkspaceId) => reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspaceId, previousWorkspaceId),
-		onStateChange: listener => supervisor.onStateChange(listener),
+		onStateChange: (listener) => supervisor.onStateChange(listener),
 	});
 }
 
@@ -120,15 +119,9 @@ export async function reconnectAppServerWorkspace(
 	previousWorkspaceId: string,
 ): Promise<void> {
 	const launcher = resolveWorkspaceLauncher(supervisor);
-	const previous =
-		launcher instanceof AppServerDaemonLauncher
-			? {
-					kind: 'local' as const,
-					launcher,
-					environment: launcher.environment,
-					root: launcher.environment.ASH_WORKSPACE_ROOT,
-				}
-			: { kind: 'remote' as const, launcher, root: launcher.workspaceRoot };
+	const previous = launcher instanceof AppServerDaemonLauncher
+		? { kind: 'local' as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
+		: { kind: 'remote' as const, launcher, root: launcher.workspaceRoot };
 	if (root !== undefined) {
 		await workspaceHost.persistDirectoryGrant(root, grant);
 	}
@@ -159,7 +152,9 @@ export async function reconnectAppServerWorkspace(
 		}
 		try {
 			await supervisor.start();
-			await workspaceHost.setFolders(previous.root ? [{ id: previousWorkspaceId, path: previous.root, grant: { type: 'config' } }] : []);
+			await workspaceHost.setFolders(previous.root
+				? [{ id: previousWorkspaceId, path: previous.root, grant: { type: 'config' } }]
+				: []);
 		} catch (rollbackError) {
 			throw new AggregateError([error, rollbackError], 'Workspace authority switch and rollback both failed');
 		}

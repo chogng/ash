@@ -7,7 +7,7 @@ import type { IClipboardItem, IClipboardResources, IClipboardService } from '../
 /** Electron main-process adapter for the system clipboard. */
 export class ElectronMainClipboardService implements IClipboardService {
 	private static readonly fileFormat = 'web application/x-ash-resources';
-	constructor(private readonly window: BrowserWindow) {}
+	constructor(private readonly window: BrowserWindow) { }
 
 	async triggerPaste(targetWindowId: number): Promise<void> {
 		if (targetWindowId !== this.window.id || this.window.isDestroyed() || this.window.webContents.isDestroyed()) {
@@ -22,10 +22,7 @@ export class ElectronMainClipboardService implements IClipboardService {
 			for (const type of item.types) {
 				const blob = await item.getType(type);
 				if (blob instanceof Blob) {
-					result.push({
-						type: type.startsWith('web ') ? type.slice(4) : type,
-						data: new Uint8Array(await blob.arrayBuffer()),
-					});
+					result.push({ type: type.startsWith('web ') ? type.slice(4) : type, data: new Uint8Array(await blob.arrayBuffer()) });
 				}
 			}
 		}
@@ -80,16 +77,9 @@ export class ElectronMainClipboardService implements IClipboardService {
 			const blob = await item.getType(ElectronMainClipboardService.fileFormat);
 			if (!(blob instanceof Blob)) return { resources: [], operation: 'copy' };
 			const values: unknown = JSON.parse(await blob.text());
-			if (
-				!values ||
-				typeof values !== 'object' ||
-				!('resources' in values) ||
-				!('operation' in values) ||
-				!Array.isArray(values.resources) ||
-				!values.resources.every(value => typeof value === 'string') ||
-				(values.operation !== 'copy' && values.operation !== 'move')
-			)
-				return { resources: [], operation: 'copy' };
+			if (!values || typeof values !== 'object' || !('resources' in values) || !('operation' in values)
+				|| !Array.isArray(values.resources) || !values.resources.every(value => typeof value === 'string')
+				|| (values.operation !== 'copy' && values.operation !== 'move')) return { resources: [], operation: 'copy' };
 			return { resources: values.resources.map(value => URI.parse(value)), operation: values.operation };
 		} catch {
 			return { resources: [], operation: 'copy' };
@@ -102,10 +92,7 @@ export class ElectronMainClipboardService implements IClipboardService {
 			return;
 		}
 		const formats: Record<string, string | Blob> = {
-			[ElectronMainClipboardService.fileFormat]: JSON.stringify({
-				resources: resources.map(resource => resource.toString()),
-				operation,
-			}),
+			[ElectronMainClipboardService.fileFormat]: JSON.stringify({ resources: resources.map(resource => resource.toString()), operation }),
 		};
 		const localFiles = resources.filter(resource => resource.scheme === Schemas.file);
 		if (localFiles.length > 0) {

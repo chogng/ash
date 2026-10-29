@@ -10,13 +10,7 @@ import { type RenderingContext, type RestrictedRenderingContext } from '../../vi
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';
-import {
-	editorCursorForeground,
-	editorMultiCursorPrimaryForeground,
-	editorMultiCursorSecondaryForeground,
-	editorOverviewRulerBackground,
-	editorOverviewRulerBorder,
-} from '../../../common/core/editorColorRegistry.js';
+import { editorCursorForeground, editorMultiCursorPrimaryForeground, editorMultiCursorSecondaryForeground, editorOverviewRulerBackground, editorOverviewRulerBorder } from '../../../common/core/editorColorRegistry.js';
 
 const MINIMUM_DECORATION_HEIGHT = 6;
 
@@ -65,45 +59,36 @@ export class DecorationsOverviewRuler extends ViewPart {
 		super.dispose();
 	}
 
-	public getDomNode(): HTMLElement {
-		return this.domNode.domNode;
-	}
+	public getDomNode(): HTMLElement { return this.domNode.domNode; }
 	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		return this.updateSettings();
 	}
 	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
 		const multiple = event.selections.length > 1;
-		this.cursorPositions = event.selections
-			.map((selection, index) => ({
-				position: selection.getPosition(),
-				color: multiple ? (index === 0 ? this.settings.cursorColorPrimary : this.settings.cursorColorSecondary) : this.settings.cursorColorSingle,
-			}))
-			.sort((left, right) => Position.compare(left.position, right.position));
+		this.cursorPositions = event.selections.map((selection, index) => ({
+			position: selection.getPosition(),
+			color: multiple
+				? index === 0 ? this.settings.cursorColorPrimary : this.settings.cursorColorSecondary
+				: this.settings.cursorColorSingle,
+		})).sort((left, right) => Position.compare(left.position, right.position));
 		return this.markMaybe();
 	}
 	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
 		return event.affectsOverviewRuler ? this.markMaybe() : false;
 	}
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
-		return this.markNeeded();
-	}
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		return event.scrollHeightChanged ? this.markNeeded() : false;
-	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
-		return this.markNeeded();
-	}
-	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean {
-		return this.updateSettings();
-	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return this.markNeeded(); }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollHeightChanged ? this.markNeeded() : false; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return this.markNeeded(); }
+	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean { return this.updateSettings(); }
 
 	public override prepareRender(_context: RenderingContext): void {
 		if (this.renderState === RenderState.Clean) return;
-		this.preparedDecorations = this._context.viewModel.getAllOverviewRulerDecorations(this._context.theme).sort(OverviewRulerDecorationsGroup.compareByRenderingProps);
+		this.preparedDecorations = this._context.viewModel.getAllOverviewRulerDecorations(this._context.theme)
+			.sort(OverviewRulerDecorationsGroup.compareByRenderingProps);
 		if (
-			this.renderState === RenderState.Maybe &&
-			OverviewRulerDecorationsGroup.equalsArr(this.renderedDecorations, this.preparedDecorations) &&
-			cursorMarkersEqual(this.renderedCursorPositions, this.cursorPositions)
+			this.renderState === RenderState.Maybe
+			&& OverviewRulerDecorationsGroup.equalsArr(this.renderedDecorations, this.preparedDecorations)
+			&& cursorMarkersEqual(this.renderedCursorPositions, this.cursorPositions)
 		) {
 			this.renderState = RenderState.Clean;
 		} else {
@@ -179,7 +164,9 @@ export class DecorationsOverviewRuler extends ViewPart {
 		this.settings = next;
 		this.cursorPositions = this.cursorPositions.map((cursor, index) => ({
 			position: cursor.position,
-			color: this.cursorPositions.length > 1 ? (index === 0 ? next.cursorColorPrimary : next.cursorColorSecondary) : next.cursorColorSingle,
+			color: this.cursorPositions.length > 1
+				? index === 0 ? next.cursorColorPrimary : next.cursorColorSecondary
+				: next.cursorColorSingle,
 		}));
 		this.applySettings();
 		return this.markNeeded();
@@ -245,7 +232,7 @@ class OverviewRulerSettings {
 		this.canvasHeight = this.lanes === 0 ? 0 : Math.max(0, Math.floor(this.domHeight * this.pixelRatio));
 	}
 
-	laneBounds(lane: number): { readonly left: number; readonly width: number } {
+	laneBounds(lane: number): { readonly left: number; readonly width: number; } {
 		const laneCount = Math.max(1, Math.min(3, this.lanes));
 		if (laneCount === 1 || lane === OverviewRulerLane.Full) return { left: 0, width: this.canvasWidth };
 		const leftWidth = Math.floor(this.canvasWidth / laneCount);
@@ -254,10 +241,7 @@ class OverviewRulerSettings {
 		const rightWidth = this.canvasWidth - rightLeft;
 		if (laneCount === 2) {
 			if (lane === OverviewRulerLane.Right) return { left: rightLeft, width: rightWidth };
-			return {
-				left: 0,
-				width: lane === OverviewRulerLane.Left || lane === OverviewRulerLane.Center ? leftWidth : this.canvasWidth,
-			};
+			return { left: 0, width: lane === OverviewRulerLane.Left || lane === OverviewRulerLane.Center ? leftWidth : this.canvasWidth };
 		}
 		const first = lane & OverviewRulerLane.Left ? 0 : lane & OverviewRulerLane.Center ? leftWidth : rightLeft;
 		const last = lane & OverviewRulerLane.Right ? this.canvasWidth : lane & OverviewRulerLane.Center ? rightLeft : leftWidth;
@@ -265,37 +249,32 @@ class OverviewRulerSettings {
 	}
 
 	equals(other: OverviewRulerSettings): boolean {
-		return (
-			this.lineHeight === other.lineHeight &&
-			this.pixelRatio === other.pixelRatio &&
-			this.lanes === other.lanes &&
-			this.renderBorder === other.renderBorder &&
-			this.borderColor === other.borderColor &&
-			this.backgroundColor === other.backgroundColor &&
-			this.hideCursor === other.hideCursor &&
-			this.cursorColorSingle === other.cursorColorSingle &&
-			this.cursorColorPrimary === other.cursorColorPrimary &&
-			this.cursorColorSecondary === other.cursorColorSecondary &&
-			this.top === other.top &&
-			this.right === other.right &&
-			this.domWidth === other.domWidth &&
-			this.domHeight === other.domHeight
-		);
+		return this.lineHeight === other.lineHeight
+			&& this.pixelRatio === other.pixelRatio
+			&& this.lanes === other.lanes
+			&& this.renderBorder === other.renderBorder
+			&& this.borderColor === other.borderColor
+			&& this.backgroundColor === other.backgroundColor
+			&& this.hideCursor === other.hideCursor
+			&& this.cursorColorSingle === other.cursorColorSingle
+			&& this.cursorColorPrimary === other.cursorColorPrimary
+			&& this.cursorColorSecondary === other.cursorColorSecondary
+			&& this.top === other.top
+			&& this.right === other.right
+			&& this.domWidth === other.domWidth
+			&& this.domHeight === other.domHeight;
 	}
 }
 
-function verticallyCenter(top: number, bottom: number, minimumHeight: number, canvasHeight: number): { readonly top: number; readonly height: number } {
+function verticallyCenter(top: number, bottom: number, minimumHeight: number, canvasHeight: number): { readonly top: number; readonly height: number; } {
 	const height = Math.max(minimumHeight, bottom - top);
 	const centeredTop = top - Math.floor((height - (bottom - top)) / 2);
 	return { top: Math.max(0, Math.min(canvasHeight - height, centeredTop)), height: Math.min(canvasHeight, height) };
 }
 
 function cursorMarkersEqual(left: readonly CursorMarker[], right: readonly CursorMarker[]): boolean {
-	return (
-		left.length === right.length &&
-		left.every((marker, index) => {
-			const other = right[index]!;
-			return marker.position.lineNumber === other.position.lineNumber && marker.color === other.color;
-		})
-	);
+	return left.length === right.length && left.every((marker, index) => {
+		const other = right[index]!;
+		return marker.position.lineNumber === other.position.lineNumber && marker.color === other.color;
+	});
 }

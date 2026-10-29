@@ -28,12 +28,11 @@ test('Explorer hides default metadata entries at every depth and honors user ove
 	const directories = ['.git', '.svn', '.hg', '.jj', '.vscode', 'src'];
 	const names = [...directories, '.DS_Store', 'Thumbs.db', '.gitignore', 'README.md'];
 	const files = {
-		readDirectory: async (resource: URI) =>
-			names.map(name => ({
-				resource: URI.joinPath(resource, name),
-				name,
-				kind: directories.includes(name) ? FileKind.Directory : FileKind.File,
-			})),
+		readDirectory: async (resource: URI) => names.map(name => ({
+			resource: URI.joinPath(resource, name),
+			name,
+			kind: directories.includes(name) ? FileKind.Directory : FileKind.File,
+		})),
 	} as unknown as IFileService;
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
 	const visibleNames = async (resource: URI) => (await source.getChildren(new ExplorerItem(resource, 'project', FileKind.Directory))).map(item => item.name);
@@ -57,12 +56,8 @@ test('Explorer applies exclusion conditions before nesting and reorders files wh
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using configuration = new InMemoryConfigurationService();
 	const getValue = configuration.getValue.bind(configuration);
-	configuration.getValue = ((section?: string) => (section ? getValue(section) : getValue())) as typeof configuration.getValue;
-	const entries = ['.git', 'folder', 'file10.ts', 'file2.ts', 'file2.js', 'file3.js', 'Upper.ts', 'lower.ts'].map(name => ({
-		resource: URI.joinPath(root, name),
-		name,
-		kind: name === '.git' || name === 'folder' ? FileKind.Directory : FileKind.File,
-	}));
+	configuration.getValue = ((section?: string) => section ? getValue(section) : getValue()) as typeof configuration.getValue;
+	const entries = ['.git', 'folder', 'file10.ts', 'file2.ts', 'file2.js', 'file3.js', 'Upper.ts', 'lower.ts'].map(name => ({ resource: URI.joinPath(root, name), name, kind: name === '.git' || name === 'folder' ? FileKind.Directory : FileKind.File }));
 	const files = {
 		readDirectory: async () => entries,
 		stat: async (resource: URI) => ({ resource, modifiedAtMillis: resource.path.includes('file2.ts') ? 20 : 10 }),
@@ -70,15 +65,9 @@ test('Explorer applies exclusion conditions before nesting and reorders files wh
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
 	const input = new ExplorerItem(root, 'project', FileKind.Directory);
 	await configuration.updateValue('files.exclude', { '**/.git': true, '**/*.js': { when: '$(basename).ts' } });
-	assert.deepEqual(
-		(await source.getChildren(input)).map(item => item.name),
-		['folder', 'file2.ts', 'file3.js', 'file10.ts', 'lower.ts', 'Upper.ts'],
-	);
+	assert.deepEqual((await source.getChildren(input)).map(item => item.name), ['folder', 'file2.ts', 'file3.js', 'file10.ts', 'lower.ts', 'Upper.ts']);
 	await configuration.updateValue('explorer.sortOrder', SortOrder.FilesFirst);
-	assert.deepEqual(
-		(await source.getChildren(input)).map(item => item.name),
-		['file2.ts', 'file3.js', 'file10.ts', 'lower.ts', 'Upper.ts', 'folder'],
-	);
+	assert.deepEqual((await source.getChildren(input)).map(item => item.name), ['file2.ts', 'file3.js', 'file10.ts', 'lower.ts', 'Upper.ts', 'folder']);
 	await configuration.updateValue('explorer.sortOrder', SortOrder.Modified);
 	assert.equal((await source.getChildren(input))[1]?.name, 'file2.ts');
 	await configuration.updateValue('explorer.sortOrder', SortOrder.Type);
@@ -87,15 +76,9 @@ test('Explorer applies exclusion conditions before nesting and reorders files wh
 	await configuration.updateValue('explorer.sortOrderLexicographicOptions', LexicographicOptions.Upper);
 	assert.equal((await source.getChildren(input))[1]?.name, 'Upper.ts');
 	await configuration.updateValue('explorer.sortOrderLexicographicOptions', LexicographicOptions.Unicode);
-	assert.deepEqual(
-		(await source.getChildren(input)).map(item => item.name),
-		['folder', 'Upper.ts', 'file10.ts', 'file2.ts', 'file3.js', 'lower.ts'],
-	);
+	assert.deepEqual((await source.getChildren(input)).map(item => item.name), ['folder', 'Upper.ts', 'file10.ts', 'file2.ts', 'file3.js', 'lower.ts']);
 	await configuration.updateValue('explorer.sortOrderReverse', true);
-	assert.deepEqual(
-		(await source.getChildren(input)).map(item => item.name),
-		['folder', 'lower.ts', 'file3.js', 'file2.ts', 'file10.ts', 'Upper.ts'],
-	);
+	assert.deepEqual((await source.getChildren(input)).map(item => item.name), ['folder', 'lower.ts', 'file3.js', 'file2.ts', 'file10.ts', 'Upper.ts']);
 	await configuration.updateValue('files.exclude', {});
 	assert.ok((await source.getChildren(input)).some(item => item.name === '.git'));
 });
@@ -123,10 +106,7 @@ test('Explorer preserves filename ties and configured case groups when loading d
 	assert.deepEqual(await names(), ['folder', 'File2.ts', 'alpha.ts', 'file02.ts', 'file10.ts', 'file2.ts']);
 	await configuration.updateValue('explorer.sortOrderReverse', true);
 	assert.deepEqual(await names(), ['folder', 'file2.ts', 'file10.ts', 'file02.ts', 'alpha.ts', 'File2.ts']);
-	assert.deepEqual(
-		entries.map(entry => entry.name),
-		['file10.ts', 'file2.ts', 'file02.ts', 'File2.ts', 'alpha.ts', 'folder'],
-	);
+	assert.deepEqual(entries.map(entry => entry.name), ['file10.ts', 'file2.ts', 'file02.ts', 'File2.ts', 'alpha.ts', 'folder']);
 });
 
 test('Explorer model groups generated files and keeps directories as separate roots', async () => {
@@ -140,41 +120,25 @@ test('Explorer model groups generated files and keeps directories as separate ro
 	];
 	const files = { readDirectory: async () => entries } as unknown as IFileService;
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({
-		key: ExplorerFileNestingSettingId.Enabled,
-		defaultValue: false,
-		parse: value => Boolean(value),
-	});
-	registry.registerConfiguration({
-		key: ExplorerFileNestingSettingId.Patterns,
-		defaultValue: {},
-		parse: value => value as Record<string, string>,
-	});
+	registry.registerConfiguration({ key: ExplorerFileNestingSettingId.Enabled, defaultValue: false, parse: value => Boolean(value) });
+	registry.registerConfiguration({ key: ExplorerFileNestingSettingId.Patterns, defaultValue: {}, parse: value => value as Record<string, string> });
 	using configuration = new InMemoryConfigurationService(registry);
 	await configuration.updateValue(ExplorerFileNestingSettingId.Enabled, true);
 	await configuration.updateValue(ExplorerFileNestingSettingId.Patterns, { '*.ts': '${capture}.js' });
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	const getValue = configuration.getValue.bind(configuration);
-	configuration.getValue = ((section?: string) => (section ? getValue(section) : getValue())) as typeof configuration.getValue;
+	configuration.getValue = ((section?: string) => section ? getValue(section) : getValue()) as typeof configuration.getValue;
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
 	const children = await source.getChildren(new ExplorerItem(root, 'project', FileKind.Directory));
-	assert.deepEqual(
-		children.map(item => item.name),
-		['src', 'link.js', 'main.ts', 'unknown.pipe'],
-	);
-	assert.deepEqual(
-		children[2]?.children?.map(item => item.name),
-		['main.js'],
-	);
+	assert.deepEqual(children.map(item => item.name), ['src', 'link.js', 'main.ts', 'unknown.pipe']);
+	assert.deepEqual(children[2]?.children?.map(item => item.name), ['main.js']);
 	assert.equal(children[2]?.children?.[0]?.resource.toString(), entries[1]?.resource.toString());
 	assert.equal(children[1]?.kind, FileKind.SymbolicLink);
 	assert.equal(children[3]?.kind, FileKind.Other);
 	await configuration.updateValue(ExplorerFileNestingSettingId.Patterns, {});
-	assert.deepEqual(
-		(await source.getChildren(new ExplorerItem(root, 'project', FileKind.Directory))).map(item => item.name),
-		['src', 'link.js', 'main.js', 'main.ts', 'unknown.pipe'],
-	);
+	assert.deepEqual((await source.getChildren(new ExplorerItem(root, 'project', FileKind.Directory))).map(item => item.name), ['src', 'link.js', 'main.js', 'main.ts', 'unknown.pipe']);
 });
+
 
 test('Explorer drag policy moves a selection once, copies without overwrite, and imports exact bytes', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -190,31 +154,12 @@ test('Explorer drag policy moves a selection once, copies without overwrite, and
 	let confirmed = false;
 	const files = {
 		hasCapability: () => false,
-		stat: async (uri: URI) => {
-			if (!existing.has(uri.path)) throw new FileNotFoundError(uri);
-			return { kind: FileKind.File };
-		},
-		copy: async (source: URI, target: URI) => {
-			operations.push(`copy ${source.path} ${target.path}`);
-			existing.add(target.path);
-		},
-		rename: async (source: URI, target: URI) => {
-			operations.push(`move ${source.path} ${target.path}`);
-			existing.add(target.path);
-		},
-		writeFileBytes: async (target: URI, bytes: Uint8Array) => {
-			operations.push(`bytes ${target.path} ${[...bytes].join(',')}`);
-		},
+		stat: async (uri: URI) => { if (!existing.has(uri.path)) throw new FileNotFoundError(uri); return { kind: FileKind.File }; },
+		copy: async (source: URI, target: URI) => { operations.push(`copy ${source.path} ${target.path}`); existing.add(target.path); },
+		rename: async (source: URI, target: URI) => { operations.push(`move ${source.path} ${target.path}`); existing.add(target.path); },
+		writeFileBytes: async (target: URI, bytes: Uint8Array) => { operations.push(`bytes ${target.path} ${[...bytes].join(',')}`); },
 	} as unknown as IFileService;
-	using dnd = new FileDragAndDrop(
-		error => errors.push(error),
-		items => items,
-		files,
-		workspace,
-		configuration,
-		{ confirm: async () => ({ confirmed }) } as unknown as IDialogService,
-		{ hasValidBasename: async (_uri, name) => name !== '..' } as IPathService,
-	);
+	using dnd = new FileDragAndDrop(error => errors.push(error), items => items, files, workspace, configuration, { confirm: async () => ({ confirmed }) } as unknown as IDialogService, { hasValidBasename: async (_uri, name) => name !== '..' } as IPathService);
 	const folder = new ExplorerItem(root.joinPathSegment('folder'), 'folder', FileKind.Directory);
 	const child = new ExplorerItem(folder.resource.joinPathSegment('child.txt'), 'child.txt', FileKind.File);
 	const a = new ExplorerItem(root.joinPathSegment('a.txt'), 'a.txt', FileKind.File);
@@ -252,21 +197,15 @@ async function waitForEffects(predicate: () => boolean): Promise<void> {
 	assert.fail('Timed out waiting for Explorer file operation');
 }
 
+
 test('a workspace file retains its visible root after shrinking to one folder', () => {
 	const first = { id: 'one', uri: URI.file('/one'), name: 'One', index: 0 };
 	const second = { id: 'two', uri: URI.file('/two'), name: 'Two', index: 1 };
-	using workspace = new TestWorkspaceService({
-		id: 'team',
-		configuration: URI.file('/team.ash-workspace'),
-		folders: [first, second],
-	});
+	using workspace = new TestWorkspaceService({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [first, second] });
 	using model = new ExplorerModel(workspace);
 	workspace.updateWorkspace({ ...workspace.getWorkspace(), folders: [first] });
 	assert.equal(model.root?.resource.scheme, 'ash-workspace');
-	assert.deepEqual(
-		model.root?.children?.map(item => item.resource),
-		[first.uri],
-	);
+	assert.deepEqual(model.root?.children?.map(item => item.resource), [first.uri]);
 	workspace.updateWorkspace({ id: 'one', uri: first.uri });
 	assert.equal(model.root?.resource.toString(), first.uri.toString());
 	assert.equal(model.root?.children, undefined);

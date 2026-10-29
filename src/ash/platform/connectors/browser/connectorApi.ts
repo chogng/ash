@@ -12,8 +12,8 @@ export interface BrowserConnectorHostServices {
 	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 	readonly callbackHost?: {
-		listen(options?: { readonly path: `/mcp-oauth/${string}/callback` }): Promise<{ readonly id: string; readonly redirectUri: string }>;
-		wait(id: string): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string }>;
+		listen(options?: { readonly path: `/mcp-oauth/${string}/callback`; }): Promise<{ readonly id: string; readonly redirectUri: string; }>;
+		wait(id: string): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string; }>;
 		close(id: string): Promise<void>;
 	};
 }
@@ -39,15 +39,11 @@ export function createAppServerConnectorApi(connection: AppServerProtocolClient,
 			if (connector?.oauthMethods.includes('browser') && hostServices.callbackHost) {
 				return connectBrowserOAuth(connection, params, hostServices, hostServices.callbackHost);
 			}
-			if (connector?.oauthMethods.includes('device')) {
-				return connectDeviceOAuth(connection, params, hostServices);
-			}
+			if (connector?.oauthMethods.includes('device')) { return connectDeviceOAuth(connection, params, hostServices); }
 			throw new Error('Connector OAuth is unavailable in this host');
 		},
 		setEnabled: params => appServerRequest(connection, 'connector/enablement/set', params),
-		refreshOAuth: async connectorId => {
-			await appServerRequest(connection, 'connector/oauth/refresh', { connectorId });
-		},
+		refreshOAuth: async connectorId => { await appServerRequest(connection, 'connector/oauth/refresh', { connectorId }); },
 		revokeOAuth: params => appServerRequest(connection, 'connector/oauth/revoke', params),
 	};
 }
@@ -62,11 +58,9 @@ async function connectDeviceOAuth(connection: AppServerProtocolClient, params: P
 		await hostServices.externalOpener.openExternal(started.verificationUri, { sourceUri: URI.parse(started.verificationUri) }, CancellationToken.None);
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
-		for (;;) {
+		for (; ;) {
 			await timeout(Math.min(waitSeconds, 30) * 1_000);
-			const result = await appServerRequest(connection, 'connector/connect/oauth/device/poll', {
-				flowId: started.flowId,
-			});
+			const result = await appServerRequest(connection, 'connector/connect/oauth/device/poll', { flowId: started.flowId });
 			if (result.status === 'connected') {
 				completed = true;
 				return result.command;
@@ -74,41 +68,24 @@ async function connectDeviceOAuth(connection: AppServerProtocolClient, params: P
 			waitSeconds = result.retryAfterSeconds;
 		}
 	} finally {
-		if (!completed)
-			await appServerRequest(connection, 'connector/connect/oauth/device/cancel', {
-				flowId: started.flowId,
-			}).catch(() => undefined);
+		if (!completed) await appServerRequest(connection, 'connector/connect/oauth/device/cancel', { flowId: started.flowId }).catch(() => undefined);
 	}
 }
 
-async function connectBrowserOAuth(
-	connection: AppServerProtocolClient,
-	params: Parameters<IConnectorApi['connectOAuth']>[0],
-	host: BrowserConnectorHostServices,
-	callbacks: NonNullable<BrowserConnectorHostServices['callbackHost']>,
-) {
+async function connectBrowserOAuth(connection: AppServerProtocolClient, params: Parameters<IConnectorApi['connectOAuth']>[0], host: BrowserConnectorHostServices, callbacks: NonNullable<BrowserConnectorHostServices['callbackHost']>) {
 	const callback = await callbacks.listen();
 	let flowId: string | undefined;
 	let completed = false;
 	try {
-		const started = await appServerRequest(connection, 'connector/connect/oauth/start', {
-			...params,
-			redirectUri: callback.redirectUri,
-		});
+		const started = await appServerRequest(connection, 'connector/connect/oauth/start', { ...params, redirectUri: callback.redirectUri });
 		flowId = started.flowId;
 		await host.externalOpener.openExternal(started.authorizationUrl, { sourceUri: URI.parse(started.authorizationUrl) }, CancellationToken.None);
 		const values = await callbacks.wait(callback.id);
-		const result = await appServerRequest(connection, 'connector/connect/oauth/complete', {
-			flowId,
-			state: values.state,
-			authorizationCode: values.code,
-		});
+		const result = await appServerRequest(connection, 'connector/connect/oauth/complete', { flowId, state: values.state, authorizationCode: values.code });
 		completed = true;
 		return result;
 	} finally {
 		await callbacks.close(callback.id);
-		if (flowId && !completed) {
-			await appServerRequest(connection, 'connector/connect/oauth/cancel', { flowId }).catch(() => undefined);
-		}
+		if (flowId && !completed) { await appServerRequest(connection, 'connector/connect/oauth/cancel', { flowId }).catch(() => undefined); }
 	}
 }

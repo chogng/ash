@@ -71,16 +71,8 @@ export interface IDebugConfigurationProvider {
 	readonly type: string;
 	readonly triggerKind: DebugConfigurationProviderTriggerKind;
 	provideDebugConfigurations?(folder: URI | undefined, signal: AbortSignal): readonly DebugConfiguration[] | PromiseLike<readonly DebugConfiguration[]>;
-	resolveDebugConfiguration?(
-		folder: URI | undefined,
-		configuration: DebugConfiguration,
-		signal: AbortSignal,
-	): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
-	resolveDebugConfigurationWithSubstitutedVariables?(
-		folder: URI | undefined,
-		configuration: DebugConfiguration,
-		signal: AbortSignal,
-	): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
+	resolveDebugConfiguration?(folder: URI | undefined, configuration: DebugConfiguration, signal: AbortSignal): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
+	resolveDebugConfigurationWithSubstitutedVariables?(folder: URI | undefined, configuration: DebugConfiguration, signal: AbortSignal): DebugConfiguration | null | undefined | PromiseLike<DebugConfiguration | null | undefined>;
 }
 
 export interface DebugConfigurationProviderRegistration extends IDisposable {
@@ -113,7 +105,7 @@ export interface IDebugCompound {
 	readonly dirId?: string;
 	readonly workspaceFolderName?: string;
 	readonly name: string;
-	readonly configurations: readonly (string | { readonly name: string; readonly folder: string })[];
+	readonly configurations: readonly (string | { readonly name: string; readonly folder: string; })[];
 	readonly preLaunchTask?: string;
 	readonly stopAll: boolean;
 }
@@ -271,7 +263,10 @@ export interface IDebugVariable {
 	readonly type?: string;
 	readonly variablesReference: number;
 	readonly memoryReference?: string;
-	readonly presentationHint?: { readonly attributes?: readonly string[]; readonly lazy?: boolean };
+	readonly presentationHint?: {
+		readonly attributes?: readonly string[];
+		readonly lazy?: boolean;
+	};
 }
 
 export type DebugEvaluateContext = 'watch' | 'repl' | 'hover';
@@ -364,7 +359,7 @@ export interface IDebugCompletionItem {
 }
 
 export interface IDebugCompletionsResponse {
-	readonly body: { readonly targets: readonly IDebugCompletionItem[] };
+	readonly body: { readonly targets: readonly IDebugCompletionItem[]; };
 }
 
 export interface IDebugProgressStart {
@@ -400,16 +395,9 @@ export interface IDebugExceptionInfo {
 export interface IDebugSession extends IDisposable {
 	readonly onDidProgressStart: Event<IDebugProgressStart>;
 	readonly onDidProgressUpdate: Event<IDebugProgressUpdate>;
-	readonly onDidProgressEnd: Event<{ readonly progressId: string }>;
-	readonly onDidInvalidateMemory: Event<{
-		readonly memoryReference: string;
-		readonly offset: number;
-		readonly count: number;
-	}>;
-	readonly onDidLoadedSource: Event<{
-		readonly reason: 'new' | 'changed' | 'removed';
-		readonly source: IDebugSource;
-	}>;
+	readonly onDidProgressEnd: Event<{ readonly progressId: string; }>;
+	readonly onDidInvalidateMemory: Event<{ readonly memoryReference: string; readonly offset: number; readonly count: number; }>;
+	readonly onDidLoadedSource: Event<{ readonly reason: 'new' | 'changed' | 'removed'; readonly source: IDebugSource; }>;
 	loadedSources(): Promise<readonly IDebugSource[]>;
 	readMemory(memoryReference: string, offset: number, count: number): Promise<IDebugMemoryRead>;
 	writeMemory(memoryReference: string, offset: number, data: Uint8Array): Promise<number>;
@@ -443,7 +431,7 @@ export interface IDebugSession extends IDisposable {
 	readonly consoleCatalogRevision: number;
 	getReplElements(): readonly DebugConsoleEntry[];
 	clearRepl(): Promise<void>;
-	readonly onDidCustomEvent: Event<{ readonly event: string; readonly body?: unknown }>;
+	readonly onDidCustomEvent: Event<{ readonly event: string; readonly body?: unknown; }>;
 	customRequest(command: string, args?: unknown): Promise<unknown>;
 	getDebugProtocolBreakpoint(breakpointId: string): unknown;
 	continue(): Promise<void>;
@@ -488,16 +476,8 @@ export interface IViewModel {
 	readonly focusedSession: IDebugSession | undefined;
 	readonly focusedThread: IDebugThread | undefined;
 	readonly focusedStackFrame: IDebugStackFrame | undefined;
-	readonly onDidFocusStackFrame: Event<{
-		stackFrame: IDebugStackFrame | undefined;
-		explicit: boolean;
-		session: IDebugSession | undefined;
-	}>;
-	readonly onDidFocusThread: Event<{
-		thread: IDebugThread | undefined;
-		explicit: boolean;
-		session: IDebugSession | undefined;
-	}>;
+	readonly onDidFocusStackFrame: Event<{ stackFrame: IDebugStackFrame | undefined; explicit: boolean; session: IDebugSession | undefined; }>;
+	readonly onDidFocusThread: Event<{ thread: IDebugThread | undefined; explicit: boolean; session: IDebugSession | undefined; }>;
 }
 
 /** Code Workbench owner for launch, workspace facades and host interactions. */
@@ -527,7 +507,7 @@ export interface IDebugService extends IDisposable {
 	readonly onDidNewSession: Event<IDebugSession>;
 	readonly onDidEndSession: Event<IDebugSession>;
 	/** Output from the integrated terminal created for this exact session. */
-	readonly onDidWriteTerminalData: Event<{ readonly session: IDebugSession; readonly data: string }>;
+	readonly onDidWriteTerminalData: Event<{ readonly session: IDebugSession; readonly data: string; }>;
 	refresh(): Promise<readonly IDebugConfiguration[]>;
 	registerDebugAdapterTrackerFactories(factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration;
 	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration;
@@ -540,7 +520,7 @@ export interface IDebugService extends IDisposable {
 	startDebugging(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
-	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session?: IDebugSession, options?: { explicit?: boolean; preserveFocus?: boolean }): Promise<void>;
+	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session?: IDebugSession, options?: { explicit?: boolean; preserveFocus?: boolean; }): Promise<void>;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
@@ -569,24 +549,21 @@ export interface InlineDebugAdapter {
 	close(): Promise<void>;
 }
 
-export type DebugAdapterDescriptor =
-	| DebugAdapterExecutable
-	| {
-			readonly inline: InlineDebugAdapter;
-			readonly arguments: readonly string[];
-			readonly connection?: never;
-			readonly program?: never;
-			readonly cwd?: never;
-			readonly env?: never;
-	  }
-	| {
-			readonly inline?: never;
-			readonly connection: DebugAdapterConnection;
-			readonly arguments: readonly string[];
-			readonly program?: never;
-			readonly cwd?: never;
-			readonly env?: never;
-	  };
+export type DebugAdapterDescriptor = DebugAdapterExecutable | {
+	readonly inline: InlineDebugAdapter;
+	readonly arguments: readonly string[];
+	readonly connection?: never;
+	readonly program?: never;
+	readonly cwd?: never;
+	readonly env?: never;
+} | {
+	readonly inline?: never;
+	readonly connection: DebugAdapterConnection;
+	readonly arguments: readonly string[];
+	readonly program?: never;
+	readonly cwd?: never;
+	readonly env?: never;
+};
 
 export interface DebugAdapterExecutable {
 	readonly inline?: never;
@@ -640,6 +617,7 @@ export interface IReplModel extends IDisposable {
 	evaluate(expression: string): Promise<void>;
 }
 
+
 export function createStaticDebugAdapterFactory(type: string, label: string, sourceId: string, executable: DebugAdapterExecutable): DebugAdapterFactory {
 	const normalizedExecutable = normalizeExecutable(executable, `Debug Adapter '${type}'`);
 	return normalizeDebugAdapterFactory({ type, label, sourceId, createDebugAdapter: () => normalizedExecutable });
@@ -655,78 +633,41 @@ export function normalizeDebugAdapterFactory(factory: DebugAdapterFactory): Debu
 		type,
 		label,
 		sourceId,
-		...(factory.createDebugAdapter
-			? {
-					createDebugAdapter: () => normalizeDebugAdapterDescriptor(factory.createDebugAdapter!.call(factory), `Debug Adapter '${type}'`),
-				}
-			: {}),
-		...(factory.createDebugAdapterDescriptor
-			? {
-					createDebugAdapterDescriptor: async (configuration: IDebugConfiguration, signal: AbortSignal, session: IDebugSession) => {
-						const descriptor = await factory.createDebugAdapterDescriptor!.call(factory, configuration, signal, session);
-						return descriptor === undefined || descriptor === null ? undefined : normalizeDebugAdapterDescriptor(descriptor, `Debug Adapter '${type}'`);
-					},
-				}
-			: {}),
+		...(factory.createDebugAdapter ? { createDebugAdapter: () => normalizeDebugAdapterDescriptor(factory.createDebugAdapter!.call(factory), `Debug Adapter '${type}'`) } : {}),
+		...(factory.createDebugAdapterDescriptor ? {
+			createDebugAdapterDescriptor: async (configuration: IDebugConfiguration, signal: AbortSignal, session: IDebugSession) => {
+				const descriptor = await factory.createDebugAdapterDescriptor!.call(factory, configuration, signal, session);
+				return descriptor === undefined || descriptor === null ? undefined : normalizeDebugAdapterDescriptor(descriptor, `Debug Adapter '${type}'`);
+			}
+		} : {}),
 	});
 }
 
 /** Validates a complete descriptor at the factory and Host callback boundaries. */
 export function normalizeDebugAdapterDescriptor(value: unknown, owner: string): DebugAdapterDescriptor {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) {
-		throw new TypeError(`${owner} descriptor must be an object`);
-	}
+	if (!value || typeof value !== 'object' || Array.isArray(value)) { throw new TypeError(`${owner} descriptor must be an object`); }
 	const input = value as Record<string, unknown>;
 	if (input.inline !== undefined) {
-		if (Object.keys(input).some(key => !['inline', 'arguments'].includes(key)) || !Array.isArray(input.arguments) || input.arguments.length !== 0) {
-			throw new TypeError(`${owner} inline adapter cannot include executable options`);
-		}
+		if (Object.keys(input).some(key => !['inline', 'arguments'].includes(key)) || !Array.isArray(input.arguments) || input.arguments.length !== 0) { throw new TypeError(`${owner} inline adapter cannot include executable options`); }
 		const inline = input.inline as InlineDebugAdapter;
-		if (!inline || typeof inline.send !== 'function' || typeof inline.read !== 'function' || typeof inline.close !== 'function') {
-			throw new TypeError(`${owner} inline adapter requires owned IO`);
-		}
+		if (!inline || typeof inline.send !== 'function' || typeof inline.read !== 'function' || typeof inline.close !== 'function') { throw new TypeError(`${owner} inline adapter requires owned IO`); }
 		return Object.freeze({ inline, arguments: Object.freeze([]) });
 	}
 	if (input.connection !== undefined) {
-		if (Object.keys(input).some(key => !['connection', 'arguments'].includes(key))) {
-			throw new TypeError(`${owner} connection contains unknown fields`);
-		}
-		if (input.program !== undefined || input.cwd !== undefined || input.env !== undefined || (input.arguments !== undefined && (!Array.isArray(input.arguments) || input.arguments.length !== 0))) {
-			throw new TypeError(`${owner} connection cannot include executable options`);
-		}
-		if (!input.connection || typeof input.connection !== 'object' || Array.isArray(input.connection)) {
-			throw new TypeError(`${owner} connection must be an object`);
-		}
+		if (Object.keys(input).some(key => !['connection', 'arguments'].includes(key))) { throw new TypeError(`${owner} connection contains unknown fields`); }
+		if (input.program !== undefined || input.cwd !== undefined || input.env !== undefined || input.arguments !== undefined && (!Array.isArray(input.arguments) || input.arguments.length !== 0)) { throw new TypeError(`${owner} connection cannot include executable options`); }
+		if (!input.connection || typeof input.connection !== 'object' || Array.isArray(input.connection)) { throw new TypeError(`${owner} connection must be an object`); }
 		const connection = input.connection as Record<string, unknown>;
 		if (connection.type === 'server') {
-			if (
-				Object.keys(connection).some(key => !['type', 'port', 'host'].includes(key)) ||
-				!Number.isInteger(connection.port) ||
-				(connection.port as number) < 1 ||
-				(connection.port as number) > 65535
-			) {
-				throw new TypeError(`${owner} server port is invalid`);
-			}
+			if (Object.keys(connection).some(key => !['type', 'port', 'host'].includes(key)) || !Number.isInteger(connection.port) || (connection.port as number) < 1 || (connection.port as number) > 65535) { throw new TypeError(`${owner} server port is invalid`); }
 			const host = connection.host === undefined ? undefined : normalizeText(connection.host as string, `${owner} server host`, 256);
-			return Object.freeze({
-				connection: Object.freeze({
-					type: 'server',
-					port: connection.port as number,
-					...(host === undefined ? {} : { host }),
-				}),
-				arguments: Object.freeze([]),
-			});
+			return Object.freeze({ connection: Object.freeze({ type: 'server', port: connection.port as number, ...(host === undefined ? {} : { host }) }), arguments: Object.freeze([]) });
 		}
 		if (connection.type === 'namedPipe') {
-			if (Object.keys(connection).some(key => !['type', 'path'].includes(key))) {
-				throw new TypeError(`${owner} named pipe contains unknown fields`);
-			}
+			if (Object.keys(connection).some(key => !['type', 'path'].includes(key))) { throw new TypeError(`${owner} named pipe contains unknown fields`); }
 			normalizeText(connection.path as string, `${owner} named pipe path`, 32768);
 			const path = connection.path as string;
-			return Object.freeze({
-				connection: Object.freeze({ type: 'namedPipe', path }),
-				arguments: Object.freeze([]),
-			});
+			return Object.freeze({ connection: Object.freeze({ type: 'namedPipe', path }), arguments: Object.freeze([]) });
 		}
 		throw new TypeError(`${owner} connection type is invalid`);
 	}
@@ -744,23 +685,8 @@ function normalizeExecutable(executable: DebugAdapterExecutable, owner: string):
 	if (argumentsList.length > 256) throw new RangeError(`${owner} has too many arguments`);
 	const cwd = executable.cwd === undefined ? undefined : normalizeText(executable.cwd, `${owner} cwd`, 32768);
 	const env = executable.env;
-	if (
-		env !== undefined &&
-		(!env ||
-			typeof env !== 'object' ||
-			Array.isArray(env) ||
-			Object.keys(env).length > 128 ||
-			Object.entries(env).some(
-				([key, value]) => !key || key.length > 256 || /[=\0]/.test(key) || (value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))),
-			))
-	)
-		throw new TypeError(`${owner} environment is invalid`);
-	return Object.freeze({
-		program,
-		arguments: Object.freeze(argumentsList),
-		...(cwd === undefined ? {} : { cwd }),
-		...(env === undefined ? {} : { env: Object.freeze({ ...env }) }),
-	});
+	if (env !== undefined && (!env || typeof env !== 'object' || Array.isArray(env) || Object.keys(env).length > 128 || Object.entries(env).some(([key, value]) => !key || key.length > 256 || /[=\0]/.test(key) || value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))))) throw new TypeError(`${owner} environment is invalid`);
+	return Object.freeze({ program, arguments: Object.freeze(argumentsList), ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env: Object.freeze({ ...env }) }) });
 }
 
 function normalizeIdentifier(value: string, owner: string): string {

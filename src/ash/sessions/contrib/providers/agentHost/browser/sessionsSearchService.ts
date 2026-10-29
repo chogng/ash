@@ -18,12 +18,8 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 		private readonly primaryWorkspace: () => IWorkspace,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
-	) {}
-	private route(directory: FileSearchDirectory): {
-		scope: ISessionProviderScope;
-		directory: FileSearchDirectory;
-		resolve?: boolean;
-	} {
+	) { }
+	private route(directory: FileSearchDirectory): { scope: ISessionProviderScope; directory: FileSearchDirectory; resolve?: boolean; } {
 		let target = directory.target;
 		if (target.type === 'workspace' && target.dirId.startsWith('session:')) {
 			const [sessionId, path] = target.dirId.slice('session:'.length).split(':').map(decodeURIComponent);
@@ -32,18 +28,12 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 		}
 		if (target.type === 'session') {
 			const scope = this.scopes.getScope(target.sessionId);
-			return {
-				scope,
-				directory: { ...directory, target: { ...target, sessionId: scope.backendIdentity(target.sessionId) } },
-			};
+			return { scope, directory: { ...directory, target: { ...target, sessionId: scope.backendIdentity(target.sessionId) } } };
 		}
 		const provider = this.providers.getProviders().find(provider => {
 			if (provider.id === this.defaultProviderId) return false;
 			const workspace = provider.currentWorkspace();
-			return (
-				(workspace.type === 'ssh' || workspace.type === 'local' || workspace.type === 'provider') &&
-				extUri.isEqualOrParent(directory.resource, sessionWorkspaceUri(buildAgentHostSessionWorkspace(workspace)!))
-			);
+			return (workspace.type === 'ssh' || workspace.type === 'local' || workspace.type === 'provider') && extUri.isEqualOrParent(directory.resource, sessionWorkspaceUri(buildAgentHostSessionWorkspace(workspace)!));
 		});
 		if (provider) {
 			return { scope: this.scopes.getProviderScope(provider.id), directory, resolve: true };
@@ -60,15 +50,7 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 		signal?.addEventListener('abort', abort, { once: true });
 		lifetime.add(toDisposable(() => signal?.removeEventListener('abort', abort)));
 		lifetime.add(scope.services.host.fs.onDidChangeConnection(abort));
-		lifetime.add(
-			this.scopes.onDidChangeScopes(() => {
-				try {
-					scope.assertCurrent();
-				} catch {
-					abort();
-				}
-			}),
-		);
+		lifetime.add(this.scopes.onDidChangeScopes(() => { try { scope.assertCurrent(); } catch { abort(); } }));
 		const result = await raceCancellationError(operation(controller.signal), controller.signal);
 		scope.assertCurrent();
 		return result;
@@ -78,10 +60,7 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 		const directory = await routed.scope.services.host.fs.resolvePath(routed.directory.resource);
 		routed.scope.assertCurrent();
 		if (signal.aborted || !extUri.isEqual(directory.uri, routed.directory.resource)) throw canceled();
-		return {
-			resource: routed.directory.resource,
-			target: directory.target.type === 'environment' ? { type: 'workspace', dirId: directory.target.dirId } : directory.target,
-		};
+		return { resource: routed.directory.resource, target: directory.target.type === 'environment' ? { type: 'workspace', dirId: directory.target.dirId } : directory.target };
 	}
 	glob(...[directory, query, signal]: Parameters<IFileSearchService['glob']>): ReturnType<IFileSearchService['glob']> {
 		const routed = this.route(directory);
@@ -97,7 +76,7 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 			const directory = await this.resolveDirectory(routed, signal);
 			const target = directory.target;
 			const host = routed.scope.services.host;
-			const translate = <T extends { readonly dirId?: string }>(params: T) => {
+			const translate = <T extends { readonly dirId?: string; }>(params: T) => {
 				const { dirId: _dirId, ...rest } = params;
 				return target.type === 'session' ? { ...rest, sessionDirectory: { sessionId: target.sessionId, path: target.path } } : { ...rest, dirId: target.dirId };
 			};

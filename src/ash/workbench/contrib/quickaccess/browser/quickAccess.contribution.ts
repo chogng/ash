@@ -23,54 +23,32 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		return value;
 	},
 	setting: {
-		get title() {
-			return localize('quickAccess.historyTitle', 'Workbench › Command Palette: History');
-		},
-		get description() {
-			return localize('quickAccess.historyDescription', 'Controls the number of recently used commands to keep in history for the command palette. Set to 0 to disable command history.');
-		},
-		valueType: 'number',
-		minimum: 0,
-		maximum: Number.MAX_VALUE,
+		get title() { return localize('quickAccess.historyTitle', 'Workbench › Command Palette: History'); },
+		get description() { return localize('quickAccess.historyDescription', 'Controls the number of recently used commands to keep in history for the command palette. Set to 0 to disable command history.'); },
+		valueType: 'number', minimum: 0, maximum: Number.MAX_VALUE,
 	},
 });
 
 QuickAccessRegistry.register({
 	prefix: '',
-	get placeholder() {
-		return localize('quickAccess.searchFiles', 'Search files by name or enter an absolute path or ~/path');
-	},
-	get helpLabel() {
-		return localize('quickAccess.files', 'Files by name, absolute path or ~/path');
-	},
-	get tabLabel() {
-		return localize('quickAccess.filesTab', 'Files');
-	},
+	get placeholder() { return localize('quickAccess.searchFiles', 'Search files by name or enter an absolute path or ~/path'); },
+	get helpLabel() { return localize('quickAccess.files', 'Files by name, absolute path or ~/path'); },
+	get tabLabel() { return localize('quickAccess.filesTab', 'Files'); },
 	tabOrder: 1,
 	ctor: AnythingQuickAccessProvider,
 });
 QuickAccessRegistry.register({
 	prefix: '>',
-	get placeholder() {
-		return localize('quickAccess.commandPlaceholder', 'Type the name of a command to run');
-	},
-	get helpLabel() {
-		return localize('quickAccess.commands', 'Commands');
-	},
-	get tabLabel() {
-		return localize('quickAccess.commands', 'Commands');
-	},
+	get placeholder() { return localize('quickAccess.commandPlaceholder', 'Type the name of a command to run'); },
+	get helpLabel() { return localize('quickAccess.commands', 'Commands'); },
+	get tabLabel() { return localize('quickAccess.commands', 'Commands'); },
 	tabOrder: 0,
 	ctor: CommandsQuickAccessProvider,
 });
 QuickAccessRegistry.register({
 	prefix: '?',
-	get placeholder() {
-		return localize('quickAccess.helpPlaceholder', 'Select a search mode');
-	},
-	get helpLabel() {
-		return localize('quickAccess.showModes', 'Show Search Modes');
-	},
+	get placeholder() { return localize('quickAccess.helpPlaceholder', 'Select a search mode'); },
+	get helpLabel() { return localize('quickAccess.showModes', 'Show Search Modes'); },
 	ctor: HelpQuickAccessProvider,
 });
 

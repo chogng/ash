@@ -33,7 +33,7 @@ export class AtomicTabMoveOperations {
 		const [previousTabStopPosition, previousTabStopVisibleColumn, visibleColumn] = this.whitespaceVisibleColumn(lineContent, position, tabSize);
 		if (visibleColumn === -1) return -1;
 		if (direction === Direction.Nearest && visibleColumn % tabSize === 0) return position;
-		const movesLeft = direction === Direction.Left || (direction === Direction.Nearest && visibleColumn % tabSize <= tabSize / 2);
+		const movesLeft = direction === Direction.Left || direction === Direction.Nearest && visibleColumn % tabSize <= tabSize / 2;
 		if (movesLeft) {
 			if (previousTabStopPosition === -1) return -1;
 			let currentVisibleColumn = previousTabStopVisibleColumn;

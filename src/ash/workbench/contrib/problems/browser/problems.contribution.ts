@@ -19,26 +19,19 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
 		location: ViewContainerLocation.Panel,
 		order: 1,
 	});
-	registry.registerStaticViews(WorkbenchViewContainerId.Problems, [
-		{
-			id: PROBLEMS_VIEW_ID,
-			title: 'Problems',
-			localizationKey: { bundle: 'ash.views', key: 'problems' },
-			order: 1,
-			canToggleVisibility: false,
-			canMoveView: true,
-			ctorDescriptor: new SyncDescriptor(ProblemsViewPane),
-		},
-	]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Problems, [{
+		id: PROBLEMS_VIEW_ID,
+		title: 'Problems',
+		localizationKey: { bundle: 'ash.views', key: 'problems' },
+		order: 1,
+		canToggleVisibility: false,
+		canMoveView: true,
+		ctorDescriptor: new SyncDescriptor(ProblemsViewPane),
+	}]);
 }
 
-registerWorkbenchContribution(
-	'workbench.contrib.problemsStatus',
-	WorkbenchPhase.BlockRestore,
-	accessor =>
-		new ProblemsStatusContribution({
-			statusbarService: accessor.get(IStatusbarService),
-			markerService: accessor.get(IMarkerService),
-			viewsService: accessor.get(IViewsService),
-		}),
-);
+registerWorkbenchContribution('workbench.contrib.problemsStatus', WorkbenchPhase.BlockRestore, accessor => new ProblemsStatusContribution({
+	statusbarService: accessor.get(IStatusbarService),
+	markerService: accessor.get(IMarkerService),
+	viewsService: accessor.get(IViewsService),
+}));

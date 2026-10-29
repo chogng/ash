@@ -13,7 +13,7 @@ export interface IVisibleItemRange {
 }
 
 /** Owns the continuous scroll surface and mounts only file templates near its viewport. */
-export class CompressedVirtualizedScrollView<TItem extends IDisposable & { readonly domNode: HTMLElement }> extends Disposable {
+export class CompressedVirtualizedScrollView<TItem extends IDisposable & { readonly domNode: HTMLElement; }> extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly contentDomNode: HTMLDivElement;
 	public readonly sections: VirtualizedItemManager<TItem>;
@@ -24,7 +24,11 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	private physicalContentHeight = 0;
 	private viewportHeight = 0;
 
-	constructor(container: HTMLElement, createItem: (contentDomNode: HTMLDivElement, index: number) => TItem, releaseItem: (index: number, item: TItem) => void) {
+	constructor(
+		container: HTMLElement,
+		createItem: (contentDomNode: HTMLDivElement, index: number) => TItem,
+		releaseItem: (index: number, item: TItem) => void,
+	) {
 		super();
 		this.scrollable = this._register(new ScrollableElement(container, { tabIndex: -1 }));
 		this.scrollable.element.classList.add('stanza-multi-diff-editor-scrollbar');
@@ -33,13 +37,12 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		this.contentDomNode = this.scrollable.contentElement;
 		this.contentNode = new FastDomNode(this.contentDomNode);
 		this.contentDomNode.classList.add('stanza-multi-diff-editor-content');
-		this.sections = this._register(new VirtualizedItemManager(this.contentDomNode, index => createItem(this.contentDomNode, index), releaseItem));
-		this._register(
-			addDisposableListener(this.domNode, 'wheel', event => this.handleWheel(event), {
-				capture: true,
-				passive: false,
-			}),
-		);
+		this.sections = this._register(new VirtualizedItemManager(
+			this.contentDomNode,
+			index => createItem(this.contentDomNode, index),
+			releaseItem,
+		));
+		this._register(addDisposableListener(this.domNode, 'wheel', event => this.handleWheel(event), { capture: true, passive: false }));
 	}
 
 	public resetItems(): void {
@@ -55,7 +58,7 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		if (!this.isCompressed) return this.domNode.scrollTop;
 		const physicalMax = Math.max(0, this.physicalContentHeight - this.viewportHeight);
 		const logicalMax = Math.max(0, this.logicalContentHeight - this.viewportHeight);
-		return physicalMax > 0 ? (this.domNode.scrollTop / physicalMax) * logicalMax : 0;
+		return physicalMax > 0 ? this.domNode.scrollTop / physicalMax * logicalMax : 0;
 	}
 
 	public setLogicalScrollTop(scrollTop: number): void {
@@ -66,7 +69,7 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 			return;
 		}
 		const physicalMax = Math.max(0, this.physicalContentHeight - this.viewportHeight);
-		this.domNode.scrollTop = logicalMax > 0 ? (target / logicalMax) * physicalMax : 0;
+		this.domNode.scrollTop = logicalMax > 0 ? target / logicalMax * physicalMax : 0;
 	}
 
 	public setLayout(ranges: readonly ICompressedVirtualizedItemRange[], contentHeight: number, viewportHeight: number): void {
@@ -113,7 +116,8 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	private handleWheel(event: WheelEvent): void {
 		if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 		// The outer viewport owns vertical gestures even over a child editor. Logical pixels also avoid amplifying compressed scrolling.
-		const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.viewportHeight : 1;
+		const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20
+			: event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? this.viewportHeight : 1;
 		const previous = this.getLogicalScrollTop();
 		this.setLogicalScrollTop(previous + event.deltaY * unit);
 		event.preventDefault();

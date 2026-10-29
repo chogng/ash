@@ -32,11 +32,7 @@ export function buildTreeChildren(items: readonly IChangesFileItem[]): ObjectTre
 			const children: ObjectTreeElement<ChangesTreeElement>[] = [];
 			folders.set(key, children);
 			roots.push({
-				element: {
-					type: 'folder',
-					id: key,
-					name: localize('sessions.changes.turn', 'Turn {0}', item.turnNumber),
-				},
+				element: { type: 'folder', id: key, name: localize('sessions.changes.turn', 'Turn {0}', item.turnNumber) },
 				children,
 			});
 		}
@@ -56,7 +52,7 @@ export function buildTreeChildren(items: readonly IChangesFileItem[]): ObjectTre
 }
 
 export class ChangesTreeRenderer {
-	constructor(private readonly document: Document) {}
+	constructor(private readonly document: Document) { }
 
 	public renderElement(row: ChangesTreeElement, reviewed: boolean, treeMode: boolean): HTMLElement {
 		const element = h(this.document, 'div', { className: 'ash-sessions-change-row' });
@@ -73,9 +69,10 @@ export class ChangesTreeRenderer {
 		const statistics = getChangesEditorFileStats(row.uri, [row])!;
 		counts.textContent = `+${statistics.insertions} −${statistics.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
-		state.textContent = [localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row), reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined]
-			.filter(Boolean)
-			.join(' · ');
+		state.textContent = [
+			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row),
+			reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+		].filter(Boolean).join(' · ');
 		state.title = [state.textContent, row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
 		element.append(label, state, counts);
 		return element;
@@ -84,24 +81,13 @@ export class ChangesTreeRenderer {
 
 export function fileState(row: IChangesFileItem): string {
 	const summary = row.summary;
-	if (summary.committedPaths.includes(row.file.path)) {
-		return localize('sessions.changes.fileCommitted', 'Committed');
-	}
-	if (summary.captureState !== 'sealed') {
-		return localize('sessions.changes.fileUnsealed', 'Not sealed');
-	}
+	if (summary.committedPaths.includes(row.file.path)) { return localize('sessions.changes.fileCommitted', 'Committed'); }
+	if (summary.captureState !== 'sealed') { return localize('sessions.changes.fileUnsealed', 'Not sealed'); }
 	switch (summary.commitState) {
-		case 'queued':
-			return localize('sessions.changes.fileQueued', 'Queued');
-		case 'committing':
-			return localize('sessions.changes.fileCommitting', 'Committing');
-		case 'conflict':
-			return localize('sessions.changes.fileConflict', 'Conflict — preview again after resolving');
-		case 'failed':
-			return localize('sessions.changes.fileFailed', 'Commit failed: {0}', summary.failureMessage ?? '');
-		case 'idle':
-		case 'partiallyCommitted':
-		case 'committed':
-			return localize('sessions.changes.fileRemaining', 'Not committed');
+		case 'queued': return localize('sessions.changes.fileQueued', 'Queued');
+		case 'committing': return localize('sessions.changes.fileCommitting', 'Committing');
+		case 'conflict': return localize('sessions.changes.fileConflict', 'Conflict — preview again after resolving');
+		case 'failed': return localize('sessions.changes.fileFailed', 'Commit failed: {0}', summary.failureMessage ?? '');
+		case 'idle': case 'partiallyCommitted': case 'committed': return localize('sessions.changes.fileRemaining', 'Not committed');
 	}
 }

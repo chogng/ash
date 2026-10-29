@@ -14,7 +14,7 @@ registerSingleton(IOnboardingScenarioService, OnboardingScenarioService, Instant
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: ONBOARDING_ENABLED_CONFIG,
 	defaultValue: true,
-	parse: value => (typeof value === 'boolean' ? value : true),
+	parse: value => typeof value === 'boolean' ? value : true,
 	setting: {
 		valueType: 'boolean',
 		title: localize('onboarding.enabled.title', 'Onboarding guides'),
@@ -24,36 +24,25 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 
 registerWorkbenchContribution('workbench.contrib.onboarding', WorkbenchPhase.AfterRestored, accessor => {
 	accessor.get(IOnboardingScenarioService).start();
-	return { dispose(): void {}, [Symbol.dispose](): void {} };
+	return { dispose(): void { }, [Symbol.dispose](): void { } };
 });
 
-registerAction2(
-	class RunOnboardingScenarioAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.onboarding.run',
-				title: localize2('onboarding.run', 'Run Onboarding Guide'),
-			});
-		}
+registerAction2(class RunOnboardingScenarioAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.onboarding.run', title: localize2('onboarding.run', 'Run Onboarding Guide') });
+	}
 
-		public run(accessor: ServicesAccessor, id: unknown): Promise<unknown> | undefined {
-			return typeof id === 'string' ? accessor.get(IOnboardingScenarioService).run(id) : undefined;
-		}
-	},
-);
+	public run(accessor: ServicesAccessor, id: unknown): Promise<unknown> | undefined {
+		return typeof id === 'string' ? accessor.get(IOnboardingScenarioService).run(id) : undefined;
+	}
+});
 
-registerAction2(
-	class ResetOnboardingShownStateAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.onboarding.resetShownState',
-				title: localize2('onboarding.resetShownState', 'Reset Onboarding Shown State'),
-				f1: true,
-			});
-		}
+registerAction2(class ResetOnboardingShownStateAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.onboarding.resetShownState', title: localize2('onboarding.resetShownState', 'Reset Onboarding Shown State'), f1: true });
+	}
 
-		public run(accessor: ServicesAccessor): void {
-			accessor.get(IOnboardingScenarioService).resetAll();
-		}
-	},
-);
+	public run(accessor: ServicesAccessor): void {
+		accessor.get(IOnboardingScenarioService).resetAll();
+	}
+});

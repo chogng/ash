@@ -57,10 +57,13 @@ test('status bar entry accessors update and remove their entry', () => {
 		text: 'Connected',
 		tooltip: 'The app server is connected',
 	});
-	assert.deepEqual(service.getEntries(StatusbarAlignment.Left)[0]?.entry, {
-		text: 'Connected',
-		tooltip: 'The app server is connected',
-	});
+	assert.deepEqual(
+		service.getEntries(StatusbarAlignment.Left)[0]?.entry,
+		{
+			text: 'Connected',
+			tooltip: 'The app server is connected',
+		},
+	);
 
 	entry.dispose();
 	assert.deepEqual(service.getEntries(StatusbarAlignment.Left), []);
@@ -78,17 +81,17 @@ test('status bar entry ids are unique while registered', () => {
 	);
 
 	assert.throws(
-		() =>
-			service.addEntry(
-				{ text: 'Duplicate' },
-				{
-					id: 'test.unique',
-					alignment: StatusbarAlignment.Right,
-				},
-			),
+		() => service.addEntry(
+			{ text: 'Duplicate' },
+			{
+				id: 'test.unique',
+				alignment: StatusbarAlignment.Right,
+			},
+		),
 		/already exists/,
 	);
 });
+
 
 test('auxiliary status bars observe shared entries through their owner and retain local editor entries', () => {
 	using main = new StatusbarService();
@@ -96,22 +99,14 @@ test('auxiliary status bars observe shared entries through their owner and retai
 	using shared = main.addEntry({ text: 'Connected', showInAllWindows: true }, { id: 'remote', alignment: StatusbarAlignment.Left });
 	using mainOnly = main.addEntry({ text: 'Main only' }, { id: 'main', alignment: StatusbarAlignment.Left });
 	using editor = auxiliary.addEntry({ text: 'Ln 2' }, { id: 'editor', alignment: StatusbarAlignment.Right });
-	assert.deepEqual(
-		auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text),
-		['Connected'],
-	);
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ['Connected']);
 	shared.update({ text: 'Disconnected', showInAllWindows: true });
-	assert.deepEqual(
-		auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text),
-		['Disconnected'],
-	);
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left).map(item => item.entry.text), ['Disconnected']);
 	shared.dispose();
 	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left), []);
-	assert.deepEqual(
-		auxiliary.getEntries(StatusbarAlignment.Right).map(item => item.entry.text),
-		['Ln 2'],
-	);
+	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Right).map(item => item.entry.text), ['Ln 2']);
 });
+
 
 test('status bar style leases respect priority and restore the prior owner on release', () => {
 	using service = new StatusbarService();

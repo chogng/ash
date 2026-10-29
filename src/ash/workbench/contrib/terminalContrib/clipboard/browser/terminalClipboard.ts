@@ -5,7 +5,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { TerminalSettingId } from '../../../../../platform/terminal/common/terminal.js';
 
 /** Returns the user's decision, including any explicitly requested newline removal. */
-export async function shouldPasteTerminalText(accessor: ServicesAccessor, text: string, bracketedPasteMode: boolean | undefined): Promise<boolean | { modifiedText: string }> {
+export async function shouldPasteTerminalText(accessor: ServicesAccessor, text: string, bracketedPasteMode: boolean | undefined): Promise<boolean | { modifiedText: string; }> {
 	if (!/[\r\n]/u.test(text)) return true;
 	const configuration = accessor.get(IConfigurationService);
 	const policy = configuration.getValue<unknown>(TerminalSettingId.EnableMultiLinePasteWarning);
@@ -17,12 +17,7 @@ export async function shouldPasteTerminalText(accessor: ServicesAccessor, text: 
 	}
 
 	// Bound the preview independently of the paste, which must retain the original text.
-	const preview = text
-		.replace(/\r\n|\r/gu, '\n')
-		.slice(0, 2000)
-		.split('\n')
-		.slice(0, 10)
-		.join('\n');
+	const preview = text.replace(/\r\n|\r/gu, '\n').slice(0, 2000).split('\n').slice(0, 10).join('\n');
 	const { result, checkboxChecked } = await accessor.get(IDialogService).prompt<'original' | 'singleLine'>({
 		title: localize('terminal.clipboard.confirmTitle', 'Paste into Terminal'),
 		severity: DialogSeverity.Warning,

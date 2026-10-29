@@ -2,28 +2,11 @@ import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { ExtensionsPackageSummaryDto } from '../../../../../../.build/protocol/typescript/index.js';
-import type {
-	ExtensionsBuiltInProviders,
-	ExtensionsEditorExtensionPolicy,
-	ExtensionsEditorExtensionPolicyAction,
-	ExtensionsEditorExtensions,
-	ExtensionsRecommendationEnvironment,
-} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions, ExtensionsRecommendationEnvironment } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IExtensionManagementApi } from '../../../../platform/extensionManagement/common/extensionManagementApi.js';
-import type {
-	IExtensionManagementService,
-	ExtensionsAcquiredCapability,
-	ExtensionsBrowseSnapshot,
-	ExtensionsInstalledPackage,
-	ExtensionsPackageDetails,
-	ExtensionsPackageSummary,
-	ExtensionsSearchOptions,
-	ExtensionsSearchPage,
-	ExtensionRegistrySources,
-	AshExtensionSource,
-} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { IExtensionManagementService, ExtensionsAcquiredCapability, ExtensionsBrowseSnapshot, ExtensionsInstalledPackage, ExtensionsPackageDetails, ExtensionsPackageSummary, ExtensionsSearchOptions, ExtensionsSearchPage, ExtensionRegistrySources, AshExtensionSource } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 /** App Server adapter and owner of path-free Renderer browse snapshots. */
 export class AppServerExtensionManagementService extends Disposable implements IExtensionManagementService {
@@ -42,27 +25,10 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		return { platform: environment.platform, executables: environment.executables };
 	}
 
-	sources(): Promise<ExtensionRegistrySources> {
-		return this.api.sources();
-	}
+	sources(): Promise<ExtensionRegistrySources> { return this.api.sources(); }
 
-	async searchPage(
-		query: string,
-		options: ExtensionsSearchOptions & {
-			readonly sourceId: string;
-			readonly pageSize: number;
-			readonly cursor?: string;
-		},
-	): Promise<ExtensionsSearchPage> {
-		const page = await this.api.searchPage({
-			query,
-			sourceId: options.sourceId,
-			pageSize: options.pageSize,
-			cursor: options.cursor ?? null,
-			packageType: options.packageType ?? null,
-			capabilityKind: options.capabilityKind ?? null,
-			languageId: options.languageId ?? null,
-		});
+	async searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage> {
+		const page = await this.api.searchPage({ query, sourceId: options.sourceId, pageSize: options.pageSize, cursor: options.cursor ?? null, packageType: options.packageType ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null });
 		const total = Number(page.total);
 		if (!Number.isSafeInteger(total) || total < 0) {
 			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'marketplaceInvalidCount' }, 'The registry returned an invalid result count.'));
@@ -82,30 +48,18 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		return result;
 	}
 
-	public listBuiltInProviders(): Promise<ExtensionsBuiltInProviders> {
-		return this.api.builtInProviders();
-	}
-	public setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders> {
-		return this.api.setBuiltInProviderEnablement({ id, enabled, expectedRevision });
-	}
+	public listBuiltInProviders(): Promise<ExtensionsBuiltInProviders> { return this.api.builtInProviders(); }
+	public setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders> { return this.api.setBuiltInProviderEnablement({ id, enabled, expectedRevision }); }
 
 	listEditorExtensions(): Promise<ExtensionsEditorExtensions> {
 		return this.api.editorExtensions();
 	}
 
 	setEditorExtensionPolicy(extension: ExtensionsEditorExtensionPolicy, action: ExtensionsEditorExtensionPolicyAction, expectedRevision: number): Promise<ExtensionsEditorExtensions> {
-		return this.api.setEditorExtensionPolicy({
-			installationId: extension.installationId,
-			packageDigest: extension.package.digest,
-			expectedRevision,
-			action,
-		});
+		return this.api.setEditorExtensionPolicy({ installationId: extension.installationId, packageDigest: extension.package.digest, expectedRevision, action });
 	}
 
-	constructor(
-		private readonly api: IExtensionManagementApi,
-		events: IServerEventApi,
-	) {
+	constructor(private readonly api: IExtensionManagementApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method !== 'extensions/changed') return;
@@ -133,27 +87,14 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	}
 
 	async search(query: string, options: ExtensionsSearchOptions = {}): Promise<readonly ExtensionsPackageSummary[]> {
-		return (
-			await this.api.search({
-				query,
-				packageType: options.packageType ?? null,
-				limit: options.limit ?? null,
-				capabilityKind: options.capabilityKind ?? null,
-				languageId: options.languageId ?? null,
-			})
-		).packages.map(packageSummary);
+		return (await this.api.search({ query, packageType: options.packageType ?? null, limit: options.limit ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null })).packages.map(packageSummary);
 	}
 
 	async get(packageId: string, version?: string): Promise<ExtensionsPackageDetails> {
 		const details = await this.api.get({ packageId, version: version ?? null });
 		return {
-			package: details.package,
-			packageType: details.packageType,
-			displayName: details.displayName,
-			description: details.description,
-			license: details.license,
-			source: details.source,
-			upstream: details.upstream,
+			package: details.package, packageType: details.packageType, displayName: details.displayName,
+			description: details.description, license: details.license, source: details.source, upstream: details.upstream,
 			capabilities: details.capabilities,
 			...(details.uiTargets ? { uiTargets: uiTargets(details.uiTargets) } : {}),
 		};
@@ -205,36 +146,20 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		const generation = this.browseGeneration;
 		let request!: Promise<ExtensionsBrowseSnapshot>;
 		request = Promise.all([
-			this.api.search({
-				query,
-				packageType: options.packageType ?? null,
-				limit: options.limit ?? null,
-				capabilityKind: options.capabilityKind ?? null,
-				languageId: options.languageId ?? null,
-			}),
+			this.api.search({ query, packageType: options.packageType ?? null, limit: options.limit ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null }),
 			this.listInstalled(),
-		])
-			.then(async ([searchResult, installed]) => {
-				const packages = searchResult.packages.map(packageSummary);
-				const browsePackages = await Promise.all(
-					packages.map(async summary => ({
-						summary,
-						details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
-					})),
-				);
-				const snapshot = Object.freeze({
-					query,
-					options,
-					unavailableSources: Object.freeze(searchResult.unavailableSources ?? []),
-					packages: Object.freeze(browsePackages),
-					installed: Object.freeze([...installed]),
-				});
-				if (generation === this.browseGeneration) this.browseSnapshots.set(key, snapshot);
-				return snapshot;
-			})
-			.finally(() => {
-				if (this.browseRequests.get(key) === request) this.browseRequests.delete(key);
-			});
+		]).then(async ([searchResult, installed]) => {
+			const packages = searchResult.packages.map(packageSummary);
+			const browsePackages = await Promise.all(packages.map(async summary => ({
+				summary,
+				details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
+			})));
+			const snapshot = Object.freeze({ query, options, unavailableSources: Object.freeze(searchResult.unavailableSources ?? []), packages: Object.freeze(browsePackages), installed: Object.freeze([...installed]) });
+			if (generation === this.browseGeneration) this.browseSnapshots.set(key, snapshot);
+			return snapshot;
+		}).finally(() => {
+			if (this.browseRequests.get(key) === request) this.browseRequests.delete(key);
+		});
 		this.browseRequests.set(key, request);
 		return request;
 	}
@@ -263,16 +188,9 @@ function browseKey(query: string, options: ExtensionsSearchOptions = {}): string
 }
 
 function uiTargets(value: readonly ('ide' | 'agents')[]): readonly ExtensionUiTarget[] {
-	return value.map(target => (target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents));
+	return value.map(target => target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents);
 }
 
 function packageSummary(value: ExtensionsPackageSummaryDto): ExtensionsPackageSummary {
-	return {
-		id: value.id,
-		version: value.version,
-		packageType: value.packageType,
-		displayName: value.displayName,
-		description: value.description,
-		...(value.uiTargets ? { uiTargets: uiTargets(value.uiTargets) } : {}),
-	};
+	return { id: value.id, version: value.version, packageType: value.packageType, displayName: value.displayName, description: value.description, ...(value.uiTargets ? { uiTargets: uiTargets(value.uiTargets) } : {}) };
 }

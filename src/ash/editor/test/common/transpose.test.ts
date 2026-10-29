@@ -11,10 +11,16 @@ import { type ICodeEditor } from '../../browser/editorBrowser.js';
 
 test('Transpose swaps complete graphemes for multiple carets and undoes atomically', () => {
 	using model = new TextModel('a😊b\néx');
-	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(1, 2)], 1));
+	using selections = createTestCursorsController(model, primaryFirst([
+		caret(0, 1),
+		caret(1, 2),
+	], 1));
 	runTranspose(model, selections);
 	assert.equal(model.getText(), '😊ab\nxé');
-	assert.deepEqual(selections.getSelections(), primaryFirst([caret(0, 3), caret(1, 3)], 1));
+	assert.deepEqual(selections.getSelections(), primaryFirst([
+		caret(0, 3),
+		caret(1, 3),
+	], 1));
 	selections.context.model.undo();
 	assert.equal(model.getText(), 'a😊b\néx');
 });
@@ -29,7 +35,11 @@ test('Transpose swaps the preceding grapheme with the following line break at a 
 
 test('Transpose ignores ranges and resolves overlapping cursor edits in favor of the primary cursor', () => {
 	using model = new TextModel('abc');
-	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(0, 2), Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))], 1));
+	using selections = createTestCursorsController(model, primaryFirst([
+		caret(0, 1),
+		caret(0, 2),
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
+	], 1));
 	runTranspose(model, selections);
 	assert.equal(model.getText(), 'acb');
 	assert.deepEqual(selections.getSelections()[0]!, caret(0, 3));
@@ -43,17 +53,14 @@ function runTranspose(model: TextModel, selections: ReturnType<typeof createTest
 	const editor = {
 		getModel: () => model,
 		getSelections: () => selections.getSelections(),
-		pushUndoStop: () => {
-			selections.pushUndoStop();
-			return true;
-		},
+		pushUndoStop: () => { selections.pushUndoStop(); return true; },
 		executeCommands: (_source: string | null | undefined, commands: Parameters<typeof selections.executeCommands>[0]) => selections.executeCommands(commands),
 	} as unknown as ICodeEditor;
 	new TransposeAction().run({} as never, editor);
 }
 
 function caret(lineIndex: number, columnIndex: number): Selection {
-	return Selection.fromPositions(new Position(lineIndex + 1, columnIndex + 1));
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

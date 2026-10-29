@@ -15,9 +15,7 @@ test('IconLabel updates name, description, suffix, and semantic icons in place',
 	const icon = registerLxicon('test-icon-label-inline', { fontCharacter: 'A' });
 	const hoverContents: unknown[] = [];
 	using delegate = setHoverDelegate({
-		setupDelayedHover() {
-			throw new Error('Unexpected delayed hover registration');
-		},
+		setupDelayedHover() { throw new Error('Unexpected delayed hover registration'); },
 		setupHover(options) {
 			hoverContents.push(options.content);
 			return managedHover();
@@ -93,25 +91,19 @@ test('SimpleIconLabel renders semantic icons and owns its hover', () => {
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
+
 
 test('IconLabel switches between file renderers, image icons and hidden icons without stale styles', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using label = new IconLabel(dom.window.document.body, {
-			label: 'Custom',
-			renderIcon: container => {
-				container.style.fontFamily = 'file-font';
-				container.style.color = 'red';
-				container.textContent = 'F';
-			},
-		});
+		using label = new IconLabel(dom.window.document.body, { label: 'Custom', renderIcon: container => { container.style.fontFamily = 'file-font'; container.style.color = 'red'; container.textContent = 'F'; } });
 		const node = label.iconElement;
 		const image = URI.parse('data:image/png;base64,aWNvbg==');
 		label.setLabel('Custom', undefined, { iconPath: image });
@@ -122,10 +114,9 @@ test('IconLabel switches between file renderers, image icons and hidden icons wi
 		label.setLabel('Custom', undefined, { iconPath: image, hideIcon: true });
 		assert.equal(node.childElementCount, 0);
 		assert.equal(node.getAttribute('aria-hidden'), 'true');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
+
 
 suite('IconLabel suffix icons', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -133,11 +124,7 @@ suite('IconLabel suffix icons', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
 			const icon = registerLxicon('test-suffix-icon', { fontCharacter: 'A' });
-			using label = new IconLabel(dom.window.document.body, {
-				label: '$(add).ts',
-				suffix: ':3',
-				suffixIcon: icon,
-			});
+			using label = new IconLabel(dom.window.document.body, { label: '$(add).ts', suffix: ':3', suffixIcon: icon });
 			const mounted = label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon');
 			assert.equal(label.labelElement.textContent, '$(add).ts');
 			assert.equal(label.element.querySelector('.ash-icon-label-suffix')?.textContent, ':3');
@@ -150,8 +137,6 @@ suite('IconLabel suffix icons', () => {
 			label.clear();
 			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), null);
 			assert.equal(label.element.querySelector<HTMLElement>('.ash-icon-label-suffix-icon')?.hidden, true);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 });

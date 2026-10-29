@@ -5,7 +5,7 @@ import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, fl
 import { designStyleFields } from './designResources.js';
 import { resolveDesignLayout } from './layout.js';
 
-type Frame = Extract<DesignShape, { kind: 'frame' }>;
+type Frame = Extract<DesignShape, { kind: 'frame'; }>;
 const placement = ['x', 'y', 'rotation', 'constraints', 'sizing', 'gridCell', 'layoutPositioning', 'scrollPosition'] as const;
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -19,16 +19,10 @@ export function recordDesignOverrides(shapes: readonly DesignShape[], previous: 
 		if ((inherited || root) && old && shape.overrides === old.overrides) {
 			const overrides = new Set(shape.overrides);
 			for (const field of getDesignOverrideFields(shape, old)) {
-				if (shape.kind === 'text' && (field === 'width' || field === 'height')) {
-					continue;
-				}
-				if (!same(getDesignOverrideValue(shape, field), getDesignOverrideValue(old, field))) {
-					overrides.add(field);
-				}
+				if (shape.kind === 'text' && (field === 'width' || field === 'height')) { continue; }
+				if (!same(getDesignOverrideValue(shape, field), getDesignOverrideValue(old, field))) { overrides.add(field); }
 			}
-			if (overrides.size) {
-				updated = { ...shape, overrides: [...overrides] };
-			}
+			if (overrides.size) { updated = { ...shape, overrides: [...overrides] }; }
 		}
 		return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => visit(child, inherited || root)) } : updated;
 	};
@@ -44,12 +38,8 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 	const active = new Set<string>();
 	const resolve = (shape: DesignShape): DesignShape => {
 		const cached = cache.get(shape.id);
-		if (cached) {
-			return cached;
-		}
-		if (active.has(shape.id)) {
-			throw new TypeError(localize('sessions.design.componentCycle', 'A component cannot contain an instance of itself.'));
-		}
+		if (cached) { return cached; }
+		if (active.has(shape.id)) { throw new TypeError(localize('sessions.design.componentCycle', 'A component cannot contain an instance of itself.')); }
 		active.add(shape.id);
 		let result = shape;
 		if (shape.kind === 'frame' && shape.instance) {
@@ -65,74 +55,39 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 			result = { ...shape, children: shape.children.map(resolve) };
 			result = resolveDesignLayout([result], [shape], measureText)[0];
 		}
-		active.delete(shape.id);
-		cache.set(shape.id, result);
+		active.delete(shape.id); cache.set(shape.id, result);
 		return result;
 	};
 	const inherit = (source: DesignShape, previous: DesignShape | undefined, root = false): DesignShape => {
 		const compatible = previous?.kind === source.kind ? previous : undefined;
 		const overrides = compatible?.overrides ?? [];
 		const result = { ...source, id: previous?.id ?? generateUuid() } as DesignShape;
-		Reflect.deleteProperty(result, 'component');
-		Reflect.deleteProperty(result, 'sourceId');
-		Reflect.deleteProperty(result, 'overrides');
+		Reflect.deleteProperty(result, 'component'); Reflect.deleteProperty(result, 'sourceId'); Reflect.deleteProperty(result, 'overrides');
 		if (root && previous?.kind === 'frame') {
 			Reflect.set(result, 'instance', previous.instance);
 			// A flow starts at this placed screen, independently of its component definition.
-			if (previous.flowStart) {
-				Reflect.set(result, 'flowStart', previous.flowStart);
-			} else {
-				Reflect.deleteProperty(result, 'flowStart');
-			}
+			if (previous.flowStart) { Reflect.set(result, 'flowStart', previous.flowStart); } else { Reflect.deleteProperty(result, 'flowStart'); }
 			for (const field of placement) {
-				if (Reflect.has(previous, field)) {
-					Reflect.set(result, field, Reflect.get(previous, field));
-				} else {
-					Reflect.deleteProperty(result, field);
-				}
+				if (Reflect.has(previous, field)) { Reflect.set(result, field, Reflect.get(previous, field)); } else { Reflect.deleteProperty(result, field); }
 			}
-			if (previous.sourceId) {
-				Reflect.set(result, 'sourceId', previous.sourceId);
-			}
-		} else {
-			Reflect.set(result, 'sourceId', source.id);
-		}
-		if (overrides.length) {
-			Reflect.set(result, 'overrides', overrides);
-		}
+			if (previous.sourceId) { Reflect.set(result, 'sourceId', previous.sourceId); }
+		} else { Reflect.set(result, 'sourceId', source.id); }
+		if (overrides.length) { Reflect.set(result, 'overrides', overrides); }
 		for (const field of overrides) {
 			copyDesignOverride(result, compatible!, field);
 		}
-		const bindings = { ...result.bindings };
-		const styles = { ...result.styleBindings };
+		const bindings = { ...result.bindings }; const styles = { ...result.styleBindings };
 		for (const field of overrides) {
 			if (!overrides.includes('bindings')) {
-				const properties =
-					field === 'autoLayout'
-						? ['gap', 'crossGap', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']
-						: field === 'sizeLimits'
-							? ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']
-							: [field];
-				for (const property of properties) {
-					if (!(overrides as readonly string[]).includes(`bindings:${property}`)) {
-						Reflect.deleteProperty(bindings, property);
-					}
-				}
+				const properties = field === 'autoLayout' ? ['gap', 'crossGap', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] : field === 'sizeLimits' ? ['minWidth', 'maxWidth', 'minHeight', 'maxHeight'] : [field];
+				for (const property of properties) { if (!(overrides as readonly string[]).includes(`bindings:${property}`)) { Reflect.deleteProperty(bindings, property); } }
 			}
 			if (!overrides.includes('styleBindings')) {
-				for (const [kind, fields] of Object.entries(designStyleFields)) {
-					if ((fields as readonly string[]).includes(field) && !(overrides as readonly string[]).includes(`styleBindings:${kind}`)) {
-						Reflect.deleteProperty(styles, kind);
-					}
-				}
+				for (const [kind, fields] of Object.entries(designStyleFields)) { if ((fields as readonly string[]).includes(field) && !(overrides as readonly string[]).includes(`styleBindings:${kind}`)) { Reflect.deleteProperty(styles, kind); } }
 			}
 		}
-		if (result.bindings) {
-			Reflect.set(result, 'bindings', bindings);
-		}
-		if (result.styleBindings) {
-			Reflect.set(result, 'styleBindings', styles);
-		}
+		if (result.bindings) { Reflect.set(result, 'bindings', bindings); }
+		if (result.styleBindings) { Reflect.set(result, 'styleBindings', styles); }
 		if (result.kind === 'frame' || result.kind === 'group') {
 			const oldChildren = compatible?.kind === 'frame' || compatible?.kind === 'group' ? compatible.children : [];
 			if (!root && result.kind === 'frame' && result.instance && overrides.includes('instance')) {
@@ -142,10 +97,7 @@ export function resolveDesignComponents(shapes: readonly DesignShape[], libraryS
 				return resolve({ ...result, children: oldChildren });
 			}
 			const bySource = new Map(oldChildren.map(child => [child.sourceId, child]));
-			return {
-				...result,
-				children: (source as Frame).children.map(child => inherit(child, bySource.get(child.id))),
-			};
+			return { ...result, children: (source as Frame).children.map(child => inherit(child, bySource.get(child.id))) };
 		}
 		return result;
 	};
@@ -157,23 +109,9 @@ export function remapDesignInstance(instance: Frame, source: Frame, previousSour
 	const match = (current: DesignShape, target: DesignShape, oldSource?: DesignShape, root = false): DesignShape => {
 		// Variant-specific styles take precedence when their original values differ.
 		// Text content, interactions and explicit instance sizing remain user intent across variants.
-		const overrides = (current.overrides ?? []).filter(
-			field =>
-				!variant ||
-				!oldSource ||
-				field === 'text' ||
-				(field === 'textRuns' && current.overrides?.includes('text')) ||
-				field === 'name' ||
-				field === 'instance' ||
-				field === 'interactions' ||
-				(root && (field === 'width' || field === 'height')) ||
-				same(getDesignOverrideValue(oldSource, field), getDesignOverrideValue(target, field)),
-		);
+		const overrides = (current.overrides ?? []).filter(field => !variant || !oldSource || field === 'text' || (field === 'textRuns' && current.overrides?.includes('text')) || field === 'name' || field === 'instance' || field === 'interactions' || (root && (field === 'width' || field === 'height')) || same(getDesignOverrideValue(oldSource, field), getDesignOverrideValue(target, field)));
 		let result = { ...current, sourceId: target.id, overrides };
-		if (root) {
-			const { sourceId: _source, ...rest } = result;
-			result = { ...rest, ...(current.sourceId ? { sourceId: current.sourceId } : {}) } as typeof result;
-		}
+		if (root) { const { sourceId: _source, ...rest } = result; result = { ...rest, ...(current.sourceId ? { sourceId: current.sourceId } : {}) } as typeof result; }
 		if ((current.kind === 'frame' || current.kind === 'group') && (target.kind === 'frame' || target.kind === 'group')) {
 			const oldLayers = oldSource?.kind === 'frame' || oldSource?.kind === 'group' ? oldSource.children : [];
 			const remaining = [...current.children];
@@ -182,23 +120,15 @@ export function remapDesignInstance(instance: Frame, source: Frame, previousSour
 					const original = oldLayers.find(layer => layer.id === candidate.sourceId) ?? candidate;
 					return original.kind === child.kind && (original.name ?? original.kind) === (child.name ?? child.kind);
 				});
-				if (index < 0) {
-					return [];
-				}
+				if (index < 0) { return []; }
 				const old = remaining.splice(index, 1)[0];
-				return [
-					match(
-						old,
-						child,
-						oldLayers.find(layer => layer.id === old.sourceId),
-					),
-				];
+				return [match(old, child, oldLayers.find(layer => layer.id === old.sourceId))];
 			});
 			result = { ...result, children } as typeof result;
 		}
 		return result;
 	};
-	return { ...(match(instance, source, previousSource, true) as Frame), instance: { componentId: source.id } };
+	return { ...match(instance, source, previousSource, true) as Frame, instance: { componentId: source.id } };
 }
 
 export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[]): Frame {
@@ -206,39 +136,23 @@ export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[
 	const unwrap = (node: DesignShape): DesignShape => {
 		const source = node.sourceId ? objects.get(node.sourceId) : undefined;
 		const { sourceId: _source, ...rest } = node;
-		const updated = {
-			...rest,
-			...(source?.sourceId ? { sourceId: source.sourceId } : {}),
-			overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])],
-		};
+		const updated = { ...rest, ...(source?.sourceId ? { sourceId: source.sourceId } : {}), overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])] };
 		return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(unwrap) } : updated;
 	};
 	const detach = (node: DesignShape, root: boolean): DesignShape => {
 		const { sourceId: _source, overrides: _overrides, ...rest } = node;
 		if (!root && rest.kind === 'frame' && rest.instance) {
 			const source = node.sourceId ? objects.get(node.sourceId) : undefined;
-			return {
-				...rest,
-				overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])].filter(field => field !== 'instance'),
-				children: node.overrides?.includes('instance') ? rest.children : rest.children.map(unwrap),
-			};
+			return { ...rest, overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])].filter(field => field !== 'instance'), children: node.overrides?.includes('instance') ? rest.children : rest.children.map(unwrap) };
 		}
-		if (rest.kind === 'frame') {
-			const { instance: _instance, ...frame } = rest;
-			return { ...frame, children: frame.children.map(child => detach(child, false)) };
-		}
-		if (rest.kind === 'group') {
-			return { ...rest, children: rest.children.map(child => detach(child, false)) };
-		}
+		if (rest.kind === 'frame') { const { instance: _instance, ...frame } = rest; return { ...frame, children: frame.children.map(child => detach(child, false)) }; }
+		if (rest.kind === 'group') { return { ...rest, children: rest.children.map(child => detach(child, false)) }; }
 		return rest;
 	};
 	return detach(shape, true) as Frame;
 }
 
 export function resetDesignOverrides(shape: DesignShape, field?: DesignOverride): DesignShape {
-	const updated = {
-		...shape,
-		overrides: field ? (shape.overrides ?? []).filter(value => value !== field && !(field === 'text' && value === 'textRuns')) : [],
-	};
+	const updated = { ...shape, overrides: field ? (shape.overrides ?? []).filter(value => value !== field && !(field === 'text' && value === 'textRuns')) : [] };
 	return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => resetDesignOverrides(child, field)) } : updated;
 }

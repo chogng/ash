@@ -6,5 +6,5 @@ export function invoke<TResult>(channel: string, params?: unknown): Promise<TRes
 }
 
 export function subscribe<T>(channel: string, listener: (value: T) => void): DisposableHandle {
-	return ipcRenderer.on(channel, value => listener(value as T));
+	return ipcRenderer.on(channel, (value) => listener(value as T));
 }

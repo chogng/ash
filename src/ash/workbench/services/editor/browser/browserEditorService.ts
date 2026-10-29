@@ -54,13 +54,13 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	get visibleEditors(): readonly IResourceEditorInput[] {
 		const state = this.editorPart.getEditorState();
-		const editors = this.editorPart.groups.flatMap(group => (this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []));
+		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);
 		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
 		return Object.freeze(editors);
 	}
 
 	get visibleEditorPanes(): readonly IEditorPane[] {
-		const panes = this.editorPart.groups.flatMap(group => (this.editorPart.isGroupVisible(group.id) && group.activePane ? [group.activePane] : []));
+		const panes = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activePane ? [group.activePane] : []);
 		if (this.editorPart.isModalEditorVisible && this.editorPart.activePane) panes.unshift(this.editorPart.activePane);
 		return panes;
 	}
@@ -79,12 +79,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	addGroup(location: IEditorGroup | EditorGroupId, direction: GroupDirection): IEditorGroup {
 		const reference = typeof location === 'number' ? location : location.id;
-		const directions = {
-			[GroupDirection.UP]: 'up',
-			[GroupDirection.DOWN]: 'down',
-			[GroupDirection.LEFT]: 'left',
-			[GroupDirection.RIGHT]: 'right',
-		} as const;
+		const directions = { [GroupDirection.UP]: 'up', [GroupDirection.DOWN]: 'down', [GroupDirection.LEFT]: 'left', [GroupDirection.RIGHT]: 'right' } as const;
 		return this.editorPart.addGroup(reference, directions[direction]);
 	}
 
@@ -122,11 +117,8 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		for (const { editor, groupId } of Array.isArray(editors) ? editors : [editors as IEditorIdentifier]) {
 			const group = this.editorPart.groups.find(group => group.id === groupId);
 			const result = await group?.saveEditor(editor, options);
-			if (result) {
-				saved.push(result);
-			} else {
-				success = false;
-			}
+			if (result) { saved.push(result); }
+			else { success = false; }
 		}
 		return { success, editors: saved };
 	}
@@ -135,11 +127,9 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		const { includeUntitled, excludeSticky, ...saveOptions } = options;
 		// Snapshot identities rather than activate tabs: retained panes own save
 		// participants and read-only recovery even when their group is hidden.
-		const editors = this.editorPart.groups.flatMap(group =>
-			group.editors
-				.filter(editor => editor.isDirty && (!excludeSticky || !editor.isSticky) && (includeUntitled || editor.input.resource.scheme !== Schemas.untitled))
-				.map(editor => ({ editor: editor.input, groupId: group.id })),
-		);
+		const editors = this.editorPart.groups.flatMap(group => group.editors
+			.filter(editor => editor.isDirty && (!excludeSticky || !editor.isSticky) && (includeUntitled || editor.input.resource.scheme !== Schemas.untitled))
+			.map(editor => ({ editor: editor.input, groupId: group.id })));
 		return this.save(editors, saveOptions);
 	}
 

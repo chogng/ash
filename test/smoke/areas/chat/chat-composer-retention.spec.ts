@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('creating another Chat keeps the existing composer and draft mounted', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const view = page.locator('.ash-chat-view-pane');
@@ -26,17 +26,15 @@ test('creating another Chat keeps the existing composer and draft mounted', { ta
 		const activeComposer = view.locator('.ash-chat:visible .ash-chat-input-part');
 		await expect(activeComposer.locator('.stanza-editor-input')).toBeFocused();
 		await expect(activeComposer.locator('.stanza-editor-line-text')).toHaveText('');
-		expect(
-			await monitor.evaluate(({ node, pane, removed, observer }) => {
-				for (const record of observer.takeRecords()) removed.push(...record.removedNodes);
-				return {
-					connected: pane.isConnected && node.isConnected,
-					hidden: pane.hidden,
-					removed: removed.some(removedNode => removedNode === pane || removedNode.contains(pane)),
-					draft: node.querySelector('.stanza-editor-line-text')?.textContent,
-				};
-			}),
-		).toEqual({ connected: true, hidden: true, removed: false, draft: 'retained Chat draft' });
+		expect(await monitor.evaluate(({ node, pane, removed, observer }) => {
+			for (const record of observer.takeRecords()) removed.push(...record.removedNodes);
+			return {
+				connected: pane.isConnected && node.isConnected,
+				hidden: pane.hidden,
+				removed: removed.some(removedNode => removedNode === pane || removedNode.contains(pane)),
+				draft: node.querySelector('.stanza-editor-line-text')?.textContent,
+			};
+		})).toEqual({ connected: true, hidden: true, removed: false, draft: 'retained Chat draft' });
 	} finally {
 		if (!page.isClosed()) await monitor.evaluate(({ observer }) => observer.disconnect());
 		await monitor.dispose();

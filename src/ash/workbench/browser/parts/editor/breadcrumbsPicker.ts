@@ -26,7 +26,9 @@ export class BreadcrumbsFilePicker extends Disposable {
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 	) {
 		super();
-		this.directory = element.kind === FileKind.Directory ? element.uri : dirname(element.uri);
+		this.directory = element.kind === FileKind.Directory
+			? element.uri
+			: dirname(element.uri);
 	}
 
 	async show(): Promise<void> {
@@ -34,19 +36,18 @@ export class BreadcrumbsFilePicker extends Disposable {
 		this.picker = picker;
 		this.pickerDisposables.add(picker);
 		picker.ariaLabel = localize('workbench.breadcrumbsPickerAriaLabel', 'Files in editor breadcrumb');
-		this.pickerDisposables.add(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
+		this.pickerDisposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
 
-				if (item.entry.kind === FileKind.Directory) {
-					void this.showDirectory(item.entry.resource).catch(reportDirectoryError);
-					return;
-				}
-				picker.hide();
-				void this.openFile(item.entry.resource).catch(reportOpenError);
-			}),
-		);
+			if (item.entry.kind === FileKind.Directory) {
+				void this.showDirectory(item.entry.resource).catch(reportDirectoryError);
+				return;
+			}
+			picker.hide();
+			void this.openFile(item.entry.resource).catch(reportOpenError);
+
+		}));
 		this.pickerDisposables.add(picker.onDidHide(() => this.dispose()));
 		await this.showDirectory(this.directory);
 		picker.show();
@@ -57,12 +58,16 @@ export class BreadcrumbsFilePicker extends Disposable {
 		const entries = await this.fileService.readDirectory(directory);
 		if (sequence !== this.readSequence || !this.picker) return;
 		this.directory = directory;
-		const sorted = [...entries].sort((left, right) => Number(right.kind === FileKind.Directory) - Number(left.kind === FileKind.Directory) || left.name.localeCompare(right.name));
+		const sorted = [...entries].sort((left, right) =>
+			Number(right.kind === FileKind.Directory) - Number(left.kind === FileKind.Directory)
+			|| left.name.localeCompare(right.name));
 		this.picker.placeholder = localize('workbench.breadcrumbsPickerPlaceholder', 'Select a file in {0}', directory.path);
 		this.picker.items = sorted.map(entry => ({
 			entry,
 			label: entry.name,
-			description: entry.kind === FileKind.Directory ? localize('workbench.breadcrumbsDirectory', 'Directory') : undefined,
+			description: entry.kind === FileKind.Directory
+				? localize('workbench.breadcrumbsDirectory', 'Directory')
+				: undefined,
 		}));
 		this.picker.value = '';
 	}
@@ -102,15 +107,14 @@ export class BreadcrumbsSymbolPicker extends Disposable {
 		picker.ariaLabel = localize('workbench.breadcrumbsSymbolPickerAriaLabel', 'Symbols in active editor');
 		picker.placeholder = localize('workbench.breadcrumbsSymbolPickerPlaceholder', 'Select a symbol (current: {0})', this.selected.name);
 		picker.items = this.symbols.flatMap(symbol => flattenSymbol(symbol));
-		this._register(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
+		this._register(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
 
-				picker.hide();
-				this.reveal(item.symbol.selectionRange);
-			}),
-		);
+			picker.hide();
+			this.reveal(item.symbol.selectionRange);
+
+		}));
 		this._register(picker.onDidHide(() => this.dispose()));
 		picker.show();
 	}

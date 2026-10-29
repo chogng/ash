@@ -17,10 +17,8 @@ class Picker extends Disposable {
 	selectedItems: readonly ITaskQuickPickEntry[] = [];
 	placeholder = '';
 	ariaLabel = '';
-	show(): void {}
-	hide(): void {
-		this.hidden.fire();
-	}
+	show(): void { }
+	hide(): void { this.hidden.fire(); }
 }
 
 suite('TaskQuickPick', () => {
@@ -31,25 +29,15 @@ suite('TaskQuickPick', () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
 		let catalog = [task];
-		const tasks = {
-			get tasks() {
-				return catalog;
-			},
-			onDidChangeTasks: changes.event,
-		} as unknown as ITaskService;
-		using controller = new TaskQuickPick(tasks => tasks, tasks, {
-			createQuickPick: () => picker,
-		} as unknown as IQuickInputService);
+		const tasks = { get tasks() { return catalog; }, onDidChangeTasks: changes.event } as unknown as ITaskService;
+		using controller = new TaskQuickPick(tasks => tasks, tasks, { createQuickPick: () => picker } as unknown as IQuickInputService);
 		const result = controller.show('Select task');
 		const removed = picker.items[0]!;
 		const replacement = { ...task, id: 'check', label: 'Check', command: 'check' };
 		catalog = [replacement];
 		changes.fire(catalog);
 		assert.equal(picker.ariaLabel, 'Select task');
-		assert.deepEqual(
-			picker.items.map(item => item.label),
-			['Check'],
-		);
+		assert.deepEqual(picker.items.map(item => item.label), ['Check']);
 		picker.selectedItems = [removed];
 		picker.accepted.fire();
 		assert.equal(picker.isDisposed, false);
@@ -59,28 +47,18 @@ suite('TaskQuickPick', () => {
 		assert.equal(picker.isDisposed, true);
 		catalog = [];
 		changes.fire(catalog);
-		assert.deepEqual(
-			picker.items.map(item => item.label),
-			['Check'],
-		);
+		assert.deepEqual(picker.items.map(item => item.label), ['Check']);
 	});
 
 	for (const action of ['cancel', 'dispose', 'template'] as const) {
 		test(`${action} settles selection and releases its listeners`, async () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
 			using picker = new Picker();
-			using controller = new TaskQuickPick(
-				tasks => tasks,
-				{ tasks: [task], onDidChangeTasks: changes.event } as unknown as ITaskService,
-				{ createQuickPick: () => picker } as unknown as IQuickInputService,
-			);
+			using controller = new TaskQuickPick(tasks => tasks, { tasks: [task], onDidChangeTasks: changes.event } as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 			const result = controller.show('Configure task', { label: 'Create configuration', task: null });
 			if (action === 'cancel') picker.hide();
 			else if (action === 'dispose') controller.dispose();
-			else {
-				picker.selectedItems = [picker.items[1]!];
-				picker.accepted.fire();
-			}
+			else { picker.selectedItems = [picker.items[1]!]; picker.accepted.fire(); }
 			assert.equal(await result, action === 'template' ? null : undefined);
 			assert.equal(picker.isDisposed, true);
 		});
@@ -90,16 +68,9 @@ suite('TaskQuickPick', () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
 		let catalog = [task];
-		using controller = new TaskQuickPick(
-			tasks => tasks,
-			{
-				get tasks() {
-					return catalog;
-				},
-				onDidChangeTasks: changes.event,
-			} as unknown as ITaskService,
-			{ createQuickPick: () => picker } as unknown as IQuickInputService,
-		);
+		using controller = new TaskQuickPick(tasks => tasks, {
+			get tasks() { return catalog; }, onDidChangeTasks: changes.event,
+		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 		const result = controller.show('Configure task');
 		const oldRow = picker.items[0]!;
 		const current = { ...task, cwd: '/updated', detail: 'Updated configuration' };
@@ -114,16 +85,9 @@ suite('TaskQuickPick', () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
 		let catalog = [task];
-		using controller = new TaskQuickPick(
-			tasks => tasks.filter(task => task.group === 'build'),
-			{
-				get tasks() {
-					return catalog;
-				},
-				onDidChangeTasks: changes.event,
-			} as unknown as ITaskService,
-			{ createQuickPick: () => picker } as unknown as IQuickInputService,
-		);
+		using controller = new TaskQuickPick(tasks => tasks.filter(task => task.group === 'build'), {
+			get tasks() { return catalog; }, onDidChangeTasks: changes.event,
+		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 		const result = controller.show('Build task');
 		const oldRow = picker.items[0]!;
 		catalog = [{ ...task, group: 'test' }];

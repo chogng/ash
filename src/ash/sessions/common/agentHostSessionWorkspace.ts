@@ -8,21 +8,11 @@ export function agentHostSessionWorkspaceKey(workspace: ISessionWorkspace | null
 }
 
 export function buildAgentHostSessionWorkspace(target: SessionCreateParams['executionTarget'] | undefined): ISessionWorkspace | null {
-	if (!target) {
-		return null;
-	}
+	if (!target) { return null; }
 	// Keep SSH aliases distinct from the local sentinel and opaque provider authorities.
-	const authorityId =
-		target.type === 'local'
-			? 'local'
-			: target.type === 'ssh'
-				? createSshRemoteAuthority(target.host).authority
-				: `provider+${encodeURIComponent(JSON.stringify([target.providerId, target.workspace]))}`;
-	return Object.freeze({
-		authorityId,
-		root: target.root,
-		...(target.type === 'provider' ? { runtime: Object.freeze({ providerId: target.providerId, workspace: target.workspace }) } : {}),
-	});
+	const authorityId = target.type === 'local' ? 'local' : target.type === 'ssh' ? createSshRemoteAuthority(target.host).authority
+		: `provider+${encodeURIComponent(JSON.stringify([target.providerId, target.workspace]))}`;
+	return Object.freeze({ authorityId, root: target.root, ...(target.type === 'provider' ? { runtime: Object.freeze({ providerId: target.providerId, workspace: target.workspace }) } : {}) });
 }
 
 /** Undefined means not hydrated; null is a hydrated Thread without filesystem access. */

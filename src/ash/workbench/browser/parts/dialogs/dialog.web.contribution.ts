@@ -4,30 +4,25 @@ import type { IDialogHandler, IDialogOutcome } from '../../../../platform/dialog
 import { IDialogsModel, IWorkbenchDialogHandler, type IDialogViewItem } from '../../../common/dialogs.js';
 import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 
-type DialogPresentationOutcome = { readonly kind: 'result'; readonly result: IDialogOutcome } | { readonly kind: 'error'; readonly error: unknown };
+type DialogPresentationOutcome =
+	| { readonly kind: 'result'; readonly result: IDialogOutcome; }
+	| { readonly kind: 'error'; readonly error: unknown; };
 
 /** Presents a window's dialog requests in queue order. */
 export class DialogHandlerContribution extends Disposable implements IWorkbenchContribution {
-	private active: { readonly item: IDialogViewItem; readonly controller: AbortController } | undefined;
+	private active: { readonly item: IDialogViewItem; readonly controller: AbortController; } | undefined;
 
-	constructor(
-		private readonly model: IDialogsModel,
-		private readonly handler: IDialogHandler,
-	) {
+	constructor(private readonly model: IDialogsModel, private readonly handler: IDialogHandler) {
 		super();
-		this._register(
-			toDisposable(() => {
-				const active = this.active;
-				this.active = undefined;
-				active?.controller.abort();
-				active?.item.cancel();
-			}),
-		);
-		this._register(
-			model.onDidCloseDialog(({ item }) => {
-				if (this.active?.item === item) this.active.controller.abort();
-			}),
-		);
+		this._register(toDisposable(() => {
+			const active = this.active;
+			this.active = undefined;
+			active?.controller.abort();
+			active?.item.cancel();
+		}));
+		this._register(model.onDidCloseDialog(({ item }) => {
+			if (this.active?.item === item) this.active.controller.abort();
+		}));
 		this._register(model.onWillShowDialog(() => this.processDialogs()));
 		this.processDialogs();
 	}
@@ -41,7 +36,7 @@ export class DialogHandlerContribution extends Disposable implements IWorkbenchC
 		void this.show(active);
 	}
 
-	private async show(active: { readonly item: IDialogViewItem; readonly controller: AbortController }): Promise<void> {
+	private async show(active: { readonly item: IDialogViewItem; readonly controller: AbortController; }): Promise<void> {
 		let outcome: DialogPresentationOutcome;
 		try {
 			outcome = {
@@ -66,6 +61,9 @@ if (environment.runtime !== 'electron') {
 	registerWorkbenchContribution(
 		'workbench.contrib.dialogHandler',
 		WorkbenchPhase.BlockStartup,
-		accessor => new DialogHandlerContribution(accessor.get(IDialogsModel), accessor.get(IWorkbenchDialogHandler)),
+		accessor => new DialogHandlerContribution(
+			accessor.get(IDialogsModel),
+			accessor.get(IWorkbenchDialogHandler),
+		),
 	);
 }

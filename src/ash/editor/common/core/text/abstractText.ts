@@ -12,44 +12,21 @@ export abstract class AbstractText {
 	abstract readonly length: TextLength;
 	abstract getValueOfRange(range: Range): string;
 
-	get endPositionExclusive(): Position {
-		return this.length.addToPosition(new Position(1, 1));
-	}
-	get lineRange(): LineRange {
-		return this.length.toLineRange();
-	}
-	getValue(): string {
-		return this.getValueOfRange(this.length.toRange());
-	}
-	getValueOfOffsetRange(range: OffsetRange): string {
-		return this.getValueOfRange(this.getTransformer().getRange(range));
-	}
-	getLineLength(lineNumber: number): number {
-		return this.getLineAt(lineNumber).length;
-	}
-	getLineAt(lineNumber: number): string {
-		return this.getValueOfRange(new Range(lineNumber, 1, lineNumber, Number.MAX_SAFE_INTEGER));
-	}
-	getLines(): string[] {
-		return splitLines(this.getValue());
-	}
-	getLinesOfRange(range: LineRange): string[] {
-		return range.mapToLineArray(lineNumber => this.getLineAt(lineNumber));
-	}
-	getTransformer(): PositionOffsetTransformerBase {
-		return (this._transformer ??= new PositionOffsetTransformer(this.getValue()));
-	}
-	equals(other: AbstractText): boolean {
-		return this === other || this.getValue() === other.getValue();
-	}
+	get endPositionExclusive(): Position { return this.length.addToPosition(new Position(1, 1)); }
+	get lineRange(): LineRange { return this.length.toLineRange(); }
+	getValue(): string { return this.getValueOfRange(this.length.toRange()); }
+	getValueOfOffsetRange(range: OffsetRange): string { return this.getValueOfRange(this.getTransformer().getRange(range)); }
+	getLineLength(lineNumber: number): number { return this.getLineAt(lineNumber).length; }
+	getLineAt(lineNumber: number): string { return this.getValueOfRange(new Range(lineNumber, 1, lineNumber, Number.MAX_SAFE_INTEGER)); }
+	getLines(): string[] { return splitLines(this.getValue()); }
+	getLinesOfRange(range: LineRange): string[] { return range.mapToLineArray(lineNumber => this.getLineAt(lineNumber)); }
+	getTransformer(): PositionOffsetTransformerBase { return this._transformer ??= new PositionOffsetTransformer(this.getValue()); }
+	equals(other: AbstractText): boolean { return this === other || this.getValue() === other.getValue(); }
 }
 
 /** An AbstractText view backed by a model-like line source. */
 export class LineBasedText extends AbstractText {
-	constructor(
-		private readonly getLineContent: (lineNumber: number) => string,
-		readonly lineCount: number,
-	) {
+	constructor(private readonly getLineContent: (lineNumber: number) => string, readonly lineCount: number) {
 		super();
 		if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError('A text source must contain at least one line');
 	}
@@ -66,9 +43,7 @@ export class LineBasedText extends AbstractText {
 		return `${value}\n${this.getLineContent(range.endLineNumber).slice(0, range.endColumn - 1)}`;
 	}
 
-	override getLineLength(lineNumber: number): number {
-		return this.getLineContent(lineNumber).length;
-	}
+	override getLineLength(lineNumber: number): number { return this.getLineContent(lineNumber).length; }
 }
 
 export class ArrayText extends LineBasedText {
@@ -86,15 +61,9 @@ export class StringText extends AbstractText {
 		this._t = new PositionOffsetTransformer(this.value);
 	}
 
-	get length(): TextLength {
-		return this._t.textLength;
-	}
-	getValueOfRange(range: Range): string {
-		return this._t.getOffsetRange(range).substring(this.value);
-	}
-	override getTransformer() {
-		return this._t;
-	}
+	get length(): TextLength { return this._t.textLength; }
+	getValueOfRange(range: Range): string { return this._t.getOffsetRange(range).substring(this.value); }
+	override getTransformer() { return this._t; }
 }
 
 function validateLineRange(range: Range, lineCount: number): void {

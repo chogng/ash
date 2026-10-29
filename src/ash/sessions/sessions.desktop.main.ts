@@ -51,10 +51,7 @@ registerAction2(ReloadWindowAction);
 registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
 
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
-	command: {
-		id: 'workbench.action.closeWindow',
-		title: localize2({ bundle: 'ash', key: 'workbench.closeWindow' }, 'Close Window'),
-	},
+	command: { id: 'workbench.action.closeWindow', title: localize2({ bundle: 'ash', key: 'workbench.closeWindow' }, 'Close Window') },
 	group: '6_close',
 	order: 5,
 });

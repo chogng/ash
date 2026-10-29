@@ -3,18 +3,11 @@ import { contrastBorder, foreground, mutedForeground, selectionBackground, selec
 import { listHoverBackground } from './listColors.js';
 
 const owner = 'platform.theme.input';
-const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string => registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
-const alias = (id: string, value: string, description: string): string =>
-	registerColor(
-		id,
-		{
-			dark: value,
-			light: value,
-			hcDark: value,
-			hcLight: value,
-		},
-		{ description, owner },
-	);
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
+const alias = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, hcDark: value, hcLight: value,
+}, { description, owner });
 
 export const inputForeground = alias('input.foreground', foreground, 'Input text foreground.');
 export const inputBackground = color('input.background', '#313131', '#ffffff', '#000000', '#ffffff', 'Input background.');
@@ -28,16 +21,10 @@ export const buttonHoverBackground = alias('button.hoverBackground', listHoverBa
 export const buttonActiveBackground = color('button.activeBackground', '#37373d', '#dcdcdc', '#333333', '#dddddd', 'Pressed button background.');
 export const buttonSecondaryBackground = color('button.secondaryBackground', '#3a3d41', '#e5e5e5', '#000000', '#ffffff', 'Secondary button background.');
 export const primaryButtonForeground = color('button.primaryForeground', '#ffffff', '#ffffff', selectionForeground, selectionForeground, 'Primary button foreground.');
-export const primaryButtonBackground = registerColor(
-	'button.primaryBackground',
-	{
-		dark: buttonBackground,
-		light: buttonBackground,
-		hcDark: selectionBackground,
-		hcLight: selectionBackground,
-	},
-	{ description: 'Primary button background.', owner },
-);
+export const primaryButtonBackground = registerColor('button.primaryBackground', {
+	dark: buttonBackground, light: buttonBackground,
+	hcDark: selectionBackground, hcLight: selectionBackground,
+}, { description: 'Primary button background.', owner });
 export const primaryButtonHoverBackground = color('button.primaryHoverBackground', '#1177bb', '#006cbe', selectionBackground, selectionBackground, 'Hovered primary button background.');
 
 export const keybindingLabelForeground = color('keybindingLabel.foreground', '#cccccc', '#555555', foreground, foreground, 'Keybinding label foreground.');

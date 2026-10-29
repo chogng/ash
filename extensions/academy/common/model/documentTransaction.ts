@@ -1,17 +1,4 @@
-import {
-	collectDocumentNodeIds,
-	containsDocumentNode,
-	createDocumentNode,
-	findDocumentNode,
-	freezeDocumentNode,
-	insertDocumentNode,
-	removeDocumentNode,
-	replaceDocumentNode,
-	type DocumentAttributes,
-	type DocumentMark,
-	type DocumentNode,
-	type DocumentNodeId,
-} from './document.js';
+import { collectDocumentNodeIds, containsDocumentNode, createDocumentNode, findDocumentNode, freezeDocumentNode, insertDocumentNode, removeDocumentNode, replaceDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from './document.js';
 import { type DocumentSchema } from './documentSchema.js';
 import { nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from '../core/documentSelection.js';
 
@@ -102,8 +89,7 @@ export class DocumentTransaction {
 		this.selectionSet = options.selectionSet ?? options.selection !== undefined;
 		this.storedMarks = options.storedMarks === undefined ? undefined : cloneMarks(options.storedMarks);
 		this.storedMarksSet = options.storedMarksSet ?? options.storedMarks !== undefined;
-		if (options.historyGroup !== undefined && (typeof options.historyGroup !== 'string' || options.historyGroup.length === 0))
-			throw new TypeError('Document history group must be a non-empty string');
+		if (options.historyGroup !== undefined && (typeof options.historyGroup !== 'string' || options.historyGroup.length === 0)) throw new TypeError('Document history group must be a non-empty string');
 		this.historyGroup = options.historyGroup;
 		this.metadata = Object.freeze(normalizeMetadata(options.metadata));
 	}
@@ -137,55 +123,20 @@ export class DocumentTransaction {
 	}
 
 	withSelection(selection: DocumentSelection | undefined): DocumentTransaction {
-		return new DocumentTransaction(this.steps, {
-			addToHistory: this.addToHistory,
-			label: this.label,
-			selection,
-			selectionSet: true,
-			storedMarks: this.storedMarks,
-			storedMarksSet: this.storedMarksSet,
-			historyGroup: this.historyGroup,
-			metadata: this.metadata,
-		});
+		return new DocumentTransaction(this.steps, { addToHistory: this.addToHistory, label: this.label, selection, selectionSet: true, storedMarks: this.storedMarks, storedMarksSet: this.storedMarksSet, historyGroup: this.historyGroup, metadata: this.metadata });
 	}
 
 	/** Sets or clears the marks that should be used for the next text insertion. */
 	withStoredMarks(storedMarks: readonly DocumentMark[] | undefined): DocumentTransaction {
-		return new DocumentTransaction(this.steps, {
-			addToHistory: this.addToHistory,
-			label: this.label,
-			selection: this.selection,
-			selectionSet: this.selectionSet,
-			storedMarks,
-			storedMarksSet: true,
-			historyGroup: this.historyGroup,
-			metadata: this.metadata,
-		});
+		return new DocumentTransaction(this.steps, { addToHistory: this.addToHistory, label: this.label, selection: this.selection, selectionSet: this.selectionSet, storedMarks, storedMarksSet: true, historyGroup: this.historyGroup, metadata: this.metadata });
 	}
 
 	withHistoryGroup(historyGroup: string): DocumentTransaction {
-		return new DocumentTransaction(this.steps, {
-			addToHistory: this.addToHistory,
-			label: this.label,
-			selection: this.selection,
-			selectionSet: this.selectionSet,
-			storedMarks: this.storedMarks,
-			storedMarksSet: this.storedMarksSet,
-			historyGroup,
-			metadata: this.metadata,
-		});
+		return new DocumentTransaction(this.steps, { addToHistory: this.addToHistory, label: this.label, selection: this.selection, selectionSet: this.selectionSet, storedMarks: this.storedMarks, storedMarksSet: this.storedMarksSet, historyGroup, metadata: this.metadata });
 	}
 
 	withoutHistory(): DocumentTransaction {
-		return new DocumentTransaction(this.steps, {
-			addToHistory: false,
-			label: this.label,
-			selection: this.selection,
-			selectionSet: this.selectionSet,
-			storedMarks: this.storedMarks,
-			storedMarksSet: this.storedMarksSet,
-			metadata: this.metadata,
-		});
+		return new DocumentTransaction(this.steps, { addToHistory: false, label: this.label, selection: this.selection, selectionSet: this.selectionSet, storedMarks: this.storedMarks, storedMarksSet: this.storedMarksSet, metadata: this.metadata });
 	}
 
 	/** Returns one semantic value attached by a command or input adapter. */
@@ -196,29 +147,11 @@ export class DocumentTransaction {
 	/** Returns a new transaction with one semantic value attached or replaced. */
 	withMeta<T>(key: DocumentTransactionMetaKey, value: T): DocumentTransaction {
 		validateMetaKey(key);
-		return new DocumentTransaction(this.steps, {
-			addToHistory: this.addToHistory,
-			label: this.label,
-			selection: this.selection,
-			selectionSet: this.selectionSet,
-			storedMarks: this.storedMarks,
-			storedMarksSet: this.storedMarksSet,
-			historyGroup: this.historyGroup,
-			metadata: [...this.metadata.filter(entry => entry.key !== key), { key, value }],
-		});
+		return new DocumentTransaction(this.steps, { addToHistory: this.addToHistory, label: this.label, selection: this.selection, selectionSet: this.selectionSet, storedMarks: this.storedMarks, storedMarksSet: this.storedMarksSet, historyGroup: this.historyGroup, metadata: [...this.metadata.filter(entry => entry.key !== key), { key, value }] });
 	}
 
 	private append(step: DocumentStep): DocumentTransaction {
-		return new DocumentTransaction([...this.steps, step], {
-			addToHistory: this.addToHistory,
-			label: this.label,
-			selection: this.selection,
-			selectionSet: this.selectionSet,
-			storedMarks: this.storedMarks,
-			storedMarksSet: this.storedMarksSet,
-			historyGroup: this.historyGroup,
-			metadata: this.metadata,
-		});
+		return new DocumentTransaction([...this.steps, step], { addToHistory: this.addToHistory, label: this.label, selection: this.selection, selectionSet: this.selectionSet, storedMarks: this.storedMarks, storedMarksSet: this.storedMarksSet, historyGroup: this.historyGroup, metadata: this.metadata });
 	}
 }
 
@@ -258,7 +191,12 @@ export class DocumentTransactionMapping {
 }
 
 /** Applies a transaction immutably and calculates an inverse for undo. */
-export function applyDocumentTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction, selection?: DocumentSelection): AppliedDocumentTransaction {
+export function applyDocumentTransaction(
+	document: DocumentNode,
+	schema: DocumentSchema,
+	transaction: DocumentTransaction,
+	selection?: DocumentSelection,
+): AppliedDocumentTransaction {
 	schema.validate(document);
 	let current = document;
 	let mappedSelection = selection;
@@ -286,12 +224,7 @@ export function applyDocumentTransaction(document: DocumentNode, schema: Documen
 			case 'deleteNode': {
 				const removed = removeDocumentNode(current, step.nodeId);
 				current = removed.document;
-				inverse.unshift({
-					kind: 'insertNode',
-					parentId: removed.parentId,
-					index: removed.index,
-					node: removed.removed,
-				});
+				inverse.unshift({ kind: 'insertNode', parentId: removed.parentId, index: removed.index, node: removed.removed });
 				break;
 			}
 			case 'moveNode': {
@@ -300,25 +233,13 @@ export function applyDocumentTransaction(document: DocumentNode, schema: Documen
 				if (containsDocumentNode(location.node, step.parentId)) throw new RangeError('A document node cannot be moved into its own subtree');
 				const removed = removeDocumentNode(current, step.nodeId);
 				current = insertDocumentNode(removed.document, step.parentId, step.index, removed.removed);
-				inverse.unshift({
-					kind: 'moveNode',
-					nodeId: step.nodeId,
-					parentId: removed.parentId,
-					index: removed.index,
-				});
+				inverse.unshift({ kind: 'moveNode', nodeId: step.nodeId, parentId: removed.parentId, index: removed.index });
 				break;
 			}
 			case 'setNodeAttributes': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location) throw new RangeError(`Document node '${step.nodeId}' does not exist`);
-				const replacement = createDocumentNode({
-					id: location.node.id,
-					type: location.node.type,
-					attrs: step.attrs,
-					content: location.node.content,
-					marks: location.node.marks,
-					...(location.node.text === undefined ? {} : { text: location.node.text }),
-				});
+				const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: step.attrs, content: location.node.content, marks: location.node.marks, ...(location.node.text === undefined ? {} : { text: location.node.text }) });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
 				inverse.unshift({ kind: 'setNodeAttributes', nodeId: step.nodeId, attrs: location.node.attrs });
 				break;
@@ -326,14 +247,7 @@ export function applyDocumentTransaction(document: DocumentNode, schema: Documen
 			case 'setNodeMarks': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location || location.node.text === undefined) throw new RangeError(`Document node '${step.nodeId}' is not a text node`);
-				const replacement = createDocumentNode({
-					id: location.node.id,
-					type: location.node.type,
-					attrs: location.node.attrs,
-					content: location.node.content,
-					marks: step.marks,
-					text: location.node.text,
-				});
+				const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: location.node.attrs, content: location.node.content, marks: step.marks, text: location.node.text });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
 				inverse.unshift({ kind: 'setNodeMarks', nodeId: step.nodeId, marks: location.node.marks });
 				break;
@@ -341,21 +255,9 @@ export function applyDocumentTransaction(document: DocumentNode, schema: Documen
 			case 'setNodeType': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location) throw new RangeError(`Document node '${step.nodeId}' does not exist`);
-				const replacement = createDocumentNode({
-					id: location.node.id,
-					type: step.type,
-					attrs: step.attrs,
-					content: location.node.content,
-					marks: location.node.marks,
-					...(location.node.text === undefined ? {} : { text: location.node.text }),
-				});
+				const replacement = createDocumentNode({ id: location.node.id, type: step.type, attrs: step.attrs, content: location.node.content, marks: location.node.marks, ...(location.node.text === undefined ? {} : { text: location.node.text }) });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
-				inverse.unshift({
-					kind: 'setNodeType',
-					nodeId: step.nodeId,
-					type: location.node.type,
-					attrs: location.node.attrs,
-				});
+				inverse.unshift({ kind: 'setNodeType', nodeId: step.nodeId, type: location.node.type, attrs: location.node.attrs });
 				break;
 			}
 		}
@@ -379,44 +281,27 @@ export function applyDocumentTransaction(document: DocumentNode, schema: Documen
 	// not change, retain the original linear offsets across the new run identities.
 	for (const comment of document.content.filter(node => node.type === 'reviewComment' && node.attrs.anchor)) {
 		if (transaction.steps.some(step => step.kind === 'setNodeAttributes' && step.nodeId === comment.id)) continue;
-		const next = findDocumentNode(current, comment.id)?.node;
-		if (!next) continue;
-		const original = JSON.parse(String(comment.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text' }>;
-		const mapped = next.attrs.anchor ? (JSON.parse(String(next.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text' }>) : undefined;
+		const next = findDocumentNode(current, comment.id)?.node; if (!next) continue;
+		const original = JSON.parse(String(comment.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }>;
+		const mapped = next.attrs.anchor ? JSON.parse(String(next.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }> : undefined;
 		const stable = (point: DocumentPoint): DocumentPoint | undefined => {
-			const block = findDocumentNode(document, point.nodeId)?.parent,
-				after = block && findDocumentNode(current, block.id)?.node;
+			const block = findDocumentNode(document, point.nodeId)?.parent, after = block && findDocumentNode(current, block.id)?.node;
 			const value = (node: DocumentNode) => node.content.map(child => child.text ?? '\uFFFC').join('');
 			if (!block || !after || value(block) !== value(after)) return undefined;
 			let offset = point.offset;
-			for (const child of block.content) {
-				if (child.id === point.nodeId) break;
-				offset += child.text?.length ?? 1;
-			}
-			for (const child of after.content) {
-				if (child.text !== undefined && offset <= child.text.length) return { nodeId: child.id, offset };
-				offset -= child.text?.length ?? 1;
-			}
+			for (const child of block.content) { if (child.id === point.nodeId) break; offset += child.text?.length ?? 1; }
+			for (const child of after.content) { if (child.text !== undefined && offset <= child.text.length) return { nodeId: child.id, offset }; offset -= child.text?.length ?? 1; }
 			return undefined;
 		};
-		const anchor = stable(original.anchor) ?? mapped?.anchor,
-			head = stable(original.head) ?? mapped?.head;
+		const anchor = stable(original.anchor) ?? mapped?.anchor, head = stable(original.head) ?? mapped?.head;
 		if (!anchor || !head) continue;
 		const attrs = { ...next.attrs, anchor: JSON.stringify(textSelection(anchor, head)) };
-		if (attrs.anchor !== next.attrs.anchor) {
-			if (!anchors.has(comment.id)) anchors.set(comment.id, comment.attrs);
-			current = replaceDocumentNode(current, comment.id, createDocumentNode({ ...next, attrs }));
-		}
+		if (attrs.anchor !== next.attrs.anchor) { if (!anchors.has(comment.id)) anchors.set(comment.id, comment.attrs); current = replaceDocumentNode(current, comment.id, createDocumentNode({ ...next, attrs })); }
 	}
 
 	for (const [nodeId, attrs] of anchors) if (findDocumentNode(current, nodeId)) inverse.push({ kind: 'setNodeAttributes', nodeId, attrs });
 	schema.validate(current);
-	return Object.freeze({
-		document: current,
-		inverse: new DocumentTransaction(inverse, { addToHistory: false, label: transaction.label }),
-		selection: mappedSelection,
-		mapping: new DocumentTransactionMapping(mapping),
-	});
+	return Object.freeze({ document: current, inverse: new DocumentTransaction(inverse, { addToHistory: false, label: transaction.label }), selection: mappedSelection, mapping: new DocumentTransactionMapping(mapping) });
 }
 
 /** Maps an identity-based selection through one already-applied document step. */
@@ -434,16 +319,13 @@ function mapDocumentPoint(point: DocumentPoint, before: DocumentNode, after: Doc
 		const replacement = findDocumentNode(after, step.nodeId)?.node;
 		if (replacement?.text !== undefined) {
 			const insertedLength = normalizeText(step.text).length;
-			const offset =
-				step.from === step.to
-					? point.offset < step.from
-						? point.offset
-						: point.offset + insertedLength
-					: point.offset <= step.from
-						? point.offset
-						: point.offset >= step.to
-							? point.offset + insertedLength - (step.to - step.from)
-							: step.from + insertedLength;
+			const offset = step.from === step.to
+				? point.offset < step.from ? point.offset : point.offset + insertedLength
+				: point.offset <= step.from
+					? point.offset
+					: point.offset >= step.to
+						? point.offset + insertedLength - (step.to - step.from)
+						: step.from + insertedLength;
 			return { nodeId: replacement.id, offset: Math.max(0, Math.min(replacement.text.length, offset)) };
 		}
 		return findFallbackTextPoint(before, after, step.nodeId);
@@ -501,11 +383,15 @@ interface AppliedReplaceText {
 	readonly inverse: DocumentStep;
 }
 
-function applyReplaceText(step: ReplaceTextStep, schema: DocumentSchema, document: DocumentNode, callback: (result: AppliedReplaceText) => void): void {
+function applyReplaceText(
+	step: ReplaceTextStep,
+	schema: DocumentSchema,
+	document: DocumentNode,
+	callback: (result: AppliedReplaceText) => void,
+): void {
 	const location = findDocumentNode(document, step.nodeId);
 	if (!location || location.node.text === undefined) throw new RangeError(`Document node '${step.nodeId}' is not a text node`);
-	if (!Number.isSafeInteger(step.from) || !Number.isSafeInteger(step.to) || step.from < 0 || step.to < step.from || step.to > location.node.text.length)
-		throw new RangeError(`Text replacement range must satisfy 0 <= from <= to <= ${location.node.text.length}`);
+	if (!Number.isSafeInteger(step.from) || !Number.isSafeInteger(step.to) || step.from < 0 || step.to < step.from || step.to > location.node.text.length) throw new RangeError(`Text replacement range must satisfy 0 <= from <= to <= ${location.node.text.length}`);
 	if (typeof step.text !== 'string') throw new TypeError('Text replacement must contain a string');
 	const text = normalizeText(step.text);
 	const replacedText = location.node.text.slice(step.from, step.to);
@@ -513,32 +399,12 @@ function applyReplaceText(step: ReplaceTextStep, schema: DocumentSchema, documen
 	if (nextText.length === 0) {
 		if (!location.parent) throw new RangeError('The document root cannot be a text node');
 		const removed = removeDocumentNode(document, step.nodeId);
-		callback({
-			document: removed.document,
-			inverse: { kind: 'insertNode', parentId: removed.parentId, index: removed.index, node: location.node },
-		});
+		callback({ document: removed.document, inverse: { kind: 'insertNode', parentId: removed.parentId, index: removed.index, node: location.node } });
 		return;
 	}
 	const replacementMarks = step.marks ?? location.node.marks;
-	const replacement = createDocumentNode({
-		id: location.node.id,
-		type: location.node.type,
-		attrs: location.node.attrs,
-		content: location.node.content,
-		marks: replacementMarks,
-		text: nextText,
-	});
-	callback({
-		document: replaceDocumentNode(document, step.nodeId, replacement),
-		inverse: {
-			kind: 'replaceText',
-			nodeId: step.nodeId,
-			from: step.from,
-			to: step.from + text.length,
-			text: replacedText,
-			marks: location.node.marks,
-		},
-	});
+	const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: location.node.attrs, content: location.node.content, marks: replacementMarks, text: nextText });
+	callback({ document: replaceDocumentNode(document, step.nodeId, replacement), inverse: { kind: 'replaceText', nodeId: step.nodeId, from: step.from, to: step.from + text.length, text: replacedText, marks: location.node.marks } });
 	schema.validateFragment(replacement);
 }
 
@@ -550,30 +416,13 @@ function hasAnyNodeId(document: DocumentNode, node: DocumentNode): boolean {
 
 function cloneStep(step: DocumentStep): DocumentStep {
 	switch (step.kind) {
-		case 'replaceText':
-			return Object.freeze({
-				...step,
-				...(step.marks === undefined
-					? {}
-					: {
-							marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))),
-						}),
-			});
-		case 'insertNode':
-			return Object.freeze({ ...step });
-		case 'deleteNode':
-			return Object.freeze({ ...step });
-		case 'moveNode':
-			return Object.freeze({ ...step });
-		case 'setNodeAttributes':
-			return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
-		case 'setNodeMarks':
-			return Object.freeze({
-				...step,
-				marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))),
-			});
-		case 'setNodeType':
-			return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
+		case 'replaceText': return Object.freeze({ ...step, ...(step.marks === undefined ? {} : { marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) }) });
+		case 'insertNode': return Object.freeze({ ...step });
+		case 'deleteNode': return Object.freeze({ ...step });
+		case 'moveNode': return Object.freeze({ ...step });
+		case 'setNodeAttributes': return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
+		case 'setNodeMarks': return Object.freeze({ ...step, marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) });
+		case 'setNodeType': return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
 	}
 }
 
@@ -597,6 +446,5 @@ function normalizeMetadata(metadata: readonly DocumentTransactionMetaEntry[] | u
 }
 
 function validateMetaKey(key: DocumentTransactionMetaKey): void {
-	if ((typeof key !== 'string' && typeof key !== 'symbol') || (typeof key === 'string' && key.length === 0))
-		throw new TypeError('Document transaction metadata keys require a non-empty string or symbol');
+	if ((typeof key !== 'string' && typeof key !== 'symbol') || (typeof key === 'string' && key.length === 0)) throw new TypeError('Document transaction metadata keys require a non-empty string or symbol');
 }

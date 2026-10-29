@@ -12,21 +12,16 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 		const windowHandle = await application.browserWindow(page);
 		const windowId = await windowHandle.evaluate(window => window.id);
 		const result = await page.evaluate(async windowId => {
-			const bridge = (
-				globalThis as unknown as {
-					readonly ash: {
-						readonly ipcRenderer: {
-							invoke(channel: string, params: unknown): Promise<unknown>;
-							on(channel: string, listener: (value: unknown) => void): { dispose(): void };
-						};
+			const bridge = (globalThis as unknown as {
+				readonly ash: {
+					readonly ipcRenderer: {
+						invoke(channel: string, params: unknown): Promise<unknown>;
+						on(channel: string, listener: (value: unknown) => void): { dispose(): void; };
 					};
-				}
-			).ash.ipcRenderer;
+				};
+			}).ash.ipcRenderer;
 			const channel = 'ash:window:operation';
-			const windows = (await bridge.invoke(channel, { kind: 'list' })) as readonly {
-				readonly id: number;
-				readonly focused: boolean;
-			}[];
+			const windows = await bridge.invoke(channel, { kind: 'list' }) as readonly { readonly id: number; readonly focused: boolean; }[];
 			const focused = windows.find(window => window.id === windowId);
 			if (!focused) throw new Error('Caller window is missing from the window list');
 			await bridge.invoke(channel, { kind: 'focus', windowId: focused.id });
@@ -53,27 +48,11 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 			} catch {
 				rejected = true;
 			}
-			return {
-				count: windows.length,
-				zoomNotification,
-				changedZoom,
-				changedAlwaysOnTop,
-				zoom,
-				alwaysOnTop,
-				rejected,
-			};
+			return { count: windows.length, zoomNotification, changedZoom, changedAlwaysOnTop, zoom, alwaysOnTop, rejected };
 		}, windowId);
 
 		await waitForElectronWindowState(application, page, { focused: true });
-		expect(result).toEqual({
-			count: windowKind === 'Agents' ? 2 : 1,
-			zoomNotification: 1,
-			changedZoom: 1,
-			changedAlwaysOnTop: true,
-			zoom: 0,
-			alwaysOnTop: false,
-			rejected: true,
-		});
+		expect(result).toEqual({ count: windowKind === 'Agents' ? 2 : 1, zoomNotification: 1, changedZoom: 1, changedAlwaysOnTop: true, zoom: 0, alwaysOnTop: false, rejected: true });
 	});
 }
 
@@ -85,12 +64,8 @@ focusTest('window picker data includes the Agents window and can focus it', { ta
 		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
 		await waitForElectronWindowState(application, childPage, { focused: true });
 		const windows = await workbench.page.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
-			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; focused: boolean }[]>;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; focused: boolean; }[]>;
 		});
 		expect(windows).toHaveLength(2);
 		const agents = windows.find(window => window.id === agentsWindowId);
@@ -99,20 +74,12 @@ focusTest('window picker data includes the Agents window and can focus it', { ta
 		expect(agents!.focused).toBe(true);
 		expect(workbenchWindow).toBeDefined();
 		await workbench.page.evaluate(async id => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
 		}, workbenchWindow!.id);
 		await waitForElectronWindowState(application, workbench.page, { focused: true });
 		await workbench.page.evaluate(async id => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
 		}, agents!.id);
 		await waitForElectronWindowState(application, childPage, { focused: true });

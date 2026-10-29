@@ -2,16 +2,7 @@ import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import { type DocumentSelection } from '../core/documentSelection.js';
 import { isRecord } from 'ash:editor/base/common/types.js';
 import { isFiniteNumber } from 'ash:editor/base/common/numbers.js';
-import {
-	getDocumentBodyContent,
-	createDocumentNode,
-	findDocumentNode,
-	type DocumentNodeId,
-	type DocumentAttributeValue,
-	type DocumentAttributes,
-	type DocumentMark,
-	type DocumentNode,
-} from './document.js';
+import { getDocumentBodyContent, createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from './document.js';
 import { type DocumentSchema, type DocumentValidationOptions } from './documentSchema.js';
 import { localize } from 'ash:editor/nls.js';
 
@@ -67,16 +58,7 @@ export function decodeDocumentNode(value: unknown, schema: DocumentSchema, optio
 /** Serializes a validated document in a versioned envelope for persistence. */
 export function serializeDocument(document: DocumentNode, schema: DocumentSchema, pretty = false): string {
 	schema.validate(document);
-	return JSON.stringify(
-		{
-			format: DOCUMENT_SERIALIZATION_FORMAT,
-			version: DOCUMENT_SERIALIZATION_VERSION,
-			documentType: schema.documentType,
-			document,
-		},
-		undefined,
-		pretty ? 2 : undefined,
-	);
+	return JSON.stringify({ format: DOCUMENT_SERIALIZATION_FORMAT, version: DOCUMENT_SERIALIZATION_VERSION, documentType: schema.documentType, document }, undefined, pretty ? 2 : undefined);
 }
 
 /** Parses, validates, and freezes a persisted document without trusting its JSON shape. */
@@ -89,8 +71,7 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 			throw new DocumentSerializationError('Structured document JSON is invalid', { cause: error });
 		}
 	}
-	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION))
-		throw new DocumentSerializationError('Unsupported structured document format or version');
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION)) throw new DocumentSerializationError('Unsupported structured document format or version');
 	// Legacy files and collaboration snapshots had no kind. The receiving schema
 	// supplies it once; all subsequent persistence and snapshots use the v2 envelope.
 	if (parsed.version === 1) {
@@ -111,15 +92,7 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 /** Serializes a validated selection fragment for Stanza-aware clipboard transport. */
 export function serializeDocumentFragment(fragment: DocumentFragment, schema: DocumentSchema, pretty = false): string {
 	validateFragmentContent(fragment.content, schema);
-	return JSON.stringify(
-		{
-			format: DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT,
-			version: DOCUMENT_FRAGMENT_SERIALIZATION_VERSION,
-			content: fragment.content,
-		},
-		undefined,
-		pretty ? 2 : undefined,
-	);
+	return JSON.stringify({ format: DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT, version: DOCUMENT_FRAGMENT_SERIALIZATION_VERSION, content: fragment.content }, undefined, pretty ? 2 : undefined);
 }
 
 /** Parses and validates a Stanza clipboard fragment without trusting its JSON shape. */
@@ -132,8 +105,7 @@ export function deserializeDocumentFragment(value: string | unknown, schema: Doc
 			throw new DocumentSerializationError('Structured document fragment JSON is invalid', { cause: error });
 		}
 	}
-	if (!isRecord(parsed) || parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION || !Array.isArray(parsed.content))
-		throw new DocumentSerializationError('Unsupported structured document fragment format or version');
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION || !Array.isArray(parsed.content)) throw new DocumentSerializationError('Unsupported structured document fragment format or version');
 	try {
 		const content = Object.freeze(parsed.content.map(decodeNode));
 		validateFragmentContent(content, schema);
@@ -148,12 +120,10 @@ export function deserializeDocumentFragment(value: string | unknown, schema: Doc
 export function documentFromPlainText(schema: DocumentSchema, text: string, documentId = 'document-1'): DocumentNode {
 	if (typeof text !== 'string') throw new TypeError('Plain document text must be a string');
 	const lines = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
-	const paragraphs = lines.map((line, index) =>
-		schema.createNode('paragraph', {
-			id: `${documentId}-paragraph-${index + 1}`,
-			content: line.length > 0 ? [schema.createText(line, { id: `${documentId}-text-${index + 1}` })] : [],
-		}),
-	);
+	const paragraphs = lines.map((line, index) => schema.createNode('paragraph', {
+		id: `${documentId}-paragraph-${index + 1}`,
+		content: line.length > 0 ? [schema.createText(line, { id: `${documentId}-text-${index + 1}` })] : [],
+	}));
 	return schema.createDocument(paragraphs, documentId);
 }
 
@@ -248,14 +218,7 @@ function decodeNode(value: unknown): DocumentNode {
 	const attrs = decodeAttributes(value.attrs, `node:${value.id}`);
 	const marks = value.marks === undefined ? [] : decodeMarks(value.marks, value.id);
 	if (value.text !== undefined && typeof value.text !== 'string') throw new DocumentSerializationError(`Serialized text for '${value.id}' is invalid`);
-	return createDocumentNode({
-		id: value.id,
-		type: value.type,
-		attrs,
-		content: value.content.map(decodeNode),
-		marks,
-		...(value.text === undefined ? {} : { text: value.text }),
-	});
+	return createDocumentNode({ id: value.id, type: value.type, attrs, content: value.content.map(decodeNode), marks, ...(value.text === undefined ? {} : { text: value.text }) });
 }
 
 function encodeNode(node: DocumentNode): SerializedDocumentNode {
@@ -363,15 +326,7 @@ function sliceInlineContent(schema: DocumentSchema, block: DocumentNode, startIn
 			const to = index === endIndex ? Math.max(from, Math.min(endOffset, child.text.length)) : child.text.length;
 			if (to > from) content.push(schema.createText(child.text.slice(from, to), { id: child.id, marks: child.marks }));
 		} else if (index > startIndex || startOffset === 0) {
-			content.push(
-				schema.createNode(child.type, {
-					id: child.id,
-					attrs: child.attrs,
-					content: child.content,
-					marks: child.marks,
-					...(child.text === undefined ? {} : { text: child.text }),
-				}),
-			);
+			content.push(schema.createNode(child.type, { id: child.id, attrs: child.attrs, content: child.content, marks: child.marks, ...(child.text === undefined ? {} : { text: child.text }) }));
 		}
 	}
 	return content;

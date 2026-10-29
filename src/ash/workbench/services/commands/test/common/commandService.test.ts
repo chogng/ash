@@ -1,35 +1,52 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { CommandRegistry } from '../../../../../platform/commands/common/commands.js';
+import {
+	CommandRegistry,
+} from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import {
+	CommandService,
+} from '../../../../../workbench/services/commands/common/commandService.js';
 
 test('command service emits execution events around the handler call', async () => {
 	const registry = new CommandRegistry();
 	const order: string[] = [];
-	using commandRegistration = registry.register('test.command.events', async () => {
-		order.push('handler');
-		return 'result';
-	});
+	using commandRegistration = registry.register(
+		'test.command.events',
+		async () => {
+			order.push('handler');
+			return 'result';
+		},
+	);
 	using service = new CommandService(new InstantiationService(), registry);
-	using willListener = service.onWillExecuteCommand(event => {
+	using willListener = service.onWillExecuteCommand((event) => {
 		order.push(`will:${event.commandId}:${String(event.args[0])}`);
 	});
-	using didListener = service.onDidExecuteCommand(event => {
+	using didListener = service.onDidExecuteCommand((event) => {
 		order.push(`did:${event.commandId}:${String(event.args[0])}`);
 	});
 
-	const result = await service.executeCommand<string>('test.command.events', 'argument');
+	const result = await service.executeCommand<string>(
+		'test.command.events',
+		'argument',
+	);
 
 	assert.equal(result, 'result');
-	assert.deepEqual(order, ['will:test.command.events:argument', 'handler', 'did:test.command.events:argument']);
+	assert.deepEqual(order, [
+		'will:test.command.events:argument',
+		'handler',
+		'did:test.command.events:argument',
+	]);
 });
 
 test('command service does not emit did when a handler throws', async () => {
 	const registry = new CommandRegistry();
-	using commandRegistration = registry.register('test.command.failure', () => {
-		throw new Error('failed');
-	});
+	using commandRegistration = registry.register(
+		'test.command.failure',
+		() => {
+			throw new Error('failed');
+		},
+	);
 	using service = new CommandService(new InstantiationService(), registry);
 	let willCount = 0;
 	let didCount = 0;
@@ -40,7 +57,10 @@ test('command service does not emit did when a handler throws', async () => {
 		didCount += 1;
 	});
 
-	await assert.rejects(service.executeCommand('test.command.failure'), /failed/);
+	await assert.rejects(
+		service.executeCommand('test.command.failure'),
+		/failed/,
+	);
 	assert.equal(willCount, 1);
 	assert.equal(didCount, 0);
 });
@@ -49,16 +69,14 @@ test('command metadata rejects arguments before handler effects and completion e
 	const registry = new CommandRegistry();
 	using services = new InstantiationService();
 	const order: string[] = [];
-	using registration = registry.registerMany([
-		{
-			id: 'test.command.arguments',
-			handler: (_accessor, value) => {
-				order.push('handler');
-				return value;
-			},
-			metadata: { description: 'test', args: [{ name: 'value', constraint: 'number' }] },
+	using registration = registry.registerMany([{
+		id: 'test.command.arguments',
+		handler: (_accessor, value) => {
+			order.push('handler');
+			return value;
 		},
-	]);
+		metadata: { description: 'test', args: [{ name: 'value', constraint: 'number' }] },
+	}]);
 	using service = new CommandService(services, registry);
 	using will = service.onWillExecuteCommand(() => order.push('will'));
 	using did = service.onDidExecuteCommand(() => order.push('did'));

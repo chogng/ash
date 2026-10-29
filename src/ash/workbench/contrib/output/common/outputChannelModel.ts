@@ -50,9 +50,7 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 			model.setEOL(EndOfLineSequence.LF);
 			this.textModel = model;
 			// Views borrow the model through the resolver. Retained entries outlive its last reference.
-			this.modelListener.value = model.onWillDispose(() => {
-				this.textModel = undefined;
-			});
+			this.modelListener.value = model.onWillDispose(() => { this.textModel = undefined; });
 		}
 		return this.textModel;
 	}
@@ -115,13 +113,7 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		const timestamp = input.timestamp ?? Date.now();
 		if (!Number.isFinite(timestamp) || timestamp < 0) throw new TypeError('Output entry timestamp must be a non-negative finite number');
 		const category = normalizeCategory(input.category);
-		return Object.freeze({
-			sequence: this.nextSequence++,
-			timestamp,
-			severity,
-			...(category ? { category } : {}),
-			text: input.text,
-		});
+		return Object.freeze({ sequence: this.nextSequence++, timestamp, severity, ...(category ? { category } : {}), text: input.text });
 	}
 
 	private retain(entry: IOutputEntry): void {

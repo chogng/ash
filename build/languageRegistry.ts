@@ -21,12 +21,12 @@ interface Expression {
 }
 interface Folding {
 	offSide: boolean;
-	markers?: { start: Expression; end: Expression };
+	markers?: { start: Expression; end: Expression; };
 }
 
 function expression(value: unknown, owner: string): Expression {
-	const source = typeof value === 'string' ? value : (value as { pattern?: unknown } | null)?.pattern;
-	const flags = typeof value === 'string' ? '' : ((value as { flags?: unknown } | null)?.flags ?? '');
+	const source = typeof value === 'string' ? value : (value as { pattern?: unknown; } | null)?.pattern;
+	const flags = typeof value === 'string' ? '' : ((value as { flags?: unknown; } | null)?.flags ?? '');
 	if (typeof source !== 'string' || !source.length || source.length > 4096 || /[\0\r\n]/.test(source) || typeof flags !== 'string' || !/^[dgimsuvy]*$/.test(flags))
 		throw new TypeError(`Invalid folding expression: ${owner}`);
 	new RegExp(source, flags);
@@ -54,13 +54,13 @@ async function readFolding(root: string, directory: string, configuration: strin
 }
 
 /** Generate shared identity, association and folding metadata from the owning language packages. */
-export async function generateLanguageRegistry(options: { root?: string; check?: boolean } = {}): Promise<void> {
+export async function generateLanguageRegistry(options: { root?: string; check?: boolean; } = {}): Promise<void> {
 	const root = options.root ?? repository;
 	const declarations: Declaration[] = [];
 	const aliases = new Map<string, string>();
 	const publicIds = new Set<string>();
 	const foldingRules = new Map<string, Folding>();
-	const grammarLanguages: { id: string; editorLanguage: string; editorIds: string[] }[] = [];
+	const grammarLanguages: { id: string; editorLanguage: string; editorIds: string[]; }[] = [];
 	for (const directory of (await readdir(resolve(root, 'extensions'))).sort()) {
 		let manifest;
 		try {
@@ -122,28 +122,28 @@ ${[...aliases].map(([alias, id]) => `        ${JSON.stringify(alias)} => ${JSON.
 
 const DECLARATIONS: &[Association] = &[
 ${declarations
-	.map(
-		language => `    Association {
+			.map(
+				language => `    Association {
         id: ${JSON.stringify(language.id)},
         extensions: ${list(language.extensions)},
         filenames: ${list(language.filenames)},
         patterns: ${list(language.filenamePatterns)},
         first_line: ${language.firstLine === undefined ? 'None' : `Some(${JSON.stringify(language.firstLine)})`},
     },`,
-	)
-	.join('\n')}
+			)
+			.join('\n')}
 ];
 
 const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
 ${[...foldingRules]
-	.map(
-		([id, rules]) => `    FoldingDeclaration {
+			.map(
+				([id, rules]) => `    FoldingDeclaration {
         id: ${JSON.stringify(id)},
         off_side: ${rules.offSide},
         markers: ${rules.markers ? `Some((${JSON.stringify(rules.markers.start.source)}, ${JSON.stringify(rules.markers.start.flags)}, ${JSON.stringify(rules.markers.end.source)}, ${JSON.stringify(rules.markers.end.flags)}))` : 'None'},
     },`,
-	)
-	.join('\n')}
+			)
+			.join('\n')}
 ];
 `;
 	const formatted = spawnSync('rustfmt', ['--edition', '2024', '--emit', 'stdout'], {

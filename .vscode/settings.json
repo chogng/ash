@@ -20,6 +20,20 @@
 		"editor.formatOnSave": true
 	},
 	"simpleLspClient.formatters": {
+		"typescript": {
+			"cmd": [
+				"${workspaceFolder}/node_modules/bun/bun",
+				"${workspaceFolder}/build/format.ts",
+				"--stdin-filepath",
+				"${file}"
+			],
+			"filetypes": [
+				"typescript",
+				"typescriptreact",
+				"javascript",
+				"javascriptreact"
+			]
+		},
 		"bun": {
 			"cmd": [
 				"${workspaceFolder}/node_modules/bun/bun",
@@ -31,18 +45,7 @@
 				"--stdin-filepath",
 				"${file}"
 			],
-			"filetypes": [
-				"typescript",
-				"typescriptreact",
-				"javascript",
-				"javascriptreact",
-				"json",
-				"jsonc",
-				"yaml",
-				"markdown",
-				"css",
-				"html"
-			]
+			"filetypes": ["json", "jsonc", "yaml", "markdown", "css", "html"]
 		}
 	},
 	"bazel.commandLine.queryExpression": "//...:*",

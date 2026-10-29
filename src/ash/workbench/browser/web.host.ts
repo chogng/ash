@@ -20,32 +20,19 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		const parameters = new URLSearchParams(window.location.hash.slice(1));
 		const endpoint = new URL(parameters.get('ash-endpoint') ?? sessionStorage.getItem('ash.appServer.endpoint') ?? window.location.origin);
 		const ticket = parameters.get('ash-ticket');
-		if (ticket) {
-			history.replaceState(history.state, '', window.location.pathname + window.location.search);
-		}
+		if (ticket) { history.replaceState(history.state, '', window.location.pathname + window.location.search); }
 		transport = await authenticateWebAppServer(endpoint, sessionStorage, ticket);
 		const workspaceClient = new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window, transport.sessionWorkspace);
 		await workspaceClient.recoverPending();
-		const connected = await connectWebRendererApi(
-			transport,
-			{
-				externalOpener: {
-					openExternal: async href => {
-						windowOpenNoOpener(normalizeExternalUrl(href));
-						return true;
-					},
-				},
-				clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-			},
-			{
-				capabilities: {
-					...(textDocuments ? { textDocuments: { version: 2 } } : {}),
-					...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}),
+		const connected = await connectWebRendererApi(transport, {
+			externalOpener: {
+				openExternal: async href => {
+					windowOpenNoOpener(normalizeExternalUrl(href));
+					return true;
 				},
 			},
-			rendererCapabilities,
-			createAppServerFrameDecoder(new WebWorkerService()),
-		);
+			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
+		}, { capabilities: { ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities, createAppServerFrameDecoder(new WebWorkerService()));
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
 			updateProvider: createWebUpdateProvider(window.document),
@@ -59,11 +46,7 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 			const parameters = new URLSearchParams(window.location.hash.slice(1));
 			if (parameters.has('ash-ticket') && parameters.has('ash-endpoint')) window.location.reload();
 		});
-		return toDisposable(() => {
-			authenticationLink.dispose();
-			connected.dispose();
-			transport?.dispose();
-		});
+		return toDisposable(() => { authenticationLink.dispose(); connected.dispose(); transport?.dispose(); });
 	} catch (error) {
 		transport?.dispose();
 		throw error;

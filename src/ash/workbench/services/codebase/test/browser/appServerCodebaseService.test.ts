@@ -45,9 +45,7 @@ test('Codebase policy excludes provider configuration and preserves revision con
 		codebase: { models, automaticContext: 'off' },
 	});
 	assert.deepEqual(await service.configure(undefined, 'firstInvocation', 4), {
-		revision: 5,
-		generation: 10,
-		disposition: 'updated',
+		revision: 5, generation: 10, disposition: 'updated',
 	});
 	assert.deepEqual(writes[0], {
 		commandId: writes[0].commandId,
@@ -80,12 +78,8 @@ test('Codebase status preserves source readiness while embedding is unavailable 
 	];
 	for (const status of statuses) {
 		const api: ICodebaseApi = {
-			readConfig: async () => {
-				throw new Error('unexpected config read');
-			},
-			configure: async () => {
-				throw new Error('unexpected configuration write');
-			},
+			readConfig: async () => { throw new Error('unexpected config read'); },
+			configure: async () => { throw new Error('unexpected configuration write'); },
 			status: async () => decodeAppServerResult('codebase/status', status),
 		};
 		assert.deepEqual(await new AppServerCodebaseService(api).status(), status);

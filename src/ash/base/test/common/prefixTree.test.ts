@@ -8,28 +8,14 @@ suite('WellDefinedPrefixTree', () => {
 		tree.insert(['editor', 'options', 'colors'], false);
 		tree.insert(['editorial', 'enabled'], true);
 		const keys = [
-			['editor'],
-			['editor', 'options'],
-			['editor', 'options', 'colors'],
-			['editor', 'options', 'colors', 'foreground'],
-			['editor', 'option'],
-			['editorial'],
-			['editorial', 'enabled'],
-			['editorials'],
+			['editor'], ['editor', 'options'], ['editor', 'options', 'colors'],
+			['editor', 'options', 'colors', 'foreground'], ['editor', 'option'],
+			['editorial'], ['editorial', 'enabled'], ['editorials'],
 		];
-		assert.deepEqual(
-			keys.map(key => [tree.hasKeyOrParent(key), tree.hasKeyOrChildren(key)]),
-			[
-				[false, true],
-				[false, true],
-				[true, true],
-				[true, false],
-				[false, false],
-				[false, true],
-				[true, true],
-				[false, false],
-			],
-		);
+		assert.deepEqual(keys.map(key => [tree.hasKeyOrParent(key), tree.hasKeyOrChildren(key)]), [
+			[false, true], [false, true], [true, true], [true, false],
+			[false, false], [false, true], [true, true], [false, false],
+		]);
 	});
 
 	test('accepts single-pass paths and replaces values without losing descendants', () => {

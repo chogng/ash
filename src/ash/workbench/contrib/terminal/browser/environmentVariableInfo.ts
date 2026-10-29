@@ -7,13 +7,10 @@ import type { IEnvironmentVariableCollectionWithPersistence, IEnvironmentVariabl
 export class EnvironmentVariableInfoChangesActive implements IEnvironmentVariableInfo {
 	readonly requiresAction = false;
 
-	constructor(private readonly collections: ReadonlyMap<string, IEnvironmentVariableCollectionWithPersistence>) {}
+	constructor(private readonly collections: ReadonlyMap<string, IEnvironmentVariableCollectionWithPersistence>) { }
 
 	getStatus(): ITerminalStatus | undefined {
-		const extensions = [...this.collections]
-			.filter(([, collection]) => collection.map.size)
-			.map(([id]) => id)
-			.sort();
+		const extensions = [...this.collections].filter(([, collection]) => collection.map.size).map(([id]) => id).sort();
 		if (!extensions.length) return undefined;
 		return {
 			id: 'environment-variable-changes-active',

@@ -12,11 +12,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IDebugService, type IDebugSession, type IDebugEvaluateResult } from '../common/debug.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { DebugWatchAccessibilityAnnouncer } from '../common/debugAccessibilityAnnouncer.js';
-interface DebugWatchResult {
-	readonly expression: string;
-	readonly result?: IDebugEvaluateResult;
-	readonly error?: string;
-}
+interface DebugWatchResult { readonly expression: string; readonly result?: IDebugEvaluateResult; readonly error?: string; }
 
 /** Watch owns drafts and evaluation results; durable definitions remain in Rust. */
 export class WatchExpressionsView extends ViewPane {
@@ -30,14 +26,11 @@ export class WatchExpressionsView extends ViewPane {
 	private watchResults: readonly DebugWatchResult[] = [];
 	private refreshGeneration = 0;
 	private readonly announcements: DebugWatchAccessibilityAnnouncer;
-	constructor(
-		container: HTMLElement,
-		options: IViewPaneOptions,
+	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IDebugService private readonly debug: IDebugService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@INotificationService private readonly notifications: INotificationService,
-		@IInstantiationService instantiation: IInstantiationService,
-	) {
+		@IInstantiationService instantiation: IInstantiationService) {
 		super(container, { minimumBodySize: 32, ...options });
 		this.announcements = instantiation.createInstance(DebugWatchAccessibilityAnnouncer);
 		const document = container.ownerDocument;
@@ -53,22 +46,16 @@ export class WatchExpressionsView extends ViewPane {
 		this.watchInput = h(document, 'input');
 		this.watchInput.type = 'text';
 		this.watchForm.append(this.watchInput);
-		this.addWatchButton = this._register(
-			new Button(this.watchForm, {
-				...defaultButtonStyles,
-				label: localize('debug.addWatch', 'Add watch expression'),
-				icon: Lxicon.add,
-				iconOnly: true,
-				type: 'submit',
-				title: localize('debug.addWatch', 'Add watch expression'),
-			}),
-		);
+		this.addWatchButton = this._register(new Button(this.watchForm, {
+			...defaultButtonStyles,
+			label: localize('debug.addWatch', 'Add watch expression'),
+			icon: Lxicon.add,
+			iconOnly: true,
+			type: 'submit',
+			title: localize('debug.addWatch', 'Add watch expression'),
+		}));
 		this.contentElement.prepend(this.watchForm);
-		this.watchToolbar = this._register(
-			new WorkbenchToolBar(this.headerActionsElement, contextMenus, {
-				ariaLabel: localize('debug.watch', 'Watch'),
-			}),
-		);
+		this.watchToolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: localize('debug.watch', 'Watch') }));
 		const addWatchLabel = localize('debug.addWatch', 'Add watch expression');
 		const removeAllWatchesLabel = localize('debug.removeAllWatches', 'Remove All Expressions');
 		this.watchToolbar.setActions([
@@ -98,31 +85,27 @@ export class WatchExpressionsView extends ViewPane {
 				},
 			},
 		]);
-		this._register(
-			addDisposableListener(this.watchInput, 'keydown', event => {
-				if (event.key === 'Escape' && !event.isComposing) {
-					event.preventDefault();
-					this.watchInput.value = '';
-					this.watchForm.hidden = true;
-					this.watchForm.classList.add('empty');
-					this.watchToolbar.focus();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.watchInput, 'keydown', event => {
+			if (event.key === 'Escape' && !event.isComposing) {
+				event.preventDefault();
+				this.watchInput.value = '';
+				this.watchForm.hidden = true;
+				this.watchForm.classList.add('empty');
+				this.watchToolbar.focus();
+			}
+		}));
 
 		this._register(addDisposableListener(this.watchElement, 'click', event => this.removeWatch(event)));
 		this._register(addDisposableListener(this.watchForm, 'submit', event => this.addWatch(event)));
 		this._register(debug.onDidChangeWatchExpressions(() => this.refresh()));
-		this._register(
-			debug.onDidChangeSession(() => {
-				// A stopped event first invalidates the old frame. DebugService publishes
-				// the completed selection before Watch evaluates user expressions.
-				++this.refreshGeneration;
-				this.loadingProgress.clear();
-				this.watchResults = [];
-				this.render();
-			}),
-		);
+		this._register(debug.onDidChangeSession(() => {
+			// A stopped event first invalidates the old frame. DebugService publishes
+			// the completed selection before Watch evaluates user expressions.
+			++this.refreshGeneration;
+			this.loadingProgress.clear();
+			this.watchResults = [];
+			this.render();
+		}));
 		this._register(debug.getViewModel().onDidFocusStackFrame(() => this.refresh()));
 		this._register(debug.getViewModel().onDidFocusThread(() => this.refresh()));
 		this._register(debug.getViewModel().onWillUpdateViews(() => this.refresh()));
@@ -143,17 +126,7 @@ export class WatchExpressionsView extends ViewPane {
 		this.watchInput.setAttribute('aria-label', localize('debug.addWatch', 'Add watch expression'));
 		this.watchInput.placeholder = localize('debug.watchPlaceholder', 'Expression to watch');
 		this.rowControls.clear();
-		this.watchElement.replaceChildren(
-			...this.debug.watchExpressions.map((expression, index) =>
-				watchItem(
-					this.rowControls,
-					this.element.ownerDocument,
-					expression,
-					this.watchResults.find(result => result.expression === expression),
-					index,
-				),
-			),
-		);
+		this.watchElement.replaceChildren(...this.debug.watchExpressions.map((expression, index) => watchItem(this.rowControls, this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
 		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
@@ -178,19 +151,13 @@ export class WatchExpressionsView extends ViewPane {
 	private async refreshWatches(generation: number): Promise<void> {
 		const session = this.debug.session;
 		const expressions = this.debug.watchExpressions;
-		if (!session || session.state !== 'stopped') {
-			this.watchResults = expressions.map(expression => ({ expression }));
-			this.render();
-			return;
-		}
+		if (!session || session.state !== 'stopped') { this.watchResults = expressions.map(expression => ({ expression })); this.render(); return; }
 		const frameId = this.debug.getViewModel().focusedStackFrame?.id;
 		const loading = session.evaluateWatchExpressions(expressions, frameId);
 		const progress = this.getProgressIndicator().show(true, 150);
 		const handle = toDisposable(() => progress.done());
 		this.loadingProgress.value = handle;
-		const finish = (): void => {
-			if (this.loadingProgress.value === handle) this.loadingProgress.clear();
-		};
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
 		void loading.then(finish, finish);
 		const results = await loading;
 		if (!this.isCurrentInspection(session, generation) || this.debug.getViewModel().focusedStackFrame?.id !== frameId || this.debug.watchExpressions !== expressions) return;
@@ -198,6 +165,8 @@ export class WatchExpressionsView extends ViewPane {
 		this.announcements.announce(session.id, results);
 		this.render();
 	}
+
+
 }
 function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
 	const item = h(document, 'li');
@@ -206,27 +175,17 @@ function watchItem(owner: DisposableStore, document: Document, expression: strin
 	value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ''}`;
 	owner.add(getHoverDelegate().setupHover({ target: value, content: value.textContent }));
 	item.append(value);
-	const remove = owner.add(
-		new Button(item, {
-			...defaultButtonStyles,
-			label: localize('debug.removeWatch', 'Remove watch expression'),
-			icon: Lxicon.close,
-			iconOnly: true,
-			size: 'small',
-			title: localize('debug.removeWatch', 'Remove watch expression'),
-		}),
-	).domNode;
+	const remove = owner.add(new Button(item, {
+		...defaultButtonStyles,
+		label: localize('debug.removeWatch', 'Remove watch expression'),
+		icon: Lxicon.close,
+		iconOnly: true,
+		size: 'small',
+		title: localize('debug.removeWatch', 'Remove watch expression'),
+	})).domNode;
 	remove.classList.add('ash-debug-watch-remove');
 	remove.dataset.watchIndex = String(index);
 	return item;
 }
-function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined {
-	const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null;
-	const raw = target?.dataset[dataName];
-	if (raw === undefined) return undefined;
-	const index = Number(raw);
-	return Number.isSafeInteger(index) && index >= 0 ? index : undefined;
-}
-function message(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
+function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }
+function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }

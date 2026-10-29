@@ -14,7 +14,7 @@ const stripIconsRegex = new RegExp(`(\\s)?(\\\\)?${iconPattern}(\\s)?`, 'gu');
 
 /** Escapes icon syntax so a label is displayed as literal text. */
 export function escapeIcons(text: string): string {
-	return text.replace(escapeIconsRegex, (match, escaped: string | undefined) => (escaped ? match : `\\${match}`));
+	return text.replace(escapeIconsRegex, (match, escaped: string | undefined) => escaped ? match : `\\${match}`);
 }
 
 /** Escapes an already escaped icon once more for Markdown content. */
@@ -68,7 +68,11 @@ export function parseLabelWithIcons(input: string): IParsedLabelWithIcons {
 }
 
 /** Fuzzy matches a label while ignoring source positions occupied by icons. */
-export function matchesFuzzyIconAware(query: string, target: IParsedLabelWithIcons, _enableSeparateSubstringMatching = false): IMatch[] | null {
+export function matchesFuzzyIconAware(
+	query: string,
+	target: IParsedLabelWithIcons,
+	_enableSeparateSubstringMatching = false,
+): IMatch[] | null {
 	const { text, iconOffsets } = target;
 	if (!iconOffsets || iconOffsets.length === 0) return matchesSubString(query, text);
 

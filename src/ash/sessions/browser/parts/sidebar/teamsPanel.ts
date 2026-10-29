@@ -55,44 +55,33 @@ export class TeamsPanel extends Disposable {
 
 	async show(): Promise<void> {
 		this.domNode.hidden = false;
-		await this.perform(async () => {
-			await this.teams.refresh();
-			await this.loadSelected();
-		});
+		await this.perform(async () => { await this.teams.refresh(); await this.loadSelected(); });
 	}
 
-	focus(): void {
-		this.content.querySelector<HTMLButtonElement>('button')?.focus();
-	}
+	focus(): void { this.content.querySelector<HTMLButtonElement>('button')?.focus(); }
 
 	private async perform(operation: () => Promise<void>): Promise<void> {
 		this.error = undefined;
 		this.status.textContent = localize('sessions.teams.working', 'Working…');
-		try {
-			await operation();
-		} catch (error) {
-			this.error = error instanceof Error ? error.message : String(error);
-		}
+		try { await operation(); }
+		catch (error) { this.error = error instanceof Error ? error.message : String(error); }
 		this.render();
 	}
 
 	private async loadSelected(): Promise<void> {
 		const team = this.current();
-		if (!team) {
-			this.runs = [];
-			this.messages = [];
-			return;
-		}
+		if (!team) { this.runs = []; this.messages = []; return; }
 		const id = team.teamId;
-		const [runs, messages] = await Promise.all([this.teams.listRuns(id), this.teams.listMessages(id, team.coordinatorId)]);
+		const [runs, messages] = await Promise.all([
+			this.teams.listRuns(id),
+			this.teams.listMessages(id, team.coordinatorId),
+		]);
 		if (this.selectedId !== id) return;
 		this.runs = runs;
 		this.messages = messages;
 	}
 
-	private current(): Team | undefined {
-		return this.teams.teams.get().find(team => team.teamId === this.selectedId);
-	}
+	private current(): Team | undefined { return this.teams.teams.get().find(team => team.teamId === this.selectedId); }
 
 	private render(): void {
 		this.renderListeners.clear();
@@ -103,23 +92,13 @@ export class TeamsPanel extends Disposable {
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-teams-toolbar';
 		this.button(toolbar, localize('sessions.teams.new', 'New Team'), () => this.perform(() => this.createTeam()));
-		this.button(toolbar, localize('sessions.teams.refresh', 'Refresh'), () =>
-			this.perform(async () => {
-				await this.teams.refresh();
-				await this.loadSelected();
-			}),
-		);
+		this.button(toolbar, localize('sessions.teams.refresh', 'Refresh'), () => this.perform(async () => { await this.teams.refresh(); await this.loadSelected(); }));
 		this.content.append(toolbar);
 		const list = h(document, 'div');
 		list.className = 'ash-teams-list';
 		for (const team of this.teams.teams.get()) {
 			const label = `${team.name} · ${team.members.length}`;
-			const entry = this.button(list, label, () =>
-				this.perform(async () => {
-					this.selectedId = team.teamId;
-					await this.loadSelected();
-				}),
-			);
+			const entry = this.button(list, label, () => this.perform(async () => { this.selectedId = team.teamId; await this.loadSelected(); }));
 			entry.setAttribute('aria-current', team.teamId === this.selectedId ? 'true' : 'false');
 			entry.classList.add('ash-teams-list-item');
 			entry.classList.toggle('selected', team.teamId === this.selectedId);
@@ -138,33 +117,18 @@ export class TeamsPanel extends Disposable {
 		actions.className = 'ash-teams-actions';
 		if (team.status === 'active') {
 			this.button(actions, localize('sessions.teams.start', 'Start task'), () => this.perform(() => this.startTask(team)));
-			this.button(actions, localize('sessions.teams.edit', 'Edit Team'), () =>
-				this.perform(async () => {
-					const name = await this.input(localize('sessions.teams.name', 'Team name'), team.name);
-					if (!name) return;
-					const description = await this.quickInput.input({
-						title: localize('sessions.teams.description', 'Team description'),
-						placeHolder: team.description,
-					});
-					if (description === undefined) return;
-					await this.teams.updateDetails(team, name, description);
-					await this.loadSelected();
-				}),
-			);
+			this.button(actions, localize('sessions.teams.edit', 'Edit Team'), () => this.perform(async () => {
+				const name = await this.input(localize('sessions.teams.name', 'Team name'), team.name);
+				if (!name) return;
+				const description = await this.quickInput.input({ title: localize('sessions.teams.description', 'Team description'), placeHolder: team.description });
+				if (description === undefined) return;
+				await this.teams.updateDetails(team, name, description);
+				await this.loadSelected();
+			}));
 			this.button(actions, localize('sessions.teams.add', 'Add member'), () => this.perform(() => this.addMember(team)));
-			this.button(actions, localize('sessions.teams.archive', 'Archive'), () =>
-				this.perform(async () => {
-					await this.teams.archive(team);
-					await this.loadSelected();
-				}),
-			);
+			this.button(actions, localize('sessions.teams.archive', 'Archive'), () => this.perform(async () => { await this.teams.archive(team); await this.loadSelected(); }));
 		} else {
-			this.button(actions, localize('sessions.teams.restore', 'Restore'), () =>
-				this.perform(async () => {
-					await this.teams.restore(team);
-					await this.loadSelected();
-				}),
-			);
+			this.button(actions, localize('sessions.teams.restore', 'Restore'), () => this.perform(async () => { await this.teams.restore(team); await this.loadSelected(); }));
 		}
 		detail.append(actions);
 		const members = h(document, 'div');
@@ -178,38 +142,21 @@ export class TeamsPanel extends Disposable {
 			this.paragraph(row, `${member.name} · ${member.responsibility}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`);
 			this.paragraph(row, member.role.type === 'exact' ? member.role.name : localize('sessions.teams.defaultRole', 'Default Agent'));
 			if (team.status === 'active') {
-				this.button(row, localize('sessions.teams.editMember', 'Edit member'), () =>
-					this.perform(async () => {
-						const name = await this.input(localize('sessions.teams.memberName', 'Member name'), member.name);
-						if (!name) return;
-						const responsibility = await this.input(localize('sessions.teams.memberResponsibility', 'Member responsibility'), member.responsibility);
-						if (!responsibility) return;
-						await this.teams.updateMember(team, { ...member, name, responsibility });
-						await this.loadSelected();
-					}),
-				);
-				this.button(row, localize('sessions.teams.changeRole', 'Change role'), () =>
-					this.perform(async () => {
-						const role = await this.pickRole();
-						if (role) {
-							await this.teams.updateMember(team, { ...member, role });
-							await this.loadSelected();
-						}
-					}),
-				);
+				this.button(row, localize('sessions.teams.editMember', 'Edit member'), () => this.perform(async () => {
+					const name = await this.input(localize('sessions.teams.memberName', 'Member name'), member.name);
+					if (!name) return;
+					const responsibility = await this.input(localize('sessions.teams.memberResponsibility', 'Member responsibility'), member.responsibility);
+					if (!responsibility) return;
+					await this.teams.updateMember(team, { ...member, name, responsibility });
+					await this.loadSelected();
+				}));
+				this.button(row, localize('sessions.teams.changeRole', 'Change role'), () => this.perform(async () => {
+					const role = await this.pickRole();
+					if (role) { await this.teams.updateMember(team, { ...member, role }); await this.loadSelected(); }
+				}));
 				if (member.agentId !== team.coordinatorId) {
-					this.button(row, localize('sessions.teams.makeLead', 'Make lead'), () =>
-						this.perform(async () => {
-							await this.teams.setCoordinator(team, member.agentId);
-							await this.loadSelected();
-						}),
-					);
-					this.button(row, localize('sessions.teams.remove', 'Remove'), () =>
-						this.perform(async () => {
-							await this.teams.removeMember(team, member.agentId);
-							await this.loadSelected();
-						}),
-					);
+					this.button(row, localize('sessions.teams.makeLead', 'Make lead'), () => this.perform(async () => { await this.teams.setCoordinator(team, member.agentId); await this.loadSelected(); }));
+					this.button(row, localize('sessions.teams.remove', 'Remove'), () => this.perform(async () => { await this.teams.removeMember(team, member.agentId); await this.loadSelected(); }));
 				}
 			}
 			members.append(row);
@@ -237,9 +184,7 @@ export class TeamsPanel extends Disposable {
 	private async createTeam(): Promise<void> {
 		const name = await this.input(localize('sessions.teams.name', 'Team name'));
 		if (!name) return;
-		const description = await this.quickInput.input({
-			title: localize('sessions.teams.description', 'Team description'),
-		});
+		const description = await this.quickInput.input({ title: localize('sessions.teams.description', 'Team description') });
 		if (description === undefined) return;
 		const coordinatorName = await this.input(localize('sessions.teams.coordinatorName', 'Lead name'));
 		if (!coordinatorName) return;
@@ -279,67 +224,36 @@ export class TeamsPanel extends Disposable {
 	}
 
 	private input(title: string, current?: string): Promise<string | undefined> {
-		return this.quickInput.input({
-			title,
-			placeHolder: current,
-			validateInput: async value => (value.trim() ? null : localize('sessions.teams.required', 'Enter a value')),
-		});
+		return this.quickInput.input({ title, placeHolder: current, validateInput: async value => value.trim() ? null : localize('sessions.teams.required', 'Enter a value') });
 	}
 
 	private async pickRole(): Promise<TeamRole | undefined> {
-		const options = [
-			{
-				name: localize('sessions.teams.defaultRole', 'Default Agent'),
-				description: '',
-				role: { type: 'default' } as TeamRole,
-			},
-			...(await this.listRoles()),
-		];
-		interface RoleItem extends IQuickPickItem {
-			readonly role: TeamRole;
-		}
+		const options = [{ name: localize('sessions.teams.defaultRole', 'Default Agent'), description: '', role: { type: 'default' } as TeamRole }, ...await this.listRoles()];
+		interface RoleItem extends IQuickPickItem { readonly role: TeamRole; }
 		const picker = this.quickInput.createQuickPick<RoleItem>();
 		picker.placeholder = localize('sessions.teams.chooseRole', 'Choose Agent role');
 		picker.ariaLabel = picker.placeholder;
-		picker.items = options.map(option => ({
-			label: option.name,
-			description: option.description,
-			role: option.role,
-		}));
+		picker.items = options.map(option => ({ label: option.name, description: option.description, role: option.role }));
 		return new Promise(resolve => {
 			let settled = false;
-			const finish = (role: TeamRole | undefined): void => {
-				if (settled) return;
-				settled = true;
-				resolve(role);
-				picker.hide();
-			};
+			const finish = (role: TeamRole | undefined): void => { if (settled) return; settled = true; resolve(role); picker.hide(); };
 			const accepted = picker.onDidAccept(() => {
 				const item = picker.selectedItems[0];
 				if (!item) return;
 				return finish(item.role);
 			});
-			const hidden = picker.onDidHide(() => {
-				finish(undefined);
-				accepted.dispose();
-				hidden.dispose();
-				picker.dispose();
-			});
+			const hidden = picker.onDidHide(() => { finish(undefined); accepted.dispose(); hidden.dispose(); picker.dispose(); });
 			picker.show();
 		});
 	}
 
 	private button(parent: HTMLElement, label: string, action: () => void | Promise<void>): HTMLButtonElement {
-		return this.renderListeners.add(
-			new Button(parent, {
-				...defaultButtonStyles,
-				label,
-				presentation: 'secondary',
-				onClick: () => {
-					void action();
-				},
-			}),
-		).domNode;
+		return this.renderListeners.add(new Button(parent, {
+			...defaultButtonStyles,
+			label,
+			presentation: 'secondary',
+			onClick: () => { void action(); },
+		})).domNode;
 	}
 
 	private paragraph(parent: HTMLElement, text: string): void {

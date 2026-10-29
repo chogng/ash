@@ -104,10 +104,7 @@ export interface IFileSystemProviderError extends Error {
 }
 
 export class FileSystemProviderError extends Error implements IFileSystemProviderError {
-	constructor(
-		message: string,
-		public readonly code: FileSystemProviderErrorCode,
-	) {
+	constructor(message: string, public readonly code: FileSystemProviderErrorCode) {
 		super(message);
 		this.name = `${code} (FileSystemError)`;
 	}
@@ -119,21 +116,13 @@ export function createFileSystemProviderError(error: Error | string, code: FileS
 
 /** Revives the stable category retained by channel error serialization. */
 export function toFileSystemProviderErrorCode(error: Error | undefined | null): FileSystemProviderErrorCode {
-	if (error instanceof FileSystemProviderError) {
-		return error.code;
-	}
-	if (error?.name === 'FileNotFoundError') {
-		return FileSystemProviderErrorCode.FileNotFound;
-	}
-	if (error?.name === 'FileOperationNotSupportedError') {
-		return FileSystemProviderErrorCode.Unavailable;
-	}
+	if (error instanceof FileSystemProviderError) { return error.code; }
+	if (error?.name === 'FileNotFoundError') { return FileSystemProviderErrorCode.FileNotFound; }
+	if (error?.name === 'FileOperationNotSupportedError') { return FileSystemProviderErrorCode.Unavailable; }
 	return Object.values(FileSystemProviderErrorCode).find(code => error?.name === `${code} (FileSystemError)`) ?? FileSystemProviderErrorCode.Unknown;
 }
 
-export interface IFileReadLimits {
-	readonly size?: number;
-}
+export interface IFileReadLimits { readonly size?: number; }
 
 export interface IFileReadStreamOptions {
 	readonly position?: number;
@@ -141,15 +130,13 @@ export interface IFileReadStreamOptions {
 	readonly limits?: IFileReadLimits;
 }
 
-export interface IReadFileStreamOptions extends IFileReadStreamOptions {}
+export interface IReadFileStreamOptions extends IFileReadStreamOptions { }
 
 export interface IFileStreamContent extends IFileStat {
 	readonly value: VSBufferReadableStream;
 }
 
-export interface IFileOpenOptions {
-	readonly create: boolean;
-}
+export interface IFileOpenOptions { readonly create: boolean; }
 
 export interface IFileSystemProviderWithFileReadStreamCapability extends IFileSystemProvider {
 	readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array>;
@@ -320,13 +307,11 @@ export class FileNotFoundError extends FileSystemProviderError {
 }
 
 export class FileOperationNotSupportedError extends FileSystemProviderError {
-	constructor(
-		readonly resource: URI,
-		readonly operation: string,
-	) {
+	constructor(readonly resource: URI, readonly operation: string) {
 		super(`File operation '${operation}' is not supported for ${resource.toString()}`, FileSystemProviderErrorCode.Unavailable);
 		this.name = 'FileOperationNotSupportedError';
 	}
 }
 
-export const IFileService = createServiceIdentifier<IFileService>('fileService');
+export const IFileService =
+	createServiceIdentifier<IFileService>('fileService');

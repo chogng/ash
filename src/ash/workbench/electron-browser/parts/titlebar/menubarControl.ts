@@ -1,19 +1,41 @@
-import { type IAction, Separator, SubmenuAction } from '../../../../base/common/actions.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	type IAction,
+	Separator,
+	SubmenuAction,
+} from '../../../../base/common/actions.js';
+import {
+	Disposable,
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { type IMenu, IMenuService, MenuId, MenuItemAction } from '../../../../platform/actions/common/actions.js';
-import type { INativeMenubarData, NativeMenubarItem, INativeTouchBarItem } from '../../../../platform/menubar/common/nativeMenubar.js';
+import {
+	type IMenu,
+	IMenuService,
+	MenuId,
+	MenuItemAction,
+} from '../../../../platform/actions/common/actions.js';
+import type {
+	INativeMenubarData,
+	NativeMenubarItem,
+	INativeTouchBarItem,
+} from '../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../platform/menubar/electron-browser/menubar.js';
-import type { IMenubarControl } from '../../../browser/parts/titlebar/menubarControl.js';
+import type {
+	IMenubarControl,
+} from '../../../browser/parts/titlebar/menubarControl.js';
 
 /** Synchronizes the workbench menu model to the macOS application menu. */
-export class NativeMenubarControl extends Disposable implements IMenubarControl {
+export class NativeMenubarControl extends Disposable
+	implements IMenubarControl {
 	private readonly menu: IMenu;
 	private readonly touchBarMenu: IMenu | undefined;
 	private touchBarIcons: Promise<readonly string[]> | undefined;
-	private readonly actionsByRevision = new Map<number, ReadonlyMap<string, IAction>>();
+	private readonly actionsByRevision = new Map<
+		number,
+		ReadonlyMap<string, IAction>
+	>();
 	private revision = 0;
 	private updateTail = Promise.resolve();
 
@@ -37,18 +59,15 @@ export class NativeMenubarControl extends Disposable implements IMenubarControl 
 			if (action) void this.runAction(action);
 		});
 		this._register(toDisposable(() => selection.dispose()));
-		this._register(
-			toDisposable(() => {
-				this.actionsByRevision.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.actionsByRevision.clear();
+		}));
 		this.synchronize();
 	}
 
 	private async runAction(action: IAction): Promise<void> {
-		try {
-			await action.run();
-		} catch (error) {
+		try { await action.run(); }
+		catch (error) {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(getErrorMessage(error));
 		}
 	}
@@ -90,7 +109,9 @@ export class NativeMenubarControl extends Disposable implements IMenubarControl 
 	}
 
 	private nextRevision(): number {
-		this.revision = this.revision === Number.MAX_SAFE_INTEGER ? 1 : this.revision + 1;
+		this.revision = this.revision === Number.MAX_SAFE_INTEGER
+			? 1
+			: this.revision + 1;
 		return this.revision;
 	}
 }
@@ -100,11 +121,18 @@ interface ISerializedMenubar {
 	readonly actions: ReadonlyMap<string, IAction>;
 }
 
-function serializeMenubar(actions: readonly IAction[], revision: number, touchBarActions: readonly IAction[] = [], touchBarIcons: readonly string[] = []): ISerializedMenubar {
+function serializeMenubar(
+	actions: readonly IAction[],
+	revision: number,
+	touchBarActions: readonly IAction[] = [],
+	touchBarIcons: readonly string[] = [],
+): ISerializedMenubar {
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
 
-	const serializeItems = (source: readonly IAction[]): readonly NativeMenubarItem[] => {
+	const serializeItems = (
+		source: readonly IAction[],
+	): readonly NativeMenubarItem[] => {
 		const items: NativeMenubarItem[] = [];
 		for (const action of source) {
 			if (action instanceof Separator) {
@@ -126,8 +154,12 @@ function serializeMenubar(actions: readonly IAction[], revision: number, touchBa
 
 			const id = `action-${nextId++}`;
 			actionMap.set(id, action);
-			const alternate = action instanceof MenuItemAction && action.alt?.enabled ? action.alt : undefined;
-			const altId = alternate ? `action-${nextId++}` : undefined;
+			const alternate = action instanceof MenuItemAction && action.alt?.enabled
+				? action.alt
+				: undefined;
+			const altId = alternate
+				? `action-${nextId++}`
+				: undefined;
 			if (altId && alternate) actionMap.set(altId, alternate);
 			items.push({
 				type: 'action',
@@ -135,7 +167,9 @@ function serializeMenubar(actions: readonly IAction[], revision: number, touchBa
 				...(altId ? { altId } : {}),
 				label: action.label,
 				enabled: action.enabled,
-				...(action.checked === undefined ? {} : { checked: action.checked }),
+				...(action.checked === undefined
+					? {}
+					: { checked: action.checked }),
 			});
 		}
 		return trimSeparators(items);
@@ -153,8 +187,10 @@ function serializeMenubar(actions: readonly IAction[], revision: number, touchBa
 			revision,
 			...(touchBar.length ? { touchBar } : {}),
 			menus: actions
-				.filter((action): action is SubmenuAction => action instanceof SubmenuAction)
-				.map(action => ({
+				.filter((action): action is SubmenuAction =>
+					action instanceof SubmenuAction
+				)
+				.map((action) => ({
 					label: action.label,
 					items: serializeItems(action.actions),
 				}))
@@ -172,10 +208,15 @@ async function pngDataUrl(url: string): Promise<string> {
 	return `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`;
 }
 
-function trimSeparators(items: readonly NativeMenubarItem[]): readonly NativeMenubarItem[] {
+function trimSeparators(
+	items: readonly NativeMenubarItem[],
+): readonly NativeMenubarItem[] {
 	const result: NativeMenubarItem[] = [];
 	for (const item of items) {
-		if (item.type === 'separator' && (result.length === 0 || result[result.length - 1]?.type === 'separator')) {
+		if (
+			item.type === 'separator' &&
+			(result.length === 0 || result[result.length - 1]?.type === 'separator')
+		) {
 			continue;
 		}
 		result.push(item);

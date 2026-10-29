@@ -63,25 +63,15 @@ test('Frontend CI retains disconnected Academy source and connected editor cover
 	assert.ok(projects.includes('electron-ui'));
 	assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
 	assert.ok(projects.includes('electron-app-server'));
-	assert.deepEqual(playwrightTargetForProject('electron-app-server'), {
-		kind: 'electron',
-		appServerMode: 'required',
-	});
-	for (const [project, file] of [
-		['browser-ui', 'academy/academy-workbench.spec.ts'],
-		['electron-app-server', 'editor/academy-open.spec.ts'],
-		['browser-app-server', 'editor/academy-open.spec.ts'],
-	]) {
+	assert.deepEqual(playwrightTargetForProject('electron-app-server'), { kind: 'electron', appServerMode: 'required' });
+	for (const [project, file] of [['browser-ui', 'academy/academy-workbench.spec.ts'], ['electron-app-server', 'editor/academy-open.spec.ts'], ['browser-app-server', 'editor/academy-open.spec.ts']]) {
 		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, `test/smoke/areas/${file}`, '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 		assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
 	}
 });
 
 test('Frontend CI collects lifecycle, dependency, readiness, output and reuse cases for both Task kinds', { timeout: 15_000 }, async () => {
-	assert.match(
-		workflow,
-		/name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u,
-	);
+	assert.match(workflow, /name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u);
 	const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 	assert.match(stdout, /process › Mock Agent Task loop/u);
 	assert.match(stdout, /shell › Mock Agent Task loop/u);

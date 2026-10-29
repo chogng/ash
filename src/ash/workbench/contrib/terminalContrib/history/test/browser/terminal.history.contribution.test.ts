@@ -30,24 +30,9 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 	try {
 		using resources = new DisposableStore();
 		const configuration = resources.add(new WorkbenchConfigurationService());
-		const storage = resources.add(
-			new BrowserStorageService({
-				ownerWindow: dom.window as unknown as Window,
-				workspaceId: 'history-contribution',
-				backend: dom.window.localStorage,
-				flushInterval: 0,
-			}),
-		);
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-contribution', backend: dom.window.localStorage, flushInterval: 0 }));
 		const services = resources.add(new InstantiationService());
-		services.registerInstance(
-			IWorkspaceContextService,
-			resources.add(
-				new TestWorkspaceService({
-					id: 'history',
-					folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 }],
-				}),
-			),
-		);
+		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 }] })));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
 		const commands = resources.add(new Emitter<ITerminalCommandStatusEvent>());
@@ -55,15 +40,7 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 		const instance = {
 			dirId: 'folder',
 			profile: { profileId: 'bash', title: 'Bash', isDefault: true },
-			get shellIntegration() {
-				return {
-					commandDetection: true,
-					cwdDetection: false,
-					hasRichCommandDetection: true,
-					commandStorageDisabled,
-					commands: [],
-				};
-			},
+			get shellIntegration() { return { commandDetection: true, cwdDetection: false, hasRichCommandDetection: true, commandStorageDisabled, commands: [] }; },
 			onDidChangeCommandStatus: commands.event,
 		} as unknown as ITerminalInstance;
 		const contribution = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.history');
@@ -71,45 +48,14 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 		const history = services.createInstance(contribution.ctor, { instance });
 		resources.add(history);
 
-		commands.fire({
-			commandId: 'command-1',
-			status: 'succeeded',
-			exitCode: 0,
-			command: 'echo before reuse',
-			isTrusted: true,
-			cwd: '/earlier directory',
-		});
+		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo before reuse', isTrusted: true, cwd: '/earlier directory' });
 		// A replacement PTY starts its command IDs over, while this Terminal instance and contribution survive.
-		commands.fire({
-			commandId: 'command-1',
-			status: 'succeeded',
-			exitCode: 0,
-			command: 'echo after reuse',
-			isTrusted: true,
-			cwd: '/later directory',
-		});
+		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo after reuse', isTrusted: true, cwd: '/later directory' });
 		commandStorageDisabled = true;
-		commands.fire({
-			commandId: 'task-command',
-			status: 'succeeded',
-			exitCode: 0,
-			command: 'echo task',
-			isTrusted: true,
-		});
+		commands.fire({ commandId: 'task-command', status: 'succeeded', exitCode: 0, command: 'echo task', isTrusted: true });
 		commandStorageDisabled = false;
-		commands.fire({
-			commandId: 'untrusted-command',
-			status: 'succeeded',
-			exitCode: 0,
-			command: 'echo forged',
-			isTrusted: false,
-		});
-		commands.fire({
-			commandId: 'missing-nonce-command',
-			status: 'succeeded',
-			exitCode: 0,
-			command: 'echo missing nonce',
-		});
+		commands.fire({ commandId: 'untrusted-command', status: 'succeeded', exitCode: 0, command: 'echo forged', isTrusted: false });
+		commands.fire({ commandId: 'missing-nonce-command', status: 'succeeded', exitCode: 0, command: 'echo missing nonce' });
 
 		assert.deepEqual(JSON.parse(storage.get('terminal.shellIntegration.commandHistory.v1', StorageScope.APPLICATION)!).entries, [
 			{ shellId: 'bash', command: 'echo before reuse' },
@@ -125,76 +71,40 @@ test('Run Recent Command executes only an accepted item in the still-active term
 	try {
 		using resources = new DisposableStore();
 		const configuration = resources.add(new WorkbenchConfigurationService());
-		const storage = resources.add(
-			new BrowserStorageService({
-				ownerWindow: dom.window as unknown as Window,
-				workspaceId: 'history-action',
-				backend: dom.window.localStorage,
-				flushInterval: 0,
-			}),
-		);
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-action', backend: dom.window.localStorage, flushInterval: 0 }));
 		new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo explicitly accepted', true, false);
 		const services = resources.add(new InstantiationService());
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
 		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history-action', folders: [] })));
 
-		const sent: Array<{ text: string; shouldExecute: boolean }> = [];
+		const sent: Array<{ text: string; shouldExecute: boolean; }> = [];
 		const instance = {
-			profile: { profileId: 'bash', title: 'Bash', isDefault: true },
-			state: 'running',
-			isReadOnly: false,
-			onDidChangeState: Event.None,
-			onDidExit: Event.None,
-			sendText: async (text: string, shouldExecute: boolean) => {
-				sent.push({ text, shouldExecute });
-			},
+			profile: { profileId: 'bash', title: 'Bash', isDefault: true }, state: 'running', isReadOnly: false,
+			onDidChangeState: Event.None, onDidExit: Event.None,
+			sendText: async (text: string, shouldExecute: boolean) => { sent.push({ text, shouldExecute }); },
 		} as unknown as ITerminalInstance;
 		let activeInstance: ITerminalInstance | undefined = instance;
 		services.registerInstance(ITerminalService, {
-			get activeInstance() {
-				return activeInstance;
-			},
+			get activeInstance() { return activeInstance; },
 			instances: [instance],
-			onDidChangeActiveInstance: Event.None,
-			onDidDisposeInstance: Event.None,
+			onDidChangeActiveInstance: Event.None, onDidDisposeInstance: Event.None,
 		} as unknown as ITerminalService);
 
-		const pickers: Array<{
-			readonly items: readonly (IQuickPickItem | IQuickPickSeparator)[];
-			readonly accept: (item: IQuickPickItem) => void;
-			readonly hidden: Emitter<void>;
-			readonly shown: Promise<void>;
-		}> = [];
+		const pickers: Array<{ readonly items: readonly (IQuickPickItem | IQuickPickSeparator)[]; readonly accept: (item: IQuickPickItem) => void; readonly hidden: Emitter<void>; readonly shown: Promise<void>; }> = [];
 		services.registerInstance(IQuickInputService, {
 			createQuickPick: () => {
-				const accepted = resources.add(new Emitter<{ inBackground: boolean }>());
+				const accepted = resources.add(new Emitter<{ inBackground: boolean; }>());
 				const hidden = resources.add(new Emitter<void>());
 				let show!: () => void;
-				const shown = new Promise<void>(resolve => (show = resolve));
+				const shown = new Promise<void>(resolve => show = resolve);
 				const picker = {
-					items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[],
-					selectedItems: [] as IQuickPickItem[],
-					ariaLabel: '',
-					placeholder: '',
-					onDidAccept: accepted.event,
-					onDidHide: hidden.event,
-					show: () => show(),
-					hide: () => hidden.fire(),
-					dispose() {},
-					[Symbol.dispose]() {},
+					items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[], selectedItems: [] as IQuickPickItem[], ariaLabel: '', placeholder: '',
+					onDidAccept: accepted.event, onDidHide: hidden.event,
+					show: () => show(), hide: () => hidden.fire(),
+					dispose() { }, [Symbol.dispose]() { },
 				} as unknown as IQuickPick<IQuickPickItem>;
-				pickers.push({
-					get items() {
-						return picker.items;
-					},
-					accept: item => {
-						picker.selectedItems = [item];
-						accepted.fire({ inBackground: false });
-					},
-					hidden,
-					shown,
-				});
+				pickers.push({ get items() { return picker.items; }, accept: item => { picker.selectedItems = [item]; accepted.fire({ inBackground: false }); }, hidden, shown });
 				return picker;
 			},
 			input: async () => undefined,
@@ -230,14 +140,7 @@ function createHistoryPickerTest(resources: DisposableStore) {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => dom.window.close()));
 	const configuration = resources.add(new WorkbenchConfigurationService());
-	const storage = resources.add(
-		new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'history-lifetime',
-			backend: dom.window.localStorage,
-			flushInterval: 0,
-		}),
-	);
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-lifetime', backend: dom.window.localStorage, flushInterval: 0 }));
 	const folder = { id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 };
 	const workspace = resources.add(new TestWorkspaceService({ id: 'history-lifetime', folders: [folder] }));
 	new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo accepted', true, false);
@@ -251,22 +154,16 @@ function createHistoryPickerTest(resources: DisposableStore) {
 	const exits = resources.add(new Emitter<number | undefined>());
 	const activeChanges = resources.add(new Emitter<ITerminalInstance | undefined>());
 	const disposals = resources.add(new Emitter<ITerminalInstance>());
-	const sent: Array<{ text: string; shouldExecute: boolean }> = [];
+	const sent: Array<{ text: string; shouldExecute: boolean; }> = [];
 	const started = new DeferredPromise<void>();
 	let sendGate: Promise<void> | undefined;
 	let focusCount = 0;
 	let processId = 10;
 	const instance = {
-		dirId: folder.id,
-		profile: { profileId: 'bash', title: 'Bash', isDefault: true },
-		shellType: PosixShellType.Bash,
-		state: 'running',
-		isReadOnly: false,
-		get processId() {
-			return processId;
-		},
-		onDidChangeState: states.event,
-		onDidExit: exits.event,
+		dirId: folder.id, profile: { profileId: 'bash', title: 'Bash', isDefault: true },
+		shellType: PosixShellType.Bash, state: 'running', isReadOnly: false,
+		get processId() { return processId; },
+		onDidChangeState: states.event, onDidExit: exits.event,
 		xterm: { focus: () => focusCount++ },
 		sendText: async (text: string, shouldExecute: boolean) => {
 			sent.push({ text, shouldExecute });
@@ -276,68 +173,37 @@ function createHistoryPickerTest(resources: DisposableStore) {
 	} as unknown as ITerminalInstance;
 	let activeInstance: ITerminalInstance | undefined = instance;
 	services.registerInstance(ITerminalService, {
-		get activeInstance() {
-			return activeInstance;
-		},
-		instances: [instance],
-		onDidChangeActiveInstance: activeChanges.event,
-		onDidDisposeInstance: disposals.event,
+		get activeInstance() { return activeInstance; }, instances: [instance],
+		onDidChangeActiveInstance: activeChanges.event, onDidDisposeInstance: disposals.event,
 	} as unknown as ITerminalService);
-	const accepted = resources.add(new Emitter<{ inBackground: boolean }>());
+	const accepted = resources.add(new Emitter<{ inBackground: boolean; }>());
 	const hidden = resources.add(new Emitter<void>());
 	let hideCount = 0;
 	let show!: () => void;
-	const shown = new Promise<void>(resolve => (show = resolve));
+	const shown = new Promise<void>(resolve => show = resolve);
 	const picker = {
-		items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[],
-		selectedItems: [] as IQuickPickItem[],
-		onDidAccept: accepted.event,
-		onDidHide: hidden.event,
-		show: () => show(),
-		hide: () => {
-			hideCount++;
-			hidden.fire();
-		},
-		dispose() {},
-		[Symbol.dispose]() {},
+		items: [] as readonly (IQuickPickItem | IQuickPickSeparator)[], selectedItems: [] as IQuickPickItem[],
+		onDidAccept: accepted.event, onDidHide: hidden.event,
+		show: () => show(), hide: () => { hideCount++; hidden.fire(); },
+		dispose() { }, [Symbol.dispose]() { },
 	} as unknown as IQuickPick<IQuickPickItem>;
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	return {
-		services,
-		workspace,
-		folder,
-		instance,
-		shown,
-		sent,
-		started: started.p,
-		get hideCount() {
-			return hideCount;
-		},
-		get focusCount() {
-			return focusCount;
-		},
-		accept: () => {
-			picker.selectedItems = [picker.items[0]! as IQuickPickItem];
-			accepted.fire({ inBackground: false });
-		},
+		services, workspace, folder, instance, shown, sent, started: started.p,
+		get hideCount() { return hideCount; },
+		get focusCount() { return focusCount; },
+		accept: () => { picker.selectedItems = [picker.items[0]! as IQuickPickItem]; accepted.fire({ inBackground: false }); },
 		switchAwayAndBack: () => {
 			activeInstance = undefined;
 			activeChanges.fire(undefined);
 			activeInstance = instance;
 			activeChanges.fire(instance);
 		},
-		reconnect: () => {
-			states.fire('reconnecting');
-			states.fire('running');
-		},
-		replaceProcess: () => {
-			processId++;
-		},
+		reconnect: () => { states.fire('reconnecting'); states.fire('running'); },
+		replaceProcess: () => { processId++; },
 		exit: () => exits.fire(0),
 		disposeInstance: () => disposals.fire(instance),
-		delaySend: (gate: Promise<void>) => {
-			sendGate = gate;
-		},
+		delaySend: (gate: Promise<void>) => { sendGate = gate; },
 	};
 }
 
@@ -349,21 +215,11 @@ for (const commandId of [TerminalHistoryCommandId.RunRecentCommand, TerminalHist
 			const running = fixture.services.invokeFunction(CommandsRegistry.getCommand(commandId)!);
 			await fixture.shown;
 			switch (scenario) {
-				case 'switch away and back':
-					fixture.switchAwayAndBack();
-					break;
-				case 'reconnect':
-					fixture.reconnect();
-					break;
-				case 'exit':
-					fixture.exit();
-					break;
-				case 'dispose':
-					fixture.disposeInstance();
-					break;
-				case 'replace workspace':
-					fixture.workspace.updateWorkspace({ id: 'replacement', folders: [fixture.folder] });
-					break;
+				case 'switch away and back': fixture.switchAwayAndBack(); break;
+				case 'reconnect': fixture.reconnect(); break;
+				case 'exit': fixture.exit(); break;
+				case 'dispose': fixture.disposeInstance(); break;
+				case 'replace workspace': fixture.workspace.updateWorkspace({ id: 'replacement', folders: [fixture.folder] }); break;
 			}
 			assert.ok(fixture.hideCount > 0, 'the stale picker must close immediately');
 			fixture.accept();

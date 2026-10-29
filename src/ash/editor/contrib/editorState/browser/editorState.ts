@@ -25,32 +25,26 @@ export class EditorStateCancellationTokenSource extends EditorKeybindingCancella
 			this.changes.add(editor.onDidChangeModelContent(() => this.cancel()));
 		}
 		if (flags & CodeEditorStateFlag.Position) {
-			this.changes.add(
-				editor.onDidChangeCursorPosition(event => {
-					if (!allowedRange?.containsPosition(event.position)) {
-						this.cancel();
-					}
-				}),
-			);
+			this.changes.add(editor.onDidChangeCursorPosition(event => {
+				if (!allowedRange?.containsPosition(event.position)) {
+					this.cancel();
+				}
+			}));
 		}
 		if (flags & CodeEditorStateFlag.Selection) {
-			this.changes.add(
-				editor.onDidChangeCursorSelection(event => {
-					if (!allowedRange?.containsRange(event.selection)) {
-						this.cancel();
-					}
-				}),
-			);
+			this.changes.add(editor.onDidChangeCursorSelection(event => {
+				if (!allowedRange?.containsRange(event.selection)) {
+					this.cancel();
+				}
+			}));
 		}
 		if (flags & CodeEditorStateFlag.Scroll) {
 			const state = new EditorState(editor, CodeEditorStateFlag.Scroll);
-			this.changes.add(
-				editor.onDidScrollChange(() => {
-					if (!state.validate(editor)) {
-						this.cancel();
-					}
-				}),
-			);
+			this.changes.add(editor.onDidScrollChange(() => {
+				if (!state.validate(editor)) {
+					this.cancel();
+				}
+			}));
 		}
 		this.changes.add(this.token.onCancellationRequested(() => this.changes.dispose()));
 		if (this.token.isCancellationRequested) {

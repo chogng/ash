@@ -9,14 +9,12 @@ export function toSkillSelectors(skills: readonly SkillDescriptor[]): readonly S
 	const available = skills.filter(skill => skill.enabled && skill.compatible);
 	const counts = new Map<string, number>();
 	for (const skill of available) counts.set(skill.id.name, (counts.get(skill.id.name) ?? 0) + 1);
-	return available
-		.filter(skill => counts.get(skill.id.name) === 1)
-		.map<SkillSelectorDefinition>(skill => ({
-			name: skill.id.name,
-			description: skill.description,
-			source: skill.id.source,
-			skill: { id: { ...skill.id }, version: { type: 'pinnedDigest', digest: skill.contentDigest } },
-		}));
+	return available.filter(skill => counts.get(skill.id.name) === 1).map<SkillSelectorDefinition>(skill => ({
+		name: skill.id.name,
+		description: skill.description,
+		source: skill.id.source,
+		skill: { id: { ...skill.id }, version: { type: 'pinnedDigest', digest: skill.contentDigest } },
+	}));
 }
 
 /** Owns the enabled Skill snapshot shared by `$` completion and Turn submission. */

@@ -1,12 +1,54 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import ts from 'typescript';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 const excludedDirectories = /(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
-const sourceRoots = ['src/', 'build/', 'extensions/', 'test/', 'services/', 'sdk/typescript/', 'examples/extensions/', 'crates/external-js-ext/', 'resources/extension-host/'];
+const sourceRoots = [
+	'src/',
+	'build/',
+	'extensions/',
+	'test/',
+	'services/',
+	'sdk/typescript/',
+	'examples/extensions/',
+	'crates/external-js-ext/',
+	'resources/extension-host/',
+];
 const copiedSourceRoots = ['src/ash/base/browser/dompurify/', 'src/ash/base/common/marked/'];
+
+/** Normalize whitespace without reflowing the author's statements, expressions, or comments. */
+export function format(
+	fileName: string,
+	text: string,
+	options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(repositoryRoot, 'tsfmt.json'), 'utf8')),
+): string {
+	const absolutePath = resolve(fileName).replaceAll('\\', '/');
+	const snapshot = ts.ScriptSnapshot.fromString(text);
+	const service = ts.createLanguageService({
+		getCompilationSettings: () => ({ allowJs: true }),
+		getScriptFileNames: () => [absolutePath],
+		getScriptVersion: () => '0',
+		getScriptSnapshot: name => name === absolutePath ? snapshot : undefined,
+		getCurrentDirectory: () => repositoryRoot,
+		getDefaultLibFileName: options => ts.getDefaultLibFilePath(options),
+		fileExists: name => name === absolutePath,
+		readFile: name => name === absolutePath ? text : undefined,
+	});
+	try {
+		// Apply replacements before insertions at the same offset so an inserted semicolon cannot be erased.
+		const edits = service.getFormattingEditsForDocument(absolutePath, options)
+			.sort((left, right) => right.span.start - left.span.start || right.span.length - left.span.length);
+		for (const edit of edits) {
+			text = text.slice(0, edit.span.start) + edit.newText + text.slice(edit.span.start + edit.span.length);
+		}
+		return text;
+	} finally {
+		service.dispose();
+	}
+}
 
 function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 	const selections = paths.map(path => {
@@ -54,6 +96,32 @@ function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 
 function main(args: readonly string[]): number {
 	const [mode, ...remaining] = args;
+	if (mode === '--stdin-filepath') {
+		if (remaining.length !== 1 || !remaining[0]) {
+			throw new Error('--stdin-filepath requires one source path.');
+		}
+		const name = relative(repositoryRoot, resolve(remaining[0])).replaceAll('\\', '/');
+		if (name === '..' || name.startsWith('../') || isAbsolute(name) || !sourceExtensions.test(name)) {
+			throw new Error(`Unsupported source path: ${remaining[0]}`);
+		}
+		const input = readFileSync(0, 'utf8');
+		const ignored = spawnSync('git', [
+			'-c', `core.excludesFile=${resolve(repositoryRoot, '.prettierignore')}`,
+			'check-ignore', '--no-index', '--quiet', '--', name,
+		], { cwd: repositoryRoot, encoding: 'utf8' });
+		if (ignored.error) {
+			throw ignored.error;
+		}
+		if (ignored.status !== 0 && ignored.status !== 1) {
+			throw new Error(ignored.stderr || 'Cannot resolve source ignore rules.');
+		}
+		const preserve = ignored.status === 0
+			|| excludedDirectories.test(name)
+			|| copiedSourceRoots.some(root => name.startsWith(root))
+			|| /\.d\.[cm]?ts$/.test(name);
+		process.stdout.write(preserve ? input : format(remaining[0], input));
+		return 0;
+	}
 	// The repository orchestrator supplies a sparse snapshot for scoped checks and
 	// writes. Git still owns source selection; only file contents and settings move.
 	const snapshot = remaining[0] === '--content-root';
@@ -69,53 +137,23 @@ function main(args: readonly string[]): number {
 	if (files.length === 0 && !snapshot) {
 		throw new Error('No first-party TypeScript or JavaScript sources found.');
 	}
-	const bun = resolve(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
-	// Keep Git's exact source ownership while formatting batches natively in Bun.
-	// Leave room for the environment and quoting under each platform's argument limit.
-	const limit = process.platform === 'win32' ? 6000 : 120_000;
-	const batches: string[][] = [];
-	let batch: string[] = [];
-	let length = 0;
+	const options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(contentRoot, 'tsfmt.json'), 'utf8'));
+	let changes = 0;
 	for (const file of files) {
 		const absolutePath = resolve(contentRoot, file);
-		const size = Buffer.byteLength(absolutePath, 'utf8') + 3;
-		if (batch.length && length + size > limit) {
-			batches.push(batch);
-			batch = [];
-			length = 0;
+		const original = readFileSync(absolutePath, 'utf8');
+		const formatted = format(absolutePath, original, options);
+		if (formatted !== original) {
+			changes++;
+			if (mode === '--check') {
+				console.error(`File not formatted: ${file}`);
+			} else {
+				writeFileSync(absolutePath, formatted, 'utf8');
+			}
 		}
-		batch.push(absolutePath);
-		length += size;
 	}
-	if (batch.length) batches.push(batch);
-	let status = 0;
-	for (const paths of batches) {
-		const result = spawnSync(
-			bun,
-			[
-				'fmt',
-				'--no-script',
-				'--disable-nested-config',
-				'--config',
-				resolve(contentRoot, '.prettierrc.toml'),
-				'--ignore-path',
-				resolve(contentRoot, '.gitignore'),
-				'--ignore-path',
-				resolve(contentRoot, '.prettierignore'),
-				mode,
-				'--log-level',
-				'warn',
-				'--',
-				...paths,
-			],
-			{ cwd: contentRoot, stdio: 'inherit', windowsHide: true },
-		);
-		if (result.error) throw result.error;
-		if (result.signal) throw new Error(`Bun formatter interrupted by ${result.signal}.`);
-		status = Math.max(status, result.status ?? 1);
-	}
-	console.log(`Bun: ${mode === '--check' ? 'checked' : 'formatted'} ${files.length} TypeScript/JavaScript files.`);
-	return status;
+	console.log(`TypeScript: ${mode === '--check' ? 'checked' : 'formatted'} ${files.length} TypeScript/JavaScript files; ${changes} changed.`);
+	return mode === '--check' && changes > 0 ? 1 : 0;
 }
 
 if (import.meta.main) {

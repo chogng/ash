@@ -17,34 +17,17 @@ function setup(resources: DisposableStore, initial: RemoteAgentConnection, resou
 	const keys = resources.add(new ContextKeyService());
 	const quick = resources.add(new TestQuickInputService({ container: document.body, contextKeyService: keys }));
 	let connection = initial;
-	const pick = new ChatInstructionsPickerPick(
-		'instruction-session',
-		{
-			isAvailable: true,
-			list: async sessionId => {
-				assert.equal(sessionId, 'instruction-session');
-				return [{ name: 'A synthetic instruction', path, scope: 'user', resource }];
-			},
-		},
-		quick,
-		{
-			get connection() {
-				return connection;
-			},
-			connectionState: 'connected',
-			onDidChangeConnection: Event.None,
-			onDidChangeConnectionState: Event.None,
-			reconnect: async () => ({ kind: 'alreadyConnected' }),
-			rollbackRuntime: async () => ({ kind: 'cancelled' }),
-		},
-	);
-	return {
-		quick,
-		pick,
-		changeConnection: (next: RemoteAgentConnection) => {
-			connection = next;
-		},
-	};
+	const pick = new ChatInstructionsPickerPick('instruction-session', {
+		isAvailable: true, list: async sessionId => {
+			assert.equal(sessionId, 'instruction-session');
+			return [{ name: 'A synthetic instruction', path, scope: 'user', resource }];
+		}
+	}, quick, {
+		get connection() { return connection; }, connectionState: 'connected',
+		onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None,
+		reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }),
+	});
+	return { quick, pick, changeConnection: (next: RemoteAgentConnection) => { connection = next; } };
 }
 
 async function ready(quick: TestQuickInputService): Promise<void> {
@@ -65,31 +48,21 @@ for (const [connection, expected] of [
 	[{ kind: 'local', generation: 1 }, URI.file(path).toString()],
 	[{ kind: 'ssh', generation: 1, authority: 'ssh+fixture', host: 'fixture' }, `ash-remote://ssh+fixture${path}`],
 	[{ kind: 'remote', generation: 1, authority: 'fixture-cloud' }, `ash-remote://fixture-cloud${path}`],
-] as const)
-	test(`Instruction selection uses the owning ${connection.kind} connection outside all workspace folders`, async () => {
-		using resources = new DisposableStore();
-		const { quick, pick } = setup(resources, connection);
-		const selecting = pick.asAttachment(undefined, new AbortController().signal);
-		await ready(quick);
-		accept();
-		const selected = await selecting;
-		assert.equal(selected?.resource?.toString(), expected);
-		assert.deepEqual(await selected?.resolve(), {
-			name: 'A synthetic instruction',
-			content: path,
-			kind: 'instruction',
-		});
-		assert.equal(quick.currentQuickInput, undefined);
-	});
+] as const) test(`Instruction selection uses the owning ${connection.kind} connection outside all workspace folders`, async () => {
+	using resources = new DisposableStore();
+	const { quick, pick } = setup(resources, connection);
+	const selecting = pick.asAttachment(undefined, new AbortController().signal);
+	await ready(quick);
+	accept();
+	const selected = await selecting;
+	assert.equal(selected?.resource?.toString(), expected);
+	assert.deepEqual(await selected?.resolve(), { name: 'A synthetic instruction', content: path, kind: 'instruction' });
+	assert.equal(quick.currentQuickInput, undefined);
+});
 
 test('Instruction selection cannot attach a catalog from a replaced connection', async () => {
 	using resources = new DisposableStore();
-	const { quick, pick, changeConnection } = setup(resources, {
-		kind: 'ssh',
-		generation: 1,
-		authority: 'ssh+fixture',
-		host: 'fixture',
-	});
+	const { quick, pick, changeConnection } = setup(resources, { kind: 'ssh', generation: 1, authority: 'ssh+fixture', host: 'fixture' });
 	const selecting = pick.asAttachment(undefined, new AbortController().signal);
 	await ready(quick);
 	changeConnection({ kind: 'local', generation: 2 });

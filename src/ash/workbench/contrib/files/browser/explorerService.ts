@@ -36,14 +36,7 @@ export class ExplorerService extends Disposable implements IExplorerService {
 		this.onDidChangeRoot = this.model.onDidChangeRoot;
 		this.onDidChangeResources = this.watcher.onDidChange;
 		this._register(workspace.onDidChangeWorkspace(() => this.setToCopy([], false)));
-		this.revealExcludeMatcher = this._register(
-			new ResourceGlobMatcher(
-				() => configuration.getValue<IExpression>('explorer.autoRevealExclude'),
-				event => event.affectsConfiguration('explorer.autoRevealExclude'),
-				workspace,
-				configuration,
-			),
-		);
+		this.revealExcludeMatcher = this._register(new ResourceGlobMatcher(() => configuration.getValue<IExpression>('explorer.autoRevealExclude'), event => event.affectsConfiguration('explorer.autoRevealExclude'), workspace, configuration));
 	}
 
 	public shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean {
@@ -51,27 +44,19 @@ export class ExplorerService extends Disposable implements IExplorerService {
 		const root = this.model.root;
 		const folder = root?.children?.find(item => extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ?? root;
 		if (!folder || !extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.resource)) return true;
-		for (
-			let parent = dirname(resource);
-			extUriBiasedIgnorePathCase.isEqualOrParent(parent, folder.resource) && !extUriBiasedIgnorePathCase.isEqual(parent, folder.resource);
-			parent = dirname(parent)
-		) {
+		for (let parent = dirname(resource); extUriBiasedIgnorePathCase.isEqualOrParent(parent, folder.resource) && !extUriBiasedIgnorePathCase.isEqual(parent, folder.resource); parent = dirname(parent)) {
 			if (this.revealExcludeMatcher.matches(parent)) return false;
 		}
 		return true;
 	}
 
-	public getRoot(): ExplorerItem | undefined {
-		return this.model.root;
-	}
+	public getRoot(): ExplorerItem | undefined { return this.model.root; }
 
 	public async refresh(): Promise<void> {
 		await this.view?.refresh(true);
 	}
 
-	public getToCopy(): IExplorerClipboard {
-		return this.clipboard;
-	}
+	public getToCopy(): IExplorerClipboard { return this.clipboard; }
 	public setToCopy(items: readonly IExplorerClipboardItem[], cut: boolean): void {
 		this.clipboard = { items: items.map(({ resource, name, kind }) => ({ resource, name, kind })), cut };
 		this.clipboardChanged.fire();

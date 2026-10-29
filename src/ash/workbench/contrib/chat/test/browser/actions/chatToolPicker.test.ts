@@ -20,46 +20,14 @@ test('browser group selection uses available built-in names without disabling a 
 	resources.add(toDisposable(() => container.remove()));
 	const quick = resources.add(new TestQuickInputService({ container }));
 	const tools = [
-		{
-			id: 'browser_open',
-			toolReferenceName: 'browser_open',
-			displayName: 'Open',
-			modelDescription: 'Open',
-			canBeReferencedInPrompt: true,
-			source: 'local',
-			sourceDetails: [],
-			exposure: 'direct',
-			authority: 'productService',
-		},
-		{
-			id: 'browser_click',
-			toolReferenceName: 'browser_click',
-			displayName: 'Click',
-			modelDescription: 'Click',
-			canBeReferencedInPrompt: true,
-			source: 'local',
-			sourceDetails: [],
-			exposure: 'direct',
-			authority: 'productService',
-		},
-		{
-			id: 'browser_screenshot',
-			toolReferenceName: 'browser_screenshot',
-			displayName: 'External',
-			modelDescription: 'External',
-			canBeReferencedInPrompt: true,
-			source: 'mcp',
-			sourceDetails: [],
-			exposure: 'direct',
-			authority: 'providerDefined',
-		},
+		{ id: 'browser_open', toolReferenceName: 'browser_open', displayName: 'Open', modelDescription: 'Open', canBeReferencedInPrompt: true, source: 'local', sourceDetails: [], exposure: 'direct', authority: 'productService' },
+		{ id: 'browser_click', toolReferenceName: 'browser_click', displayName: 'Click', modelDescription: 'Click', canBeReferencedInPrompt: true, source: 'local', sourceDetails: [], exposure: 'direct', authority: 'productService' },
+		{ id: 'browser_screenshot', toolReferenceName: 'browser_screenshot', displayName: 'External', modelDescription: 'External', canBeReferencedInPrompt: true, source: 'mcp', sourceDetails: [], exposure: 'direct', authority: 'providerDefined' },
 	] as const;
 	using service = createTestLanguageModelToolsService({
-		isAvailable: true,
-		read: async () => ({
-			tools: tools.map(tool => ({ ...tool, name: tool.id, description: tool.modelDescription })),
-			sourceGroups: [],
-		}),
+		isAvailable: true, read: async () => ({
+			tools: tools.map(tool => ({ ...tool, name: tool.id, description: tool.modelDescription })), sourceGroups: [],
+		})
 	});
 	await service.refresh();
 	const cancellation = new AbortController();
@@ -88,19 +56,10 @@ test('an open tools picker follows backend changes and retains search, focus and
 	const quick = resources.add(new TestQuickInputService({ container }));
 	let names = ['read_file', 'removed_tool'];
 	using service = createTestLanguageModelToolsService({
-		isAvailable: true,
-		onDidChangeTools: invalidated.event,
-		read: async () => ({
-			tools: names.map(name => ({
-				name,
-				description: name,
-				source: 'local',
-				sourceDetails: [],
-				exposure: 'direct',
-				authority: 'directoryRead',
-			})),
+		isAvailable: true, onDidChangeTools: invalidated.event, read: async () => ({
+			tools: names.map(name => ({ name, description: name, source: 'local', sourceDetails: [], exposure: 'direct', authority: 'directoryRead' })),
 			sourceGroups: [{ id: 'directory', source: 'local', sourceId: 'directory', tools: names }],
-		}),
+		})
 	});
 	await service.refresh();
 	const cancellation = new AbortController();

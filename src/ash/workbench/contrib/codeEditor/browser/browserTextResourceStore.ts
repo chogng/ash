@@ -1,13 +1,5 @@
 import { type Event } from '../../../../base/common/event.js';
-import {
-	TextResourceConflictError,
-	type TextResourceChangeEvent,
-	type TextResourceContent,
-	type TextResourceResolveRequest,
-	type TextResourceSaveRequest,
-	type TextResourceSaveResult,
-	type ITextResourceStore,
-} from '../../../services/textmodelResolver/common/textResourceStore.js';
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
 import { type ITextFileService } from '../../../services/textfile/common/textfiles.js';
 import { TextFileSaveConflictError } from '../../../services/textfile/common/textFileService.js';
 
@@ -22,12 +14,7 @@ export class BrowserTextResourceStore implements ITextResourceStore {
 
 	async resolve(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {
 		const content = await this.textFiles.resolve(request, signal);
-		return Object.freeze({
-			resource: content.resource,
-			text: content.text,
-			encoding: content.encoding,
-			revision: content.revision,
-		});
+		return Object.freeze({ resource: content.resource, text: content.text, encoding: content.encoding, revision: content.revision });
 	}
 
 	async save(request: TextResourceSaveRequest, signal: AbortSignal): Promise<TextResourceSaveResult> {

@@ -38,16 +38,12 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 			this.startupCatalogs.set(locale, { ...catalog, locale });
 		}
 		this.whenReady = this.refreshAutomatically().catch(() => undefined);
-		this._register(
-			meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
-				if (!isMetered && this.automaticRefreshNeeded) void this.refreshAutomatically().catch(() => undefined);
-			}),
-		);
-		this._register(
-			extensionManagement.onDidChangeInstalled(() => {
-				void this.refresh().catch(() => undefined);
-			}),
-		);
+		this._register(meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
+			if (!isMetered && this.automaticRefreshNeeded) void this.refreshAutomatically().catch(() => undefined);
+		}));
+		this._register(extensionManagement.onDidChangeInstalled(() => {
+			void this.refresh().catch(() => undefined);
+		}));
 	}
 
 	get catalogs(): readonly LanguagePackCatalog[] {
@@ -59,17 +55,16 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		// Requesting the language list is explicit intent, so a postponed startup
 		// sync must not prevent the user from choosing a newly installed pack.
 		if (this.automaticRefreshNeeded) await this.refresh().catch(() => undefined);
-		return this.catalogs
-			.map(catalog => {
-				const extensionId = this.installedProviders.get(catalog.locale) ?? this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
-				return {
-					id: catalog.locale,
-					label: catalog.localizedLanguageName,
-					description: catalog.languageName,
-					...(extensionId ? { extensionId } : {}),
-				};
-			})
-			.sort((left, right) => left.id.localeCompare(right.id));
+		return this.catalogs.map(catalog => {
+			const extensionId = this.installedProviders.get(catalog.locale)
+				?? this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
+			return {
+				id: catalog.locale,
+				label: catalog.localizedLanguageName,
+				description: catalog.languageName,
+				...(extensionId ? { extensionId } : {}),
+			};
+		}).sort((left, right) => left.id.localeCompare(right.id));
 	}
 
 	public async getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined> {
@@ -81,10 +76,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		while (locale && locale !== 'en') {
 			const translations = this.startupCatalogs.get(locale)?.extensionTranslations?.[id.toLowerCase()];
 			if (translations) {
-				return URI.from({
-					scheme: 'data',
-					path: 'application/json,' + JSON.stringify({ contents: translations }),
-				});
+				return URI.from({ scheme: 'data', path: 'application/json,' + JSON.stringify({ contents: translations }) });
 			}
 			const separator = locale.lastIndexOf('-');
 			locale = separator > 0 ? locale.slice(0, separator) : '';
@@ -95,17 +87,13 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	public async refresh(): Promise<void> {
 		this.automaticRefreshNeeded = false;
 		this.refreshQueued = true;
-		if (this.refreshPromise) {
-			return this.refreshPromise;
-		}
+		if (this.refreshPromise) { return this.refreshPromise; }
 		this.refreshPromise = (async () => {
 			while (this.refreshQueued && !this.isDisposed) {
 				this.refreshQueued = false;
 				await this.load();
 			}
-		})().finally(() => {
-			this.refreshPromise = undefined;
-		});
+		})().finally(() => { this.refreshPromise = undefined; });
 		return this.refreshPromise;
 	}
 
@@ -123,13 +111,9 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 			const cached = await this.store.readIndex().catch(() => []);
 			if (this.isDisposed) return;
 			for (const entry of cached) {
-				if (this.builtinLocales.has(entry.locale)) {
-					continue;
-				}
+				if (this.builtinLocales.has(entry.locale)) { continue; }
 				const preinstalled = this.preinstalled.find(pack => pack.catalog.locale === entry.locale);
-				if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) {
-					continue;
-				}
+				if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) { continue; }
 				this.catalogsByLocale.set(entry.locale, entry.catalog);
 				this.startupCatalogs.set(entry.locale, entry.catalog);
 				this.installedProviders.set(entry.locale, entry.extensionId);
@@ -144,13 +128,9 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		const installed = await this.extensionManagement.listInstalled();
 		const candidates = new Map<string, LanguagePackIndexEntry | undefined>();
 		for (const entry of await loadInstalledCatalogs(this.extensionManagement, installed)) {
-			if (this.builtinLocales.has(entry.locale)) {
-				continue;
-			}
+			if (this.builtinLocales.has(entry.locale)) { continue; }
 			const preinstalled = this.preinstalled.find(pack => pack.catalog.locale === entry.locale);
-			if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) {
-				continue;
-			}
+			if (preinstalled && providerId(preinstalled.id) !== providerId(entry.extensionId)) { continue; }
 			candidates.set(entry.locale, candidates.has(entry.locale) ? undefined : entry);
 		}
 		const loaded = [...candidates.values()].filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
@@ -160,13 +140,9 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		this.assertNotDisposed();
 		this.catalogsByLocale.clear();
 		for (const catalog of [...this.startupCatalogs.values()]) {
-			if (this.builtinLocales.has(catalog.locale)) {
-				this.catalogsByLocale.set(catalog.locale, catalog);
-			}
+			if (this.builtinLocales.has(catalog.locale)) { this.catalogsByLocale.set(catalog.locale, catalog); }
 		}
-		for (const pack of this.preinstalled) {
-			this.catalogsByLocale.set(pack.catalog.locale, pack.catalog);
-		}
+		for (const pack of this.preinstalled) { this.catalogsByLocale.set(pack.catalog.locale, pack.catalog); }
 		this.installedProviders.clear();
 		for (const entry of loaded) {
 			this.catalogsByLocale.set(entry.locale, entry.catalog);
@@ -176,7 +152,10 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	}
 }
 
-async function loadInstalledCatalogs(extensionManagement: IExtensionManagementService, installed: readonly ExtensionsInstalledPackage[]): Promise<readonly LanguagePackIndexEntry[]> {
+async function loadInstalledCatalogs(
+	extensionManagement: IExtensionManagementService,
+	installed: readonly ExtensionsInstalledPackage[],
+): Promise<readonly LanguagePackIndexEntry[]> {
 	const catalogs: LanguagePackIndexEntry[] = [];
 	for (const packageValue of installed) {
 		if (packageValue.state !== 'installed') continue;
@@ -198,15 +177,7 @@ async function loadInstalledCatalogs(extensionManagement: IExtensionManagementSe
 					continue;
 				}
 				const catalog = parseLanguagePackCatalog(parsed);
-				if (catalog) {
-					catalogs.push({
-						locale: catalog.locale,
-						extensionId: packageValue.package.id,
-						version: packageValue.package.version,
-						digest: packageValue.package.digest,
-						catalog,
-					});
-				}
+				if (catalog) { catalogs.push({ locale: catalog.locale, extensionId: packageValue.package.id, version: packageValue.package.version, digest: packageValue.package.digest, catalog }); }
 			} catch {
 				// One unavailable resource must not hide other installed languages.
 			} finally {

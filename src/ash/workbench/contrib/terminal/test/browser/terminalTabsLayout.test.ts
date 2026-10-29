@@ -80,11 +80,8 @@ suite('Terminal Panel orientation', () => {
 			element.append(input);
 			inputs.push(input);
 			return {
-				id,
-				instanceId: index + 1,
-				title: id,
-				processId: index + 100,
-				xterm: { element, fit() {}, setVisible() {}, focus: () => input.focus() },
+				id, instanceId: index + 1, title: id, processId: index + 100,
+				xterm: { element, fit() { }, setVisible() { }, focus: () => input.focus() },
 				attachToElement: (pane: HTMLElement) => pane.append(element),
 				detachFromElement: () => element.remove(),
 			} as unknown as ITerminalInstance;
@@ -92,17 +89,11 @@ suite('Terminal Panel orientation', () => {
 		let active: ITerminalInstance | undefined = instances[1];
 		using services = new InstantiationService();
 		services.registerInstance(ITerminalService, {
-			instances,
-			get activeInstance() {
-				return active;
-			},
-			setActiveInstance: (instance: ITerminalInstance | undefined) => {
-				active = instance;
-			},
+			instances, get activeInstance() { return active; },
+			setActiveInstance: (instance: ITerminalInstance | undefined) => { active = instance; },
 		} as unknown as ITerminalService);
 		services.registerInstance(IWorkbenchLayoutService, {
-			getPanelPosition: () => position,
-			onDidChangePanelPosition: positionChanged.event,
+			getPanelPosition: () => position, onDidChangePanelPosition: positionChanged.event,
 		} as IWorkbenchLayoutService);
 		using group = services.createInstance(TerminalGroup, instances[0]!);
 		group.addInstance(instances[1]!);
@@ -116,18 +107,9 @@ suite('Terminal Panel orientation', () => {
 			assert.equal(host.querySelector('.ash-terminal-group')?.classList.contains(`ash-split-view-${orientation}`), true);
 			assert.deepEqual(group.terminalInstances, instances);
 			assert.equal(group.activeInstance, instances[1]);
-			assert.deepEqual(
-				instances.map(instance => instance.xterm!.element),
-				screens,
-			);
-			assert.deepEqual(
-				inputs.map(input => input.value),
-				['pending first', 'pending second', 'pending third'],
-			);
-			assert.deepEqual(
-				group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize),
-				[0.2, 0.3, 0.5],
-			);
+			assert.deepEqual(instances.map(instance => instance.xterm!.element), screens);
+			assert.deepEqual(inputs.map(input => input.value), ['pending first', 'pending second', 'pending third']);
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
 		};
 		try {
 			inputs[1]!.focus();
@@ -136,19 +118,11 @@ suite('Terminal Panel orientation', () => {
 			positionChanged.fire('left');
 			// Applying the old bottom height to the new axis would clamp all three
 			// panes to their minimum and erase the unequal proportions.
-			assert.deepEqual(
-				group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize),
-				[0.2, 0.3, 0.5],
-			);
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
 			group.layout(400, 900);
 			assertState('vertical');
 			assert.equal(document.activeElement, inputs[1]);
-			for (const [next, orientation] of [
-				[Position.LEFT, 'vertical'],
-				[Position.RIGHT, 'vertical'],
-				[Position.TOP, 'horizontal'],
-				[Position.BOTTOM, 'horizontal'],
-			] as const) {
+			for (const [next, orientation] of [[Position.LEFT, 'vertical'], [Position.RIGHT, 'vertical'], [Position.TOP, 'horizontal'], [Position.BOTTOM, 'horizontal']] as const) {
 				position = next;
 				// Part layout can precede the host's position notification.
 				group.layout(orientation === 'vertical' ? 400 : 1_200, 900);
@@ -170,10 +144,7 @@ suite('Terminal Panel orientation', () => {
 			group.setVisible(true);
 			group.attachToElement(reopened);
 			assert.equal(reopened.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-vertical'), true);
-			assert.deepEqual(
-				group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize),
-				[0.2, 0.3, 0.5],
-			);
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
 			assert.equal(document.activeElement, outside);
 			const sash = reopened.querySelector<HTMLElement>('.ash-sash')!;
 			sash.focus();
@@ -198,68 +169,17 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	using created = new Emitter<ITerminalInstance>();
 	using disposed = new Emitter<ITerminalInstance>();
 	const createInstance = (id: string): ITerminalInstance => ({
-		...Disposable.None,
-		id,
-		instanceId: id === 'one' ? 1 : id === 'two' ? 2 : 3,
-		dirId: 'folder',
-		processId: 1,
-		initialCwd: '/folder',
-		title: id,
-		profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-		state: 'running',
-		exitCode: undefined,
-		onDidWriteData: Event.None,
-		onDidChangeCommandStatus: Event.None,
-		onDidExit: Event.None,
-		onDidChangeState: Event.None,
-		xterm: undefined,
-		xtermReadyPromise: Promise.resolve(undefined),
-		getContribution: () => null,
-		start() {},
-		attachToElement() {},
-		detachFromElement() {},
-		async setAutoReplies() {},
-		async sendSignal() {},
-		async sendText() {},
-		async sendPath() {
-			throw new Error('Layout fixture does not insert file paths');
-		},
-		processBinary: async () => {},
-		resize() {},
-		clearBuffer() {},
-		reuseTerminal: async () => {
-			throw new Error('Layout fixture does not replace processes');
-		},
-		close: async () => {},
-		refreshProperty: async () => {
-			throw new Error('No OS process in layout fixture');
-		},
-		serializeState: async () => {
-			throw new Error('No process checkpoint in layout fixture');
-		},
+		...Disposable.None, id, instanceId: id === 'one' ? 1 : id === 'two' ? 2 : 3, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
+		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
+		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Layout fixture does not insert file paths'); }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error('No OS process in layout fixture'); }, serializeState: async () => { throw new Error('No process checkpoint in layout fixture'); },
 	});
 	const instances = [createInstance('one'), createInstance('two')];
 	const terminals: ITerminalService = {
-		...Disposable.None,
-		instances,
-		activeInstance: instances[0],
-		onDidCreateInstance: created.event,
-		onDidDisposeInstance: disposed.event,
-		onDidChangeInstances: changed.event,
-		onDidChangeActiveInstance: Event.None,
-		createTerminal: async () => {
-			throw new Error('Unexpected creation');
-		},
-		relaunchTerminal: async () => {},
-		setActiveInstance() {},
-		moveTerminal() {},
-		whenConnected: Promise.resolve(),
-		importTerminalState: async () => {
-			throw new Error('Transfer is not used in this fixture');
-		},
-		confirmTerminalClose: async () => true,
-		safeDisposeTerminal: async () => {},
-		closeTerminal: async () => {},
+		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: created.event,
+		onDidDisposeInstance: disposed.event, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
+		createTerminal: async () => { throw new Error('Unexpected creation'); },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 	};
 	using services = new InstantiationService();
 	using context = new ContextKeyService();
@@ -272,10 +192,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	services.registerInstance(IMenuService, new MenuService(commands, context));
 	services.registerInstance(IContextMenuService, {
 		contextMenuStyle: 'custom' as const,
-		onDidShowContextMenu: Event.None,
-		onDidHideContextMenu: Event.None,
-		showContextMenu() {},
-		hideContextMenu() {},
+		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
 	});
 	registerTestComponentServices(services, dom.window.document);
 	using hoverConfiguration = new TestConfigurationService();
@@ -287,8 +204,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	using positionChanged = new Emitter<string>();
 	let panelPosition = Position.BOTTOM;
 	services.registerInstance(IWorkbenchLayoutService, {
-		getPanelPosition: () => panelPosition,
-		onDidChangePanelPosition: positionChanged.event,
+		getPanelPosition: () => panelPosition, onDidChangePanelPosition: positionChanged.event,
 	} as unknown as IWorkbenchLayoutService);
 	using groups = services.createInstance(TerminalGroupService);
 	services.registerInstance(ITerminalGroupService, groups);
@@ -305,17 +221,10 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	assert.equal(sash.getAttribute('aria-label'), 'Resize terminal instance list');
 	instances.reverse();
 	changed.fire();
-	assert.deepEqual(
-		[...tabs.querySelectorAll('[role="tab"]')].map(row => row.id),
-		['two-tab', 'one-tab'],
-	);
+	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['two-tab', 'one-tab']);
 	instances.reverse();
 	changed.fire();
-	for (const [width, height] of [
-		[0, 0],
-		[1_000, 0],
-		[0, 200],
-	]) {
+	for (const [width, height] of [[0, 0], [1_000, 0], [0, 200]]) {
 		layout.layout(width!, height!);
 		layout.layout(1_000, 200);
 		assert.equal(panes[1]?.style.width, '120px');
@@ -344,20 +253,14 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	instances.push(third);
 	created.fire(third);
 	groups.joinInstances([instances[0]!, third]);
-	assert.deepEqual(
-		[...tabs.querySelectorAll('[role="tab"]')].map(row => row.id),
-		['one-tab', 'three-tab', 'two-tab'],
-	);
+	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['one-tab', 'three-tab', 'two-tab']);
 	groups.joinInstances([instances[0]!, instances[1]!]);
 	const group = groups.activeGroup!;
 	group.attachToElement(layout.terminalContainer);
 	group.setVisible(true);
 	group.layout(500, 800);
 	group.resizePanes([2, 1, 1]);
-	const paneSizes = () =>
-		[...layout.element.querySelectorAll<HTMLElement>('.ash-terminal-group > .ash-split-view-pane')].map(pane =>
-			panelPosition === Position.BOTTOM || panelPosition === Position.TOP ? Number.parseFloat(pane.style.width) : Number.parseFloat(pane.style.height),
-		);
+	const paneSizes = () => [...layout.element.querySelectorAll<HTMLElement>('.ash-terminal-group > .ash-split-view-pane')].map(pane => panelPosition === Position.BOTTOM || panelPosition === Position.TOP ? Number.parseFloat(pane.style.width) : Number.parseFloat(pane.style.height));
 	const relativeSizes = group.getLayoutInfo(true).terminals.map(terminal => terminal.relativeSize);
 	for (const position of [Position.LEFT, Position.RIGHT, Position.TOP, Position.BOTTOM]) {
 		panelPosition = position;
@@ -379,19 +282,13 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 		assert.ok(rendered.every((size, index) => Math.abs(size / renderedTotal - relativeSizes[index]!) < 0.01));
 	}
 	layout.layout(1_000, 200);
-	assert.deepEqual(
-		[...tabs.querySelectorAll('.ash-terminal-group-branch')].map(branch => branch.textContent),
-		['┌', '├', '└'],
-	);
+	assert.deepEqual([...tabs.querySelectorAll('.ash-terminal-group-branch')].map(branch => branch.textContent), ['┌', '├', '└']);
 	assert.equal(tabs.querySelector('[id="three-tab"]')?.getAttribute('aria-description'), 'Split 2 of 3 in terminal group 1');
 	groups.unsplitInstance(third);
 	instances.pop();
 	disposed.fire(third);
 	groups.unsplitInstance(instances[1]!);
-	assert.equal(
-		[...tabs.querySelectorAll<HTMLElement>('.ash-terminal-group-branch')].every(branch => branch.hidden),
-		true,
-	);
+	assert.equal([...tabs.querySelectorAll<HTMLElement>('.ash-terminal-group-branch')].every(branch => branch.hidden), true);
 
 	const second = instances.pop()!;
 	disposed.fire(second);
@@ -424,80 +321,46 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	dom.window.close();
 });
 
+
 suite('Terminal screen resize lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Terminal screen resize coalesces columns, applies rows immediately and flushes explicitly', async () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
 		try {
 			const calls: unknown[] = [];
-			const screen = {
-				isDisposed: false,
-				raw: { buffer: { normal: { length: 400 } } },
-			} as unknown as XtermTerminal;
-			using resize = new TerminalResizeDebouncer(
-				() => true,
-				() => screen,
-				(cols, rows) => calls.push(['both', cols, rows]),
-				cols => calls.push(['x', cols]),
-				rows => calls.push(['y', rows]),
-			);
+			const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+			using resize = new TerminalResizeDebouncer(() => true, () => screen,
+				(cols, rows) => calls.push(['both', cols, rows]), cols => calls.push(['x', cols]), rows => calls.push(['y', rows]));
 			await resize.resize(90, 30, false);
 			await resize.resize(100, 40, false);
-			assert.deepEqual(calls, [
-				['y', 30],
-				['y', 40],
-			]);
+			assert.deepEqual(calls, [['y', 30], ['y', 40]]);
 			mock.timers.tick(99);
-			assert.deepEqual(calls, [
-				['y', 30],
-				['y', 40],
-			]);
+			assert.deepEqual(calls, [['y', 30], ['y', 40]]);
 			mock.timers.tick(1);
-			assert.deepEqual(calls, [
-				['y', 30],
-				['y', 40],
-				['x', 100],
-			]);
+			assert.deepEqual(calls, [['y', 30], ['y', 40], ['x', 100]]);
 			await resize.resize(110, 45, false);
 			resize.flush();
-			assert.deepEqual(calls.slice(-2), [
-				['y', 45],
-				['x', 110],
-			]);
+			assert.deepEqual(calls.slice(-2), [['y', 45], ['x', 110]]);
 			await resize.resize(120, 50, true);
 			mock.timers.tick(200);
 			assert.deepEqual(calls.at(-1), ['both', 120, 50]);
-		} finally {
-			mock.timers.reset();
-		}
+		} finally { mock.timers.reset(); }
 	});
 
 	test('Terminal screen resize keeps the latest hidden dimensions and releases idle work', async () => {
 		let idle: (() => void) | undefined;
 		let canceled = 0;
 		const targetWindow = {
-			requestIdleCallback: (work: () => void) => {
-				idle = work;
-				return 1;
-			},
-			cancelIdleCallback: () => {
-				idle = undefined;
-				canceled++;
-			},
+			requestIdleCallback: (work: () => void) => { idle = work; return 1; },
+			cancelIdleCallback: () => { idle = undefined; canceled++; },
 		};
 		const screen = {
-			isDisposed: false,
-			raw: { buffer: { normal: { length: 400 } } },
+			isDisposed: false, raw: { buffer: { normal: { length: 400 } } },
 			element: { ownerDocument: { defaultView: targetWindow } },
 		} as unknown as XtermTerminal;
 		const calls: unknown[] = [];
-		using resize = new TerminalResizeDebouncer(
-			() => false,
-			() => screen,
-			(cols, rows) => calls.push([cols, rows]),
-			() => assert.fail('Unexpected horizontal-only resize'),
-			() => assert.fail('Unexpected vertical-only resize'),
-		);
+		using resize = new TerminalResizeDebouncer(() => false, () => screen,
+			(cols, rows) => calls.push([cols, rows]), () => assert.fail('Unexpected horizontal-only resize'), () => assert.fail('Unexpected vertical-only resize'));
 		await resize.resize(90, 30, false);
 		await resize.resize(100, 40, false);
 		assert.deepEqual(calls, []);
@@ -516,32 +379,17 @@ suite('Terminal screen resize lifecycle', () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
 		try {
 			const calls: unknown[] = [];
-			const screen = {
-				isDisposed: false,
-				raw: { buffer: { normal: { length: 400 } } },
-			} as unknown as XtermTerminal;
-			const resize = new TerminalResizeDebouncer(
-				() => true,
-				() => screen,
-				() => assert.fail('Unexpected immediate resize'),
-				cols => calls.push(cols),
-				() => {},
-			);
+			const screen = { isDisposed: false, raw: { buffer: { normal: { length: 400 } } } } as unknown as XtermTerminal;
+			const resize = new TerminalResizeDebouncer(() => true, () => screen,
+				() => assert.fail('Unexpected immediate resize'), cols => calls.push(cols), () => { });
 			await resize.resize(90, 30, false);
 			resize.dispose();
 			mock.timers.tick(200);
 			assert.deepEqual(calls, []);
-			using reentrant = new TerminalResizeDebouncer(
-				() => true,
-				() => screen,
-				() => {},
-				() => assert.fail('Disposed owner resized'),
-				() => reentrant.dispose(),
-			);
+			using reentrant = new TerminalResizeDebouncer(() => true, () => screen, () => { }, () => assert.fail('Disposed owner resized'), () => reentrant.dispose());
 			await reentrant.resize(100, 40, false);
 			mock.timers.tick(200);
-		} finally {
-			mock.timers.reset();
-		}
+		} finally { mock.timers.reset(); }
 	});
+
 });

@@ -20,10 +20,7 @@ export interface CreatedIssue extends ISimilarIssue {
 export type IssueReporterErrorCode = 'authenticationRequired' | 'permissionDenied' | 'rateLimited' | 'unavailable' | 'invalidInput' | 'submissionUncertain' | 'operationFailed';
 
 export class IssueReporterError extends Error {
-	constructor(readonly code: IssueReporterErrorCode) {
-		super(code);
-		this.name = 'IssueReporterError';
-	}
+	constructor(readonly code: IssueReporterErrorCode) { super(code); this.name = 'IssueReporterError'; }
 }
 
 /** Product reporting operations. The host owns the target, network policy and credentials. */

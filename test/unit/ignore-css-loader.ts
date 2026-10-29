@@ -4,9 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 export const resolve: ResolveHook = (specifier, context, nextResolve) => {
 	if (specifier.startsWith('ash:editor/')) {
-		specifier = pathToFileURL(
-			resolvePath(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolvePath(import.meta.dirname, '../../.build/desktop/test'), 'src/ash', specifier.slice('ash:editor/'.length)),
-		).href;
+		specifier = pathToFileURL(resolvePath(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolvePath(import.meta.dirname, '../../.build/desktop/test'), 'src/ash', specifier.slice('ash:editor/'.length))).href;
 	}
 	if (!specifier.endsWith('.css')) {
 		return nextResolve(specifier, context);

@@ -16,14 +16,14 @@ export interface EditorOpenOptions extends IMultiDiffEditorOptions {
 }
 
 /** The editor group selected by a resource-navigation request. */
-export type EditorOpenTarget = 'activeGroup' | 'sideGroup' | 'modalGroup' | { readonly groupId: number };
+export type EditorOpenTarget = 'activeGroup' | 'sideGroup' | 'modalGroup' | { readonly groupId: number; };
 
 export interface ISaveEditorsOptions extends ISaveOptions {
 	readonly saveAs?: boolean;
 }
 
 export interface ISaveAllEditorsOptions extends ISaveEditorsOptions {
-	readonly includeUntitled?: boolean | { readonly includeScratchpad: boolean };
+	readonly includeUntitled?: boolean | { readonly includeScratchpad: boolean; };
 	readonly excludeSticky?: boolean;
 }
 

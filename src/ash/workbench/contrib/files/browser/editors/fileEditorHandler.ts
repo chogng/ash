@@ -1,6 +1,12 @@
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { EditorInputSerializers, optionalString, requireRecord, requireString, type EditorInputSerializer } from '../../../../services/editor/common/editorInputSerializer.js';
+import {
+	EditorInputSerializers,
+	optionalString,
+	requireRecord,
+	requireString,
+	type EditorInputSerializer,
+} from '../../../../services/editor/common/editorInputSerializer.js';
 
 import { FILE_EDITOR_INPUT_ID, FileEditorInput } from './fileEditorInput.js';
 

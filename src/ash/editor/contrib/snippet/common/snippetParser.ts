@@ -49,16 +49,11 @@ export function createSnippetVariables(resource: URI): SnippetVariableResolver {
 	return Object.freeze({
 		resolveVariable(name: string): string | undefined {
 			switch (name) {
-				case 'TM_FILENAME':
-					return filename;
-				case 'TM_FILENAME_BASE':
-					return filenameBase;
-				case 'TM_DIRECTORY':
-					return directory;
-				case 'TM_FILEPATH':
-					return filePath;
-				default:
-					return undefined;
+				case 'TM_FILENAME': return filename;
+				case 'TM_FILENAME_BASE': return filenameBase;
+				case 'TM_DIRECTORY': return directory;
+				case 'TM_FILEPATH': return filePath;
+				default: return undefined;
 			}
 		},
 	});
@@ -93,15 +88,11 @@ export function parseSnippet(source: string, options: SnippetOptions = {}): Snip
 			const choices = placeholders.find(placeholder => placeholder.choices)?.choices;
 			return Object.freeze({
 				index,
-				placeholders: Object.freeze(
-					placeholders.map(placeholder =>
-						Object.freeze({
-							startOffset: placeholder.startOffset,
-							endOffset: placeholder.endOffset,
-							...(placeholder.choices ? { choices: Object.freeze([...placeholder.choices]) } : {}),
-						}),
-					),
-				),
+				placeholders: Object.freeze(placeholders.map(placeholder => Object.freeze({
+					startOffset: placeholder.startOffset,
+					endOffset: placeholder.endOffset,
+					...(placeholder.choices ? { choices: Object.freeze([...placeholder.choices]) } : {}),
+				}))),
 				...(choices ? { choices: Object.freeze([...choices]) } : {}),
 			});
 		});
@@ -164,14 +155,7 @@ class SnippetText {
 	}
 }
 
-function parseSegment(
-	source: string,
-	startOffset: number,
-	stopsAtClosingBrace: boolean,
-	tabstopValues: Map<number, SnippetTabstopValue>,
-	variables: SnippetVariableResolver | undefined,
-	allowUnresolvedVariables: boolean,
-): ParsedSegment {
+function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): ParsedSegment {
 	const text = new SnippetText();
 	let offset = startOffset;
 	const placeholders = new Map<number, SnippetPlaceholder[]>();
@@ -179,14 +163,7 @@ function parseSegment(
 	while (offset < source.length) {
 		const character = source[offset]!;
 		if (character === '}' && stopsAtClosingBrace) {
-			return {
-				get text() {
-					return text.text;
-				},
-				placeholders,
-				transforms,
-				nextOffset: offset + 1,
-			};
+			return { get text() { return text.text; }, placeholders, transforms, nextOffset: offset + 1 };
 		}
 		if (character === '}') {
 			text.append(character);
@@ -245,18 +222,12 @@ function parseSegment(
 			const transform = token.transform;
 			text.append(() => applySnippetTransform(tabstopValues.get(token.index)?.text ?? '', transform));
 			const transformEnd = text.position();
-			transforms.push(
-				Object.freeze({
-					index: token.index,
-					get startOffset() {
-						return placeholderStart();
-					},
-					get endOffset() {
-						return transformEnd();
-					},
-					transform: token.transform,
-				}),
-			);
+			transforms.push(Object.freeze({
+				index: token.index,
+				get startOffset() { return placeholderStart(); },
+				get endOffset() { return transformEnd(); },
+				transform: token.transform,
+			}));
 			offset = token.nextOffset;
 			continue;
 		}
@@ -265,19 +236,13 @@ function parseSegment(
 			text.append(() => token.defaultText!.text);
 			mergePlaceholders(placeholders, token.defaultText.placeholders, placeholderStart);
 			mergeTransforms(transforms, token.defaultText.transforms, placeholderStart);
-			value = {
-				get text() {
-					return token.defaultText!.text;
-				},
-			};
+			value = { get text() { return token.defaultText!.text; } };
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 		} else if (token.choices) {
-			value =
-				tabstopValues.get(token.index) ??
-				Object.freeze({
-					text: token.choices[0]!,
-					choices: token.choices,
-				});
+			value = tabstopValues.get(token.index) ?? Object.freeze({
+				text: token.choices[0]!,
+				choices: token.choices,
+			});
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 			text.append(() => value.text);
 		} else {
@@ -286,37 +251,18 @@ function parseSegment(
 		const placeholderEnd = text.position();
 		const occurrences = placeholders.get(token.index) ?? [];
 		occurrences.push({
-			get startOffset() {
-				return placeholderStart();
-			},
-			get endOffset() {
-				return placeholderEnd();
-			},
-			get choices() {
-				return tabstopValues.get(token.index)?.choices;
-			},
+			get startOffset() { return placeholderStart(); },
+			get endOffset() { return placeholderEnd(); },
+			get choices() { return tabstopValues.get(token.index)?.choices; },
 		});
 		placeholders.set(token.index, occurrences);
 		offset = token.nextOffset;
 	}
 	if (stopsAtClosingBrace) throw new SyntaxError('Unclosed tabstop in language completion snippet');
-	return {
-		get text() {
-			return text.text;
-		},
-		placeholders,
-		transforms,
-		nextOffset: offset,
-	};
+	return { get text() { return text.text; }, placeholders, transforms, nextOffset: offset };
 }
 
-function readSnippetToken(
-	source: string,
-	offset: number,
-	tabstopValues: Map<number, SnippetTabstopValue>,
-	variables: SnippetVariableResolver | undefined,
-	allowUnresolvedVariables: boolean,
-): SnippetToken {
+function readSnippetToken(source: string, offset: number, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetToken {
 	const next = source[offset + 1];
 	if (next === undefined) throw new SyntaxError('Language completion snippet must not end with $');
 	if (isDigit(next)) {
@@ -343,14 +289,7 @@ function readSnippetToken(
 	return { kind: 'tabstop', index, defaultText, nextOffset: defaultText.nextOffset };
 }
 
-function readVariable(
-	source: string,
-	nameStartOffset: number,
-	braced: boolean,
-	tabstopValues: Map<number, SnippetTabstopValue>,
-	variables: SnippetVariableResolver | undefined,
-	allowUnresolvedVariables: boolean,
-): SnippetVariableToken {
+function readVariable(source: string, nameStartOffset: number, braced: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetVariableToken {
 	const nameEndOffset = readVariableNameEnd(source, nameStartOffset);
 	if (nameEndOffset === nameStartOffset) throw new SyntaxError('Language completion snippet variable must have a name');
 	const name = source.slice(nameStartOffset, nameEndOffset);
@@ -385,7 +324,7 @@ interface SnippetVariableToken {
 
 type SnippetToken = SnippetTabstopToken | SnippetVariableToken;
 
-function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number } {
+function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number; } {
 	const pattern = readTransformPart(source, slashOffset + 1, false);
 	const format = readTransformPart(source, pattern.nextOffset, true);
 	let options = '';
@@ -403,7 +342,7 @@ function readTransform(source: string, slashOffset: number): { readonly transfor
 	});
 }
 
-function readTransformPart(source: string, startOffset: number, supportsBracedFormatExpressions: boolean): { readonly text: string; readonly nextOffset: number } {
+function readTransformPart(source: string, startOffset: number, supportsBracedFormatExpressions: boolean): { readonly text: string; readonly nextOffset: number; } {
 	let text = '';
 	let braceDepth = 0;
 	let offset = startOffset;
@@ -436,7 +375,7 @@ function readTransformPart(source: string, startOffset: number, supportsBracedFo
 	throw new SyntaxError('Unclosed language completion snippet transform');
 }
 
-function readChoice(source: string, startOffset: number): { readonly values: readonly string[]; readonly nextOffset: number } {
+function readChoice(source: string, startOffset: number): { readonly values: readonly string[]; readonly nextOffset: number; } {
 	const values: string[] = [];
 	let value = '';
 	let offset = startOffset;
@@ -472,38 +411,22 @@ function readChoice(source: string, startOffset: number): { readonly values: rea
 function mergePlaceholders(target: Map<number, SnippetPlaceholder[]>, source: Map<number, SnippetPlaceholder[]>, offset: () => number): void {
 	for (const [index, placeholders] of source) {
 		const targetPlaceholders = target.get(index) ?? [];
-		targetPlaceholders.push(
-			...placeholders.map(placeholder => ({
-				get startOffset() {
-					return placeholder.startOffset + offset();
-				},
-				get endOffset() {
-					return placeholder.endOffset + offset();
-				},
-				get choices() {
-					return placeholder.choices;
-				},
-			})),
-		);
+		targetPlaceholders.push(...placeholders.map(placeholder => ({
+			get startOffset() { return placeholder.startOffset + offset(); },
+			get endOffset() { return placeholder.endOffset + offset(); },
+			get choices() { return placeholder.choices; },
+		})));
 		target.set(index, targetPlaceholders);
 	}
 }
 
 function mergeTransforms(target: SnippetTransformOccurrence[], source: readonly SnippetTransformOccurrence[], offset: () => number): void {
-	target.push(
-		...source.map(transform =>
-			Object.freeze({
-				index: transform.index,
-				transform: transform.transform,
-				get startOffset() {
-					return transform.startOffset + offset();
-				},
-				get endOffset() {
-					return transform.endOffset + offset();
-				},
-			}),
-		),
-	);
+	target.push(...source.map(transform => Object.freeze({
+		index: transform.index,
+		transform: transform.transform,
+		get startOffset() { return transform.startOffset + offset(); },
+		get endOffset() { return transform.endOffset + offset(); },
+	})));
 }
 
 function readDigitsEnd(source: string, startOffset: number): number {

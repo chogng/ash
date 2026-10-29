@@ -12,7 +12,7 @@ class MarkdownHover implements IHoverPart {
 		readonly range: Range,
 		readonly contents: readonly IMarkdownString[],
 		readonly decorationId: string,
-	) {}
+	) { }
 }
 
 /** Displays model decoration documentation without requesting a language provider or reading its source. */
@@ -20,7 +20,7 @@ export class MarkdownHoverParticipant implements IEditorHoverParticipant {
 	constructor(
 		private readonly editor: ICodeEditor,
 		@IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService,
-	) {}
+	) { }
 
 	computeSync(anchor: HoverAnchor): MarkdownHover[] {
 		const model = this.editor.getModel();
@@ -47,37 +47,28 @@ export class MarkdownHoverParticipant implements IEditorHoverParticipant {
 			renderedMessages.clear();
 			content.replaceChildren();
 			for (const message of messages) {
-				const rendered = renderedMessages.add(
-					this.markdownRenderer.render(message, {
-						ownerDocument: content.ownerDocument,
-						asyncRenderCallback: () => {
-							if (!resources.isDisposed) context.onContentsChanged();
-						},
-					}),
-				);
+				const rendered = renderedMessages.add(this.markdownRenderer.render(message, {
+					ownerDocument: content.ownerDocument,
+					asyncRenderCallback: () => { if (!resources.isDisposed) context.onContentsChanged(); },
+				}));
 				content.append(rendered.element);
 			}
 		};
 		render();
 		context.container.append(content);
-		resources.add(
-			this.editor.onDidChangeModelDecorations(() => {
-				const model = this.editor.getModel();
-				if (ownedParts.some(part => !model?.getDecorationRange(part.decorationId))) {
-					context.hide();
-					return;
-				}
-				const next = ownedParts.flatMap(part => {
-					const message = model!.getDecorationOptions(part.decorationId)?.hoverMessage;
-					if (!message) return [];
-					return Array.isArray(message) ? message : [message];
-				});
-				if (next.length === messages.length && next.every((message, index) => message === messages[index])) return;
-				messages = next;
-				render();
-				context.onContentsChanged();
-			}),
-		);
+		resources.add(this.editor.onDidChangeModelDecorations(() => {
+			const model = this.editor.getModel();
+			if (ownedParts.some(part => !model?.getDecorationRange(part.decorationId))) { context.hide(); return; }
+			const next = ownedParts.flatMap(part => {
+				const message = model!.getDecorationOptions(part.decorationId)?.hoverMessage;
+				if (!message) return [];
+				return Array.isArray(message) ? message : [message];
+			});
+			if (next.length === messages.length && next.every((message, index) => message === messages[index])) return;
+			messages = next;
+			render();
+			context.onContentsChanged();
+		}));
 		resources.add(toDisposable(() => content.remove()));
 		return Object.assign(resources, {
 			focus: () => content.focus({ preventScroll: true }),

@@ -20,19 +20,13 @@ import { DesktopWorkbench } from './desktopWorkbench.js';
 export async function createSessionsWorkbench(options: IWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(options.api.extensions, options.api.events);
 	const logger = options.createLogService();
-	let storage: (IStorageService & IDisposable) | undefined;
-	let userDataFiles: (IFileSystemProvider & IDisposable) | undefined;
+	let storage: IStorageService & IDisposable | undefined;
+	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
 	try {
 		await themes.start();
 		const ownerWindow = options.container.ownerDocument.defaultView;
-		if (!ownerWindow) {
-			throw new Error('Sessions renderer requires an owner window');
-		}
-		storage = await options.createStorageService({
-			ownerWindow,
-			workspaceId: 'sessions',
-			profileId: options.profile.id,
-		});
+		if (!ownerWindow) { throw new Error('Sessions renderer requires an owner window'); }
+		storage = await options.createStorageService({ ownerWindow, workspaceId: 'sessions', profileId: options.profile.id });
 		userDataFiles = await options.createUserDataFileSystemProvider();
 		{
 			using startupFiles = new FileService();

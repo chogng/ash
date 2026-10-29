@@ -20,17 +20,7 @@ test('LogService publishes structured entries and releases dynamic sinks', () =>
 test('LogService isolates a failing sink', () => {
 	const entries: LogEntry[] = [];
 	const sinkErrors: unknown[] = [];
-	using service = new LogService({
-		sinks: [
-			{
-				log: () => {
-					throw new Error('sink failed');
-				},
-			},
-			{ log: entry => entries.push(entry) },
-		],
-		onSinkError: (_entry, error) => sinkErrors.push(error),
-	});
+	using service = new LogService({ sinks: [{ log: () => { throw new Error('sink failed'); } }, { log: entry => entries.push(entry) }], onSinkError: (_entry, error) => sinkErrors.push(error) });
 	service.error('test', 'failure');
 	assert.equal(entries.length, 1);
 	assert.equal(sinkErrors.length, 1);
@@ -40,25 +30,12 @@ test('LogService preserves diagnostics when both a sink and its failure reporter
 	const entries: LogEntry[] = [];
 	let reports = 0;
 	using service = new LogService({
-		sinks: [
-			{
-				log: () => {
-					throw new Error('console transport disconnected');
-				},
-			},
-			{ log: entry => entries.push(entry) },
-		],
-		onSinkError: () => {
-			reports++;
-			throw new Error('failure reporter disconnected');
-		},
+		sinks: [{ log: () => { throw new Error('console transport disconnected'); } }, { log: entry => entries.push(entry) }],
+		onSinkError: () => { reports++; throw new Error('failure reporter disconnected'); },
 	});
 	assert.doesNotThrow(() => service.error('runtime', 'original failure'));
 	service.info('runtime', 'still usable');
-	assert.deepEqual(
-		entries.map(entry => entry.message),
-		['original failure', 'still usable'],
-	);
+	assert.deepEqual(entries.map(entry => entry.message), ['original failure', 'still usable']);
 	assert.equal(reports, 2);
 });
 
@@ -68,16 +45,10 @@ test('LogService defaults to Info and changes production verbosity independently
 	service.trace('NativeEditContext.focus');
 	service.debug('debug message');
 	service.info('ready');
-	assert.deepEqual(
-		entries.map(entry => entry.message),
-		['ready'],
-	);
+	assert.deepEqual(entries.map(entry => entry.message), ['ready']);
 	service.setLevel(LogLevel.Trace);
 	service.trace('NativeEditContext.focus');
-	assert.deepEqual(
-		entries.map(entry => entry.message),
-		['ready', 'NativeEditContext.focus'],
-	);
+	assert.deepEqual(entries.map(entry => entry.message), ['ready', 'NativeEditContext.focus']);
 });
 
 test('log levels, null logging, and console logging expose the complete platform contract', () => {
@@ -104,24 +75,16 @@ test('LogService accepts uncategorized messages without losing structured local 
 	using service = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 	service.info('standalone message');
 	service.info('editor', 'opened', { id: 1 });
-	assert.deepEqual(
-		entries.map(entry => [entry.category, entry.message]),
-		[
-			['application', 'standalone message'],
-			['editor', 'opened {"id":1}'],
-		],
-	);
+	assert.deepEqual(entries.map(entry => [entry.category, entry.message]), [
+		['application', 'standalone message'],
+		['editor', 'opened {"id":1}'],
+	]);
 });
 
 test('named loggers own filtering, string arguments and flush on the original sink', async () => {
 	const entries: LogEntry[] = [];
 	let flushes = 0;
-	using host = new LogService({
-		sinks: [{ log: entry => entries.push(entry) }],
-		flush: async () => {
-			flushes++;
-		},
-	});
+	using host = new LogService({ sinks: [{ log: entry => entries.push(entry) }], flush: async () => { flushes++; } });
 	using terminal = host.createLogger('terminal');
 	const levels: LogLevel[] = [];
 	using listener = terminal.onDidChangeLogLevel(level => levels.push(level));
@@ -131,10 +94,7 @@ test('named loggers own filtering, string arguments and flush on the original si
 	terminal.warn('message', 'argument');
 	await terminal.flush();
 	assert.deepEqual(levels, [LogLevel.Warning]);
-	assert.deepEqual(
-		entries.map(entry => [entry.category, entry.message]),
-		[['terminal', 'message argument']],
-	);
+	assert.deepEqual(entries.map(entry => [entry.category, entry.message]), [['terminal', 'message argument']]);
 	assert.equal(flushes, 1);
 	terminal.dispose();
 	terminal.error('released');

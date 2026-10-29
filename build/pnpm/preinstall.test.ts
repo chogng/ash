@@ -15,9 +15,7 @@ test('installation accepts only the declared Node and package manager', async ()
 		await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module', packageManager: 'pnpm@12.8.0' }));
 		for (const agent of ['pnpm/12.8.0 npm/?', 'pnpm/11.17.0', 'npm/11.0.0', '']) {
 			const result = spawnSync(process.execPath, [entry], {
-				env: { ...process.env, npm_config_user_agent: agent },
-				encoding: 'utf8',
-				windowsHide: true,
+				env: { ...process.env, npm_config_user_agent: agent }, encoding: 'utf8', windowsHide: true,
 			});
 			if (agent.startsWith('pnpm/12.8.0')) {
 				assert.equal(result.status, 0, result.stderr);

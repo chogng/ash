@@ -8,7 +8,10 @@ import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TrackedRangeStickiness } from '../../../../editor/common/model.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
+import {
+	TextDecorationCollection,
+	type TextDecorationId,
+} from '../../../../editor/common/model/decorationCollection.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDebugService } from '../common/debug.js';
@@ -47,7 +50,7 @@ export class DebugEditorContribution extends Disposable {
 		this._register(model.onDidChangeLanguage(invalidate));
 		this._register(editor.onDidScrollChange(() => this.refresh.schedule()));
 		this._register(
-			configuration.onDidChangeConfiguration(event => {
+			configuration.onDidChangeConfiguration((event) => {
 				if (event.affectsConfiguration('debug.inlineValues')) invalidate();
 			}),
 		);
@@ -66,7 +69,13 @@ export class DebugEditorContribution extends Disposable {
 			this.debug.session === session &&
 			session?.state === 'stopped' &&
 			this.debug.getViewModel().focusedStackFrame === frame;
-		if (!session || session.state !== 'stopped' || !frame || frame.source?.resource?.toString() !== this.model.uri.toString()) return;
+		if (
+			!session ||
+			session.state !== 'stopped' ||
+			!frame ||
+			frame.source?.resource?.toString() !== this.model.uri.toString()
+		)
+			return;
 		this.hoverRegistration.value = this.languages.hoverProvider.register(
 			{ language: this.model.getLanguageId(), scheme: this.model.uri.scheme },
 			{
@@ -78,10 +87,20 @@ export class DebugEditorContribution extends Disposable {
 					const expression = /[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.exec(prefix)?.[0];
 					if (!expression) return undefined;
 					try {
-						const variable = await findExpressionInStackFrame(session, frame, expression.split('.'), signal);
+						const variable = await findExpressionInStackFrame(
+							session,
+							frame,
+							expression.split('.'),
+							signal,
+						);
 						if (!variable || signal.aborted || !current()) return undefined;
 						return {
-							range: new Range(request.position.lineNumber, word.endColumn - expression.length, request.position.lineNumber, word.endColumn),
+							range: new Range(
+								request.position.lineNumber,
+								word.endColumn - expression.length,
+								request.position.lineNumber,
+								word.endColumn,
+							),
 							contents: [`${expression} = ${variable.value}${variable.type ? `\n${variable.type}` : ''}`],
 						};
 					} catch (error) {
@@ -94,20 +113,27 @@ export class DebugEditorContribution extends Disposable {
 		if (this.configuration.getValue<string>('debug.inlineValues') === 'off') return;
 		const ranges = this.editor.getVisibleRanges();
 		void session.inspectFrame(frame.id).then(
-			scopes => {
+			(scopes) => {
 				if (!current()) return;
 				const values = scopes
-					.flatMap(scope => scope.variables)
-					.filter(value => /^[A-Za-z_$][\w$]*$/.test(value.name) && !value.presentationHint?.lazy)
+					.flatMap((scope) => scope.variables)
+					.filter((value) => /^[A-Za-z_$][\w$]*$/.test(value.name) && !value.presentationHint?.lazy)
 					.slice(0, 100);
-				const annotations: Parameters<TextDecorationCollection<undefined>['deltaDecorations']>[1][number][] = [];
+				const annotations: Parameters<TextDecorationCollection<undefined>['deltaDecorations']>[1][number][] =
+					[];
 				for (const range of ranges) {
-					for (let line = range.startLineNumber; line <= Math.min(range.endLineNumber, range.startLineNumber + 200); line++) {
+					for (
+						let line = range.startLineNumber;
+						line <= Math.min(range.endLineNumber, range.startLineNumber + 200);
+						line++
+					) {
 						const text = this.model.getLineContent(line).slice(0, 4096);
 						const labels = values
-							.filter(value => new RegExp(`(?<![\\w$])${escapeRegExpCharacters(value.name)}(?![\\w$])`).test(text))
+							.filter((value) =>
+								new RegExp(`(?<![\\w$])${escapeRegExpCharacters(value.name)}(?![\\w$])`).test(text),
+							)
 							.slice(0, 8)
-							.map(value => `${value.name} = ${value.value.slice(0, 120)}`);
+							.map((value) => `${value.name} = ${value.value.slice(0, 120)}`);
 						if (!labels.length || annotations.length >= 100) continue;
 						const column = this.model.getLineMaxColumn(line);
 						annotations.push({

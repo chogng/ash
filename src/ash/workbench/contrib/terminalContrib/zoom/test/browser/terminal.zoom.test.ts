@@ -71,21 +71,13 @@ function wheelFixture(resources: DisposableStore) {
 		return { viewport, contribution };
 	};
 	const wheel = (viewport: HTMLElement, timeStamp: number, deltaY: number, options: WheelEventInit = {}) => {
-		const event = new dom.window.WheelEvent('wheel', {
-			bubbles: true,
-			cancelable: true,
-			deltaY,
-			ctrlKey: true,
-			...options,
-		});
+		const event = new dom.window.WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY, ctrlKey: true, ...options });
 		Object.defineProperty(event, 'timeStamp', { value: timeStamp });
 		viewport.dispatchEvent(event);
 		return event;
 	};
 	return {
-		configuration,
-		createScreen,
-		wheel,
+		configuration, createScreen, wheel,
 		run: (id: TerminalZoomCommandId) => services.invokeFunction(CommandsRegistry.getCommand(id)!),
 	};
 }

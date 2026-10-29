@@ -21,6 +21,7 @@ export function designBlendLabel(mode: DesignBlendMode | 'pass-through'): string
 		saturation: localize('sessions.design.blendSaturation', 'Saturation'),
 		color: localize('sessions.design.blendColor', 'Color'),
 		luminosity: localize('sessions.design.blendLuminosity', 'Luminosity'),
+
 	};
 	return labels[mode];
 }

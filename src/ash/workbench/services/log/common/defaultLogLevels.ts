@@ -14,7 +14,7 @@ import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { localize } from '../../../../nls.js';
 
-export type DefaultLogLevels = Readonly<{ default: LogLevel; extensions: [string, LogLevel][] }>;
+export type DefaultLogLevels = Readonly<{ default: LogLevel; extensions: [string, LogLevel][]; }>;
 export const IDefaultLogLevelsService = createDecorator<IDefaultLogLevelsService>('IDefaultLogLevelsService');
 export interface IDefaultLogLevelsService {
 	readonly defaultLogLevels: DefaultLogLevels;
@@ -64,41 +64,33 @@ export class DefaultLogLevelsService extends Disposable implements IDefaultLogLe
 		super();
 		this.state = initial ?? this.startupLevels();
 		this._register(files.watch(environment.argvResource));
-		this._register(
-			files.onDidChangeFiles(event => {
-				if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, environment.argvResource))) {
-					void this.enqueue(async () => {
-						this.accept(parseDefaultLogLevels(await this.readEntries(), this.startupLevels()));
-					}).catch(error => {
-						if (!this.isDisposed) this.log.error('logs', localize('logs.reloadFailed', 'Could not reload default log levels.'), error);
-					});
-				}
-			}),
-		);
-		this._register(
-			loggers.onDidChangeLoggers(event => {
-				for (const info of event.added) {
-					if (info.logLevel === undefined) loggers.getLogger(info.id)?.setLevel(this.getDefaultLogLevel(info.extensionId));
-				}
-			}),
-		);
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, environment.argvResource))) {
+				void this.enqueue(async () => {
+					this.accept(parseDefaultLogLevels(await this.readEntries(), this.startupLevels()));
+				}).catch(error => {
+					if (!this.isDisposed) this.log.error('logs', localize('logs.reloadFailed', 'Could not reload default log levels.'), error);
+				});
+			}
+		}));
+		this._register(loggers.onDidChangeLoggers(event => {
+			for (const info of event.added) {
+				if (info.logLevel === undefined) loggers.getLogger(info.id)?.setLevel(this.getDefaultLogLevel(info.extensionId));
+			}
+		}));
 		this._register(output.onDidChangeChannels(() => this.initializeChannels()));
 		this.initializeChannels();
 		// Producers release channels during scope teardown, after DI lookups are retired.
 		this._register(lifecycle.onDidShutdown(() => this.dispose()));
 	}
-	get defaultLogLevels(): DefaultLogLevels {
-		return this.state;
-	}
-	getDefaultLogLevel(extensionId?: string): LogLevel {
-		return this.levelFor(this.state, extensionId);
-	}
+	get defaultLogLevels(): DefaultLogLevels { return this.state; }
+	getDefaultLogLevel(extensionId?: string): LogLevel { return this.levelFor(this.state, extensionId); }
 
 	setDefaultLogLevel(logLevel: LogLevel, extensionId?: string): Promise<void> {
 		return this.enqueue(async () => {
 			const previous = await this.readEntries();
 			parseDefaultLogLevels(previous);
-			const entries = previous === undefined ? [] : typeof previous === 'string' ? [previous] : (previous as string[]);
+			const entries = previous === undefined ? [] : typeof previous === 'string' ? [previous] : previous as string[];
 			const id = extensionId?.toLowerCase();
 			const next = entries.filter(entry => {
 				const separator = entry.indexOf('=');
@@ -112,13 +104,14 @@ export class DefaultLogLevelsService extends Disposable implements IDefaultLogLe
 	}
 
 	private startupLevels(): DefaultLogLevels {
-		return parseDefaultLogLevels([this.environment.logLevel ?? 'info', ...(this.environment.extensionLogLevel ?? []).map(([id, level]) => `${id}=${level}`)]);
+		return parseDefaultLogLevels([
+			this.environment.logLevel ?? 'info',
+			...(this.environment.extensionLogLevel ?? []).map(([id, level]) => `${id}=${level}`),
+		]);
 	}
 
 	private enqueue(work: () => Promise<void>): Promise<void> {
-		const result = this.pending.then(async () => {
-			if (!this.isDisposed) await work();
-		});
+		const result = this.pending.then(async () => { if (!this.isDisposed) await work(); });
 		this.pending = result.catch(() => undefined);
 		return result;
 	}
@@ -185,5 +178,8 @@ export async function readDefaultLogLevels(files: IFileService, environment: IWo
 			log.error('logs', localize('logs.readFailed', 'Could not read startup log levels.'), error);
 		}
 	}
-	return parseDefaultLogLevels([...(environment.logLevel ? [environment.logLevel] : []), ...(environment.extensionLogLevel ?? []).map(([id, level]) => `${id}=${level}`)], state);
+	return parseDefaultLogLevels([
+		...(environment.logLevel ? [environment.logLevel] : []),
+		...(environment.extensionLogLevel ?? []).map(([id, level]) => `${id}=${level}`),
+	], state);
 }

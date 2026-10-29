@@ -38,14 +38,7 @@ export async function removeRootFolder(accessor: ServicesAccessor, resource?: un
 	const selected = selectedResources as readonly URI[] | undefined;
 	// Menus forward both the clicked root and the selection snapshot. Explicit
 	// invocations use their URI; only keyboard invocations consult live selection.
-	const resources = selected?.length
-		? selected
-		: resource
-			? [resource as URI]
-			: accessor
-					.get(IExplorerService)
-					.getContext()
-					.map(item => item.resource);
+	const resources = selected?.length ? selected : resource ? [resource as URI] : accessor.get(IExplorerService).getContext().map(item => item.resource);
 	const workspace = accessor.get(IWorkspaceContextService).getWorkspace();
 	const folders = workspace.folders.filter(folder => resources.some(uri => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri)));
 	if (!folders.length) return;
@@ -56,16 +49,10 @@ export async function removeRootFolder(accessor: ServicesAccessor, resource?: un
 /** Handles {@link COPY_FILE_COMMAND_ID} and {@link CUT_FILE_COMMAND_ID}; roots and nested selections are omitted. */
 export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean): Promise<void> {
 	const selection = accessor.get(IExplorerService).getContext();
-	const items = selection.filter(
-		item =>
-			!isWorkspaceRoot(accessor, item.resource) &&
-			!selection.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)),
-	);
+	const items = selection.filter(item => !isWorkspaceRoot(accessor, item.resource) && !selection.some(parent =>
+		parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
 	if (!items.length) return;
-	await accessor.get(IClipboardService).writeResources(
-		items.map(item => item.resource),
-		cut ? 'move' : 'copy',
-	);
+	await accessor.get(IClipboardService).writeResources(items.map(item => item.resource), cut ? 'move' : 'copy');
 	accessor.get(IExplorerService).setToCopy(items, cut);
 }
 
@@ -74,13 +61,7 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 	const explorer = accessor.get(IExplorerService);
 	if (!explorer.getToCopy().cut) return;
 	const { resources, operation } = await accessor.get(IClipboardService).readResources();
-	if (
-		operation === 'move' &&
-		sameResources(
-			resources,
-			explorer.getToCopy().items.map(item => item.resource),
-		)
-	) {
+	if (operation === 'move' && sameResources(resources, explorer.getToCopy().items.map(item => item.resource))) {
 		await accessor.get(IClipboardService).writeResources([], 'copy');
 	}
 	explorer.setToCopy([], false);
@@ -101,12 +82,9 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	const selection = explorer.getContext()[0];
 	const workspaceContext = accessor.get(IWorkspaceContextService);
 	const workspaceId = workspaceContext.getWorkspace().id;
-	const directory =
-		selection && selection.resource.scheme !== 'ash-workspace'
-			? selection.kind === FileKind.Directory
-				? selection.resource
-				: dirname(selection.resource)
-			: await resolveCreationDirectory(accessor, 'folder');
+	const directory = selection && selection.resource.scheme !== 'ash-workspace'
+		? selection.kind === FileKind.Directory ? selection.resource : dirname(selection.resource)
+		: await resolveCreationDirectory(accessor, 'folder');
 	if (!directory || workspaceContext.getWorkspace().id !== workspaceId) return;
 	const { resources, operation } = await clipboard.readResources();
 	if (workspaceContext.getWorkspace().id !== workspaceId) return;
@@ -115,7 +93,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	const cut = nativeFiles.length === 0 && (operation === 'move' || move);
 	const files = accessor.get(IFileService);
 	const paths = accessor.get(IPathService);
-	if (!resources.length && (await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move))) {
+	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move)) {
 		explorer.setToCopy([], false);
 		status(localize('accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'));
 		return;
@@ -124,7 +102,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	if (!nativeFiles.length && !resources.length) return;
 	for (const file of nativeFiles) {
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
-		if (!(await paths.hasValidBasename(directory, file.name))) continue;
+		if (!await paths.hasValidBasename(directory, file.name)) continue;
 		const target = await availablePasteTarget(files, directory, file.name);
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
@@ -135,7 +113,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		const local = localClipboard.items.find(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource));
 		const kind = local?.kind ?? (await files.stat(resource)).kind;
 		const name = local?.name ?? basename(resource);
-		if (!(await paths.hasValidBasename(directory, name))) continue;
+		if (!await paths.hasValidBasename(directory, name)) continue;
 		if (kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, resource)) {
 			throw new Error(localize({ bundle: 'ash', key: 'files.pasteIntoSelf' }, 'Cannot paste a folder into itself.'));
 		}
@@ -169,12 +147,8 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 	const extension = dot > 0 ? name.slice(dot) : '';
 	for (let index = 0; index < 10_000; index++) {
 		const candidate = directory.joinPathSegment(index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
-		try {
-			await files.stat(candidate);
-		} catch (error) {
-			if (error instanceof FileNotFoundError) return candidate;
-			throw error;
-		}
+		try { await files.stat(candidate); }
+		catch (error) { if (error instanceof FileNotFoundError) return candidate; throw error; }
 	}
 	throw new Error(localize({ bundle: 'ash', key: 'files.pasteNoName' }, 'Could not find an available file name.'));
 }
@@ -194,33 +168,28 @@ export async function renameExplorerItem(accessor: ServicesAccessor): Promise<vo
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'files.rename' }, 'Rename'),
 		value: item.name,
-		validateInput: async value =>
-			(await paths.hasValidBasename(item.resource, value)) ? undefined : localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
+		validateInput: async value => await paths.hasValidBasename(item.resource, value)
+			? undefined
+			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
 	});
 	if (name === undefined || name === item.name) return;
-	if (!(await paths.hasValidBasename(item.resource, name))) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
+	if (!await paths.hasValidBasename(item.resource, name)) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
 	assertWritable();
 	await accessor.get(IFileService).rename(item.resource, dirname(item.resource).joinPathSegment(name), 'error');
 }
 
 /** Handles {@link DELETE_FILE_COMMAND_ID} with confirmation before permanent deletion. */
 export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<void> {
-	const selection = accessor
-		.get(IExplorerService)
-		.getContext()
-		.filter(item => !isWorkspaceRoot(accessor, item.resource));
-	const items = selection.filter(
-		item => !selection.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)),
-	);
+	const selection = accessor.get(IExplorerService).getContext().filter(item => !isWorkspaceRoot(accessor, item.resource));
+	const items = selection.filter(item => !selection.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
 	if (!items.length) return;
 	const filesConfiguration = accessor.get(IFilesConfigurationService);
 	const includesReadonly = items.some(item => filesConfiguration.isReadonly(item.resource));
 	const dialog = accessor.get(IDialogService);
 	const result = await dialog.confirm({
-		message:
-			items.length === 1
-				? localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', items[0]!.name)
-				: localize('files.deleteManyConfirm', 'Permanently delete {0} selected items?', items.length),
+		message: items.length === 1
+			? localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', items[0]!.name)
+			: localize('files.deleteManyConfirm', 'Permanently delete {0} selected items?', items.length),
 		detail: includesReadonly ? localize('files.deleteReadonlyDetail', 'Selected files or folders are configured as read-only. Deleting them will override their read-only protection.') : undefined,
 		primaryButton: localize({ bundle: 'ash', key: 'files.deletePermanently' }, 'Delete Permanently'),
 	});
@@ -234,9 +203,7 @@ export async function openExplorerItemToSide(accessor: ServicesAccessor, resourc
 	if (resource !== undefined) {
 		if (!URI.isUri(resource)) throw new TypeError('Open to the side requires a resource URI');
 		const { uri, selection } = extractSelection(resource);
-		const range = selection
-			? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn)
-			: undefined;
+		const range = selection ? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn) : undefined;
 		await accessor.get(IEditorService).openEditor({ resource: uri }, { pinned: true, selection: range }, 'sideGroup');
 		return;
 	}
@@ -260,11 +227,12 @@ export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'),
 		placeHolder: localize({ bundle: 'ash', key: 'workbench.newFileNamePlaceholder' }, 'Enter a file name'),
-		validateInput: async value =>
-			(await paths.hasValidBasename(directory, value)) ? undefined : localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
+		validateInput: async value => await paths.hasValidBasename(directory, value)
+			? undefined
+			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
 	});
 	if (name === undefined) return;
-	if (!(await paths.hasValidBasename(directory, name))) {
+	if (!await paths.hasValidBasename(directory, name)) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
 	}
 	const resource = directory.joinPathSegment(name);
@@ -280,11 +248,12 @@ export async function createNewFolder(accessor: ServicesAccessor): Promise<void>
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'files.newFolderName' }, 'New Folder Name'),
 		placeHolder: localize({ bundle: 'ash', key: 'files.newFolderPlaceholder' }, 'Enter a folder name'),
-		validateInput: async value =>
-			(await paths.hasValidBasename(directory, value)) ? undefined : localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'),
+		validateInput: async value => await paths.hasValidBasename(directory, value)
+			? undefined
+			: localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'),
 	});
 	if (name === undefined) return;
-	if (!(await paths.hasValidBasename(directory, name))) throw new Error(localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'));
+	if (!await paths.hasValidBasename(directory, name)) throw new Error(localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'));
 	await accessor.get(IFileService).createDirectory(directory.joinPathSegment(name));
 }
 
@@ -292,32 +261,35 @@ export async function createNewFolder(accessor: ServicesAccessor): Promise<void>
 async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file' | 'folder'): Promise<URI | undefined> {
 	const workspace = accessor.get(IWorkspaceContextService).getWorkspace();
 	if (workspace.folders.length === 0) {
-		throw new Error(
-			kind === 'file'
-				? localize({ bundle: 'ash', key: 'workbench.newFileNoFolder' }, 'Open a folder to create a file.')
-				: localize({ bundle: 'ash', key: 'files.newFolderNoFolder' }, 'Open a folder to create a new folder.'),
-		);
+		throw new Error(kind === 'file'
+			? localize({ bundle: 'ash', key: 'workbench.newFileNoFolder' }, 'Open a folder to create a file.')
+			: localize({ bundle: 'ash', key: 'files.newFolderNoFolder' }, 'Open a folder to create a new folder.'));
 	}
 	const quickInput = accessor.get(IQuickInputService);
 	const selection = accessor.get(IExplorerService).getContext()[0];
-	const selectionDirectory = selection?.kind === FileKind.Directory ? selection.resource : selection ? dirname(selection.resource) : undefined;
-	const selectedDirectory = selectionDirectory && accessor.get(IWorkspaceContextService).getWorkspaceFolder(selectionDirectory) ? selectionDirectory : undefined;
+	const selectionDirectory = selection?.kind === FileKind.Directory
+		? selection.resource
+		: selection ? dirname(selection.resource) : undefined;
+	const selectedDirectory = selectionDirectory && accessor.get(IWorkspaceContextService).getWorkspaceFolder(selectionDirectory)
+		? selectionDirectory
+		: undefined;
 	const activeResource = accessor.get(IEditorService).activeEditor?.resource;
 	const activeFolder = activeResource ? accessor.get(IWorkspaceContextService).getWorkspaceFolder(activeResource) : null;
-	const folder = selectedDirectory ? undefined : (activeFolder ?? (workspace.folders.length === 1 ? workspace.folders[0] : await pickWorkspaceFolder(quickInput, workspace.folders, kind)));
+	const folder = selectedDirectory ? undefined : activeFolder ?? (workspace.folders.length === 1
+		? workspace.folders[0]
+		: await pickWorkspaceFolder(quickInput, workspace.folders, kind));
 	return selectedDirectory ?? folder?.uri;
 }
 
 function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly IWorkspaceFolder[], kind: 'file' | 'folder'): Promise<IWorkspaceFolder | undefined> {
-	type FolderItem = IQuickPickItem & { readonly folder: IWorkspaceFolder };
+	type FolderItem = IQuickPickItem & { readonly folder: IWorkspaceFolder; };
 	const picker = quickInput.createQuickPick<FolderItem>();
 	const disposables = new DisposableStore();
 	disposables.add(picker);
 	picker.items = folders.map(folder => ({ label: folder.name, description: folder.uri.path, folder }));
-	picker.ariaLabel =
-		kind === 'file'
-			? localize({ bundle: 'ash', key: 'workbench.newFileSelectFolder' }, 'Select a folder for the new file')
-			: localize({ bundle: 'ash', key: 'files.newFolderSelectFolder' }, 'Select a folder for the new folder');
+	picker.ariaLabel = kind === 'file'
+		? localize({ bundle: 'ash', key: 'workbench.newFileSelectFolder' }, 'Select a folder for the new file')
+		: localize({ bundle: 'ash', key: 'files.newFolderSelectFolder' }, 'Select a folder for the new folder');
 	picker.placeholder = picker.ariaLabel;
 	return new Promise(resolve => {
 		let settled = false;
@@ -327,13 +299,11 @@ function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly I
 			resolve(folder);
 			disposables.dispose();
 		};
-		disposables.add(
-			picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
-				return finish(item.folder);
-			}),
-		);
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			return finish(item.folder);
+		}));
 		disposables.add(picker.onDidHide(() => finish(undefined)));
 		picker.show();
 	});

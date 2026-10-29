@@ -13,10 +13,7 @@ function preserveLetterCase(source: string, replacement: string): string {
 	if (separators.length === 1) {
 		const separator = separators[0]!;
 		const words = source.split(separator);
-		return replacement
-			.split(separator)
-			.map((word, index) => preserveLetterCase(words[index]!, word))
-			.join(separator);
+		return replacement.split(separator).map((word, index) => preserveLetterCase(words[index]!, word)).join(separator);
 	}
 
 	if (source === source.toUpperCase()) {

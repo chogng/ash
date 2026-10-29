@@ -46,20 +46,16 @@ export class WindowTitle extends Disposable {
 		this._register(workingCopyService.onDidChangeDirty(() => this.updateTitle()));
 		this._register(workingCopyService.onDidRegister(() => this.updateTitle()));
 		this._register(workingCopyService.onDidUnregister(() => this.updateTitle()));
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.windowTitle) || event.affectsConfiguration(WorkbenchConfiguration.windowTitleSeparator)) {
-					this.updateTitle();
-				}
-			}),
-		);
-		this._register(
-			contextKeyService.onDidChangeContext(event => {
-				if (event.affectsSome(new Set(this.variables.values()))) {
-					this.updateTitle();
-				}
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.windowTitle) || event.affectsConfiguration(WorkbenchConfiguration.windowTitleSeparator)) {
+				this.updateTitle();
+			}
+		}));
+		this._register(contextKeyService.onDidChangeContext(event => {
+			if (event.affectsSome(new Set(this.variables.values()))) {
+				this.updateTitle();
+			}
+		}));
 		this.bindActiveGroup();
 	}
 
@@ -116,9 +112,7 @@ export class WindowTitle extends Disposable {
 			rootPath: workspaceResource ? this.labelService.getUriLabel(workspaceResource) : '',
 			appName: this.productName,
 			dirty: dirty ? '● ' : '',
-			separator: {
-				label: this.configurationService.getValue<string>(WorkbenchConfiguration.windowTitleSeparator),
-			},
+			separator: { label: this.configurationService.getValue<string>(WorkbenchConfiguration.windowTitleSeparator) },
 			...customValues,
 		});
 		const admin = this.properties.isAdmin

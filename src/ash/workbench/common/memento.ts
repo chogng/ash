@@ -14,10 +14,7 @@ export class Memento<T extends object = object> {
 	private readonly storageKey: string;
 	private readonly scopes = new Map<StorageScope, MementoScope<T>>();
 
-	constructor(
-		id: string,
-		private readonly storageService: IStorageService,
-	) {
+	constructor(id: string, private readonly storageService: IStorageService) {
 		// IDs also come from extension editor registrations; they are storage identities, not file paths.
 		if (id.trim().length === 0) {
 			throw new TypeError(`Invalid Workbench Memento ID: ${id}`);
@@ -35,18 +32,11 @@ export class Memento<T extends object = object> {
 	}
 
 	public onDidChangeValue(scope: StorageScope, disposables: DisposableStore): Event<IStorageValueChangeEvent> {
-		return (listener, thisArgs, listenerDisposables) =>
-			disposables.add(
-				this.storageService.onDidChangeValue(
-					event => {
-						if (event.scope === scope && event.key === this.storageKey) {
-							listener.call(thisArgs, event);
-						}
-					},
-					undefined,
-					listenerDisposables,
-				),
-			);
+		return (listener, thisArgs, listenerDisposables) => disposables.add(this.storageService.onDidChangeValue(event => {
+			if (event.scope === scope && event.key === this.storageKey) {
+				listener.call(thisArgs, event);
+			}
+		}, undefined, listenerDisposables));
 	}
 
 	public saveMemento(): void {

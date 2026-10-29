@@ -1,15 +1,7 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
-import {
-	RemoteAuthorityResolverError,
-	RemoteAuthorityResolverErrorCode,
-	type IRemoteAuthorityResolverService,
-	type IRemoteConnectionData,
-	type ResolvedAuthority,
-	type ResolvedOptions,
-	type ResolverResult,
-} from '../common/remoteAuthorityResolver.js';
+import { RemoteAuthorityResolverError, RemoteAuthorityResolverErrorCode, type IRemoteAuthorityResolverService, type IRemoteConnectionData, type ResolvedAuthority, type ResolvedOptions, type ResolverResult } from '../common/remoteAuthorityResolver.js';
 
 /** Web uses host-published addresses and keeps resource identity without a local extension host. */
 export class RemoteAuthorityResolverService extends Disposable implements IRemoteAuthorityResolverService {
@@ -22,20 +14,16 @@ export class RemoteAuthorityResolverService extends Disposable implements IRemot
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.results.clear();
-				this.errors.clear();
-				this.canonicalProvider = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.results.clear();
+			this.errors.clear();
+			this.canonicalProvider = undefined;
+		}));
 	}
 
 	public resolveAuthority(authority: string): Promise<ResolverResult> {
 		this.assertNotDisposed();
-		if (this.errors.has(authority)) {
-			return Promise.reject(this.errors.get(authority));
-		}
+		if (this.errors.has(authority)) { return Promise.reject(this.errors.get(authority)); }
 		const result = this.results.get(authority);
 		return result ? Promise.resolve(result) : Promise.reject(new RemoteAuthorityResolverError('No Web host has resolved this authority', RemoteAuthorityResolverErrorCode.NoResolverFound));
 	}

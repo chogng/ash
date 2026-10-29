@@ -13,7 +13,10 @@ test('Menu renders submenu actions with the shared SVG indicator', async () => {
 		configurable: true,
 		value: dom.window.Node,
 	});
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([
+		import('../../common/actions.js'),
+		import('../../browser/ui/menu/menu.js'),
+	]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [new SubmenuAction('test.submenu', 'More', [])],
 	});
@@ -48,16 +51,14 @@ test('Menu renders action badges as trailing metadata', async () => {
 	});
 	const { Menu } = await import('../../browser/ui/menu/menu.js');
 	const menu = new Menu(dom.window.document.body, {
-		actions: [
-			{
-				id: 'test.badge',
-				label: 'Model',
-				tooltip: 'Model',
-				badge: 'Subscription',
-				enabled: true,
-				run(): void {},
-			},
-		],
+		actions: [{
+			id: 'test.badge',
+			label: 'Model',
+			tooltip: 'Model',
+			badge: 'Subscription',
+			enabled: true,
+			run(): void { },
+		}],
 	});
 
 	assert.equal(menu.element.querySelector('.ash-menu-badge')?.textContent, 'Subscription');
@@ -70,25 +71,24 @@ test('Menu renders action badges as trailing metadata', async () => {
 
 test('Menu items keep accessible names without installing action tooltips', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const [{ Menu }, { setHoverDelegate }] = await Promise.all([import('../../browser/ui/menu/menu.js'), import('../../browser/ui/hover/hoverDelegate.js')]);
+	const [{ Menu }, { setHoverDelegate }] = await Promise.all([
+		import('../../browser/ui/menu/menu.js'),
+		import('../../browser/ui/hover/hoverDelegate.js'),
+	]);
 	using hoverDelegate = setHoverDelegate({
-		setupDelayedHover() {
-			throw new Error('Unexpected delayed hover registration');
-		},
+		setupDelayedHover() { throw new Error('Unexpected delayed hover registration'); },
 		setupHover(): never {
 			throw new Error('Menu items must not install tooltips');
 		},
 	});
 	const menu = new Menu(dom.window.document.body, {
-		actions: [
-			{
-				id: 'plan',
-				label: 'Plan',
-				tooltip: 'Use Plan mode',
-				enabled: true,
-				run(): void {},
-			},
-		],
+		actions: [{
+			id: 'plan',
+			label: 'Plan',
+			tooltip: 'Use Plan mode',
+			enabled: true,
+			run(): void { },
+		}],
 	});
 	const item = menu.element.querySelector<HTMLButtonElement>("[role='menuitem']");
 	assert.equal(item?.getAttribute('aria-label'), 'Plan');
@@ -109,85 +109,78 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 	});
 	const { Menu } = await import('../../browser/ui/menu/menu.js');
 	const menu = new Menu(dom.window.document.body, {
-		actions: ['first', 'second', 'third'].map(id => ({
+		actions: ['first', 'second', 'third'].map((id) => ({
 			id,
 			label: id,
 			tooltip: id,
 			enabled: true,
-			run(): void {},
+			run(): void { },
 		})),
 	});
 	dom.window.document.body.append(menu.element);
-	const items = [...menu.element.querySelectorAll<HTMLElement>(':scope > .ash-action-view-item')];
-	const buttons = items.map(item => item.querySelector<HTMLButtonElement>(':scope > .ash-button')!);
+	const items = [...menu.element.querySelectorAll<HTMLElement>(
+		':scope > .ash-action-view-item',
+	)];
+	const buttons = items.map((item) =>
+		item.querySelector<HTMLButtonElement>(':scope > .ash-button')!
+	);
 	for (const button of buttons) {
 		button.getClientRects = () => [{}] as unknown as DOMRectList;
 	}
 	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 
 	menu.focus(false);
 	assert.equal(dom.window.document.activeElement, menu.element);
-	assert.equal(
-		items.some(item => item.classList.contains('focused')),
-		false,
-	);
-	menu.element.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			key: 'ArrowUp',
-		}),
-	);
+	assert.equal(items.some((item) => item.classList.contains('focused')), false);
+	menu.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		key: 'ArrowUp',
+	}));
 	assert.equal(dom.window.document.activeElement, buttons[2]);
 
 	menu.focus(true);
 	assert.equal(dom.window.document.activeElement, buttons[0]);
-	assert.deepEqual(
-		items.map(item => item.classList.contains('focused')),
-		[true, false, false],
-	);
+	assert.deepEqual(items.map((item) => item.classList.contains('focused')), [
+		true,
+		false,
+		false,
+	]);
 
-	buttons[1]!.dispatchEvent(
-		new dom.window.MouseEvent('mouseover', {
-			bubbles: true,
-			relatedTarget: buttons[0],
-		}),
-	);
+	buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mouseover', {
+		bubbles: true,
+		relatedTarget: buttons[0],
+	}));
 	buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mousemove', { bubbles: true }));
 	assert.equal(dom.window.document.activeElement, buttons[0]);
 	const movement = new dom.window.MouseEvent('mousemove', { bubbles: true });
 	Object.defineProperty(movement, 'movementX', { value: 1 });
 	buttons[1]!.dispatchEvent(movement);
 	assert.equal(dom.window.document.activeElement, buttons[1]);
-	assert.deepEqual(
-		items.map(item => item.classList.contains('focused')),
-		[false, true, false],
-	);
-
-	buttons[1]!.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			key: 'ArrowDown',
-		}),
-	);
-	assert.equal(dom.window.document.activeElement, buttons[2]);
-	assert.deepEqual(
-		items.map(item => item.classList.contains('focused')),
-		[false, false, true],
-	);
-
-	menu.element.dispatchEvent(
-		new dom.window.MouseEvent('mouseout', {
-			bubbles: true,
-			relatedTarget: dom.window.document.body,
-		}),
-	);
-	assert.equal(
-		items.some(item => item.classList.contains('focused')),
+	assert.deepEqual(items.map((item) => item.classList.contains('focused')), [
 		false,
-	);
+		true,
+		false,
+	]);
+
+	buttons[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		key: 'ArrowDown',
+	}));
+	assert.equal(dom.window.document.activeElement, buttons[2]);
+	assert.deepEqual(items.map((item) => item.classList.contains('focused')), [
+		false,
+		false,
+		true,
+	]);
+
+	menu.element.dispatchEvent(new dom.window.MouseEvent('mouseout', {
+		bubbles: true,
+		relatedTarget: dom.window.document.body,
+	}));
+	assert.equal(items.some((item) => item.classList.contains('focused')), false);
 
 	menu.dispose();
 	dom.window.close();
@@ -200,7 +193,7 @@ test('Menu delays pointer expansion and switches the expanded submenu', async ()
 	mock.timers.enable({ apis: ['setTimeout'] });
 	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
@@ -210,39 +203,36 @@ test('Menu delays pointer expansion and switches the expanded submenu', async ()
 		configurable: true,
 		value: dom.window.Node,
 	});
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([
+		import('../../common/actions.js'),
+		import('../../browser/ui/menu/menu.js'),
+	]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
-			new SubmenuAction('first', 'First', [
-				{
-					id: 'first.child',
-					label: 'First child',
-					tooltip: 'First child',
-					enabled: true,
-					run(): void {},
-				},
-			]),
-			new SubmenuAction('second', 'Second', [
-				{
-					id: 'second.child',
-					label: 'Second child',
-					tooltip: 'Second child',
-					enabled: true,
-					run(): void {},
-				},
-			]),
+			new SubmenuAction('first', 'First', [{
+				id: 'first.child',
+				label: 'First child',
+				tooltip: 'First child',
+				enabled: true,
+				run(): void { },
+			}]),
+			new SubmenuAction('second', 'Second', [{
+				id: 'second.child',
+				label: 'Second child',
+				tooltip: 'Second child',
+				enabled: true,
+				run(): void { },
+			}]),
 		],
 	});
 	const first = menu.element.querySelector<HTMLButtonElement>('[data-action-id="first"] button')!;
 	const second = menu.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!;
 	const firstContainer = first.parentElement!;
 	const movePointer = (button: HTMLButtonElement, previous: Element): void => {
-		button.dispatchEvent(
-			new dom.window.MouseEvent('mouseover', {
-				bubbles: true,
-				relatedTarget: previous,
-			}),
-		);
+		button.dispatchEvent(new dom.window.MouseEvent('mouseover', {
+			bubbles: true,
+			relatedTarget: previous,
+		}));
 		const movement = new dom.window.MouseEvent('mousemove', { bubbles: true });
 		Object.defineProperty(movement, 'movementX', { value: 1 });
 		button.dispatchEvent(movement);
@@ -287,7 +277,7 @@ test('Menu opens immediate root submenus only on movement without changing neste
 	mock.timers.enable({ apis: ['setTimeout'] });
 	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
@@ -297,19 +287,20 @@ test('Menu opens immediate root submenus only on movement without changing neste
 		configurable: true,
 		value: dom.window.Node,
 	});
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([
+		import('../../common/actions.js'),
+		import('../../browser/ui/menu/menu.js'),
+	]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
 			new SubmenuAction('first', 'First', [
-				new SubmenuAction('nested', 'Nested', [
-					{
-						id: 'nested.child',
-						label: 'Child',
-						tooltip: 'Child',
-						enabled: true,
-						run(): void {},
-					},
-				]),
+				new SubmenuAction('nested', 'Nested', [{
+					id: 'nested.child',
+					label: 'Child',
+					tooltip: 'Child',
+					enabled: true,
+					run(): void { },
+				}]),
 			]),
 			new SubmenuAction('second', 'Second', []),
 		],
@@ -369,7 +360,7 @@ test('Menu preserves submenu focus and closes after focus leaves or the parent s
 	mock.timers.enable({ apis: ['setTimeout'] });
 	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
@@ -379,24 +370,25 @@ test('Menu preserves submenu focus and closes after focus leaves or the parent s
 		configurable: true,
 		value: dom.window.Node,
 	});
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([
+		import('../../common/actions.js'),
+		import('../../browser/ui/menu/menu.js'),
+	]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
-			new SubmenuAction('submenu', 'Submenu', [
-				{
-					id: 'child',
-					label: 'Child',
-					tooltip: 'Child',
-					enabled: true,
-					run(): void {},
-				},
-			]),
+			new SubmenuAction('submenu', 'Submenu', [{
+				id: 'child',
+				label: 'Child',
+				tooltip: 'Child',
+				enabled: true,
+				run(): void { },
+			}]),
 			{
 				id: 'leaf',
 				label: 'Leaf',
 				tooltip: 'Leaf',
 				enabled: true,
-				run(): void {},
+				run(): void { },
 			},
 		],
 	});
@@ -451,19 +443,11 @@ test('Menu restores its borrowed popup shell styles on disposal', async () => {
 	const border = '--ash-menu-style-border-color';
 	const background = '--ash-menu-style-background-color';
 	shell.style.setProperty(border, '#123456', 'important');
-	const menu = new Menu(
-		shell,
-		{ actions: [] },
-		{
-			foregroundColor: '#ffffff',
-			backgroundColor: '#111111',
-			selectionForegroundColor: '#ffffff',
-			selectionBackgroundColor: '#222222',
-			borderColor: '#333333',
-			separatorColor: '#444444',
-			shadowColor: '#555555',
-		},
-	);
+	const menu = new Menu(shell, { actions: [] }, {
+		foregroundColor: '#ffffff', backgroundColor: '#111111',
+		selectionForegroundColor: '#ffffff', selectionBackgroundColor: '#222222',
+		borderColor: '#333333', separatorColor: '#444444', shadowColor: '#555555',
+	});
 	try {
 		assert.equal(shell.style.getPropertyValue(border), '#333333');
 		assert.equal(shell.style.getPropertyValue(background), '#111111');

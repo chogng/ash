@@ -27,11 +27,19 @@ export function isModelDecorationVisible(model: ITextModel, decoration: IModelDe
 }
 
 export function isModelDecorationInComment(model: ITextModel, decoration: IModelDecoration): boolean {
-	return testTokensInRange(model, decoration.range, tokenType => tokenType === StandardTokenType.Comment);
+	return testTokensInRange(
+		model,
+		decoration.range,
+		(tokenType) => tokenType === StandardTokenType.Comment
+	);
 }
 
 export function isModelDecorationInString(model: ITextModel, decoration: IModelDecoration): boolean {
-	return testTokensInRange(model, decoration.range, tokenType => tokenType === StandardTokenType.String);
+	return testTokensInRange(
+		model,
+		decoration.range,
+		(tokenType) => tokenType === StandardTokenType.String
+	);
 }
 
 /**

@@ -26,7 +26,7 @@ class TestMediaQueryList extends EventTarget {
 	}
 }
 
-function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService } {
+function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService; } {
 	const mediaQuery = new TestMediaQueryList();
 	const ownerWindow = {
 		document: browserEnvironment.window.document,
@@ -56,14 +56,7 @@ const {
 } = await import('../../common/core/editorColorRegistry.js');
 
 test('all bracket nesting colors remain readable in light, dark and high contrast themes', () => {
-	const identifiers = [
-		editorBracketHighlightingForeground1,
-		editorBracketHighlightingForeground2,
-		editorBracketHighlightingForeground3,
-		editorBracketHighlightingForeground4,
-		editorBracketHighlightingForeground5,
-		editorBracketHighlightingForeground6,
-	];
+	const identifiers = [editorBracketHighlightingForeground1, editorBracketHighlightingForeground2, editorBracketHighlightingForeground3, editorBracketHighlightingForeground4, editorBracketHighlightingForeground5, editorBracketHighlightingForeground6];
 	for (const theme of [lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]) {
 		const background = theme.getColor('editor.background');
 		assert.ok(background);
@@ -80,12 +73,7 @@ test('all bracket nesting colors remain readable in light, dark and high contras
 
 test('themes created before the editor loads include its color contributions', () => {
 	// The unit runner preloads bundled themes, so module-load ordering needs a fresh process.
-	const result = execFileSync(
-		process.execPath,
-		[
-			'--input-type=module',
-			'--eval',
-			`
+	const result = execFileSync(process.execPath, ['--input-type=module', '--eval', `
 		const { lightColorTheme } = await import(${JSON.stringify(new URL('../../../platform/theme/common/colorTheme.js', import.meta.url).href)});
 		const before = lightColorTheme.colors;
 		const { editorCursorForeground } = await import(${JSON.stringify(new URL('../../common/core/editorColorRegistry.js', import.meta.url).href)});
@@ -93,13 +81,9 @@ test('themes created before the editor loads include its color contributions', (
 			registeredBefore: Object.hasOwn(before, editorCursorForeground),
 			after: lightColorTheme.getColorCss(editorCursorForeground),
 		}));
-	`,
-		],
-		{ encoding: 'utf8', windowsHide: true, timeout: 10_000 },
-	);
+	`], { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
 	assert.deepEqual(JSON.parse(result), {
-		registeredBefore: false,
-		after: '#000000',
+		registeredBefore: false, after: '#000000',
 	});
 });
 
@@ -112,12 +96,7 @@ test('standalone themes default to the built-in light theme', () => {
 test('standard theme inheritance updates selected child token colors and preserves input ownership', () => {
 	using service = createThemeService().service;
 	const rules = [{ token: 'entity', foreground: '124578', fontStyle: 'italic' }];
-	service.defineTheme('child-theme', {
-		base: 'vs-dark',
-		inherit: true,
-		rules,
-		colors: { 'editor.background': '#111111' },
-	});
+	service.defineTheme('child-theme', { base: 'vs-dark', inherit: true, rules, colors: { 'editor.background': '#111111' } });
 	service.setTheme('child-theme');
 	rules[0]!.foreground = 'ffffff';
 	const readColor = (scope: string) => {
@@ -126,12 +105,7 @@ test('standard theme inheritance updates selected child token colors and preserv
 	};
 	assert.equal(readColor('entity.method'), '#124578');
 	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#111111');
-	service.defineTheme('vs-dark', {
-		base: 'vs-dark',
-		inherit: true,
-		rules: [{ token: 'comment', foreground: '345678' }],
-		colors: {},
-	});
+	service.defineTheme('vs-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'comment', foreground: '345678' }], colors: {} });
 	assert.equal(service.getColorTheme().themeName, 'child-theme');
 	assert.equal(readColor('comment.line'), '#345678');
 	assert.equal(readColor('entity.method'), '#124578');
@@ -147,11 +121,7 @@ test('Ash named themes preserve standard base inheritance when replacing a built
 	using service = createThemeService().service;
 	service.defineTheme('inherited', { base: 'vs-dark', inherit: true, rules: [], colors: {} });
 	service.setTheme('inherited');
-	service.defineNamedTheme('vs-dark', {
-		label: 'Custom Dark',
-		colorScheme: ColorScheme.Dark,
-		colors: { 'editor.background': '#121314' },
-	});
+	service.defineNamedTheme('vs-dark', { label: 'Custom Dark', colorScheme: ColorScheme.Dark, colors: { 'editor.background': '#121314' } });
 	assert.equal(service.getColorTheme().getColorCss('editor.background'), '#121314');
 	service.defineTheme('another', { base: 'vs-dark', inherit: true, rules: [], colors: {} });
 	service.setTheme('another');
@@ -174,14 +144,9 @@ test('standalone themes preserve overrides for later contributions and stop noti
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange(value => changes.push(value.getColorCss('test.standaloneLate')!));
 	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef', hcDark: 'editor.background', hcLight: '#000000' }, { description: 'Late standalone test.', owner: 'test' });
-	assert.deepEqual(
-		{ before: before['test.standaloneLate'], value: theme.colors['test.standaloneLate'], changes },
-		{
-			before: undefined,
-			value: '#101010',
-			changes: ['#101010'],
-		},
-	);
+	assert.deepEqual({ before: before['test.standaloneLate'], value: theme.colors['test.standaloneLate'], changes }, {
+		before: undefined, value: '#101010', changes: ['#101010'],
+	});
 	assert.equal(theme.getColorCss('editor.background'), '#101010');
 	assert.equal(theme.colorEntries, theme.colorEntries);
 	service.dispose();
@@ -237,7 +202,10 @@ test('standalone themes track forced colors without losing the selected theme', 
 });
 
 test('editor identifiers retain their CSS variables', () => {
-	assert.equal(colorCssVariable(editorMultiCursorSecondaryBackground), '--ash-editorMultiCursor-secondary-background');
+	assert.equal(
+		colorCssVariable(editorMultiCursorSecondaryBackground),
+		'--ash-editorMultiCursor-secondary-background',
+	);
 	assert.equal(colorCssVariable(editorLineHighlight), '--ash-editor-lineHighlightBackground');
 	assert.equal(colorCssVariable(editorInactiveLineHighlight), '--ash-editor-inactiveLineHighlightBackground');
 	assert.equal(colorCssVariable(editorLineHighlightBorder), '--ash-editor-lineHighlightBorder');
@@ -247,65 +215,57 @@ test('editor identifiers retain their CSS variables', () => {
 });
 
 test('current-line colors preserve transparent fills and high-contrast borders', () => {
-	assert.deepEqual(
-		{
-			darkBackground: darkColorTheme.colors[editorLineHighlight],
-			lightBackground: lightColorTheme.colors[editorLineHighlight],
-			highContrastDarkBorder: highContrastDarkColorTheme.colors[editorLineHighlightBorder],
-			highContrastLightBorder: highContrastLightColorTheme.colors[editorLineHighlightBorder],
-			strokeThickness: darkColorTheme.getSize('strokeThickness'),
-		},
-		{
-			darkBackground: '#00000000',
-			lightBackground: '#00000000',
-			highContrastDarkBorder: '#f38518',
-			highContrastLightBorder: '#0f4a85',
-			strokeThickness: { value: 1, unit: 'px' },
-		},
-	);
+	assert.deepEqual({
+		darkBackground: darkColorTheme.colors[editorLineHighlight],
+		lightBackground: lightColorTheme.colors[editorLineHighlight],
+		highContrastDarkBorder: highContrastDarkColorTheme.colors[editorLineHighlightBorder],
+		highContrastLightBorder: highContrastLightColorTheme.colors[editorLineHighlightBorder],
+		strokeThickness: darkColorTheme.getSize('strokeThickness'),
+	}, {
+		darkBackground: '#00000000',
+		lightBackground: '#00000000',
+		highContrastDarkBorder: '#f38518',
+		highContrastLightBorder: '#0f4a85',
+		strokeThickness: { value: 1, unit: 'px' },
+	});
 });
 
 test('editor ruler colors preserve the editor theme contract', () => {
-	assert.deepEqual(
-		{
-			dark: darkColorTheme.colors[editorRuler],
-			light: lightColorTheme.colors[editorRuler],
-			hcDark: highContrastDarkColorTheme.colors[editorRuler],
-			hcLight: highContrastLightColorTheme.colors[editorRuler],
-		},
-		{
-			dark: '#5a5a5a',
-			light: '#d3d3d3',
-			hcDark: '#ffffff',
-			hcLight: '#292929',
-		},
-	);
+	assert.deepEqual({
+		dark: darkColorTheme.colors[editorRuler],
+		light: lightColorTheme.colors[editorRuler],
+		hcDark: highContrastDarkColorTheme.colors[editorRuler],
+		hcLight: highContrastLightColorTheme.colors[editorRuler],
+	}, {
+		dark: '#5a5a5a',
+		light: '#d3d3d3',
+		hcDark: '#ffffff',
+		hcLight: '#292929',
+	});
 });
 
 test('overview ruler colors use solid backgrounds and retain theme-specific borders', () => {
-	assert.deepEqual(
-		{
-			darkBorder: darkColorTheme.colors[editorOverviewRulerBorder],
-			lightBorder: lightColorTheme.colors[editorOverviewRulerBorder],
-			highContrastDarkBorder: highContrastDarkColorTheme.colors[editorOverviewRulerBorder],
-			highContrastLightBorder: highContrastLightColorTheme.colors[editorOverviewRulerBorder],
-			darkBackground: darkColorTheme.colors[editorOverviewRulerBackground],
-			lightBackground: lightColorTheme.colors[editorOverviewRulerBackground],
-			highContrastDarkBackground: highContrastDarkColorTheme.colors[editorOverviewRulerBackground],
-			highContrastLightBackground: highContrastLightColorTheme.colors[editorOverviewRulerBackground],
-		},
-		{
-			darkBorder: '#7f7f7f4d',
-			lightBorder: '#7f7f7f4d',
-			highContrastDarkBorder: '#ffffff',
-			highContrastLightBorder: '#000000',
-			darkBackground: '#1e1e1e',
-			lightBackground: '#ffffff',
-			highContrastDarkBackground: '#000000',
-			highContrastLightBackground: '#ffffff',
-		},
-	);
+	assert.deepEqual({
+		darkBorder: darkColorTheme.colors[editorOverviewRulerBorder],
+		lightBorder: lightColorTheme.colors[editorOverviewRulerBorder],
+		highContrastDarkBorder: highContrastDarkColorTheme.colors[editorOverviewRulerBorder],
+		highContrastLightBorder: highContrastLightColorTheme.colors[editorOverviewRulerBorder],
+		darkBackground: darkColorTheme.colors[editorOverviewRulerBackground],
+		lightBackground: lightColorTheme.colors[editorOverviewRulerBackground],
+		highContrastDarkBackground: highContrastDarkColorTheme.colors[editorOverviewRulerBackground],
+		highContrastLightBackground: highContrastLightColorTheme.colors[editorOverviewRulerBackground],
+	}, {
+		darkBorder: '#7f7f7f4d',
+		lightBorder: '#7f7f7f4d',
+		highContrastDarkBorder: '#ffffff',
+		highContrastLightBorder: '#000000',
+		darkBackground: '#1e1e1e',
+		lightBackground: '#ffffff',
+		highContrastDarkBackground: '#000000',
+		highContrastLightBackground: '#ffffff',
+	});
 });
+
 
 test('standalone container registration follows schemes and restores host metadata without inline theme copies', () => {
 	const { service } = createThemeService();
@@ -322,10 +282,7 @@ test('standalone container registration follows schemes and restores host metada
 		assert.equal(host.classList.contains('hc-light'), theme === highContrastLightColorTheme);
 		assert.equal(host.style.getPropertyValue('--ash-editor-background'), 'hotpink');
 		assert.equal(host.style.getPropertyPriority('--ash-editor-background'), 'important');
-		assert.equal(
-			browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'),
-			theme.getColorCss('editor.background'),
-		);
+		assert.equal(browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'), theme.getColorCss('editor.background'));
 	}
 	registration.dispose();
 	service.setColorTheme(darkColorTheme);
@@ -335,6 +292,7 @@ test('standalone container registration follows schemes and restores host metada
 	service.dispose();
 	assert.equal(browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'), '');
 });
+
 
 test('standalone editors in another document share theme styles until the last container releases them', () => {
 	const { service } = createThemeService();
@@ -358,7 +316,5 @@ test('standalone editors in another document share theme styles until the last c
 		assert.equal(root.classList.contains('hc-light'), false);
 		service.setColorTheme(lightColorTheme);
 		assert.equal(root.getAttribute('data-color-theme'), 'host-theme');
-	} finally {
-		other.window.close();
-	}
+	} finally { other.window.close(); }
 });

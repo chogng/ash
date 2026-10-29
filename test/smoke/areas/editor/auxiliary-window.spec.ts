@@ -22,17 +22,11 @@ for (const scenario of [
 		await page.keyboard.press('ControlOrMeta+N');
 		await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 		await workbench.editors.groupAt(0).editor.waitForTypeInEditor('selected tab content');
-		const instanceId = await workbench.editors
-			.groupAt(0)
-			.tabs.last()
-			.evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+		const instanceId = await workbench.editors.groupAt(0).tabs.last().evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
 		await page.keyboard.press('ControlOrMeta+N');
 		const tab = page.locator(`.ash-tab[data-action-id="${instanceId}"]`).getByRole('tab');
 		await expect(tab).toHaveAttribute('aria-selected', 'false');
-		const remainingId = await workbench.editors
-			.groupAt(0)
-			.element.locator('.ash-tab-label[aria-selected="true"]')
-			.evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+		const remainingId = await workbench.editors.groupAt(0).element.locator('.ash-tab-label[aria-selected="true"]').evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
 		const remainingTab = page.locator(`.ash-tab[data-action-id="${remainingId}"]`).getByRole('tab');
 		const openMenu = async () => {
 			if (scenario.keyboard) {
@@ -65,10 +59,7 @@ for (const scenario of [
 			}
 			await expect(tab).toHaveCount(scenario.mode === 'move' ? 0 : 1);
 			await expect(remainingTab).toHaveCount(1);
-			const popupId = await popup
-				.getByRole('tab')
-				.first()
-				.evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
+			const popupId = await popup.getByRole('tab').first().evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
 			expect(popupId === instanceId).toBe(scenario.mode === 'move');
 			if (scenario.mode === 'copy') {
 				await input.press('ControlOrMeta+A');
@@ -100,27 +91,20 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		await expect(root.locator('.ash-workbench-editor')).toBeVisible();
 		const sameElementRealm = await root.evaluate(element => element.firstElementChild?.constructor === element.constructor);
 		expect(sameElementRealm).toBe(true);
-		const mainAppearance = await page
-			.locator('.ash-workbench')
-			.first()
-			.evaluate(element => ({
-				scheme: element.getAttribute('data-color-scheme'),
-				os: element.getAttribute('data-os'),
-				reducedMotion: element.classList.contains('ash-reduce-motion'),
-				background: getComputedStyle(element).backgroundColor,
-				foreground: getComputedStyle(element).color,
-			}));
-		await expect
-			.poll(() =>
-				root.evaluate(element => ({
-					scheme: element.getAttribute('data-color-scheme'),
-					os: element.getAttribute('data-os'),
-					reducedMotion: element.classList.contains('ash-reduce-motion'),
-					background: getComputedStyle(element).backgroundColor,
-					foreground: getComputedStyle(element).color,
-				})),
-			)
-			.toEqual(mainAppearance);
+		const mainAppearance = await page.locator('.ash-workbench').first().evaluate(element => ({
+			scheme: element.getAttribute('data-color-scheme'),
+			os: element.getAttribute('data-os'),
+			reducedMotion: element.classList.contains('ash-reduce-motion'),
+			background: getComputedStyle(element).backgroundColor,
+			foreground: getComputedStyle(element).color,
+		}));
+		await expect.poll(() => root.evaluate(element => ({
+			scheme: element.getAttribute('data-color-scheme'),
+			os: element.getAttribute('data-os'),
+			reducedMotion: element.classList.contains('ash-reduce-motion'),
+			background: getComputedStyle(element).backgroundColor,
+			foreground: getComputedStyle(element).color,
+		}))).toEqual(mainAppearance);
 		await popup.keyboard.press('F1');
 		await expect(popup.locator('.ash-quick-pick')).toBeVisible();
 		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
@@ -129,16 +113,8 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		await popup.keyboard.press('ControlOrMeta+f');
 		await expect(popup.locator('.stanza-editor-find-widget')).toBeVisible();
 		await popup.keyboard.press('Escape');
-		await popup.evaluate(() => {
-			window.resizeTo(700, 530);
-			window.moveTo(120, 90);
-		});
-		const previousBounds = await popup.evaluate(() => ({
-			width: window.outerWidth,
-			height: window.outerHeight,
-			left: window.screenX,
-			top: window.screenY,
-		}));
+		await popup.evaluate(() => { window.resizeTo(700, 530); window.moveTo(120, 90); });
+		const previousBounds = await popup.evaluate(() => ({ width: window.outerWidth, height: window.outerHeight, left: window.screenX, top: window.screenY }));
 		await popup.evaluate(() => window.close());
 		await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
@@ -148,16 +124,7 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		const reopened = await reopenedPromise;
 		try {
 			await expect(reopened.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
-			await expect
-				.poll(() =>
-					reopened.evaluate(() => ({
-						width: window.outerWidth,
-						height: window.outerHeight,
-						left: window.screenX,
-						top: window.screenY,
-					})),
-				)
-				.toEqual(previousBounds);
+			await expect.poll(() => reopened.evaluate(() => ({ width: window.outerWidth, height: window.outerHeight, left: window.screenX, top: window.screenY }))).toEqual(previousBounds);
 		} finally {
 			if (!reopened.isClosed()) await reopened.close();
 		}
@@ -176,11 +143,7 @@ focusTest('detached editor windows participate in desktop window switching and c
 	await mainWindow.dispose();
 	const focusMain = async (): Promise<void> => {
 		await page.evaluate(async id => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
 		}, mainWindowId);
 		await waitForElectronWindowState(application, page, { focused: true });
@@ -259,15 +222,7 @@ test('detached window titlebar follows its own editor and reserves layout space'
 			const title = element.querySelector('.ash-auxiliary-titlebar')!.getBoundingClientRect();
 			const editor = element.querySelector('.ash-workbench-editor')!.getBoundingClientRect();
 			const status = element.querySelector('.ash-workbench-statusbar')!.getBoundingClientRect();
-			return {
-				titleHeight: title.height,
-				titleBottom: title.bottom,
-				editorTop: editor.top,
-				editorBottom: editor.bottom,
-				statusTop: status.top,
-				statusBottom: status.bottom,
-				windowHeight: element.ownerDocument.defaultView!.innerHeight,
-			};
+			return { titleHeight: title.height, titleBottom: title.bottom, editorTop: editor.top, editorBottom: editor.bottom, statusTop: status.top, statusBottom: status.bottom, windowHeight: element.ownerDocument.defaultView!.innerHeight };
 		});
 		expect(bounds.titleHeight).toBeGreaterThan(0);
 		expect(Math.abs(bounds.titleBottom - bounds.editorTop)).toBeLessThanOrEqual(1);

@@ -31,8 +31,7 @@ test('Base and Platform production imports preserve the layer direction', () => 
 	}
 	for (const file of productionTypeScriptFiles(join(sourceRoot, 'platform'))) {
 		for (const target of localImports(file)) {
-			if (target.startsWith(join(sourceRoot, 'workbench')) || target.startsWith(join(sourceRoot, 'editor')) || target.startsWith(join(sourceRoot, 'code')))
-				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			if (target.startsWith(join(sourceRoot, 'workbench')) || target.startsWith(join(sourceRoot, 'editor')) || target.startsWith(join(sourceRoot, 'code'))) violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 		}
 	}
 	assert.deepEqual(violations, []);
@@ -43,11 +42,10 @@ test('Workbench services do not depend on contribution implementations', () => {
 	// Debug and Tasks own cross-feature contracts in their contribution's common layer.
 	// Admit these exact public entry points, never their browser implementations.
 	const contracts = new Set([join(contributionRoot, 'debug/common/debug.ts'), ...taskContracts]);
-	const violations = productionTypeScriptFiles(join(sourceRoot, 'workbench/services')).flatMap(file =>
-		localImports(file)
+	const violations = productionTypeScriptFiles(join(sourceRoot, 'workbench/services'))
+		.flatMap(file => localImports(file)
 			.filter(target => target.startsWith(contributionRoot) && !contracts.has(target))
-			.map(target => `${sourceName(file)} -> ${sourceName(target)}`),
-	);
+			.map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
 
@@ -79,7 +77,7 @@ test('Terminal and Tasks contracts cannot reach contribution implementations thr
 			if (visited.has(file)) return;
 			visited.add(file);
 			for (const target of localImports(file)) {
-				if ((target.startsWith(contributionRoot) && !contracts.has(target)) || (entry.includes(`${sep}common${sep}`) && target.includes(`${sep}browser${sep}`))) {
+				if (target.startsWith(contributionRoot) && !contracts.has(target) || entry.includes(`${sep}common${sep}`) && target.includes(`${sep}browser${sep}`)) {
 					violations.push(`${sourceName(entry)} via ${sourceName(file)} -> ${sourceName(target)}`);
 				} else if (target.startsWith(sourceRoot) && existsSync(target)) {
 					visit(target);
@@ -98,16 +96,9 @@ test('Terminal and Tasks domain service identifiers have one owner', () => {
 		['ITerminalProfileService', 'workbench/contrib/terminal/common/terminal.ts'],
 		['ITerminalProfileResolverService', 'workbench/contrib/terminal/common/terminal.ts'],
 	]);
-	const declarations = new Map(
-		[...owners.keys()].map(name => [
-			name,
-			{
-				identifiers: [] as string[],
-				contracts: [] as string[],
-				reexports: [] as string[],
-			},
-		]),
-	);
+	const declarations = new Map([...owners.keys()].map(name => [name, {
+		identifiers: [] as string[], contracts: [] as string[], reexports: [] as string[],
+	}]));
 	for (const file of productionTypeScriptFiles(sourceRoot)) {
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 		source.forEachChild(node => {
@@ -132,11 +123,8 @@ test('Terminal and Tasks domain service identifiers have one owner', () => {
 
 test('Workbench production imports do not depend on Sessions', () => {
 	const sessionsRoot = join(sourceRoot, 'sessions');
-	const violations = productionTypeScriptFiles(join(sourceRoot, 'workbench')).flatMap(file =>
-		localImports(file)
-			.filter(target => target.startsWith(`${sessionsRoot}${sep}`))
-			.map(target => `${sourceName(file)} -> ${sourceName(target)}`),
-	);
+	const violations = productionTypeScriptFiles(join(sourceRoot, 'workbench'))
+		.flatMap(file => localImports(file).filter(target => target.startsWith(`${sessionsRoot}${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
 
@@ -148,17 +136,12 @@ test('Sessions owns canonical Session management independently from Workbench co
 	const automationContract = join(contributionRoot, 'chat/common/automations/automationService.ts');
 	const appToolsContract = join(sessionsServicesRoot, 'appTools/browser/appTools.ts');
 	const taskModels = join(contributionRoot, 'tasks/common/tasks.ts');
-	const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file =>
-		localImportEdges(file)
-			.filter(
-				({ target, typeOnly }) =>
-					target.startsWith(contributionRoot) &&
-					!(file === providerContract && target === automationContract) &&
-					// App Tools shares task descriptions and output types without loading the task runtime.
-					!(file === appToolsContract && target === taskModels && typeOnly),
-			)
-			.map(({ target }) => `${sourceName(file)} -> ${sourceName(target)}`),
-	);
+	const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file => localImportEdges(file)
+		.filter(({ target, typeOnly }) => target.startsWith(contributionRoot)
+			&& !(file === providerContract && target === automationContract)
+			// App Tools shares task descriptions and output types without loading the task runtime.
+			&& !(file === appToolsContract && target === taskModels && typeOnly))
+		.map(({ target }) => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.equal(existsSync(join(sessionsServicesRoot, 'sessions/common/session.ts')), true);
 	assert.equal(existsSync(join(sessionsServicesRoot, 'sessions/common/sessionsManagement.ts')), true);
 	assert.equal(existsSync(join(sessionsServicesRoot, 'sessions/browser/sessionsManagementService.ts')), true);
@@ -173,16 +156,13 @@ test('Frontend common service contracts do not import browser implementations', 
 	const workbenchRoot = join(sourceRoot, 'workbench');
 	const sessionsRoot = join(sourceRoot, 'sessions');
 	const platformRoot = join(sourceRoot, 'platform');
-	const candidates = [...productionTypeScriptFiles(join(sessionsRoot, 'services')), ...productionTypeScriptFiles(join(workbenchRoot, 'services'))].filter(file =>
-		/services[/\\][^/\\]+[/\\]common[/\\]/u.test(file),
-	);
+	const candidates = [
+		...productionTypeScriptFiles(join(sessionsRoot, 'services')),
+		...productionTypeScriptFiles(join(workbenchRoot, 'services')),
+	].filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file));
 	candidates.push(join(workbenchRoot, 'contrib/debug/common/debug.ts'));
 	candidates.push(...taskContracts);
-	const violations = candidates.flatMap(file =>
-		localImports(file)
-			.filter(target => (target.startsWith(sessionsRoot) || target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`))
-			.map(target => `${sourceName(file)} -> ${sourceName(target)}`),
-	);
+	const violations = candidates.flatMap(file => localImports(file).filter(target => (target.startsWith(sessionsRoot) || target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
 
@@ -235,7 +215,9 @@ test('Layer boundary scanning distinguishes erased type references from runtime 
 		['void import("./tasks.js");', false],
 	];
 	for (const [source, typeOnly] of cases) {
-		assert.deepEqual(localImportEdges(join(sourceRoot, 'entry.ts'), source), [{ target: join(sourceRoot, 'tasks.ts'), typeOnly }], source);
+		assert.deepEqual(localImportEdges(join(sourceRoot, 'entry.ts'), source), [
+			{ target: join(sourceRoot, 'tasks.ts'), typeOnly },
+		], source);
 	}
 });
 
@@ -257,33 +239,23 @@ function localImports(file: string): string[] {
 	return localImportEdges(file).map(({ target }) => target);
 }
 
-function localImportEdges(file: string, source = readFileSync(file, 'utf8')): { target: string; typeOnly: boolean }[] {
+function localImportEdges(file: string, source = readFileSync(file, 'utf8')): { target: string; typeOnly: boolean; }[] {
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-	const targets: { target: string; typeOnly: boolean }[] = [];
+	const targets: { target: string; typeOnly: boolean; }[] = [];
 	const visit = (node: ts.Node): void => {
-		const module =
-			ts.isImportDeclaration(node) || ts.isExportDeclaration(node)
-				? node.moduleSpecifier
-				: ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
-					? node.argument.literal
-					: ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
-						? node.arguments[0]
-						: undefined;
+		const module = ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ? node.moduleSpecifier
+			: ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) ? node.argument.literal
+				: ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword ? node.arguments[0] : undefined;
 		if (module && ts.isStringLiteral(module) && module.text.startsWith('.')) {
 			let typeOnly = ts.isImportTypeNode(node);
 			if (ts.isImportDeclaration(node) && node.importClause) {
 				const clause = node.importClause;
-				typeOnly =
-					clause.isTypeOnly ||
-					(!clause.name &&
-						!!clause.namedBindings &&
-						ts.isNamedImports(clause.namedBindings) &&
-						clause.namedBindings.elements.length > 0 &&
-						clause.namedBindings.elements.every(element => element.isTypeOnly));
+				typeOnly = clause.isTypeOnly || !clause.name && !!clause.namedBindings
+					&& ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.length > 0
+					&& clause.namedBindings.elements.every(element => element.isTypeOnly);
 			} else if (ts.isExportDeclaration(node)) {
-				typeOnly =
-					node.isTypeOnly ||
-					(!!node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length > 0 && node.exportClause.elements.every(element => element.isTypeOnly));
+				typeOnly = node.isTypeOnly || !!node.exportClause && ts.isNamedExports(node.exportClause)
+					&& node.exportClause.elements.length > 0 && node.exportClause.elements.every(element => element.isTypeOnly);
 			}
 			targets.push({ target: resolve(dirname(file), module.text.replace(/\.js$/u, '.ts')), typeOnly });
 		}
@@ -296,6 +268,7 @@ function localImportEdges(file: string, source = readFileSync(file, 'utf8')): { 
 function sourceName(file: string): string {
 	return relative(sourceRoot, file).replaceAll('\\', '/');
 }
+
 
 test('Design editor stays within its Sessions contribution and keeps document code independent from the page', () => {
 	const designRoot = join(sourceRoot, 'sessions/contrib/creator');
@@ -350,6 +323,7 @@ test('Shared canvas does not depend on Creator modes or Sessions composition', (
 	}
 	assert.deepEqual(violations, []);
 });
+
 
 test("Creator host consumes mode contracts and modes do not import each other's implementations", () => {
 	const root = join(sourceRoot, 'sessions/contrib/creator');

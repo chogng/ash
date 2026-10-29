@@ -36,49 +36,20 @@ export class WatchingProblemCollector extends Disposable {
 	public readonly onDidChangeProblems = this.problemsEmitter.event;
 	public readonly onDidError = this.errorEmitter.event;
 
-	constructor(
-		matchers: readonly ProblemMatcher[],
-		private readonly root: URI,
-		private readonly markers: IMarkerService,
-		runId: string,
-		private readonly isOpen: (resource: URI) => boolean,
-		private readonly searchFile?: (file: string, matcher: ProblemMatcher, signal: AbortSignal) => Promise<URI | undefined>,
-	) {
+	constructor(matchers: readonly ProblemMatcher[], private readonly root: URI, private readonly markers: IMarkerService, runId: string, private readonly isOpen: (resource: URI) => boolean, private readonly searchFile?: (file: string, matcher: ProblemMatcher, signal: AbortSignal) => Promise<URI | undefined>) {
 		super();
-		this.states = matchers.map(matcher => ({
-			matcher,
-			owner: `tasks:${runId}:${matcher.owner}`,
-			markers: [],
-			active: matcher.watching?.activeOnStart ?? false,
-			completed: false,
-			patternIndex: 0,
-			fields: {},
-			version: 0,
-			pending: 0,
-		}));
+		this.states = matchers.map(matcher => ({ matcher, owner: `tasks:${runId}:${matcher.owner}`, markers: [], active: matcher.watching?.activeOnStart ?? false, completed: false, patternIndex: 0, fields: {}, version: 0, pending: 0 }));
 		for (const state of this.states) {
 			markers.changeAll(state.owner, []);
 		}
 	}
 
-	public get isReady(): boolean {
-		return this._isReady;
-	}
-	public get hasErrors(): boolean {
-		return this.states.some(state => state.markers.some(({ marker }) => marker.severity === MarkerSeverity.Error));
-	}
-	public get hasProblems(): boolean {
-		return this.states.some(state => state.markers.length > 0);
-	}
-	public get isWatching(): boolean {
-		return this.states.some(state => state.matcher.watching !== undefined);
-	}
-	public get owners(): readonly string[] {
-		return this.states.map(state => state.owner);
-	}
-	public get hasPendingResolutions(): boolean {
-		return this.states.some(state => state.pending > 0);
-	}
+	public get isReady(): boolean { return this._isReady; }
+	public get hasErrors(): boolean { return this.states.some(state => state.markers.some(({ marker }) => marker.severity === MarkerSeverity.Error)); }
+	public get hasProblems(): boolean { return this.states.some(state => state.markers.length > 0); }
+	public get isWatching(): boolean { return this.states.some(state => state.matcher.watching !== undefined); }
+	public get owners(): readonly string[] { return this.states.map(state => state.owner); }
+	public get hasPendingResolutions(): boolean { return this.states.some(state => state.pending > 0); }
 
 	public cancelSearch(): void {
 		this.searchController.abort();
@@ -139,14 +110,7 @@ export class WatchingProblemCollector extends Disposable {
 
 	private updateReadiness(): void {
 		const watching = this.states.filter(state => state.matcher.watching);
-		if (
-			!this.isDisposed &&
-			!this.searchController.signal.aborted &&
-			this.searchFailure === undefined &&
-			!this._isReady &&
-			watching.length > 0 &&
-			watching.every(state => state.completed && !state.active && state.pending === 0)
-		) {
+		if (!this.isDisposed && !this.searchController.signal.aborted && this.searchFailure === undefined && !this._isReady && watching.length > 0 && watching.every(state => state.completed && !state.active && state.pending === 0)) {
 			this._isReady = true;
 			this.readyEmitter.fire();
 		}
@@ -206,7 +170,7 @@ export class WatchingProblemCollector extends Disposable {
 
 	private publishMarker(state: MatcherState, marker: IResourceMarker): void {
 		const open = this.isOpen(marker.resource);
-		if ((state.matcher.applyTo === 'openDocuments' && !open) || (state.matcher.applyTo === 'closedDocuments' && open)) return;
+		if (state.matcher.applyTo === 'openDocuments' && !open || state.matcher.applyTo === 'closedDocuments' && open) return;
 		state.markers.push(marker);
 		this.updateMarkers(state.owner);
 		this.problemsEmitter.fire();
@@ -214,7 +178,7 @@ export class WatchingProblemCollector extends Disposable {
 
 	private updateMarkers(owner: string): void {
 		// Multiple output formats may share one compiler's diagnostic owner.
-		const markers = this.states.flatMap(state => (state.owner === owner ? state.markers : [])).slice(0, 5000);
+		const markers = this.states.flatMap(state => state.owner === owner ? state.markers : []).slice(0, 5000);
 		if (markers.length) {
 			this.markers.changeAll(owner, markers);
 		} else {
@@ -227,25 +191,22 @@ export class WatchingProblemCollector extends Disposable {
 		const version = state.version;
 		const key = JSON.stringify([state.matcher.searchPaths, file]);
 		state.pending++;
-		void this.searchQueue
-			.scheduleSkipIfCleared(async () => {
-				if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
-				if (!this.searchFile) throw new Error('Search file location requires a file search owner');
-				const resource = this.resolvedFiles.get(key) ?? (await this.searchFile(file, state.matcher, this.searchController.signal)) ?? marker.resource;
-				if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
-				this.resolvedFiles.set(key, resource);
-				this.publishMarker(state, { ...marker, resource });
-			})
-			.catch(error => {
-				if (!this.isDisposed && version === state.version && !this.searchController.signal.aborted) {
-					this.searchFailure = error;
-					this.errorEmitter.fire(error);
-				}
-			})
-			.finally(() => {
-				if (version === state.version) state.pending--;
-				this.updateReadiness();
-			});
+		void this.searchQueue.scheduleSkipIfCleared(async () => {
+			if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
+			if (!this.searchFile) throw new Error('Search file location requires a file search owner');
+			const resource = this.resolvedFiles.get(key) ?? await this.searchFile(file, state.matcher, this.searchController.signal) ?? marker.resource;
+			if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
+			this.resolvedFiles.set(key, resource);
+			this.publishMarker(state, { ...marker, resource });
+		}).catch(error => {
+			if (!this.isDisposed && version === state.version && !this.searchController.signal.aborted) {
+				this.searchFailure = error;
+				this.errorEmitter.fire(error);
+			}
+		}).finally(() => {
+			if (version === state.version) state.pending--;
+			this.updateReadiness();
+		});
 	}
 
 	private marker(state: MatcherState): IResourceMarker | undefined {
@@ -256,10 +217,7 @@ export class WatchingProblemCollector extends Disposable {
 		const absolute = /^[a-z]:[\\/]|^[\\/]/i.test(fields.file);
 		const prefix = state.matcher.filePrefix;
 		const base = prefix === undefined ? this.root : /^[a-z]:[\\/]|^[\\/]/i.test(prefix) ? this.pathResource(prefix) : URI.joinPath(this.root, prefix);
-		const resource =
-			state.matcher.fileLocation === 'absolute' || state.matcher.fileLocation === 'search' || (state.matcher.fileLocation === 'autoDetect' && absolute)
-				? this.pathResource(fields.file)
-				: URI.joinPath(base, fields.file.replaceAll('\\', '/'));
+		const resource = state.matcher.fileLocation === 'absolute' || state.matcher.fileLocation === 'search' || state.matcher.fileLocation === 'autoDetect' && absolute ? this.pathResource(fields.file) : URI.joinPath(base, fields.file.replaceAll('\\', '/'));
 		const fileOnly = state.matcher.pattern[0].kind === 'file';
 		let line = 1;
 		let column = 1;
@@ -269,8 +227,8 @@ export class WatchingProblemCollector extends Disposable {
 			if (fields.location ? !/\d/.test(fields.location) : !fields.line) return undefined;
 			const location = fields.location ? fields.location.split(',') : undefined;
 			const startColumn = location ? location[1] : fields.character || undefined;
-			const lastColumn = location ? (location.length > 3 ? location[3] : undefined) : fields.endCharacter || undefined;
-			const lastLine = location ? (location.length > 3 ? location[2] : undefined) : fields.endLine || undefined;
+			const lastColumn = location ? location.length > 3 ? location[3] : undefined : fields.endCharacter || undefined;
+			const lastLine = location ? location.length > 3 ? location[2] : undefined : fields.endLine || undefined;
 			// Compiler positions are untrusted strings. Normalize them at this boundary
 			// so one malformed diagnostic cannot discard the owner's marker batch.
 			const coordinate = (value: string | undefined, fallback = 1): number => {
@@ -301,14 +259,7 @@ export class WatchingProblemCollector extends Disposable {
 				endLineNumber: endLine,
 				endColumn: endColumn,
 				message: fields.message,
-				severity:
-					severity === 'error' || fields.severity === 'E'
-						? MarkerSeverity.Error
-						: severity === 'warning' || severity === 'warn' || fields.severity === 'W'
-							? MarkerSeverity.Warning
-							: severity === 'info' || severity === 'note' || severity === 'hint' || fields.severity === 'I'
-								? MarkerSeverity.Info
-								: state.matcher.severity,
+				severity: severity === 'error' || fields.severity === 'E' ? MarkerSeverity.Error : severity === 'warning' || severity === 'warn' || fields.severity === 'W' ? MarkerSeverity.Warning : severity === 'info' || severity === 'note' || severity === 'hint' || fields.severity === 'I' ? MarkerSeverity.Info : state.matcher.severity,
 				source: state.matcher.source,
 				code: fields.code || undefined,
 			},

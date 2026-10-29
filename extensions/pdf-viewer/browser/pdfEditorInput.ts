@@ -8,7 +8,9 @@ export const PDF_CONTENT_TYPE = 'application/pdf';
 /** Matches workspace PDF resources without requiring their bytes to be loaded. */
 export function matchPdfEditor(input: IResourceEditorInput): EditorPaneMatch {
 	if (contentType(input) === PDF_CONTENT_TYPE) return EditorPaneMatch.Default;
-	return input.resource.path.toLowerCase().endsWith('.pdf') ? EditorPaneMatch.Default : EditorPaneMatch.None;
+	return input.resource.path.toLowerCase().endsWith('.pdf')
+		? EditorPaneMatch.Default
+		: EditorPaneMatch.None;
 }
 
 function contentType(input: IResourceEditorInput): string | undefined {

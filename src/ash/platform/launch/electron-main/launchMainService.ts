@@ -33,18 +33,15 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 	public async start({ args, cwd }: IStartArguments): Promise<void> {
 		this.assertNotDisposed();
 		if (args.waitMarkerFilePath) {
-			this.waitMarkers.set(
-				args.waitMarkerFilePath,
-				toDisposable(() => {
-					try {
-						unlinkSync(args.waitMarkerFilePath!);
-					} catch (error) {
-						if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-							throw error;
-						}
+			this.waitMarkers.set(args.waitMarkerFilePath, toDisposable(() => {
+				try {
+					unlinkSync(args.waitMarkerFilePath!);
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+						throw error;
 					}
-				}),
-			);
+				}
+			}));
 		}
 		try {
 			let workspace = args.workspace;
@@ -64,10 +61,7 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 					if (workspace) {
 						throw new Error('One launch request may open only one workspace');
 					}
-					workspace = {
-						kind: isDirectory ? WorkspaceOpenTargetKind.Folder : WorkspaceOpenTargetKind.Workspace,
-						path,
-					};
+					workspace = { kind: isDirectory ? WorkspaceOpenTargetKind.Folder : WorkspaceOpenTargetKind.Workspace, path };
 				} else {
 					const line = location ? Number(location[2]) : undefined;
 					const column = location?.[3] ? Number(location[3]) : undefined;
@@ -77,14 +71,7 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 					files.push({ uri: URI.file(path).toString(), line, column });
 				}
 			}
-			const opened = await this.windows.open({
-				workspace,
-				cwd,
-				files,
-				forceNewWindow: args.newWindow,
-				forceReuseWindow: args.reuseWindow,
-				waitForFiles: args.wait,
-			});
+			const opened = await this.windows.open({ workspace, cwd, files, forceNewWindow: args.newWindow, forceReuseWindow: args.reuseWindow, waitForFiles: args.wait });
 			if (args.waitMarkerFilePath) {
 				// The secondary process waits on the marker; launch completion must not block startup or later requests.
 				const finished = files.length > 0 ? opened.whenFilesClosed : opened.whenClosed;

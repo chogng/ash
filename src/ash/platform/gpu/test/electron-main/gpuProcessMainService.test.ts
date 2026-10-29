@@ -9,9 +9,7 @@ import { SyncDescriptor } from '../../../instantiation/common/descriptors.js';
 
 class GpuApplication extends EventEmitter {
 	public status = {} as GPUFeatureStatus;
-	public getGPUFeatureStatus(): GPUFeatureStatus {
-		return this.status;
-	}
+	public getGPUFeatureStatus(): GPUFeatureStatus { return this.status; }
 	public update(status: GPUFeatureStatus): void {
 		this.status = status;
 		this.emit('gpu-info-update');
@@ -43,7 +41,10 @@ test('GPU lifecycle invalidates stale facts before exit and follows repeated rec
 	application.exit('GPU', 'killed');
 	application.update(software);
 	application.update(software);
-	assert.deepEqual(observed, [accelerated, undefined, { reason: 'crashed', status: undefined }, accelerated, undefined, { reason: 'killed', status: undefined }, software]);
+	assert.deepEqual(observed, [
+		accelerated, undefined, { reason: 'crashed', status: undefined },
+		accelerated, undefined, { reason: 'killed', status: undefined }, software,
+	]);
 });
 
 test('late GPU initialization snapshots software state and releases Electron listeners', () => {
@@ -54,9 +55,7 @@ test('late GPU initialization snapshots software state and releases Electron lis
 	assert.deepEqual(snapshot, software);
 	application.status.gpu_compositing = 'enabled';
 	assert.deepEqual(snapshot, software);
-	assert.throws(() => {
-		snapshot.gpu_compositing = 'enabled';
-	}, TypeError);
+	assert.throws(() => { snapshot.gpu_compositing = 'enabled'; }, TypeError);
 	const updates: unknown[] = [];
 	using subscription = service.onDidUpdateFeatureStatus(status => updates.push(status));
 	service.dispose();
@@ -69,7 +68,9 @@ test('late GPU initialization snapshots software state and releases Electron lis
 
 test('Desktop service scope owns exactly one eagerly resolved GPU monitor', () => {
 	const application = new GpuApplication();
-	const scope = new InstantiationService(new ServiceCollection([IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [application])]));
+	const scope = new InstantiationService(new ServiceCollection([
+		IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [application]),
+	]));
 	const service = scope.get(IGPUProcessMainService);
 	assert.equal(scope.get(IGPUProcessMainService), service);
 	assert.equal(application.listenerCount('gpu-info-update'), 1);
@@ -81,9 +82,7 @@ test('Desktop service scope owns exactly one eagerly resolved GPU monitor', () =
 
 test('failed initial GPU collection removes both Electron subscriptions', () => {
 	const application = new GpuApplication();
-	application.getGPUFeatureStatus = () => {
-		throw new Error('Deliberate GPU collection failure');
-	};
+	application.getGPUFeatureStatus = () => { throw new Error('Deliberate GPU collection failure'); };
 	assert.throws(() => new GPUProcessMainService(application as unknown as App), /Deliberate GPU collection failure/);
 	assert.equal(application.listenerCount('gpu-info-update'), 0);
 	assert.equal(application.listenerCount('child-process-gone'), 0);

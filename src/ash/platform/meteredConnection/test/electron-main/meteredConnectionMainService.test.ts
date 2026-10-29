@@ -20,11 +20,7 @@ import { createSettingsLayout } from '../../../../workbench/contrib/preferences/
 
 function createConfiguration() {
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({
-		key: 'network.meteredConnection',
-		defaultValue: 'auto',
-		parse: value => value as string,
-	});
+	registry.registerConfiguration({ key: 'network.meteredConnection', defaultValue: 'auto', parse: value => value as string });
 	return new InMemoryConfigurationService(registry);
 }
 
@@ -40,10 +36,7 @@ suite('Desktop metered connection policy', () => {
 		const observed: boolean[] = [];
 		using subscription = channel.listen<boolean>('window:2', MeteredConnectionCommand.OnDidChangeIsConnectionMetered)(value => observed.push(value));
 		let initialized = false;
-		const initialState = channel.call('window:2', MeteredConnectionCommand.IsConnectionMetered).then(value => {
-			initialized = true;
-			return value;
-		});
+		const initialState = channel.call('window:2', MeteredConnectionCommand.IsConnectionMetered).then(value => { initialized = true; return value; });
 		await Promise.resolve();
 		assert.equal(initialized, false);
 		await assert.rejects(channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, 'true'), /boolean/);
@@ -87,13 +80,10 @@ suite('Desktop metered connection policy', () => {
 		}
 		// Host callbacks are injected so the real automatic-check gate runs
 		// without launching an updater or requiring an Electron process.
-		using update = services.createInstance(RecordingUpdateService, async () => {}, {
+		using update = services.createInstance(RecordingUpdateService, async () => { }, {
 			isPackaged: true,
-			getPath: () => '',
-			getVersion: () => '1',
-			getAppPath: () => '',
-			quit() {},
-			relaunch() {},
+			getPath: () => '', getVersion: () => '1', getAppPath: () => '',
+			quit() { }, relaunch() { },
 		});
 		const channel = new MeteredConnectionChannel(main);
 		const automatic = update.checkAutomatically('latest');
@@ -103,7 +93,9 @@ suite('Desktop metered connection policy', () => {
 		assert.equal(await update.checkAutomatically('latest'), undefined);
 		assert.deepEqual(calls, ['stable']);
 		await channel.call('window:2', MeteredConnectionCommand.SetIsBrowserConnectionMetered, false);
-		assert.deepEqual(await Promise.all([update.checkAutomatically('latest'), update.checkAutomatically('latest')]), [{ status: 'current', version: '1' }, undefined]);
+		assert.deepEqual(await Promise.all([update.checkAutomatically('latest'), update.checkAutomatically('latest')]), [
+			{ status: 'current', version: '1' }, undefined,
+		]);
 		assert.deepEqual(calls, ['stable', 'latest']);
 		await configuration.updateValue('network.meteredConnection', 'on');
 		assert.deepEqual(await update.checkForUpdates('stable'), { status: 'current', version: '1' });
@@ -112,7 +104,7 @@ suite('Desktop metered connection policy', () => {
 	test('required configuration and network dependencies fail during service creation', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(MeteredConnectionMainService), /configurationService/);
-		assert.throws(() => services.createInstance(UpdateMainService, async () => {}, { isPackaged: false }), /meteredConnectionService/);
+		assert.throws(() => services.createInstance(UpdateMainService, async () => { }, { isPackaged: false }), /meteredConnectionService/);
 	});
 
 	test('the application setting validates values and presents its Chinese labels', async () => {
@@ -126,24 +118,13 @@ suite('Desktop metered connection policy', () => {
 			assert.ok(configuration.setting?.description.includes('手动检查、下载和刷新语言包仍可使用'));
 			assert.equal(configuration.setting?.valueType, 'select');
 			if (configuration.setting?.valueType === 'select') {
-				assert.deepEqual(
-					configuration.setting.options.map(option => option.label),
-					['自动检测', '始终视为按流量计费', '从不视为按流量计费'],
-				);
+				assert.deepEqual(configuration.setting.options.map(option => option.label), ['自动检测', '始终视为按流量计费', '从不视为按流量计费']);
 			}
-			assert.deepEqual(
-				['auto', 'on', 'off'].map(value => configuration.parse(value)),
-				['auto', 'on', 'off'],
-			);
+			assert.deepEqual(['auto', 'on', 'off'].map(value => configuration.parse(value)), ['auto', 'on', 'off']);
 			for (const value of ['sometimes', null, false]) assert.throws(() => configuration.parse(value), /Invalid/);
 			const setting = new DefaultSettings().all.find(setting => setting.id === 'network.meteredConnection')!;
-			const updates = createSettingsLayout([setting])
-				.find(category => category.id === 'general')
-				?.groups.find(group => group.id === 'updates');
-			assert.deepEqual(
-				updates?.settings.map(setting => setting.id),
-				['network.meteredConnection'],
-			);
+			const updates = createSettingsLayout([setting]).find(category => category.id === 'general')?.groups.find(group => group.id === 'updates');
+			assert.deepEqual(updates?.settings.map(setting => setting.id), ['network.meteredConnection']);
 		} finally {
 			resetNlsResolver();
 		}

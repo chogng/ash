@@ -26,16 +26,14 @@ export class SessionsExplorerView extends ExplorerView {
 			const updateActions = (): void => {
 				const label = localize('sessions.files.collapseFolders', 'Collapse folders');
 				actions.element.setAttribute('aria-label', localize('sessions.files.actions', 'Files actions'));
-				actions.setActions([
-					{
-						id: 'sessions.files.action.collapseExplorerFolders',
-						label,
-						tooltip: label,
-						icon: Lxicon.chevronUp,
-						enabled: true,
-						run: () => this.commandService.executeCommand('sessions.files.action.collapseExplorerFolders'),
-					},
-				]);
+				actions.setActions([{
+					id: 'sessions.files.action.collapseExplorerFolders',
+					label,
+					tooltip: label,
+					icon: Lxicon.chevronUp,
+					enabled: true,
+					run: () => this.commandService.executeCommand('sessions.files.action.collapseExplorerFolders'),
+				}]);
 			};
 			updateActions();
 		}

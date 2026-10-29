@@ -6,24 +6,11 @@ import { KnownStorageProvider } from '../../common/encryptionService.js';
 suite('Main encryption', () => {
 	test('round trips a versioned value, rejects malformed ciphertext and redacts native failures', async () => {
 		let fail = false;
-		const service = new EncryptionMainService(
-			{
-				isEncryptionAvailable: () => true,
-				encryptString: value => {
-					if (fail) {
-						throw new Error(value);
-					}
-					return Buffer.from(value);
-				},
-				decryptString: bytes => {
-					if (fail) {
-						throw new Error(bytes.toString());
-					}
-					return bytes.toString();
-				},
-			} as Electron.SafeStorage,
-			'win32',
-		);
+		const service = new EncryptionMainService({
+			isEncryptionAvailable: () => true,
+			encryptString: value => { if (fail) { throw new Error(value); } return Buffer.from(value); },
+			decryptString: bytes => { if (fail) { throw new Error(bytes.toString()); } return bytes.toString(); },
+		} as Electron.SafeStorage, 'win32');
 		const value = await service.encrypt('秘密 🔐');
 		assert.equal(await service.decrypt(value), '秘密 🔐');
 		assert.equal(await service.getKeyStorageProvider(), KnownStorageProvider.dplib);
@@ -39,17 +26,12 @@ suite('Main encryption', () => {
 	test('Linux basic storage requires explicit opt-in and an unavailable keyring never falls back', async () => {
 		let available = true;
 		let optIn = false;
-		const service = new EncryptionMainService(
-			{
-				isEncryptionAvailable: () => available,
-				getSelectedStorageBackend: () => 'basic_text',
-				setUsePlainTextEncryption: value => {
-					optIn = value;
-				},
-				encryptString: value => Buffer.from(value),
-			} as Electron.SafeStorage,
-			'linux',
-		);
+		const service = new EncryptionMainService({
+			isEncryptionAvailable: () => available,
+			getSelectedStorageBackend: () => 'basic_text',
+			setUsePlainTextEncryption: value => { optIn = value; },
+			encryptString: value => Buffer.from(value),
+		} as Electron.SafeStorage, 'linux');
 		assert.equal(await service.isEncryptionAvailable(), false);
 		await assert.rejects(service.encrypt('secret'), /Encryption unavailable/);
 		assert.equal(optIn, false);

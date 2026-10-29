@@ -57,33 +57,25 @@ export class GlobalCompositeBar extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.manageMenu = this._register(this.menuService.createMenu(MenuId.GlobalActivity));
-		this.actionBar = this._register(
-			new ActionBar(this.domNode, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
-				orientation: 'vertical',
-				actionViewItemProvider: (action, options) =>
-					this.createActionViewItem(action, options, {
-						position: () => getActivityHoverPosition(ActivityBarPosition.DEFAULT, this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation)),
-					}),
+		this.actionBar = this._register(new ActionBar(this.domNode, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+			ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
+			orientation: 'vertical',
+			actionViewItemProvider: (action, options) => this.createActionViewItem(action, options, {
+				position: () => getActivityHoverPosition(ActivityBarPosition.DEFAULT, this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation)),
 			}),
-		);
+		}));
 		this.renderActions();
-		this._register(
-			this.storageService.onDidChangeValue(event => {
-				if (event.key !== GlobalCompositeBar.accountsVisibilityKey || event.scope !== StorageScope.PROFILE || !event.external) return;
-				this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
-				this.renderActions();
-			}),
-		);
+		this._register(this.storageService.onDidChangeValue(event => {
+			if (event.key !== GlobalCompositeBar.accountsVisibilityKey || event.scope !== StorageScope.PROFILE || !event.external) return;
+			this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
+			this.renderActions();
+		}));
 		this._register(this.accountService.onDidChangeAccounts(state => this.updateAccounts(state)));
 		if (host.hasAppServer) {
-			void this.accountService.read().then(
-				state => this.updateAccounts(state),
-				error => {
-					this.logService.error('activitybar', 'Could not read accounts', error);
-				},
-			);
+			void this.accountService.read().then(state => this.updateAccounts(state), error => {
+				this.logService.error('activitybar', 'Could not read accounts', error);
+			});
 		}
 	}
 
@@ -102,130 +94,74 @@ export class GlobalCompositeBar extends Disposable {
 		const accountsLabel = this.label('workbench.accounts', 'Accounts');
 		const manageLabel = this.label('workbench.manage', 'Manage');
 		return [
-			...(this.accountsVisible && this.host.hasAppServer
-				? [
-						{
-							id: 'ash.activityBar.accounts',
-							label: accountsLabel,
-							tooltip: accountsLabel,
-							icon: Lxicon.account,
-							enabled: true,
-							run() {},
-						},
-					]
-				: []),
-			{
-				id: 'ash.activityBar.manage',
-				label: manageLabel,
-				tooltip: manageLabel,
-				icon: Lxicon.gear,
-				enabled: true,
-				run() {},
-			},
+			...(this.accountsVisible && this.host.hasAppServer ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() { } }] : []),
+			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() { } },
 		];
 	}
 
 	createActionViewItem(action: IAction, options: ActionViewItemOptions, hoverOptions: IActivityHoverOptions = { position: () => HoverPosition.BELOW }): ActionViewItem | undefined {
 		if (action.id !== 'ash.activityBar.accounts' && action.id !== 'ash.activityBar.manage') return undefined;
-		return new GlobalActivityActionViewItem(
-			hoverOptions,
+		return new GlobalActivityActionViewItem(hoverOptions,
 			action,
-			() => (action.id === 'ash.activityBar.accounts' ? this.accountActions() : getFlatContextMenuActions(this.manageMenu.getActions())),
+			() => action.id === 'ash.activityBar.accounts'
+				? this.accountActions()
+				: getFlatContextMenuActions(this.manageMenu.getActions()),
 			this.contextMenuService,
 			options,
 			// The title bar renders separate action items; the trigger's owner determines its menu direction.
-			anchor =>
-				this.domNode.contains(anchor)
-					? {
-							anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-							anchorAlignment: this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? AnchorAlignment.Right : AnchorAlignment.Left,
-						}
-					: { anchorAxisAlignment: AnchorAxisAlignment.Vertical, anchorAlignment: AnchorAlignment.Left },
+			(anchor) => this.domNode.contains(anchor)
+				? {
+					anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+					anchorAlignment: this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? AnchorAlignment.Right : AnchorAlignment.Left,
+				}
+				: { anchorAxisAlignment: AnchorAxisAlignment.Vertical, anchorAlignment: AnchorAlignment.Left },
 		);
 	}
 
 	getContextMenuActions(): readonly IAction[] {
 		const label = this.label('workbench.accounts', 'Accounts');
-		return [
-			{
-				id: 'ash.activityBar.toggleAccounts',
-				label,
-				tooltip: label,
-				enabled: true,
-				checked: this.accountsVisible,
-				run: () => {
-					this.accountsVisible = !this.accountsVisible;
-					this.storageService.store(GlobalCompositeBar.accountsVisibilityKey, this.accountsVisible, StorageScope.PROFILE, StorageTarget.USER);
-					this.renderActions();
-				},
+		return [{
+			id: 'ash.activityBar.toggleAccounts', label, tooltip: label, enabled: true, checked: this.accountsVisible,
+			run: () => {
+				this.accountsVisible = !this.accountsVisible;
+				this.storageService.store(GlobalCompositeBar.accountsVisibilityKey, this.accountsVisible, StorageScope.PROFILE, StorageTarget.USER);
+				this.renderActions();
 			},
-		];
+		}];
 	}
 
 	private accountActions(): readonly IAction[] {
 		const manageLabel = this.label('workbench.manageAccounts', 'Manage Accounts');
 		const signOutLabel = this.label('workbench.signOut', 'Sign Out');
 		const githubConnected = this.accounts.some(account => account.provider === 'github');
-		const githubLabel = this.githubConnection.isConnecting ? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection') : this.label('workbench.connectGitHub', 'Connect GitHub');
+		const githubLabel = this.githubConnection.isConnecting
+			? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection')
+			: this.label('workbench.connectGitHub', 'Connect GitHub');
 		const accountActions = this.accounts.map(account => {
 			const name = account.displayName ?? account.email ?? account.provider;
 			const providerName = this.accountProviderName(account.provider);
-			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', {
-				'0': name,
-				'1': providerName,
-			});
+			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName });
 			return new SubmenuAction(`ash.activityBar.account.${account.provider}.${account.accountId}`, label, [
-				{
-					id: `ash.activityBar.signOut.${account.provider}.${account.accountId}`,
-					label: signOutLabel,
-					tooltip: signOutLabel,
-					enabled: true,
-					run: () => this.accountService.logout(account.provider, account.accountId),
-				},
+				{ id: `ash.activityBar.signOut.${account.provider}.${account.accountId}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider, account.accountId) },
 			]);
 		});
 		return Separator.join(accountActions, [
-			{
-				id: 'ash.activityBar.manageAccounts',
-				label: manageLabel,
-				tooltip: manageLabel,
-				enabled: true,
-				run: () => this.commandService.executeCommand('workbench.action.manageAccounts'),
-			},
-			...(!githubConnected
-				? [
-						{
-							id: 'ash.activityBar.connectGitHub',
-							label: githubLabel,
-							tooltip: githubLabel,
-							enabled: true,
-							run: () => (this.githubConnection.isConnecting ? this.githubConnection.cancel() : this.githubConnection.connect()),
-						},
-					]
-				: []),
+			{ id: 'ash.activityBar.manageAccounts', label: manageLabel, tooltip: manageLabel, enabled: true, run: () => this.commandService.executeCommand('workbench.action.manageAccounts') },
+			...(!githubConnected ? [{ id: 'ash.activityBar.connectGitHub', label: githubLabel, tooltip: githubLabel, enabled: true, run: () => this.githubConnection.isConnecting ? this.githubConnection.cancel() : this.githubConnection.connect() }] : []),
 		]);
 	}
 
 	private accountProviderName(provider: string): string {
 		switch (provider) {
-			case 'github':
-				return 'GitHub';
-			case 'chatgpt-subscription':
-				return 'ChatGPT';
-			case 'kimi-subscription':
-				return 'Kimi';
-			case 'xai-subscription':
-				return 'Super Grok';
-			case 'bigmodel-coding-plan':
-				return 'BigModel';
-			case 'zai-coding-plan':
-				return 'Z.AI';
-			case 'bigmodel-start-plan':
-				return 'BigModel Start Plan';
-			case 'zai-start-plan':
-				return 'Z.AI Start Plan';
-			default:
-				return provider;
+			case 'github': return 'GitHub';
+			case 'chatgpt-subscription': return 'ChatGPT';
+			case 'kimi-subscription': return 'Kimi';
+			case 'xai-subscription': return 'Super Grok';
+			case 'bigmodel-coding-plan': return 'BigModel';
+			case 'zai-coding-plan': return 'Z.AI';
+			case 'bigmodel-start-plan': return 'BigModel Start Plan';
+			case 'zai-start-plan': return 'Z.AI Start Plan';
+			default: return provider;
 		}
 	}
 
@@ -235,10 +171,7 @@ export class GlobalCompositeBar extends Disposable {
 }
 
 class GlobalActivityActionViewItem extends DropdownMenuActionViewItem {
-	constructor(
-		private readonly hoverOptions: IActivityHoverOptions,
-		...args: ConstructorParameters<typeof DropdownMenuActionViewItem>
-	) {
+	constructor(private readonly hoverOptions: IActivityHoverOptions, ...args: ConstructorParameters<typeof DropdownMenuActionViewItem>) {
 		super(...args);
 	}
 

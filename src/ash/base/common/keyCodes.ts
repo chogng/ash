@@ -455,7 +455,13 @@ export const IMMUTABLE_CODE_TO_KEY_CODE: KeyCode[] = new Array<KeyCode>(ScanCode
 /** Layout-independent logical-to-physical mappings; other entries remain layout-dependent. */
 export const IMMUTABLE_KEY_CODE_TO_CODE: ScanCode[] = new Array<ScanCode>(KeyCode.MaxValue + 1).fill(ScanCode.DependsOnKeyboardLayout);
 
-function registerKeyIdentity(scanCode: ScanCode, keyCode: KeyCode, eventKeyCode: number, vkey: string, immutable: boolean): void {
+function registerKeyIdentity(
+	scanCode: ScanCode,
+	keyCode: KeyCode,
+	eventKeyCode: number,
+	vkey: string,
+	immutable: boolean,
+): void {
 	const scanCodeName = scanCodeStrings[scanCode];
 	if (eventKeyCode > 0) {
 		EVENT_KEY_CODE_MAP[eventKeyCode] = keyCode;
@@ -621,21 +627,21 @@ export const KeyCodeUtils = {
 			return undefined;
 		}
 		switch (keyCode) {
-			case KeyCode.UpArrow:
-				return 'Up';
-			case KeyCode.DownArrow:
-				return 'Down';
-			case KeyCode.LeftArrow:
-				return 'Left';
-			case KeyCode.RightArrow:
-				return 'Right';
-			default:
-				return this.toString(keyCode);
+			case KeyCode.UpArrow: return 'Up';
+			case KeyCode.DownArrow: return 'Down';
+			case KeyCode.LeftArrow: return 'Left';
+			case KeyCode.RightArrow: return 'Right';
+			default: return this.toString(keyCode);
 		}
 	},
 };
 
-export function keyCodeFromKeyboardEvent(key: string, legacyKeyCode = 0, code = '', location = 0): KeyCode {
+export function keyCodeFromKeyboardEvent(
+	key: string,
+	legacyKeyCode = 0,
+	code = '',
+	location = 0,
+): KeyCode {
 	if (legacyKeyCode === 229) {
 		return KeyCode.KeyInComposition;
 	}
@@ -646,7 +652,7 @@ export function keyCodeFromKeyboardEvent(key: string, legacyKeyCode = 0, code = 
 		}
 	}
 	const keyCode = KeyCodeUtils.fromString(key);
-	return keyCode !== KeyCode.Unknown ? keyCode : (EVENT_KEY_CODE_MAP[legacyKeyCode] ?? KeyCode.Unknown);
+	return keyCode !== KeyCode.Unknown ? keyCode : EVENT_KEY_CODE_MAP[legacyKeyCode] ?? KeyCode.Unknown;
 }
 
 export const enum KeyMod {
@@ -657,7 +663,7 @@ export const enum KeyMod {
 }
 
 export function KeyChord(firstPart: number, secondPart: number): number {
-	const chordPart = ((secondPart & 0x0000ffff) << 16) >>> 0;
+	const chordPart = ((secondPart & 0x0000FFFF) << 16) >>> 0;
 	return (firstPart | chordPart) >>> 0;
 }
 
@@ -667,39 +673,22 @@ export function isModifierKey(keyCode: KeyCode): boolean {
 
 function userSettingsAlias(keyCode: KeyCode, usStandard: boolean): string {
 	switch (keyCode) {
-		case KeyCode.LeftArrow:
-			return 'left';
-		case KeyCode.UpArrow:
-			return 'up';
-		case KeyCode.RightArrow:
-			return 'right';
-		case KeyCode.DownArrow:
-			return 'down';
-		case KeyCode.Delete:
-			return 'delete';
-		case KeyCode.Semicolon:
-			return usStandard ? ';' : 'oem_1';
-		case KeyCode.Equal:
-			return usStandard ? '=' : 'oem_plus';
-		case KeyCode.Comma:
-			return usStandard ? ',' : 'oem_comma';
-		case KeyCode.Minus:
-			return usStandard ? '-' : 'oem_minus';
-		case KeyCode.Period:
-			return usStandard ? '.' : 'oem_period';
-		case KeyCode.Slash:
-			return usStandard ? '/' : 'oem_2';
-		case KeyCode.Backquote:
-			return usStandard ? '`' : 'oem_3';
-		case KeyCode.BracketLeft:
-			return usStandard ? '[' : 'oem_4';
-		case KeyCode.Backslash:
-			return usStandard ? '\\' : 'oem_5';
-		case KeyCode.BracketRight:
-			return usStandard ? ']' : 'oem_6';
-		case KeyCode.Quote:
-			return usStandard ? "'" : 'oem_7';
-		default:
-			return KeyCodeUtils.toUserSettings(keyCode);
+		case KeyCode.LeftArrow: return 'left';
+		case KeyCode.UpArrow: return 'up';
+		case KeyCode.RightArrow: return 'right';
+		case KeyCode.DownArrow: return 'down';
+		case KeyCode.Delete: return 'delete';
+		case KeyCode.Semicolon: return usStandard ? ';' : 'oem_1';
+		case KeyCode.Equal: return usStandard ? '=' : 'oem_plus';
+		case KeyCode.Comma: return usStandard ? ',' : 'oem_comma';
+		case KeyCode.Minus: return usStandard ? '-' : 'oem_minus';
+		case KeyCode.Period: return usStandard ? '.' : 'oem_period';
+		case KeyCode.Slash: return usStandard ? '/' : 'oem_2';
+		case KeyCode.Backquote: return usStandard ? '`' : 'oem_3';
+		case KeyCode.BracketLeft: return usStandard ? '[' : 'oem_4';
+		case KeyCode.Backslash: return usStandard ? '\\' : 'oem_5';
+		case KeyCode.BracketRight: return usStandard ? ']' : 'oem_6';
+		case KeyCode.Quote: return usStandard ? "'" : 'oem_7';
+		default: return KeyCodeUtils.toUserSettings(keyCode);
 	}
 }

@@ -1,4 +1,7 @@
-import { Separator, type IAction } from '../../../base/common/actions.js';
+import {
+	Separator,
+	type IAction,
+} from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isCommandActionToggleInfo } from '../../action/common/action.js';
@@ -24,17 +27,33 @@ export class MenuService implements IMenuService {
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
 
-	constructor(@ICommandService commandService: ICommandService, @IContextKeyService contextKeyService: IContextKeyService) {
+	constructor(
+		@ICommandService commandService: ICommandService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+	) {
 		this.commandService = commandService;
 		this.contextKeyService = contextKeyService;
 	}
 
-	createMenu(id: MenuId, contextKeyService: IContextKeyService = this.contextKeyService): IMenu {
+	createMenu(
+		id: MenuId,
+		contextKeyService: IContextKeyService = this.contextKeyService,
+	): IMenu {
 		return new Menu(id, this.commandService, contextKeyService);
 	}
 
-	getMenuActions(id: MenuId, options?: IMenuActionOptions, contextKeyService: IContextKeyService = this.contextKeyService): readonly MenuActionGroup[] {
-		return resolveMenu(id, this.commandService, contextKeyService, options, new Set());
+	getMenuActions(
+		id: MenuId,
+		options?: IMenuActionOptions,
+		contextKeyService: IContextKeyService = this.contextKeyService,
+	): readonly MenuActionGroup[] {
+		return resolveMenu(
+			id,
+			this.commandService,
+			contextKeyService,
+			options,
+			new Set(),
+		);
 	}
 }
 
@@ -46,14 +65,18 @@ class Menu extends Disposable implements IMenu {
 	private readonly contextKeyService: IContextKeyService;
 	private readonly snapshot: MenuInfoSnapshot;
 
-	constructor(id: MenuId, commandService: ICommandService, contextKeyService: IContextKeyService) {
+	constructor(
+		id: MenuId,
+		commandService: ICommandService,
+		contextKeyService: IContextKeyService,
+	) {
 		super();
 		this.id = id;
 		this.commandService = commandService;
 		this.contextKeyService = contextKeyService;
 		this.snapshot = new MenuInfoSnapshot(this.id);
-		this._register(
-			MenusRegistry.onDidChangeMenu((event: IMenuRegistryChangeEvent) => {
+		this._register(MenusRegistry.onDidChangeMenu(
+			(event: IMenuRegistryChangeEvent) => {
 				let affected = false;
 				for (const menuId of this.snapshot.menuIds) {
 					if (event.has(menuId)) {
@@ -68,27 +91,37 @@ class Menu extends Disposable implements IMenu {
 					isEnablementChange: true,
 					isToggleChange: true,
 				});
-			}),
-		);
-		this._register(
-			this.contextKeyService.onDidChangeContext(event => {
-				const isStructuralChange = event.affectsSome(this.snapshot.structureContextKeys);
-				const isEnablementChange = event.affectsSome(this.snapshot.enablementContextKeys);
-				const isToggleChange = event.affectsSome(this.snapshot.toggleContextKeys);
-				if (!isStructuralChange && !isEnablementChange && !isToggleChange) {
-					return;
-				}
-				this._onDidChange.fire({
-					isStructuralChange,
-					isEnablementChange,
-					isToggleChange,
-				});
-			}),
-		);
+			},
+		));
+		this._register(this.contextKeyService.onDidChangeContext((event) => {
+			const isStructuralChange = event.affectsSome(
+				this.snapshot.structureContextKeys,
+			);
+			const isEnablementChange = event.affectsSome(
+				this.snapshot.enablementContextKeys,
+			);
+			const isToggleChange = event.affectsSome(
+				this.snapshot.toggleContextKeys,
+			);
+			if (!isStructuralChange && !isEnablementChange && !isToggleChange) {
+				return;
+			}
+			this._onDidChange.fire({
+				isStructuralChange,
+				isEnablementChange,
+				isToggleChange,
+			});
+		}));
 	}
 
 	getActions(options?: IMenuActionOptions): readonly MenuActionGroup[] {
-		return resolveMenu(this.id, this.commandService, this.contextKeyService, options, new Set());
+		return resolveMenu(
+			this.id,
+			this.commandService,
+			this.contextKeyService,
+			options,
+			new Set(),
+		);
 	}
 }
 
@@ -123,7 +156,12 @@ class MenuInfoSnapshot {
 				if (!command) continue;
 				addExpressionKeys(command.precondition, this.enablementContextKeys);
 				const toggled = command.toggled;
-				addExpressionKeys(toggled && isCommandActionToggleInfo(toggled) ? toggled.condition : toggled, this.toggleContextKeys);
+				addExpressionKeys(
+					toggled && isCommandActionToggleInfo(toggled)
+						? toggled.condition
+						: toggled,
+					this.toggleContextKeys,
+				);
 			}
 		}
 	}
@@ -134,7 +172,13 @@ function addExpressionKeys(expression: ContextKeyExpression | undefined, keys: S
 	for (const key of expression.keys()) keys.add(key);
 }
 
-function resolveMenu(id: MenuId, commandService: ICommandService, contextKeyService: IContextKeyService, options: IMenuActionOptions | undefined, ancestors: Set<MenuId>): readonly MenuActionGroup[] {
+function resolveMenu(
+	id: MenuId,
+	commandService: ICommandService,
+	contextKeyService: IContextKeyService,
+	options: IMenuActionOptions | undefined,
+	ancestors: Set<MenuId>,
+): readonly MenuActionGroup[] {
 	if (ancestors.has(id)) {
 		throw new Error(`Menu contribution cycle detected at '${id.id}'`);
 	}
@@ -147,7 +191,13 @@ function resolveMenu(id: MenuId, commandService: ICommandService, contextKeyServ
 	const groups = new Map<string, IAction[]>();
 
 	for (const item of sorted) {
-		const action = resolveItem(item, commandService, contextKeyService, options, nextAncestors);
+		const action = resolveItem(
+			item,
+			commandService,
+			contextKeyService,
+			options,
+			nextAncestors,
+		);
 		if (!action) continue;
 		const group = item.group ?? '';
 		const actions = groups.get(group);
@@ -166,16 +216,43 @@ function resolveItem(
 	ancestors: Set<MenuId>,
 ): IAction | undefined {
 	if (isMenuItem(item)) {
-		const alt = item.alt ? new MenuItemAction(item.alt, undefined, options, contextKeyService, commandService) : undefined;
-		return new MenuItemAction(item.command, alt, options, contextKeyService, commandService);
+		const alt = item.alt
+			? new MenuItemAction(
+				item.alt,
+				undefined,
+				options,
+				contextKeyService,
+				commandService,
+			)
+			: undefined;
+		return new MenuItemAction(
+			item.command,
+			alt,
+			options,
+			contextKeyService,
+			commandService,
+		);
 	}
 
-	const groups = resolveMenu(item.submenu, commandService, contextKeyService, options, ancestors);
-	const actions = Separator.join(...groups.map(([, groupActions]) => [...groupActions]));
-	return actions.length > 0 || options?.preserveEmptySubmenus ? new SubmenuItemAction(item, actions) : undefined;
+	const groups = resolveMenu(
+		item.submenu,
+		commandService,
+		contextKeyService,
+		options,
+		ancestors,
+	);
+	const actions = Separator.join(
+		...groups.map(([, groupActions]) => [...groupActions]),
+	);
+	return actions.length > 0 || options?.preserveEmptySubmenus
+		? new SubmenuItemAction(item, actions)
+		: undefined;
 }
 
-function compareMenuItems(first: MenuRegistryItem, second: MenuRegistryItem): number {
+function compareMenuItems(
+	first: MenuRegistryItem,
+	second: MenuRegistryItem,
+): number {
 	const groupComparison = compareGroups(first.group, second.group);
 	if (groupComparison !== 0) return groupComparison;
 
@@ -185,7 +262,10 @@ function compareMenuItems(first: MenuRegistryItem, second: MenuRegistryItem): nu
 	return itemTitle(first).localeCompare(itemTitle(second));
 }
 
-function compareGroups(first: string | undefined, second: string | undefined): number {
+function compareGroups(
+	first: string | undefined,
+	second: string | undefined,
+): number {
 	if (first === second) return 0;
 	if (!first) return 1;
 	if (!second) return -1;
@@ -196,5 +276,7 @@ function compareGroups(first: string | undefined, second: string | undefined): n
 
 function itemTitle(item: MenuRegistryItem): string {
 	if (!isMenuItem(item)) return typeof item.title === 'string' ? item.title : item.title.original;
-	return typeof item.command.title === 'string' ? item.command.title : item.command.title.original;
+	return typeof item.command.title === 'string'
+		? item.command.title
+		: item.command.title.original;
 }

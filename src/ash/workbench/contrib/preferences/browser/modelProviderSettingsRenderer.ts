@@ -1,4 +1,9 @@
-import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+	defaultToggleStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/modelProviderSettingsRenderer.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -25,48 +30,21 @@ export class ProviderApiKeyInput extends Disposable {
 	private saving: Promise<void> | undefined;
 	private allowed = true;
 
-	constructor(
-		container: HTMLElement,
-		private readonly connection: string,
-		name: string,
-		configured: boolean,
-		private readonly beforeSave: () => Promise<void>,
-		@ILanguageModelsService private readonly chat: ILanguageModelsService,
-		@INotificationService private readonly notifications: INotificationService,
-	) {
+	constructor(container: HTMLElement, private readonly connection: string, name: string, configured: boolean, private readonly beforeSave: () => Promise<void>, @ILanguageModelsService private readonly chat: ILanguageModelsService, @INotificationService private readonly notifications: INotificationService) {
 		super();
-		this.input = this._register(
-			new InputBox(container, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: 'password',
-				presentation: 'field',
-				placeholder: localize('chat.providerKeys.inputPlaceholder', 'Paste an API key'),
-				ariaLabel: localize('chat.providerKeys.inputTitle', 'API key for {0}', name),
-			}),
-		);
+		this.input = this._register(new InputBox(container, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'password',
+			presentation: 'field',
+			placeholder: localize('chat.providerKeys.inputPlaceholder', 'Paste an API key'),
+			ariaLabel: localize('chat.providerKeys.inputTitle', 'API key for {0}', name),
+		}));
 		this.input.value = configured ? SavedKeyMask : '';
-		this._register(
-			this.input.onDidChange(() => {
-				this.dirty = true;
-			}),
-		);
-		this._register(
-			this.input.onDidBlur(() => {
-				void this.save().catch(error => {
-					if (!this.isDisposed) {
-						this.notifications.error(localize('models.keys.saveError', 'Could not update API key: {0}', error instanceof Error ? error.message : String(error)));
-					}
-				});
-			}),
-		);
-		this._register(
-			this.input.onKeyDown(event => {
-				if (event.key === 'Enter') {
-					event.preventDefault();
-					this.input.inputElement.blur();
-				}
-			}),
-		);
+		this._register(this.input.onDidChange(() => { this.dirty = true; }));
+		this._register(this.input.onDidBlur(() => { void this.save().catch(error => { if (!this.isDisposed) { this.notifications.error(localize('models.keys.saveError', 'Could not update API key: {0}', error instanceof Error ? error.message : String(error))); } }); }));
+		this._register(this.input.onKeyDown(event => {
+			if (event.key === 'Enter') { event.preventDefault(); this.input.inputElement.blur(); }
+		}));
 	}
 
 	public setEnabled(enabled: boolean): void {
@@ -75,27 +53,17 @@ export class ProviderApiKeyInput extends Disposable {
 	}
 
 	public updateConfigured(configured: boolean): void {
-		if (this.dirty || this.saving || this.input.hasFocus()) {
-			return;
-		}
+		if (this.dirty || this.saving || this.input.hasFocus()) { return; }
 		this.input.value = configured ? SavedKeyMask : '';
 		this.dirty = false;
 	}
 
 	public save(): Promise<void> {
-		if (this.saving) {
-			return this.saving;
-		}
-		if (!this.dirty) {
-			return Promise.resolve();
-		}
+		if (this.saving) { return this.saving; }
+		if (!this.dirty) { return Promise.resolve(); }
 		const operation = Promise.resolve().then(() => this.saveKey());
 		this.saving = operation;
-		void operation
-			.finally(() => {
-				this.saving = undefined;
-			})
-			.catch(() => {});
+		void operation.finally(() => { this.saving = undefined; }).catch(() => { });
 		return operation;
 	}
 
@@ -114,13 +82,9 @@ export class ProviderApiKeyInput extends Disposable {
 			this.input.showValidation('');
 			await this.chat.refreshModels();
 		} catch (error) {
-			this.input.showValidation(
-				error instanceof SecretStorageError
-					? error.message
-					: this.dirty
-						? localize('models.keys.saveFailed', 'Could not save API key. Change the field or leave it again to retry.')
-						: localize('chat.providerKeys.refreshFailed', 'API key saved, but models could not be refreshed'),
-			);
+			this.input.showValidation(error instanceof SecretStorageError ? error.message : this.dirty
+				? localize('models.keys.saveFailed', 'Could not save API key. Change the field or leave it again to retry.')
+				: localize('chat.providerKeys.refreshFailed', 'API key saved, but models could not be refreshed'));
 			throw error;
 		} finally {
 			this.input.enabled = this.allowed;
@@ -150,17 +114,13 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	private readonly saveModel: Button;
 	private readonly cancel: Button;
 	private readonly tableResources = this._register(new DisposableStore());
-	private readonly rowControls = new Map<string, { toggle: Switch; status: HTMLElement; edit: Button; remove?: Button }>();
+	private readonly rowControls = new Map<string, { toggle: Switch; status: HTMLElement; edit: Button; remove?: Button; }>();
 	private structure = '';
 	private editing = false;
 	private savingModel = false;
 	private credentialStorageAvailable = true;
 
-	constructor(
-		document: Document,
-		provider: CustomModelProvider,
-		configured: boolean,
-		private readonly isNew: boolean,
+	constructor(document: Document, provider: CustomModelProvider, configured: boolean, private readonly isNew: boolean,
 		@IContextViewService contextView: IContextViewService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -171,33 +131,16 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.domNode.dataset.providerId = provider.id;
 		this.name = this.textField(localize('models.provider.name', 'Provider name'), provider.name);
 		this.baseUrl = this.textField(localize('models.provider.baseUrl', 'Base URL'), provider.baseUrl);
-		this.key = this._register(
-			instantiation.createInstance(
-				ProviderApiKeyInput,
-				this.field(localize('models.keys.title', 'API key')),
-				provider.id,
-				provider.name || localize('models.provider.new', 'New provider'),
-				configured,
-				() => this.saveProvider(),
-			),
-		);
-		this.format = this._register(
-			new SelectBox(
-				this.field(localize('models.provider.apiFormat', 'API format')),
-				{
-					presentation: 'field',
-					selectedValue: provider.apiFormat,
-					contextViewProvider: contextView,
-					ariaLabel: localize('models.provider.apiFormat', 'API format'),
-					options: [
-						{ value: 'responses', label: 'OpenAI Responses' },
-						{ value: 'chatCompletions', label: 'OpenAI Chat Completions' },
-						{ value: 'anthropicMessages', label: 'Anthropic Messages' },
-					],
-				},
-				defaultSelectBoxStyles,
-			),
-		);
+		this.key = this._register(instantiation.createInstance(ProviderApiKeyInput, this.field(localize('models.keys.title', 'API key')), provider.id, provider.name || localize('models.provider.new', 'New provider'), configured, () => this.saveProvider()));
+		this.format = this._register(new SelectBox(this.field(localize('models.provider.apiFormat', 'API format')), {
+			presentation: 'field', selectedValue: provider.apiFormat, contextViewProvider: contextView,
+			ariaLabel: localize('models.provider.apiFormat', 'API format'),
+			options: [
+				{ value: 'responses', label: 'OpenAI Responses' },
+				{ value: 'chatCompletions', label: 'OpenAI Chat Completions' },
+				{ value: 'anthropicMessages', label: 'Anthropic Messages' },
+			],
+		}, defaultSelectBoxStyles));
 		this._register(this.format.onDidSelect(() => this.saveInBackground()));
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-chat-models-toolbar';
@@ -206,40 +149,29 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		const actions = h(document, 'div');
 		actions.className = 'ash-chat-models-actions';
 		toolbar.append(title, actions);
-		this.refresh = this._register(
-			new Button(actions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.refresh', 'Refresh models'),
-				icon: Lxicon.refresh,
-				iconOnly: true,
-				presentation: 'quiet',
-			}),
-		);
-		this.add = this._register(
-			new Button(actions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.addModel', 'Add model'),
-				presentation: 'quiet',
-			}),
-		);
-		this.test = this._register(
-			new Button(actions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.testModels', 'Test models'),
-				presentation: 'secondary',
-			}),
-		);
+		this.refresh = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.refresh', 'Refresh models'),
+			icon: Lxicon.refresh,
+			iconOnly: true,
+			presentation: 'quiet',
+		}));
+		this.add = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.addModel', 'Add model'),
+			presentation: 'quiet',
+		}));
+		this.test = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.testModels', 'Test models'),
+			presentation: 'secondary',
+		}));
 		const table = h(document, 'table');
 		table.className = 'ash-chat-models-table';
 		table.setAttribute('aria-label', localize('models.provider.models', 'Provider models'));
 		const head = h(document, 'thead');
 		const headings = h(document, 'tr');
-		for (const label of [
-			localize('models.provider.modelName', 'Model name'),
-			localize('models.provider.status', 'Status'),
-			localize('models.provider.actions', 'Actions'),
-			localize('models.provider.enabled', 'Enabled'),
-		]) {
+		for (const label of [localize('models.provider.modelName', 'Model name'), localize('models.provider.status', 'Status'), localize('models.provider.actions', 'Actions'), localize('models.provider.enabled', 'Enabled')]) {
 			const cell = h(document, 'th');
 			cell.scope = 'col';
 			cell.textContent = label;
@@ -254,55 +186,43 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.editor = h(document, 'div');
 		this.editor.className = 'ash-chat-models-editor';
 		this.editor.hidden = true;
-		this.modelId = this._register(
-			new InputBox(this.editor, {
-				inputBoxStyles: defaultInputBoxStyles,
-				presentation: 'field',
-				ariaLabel: localize('models.provider.modelId', 'Model ID'),
-				placeholder: localize('models.provider.modelId', 'Model ID'),
-			}),
-		);
-		this.upstreamModel = this._register(
-			new InputBox(this.editor, {
-				inputBoxStyles: defaultInputBoxStyles,
-				presentation: 'field',
-				ariaLabel: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
-				placeholder: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
-			}),
-		);
-		this.contextWindow = this._register(
-			new InputBox(this.editor, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: 'number',
-				presentation: 'field',
-				ariaLabel: localize('models.provider.contextWindow', 'Context window (tokens)'),
-				placeholder: localize('models.provider.contextWindow', 'Context window (tokens)'),
-			}),
-		);
-		this.largeContext = this._register(
-			new Switch(this.editor, {
-				...defaultToggleStyles,
-				checked: false,
-				label: localize('models.provider.context', '1M context'),
-				ariaLabel: localize('models.provider.context', '1M context'),
-			}),
-		);
+		this.modelId = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: localize('models.provider.modelId', 'Model ID'),
+			placeholder: localize('models.provider.modelId', 'Model ID'),
+		}));
+		this.upstreamModel = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
+			placeholder: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
+		}));
+		this.contextWindow = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'number',
+			presentation: 'field',
+			ariaLabel: localize('models.provider.contextWindow', 'Context window (tokens)'),
+			placeholder: localize('models.provider.contextWindow', 'Context window (tokens)'),
+		}));
+		this.largeContext = this._register(new Switch(this.editor, {
+			...defaultToggleStyles,
+			checked: false,
+			label: localize('models.provider.context', '1M context'),
+			ariaLabel: localize('models.provider.context', '1M context'),
+		}));
 		const editorActions = h(document, 'div');
 		editorActions.className = 'ash-chat-models-actions';
-		this.saveModel = this._register(
-			new Button(editorActions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.saveModel', 'Save model'),
-				presentation: 'secondary',
-			}),
-		);
-		this.cancel = this._register(
-			new Button(editorActions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.cancel', 'Cancel'),
-				presentation: 'quiet',
-			}),
-		);
+		this.saveModel = this._register(new Button(editorActions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.saveModel', 'Save model'),
+			presentation: 'secondary',
+		}));
+		this.cancel = this._register(new Button(editorActions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.cancel', 'Cancel'),
+			presentation: 'quiet',
+		}));
 		this.editor.append(editorActions);
 		this.feedback = h(document, 'p');
 		this.feedback.className = 'ash-chat-models-note';
@@ -310,85 +230,51 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.domNode.append(toolbar, table, this.empty, this.editor, this.feedback);
 		this._register(this.add.onDidClick(() => this.openEditor()));
 		this._register(this.cancel.onDidClick(() => this.closeEditor()));
-		this._register(
-			this.largeContext.onDidChange(() => {
-				if (this.largeContext.checked) {
-					this.contextWindow.value = '1000000';
+		this._register(this.largeContext.onDidChange(() => {
+			if (this.largeContext.checked) { this.contextWindow.value = '1000000'; }
+			this.contextWindow.enabled = !this.largeContext.checked;
+		}));
+		this._register(this.saveModel.onDidClick(() => {
+			this.savingModel = true;
+			this.render();
+			void (async () => {
+				try {
+					await this.saveProvider();
+					await this.viewModel.addModel(this.modelId.value.trim(), Number(this.contextWindow.value), this.upstreamModel.value.trim() || undefined);
+					this.closeEditor();
+				} catch (error) { this.viewModel.report(error); }
+				finally {
+					this.savingModel = false;
+					if (!this.isDisposed) { this.render(); }
 				}
-				this.contextWindow.enabled = !this.largeContext.checked;
-			}),
-		);
-		this._register(
-			this.saveModel.onDidClick(() => {
-				this.savingModel = true;
-				this.render();
-				void (async () => {
-					try {
-						await this.saveProvider();
-						await this.viewModel.addModel(this.modelId.value.trim(), Number(this.contextWindow.value), this.upstreamModel.value.trim() || undefined);
-						this.closeEditor();
-					} catch (error) {
-						this.viewModel.report(error);
-					} finally {
-						this.savingModel = false;
-						if (!this.isDisposed) {
-							this.render();
-						}
-					}
-				})();
-			}),
-		);
-		const before = async (): Promise<void> => {
-			await this.saveProvider();
-			await this.key.save();
-		};
-		this._register(
-			this.test.onDidClick(() => {
-				void this.viewModel.testModels(before);
-			}),
-		);
-		this._register(
-			this.refresh.onDidClick(() => {
-				void this.viewModel.refresh(before);
-			}),
-		);
+			})();
+		}));
+		const before = async (): Promise<void> => { await this.saveProvider(); await this.key.save(); };
+		this._register(this.test.onDidClick(() => { void this.viewModel.testModels(before); }));
+		this._register(this.refresh.onDidClick(() => { void this.viewModel.refresh(before); }));
 		this._register(addDisposableListener(this.key.input.inputElement, 'input', () => this.viewModel.invalidateTests()));
 		this._register(this.viewModel.onDidChange(() => this.render()));
 	}
 
 	public async initialize(): Promise<void> {
 		this.render();
-		if (!this.isNew) {
-			await this.viewModel.initialize();
-		}
+		if (!this.isNew) { await this.viewModel.initialize(); }
 	}
 
-	public focus(): void {
-		this.name.focus();
-	}
-	public get title(): string {
-		return this.name.value.trim() || localize('models.provider.new', 'New provider');
-	}
-	public updateKeyConfigured(configured: boolean): void {
-		this.key.updateConfigured(configured);
-	}
+	public focus(): void { this.name.focus(); }
+	public get title(): string { return this.name.value.trim() || localize('models.provider.new', 'New provider'); }
+	public updateKeyConfigured(configured: boolean): void { this.key.updateConfigured(configured); }
 	public setCredentialStorageAvailable(available: boolean): void {
 		this.credentialStorageAvailable = available;
 		this.render();
 	}
 
 	public getAccessibleContent(): string {
-		return [
-			this.title,
-			this.viewModel.message,
-			...this.viewModel.rows.map(row => {
-				const status = this.rowControls.get(row.id)?.status.textContent ?? '';
-				const enabled = this.viewModel.isEnabled(row.id) ? localize('models.provider.enabled', 'Enabled') : localize('models.provider.disabled', 'Disabled');
-				return `${row.name}, ${row.id}, ${enabled}, ${status}${row.contextWindow ? `, ${localize('models.provider.contextTokens', '{0} tokens', row.contextWindow.toLocaleString())}` : ''}${row.upstreamModel ? `, ${row.upstreamModel}` : ''}`;
-			}),
-		]
-			.filter(Boolean)
-			.join('\n');
+		return [this.title, this.viewModel.message, ...this.viewModel.rows.map(row => {
+			const status = this.rowControls.get(row.id)?.status.textContent ?? '';
+			const enabled = this.viewModel.isEnabled(row.id) ? localize('models.provider.enabled', 'Enabled') : localize('models.provider.disabled', 'Disabled');
+			return `${row.name}, ${row.id}, ${enabled}, ${status}${row.contextWindow ? `, ${localize('models.provider.contextTokens', '{0} tokens', row.contextWindow.toLocaleString())}` : ''}${row.upstreamModel ? `, ${row.upstreamModel}` : ''}`;
+		})].filter(Boolean).join('\n');
 	}
 
 	private field(label: string): HTMLElement {
@@ -404,13 +290,11 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	}
 
 	private textField(label: string, value: string): InputBox {
-		const input = this._register(
-			new InputBox(this.field(label), {
-				inputBoxStyles: defaultInputBoxStyles,
-				presentation: 'field',
-				ariaLabel: label,
-			}),
-		);
+		const input = this._register(new InputBox(this.field(label), {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: label,
+		}));
 		input.value = value;
 		this._register(input.onDidChange(() => this.viewModel.invalidateTests()));
 		this._register(input.onDidBlur(() => this.saveInBackground()));
@@ -418,23 +302,13 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	}
 
 	private saveProvider(): Promise<void> {
-		this.viewModel.updateProvider({
-			name: this.name.value.trim(),
-			baseUrl: this.baseUrl.value.trim(),
-			apiFormat: this.format.value as ModelProviderApiFormat,
-		});
+		this.viewModel.updateProvider({ name: this.name.value.trim(), baseUrl: this.baseUrl.value.trim(), apiFormat: this.format.value as ModelProviderApiFormat });
 		return this.viewModel.save();
 	}
 
 	private saveInBackground(): void {
-		if (!this.name.value.trim() || !this.baseUrl.value.trim()) {
-			return;
-		}
-		void this.saveProvider().catch(error => {
-			if (!this.isDisposed) {
-				this.viewModel.report(error);
-			}
-		});
+		if (!this.name.value.trim() || !this.baseUrl.value.trim()) { return; }
+		void this.saveProvider().catch(error => { if (!this.isDisposed) { this.viewModel.report(error); } });
 	}
 
 	private openEditor(model?: ProviderModelItem): void {
@@ -446,11 +320,8 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.largeContext.checked = model?.contextWindow === 1_000_000;
 		this.contextWindow.enabled = !this.largeContext.checked;
 		this.editor.hidden = false;
-		if (this.editing) {
-			this.contextWindow.focus();
-		} else {
-			this.modelId.focus();
-		}
+		if (this.editing) { this.contextWindow.focus(); }
+		else { this.modelId.focus(); }
 	}
 
 	private closeEditor(): void {
@@ -460,9 +331,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 
 	private render(): void {
 		const busy = this.viewModel.busy || this.savingModel;
-		for (const control of [this.name, this.baseUrl, this.format, this.test, this.refresh, this.add, this.cancel, this.saveModel]) {
-			control.enabled = !busy;
-		}
+		for (const control of [this.name, this.baseUrl, this.format, this.test, this.refresh, this.add, this.cancel, this.saveModel]) { control.enabled = !busy; }
 		this.key.setEnabled(this.credentialStorageAvailable && !busy);
 		this.modelId.enabled = !busy && !this.editing;
 		this.upstreamModel.enabled = !busy;
@@ -479,27 +348,18 @@ export class ModelProviderSettingsRenderer extends Disposable {
 			this.tableResources.clear();
 			this.rowControls.clear();
 			this.modelBody.replaceChildren();
-			for (const model of this.viewModel.rows) {
-				this.createRow(model);
-			}
+			for (const model of this.viewModel.rows) { this.createRow(model); }
 		}
 		for (const model of this.viewModel.rows) {
 			const controls = this.rowControls.get(model.id)!;
 			controls.toggle.checked = this.viewModel.isEnabled(model.id);
 			controls.toggle.enabled = !busy;
 			controls.edit.enabled = !busy;
-			if (controls.remove) {
-				controls.remove.enabled = !busy;
-			}
+			if (controls.remove) { controls.remove.enabled = !busy; }
 			controls.status.classList.toggle('passed', model.status === 'passed');
-			controls.status.textContent =
-				model.status === 'passed'
-					? localize('models.provider.passed', 'Model test passed')
-					: model.status === 'failed'
-						? localize('models.provider.testFailed', 'Model test failed: {0}', model.message ?? '')
-						: model.status === 'testing'
-							? localize('models.provider.testing', 'Testing model…')
-							: localize('models.provider.untested', 'Not tested');
+			controls.status.textContent = model.status === 'passed' ? localize('models.provider.passed', 'Model test passed')
+				: model.status === 'failed' ? localize('models.provider.testFailed', 'Model test failed: {0}', model.message ?? '')
+					: model.status === 'testing' ? localize('models.provider.testing', 'Testing model…') : localize('models.provider.untested', 'Not tested');
 		}
 	}
 
@@ -512,54 +372,40 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		name.textContent = model.name;
 		const detail = h(document, 'small');
 		detail.textContent = model.contextWindow ? `${model.id} · ${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}` : model.id;
-		if (model.upstreamModel) {
-			detail.textContent += ` → ${model.upstreamModel}`;
-		}
+		if (model.upstreamModel) { detail.textContent += ` → ${model.upstreamModel}`; }
 		identity.append(name, detail);
 		const status = h(document, 'td');
 		status.className = 'ash-chat-models-test-status';
 		const actions = h(document, 'td');
-		const edit = this.tableResources.add(
-			new Button(actions, {
-				...defaultButtonStyles,
-				label: localize('models.provider.editModel', 'Edit context for {0}', model.id),
-				icon: Lxicon.edit,
-				iconOnly: true,
-				presentation: 'quiet',
-			}),
-		);
+		const edit = this.tableResources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.editModel', 'Edit context for {0}', model.id),
+			icon: Lxicon.edit,
+			iconOnly: true,
+			presentation: 'quiet',
+		}));
 		this.tableResources.add(edit.onDidClick(() => this.openEditor(model)));
 		let remove: Button | undefined;
 		if (model.manual) {
-			remove = this.tableResources.add(
-				new Button(actions, {
-					...defaultButtonStyles,
-					label: localize('models.provider.removeModel', 'Delete model {0}', model.id),
-					icon: Lxicon.trash,
-					iconOnly: true,
-					presentation: 'quiet',
-				}),
-			);
-			this.tableResources.add(
-				remove.onDidClick(() => {
-					this.add.focus();
-					void this.viewModel.removeModel(model.id).catch(error => this.viewModel.report(error));
-				}),
-			);
+			remove = this.tableResources.add(new Button(actions, {
+				...defaultButtonStyles,
+				label: localize('models.provider.removeModel', 'Delete model {0}', model.id),
+				icon: Lxicon.trash,
+				iconOnly: true,
+				presentation: 'quiet',
+			}));
+			this.tableResources.add(remove.onDidClick(() => {
+				this.add.focus();
+				void this.viewModel.removeModel(model.id).catch(error => this.viewModel.report(error));
+			}));
 		}
 		const enabled = h(document, 'td');
-		const toggle = this.tableResources.add(
-			new Switch(enabled, {
-				...defaultToggleStyles,
-				checked: this.viewModel.isEnabled(model.id),
-				ariaLabel: localize('models.provider.enableModel', 'Enable {0}', model.id),
-			}),
-		);
-		this.tableResources.add(
-			toggle.onDidChange(() => {
-				void this.viewModel.setEnabled(model.id, toggle.checked);
-			}),
-		);
+		const toggle = this.tableResources.add(new Switch(enabled, {
+			...defaultToggleStyles,
+			checked: this.viewModel.isEnabled(model.id),
+			ariaLabel: localize('models.provider.enableModel', 'Enable {0}', model.id),
+		}));
+		this.tableResources.add(toggle.onDidChange(() => { void this.viewModel.setEnabled(model.id, toggle.checked); }));
 		row.append(identity, status, actions, enabled);
 		this.modelBody.append(row);
 		this.rowControls.set(model.id, { toggle, status, edit, remove });
@@ -583,16 +429,14 @@ class ProviderModelsViewModel extends Disposable {
 	private configuration: CustomModelProvider;
 	private saved: string;
 	private writes: Promise<void> = Promise.resolve();
-	private discovered: readonly { id: string; name: string; contextWindow?: number }[] = [];
+	private discovered: readonly { id: string; name: string; contextWindow?: number; }[] = [];
 	private items: ProviderModelItem[] = [];
 	private generation = 0;
 	private _busy = false;
 	private _message = '';
 	private _error = false;
 
-	constructor(
-		provider: CustomModelProvider,
-		isNew: boolean,
+	constructor(provider: CustomModelProvider, isNew: boolean,
 		@ILanguageModelsService private readonly models: ILanguageModelsService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
@@ -603,106 +447,57 @@ class ProviderModelsViewModel extends Disposable {
 		this._register(models.onDidChangeModels(() => this.changed.fire()));
 	}
 
-	public get provider(): CustomModelProvider {
-		return this.configuration;
-	}
-	public get rows(): readonly ProviderModelItem[] {
-		return this.items;
-	}
-	public get busy(): boolean {
-		return this._busy;
-	}
-	public get message(): string {
-		return this._message;
-	}
-	public get isError(): boolean {
-		return this._error;
-	}
+	public get provider(): CustomModelProvider { return this.configuration; }
+	public get rows(): readonly ProviderModelItem[] { return this.items; }
+	public get busy(): boolean { return this._busy; }
+	public get message(): string { return this._message; }
+	public get isError(): boolean { return this._error; }
 
 	public async initialize(): Promise<void> {
 		const generation = this.generation;
 		try {
 			const catalog = await this.models.listModelCatalog();
-			if (this.isDisposed || generation !== this.generation) {
-				return;
-			}
-			this.discovered = catalog
-				.filter(entry => entry.model.provider === this.configuration.id && entry.discovered === true)
-				.map(entry => ({
-					id: entry.model.model,
-					name: entry.displayName,
-					contextWindow: entry.contextWindow ?? undefined,
-				}));
+			if (this.isDisposed || generation !== this.generation) { return; }
+			this.discovered = catalog.filter(entry => entry.model.provider === this.configuration.id && entry.discovered === true)
+				.map(entry => ({ id: entry.model.model, name: entry.displayName, contextWindow: entry.contextWindow ?? undefined }));
 			this.mergeItems();
 			this.changed.fire();
 		} catch (error) {
-			if (!this.isDisposed) {
-				this.report(error);
-			}
+			if (!this.isDisposed) { this.report(error); }
 		}
 	}
 
 	public updateProvider(value: Pick<CustomModelProvider, 'name' | 'baseUrl' | 'apiFormat'>): void {
-		if (
-			JSON.stringify(value) ===
-			JSON.stringify({
-				name: this.provider.name,
-				baseUrl: this.provider.baseUrl,
-				apiFormat: this.provider.apiFormat,
-			})
-		) {
-			return;
-		}
+		if (JSON.stringify(value) === JSON.stringify({ name: this.provider.name, baseUrl: this.provider.baseUrl, apiFormat: this.provider.apiFormat })) { return; }
 		const connectionChanged = value.baseUrl !== this.provider.baseUrl || value.apiFormat !== this.provider.apiFormat;
 		this.configuration = { ...this.provider, ...value };
-		if (connectionChanged) {
-			this.discovered = [];
-			this.mergeItems();
-		}
+		if (connectionChanged) { this.discovered = []; this.mergeItems(); }
 		this.invalidateTests();
 	}
 
 	public invalidateTests(): void {
 		this.generation++;
-		for (const row of this.items) {
-			row.status = 'untested';
-			row.message = undefined;
-		}
+		for (const row of this.items) { row.status = 'untested'; row.message = undefined; }
 		this._message = '';
 		this._error = false;
 		this.changed.fire();
 	}
 
-	public isEnabled(id: string): boolean {
-		return this.models.isModelVisible({ provider: this.provider.id, model: id });
-	}
+	public isEnabled(id: string): boolean { return this.models.isModelVisible({ provider: this.provider.id, model: id }); }
 
 	public async setEnabled(id: string, enabled: boolean): Promise<void> {
-		try {
-			await this.models.setModelVisible({ provider: this.provider.id, model: id }, enabled);
-		} catch (error) {
-			this.report(error);
-		} finally {
-			if (!this.isDisposed) {
-				this.changed.fire();
-			}
-		}
+		try { await this.models.setModelVisible({ provider: this.provider.id, model: id }, enabled); }
+		catch (error) { this.report(error); }
+		finally { if (!this.isDisposed) { this.changed.fire(); } }
 	}
 
 	public async addModel(id: string, contextWindow: number, upstreamModel?: string): Promise<void> {
-		if (!id.trim() || /\s|\p{Cc}/u.test(id)) {
-			throw new Error(localize('models.provider.modelRequired', 'Enter a model ID.'));
-		}
+		if (!id.trim() || /\s|\p{Cc}/u.test(id)) { throw new Error(localize('models.provider.modelRequired', 'Enter a model ID.')); }
 		if (!Number.isSafeInteger(contextWindow) || contextWindow <= 0 || contextWindow > 0xffff_ffff) {
 			throw new Error(localize('models.provider.contextInvalid', 'Enter a positive context window in tokens.'));
 		}
-		if (upstreamModel && /\s|\p{Cc}/u.test(upstreamModel)) {
-			throw new Error(localize('models.provider.modelRequired', 'Enter a model ID.'));
-		}
-		const config = {
-			...this.provider,
-			models: [...this.provider.models.filter(model => model.id !== id), { id, contextWindow, ...(upstreamModel ? { upstreamModel } : {}) }],
-		};
+		if (upstreamModel && /\s|\p{Cc}/u.test(upstreamModel)) { throw new Error(localize('models.provider.modelRequired', 'Enter a model ID.')); }
+		const config = { ...this.provider, models: [...this.provider.models.filter(model => model.id !== id), { id, contextWindow, ...(upstreamModel ? { upstreamModel } : {}) }] };
 		this._busy = true;
 		this.changed.fire();
 		try {
@@ -732,78 +527,52 @@ class ProviderModelsViewModel extends Disposable {
 		}
 	}
 
-	public save(): Promise<void> {
-		return this.write(this.provider);
-	}
+	public save(): Promise<void> { return this.write(this.provider); }
 
 	private write(config: CustomModelProvider): Promise<void> {
 		const fingerprint = JSON.stringify(config);
 		const operation = this.writes.then(async () => {
-			if (fingerprint === this.saved) {
-				return;
-			}
-			if (!config.name || config.name.length > 80 || /\p{Cc}/u.test(config.name)) {
-				throw new Error(localize('models.provider.nameRequired', 'Enter a provider name of 1–80 characters.'));
-			}
+			if (fingerprint === this.saved) { return; }
+			if (!config.name || config.name.length > 80 || /\p{Cc}/u.test(config.name)) { throw new Error(localize('models.provider.nameRequired', 'Enter a provider name of 1–80 characters.')); }
 			let url: URL;
-			try {
-				url = new URL(config.baseUrl);
-			} catch {
-				throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.'));
-			}
-			if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
-				throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.'));
-			}
+			try { url = new URL(config.baseUrl); } catch { throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.')); }
+			if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) { throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.')); }
 			await this.models.saveCustomModelProvider(config);
 			this.saved = fingerprint;
 			await this.models.refreshModels();
 		});
-		this.writes = operation.catch(() => {});
+		this.writes = operation.catch(() => { });
 		return operation;
 	}
 
 	public async refresh(before: () => Promise<void>): Promise<void> {
 		await this.run(before, async () => {
 			await this.discover();
-			this._message = this.items.length
-				? localize('models.provider.loaded', '{0} models loaded.', this.items.length)
-				: localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.');
+			this._message = this.items.length ? localize('models.provider.loaded', '{0} models loaded.', this.items.length) : localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.');
 		});
 	}
 
 	public async testModels(before: () => Promise<void>): Promise<void> {
 		await this.run(before, async () => {
-			if (!this.items.length) {
-				await this.discover();
-			}
-			if (!this.items.length) {
-				throw new Error(localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.'));
-			}
+			if (!this.items.length) { await this.discover(); }
+			if (!this.items.length) { throw new Error(localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.')); }
 			const generation = this.generation;
 			const provider = this.provider;
 			let passed = 0;
 			const rows = [...this.items];
 			for (const [index, row] of rows.entries()) {
-				if (this.isDisposed || generation !== this.generation) {
-					return;
-				}
+				if (this.isDisposed || generation !== this.generation) { return; }
 				row.status = 'testing';
 				this._message = localize('models.provider.progress', 'Testing {0} of {1}: {2}', index + 1, rows.length, row.id);
 				this.changed.fire();
 				try {
 					const result = await this.models.testProviderModel(provider, row.id);
-					if (this.isDisposed || generation !== this.generation) {
-						return;
-					}
+					if (this.isDisposed || generation !== this.generation) { return; }
 					row.status = result.type === 'passed' ? 'passed' : 'failed';
 					row.message = result.type === 'failed' ? result.message : undefined;
-					if (result.type === 'passed') {
-						passed++;
-					}
+					if (result.type === 'passed') { passed++; }
 				} catch (error) {
-					if (this.isDisposed || generation !== this.generation) {
-						return;
-					}
+					if (this.isDisposed || generation !== this.generation) { return; }
 					row.status = 'failed';
 					row.message = error instanceof Error ? error.message : String(error);
 				}
@@ -811,82 +580,39 @@ class ProviderModelsViewModel extends Disposable {
 			}
 			this._message = localize('models.provider.summary', '{0}: {1} of {2} models passed.', provider.name, passed, rows.length);
 			this._error = passed !== rows.length;
-			if (this._error) {
-				this.notifications.warn(this._message);
-			} else {
-				this.notifications.info(this._message);
-			}
+			if (this._error) { this.notifications.warn(this._message); }
+			else { this.notifications.info(this._message); }
 		});
 	}
 
 	private async discover(): Promise<void> {
 		const catalog = await this.models.discoverProviderModels(this.provider.id);
-		if (this.isDisposed) {
-			return;
-		}
-		this.discovered = catalog.map(entry => ({
-			id: entry.model.model,
-			name: entry.displayName,
-			contextWindow: entry.contextWindow ?? undefined,
-		}));
+		if (this.isDisposed) { return; }
+		this.discovered = catalog.map(entry => ({ id: entry.model.model, name: entry.displayName, contextWindow: entry.contextWindow ?? undefined }));
 		this.mergeItems();
 	}
 
 	private mergeItems(): void {
 		const previous = new Map(this.items.map(row => [row.id, row]));
 		const rows = new Map<string, ProviderModelItem>();
-		for (const model of this.discovered) {
-			rows.set(model.id, { ...model, manual: false, status: 'untested' });
-		}
-		for (const model of this.provider.models) {
-			rows.set(model.id, {
-				id: model.id,
-				name: rows.get(model.id)?.name ?? model.id,
-				contextWindow: model.contextWindow,
-				upstreamModel: model.upstreamModel,
-				manual: true,
-				status: 'untested',
-			});
-		}
-		this.items = [...rows.values()].map(row => ({
-			...row,
-			status: previous.get(row.id)?.status ?? 'untested',
-			message: previous.get(row.id)?.message,
-		}));
+		for (const model of this.discovered) { rows.set(model.id, { ...model, manual: false, status: 'untested' }); }
+		for (const model of this.provider.models) { rows.set(model.id, { id: model.id, name: rows.get(model.id)?.name ?? model.id, contextWindow: model.contextWindow, upstreamModel: model.upstreamModel, manual: true, status: 'untested' }); }
+		this.items = [...rows.values()].map(row => ({ ...row, status: previous.get(row.id)?.status ?? 'untested', message: previous.get(row.id)?.message }));
 	}
 
 	private async run(before: () => Promise<void>, operation: () => Promise<void>): Promise<void> {
-		if (this._busy) {
-			return;
-		}
+		if (this._busy) { return; }
 		this._busy = true;
 		this._error = false;
 		this.changed.fire();
-		try {
-			await before();
-			await operation();
-		} catch (error) {
-			if (!this.isDisposed) {
-				this.report(error);
-			}
-		} finally {
-			if (!this.isDisposed) {
-				this._busy = false;
-				this.changed.fire();
-			}
-		}
+		try { await before(); await operation(); }
+		catch (error) { if (!this.isDisposed) { this.report(error); } }
+		finally { if (!this.isDisposed) { this._busy = false; this.changed.fire(); } }
 	}
 
 	public report(error: unknown): void {
-		if (this.isDisposed) {
-			return;
-		}
-		this._message = localize(
-			'models.provider.operationFailed',
-			'Could not update {0}: {1}',
-			this.provider.name || localize('models.provider.new', 'New provider'),
-			error instanceof Error ? error.message : String(error),
-		);
+		if (this.isDisposed) { return; }
+		this._message = localize('models.provider.operationFailed', 'Could not update {0}: {1}', this.provider.name || localize('models.provider.new', 'New provider'), error instanceof Error ? error.message : String(error));
 		this._error = true;
 		this.notifications.error(this._message);
 		this.changed.fire();

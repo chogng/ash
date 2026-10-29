@@ -37,49 +37,29 @@ test('real color and folding limits retain separate Configure actions in one lan
 	let active: unknown;
 	services.registerInstance(IEditorService, {
 		onDidActiveEditorChange: changed.event,
-		get activeEditorPane() {
-			return active ? { getControl: () => active } : undefined;
-		},
+		get activeEditorPane() { return active ? { getControl: () => active } : undefined; },
 	} as IEditorService);
 	const statusbar = resources.add(new StatusbarService());
 	services.registerInstance(IStatusbarService, statusbar);
 	let menu: IContextMenuMenuDelegate | undefined;
 	services.registerInstance(IContextViewService, { container: dom.window.document.body } as IContextViewService);
 	services.registerInstance(IContextMenuService, {
-		showContextMenu: delegate => {
-			menu = delegate;
-		},
+		showContextMenu: delegate => { menu = delegate; },
 	} as IContextMenuService);
 	const commands: unknown[][] = [];
 	services.registerInstance(ICommandService, {
-		onWillExecuteCommand: Event.None,
-		onDidExecuteCommand: Event.None,
-		executeCommand: async <T>(id: string, ...args: unknown[]): Promise<T> => {
-			commands.push([id, ...args]);
-			return undefined as T;
-		},
+		onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+		executeCommand: async <T>(id: string, ...args: unknown[]): Promise<T> => { commands.push([id, ...args]); return undefined as T; },
 	});
 	registerCodeEditorServices(services);
 	const features = resources.add(new LanguageFeaturesService());
-	resources.add(
-		features.colorProvider.register('*', {
-			provideDocumentColors: () =>
-				[1, 6, 11].map(column => ({
-					range: new Range(5, column, 5, column + 4),
-					color: { red: 1, green: 0, blue: 0, alpha: 1 },
-				})),
-			provideColorPresentations: () => [],
-		}),
-	);
-	const model = resources.add(new TextModel('first\n  child\nsecond\n  child\n#f00 #f00 #f00\n' + Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n')));
-	const editor = resources.add(
-		createTestCodeEditor({
-			container: dom.window.document.querySelector<HTMLElement>('main')!,
-			model,
-			languageFeaturesService: features,
-			instantiationService: services,
-		}),
-	);
+	resources.add(features.colorProvider.register('*', {
+		provideDocumentColors: () => [1, 6, 11].map(column => ({ range: new Range(5, column, 5, column + 4), color: { red: 1, green: 0, blue: 0, alpha: 1 } })),
+		provideColorPresentations: () => [],
+	}));
+	const model = resources.add(new TextModel('first\n  child\nsecond\n  child\n#f00 #f00 #f00\n'
+		+ Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n')));
+	const editor = resources.add(createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features, instantiationService: services }));
 	editor.updateOptions({ colorDecoratorsLimit: 1, foldingMaximumRegions: 10, foldingStrategy: 'indentation' });
 	editor.layout({ width: 500, height: 180 });
 	editor.focus();
@@ -93,13 +73,7 @@ test('real color and folding limits retain separate Configure actions in one lan
 	assert.equal(FoldingController.get(editor)?.limitReporter.computed, 12);
 	assert.match(entry()!.tooltip!, /Color decorators: only 1 shown/);
 	assert.match(entry()!.tooltip!, /Folding ranges: only 10 shown/);
-	assert.deepEqual(
-		statuses
-			.getLanguageStatus(model)
-			.map(status => status.id)
-			.sort(),
-		['decoratorsLimitInfo', 'foldingLimitInfo'],
-	);
+	assert.deepEqual(statuses.getLanguageStatus(model).map(status => status.id).sort(), ['decoratorsLimitInfo', 'foldingLimitInfo']);
 	const anchor = dom.window.document.createElement('a');
 	anchor.className = 'ash-statusbar-item-label';
 	const item = dom.window.document.createElement('div');
@@ -135,9 +109,7 @@ function diagnosticFixture() {
 	let active: unknown;
 	services.registerInstance(IEditorService, {
 		onDidActiveEditorChange: changed.event,
-		get activeEditorPane() {
-			return active ? { getControl: () => active } : undefined;
-		},
+		get activeEditorPane() { return active ? { getControl: () => active } : undefined; },
 	} as IEditorService);
 	const statuses = services.get(ILanguageStatusService);
 	const markers = services.get(IMarkerService);
@@ -151,37 +123,15 @@ function diagnosticFixture() {
 	active = editor;
 	const contribution = resources.add(services.createInstance(LimitIndicatorContribution));
 	return {
-		resources,
-		services,
-		editor,
-		createEditor,
-		model,
-		contribution,
-		statuses,
-		markers,
-		decorations,
-		activate(control: unknown) {
-			active = control;
-			changed.fire();
-		},
+		resources, services, editor, createEditor, model, contribution, statuses, markers, decorations,
+		activate(control: unknown) { active = control; changed.fire(); },
 		setMarkers(value: TextModel, count: number, truncated = false) {
-			markers.changeOne(
-				'test',
-				value.uri,
-				Array.from({ length: count }, (_, index) => ({
-					severity: MarkerSeverity.Error,
-					message: `problem ${index}`,
-					startLineNumber: index + 1,
-					startColumn: 1,
-					endLineNumber: index + 1,
-					endColumn: 2,
-				})),
-				{ isTruncated: truncated },
-			);
+			markers.changeOne('test', value.uri, Array.from({ length: count }, (_, index) => ({
+				severity: MarkerSeverity.Error, message: `problem ${index}`,
+				startLineNumber: index + 1, startColumn: 1, endLineNumber: index + 1, endColumn: 2,
+			})), { isTruncated: truncated });
 		},
-		details(value = editor.getModel()!) {
-			return statuses.getLanguageStatus(value).map(status => status.detail);
-		},
+		details(value = editor.getModel()!) { return statuses.getLanguageStatus(value).map(status => status.detail); },
 	};
 }
 

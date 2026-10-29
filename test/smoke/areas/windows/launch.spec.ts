@@ -15,80 +15,45 @@ import type { ConsoleMessage, Page } from '@playwright/test';
 const focusTest = test.extend({
 	electronWindowMode: async ({ target }, use) => {
 		await use(target.appServerMode === 'disabled' ? 'active' : undefined);
-	},
+	}
 });
 
-for (const launchKind of ['executable', 'bundle'] as const)
-	test(
-		`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`,
-		{ tag: ['@electron-ui', '@darwin', '@linux'] },
-		async ({ application, target, testWorkspace }) => {
-			test.skip(launchKind === 'bundle' && process.platform !== 'darwin', 'Application bundles use macOS LaunchServices.');
-			const cli = process.env.ASH_CLI_EXECUTABLE;
-			test.skip(!cli, 'Set ASH_CLI_EXECUTABLE to the built ash CLI.');
-			if (!cli || !('windows' in application)) return;
-			const configuration = await application.evaluate(({ app }) => ({
-				executable: process.execPath,
-				appPath: app.getAppPath(),
-				userData: app.getPath('userData'),
-				environment: process.env,
-			}));
-			const folder = join(testWorkspace.directory, "app project with 'quotes' and {0}");
-			await mkdir(folder);
-			const launcher = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS', 'Ash') : join(testWorkspace.directory, 'launch Ash');
-			const quote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
-			if (launchKind === 'bundle') {
-				await mkdir(join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS'), { recursive: true });
-				const bundleId = `com.ash.cli-launch-test.${testWorkspace.directory.split('/').at(-1)}`;
-				await writeFile(
-					join(testWorkspace.directory, 'Ash.app', 'Contents', 'Info.plist'),
-					`<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Ash</string><key>CFBundleIdentifier</key><string>${bundleId}</string><key>CFBundleName</key><string>Ash</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>`,
-				);
-			}
-			// LaunchServices starts bundles outside the CLI's environment. Pin only the
-			// fixture's isolation settings, without copying unrelated process secrets.
-			const environment = ['HOME', 'ASH_HOME', 'ASH_DESKTOP_UI_ONLY', 'ASH_TEST_WINDOW_MODE']
-				.map(key => {
-					const value = configuration.environment[key];
-					return value === undefined ? `unset ${key}` : `export ${key}=${quote(value)}`;
-				})
-				.join('\n');
-			await writeFile(
-				launcher,
-				`#!/bin/sh\n${environment}\nunset ELECTRON_RUN_AS_NODE\nexec ${[configuration.executable, configuration.appPath, `--user-data-dir=${configuration.userData}`].map(quote).join(' ')} "$@"\n`,
-				{ mode: 0o755 },
-			);
-			const appPath = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app') : launcher;
-			await promisify(execFile)(resolve(cli), ['app', '--app-path', appPath, '.'], {
-				cwd: folder,
-				env: { ...configuration.environment, ELECTRON_RUN_AS_NODE: '1' },
-				timeout: 10_000,
-			});
-			await expect
-				.poll(async () => {
-					const contexts = await Promise.all(
-						application.windows().map(page =>
-							page
-								.evaluate(async () => {
-									const ipc = (
-										globalThis as unknown as {
-											ash?: {
-												ipcRenderer: {
-													invoke(channel: string): Promise<{ folders: { uri: string }[] }>;
-												};
-											};
-										}
-									).ash?.ipcRenderer;
-									return ipc ? (await ipc.invoke('ash:workspace:context:read')).folders.map(folder => folder.uri) : [];
-								})
-								.catch(() => []),
-						),
-					);
-					return contexts.flat();
-				})
-				.toContain(pathToFileURL(await realpath(folder)).href);
-		},
-	);
+for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, { tag: ['@electron-ui', '@darwin', '@linux'] }, async ({ application, target, testWorkspace }) => {
+	test.skip(launchKind === 'bundle' && process.platform !== 'darwin', 'Application bundles use macOS LaunchServices.');
+	const cli = process.env.ASH_CLI_EXECUTABLE;
+	test.skip(!cli, 'Set ASH_CLI_EXECUTABLE to the built ash CLI.');
+	if (!cli || !('windows' in application)) return;
+	const configuration = await application.evaluate(({ app }) => ({ executable: process.execPath, appPath: app.getAppPath(), userData: app.getPath('userData'), environment: process.env }));
+	const folder = join(testWorkspace.directory, "app project with 'quotes' and {0}");
+	await mkdir(folder);
+	const launcher = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS', 'Ash') : join(testWorkspace.directory, 'launch Ash');
+	const quote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+	if (launchKind === 'bundle') {
+		await mkdir(join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS'), { recursive: true });
+		const bundleId = `com.ash.cli-launch-test.${testWorkspace.directory.split('/').at(-1)}`;
+		await writeFile(join(testWorkspace.directory, 'Ash.app', 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Ash</string><key>CFBundleIdentifier</key><string>${bundleId}</string><key>CFBundleName</key><string>Ash</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>`);
+	}
+	// LaunchServices starts bundles outside the CLI's environment. Pin only the
+	// fixture's isolation settings, without copying unrelated process secrets.
+	const environment = ['HOME', 'ASH_HOME', 'ASH_DESKTOP_UI_ONLY', 'ASH_TEST_WINDOW_MODE'].map(key => {
+		const value = configuration.environment[key];
+		return value === undefined ? `unset ${key}` : `export ${key}=${quote(value)}`;
+	}).join('\n');
+	await writeFile(launcher, `#!/bin/sh\n${environment}\nunset ELECTRON_RUN_AS_NODE\nexec ${[configuration.executable, configuration.appPath, `--user-data-dir=${configuration.userData}`].map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
+	const appPath = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app') : launcher;
+	await promisify(execFile)(resolve(cli), ['app', '--app-path', appPath, '.'], {
+		cwd: folder,
+		env: { ...configuration.environment, ELECTRON_RUN_AS_NODE: '1' },
+		timeout: 10_000,
+	});
+	await expect.poll(async () => {
+		const contexts = await Promise.all(application.windows().map(page => page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash?: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string; }[]; }>; }; }; }).ash?.ipcRenderer;
+			return ipc ? (await ipc.invoke('ash:workspace:context:read')).folders.map(folder => folder.uri) : [];
+		}).catch(() => [])));
+		return contexts.flat();
+	}).toContain(pathToFileURL(await realpath(folder)).href);
+});
 
 test('the first process opens its requested file after restoring the Workbench and positions its caret', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-launch-'));
@@ -119,7 +84,7 @@ test('the first process opens its requested file after restoring the Workbench a
 test.extend({
 	electronWindowMode: async ({ target }, use) => {
 		await use(target.appServerMode === 'required' ? 'active' : undefined);
-	},
+	}
 })('desktop launch opens files, positions the caret and distinguishes new and reused windows', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) {
 		return;
@@ -127,9 +92,7 @@ test.extend({
 	const file = join(testWorkspace.directory, 'launch file.txt');
 	const diagnostics: string[] = [];
 	const stderr = application.process().stderr;
-	const onProcessError = (chunk: Buffer): void => {
-		diagnostics.push(String(chunk));
-	};
+	const onProcessError = (chunk: Buffer): void => { diagnostics.push(String(chunk)); };
 	const onConsole = (message: ConsoleMessage): void => {
 		if (message.type() === 'error') {
 			diagnostics.push(message.text());
@@ -145,9 +108,7 @@ test.extend({
 	workbench.page.on('console', onConsole);
 	await writeFile(file, 'first line\nsecond line\nthird line\n');
 	const launch = async (args: string[]): Promise<void> => {
-		await application.evaluate(({ app }, args) => {
-			app.emit('second-instance', {}, [process.execPath, app.getAppPath(), ...args], process.cwd(), {});
-		}, args);
+		await application.evaluate(({ app }, args) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), ...args], process.cwd(), {}); }, args);
 	};
 	await launch(['--reuse-window', '--goto', `${file}:2:4`]);
 	try {
@@ -160,12 +121,7 @@ test.extend({
 	await expect(workbench.page.getByText('Ln 2, Col 4', { exact: true })).toBeVisible();
 	expect(application.windows()).toHaveLength(1);
 	const firstWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()!.id);
-	await application.evaluate(
-		({ app }, url) => {
-			app.emit('open-url', { preventDefault() {} }, url);
-		},
-		`ash://file${pathToFileURL(file).pathname}:3:2?windowId=${firstWindowId}`,
-	);
+	await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() { } }, url); }, `ash://file${pathToFileURL(file).pathname}:3:2?windowId=${firstWindowId}`);
 	await expect(workbench.page.getByText('Ln 3, Col 2', { exact: true })).toBeVisible();
 	const opened = application.waitForEvent('window');
 	await launch(['--new-window', file]);
@@ -183,32 +139,15 @@ test.extend({
 		await launch(['--reuse-window', '--folder', folder]);
 		await newPage.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		try {
-			await expect
-				.poll(() =>
-					newPage.evaluate(() => {
-						const ipc = (
-							globalThis as unknown as {
-								ash: {
-									ipcRenderer: {
-										invoke(channel: string): Promise<{ folders: { uri: string }[] }>;
-									};
-								};
-							}
-						).ash.ipcRenderer;
-						return ipc.invoke('ash:workspace:context:read').then(value => value.folders[0]?.uri);
-					}),
-				)
-				.toBe(pathToFileURL(folder).href);
+			await expect.poll(() => newPage.evaluate(() => {
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string; }[]; }>; }; }; }).ash.ipcRenderer;
+				return ipc.invoke('ash:workspace:context:read').then(value => value.folders[0]?.uri);
+			})).toBe(pathToFileURL(folder).href);
 		} catch (error) {
 			throw new Error(`Workspace reuse failed:\n${diagnostics.join('\n')}\n${await newPage.locator('body').innerText()}`, { cause: error });
 		}
 		expect(application.windows()).toHaveLength(2);
-		await application.evaluate(
-			({ app }, url) => {
-				app.emit('open-url', { preventDefault() {} }, url);
-			},
-			`ash://file${pathToFileURL(file).pathname}`,
-		);
+		await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() { } }, url); }, `ash://file${pathToFileURL(file).pathname}`);
 		await expect(newPage.getByRole('tab').filter({ hasText: 'launch file.txt' })).toHaveCount(1);
 	} finally {
 		if (!newPage.isClosed()) {
@@ -217,88 +156,60 @@ test.extend({
 	}
 });
 
-test(
-	'a real second process waits until all requested files close while the first window stays usable',
-	{ tag: ['@electron-app-server'] },
-	async ({ application, target, testWorkspace, workbench }) => {
-		if (!('windows' in application)) {
-			return;
+test('a real second process waits until all requested files close while the first window stays usable', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	if (!('windows' in application)) {
+		return;
+	}
+	const file = join(testWorkspace.directory, 'wait file.txt');
+	const otherFile = join(testWorkspace.directory, 'second.txt');
+	await writeFile(file, 'wait for this tab');
+	await writeFile(otherFile, 'wait for the other tab');
+	const configuration = await application.evaluate(({ app }) => ({ executable: process.execPath, appPath: app.getAppPath(), userData: app.getPath('userData'), environment: process.env, cwd: process.cwd() }));
+	const child = spawn(configuration.executable, [configuration.appPath, `--user-data-dir=${configuration.userData}`, '--reuse-window', '--wait', '--', file, otherFile], { cwd: configuration.cwd, env: configuration.environment, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+	let output = '';
+	child.stdout.on('data', chunk => { output += String(chunk); });
+	child.stderr.on('data', chunk => { output += String(chunk); });
+	try {
+		const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'wait file.txt' });
+		await expect(tab, { message: output }).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'second.txt' })).toHaveCount(1);
+		expect(child.exitCode).toBeNull();
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('wait for the other tab'));
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'second.txt' })).toHaveCount(0);
+		expect(child.exitCode).toBeNull();
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('wait for this tab'));
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect.poll(() => child.exitCode, { message: output }).toBe(0);
+		await expect(workbench.element).toBeVisible();
+		expect(application.windows()).toHaveLength(1);
+	} catch (error) {
+		throw new Error(`Waiting launch failed:\n${output}\n${await workbench.page.locator('body').innerText()}`, { cause: error });
+	} finally {
+		if (child.exitCode === null) {
+			const exited = once(child, 'exit');
+			child.kill();
+			await exited;
 		}
-		const file = join(testWorkspace.directory, 'wait file.txt');
-		const otherFile = join(testWorkspace.directory, 'second.txt');
-		await writeFile(file, 'wait for this tab');
-		await writeFile(otherFile, 'wait for the other tab');
-		const configuration = await application.evaluate(({ app }) => ({
-			executable: process.execPath,
-			appPath: app.getAppPath(),
-			userData: app.getPath('userData'),
-			environment: process.env,
-			cwd: process.cwd(),
-		}));
-		const child = spawn(configuration.executable, [configuration.appPath, `--user-data-dir=${configuration.userData}`, '--reuse-window', '--wait', '--', file, otherFile], {
-			cwd: configuration.cwd,
-			env: configuration.environment,
-			windowsHide: true,
-			stdio: ['ignore', 'pipe', 'pipe'],
-		});
-		let output = '';
-		child.stdout.on('data', chunk => {
-			output += String(chunk);
-		});
-		child.stderr.on('data', chunk => {
-			output += String(chunk);
-		});
-		try {
-			const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'wait file.txt' });
-			await expect(tab, { message: output }).toHaveCount(1);
-			await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'second.txt' })).toHaveCount(1);
-			expect(child.exitCode).toBeNull();
-			await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('wait for the other tab'));
-			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
-			await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'second.txt' })).toHaveCount(0);
-			expect(child.exitCode).toBeNull();
-			await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('wait for this tab'));
-			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
-			await expect.poll(() => child.exitCode, { message: output }).toBe(0);
-			await expect(workbench.element).toBeVisible();
-			expect(application.windows()).toHaveLength(1);
-		} catch (error) {
-			throw new Error(`Waiting launch failed:\n${output}\n${await workbench.page.locator('body').innerText()}`, {
-				cause: error,
-			});
-		} finally {
-			if (child.exitCode === null) {
-				const exited = once(child, 'exit');
-				child.kill();
-				await exited;
-			}
-		}
-	},
-);
+	}
+});
 
 focusTest('UI-only launches create a requested window and focus it on the next launch', { tag: ['@electron-ui'] }, async ({ application, target, testWorkspace, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}
 	const opened = application.waitForEvent('window');
-	await application.evaluate(({ app }, folder) => {
-		app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window', '--folder', folder], process.cwd(), {});
-	}, testWorkspace.directory);
+	await application.evaluate(({ app }, folder) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window', '--folder', folder], process.cwd(), {}); }, testWorkspace.directory);
 	const page = await opened;
 	try {
 		await expect(page.locator('.ash-workbench')).toBeVisible();
 		expect(application.windows()).toHaveLength(2);
 		const window = await application.browserWindow(page);
 		let id: number;
-		try {
-			id = await window.evaluate(window => window.id);
-		} finally {
-			await window.dispose();
-		}
+		try { id = await window.evaluate(window => window.id); }
+		finally { await window.dispose(); }
 		await waitForElectronWindowState(application, page, { focused: true });
-		await application.evaluate(({ app }) => {
-			app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--reuse-window'], process.cwd(), {});
-		});
+		await application.evaluate(({ app }) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--reuse-window'], process.cwd(), {}); });
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(id);
 		expect(application.windows()).toHaveLength(2);
 		await expect(workbench.element).toBeVisible();
@@ -307,13 +218,14 @@ focusTest('UI-only launches create a requested window and focus it on the next l
 	}
 });
 
+
 test('product URL callbacks create a requested window and leave unhandled callbacks out of editors', { tag: ['@electron-ui'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) {
 		return;
 	}
 	const opened = application.waitForEvent('window');
 	await application.evaluate(({ app }) => {
-		app.emit('open-url', { preventDefault() {} }, 'ash://publisher.extension/callback?code=a%26b&windowId=_blank');
+		app.emit('open-url', { preventDefault() { } }, 'ash://publisher.extension/callback?code=a%26b&windowId=_blank');
 	});
 	const page = await opened;
 	try {

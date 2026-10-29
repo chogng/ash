@@ -17,52 +17,28 @@ import { InstantiationService } from '../../../../../../../platform/instantiatio
 
 const id = { source: 'user:review-source', name: 'review' };
 const digest = `sha256:${'a'.repeat(64)}`;
-const catalog: SkillCatalog = {
-	generation: 3,
-	skills: [{ id, contentDigest: digest, description: 'Review changes', enabled: true, compatible: true }],
-};
+const catalog: SkillCatalog = { generation: 3, skills: [{ id, contentDigest: digest, description: 'Review changes', enabled: true, compatible: true }] };
 const instructions = '---\r\nname: review\r\n---\r\n# Review\r\nKeep the exact file.\r\n';
 
 class Backend extends Disposable implements IAppServerSkillApi {
 	readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeSkills = this.changed.event;
 	readonly calls: unknown[] = [];
-	public list = async (reload: 'cached' | 'refresh', sessionId?: string): Promise<SkillCatalog> => {
-		this.calls.push(['list', reload, sessionId]);
-		return catalog;
-	};
-	public read = async (sessionId?: string) => {
-		this.calls.push(['read', sessionId]);
-		return { revision: 7, catalog, diagnostics: [] };
-	};
-	public registerSource = async (root: string) => {
-		this.calls.push(['source', root]);
-	};
-	public setEnabled = async (skillId: typeof id, enabled: boolean, revision: number, sessionId?: string) => {
-		this.calls.push(['set', skillId, enabled, revision, sessionId]);
-	};
-	public readTextResource = async (reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string) => {
-		this.calls.push(['body', reference, sessionId, signal.aborted, path]);
-		return instructions;
-	};
+	public list = async (reload: 'cached' | 'refresh', sessionId?: string): Promise<SkillCatalog> => { this.calls.push(['list', reload, sessionId]); return catalog; };
+	public read = async (sessionId?: string) => { this.calls.push(['read', sessionId]); return { revision: 7, catalog, diagnostics: [] }; };
+	public registerSource = async (root: string) => { this.calls.push(['source', root]); };
+	public setEnabled = async (skillId: typeof id, enabled: boolean, revision: number, sessionId?: string) => { this.calls.push(['set', skillId, enabled, revision, sessionId]); };
+	public readTextResource = async (reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string) => { this.calls.push(['body', reference, sessionId, signal.aborted, path]); return instructions; };
 }
 
 test('Prompt discovery is metadata-only and reading pins source, digest and Session', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [first] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	const [second] = await prompts.findAgentSkills(CancellationToken.None, 'second');
 	assert.notEqual(first.uri.toString(), second.uri.toString());
 	assert.equal(first.uri.scheme, 'private');
-	assert.deepEqual(backend.calls, [
-		['list', 'cached', 'first'],
-		['list', 'cached', 'second'],
-	]);
+	assert.deepEqual(backend.calls, [['list', 'cached', 'first'], ['list', 'cached', 'second']]);
 	const parsed = await prompts.parseNew(first.uri);
 	assert.deepEqual({ content: parsed.content, body: parsed.body?.getContent(), uri: parsed.uri }, { content: instructions, body: '# Review\r\nKeep the exact file.\r\n', uri: first.uri });
 	assert.deepEqual(backend.calls.at(-1), ['body', { id, version: { type: 'pinnedDigest', digest } }, 'first', false, 'SKILL.md']);
@@ -70,12 +46,7 @@ test('Prompt discovery is metadata-only and reading pins source, digest and Sess
 
 test('Prompt management uses the same discovered URIs and backend revision authority', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const snapshot = await prompts.readSkillManagement('first');
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	assert.equal(snapshot.catalog.skills[0].uri.toString(), skill.uri.toString());
@@ -85,18 +56,8 @@ test('Prompt management uses the same discovered URIs and backend revision autho
 
 test('Prompt URIs from another window or a changed catalog cannot open instructions', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
-	using otherWindow = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	using otherWindow = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 	await assert.rejects(otherWindow.parseNew(skill.uri), /not discovered/u);
 	await assert.rejects(prompts.parseNew(URI.file('/private/SKILL.md')), /not discovered/u);
@@ -107,12 +68,7 @@ test('Prompt URIs from another window or a changed catalog cannot open instructi
 
 test('Prompt discovery discards a reply completed after catalog invalidation', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const pending = new DeferredPromise<SkillCatalog>();
 	backend.list = () => pending.p;
 	const discovery = prompts.findAgentSkills(CancellationToken.None, 'first');
@@ -124,19 +80,11 @@ test('Prompt discovery discards a reply completed after catalog invalidation', a
 for (const reason of ['token', 'catalog', 'window'] as const) {
 	test(`Prompt body reading aborts and rejects a late reply after ${reason} cancellation`, async () => {
 		using backend = new Backend();
-		using prompts = new PromptsService(backend, {
-			onDidChangeHooks: Event.None,
-			list: async () => {
-				throw new Error('Unexpected Hook read in Skill fixture');
-			},
-		});
+		using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		using cancellation = new CancellationTokenSource();
 		const pending = new DeferredPromise<string>();
 		let signal: AbortSignal | undefined;
-		backend.readTextResource = (_reference, _path, current) => {
-			signal = current;
-			return pending.p;
-		};
+		backend.readTextResource = (_reference, _path, current) => { signal = current; return pending.p; };
 		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'first');
 		const reading = prompts.parseNew(skill.uri, cancellation.token);
 		if (reason === 'token') cancellation.cancel();
@@ -154,27 +102,15 @@ registerSkillActions();
 test('Configure Skills opens the Extensions Skills pane without opening Settings', async () => {
 	using services = new InstantiationService();
 	const calls: unknown[] = [];
-	services.registerInstance(ICommandService, {
-		executeCommand: async (id, options) => {
-			calls.push([id, options]);
-		},
-	} as ICommandService);
+	services.registerInstance(ICommandService, { executeCommand: async (id, options) => { calls.push([id, options]); } } as ICommandService);
 	await services.invokeFunction(CommandsRegistry.getCommand(CONFIGURE_SKILLS_ACTION_ID)!);
 	assert.deepEqual(calls, [['ash.extensions.open', { view: 'skills' }]]);
 });
 
 test('Prompt relative references preserve source, pinned digest and Session and reject forged or escaping URIs', async () => {
 	using backend = new Backend();
-	backend.readTextResource = async (reference, path, signal, sessionId) => {
-		backend.calls.push(['resource', reference, path, sessionId, signal.aborted]);
-		return 'See [next](nested/checks.md).';
-	};
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	backend.readTextResource = async (reference, path, signal, sessionId) => { backend.calls.push(['resource', reference, path, sessionId, signal.aborted]); return 'See [next](nested/checks.md).'; };
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
 	const root = await prompts.parseNew(skill.uri);
 	const child = root.body!.resolveFilePath('references/guide.md')!;
@@ -185,25 +121,15 @@ test('Prompt relative references preserve source, pinned digest and Session and 
 	const next = parsed.body!.resolveFilePath('nested/checks.md')!;
 	await prompts.parseNew(next);
 	assert.equal((backend.calls.at(-1) as unknown[])[2], 'references/nested/checks.md');
-	for (const invalid of [
-		child.with({ query: 'forged' }),
-		child.with({ authority: 'other' }),
-		skill.uri.with({ path: '/review/../secret' }),
-		skill.uri.with({ path: '/review/assets\\secret' }),
-		skill.uri.with({ path: '/escape.md' }),
-	]) {
+	for (const invalid of [child.with({ query: 'forged' }), child.with({ authority: 'other' }), skill.uri.with({ path: '/review/../secret' }), skill.uri.with({ path: '/review/assets\\secret' }), skill.uri.with({ path: '/escape.md' })]) {
 		await assert.rejects(prompts.parseNew(invalid), /not discovered/u);
 	}
 });
 
+
 test('Prompt management re-reads the catalog when its own refresh publishes a change, without retrying mutation conflicts', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let reads = 0;
 	backend.read = async () => {
 		reads++;
@@ -216,28 +142,16 @@ test('Prompt management re-reads the catalog when its own refresh publishes a ch
 	assert.equal((await prompts.parseNew(snapshot.catalog.skills[0].uri)).content, instructions);
 	const conflict = new Error('ConfigRevisionConflict');
 	let mutations = 0;
-	backend.setEnabled = async () => {
-		mutations++;
-		throw conflict;
-	};
+	backend.setEnabled = async () => { mutations++; throw conflict; };
 	await assert.rejects(prompts.setSkillEnablement(id, false, 7, 'session'), error => error === conflict);
 	assert.equal(mutations, 1);
 });
 
 test('Prompt management bounds continuous invalidation and cannot rediscover after disposal', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let reads = 0;
-	backend.read = async () => {
-		reads++;
-		backend.changed.fire();
-		return { revision: 8, catalog, diagnostics: [] };
-	};
+	backend.read = async () => { reads++; backend.changed.fire(); return { revision: 8, catalog, diagnostics: [] }; };
 	await assert.rejects(prompts.readSkillManagement(), isCancellationError);
 	assert.equal(reads, 2);
 	prompts.dispose();
@@ -246,51 +160,32 @@ test('Prompt management bounds continuous invalidation and cannot rediscover aft
 	assert.equal(reads, 2);
 });
 
+
 test('Skill enablement exposes a domain conflict with the displayed revision and does not overwrite a newer configuration', async () => {
 	using backend = new Backend();
-	using prompts = new PromptsService(backend, {
-		onDidChangeHooks: Event.None,
-		list: async () => {
-			throw new Error('Unexpected Hook read in Skill fixture');
-		},
-	});
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	let writes = 0;
-	backend.setEnabled = async () => {
-		writes++;
-		throw new AppServerRemoteError(-32031, 'ConfigRevisionConflict', { kind: 'ConfigRevisionConflict' });
-	};
-	await assert.rejects(
-		prompts.setSkillEnablement(id, false, 7, 'session'),
-		error => error instanceof SkillManagementConflictError && error.expectedRevision === 7 && /Refresh Skills/u.test(error.message),
-	);
+	backend.setEnabled = async () => { writes++; throw new AppServerRemoteError(-32031, 'ConfigRevisionConflict', { kind: 'ConfigRevisionConflict' }); };
+	await assert.rejects(prompts.setSkillEnablement(id, false, 7, 'session'), error => error instanceof SkillManagementConflictError && error.expectedRevision === 7 && /Refresh Skills/u.test(error.message));
 	assert.equal(writes, 1);
 });
+
 
 test('Prompt Hook discovery preserves every Ash event, disabled declarations, legacy events and owning TOML paths', async () => {
 	using backend = new Backend();
 	using changed = new Emitter<void>();
-	const sources: readonly HookSource[] = [
-		{
-			namespace: 'directory:fixture',
-			configPath: '/fixture/.ash/config.toml',
-			hooks: [...HookEvents, 'beforeTool', 'afterTool', 'turnCompleted'].map((event, index) => ({
-				id: `hook:${index}`,
-				event: event as HookSource['hooks'][number]['event'],
-				enabled: false,
-				toolNames: ['shell-command'],
-				program: '/program with spaces',
-				args: ['two words', '"quote"'],
-			})),
-		},
-	];
+	const sources: readonly HookSource[] = [{
+		namespace: 'directory:fixture', configPath: '/fixture/.ash/config.toml',
+		hooks: [...HookEvents, 'beforeTool', 'afterTool', 'turnCompleted'].map((event, index) => ({
+			id: `hook:${index}`, event: event as HookSource['hooks'][number]['event'], enabled: false,
+			toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
+		})),
+	}];
 	assert.equal(HookEvents.length, 33);
 	const sessions: (string | undefined)[] = [];
 	using prompts = new PromptsService(backend, {
 		onDidChangeHooks: changed.event,
-		list: async sessionId => {
-			sessions.push(sessionId);
-			return sources;
-		},
+		list: async sessionId => { sessions.push(sessionId); return sources; },
 	});
 	assert.deepEqual(await prompts.getHooks(CancellationToken.None, 'session-hooks'), sources);
 	assert.deepEqual(await prompts.getHooks(CancellationToken.None), sources);
@@ -315,10 +210,7 @@ for (const reason of ['token', 'configuration', 'window'] as const) {
 		let reads = 0;
 		using prompts = new PromptsService(backend, {
 			onDidChangeHooks: changed.event,
-			list: () => {
-				reads++;
-				return pending.p;
-			},
+			list: () => { reads++; return pending.p; },
 		});
 		const reading = prompts.getHooks(cancellation.token, 'retired-session');
 		if (reason === 'token') cancellation.cancel();

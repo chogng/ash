@@ -16,7 +16,7 @@ export class BulkFileEdits {
 		private readonly operation: FileOperation,
 		private readonly files: IFileService,
 		private readonly inverses: (() => Promise<void>)[],
-	) {}
+	) { }
 
 	public async apply(): Promise<readonly URI[]> {
 		const operation = this.operation;
@@ -38,11 +38,7 @@ export class BulkFileEdits {
 				});
 				if (entry.contents !== undefined) {
 					const empty = await this.files.readFile(entry.resource);
-					await this.files.writeFile({
-						resource: entry.resource,
-						content: entry.contents,
-						expectedRevision: empty.revision,
-					});
+					await this.files.writeFile({ resource: entry.resource, content: entry.contents, expectedRevision: empty.revision });
 					written = entry.contents;
 				}
 				return [entry.resource];

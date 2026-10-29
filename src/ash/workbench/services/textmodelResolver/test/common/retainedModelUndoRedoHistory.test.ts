@@ -29,7 +29,12 @@ test('RetainedModelUndoRedoHistory does not capture an unfinished history revisi
 	using model = new TextModel('revision');
 	const group = new UndoRedoGroup();
 	model.beginHistoryRevision(group);
-	model.pushEditOperations(null, [{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }], () => null, group);
+	model.pushEditOperations(
+		null,
+		[{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }],
+		() => null,
+		group,
+	);
 	participant.remember(resource, model);
 	assert.equal(model.finishHistoryRevision(group), true);
 
@@ -44,18 +49,13 @@ function editedModel(text: string): TextModel {
 	return model;
 }
 
+
 test('retained histories release identity references on eviction, restoration, forgetting and disposal', () => {
 	let retained = 0;
-	using histories = new RetainedModelUndoRedoHistory(
-		{ maxEntries: 1 },
-		resource => resource.toString(),
-		() => {
-			retained++;
-			return toDisposable(() => {
-				retained--;
-			});
-		},
-	);
+	using histories = new RetainedModelUndoRedoHistory({ maxEntries: 1 }, resource => resource.toString(), () => {
+		retained++;
+		return toDisposable(() => { retained--; });
+	});
 	const firstResource = URI.file('/workspace/first');
 	const secondResource = URI.file('/workspace/second');
 	using first = editedModel('first');

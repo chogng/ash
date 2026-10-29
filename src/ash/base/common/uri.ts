@@ -35,13 +35,11 @@ function encodeFragment(fragment: string): string {
 export function isUriComponents(value: unknown): value is UriComponents {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as UriComponents;
-	return (
-		typeof candidate.scheme === 'string' &&
-		(candidate.authority === undefined || typeof candidate.authority === 'string') &&
-		(candidate.path === undefined || typeof candidate.path === 'string') &&
-		(candidate.query === undefined || typeof candidate.query === 'string') &&
-		(candidate.fragment === undefined || typeof candidate.fragment === 'string')
-	);
+	return typeof candidate.scheme === 'string'
+		&& (candidate.authority === undefined || typeof candidate.authority === 'string')
+		&& (candidate.path === undefined || typeof candidate.path === 'string')
+		&& (candidate.query === undefined || typeof candidate.query === 'string')
+		&& (candidate.fragment === undefined || typeof candidate.fragment === 'string');
 }
 
 function parseUrl(value: string): URL {
@@ -73,7 +71,9 @@ function validatePercentEncoding(value: string, component: string): void {
 	try {
 		decodeURIComponent(value);
 	} catch (error) {
-		throw new TypeError(`URI ${component} has invalid percent encoding`, { cause: error });
+		throw new TypeError(`URI ${component} has invalid percent encoding`, {
+			cause: error,
+		});
 	}
 }
 
@@ -99,16 +99,14 @@ export class URI {
 		if (value instanceof URI) return true;
 		if (!value || typeof value !== 'object') return false;
 		const candidate = value as Partial<URI>;
-		return (
-			typeof candidate.scheme === 'string' &&
-			typeof candidate.authority === 'string' &&
-			typeof candidate.path === 'string' &&
-			typeof candidate.query === 'string' &&
-			typeof candidate.fragment === 'string' &&
-			typeof candidate.fsPath === 'string' &&
-			typeof candidate.with === 'function' &&
-			typeof candidate.toString === 'function'
-		);
+		return typeof candidate.scheme === 'string'
+			&& typeof candidate.authority === 'string'
+			&& typeof candidate.path === 'string'
+			&& typeof candidate.query === 'string'
+			&& typeof candidate.fragment === 'string'
+			&& typeof candidate.fsPath === 'string'
+			&& typeof candidate.with === 'function'
+			&& typeof candidate.toString === 'function';
 	}
 
 	/** Parses a URI; non-strict mode assigns the file scheme when it is missing. */
@@ -132,7 +130,9 @@ export class URI {
 		if (normalized.startsWith('//')) {
 			const withoutPrefix = normalized.replace(/^\/+/, '');
 			const separator = withoutPrefix.indexOf('/');
-			const authority = separator < 0 ? withoutPrefix : withoutPrefix.slice(0, separator);
+			const authority = separator < 0
+				? withoutPrefix
+				: withoutPrefix.slice(0, separator);
 			const resourcePath = separator < 0 ? '/' : withoutPrefix.slice(separator);
 			if (!authority) {
 				throw new TypeError(`UNC path must contain a host: ${path}`);
@@ -146,7 +146,9 @@ export class URI {
 			throw new TypeError(`File path must be absolute: ${path}`);
 		}
 
-		const resourcePath = WINDOWS_DRIVE_PATH.test(path) ? `/${normalized}` : normalized;
+		const resourcePath = WINDOWS_DRIVE_PATH.test(path)
+			? `/${normalized}`
+			: normalized;
 		const url = new URL('file:///');
 		url.pathname = encodePath(resourcePath);
 		return new URI(url);
@@ -203,7 +205,7 @@ export class URI {
 		}
 		if (strict && !components.scheme) throw new TypeError('URI scheme is missing');
 		const scheme = components.scheme || 'file';
-		const path = scheme === 'file' && !components.path?.startsWith('/') ? `/${components.path ?? ''}` : (components.path ?? '');
+		const path = (scheme === 'file' && !components.path?.startsWith('/')) ? `/${components.path ?? ''}` : components.path ?? '';
 		let value = `${scheme}:`;
 		if (components.authority || scheme === 'file') {
 			value += `//${components.authority ?? ''}`;
@@ -234,12 +236,12 @@ export class URI {
 	}
 
 	/** Returns a URI with the specified decoded components changed. */
-	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null }): URI {
+	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null; }): URI {
 		const scheme = change.scheme === undefined ? this.scheme : change.scheme;
-		const authority = change.authority === undefined ? this.authority : (change.authority ?? '');
-		const path = change.path === undefined ? this.path : (change.path ?? '');
-		const query = change.query === undefined ? this.query : (change.query ?? '');
-		const fragment = change.fragment === undefined ? this.fragment : (change.fragment ?? '');
+		const authority = change.authority === undefined ? this.authority : change.authority ?? '';
+		const path = change.path === undefined ? this.path : change.path ?? '';
+		const query = change.query === undefined ? this.query : change.query ?? '';
+		const fragment = change.fragment === undefined ? this.fragment : change.fragment ?? '';
 		if (scheme === this.scheme && authority === this.authority && path === this.path && query === this.query && fragment === this.fragment) return this;
 		if (authority && path && !path.startsWith('/')) throw new TypeError('URI paths with an authority must start with /');
 
@@ -295,7 +297,7 @@ export class URI {
 		if (!skipEncoding) return typeof this.value === 'string' ? this.value : this.value.href;
 		const path = this.path.replaceAll('?', '%3F').replaceAll('#', '%23');
 		const query = this.query.replaceAll('#', '%23');
-		const authority = this.authority || this.scheme === 'file' ? `//${this.authority}` : '';
+		const authority = (this.authority || this.scheme === 'file') ? `//${this.authority}` : '';
 		return `${this.scheme}:${authority}${path}${query ? `?${query}` : ''}${this.fragment ? `#${this.fragment}` : ''}`;
 	}
 
@@ -321,11 +323,11 @@ function uriToFsPath(uri: URI): string {
 		return isWindows ? uncPath.replaceAll('/', '\\') : uncPath;
 	}
 
-	const hasDriveLetter =
-		path.length >= 3 &&
-		path.charCodeAt(0) === CharCode.Slash &&
-		((path.charCodeAt(1) >= CharCode.A && path.charCodeAt(1) <= CharCode.Z) || (path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z)) &&
-		path.charCodeAt(2) === CharCode.Colon;
+	const hasDriveLetter = path.length >= 3
+		&& path.charCodeAt(0) === CharCode.Slash
+		&& ((path.charCodeAt(1) >= CharCode.A && path.charCodeAt(1) <= CharCode.Z)
+			|| (path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z))
+		&& path.charCodeAt(2) === CharCode.Colon;
 	if (!hasDriveLetter) {
 		return isWindows ? path.replaceAll('/', '\\') : path;
 	}

@@ -25,67 +25,49 @@ interface TransposeOperation {
 	readonly selectionIndex: number;
 	readonly startOffset: number;
 	readonly endOffset: number;
-	readonly edit: { readonly range: Range; readonly text: string };
+	readonly edit: { readonly range: Range; readonly text: string; };
 }
 
 abstract class CopyLinesAction extends EditorAction {
-	constructor(
-		private readonly down: boolean,
-		options: IActionOptions,
-	) {
+	constructor(private readonly down: boolean, options: IActionOptions) {
 		super(options);
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const selections = editor.getSelections() ?? [];
 		editor.pushUndoStop();
-		editor.executeCommands(
-			this.id,
-			selections.map(selection => new CopyLinesCommand(selection, this.down)),
-		);
+		editor.executeCommands(this.id, selections.map(selection => new CopyLinesCommand(selection, this.down)));
 		editor.pushUndoStop();
 	}
 }
 
 class CopyLinesUpAction extends CopyLinesAction {
 	constructor() {
-		super(false, {
-			id: 'editor.action.copyLinesUpAction',
-			label: nls.localize2('lines.copyUp', 'Copy Line Up'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(false, { id: 'editor.action.copyLinesUpAction', label: nls.localize2('lines.copyUp', 'Copy Line Up'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 class CopyLinesDownAction extends CopyLinesAction {
 	constructor() {
-		super(true, {
-			id: 'editor.action.copyLinesDownAction',
-			label: nls.localize2('lines.copyDown', 'Copy Line Down'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(true, { id: 'editor.action.copyLinesDownAction', label: nls.localize2('lines.copyDown', 'Copy Line Down'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 /** Duplicates selected text, or the selected physical line for an empty selection. */
 export class DuplicateSelectionAction extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.duplicateSelection',
-			label: nls.localize2('duplicateSelection', 'Duplicate Selection'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super({ id: 'editor.action.duplicateSelection', label: nls.localize2('duplicateSelection', 'Duplicate Selection'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const model = editor.getModel();
 		if (!model) return;
-		const commands = (editor.getSelections() ?? []).map(selection =>
-			selection.isEmpty() ? new CopyLinesCommand(selection, true) : new ReplaceCommandThatSelectsText(Selection.fromPositions(selection.getEndPosition()), model.getValueInRange(selection)),
-		);
+		const commands = (editor.getSelections() ?? []).map(selection => selection.isEmpty()
+			? new CopyLinesCommand(selection, true)
+			: new ReplaceCommandThatSelectsText(
+				Selection.fromPositions(selection.getEndPosition()),
+				model.getValueInRange(selection),
+			));
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
 		editor.pushUndoStop();
@@ -93,16 +75,18 @@ export class DuplicateSelectionAction extends EditorAction {
 }
 
 abstract class MoveLinesAction extends EditorAction {
-	constructor(
-		private readonly down: boolean,
-		options: IActionOptions,
-	) {
+	constructor(private readonly down: boolean, options: IActionOptions) {
 		super(options);
 	}
 
 	public run(accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const configurations = accessor.get(ILanguageConfigurationService);
-		const commands = (editor.getSelections() ?? []).map(selection => new MoveLinesCommand(selection, this.down, EditorAutoIndentStrategy.None, configurations));
+		const commands = (editor.getSelections() ?? []).map(selection => new MoveLinesCommand(
+			selection,
+			this.down,
+			EditorAutoIndentStrategy.None,
+			configurations,
+		));
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
 		editor.pushUndoStop();
@@ -111,31 +95,18 @@ abstract class MoveLinesAction extends EditorAction {
 
 class MoveLinesUpAction extends MoveLinesAction {
 	constructor() {
-		super(false, {
-			id: 'editor.action.moveLinesUpAction',
-			label: nls.localize2('lines.moveUp', 'Move Line Up'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(false, { id: 'editor.action.moveLinesUpAction', label: nls.localize2('lines.moveUp', 'Move Line Up'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 class MoveLinesDownAction extends MoveLinesAction {
 	constructor() {
-		super(true, {
-			id: 'editor.action.moveLinesDownAction',
-			label: nls.localize2('lines.moveDown', 'Move Line Down'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(true, { id: 'editor.action.moveLinesDownAction', label: nls.localize2('lines.moveDown', 'Move Line Down'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 export abstract class AbstractSortLinesAction extends EditorAction {
-	constructor(
-		private readonly descending: boolean,
-		options: IActionOptions,
-	) {
+	constructor(private readonly descending: boolean, options: IActionOptions) {
 		super(options);
 	}
 
@@ -148,33 +119,20 @@ export abstract class AbstractSortLinesAction extends EditorAction {
 		}
 		if (!selections.every(selection => SortLinesCommand.canRun(model, selection, this.descending))) return;
 		editor.pushUndoStop();
-		editor.executeCommands(
-			this.id,
-			selections.map(selection => new SortLinesCommand(selection, this.descending)),
-		);
+		editor.executeCommands(this.id, selections.map(selection => new SortLinesCommand(selection, this.descending)));
 		editor.pushUndoStop();
 	}
 }
 
 export class SortLinesAscendingAction extends AbstractSortLinesAction {
 	constructor() {
-		super(false, {
-			id: 'editor.action.sortLinesAscending',
-			label: nls.localize2('lines.sortAscending', 'Sort Lines Ascending'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(false, { id: 'editor.action.sortLinesAscending', label: nls.localize2('lines.sortAscending', 'Sort Lines Ascending'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 export class SortLinesDescendingAction extends AbstractSortLinesAction {
 	constructor() {
-		super(true, {
-			id: 'editor.action.sortLinesDescending',
-			label: nls.localize2('lines.sortDescending', 'Sort Lines Descending'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super(true, { id: 'editor.action.sortLinesDescending', label: nls.localize2('lines.sortDescending', 'Sort Lines Descending'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
@@ -195,12 +153,7 @@ export class TransposeAction extends EditorAction {
 
 export class DeleteLinesAction extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.deleteLines',
-			label: nls.localize2('lines.delete', 'Delete Line'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super({ id: 'editor.action.deleteLines', label: nls.localize2('lines.delete', 'Delete Line'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -212,12 +165,7 @@ export class InsertLineBeforeAction extends EditorAction {
 	public static readonly ID = 'editor.action.insertLineBefore';
 
 	constructor() {
-		super({
-			id: InsertLineBeforeAction.ID,
-			label: nls.localize2('lines.insertBefore', 'Insert Line Above'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super({ id: InsertLineBeforeAction.ID, label: nls.localize2('lines.insertBefore', 'Insert Line Above'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -229,12 +177,7 @@ export class InsertLineAfterAction extends EditorAction {
 	public static readonly ID = 'editor.action.insertLineAfter';
 
 	constructor() {
-		super({
-			id: InsertLineAfterAction.ID,
-			label: nls.localize2('lines.insertAfter', 'Insert Line Below'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super({ id: InsertLineAfterAction.ID, label: nls.localize2('lines.insertAfter', 'Insert Line Below'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -244,12 +187,7 @@ export class InsertLineAfterAction extends EditorAction {
 
 export class JoinLinesAction extends EditorAction {
 	constructor() {
-		super({
-			id: 'editor.action.joinLines',
-			label: nls.localize2('lines.joinLines', 'Join Lines'),
-			precondition: EditorContextKeys.writable,
-			canTriggerInlineEdits: true,
-		});
+		super({ id: 'editor.action.joinLines', label: nls.localize2('lines.joinLines', 'Join Lines'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -280,14 +218,12 @@ function createTransposeCommands(model: ITextModel, selections: readonly Selecti
 		const range = Range.fromPositions(begin, end);
 		const left = model.getValueInRange(Range.fromPositions(begin, cursor));
 		const right = model.getValueInRange(Range.fromPositions(cursor, end));
-		return [
-			Object.freeze({
-				selectionIndex,
-				startOffset: model.getOffsetAt(begin),
-				endOffset: model.getOffsetAt(end),
-				edit: Object.freeze({ range, text: `${right}${left}` }),
-			}),
-		];
+		return [Object.freeze({
+			selectionIndex,
+			startOffset: model.getOffsetAt(begin),
+			endOffset: model.getOffsetAt(end),
+			edit: Object.freeze({ range, text: `${right}${left}` }),
+		})];
 	});
 	const operations = selectTransposeOperations(candidates);
 	const operationBySelection = new Map(operations.map(operation => [operation.selectionIndex, operation]));
@@ -316,15 +252,12 @@ function deleteLines(editor: ICodeEditor): void {
 	if (!model || !selections || (model.getLineCount() === 1 && model.getLineMaxColumn(1) === 1)) return;
 	const groups = contiguousLineGroups(selectedLineIndices(selections));
 	const edit = new TextEdit(groups.map(group => deleteLineGroup(model, group)));
-	const cursorState = selections.map(selection =>
-		Selection.fromPositions(edit.mapRange(Range.fromPositions(selection.getSelectionStart())).getStartPosition(), edit.mapRange(Range.fromPositions(selection.getPosition())).getStartPosition()),
-	);
+	const cursorState = selections.map(selection => Selection.fromPositions(
+		edit.mapRange(Range.fromPositions(selection.getSelectionStart())).getStartPosition(),
+		edit.mapRange(Range.fromPositions(selection.getPosition())).getStartPosition(),
+	));
 	editor.pushUndoStop();
-	editor.executeEdits(
-		'editor.action.deleteLines',
-		edit.replacements.map(replacement => replacement.toSingleEditOperation()),
-		cursorState,
-	);
+	editor.executeEdits('editor.action.deleteLines', edit.replacements.map(replacement => replacement.toSingleEditOperation()), cursorState);
 	editor.pushUndoStop();
 }
 
@@ -333,7 +266,9 @@ function insertLine(editor: ICodeEditor, before: boolean): void {
 	const selections = editor.getSelections();
 	const viewModel = editor._getViewModel();
 	if (!model || !selections || !viewModel) return;
-	const commands = before ? EnterOperation.lineInsertBefore(viewModel.cursorConfig, model, selections) : EnterOperation.lineInsertAfter(viewModel.cursorConfig, model, selections);
+	const commands = before
+		? EnterOperation.lineInsertBefore(viewModel.cursorConfig, model, selections)
+		: EnterOperation.lineInsertAfter(viewModel.cursorConfig, model, selections);
 	editor.pushUndoStop();
 	editor.executeCommands(before ? InsertLineBeforeAction.ID : InsertLineAfterAction.ID, commands);
 	editor.pushUndoStop();
@@ -361,8 +296,8 @@ function joinLines(editor: ICodeEditor): void {
 	if (!model || !selections) return;
 	const edits = reduceJoinTargets(selections).map(target => joinEdit(model, target));
 	if (edits.every(edit => edit.startOffset === edit.endOffset)) return;
-	const operations: Array<{ readonly range: Range; readonly text: string }> = [];
-	const selectionOffsets: Array<{ readonly anchorOffset: number; readonly activeOffset: number }> = [];
+	const operations: Array<{ readonly range: Range; readonly text: string; }> = [];
+	const selectionOffsets: Array<{ readonly anchorOffset: number; readonly activeOffset: number; }> = [];
 	let primarySelectionIndex = 0;
 	let delta = 0;
 	for (const edit of edits) {
@@ -375,7 +310,10 @@ function joinLines(editor: ICodeEditor): void {
 	}
 	const textEdit = new TextEdit(operations.map(operation => new TextReplacement(operation.range, operation.text)));
 	const coordinates = new StringText(textEdit.apply(new TextModelText(model))).getTransformer();
-	const cursorState = selectionOffsets.map(offsets => Selection.fromPositions(coordinates.getPosition(offsets.anchorOffset), coordinates.getPosition(offsets.activeOffset)));
+	const cursorState = selectionOffsets.map(offsets => Selection.fromPositions(
+		coordinates.getPosition(offsets.anchorOffset),
+		coordinates.getPosition(offsets.activeOffset),
+	));
 	if (primarySelectionIndex > 0) cursorState.unshift(cursorState.splice(primarySelectionIndex, 1)[0]!);
 	editor.pushUndoStop();
 	editor.executeEdits('editor.action.joinLines', operations, cursorState);
@@ -383,13 +321,11 @@ function joinLines(editor: ICodeEditor): void {
 }
 
 function reduceJoinTargets(selections: readonly Selection[]): readonly JoinTarget[] {
-	const ordered = selections
-		.map((selection, index) => ({
-			start: selection.getStartPosition(),
-			end: selection.getEndPosition(),
-			primary: index === 0,
-		}))
-		.sort((left, right) => Position.compare(left.start, right.start) || Position.compare(left.end, right.end));
+	const ordered = selections.map((selection, index) => ({
+		start: selection.getStartPosition(),
+		end: selection.getEndPosition(),
+		primary: index === 0,
+	})).sort((left, right) => Position.compare(left.start, right.start) || Position.compare(left.end, right.end));
 	const result: JoinTarget[] = [];
 	for (const target of ordered) {
 		const previous = result.at(-1);
@@ -402,16 +338,14 @@ function reduceJoinTargets(selections: readonly Selection[]): readonly JoinTarge
 			result[result.length - 1] = { ...target, primary: previous.primary || target.primary };
 			continue;
 		}
-		const separate = previousCollapsed ? target.start.lineNumber > previous.end.lineNumber + 1 : target.start.lineNumber > previous.end.lineNumber;
+		const separate = previousCollapsed
+			? target.start.lineNumber > previous.end.lineNumber + 1
+			: target.start.lineNumber > previous.end.lineNumber;
 		if (separate) {
 			result.push(target);
 			continue;
 		}
-		result[result.length - 1] = {
-			start: previous.start,
-			end: target.end,
-			primary: previous.primary || target.primary,
-		};
+		result[result.length - 1] = { start: previous.start, end: target.end, primary: previous.primary || target.primary };
 	}
 	return result;
 }
@@ -447,7 +381,7 @@ function joinEdit(model: ITextModel, target: JoinTarget): JoinEdit {
 	};
 }
 
-function joinText(model: ITextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number } {
+function joinText(model: ITextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number; } {
 	let text = model.getLineContent(startLineNumber);
 	let lastPartLength = 0;
 	for (let lineNumber = startLineNumber + 1; lineNumber <= endLineNumber; lineNumber += 1) {
@@ -471,17 +405,18 @@ function deleteLineGroup(model: ITextModel, group: EditorLineGroup): TextReplace
 	const first = group.startLineIndex;
 	const last = group.endLineIndex;
 	if (first === 0 && last === model.getLineCount() - 1) {
-		const start = new Position(0 + 1, 0 + 1);
-		const end = new Position(last + 1, model.getLineContent(last + 1).length + 1);
+		const start = new Position((0) + 1, (0) + 1);
+		const end = new Position((last) + 1, (model.getLineContent((last) + 1).length) + 1);
 		return TextReplacement.delete(Range.fromPositions(start, end));
 	}
 	if (last + 1 < model.getLineCount()) {
 		return TextReplacement.delete(new Range(first + 1, 1, last + 2, 1));
 	}
 	const previousLineIndex = first - 1;
-	return TextReplacement.delete(
-		Range.fromPositions(new Position(previousLineIndex + 1, model.getLineContent(previousLineIndex + 1).length + 1), new Position(last + 1, model.getLineContent(last + 1).length + 1)),
-	);
+	return TextReplacement.delete(Range.fromPositions(
+		new Position((previousLineIndex) + 1, (model.getLineContent((previousLineIndex) + 1).length) + 1),
+		new Position((last) + 1, (model.getLineContent((last) + 1).length) + 1),
+	));
 }
 
 interface EditorLineGroup {

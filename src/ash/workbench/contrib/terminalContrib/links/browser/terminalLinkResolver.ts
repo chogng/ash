@@ -7,7 +7,7 @@ import { withRemoteWorkspacePath } from '../../../../../platform/remote/common/r
 
 /** Resolves terminal output using that process's cwd, home and execution authority. */
 export class TerminalLinkResolver {
-	constructor(@IFileService private readonly files: IFileService) {}
+	constructor(@IFileService private readonly files: IFileService) { }
 
 	async resolveLink(
 		processManager: {
@@ -18,7 +18,7 @@ export class TerminalLinkResolver {
 		},
 		link: string,
 		uri?: URI,
-	): Promise<{ uri: URI; link: string; isDirectory: boolean } | null> {
+	): Promise<{ uri: URI; link: string; isDirectory: boolean; } | null> {
 		const windows = processManager.os === OperatingSystem.Windows;
 		const rules = windows ? win32 : posix;
 		try {
@@ -35,7 +35,7 @@ export class TerminalLinkResolver {
 				// A terminal link cannot borrow the renderer's per-drive working directory.
 				if (/^[a-z]:(?![\\/])/i.test(path)) return null;
 			}
-			if (path.startsWith('~/') || (windows && path.startsWith('~\\'))) {
+			if (path.startsWith('~/') || windows && path.startsWith('~\\')) {
 				if (!processManager.userHome || !rules.isAbsolute(processManager.userHome)) return null;
 				path = rules.join(processManager.userHome, path.slice(2));
 			}
@@ -49,9 +49,9 @@ export class TerminalLinkResolver {
 				resource = URI.from({ scheme: Schemas.file, authority: share?.[1] ?? '', path: share?.[2] ?? slashes });
 			}
 			const stat = await this.files.stat(resource);
-			return stat.kind === FileKind.File || stat.kind === FileKind.Directory ? { uri: resource, link, isDirectory: stat.kind === FileKind.Directory } : null;
-		} catch {
-			return null;
-		}
+			return stat.kind === FileKind.File || stat.kind === FileKind.Directory
+				? { uri: resource, link, isDirectory: stat.kind === FileKind.Directory }
+				: null;
+		} catch { return null; }
 	}
 }

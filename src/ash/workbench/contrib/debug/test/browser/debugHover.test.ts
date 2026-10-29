@@ -11,12 +11,12 @@ test('Debug hover reads scalar and nested scope values without evaluating source
 	const session = debug.sessions[0] as MockDebugSession;
 	const frame = { id: 10, name: 'main', lineNumber: 1, columnNumber: 1 };
 	const signal = new AbortController().signal;
-	session.variables = async reference =>
+	session.variables = async (reference) =>
 		reference === 20
 			? [
-					{ name: 'answer', value: '42', variablesReference: 0 },
-					{ name: 'parent', value: 'Object', variablesReference: 21 },
-				]
+				{ name: 'answer', value: '42', variablesReference: 0 },
+				{ name: 'parent', value: 'Object', variablesReference: 21 },
+			]
 			: [{ name: 'child', value: '7', variablesReference: 0 }];
 	session.evaluate = async () => assert.fail('Hover must not evaluate source expressions');
 	assert.equal((await findExpressionInStackFrame(session, frame, ['answer'], signal))?.value, '42');
@@ -37,5 +37,8 @@ test('Debug hover discards inspection work after caller cancellation or continui
 	await held.complete([]);
 	await assert.rejects(result, isCancellationError);
 	session.state = 'running';
-	await assert.rejects(findExpressionInStackFrame(session, frame, ['answer'], new AbortController().signal), isCancellationError);
+	await assert.rejects(
+		findExpressionInStackFrame(session, frame, ['answer'], new AbortController().signal),
+		isCancellationError,
+	);
 });

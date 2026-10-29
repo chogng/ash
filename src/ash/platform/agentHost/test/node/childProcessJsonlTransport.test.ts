@@ -4,7 +4,10 @@ import { EventEmitter, once } from 'node:events';
 import { test } from 'mocha';
 import { PassThrough, Writable } from 'node:stream';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import { ChildProcessJsonlTransport, type ChildProcessJsonlTransportOptions } from '../../node/childProcessJsonlTransport.js';
+import {
+	ChildProcessJsonlTransport,
+	type ChildProcessJsonlTransportOptions,
+} from '../../node/childProcessJsonlTransport.js';
 class FakeChildProcess extends EventEmitter {
 	stdin: Writable = new PassThrough();
 	readonly stdout = new PassThrough();
@@ -20,15 +23,21 @@ class FakeChildProcess extends EventEmitter {
 	}
 }
 
-function transport(child: FakeChildProcess, options?: ChildProcessJsonlTransportOptions): ChildProcessJsonlTransport {
-	return new ChildProcessJsonlTransport(child as unknown as ChildProcessWithoutNullStreams, options);
+function transport(
+	child: FakeChildProcess,
+	options?: ChildProcessJsonlTransportOptions,
+): ChildProcessJsonlTransport {
+	return new ChildProcessJsonlTransport(
+		child as unknown as ChildProcessWithoutNullStreams,
+		options,
+	);
 }
 
 test('frames split UTF-8 code points incrementally on LF boundaries', async () => {
 	const child = new FakeChildProcess();
 	const jsonl = transport(child);
 	const frames: string[] = [];
-	jsonl.onFrame(frame => frames.push(frame));
+	jsonl.onFrame((frame) => frames.push(frame));
 	const bytes = Buffer.from('{"message":"你好"}\n{"ok":true}\n', 'utf8');
 
 	child.stdout.write(bytes.subarray(0, 14));
@@ -43,7 +52,7 @@ test('rejects an oversized unterminated frame before buffering more input', asyn
 	const child = new FakeChildProcess();
 	const jsonl = transport(child, { maxFrameBytes: 4 });
 	const closed = once(child, 'exit');
-	const failure = new Promise<Error>(resolve => jsonl.onClose(resolve));
+	const failure = new Promise<Error>((resolve) => jsonl.onClose(resolve));
 
 	child.stdout.write('12345');
 
@@ -59,7 +68,7 @@ test('rejects CRLF, empty frames, and invalid UTF-8', async () => {
 	] as const) {
 		const child = new FakeChildProcess();
 		const jsonl = transport(child);
-		const failure = new Promise<Error>(resolve => jsonl.onClose(resolve));
+		const failure = new Promise<Error>((resolve) => jsonl.onClose(resolve));
 		child.stdout.write(bytes);
 		assert.match((await failure).message, expected);
 	}
@@ -146,10 +155,7 @@ test('queued byte capacity includes the active write and recovers after draining
 		await Promise.all([first, second]);
 		// One maximum-sized frame plus its LF remains admissible after capacity is released.
 		await jsonl.send('abcdefgh');
-		assert.deepEqual(
-			chunks.map(chunk => chunk.toString()),
-			['1234', '56789', 'abcdefgh\n'],
-		);
+		assert.deepEqual(chunks.map(chunk => chunk.toString()), ['1234', '56789', 'abcdefgh\n']);
 	} finally {
 		release?.();
 		await jsonl.close();
@@ -173,10 +179,7 @@ test('failed active and queued writes settle before another write checks byte ca
 		const results = Promise.allSettled([first, second]);
 		await started.p;
 		failWrite!(new Error('deliberate write failure'));
-		assert.deepEqual(
-			(await results).map(result => result.status),
-			['rejected', 'rejected'],
-		);
+		assert.deepEqual((await results).map(result => result.status), ['rejected', 'rejected']);
 		await assert.rejects(jsonl.send('abcdefgh'), error => {
 			assert.match(String(error), /stdin|deliberate write failure/);
 			assert.doesNotMatch(String(error), /byte capacity/);
@@ -199,15 +202,11 @@ test('close is asynchronous and idempotent', async () => {
 	assert.equal(child.signalCode, 'SIGTERM');
 });
 
+
 test('byte carrier preserves split UTF-8 writes without adding framing and owns queued buffers', async () => {
 	const child = new FakeChildProcess();
 	const chunks: Buffer[] = [];
-	child.stdin = new Writable({
-		write(chunk: Buffer, _encoding, callback) {
-			chunks.push(Buffer.from(chunk));
-			setImmediate(callback);
-		},
-	});
+	child.stdin = new Writable({ write(chunk: Buffer, _encoding, callback) { chunks.push(Buffer.from(chunk)); setImmediate(callback); } });
 	const jsonl = transport(child);
 	try {
 		const bytes = Buffer.from('你好\n', 'utf8');
@@ -216,9 +215,7 @@ test('byte carrier preserves split UTF-8 writes without adding framing and owns 
 		bytes.fill(0);
 		await Promise.all([first, second]);
 		assert.equal(Buffer.concat(chunks).toString('utf8'), '你好\n');
-	} finally {
-		await jsonl.close();
-	}
+	} finally { await jsonl.close(); }
 });
 
 test('byte output forwards unterminated and invalid UTF-8 chunks without JSONL decoding', async () => {
@@ -227,7 +224,7 @@ test('byte output forwards unterminated and invalid UTF-8 chunks without JSONL d
 	const chunks: Buffer[] = [];
 	using data = carrier.onData(chunk => chunks.push(Buffer.from(chunk)));
 	try {
-		assert.throws(() => carrier.onFrame(() => {}), /does not expose JSONL/);
+		assert.throws(() => carrier.onFrame(() => { }), /does not expose JSONL/);
 		child.stdout.write(Buffer.from([0xe4, 0xbd]));
 		child.stdout.write(Buffer.from([0xa0, 0xff]));
 		assert.deepEqual(chunks, [Buffer.from([0xe4, 0xbd]), Buffer.from([0xa0, 0xff])]);

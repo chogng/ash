@@ -43,20 +43,20 @@ export class EditorBreadcrumbsControl extends Disposable {
 		super();
 		this.labels = this._register(resourceLabels.createGroup());
 		this.showIcons = configuration.getValue(BreadcrumbsIconsConfiguration);
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(BreadcrumbsIconsConfiguration)) {
-					this.showIcons = configuration.getValue(BreadcrumbsIconsConfiguration);
-					this.render();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(BreadcrumbsIconsConfiguration)) {
+				this.showIcons = configuration.getValue(BreadcrumbsIconsConfiguration);
+				this.render();
+			}
+		}));
 		this.domNode = h(container.ownerDocument, 'nav');
 		this.domNode.className = 'ash-editor-breadcrumbs empty';
 		this.domNode.setAttribute('aria-label', localize('breadcrumbs.editorLabel', 'Editor breadcrumbs'));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.widget = this._register(new BreadcrumbsWidget(this.domNode, 3, undefined, Lxicon.chevronRight, defaultBreadcrumbsWidgetStyles));
+		this.widget = this._register(new BreadcrumbsWidget(
+			this.domNode, 3, undefined, Lxicon.chevronRight, defaultBreadcrumbsWidgetStyles,
+		));
 		this.editorTypeButton = h(container.ownerDocument, 'button');
 		this.editorTypeButton.type = 'button';
 		this.editorTypeButton.className = 'ash-breadcrumbs-editor-type';
@@ -64,19 +64,17 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.editorTypeButton.setAttribute('aria-haspopup', 'menu');
 		this.domNode.append(this.editorTypeButton);
 		this._register(addDisposableListener(this.editorTypeButton, 'click', () => this.selectEditorType?.(this.editorTypeButton)));
-		this._register(
-			this.widget.onDidSelectItem(event => {
-				if (!(event.item instanceof EditorBreadcrumbItem)) {
-					return;
-				}
-				const element = event.item.element;
-				if (element instanceof FileElement) {
-					this.onSelect?.(element);
-				} else {
-					this.onSelectSymbol?.(element);
-				}
-			}),
-		);
+		this._register(this.widget.onDidSelectItem(event => {
+			if (!(event.item instanceof EditorBreadcrumbItem)) {
+				return;
+			}
+			const element = event.item.element;
+			if (element instanceof FileElement) {
+				this.onSelect?.(element);
+			} else {
+				this.onSelectSymbol?.(element);
+			}
+		}));
 		this._register(this.workspaceContextService.onDidChangeWorkspace(() => this.render()));
 	}
 
@@ -90,11 +88,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 
 	setScrollbarOptions(sizing: EditorTitleScrollbarSizing, visibility: EditorTitleScrollbarVisibility): void {
 		this.widget.setHorizontalScrollbarSize(sizing === 'large' ? 8 : 3);
-		const values = {
-			auto: ScrollbarVisibility.Auto,
-			visible: ScrollbarVisibility.Visible,
-			hidden: ScrollbarVisibility.Hidden,
-		};
+		const values = { auto: ScrollbarVisibility.Auto, visible: ScrollbarVisibility.Visible, hidden: ScrollbarVisibility.Hidden };
 		this.widget.setHorizontalScrollbarVisibility(values[visibility]);
 	}
 
@@ -128,9 +122,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 
 	private render(): void {
 		// A comparison's tab identity is synthetic; navigation follows its modified resource.
-		const resource = EditorResourceAccessor.getOriginalUri(this.input, {
-			supportSideBySide: SideBySideEditor.PRIMARY,
-		});
+		const resource = EditorResourceAccessor.getOriginalUri(this.input, { supportSideBySide: SideBySideEditor.PRIMARY });
 		if (!this.input || !resource) {
 			this.widget.setItems([]);
 			this.domNode.classList.add('empty');
@@ -153,7 +145,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 
 /** Keeps resource and outline identity in Workbench, outside the generic widget. */
 class EditorBreadcrumbItem extends BreadcrumbsItem {
-	private label: { dispose(): void } | undefined;
+	private label: { dispose(): void; } | undefined;
 
 	constructor(
 		public readonly element: FileElement | SymbolElement,
@@ -164,9 +156,7 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 		super();
 	}
 
-	public override dispose(): void {
-		this.label?.dispose();
-	}
+	public override dispose(): void { this.label?.dispose(); }
 
 	public override equals(other: BreadcrumbsItem): boolean {
 		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.showIcons !== other.showIcons || this.element.label !== other.element.label) {
@@ -180,15 +170,12 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 
 	public override render(container: HTMLElement): void {
 		if (this.element instanceof FileElement) {
-			const label = (this.label = this.labels.create(container));
-			label.setResource(
-				{ resource: this.element.uri, name: this.element.label },
-				{
-					fileKind: this.element.kind,
-					hideIcon: !this.showIcons || this.element.kind === FileKind.Directory,
-					fileDecorations: { colors: true, badges: false },
-				},
-			);
+			const label = this.label = this.labels.create(container);
+			label.setResource({ resource: this.element.uri, name: this.element.label }, {
+				fileKind: this.element.kind,
+				hideIcon: !this.showIcons || this.element.kind === FileKind.Directory,
+				fileDecorations: { colors: true, badges: false },
+			});
 		} else {
 			this.label = new IconLabel(container, {
 				label: this.element.label,

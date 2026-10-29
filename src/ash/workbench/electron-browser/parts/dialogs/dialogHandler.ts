@@ -7,10 +7,7 @@ import { localize } from '../../../../nls.js';
 export class NativeDialogHandler implements IDialogHandler {
 	private readonly browser: BrowserDialogHandler;
 
-	constructor(
-		private readonly host: INativeHostApi,
-		container: HTMLElement,
-	) {
+	constructor(private readonly host: INativeHostApi, container: HTMLElement) {
 		this.browser = new BrowserDialogHandler(container);
 	}
 
@@ -33,7 +30,7 @@ export class NativeDialogHandler implements IDialogHandler {
 				break;
 		}
 		const result = await this.host.showMessageBox({
-			type: request.kind === 'message' || request.kind === 'choice' ? (request.severity ?? 'question') : 'question',
+			type: request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
 			title: request.title,
 			message: request.message,
 			detail: request.detail,
@@ -48,16 +45,9 @@ export class NativeDialogHandler implements IDialogHandler {
 		if (request.kind === 'choice') {
 			return result.response === request.buttons.length
 				? { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked }
-				: {
-						button: DialogResult.Primary,
-						buttonIndex: result.response,
-						checkboxChecked: result.checkboxChecked,
-					};
+				: { button: DialogResult.Primary, buttonIndex: result.response, checkboxChecked: result.checkboxChecked };
 		}
 		if (request.kind !== 'message' && result.response === buttons.length - 1) return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
-		return {
-			button: result.response === 0 ? DialogResult.Primary : DialogResult.Secondary,
-			checkboxChecked: result.checkboxChecked,
-		};
+		return { button: result.response === 0 ? DialogResult.Primary : DialogResult.Secondary, checkboxChecked: result.checkboxChecked };
 	}
 }

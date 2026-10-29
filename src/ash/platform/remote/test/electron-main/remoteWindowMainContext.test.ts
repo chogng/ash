@@ -40,22 +40,16 @@ test('Remote window context owns routes, projections, and Workspace tunnel clean
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async () => {},
+		connect: async () => { },
 	};
 	let tunnelCloseAllCalls = 0;
 	let tunnelsDisposed = false;
 	const tunnels: Pick<import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService, 'closeAll'> & IDisposable = {
-		closeAll: async () => {
-			tunnelCloseAllCalls += 1;
-		},
-		dispose: () => {
-			tunnelsDisposed = true;
-		},
-		[Symbol.dispose]: () => {
-			tunnelsDisposed = true;
-		},
+		closeAll: async () => { tunnelCloseAllCalls += 1; },
+		dispose: () => { tunnelsDisposed = true; },
+		[Symbol.dispose]: () => { tunnelsDisposed = true; },
 	};
-	const events: Array<{ readonly channel: string; readonly payload: unknown }> = [];
+	const events: Array<{ readonly channel: string; readonly payload: unknown; }> = [];
 	const context = new RemoteWindowMainContext({
 		supervisor,
 		workspaceContext,
@@ -64,23 +58,20 @@ test('Remote window context owns routes, projections, and Workspace tunnel clean
 		host: {
 			send: (channel, payload) => events.push({ channel, payload }),
 			confirmRuntimeRollback: async () => 'cancelled',
-			reportRuntimeRollbackFailure: async () => {},
+			reportRuntimeRollbackFailure: async () => { },
 		},
 	});
 	try {
-		assert.deepEqual(
-			context.ipcRoutes.map(route => route.channel),
-			[
-				REMOTE_AGENT_CONNECTION_READ_CHANNEL,
-				REMOTE_AGENT_RECONNECT_CHANNEL,
-				REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL,
-				REMOTE_CONNECTION_LIST_CHANNEL,
-				REMOTE_CONNECTION_CONNECT_CHANNEL,
-				REMOTE_CONNECTION_SAVE_CHANNEL,
-				REMOTE_CONNECTION_UPDATE_CHANNEL,
-				REMOTE_CONNECTION_REMOVE_CHANNEL,
-			],
-		);
+		assert.deepEqual(context.ipcRoutes.map(route => route.channel), [
+			REMOTE_AGENT_CONNECTION_READ_CHANNEL,
+			REMOTE_AGENT_RECONNECT_CHANNEL,
+			REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL,
+			REMOTE_CONNECTION_LIST_CHANNEL,
+			REMOTE_CONNECTION_CONNECT_CHANNEL,
+			REMOTE_CONNECTION_SAVE_CHANNEL,
+			REMOTE_CONNECTION_UPDATE_CHANNEL,
+			REMOTE_CONNECTION_REMOVE_CHANNEL,
+		]);
 
 		for (const listener of stateListeners) listener('ready');
 		assert.deepEqual(events, [
@@ -108,12 +99,7 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 		workspace,
 		sshExecutable: 'custom-ssh',
 		remoteExecutable: 'ash',
-		carrier: new AppServerDaemonLauncher({
-			executable: '/runtime/ash-app-server-daemon',
-			args: ['connect-selected'],
-			environment: {},
-			fileExists: () => true,
-		}),
+		carrier: new AppServerDaemonLauncher({ executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
 			calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);
@@ -124,25 +110,19 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 	const supervisor = {
 		generation: 9,
 		state: 'ready',
-		get options() {
-			return { enabled: true, processLauncher: launcher };
-		},
+		get options() { return { enabled: true, processLauncher: launcher }; },
 		onStateChange: (listener: (state: AppServerConnectionState) => void): IDisposable => {
 			stateListeners.add(listener);
 			return toDisposable(() => stateListeners.delete(listener));
 		},
-		stop: async () => {
-			calls.push('stop');
-		},
-		start: async () => {
-			calls.push('start');
-		},
+		stop: async () => { calls.push('stop'); },
+		start: async () => { calls.push('start'); },
 	} as unknown as AppServerConnectionRelay;
 	const workspaceContext = new WorkspaceContextMainService({ id: 'remote-one', uri: workspace });
 	const tunnels: Pick<import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService, 'closeAll'> & IDisposable = {
-		closeAll: async () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		closeAll: async () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 	const context = new RemoteWindowMainContext({
 		supervisor,
@@ -153,22 +133,18 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 			save: async connection => connection,
 			update: async (_originalName, connection) => connection,
 			remove: async () => undefined,
-			connect: async () => {},
+			connect: async () => { },
 		},
 		tunnels,
 		host: {
-			send: () => {},
+			send: () => { },
 			confirmRuntimeRollback: async () => {
 				calls.push('confirm');
 				return 'confirmed';
 			},
-			reportRuntimeRollbackFailure: async () => {
-				throw new Error('not used');
-			},
+			reportRuntimeRollbackFailure: async () => { throw new Error('not used'); },
 		},
-		prepareForRuntimeReplacement: () => {
-			calls.push('prepare-terminals');
-		},
+		prepareForRuntimeReplacement: () => { calls.push('prepare-terminals'); },
 	});
 	try {
 		const nextWorkspace = URI.parse('ash-remote://ssh+build-next/workspace/two');
@@ -176,12 +152,7 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 			workspace: nextWorkspace,
 			sshExecutable: 'custom-ssh',
 			remoteExecutable: 'ash',
-			carrier: new AppServerDaemonLauncher({
-				executable: '/runtime/ash-app-server-daemon',
-				args: ['connect-selected'],
-				environment: {},
-				fileExists: () => true,
-			}),
+			carrier: new AppServerDaemonLauncher({ executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'], environment: {}, fileExists: () => true }),
 			localEnvironment: {},
 			rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
 				calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);
@@ -193,7 +164,13 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 		assert.ok(route);
 		const result = await route.invoke(route.validate(undefined));
 		assert.deepEqual(result, { kind: 'rolledBack' });
-		assert.deepEqual(calls, ['confirm', 'rollback:build-next:/workspace/two:custom-ssh', 'prepare-terminals', 'stop', 'start']);
+		assert.deepEqual(calls, [
+			'confirm',
+			'rollback:build-next:/workspace/two:custom-ssh',
+			'prepare-terminals',
+			'stop',
+			'start',
+		]);
 	} finally {
 		context.dispose();
 		workspaceContext.dispose();

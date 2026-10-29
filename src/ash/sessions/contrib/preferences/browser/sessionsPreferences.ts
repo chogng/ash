@@ -21,13 +21,7 @@ import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { STARTUP_WINDOW_SETTING } from '../../../../platform/window/common/window.js';
@@ -70,33 +64,22 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	setting: {
 		included: false,
 		valueType: 'boolean',
-		get title() {
-			return localize('sessions.settings.verbosityTitle', 'Settings accessibility help');
-		},
-		get description() {
-			return localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.');
-		},
+		get title() { return localize('sessions.settings.verbosityTitle', 'Settings accessibility help'); },
+		get description() { return localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.'); }
 	},
 });
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.ExecutionSettings,
-	defaultValue: true,
-	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') throw new TypeError('Execution Settings accessibility verbosity must be boolean');
-		return value;
-	},
+	key: AccessibilityVerbositySettingId.ExecutionSettings, defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Execution Settings accessibility verbosity must be boolean'); return value; },
 	setting: {
 		included: false,
 		valueType: 'boolean',
-		get title() {
-			return localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help');
-		},
-		get description() {
-			return localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.');
-		},
+		get title() { return localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help'); },
+		get description() { return localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.'); }
 	},
 });
+
 
 interface SettingsCategory {
 	readonly id: string;
@@ -129,79 +112,27 @@ export class SessionsPreferences extends Disposable {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(
-			AccessibleViewRegistry.register({
-				type: AccessibleViewType.Help,
-				priority: 100,
-				name: 'sessionsSettingsHelp',
-				when: ContextKeyExpr.has('sessionsSettingsFocused'),
-				getProvider: () => {
-					const focused = this.container.ownerDocument.activeElement as HTMLElement;
-					return new AccessibleContentProvider(
-						AccessibleViewProviderId.SessionsSettings,
-						{ type: AccessibleViewType.Help },
-						() =>
-							localize(
-								'chat.ai.disabled.help',
-								'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.',
-							) +
-							'\n' +
-							localize(
-								'sessions.settings.help',
-								'Sessions Settings has categories on the left and settings on the right. General contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.',
-							) +
-							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'search.modifiedHelp' },
-								'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.',
-							) +
-							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'search.maturityHelp' },
-								'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.',
-							) +
-							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'search.openQueryHelp' },
-								'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.',
-							) +
-							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'search.languageHelp' },
-								'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.',
-							) +
-							' ' +
-							localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') +
-							' ' +
-							localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') +
-							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'editor.switchHelp' },
-								'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.',
-							) +
-							' ' +
-							localize(
-								'sessions.settings.layoutScopeHelp',
-								'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.',
-							),
-						() => focused.focus(),
-						AccessibilityVerbositySettingId.SessionsSettings,
-					);
-				},
-			}),
-		);
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.Help,
+			priority: 100,
+			name: 'sessionsSettingsHelp',
+			when: ContextKeyExpr.has('sessionsSettingsFocused'),
+			getProvider: () => {
+				const focused = this.container.ownerDocument.activeElement as HTMLElement;
+				return new AccessibleContentProvider(
+					AccessibleViewProviderId.SessionsSettings,
+					{ type: AccessibleViewType.Help },
+					() => localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.'),
+					() => focused.focus(),
+					AccessibilityVerbositySettingId.SessionsSettings,
+				);
+			},
+		}));
 	}
 
 	public async open(options: IOpenSettingsOptions = {}): Promise<void> {
 		const validated = validateSettingsEditorOptions(options);
-		if (
-			validated.openToSide ||
-			validated.groupId !== undefined ||
-			validated.folderUri ||
-			validated.target === ConfigurationTarget.WORKSPACE ||
-			validated.target === ConfigurationTarget.WORKSPACE_FOLDER ||
-			new SettingsSearchQuery(validated.query ?? '').languageFilter
-		) {
+		if (validated.openToSide || validated.groupId !== undefined || validated.folderUri || validated.target === ConfigurationTarget.WORKSPACE || validated.target === ConfigurationTarget.WORKSPACE_FOLDER || new SettingsSearchQuery(validated.query ?? '').languageFilter) {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			const jsonEditor = validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json';
@@ -223,9 +154,7 @@ export class SessionsPreferences extends Disposable {
 		const categoryId = validated.section;
 		const query = validated.query ?? (validated.revealSetting ? `@id:${validated.revealSetting.key}` : undefined);
 		if (this.dialogVisible) {
-			if (categoryId) {
-				this.navigate?.(categoryId);
-			}
+			if (categoryId) { this.navigate?.(categoryId); }
 			if (query !== undefined) this.applyQuery?.(query);
 			else this.focusDialog?.();
 			return;
@@ -270,89 +199,61 @@ export class SessionsPreferences extends Disposable {
 		pageContent.append(heading, list, empty, status);
 		content.append(sidebar, page);
 		const resources = new DisposableStore();
-		const navigationScrollable = resources.add(
-			new ScrollableElement(navigation, {
-				direction: 'vertical',
-				vertical: 'auto',
-				tabIndex: -1,
-				wheel: { consume: 'when-scrolling' },
-			}),
-		);
+		const navigationScrollable = resources.add(new ScrollableElement(navigation, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
 		navigationScrollable.element.classList.add('ash-sessions-settings-navigation-scrollable');
 		navigationScrollable.append(navigationContent);
-		const pageScrollable = resources.add(
-			new ScrollableElement(page, {
-				direction: 'vertical',
-				vertical: 'auto',
-				tabIndex: -1,
-				wheel: { consume: 'when-scrolling' },
-			}),
-		);
+		const pageScrollable = resources.add(new ScrollableElement(page, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
 		pageScrollable.element.classList.add('ash-sessions-settings-page-scrollable');
 		pageScrollable.append(pageContent);
-		const searchInput = resources.add(
-			new InputBox(search, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: 'search',
-				presentation: 'field',
-				placeholder: localize('sessions.settings.search', 'Search settings'),
-				ariaLabel: localize('sessions.settings.search', 'Search settings'),
-				ariaControls: page.id,
-			}),
-		);
+		const searchInput = resources.add(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			presentation: 'field',
+			placeholder: localize('sessions.settings.search', 'Search settings'),
+			ariaLabel: localize('sessions.settings.search', 'Search settings'),
+			ariaControls: page.id,
+		}));
 		if (query !== undefined) searchInput.value = query;
-		const dialog = resources.add(
-			new Dialog(this.container, localize('sessions.settings.title', 'Sessions Settings'), [], {
-				buttonStyles: defaultButtonStyles,
-				dialogStyles: defaultDialogStyles,
-				checkboxStyles: defaultCheckboxStyles,
-				inputBoxStyles: defaultInputBoxStyles,
-				extraClasses: ['ash-sessions-settings-dialog'],
-				disableCloseButton: true,
-				disableDefaultAction: true,
-				renderBody: body => body.append(content),
-				onVisibilityChange: (_window, visible) => {
-					if (this.dialog === dialog) this.dialogVisible = visible;
-				},
-			}),
-		);
-		resources.add(
-			addDisposableListener(
-				getWindow(content),
-				'click',
-				event => {
-					if ((event.target as HTMLElement | null)?.classList?.contains('ash-sessions-settings-dialog')) dialog.dispose();
-				},
-				true,
-			),
-		);
+		const dialog = resources.add(new Dialog(this.container, localize('sessions.settings.title', 'Sessions Settings'), [], {
+			buttonStyles: defaultButtonStyles,
+			dialogStyles: defaultDialogStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			extraClasses: ['ash-sessions-settings-dialog'],
+			disableCloseButton: true,
+			disableDefaultAction: true,
+			renderBody: body => body.append(content),
+			onVisibilityChange: (_window, visible) => { if (this.dialog === dialog) this.dialogVisible = visible; },
+		}));
+		resources.add(addDisposableListener(getWindow(content), 'click', event => {
+			if ((event.target as HTMLElement | null)?.classList?.contains('ash-sessions-settings-dialog')) dialog.dispose();
+		}, true));
 		const contextView = resources.add(new ContextView(content));
 		// Modal menus and dropdowns must live in the dialog's top layer and end with it.
-		const contentServices = resources.add(
-			this.instantiationService.createChild(
-				new ServiceCollection([
-					IContextViewService,
-					{
-						container: content,
-						show: (options: ContextViewOptions) => contextView.show(options),
-						hide: (reason?: ContextViewHideReason) => contextView.hide(reason),
-						layout: () => contextView.layout(),
-					},
-				]),
-			),
-		);
+		const contentServices = resources.add(this.instantiationService.createChild(new ServiceCollection([IContextViewService, {
+			container: content,
+			show: (options: ContextViewOptions) => contextView.show(options),
+			hide: (reason?: ContextViewHideReason) => contextView.hide(reason),
+			layout: () => contextView.layout(),
+		}])));
 		const contextMenus = resources.add(contentServices.createInstance(BrowserContextMenuService));
 		contentServices.registerInstance(IContextMenuService, contextMenus);
-		resources.add(
-			new SettingsSearchMenu(search, {
-				getValue: () => searchInput.value,
-				setValue: value => {
-					searchInput.value = value;
-				},
-				focus: () => searchInput.focus(),
-				contextMenuProvider: contextMenus,
-			}),
-		);
+		resources.add(new SettingsSearchMenu(search, {
+			getValue: () => searchInput.value,
+			setValue: value => { searchInput.value = value; },
+			focus: () => searchInput.focus(),
+			contextMenuProvider: contextMenus,
+		}));
 		// The window owns preferences, editors and notifications. Resolve them before closing
 		// the modal, whose child service scope is released by open()'s finally block.
 		const notifications = this.instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
@@ -367,59 +268,29 @@ export class SessionsPreferences extends Disposable {
 		};
 		const openSettingsEditor = (section?: string): Promise<void> => {
 			const editors = this.instantiationService.invokeFunction(accessor => accessor.get(IEditorService));
-			return handoff(async () => {
-				await editors.openEditor(createSettingsEditorInput(section), { pinned: true }, 'modalGroup');
-			}, false);
+			return handoff(async () => { await editors.openEditor(createSettingsEditorInput(section), { pinned: true }, 'modalGroup'); }, false);
 		};
 		const openUserSettings = (key?: string, query?: string): Promise<void> => {
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-			return handoff(() =>
-				preferences.openUserSettings({
-					jsonEditor: true,
-					...(key ? { revealSetting: { key, edit: true } } : query !== undefined ? { query } : {}),
-				}),
-			);
+			return handoff(() => preferences.openUserSettings({ jsonEditor: true, ...(key ? { revealSetting: { key, edit: true } } : query !== undefined ? { query } : {}) }));
 		};
 		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
-		const openJson = resources.add(
-			new Button(search, {
-				...defaultButtonStyles,
-				label: openJsonLabel,
-				title: openJsonLabel,
-				icon: Lxicon.code,
-				iconOnly: true,
-				size: 'small',
-				onClick: () => {
-					void openUserSettings(undefined, searchInput.value);
-				},
-			}),
-		);
+		const openJson = resources.add(new Button(search, {
+			...defaultButtonStyles,
+			label: openJsonLabel,
+			title: openJsonLabel,
+			icon: Lxicon.code,
+			iconOnly: true,
+			size: 'small',
+			onClick: () => { void openUserSettings(undefined, searchInput.value); },
+		}));
 		openJson.domNode.classList.add('ash-settings-open-json');
-		openJson.domNode.setAttribute(
-			'aria-description',
-			localize(
-				{ bundle: 'ash.settings', key: 'editor.switchHelp' },
-				'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.',
-			),
-		);
+		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
 		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
-			resources.add(
-				contentServices.createInstance(
-					SettingsSectionRenderer,
-					list,
-					{
-						categoryId: id,
-						title,
-						description,
-						help: description,
-						fields,
-						onDidChange: Event.None,
-						setVisible: () => {},
-					},
-					AccessibleViewProviderId.SessionsSettings,
-					AccessibilityVerbositySettingId.SessionsSettings,
-				),
-			);
+			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
+				categoryId: id, title, description, help: description, fields,
+				onDidChange: Event.None, setVisible: () => { },
+			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		const settingOptions: SettingWidgetOptions = {
 			onOpenSettings: key => openUserSettings(key),
 			onStatus: (message, isError) => {
@@ -432,77 +303,37 @@ export class SessionsPreferences extends Disposable {
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsRenderer, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
-		const customizeContent = resources.add(
-			contentServices.createInstance(
-				SessionsCustomizeContent,
-				list,
-				async () => {
-					dialog.dispose();
-				},
-				this.showEditor,
-				() => openSettingsEditor(),
-				() => openUserSettings(),
-			),
-		);
+		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsRenderer, list));
-		const githubSettings = resources.add(
-			contentServices.createInstance(GitHubSettingsModel, async () => {
-				dialog.dispose();
-			}),
-		);
-		const githubContent = resources.add(
-			contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings),
-		);
+		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.dispose(); }));
+		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
-		const traceContent = resources.add(
-			contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings),
-		);
+		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
 		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
-		const executionContent = resources.add(
-			contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings),
-		);
+		const executionContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings));
 		const management = new Map<string, SettingsPageRenderer>();
 		const accountTitle = localize('sessions.settings.account', 'Account');
-		management.set(
-			'account',
-			managementContent('account', accountTitle, localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'), [
-				{
-					id: 'manage',
-					kind: 'action',
-					enabled: true,
-					label: localize({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
-					run: () => {
-						const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
-						return handoff(async () => {
-							await commands.executeCommand('workbench.action.manageAccounts');
-						}, false);
-					},
+		management.set('account', managementContent('account', accountTitle,
+			localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'), [{
+				id: 'manage', kind: 'action', enabled: true,
+				label: localize({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
+				run: () => {
+					const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
+					return handoff(async () => { await commands.executeCommand('workbench.action.manageAccounts'); }, false);
 				},
-			]),
-		);
+			}]));
 		const shortcutTitle = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
-		management.set(
-			'keyboard-shortcuts',
-			managementContent(
-				'keyboard-shortcuts',
-				shortcutTitle,
-				localize(
-					'sessions.settings.shortcutsDescription',
-					'Search commands and keybindings, inspect defaults, record keys, and edit or reset shortcuts. Changes use the current profile and also apply in the Workbench.',
-				),
-				[false, true].map(textual => ({
-					id: textual ? 'json' : 'editor',
-					kind: 'action',
-					enabled: true,
-					label: textual ? localize({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)') : shortcutTitle,
-					run: () => {
-						const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-						// The UI opens as a modal; switching document entries would retire its host.
-						return handoff(() => preferences.openGlobalKeybindingSettings(textual), textual);
-					},
-				})),
-			),
-		);
+		management.set('keyboard-shortcuts', managementContent('keyboard-shortcuts', shortcutTitle,
+			localize('sessions.settings.shortcutsDescription', 'Search commands and keybindings, inspect defaults, record keys, and edit or reset shortcuts. Changes use the current profile and also apply in the Workbench.'),
+			[false, true].map(textual => ({
+				id: textual ? 'json' : 'editor', kind: 'action', enabled: true,
+				label: textual ? localize({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)') : shortcutTitle,
+				run: () => {
+					const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
+					// The UI opens as a modal; switching document entries would retire its host.
+					return handoff(() => preferences.openGlobalKeybindingSettings(textual), textual);
+				},
+			}))));
 		for (const [id, section, title] of [
 			['browser', 'browser', localize('sessions.settings.browser', 'Browser')],
 			['tab', 'editor-opening', localize('sessions.settings.tab', 'Tab')],
@@ -511,23 +342,12 @@ export class SessionsPreferences extends Disposable {
 		] as const) {
 			const label = localize('sessions.settings.openSection', 'Open {0} settings', title);
 			const fields: SettingsSectionField[] = [{ id: 'settings', kind: 'action', label, enabled: true, run: () => openSettingsEditor(section) }];
-			if (id === 'code-intelligence')
-				fields.push({
-					id: 'language-servers',
-					kind: 'action',
-					enabled: true,
-					label: localize('sessions.settings.languageServers', 'Language servers'),
-					run: () => openSettingsEditor('editor-language'),
-				});
-			management.set(
-				id,
-				managementContent(
-					id,
-					title,
-					localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'),
-					fields,
-				),
-			);
+			if (id === 'code-intelligence') fields.push({
+				id: 'language-servers', kind: 'action', enabled: true,
+				label: localize('sessions.settings.languageServers', 'Language servers'), run: () => openSettingsEditor('editor-language'),
+			});
+			management.set(id, managementContent(id, title,
+				localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'), fields));
 		}
 		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent, management);
 		const categories = sections.flatMap(section => section.categories);
@@ -542,30 +362,21 @@ export class SessionsPreferences extends Disposable {
 		if (categoryId === 'hooks') customizeContent.selectTab('hooks');
 		let activeCategory = categoryIndex(categoryId);
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-		const treeModel = resources.add(
-			new SettingsTreeModel<ISetting | SettingsSectionReference>(
-				id =>
-					// Keep service-only sections out of the local-user filter without creating configuration copies.
-					configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
-			),
-		);
-		const tree = resources.add(
-			new SettingsTree(list, {
-				model: treeModel,
-				rootClassName: 'ash-sessions-settings-content-tree',
-				groupClassName: 'ash-sessions-settings-content-group',
-				groupDescriptionClassName: 'ash-sessions-settings-group-description',
-				itemsClassName: 'ash-sessions-settings-list ash-settings-card',
-				renderGroupHeader: header => renderer.render(header),
-				renderItem: item => renderer.render(item.value),
-				updateItem: item => {
-					if (!('rendererId' in item.value)) renderer.update(item.value);
-				},
-				disposeItem: item => {
-					if (!('rendererId' in item.value)) renderer.disposeSetting(item.id);
-				},
-			}),
-		);
+		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsSectionReference>(id =>
+			// Keep service-only sections out of the local-user filter without creating configuration copies.
+			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
+		));
+		const tree = resources.add(new SettingsTree(list, {
+			model: treeModel,
+			rootClassName: 'ash-sessions-settings-content-tree',
+			groupClassName: 'ash-sessions-settings-content-group',
+			groupDescriptionClassName: 'ash-sessions-settings-group-description',
+			itemsClassName: 'ash-sessions-settings-list ash-settings-card',
+			renderGroupHeader: header => renderer.render(header),
+			renderItem: item => renderer.render(item.value),
+			updateItem: item => { if (!('rendererId' in item.value)) renderer.update(item.value); },
+			disposeItem: item => { if (!('rendererId' in item.value)) renderer.disposeSetting(item.id); },
+		}));
 		const buttons: Button[] = [];
 		for (const section of sections) {
 			const group = h(ownerDocument, 'div');
@@ -579,20 +390,18 @@ export class SessionsPreferences extends Disposable {
 			navigationContent.append(group);
 			for (const category of section.categories) {
 				const index = buttons.length;
-				const button = resources.add(
-					new Button(group, {
-						...defaultButtonStyles,
-						label: category.title,
-						icon: category.icon,
-						presentation: 'quiet',
-						onClick: () => {
-							activeCategory = index;
-							if (searchInput.value) searchInput.value = '';
-							else render();
-							pageScrollable.scrollTo(0, 0);
-						},
-					}),
-				);
+				const button = resources.add(new Button(group, {
+					...defaultButtonStyles,
+					label: category.title,
+					icon: category.icon,
+					presentation: 'quiet',
+					onClick: () => {
+						activeCategory = index;
+						if (searchInput.value) searchInput.value = '';
+						else render();
+						pageScrollable.scrollTo(0, 0);
+					},
+				}));
 				button.domNode.classList.add('ash-sessions-settings-navigation-item');
 				button.domNode.dataset.settingsCategoryId = category.id;
 				button.domNode.setAttribute('aria-controls', page.id);
@@ -602,25 +411,10 @@ export class SessionsPreferences extends Disposable {
 		const render = (): void => {
 			const query = new SettingsSearchQuery(searchInput.value);
 			const nodes: readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] = categories.map((category, index) => ({
-				element: {
-					kind: 'group',
-					id: `sessions.category.${category.id}`,
-					title: category.title,
-					description: '',
-				},
+				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
-					...category.settings.map(setting => ({
-						element: {
-							kind: 'item' as const,
-							id: setting.id,
-							title: setting.title,
-							description: setting.description,
-							keywords: [setting.id, ...(setting.keywords ?? [])],
-							tags: setting.tags,
-							value: setting,
-						},
-					})),
-					...(category.content?.getNodes(query) ?? []),
+					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
+					...category.content?.getNodes(query) ?? [],
 				],
 			}));
 			treeModel.setChildren(nodes);
@@ -643,11 +437,9 @@ export class SessionsPreferences extends Disposable {
 		for (const category of categories) {
 			if (category.content) resources.add(category.content.onDidChange(render));
 		}
-		resources.add(
-			this.configurationService.onDidChangeConfiguration(() => {
-				if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
-			}),
-		);
+		resources.add(this.configurationService.onDidChangeConfiguration(() => {
+			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
+		}));
 		this.navigate = categoryId => {
 			if (categoryId === 'hooks') customizeContent.selectTab('hooks');
 			activeCategory = categoryIndex(categoryId);
@@ -655,55 +447,41 @@ export class SessionsPreferences extends Disposable {
 			render();
 			pageScrollable.scrollTo(0, 0);
 		};
-		resources.add(
-			addDisposableListener(navigation, 'keydown', event => {
-				const current = buttons.findIndex(button => button.domNode === ownerDocument.activeElement);
-				if (current < 0) return;
-				const next =
-					event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? buttons.length - 1
-							: event.key === 'ArrowDown'
-								? (current + 1) % buttons.length
-								: event.key === 'ArrowUp'
-									? (current + buttons.length - 1) % buttons.length
-									: undefined;
-				if (next === undefined) return;
+		resources.add(addDisposableListener(navigation, 'keydown', event => {
+			const current = buttons.findIndex(button => button.domNode === ownerDocument.activeElement);
+			if (current < 0) return;
+			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+				: event.key === 'ArrowDown' ? (current + 1) % buttons.length
+					: event.key === 'ArrowUp' ? (current + buttons.length - 1) % buttons.length : undefined;
+			if (next === undefined) return;
+			event.preventDefault();
+			event.stopPropagation();
+			buttons[next].focus();
+			buttons[next].domNode.click();
+		}));
+		resources.add(searchInput.onKeyDown(event => {
+			if (event.key === 'Escape' && searchInput.value) {
 				event.preventDefault();
 				event.stopPropagation();
-				buttons[next].focus();
-				buttons[next].domNode.click();
-			}),
-		);
-		resources.add(
-			searchInput.onKeyDown(event => {
-				if (event.key === 'Escape' && searchInput.value) {
-					event.preventDefault();
-					event.stopPropagation();
-					searchInput.value = '';
-				} else if (event.key === 'ArrowDown') {
-					const target = [...pageContent.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]')].find(
-						element => !element.hasAttribute('disabled') && element.getClientRects().length > 0,
-					);
-					if (!target) return;
-					event.preventDefault();
-					event.stopPropagation();
-					target.focus();
-				}
-			}),
-		);
-		resources.add(
-			searchInput.onDidChange(() => {
-				if (new SettingsSearchQuery(searchInput.value).languageFilter) {
-					const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-					void handoff(() => preferences.openUserSettings({ query: searchInput.value, jsonEditor: false }), false);
-					return;
-				}
-				render();
-				pageScrollable.scrollTo(0, 0);
-			}),
-		);
+				searchInput.value = '';
+			} else if (event.key === 'ArrowDown') {
+				const target = [...pageContent.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]')]
+					.find(element => !element.hasAttribute('disabled') && element.getClientRects().length > 0);
+				if (!target) return;
+				event.preventDefault();
+				event.stopPropagation();
+				target.focus();
+			}
+		}));
+		resources.add(searchInput.onDidChange(() => {
+			if (new SettingsSearchQuery(searchInput.value).languageFilter) {
+				const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
+				void handoff(() => preferences.openUserSettings({ query: searchInput.value, jsonEditor: false }), false);
+				return;
+			}
+			render();
+			pageScrollable.scrollTo(0, 0);
+		}));
 		this.applyQuery = query => {
 			searchInput.value = query;
 			searchInput.focus();
@@ -713,24 +491,15 @@ export class SessionsPreferences extends Disposable {
 		if (hint) {
 			searchInput.inputElement.setAttribute('aria-description', hint);
 		}
-		resources.add(
-			AccessibleViewRegistry.register({
-				type: AccessibleViewType.View,
-				priority: 100,
-				name: 'sessionsSettingsView',
-				when: ContextKeyExpr.has('sessionsSettingsFocused'),
-				getProvider: () => {
-					const focused = ownerDocument.activeElement as HTMLElement;
-					return new AccessibleContentProvider(
-						AccessibleViewProviderId.SessionsSettings,
-						{ type: AccessibleViewType.View },
-						() => pageContent.innerText,
-						() => focused.focus(),
-						AccessibilityVerbositySettingId.SessionsSettings,
-					);
-				},
-			}),
-		);
+		resources.add(AccessibleViewRegistry.register({
+			type: AccessibleViewType.View, priority: 100, name: 'sessionsSettingsView',
+			when: ContextKeyExpr.has('sessionsSettingsFocused'),
+			getProvider: () => {
+				const focused = ownerDocument.activeElement as HTMLElement;
+				return new AccessibleContentProvider(AccessibleViewProviderId.SessionsSettings, { type: AccessibleViewType.View },
+					() => pageContent.innerText, () => focused.focus(), AccessibilityVerbositySettingId.SessionsSettings);
+			},
+		}));
 
 		const scope = resources.add(this.contextKeys.createScoped(content));
 		scope.createKey('sessionsSettingsFocused', true);
@@ -755,18 +524,13 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(
-		modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		advisorContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		executionContent: SettingsPageRenderer<ISetting | SettingsSectionReference>,
-		management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>,
-	): readonly SettingsSection[] {
+	private sections(modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, advisorContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, executionContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>): readonly SettingsSection[] {
 		const defaults = new DefaultSettings();
-		const appearanceSettings: readonly ISetting[] = [SESSIONS_LAYOUT_SCOPE_SETTING, SessionsConfiguration.layoutStyle, SessionsConfiguration.activityBarLocation].map(id => defaults.get(id));
+		const appearanceSettings: readonly ISetting[] = [
+			SESSIONS_LAYOUT_SCOPE_SETTING,
+			SessionsConfiguration.layoutStyle,
+			SessionsConfiguration.activityBarLocation
+		].map(id => defaults.get(id));
 		// Existing accessibility preferences live under General without changing their stored keys.
 		const generalSettings: readonly ISetting[] = [
 			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING).map(setting => setting.id),
@@ -775,135 +539,43 @@ export class SessionsPreferences extends Disposable {
 			AccessibilityVerbositySettingId.SessionsActivityBar,
 			AccessibilityVerbositySettingId.SessionsSettings,
 			AccessibilityVerbositySettingId.ExecutionSettings,
-			AccessibilityVerbositySettingId.ResourceEditor,
+			AccessibilityVerbositySettingId.ResourceEditor
 		].map(id => defaults.get(id));
-		const designSettings: readonly ISetting[] = [DesignConfiguration.usePointerCursor, AccessibilityVerbositySettingId.DesignCanvas].map(id => defaults.get(id));
-		const projectsSettings: readonly ISetting[] = [AccessibilityVerbositySettingId.Projects].map(id => defaults.get(id));
-		return [
-			{
-				title: localize('sessions.settings.section.basics', 'Basics'),
-				categories: [
-					{
-						id: 'general',
-						title: localize('sessions.settings.general', 'General'),
-						icon: Lxicon.settings,
-						settings: generalSettings,
-						content: dictationContent,
-					},
-					{
-						id: 'account',
-						title: localize('sessions.settings.account', 'Account'),
-						icon: Lxicon.account,
-						settings: [],
-						content: management.get('account'),
-					},
-					{
-						id: 'appearance',
-						title: localize('sessions.settings.appearance', 'Appearance'),
-						icon: Lxicon.appearance,
-						settings: appearanceSettings,
-					},
-					{
-						id: 'customize',
-						title: localize('sessions.settings.customize', 'Customize'),
-						icon: Lxicon.briefcase,
-						settings: [],
-						content: customizeContent,
-					},
-				],
-			},
-			{
-				title: localize('sessions.settings.section.development', 'Development'),
-				categories: [
-					{
-						id: 'execution-permissions',
-						title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'),
-						icon: Lxicon.settings,
-						settings: [],
-						content: executionContent,
-					},
-					{
-						id: 'agents',
-						title: localize('sessions.settings.agents', 'Agents'),
-						icon: Lxicon.agent,
-						settings: [],
-						content: advisorContent,
-					},
-					{
-						id: 'execution-trace',
-						title: localize('sessions.settings.executionTrace', 'Execution trace'),
-						icon: Lxicon.history,
-						settings: [],
-						content: traceContent,
-					},
-					{
-						id: 'projects',
-						title: localize('projects.title', 'Projects'),
-						icon: Lxicon.projects,
-						settings: projectsSettings,
-					},
-					{
-						id: 'design',
-						title: localize('sessions.settings.design', 'Design'),
-						icon: Lxicon.symbolColor,
-						settings: designSettings,
-					},
-					{
-						id: 'models',
-						title: localize('sessions.settings.models', 'Models'),
-						icon: Lxicon.model,
-						settings: [],
-						content: modelContent,
-					},
-					{
-						id: 'github',
-						title: localize('sessions.settings.gitPrs', 'Git & PRs'),
-						icon: Lxicon.git,
-						settings: [],
-						content: githubContent,
-					},
-					{
-						id: 'browser',
-						title: localize('sessions.settings.browser', 'Browser'),
-						icon: Lxicon.browserWeb,
-						settings: [],
-						content: management.get('browser'),
-					},
-					{
-						id: 'tab',
-						title: localize('sessions.settings.tab', 'Tab'),
-						icon: Lxicon.keyboardTab,
-						settings: [],
-						content: management.get('tab'),
-					},
-					{
-						id: 'code-intelligence',
-						title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'),
-						icon: Lxicon.code,
-						settings: [],
-						content: management.get('code-intelligence'),
-					},
-					{
-						id: 'environment',
-						title: localize('sessions.settings.environment', 'Environment'),
-						icon: Lxicon.terminal,
-						settings: [],
-						content: management.get('environment'),
-					},
-				],
-			},
-			{
-				title: localize('sessions.settings.section.management', 'Management'),
-				categories: [
-					{
-						id: 'keyboard-shortcuts',
-						title: localize('sessions.settings.shortcuts', 'Keyboard Shortcuts'),
-						icon: Lxicon.command,
-						settings: [],
-						content: management.get('keyboard-shortcuts'),
-					},
-				],
-			},
-		];
+		const designSettings: readonly ISetting[] = [
+			DesignConfiguration.usePointerCursor,
+			AccessibilityVerbositySettingId.DesignCanvas
+		].map(id => defaults.get(id));
+		const projectsSettings: readonly ISetting[] = [
+			AccessibilityVerbositySettingId.Projects
+		].map(id => defaults.get(id));
+		return [{
+			title: localize('sessions.settings.section.basics', 'Basics'),
+			categories: [
+				{ id: 'general', title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings, content: dictationContent },
+				{ id: 'account', title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [], content: management.get('account') },
+				{ id: 'appearance', title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
+				{ id: 'customize', title: localize('sessions.settings.customize', 'Customize'), icon: Lxicon.briefcase, settings: [], content: customizeContent },
+			],
+		}, {
+			title: localize('sessions.settings.section.development', 'Development'),
+			categories: [
+				{ id: 'execution-permissions', title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'), icon: Lxicon.settings, settings: [], content: executionContent },
+				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
+				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
+				{ id: 'projects', title: localize('projects.title', 'Projects'), icon: Lxicon.projects, settings: projectsSettings },
+				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
+				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
+				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
+				{ id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [], content: management.get('browser') },
+				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },
+				{ id: 'code-intelligence', title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [], content: management.get('code-intelligence') },
+				{ id: 'environment', title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: [], content: management.get('environment') },
+			],
+		}, {
+			title: localize('sessions.settings.section.management', 'Management'),
+			categories: [
+				{ id: 'keyboard-shortcuts', title: localize('sessions.settings.shortcuts', 'Keyboard Shortcuts'), icon: Lxicon.command, settings: [], content: management.get('keyboard-shortcuts') },
+			],
+		}];
 	}
 }

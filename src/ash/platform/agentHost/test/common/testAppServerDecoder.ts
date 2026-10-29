@@ -13,24 +13,14 @@ export class TestAppServerDecodePort extends Disposable implements WebWorkerClie
 	public readonly jobs: unknown[] = [];
 	constructor() {
 		super();
-		this._register(
-			new WebWorkerServer(
-				{
-					onMessage: this.requests.event,
-					send: value => this.responses.fire(structuredClone(value)),
-					...toDisposable(() => {}),
-				},
-				appServerDecodeChannel,
-				appServerDecodeHandler,
-			),
-		);
+		this._register(new WebWorkerServer({
+			onMessage: this.requests.event,
+			send: value => this.responses.fire(structuredClone(value)),
+			...toDisposable(() => { }),
+		}, appServerDecodeChannel, appServerDecodeHandler));
 	}
-	public send(value: unknown): void {
-		this.jobs.push(structuredClone(value));
-	}
-	public fail(error: Error): void {
-		this.failures.fire(error);
-	}
+	public send(value: unknown): void { this.jobs.push(structuredClone(value)); }
+	public fail(error: Error): void { this.failures.fire(error); }
 	public async release(): Promise<void> {
 		if (!this.jobs.length) throw new Error('No pending decode job');
 		this.requests.fire(this.jobs.shift());

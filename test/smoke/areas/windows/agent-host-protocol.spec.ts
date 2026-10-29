@@ -24,30 +24,13 @@ interface ObservedFrame {
 async function observeProtocol(page: Page): Promise<void> {
 	await page.addInitScript(() => {
 		const frames: ObservedFrame[] = [];
-		(globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence = frames;
+		(globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence = frames;
 		let nextConnection = 1;
-		const connections = new WeakMap<
-			object,
-			{
-				id: number;
-				selected: Set<unknown>;
-				sent: string;
-				received: string;
-				sentDecoder: TextDecoder;
-				receivedDecoder: TextDecoder;
-			}
-		>();
+		const connections = new WeakMap<object, { id: number; selected: Set<unknown>; sent: string; received: string; sentDecoder: TextDecoder; receivedDecoder: TextDecoder; }>();
 		const read = (owner: object, direction: 'send' | 'receive', value: unknown): void => {
 			let connection = connections.get(owner);
 			if (!connection) {
-				connection = {
-					id: nextConnection++,
-					selected: new Set(),
-					sent: '',
-					received: '',
-					sentDecoder: new TextDecoder(),
-					receivedDecoder: new TextDecoder(),
-				};
+				connection = { id: nextConnection++, selected: new Set(), sent: '', received: '', sentDecoder: new TextDecoder(), receivedDecoder: new TextDecoder() };
 				connections.set(owner, connection);
 			}
 			let records: string[];
@@ -58,30 +41,16 @@ async function observeProtocol(page: Page): Promise<void> {
 				connection[key] += (direction === 'send' ? connection.sentDecoder : connection.receivedDecoder).decode(value.data, { stream: true });
 				records = connection[key].split('\n');
 				connection[key] = records.pop()!;
-			} else {
-				return;
-			}
+			} else { return; }
 			for (const text of records) {
 				let frame: Record<string, unknown>;
-				try {
-					frame = JSON.parse(text) as Record<string, unknown>;
-				} catch {
-					continue;
-				}
-				if (frame.jsonrpc !== '2.0') {
-					continue;
-				}
+				try { frame = JSON.parse(text) as Record<string, unknown>; } catch { continue; }
+				if (frame.jsonrpc !== '2.0') { continue; }
 				if (direction === 'send') {
-					if (!['initialize', 'fs/readFile', 'env/dirs/set'].includes(String(frame.method))) {
-						continue;
-					}
+					if (!['initialize', 'fs/readFile', 'env/dirs/set'].includes(String(frame.method))) { continue; }
 					connection.selected.add(frame.id);
-				} else if (!connection.selected.has(frame.id)) {
-					continue;
-				}
-				if (frames.length < 300) {
-					frames.push({ connection: connection.id, direction, frame });
-				}
+				} else if (!connection.selected.has(frame.id)) { continue; }
+				if (frames.length < 300) { frames.push({ connection: connection.id, direction, frame }); }
 			}
 		};
 		const sendWebSocket = WebSocket.prototype.send;
@@ -102,9 +71,7 @@ async function observeProtocol(page: Page): Promise<void> {
 			Reflect.apply(sendPort, this, args);
 		};
 		window.addEventListener('message', event => {
-			if (event.source !== window) {
-				return;
-			}
+			if (event.source !== window) { return; }
 			for (const port of event.ports) {
 				port.addEventListener('message', data => read(port, 'receive', data.data));
 			}
@@ -112,42 +79,25 @@ async function observeProtocol(page: Page): Promise<void> {
 	});
 }
 
-async function initializationEvidence(page: Page): Promise<{ requestId: unknown; schemaHash: string; server: string; frames: ObservedFrame[] }> {
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				(globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence?.some(entry => entry.direction === 'receive' && 'result' in entry.frame),
-			),
-		)
-		.toBe(true);
-	const frames = await page.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence);
+async function initializationEvidence(page: Page): Promise<{ requestId: unknown; schemaHash: string; server: string; frames: ObservedFrame[]; }> {
+	await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence?.some(entry => entry.direction === 'receive' && 'result' in entry.frame))).toBe(true);
+	const frames = await page.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence);
 	const request = frames.find(entry => entry.direction === 'send' && entry.frame.method === 'initialize');
 	expect(request).toBeDefined();
 	const response = frames.find(entry => entry.direction === 'receive' && entry.connection === request!.connection && entry.frame.id === request!.frame.id);
 	expect(response).toBeDefined();
 	const decoded = decodeAppServerResponse('initialize', response!.frame);
 	expect('result' in decoded).toBe(true);
-	if (!('result' in decoded)) {
-		throw new Error('Initialize returned an error');
-	}
+	if (!('result' in decoded)) { throw new Error('Initialize returned an error'); }
 	const initialized = checkAppServerInitializeCompatibility(decoded.result, { expectedServerName: 'ash-app-server' });
-	return {
-		requestId: request!.frame.id,
-		schemaHash: initialized.schemaHash,
-		server: initialized.serverInfo.name,
-		frames,
-	};
+	return { requestId: request!.frame.id, schemaHash: initialized.schemaHash, server: initialized.serverInfo.name, frames };
 }
 
-async function backendIdentity(environment: Readonly<NodeJS.ProcessEnv>, runtime: 'packaged-node' | 'host-provided-node'): Promise<{ pid: number; instanceId: string }> {
+async function backendIdentity(environment: Readonly<NodeJS.ProcessEnv>, runtime: 'packaged-node' | 'host-provided-node'): Promise<{ pid: number; instanceId: string; }> {
 	const root = developmentAshPackagePath(repository, runtime);
 	const executable = join(root, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
-	const output = await execFileAsync(executable, ['version'], {
-		env: { ...process.env, ...environment },
-		windowsHide: true,
-		timeout: 10_000,
-	});
-	const value = JSON.parse(output.stdout) as { pid: number; instanceId: string };
+	const output = await execFileAsync(executable, ['version'], { env: { ...process.env, ...environment }, windowsHide: true, timeout: 10_000 });
+	const value = JSON.parse(output.stdout) as { pid: number; instanceId: string; };
 	expect(value.pid).toBeGreaterThan(0);
 	expect(value.instanceId).toBeTruthy();
 	return { pid: value.pid, instanceId: value.instanceId };
@@ -173,11 +123,7 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 		expect(second.requestId).toBe(first.requestId);
 		expect(second.schemaHash).toBe(first.schemaHash);
 		// The profile's product services own its Extensions authority, including health probes.
-		const backendEnvironment = {
-			...createTestEnvironment(webAppServer!.profileDirectory, process.env),
-			ASH_HOME: webAppServer!.profileDirectory,
-			ASH_PRODUCT_SERVICES_PATH: join(webAppServer!.profileDirectory, 'product-services.json'),
-		};
+		const backendEnvironment = { ...createTestEnvironment(webAppServer!.profileDirectory, process.env), ASH_HOME: webAppServer!.profileDirectory, ASH_PRODUCT_SERVICES_PATH: join(webAppServer!.profileDirectory, 'product-services.json') };
 		const before = await backendIdentity(backendEnvironment, 'packaged-node');
 		const pair = await page.evaluate(async () => {
 			const endpoint = new URL(sessionStorage.getItem('ash.appServer.endpoint')!);
@@ -186,72 +132,34 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 			url.protocol = 'ws:';
 			const connect = async (label: string) => {
 				const socket = new WebSocket(url, `ash-session.${token}`);
-				const pending = new Map<
-					number,
-					{
-						resolve(value: Record<string, unknown>): void;
-						reject(error: Error): void;
-						timer: ReturnType<typeof setTimeout>;
-					}
-				>();
-				const request = (id: number, method: string, params: unknown): Promise<Record<string, unknown>> =>
-					new Promise((resolve, reject) => {
-						const timer = setTimeout(() => {
-							pending.delete(id);
-							reject(new Error(`${label} ${method} timed out`));
-						}, 10_000);
-						pending.set(id, { resolve, reject, timer });
-						socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
-					});
+				const pending = new Map<number, { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout>; }>();
+				const request = (id: number, method: string, params: unknown): Promise<Record<string, unknown>> => new Promise((resolve, reject) => {
+					const timer = setTimeout(() => { pending.delete(id); reject(new Error(`${label} ${method} timed out`)); }, 10_000);
+					pending.set(id, { resolve, reject, timer });
+					socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+				});
 				socket.addEventListener('message', event => {
 					const frame = JSON.parse(String(event.data)) as Record<string, unknown>;
-					if (typeof frame.id !== 'number') {
-						return;
-					}
+					if (typeof frame.id !== 'number') { return; }
 					const waiter = pending.get(frame.id);
-					if (waiter) {
-						pending.delete(frame.id);
-						clearTimeout(waiter.timer);
-						waiter.resolve(frame);
-					}
+					if (waiter) { pending.delete(frame.id); clearTimeout(waiter.timer); waiter.resolve(frame); }
 				});
 				socket.addEventListener('close', () => {
-					for (const waiter of pending.values()) {
-						clearTimeout(waiter.timer);
-						waiter.reject(new Error(`${label} closed`));
-					}
+					for (const waiter of pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error(`${label} closed`)); }
 					pending.clear();
 				});
-				await new Promise<void>((resolve, reject) => {
-					socket.addEventListener('open', () => resolve(), { once: true });
-					socket.addEventListener('error', () => reject(new Error(`${label} failed to open`)), {
-						once: true,
-					});
-				});
+				await new Promise<void>((resolve, reject) => { socket.addEventListener('open', () => resolve(), { once: true }); socket.addEventListener('error', () => reject(new Error(`${label} failed to open`)), { once: true }); });
 				try {
-					const initialized = await request(1, 'initialize', {
-						clientInfo: { name: `ash-protocol-acceptance-${label}`, version: '1' },
-						capabilities: { notifications: true },
-					});
+					const initialized = await request(1, 'initialize', { clientInfo: { name: `ash-protocol-acceptance-${label}`, version: '1' }, capabilities: { notifications: true } });
 					return { socket, request, initialized };
-				} catch (error) {
-					socket.close();
-					throw error;
-				}
+				} catch (error) { socket.close(); throw error; }
 			};
 			const connected = await Promise.allSettled([connect('left'), connect('right')]);
-			const peers = connected.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []));
+			const peers = connected.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
 			try {
 				const failed = connected.find(result => result.status === 'rejected');
-				if (failed?.status === 'rejected') {
-					throw failed.reason;
-				}
-				const create = (title: string) => ({
-					commandId: crypto.randomUUID(),
-					title,
-					executionTarget: null,
-					agent: { type: 'default' },
-				});
+				if (failed?.status === 'rejected') { throw failed.reason; }
+				const create = (title: string) => ({ commandId: crypto.randomUUID(), title, executionTarget: null, agent: { type: 'default' } });
 				const left = peers[0];
 				const right = peers[1];
 				const [leftResult, rightResult] = await Promise.all([left.request(2, 'session/create', create('A protocol left')), right.request(2, 'session/create', create('A protocol right'))]);
@@ -259,25 +167,13 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 				left.socket.close();
 				await closed;
 				const survivor = await right.request(3, 'session/create', create('A protocol survivor'));
-				return {
-					leftInitialize: left.initialized,
-					rightInitialize: right.initialized,
-					leftResult,
-					rightResult,
-					survivor,
-				};
-			} finally {
-				for (const peer of peers) {
-					peer.socket.close();
-				}
-			}
+				return { leftInitialize: left.initialized, rightInitialize: right.initialized, leftResult, rightResult, survivor };
+			} finally { for (const peer of peers) { peer.socket.close(); } }
 		});
 		for (const response of [pair.leftInitialize, pair.rightInitialize]) {
 			const initialized = decodeAppServerResponse('initialize', response);
 			expect('result' in initialized).toBe(true);
-			if ('result' in initialized) {
-				checkAppServerInitializeCompatibility(initialized.result, { expectedServerName: 'ash-app-server' });
-			}
+			if ('result' in initialized) { checkAppServerInitializeCompatibility(initialized.result, { expectedServerName: 'ash-app-server' }); }
 		}
 		const left = decodeAppServerResponse('session/create', pair.leftResult);
 		const right = decodeAppServerResponse('session/create', pair.rightResult);
@@ -297,22 +193,8 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 		expect(await page.evaluate(() => globalThis.ashWebWorkbenchHost!.api.appServer.connectionGeneration)).toBe(generation);
 		const after = await backendIdentity(backendEnvironment, 'packaged-node');
 		expect(after).toEqual(before);
-		await testInfo.attach('browser-protocol-isolation', {
-			body: JSON.stringify({
-				first,
-				second,
-				requestIds: { left: left.id, right: right.id, survivor: survivor.id },
-				before,
-				after,
-				survivorContent: content,
-			}),
-			contentType: 'application/json',
-		});
-	} finally {
-		if (!peer.isClosed()) {
-			await peer.close();
-		}
-	}
+		await testInfo.attach('browser-protocol-isolation', { body: JSON.stringify({ first, second, requestIds: { left: left.id, right: right.id, survivor: survivor.id }, before, after, survivorContent: content }), contentType: 'application/json' });
+	} finally { if (!peer.isClosed()) { await peer.close(); } }
 });
 
 test('Desktop MessagePort handshakes isolate equal IDs and closing one window preserves the other', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
@@ -330,9 +212,7 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await workbench.waitForReady();
 		const first = await initializationEvidence(firstPage);
 		const opening = electron.waitForEvent('window');
-		await electron.evaluate(({ app }, directory) => {
-			app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {});
-		}, secondWorkspace.directory);
+		await electron.evaluate(({ app }, directory) => { app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {}); }, secondWorkspace.directory);
 		secondPage = await opening;
 		// A new folder restores its Workbench only after the real trust decision.
 		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
@@ -345,11 +225,7 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		expect(first.requestId).toBe(1);
 		expect(second.requestId).toBe(first.requestId);
 		expect(second.schemaHash).toBe(first.schemaHash);
-		const backendEnvironment = await electron.evaluate(() => ({
-			HOME: process.env.HOME,
-			ASH_HOME: process.env.ASH_HOME,
-			ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH,
-		}));
+		const backendEnvironment = await electron.evaluate(() => ({ HOME: process.env.HOME, ASH_HOME: process.env.ASH_HOME, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH }));
 		const before = await backendIdentity(backendEnvironment, 'host-provided-node');
 		await workbench.quickaccess.open(firstProof);
 		await workbench.quickaccess.select('protocol-scope.txt');
@@ -357,7 +233,7 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await peerWorkbench.quickaccess.open(secondProof);
 		await peerWorkbench.quickaccess.select('protocol-scope.txt');
 		await peerWorkbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'window two proof\n');
-		const secondFrames = await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence);
+		const secondFrames = await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence);
 		expect(secondFrames.some(entry => entry.direction === 'send' && entry.frame.method === 'fs/readFile')).toBe(true);
 		const closed = firstPage.waitForEvent('close');
 		const firstWindow = await electron.browserWindow(firstPage);
@@ -370,10 +246,8 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await peerWorkbench.quickaccess.open(survivingProof);
 		await peerWorkbench.quickaccess.select('protocol-survivor.txt');
 		await peerWorkbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'survivor after first close\n');
-		const survivingFrames = await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence);
-		const survivingRead = survivingFrames.find(
-			entry => entry.direction === 'send' && entry.frame.method === 'fs/readFile' && String((entry.frame.params as { path?: string } | undefined)?.path).endsWith('protocol-survivor.txt'),
-		);
+		const survivingFrames = await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence);
+		const survivingRead = survivingFrames.find(entry => entry.direction === 'send' && entry.frame.method === 'fs/readFile' && String((entry.frame.params as { path?: string; } | undefined)?.path).endsWith('protocol-survivor.txt'));
 		expect(survivingRead).toBeDefined();
 		const survivingResponse = survivingFrames.find(entry => entry.direction === 'receive' && entry.connection === survivingRead!.connection && entry.frame.id === survivingRead!.frame.id);
 		expect(survivingResponse).toBeDefined();
@@ -381,20 +255,9 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		expect('result' in decodedRead && decodedRead.result.content).toBe('survivor after first close\n');
 		const after = await backendIdentity(backendEnvironment, 'host-provided-node');
 		expect(after).toEqual(before);
-		await testInfo.attach('desktop-protocol-isolation', {
-			body: JSON.stringify({
-				first,
-				second,
-				before,
-				after,
-				survivingFrames: await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[] }).ashProtocolEvidence),
-			}),
-			contentType: 'application/json',
-		});
+		await testInfo.attach('desktop-protocol-isolation', { body: JSON.stringify({ first, second, before, after, survivingFrames: await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence) }), contentType: 'application/json' });
 	} finally {
-		if (secondPage && !secondPage.isClosed()) {
-			await secondPage.close().catch(() => undefined);
-		}
+		if (secondPage && !secondPage.isClosed()) { await secondPage.close().catch(() => undefined); }
 		await disposeTestWorkspace(secondWorkspace);
 	}
 });

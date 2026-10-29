@@ -1,7 +1,7 @@
 import { expect, type Locator } from '@playwright/test';
 import { expectTabActionCentered } from '../../../../../../test/automation/editors.js';
 import { expectVisibleFocusOutline } from '../../../../../../test/fixtures/browser/focusOutline.js';
-import type {} from './fixtures/composite.page.js';
+import type { } from './fixtures/composite.page.js';
 import { suite, test, setup } from 'mocha';
 import { useBrowserTests } from '../../../../../../test/unit/browser/context.js';
 
@@ -37,7 +37,7 @@ suite('composite browser component', () => {
 			await page.locator('[data-action-id="ash.output.clear"] button').click();
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
 			const follow = page.locator('[data-action-id="ash.output.autoScroll"] button');
-			if ((await follow.getAttribute('aria-pressed')) === 'true') await follow.click();
+			if (await follow.getAttribute('aria-pressed') === 'true') await follow.click();
 			await page.evaluate(() => window.ashCompositeIntegration.appendAgentEvent());
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toContain('eventId=event-2');
 			expect(await page.evaluate(() => window.ashCompositeIntegration.outputState().text)).not.toContain('eventId=event-1');
@@ -82,17 +82,9 @@ suite('composite browser component', () => {
 			await expect(follow).toHaveAttribute('aria-pressed', 'true');
 			await input.fill('restored');
 			await input.evaluate(element => (element as HTMLInputElement).setSelectionRange(2, 5));
-			for (const [width, inHeader] of [
-				[480, false],
-				[800, true],
-				[420, false],
-				[1200, true],
-			] as const) {
+			for (const [width, inHeader] of [[480, false], [800, true], [420, false], [1200, true]] as const) {
 				const height = 320;
-				await page.evaluate(({ width, height }) => window.ashCompositeIntegration.resize(width, height), {
-					width,
-					height,
-				});
+				await page.evaluate(({ width, height }) => window.ashCompositeIntegration.resize(width, height), { width, height });
 				await expect(input).toBeFocused();
 				await expect(input).toHaveValue('restored');
 				expect(await input.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd])).toEqual([2, 5]);
@@ -116,10 +108,7 @@ suite('composite browser component', () => {
 			await input.press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('Enter');
-			const errorOption = page.getByRole('menuitemcheckbox', {
-				name: locale === 'en' ? 'Error' : '错误',
-				exact: true,
-			});
+			const errorOption = page.getByRole('menuitemcheckbox', { name: locale === 'en' ? 'Error' : '错误', exact: true });
 			await expect(errorOption).toBeVisible();
 			await errorOption.click();
 			await expect(filter).toHaveAttribute('aria-label', locale === 'en' ? 'Filter Output (Filters Active)' : '筛选输出（已启用筛选条件）');
@@ -159,10 +148,7 @@ suite('composite browser component', () => {
 		await expect(part.getByLabel('First input')).toBeVisible();
 		await expect.poll(() => part.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		await page.locator('#part-width-host').screenshot({ path: browserTests.info.outputPath('auxiliary-part-minimum.png') });
-		await page.evaluate(() => {
-			window.ashPartWidthIntegration.setMinimum(300);
-			window.ashPartWidthIntegration.resize(1);
-		});
+		await page.evaluate(() => { window.ashPartWidthIntegration.setMinimum(300); window.ashPartWidthIntegration.resize(1); });
 		await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state())).toEqual({ minimum: 301, frameMinimum: 317, width: 317 });
 	});
 
@@ -200,22 +186,17 @@ suite('composite browser component', () => {
 				await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
 				await expect(rows.nth(0).locator('kbd')).toHaveText(process.platform === 'darwin' ? ['⌘', 'P'] : ['Ctrl', 'P']);
 				await expect(rows.nth(1).locator('kbd')).toHaveText(process.platform === 'darwin' ? ['⇧', '⌘', 'F'] : ['Ctrl', 'Shift', 'F']);
-				const caps = await entries.locator('kbd').evaluateAll(elements =>
-					elements.map(element => {
-						const bounds = element.getBoundingClientRect();
-						const style = getComputedStyle(element);
-						return { width: bounds.width, height: bounds.height, background: style.backgroundColor };
-					}),
-				);
+				const caps = await entries.locator('kbd').evaluateAll(elements => elements.map(element => {
+					const bounds = element.getBoundingClientRect();
+					const style = getComputedStyle(element);
+					return { width: bounds.width, height: bounds.height, background: style.backgroundColor };
+				}));
 				for (const cap of caps) {
 					expect(cap.width).toBeGreaterThanOrEqual(20);
 					expect(cap.height).toBe(20);
 					expect(cap.background).not.toBe('rgba(0, 0, 0, 0)');
 				}
-				for (const [width, height] of [
-					[800, 520],
-					[320, 180],
-				]) {
+				for (const [width, height] of [[800, 520], [320, 180]]) {
 					await page.evaluate(([width, height]) => window.ashCompositeIntegration.resizeEditor(width!, height!), [width!, height!]);
 					await assertCentered();
 				}
@@ -235,9 +216,9 @@ suite('composite browser component', () => {
 			await expect(rows.nth(2).locator('.ash-keybinding-label')).toHaveCount(0);
 			await expect(rows.nth(2)).toBeFocused();
 			await rows.nth(2).press('Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashCompositeIntegration.watermarkCommands))
-				.toEqual(['workbench.action.quickOpen', 'workbench.action.findInFiles', 'workbench.action.showCommands']);
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.watermarkCommands)).toEqual([
+				'workbench.action.quickOpen', 'workbench.action.findInFiles', 'workbench.action.showCommands',
+			]);
 			await page.evaluate(() => window.ashCompositeIntegration.openEditor('watermark'));
 			await expect(shortcuts).toBeHidden();
 			await expect(host.locator('.ash-editor-pane-host:visible')).toHaveCount(1);
@@ -281,26 +262,11 @@ suite('composite browser component', () => {
 					padding: style.padding,
 					radius: style.borderRadius,
 					inside: badge.left >= tab.left && badge.right <= tab.right && badge.top >= tab.top && badge.bottom <= tab.bottom,
-					overlap:
-						(Math.max(0, Math.min(badge.right, icon.right) - Math.max(badge.left, icon.left)) * Math.max(0, Math.min(badge.bottom, icon.bottom) - Math.max(badge.top, icon.top))) /
-						(icon.width * icon.height),
-					foreground: style.color,
-					background: style.backgroundColor,
-					outline: style.outlineColor,
+					overlap: Math.max(0, Math.min(badge.right, icon.right) - Math.max(badge.left, icon.left)) * Math.max(0, Math.min(badge.bottom, icon.bottom) - Math.max(badge.top, icon.top)) / (icon.width * icon.height),
+					foreground: style.color, background: style.backgroundColor, outline: style.outlineColor,
 				};
 			});
-			expect(geometry).toMatchObject({
-				height: 13,
-				itemWidth: 24,
-				itemHeight: 24,
-				top: 11,
-				right: 0,
-				font: '9px',
-				weight: '600',
-				lineHeight: '13px',
-				padding: '0px 2px',
-				radius: '16px',
-			});
+			expect(geometry).toMatchObject({ height: 13, itemWidth: 24, itemHeight: 24, top: 11, right: 0, font: '9px', weight: '600', lineHeight: '13px', padding: '0px 2px', radius: '16px' });
 			expect(geometry.inside).toBe(true);
 			expect(geometry.overlap).toBeLessThan(0.5);
 			expect(geometry.foreground).not.toBe(geometry.background);
@@ -312,37 +278,15 @@ suite('composite browser component', () => {
 				const badgeElement = element.querySelector('.ash-composite-bar-badge')!;
 				const badge = badgeElement.getBoundingClientRect();
 				const style = getComputedStyle(badgeElement);
-				return {
-					height: badge.height,
-					gap: badge.left - label.right,
-					center: (badge.top + badge.bottom - label.top - label.bottom) / 2,
-					font: style.fontSize,
-					padding: style.padding,
-					radius: style.borderRadius,
-					weight: style.fontWeight,
-					lineHeight: style.lineHeight,
-				};
+				return { height: badge.height, gap: badge.left - label.right, center: (badge.top + badge.bottom - label.top - label.bottom) / 2, font: style.fontSize, padding: style.padding, radius: style.borderRadius, weight: style.fontWeight, lineHeight: style.lineHeight };
 			});
-			expect(labelGeometry).toEqual({
-				height: 16,
-				gap: 2,
-				center: 0,
-				font: '10px',
-				padding: '3px 5px',
-				radius: '10px',
-				weight: '400',
-				lineHeight: '10px',
-			});
+			expect(labelGeometry).toEqual({ height: 16, gap: 2, center: 0, font: '10px', padding: '3px 5px', radius: '10px', weight: '400', lineHeight: '10px' });
 			await tab.focus();
 			await expect(tab).toHaveCSS('outline-style', 'solid');
 			await expectVisibleFocusOutline(tab);
 			await page.screenshot({ path: testInfo.outputPath(`${theme}-badges.png`) });
 		}
-		for (const [count, text] of [
-			[999, '999'],
-			[1000, '1K'],
-			[1234, '1K+'],
-		] as const) {
+		for (const [count, text] of [[999, '999'], [1000, '1K'], [1234, '1K+']] as const) {
 			await page.evaluate(count => window.ashCompositeIntegration.setBadge(count), count);
 			await expect(badge).toHaveText(text);
 			await expect(tab).toHaveAttribute('aria-label', `first container, ${count} changes`);
@@ -360,57 +304,23 @@ suite('composite browser component', () => {
 				const badgeElement = element.querySelector('.ash-composite-bar-badge')!;
 				const badge = badgeElement.getBoundingClientRect();
 				const style = getComputedStyle(badgeElement);
-				return {
-					itemHeight: tab.height,
-					height: badge.height,
-					top: badge.top - tab.top,
-					right: tab.right - badge.right,
-					padding: style.padding,
-					radius: style.borderRadius,
-					lineHeight: style.lineHeight,
-				};
+				return { itemHeight: tab.height, height: badge.height, top: badge.top - tab.top, right: tab.right - badge.right, padding: style.padding, radius: style.borderRadius, lineHeight: style.lineHeight };
 			});
-			expect(geometry).toEqual(
-				compact
-					? {
-							itemHeight: 28,
-							height: 13,
-							top: 13,
-							right: 6,
-							padding: '0px 2px',
-							radius: '9999px',
-							lineHeight: '13px',
-						}
-					: {
-							itemHeight: 48,
-							height: 16,
-							top: 24,
-							right: 8,
-							padding: '0px 4px',
-							radius: '9999px',
-							lineHeight: '16px',
-						},
-			);
+			expect(geometry).toEqual(compact
+				? { itemHeight: 28, height: 13, top: 13, right: 6, padding: '0px 2px', radius: '9999px', lineHeight: '13px' }
+				: { itemHeight: 48, height: 16, top: 24, right: 8, padding: '0px 4px', radius: '9999px', lineHeight: '16px' });
 			const placement = await tab.evaluate(element => {
 				const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
 				const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
 				return {
-					iconWidth: icon.width,
-					iconHeight: icon.height,
+					iconWidth: icon.width, iconHeight: icon.height,
 					rightOfIconCenter: badge.x + badge.width / 2 > icon.x + icon.width / 2,
 					belowIconCenter: badge.y + badge.height / 2 > icon.y + icon.height / 2,
 				};
 			});
-			expect(placement).toEqual({
-				iconWidth: compact ? 16 : 24,
-				iconHeight: compact ? 16 : 24,
-				rightOfIconCenter: true,
-				belowIconCenter: true,
-			});
+			expect(placement).toEqual({ iconWidth: compact ? 16 : 24, iconHeight: compact ? 16 : 24, rightOfIconCenter: true, belowIconCenter: true });
 			await expectVisibleFocusOutline(tab);
-			await page.screenshot({
-				path: testInfo.outputPath(`vertical-${compact ? 'compact' : 'default'}-badges.png`),
-			});
+			await page.screenshot({ path: testInfo.outputPath(`vertical-${compact ? 'compact' : 'default'}-badges.png`) });
 		}
 		await page.evaluate(() => window.ashCompositeIntegration.toggleBadge());
 		await expect(badge).toHaveCount(0);
@@ -435,11 +345,10 @@ suite('composite browser component', () => {
 		});
 		const tab = page.locator('#badge-icon [data-action-id="first"]');
 		const other = page.locator('#badge-icon [data-action-id="second"]');
-		const readSelection = () =>
-			tab.evaluate(element => {
-				const style = getComputedStyle(element, '::after');
-				return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
-			});
+		const readSelection = () => tab.evaluate(element => {
+			const style = getComputedStyle(element, '::after');
+			return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
+		});
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
 			await page.mouse.move(700, 600);
@@ -455,10 +364,7 @@ suite('composite browser component', () => {
 			await tab.hover();
 			await expectVisibleFocusOutline(tab);
 			await tab.click({ trial: true });
-			await testInfo.attach(`modern-activity-focus-${theme}`, {
-				body: await tab.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach(`modern-activity-focus-${theme}`, { body: await tab.screenshot(), contentType: 'image/png' });
 		}
 	});
 
@@ -482,12 +388,7 @@ suite('composite browser component', () => {
 				gap: getComputedStyle(list).gap,
 				tabs: elements.map(element => {
 					const bounds = element.getBoundingClientRect();
-					return {
-						top: bounds.top - row.top,
-						height: bounds.height,
-						rowHeight: row.height,
-						radius: getComputedStyle(element).borderRadius,
-					};
+					return { top: bounds.top - row.top, height: bounds.height, rowHeight: row.height, radius: getComputedStyle(element).borderRadius };
 				}),
 			};
 		});
@@ -516,12 +417,7 @@ suite('composite browser component', () => {
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
 			await expect(alpha).toHaveCSS('outline-style', 'solid');
-			const colors = await tabs.evaluateAll(elements =>
-				elements.map(element => ({
-					background: getComputedStyle(element).backgroundColor,
-					selection: getComputedStyle(element).borderTopColor,
-				})),
-			);
+			const colors = await tabs.evaluateAll(elements => elements.map(element => ({ background: getComputedStyle(element).backgroundColor, selection: getComputedStyle(element).borderTopColor })));
 			if (theme.includes('high-contrast')) {
 				expect(colors[0]!.selection).not.toBe('rgba(0, 0, 0, 0)');
 				expect(colors[0]!.selection).not.toBe(colors[1]!.selection);
@@ -651,30 +547,18 @@ suite('composite browser component', () => {
 					element.style.setProperty('--ash-border', color);
 					return [...element.querySelectorAll<HTMLElement>('.ash-split-view-pane')].map(pane => {
 						const style = getComputedStyle(pane, '::before');
-						return {
-							content: style.content,
-							height: style.height,
-							width: style.width,
-							color: style.backgroundColor,
-							pointerEvents: style.pointerEvents,
-						};
+						return { content: style.content, height: style.height, width: style.width, color: style.backgroundColor, pointerEvents: style.pointerEvents };
 					});
 				}, color);
 				expect(borders[0]!.content).toBe('none');
 				for (const border of borders.slice(1)) {
-					expect(border).toEqual({
-						content: '""',
-						height: '1px',
-						width: '300px',
-						color,
-						pointerEvents: 'none',
-					});
+					expect(border).toEqual({ content: '""', height: '1px', width: '300px', color, pointerEvents: 'none' });
 				}
 			}
 			await host.evaluate(element => element.style.removeProperty('--ash-border'));
 			for (const title of ['Changes', 'Graph', 'Agent Review', 'Changes']) {
 				const button = host.getByRole('button', { name: title, exact: true });
-				const expanded = (await button.getAttribute('aria-expanded')) === 'true';
+				const expanded = await button.getAttribute('aria-expanded') === 'true';
 				// Start recording at the click so protocol round trips cannot miss a short transition.
 				const framesPromise = host.evaluate(async element => {
 					await new Promise<void>(resolve => element.addEventListener('click', () => resolve(), { once: true, capture: true }));
@@ -685,22 +569,13 @@ suite('composite browser component', () => {
 					const frames = [];
 					for (let frame = 0; frame < 48; frame++) {
 						await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-						const positions = panes.map(pane => ({
-							actual: pane.getBoundingClientRect().top - origin,
-							allocated: Number.parseFloat(pane.style.top),
-						}));
+						const positions = panes.map(pane => ({ actual: pane.getBoundingClientRect().top - origin, allocated: Number.parseFloat(pane.style.top) }));
 						const edges = panes.slice(0, -1).map((pane, index) => {
 							const sash = sashes[index]!.getBoundingClientRect();
-							return {
-								bottom: pane.getBoundingClientRect().bottom,
-								nextTop: panes[index + 1]!.getBoundingClientRect().top,
-								sash: sash.top + sash.height / 2,
-							};
+							return { bottom: pane.getBoundingClientRect().bottom, nextTop: panes[index + 1]!.getBoundingClientRect().top, sash: sash.top + sash.height / 2 };
 						});
 						frames.push({ positions, edges });
-						if ([...panes, ...sashes].every(node => node.getAnimations().length === 0)) {
-							break;
-						}
+						if ([...panes, ...sashes].every(node => node.getAnimations().length === 0)) { break; }
 					}
 					return frames;
 				});
@@ -734,24 +609,14 @@ suite('composite browser component', () => {
 	test('typed case aliases reuse the open editor pane and unsaved model', async function () {
 		const { page } = browserTests;
 
-		expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases())).toEqual({
-			tabs: 1,
-			models: 1,
-			retained: true,
-			text: 'unsaved content',
-		});
+		expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases())).toEqual({ tabs: 1, models: 1, retained: true, text: 'unsaved content' });
 		await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
 	});
 
 	test('typed case aliases reuse the modal editor pane and unsaved model', async function () {
 		const { page } = browserTests;
 
-		expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases('modalGroup'))).toEqual({
-			tabs: 0,
-			models: 1,
-			retained: true,
-			text: 'unsaved content',
-		});
+		expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases('modalGroup'))).toEqual({ tabs: 0, models: 1, retained: true, text: 'unsaved content' });
 		await expect(page.getByRole('dialog')).toBeVisible();
 		await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
 	});
@@ -791,12 +656,10 @@ suite('composite browser component', () => {
 
 		await page.evaluate(() => window.ashCompositeIntegration.openView('first.view'));
 		await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.state()))
-			.toEqual([
-				{ id: 'first', title: 'first container', focused: true, retained: true },
-				{ id: 'second', title: 'second container', focused: false, retained: true },
-			]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.state())).toEqual([
+			{ id: 'first', title: 'first container', focused: true, retained: true },
+			{ id: 'second', title: 'second container', focused: false, retained: true },
+		]);
 		await page.keyboard.press('Tab');
 		await expect(page.getByRole('textbox', { name: 'Second input', exact: true })).toBeFocused();
 		await page.keyboard.press('Shift+Tab');
@@ -818,7 +681,9 @@ suite('composite browser component', () => {
 		await page.evaluate(() => window.ashCompositeIntegration.open('first', true));
 		await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
 		expect(await page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.retained))).toEqual([true, true]);
-		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.events)).toEqual(['first:focus', 'second:focus', 'first:blur', 'second:blur', 'first:focus']);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.events)).toEqual([
+			'first:focus', 'second:focus', 'first:blur', 'second:blur', 'first:focus',
+		]);
 	});
 
 	test('disposed content stops reporting focus even if its old root is mounted again', async function () {
@@ -846,10 +711,8 @@ suite('composite browser component', () => {
 		await page.evaluate(() => window.ashCompositeIntegration.open('second', true));
 		await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
 		expect(await page.evaluate(() => window.ashCompositeIntegration.partEvents)).toEqual([
-			{ id: 'first', visible: false },
-			{ id: 'second', visible: true, focus: true },
-			{ id: 'second', visible: false },
-			{ id: 'second', visible: true, focus: true },
+			{ id: 'first', visible: false }, { id: 'second', visible: true, focus: true },
+			{ id: 'second', visible: false }, { id: 'second', visible: true, focus: true },
 		]);
 		expect(await page.evaluate(() => window.ashCompositeIntegration.state().every(state => state.retained))).toBe(true);
 	});
@@ -862,12 +725,10 @@ suite('composite browser component', () => {
 		await expect(input).toBeFocused();
 		await page.evaluate(() => window.ashCompositeIntegration.openEditor('beta'));
 		await expect(input).toBeFocused();
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorState()))
-			.toEqual([
-				{ name: 'alpha', focused: false, visible: false, retained: true },
-				{ name: 'beta', focused: true, visible: true, retained: true },
-			]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorState())).toEqual([
+			{ name: 'alpha', focused: false, visible: false, retained: true },
+			{ name: 'beta', focused: true, visible: true, retained: true },
+		]);
 		await page.evaluate(() => window.ashCompositeIntegration.openEditor('alpha'));
 		await expect(input).toBeFocused();
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorEvents)).toEqual(['alpha:focus', 'beta:focus', 'alpha:blur', 'alpha:focus', 'beta:blur']);
@@ -884,6 +745,7 @@ suite('composite browser component', () => {
 		await page.evaluate(() => window.ashCompositeIntegration.dispose());
 		expect(await page.evaluate(() => window.ashCompositeIntegration.flushPaneState())).toBeUndefined();
 	});
+
 
 	test('Sessions replace conversation views while retaining the sibling draft and outside focus', async function () {
 		const { page } = browserTests;
@@ -984,32 +846,18 @@ suite('composite browser component', () => {
 			const samples = await page.locator('#pane-transitions').evaluate(async host => {
 				const panes = [...host.querySelectorAll<HTMLElement>('.ash-pane-view')];
 				const buttons = panes.map(pane => pane.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!);
-				const samples: {
-					title: string;
-					paintedBottom: number;
-					nextHeaderTop: number;
-					paneBottom: number;
-					sash: number;
-				}[] = [];
+				const samples: { title: string; paintedBottom: number; nextHeaderTop: number; paneBottom: number; sash: number; }[] = [];
 				for (let index = 0; index < 12; index++) {
 					buttons[index % buttons.length]!.click();
 					await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 					for (let paneIndex = 0; paneIndex < panes.length - 1; paneIndex++) {
 						const pane = panes[paneIndex]!;
 						const body = pane.querySelector<HTMLElement>('.ash-pane-view-content')!;
-						if (body.hidden) {
-							continue;
-						}
+						if (body.hidden) { continue; }
 						const paintedBottom = Math.min(body.getBoundingClientRect().bottom, pane.getBoundingClientRect().bottom, pane.parentElement!.getBoundingClientRect().bottom);
 						const nextHeaderTop = panes[paneIndex + 1]!.querySelector('.ash-pane-view-header')!.getBoundingClientRect().top;
 						const sash = host.querySelectorAll('.ash-sash')[paneIndex]!.getBoundingClientRect();
-						samples.push({
-							title: buttons[paneIndex]!.textContent!,
-							paintedBottom,
-							nextHeaderTop,
-							paneBottom: pane.parentElement!.getBoundingClientRect().bottom,
-							sash: sash.top + sash.height / 2,
-						});
+						samples.push({ title: buttons[paneIndex]!.textContent!, paintedBottom, nextHeaderTop, paneBottom: pane.parentElement!.getBoundingClientRect().bottom, sash: sash.top + sash.height / 2 });
 					}
 				}
 				return samples;
@@ -1112,9 +960,7 @@ suite('composite browser component', () => {
 			button.click();
 			// Expansion can synchronously create or lay out a view before its first paint.
 			const workEnds = performance.now() + 40;
-			while (performance.now() < workEnds) {
-				/* Simulate that work without yielding a frame. */
-			}
+			while (performance.now() < workEnds) { /* Simulate that work without yielding a frame. */ }
 			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 			const firstFrame = pane.getBoundingClientRect().height;
 			await Promise.all(pane.getAnimations().map(animation => animation.finished));
@@ -1133,9 +979,7 @@ suite('composite browser component', () => {
 		const result = await page.locator('#pane-transitions').evaluate(host => {
 			const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')];
 			for (const button of buttons) {
-				if (button.getAttribute('aria-expanded') === 'false') {
-					button.click();
-				}
+				if (button.getAttribute('aria-expanded') === 'false') { button.click(); }
 			}
 			const panes = [...host.querySelectorAll<HTMLElement>('.ash-split-view-pane')];
 			const sash = host.querySelector<HTMLElement>('.ash-sash')!;
@@ -1161,6 +1005,7 @@ suite('composite browser component', () => {
 		expect(result.bottom).toBeCloseTo(result.nextTop, 0);
 		expect(result.sash).toBeCloseTo(result.nextTop, 0);
 	});
+
 
 	test('Conversation title switches through history and preserves editor appearance and focus', async function () {
 		const { page } = browserTests;
@@ -1197,39 +1042,40 @@ suite('composite browser component', () => {
 		await expect(selected).toHaveAttribute('aria-expanded', 'false');
 	});
 
-	for (const locale of ['en', 'zh-CN'])
-		test(`Conversation title menus copy their opening target and restore keyboard focus (${locale})`, async function () {
-			const { page } = browserTests;
 
-			await page.goto(`/composite.html?editorTabs&chatLinks${locale === 'zh-CN' ? '&locale=zh-CN' : ''}`);
-			await page.waitForFunction(() => !!window.ashChatTitleIntegration);
-			const host = page.locator('#chat-tabs-host');
-			const title = host.locator('.ash-chat-view-title-button');
-			const copyLabel = locale === 'en' ? 'Copy Conversation Link' : '复制对话链接';
-			const copy = page.getByRole('menuitem', { name: copyLabel, exact: true });
-			await title.click({ button: 'right' });
-			await expect(copy).toBeVisible();
-			await page.evaluate(() => window.ashChatTitleIntegration.select('chat-beta'));
-			await copy.click();
-			await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha']);
-			await title.focus();
-			await title.press('Shift+F10');
-			await expect(copy).toBeVisible();
-			await page.keyboard.press('Escape');
-			await expect(copy).toBeHidden();
-			await expect(title).toBeFocused();
-			await host.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true }).click();
-			await expect(copy).toBeVisible();
-			await copy.click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard()))
-				.toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha', 'agent-host-session://local/open?sessionId=session&threadId=chat-beta']);
-			await title.press('Shift+F10');
-			await expect(copy).toBeVisible();
-			await page.evaluate(() => window.ashChatTitleIntegration.dispose());
-			await expect(copy).toBeHidden();
-			await expect(title).toHaveCount(0);
-		});
+	for (const locale of ['en', 'zh-CN']) test(`Conversation title menus copy their opening target and restore keyboard focus (${locale})`, async function () {
+		const { page } = browserTests;
+
+		await page.goto(`/composite.html?editorTabs&chatLinks${locale === 'zh-CN' ? '&locale=zh-CN' : ''}`);
+		await page.waitForFunction(() => !!window.ashChatTitleIntegration);
+		const host = page.locator('#chat-tabs-host');
+		const title = host.locator('.ash-chat-view-title-button');
+		const copyLabel = locale === 'en' ? 'Copy Conversation Link' : '复制对话链接';
+		const copy = page.getByRole('menuitem', { name: copyLabel, exact: true });
+		await title.click({ button: 'right' });
+		await expect(copy).toBeVisible();
+		await page.evaluate(() => window.ashChatTitleIntegration.select('chat-beta'));
+		await copy.click();
+		await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha']);
+		await title.focus();
+		await title.press('Shift+F10');
+		await expect(copy).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(copy).toBeHidden();
+		await expect(title).toBeFocused();
+		await host.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true }).click();
+		await expect(copy).toBeVisible();
+		await copy.click();
+		await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual([
+			'agent-host-session://local/open?sessionId=session&threadId=chat-alpha',
+			'agent-host-session://local/open?sessionId=session&threadId=chat-beta',
+		]);
+		await title.press('Shift+F10');
+		await expect(copy).toBeVisible();
+		await page.evaluate(() => window.ashChatTitleIntegration.dispose());
+		await expect(copy).toBeHidden();
+		await expect(title).toHaveCount(0);
+	});
 
 	test('Editor and conversation title share rounded outer corners across styles and themes', async function () {
 		const { page } = browserTests;
@@ -1246,18 +1092,13 @@ suite('composite browser component', () => {
 		const chatTab = chatHost.getByRole('button', { name: 'Switch conversation: Chat alpha', exact: true });
 		// A contrasting backdrop exposes paint escaping any rounded outer corner.
 		for (const host of [editorHost, chatHost]) {
-			await host.evaluate(element => {
-				element.style.background = 'rgb(255, 0, 255)';
-			});
+			await host.evaluate(element => { element.style.background = 'rgb(255, 0, 255)'; });
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
 			for (const style of ['standard', 'connected', 'pill'] as const) {
 				await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
-				for (const [part, tab] of [
-					[editorPart, editorTab],
-					[chatPart, chatTab],
-				] as const) {
+				for (const [part, tab] of [[editorPart, editorTab], [chatPart, chatTab]] as const) {
 					await tab.focus();
 					await expect(tab).toBeFocused();
 					await expect(tab).toHaveCSS('outline-style', 'solid');
@@ -1272,12 +1113,7 @@ suite('composite browser component', () => {
 						canvas.height = image.height;
 						const context = canvas.getContext('2d')!;
 						context.drawImage(image, 0, 0);
-						return [
-							[1, 1],
-							[image.width - 2, 1],
-							[1, image.height - 2],
-							[image.width - 2, image.height - 2],
-						].map(([x, y]) => [...context.getImageData(x!, y!, 1, 1).data]);
+						return [[1, 1], [image.width - 2, 1], [1, image.height - 2], [image.width - 2, image.height - 2]].map(([x, y]) => [...context.getImageData(x!, y!, 1, 1).data]);
 					}, screenshot.toString('base64'));
 					expect(corners, `${theme}, ${style}, ${part === editorPart ? 'editor' : 'chat'}`).toEqual(Array.from({ length: 4 }, () => [255, 0, 255, 255]));
 				}
@@ -1285,23 +1121,16 @@ suite('composite browser component', () => {
 			}
 		}
 		for (const host of [editorHost, chatHost]) {
-			await host.evaluate(element => {
-				element.style.removeProperty('background');
-			});
+			await host.evaluate(element => { element.style.removeProperty('background'); });
 		}
 		await page.evaluate(async () => {
 			await window.ashCompositeIntegration.configureEditorTabs('standard');
 			window.ashCompositeIntegration.setEditorTheme('ash-light');
 		});
-		await testInfo.attach('rounded-editor-title', {
-			body: await editorPart.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach('rounded-editor-title', { body: await editorPart.screenshot(), contentType: 'image/png' });
 		await testInfo.attach('rounded-chat-title', { body: await chatPart.screenshot(), contentType: 'image/png' });
 		for (const host of [editorHost, chatHost]) {
-			await host.evaluate(element => {
-				element.classList.remove('modern-ui');
-			});
+			await host.evaluate(element => { element.classList.remove('modern-ui'); });
 		}
 		for (const part of [editorPart, chatPart]) {
 			await expect(part).toHaveCSS('border-radius', '0px');
@@ -1316,12 +1145,11 @@ suite('composite browser component', () => {
 			await page.goto(`/composite.html?editorMenu&locale=${locale}`);
 			await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
 			const host = page.locator('#editor-tabs-host');
-			const names =
-				locale === 'zh-CN'
-					? ['显示已打开的编辑器', '全部关闭', '关闭已保存', '启用预览编辑器', '锁定组', '配置编辑器']
-					: ['Show Opened Editors', 'Close All', 'Close Saved', 'Enable Preview Editors', 'Lock Group', 'Configure Editors'];
+			const names = locale === 'zh-CN'
+				? ['显示已打开的编辑器', '全部关闭', '关闭已保存', '启用预览编辑器', '锁定组', '配置编辑器']
+				: ['Show Opened Editors', 'Close All', 'Close Saved', 'Enable Preview Editors', 'Lock Group', 'Configure Editors'];
 			const menu = page.getByRole('menu');
-			const primary = await page.evaluate(() => (navigator.platform.includes('Mac') ? 'Meta' : 'Control'));
+			const primary = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta' : 'Control');
 			const primaryLabel = primary === 'Meta' ? '⌘' : 'Ctrl+';
 			const openMenu = async (index = 0) => {
 				await host.locator('.ash-editor-group').nth(index).locator('.ash-editor-title-actions [aria-haspopup="menu"]').click();
@@ -1366,20 +1194,14 @@ suite('composite browser component', () => {
 			const groups = host.locator('.ash-editor-group');
 			const before = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
 			await openMenu(0);
-			const maximize = menu.getByRole('menuitem', {
-				name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group',
-				exact: true,
-			});
+			const maximize = menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group', exact: true });
 			await expect(maximize.locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, `${primaryLabel}M`]);
 			await page.keyboard.press('Escape');
 			await host.getByRole('textbox', { name: 'kept.ts', exact: true }).focus();
 			await page.keyboard.press(`${primary}+KeyK`);
 			await page.keyboard.press(`${primary}+KeyM`);
 			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, false]);
-			const maximized = await groups.nth(0).evaluate(element => ({
-				width: element.getBoundingClientRect().width,
-				available: element.closest('.ash-grid')!.getBoundingClientRect().width,
-			}));
+			const maximized = await groups.nth(0).evaluate(element => ({ width: element.getBoundingClientRect().width, available: element.closest('.ash-grid')!.getBoundingClientRect().width }));
 			// The Workbench frame reserves its border inside the Grid's CSS width.
 			expect(maximized.width).toBeGreaterThan(before[0]! * 1.9);
 			expect(maximized.available - maximized.width).toBeLessThanOrEqual(2);
@@ -1437,48 +1259,31 @@ suite('composite browser component', () => {
 				// Sample painted pixels so a present but imperceptible line cannot pass.
 				const image = await title.screenshot();
 				const titleBounds = (await title.boundingBox())!;
-				const pixels = await page.evaluate(
-					async ({ base64, x, y }) => {
-						const image = new Image();
-						image.src = `data:image/png;base64,${base64}`;
-						await image.decode();
-						const canvas = document.createElement('canvas');
-						canvas.width = image.width;
-						canvas.height = image.height;
-						const context = canvas.getContext('2d')!;
-						context.drawImage(image, 0, 0);
-						const line = [...context.getImageData(x, y, 1, 1).data];
-						const background = [...context.getImageData(x - 3, y, 1, 1).data];
-						const luminance = (rgb: number[]) =>
-							rgb
-								.slice(0, 3)
-								.map(value => value / 255)
-								.map(value => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
-								.reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
-						const values = [luminance(line), luminance(background)].sort((a, b) => b - a);
-						return { line, background, contrast: (values[0]! + 0.05) / (values[1]! + 0.05) };
-					},
-					{
-						base64: image.toString('base64'),
-						x: Math.round(geometry!.x - titleBounds.x),
-						y: Math.round(geometry!.y + geometry!.height / 2 - titleBounds.y),
-					},
-				);
+				const pixels = await page.evaluate(async ({ base64, x, y }) => {
+					const image = new Image();
+					image.src = `data:image/png;base64,${base64}`;
+					await image.decode();
+					const canvas = document.createElement('canvas');
+					canvas.width = image.width;
+					canvas.height = image.height;
+					const context = canvas.getContext('2d')!;
+					context.drawImage(image, 0, 0);
+					const line = [...context.getImageData(x, y, 1, 1).data];
+					const background = [...context.getImageData(x - 3, y, 1, 1).data];
+					const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
+					const values = [luminance(line), luminance(background)].sort((a, b) => b - a);
+					return { line, background, contrast: (values[0]! + 0.05) / (values[1]! + 0.05) };
+				}, { base64: image.toString('base64'), x: Math.round(geometry!.x - titleBounds.x), y: Math.round(geometry!.y + geometry!.height / 2 - titleBounds.y) });
 				expect(pixels.line).not.toEqual(pixels.background);
 				expect(pixels.contrast, theme).toBeGreaterThanOrEqual(3);
+
 			}
 
 			await expect(input).toBeVisible();
 			await expect(panel.locator('.ash-problems .ash-problems-controls')).toHaveCount(0);
 			const filter = title.getByRole('button', { name: locale === 'en' ? 'Filter' : '筛选', exact: true });
-			const collapse = title.getByRole('button', {
-				name: locale === 'en' ? 'Collapse All' : '全部折叠',
-				exact: true,
-			});
-			const copy = title.getByRole('button', {
-				name: locale === 'en' ? 'Copy Problems' : '复制问题',
-				exact: true,
-			});
+			const collapse = title.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
+			const copy = title.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
 			for (const width of [1200, 600, 300]) {
 				await page.evaluate(width => window.ashCompositeIntegration.resize(width, 240), width);
 				await expect.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
@@ -1494,7 +1299,7 @@ suite('composite browser component', () => {
 			await input.fill('utils.ts');
 			await copy.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(2);
-			const expectedPath = await page.evaluate(() => (navigator.userAgent.includes('Windows') ? '\\project\\src\\utils.ts' : '/project/src/utils.ts'));
+			const expectedPath = await page.evaluate(() => navigator.userAgent.includes('Windows') ? '\\project\\src\\utils.ts' : '/project/src/utils.ts');
 			expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[1])).toContain(expectedPath);
 			await page.evaluate(() => window.ashCompositeIntegration.resize(1000, 240));
 			await page.evaluate(() => window.ashCompositeIntegration.setEditorTheme('ash-light'));
@@ -1531,10 +1336,7 @@ suite('composite browser component', () => {
 			await openLevels();
 			await page.locator('[data-action-id="ash.output.recordingLevel.trace"]').click();
 			await openLevels();
-			const save = page.getByRole('menuitem', {
-				name: locale === 'en' ? 'Set As Default' : '设为默认',
-				exact: true,
-			});
+			const save = page.getByRole('menuitem', { name: locale === 'en' ? 'Set As Default' : '设为默认', exact: true });
 			await expect(save).toBeEnabled();
 			await save.focus();
 			await page.keyboard.press('Enter');
@@ -1590,7 +1392,9 @@ suite('composite browser component', () => {
 						const x = Math.floor(bounds.left + bounds.width / 2 - titleBounds.left);
 						const y = Math.floor(bounds.bottom - titleBounds.top) - 1;
 						const actual = Array.from(context.getImageData(x, y, 1, 1).data);
-						const expectedColor = item.classList.contains('checked') ? getComputedStyle(item).backgroundColor : getComputedStyle(title, '::after').backgroundColor;
+						const expectedColor = item.classList.contains('checked')
+							? getComputedStyle(item).backgroundColor
+							: getComputedStyle(title, '::after').backgroundColor;
 						context.fillStyle = expectedColor;
 						context.fillRect(0, 0, 1, 1);
 						return { actual, expected: Array.from(context.getImageData(0, 0, 1, 1).data) };
@@ -1697,14 +1501,7 @@ suite('composite browser component', () => {
 		const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
 			const rect = button.getBoundingClientRect();
 			const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
-			return {
-				width: rect.width,
-				height: rect.height,
-				iconWidth: icon.width,
-				iconHeight: icon.height,
-				left: icon.left - rect.left,
-				right: rect.right - icon.right,
-			};
+			return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
 		});
 		expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
 		await expectTabActionCentered(ordinary);
@@ -1758,25 +1555,16 @@ suite('composite browser component', () => {
 			await current.press('End');
 			await expect(current).toBeFocused();
 			await expect(current).toHaveCSS('outline-style', 'solid');
-			expect(
-				await current.evaluate(element => {
-					const probe = document.createElement('span');
-					probe.style.color = 'var(--ash-focusBorder)';
-					element.append(probe);
-					try {
-						return getComputedStyle(element).outlineColor === getComputedStyle(probe).color;
-					} finally {
-						probe.remove();
-					}
-				}),
-			).toBe(true);
+			expect(await current.evaluate(element => {
+				const probe = document.createElement('span');
+				probe.style.color = 'var(--ash-focusBorder)';
+				element.append(probe);
+				try { return getComputedStyle(element).outlineColor === getComputedStyle(probe).color; }
+				finally { probe.remove(); }
+			})).toBe(true);
 		}
-		await tabs.evaluate(element => {
-			(element as HTMLElement).style.width = '220px';
-		});
-		await breadcrumbs.evaluate(element => {
-			Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' });
-		});
+		await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
+		await breadcrumbs.evaluate(element => { Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' }); });
 		const tabViewport = tabs.locator('.ash-scrollbar-viewport');
 		const breadcrumbViewport = breadcrumbs.locator('.ash-scrollbar-viewport');
 		const tabBar = tabs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
@@ -1784,28 +1572,15 @@ suite('composite browser component', () => {
 		const selected = tabs.locator('.ash-tab.checked');
 		const identity = await selected.getByRole('tab').getAttribute('id');
 		const originalViewport = await tabViewport.elementHandle();
-		for (const [viewport, bar] of [
-			[tabViewport, tabBar],
-			[breadcrumbViewport, breadcrumbBar],
-		]) {
-			await expect
-				.poll(() =>
-					viewport.evaluate(element => ({
-						width: element.clientWidth,
-						scroll: element.scrollWidth,
-						overflow: element.scrollWidth > element.clientWidth,
-					})),
-				)
-				.toMatchObject({ overflow: true });
+		for (const [viewport, bar] of [[tabViewport, tabBar], [breadcrumbViewport, breadcrumbBar]]) {
+			await expect.poll(() => viewport.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, overflow: element.scrollWidth > element.clientWidth }))).toMatchObject({ overflow: true });
 			await expect(bar).toHaveCSS('height', '3px');
 		}
 		const changeSetting = async (key: string, option: string): Promise<void> => {
 			await page.evaluate(({ key, value }) => window.ashCompositeIntegration.setEditorConfiguration(`workbench.editor.titleScrollbar${key}`, value), { key, value: option.toLowerCase() });
 		};
 		const exercise = async (viewport: Locator, bar: Locator): Promise<void> => {
-			await viewport.evaluate(element => {
-				element.scrollLeft = 0;
-			});
+			await viewport.evaluate(element => { element.scrollLeft = 0; });
 			await viewport.hover();
 			await page.mouse.wheel(0, 60);
 			await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
@@ -1837,20 +1612,14 @@ suite('composite browser component', () => {
 		await expect(breadcrumbBar).toHaveCSS('opacity', '0');
 		await exercise(tabViewport, tabBar);
 		await exercise(breadcrumbViewport, breadcrumbBar);
-		await tabViewport.evaluate(element => {
-			element.scrollLeft = 0;
-		});
+		await tabViewport.evaluate(element => { element.scrollLeft = 0; });
 		await expect(selected).toHaveClass(/connected-tab-right-clipped/u);
 		await selected.getByRole('tab').focus();
-		await expect
-			.poll(() =>
-				selected.evaluate(tab => {
-					const viewport = tab.closest('.ash-scrollbar-viewport')!.getBoundingClientRect();
-					const bounds = tab.getBoundingClientRect();
-					return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => selected.evaluate(tab => {
+			const viewport = tab.closest('.ash-scrollbar-viewport')!.getBoundingClientRect();
+			const bounds = tab.getBoundingClientRect();
+			return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1;
+		})).toBe(true);
 		await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
 		await expect(selected).toHaveCSS('border-bottom-width', '0px');
 		await changeSetting('Visibility', 'Visible');

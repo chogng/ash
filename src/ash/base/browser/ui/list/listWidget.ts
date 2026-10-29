@@ -97,39 +97,32 @@ export class List<T> extends Disposable {
 	readonly onDidScroll: Event<number>;
 	readonly onDidRenderRows: Event<void>;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: ListOptions<T>,
-	) {
+	constructor(container: HTMLElement, private readonly options: ListOptions<T>) {
 		super();
 		this.loopNavigation = options.loopNavigation ?? true;
-		this.view = this._register(
-			new ListView(container, {
-				ariaLabel: options.ariaLabel,
-				role: options.role,
-				scrolling: options.scrolling,
-				smoothScrolling: options.smoothScrolling,
-				domFocusable: options.domFocusable,
-				getId: options.getId,
-				get getHeight() {
-					return options.getHeight;
-				},
-				dnd: options.dnd,
-				getDragElements: (item, index) => (this._selectionIndexes.includes(index) ? this.selection : [item]),
-				accessibilityProvider: options.accessibilityProvider,
-				renderItem: (item, index, row) => {
-					const contents = options.renderItem(item, index, row);
-					this.updateRowState(row, index);
-					return contents;
-				},
-				reuseRows: options.reuseRows,
-				updateItem: (item, index, row, rerender) => {
-					options.updateItem?.(item, index, row, rerender);
-					this.updateRowState(row, index);
-				},
-				onDidRemoveRow: options.onDidRemoveRow,
-			}),
-		);
+		this.view = this._register(new ListView(container, {
+			ariaLabel: options.ariaLabel,
+			role: options.role,
+			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
+			domFocusable: options.domFocusable,
+			getId: options.getId,
+			get getHeight() { return options.getHeight; },
+			dnd: options.dnd,
+			getDragElements: (item, index) => this._selectionIndexes.includes(index) ? this.selection : [item],
+			accessibilityProvider: options.accessibilityProvider,
+			renderItem: (item, index, row) => {
+				const contents = options.renderItem(item, index, row);
+				this.updateRowState(row, index);
+				return contents;
+			},
+			reuseRows: options.reuseRows,
+			updateItem: (item, index, row, rerender) => {
+				options.updateItem?.(item, index, row, rerender);
+				this.updateRowState(row, index);
+			},
+			onDidRemoveRow: options.onDidRemoveRow,
+		}));
 		this.element = this.view.element;
 		this.domNode = this.view.domNode;
 		if (options.styles) {
@@ -153,19 +146,15 @@ export class List<T> extends Disposable {
 		this.onDidRenderRows = this.view.onDidRenderRows;
 		this._register(this.view.onDidRenderRows(() => this.syncActiveDescendant()));
 		if (options.mouseSupport !== false) {
-			this._register(
-				addDisposableListener(this.element, 'mousemove', (event: MouseEvent) => {
-					if (options.focusOnMouseMove === false) return;
-					const index = this.view.getRowIndex(event);
-					if (index !== undefined) this.setActiveIndex(index, event);
-				}),
-			);
-			this._register(
-				addDisposableListener(this.element, 'mousedown', (event: MouseEvent) => {
-					const index = this.view.getRowIndex(event);
-					if (index !== undefined) stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
-				}),
-			);
+			this._register(addDisposableListener(this.element, 'mousemove', (event: MouseEvent) => {
+				if (options.focusOnMouseMove === false) return;
+				const index = this.view.getRowIndex(event);
+				if (index !== undefined) this.setActiveIndex(index, event);
+			}));
+			this._register(addDisposableListener(this.element, 'mousedown', (event: MouseEvent) => {
+				const index = this.view.getRowIndex(event);
+				if (index !== undefined) stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
+			}));
 			this._register(addDisposableListener(this.element, 'click', (event: MouseEvent) => this.onClick(event)));
 			this._register(addDisposableListener(this.element, 'auxclick', (event: MouseEvent) => this.onAuxClick(event)));
 			this._register(addDisposableListener(this.element, 'dblclick', (event: MouseEvent) => this.onDoubleClick(event)));
@@ -174,19 +163,11 @@ export class List<T> extends Disposable {
 		this._register(addDisposableListener(this.element, 'focusout', () => this.resetNavigationPrefix()));
 	}
 
-	updateOptions(options: Pick<ListOptions<T>, 'smoothScrolling'>): void {
-		this.view.updateOptions(options);
-	}
+	updateOptions(options: Pick<ListOptions<T>, 'smoothScrolling'>): void { this.view.updateOptions(options); }
 
-	get items(): readonly T[] {
-		return this.view.items;
-	}
-	clearRetainedRows(): void {
-		this.view.clearRetainedRows();
-	}
-	layout(height: number): void {
-		this.view.layout(height);
-	}
+	get items(): readonly T[] { return this.view.items; }
+	clearRetainedRows(): void { this.view.clearRetainedRows(); }
+	layout(height: number): void { this.view.layout(height); }
 
 	set items(items: readonly T[]) {
 		this.splice(0, this.items.length, items);
@@ -194,7 +175,7 @@ export class List<T> extends Disposable {
 
 	splice(start: number, deleteCount: number, elements: readonly T[] = []): void {
 		const focusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
-		const selectedIds = this._selectionIndexes.map(index => this.itemId(this.items[index], index));
+		const selectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
 		const anchorId = this.selectionAnchor === undefined ? undefined : this.itemId(this.items[this.selectionAnchor], this.selectionAnchor);
 
 		this.view.splice(start, deleteCount, elements);
@@ -204,13 +185,13 @@ export class List<T> extends Disposable {
 		} else {
 			this._activeIndex = this.items.length > 0 && (this.options.mouseSupport !== false || this.options.keyboardNavigation === true) ? 0 : -1;
 		}
-		this._selectionIndexes = selectedIds.map(id => this.indexOfId(id)).filter(index => index >= 0);
+		this._selectionIndexes = selectedIds.map((id) => this.indexOfId(id)).filter((index) => index >= 0);
 		const nextAnchor = anchorId === undefined ? -1 : this.indexOfId(anchorId);
 		this.selectionAnchor = nextAnchor >= 0 ? nextAnchor : undefined;
 		this.syncRows();
 
 		const nextFocusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
-		const nextSelectedIds = this._selectionIndexes.map(index => this.itemId(this.items[index], index));
+		const nextSelectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
 		if (focusedId !== nextFocusedId) {
 			this.emitFocus(undefined);
 		}
@@ -219,18 +200,12 @@ export class List<T> extends Disposable {
 		}
 	}
 
-	get activeIndex(): number {
-		return this._activeIndex;
-	}
-	get activeItem(): T | undefined {
-		return this.items[this._activeIndex];
-	}
-	get selection(): readonly T[] {
-		return this._selectionIndexes.map(index => this.items[index]!).filter(item => item !== undefined);
-	}
+	get activeIndex(): number { return this._activeIndex; }
+	get activeItem(): T | undefined { return this.items[this._activeIndex]; }
+	get selection(): readonly T[] { return this._selectionIndexes.map((index) => this.items[index]!).filter((item) => item !== undefined); }
 
 	/** Use -1 to clear logical focus while retaining selection. */
-	setActiveIndex(index: number, browserEvent?: UIEvent, options: { readonly reveal?: boolean } = {}): void {
+	setActiveIndex(index: number, browserEvent?: UIEvent, options: { readonly reveal?: boolean; } = {}): void {
 		if (!Number.isInteger(index) || index < -1 || index >= this.items.length || this._activeIndex === index) return;
 		this._activeIndex = index;
 		if (index >= 0 && options.reveal !== false) this.reveal(index);
@@ -239,7 +214,7 @@ export class List<T> extends Disposable {
 	}
 
 	setSelection(indexes: readonly number[], browserEvent?: UIEvent): void {
-		const normalized = [...new Set(indexes)].filter(index => Number.isInteger(index) && index >= 0 && index < this.items.length);
+		const normalized = [...new Set(indexes)].filter((index) => Number.isInteger(index) && index >= 0 && index < this.items.length);
 		if (equals(this._selectionIndexes, normalized)) {
 			return;
 		}
@@ -249,12 +224,8 @@ export class List<T> extends Disposable {
 		this.emitSelection(browserEvent);
 	}
 
-	focusNext(browserEvent?: UIEvent): void {
-		this.moveActive(1, browserEvent);
-	}
-	focusPrevious(browserEvent?: UIEvent): void {
-		this.moveActive(-1, browserEvent);
-	}
+	focusNext(browserEvent?: UIEvent): void { this.moveActive(1, browserEvent); }
+	focusPrevious(browserEvent?: UIEvent): void { this.moveActive(-1, browserEvent); }
 	async focusNextPage(browserEvent?: UIEvent): Promise<void> {
 		const index = this.pageIndex(1);
 		if (index !== undefined) this.setActiveIndex(index, browserEvent);
@@ -263,39 +234,21 @@ export class List<T> extends Disposable {
 		const index = this.pageIndex(-1);
 		if (index !== undefined) this.setActiveIndex(index, browserEvent);
 	}
-	domFocus(): void {
-		this.element.focus();
-	}
+	domFocus(): void { this.element.focus(); }
 
 	acceptActive(browserEvent?: MouseEvent | KeyboardEvent): void {
 		const item = this.activeItem;
 		if (item !== undefined) this._onDidAccept.fire({ item, index: this._activeIndex, browserEvent });
 	}
 
-	row(index: number): HTMLElement | undefined {
-		return this.view.row(index);
-	}
-	rerender(index: number): void {
-		this.view.rerender(index);
-	}
-	updateElementHeight(index: number, height: number | undefined): void {
-		this.view.updateElementHeight(index, height);
-	}
-	getElementTop(index: number): number {
-		return this.view.getElementTop(index);
-	}
-	getElementHeight(index: number): number {
-		return this.view.getElementHeight(index);
-	}
-	indexAt(position: number): number {
-		return this.view.indexAt(position);
-	}
-	get scrollTop(): number {
-		return this.view.scrollTop;
-	}
-	set scrollTop(top: number) {
-		this.view.scrollTop = top;
-	}
+	row(index: number): HTMLElement | undefined { return this.view.row(index); }
+	rerender(index: number): void { this.view.rerender(index); }
+	updateElementHeight(index: number, height: number | undefined): void { this.view.updateElementHeight(index, height); }
+	getElementTop(index: number): number { return this.view.getElementTop(index); }
+	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
+	indexAt(position: number): number { return this.view.indexAt(position); }
+	get scrollTop(): number { return this.view.scrollTop; }
+	set scrollTop(top: number) { this.view.scrollTop = top; }
 	reveal(index: number, relativeTop?: number): void {
 		this.view.reveal(index, relativeTop);
 		if (this.options.scrolling !== 'managed') this.view.row(index)?.scrollIntoView?.({ block: 'nearest' });
@@ -417,17 +370,16 @@ export class List<T> extends Disposable {
 			this.selectionAnchor ??= this._activeIndex >= 0 ? this._activeIndex : index;
 			const start = Math.min(this.selectionAnchor, index);
 			const end = Math.max(this.selectionAnchor, index);
-			this.setSelection(
-				Array.from({ length: end - start + 1 }, (_, offset) => start + offset),
-				event,
-			);
+			this.setSelection(Array.from({ length: end - start + 1 }, (_, offset) => start + offset), event);
 			return;
 		}
 		this.selectionAnchor = index;
 		const toggleSelection = isMacintosh ? event.metaKey : event.ctrlKey;
 		if (this.options.multipleSelectionSupport && toggleSelection) {
 			if (event.type === 'click') {
-				const indexes = this._selectionIndexes.includes(index) ? this._selectionIndexes.filter(selected => selected !== index) : [...this._selectionIndexes, index];
+				const indexes = this._selectionIndexes.includes(index)
+					? this._selectionIndexes.filter(selected => selected !== index)
+					: [...this._selectionIndexes, index];
 				this.setSelection(indexes, event);
 			}
 			return;
@@ -451,7 +403,7 @@ export class List<T> extends Disposable {
 		// Logical focus survives virtualized rows leaving the DOM during scrolling.
 		this.element.classList.toggle('has-focused-item', this.activeItem !== undefined);
 		const rows = this.element.querySelectorAll<HTMLElement>(':scope > .ash-list-row');
-		rows.forEach(row => {
+		rows.forEach((row) => {
 			const index = Number(row.dataset.index);
 			this.updateRowState(row, index);
 		});
@@ -475,22 +427,13 @@ export class List<T> extends Disposable {
 	}
 
 	private emitFocus(browserEvent?: UIEvent): void {
-		this._onDidChangeActive.fire({
-			item: this.activeItem,
-			index: this._activeIndex,
-			rowId: this.row(this._activeIndex)?.id,
-			browserEvent,
-		});
+		this._onDidChangeActive.fire({ item: this.activeItem, index: this._activeIndex, rowId: this.row(this._activeIndex)?.id, browserEvent });
 	}
 
 	private emitSelection(browserEvent?: UIEvent): void {
 		this._onDidChangeSelection.fire({ items: this.selection, indexes: this._selectionIndexes, browserEvent });
 	}
 
-	private itemId(item: T | undefined, index: number): string {
-		return item === undefined ? String(index) : (this.options.getId?.(item) ?? String(index));
-	}
-	private indexOfId(id: string): number {
-		return this.items.findIndex((item, index) => this.itemId(item, index) === id);
-	}
+	private itemId(item: T | undefined, index: number): string { return item === undefined ? String(index) : this.options.getId?.(item) ?? String(index); }
+	private indexOfId(id: string): number { return this.items.findIndex((item, index) => this.itemId(item, index) === id); }
 }

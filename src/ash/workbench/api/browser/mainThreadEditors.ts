@@ -39,33 +39,23 @@ import { IPathService } from '../../../platform/path/common/pathService.js';
 /** Editor models, working copies and UI always stay in the client. */
 export class MainThreadEditors extends Disposable {
 	private readonly editSources = this._register(new DisposableMap<string, DisposableStore>());
-	private readonly aiEdited = new Map<ITextModel, { version: number; chat: boolean }>();
+	private readonly aiEdited = new Map<ITextModel, { version: number; chat: boolean; }>();
 	private trackModel(model: ITextModel): void {
 		const lifetime = new DisposableStore();
 		this.editSources.set(model.uri.toString(), lifetime);
-		lifetime.add(
-			model.onDidChangeContent(event => {
-				const reasons = event.detailedReasons.filter(isAiEdit);
-				if (!reasons.length || event.reason === TextModelChangeReason.Undo || event.reason === TextModelChangeReason.Reset) this.aiEdited.delete(model);
-				else
-					this.aiEdited.set(model, {
-						version: event.version,
-						chat: reasons.some(reason => reason.metadata.source === 'Chat.applyEdits' || reason.metadata.source === 'inlineChat.applyEdits'),
-					});
-			}),
-		);
+		lifetime.add(model.onDidChangeContent(event => {
+			const reasons = event.detailedReasons.filter(isAiEdit);
+			if (!reasons.length || event.reason === TextModelChangeReason.Undo || event.reason === TextModelChangeReason.Reset) this.aiEdited.delete(model);
+			else this.aiEdited.set(model, { version: event.version, chat: reasons.some(reason => reason.metadata.source === 'Chat.applyEdits' || reason.metadata.source === 'inlineChat.applyEdits') });
+		}));
 		lifetime.add(toDisposable(() => this.aiEdited.delete(model)));
 	}
 	private readonly annotations = this._register(new DisposableMap<string, DisposableStore>());
 	public updateSources(snapshot: ExtensionHostFleetSnapshot): void {
-		const active = new Set(
-			snapshot.extensions.filter(extension => extension.lifecycle === 'ready').map(extension => JSON.stringify([extension.id, extension.incarnation, extension.activationGeneration])),
-		);
+		const active = new Set(snapshot.extensions.filter(extension => extension.lifecycle === 'ready').map(extension => JSON.stringify([extension.id, extension.incarnation, extension.activationGeneration])));
 		for (const key of this.annotations.keys()) if (!active.has(key)) this.annotations.deleteAndDispose(key);
 	}
-	public clearAnnotations(): void {
-		this.annotations.clearAndDisposeAll();
-	}
+	public clearAnnotations(): void { this.annotations.clearAndDisposeAll(); }
 
 	constructor(
 		@IEditorService
@@ -92,8 +82,7 @@ export class MainThreadEditors extends Disposable {
 		@ITextFileService
 		private readonly files: ITextFileService,
 		@IModelService private readonly models: IModelService,
-		@IPathService private readonly paths: IPathService,
-	) {
+		@IPathService private readonly paths: IPathService) {
 		super();
 		for (const model of models.getModels()) this.trackModel(model);
 		this._register(models.onModelAdded(model => this.trackModel(model)));
@@ -109,7 +98,7 @@ export class MainThreadEditors extends Disposable {
 				const entries: JsonValue[] = [];
 				let bytes = 0;
 				for (const [model, evidence] of this.aiEdited) {
-					if (evidence.version !== model.getVersionId() || (request.mode !== 'all' && !evidence.chat) || !extUriBiasedIgnorePathCase.isEqualOrParent(model.uri, root)) continue;
+					if (evidence.version !== model.getVersionId() || request.mode !== 'all' && !evidence.chat || !extUriBiasedIgnorePathCase.isEqualOrParent(model.uri, root)) continue;
 					const contents = model.getValue();
 					bytes += new TextEncoder().encode(contents).byteLength;
 					if (bytes > 256 * 1024 || entries.length >= 100) throw new RangeError('AI edit evidence exceeds the payload limit');
@@ -127,63 +116,31 @@ export class MainThreadEditors extends Disposable {
 				const label = text(request.text, 4096).replace(/[\r\n]/g, ' ');
 				const editor = this.codeEditors.getActiveCodeEditor();
 				const model = editor?.getModel();
-				if (
-					!editor ||
-					!model ||
-					!extUriBiasedIgnorePathCase.isEqual(model.uri, resource) ||
-					line > model.getLineCount() ||
-					(request.version !== undefined && request.version !== model.getVersionId())
-				)
-					return null;
+				if (!editor || !model || !extUriBiasedIgnorePathCase.isEqual(model.uri, resource) || line > model.getLineCount() || request.version !== undefined && request.version !== model.getVersionId()) return null;
 				const owner = new DisposableStore();
 				this.annotations.set(key, owner);
 				const type = `extension.annotation.${key}`;
-				owner.add(
-					this.codeEditors.registerDecorationType('Extension line annotation', type, {
-						after: {
-							contentText: `  ${label}`,
-							color: { id: 'editorGhostText.foreground' },
-							fontStyle: 'italic',
-						},
-					}),
-				);
+				owner.add(this.codeEditors.registerDecorationType('Extension line annotation', type, { after: { contentText: `  ${label}`, color: { id: 'editorGhostText.foreground' }, fontStyle: 'italic' } }));
 				const options = this.codeEditors.resolveDecorationOptions(type, true);
-				const collection = editor.createDecorationsCollection([
-					{
-						range: new Range(line, model.getLineMaxColumn(line), line, model.getLineMaxColumn(line)),
-						options: {
-							...options,
-							hoverMessage: request.hover == null ? undefined : { value: text(request.hover, 16384), isTrusted: false, supportHtml: false },
-						},
-					},
-				]);
+				const collection = editor.createDecorationsCollection([{ range: new Range(line, model.getLineMaxColumn(line), line, model.getLineMaxColumn(line)), options: { ...options, hoverMessage: request.hover == null ? undefined : { value: text(request.hover, 16384), isTrusted: false, supportHtml: false } } }]);
 				owner.add(toDisposable(() => collection.clear()));
 				owner.add(editor.onDidChangeModel(() => this.annotations.deleteAndDispose(key)));
 				owner.add(editor.onDidDispose(() => this.annotations.deleteAndDispose(key)));
 				return null;
 			}
 			case 'formatTimestamps': {
-				if (
-					!Array.isArray(request.timestamps) ||
-					request.timestamps.length > 512 ||
-					request.timestamps.some(value => typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 8.64e15)
-				)
-					throw new TypeError('Invalid timestamp batch');
+				if (!Array.isArray(request.timestamps) || request.timestamps.length > 512 || request.timestamps.some(value => typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 8.64e15)) throw new TypeError('Invalid timestamp batch');
 				const date = new Intl.DateTimeFormat(getNLSLanguage(), { dateStyle: 'medium', timeStyle: 'short' });
 				const relative = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' });
 				const now = Date.now();
 				return request.timestamps.map(value => {
 					const milliseconds = value as number;
 					const seconds = Math.round((milliseconds - now) / 1000);
-					const [unit, divisor] = Math.abs(seconds) >= 86400 ? (['day', 86400] as const) : Math.abs(seconds) >= 3600 ? (['hour', 3600] as const) : (['minute', 60] as const);
-					return {
-						date: date.format(milliseconds),
-						relative: relative.format(Math.round(seconds / divisor), unit),
-					};
+					const [unit, divisor] = Math.abs(seconds) >= 86400 ? ['day', 86400] as const : Math.abs(seconds) >= 3600 ? ['hour', 3600] as const : ['minute', 60] as const;
+					return { date: date.format(milliseconds), relative: relative.format(Math.round(seconds / divisor), unit) };
 				});
 			}
-			case 'openEditorResources':
-				return [...new Set(this.part.groups.flatMap(group => group.inputs.map(input => input.resource.toString())))].slice(0, 4096);
+			case 'openEditorResources': return [...new Set(this.part.groups.flatMap(group => group.inputs.map(input => input.resource.toString())))].slice(0, 4096);
 			case 'hostFacts': {
 				const canOpenWorkspace = this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 				return { canClone: canOpenWorkspace, canOpenWorkspace };
@@ -193,55 +150,34 @@ export class MainThreadEditors extends Disposable {
 				const abort = () => cancellation.cancel();
 				signal.addEventListener('abort', abort, { once: true });
 				try {
-					const result = await this.quickInput.input(
-						{
-							title: optionalText(request.title),
-							placeHolder: optionalText(request.placeHolder),
-							value: optionalText(request.value),
-							password: request.password === true,
-							validationMessage: optionalText(request.validationMessage),
-						},
-						cancellation.token,
-					);
+					const result = await this.quickInput.input({ title: optionalText(request.title), placeHolder: optionalText(request.placeHolder), value: optionalText(request.value), password: request.password === true, validationMessage: optionalText(request.validationMessage) }, cancellation.token);
 					signal.throwIfAborted();
 					return result ?? null;
-				} finally {
+				}
+				finally {
 					signal.removeEventListener('abort', abort);
 				}
 			}
 			case 'confirm': {
-				const result = await this.dialogs.confirm({
-					title: optionalText(request.title),
-					message: text(request.message),
-					detail: optionalText(request.detail),
-					primaryButton: optionalText(request.primaryButton),
-				});
+				const result = await this.dialogs.confirm({ title: optionalText(request.title), message: text(request.message), detail: optionalText(request.detail), primaryButton: optionalText(request.primaryButton) });
 				signal.throwIfAborted();
 				return { confirmed: result.confirmed };
 			}
 			case 'prompt': {
 				if (!Array.isArray(request.buttons) || !request.buttons.length || request.buttons.length > 16) throw new TypeError('Invalid extension dialog buttons');
-				if (request.severity !== undefined && request.severity !== 'info' && request.severity !== 'warning' && request.severity !== 'error')
-					throw new TypeError('Invalid extension dialog severity');
+				if (request.severity !== undefined && request.severity !== 'info' && request.severity !== 'warning' && request.severity !== 'error') throw new TypeError('Invalid extension dialog severity');
 				const buttons = request.buttons.map((label, index) => ({ label: text(label, 1024), run: () => index }));
 				const result = await this.dialogs.prompt({
-					title: optionalText(request.title),
-					message: text(request.message),
-					detail: optionalText(request.detail),
+					title: optionalText(request.title), message: text(request.message), detail: optionalText(request.detail),
 					severity: request.severity === 'warning' ? DialogSeverity.Warning : request.severity === 'error' ? DialogSeverity.Error : DialogSeverity.Info,
-					buttons,
-					cancelButton: optionalText(request.cancelButton),
+					buttons, cancelButton: optionalText(request.cancelButton),
 				});
 				signal.throwIfAborted();
 				return { selection: result.result ?? null };
 			}
 			case 'pickFolder': {
 				const defaultPath = optionalText(request.defaultPath);
-				const resources = await this.fileDialogs.showOpenDialog({
-					canSelectFiles: false,
-					canSelectFolders: true,
-					defaultUri: defaultPath === undefined ? undefined : await this.paths.fileURI(defaultPath),
-				});
+				const resources = await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: defaultPath === undefined ? undefined : await this.paths.fileURI(defaultPath) });
 				const resource = resources?.[0];
 				signal.throwIfAborted();
 				return resource?.toString() ?? null;
@@ -259,11 +195,7 @@ export class MainThreadEditors extends Disposable {
 				await this.clipboard.writeText(text(request.text));
 				return null;
 			case 'openExternal':
-				await this.opener.open(URI.parse(text(request.uri)), {
-					openExternal: true,
-					fromUserGesture: true,
-					allowContributedOpeners: true,
-				});
+				await this.opener.open(URI.parse(text(request.uri)), { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 				return null;
 			case 'openEditorDocument': {
 				const resource = URI.parse(text(request.uri));
@@ -279,12 +211,11 @@ export class MainThreadEditors extends Disposable {
 			case 'closeEditorDocument': {
 				const resource = URI.parse(text(request.uri));
 				for (const group of this.part.groups) {
-					for (const input of [...group.inputs])
-						if (extUriBiasedIgnorePathCase.isEqual(input.resource, resource)) {
-							const copy = this.workingCopies.get(resource).find(copy => copy.backupKind === 'text');
-							if (request.expectedText != null && copy?.backup() !== text(request.expectedText)) continue;
-							await group.closeEditor(input, { skipConfirmation: request.expectedText != null });
-						}
+					for (const input of [...group.inputs]) if (extUriBiasedIgnorePathCase.isEqual(input.resource, resource)) {
+						const copy = this.workingCopies.get(resource).find(copy => copy.backupKind === 'text');
+						if (request.expectedText != null && copy?.backup() !== text(request.expectedText)) continue;
+						await group.closeEditor(input, { skipConfirmation: request.expectedText != null });
+					}
 				}
 				return null;
 			}
@@ -294,49 +225,25 @@ export class MainThreadEditors extends Disposable {
 				if (!Array.isArray(request.paths) || request.paths.length > 10000) throw new TypeError('Invalid repository paths');
 				const paths = request.paths.map(value => URI.parse(text(value)));
 				if (paths.some(path => !extUriBiasedIgnorePathCase.isEqualOrParent(path, root))) throw new TypeError('Path exceeds repository');
-				const selected = (resource: URI) =>
-					request.saveMode === 'always' ? extUriBiasedIgnorePathCase.isEqualOrParent(resource, root) : paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, resource));
+				const selected = (resource: URI) => request.saveMode === 'always' ? extUriBiasedIgnorePathCase.isEqualOrParent(resource, root) : paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, resource));
 				const dirty = request.saveMode === 'never' ? [] : this.workingCopies.getAll().filter(copy => copy.isDirty && selected(copy.resource));
 				if (dirty.length) {
-					const confirmation = await this.dialogs.confirm({
-						message: localize({ bundle: 'ash', key: 'extension.editor.saveBeforeOperation' }, 'Save {0} changed files before continuing?', dirty.length),
-						primaryButton: localize({ bundle: 'ash', key: 'extension.editor.saveFiles' }, 'Save Files'),
-					});
+					const confirmation = await this.dialogs.confirm({ message: localize({ bundle: 'ash', key: 'extension.editor.saveBeforeOperation' }, 'Save {0} changed files before continuing?', dirty.length), primaryButton: localize({ bundle: 'ash', key: 'extension.editor.saveFiles' }, 'Save Files') });
 					if (!confirmation.confirmed) return false;
-					for (const copy of dirty) {
-						await copy.save(signal);
-						signal.throwIfAborted();
-					}
+					for (const copy of dirty) { await copy.save(signal); signal.throwIfAborted(); }
 					if (dirty.some(copy => copy.isDirty)) return false;
 				}
 				if (request.diagnostics != null) {
 					const sources = record(request.diagnostics);
-					if (
-						Object.keys(sources).length > 100 ||
-						Object.values(sources).some(level => level !== 'error' && level !== 'warning' && level !== 'information' && level !== 'hint' && level !== 'none')
-					)
-						throw new TypeError('Invalid diagnostic policy');
+					if (Object.keys(sources).length > 100 || Object.values(sources).some(level => level !== 'error' && level !== 'warning' && level !== 'information' && level !== 'hint' && level !== 'none')) throw new TypeError('Invalid diagnostic policy');
 					const markers = this.instantiation.invokeFunction(accessor => accessor.get(IMarkerService)).read();
-					const blocked = markers
-						.filter(marker => paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, marker.resource)))
-						.filter(marker => {
-							const threshold = sources[marker.source ?? marker.owner] ?? sources['*'];
-							const minimum =
-								threshold === 'error'
-									? MarkerSeverity.Error
-									: threshold === 'warning'
-										? MarkerSeverity.Warning
-										: threshold === 'information'
-											? MarkerSeverity.Info
-											: threshold === 'hint'
-												? MarkerSeverity.Hint
-												: undefined;
-							return minimum !== undefined && marker.severity >= minimum;
-						});
+					const blocked = markers.filter(marker => paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, marker.resource))).filter(marker => {
+						const threshold = sources[marker.source ?? marker.owner] ?? sources['*'];
+						const minimum = threshold === 'error' ? MarkerSeverity.Error : threshold === 'warning' ? MarkerSeverity.Warning : threshold === 'information' ? MarkerSeverity.Info : threshold === 'hint' ? MarkerSeverity.Hint : undefined;
+						return minimum !== undefined && marker.severity >= minimum;
+					});
 					if (blocked.length) {
-						await this.dialogs.confirm({
-							message: localize({ bundle: 'ash', key: 'extension.editor.commitDiagnostics' }, 'Resolve {0} diagnostics before committing.', blocked.length),
-						});
+						await this.dialogs.confirm({ message: localize({ bundle: 'ash', key: 'extension.editor.commitDiagnostics' }, 'Resolve {0} diagnostics before committing.', blocked.length) });
 						return false;
 					}
 				}
@@ -346,14 +253,8 @@ export class MainThreadEditors extends Disposable {
 				const root = URI.parse(text(request.root));
 				for (const group of this.part.groups) {
 					for (const input of [...group.inputs]) {
-						if (
-							'modified' in input &&
-							input.modified &&
-							typeof input.modified === 'object' &&
-							'resource' in input.modified &&
-							extUriBiasedIgnorePathCase.isEqualOrParent((input.modified as IResourceEditorInput).resource, root)
-						)
-							await group.closeEditor(input);
+						if ('modified' in input && input.modified && typeof input.modified === 'object' && 'resource' in input.modified
+							&& extUriBiasedIgnorePathCase.isEqualOrParent((input.modified as IResourceEditorInput).resource, root)) await group.closeEditor(input);
 					}
 				}
 				return null;
@@ -379,36 +280,12 @@ export class MainThreadEditors extends Disposable {
 				const copy = input ? this.workingCopies.get(input.resource).find(copy => copy.backupKind === 'text') : undefined;
 				if (request.includeContents !== undefined && typeof request.includeContents !== 'boolean') throw new TypeError('Invalid editor contents request');
 				const contents = request.includeContents === false ? undefined : copy?.backup();
-				return normalizeExtensionHostPayload({
-					version: input
-						? (this.codeEditors
-								.listCodeEditors()
-								.find(editor => extUriBiasedIgnorePathCase.isEqual(editor.getModel()?.uri, input.resource))
-								?.getModel()
-								?.getVersionId() ?? null)
-						: null,
-					contents: contents && contents.length <= 2 * 1024 * 1024 ? contents : null,
-					input: input
-						? {
-								resource: input.resource.toString(),
-								modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null,
-							}
-						: null,
-					selection: selection
-						? {
-								startLineNumber: selection.startLineNumber,
-								startColumn: selection.startColumn,
-								endLineNumber: selection.endLineNumber,
-								endColumn: selection.endColumn,
-							}
-						: null,
-				});
+				return normalizeExtensionHostPayload({ version: input ? this.codeEditors.listCodeEditors().find(editor => extUriBiasedIgnorePathCase.isEqual(editor.getModel()?.uri, input.resource))?.getModel()?.getVersionId() ?? null : null, contents: contents && contents.length <= 2 * 1024 * 1024 ? contents : null, input: input ? { resource: input.resource.toString(), modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null } : null, selection: selection ? { startLineNumber: selection.startLineNumber, startColumn: selection.startColumn, endLineNumber: selection.endLineNumber, endColumn: selection.endColumn } : null });
 			}
 			case 'dirty':
 			case 'diffChange':
 			case 'readTextFile':
-			case 'saveTextFile':
-				return new MainThreadEditorChanges(this.codeEditors, this.workingCopies, this.files).handle(value, signal);
+			case 'saveTextFile': return new MainThreadEditorChanges(this.codeEditors, this.workingCopies, this.files).handle(value, signal);
 			case 'revealDiff': {
 				const original = URI.parse(text(request.originalResource, 16 * 1024));
 				if (!Array.isArray(request.modifiedResources) || request.modifiedResources.length < 1 || request.modifiedResources.length > 2) throw new TypeError('Invalid comparison resources');
@@ -417,12 +294,9 @@ export class MainThreadEditors extends Disposable {
 				// Compare identities before requiring any snapshot contents. Reuse only
 				// the current group, preserving normal opens into another side group.
 				const group = this.part.activeGroup;
-				const existing = group.inputs.find(
-					input =>
-						isResourceDiffEditorInput(input) &&
-						extUriBiasedIgnorePathCase.isEqual(input.original.resource, original) &&
-						modified.some(resource => extUriBiasedIgnorePathCase.isEqual(input.modified.resource, resource)),
-				);
+				const existing = group.inputs.find(input => isResourceDiffEditorInput(input)
+					&& extUriBiasedIgnorePathCase.isEqual(input.original.resource, original)
+					&& modified.some(resource => extUriBiasedIgnorePathCase.isEqual(input.modified.resource, resource)));
 				if (!existing) return false;
 				await this.editors.openEditor(existing, options, { groupId: group.id });
 				signal.throwIfAborted();
@@ -435,52 +309,36 @@ export class MainThreadEditors extends Disposable {
 				signal.throwIfAborted();
 				return null;
 			}
-			default:
-				throw new TypeError('Unsupported extension editor operation');
+			default: throw new TypeError('Unsupported extension editor operation');
 		}
 	}
 }
 function record(value: JsonValue): Record<string, JsonValue> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {
 		throw new TypeError('Expected extension editor object');
-	}
-	return value as Record<string, JsonValue>;
+	} return value as Record<string, JsonValue>;
 }
 function text(value: JsonValue, limit = 16 * 1024 * 1024): string {
 	if (typeof value !== 'string' || value.length > limit || value.includes('\0')) {
 		throw new TypeError('Invalid extension editor text');
-	}
-	return value;
+	} return value;
 }
-function optionalText(value: JsonValue | undefined): string | undefined {
-	return value == null ? undefined : text(value);
-}
+function optionalText(value: JsonValue | undefined): string | undefined { return value == null ? undefined : text(value); }
 function positiveInteger(value: JsonValue): number {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
 		throw new TypeError('Invalid editor coordinate');
-	}
-	return value;
+	} return value;
 }
-function parseRange(value: JsonValue): Range {
-	const range = record(value);
-	return new Range(positiveInteger(range.startLineNumber), positiveInteger(range.startColumn), positiveInteger(range.endLineNumber), positiveInteger(range.endColumn));
-}
+function parseRange(value: JsonValue): Range { const range = record(value); return new Range(positiveInteger(range.startLineNumber), positiveInteger(range.startColumn), positiveInteger(range.endLineNumber), positiveInteger(range.endColumn)); }
 function selectionSource(value: JsonValue): TextEditorSelectionSource {
 	if (value === TextEditorSelectionSource.PROGRAMMATIC || value === TextEditorSelectionSource.NAVIGATION || value === TextEditorSelectionSource.JUMP) {
 		return value;
-	}
-	throw new TypeError('Invalid editor selection source');
+	} throw new TypeError('Invalid editor selection source');
 }
 function parseOptions(value: JsonValue): EditorOpenOptions {
 	if (value == null) {
 		return {};
 	}
 	const entry = record(value);
-	return {
-		pinned: entry.pinned === true,
-		revealIfOpened: entry.revealIfOpened === true,
-		preserveFocus: entry.preserveFocus === true,
-		selection: entry.selection == null ? undefined : parseRange(entry.selection),
-		selectionSource: entry.selectionSource == null ? undefined : selectionSource(entry.selectionSource),
-	};
+	return { pinned: entry.pinned === true, revealIfOpened: entry.revealIfOpened === true, preserveFocus: entry.preserveFocus === true, selection: entry.selection == null ? undefined : parseRange(entry.selection), selectionSource: entry.selectionSource == null ? undefined : selectionSource(entry.selectionSource) };
 }

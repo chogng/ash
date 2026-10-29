@@ -62,9 +62,7 @@ function blocksFromNodes(nodes: NodeListOf<ChildNode> | readonly ChildNode[], sc
 			case 'h5':
 			case 'h6':
 				flushInline();
-				appendContainerBlocks(blocks, element, schema, 'heading', {
-					level: Number(element.localName.slice(1)),
-				});
+				appendContainerBlocks(blocks, element, schema, 'heading', { level: Number(element.localName.slice(1)) });
 				break;
 			case 'blockquote':
 				flushInline();
@@ -148,7 +146,7 @@ function appendTable(target: DocumentNode[], element: HTMLElement, schema: Docum
 			const tagName = child.localName.toLowerCase();
 			if (tagName !== 'td' && tagName !== 'th') continue;
 			const content = blocksFromNodes(child.childNodes, schema);
-			const cell = createNode(schema, 'tableCell', content.length > 0 ? content : (emptyParagraph(schema) ?? []));
+			const cell = createNode(schema, 'tableCell', content.length > 0 ? content : emptyParagraph(schema) ?? []);
 			if (cell) cells.push(cell);
 		}
 		const row = cells.length > 0 ? createNode(schema, 'tableRow', cells) : undefined;
@@ -190,14 +188,7 @@ function appendInlineNodes(schema: DocumentSchema, nodes: NodeListOf<ChildNode> 
 		}
 		if (tagName === 'img') {
 			const src = safeImageSource(element.getAttribute('src'));
-			if (src)
-				appendNode(
-					target,
-					createNode(schema, 'image', [], {
-						src,
-						...(safeAlt(element.getAttribute('alt')) ? { alt: safeAlt(element.getAttribute('alt')) } : {}),
-					}),
-				);
+			if (src) appendNode(target, createNode(schema, 'image', [], { src, ...(safeAlt(element.getAttribute('alt')) ? { alt: safeAlt(element.getAttribute('alt')) } : {}) }));
 			continue;
 		}
 		const nextMarks = markForElement(schema, element, marks);

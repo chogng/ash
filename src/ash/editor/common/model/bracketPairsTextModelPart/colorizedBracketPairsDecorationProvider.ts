@@ -13,23 +13,19 @@ export class ColorizedBracketPairsDecorationProvider extends Disposable implemen
 
 	constructor(private readonly model: TextModel) {
 		super();
-		this._register(
-			model.bracketPairs.onDidChange(() => {
-				if (this.activeQueries === 0) {
-					this.changes.fire();
-				}
-			}),
-		);
+		this._register(model.bracketPairs.onDidChange(() => {
+			if (this.activeQueries === 0) {
+				this.changes.fire();
+			}
+		}));
 		let options = model.getOptions().bracketPairColorizationOptions;
-		this._register(
-			model.onDidChangeOptions(() => {
-				const next = model.getOptions().bracketPairColorizationOptions;
-				if (options.enabled !== next.enabled || options.independentColorPoolPerBracketType !== next.independentColorPoolPerBracketType) {
-					options = next;
-					this.changes.fire();
-				}
-			}),
-		);
+		this._register(model.onDidChangeOptions(() => {
+			const next = model.getOptions().bracketPairColorizationOptions;
+			if (options.enabled !== next.enabled || options.independentColorPoolPerBracketType !== next.independentColorPoolPerBracketType) {
+				options = next;
+				this.changes.fire();
+			}
+		}));
 	}
 
 	public getDecorationsInRange(range: Range, ownerId?: number, _filterOutValidation?: boolean, _filterFontDecorations?: boolean, onlyMinimapDecorations = false): IModelDecoration[] {
@@ -58,7 +54,7 @@ export class ColorizedBracketPairsDecorationProvider extends Disposable implemen
 				range: bracket.range,
 				options: {
 					description: 'BracketPairColorization',
-					inlineClassName: `stanza-editor-bracket-level-${(level % 6) + 1}`,
+					inlineClassName: `stanza-editor-bracket-level-${level % 6 + 1}`,
 				},
 			});
 		}

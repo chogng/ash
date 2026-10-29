@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('Chat conversation title uses toolbar colors and exposes keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const title = page.locator('.ash-chat-view-title-button');

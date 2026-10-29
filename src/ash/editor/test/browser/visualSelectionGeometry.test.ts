@@ -11,18 +11,11 @@ import { type TextMeasurer } from '../../common/viewModel.js';
 test('visual selection geometry splits one logical range across wrapped fragments', () => {
 	using model = new TextModel('abcdef\ngh');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
-	const selections = [Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(1 + 1, 1 + 1))];
-	const geometry = createStanzaVisualSelectionGeometry(
-		model,
-		selections,
-		projection,
-		{
-			startLineIndex: 0,
-			endLineIndexExclusive: 4,
-		},
-		10,
-		new FixedTextMeasurer(),
-	);
+	const selections = [Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (1) + 1))];
+	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
+		startLineIndex: 0,
+		endLineIndexExclusive: 4,
+	}, 10, new FixedTextMeasurer());
 
 	assert.deepEqual(geometry.selections, [
 		{ selectionIndex: 0, visualLineIndex: 0, left: 20, width: 10 },
@@ -30,66 +23,42 @@ test('visual selection geometry splits one logical range across wrapped fragment
 		{ selectionIndex: 0, visualLineIndex: 2, left: 10, width: 30 },
 		{ selectionIndex: 0, visualLineIndex: 3, left: 10, width: 10 },
 	]);
-	assert.deepEqual(geometry.carets, [
-		{
-			selectionIndex: 0,
-			visualLineIndex: 3,
-			left: 20,
-			primary: true,
-		},
-	]);
+	assert.deepEqual(geometry.carets, [{
+		selectionIndex: 0,
+		visualLineIndex: 3,
+		left: 20,
+		primary: true,
+	}]);
 });
 
 test('visual selection geometry offsets continuation rows by their wrapping indent', () => {
 	using model = new TextModel('abcdef');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
-	const selections = [Selection.fromPositions(new Position(0 + 1, 4 + 1), new Position(0 + 1, 2 + 1))];
-	const geometry = createStanzaVisualSelectionGeometry(
-		model,
-		selections,
-		projection,
-		{
-			startLineIndex: 0,
-			endLineIndexExclusive: 3,
-		},
-		10,
-		new FixedTextMeasurer(),
-	);
+	const selections = [Selection.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (2) + 1))];
+	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
+		startLineIndex: 0,
+		endLineIndexExclusive: 3,
+	}, 10, new FixedTextMeasurer());
 
-	assert.deepEqual(geometry.selections, [
-		{
-			selectionIndex: 0,
-			visualLineIndex: 1,
-			left: 30,
-			width: 20,
-		},
-	]);
-	assert.deepEqual(geometry.carets, [
-		{
-			selectionIndex: 0,
-			visualLineIndex: 1,
-			left: 30,
-			primary: true,
-		},
-	]);
+	assert.deepEqual(geometry.selections, [{
+		selectionIndex: 0,
+		visualLineIndex: 1,
+		left: 30,
+		width: 20,
+	}]);
+	assert.deepEqual(geometry.carets, [{
+		selectionIndex: 0,
+		visualLineIndex: 1,
+		left: 30,
+		primary: true,
+	}]);
 });
 
 test('visual selection geometry rejects a projection from another model version', () => {
 	using model = new TextModel('abc');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: 'd' }]);
-	assert.throws(
-		() =>
-			createStanzaVisualSelectionGeometry(
-				model,
-				[Selection.fromPositions(new Position(1, 1), new Position(1, 2))],
-				projection,
-				{ startLineIndex: 0, endLineIndexExclusive: 1 },
-				0,
-				new FixedTextMeasurer(),
-			),
-		/current text model projection/,
-	);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (3) + 1)), text: 'd' }]);
+	assert.throws(() => createStanzaVisualSelectionGeometry(model, [Selection.fromPositions(new Position(1, 1), new Position(1, 2))], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

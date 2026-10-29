@@ -15,57 +15,24 @@ import '../../../localHistory/browser/localHistory.contribution.js';
 
 const views: IViewsService = {
 	getViewProgressIndicator: () => undefined,
-	onDidChangeViewContainerVisibility: Event.None,
-	onDidChangeViewVisibility: Event.None,
-	onDidChangeFocusedView: Event.None,
-	isViewContainerVisible: () => false,
-	isViewContainerActive: () => false,
-	openViewContainer: async () => null,
-	closeViewContainer: () => {},
-	getVisibleViewContainer: () => null,
-	getActiveViewPaneContainerWithId: () => null,
-	getFocusedView: () => null,
-	getFocusedViewName: () => '',
-	isViewVisible: () => false,
-	openView: async () => null,
-	closeView: () => {},
-	getActiveViewWithId: () => null,
-	getViewWithId: () => null,
-	focusView: async () => false,
+	onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
+	isViewContainerVisible: () => false, isViewContainerActive: () => false, openViewContainer: async () => null, closeViewContainer: () => { }, getVisibleViewContainer: () => null, getActiveViewPaneContainerWithId: () => null, getFocusedView: () => null, getFocusedViewName: () => '',
+	isViewVisible: () => false, openView: async () => null, closeView: () => { }, getActiveViewWithId: () => null, getViewWithId: () => null, focusView: async () => false,
 };
 
 test('LocalHistoryTimeline pages the existing snapshots, refreshes on save, and releases registration when disabled', async () => {
 	using context = new ContextKeyService();
 	using timeline = new TimelineService(context, views, new NullLoggerService());
 	using configuration = new InMemoryConfigurationService();
-	using changed = new Emitter<{ entry: IWorkingCopyHistoryEntry }>();
+	using changed = new Emitter<{ entry: IWorkingCopyHistoryEntry; }>();
 	const uri = URI.file('/main.ts');
-	const entries: IWorkingCopyHistoryEntry[] = [3, 2, 1].map(timestamp => ({
-		id: String(timestamp),
-		timestamp,
-		workingCopy: { resource: uri, name: 'main.ts' },
-		location: URI.file(`/history/${timestamp}`),
-	}));
-	const history: IWorkingCopyHistoryService = {
-		onDidAddEntry: changed.event,
-		getEntries: async () => entries,
-		addEntry: async () => {
-			throw new Error('The timeline must not create history entries');
-		},
-	};
+	const entries: IWorkingCopyHistoryEntry[] = [3, 2, 1].map(timestamp => ({ id: String(timestamp), timestamp, workingCopy: { resource: uri, name: 'main.ts' }, location: URI.file(`/history/${timestamp}`) }));
+	const history: IWorkingCopyHistoryService = { onDidAddEntry: changed.event, getEntries: async () => entries, addEntry: async () => { throw new Error('The timeline must not create history entries'); } };
 	using provider = new LocalHistoryTimeline(timeline, history, configuration);
 	assert.equal(context.getValue('timelineHasProvider'), true);
 	const first = await provider.provideTimeline(uri, { limit: 2 }, CancellationToken.None);
 	const second = await provider.provideTimeline(uri, { limit: 2, cursor: first.paging?.cursor }, CancellationToken.None);
-	assert.deepEqual(
-		{
-			first: first.items.map(item => item.id),
-			cursor: first.paging?.cursor,
-			second: second.items.map(item => item.id),
-			done: second.paging?.cursor,
-		},
-		{ first: ['3', '2'], cursor: '2', second: ['1'], done: undefined },
-	);
+	assert.deepEqual({ first: first.items.map(item => item.id), cursor: first.paging?.cursor, second: second.items.map(item => item.id), done: second.paging?.cursor }, { first: ['3', '2'], cursor: '2', second: ['1'], done: undefined });
 	assert.deepEqual(first.items[0].command?.arguments, [uri, '3']);
 	assert.equal((await provider.provideTimeline(uri, { cursor: 'expired', limit: 2 }, CancellationToken.None)).items.length, 0);
 	const events: string[] = [];

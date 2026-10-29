@@ -8,6 +8,7 @@ import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
 import { localize } from '../../../../nls.js';
 
+
 export interface ColorThemeDocument {
 	readonly $schema?: string;
 	readonly include?: string;
@@ -15,20 +16,14 @@ export interface ColorThemeDocument {
 	readonly type?: 'dark' | 'light' | 'hcDark' | 'hcLight';
 	readonly colors?: Readonly<Record<string, string>>;
 	readonly semanticHighlighting?: boolean;
-	readonly semanticTokenColors?: Readonly<
-		Record<
-			string,
-			| string
-			| {
-					readonly foreground?: string;
-					readonly fontStyle?: string;
-					readonly bold?: boolean;
-					readonly italic?: boolean;
-					readonly underline?: boolean;
-					readonly strikethrough?: boolean;
-			  }
-		>
-	>;
+	readonly semanticTokenColors?: Readonly<Record<string, string | {
+		readonly foreground?: string;
+		readonly fontStyle?: string;
+		readonly bold?: boolean;
+		readonly italic?: boolean;
+		readonly underline?: boolean;
+		readonly strikethrough?: boolean;
+	}>>;
 }
 
 export function parseColorThemeDocument(value: unknown): ColorThemeDocument {
@@ -71,7 +66,8 @@ function mergeColorThemeDocuments(inherited: ColorThemeDocument | undefined, doc
 		...own,
 		colors: { ...inherited.colors, ...own.colors },
 		semanticTokenColors: { ...inherited.semanticTokenColors, ...own.semanticTokenColors },
-		semanticHighlighting: inherited.semanticHighlighting === true || own.semanticHighlighting === true ? true : (own.semanticHighlighting ?? inherited.semanticHighlighting),
+		semanticHighlighting: inherited.semanticHighlighting === true || own.semanticHighlighting === true
+			? true : own.semanticHighlighting ?? inherited.semanticHighlighting,
 	};
 }
 
@@ -113,38 +109,22 @@ export async function loadUserColorTheme(path: string, read: (path: string) => P
 }
 
 export function userThemeId(name: string): string {
-	const slug = name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/gu, '-')
-		.replace(/^-+|-+$/gu, '');
-	return (
-		slug ||
-		`user-${Array.from(name)
-			.map(character => character.codePointAt(0)!.toString(16))
-			.join('-')}`
-	);
+	const slug = name.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
+	return slug || `user-${Array.from(name).map(character => character.codePointAt(0)!.toString(16)).join('-')}`;
 }
 
 export function colorThemeType(type: ColorThemeDocument['type']): ColorScheme {
 	switch (type) {
-		case 'light':
-			return ColorScheme.Light;
-		case 'hcDark':
-			return ColorScheme.HighContrastDark;
-		case 'hcLight':
-			return ColorScheme.HighContrastLight;
-		default:
-			return ColorScheme.Dark;
+		case 'light': return ColorScheme.Light;
+		case 'hcDark': return ColorScheme.HighContrastDark;
+		case 'hcLight': return ColorScheme.HighContrastLight;
+		default: return ColorScheme.Dark;
 	}
 }
 
 export function createDocumentColorTheme(document: ColorThemeDocument, id: string, label: string, colorScheme: ColorScheme): IColorTheme {
 	return createColorTheme({
-		id,
-		label,
-		colorScheme,
-		colorOverrides: document.colors,
-		allowUnregisteredColorOverrides: true,
+		id, label, colorScheme, colorOverrides: document.colors, allowUnregisteredColorOverrides: true,
 		semanticHighlighting: document.semanticHighlighting,
 		semanticTokenRules: parseSemanticTokenRules(document.semanticTokenColors),
 	});
@@ -153,22 +133,17 @@ export function createDocumentColorTheme(document: ColorThemeDocument, id: strin
 export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticTokenColors']): readonly ISemanticTokenThemeRule[] {
 	if (!colors) return Object.freeze([]);
 	if (Object.keys(colors).length > 1024) throw new Error('Theme exceeds 1024 semantic token rules');
-	return Object.freeze(
-		Object.entries(colors).map(([selector, value]) => {
-			const match = /^(\*|[A-Za-z][A-Za-z0-9_]*)(\.[A-Za-z][A-Za-z0-9_]*)*(?::[A-Za-z][A-Za-z0-9_-]*)?$/u.exec(selector);
-			if (!match) throw new Error(`Invalid semantic token selector: ${selector}`);
-			const [typeAndModifiers, language] = selector.split(':');
-			const [type, ...modifiers] = typeAndModifiers!.split('.');
-			const style = typeof value === 'string' ? { foreground: value } : value;
-			return Object.freeze({
-				selector,
-				type: type!,
-				modifiers: Object.freeze(modifiers),
-				...(language ? { language } : {}),
-				...style,
-			});
-		}),
-	);
+	return Object.freeze(Object.entries(colors).map(([selector, value]) => {
+		const match = /^(\*|[A-Za-z][A-Za-z0-9_]*)(\.[A-Za-z][A-Za-z0-9_]*)*(?::[A-Za-z][A-Za-z0-9_-]*)?$/u.exec(selector);
+		if (!match) throw new Error(`Invalid semantic token selector: ${selector}`);
+		const [typeAndModifiers, language] = selector.split(':');
+		const [type, ...modifiers] = typeAndModifiers!.split('.');
+		const style = typeof value === 'string' ? { foreground: value } : value;
+		return Object.freeze({
+			selector, type: type!, modifiers: Object.freeze(modifiers), ...(language ? { language } : {}),
+			...style
+		});
+	}));
 }
 
 /** Keep registry defaults implicit so copies still follow their design tokens. Explicit overrides export as resolved hex colors. */
@@ -189,23 +164,7 @@ export function serializeUserColorThemeDraft(theme: IColorTheme, label: string):
 		type: theme.colorScheme,
 		colors,
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
-		...(theme.semanticTokenRules?.length
-			? {
-					semanticTokenColors: Object.fromEntries(
-						theme.semanticTokenRules.map(rule => [
-							rule.selector,
-							{
-								foreground: rule.foreground,
-								fontStyle: rule.fontStyle,
-								bold: rule.bold,
-								italic: rule.italic,
-								underline: rule.underline,
-								strikethrough: rule.strikethrough,
-							},
-						]),
-					),
-				}
-			: {}),
+		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle, bold: rule.bold, italic: rule.italic, underline: rule.underline, strikethrough: rule.strikethrough }])) } : {}),
 	};
 	parseColorThemeDocument(document);
 	return `${JSON.stringify(document, null, 2)}\n`;

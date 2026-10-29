@@ -33,19 +33,14 @@ export class BreadcrumbsService implements IBreadcrumbsService {
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 export const BreadcrumbsShowEditorTypeConfiguration = configurationRegistry.registerConfiguration<boolean>({
-	key: 'breadcrumbs.showEditorType',
-	defaultValue: true,
+	key: 'breadcrumbs.showEditorType', defaultValue: true,
 	parse: value => {
 		if (typeof value !== 'boolean') throw new TypeError(localize('breadcrumbs.showEditorType.invalid', 'Show Editor Type must be a boolean.'));
 		return value;
 	},
 	setting: {
-		get title() {
-			return localize('breadcrumbs.showEditorType.title', 'Breadcrumbs: Show Editor Type');
-		},
-		get description() {
-			return localize('breadcrumbs.showEditorType.description', 'Shows an editor selector for resources that support multiple editors.');
-		},
+		get title() { return localize('breadcrumbs.showEditorType.title', 'Breadcrumbs: Show Editor Type'); },
+		get description() { return localize('breadcrumbs.showEditorType.description', 'Shows an editor selector for resources that support multiple editors.'); },
 		valueType: 'boolean',
 	},
 });
@@ -53,7 +48,7 @@ export const BreadcrumbsShowEditorTypeConfiguration = configurationRegistry.regi
 export const BreadcrumbsEnabledConfiguration = configurationRegistry.registerConfiguration<boolean>({
 	key: 'breadcrumbs.enabled',
 	defaultValue: true,
-	parse: value => (typeof value === 'boolean' ? value : true),
+	parse: value => typeof value === 'boolean' ? value : true,
 	setting: {
 		title: 'Breadcrumbs: Enabled',
 		description: 'Shows the active editor resource path below the editor title.',
@@ -101,16 +96,11 @@ export const BreadcrumbsSymbolPathConfiguration = configurationRegistry.register
 });
 
 export const BreadcrumbsIconsConfiguration = configurationRegistry.registerConfiguration<boolean>({
-	key: 'breadcrumbs.icons',
-	defaultValue: true,
-	parse: value => (typeof value === 'boolean' ? value : true),
+	key: 'breadcrumbs.icons', defaultValue: true,
+	parse: value => typeof value === 'boolean' ? value : true,
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('breadcrumbs.icons.title', 'Breadcrumb icons');
-		},
-		get description() {
-			return localize('breadcrumbs.icons.description', 'Show file and symbol icons in editor breadcrumbs.');
-		},
+		get title() { return localize('breadcrumbs.icons.title', 'Breadcrumb icons'); },
+		get description() { return localize('breadcrumbs.icons.description', 'Show file and symbol icons in editor breadcrumbs.'); },
 	},
 });

@@ -46,7 +46,10 @@ export class SideBySideEditor extends EditorPane implements IEditorPane {
 		if (!isResourceDiffEditorInput(input)) throw new TypeError('Side-by-side editor requires two inputs');
 		if (!this.container) throw new ReferenceError('Side-by-side editor has not been created');
 		throwIfCancelled(signal, 'Side-by-side editor loading was cancelled');
-		const results = await Promise.allSettled([this.secondaryPane.setInput(input.original, signal), this.primaryPane.setInput(input.modified, signal)]);
+		const results = await Promise.allSettled([
+			this.secondaryPane.setInput(input.original, signal),
+			this.primaryPane.setInput(input.modified, signal),
+		]);
 		const failure = results.find(result => result.status === 'rejected');
 		if (failure?.status === 'rejected') {
 			this.clearInput();
@@ -80,14 +83,8 @@ export class SideBySideEditor extends EditorPane implements IEditorPane {
 		this.primaryPane.setVisible(visibility);
 	}
 
-	public override focus(): void {
-		this.primaryPane.focus();
-	}
+	public override focus(): void { this.primaryPane.focus(); }
 
-	public getSecondaryEditorPane(): IEditorPane {
-		return this.secondaryPane;
-	}
-	public getPrimaryEditorPane(): IEditorPane {
-		return this.primaryPane;
-	}
+	public getSecondaryEditorPane(): IEditorPane { return this.secondaryPane; }
+	public getPrimaryEditorPane(): IEditorPane { return this.primaryPane; }
 }

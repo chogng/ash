@@ -5,22 +5,27 @@ import { KeyboardLayoutContribution } from './keyboardLayouts/_.contribution.js'
 
 const layoutPromises = new Map<OperatingSystem, Promise<readonly IKeyboardLayoutDefinition[]>>();
 
-export function loadBuiltinKeyboardLayouts(operatingSystem: OperatingSystem): Promise<readonly IKeyboardLayoutDefinition[]> {
+export function loadBuiltinKeyboardLayouts(
+	operatingSystem: OperatingSystem,
+): Promise<readonly IKeyboardLayoutDefinition[]> {
 	const existing = layoutPromises.get(operatingSystem);
 	if (existing) {
 		return existing;
 	}
 	const promise = loadPlatformContribution(operatingSystem).then(() => {
 		const definitions = KeyboardLayoutContribution.INSTANCE.layoutInfos
-			.flatMap(info => toKeyboardLayoutDefinitions(info))
-			.filter(definition => definition.layout.operatingSystem === operatingSystem);
+			.flatMap((info) => toKeyboardLayoutDefinitions(info))
+			.filter((definition) => definition.layout.operatingSystem === operatingSystem);
 		return deduplicateLayouts(definitions);
 	});
 	layoutPromises.set(operatingSystem, promise);
 	return promise;
 }
 
-export function findMatchingBuiltinLayout(browserMapping: IKeyboardMapping, definitions: readonly IKeyboardLayoutDefinition[]): IKeyboardLayoutDefinition | undefined {
+export function findMatchingBuiltinLayout(
+	browserMapping: IKeyboardMapping,
+	definitions: readonly IKeyboardLayoutDefinition[],
+): IKeyboardLayoutDefinition | undefined {
 	let best: IKeyboardLayoutDefinition | undefined;
 	let bestScore = -1;
 	for (const definition of definitions) {
@@ -61,7 +66,9 @@ async function loadPlatformContribution(operatingSystem: OperatingSystem): Promi
 	}
 }
 
-function deduplicateLayouts(definitions: readonly IKeyboardLayoutDefinition[]): readonly IKeyboardLayoutDefinition[] {
+function deduplicateLayouts(
+	definitions: readonly IKeyboardLayoutDefinition[],
+): readonly IKeyboardLayoutDefinition[] {
 	const unique = new Map<string, IKeyboardLayoutDefinition>();
 	for (const definition of definitions) {
 		if (!unique.has(definition.layout.id)) {

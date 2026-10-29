@@ -10,10 +10,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.getByRole('button', { name: 'Open voice window' }).click();
 			const popup = await popupPromise;
 			popup.on('pageerror', error => errors.push(error.message));
-			const openChat = popup.getByRole('button', {
-				name: locale === 'en' ? 'Open Chat' : '打开聊天',
-				exact: true,
-			});
+			const openChat = popup.getByRole('button', { name: locale === 'en' ? 'Open Chat' : '打开聊天', exact: true });
 			await expect(openChat).toBeFocused();
 			await expect(popup.getByRole('status')).toContainText('Original Chat');
 			await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.owners().active)).toBe(1);
@@ -30,12 +27,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(help.view).toContain('Updated spoken text');
 			const style = await transcript.evaluate(element => {
 				const style = getComputedStyle(element);
-				return {
-					color: style.color,
-					outline: style.outlineStyle,
-					border: style.borderTopStyle,
-					overflow: style.overflowY,
-				};
+				return { color: style.color, outline: style.outlineStyle, border: style.borderTopStyle, overflow: style.overflowY };
 			});
 			expect(style.color).not.toBe('rgba(0, 0, 0, 0)');
 			expect(style.overflow).toBe('auto');
@@ -47,9 +39,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(popup.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开连接', exact: true })).toBeDisabled();
 			await expect(openChat).toBeFocused();
 			await popup.locator('.ash-agents-voice').screenshot({ path: test.info().outputPath('voice-window.png') });
-			await openChat.press('Escape').catch(error => {
-				if (!popup.isClosed()) throw error;
-			});
+			await openChat.press('Escape').catch(error => { if (!popup.isClosed()) throw error; });
 			await expect.poll(() => popup.isClosed()).toBe(true);
 			await expect(page.getByRole('button', { name: 'Open voice window' })).toBeFocused();
 			await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.owners().active)).toBe(0);
@@ -112,47 +102,28 @@ test('A transcript revision gap refreshes the canonical snapshot', async ({ page
 for (const locale of ['en', 'zh-CN']) {
 	test(`Voice microphone mute and held input release on keyup, pointer cancel and close in ${locale}`, async ({ page }) => {
 		await page.goto(`/agentsVoice.html?connected=1&locale=${locale}`);
-		const opened = page.waitForEvent('popup');
-		await page.getByRole('button', { name: 'Open voice window' }).click();
-		const popup = await opened;
+		const opened = page.waitForEvent('popup'); await page.getByRole('button', { name: 'Open voice window' }).click(); const popup = await opened;
 		await popup.getByRole('button', { name: locale === 'en' ? 'Mute microphone' : '静音麦克风', exact: true }).click();
 		await expect(popup.getByRole('status')).toContainText(locale === 'en' ? 'Microphone muted' : '麦克风已静音');
-		const held = popup.getByRole('button', { name: locale === 'en' ? 'Hold to speak' : '按住说话', exact: true });
-		await expect(held).toBeDisabled();
+		const held = popup.getByRole('button', { name: locale === 'en' ? 'Hold to speak' : '按住说话', exact: true }); await expect(held).toBeDisabled();
 		await popup.getByRole('button', { name: locale === 'en' ? 'Unmute microphone' : '取消麦克风静音', exact: true }).click();
 		await popup.getByRole('button', { name: locale === 'en' ? 'Use push to talk' : '使用按住说话', exact: true }).click();
-		await expect(held).toBeEnabled();
-		await held.focus();
-		await popup.keyboard.down('Space');
-		await expect(held).toHaveAttribute('aria-pressed', 'true');
-		await popup.keyboard.up('Space');
-		await expect(held).toHaveAttribute('aria-pressed', 'false');
+		await expect(held).toBeEnabled(); await held.focus(); await popup.keyboard.down('Space'); await expect(held).toHaveAttribute('aria-pressed', 'true');
+		await popup.keyboard.up('Space'); await expect(held).toHaveAttribute('aria-pressed', 'false');
 		// Browser-generated pointer events establish capture; cancellation must retire the same hold.
-		const bounds = await held.boundingBox();
-		if (!bounds) throw new Error('Missing held input control');
-		await popup.mouse.move(bounds.x + 4, bounds.y + 4);
-		await popup.mouse.down();
-		await expect(held).toHaveAttribute('aria-pressed', 'true');
-		await held.dispatchEvent('pointercancel');
-		await expect(held).toHaveAttribute('aria-pressed', 'false');
-		await popup.mouse.up();
-		await held.focus();
-		await popup.keyboard.down('Enter');
-		await expect(held).toHaveAttribute('aria-pressed', 'true');
-		await page.evaluate(() => window.ashAgentsVoice.close());
-		await expect.poll(() => popup.isClosed()).toBe(true);
+		const bounds = await held.boundingBox(); if (!bounds) throw new Error('Missing held input control');
+		await popup.mouse.move(bounds.x + 4, bounds.y + 4); await popup.mouse.down(); await expect(held).toHaveAttribute('aria-pressed', 'true');
+		await held.dispatchEvent('pointercancel'); await expect(held).toHaveAttribute('aria-pressed', 'false'); await popup.mouse.up();
+		await held.focus(); await popup.keyboard.down('Enter'); await expect(held).toHaveAttribute('aria-pressed', 'true');
+		await page.evaluate(() => window.ashAgentsVoice.close()); await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.controls())).toEqual(['mute:true', 'mute:false', 'mode:pushToTalk', 'hold', 'release', 'hold', 'release', 'hold', 'release']);
 		expect(await page.evaluate(() => window.ashAgentsVoice.notifications())).toEqual([]);
 	});
 }
 
 test('Starting voice in the floating window uses the original Chat navigation controller', async ({ page }) => {
-	await page.goto('/agentsVoice.html');
-	const opened = page.waitForEvent('popup');
-	await page.getByRole('button', { name: 'Open voice window' }).click();
-	const popup = await opened;
+	await page.goto('/agentsVoice.html'); const opened = page.waitForEvent('popup'); await page.getByRole('button', { name: 'Open voice window' }).click(); const popup = await opened;
 	await popup.getByRole('button', { name: 'Start voice', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.controls())).toEqual(['startFromChat']);
-	expect(await page.evaluate(() => window.ashAgentsVoice.notifications())).toEqual([]);
-	await popup.close();
+	expect(await page.evaluate(() => window.ashAgentsVoice.notifications())).toEqual([]); await popup.close();
 });

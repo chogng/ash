@@ -160,17 +160,15 @@ suite('Customize page', () => {
 		for (const width of [1280, 760]) {
 			await page.setViewportSize({ width, height: 900 });
 			await expect(root).toHaveClass(width === 760 ? /narrow/ : /^(?!.*narrow)/);
-			const dimensions = await root.locator('.ash-customize-card').evaluateAll(cards =>
-				cards.map(card => {
-					const description = card.querySelector<HTMLElement>('.ash-customize-card-description')!;
-					return {
-						height: card.getBoundingClientRect().height,
-						descriptionHeight: description.getBoundingClientRect().height,
-						lineHeight: Number.parseFloat(getComputedStyle(description).lineHeight),
-						truncated: description.scrollHeight > description.clientHeight,
-					};
-				}),
-			);
+			const dimensions = await root.locator('.ash-customize-card').evaluateAll(cards => cards.map(card => {
+				const description = card.querySelector<HTMLElement>('.ash-customize-card-description')!;
+				return {
+					height: card.getBoundingClientRect().height,
+					descriptionHeight: description.getBoundingClientRect().height,
+					lineHeight: Number.parseFloat(getComputedStyle(description).lineHeight),
+					truncated: description.scrollHeight > description.clientHeight,
+				};
+			}));
 			for (const dimension of dimensions) {
 				expect(dimension.height).toBeCloseTo(dimensions[0].height, 1);
 				expect(dimension.descriptionHeight).toBeCloseTo(2 * dimension.lineHeight, 1);
@@ -198,12 +196,7 @@ suite('Customize page', () => {
 		await expect(root.locator('.ash-customize-search > .ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		await expect(root.getByRole('searchbox')).toHaveCSS('padding-inline-start', '32px');
 		await expect(root.getByRole('button', { name: 'Filter sources' }).locator('.ash-icon-label-icon > .ash-icon')).toHaveAttribute('data-ash-icon-id', 'list-filter');
-		for (const control of [
-			root.locator('.ash-customize-search'),
-			root.getByRole('tab', { name: 'Skills', exact: true }),
-			root.getByRole('button', { name: 'Discover', exact: true }),
-			root.getByRole('button', { name: 'Add', exact: true }),
-		]) {
+		for (const control of [root.locator('.ash-customize-search'), root.getByRole('tab', { name: 'Skills', exact: true }), root.getByRole('button', { name: 'Discover', exact: true }), root.getByRole('button', { name: 'Add', exact: true })]) {
 			await expect(control).toHaveCSS('border-radius', '8px');
 		}
 		for (const name of ['Filter sources', 'Sort resources', 'Add', 'Refresh', 'Install Data explorer']) {
@@ -306,10 +299,7 @@ suite('Customize page', () => {
 			}
 			const root = page.locator('.ash-customize');
 			await root.getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
-			const install = root.getByRole('button', {
-				name: chinese ? '安装 Data explorer' : 'Install Data explorer',
-				exact: true,
-			});
+			const install = root.getByRole('button', { name: chinese ? '安装 Data explorer' : 'Install Data explorer', exact: true });
 			await expect(install.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
 			await install.focus();
 			await install.press('Enter');
@@ -318,10 +308,7 @@ suite('Customize page', () => {
 			await expect(root.locator('.ash-customize-card-open.installed')).toHaveCount(0);
 			await expect(page.locator('.ash-notification')).toHaveCount(0);
 			await review.getByRole('button', { name: chinese ? '安装' : 'Install', exact: true }).click();
-			const installed = root.getByRole('button', {
-				name: chinese ? '已安装：Data explorer。查看详情' : 'Installed: Data explorer. View details',
-				exact: true,
-			});
+			const installed = root.getByRole('button', { name: chinese ? '已安装：Data explorer。查看详情' : 'Installed: Data explorer. View details', exact: true });
 			await expect(installed.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'check');
 			await expect(installed).toBeFocused();
 			const toast = page.locator('.ash-notification');
@@ -374,4 +361,6 @@ suite('Customize page', () => {
 		await expect(root.locator('.ash-customize-card-open.installed')).toHaveCount(0);
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
 	});
+
+
 });

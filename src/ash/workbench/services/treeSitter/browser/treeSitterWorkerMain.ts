@@ -14,24 +14,12 @@ start(({ port, resources }) => {
 		const query = library.getHighlightingQueries(languageId);
 		if (!language || !query) throw new Error(`Missing Tree-sitter grammar for ${languageId}`);
 		const editorLanguage = editorLanguageForSyntaxLanguage(syntaxLanguageForEditorLanguage(languageId)!);
-		return {
-			Parser,
-			language,
-			languageId: editorLanguage,
-			foldingRules: getLanguageFoldingRules(editorLanguage),
-			query,
-			symbols: library.getSymbolQueries(languageId),
-			folds: library.getFoldingQueries(languageId),
-			injections: library.getInjectionQueries(languageId),
-			loadEmbeddedLanguage: load,
-		};
+		return { Parser, language, languageId: editorLanguage, foldingRules: getLanguageFoldingRules(editorLanguage), query, symbols: library.getSymbolQueries(languageId), folds: library.getFoldingQueries(languageId), injections: library.getInjectionQueries(languageId), loadEmbeddedLanguage: load };
 	};
-	const worker = resources.add(
-		new TreeSitterWorker(async languageId => {
-			const runtime = await load(languageId);
-			if (!runtime) throw new Error(`Missing Tree-sitter grammar for ${languageId}`);
-			return runtime;
-		}),
-	);
+	const worker = resources.add(new TreeSitterWorker(async languageId => {
+		const runtime = await load(languageId);
+		if (!runtime) throw new Error(`Missing Tree-sitter grammar for ${languageId}`);
+		return runtime;
+	}));
 	resources.add(new WebWorkerServer(port, treeSitterChannel, worker));
 });

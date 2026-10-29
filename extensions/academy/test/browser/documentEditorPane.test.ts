@@ -16,13 +16,7 @@ import { JSDOM } from 'jsdom';
 import { type IDimension } from '../../../../src/ash/base/browser/dom.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 import type { IFileChangeEvent } from '../../../../src/ash/platform/files/common/files.js';
-import {
-	TextFileContentSource,
-	TextFileSaveConflictError,
-	type ResolvedTextFileContent,
-	type TextFileResolveRequest,
-	type TextFileSaveRequest,
-} from '../../../../src/ash/workbench/services/textfile/common/textFileService.js';
+import { TextFileContentSource, TextFileSaveConflictError, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from '../../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { type ITextFileService } from '../../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import { DocumentEditorTextModelService } from '../../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
@@ -51,30 +45,24 @@ import { h } from '../../../../src/ash/base/browser/dom.js';
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
+
+
 let dialogValues: readonly string[] = [];
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
 	onDidShowDialog: Event.None,
-	about: async () => {
-		throw new Error('Unexpected about dialog');
-	},
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
+	about: async () => { throw new Error('Unexpected about dialog'); },
+	showMessage: async () => { },
+	info: async () => { },
+	warn: async () => { },
+	error: async () => { },
 	confirm: async () => ({ confirmed: true }),
-	prompt: async () => {
-		throw new Error('Unexpected prompt');
-	},
+	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: true, values: dialogValues }),
 };
 
 class EditorPane extends DocumentEditorPane {
-	constructor(
-		document: Document,
-		files: ITextFileService,
-		options: Partial<EditorPaneOptions> & RichTextEditorOptions & { schema?: DocumentSchema; plugins?: readonly DocumentPlugin<unknown>[] } = {},
-	) {
+	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> & RichTextEditorOptions & { schema?: DocumentSchema; plugins?: readonly DocumentPlugin<unknown>[]; } = {}) {
 		const copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		const models = new DocumentEditorTextModelService(files, copies);
 		const services = createTestComponentServices(undefined, undefined, document);
@@ -84,18 +72,7 @@ class EditorPane extends DocumentEditorPane {
 		const opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		services.registerInstance(DialogServiceId, testDialogs);
-		super(
-			{
-				...createEditorProfileConfiguration(options.schema ?? createDefaultDocumentSchema(), { outlineNavigator: false, contributions: documentContributions, ...options }, options.plugins),
-				contentType: 'application/vnd.ash.document+json',
-				...options,
-			},
-			testDialogs,
-			models,
-			services,
-			services.get(IThemeService),
-			services.get(IStorageService),
-		);
+		super({ ...createEditorProfileConfiguration(options.schema ?? createDefaultDocumentSchema(), { outlineNavigator: false, contributions: documentContributions, ...options }, options.plugins), contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services, services.get(IThemeService), services.get(IStorageService));
 		this._register(services);
 		this._register(codeEditors);
 		this._register(opener);
@@ -120,14 +97,8 @@ test('Academy package panes share one model, save baseline and working copy unti
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	const input = { codec: bindDocumentCodec(schema), resource: URI.file('/paper.ash-academy') };
-	using first = createDocumentEditorPane(academyProfile, {
-		input,
-		instantiationService: services,
-	}) as DocumentEditorPane;
-	using second = createDocumentEditorPane(academyProfile, {
-		input,
-		instantiationService: services,
-	}) as DocumentEditorPane;
+	using first = createDocumentEditorPane(academyProfile, { input, instantiationService: services }) as DocumentEditorPane;
+	using second = createDocumentEditorPane(academyProfile, { input, instantiationService: services }) as DocumentEditorPane;
 	try {
 		first.create(environment.window.document.body);
 		second.create(environment.window.document.body);
@@ -148,38 +119,16 @@ test('Academy package panes share one model, save baseline and working copy unti
 		await second.save!();
 		second.clearInput();
 		assert.equal(copies.get(input.resource).length, 0);
-	} finally {
-		environment.window.close();
-	}
+	} finally { environment.window.close(); }
 });
 
 test('shared untitled save uses a live view after the original view closes', async () => {
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
-	const input = {
-		codec: bindDocumentCodec(createDefaultDocumentSchema()),
-		resource: URI.parse('untitled:document/shared'),
-		contentType: 'test.document',
-	};
+	const input = { codec: bindDocumentCodec(createDefaultDocumentSchema()), resource: URI.parse('untitled:document/shared'), contentType: 'test.document' };
 	let saves = 0;
-	const first = await models.acquire(
-		{
-			...input,
-			onSave: async () => {
-				throw new Error('Closed view must not save');
-			},
-		},
-		new AbortController().signal,
-	);
-	using second = await models.acquire(
-		{
-			...input,
-			onSave: async () => {
-				saves += 1;
-			},
-		},
-		new AbortController().signal,
-	);
+	const first = await models.acquire({ ...input, onSave: async () => { throw new Error('Closed view must not save'); } }, new AbortController().signal);
+	using second = await models.acquire({ ...input, onSave: async () => { saves += 1; } }, new AbortController().signal);
 	first.dispose();
 	await copies.get(input.resource)[0]!.save(new AbortController().signal);
 	assert.equal(saves, 1);
@@ -189,11 +138,7 @@ test('shared untitled save uses a live view after the original view closes', asy
 test('structured acquisition rejects plain text, cancellation and conflicting document types', async () => {
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Initial'), copies);
-	const input = {
-		codec: bindDocumentCodec(createDefaultDocumentSchema()),
-		resource: URI.file('/document.ash-paper'),
-		contentType: 'test.document',
-	};
+	const input = { codec: bindDocumentCodec(createDefaultDocumentSchema()), resource: URI.file('/document.ash-paper'), contentType: 'test.document' };
 	using reference = await models.acquire(input, new AbortController().signal);
 	await assert.rejects(models.acquire({ ...input, contentType: 'other.document' }, new AbortController().signal), /different document type/u);
 	await assert.rejects(models.acquire(input, AbortSignal.abort()), /cancelled/u);
@@ -204,36 +149,21 @@ test('structured acquisition rejects plain text, cancellation and conflicting do
 
 test('Academy v1 migration preserves one typed working copy through backup, revert and Save As', async () => {
 	const schema = createAcademyDocumentSchema();
-	const document = schema.createDocument(
-		[
-			schema.createNode('paragraph', {
-				id: 'migration-paragraph',
-				content: [
-					schema.createText('Original', { id: 'migration-text' }),
-					schema.createNode('image', {
-						id: 'migration-image',
-						attrs: { src: 'https://images.example/figure.png', alt: 'Figure' },
-					}),
-				],
-			}),
+	const document = schema.createDocument([schema.createNode('paragraph', {
+		id: 'migration-paragraph', content: [
+			schema.createText('Original', { id: 'migration-text' }),
+			schema.createNode('image', { id: 'migration-image', attrs: { src: 'https://images.example/figure.png', alt: 'Figure' } }),
 		],
-		'migration-document',
-	);
+	})], 'migration-document');
 	const resource = URI.file('/legacy.ash-academy');
 	const target = URI.file('/saved.ash-paper');
 	const records = new Map([[resource.toString(), { text: JSON.stringify({ format: 'ash.document', version: 1, document }), revision: '1' }]]);
 	const files: ITextFileService = {
-		onDidSave: Event.None,
-		onDidChangeFiles: Event.None,
+		onDidSave: Event.None, onDidChangeFiles: Event.None,
 		async resolve(request) {
 			const record = records.get(request.resource.toString());
 			assert.ok(record);
-			return {
-				resource: request.resource,
-				...record,
-				source: TextFileContentSource.FileSystem,
-				encoding: 'utf8',
-			};
+			return { resource: request.resource, ...record, source: TextFileContentSource.FileSystem, encoding: 'utf8' };
 		},
 		async save(request) {
 			const current = records.get(request.resource.toString());
@@ -246,12 +176,7 @@ test('Academy v1 migration preserves one typed working copy through backup, reve
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(files, copies);
 	const signal = new AbortController().signal;
-	const input = {
-		codec: bindDocumentCodec(schema),
-		resource,
-		contentType: 'application/vnd.ash.academy-document+json',
-		schema,
-	};
+	const input = { codec: bindDocumentCodec(schema), resource, contentType: 'application/vnd.ash.academy-document+json', schema };
 	const first = await models.acquire(input, signal);
 	const second = await models.acquire({ ...input, codec: bindDocumentCodec(createAcademyDocumentSchema()) }, signal);
 	await assert.rejects(models.acquire({ ...input, modelCompatibility: 'changed-client-build' }, new AbortController().signal), /different editor version/);
@@ -260,12 +185,7 @@ test('Academy v1 migration preserves one typed working copy through backup, reve
 		assert.equal(copies.get(resource).length, 1);
 		assert.equal(first.isDirty, false);
 		assert.equal(JSON.parse(records.get(resource.toString())!.text).version, 1, 'opening must not rewrite the file');
-		assert.deepEqual(JSON.parse(first.backup()), {
-			format: 'ash.document',
-			version: 2,
-			documentType: 'academy',
-			document,
-		});
+		assert.deepEqual(JSON.parse(first.backup()), { format: 'ash.document', version: 2, documentType: 'academy', document });
 		await assert.rejects(models.acquire({ ...input, codec: bindDocumentCodec(createDefaultDocumentSchema()) }, signal), /different document type/u);
 		const restored = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Recovered')] })]);
 		first.restoreBackup(serializeDocument(restored, schema));
@@ -318,32 +238,23 @@ test('Stanza editor edits and saves a structured paragraph', async () => {
 
 	const layoutContainer = parent.querySelector<HTMLElement>('.ash-text-editor-widget-layout');
 	const editorContainer = parent.querySelector<HTMLElement>('.ash-text-editor-widget-pane');
-	assert.deepEqual(
-		{
-			layout: { width: layoutContainer?.style.width, height: layoutContainer?.style.height },
-			editor: { width: editorContainer?.style.width, height: editorContainer?.style.height },
-		},
-		{
-			layout: { width: '640px', height: '480px' },
-			editor: { width: '640px', height: '480px' },
-		},
-	);
+	assert.deepEqual({
+		layout: { width: layoutContainer?.style.width, height: layoutContainer?.style.height },
+		editor: { width: editorContainer?.style.width, height: editorContainer?.style.height },
+	}, {
+		layout: { width: '640px', height: '480px' },
+		editor: { width: '640px', height: '480px' },
+	});
 
-	await pane.setInput(
-		{
-			resource: URI.file('C:\\project\\paper.ash-academy'),
-			contentType: 'application/vnd.ash.academy-document+json',
-			label: 'paper',
-		},
-		new AbortController().signal,
-	);
+	await pane.setInput({
+		resource: URI.file('C:\\project\\paper.ash-academy'),
+		contentType: 'application/vnd.ash.academy-document+json',
+		label: 'paper',
+	}, new AbortController().signal);
 
 	assert.equal(pane.id, DOCUMENT_EDITOR_ID);
 	assert.equal(parent.querySelectorAll('textarea').length, 2);
-	assert.deepEqual(
-		[...parent.querySelectorAll<HTMLTextAreaElement>('textarea')].map(textarea => textarea.getAttribute('aria-label')),
-		['Paragraph', 'Paragraph'],
-	);
+	assert.deepEqual([...parent.querySelectorAll<HTMLTextAreaElement>('textarea')].map(textarea => textarea.getAttribute('aria-label')), ['Paragraph', 'Paragraph']);
 	const first = parent.querySelector<HTMLTextAreaElement>('textarea');
 	assert.ok(first);
 	first.value = 'Edited title';
@@ -361,11 +272,7 @@ test('DocumentWorkingCopy clears dirty state after an untitled save succeeds', a
 	const environment = new JSDOM('<!doctype html><body></body>');
 	let saveCalls = 0;
 	const parent = h(environment.window.document, 'main');
-	const pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		onSave: async () => {
-			saveCalls += 1;
-		},
-	});
+	const pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { onSave: async () => { saveCalls += 1; } });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.parse('untitled:academy/draft'), initialText: 'Draft' }, new AbortController().signal);
 	const textarea = parent.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input');
@@ -434,12 +341,7 @@ test('Stanza routes block keyboard commands through Stanza', async () => {
 	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>('textarea.stanza-document-text-input'));
 	const blockTexts = (): string[] => pane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? '');
 	const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
-		const event = new environment.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			cancelable: true,
-			key,
-			...modifiers,
-		});
+		const event = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, ...modifiers });
 		textarea.dispatchEvent(event);
 		return event;
 	};
@@ -487,26 +389,14 @@ test('Stanza projects plugin decorations onto rich text runs', async () => {
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	const key = new DocumentPluginKey<DocumentDecorationSet>('search');
-	const plugin = createDocumentPlugin(
-		key,
-		{
-			init: context => {
-				const textNode = context.document.content[0]?.content.find(child => child.text !== undefined);
-				if (!textNode) throw new Error('Expected a migrated text node');
-				return new DocumentDecorationSet([
-					createDocumentDecoration({
-						id: 'search-hit',
-						from: { nodeId: textNode.id, offset: 1 },
-						to: { nodeId: textNode.id, offset: 4 },
-						className: 'search-hit',
-						attrs: { 'data-source': 'test' },
-					}),
-				]);
-			},
-			apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
+	const plugin = createDocumentPlugin(key, {
+		init: context => {
+			const textNode = context.document.content[0]?.content.find(child => child.text !== undefined);
+			if (!textNode) throw new Error('Expected a migrated text node');
+			return new DocumentDecorationSet([createDocumentDecoration({ id: 'search-hit', from: { nodeId: textNode.id, offset: 1 }, to: { nodeId: textNode.id, offset: 4 }, className: 'search-hit', attrs: { 'data-source': 'test' } })]);
 		},
-		{ decorations: state => state },
-	);
+		apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
+	}, { decorations: state => state });
 	using pane = new EditorPane(environment.window.document, files, { plugins: [plugin] });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\paper.ash-academy') }, new AbortController().signal);
@@ -546,12 +436,7 @@ test('Stanza commits textarea composition as one Stanza transaction', async () =
 	textarea.dispatchEvent(compositionEnd);
 
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Hello世');
-	const undo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-	});
+	const undo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true });
 	parent.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input')?.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Hello');
@@ -561,10 +446,7 @@ test('Stanza commits textarea composition as one Stanza transaction', async () =
 test('Stanza accepts a schema and custom node view without changing Stanza common nodes', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createDefaultDocumentSchema();
-	const paragraph = schema.createNode('paragraph', {
-		id: 'custom-paragraph',
-		content: [schema.createText('Inside callout', { id: 'custom-text' })],
-	});
+	const paragraph = schema.createNode('paragraph', { id: 'custom-paragraph', content: [schema.createText('Inside callout', { id: 'custom-text' })] });
 	const document = schema.createDocument([schema.createNode('blockquote', { id: 'custom-callout', content: [paragraph] })], 'custom-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
@@ -584,7 +466,7 @@ test('Stanza accepts a schema and custom node view without changing Stanza commo
 						updateChildren(element);
 						return true;
 					},
-					dispose: () => (disposals += 1),
+					dispose: () => disposals += 1,
 				};
 			},
 		},
@@ -620,23 +502,13 @@ test('Stanza projects and edits the generic group, typed-block, and line hierarc
 			text: { kind: 'text' },
 		},
 	});
-	const firstLine = schema.createNode('richLine', {
-		id: 'line-1',
-		content: [schema.createText('First', { id: 'line-text-1' })],
-	});
-	const secondLine = schema.createNode('richLine', {
-		id: 'line-2',
-		content: [schema.createText('Second', { id: 'line-text-2' })],
-	});
-	const document = schema.createDocument(
-		[
-			schema.createNode('group', {
-				id: 'group-1',
-				content: [schema.createNode('textBlock', { id: 'block-1', content: [firstLine, secondLine] })],
-			}),
-		],
-		'article-1',
-	);
+	const firstLine = schema.createNode('richLine', { id: 'line-1', content: [schema.createText('First', { id: 'line-text-1' })] });
+	const secondLine = schema.createNode('richLine', { id: 'line-2', content: [schema.createText('Second', { id: 'line-text-2' })] });
+	const document = schema.createDocument([schema.createNode('group', {
+		id: 'group-1', content: [
+			schema.createNode('textBlock', { id: 'block-1', content: [firstLine, secondLine] }),
+		]
+	})], 'article-1');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema });
@@ -658,49 +530,14 @@ test('Stanza projects and edits the generic group, typed-block, and line hierarc
 test('Stanza projects Academy wrappers while editing Stanza child blocks', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createAcademyDocumentSchema();
-	const document = schema.createDocument(
-		[
-			schema.createNode('title', {
-				id: 'academy-title',
-				content: [
-					schema.createNode('heading', {
-						id: 'title-heading',
-						content: [schema.createText('Paper title', { id: 'title-text' })],
-					}),
-				],
-			}),
-			schema.createNode('abstract', {
-				id: 'academy-abstract',
-				content: [
-					schema.createNode('paragraph', {
-						id: 'abstract-paragraph',
-						content: [schema.createText('Summary', { id: 'abstract-text' })],
-					}),
-				],
-			}),
-			schema.createNode('section', {
-				id: 'academy-section',
-				content: [
-					schema.createNode('heading', {
-						id: 'section-heading',
-						content: [schema.createText('Introduction', { id: 'section-title-text' })],
-					}),
-					schema.createNode('paragraph', {
-						id: 'section-paragraph',
-						content: [schema.createText('Body', { id: 'section-body-text' })],
-					}),
-				],
-			}),
-		],
-		'academy-document',
-	);
+	const document = schema.createDocument([
+		schema.createNode('title', { id: 'academy-title', content: [schema.createNode('heading', { id: 'title-heading', content: [schema.createText('Paper title', { id: 'title-text' })] })] }),
+		schema.createNode('abstract', { id: 'academy-abstract', content: [schema.createNode('paragraph', { id: 'abstract-paragraph', content: [schema.createText('Summary', { id: 'abstract-text' })] })] }),
+		schema.createNode('section', { id: 'academy-section', content: [schema.createNode('heading', { id: 'section-heading', content: [schema.createText('Introduction', { id: 'section-title-text' })] }), schema.createNode('paragraph', { id: 'section-paragraph', content: [schema.createText('Body', { id: 'section-body-text' })] })] }),
+	], 'academy-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		schema,
-		nodeViews: profileNodeViews,
-		outlineNavigator: true,
-	});
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\paper.ash-academy'), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -715,18 +552,12 @@ test('Stanza projects Academy wrappers while editing Stanza child blocks', async
 	assert.equal(abstract.dataset.academyRole, 'abstract');
 	assert.equal(section.dataset.academyRole, 'section');
 	assert.equal(parent.querySelectorAll('textarea.stanza-document-text-input').length, 4);
-	assert.deepEqual(
-		pane.getOutline().map(entry => ({ nodeId: entry.nodeId, title: entry.title, depth: entry.depth })),
-		[
-			{ nodeId: 'title-heading', title: 'Paper title', depth: 0 },
-			{ nodeId: 'section-heading', title: 'Introduction', depth: 0 },
-		],
-	);
+	assert.deepEqual(pane.getOutline().map(entry => ({ nodeId: entry.nodeId, title: entry.title, depth: entry.depth })), [
+		{ nodeId: 'title-heading', title: 'Paper title', depth: 0 },
+		{ nodeId: 'section-heading', title: 'Introduction', depth: 0 },
+	]);
 	const outlineEntries = parent.querySelectorAll<HTMLButtonElement>('.stanza-document-outline-entry');
-	assert.deepEqual(
-		[...outlineEntries].map(entry => entry.textContent),
-		['Paper title', 'Introduction'],
-	);
+	assert.deepEqual([...outlineEntries].map(entry => entry.textContent), ['Paper title', 'Introduction']);
 	outlineEntries[1]!.click();
 	const sectionInput = section.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input');
 	assert.ok(sectionInput);
@@ -747,49 +578,12 @@ test('Stanza projects Academy wrappers while editing Stanza child blocks', async
 test('Stanza renders and deletes Academy citation inline nodes', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createAcademyDocumentSchema();
-	const citation = schema.createNode('citation', {
-		id: 'browser-citation',
-		attrs: { key: 'smith-2024', label: '[Smith 2024]' },
-	});
-	const paragraph = schema.createNode('paragraph', {
-		id: 'citation-paragraph',
-		content: [schema.createText('See ', { id: 'citation-before' }), citation, schema.createText(' for details', { id: 'citation-after' })],
-	});
-	const document = schema.createDocument(
-		[
-			schema.createNode('title', {
-				id: 'citation-title',
-				content: [
-					schema.createNode('heading', {
-						id: 'citation-title-heading',
-						content: [schema.createText('Citations', { id: 'citation-title-text' })],
-					}),
-				],
-			}),
-			schema.createNode('abstract', {
-				id: 'citation-abstract',
-				content: [schema.createNode('paragraph', { id: 'citation-abstract-paragraph' })],
-			}),
-			schema.createNode('section', {
-				id: 'citation-section',
-				content: [
-					schema.createNode('heading', {
-						id: 'citation-section-heading',
-						content: [schema.createText('References', { id: 'citation-section-text' })],
-					}),
-					paragraph,
-				],
-			}),
-		],
-		'citation-document',
-	);
+	const citation = schema.createNode('citation', { id: 'browser-citation', attrs: { key: 'smith-2024', label: '[Smith 2024]' } });
+	const paragraph = schema.createNode('paragraph', { id: 'citation-paragraph', content: [schema.createText('See ', { id: 'citation-before' }), citation, schema.createText(' for details', { id: 'citation-after' })] });
+	const document = schema.createDocument([schema.createNode('title', { id: 'citation-title', content: [schema.createNode('heading', { id: 'citation-title-heading', content: [schema.createText('Citations', { id: 'citation-title-text' })] })] }), schema.createNode('abstract', { id: 'citation-abstract', content: [schema.createNode('paragraph', { id: 'citation-abstract-paragraph' })] }), schema.createNode('section', { id: 'citation-section', content: [schema.createNode('heading', { id: 'citation-section-heading', content: [schema.createText('References', { id: 'citation-section-text' })] }), paragraph] })], 'citation-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		schema,
-		nodeViews: profileNodeViews,
-		inlineNodeViews: citationInlineNodeViews,
-	});
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\citations.ash-academy'), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -802,17 +596,10 @@ test('Stanza renders and deletes Academy citation inline nodes', async () => {
 	citationElement.click();
 	assert.equal(citationElement.classList.contains('stanza-document-inline-node-selected'), true);
 
-	const deletion = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Backspace',
-	});
+	const deletion = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' });
 	editor.dispatchEvent(deletion);
 	assert.equal(deletion.defaultPrevented, true);
-	assert.equal(
-		pane.getDocument().content.some(node => node.type === 'section' && node.content.some(child => child.content.some(inline => inline.type === 'citation'))),
-		false,
-	);
+	assert.equal(pane.getDocument().content.some(node => node.type === 'section' && node.content.some(child => child.content.some(inline => inline.type === 'citation'))), false);
 	assert.equal(parent.querySelector('.ash-citation'), null);
 	environment.window.close();
 });
@@ -821,19 +608,11 @@ test('Stanza exposes Academy citation insertion as a toolbar action', async () =
 	const environment = new JSDOM('<!doctype html><body></body>');
 	dialogValues = ['smith-2024', '[Smith 2024]'];
 	const schema = createAcademyDocumentSchema();
-	const paragraph = schema.createNode('paragraph', {
-		id: 'toolbar-paragraph',
-		content: [schema.createText('See', { id: 'toolbar-text' })],
-	});
+	const paragraph = schema.createNode('paragraph', { id: 'toolbar-paragraph', content: [schema.createText('See', { id: 'toolbar-text' })] });
 	const document = schema.createDocument([paragraph], 'toolbar-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		schema,
-		nodeViews: profileNodeViews,
-		inlineNodeViews: citationInlineNodeViews,
-		toolbarActions: citationToolbarActions,
-	});
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\toolbar.ash-academy'), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -856,41 +635,17 @@ test('Stanza renders resolved citations and bibliography references', async () =
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createAcademyDocumentSchema();
 	const citation = schema.createNode('citation', { id: 'resolved-citation', attrs: { key: 'smith-2024' } });
-	const paragraph = schema.createNode('paragraph', {
-		id: 'resolved-paragraph',
-		content: [schema.createText('See '), citation],
-	});
-	const reference = schema.createNode('reference', {
-		id: 'resolved-reference',
-		attrs: { key: 'smith-2024' },
-		content: [
-			schema.createNode('paragraph', {
-				id: 'resolved-reference-paragraph',
-				content: [schema.createText('Smith, 2024')],
-			}),
-		],
-	});
-	const document = schema.createDocument(
-		[
-			schema.createNode('title', {
-				content: [schema.createNode('heading', { content: [schema.createText('Citations')] })],
-			}),
-			schema.createNode('abstract', { content: [schema.createNode('paragraph')] }),
-			schema.createNode('section', {
-				content: [schema.createNode('heading', { content: [schema.createText('Body')] }), paragraph],
-			}),
-			schema.createNode('bibliography', { content: [reference] }),
-		],
-		'resolved-document',
-	);
+	const paragraph = schema.createNode('paragraph', { id: 'resolved-paragraph', content: [schema.createText('See '), citation] });
+	const reference = schema.createNode('reference', { id: 'resolved-reference', attrs: { key: 'smith-2024' }, content: [schema.createNode('paragraph', { id: 'resolved-reference-paragraph', content: [schema.createText('Smith, 2024')] })] });
+	const document = schema.createDocument([
+		schema.createNode('title', { content: [schema.createNode('heading', { content: [schema.createText('Citations')] })] }),
+		schema.createNode('abstract', { content: [schema.createNode('paragraph')] }),
+		schema.createNode('section', { content: [schema.createNode('heading', { content: [schema.createText('Body')] }), paragraph] }),
+		schema.createNode('bibliography', { content: [reference] }),
+	], 'resolved-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		schema,
-		nodeViews: { ...profileNodeViews, ...citationNodeViews },
-		inlineNodeViews: citationInlineNodeViews,
-		plugins: [createReferenceIndexPlugin()],
-	});
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\resolved.ash-academy'), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -909,27 +664,13 @@ test('Stanza exposes reference insertion as a citation toolbar action', async ()
 	const environment = new JSDOM('<!doctype html><body></body>');
 	dialogValues = ['smith-2024', 'Smith, 2024'];
 	const schema = createAcademyDocumentSchema();
-	const paragraph = schema.createNode('paragraph', {
-		id: 'reference-toolbar-paragraph',
-		content: [schema.createText('Body')],
-	});
+	const paragraph = schema.createNode('paragraph', { id: 'reference-toolbar-paragraph', content: [schema.createText('Body')] });
 	const document = schema.createDocument([paragraph], 'reference-toolbar-document');
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), {
-		schema,
-		nodeViews: { ...profileNodeViews, ...citationNodeViews },
-		inlineNodeViews: citationInlineNodeViews,
-		toolbarActions: citationToolbarActions,
-	});
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(''), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
-	await pane.setInput(
-		{
-			resource: URI.file('C:\\project\\reference-toolbar.ash-academy'),
-			initialText: serializeDocument(document, schema),
-		},
-		new AbortController().signal,
-	);
+	await pane.setInput({ resource: URI.file('C:\\project\\reference-toolbar.ash-academy'), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='reference-toolbar-paragraph']");
 	assert.ok(textarea);
@@ -958,10 +699,7 @@ test('Stanza uses the Academy empty document through revert', async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\empty.ash-academy') }, new AbortController().signal);
 
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.type),
-		['title', 'abstract'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.type), ['title', 'abstract']);
 	assert.ok(parent.querySelector('header.ash-academy-title'));
 	assert.ok(parent.querySelector('section.ash-academy-abstract'));
 	assert.equal(parent.querySelectorAll('textarea.stanza-document-text-input').length, 2);
@@ -973,10 +711,7 @@ test('Stanza uses the Academy empty document through revert', async () => {
 	assert.equal(pane.isDirty, true);
 
 	await pane.revert();
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.type),
-		['title', 'abstract'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.type), ['title', 'abstract']);
 	assert.equal(parent.querySelector<HTMLTextAreaElement>('header.ash-academy-title textarea.stanza-document-text-input')?.value, '');
 	assert.equal(pane.isDirty, false);
 	environment.window.close();
@@ -993,14 +728,8 @@ test('Stanza projects read-only inputs without accepting model mutations', async
 	assert.ok(textarea);
 	assert.equal(textarea.readOnly, true);
 	assert.equal(textarea.getAttribute('aria-readonly'), 'true');
-	assert.equal(
-		[...parent.querySelectorAll<HTMLButtonElement>('.stanza-structured-format-toolbar button')].every(button => button.disabled),
-		true,
-	);
-	assert.equal(
-		[...parent.querySelectorAll<HTMLSelectElement>('.stanza-structured-format-toolbar select')].every(select => select.disabled),
-		true,
-	);
+	assert.equal([...parent.querySelectorAll<HTMLButtonElement>('.stanza-structured-format-toolbar button')].every(button => button.disabled), true);
+	assert.equal([...parent.querySelectorAll<HTMLSelectElement>('.stanza-structured-format-toolbar select')].every(select => select.disabled), true);
 	textarea.value = 'Rejected';
 	textarea.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Hello');
@@ -1022,12 +751,7 @@ test('Stanza routes text undo and redo through Stanza history', async () => {
 
 	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>('textarea.stanza-document-text-input'));
 	const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
-		const event = new environment.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			cancelable: true,
-			key,
-			...modifiers,
-		});
+		const event = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, ...modifiers });
 		textarea.dispatchEvent(event);
 		return event;
 	};
@@ -1065,56 +789,38 @@ test('Stanza creates a hard break with Shift+Enter', async () => {
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(2, 2);
-	const event = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Enter',
-		shiftKey: true,
-	});
+	const event = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', shiftKey: true });
 	textarea.dispatchEvent(event);
 	assert.equal(event.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.type),
-		['text', 'hardBreak', 'text'],
-	);
-	assert.deepEqual(
-		pane
-			.getDocument()
-			.content[0]?.content.filter(node => node.text !== undefined)
-			.map(node => node.text),
-		['He', 'llo'],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ['text', 'hardBreak', 'text']);
+	assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ['He', 'llo']);
 	assert.ok(parent.querySelector('.stanza-document-rich-text-input br'));
 	environment.window.close();
 });
 
 test('Stanza deletes a selection spanning a hard break', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
-							{ id: 'break-1', type: 'hardBreak', attrs: {}, content: [], marks: [] },
-							{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'world' },
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
+					{ id: 'break-1', type: 'hardBreak', attrs: {}, content: [], marks: [] },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'world' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1130,72 +836,45 @@ test('Stanza deletes a selection spanning a hard break', async () => {
 	range.setEnd(runs[1]!.firstChild!, 3);
 	selection?.removeAllRanges();
 	selection?.addRange(range);
-	const event = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Backspace',
-	});
+	const event = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' });
 	editor.dispatchEvent(event);
 	assert.equal(event.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.type),
-		['text', 'text'],
-	);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.text),
-		['He', 'ld'],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ['text', 'text']);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text), ['He', 'ld']);
 	environment.window.close();
 });
 
 test('Stanza renders semantic lists and splits list items', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'list-1',
+				type: 'bulletList',
 				attrs: {},
-				content: [
-					{
-						id: 'list-1',
-						type: 'bulletList',
+				content: [{
+					id: 'item-1',
+					type: 'listItem',
+					attrs: {},
+					content: [{
+						id: 'paragraph-1',
+						type: 'paragraph',
 						attrs: {},
-						content: [
-							{
-								id: 'item-1',
-								type: 'listItem',
-								attrs: {},
-								content: [
-									{
-										id: 'paragraph-1',
-										type: 'paragraph',
-										attrs: {},
-										content: [
-											{
-												id: 'text-1',
-												type: 'text',
-												attrs: {},
-												content: [],
-												marks: [],
-												text: 'oneTwo',
-											},
-										],
-										marks: [],
-									},
-								],
-								marks: [],
-							},
-						],
+						content: [{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'oneTwo' }],
 						marks: [],
-					},
-				],
+					}],
+					marks: [],
+				}],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1213,85 +892,32 @@ test('Stanza renders semantic lists and splits list items', async () => {
 
 	assert.equal(event.defaultPrevented, true);
 	assert.equal(parent.querySelectorAll('ul > li').length, 2);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(item => item.content[0]?.content[0]?.text),
-		['one', 'Two'],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(item => item.content[0]?.content[0]?.text), ['one', 'Two']);
 	environment.window.close();
 });
 
 test('Stanza indents and outdents list items with Tab', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'list-1',
+				type: 'bulletList',
 				attrs: {},
 				content: [
-					{
-						id: 'list-1',
-						type: 'bulletList',
-						attrs: {},
-						content: [
-							{
-								id: 'item-1',
-								type: 'listItem',
-								attrs: {},
-								content: [
-									{
-										id: 'paragraph-1',
-										type: 'paragraph',
-										attrs: {},
-										content: [
-											{
-												id: 'text-1',
-												type: 'text',
-												attrs: {},
-												content: [],
-												marks: [],
-												text: 'one',
-											},
-										],
-										marks: [],
-									},
-								],
-								marks: [],
-							},
-							{
-								id: 'item-2',
-								type: 'listItem',
-								attrs: {},
-								content: [
-									{
-										id: 'paragraph-2',
-										type: 'paragraph',
-										attrs: {},
-										content: [
-											{
-												id: 'text-2',
-												type: 'text',
-												attrs: {},
-												content: [],
-												marks: [],
-												text: 'two',
-											},
-										],
-										marks: [],
-									},
-								],
-								marks: [],
-							},
-						],
-						marks: [],
-					},
+					{ id: 'item-1', type: 'listItem', attrs: {}, content: [{ id: 'paragraph-1', type: 'paragraph', attrs: {}, content: [{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'one' }], marks: [] }], marks: [] },
+					{ id: 'item-2', type: 'listItem', attrs: {}, content: [{ id: 'paragraph-2', type: 'paragraph', attrs: {}, content: [{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'two' }], marks: [] }], marks: [] },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1307,12 +933,7 @@ test('Stanza indents and outdents list items with Tab', async () => {
 	assert.equal(parent.querySelectorAll('ul ul > li').length, 1);
 
 	textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>('textarea.stanza-document-text-input'));
-	const outdent = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Tab',
-		shiftKey: true,
-	});
+	const outdent = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Tab', shiftKey: true });
 	textareas[1]!.dispatchEvent(outdent);
 	assert.equal(outdent.defaultPrevented, true);
 	assert.equal(parent.querySelector('ul')?.children.length, 2);
@@ -1322,35 +943,17 @@ test('Stanza indents and outdents list items with Tab', async () => {
 
 test('Stanza exits an empty list item on the second Enter', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
-				attrs: {},
-				content: [
-					{
-						id: 'list-1',
-						type: 'bulletList',
-						attrs: {},
-						content: [
-							{
-								id: 'item-1',
-								type: 'listItem',
-								attrs: {},
-								content: [{ id: 'paragraph-1', type: 'paragraph', attrs: {}, content: [], marks: [] }],
-								marks: [],
-							},
-						],
-						marks: [],
-					},
-				],
-				marks: [],
-			},
-		}),
-	);
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{ id: 'list-1', type: 'bulletList', attrs: {}, content: [{ id: 'item-1', type: 'listItem', attrs: {}, content: [{ id: 'paragraph-1', type: 'paragraph', attrs: {}, content: [], marks: [] }], marks: [] }], marks: [] }],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1478,10 +1081,7 @@ test('Stanza toggles blockquotes and inserts horizontal rules', async () => {
 
 	documentAction(toolbar, 'horizontalRule').click();
 	assert.equal(parent.querySelectorAll('hr.stanza-document-horizontal-rule').length, 1);
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.type),
-		['paragraph', 'horizontalRule'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.type), ['paragraph', 'horizontalRule']);
 	environment.window.close();
 });
 
@@ -1509,12 +1109,7 @@ test('Stanza navigates table cells with Tab and exposes row and column operation
 	assert.equal(next.defaultPrevented, true);
 	assert.equal(environment.window.document.activeElement, cells[1]);
 
-	const previous = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Tab',
-		shiftKey: true,
-	});
+	const previous = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Tab', shiftKey: true });
 	cells[1]!.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
 	assert.equal(environment.window.document.activeElement, cells[0]);
@@ -1536,21 +1131,11 @@ test('Stanza navigates table cells with Tab and exposes row and column operation
 	documentAction(toolbar, 'deleteTableRow').click();
 	assert.equal(parent.querySelectorAll('table td').length, 6);
 	const activeCell = environment.window.document.activeElement as HTMLTextAreaElement;
-	const undo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-	});
+	const undo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true });
 	activeCell.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
 	assert.equal(parent.querySelectorAll('table td').length, 8);
-	const redo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'y',
-		ctrlKey: true,
-	});
+	const redo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'y', ctrlKey: true });
 	(environment.window.document.activeElement as HTMLTextAreaElement).dispatchEvent(redo);
 	assert.equal(redo.defaultPrevented, true);
 	assert.equal(parent.querySelectorAll('table td').length, 6);
@@ -1559,36 +1144,26 @@ test('Stanza navigates table cells with Tab and exposes row and column operation
 
 test('Stanza renders inline image nodes in the rich surface', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Before' },
-							{
-								id: 'image-1',
-								type: 'image',
-								attrs: { src: 'https://example.test/image.png', alt: 'Example' },
-								content: [],
-								marks: [],
-							},
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Before' },
+					{ id: 'image-1', type: 'image', attrs: { src: 'https://example.test/image.png', alt: 'Example' }, content: [], marks: [] },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1606,16 +1181,8 @@ test('Stanza renders inline image nodes in the rich surface', async () => {
 	const remove = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Delete' });
 	rich.dispatchEvent(remove);
 	assert.equal(remove.defaultPrevented, true);
-	assert.equal(
-		pane.getDocument().content[0]?.content.some(node => node.type === 'image'),
-		false,
-	);
-	const undo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-	});
+	assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === 'image'), false);
+	const undo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true });
 	rich.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
 	const restoredImage = parent.querySelector<HTMLImageElement>('.stanza-document-rich-text-input img');
@@ -1651,37 +1218,26 @@ test('Stanza turns an image clipboard paste into an image node', async () => {
 
 test('Stanza inserts a pasted image at a rich-text selection', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: ' world',
-							},
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: ' world' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1705,43 +1261,17 @@ test('Stanza inserts a pasted image at a rich-text selection', async () => {
 	await waitFor(() => pane.getDocument().content[0]?.content.some(node => node.type === 'image') === true);
 
 	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.type),
-		['text', 'image', 'text', 'text'],
-	);
-	assert.deepEqual(
-		pane
-			.getDocument()
-			.content[0]?.content.filter(node => node.text !== undefined)
-			.map(node => node.text),
-		['He', 'llo', ' world'],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ['text', 'image', 'text', 'text']);
+	assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ['He', 'llo', ' world']);
 	assert.equal(pane.getDocument().content[0]?.content.at(-1)?.marks[0]?.type, 'strong');
-	const undo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-	});
+	const undo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true });
 	editor.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
-	assert.equal(
-		pane.getDocument().content[0]?.content.some(node => node.type === 'image'),
-		false,
-	);
-	const redo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-		shiftKey: true,
-	});
+	assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === 'image'), false);
+	const redo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true, shiftKey: true });
 	editor.dispatchEvent(redo);
 	assert.equal(redo.defaultPrevented, true);
-	assert.equal(
-		pane.getDocument().content[0]?.content.some(node => node.type === 'image'),
-		true,
-	);
+	assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === 'image'), true);
 	const suffixRun = editor.querySelectorAll<HTMLElement>('[data-text-node-id]')[1];
 	assert.ok(suffixRun?.firstChild);
 	const suffixSelection = environment.window.document.getSelection();
@@ -1750,54 +1280,36 @@ test('Stanza inserts a pasted image at a rich-text selection', async () => {
 	suffixRange.collapse(true);
 	suffixSelection?.removeAllRanges();
 	suffixSelection?.addRange(suffixRange);
-	const backspace = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'Backspace',
-	});
+	const backspace = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' });
 	editor.dispatchEvent(backspace);
 	assert.equal(backspace.defaultPrevented, true);
-	assert.equal(
-		pane.getDocument().content[0]?.content.some(node => node.type === 'image'),
-		false,
-	);
+	assert.equal(pane.getDocument().content[0]?.content.some(node => node.type === 'image'), false);
 	environment.window.close();
 });
 
 test('Stanza renders and edits marked inline runs', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'H' },
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: 'ell',
-							},
-							{ id: 'text-3', type: 'text', attrs: {}, content: [], marks: [], text: 'o' },
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'H' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: 'ell' },
+					{ id: 'text-3', type: 'text', attrs: {}, content: [], marks: [], text: 'o' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1807,10 +1319,7 @@ test('Stanza renders and edits marked inline runs', async () => {
 	const rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input');
 	assert.ok(rich);
 	let runs = Array.from(rich.querySelectorAll<HTMLElement>('[data-text-node-id]'));
-	assert.deepEqual(
-		runs.map(run => run.textContent),
-		['H', 'ell', 'o'],
-	);
+	assert.deepEqual(runs.map(run => run.textContent), ['H', 'ell', 'o']);
 	assert.equal(runs[1]?.classList.contains('stanza-document-mark-strong'), true);
 
 	runs[1]!.textContent = 'ELl';
@@ -1825,18 +1334,10 @@ test('Stanza renders and edits marked inline runs', async () => {
 	range.setEnd(runs[2]!.firstChild!, 1);
 	selection?.removeAllRanges();
 	selection?.addRange(range);
-	const event = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'b',
-		ctrlKey: true,
-	});
+	const event = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b', ctrlKey: true });
 	rich.dispatchEvent(event);
 	assert.equal(event.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)),
-		[['strong'], ['strong'], ['strong']],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [['strong'], ['strong'], ['strong']]);
 
 	runs = Array.from(rich.querySelectorAll<HTMLElement>('[data-text-node-id]'));
 	range.setStart(runs[0]!.firstChild!, 0);
@@ -1844,32 +1345,21 @@ test('Stanza renders and edits marked inline runs', async () => {
 	selection?.removeAllRanges();
 	selection?.addRange(range);
 	rich.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b', ctrlKey: true }));
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.marks),
-		[[], [], []],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks), [[], [], []]);
 
 	runs = Array.from(rich.querySelectorAll<HTMLElement>('[data-text-node-id]'));
 	range.setStart(runs[0]!.firstChild!, 1);
 	range.setEnd(runs[2]!.firstChild!, 0);
 	selection?.removeAllRanges();
 	selection?.addRange(range);
-	const beforeInput = new environment.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'insertText',
-		data: 'X',
-	});
+	const beforeInput = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' });
 	rich.dispatchEvent(beforeInput);
 	assert.equal(beforeInput.defaultPrevented, true);
 	// Replacement retains the existing boundary runs so collaborative rebasing keeps their identities.
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(({ id, text, marks }) => ({ id, text, marks })),
-		[
-			{ id: 'text-1', text: 'HX', marks: [] },
-			{ id: 'text-3', text: 'o', marks: [] },
-		],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(({ id, text, marks }) => ({ id, text, marks })), [
+		{ id: 'text-1', text: 'HX', marks: [] },
+		{ id: 'text-3', text: 'o', marks: [] },
+	]);
 	environment.window.close();
 });
 
@@ -1886,12 +1376,7 @@ test('Stanza carries collapsed mark toggles into later input', async () => {
 	textarea.focus();
 	textarea.setSelectionRange(5, 5);
 	textarea.dispatchEvent(new environment.window.Event('select', { bubbles: true }));
-	const toggle = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'b',
-		ctrlKey: true,
-	});
+	const toggle = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b', ctrlKey: true });
 	textarea.dispatchEvent(toggle);
 	assert.equal(toggle.defaultPrevented, true);
 
@@ -1911,21 +1396,11 @@ test('Stanza carries collapsed mark toggles into later input', async () => {
 	domSelection?.removeAllRanges();
 	domSelection?.addRange(range);
 	rich.dispatchEvent(new environment.window.Event('focus', { bubbles: true }));
-	const off = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'b',
-		ctrlKey: true,
-	});
+	const off = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'b', ctrlKey: true });
 	rich.dispatchEvent(off);
 	assert.equal(off.defaultPrevented, true);
 
-	const beforeInput = new environment.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'insertText',
-		data: '?',
-	});
+	const beforeInput = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: '?' });
 	rich.dispatchEvent(beforeInput);
 	assert.equal(beforeInput.defaultPrevented, true);
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Hello!?');
@@ -1936,37 +1411,26 @@ test('Stanza carries collapsed mark toggles into later input', async () => {
 test('Stanza applies, updates, and removes link marks', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	dialogValues = [' https://example.test '];
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: ' world',
-							},
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: ' world' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -1990,77 +1454,49 @@ test('Stanza applies, updates, and removes link marks', async () => {
 	select(0, 1, 1, 6);
 	documentAction(parent, 'link').click();
 	await Promise.resolve();
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)),
-		[[], ['link'], ['strong', 'link']],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], ['link'], ['strong', 'link']]);
 	let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>('a.stanza-document-inline-run'));
-	assert.deepEqual(
-		links.map(link => link.getAttribute('href')),
-		['https://example.test', 'https://example.test'],
-	);
+	assert.deepEqual(links.map(link => link.getAttribute('href')), ['https://example.test', 'https://example.test']);
 	assert.equal(documentAction(parent, 'link').classList.contains('checked'), true);
 
 	dialogValues = ['https://updated.test'];
 	select(1, 0, 2, 6);
-	const shortcut = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'k',
-		ctrlKey: true,
-	});
+	const shortcut = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'k', ctrlKey: true });
 	rich.dispatchEvent(shortcut);
 	await Promise.resolve();
 	assert.equal(shortcut.defaultPrevented, true);
 	links = Array.from(rich.querySelectorAll<HTMLAnchorElement>('a.stanza-document-inline-run'));
-	assert.deepEqual(
-		links.map(link => link.getAttribute('href')),
-		['https://updated.test', 'https://updated.test'],
-	);
+	assert.deepEqual(links.map(link => link.getAttribute('href')), ['https://updated.test', 'https://updated.test']);
 
 	select(1, 0, 2, 6);
 	documentAction(parent, 'unlink').click();
 	assert.equal(rich.querySelectorAll('a.stanza-document-inline-run').length, 0);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)),
-		[[], [], ['strong']],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], [], ['strong']]);
 	environment.window.close();
 });
 
 test('Stanza routes rich-text copy and cut through Stanza', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: ' world',
-							},
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Hello' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: ' world' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -2079,9 +1515,7 @@ test('Stanza routes rich-text copy and cut through Stanza', async () => {
 	environment.window.document.dispatchEvent(new environment.window.Event('selectionchange'));
 
 	const clipboardValues = new Map<string, string>();
-	const clipboardData = {
-		setData: (type: string, value: string) => clipboardValues.set(type, value),
-	} as unknown as DataTransfer;
+	const clipboardData = { setData: (type: string, value: string) => clipboardValues.set(type, value) } as unknown as DataTransfer;
 	const copy = new environment.window.Event('copy', { bubbles: true, cancelable: true });
 	Object.defineProperty(copy, 'clipboardData', { value: clipboardData });
 	rich.dispatchEvent(copy);
@@ -2101,19 +1535,13 @@ test('Stanza routes rich-text copy and cut through Stanza', async () => {
 	const pasteData = {
 		files: [],
 		items: [],
-		getData: (type: string) => (type === DOCUMENT_FRAGMENT_CLIPBOARD_MIME ? encodedFragment : ''),
+		getData: (type: string) => type === DOCUMENT_FRAGMENT_CLIPBOARD_MIME ? encodedFragment : '',
 	} as unknown as DataTransfer;
 	const paste = new environment.window.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(paste, 'clipboardData', { value: pasteData });
 	rich.dispatchEvent(paste);
 	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(
-		pane
-			.getDocument()
-			.content[0]?.content.filter(node => node.text !== undefined)
-			.map(node => node.text),
-		['Hello', ' world', 'Hello', ' world'],
-	);
+	assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ['Hello', ' world', 'Hello', ' world']);
 
 	const updatedRich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input');
 	assert.ok(updatedRich);
@@ -2135,37 +1563,26 @@ test('Stanza routes rich-text copy and cut through Stanza', async () => {
 
 test('Stanza pastes external HTML through a schema-valid structured fragment', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Start' },
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: 'End',
-							},
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'Start' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: 'End' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -2187,18 +1604,16 @@ test('Stanza pastes external HTML through a schema-valid structured fragment', a
 	const clipboardData = {
 		files: [],
 		items: [],
-		getData: (type: string) =>
-			type === 'text/html' ? '<h2>Imported</h2><ul><li><strong>Listed</strong></li></ul><table><tr><td>Cell</td></tr></table>' : type === 'text/plain' ? 'Imported\nListed\nCell' : '',
+		getData: (type: string) => type === 'text/html'
+			? '<h2>Imported</h2><ul><li><strong>Listed</strong></li></ul><table><tr><td>Cell</td></tr></table>'
+			: type === 'text/plain' ? 'Imported\nListed\nCell' : '',
 	} as unknown as DataTransfer;
 	const paste = new environment.window.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
 	rich.dispatchEvent(paste);
 
 	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.type),
-		['paragraph', 'heading', 'bulletList', 'table', 'paragraph'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.type), ['paragraph', 'heading', 'bulletList', 'table', 'paragraph']);
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Start');
 	assert.equal(pane.getDocument().content[1]?.content[0]?.text, 'Imported');
 	assert.equal(pane.getDocument().content[2]?.content[0]?.content[0]?.content[0]?.text, 'Listed');
@@ -2209,52 +1624,32 @@ test('Stanza pastes external HTML through a schema-valid structured fragment', a
 
 test('Stanza handles whole-document select all, copy, and cut', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
-				attrs: {},
-				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{
-								id: 'text-1',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'strong', attrs: {} }],
-								text: 'First',
-							},
-						],
-						marks: [],
-					},
-					{
-						id: 'paragraph-2',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{
-								id: 'text-2',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [{ type: 'em', attrs: {} }],
-								text: 'Second',
-							},
-						],
-						marks: [],
-					},
-				],
-				marks: [],
-			},
-		}),
-	);
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [
+				{
+					id: 'paragraph-1',
+					type: 'paragraph',
+					attrs: {},
+					content: [{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [{ type: 'strong', attrs: {} }], text: 'First' }],
+					marks: [],
+				},
+				{
+					id: 'paragraph-2',
+					type: 'paragraph',
+					attrs: {},
+					content: [{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [{ type: 'em', attrs: {} }], text: 'Second' }],
+					marks: [],
+				},
+			],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -2263,19 +1658,12 @@ test('Stanza handles whole-document select all, copy, and cut', async () => {
 
 	const rich = parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input');
 	assert.ok(rich);
-	const selectAll = new environment.window.KeyboardEvent('keydown', {
-		key: 'a',
-		ctrlKey: true,
-		bubbles: true,
-		cancelable: true,
-	});
+	const selectAll = new environment.window.KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true });
 	rich.dispatchEvent(selectAll);
 	assert.equal(selectAll.defaultPrevented, true);
 
 	const clipboardValues = new Map<string, string>();
-	const clipboardData = {
-		setData: (type: string, value: string) => clipboardValues.set(type, value),
-	} as unknown as DataTransfer;
+	const clipboardData = { setData: (type: string, value: string) => clipboardValues.set(type, value) } as unknown as DataTransfer;
 	const copy = new environment.window.Event('copy', { bubbles: true, cancelable: true });
 	Object.defineProperty(copy, 'clipboardData', { value: clipboardData });
 	rich.dispatchEvent(copy);
@@ -2287,50 +1675,45 @@ test('Stanza handles whole-document select all, copy, and cut', async () => {
 	Object.defineProperty(cut, 'clipboardData', { value: clipboardData });
 	rich.dispatchEvent(cut);
 	assert.equal(cut.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.type),
-		['paragraph'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.type), ['paragraph']);
 	assert.equal(pane.getDocument().content[0]?.content.length, 0);
 	environment.window.close();
 });
 
 test('Stanza replaces a rich-text selection spanning sibling blocks', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
-				attrs: {},
-				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'First' },
-							{ id: 'break-1', type: 'hardBreak', attrs: {}, content: [], marks: [] },
-						],
-						marks: [],
-					},
-					{
-						id: 'paragraph-2',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'Second' },
-							{ id: 'break-2', type: 'hardBreak', attrs: {}, content: [], marks: [] },
-						],
-						marks: [],
-					},
-				],
-				marks: [],
-			},
-		}),
-	);
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [
+				{
+					id: 'paragraph-1',
+					type: 'paragraph',
+					attrs: {},
+					content: [
+						{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'First' },
+						{ id: 'break-1', type: 'hardBreak', attrs: {}, content: [], marks: [] },
+					],
+					marks: [],
+				},
+				{
+					id: 'paragraph-2',
+					type: 'paragraph',
+					attrs: {},
+					content: [
+						{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'Second' },
+						{ id: 'break-2', type: 'hardBreak', attrs: {}, content: [], marks: [] },
+					],
+					marks: [],
+				},
+			],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -2352,82 +1735,47 @@ test('Stanza replaces a rich-text selection spanning sibling blocks', async () =
 	domSelection?.addRange(range);
 	environment.window.document.dispatchEvent(new environment.window.Event('selectionchange'));
 
-	const beforeInput = new environment.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'deleteContentBackward',
-	});
+	const beforeInput = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' });
 	editors[0]!.dispatchEvent(beforeInput);
 	assert.equal(beforeInput.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.id),
-		['paragraph-1'],
-	);
-	assert.deepEqual(
-		pane.getDocument().content[0]?.content.map(node => node.text ?? node.type),
-		['Fi', 'ond', 'hardBreak'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.id), ['paragraph-1']);
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text ?? node.type), ['Fi', 'ond', 'hardBreak']);
 
-	const undo = new environment.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: 'z',
-		ctrlKey: true,
-	});
+	const undo = new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true });
 	(parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input') as HTMLDivElement).dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(node => node.id),
-		['paragraph-1', 'paragraph-2'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.id), ['paragraph-1', 'paragraph-2']);
 
-	const paste = new environment.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'insertFromPaste',
-		data: 'A\nB',
-	});
+	const paste = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: 'A\nB' });
 	(parent.querySelector<HTMLDivElement>('.stanza-document-rich-text-input') as HTMLDivElement).dispatchEvent(paste);
 	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(node =>
-			node.content
-				.filter(child => child.text !== undefined)
-				.map(child => child.text)
-				.join(''),
-		),
-		['FiA', 'Bond'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(node => node.content.filter(child => child.text !== undefined).map(child => child.text).join('')), ['FiA', 'Bond']);
 	environment.window.close();
 });
 
 test('Stanza pastes multiline text as structured blocks', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'paragraph-1',
+				type: 'paragraph',
 				attrs: {},
 				content: [
-					{
-						id: 'paragraph-1',
-						type: 'paragraph',
-						attrs: {},
-						content: [
-							{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'H' },
-							{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'ell' },
-							{ id: 'text-3', type: 'text', attrs: {}, content: [], marks: [], text: 'o' },
-						],
-						marks: [],
-					},
+					{ id: 'text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'H' },
+					{ id: 'text-2', type: 'text', attrs: {}, content: [], marks: [], text: 'ell' },
+					{ id: 'text-3', type: 'text', attrs: {}, content: [], marks: [], text: 'o' },
 				],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(environment.window.document, files);
@@ -2443,55 +1791,36 @@ test('Stanza pastes multiline text as structured blocks', async () => {
 	range.setEnd(runs[2]!.firstChild!, 0);
 	selection?.removeAllRanges();
 	selection?.addRange(range);
-	const event = new environment.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'insertFromPaste',
-		data: 'A\nB',
-	});
+	const event = new environment.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: 'A\nB' });
 	editor.dispatchEvent(event);
 
 	assert.equal(event.defaultPrevented, true);
-	assert.deepEqual(
-		pane.getDocument().content.map(block => block.content.map(child => child.text ?? '').join('')),
-		['HA', 'Bo'],
-	);
+	assert.deepEqual(pane.getDocument().content.map(block => block.content.map(child => child.text ?? '').join('')), ['HA', 'Bo']);
 	assert.equal(pane.getDocument().content.length, 2);
 	environment.window.close();
 });
 
 test('Stanza restores serialized blocks and releases its model', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
-				attrs: {},
-				content: [
-					{
-						id: 'code-1',
-						type: 'codeBlock',
-						attrs: { language: 'typescript' },
-						content: [
-							{
-								id: 'code-text-1',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [],
-								text: 'const value = 1;',
-							},
-						],
-						marks: [],
-					},
-				],
-				marks: [],
-			},
-		}),
-	);
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [
+				{
+					id: 'code-1',
+					type: 'codeBlock',
+					attrs: { language: 'typescript' },
+					content: [{ id: 'code-text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'const value = 1;' }],
+					marks: [],
+				},
+			],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
@@ -2509,36 +1838,23 @@ test('Stanza restores serialized blocks and releases its model', async () => {
 
 test('Stanza edits Academy code-block lines through the owning TextModel', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const files = new MemoryTextFiles(
-		JSON.stringify({
-			format: 'ash.document',
-			version: 1,
-			document: {
-				id: 'document-1',
-				type: 'doc',
-				attrs: {},
-				content: [
-					{
-						id: 'code-1',
-						type: 'codeBlock',
-						attrs: { language: 'typescript' },
-						content: [
-							{
-								id: 'code-text-1',
-								type: 'text',
-								attrs: {},
-								content: [],
-								marks: [],
-								text: 'const value = 1;',
-							},
-						],
-						marks: [],
-					},
-				],
+	const files = new MemoryTextFiles(JSON.stringify({
+		format: 'ash.document',
+		version: 1,
+		document: {
+			id: 'document-1',
+			type: 'doc',
+			attrs: {},
+			content: [{
+				id: 'code-1',
+				type: 'codeBlock',
+				attrs: { language: 'typescript' },
+				content: [{ id: 'code-text-1', type: 'text', attrs: {}, content: [], marks: [], text: 'const value = 1;' }],
 				marks: [],
-			},
-		}),
-	);
+			}],
+			marks: [],
+		},
+	}));
 	const parent = h(environment.window.document, 'main');
 	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
@@ -2564,29 +1880,27 @@ async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 class MemoryTextFiles implements ITextFileService {
 	readonly onDidSave = Event.None;
 	readonly onDidChangeFiles = (_listener: (event: IFileChangeEvent) => void) => ({
-		dispose(): void {},
-		[Symbol.dispose](): void {},
+		dispose(): void { },
+		[Symbol.dispose](): void { },
 	});
 	lastSavedText = '';
 	private revision = 1;
 
 	private text: string;
-	constructor(text: string) {
-		this.text = structuredText(text);
-	}
+	constructor(text: string) { this.text = structuredText(text); }
 
 	async resolve(request: TextFileResolveRequest, _signal: AbortSignal): Promise<ResolvedTextFileContent> {
 		assert.ok(request.resource.scheme !== 'untitled' || request.bootstrapText !== undefined, 'untitled documents must not query a filesystem provider');
 		return {
 			resource: request.resource,
 			text: request.bootstrapText === undefined ? this.text : structuredText(request.bootstrapText),
-			source: request.bootstrapText === undefined ? ('fileSystem' as ResolvedTextFileContent['source']) : ('bootstrap' as ResolvedTextFileContent['source']),
+			source: request.bootstrapText === undefined ? 'fileSystem' as ResolvedTextFileContent['source'] : 'bootstrap' as ResolvedTextFileContent['source'],
 			revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
 			encoding: 'utf8',
 		};
 	}
 
-	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined }> {
+	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined; }> {
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.currentRevision()) {
 			throw new TextFileSaveConflictError(request.resource);
 		}
@@ -2610,50 +1924,28 @@ test('switching a document cancels a pending room and disposes a late connection
 	const environment = new JSDOM('<!doctype html><body></body>');
 	dialogValues = [''];
 	let finishOpen!: () => void;
-	const pending = new Promise<void>(resolve => {
-		finishOpen = resolve;
-	});
+	const pending = new Promise<void>(resolve => { finishOpen = resolve; });
 	let openingSignal: AbortSignal | undefined;
 	let disposed = false;
 	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('First'), {
 		createDocumentCollaborationService: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 			async open(input, signal) {
 				openingSignal = signal;
 				await pending;
 				return {
-					roomId: 'late-room',
-					clientId: input.clientId,
-					principalId: 'owner',
-					canEdit: true,
-					canManageMembers: true,
-					initialSnapshot: { roomId: 'late-room', version: 0, document: input.document },
-					currentPresence: [],
-					onDidReceiveUpdate: Event.None,
-					onDidReceiveSnapshot: Event.None,
-					onDidReceivePresence: Event.None,
-					onDidFail: Event.None,
-					submit: async () => {
-						throw new Error('A stale connection must not submit');
-					},
-					updatePresence: async () => {
-						throw new Error('A stale connection must not publish presence');
-					},
-					createInvite: async () => {
-						throw new Error('A stale connection must not invite');
-					},
+					roomId: 'late-room', clientId: input.clientId, principalId: 'owner', canEdit: true, canManageMembers: true,
+					initialSnapshot: { roomId: 'late-room', version: 0, document: input.document }, currentPresence: [],
+					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
+					submit: async () => { throw new Error('A stale connection must not submit'); },
+					updatePresence: async () => { throw new Error('A stale connection must not publish presence'); },
+					createInvite: async () => { throw new Error('A stale connection must not invite'); },
 					listMembers: async () => [],
-					rotateMemberAccessToken: async () => {
-						throw new Error('A stale connection must not rotate credentials');
-					},
-					revokeMember: async () => {},
-					dispose: () => {
-						disposed = true;
-					},
-					[Symbol.dispose]: () => {
-						disposed = true;
-					},
+					rotateMemberAccessToken: async () => { throw new Error('A stale connection must not rotate credentials'); },
+					revokeMember: async () => { },
+					dispose: () => { disposed = true; },
+					[Symbol.dispose]: () => { disposed = true; },
 				};
 			},
 		}),
@@ -2684,61 +1976,28 @@ function structuredText(text: string): string {
 
 test('call document joins use a separate untitled working copy and preserve the remote room identity', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	const document = {
-		serverUrl: 'https://documents.example',
-		roomId: 'document-shared',
-		schemaId: 'stanza-document-v1',
-		contentType: 'application/vnd.ash.document+json',
-		title: 'Shared notes',
-	};
+	const document = { serverUrl: 'https://documents.example', roomId: 'document-shared', schemaId: 'stanza-document-v1', contentType: 'application/vnd.ash.document+json', title: 'Shared notes' };
 	let opens = 0;
 	let pendingOpen: Promise<void> | undefined;
 	let selectedServer: string | undefined;
 	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Local text'), {
 		createDocumentCollaborationService: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { }, [Symbol.dispose]() { },
 			async open(input) {
 				opens++;
 				selectedServer = input.serverUrl;
 				await pendingOpen;
 				const remoteSchema = createDefaultDocumentSchema();
-				const remote = remoteSchema.createDocument(
-					[
-						remoteSchema.createNode('paragraph', {
-							id: 'remote-paragraph',
-							content: [remoteSchema.createText('Remote text', { id: 'remote-text' })],
-						}),
-					],
-					'remote-document',
-				);
+				const remote = remoteSchema.createDocument([remoteSchema.createNode('paragraph', { id: 'remote-paragraph', content: [remoteSchema.createText('Remote text', { id: 'remote-text' })] })], 'remote-document');
 				return {
-					serverUrl: input.serverUrl,
-					roomId: document.roomId,
-					clientId: input.clientId,
-					principalId: 'viewer',
-					canEdit: false,
-					canManageMembers: false,
-					initialSnapshot: { roomId: document.roomId, version: 0, document: remote },
-					currentPresence: [],
-					onDidReceiveUpdate: Event.None,
-					onDidReceiveSnapshot: Event.None,
-					onDidReceivePresence: Event.None,
-					onDidFail: Event.None,
-					submit: async () => {
-						throw new Error('A viewer must not submit');
-					},
-					updatePresence: async () => {},
-					createInvite: async () => {
-						throw new Error('A viewer must not invite');
-					},
-					listMembers: async () => [],
-					rotateMemberAccessToken: async () => {
-						throw new Error('A viewer must not rotate credentials');
-					},
-					revokeMember: async () => {},
-					dispose() {},
-					[Symbol.dispose]() {},
+					serverUrl: input.serverUrl, roomId: document.roomId, clientId: input.clientId,
+					principalId: 'viewer', canEdit: false, canManageMembers: false,
+					initialSnapshot: { roomId: document.roomId, version: 0, document: remote }, currentPresence: [],
+					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
+					submit: async () => { throw new Error('A viewer must not submit'); }, updatePresence: async () => { },
+					createInvite: async () => { throw new Error('A viewer must not invite'); }, listMembers: async () => [],
+					rotateMemberAccessToken: async () => { throw new Error('A viewer must not rotate credentials'); }, revokeMember: async () => { },
+					dispose() { }, [Symbol.dispose]() { },
 				};
 			},
 		}),
@@ -2759,9 +2018,7 @@ test('call document joins use a separate untitled working copy and preserve the 
 		assert.deepEqual(pane.getCollaborationDocument(), { ...document, title: 'shared-notes' });
 		await pane.setInput({ resource: URI.parse('untitled:/pending-shared-notes'), initialText: structuredText('Local draft') }, new AbortController().signal);
 		let finishOpen!: () => void;
-		pendingOpen = new Promise<void>(resolve => {
-			finishOpen = resolve;
-		});
+		pendingOpen = new Promise<void>(resolve => { finishOpen = resolve; });
 		const joining = pane.joinCollaborationDocument(document);
 		const input = environment.window.document.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input')!;
 		input.value = 'Keep typing while the room opens';
@@ -2771,11 +2028,9 @@ test('call document joins use a separate untitled working copy and preserve the 
 		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Keep typing while the room opens');
 		pane.clearInput();
 		assert.equal(pane.getCollaborationDocument(), undefined);
-	} finally {
-		pane.dispose();
-		environment.window.close();
-	}
+	} finally { pane.dispose(); environment.window.close(); }
 });
+
 
 test('a confirmed channel snapshot clears only the matching document baseline', async () => {
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
@@ -2806,30 +2061,19 @@ test('closing a document cancels its package artifact task', async () => {
 		}
 	}
 	try {
-		using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Output snapshot'), {
-			widget: WaitingWidget,
-		});
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Output snapshot'), { widget: WaitingWidget });
 		pane.create(environment.window.document.querySelector('#editor')!);
 		await pane.setInput({ resource: URI.file('/output.ash-doc') }, new AbortController().signal);
 		const pending = pane.exportArtifact('docx', new AbortController().signal);
 		const rejected = assert.rejects(pending, /abort/i);
-		assert.equal(started, true);
-		pane.clearInput();
-		await rejected;
-	} finally {
-		environment.window.close();
-	}
+		assert.equal(started, true); pane.clearInput(); await rejected;
+	} finally { environment.window.close(); }
 });
 
 test('document Accessible View includes review evidence without changing the body text', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createDefaultDocumentSchema();
-	const document = schema.createDocument([
-		schema.createNode('paragraph', { content: [schema.createText('Body')] }),
-		schema.createNode('reviewComment', {
-			attrs: { author: 'Reader', createdAt: '', body: 'Check this claim', quote: 'Body', resolved: false },
-		}),
-	]);
+	const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Body')] }), schema.createNode('reviewComment', { attrs: { author: 'Reader', createdAt: '', body: 'Check this claim', quote: 'Body', resolved: false } })]);
 	try {
 		using pane = new EditorPane(environment.window.document, new MemoryTextFiles(serializeDocument(document, schema)));
 		pane.create(environment.window.document.body);
@@ -2837,7 +2081,5 @@ test('document Accessible View includes review evidence without changing the bod
 		assert.match(pane.getAccessibleContent(), /Body\n\nReader: Check this claim/);
 		assert.match(pane.getAccessibleContent(), /Status: Open/);
 		assert.equal(pane.exportText('text'), 'Body');
-	} finally {
-		environment.window.close();
-	}
+	} finally { environment.window.close(); }
 });

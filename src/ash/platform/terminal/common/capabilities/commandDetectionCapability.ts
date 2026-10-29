@@ -3,14 +3,9 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import type { ILogService } from '../../../log/common/log.js';
 import type { ITerminalCommandScreen, TerminalShellIntegrationEvent } from '../terminal.js';
 import {
-	CommandInvalidationReason,
-	TerminalCapability,
-	type ICommandDetectionCapability,
-	type ICommandInvalidationRequest,
-	type IHandleCommandOptions,
-	type IMarkProperties,
-	type ISerializedCommandDetectionCapability,
-	type ITerminalCommand,
+	CommandInvalidationReason, TerminalCapability,
+	type ICommandDetectionCapability, type ICommandInvalidationRequest, type IHandleCommandOptions,
+	type IMarkProperties, type ISerializedCommandDetectionCapability, type ITerminalCommand,
 } from './capabilities.js';
 import { PromptInputModel } from './commandDetection/promptInputModel.js';
 import { PartialTerminalCommand, TerminalCommand, isFullTerminalCommand } from './commandDetection/terminalCommand.js';
@@ -43,42 +38,23 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 	private windows = false;
 	private rich = false;
 	private storageDisabled = false;
-	private nextId: { command: string; id: string } | undefined;
-	get commands(): readonly ITerminalCommand[] {
-		return this.completed;
-	}
-	get currentCommand(): PartialTerminalCommand | undefined {
-		return this.partial;
-	}
-	get executingCommandObject(): ITerminalCommand | undefined {
-		return this.partial?.commandExecutedMarker ? this.active : undefined;
-	}
-	get executingCommand(): string | undefined {
-		return this.executingCommandObject?.command;
-	}
-	get executingCommandConfidence(): ITerminalCommand['commandLineConfidence'] | undefined {
-		return this.executingCommandObject?.commandLineConfidence;
-	}
-	get cwd(): string | undefined {
-		return this.directory;
-	}
-	get hasRichCommandDetection(): boolean {
-		return this.rich;
-	}
+	private nextId: { command: string; id: string; } | undefined;
+	get commands(): readonly ITerminalCommand[] { return this.completed; }
+	get currentCommand(): PartialTerminalCommand | undefined { return this.partial; }
+	get executingCommandObject(): ITerminalCommand | undefined { return this.partial?.commandExecutedMarker ? this.active : undefined; }
+	get executingCommand(): string | undefined { return this.executingCommandObject?.command; }
+	get executingCommandConfidence(): ITerminalCommand['commandLineConfidence'] | undefined { return this.executingCommandObject?.commandLineConfidence; }
+	get cwd(): string | undefined { return this.directory; }
+	get hasRichCommandDetection(): boolean { return this.rich; }
 
-	constructor(
-		private readonly terminal: ITerminalCommandScreen,
-		private readonly log: ILogService,
-	) {
+	constructor(private readonly terminal: ITerminalCommandScreen, private readonly log: ILogService) {
 		super();
 		this.promptInputModel = this._register(new PromptInputModel(terminal, this.onCommandStarted, this.startChanged.event, this.onCommandExecuted, this.onCommandFinished, log));
-		this._register(
-			this.promptInputModel.onDidInterrupt(() => {
-				if (this.partial) {
-					this.partial.isInvalid = true;
-				}
-			}),
-		);
+		this._register(this.promptInputModel.onDidInterrupt(() => {
+			if (this.partial) {
+				this.partial.isInvalid = true;
+			}
+		}));
 	}
 
 	invalidateCurrentCommand(): void {
@@ -100,15 +76,9 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		this.promptInputModel.reset();
 	}
 
-	setCwd(value: string): void {
-		this.directory = value;
-	}
-	setIsWindowsPty(value: boolean): void {
-		this.windows = value;
-	}
-	setContinuationPrompt(value: string): void {
-		this.promptInputModel.setContinuationPrompt(value);
-	}
+	setCwd(value: string): void { this.directory = value; }
+	setIsWindowsPty(value: boolean): void { this.windows = value; }
+	setContinuationPrompt(value: string): void { this.promptInputModel.setContinuationPrompt(value); }
 	setPromptTerminator(value: string, lastPromptLine: string): void {
 		this.promptInputModel.setLastPromptLine(lastPromptLine);
 		if (this.partial && !this.partial.commandExecutedMarker && lastPromptLine.endsWith(value)) {
@@ -200,7 +170,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		}
 	}
 
-	handleCommandExecuted(options: IHandleCommandOptions = {}, metadata?: Extract<TerminalShellIntegrationEvent, { type: 'commandExecuted' }>): void {
+	handleCommandExecuted(options: IHandleCommandOptions = {}, metadata?: Extract<TerminalShellIntegrationEvent, { type: 'commandExecuted'; }>): void {
 		// After an output gap the execution boundary may be our first retained
 		// position. Anchor at that observed position rather than reconstructing
 		// a prompt or echoed command that is no longer in this screen.
@@ -314,12 +284,10 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 
 	getCwdForLine(line: number): string | undefined {
 		const command = this.getCommandForLine(line);
-		return command && isFullTerminalCommand(command) ? command.cwd : command ? (this.active?.cwd ?? this.directory) : undefined;
+		return command && isFullTerminalCommand(command) ? command.cwd : command ? this.active?.cwd ?? this.directory : undefined;
 	}
 
-	clearCommands(): void {
-		this.remove([...this.completed]);
-	}
+	clearCommands(): void { this.remove([...this.completed]); }
 
 	serialize(): ISerializedCommandDetectionCapability {
 		const commands = this.completed.map(command => command.serialize(this.storageDisabled));
@@ -345,10 +313,9 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 				continue;
 			}
 			const lifetime = new DisposableStore();
-			for (const marker of new Set([command.marker, command.promptStartMarker, command.executedMarker, command.endMarker]))
-				if (marker) {
-					lifetime.add(toDisposable(() => marker.dispose()));
-				}
+			for (const marker of new Set([command.marker, command.promptStartMarker, command.executedMarker, command.endMarker])) if (marker) {
+				lifetime.add(toDisposable(() => marker.dispose()));
+			}
 			if (item.endLine === undefined) {
 				if (this.partial) {
 					this.invalidatePending();
@@ -366,13 +333,11 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 				this.directory = command.cwd;
 				this.pendingLifetime = lifetime;
 				if (command.marker) {
-					lifetime.add(
-						this.onMarkerDispose(command.marker, () => {
-							if (this.partial === partial) {
-								this.invalidateCurrentCommand();
-							}
-						}),
-					);
+					lifetime.add(this.onMarkerDispose(command.marker, () => {
+						if (this.partial === partial) {
+							this.invalidateCurrentCommand();
+						}
+					}));
 				}
 				this.started.fire(command);
 				if (command.executedMarker) {
@@ -414,9 +379,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 	}
 
 	private invalidatePending(): void {
-		this.currentInvalidated.fire({
-			reason: this.windows ? CommandInvalidationReason.Windows : CommandInvalidationReason.NoProblemsReported,
-		});
+		this.currentInvalidated.fire({ reason: this.windows ? CommandInvalidationReason.Windows : CommandInvalidationReason.NoProblemsReported });
 		this.log.trace('Abandoned screen command', this.active?.id);
 		this.partial = undefined;
 		this.active = undefined;

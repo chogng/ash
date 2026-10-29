@@ -71,7 +71,7 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	}
 
 	public override getActions(): readonly IAction[] {
-		return [...super.getActions(), ...(this.mergedPane?.getActions() ?? [])];
+		return [...super.getActions(), ...this.mergedPane?.getActions() ?? []];
 	}
 
 	public override getSecondaryActions(): readonly IAction[] {
@@ -104,7 +104,9 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	}
 
 	get partTitleProjection(): PartTitleProjection | undefined {
-		const projections = this.panes.map(pane => pane.partTitleProjection).filter((projection): projection is PartTitleProjection => projection !== undefined);
+		const projections = this.panes.map((pane) => pane.partTitleProjection).filter(
+			(projection): projection is PartTitleProjection => projection !== undefined,
+		);
 		if (projections.length > 1) {
 			throw new Error('A PaneComposite may receive a title projection from only one visible View');
 		}

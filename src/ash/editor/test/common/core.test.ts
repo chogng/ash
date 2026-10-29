@@ -24,11 +24,7 @@ test('word lookup skips empty matches and advances across Unicode characters', (
 	assert.equal(getWordAtText(4, /a*/g, 'bbbfoo', 0), null);
 	assert.equal(getWordAtText(1, /a*/g, '', 0), null);
 	for (const flags of ['g', 'gu', 'gv']) {
-		assert.deepEqual(getWordAtText(4, new RegExp('foo|a*', flags), '😀 foo', 0), {
-			word: 'foo',
-			startColumn: 4,
-			endColumn: 7,
-		});
+		assert.deepEqual(getWordAtText(4, new RegExp('foo|a*', flags), '😀 foo', 0), { word: 'foo', startColumn: 4, endColumn: 7 });
 	}
 });
 
@@ -60,7 +56,10 @@ test('core edit algebra applies, composes, and inverts string edits', () => {
 });
 
 test('array edits share the same composition algebra as string edits', () => {
-	const first = ArrayEdit.create([new ArrayReplacement(new OffsetRange(1, 3), ['X']), new ArrayReplacement(new OffsetRange(4, 5), ['Y', 'Z'])]);
+	const first = ArrayEdit.create([
+		new ArrayReplacement(new OffsetRange(1, 3), ['X']),
+		new ArrayReplacement(new OffsetRange(4, 5), ['Y', 'Z']),
+	]);
 	const second = ArrayEdit.replace(new OffsetRange(1, 2), ['A', 'B']);
 	const source = ['0', '1', '2', '3', '4', '5'];
 	const composed = first.compose(second);

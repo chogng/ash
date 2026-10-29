@@ -4,17 +4,11 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { IExtensionRecommendations } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import type { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
-export enum ExtensionRecommendationReason {
-	Workspace = 'workspace',
-	Executable = 'executable',
-	File = 'file',
-	Application = 'application',
-	WorkspaceConfig = 'workspaceConfig',
-}
+export enum ExtensionRecommendationReason { Workspace = 'workspace', Executable = 'executable', File = 'file', Application = 'application', WorkspaceConfig = 'workspaceConfig' }
 
 export interface ExtensionRecommendation {
 	readonly extensionId: string;
-	readonly reason: { readonly reasonId: ExtensionRecommendationReason; readonly reasonText: string };
+	readonly reason: { readonly reasonId: ExtensionRecommendationReason; readonly reasonText: string; };
 	/** The package manifest's declared product windows; never inferred from its capabilities. */
 	readonly uiTargets?: readonly ExtensionUiTarget[];
 	/** Discovery context shared by the Recommended view and optional install notification. */
@@ -40,16 +34,11 @@ export interface IExtensionRecommendationsService {
 export const IExtensionRecommendationsService = createServiceIdentifier<IExtensionRecommendationsService>('extensionRecommendationsService');
 
 /** Registry-qualified package IDs and declarative editor IDs share one recommendation identity. */
-export function extensionRecommendationKey(id: string): string {
-	return id.toLowerCase().replace(/@[^@]+$/u, '');
-}
+export function extensionRecommendationKey(id: string): string { return id.toLowerCase().replace(/@[^@]+$/u, ''); }
 
 export interface IExtensionIgnoredRecommendationsService {
 	readonly onDidChangeIgnoredRecommendations: Event<void>;
-	readonly onDidChangeGlobalIgnoredRecommendation: Event<{
-		readonly extensionId: string;
-		readonly isRecommended: boolean;
-	}>;
+	readonly onDidChangeGlobalIgnoredRecommendation: Event<{ readonly extensionId: string; readonly isRecommended: boolean; }>;
 	readonly ignoredRecommendations: readonly string[];
 	readonly globalIgnoredRecommendations: readonly string[];
 	toggleGlobalIgnoredRecommendation(extensionId: string, ignore: boolean): void;

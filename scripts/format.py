@@ -27,6 +27,7 @@ CONFIGURATION = (
     "rust-toolchain.toml",
     "rustfmt.toml",
     ".prettierrc.toml",
+    "tsfmt.json",
     ".prettierignore",
     ".gitignore",
     ".editorconfig",

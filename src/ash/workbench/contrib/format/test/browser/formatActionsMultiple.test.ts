@@ -19,15 +19,11 @@ function createServices(configuration: TestConfigurationService) {
 }
 
 const providers = ['Acme.First', 'Acme.Second'].map(id => ({
-	extensionId: new ExtensionIdentifier(id),
-	displayName: id,
-	provideDocumentFormattingEdits: () => [],
+	extensionId: new ExtensionIdentifier(id), displayName: id, provideDocumentFormattingEdits: () => [],
 }));
 
 test('default formatter honors language overrides and extension identity without changing other languages', async () => {
-	using configuration = new TestConfigurationService({
-		source: '{"editor.defaultFormatter":"Acme.First","[python]":{"editor.defaultFormatter":"acme.second"}}',
-	});
+	using configuration = new TestConfigurationService({ source: '{"editor.defaultFormatter":"Acme.First","[python]":{"editor.defaultFormatter":"acme.second"}}' });
 	using services = createServices(configuration);
 	using policy = services.createInstance(DefaultFormatter);
 	using python = new TextModel('alpha', { languageId: 'python' });

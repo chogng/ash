@@ -71,55 +71,41 @@ registerEditorContribution({
 
 const CodeEditorActive = ActiveEditorContext.isEqualTo(CODE_EDITOR_ID);
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({
-				id: 'scm.quickDiff.next',
-				title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.next' }, 'Go to Next Quick Diff Change'),
-				f1: true,
-				precondition: CodeEditorActive,
-				keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true })), when: CodeEditorActive },
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IQuickDiffEditorControllerService).activeController?.showNextChange();
-		}
-	},
-);
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'scm.quickDiff.next',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.next' }, 'Go to Next Quick Diff Change'),
+			f1: true,
+			precondition: CodeEditorActive,
+			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true })), when: CodeEditorActive },
+		});
+	}
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IQuickDiffEditorControllerService).activeController?.showNextChange();
+	}
+});
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({
-				id: 'scm.quickDiff.previous',
-				title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.previous' }, 'Go to Previous Quick Diff Change'),
-				f1: true,
-				precondition: CodeEditorActive,
-				keybinding: {
-					primary: Keybinding.single(logicalKey('F3', { altKey: true, shiftKey: true })),
-					when: CodeEditorActive,
-				},
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IQuickDiffEditorControllerService).activeController?.showPreviousChange();
-		}
-	},
-);
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'scm.quickDiff.previous',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.previous' }, 'Go to Previous Quick Diff Change'),
+			f1: true,
+			precondition: CodeEditorActive,
+			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true, shiftKey: true })), when: CodeEditorActive },
+		});
+	}
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IQuickDiffEditorControllerService).activeController?.showPreviousChange();
+	}
+});
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({
-				id: 'scm.quickDiff.close',
-				title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.close' }, 'Close Quick Diff'),
-				f1: true,
-				precondition: CodeEditorActive,
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IQuickDiffEditorControllerService).activeController?.close();
-		}
-	},
-);
+registerAction2(class extends Action2 {
+	constructor() {
+		super({ id: 'scm.quickDiff.close', title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.close' }, 'Close Quick Diff'), f1: true, precondition: CodeEditorActive });
+	}
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IQuickDiffEditorControllerService).activeController?.close();
+	}
+});

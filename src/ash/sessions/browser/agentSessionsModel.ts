@@ -11,38 +11,16 @@ import type { ISessionsManagementService } from '../services/sessions/common/ses
 import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 
 /** Exposes the Sessions catalog to the Chat view without moving session ownership into Workbench. */
-export function createAgentSessionsModel(
-	sessions: ISessionsManagementService,
-	storage: IStorageService,
-	groups: ISessionGroupsService,
-	actions: (selection: SessionsViewSelection) => readonly IAction[],
-	onDidOpen?: () => void,
-): IAgentSessionsModel {
+export function createAgentSessionsModel(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: () => void): IAgentSessionsModel {
 	return {
-		onDidChange: Event.any(sessions.onDidChange, groups.onDidChange, (listener: () => void) =>
-			storage.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) listener();
-			}),
-		),
-		get items() {
-			return sessionItems(sessions, storage, groups, actions, onDidOpen);
-		},
-		get state() {
-			return sessions.state === 'loading' ? 'loading' : sessions.state === 'error' ? 'error' : 'ready';
-		},
-		get error() {
-			return sessions.error;
-		},
+		onDidChange: Event.any(sessions.onDidChange, groups.onDidChange, (listener: () => void) => storage.onDidChangeValue(event => { if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) listener(); })),
+		get items() { return sessionItems(sessions, storage, groups, actions, onDidOpen); },
+		get state() { return sessions.state === 'loading' ? 'loading' : sessions.state === 'error' ? 'error' : 'ready'; },
+		get error() { return sessions.error; },
 	};
 }
 
-function sessionItems(
-	sessions: ISessionsManagementService,
-	storage: IStorageService,
-	groups: ISessionGroupsService,
-	actions: (selection: SessionsViewSelection) => readonly IAction[],
-	onDidOpen?: () => void,
-): readonly IAgentSessionListItem[] {
+function sessionItems(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: () => void): readonly IAgentSessionListItem[] {
 	const items: IAgentSessionListItem[] = sessions.untitledSessions.map(draft => ({
 		id: `draft:${draft.untitledSessionId}`,
 		title: draft.title.trim() || localize('chat.sessions.new', 'New Session'),
@@ -58,10 +36,9 @@ function sessionItems(
 	for (const session of sessions.sessions) {
 		if (session.status !== 'active') continue;
 		const selectedThreadId = sessions.active?.session.sessionId === session.sessionId ? sessions.active.threadId : undefined;
-		const thread =
-			session.chats.find(chat => chat.threadId === selectedThreadId && chat.status === 'active') ??
-			session.chats.find(chat => chat.status === 'active' && chat.origin.type === 'root') ??
-			session.chats.find(chat => chat.status === 'active');
+		const thread = session.chats.find(chat => chat.threadId === selectedThreadId && chat.status === 'active')
+			?? session.chats.find(chat => chat.status === 'active' && chat.origin.type === 'root')
+			?? session.chats.find(chat => chat.status === 'active');
 		if (!thread) continue;
 		items.push({
 			id: `session:${session.sessionId}`,
@@ -82,35 +59,21 @@ function sessionItems(
 }
 
 /** Both list hosts invoke the same captured-target commands; only their window owner differs. */
-export function createSessionItemActions(
-	selection: SessionsViewSelection,
-	commands: ICommandService,
-	storage: IStorageService,
-	notifications: INotificationService,
-	openInNewWindow: () => Promise<unknown>,
-	didPin?: (sessionId: string) => void,
-): readonly IAction[] {
+export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, storage: IStorageService, notifications: INotificationService, openInNewWindow: () => Promise<unknown>, didPin?: (sessionId: string) => void): readonly IAction[] {
 	const id = selection.kind === 'session' ? selection.active.session.sessionId : undefined;
 	const target = selection.kind === 'untitled' ? { untitledSessionId: selection.session.untitledSessionId } : id;
 	const pinned = id !== undefined && storage.getBoolean(`sessions.list.pinned.${id}`, StorageScope.PROFILE, false);
 	const action = (commandId: string, label: string, argument: unknown = target): IAction => ({
-		id: commandId,
-		label,
-		enabled: true,
-		tooltip: '',
+		id: commandId, label, enabled: true, tooltip: '',
 		run: () => commands.executeCommand(commandId, argument).catch(error => notifications.error(String(error))),
 	});
 	return [
 		{
 			...action('sessions.list.togglePin', pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat')),
 			run: async () => {
-				try {
-					const id = await commands.executeCommand<string>('sessions.list.togglePin', target);
-					didPin?.(id);
-				} catch (error) {
-					notifications.error(String(error));
-				}
-			},
+				try { const id = await commands.executeCommand<string>('sessions.list.togglePin', target); didPin?.(id); }
+				catch (error) { notifications.error(String(error)); }
+			}
 		},
 		action('agentSession.rename', localize('sessions.list.rename', 'Rename')),
 		action('agentSession.archive', localize('chatSession.archive', 'Archive')),
@@ -122,7 +85,7 @@ export function createSessionItemActions(
 		new Separator(),
 		{
 			...action('sessions.openInNewWindow', localize('sessions.list.openWindow', 'Open in new window')),
-			run: () => openInNewWindow().catch(error => notifications.error(String(error))),
+			run: () => openInNewWindow().catch(error => notifications.error(String(error)))
 		},
 	];
 }

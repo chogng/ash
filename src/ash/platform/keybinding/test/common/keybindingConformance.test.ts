@@ -18,26 +18,14 @@ import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/commo
 test('shortcut presentation prefers matching command bindings and survives leaving their context', () => {
 	using registrations = new DisposableStore();
 	const registry = new KeybindingRegistry();
-	const resolver = new KeybindingResolver({
-		registry,
-		resolveKeybinding: binding => resolveKeybinding(binding, OperatingSystem.Windows),
-	});
-	const context = (active: string): Context => ({
-		getValue: <T extends ContextKeyValue>(key: string) => (key === active) as T,
-	});
+	const resolver = new KeybindingResolver({ registry, resolveKeybinding: binding => resolveKeybinding(binding, OperatingSystem.Windows) });
+	const context = (active: string): Context => ({ getValue: <T extends ContextKeyValue>(key: string) => (key === active) as T });
 	for (const [binding, scope, source] of [
 		['ctrl+c', 'explorerFocus', KeybindingSource.Builtin],
 		['ctrl+shift+c', 'editorFocus', KeybindingSource.Builtin],
 		['ctrl+alt+c', 'explorerFocus', KeybindingSource.User],
 	] as const) {
-		registrations.add(
-			registry.registerKeybindingRule({
-				command: 'test.copy',
-				keybinding: parseKeybinding(binding)!,
-				when: ContextKeyExpr.has(scope),
-				source,
-			}),
-		);
+		registrations.add(registry.registerKeybindingRule({ command: 'test.copy', keybinding: parseKeybinding(binding)!, when: ContextKeyExpr.has(scope), source }));
 	}
 	const label = (scope: string) => getKeybindingLabel(resolver.lookupKeybinding('test.copy', context(scope))!, KeybindingLabelStyle.UserSettings);
 	assert.equal(label('explorerFocus'), 'ctrl+alt+c');
@@ -48,23 +36,10 @@ test('shortcut presentation prefers matching command bindings and survives leavi
 	assert.deepEqual(resolver.lookupKeybindings('test.copy', context('menuFocus')), []);
 
 	// A command with the same shortcut in another scope must not erase this command's hint.
-	registrations.add(
-		registry.registerKeybindingRule({
-			command: 'test.other',
-			keybinding: parseKeybinding('ctrl+alt+c')!,
-			when: ContextKeyExpr.has('menuFocus'),
-			source: KeybindingSource.User,
-		}),
-	);
+	registrations.add(registry.registerKeybindingRule({ command: 'test.other', keybinding: parseKeybinding('ctrl+alt+c')!, when: ContextKeyExpr.has('menuFocus'), source: KeybindingSource.User }));
 	assert.equal(label('menuFocus'), 'ctrl+alt+c');
 	assert.equal(resolver.resolve(context('menuFocus'), [keybindingEvent({ key: 'c', control: true, alt: true })]).kind, KeybindingResolveKind.Command);
-	registrations.add(
-		registry.registerKeybindingPassThrough({
-			command: 'test.paste',
-			keybinding: parseKeybinding('ctrl+v')!,
-			when: ContextKeyExpr.has('explorerFocus'),
-		}),
-	);
+	registrations.add(registry.registerKeybindingPassThrough({ command: 'test.paste', keybinding: parseKeybinding('ctrl+v')!, when: ContextKeyExpr.has('explorerFocus') }));
 	assert.equal(getKeybindingLabel(resolver.lookupKeybinding('test.paste', context('menuFocus'))!, KeybindingLabelStyle.UserSettings), 'ctrl+v');
 	assert.equal(resolver.resolve(context('explorerFocus'), [keybindingEvent({ key: 'v', control: true })]).kind, KeybindingResolveKind.PassThrough);
 	registrations.add(registry.registerKeybindingBlocker({ keybinding: parseKeybinding('ctrl+v')!, source: KeybindingSource.User }));
@@ -80,7 +55,10 @@ interface ResolverFixture {
 	readonly context?: readonly string[];
 	readonly events: readonly EventFixture[];
 	readonly rules: readonly RuleFixture[];
-	readonly result: { readonly kind: 'noMatch' | 'pending' | 'command' | 'blocked'; readonly command?: string };
+	readonly result: {
+		readonly kind: 'noMatch' | 'pending' | 'command' | 'blocked';
+		readonly command?: string;
+	};
 }
 
 interface EventFixture {
@@ -125,15 +103,26 @@ test('shared keybinding resolver fixtures match the TypeScript implementation', 
 		}
 		const resolver = new KeybindingResolver({
 			registry,
-			resolveKeybinding: keybinding => resolveKeybinding(keybinding, OperatingSystem.Windows),
+			resolveKeybinding: (keybinding) =>
+				resolveKeybinding(keybinding, OperatingSystem.Windows),
 		});
 		const activeKeys = new Set(fixture.context ?? []);
 		const context: Context = {
-			getValue: <T extends ContextKeyValue>(key: string): T | undefined => activeKeys.has(key) as T,
+			getValue: <T extends ContextKeyValue>(key: string): T | undefined =>
+				activeKeys.has(key) as T,
 		};
-		const result = resolver.resolve(context, fixture.events.map(keybindingEvent));
+		const result = resolver.resolve(
+			context,
+			fixture.events.map(keybindingEvent),
+		);
 		assert.equal(resultKind(result.kind), fixture.result.kind, fixture.name);
-		assert.equal(result.kind === KeybindingResolveKind.Command ? result.command : undefined, fixture.result.command, fixture.name);
+		assert.equal(
+			result.kind === KeybindingResolveKind.Command
+				? result.command
+				: undefined,
+			fixture.result.command,
+			fixture.name,
+		);
 	}
 });
 

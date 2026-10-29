@@ -36,22 +36,12 @@ suite('Browser form passwords', () => {
 	test('memory credentials support save, fill and update without encryption or disk and disappear with the owner', async () => {
 		using services = new InstantiationService();
 		using configuration = new InMemoryConfigurationService();
-		const forbidden = {
-			get: () => {
-				throw new Error('Memory credentials touched persistence');
-			},
-		};
+		const forbidden = { get: () => { throw new Error('Memory credentials touched persistence'); } };
 		services.registerInstance(IEncryptionMainService, new Proxy({} as IEncryptionMainService, forbidden));
 		services.registerInstance(IApplicationStorageMainService, new Proxy({} as IApplicationStorageMainService, forbidden));
 		services.registerInstance(IConfigurationService, configuration);
 		using vault = services.createInstance(BrowserPasswordMainService, true);
-		const value = {
-			session: 'a'.repeat(64),
-			scope: 'global' as const,
-			origin: 'https://example.test',
-			username: 'account',
-			password: 'synthetic-password',
-		};
+		const value = { session: 'a'.repeat(64), scope: 'global' as const, origin: 'https://example.test', username: 'account', password: 'synthetic-password' };
 		await vault.save(value);
 		const [saved] = await vault.find(value.session, value.origin);
 		assert.equal(saved?.password, value.password);
@@ -65,418 +55,210 @@ suite('Browser form passwords', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const application = { scope: StorageScope.APPLICATION, id: 'application' };
 	async function page(f: ReturnType<typeof fixture>, scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral = BrowserViewStorageScope.Global) {
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/login',
-			owner: { type: 'user' },
-			session: { scope },
-		});
-		const sent: { command: string; data: unknown }[] = [];
-		const frame = {
-			detached: false,
-			url: 'https://example.test/login',
-			framesInSubtree: [] as unknown[],
-			send: (_channel: string, message: (typeof sent)[number]) => sent.push(message),
-		};
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/login', owner: { type: 'user' }, session: { scope } });
+		const sent: { command: string; data: unknown; }[] = [];
+		const frame = { detached: false, url: 'https://example.test/login', framesInSubtree: [] as unknown[], send: (_channel: string, message: typeof sent[number]) => sent.push(message) };
 		frame.framesInSubtree.push(frame);
 		Object.assign(f.contents, { mainFrame: frame });
-		const post = (type: string, data?: unknown, token = 'a'.repeat(32), sender = frame) =>
-			f.contents.emit('ipc-message', { senderFrame: sender }, 'ash:browserView:preload', {
-				type,
-				data,
-				frameToken: token,
-			});
+		const post = (type: string, data?: unknown, token = 'a'.repeat(32), sender = frame) => f.contents.emit('ipc-message', { senderFrame: sender }, 'ash:browserView:preload', { type, data, frameToken: token });
 		post('ready');
 		const vault = f.instantiation.get(IBrowserPasswordMainService);
 		return { frame, post, sent, vault, session: f.manager.tryGetBrowserView(id)!.session.id };
 	}
 	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
-	const submitted = {
-		action: 'https://example.test/login',
-		hasUsername: true,
-		username: 'synthetic-user',
-		password: 'synthetic-password',
-	};
-	const form = {
-		action: submitted.action,
-		hasUsername: true,
-		username: '',
-		field: 'password',
-		formId: 'a'.repeat(32) + '-1',
-	};
+	const submitted = { action: 'https://example.test/login', hasUsername: true, username: 'synthetic-user', password: 'synthetic-password' };
+	const form = { action: submitted.action, hasUsername: true, username: '', field: 'password', formId: 'a'.repeat(32) + '-1' };
 
 	test('the username expires after two minutes while a password candidate expires independently', async () => {
 		mock.timers.enable({ apis: ['Date', 'setTimeout'] });
 		try {
-			using f = fixture();
-			const p = await page(f);
+			using f = fixture(); const p = await page(f);
 			const identity = { action: submitted.action, username: submitted.username };
 			const submit = () => p.post('passwordSubmitted', { ...submitted, username: '', hasUsername: false });
 			const finish = () => p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
-			p.post('passwordIdentitySubmitted', identity);
-			mock.timers.tick(120_001);
-			submit();
-			finish();
-			await settle();
-			assert.equal(
-				f.events.some(event => event.type === 'passwordSaveRequested'),
-				false,
-			);
-			p.post('passwordIdentitySubmitted', identity);
-			submit();
-			mock.timers.tick(60_001);
-			finish();
-			await settle();
-			assert.equal(
-				f.events.some(event => event.type === 'passwordSaveRequested'),
-				false,
-			);
-			submit();
-			finish();
-			await settle();
-			assert.equal(
-				f.events.some(event => event.type === 'passwordSaveRequested'),
-				true,
-			);
-		} finally {
-			mock.timers.reset();
-		}
+			p.post('passwordIdentitySubmitted', identity); mock.timers.tick(120_001); submit(); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+			p.post('passwordIdentitySubmitted', identity); submit(); mock.timers.tick(60_001); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+			submit(); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), true);
+		} finally { mock.timers.reset(); }
 	});
 
 	test('a username step sends no password and binds a later password-only document to the submitted account', async () => {
-		using f = fixture();
-		const p = await page(f);
-		await p.vault.save({
-			session: p.session,
-			scope: 'global',
-			origin: 'https://example.test',
-			username: submitted.username,
-			password: submitted.password,
-		});
-		p.post('passwordFill', { ...form, field: 'username' });
-		await settle();
+		using f = fixture(); const p = await page(f);
+		await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username: submitted.username, password: submitted.password });
+		p.post('passwordFill', { ...form, field: 'username' }); await settle();
 		const fill = p.sent.find(message => message.command === 'fillPassword')!;
 		assert.equal('password' in (fill.data as object), false);
 		p.post('passwordIdentitySubmitted', { action: submitted.action, username: submitted.username });
 		f.contents.emit('did-start-navigation', {}, 'https://example.test/password', false, true);
-		p.frame.url = 'https://example.test/password';
-		p.post('ready', undefined, 'b'.repeat(32));
-		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'a'.repeat(32));
-		await settle();
+		p.frame.url = 'https://example.test/password'; p.post('ready', undefined, 'b'.repeat(32));
+		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'a'.repeat(32)); await settle();
 		assert.equal(p.sent.length, 1);
-		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'b'.repeat(32));
-		await settle();
-		assert.equal((p.sent[1]!.data as { password: string }).password, submitted.password);
+		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'b'.repeat(32)); await settle();
+		assert.equal((p.sent[1]!.data as { password: string; }).password, submitted.password);
 		// A rejected attempt must retain the account for a subsequent password-only retry.
-		for (const password of ['wrong-password', 'replacement-password']) {
-			p.post('passwordSubmitted', { action: p.frame.url, username: '', hasUsername: false, password }, 'b'.repeat(32));
-		}
-		p.post('passwordPageState', { action: p.frame.url, hasPasswordForm: false }, 'b'.repeat(32));
-		await settle();
-		const request = f.events.find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> => event.type === 'passwordSaveRequested')!;
-		assert.equal(request.username, submitted.username);
-		assert.equal(request.update, true);
+		for (const password of ['wrong-password', 'replacement-password']) { p.post('passwordSubmitted', { action: p.frame.url, username: '', hasUsername: false, password }, 'b'.repeat(32)); }
+		p.post('passwordPageState', { action: p.frame.url, hasPasswordForm: false }, 'b'.repeat(32)); await settle();
+		const request = f.events.find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested'; }> => event.type === 'passwordSaveRequested')!;
+		assert.equal(request.username, submitted.username); assert.equal(request.update, true);
 		await f.manager.respondToPasswordSave(id, request.requestId, true);
 		assert.equal((await p.vault.find(p.session, 'https://example.test'))[0]!.password, 'replacement-password');
 	});
 
 	test('transient usernames never cross origins, page lifetimes or clearing, and are not persisted on their own', async () => {
-		using f = fixture();
-		let p = await page(f);
+		using f = fixture(); let p = await page(f);
 		const identity = { action: submitted.action, username: submitted.username };
 		const submitWithoutIdentity = async () => {
-			p.post('passwordSubmitted', { ...submitted, username: '', hasUsername: false });
-			p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
-			await settle();
-			assert.equal(
-				f.events.some(event => event.type === 'passwordSaveRequested'),
-				false,
-			);
+			p.post('passwordSubmitted', { ...submitted, username: '', hasUsername: false }); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
 		};
-		p.post('passwordIdentitySubmitted', identity);
-		assert.equal((await p.vault.readState()).entries.length, 0);
+		p.post('passwordIdentitySubmitted', identity); assert.equal((await p.vault.readState()).entries.length, 0);
 		assert.doesNotMatch(JSON.stringify(await f.storage.getItems(application)), /synthetic-user/);
-		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true);
-		p.frame.url = 'https://other.test/';
-		p.post('ready');
+		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true); p.frame.url = 'https://other.test/'; p.post('ready');
 		p.post('passwordIdentitySubmitted', { ...identity, action: 'https://example.test/' });
-		f.contents.emit('did-start-navigation', {}, submitted.action, false, true);
-		p.frame.url = submitted.action;
-		p.post('ready');
-		await submitWithoutIdentity();
-		p.post('passwordIdentitySubmitted', identity);
-		await f.manager.clearStorage(id);
-		await submitWithoutIdentity();
-		p.post('passwordIdentitySubmitted', identity);
-		await f.manager.destroyBrowserView(id);
-		p = await page(f);
-		await submitWithoutIdentity();
-		await f.manager.destroyBrowserView(id);
-		p = await page(f, BrowserViewStorageScope.Ephemeral);
-		p.post('passwordIdentitySubmitted', identity);
-		await submitWithoutIdentity();
+		f.contents.emit('did-start-navigation', {}, submitted.action, false, true); p.frame.url = submitted.action; p.post('ready'); await submitWithoutIdentity();
+		p.post('passwordIdentitySubmitted', identity); await f.manager.clearStorage(id); await submitWithoutIdentity();
+		p.post('passwordIdentitySubmitted', identity); await f.manager.destroyBrowserView(id); p = await page(f); await submitWithoutIdentity();
+		await f.manager.destroyBrowserView(id); p = await page(f, BrowserViewStorageScope.Ephemeral); p.post('passwordIdentitySubmitted', identity); await submitWithoutIdentity();
 	});
 
 	test('a submitted login is offered only after the form disappears, encrypted and updated without a password readback', async () => {
-		using f = fixture();
-		const p = await page(f);
-		p.post('passwordSubmitted', submitted);
-		p.post('passwordPageState', { action: submitted.action, hasPasswordForm: true });
-		await settle();
-		assert.equal(
-			f.events.some(event => event.type === 'passwordSaveRequested'),
-			false,
-		);
+		using f = fixture(); const p = await page(f);
+		p.post('passwordSubmitted', submitted); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: true }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
 		for (const password of [submitted.password, 'replacement-password']) {
 			p.post('passwordSubmitted', { ...submitted, password });
-			p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
-			await settle();
-			const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> => event.type === 'passwordSaveRequested')!;
-			assert.ok(request);
-			assert.equal(request.update, password !== submitted.password);
+			p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+			const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested'; }> => event.type === 'passwordSaveRequested')!;
+			assert.ok(request); assert.equal(request.update, password !== submitted.password);
 			assert.doesNotMatch(JSON.stringify(f.events), /synthetic-password|replacement-password/);
 			await f.manager.respondToPasswordSave(id, request.requestId, true);
 		}
 		const snapshot = await f.storage.getItems(application);
 		assert.doesNotMatch(JSON.stringify(snapshot), /synthetic-user|synthetic-password|replacement-password|example\.test/);
-		const state = (await browserPasswordChannel(p.vault).call('window:1', 'readState', [])) as Awaited<ReturnType<typeof p.vault.readState>>;
-		assert.equal(state.entries.length, 1);
-		assert.equal(state.entries[0]!.username, submitted.username);
+		const state = await browserPasswordChannel(p.vault).call('window:1', 'readState', []) as Awaited<ReturnType<typeof p.vault.readState>>;
+		assert.equal(state.entries.length, 1); assert.equal(state.entries[0]!.username, submitted.username);
 		assert.equal('password' in state.entries[0]!, false);
-		p.post('passwordFill', form);
-		await settle();
-		assert.equal(([...p.sent].reverse().find(message => message.command === 'fillPassword')!.data as { password: string }).password, 'replacement-password');
+		p.post('passwordFill', form); await settle();
+		assert.equal(([...p.sent].reverse().find(message => message.command === 'fillPassword')!.data as { password: string; }).password, 'replacement-password');
 		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'find', [p.session, 'https://example.test']), /Invalid password command/);
 		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'update', [state.entries[0]!.id, 'user', 'bad\npassword']), /Invalid password command/);
 	});
 
 	test('fill binds the native top frame, document, exact origin and session; navigation cancels account selection', async () => {
-		using f = fixture();
-		const p = await page(f);
-		for (const username of ['first', 'second']) {
-			await p.vault.save({
-				session: p.session,
-				scope: 'global',
-				origin: 'https://example.test',
-				username,
-				password: 'secret-' + username,
-			});
-		}
-		for (const [data, token, sender] of [
-			[{ ...form, action: 'https://other.test' }, 'a'.repeat(32), p.frame],
-			[form, 'stale', p.frame],
-			[form, 'a'.repeat(32), { ...p.frame }],
-		] as const) {
-			p.post('passwordFill', data, token, sender);
-		}
-		await settle();
-		assert.equal(
-			p.sent.some(message => message.command === 'fillPassword'),
-			false,
-		);
+		using f = fixture(); const p = await page(f);
+		for (const username of ['first', 'second']) { await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username, password: 'secret-' + username }); }
+		for (const [data, token, sender] of [[{ ...form, action: 'https://other.test' }, 'a'.repeat(32), p.frame], [form, 'stale', p.frame], [form, 'a'.repeat(32), { ...p.frame }]] as const) { p.post('passwordFill', data, token, sender); }
+		await settle(); assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
 		p.post('passwordIdentitySubmitted', { action: submitted.action, username: 'first' });
-		p.post('passwordFill', form);
-		await settle();
-		const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested' }> => event.type === 'passwordFillRequested')!;
+		p.post('passwordFill', form); await settle();
+		const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested'; }> => event.type === 'passwordFillRequested')!;
 		assert.equal(request.accounts.length, 2);
 		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true);
-		p.frame.url = 'https://other.test/';
-		p.post('ready');
+		p.frame.url = 'https://other.test/'; p.post('ready');
 		await f.manager.respondToPasswordFill(id, request.requestId, request.accounts[0]!.id);
-		assert.equal(
-			p.sent.some(message => message.command === 'fillPassword'),
-			false,
-		);
+		assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
 		assert.deepEqual(await p.vault.find('b'.repeat(64), 'https://example.test'), []);
 		assert.deepEqual(await p.vault.find(p.session, 'https://example.test:444'), []);
 	});
 
 	test('settings mutations preserve corrupt records, reject account collisions and clear only the requested session', async () => {
-		using f = fixture();
-		const p = await page(f);
-		for (const username of ['first', 'second']) {
-			await p.vault.save({
-				session: p.session,
-				scope: 'global',
-				origin: 'https://example.test',
-				username,
-				password: 'secret',
-			});
-		}
-		await p.vault.save({
-			session: 'b'.repeat(64),
-			scope: 'workspace',
-			origin: 'https://example.test',
-			username: 'other',
-			password: 'secret',
-		});
+		using f = fixture(); const p = await page(f);
+		for (const username of ['first', 'second']) { await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username, password: 'secret' }); }
+		await p.vault.save({ session: 'b'.repeat(64), scope: 'workspace', origin: 'https://example.test', username: 'other', password: 'secret' });
 		const first = (await p.vault.readState()).entries.find(value => value.username === 'first')!;
 		await assert.rejects(p.vault.update(first.id, 'second', 'new-secret'), /already exists/);
 		await p.vault.update(first.id, 'renamed', 'new-secret');
-		assert.equal(
-			(await p.vault.readState()).entries.some(value => value.id === first.id),
-			false,
-		);
+		assert.equal((await p.vault.readState()).entries.some(value => value.id === first.id), false);
 		await f.storage.updateItems(application, first.id, { value: 'corrupt', target: StorageTarget.MACHINE });
 		assert.equal((await p.vault.readState()).corrupted, 1);
 		assert.equal((await f.storage.getItems(application)).entries[first.id]!.value, 'corrupt');
 		await p.vault.clearSession(p.session);
-		assert.deepEqual(
-			(await p.vault.readState()).entries.map(value => value.username),
-			['other'],
-		);
-		const entry = (await p.vault.readState()).entries[0]!;
-		await p.vault.delete(entry.id);
+		assert.deepEqual((await p.vault.readState()).entries.map(value => value.username), ['other']);
+		const entry = (await p.vault.readState()).entries[0]!; await p.vault.delete(entry.id);
 		assert.equal((await p.vault.readState()).entries.length, 0);
 	});
 
 	test('save and autofill preferences take effect in Main, and ephemeral pages cannot save', async () => {
-		using f = fixture();
-		const p = await page(f);
+		using f = fixture(); const p = await page(f);
 		await f.passwordConfiguration.updateValue('workbench.browser.savePasswords', false);
-		p.post('passwordSubmitted', submitted);
-		p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
-		await settle();
-		assert.equal(
-			f.events.some(event => event.type === 'passwordSaveRequested'),
-			false,
-		);
+		p.post('passwordSubmitted', submitted); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
 		await f.passwordConfiguration.updateValue('workbench.browser.savePasswords', true);
 		await p.vault.save({ ...submitted, origin: 'https://example.test', session: p.session, scope: 'global' });
 		await f.passwordConfiguration.updateValue('workbench.browser.autofillPasswords', false);
-		p.post('passwordFill', form);
-		await settle();
-		assert.equal(
-			p.sent.some(message => message.command === 'fillPassword'),
-			false,
-		);
+		p.post('passwordFill', form); await settle(); assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
 		await f.manager.destroyBrowserView(id);
 		const ephemeral = await page(f, BrowserViewStorageScope.Ephemeral);
-		ephemeral.post('passwordSubmitted', submitted);
-		ephemeral.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
-		await settle();
-		assert.equal(
-			f.events.some(event => event.type === 'passwordSaveRequested'),
-			false,
-		);
-		f.encryptionAvailable = false;
-		assert.equal((await p.vault.readState()).available, false);
+		ephemeral.post('passwordSubmitted', submitted); ephemeral.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+		f.encryptionAvailable = false; assert.equal((await p.vault.readState()).available, false);
 	});
 });
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const observation = { includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
-const agent = {
-	owner: { type: 'agent' as const, sessionId: 'thread-one' },
-	session: { scope: BrowserViewStorageScope.Agent as const, affinity: 'thread-one' },
-};
+const agent = { owner: { type: 'agent' as const, sessionId: 'thread-one' }, session: { scope: BrowserViewStorageScope.Agent as const, affinity: 'thread-one' } };
 const signal = () => new AbortController().signal;
 
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('rendering rules cross validated IPC, reach only the main frame and survive document replacement', async () => {
-		using f = fixture();
-		await f.create();
+		using f = fixture(); await f.create();
 		const sent: unknown[] = [];
-		const frame = {
-			detached: false,
-			framesInSubtree: [] as unknown[],
-			send: (_channel: string, message: unknown) => sent.push(message),
-		};
-		const child = {
-			detached: false,
-			send: () => {
-				throw new Error('A rule must not enter a subframe');
-			},
-		};
+		const frame = { detached: false, framesInSubtree: [] as unknown[], send: (_channel: string, message: unknown) => sent.push(message) };
+		const child = { detached: false, send: () => { throw new Error('A rule must not enter a subframe'); } };
 		frame.framesInSubtree.push(frame, child);
 		Object.assign(f.contents, { mainFrame: frame });
-		const channel = browserViewChannel(f.manager, {
-			call: async () => null,
-			listen: () => Event.None,
-		} as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
 		const rule = { origin: 'https://chatgpt.com', selector: '[data-talvt-turn-state="complete"]' };
 		await channel.call('window:1', 'setContentVisibility', [id, rule]);
 		for (const senderFrame of [child, frame]) {
-			f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', {
-				type: 'ready',
-				frameToken: 'frame-one',
-			});
+			f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', { type: 'ready', frameToken: 'frame-one' });
 		}
 		assert.deepEqual(sent, [{ command: 'contentVisibility', data: rule }]);
 		f.contents.emit('did-start-navigation', {}, 'https://chatgpt.com/c/next', false, true);
-		f.contents.emit('ipc-message', { senderFrame: frame }, 'ash:browserView:preload', {
-			type: 'ready',
-			frameToken: 'frame-two',
-		});
+		f.contents.emit('ipc-message', { senderFrame: frame }, 'ash:browserView:preload', { type: 'ready', frameToken: 'frame-two' });
 		await channel.call('window:1', 'setContentVisibility', [id, null]);
-		assert.deepEqual(sent, [
-			{ command: 'contentVisibility', data: rule },
-			{ command: 'contentVisibility', data: rule },
-			{ command: 'contentVisibility', data: undefined },
-		]);
-		for (const invalid of [
-			{ ...rule, origin: 'https://chatgpt.com/path' },
-			{ ...rule, origin: 'http://chatgpt.com' },
-			{ ...rule, selector: '' },
-			{ ...rule, extra: true },
-		]) {
+		assert.deepEqual(sent, [{ command: 'contentVisibility', data: rule }, { command: 'contentVisibility', data: rule }, { command: 'contentVisibility', data: undefined }]);
+		for (const invalid of [{ ...rule, origin: 'https://chatgpt.com/path' }, { ...rule, origin: 'http://chatgpt.com' }, { ...rule, selector: '' }, { ...rule, extra: true }]) {
 			await assert.rejects(channel.call('window:1', 'setContentVisibility', [id, invalid]), /rendering rule/);
 		}
 	});
 
 	test('console capture is bounded, isolated to one page and reset at a document navigation', async () => {
-		using f = fixture();
-		await f.create();
+		using f = fixture(); await f.create();
 		f.contents.emit('console-message', { level: 'info', message: 'captured message' });
 		assert.equal(await f.manager.getConsoleLogs(id), 'info: captured message');
-		for (let i = 0; i < 100; i++) {
-			f.contents.emit('console-message', { level: 'error', message: '界'.repeat(8192) });
-		}
+		for (let i = 0; i < 100; i++) { f.contents.emit('console-message', { level: 'error', message: '界'.repeat(8192) }); }
 		assert.ok(Buffer.byteLength(await f.manager.getConsoleLogs(id)) <= 64 * 1024 + 500);
 		f.contents.emit('did-start-navigation', {}, 'https://example.test/next', false, true);
 		assert.equal(await f.manager.getConsoleLogs(id), '');
 	});
 
 	test('full-page capture normalizes display scale and refuses an oversized document before requesting pixels', async () => {
-		using f = fixture();
-		await f.create();
+		using f = fixture(); await f.create();
 		f.manager.tryGetBrowserView(id)!.webContents.executeJavaScriptInIsolatedWorld = async () => 2;
 		let large = false;
-		f.command = async method => (method === 'Page.getLayoutMetrics' ? { cssContentSize: { width: 1000, height: large ? 20000 : 2000 } } : { data: 'AA==' });
+		f.command = async method => method === 'Page.getLayoutMetrics' ? { cssContentSize: { width: 1000, height: large ? 20000 : 2000 } } : { data: 'AA==' };
 		await f.manager.captureScreenshot(id, { fullPage: true });
 		const capture = f.commands.find(command => command.method === 'Page.captureScreenshot')!;
-		assert.deepEqual((capture.params as { clip: unknown }).clip, {
-			x: 0,
-			y: 0,
-			width: 1000,
-			height: 2000,
-			scale: 0.5,
-		});
-		large = true;
-		f.commands.length = 0;
+		assert.deepEqual((capture.params as { clip: unknown; }).clip, { x: 0, y: 0, width: 1000, height: 2000, scale: 0.5 });
+		large = true; f.commands.length = 0;
 		await assert.rejects(f.manager.captureScreenshot(id, { fullPage: true }), /TooLarge/);
-		assert.equal(
-			f.commands.some(command => command.method === 'Page.captureScreenshot'),
-			false,
-		);
+		assert.equal(f.commands.some(command => command.method === 'Page.captureScreenshot'), false);
 	});
 
 	test('trusted reload IPC forwards cache bypass and rejects malformed flags', async () => {
-		using f = fixture();
-		await f.create();
+		using f = fixture(); await f.create();
 		const view = f.manager.tryGetBrowserView(id)!;
 		const calls: boolean[] = [];
-		view.webContents.reload = () => {
-			calls.push(false);
-		};
-		view.webContents.reloadIgnoringCache = () => {
-			calls.push(true);
-		};
-		const channel = browserViewChannel(f.manager, {
-			call: async () => null,
-			listen: () => Event.None,
-		} as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		view.webContents.reload = () => { calls.push(false); };
+		view.webContents.reloadIgnoringCache = () => { calls.push(true); };
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
 		await channel.call('window:1', 'reload', [id]);
 		await channel.call('window:1', 'reload', [id, true]);
 		await channel.call('window:1', 'reload', [id, null]);
@@ -487,20 +269,13 @@ suite('Browser view ownership and operations', () => {
 
 	test('committed user visits and title updates reach the session history through the trusted service', async () => {
 		using f = fixture();
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Workspace },
-		});
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 		f.contents.emit('did-navigate', {}, 'https://example.test/');
 		f.title = 'Visited title';
 		f.contents.emit('page-title-updated');
 		f.contents.emit('did-navigate-in-page', {}, 'https://other.test/frame', false);
 		const snapshot = await f.manager.getBrowserHistory(id);
-		assert.deepEqual(
-			snapshot.items.map(entry => ({ url: entry.url, title: entry.title, explicit: entry.explicit })),
-			[{ url: 'https://example.test/', title: 'Visited title', explicit: true }],
-		);
+		assert.deepEqual(snapshot.items.map(entry => ({ url: entry.url, title: entry.title, explicit: entry.explicit })), [{ url: 'https://example.test/', title: 'Visited title', explicit: true }]);
 		await f.manager.deleteBrowserHistory(id, [snapshot.items[0]!.id]);
 		f.contents.emit('page-title-updated');
 		assert.deepEqual(await f.manager.getBrowserHistory(id), { items: [] });
@@ -517,23 +292,11 @@ suite('Browser view ownership and operations', () => {
 		using f = fixture();
 		const loading = promiseWithResolvers<void>();
 		const snapshot = promiseWithResolvers<IStorageSnapshot>();
-		f.storage.getItems = async () => {
-			loading.resolve();
-			return snapshot.promise;
-		};
-		const creating = f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Workspace },
-		});
+		f.storage.getItems = async () => { loading.resolve(); return snapshot.promise; };
+		const creating = f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 		await loading.promise;
 		f.manager.dispose();
-		snapshot.resolve({
-			identity: { scope: StorageScope.APPLICATION, id: 'application' },
-			revision: 0,
-			isNew: true,
-			entries: {},
-		});
+		snapshot.resolve({ identity: { scope: StorageScope.APPLICATION, id: 'application' }, revision: 0, isNew: true, entries: {} });
 		await assert.rejects(creating, /BrowserCapabilityUnavailable/);
 		assert.equal(f.children.size, 0);
 	});
@@ -554,15 +317,9 @@ suite('Browser view ownership and operations', () => {
 		assert.notEqual(other.targetId, first.targetId);
 		const pages = await f.manager.getBrowserViews();
 		assert.equal(pages.length, 2);
-		assert.deepEqual(pages.find(page => page.id === first.targetId)!.canvas, {
-			sessionId: 'session-one',
-			instanceId: 'preview',
-			title: 'Updated',
-		});
+		assert.deepEqual(pages.find(page => page.id === first.targetId)!.canvas, { sessionId: 'session-one', instanceId: 'preview', title: 'Updated' });
 		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
-		f.load = async () => {
-			throw new Error('navigation failed');
-		};
+		f.load = async () => { throw new Error('navigation failed'); };
 		await assert.rejects(host.create({ threadId: 'thread-one', url: 'https://example.test/failure', canvas }, { signal: signal() }), /navigation failed/);
 		assert.equal((await f.manager.getBrowserViews()).length, 2);
 		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
@@ -570,17 +327,10 @@ suite('Browser view ownership and operations', () => {
 
 	test('window accessibility inspection reads an unshared user page without granting Agent access', async () => {
 		using f = fixture();
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Ephemeral },
-		});
-		f.command = async method => {
-			assert.equal(method, 'Accessibility.getFullAXTree');
-			return { nodes: [{ role: { value: 'button' }, name: { value: 'User control' } }] };
-		};
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		f.command = async method => { assert.equal(method, 'Accessibility.getFullAXTree'); return { nodes: [{ role: { value: 'button' }, name: { value: 'User control' } }] }; };
 		const channel = browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None });
-		assert.match((await channel.call('window:1', 'getAccessibilityTree', [id])) as string, /User control/);
+		assert.match(await channel.call('window:1', 'getAccessibilityTree', [id]) as string, /User control/);
 		assert.throws(() => f.manager.validateAgentAccess(id, 'thread-one'), /BrowserTargetAccessDenied/);
 		assert.equal(f.attached, false);
 		f.command = async () => ({ nodes: [{ name: { value: 'x'.repeat(512 * 1024) } }] });
@@ -590,31 +340,14 @@ suite('Browser view ownership and operations', () => {
 	test('the renderer channel validates requests, enforces Thread access and returns Main page state', async () => {
 		using f = fixture();
 		await f.create();
-		f.observe = async pageId => ({
-			targetId: pageId,
-			url: 'https://stale.test/',
-			title: 'Worker title',
-			loading: true,
-		});
+		f.observe = async pageId => ({ targetId: pageId, url: 'https://stale.test/', title: 'Worker title', loading: true });
 		using host = f.createHost();
 		const channel = host.getChannel();
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 		await assert.rejects(channel.call('window:1', 'disposeCore', []), /Unknown browser host command/);
 		await assert.rejects(channel.call('window:1', 'observe', { id: 'invalid', params: {} }), /Invalid browser operation/);
-		await assert.rejects(
-			channel.call('window:1', 'observe', {
-				id: requestId,
-				params: { threadId: 'thread-two', targetId: id, ...observation },
-			}),
-			/BrowserTargetAccessDenied/,
-		);
-		assert.deepEqual(
-			await channel.call('window:1', 'observe', {
-				id: requestId,
-				params: { threadId: 'thread-one', targetId: id, ...observation },
-			}),
-			{ targetId: id, url: 'https://example.test/', title: 'Example', loading: false },
-		);
+		await assert.rejects(channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-two', targetId: id, ...observation } }), /BrowserTargetAccessDenied/);
+		assert.deepEqual(await channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } }), { targetId: id, url: 'https://example.test/', title: 'Example', loading: false });
 		await channel.call('window:1', 'disposeSession', { threadId: 'thread-one' });
 		assert.deepEqual([f.observations, f.retired, f.children.size], [[id], ['thread-one'], 1]);
 	});
@@ -628,18 +361,12 @@ suite('Browser view ownership and operations', () => {
 		const events: BrowserViewEvent[] = [];
 		using listener = channel.listen<BrowserViewEvent>('window:1', 'onDidEvent')(event => events.push(event));
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		const pending = channel.call('window:1', 'observe', {
-			id: requestId,
-			params: { threadId: 'thread-one', targetId: id, ...observation },
-		});
+		const pending = channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } });
 		const rejected = assert.rejects(pending, /BrowserRequestCancelled/);
 		await channel.call('window:1', 'cancel', { id: requestId });
 		await rejected;
 		await f.manager.destroyBrowserView(id);
-		assert.equal(
-			events.some(event => event.type === 'closed' && event.targetId === id),
-			true,
-		);
+		assert.equal(events.some(event => event.type === 'closed' && event.targetId === id), true);
 	});
 
 	test('host reset cancels channel requests waiting for schema loading', async () => {
@@ -647,10 +374,7 @@ suite('Browser view ownership and operations', () => {
 		using host = f.createHost();
 		const channel = host.getChannel();
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		const pending = channel.call('window:1', 'create', {
-			id: requestId,
-			params: { threadId: 'thread-one', url: 'about:blank' },
-		});
+		const pending = channel.call('window:1', 'create', { id: requestId, params: { threadId: 'thread-one', url: 'about:blank' } });
 		const rejected = assert.rejects(pending, /BrowserRequestCancelled/);
 		host.reset();
 		await rejected;
@@ -662,10 +386,7 @@ suite('Browser view ownership and operations', () => {
 
 	test('one id has one page, including simultaneous creation', async () => {
 		using f = fixture();
-		await Promise.all([
-			f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }),
-			f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://ignored.test/', ...agent }),
-		]);
+		await Promise.all([f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }), f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://ignored.test/', ...agent })]);
 		assert.deepEqual([f.children.size, f.events.filter(e => e.type === 'created').length, (await f.manager.getState(id)).url], [1, 1, 'https://example.test/']);
 	});
 
@@ -673,59 +394,26 @@ suite('Browser view ownership and operations', () => {
 		using f = fixture();
 		const view = await f.create();
 		const sent: unknown[] = [];
-		const frame = {
-			detached: false,
-			url: 'https://example.test/',
-			framesInSubtree: [] as unknown[],
-			send: (_channel: string, message: unknown) => sent.push(message),
-		};
+		const frame = { detached: false, url: 'https://example.test/', framesInSubtree: [] as unknown[], send: (_channel: string, message: unknown) => sent.push(message) };
 		frame.framesInSubtree.push(frame);
-		Object.assign(f.contents, {
-			mainFrame: frame,
-			focusedFrame: frame,
-			isFocused: () => true,
-			executeJavaScriptInIsolatedWorld: async () => 'selected words',
-			getZoomFactor: () => 1,
-		});
-		const post = (type: string, data?: unknown, frameToken = 'frame-one', senderFrame: unknown = frame) =>
-			f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', { type, data, frameToken });
-		const key = {
-			key: 'P',
-			code: 'KeyP',
-			keyCode: 80,
-			ctrlKey: true,
-			shiftKey: true,
-			altKey: false,
-			metaKey: false,
-			repeat: false,
-		};
+		Object.assign(f.contents, { mainFrame: frame, focusedFrame: frame, isFocused: () => true, executeJavaScriptInIsolatedWorld: async () => 'selected words', getZoomFactor: () => 1 });
+		const post = (type: string, data?: unknown, frameToken = 'frame-one', senderFrame: unknown = frame) => f.contents.emit('ipc-message', { senderFrame }, 'ash:browserView:preload', { type, data, frameToken });
+		const key = { key: 'P', code: 'KeyP', keyCode: 80, ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, repeat: false };
 		post('keyDown', key);
 		post('ready');
 		post('keyDown', key, 'stale-frame');
 		post('keyDown', key, 'frame-one', { ...frame });
 		post('keyDown', { ...key, keyCode: '80' });
 		post('keyDown', key);
-		assert.deepEqual(
-			f.events.filter(event => event.type === 'keyDown'),
-			[{ type: 'keyDown', targetId: id, event: key }],
-		);
+		assert.deepEqual(f.events.filter(event => event.type === 'keyDown'), [{ type: 'keyDown', targetId: id, event: key }]);
 		assert.equal(await f.manager.getSelectedText(id), 'selected words');
-		const element = {
-			elementId: 'frame-one:element',
-			outerHTML: '<button>Pick</button>',
-			computedStyle: '',
-			innerText: 'Pick',
-			bounds: { x: 0, y: 0, width: 40, height: 20 },
-		};
+		const element = { elementId: 'frame-one:element', outerHTML: '<button>Pick</button>', computedStyle: '', innerText: 'Pick', bounds: { x: 0, y: 0, width: 40, height: 20 } };
 		post('elementPicked', element);
 		await f.manager.toggleElementSelection(id, true);
 		post('elementPicked', { ...element, bounds: { ...element.bounds, width: NaN } });
 		post('elementPicked', element);
-		assert.deepEqual(
-			f.events.filter(event => event.type === 'elementPicked'),
-			[{ type: 'elementPicked', targetId: id, data: { ...element, url: frame.url } }],
-		);
-		assert.ok(sent.some(message => (message as { command: string }).command === 'startElementPicker'));
+		assert.deepEqual(f.events.filter(event => event.type === 'elementPicked'), [{ type: 'elementPicked', targetId: id, data: { ...element, url: frame.url } }]);
+		assert.ok(sent.some(message => (message as { command: string; }).command === 'startElementPicker'));
 		await f.manager.toggleAreaSelection(id, true);
 		post('areaPicked', { x: 1000, y: 0, width: 40, height: 20 });
 		post('areaPicked', { x: 0, y: 0, width: 40, height: 20 });
@@ -733,9 +421,7 @@ suite('Browser view ownership and operations', () => {
 		post('selectionStopped');
 		post('elementPicked', { ...element, comment: 'Unaccepted marker' });
 		assert.equal(f.events.filter(event => event.type === 'elementPicked').length, 1);
-		await f.manager.setElementComments(id, {
-			comments: [{ elementId: element.elementId, body: 'Original comment' }],
-		});
+		await f.manager.setElementComments(id, { comments: [{ elementId: element.elementId, body: 'Original comment' }] });
 		post('elementPicked', { ...element, comment: 'Edited after picker stopped' });
 		assert.equal(f.events.filter(event => event.type === 'elementPicked').length, 2);
 		await f.manager.destroyBrowserView(id);
@@ -776,11 +462,7 @@ suite('Browser view ownership and operations', () => {
 		const page = await f.create();
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		f.observe = async pageId => {
-			started.resolve();
-			await finish.promise;
-			return { targetId: pageId, url: f.url, title: f.title, loading: false };
-		};
+		f.observe = async pageId => { started.resolve(); await finish.promise; return { targetId: pageId, url: f.url, title: f.title, loading: false }; };
 		using host = f.createHost();
 		const first = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
 		await started.promise;
@@ -804,10 +486,7 @@ suite('Browser view ownership and operations', () => {
 		const order: string[] = [];
 		f.observe = async pageId => {
 			order.push(pageId);
-			if (pageId === id) {
-				started.resolve();
-				await finish.promise;
-			}
+			if (pageId === id) { started.resolve(); await finish.promise; }
 			return { targetId: pageId, url: f.url, title: f.title, loading: false };
 		};
 		const first = host.observe({ threadId: 'thread-one', targetId: id, networkToken: 'first-tool', ...observation }, { signal: signal() });
@@ -826,24 +505,14 @@ suite('Browser view ownership and operations', () => {
 		const page = await f.create();
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		f.load = async url => {
-			started.resolve();
-			await finish.promise;
-			f.url = url;
-			f.title = 'Loaded page';
-		};
+		f.load = async url => { started.resolve(); await finish.promise; f.url = url; f.title = 'Loaded page'; };
 		const navigation = f.manager.loadURL(id, 'https://example.test/next');
 		await started.promise;
 		using host = f.createHost();
 		const observed = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
 		finish.resolve();
 		await navigation;
-		assert.deepEqual(await observed, {
-			targetId: id,
-			url: 'https://example.test/next',
-			title: 'Loaded page',
-			loading: false,
-		});
+		assert.deepEqual(await observed, { targetId: id, url: 'https://example.test/next', title: 'Loaded page', loading: false });
 	});
 
 	test('editor navigation waits until the agent screenshot finishes', async () => {
@@ -852,17 +521,8 @@ suite('Browser view ownership and operations', () => {
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
 		const order: string[] = [];
-		f.observe = async pageId => {
-			order.push('capture');
-			started.resolve();
-			await finish.promise;
-			order.push('captured');
-			return { targetId: pageId, url: f.url, title: f.title, loading: false };
-		};
-		f.load = async url => {
-			order.push('navigate');
-			f.url = url;
-		};
+		f.observe = async pageId => { order.push('capture'); started.resolve(); await finish.promise; order.push('captured'); return { targetId: pageId, url: f.url, title: f.title, loading: false }; };
+		f.load = async url => { order.push('navigate'); f.url = url; };
 		using host = f.createHost();
 		const observed = host.observe({ threadId: 'thread-one', targetId: id, ...observation, includeScreenshot: true }, { signal: signal() });
 		await started.promise;
@@ -876,10 +536,7 @@ suite('Browser view ownership and operations', () => {
 		using f = fixture();
 		const page = await f.create();
 		f.loading = true;
-		f.load = async url => {
-			f.url = url;
-			f.loading = false;
-		};
+		f.load = async url => { f.url = url; f.loading = false; };
 		await page.loadURL('https://example.test/next', signal());
 		assert.equal(page.getState().url, 'https://example.test/next');
 	});
@@ -891,10 +548,7 @@ suite('Browser view ownership and operations', () => {
 		using host = f.createHost();
 		const channel = host.getChannel();
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		const pending = channel.call('window:1', 'observe', {
-			id: requestId,
-			params: { threadId: 'thread-one', targetId: id, ...observation },
-		});
+		const pending = channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } });
 		await Promise.resolve();
 		await channel.call('window:1', 'cancel', { id: requestId });
 		await assert.rejects(Promise.resolve(pending), /BrowserRequestCancelled/);
@@ -910,21 +564,8 @@ suite('Browser view ownership and operations', () => {
 		using host = f.createHost();
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		f.observe = async pageId => {
-			started.resolve();
-			await finish.promise;
-			return { targetId: pageId, url: f.url, title: f.title, loading: false };
-		};
-		const pending = host.observe(
-			{
-				threadId: 'thread-one',
-				targetId: id,
-				includeAccessibilityTree: true,
-				includeDomSnapshot: true,
-				includeScreenshot: false,
-			},
-			{ signal: signal() },
-		);
+		f.observe = async pageId => { started.resolve(); await finish.promise; return { targetId: pageId, url: f.url, title: f.title, loading: false }; };
+		const pending = host.observe({ threadId: 'thread-one', targetId: id, includeAccessibilityTree: true, includeDomSnapshot: true, includeScreenshot: false }, { signal: signal() });
 		await started.promise;
 		host.reset();
 		await assert.rejects(pending, /BrowserRequestCancelled/);
@@ -935,15 +576,10 @@ suite('Browser view ownership and operations', () => {
 
 	test('host reset closes its pages while retaining the user page', async () => {
 		using f = fixture();
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'about:blank',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Workspace },
-		});
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 		using host = f.createHost();
 		const created = await host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: signal() });
-		host.reset();
-		host.reset();
+		host.reset(); host.reset();
 		assert.deepEqual([f.manager.tryGetBrowserView(created.targetId), f.manager.tryGetBrowserView(id)?.id], [undefined, id]);
 	});
 
@@ -952,17 +588,7 @@ suite('Browser view ownership and operations', () => {
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
 		f.remote = true;
-		f.proxy = async () => {
-			started.resolve();
-			await finish.promise;
-			return {
-				localPort: 1234,
-				signal: signal(),
-				...toDisposable(() => {
-					f.networkReleases++;
-				}),
-			};
-		};
+		f.proxy = async () => { started.resolve(); await finish.promise; return { localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }; };
 		const pending = f.manager.createTarget('about:blank', 'thread-one', signal());
 		await started.promise;
 		f.manager.dispose();
@@ -977,17 +603,7 @@ suite('Browser view ownership and operations', () => {
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
 		f.remote = true;
-		f.proxy = async () => {
-			started.resolve();
-			await finish.promise;
-			return {
-				localPort: 1234,
-				signal: signal(),
-				...toDisposable(() => {
-					f.networkReleases++;
-				}),
-			};
-		};
+		f.proxy = async () => { started.resolve(); await finish.promise; return { localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }; };
 		const pending = host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: signal() });
 		await started.promise;
 		host.dispose();
@@ -1014,11 +630,7 @@ suite('Browser view ownership and operations', () => {
 	test('user storage is workspace scoped and user pages are private from agents', async () => {
 		using f = fixture();
 		using host = f.createHost();
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'about:blank',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Workspace },
-		});
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 		assert.throws(() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 		assert.ok([...f.partitions.keys()].every(partition => partition.startsWith('persist:')));
 	});
@@ -1027,22 +639,14 @@ suite('Browser view ownership and operations', () => {
 test('sharing grants only the chosen thread and revocation cancels its operation without closing the user page', async () => {
 	using f = fixture();
 	using host = f.createHost();
-	await f.manager.getOrCreateBrowserView(id, {
-		initialUrl: 'about:blank',
-		owner: { type: 'user' },
-		session: { scope: BrowserViewStorageScope.Workspace },
-	});
+	await f.manager.getOrCreateBrowserView(id, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 	await f.manager.setSharing(id, ['thread-one']);
 	await assert.rejects(host.perform({ threadId: 'thread-one', action: { type: 'reload', targetId: id } }, { signal: signal() }), /BrowserNetworkIsolationRequired/);
 	await assert.rejects(host.close({ threadId: 'thread-one', targetId: id }), /BrowserNetworkIsolationRequired/);
 	assert.throws(() => host.observe({ threadId: 'thread-two', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 	const started = promiseWithResolvers<void>();
 	const finish = promiseWithResolvers<void>();
-	f.observe = async pageId => {
-		started.resolve();
-		await finish.promise;
-		return { targetId: pageId, url: f.url, title: f.title, loading: false };
-	};
+	f.observe = async pageId => { started.resolve(); await finish.promise; return { targetId: pageId, url: f.url, title: f.title, loading: false }; };
 	const pending = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
 	await started.promise;
 	await f.manager.setSharing(id, []);
@@ -1064,289 +668,120 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	const contents = new EventEmitter();
 	const partitions = new Map<string, Electron.Session>();
 	const f = {
-		[Symbol.dispose]: () => store.dispose(),
-		events,
-		children,
-		contents,
-		partitions,
-		url: '',
-		title: 'Example',
-		loading: false,
-		attached: false,
-		networkReleases: 0,
-		workbenchFocused: 0,
+		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
+		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
 		workbenchInput: [] as Electron.KeyboardInputEvent[],
-		commands: [] as Array<{ method: string; params: unknown; sessionId?: string }>,
+		commands: [] as Array<{ method: string; params: unknown; sessionId?: string; }>,
 		debugSessions: [] as string[],
-		observations: [] as string[],
-		cancelled: [] as string[],
-		retired: [] as string[],
-		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({
-			targetId: pageId,
-			url: f.url,
-			title: f.title,
-			loading: f.loading,
-		}),
+		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
+		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
-		load: async (url: string): Promise<void> => {
-			f.url = url;
-		},
+		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
-		remote: false,
-		encryptionAvailable: true,
-		authCacheClears: 0,
+		remote: false, encryptionAvailable: true, authCacheClears: 0,
 		menuRequests: [] as INativeContextMenuRequest[],
 		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
 		menuCloses: 0,
 		messages: {} as Readonly<Record<string, string>>,
 		clipboardWrites: [] as string[],
 		editing: [] as string[],
-		imageCopies: [] as { x: number; y: number }[],
+		imageCopies: [] as { x: number; y: number; }[],
 		downloads: [] as string[],
-		proxy: async () => ({
-			localPort: 1234,
-			signal: signal(),
-			...toDisposable(() => {
-				f.networkReleases++;
-			}),
-		}),
+		proxy: async () => ({ localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }),
 	};
-	const window = {
-		id: 1,
-		contentView: {
-			addChildView: (view: WebContentsView) => children.add(view),
-			removeChildView: (view: WebContentsView) => children.delete(view),
-		},
-		webContents: {
-			getZoomFactor: () => 2,
-			focus: () => {
-				f.workbenchFocused++;
-			},
-			sendInputEvent: (input: Electron.KeyboardInputEvent) => {
-				f.workbenchInput.push(input);
-			},
-		},
-		isDestroyed: () => false,
-	} as unknown as BrowserWindow;
+	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { f.workbenchFocused++; }, sendInputEvent: (input: Electron.KeyboardInputEvent) => { f.workbenchInput.push(input); } }, isDestroyed: () => false } as unknown as BrowserWindow;
 	const instantiation = store.add(new InstantiationService());
 	const snapshots = new Map<string, IStorageSnapshot>();
 	const storage: IApplicationStorageMainService = storageOverride ?? {
-		onDidChangeStorage: Event.None,
-		onWillSaveState: Event.None,
-		initialize: async () => {},
+		onDidChangeStorage: Event.None, onWillSaveState: Event.None,
+		initialize: async () => { },
 		getItemsIfExists: async identity => snapshots.get(JSON.stringify(identity)),
 		getItems: async identity => {
 			const key = JSON.stringify(identity);
 			let snapshot = snapshots.get(key);
-			if (!snapshot) {
-				snapshot = { identity, revision: 0, isNew: true, entries: {} };
-				snapshots.set(key, snapshot);
-			}
+			if (!snapshot) { snapshot = { identity, revision: 0, isNew: true, entries: {} }; snapshots.set(key, snapshot); }
 			return snapshot;
 		},
 		updateItems: async (identity, key, entry) => {
 			const previous = await storage.getItems(identity);
 			const entries = { ...previous.entries };
-			if (entry) {
-				entries[key] = entry;
-			} else {
-				delete entries[key];
-			}
+			if (entry) { entries[key] = entry; } else { delete entries[key]; }
 			const snapshot = { ...previous, revision: previous.revision + 1, entries };
 			snapshots.set(JSON.stringify(identity), snapshot);
 			return snapshot;
 		},
-		cleanUpStorage: async () => {},
-		use: () => toDisposable(() => {}),
-		flush: async () => {},
-		close: async () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		cleanUpStorage: async () => { }, use: () => toDisposable(() => { }),
+		flush: async () => { }, close: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
 	};
 	instantiation.registerInstance(IApplicationStorageMainService, storage);
 	// Deterministic OS facility replacement; the production service still owns encoding and failure policy.
-	const encryption = new EncryptionMainService(
-		{
-			isEncryptionAvailable: () => f.encryptionAvailable,
-			encryptString: value => {
-				const cipher = createCipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
-				return Buffer.concat([cipher.update(value, 'utf8'), cipher.final(), cipher.getAuthTag()]);
-			},
-			decryptString: bytes => {
-				const cipher = createDecipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
-				cipher.setAuthTag(bytes.subarray(-16));
-				return Buffer.concat([cipher.update(bytes.subarray(0, -16)), cipher.final()]).toString('utf8');
-			},
-		} as Electron.SafeStorage,
-		'win32',
-	);
-	if (provideEncryption) {
-		instantiation.registerInstance(IEncryptionMainService, encryption);
-	}
-	instantiation.registerInstance(ILogService, new NullLoggerService());
-	instantiation.registerInstance(IClipboardService, {
-		writeText: async (text: string) => {
-			f.clipboardWrites.push(text);
+	const encryption = new EncryptionMainService({
+		isEncryptionAvailable: () => f.encryptionAvailable,
+		encryptString: value => {
+			const cipher = createCipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
+			return Buffer.concat([cipher.update(value, 'utf8'), cipher.final(), cipher.getAuthTag()]);
 		},
-	} as unknown as IClipboardService);
+		decryptString: bytes => {
+			const cipher = createDecipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
+			cipher.setAuthTag(bytes.subarray(-16));
+			return Buffer.concat([cipher.update(bytes.subarray(0, -16)), cipher.final()]).toString('utf8');
+		},
+	} as Electron.SafeStorage, 'win32');
+	if (provideEncryption) { instantiation.registerInstance(IEncryptionMainService, encryption); }
+	instantiation.registerInstance(ILogService, new NullLoggerService());
+	instantiation.registerInstance(IClipboardService, { writeText: async (text: string) => { f.clipboardWrites.push(text); } } as unknown as IClipboardService);
 	const passwordConfiguration = store.add(new InMemoryConfigurationService());
 	instantiation.registerInstance(IConfigurationService, passwordConfiguration);
 	// Construct the vault only when encryption is registered, preserving the missing-registration test.
-	if (provideEncryption) {
-		instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage)));
-	}
-	const manager = store.add(
-		instantiation.createInstance(BrowserViewMainService, {
-			window,
-			getWorkspaceId: () => 'workspace-one',
-			contextMenu: {
-				popup: (request: INativeContextMenuRequest) => {
-					f.menuRequests.push(request);
-					return f.popupMenu(request);
-				},
-				close: () => {
-					f.menuCloses++;
-				},
-			} as unknown as ElectronContextMenu,
-			getNlsMessages: () => f.messages,
-			getRemoteNetwork() {
-				return f.remote
-					? {
-							authority: 'ssh-remote+test',
-							tunnels: {
-								openProxy: () => f.proxy(),
-							} as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService,
-						}
-					: undefined;
-			},
-			createSession: (partition: string) => {
-				let session = partitions.get(partition);
-				if (!session) {
-					session = Object.assign(new EventEmitter(), {
-						protocol: { handle: () => {}, unhandle: () => {} },
-						webRequest: { onBeforeRequest: () => {} },
-						setPermissionCheckHandler: () => {},
-						setPermissionRequestHandler: () => {},
-						setDevicePermissionHandler: () => {},
-						setProxy: async () => {},
-						closeAllConnections: async () => {},
-						clearAuthCache: async () => {
-							f.authCacheClears++;
-						},
-						clearStorageData: async () => {},
-						clearCache: async () => {},
-					}) as unknown as Electron.Session;
-					partitions.set(partition, session);
-				}
-				return session;
-			},
-			createView: (browserStorage: Electron.Session) => {
-				const chromiumId = 'chromium-target-' + children.size;
-				const pageContents = children.size === 0 ? contents : new EventEmitter();
-				let destroyed = false;
-				let zoomFactor = 1;
-				let bounds = { x: 0, y: 0, width: 0, height: 0 };
-				Object.assign(pageContents, {
-					getZoomFactor: () => zoomFactor,
-					setZoomFactor: (value: number) => {
-						zoomFactor = value;
-					},
-					id: children.size + 1,
-					setWebRTCIPHandlingPolicy: () => {},
-					session: browserStorage,
-					setWindowOpenHandler: () => {},
-					isDestroyed: () => destroyed,
-					isLoading: () => f.loading,
-					getURL: () => f.url,
-					getTitle: () => f.title,
-					focus: () => {},
-					stop: () => {
-						f.loading = false;
-					},
-					reload: () => {},
-					reloadIgnoringCache: () => {},
-					navigationHistory: {
-						canGoBack: () => false,
-						canGoForward: () => false,
-						goBack: () => {},
-						goForward: () => {},
-					},
-					loadURL: (url: string) => f.load(url),
-					capturePage: () => f.capture(),
-					undo: () => f.editing.push('undo'),
-					redo: () => f.editing.push('redo'),
-					cut: () => f.editing.push('cut'),
-					copy: () => f.editing.push('copy'),
-					paste: () => f.editing.push('paste'),
-					pasteAndMatchStyle: () => f.editing.push('pastePlain'),
-					selectAll: () => f.editing.push('selectAll'),
-					copyImageAt: (x: number, y: number) => {
-						f.imageCopies.push({ x, y });
-					},
-					downloadURL: (url: string) => {
-						f.downloads.push(url);
-					},
-					close: () => {
-						destroyed = true;
-						pageContents.emit('destroyed');
-					},
-					debugger: Object.assign(new EventEmitter(), {
-						isAttached: () => f.attached,
-						attach: () => {
-							f.attached = true;
-						},
-						detach: () => {
-							f.attached = false;
-						},
-						sendCommand: (method: string, params?: unknown, sessionId?: string) => {
-							f.commands.push({ method, params, ...(sessionId ? { sessionId } : {}) });
-							if (method === 'Target.attachToTarget') {
-								const sessionId = 'session-' + f.debugSessions.length;
-								f.debugSessions.push(sessionId);
-								return Promise.resolve({ sessionId });
-							}
-							return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params);
-						},
-					}),
-				});
-				return {
-					webContents: pageContents,
-					setVisible: () => {},
-					setBounds: (value: typeof bounds) => {
-						bounds = value;
-					},
-					getBounds: () => bounds,
-				} as unknown as WebContentsView;
-			},
-		}),
-	);
+	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage))); }
+	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
+		window, getWorkspaceId: () => 'workspace-one',
+		contextMenu: {
+			popup: (request: INativeContextMenuRequest) => { f.menuRequests.push(request); return f.popupMenu(request); },
+			close: () => { f.menuCloses++; },
+		} as unknown as ElectronContextMenu,
+		getNlsMessages: () => f.messages,
+		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
+			let session = partitions.get(partition);
+			if (!session) {
+				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearAuthCache: async () => { f.authCacheClears++; }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;
+				partitions.set(partition, session);
+			}
+			return session;
+		}, createView: (browserStorage: Electron.Session) => {
+			const chromiumId = 'chromium-target-' + children.size;
+			const pageContents = children.size === 0 ? contents : new EventEmitter();
+			let destroyed = false;
+			let zoomFactor = 1;
+			let bounds = { x: 0, y: 0, width: 0, height: 0 };
+			Object.assign(pageContents, {
+				getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
+				id: children.size + 1,
+				setWebRTCIPHandlingPolicy: () => { },
+				session: browserStorage,
+				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
+				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { }, reloadIgnoringCache: () => { },
+				navigationHistory: { canGoBack: () => false, canGoForward: () => false, goBack: () => { }, goForward: () => { } },
+				loadURL: (url: string) => f.load(url), capturePage: () => f.capture(),
+				undo: () => f.editing.push('undo'), redo: () => f.editing.push('redo'),
+				cut: () => f.editing.push('cut'), copy: () => f.editing.push('copy'),
+				paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),
+				copyImageAt: (x: number, y: number) => { f.imageCopies.push({ x, y }); }, downloadURL: (url: string) => { f.downloads.push(url); },
+				close: () => { destroyed = true; pageContents.emit('destroyed'); },
+				debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown, sessionId?: string) => { f.commands.push({ method, params, ...(sessionId ? { sessionId } : {}) }); if (method === 'Target.attachToTarget') { const sessionId = 'session-' + f.debugSessions.length; f.debugSessions.push(sessionId); return Promise.resolve({ sessionId }); } return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
+			});
+			return { webContents: pageContents, setVisible: () => { }, setBounds: (value: typeof bounds) => { bounds = value; }, getBounds: () => bounds } as unknown as WebContentsView;
+		},
+	}));
 	instantiation.registerInstance(IBrowserViewMainService, manager);
 	instantiation.registerInstance(IPlaywrightService, {
-		getObservation: async (_operationId, _sessionId, pageId) => {
-			f.observations.push(pageId);
-			return f.observe(pageId);
-		},
+		getObservation: async (_operationId, _sessionId, pageId) => { f.observations.push(pageId); return f.observe(pageId); },
 		performAction: async () => undefined,
-		cancelOperation: async operationId => {
-			f.cancelled.push(operationId);
-		},
-		disposeSession: async sessionId => {
-			f.retired.push(sessionId);
-		},
+		cancelOperation: async operationId => { f.cancelled.push(operationId); },
+		disposeSession: async sessionId => { f.retired.push(sessionId); },
 	});
 	store.add(manager.onDidEvent(event => events.push(event)));
-	return Object.assign(f, {
-		manager,
-		instantiation,
-		store,
-		storage,
-		passwordConfiguration,
-		createHost: () => instantiation.createInstance(AppServerBrowserHost),
-		create: async () => {
-			await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent });
-			return manager.tryGetBrowserView(id)!;
-		},
-	});
+	return Object.assign(f, { manager, instantiation, store, storage, passwordConfiguration, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
 }
 
 import { browserViewChannel } from '../../electron-main/browserViewIpc.js';
@@ -1360,37 +795,23 @@ suite('Browser authentication', () => {
 	const challenge = (f: ReturnType<typeof fixture>, firstAuthAttempt = true, overrides: Partial<Electron.AuthInfo> = {}) => {
 		const calls: Array<readonly [string | undefined, string | undefined]> = [];
 		let prevented = false;
-		f.contents.emit(
-			'login',
-			{
-				preventDefault: () => {
-					prevented = true;
-				},
-			},
-			{ url: 'https://example.test/private', firstAuthAttempt },
+		f.contents.emit('login', { preventDefault: () => { prevented = true; } }, { url: 'https://example.test/private', firstAuthAttempt },
 			{ isProxy: false, host: 'example.test', port: 443, realm: 'private', scheme: 'basic', ...overrides },
-			(username?: string, password?: string) => calls.push([username, password]),
-		);
+			(username?: string, password?: string) => calls.push([username, password]));
 		assert.equal(prevented, true);
 		return calls;
 	};
 	const prompt = async (f: ReturnType<typeof fixture>) => {
-		const find = () => [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'authenticationRequested' }> => event.type === 'authenticationRequested');
-		if (find()) {
-			return find()!;
-		}
+		const find = () => [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'authenticationRequested'; }> => event.type === 'authenticationRequested');
+		if (find()) { return find()!; }
 		return new Promise<NonNullable<ReturnType<typeof find>>>(resolve => {
 			const listener = f.manager.onDidEvent(event => {
-				if (event.type === 'authenticationRequested') {
-					listener.dispose();
-					resolve(event);
-				}
+				if (event.type === 'authenticationRequested') { listener.dispose(); resolve(event); }
 			});
 			f.store.add(listener);
 		});
 	};
-	const response = (f: ReturnType<typeof fixture>, requestId: string, value: typeof credentials | null) =>
-		browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call('window:1', 'respondToAuthentication', [id, requestId, value]);
+	const response = (f: ReturnType<typeof fixture>, requestId: string, value: typeof credentials | null) => browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call('window:1', 'respondToAuthentication', [id, requestId, value]);
 
 	test('production page construction requires the Main encryption registration', async () => {
 		using f = fixture(undefined, false);
@@ -1398,15 +819,11 @@ suite('Browser authentication', () => {
 	});
 
 	test('memory mode authenticates without native encryption and leaves saved HTTP credentials untouched', async () => {
-		using f = fixture(undefined, true, true);
-		await create(f);
+		using f = fixture(undefined, true, true); await create(f);
 		const key = `browser.credentials.${f.manager.tryGetBrowserView(id)!.session.id}.preserved`;
 		await f.storage.updateItems(application, key, { value: 'preserved-ciphertext', target: StorageTarget.MACHINE });
 		let nativeCalls = 0;
-		f.instantiation.get(IEncryptionMainService).isEncryptionAvailable = async () => {
-			nativeCalls++;
-			throw new Error('Unexpected native encryption');
-		};
+		f.instantiation.get(IEncryptionMainService).isEncryptionAvailable = async () => { nativeCalls++; throw new Error('Unexpected native encryption'); };
 		const calls = challenge(f);
 		const request = await prompt(f);
 		assert.equal(request.canRemember, false);
@@ -1416,80 +833,50 @@ suite('Browser authentication', () => {
 		await f.manager.tryGetBrowserView(id)!.clearAuthentication();
 		assert.equal(nativeCalls, 0);
 		const entries = (await f.storage.getItems(application)).entries;
-		assert.deepEqual(
-			Object.keys(entries).filter(key => key.startsWith('browser.credentials.')),
-			[key],
-		);
+		assert.deepEqual(Object.keys(entries).filter(key => key.startsWith('browser.credentials.')), [key]);
 		assert.equal(entries[key]!.value, 'preserved-ciphertext');
 	});
 
 	test('unreadable encrypted credentials are preserved, and failed saving never blocks a one-time sign-in', async () => {
-		using f = fixture();
-		await create(f);
-		challenge(f);
-		await response(f, (await prompt(f)).requestId, credentials);
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
 		const snapshot = await f.storage.getItems(application);
 		const key = Object.keys(snapshot.entries).find(key => key.startsWith('browser.credentials.'))!;
-		await f.storage.updateItems(application, key, {
-			value: 'unreadable-ciphertext',
-			target: StorageTarget.MACHINE,
-		});
-		await f.manager.destroyBrowserView(id);
-		await create(f);
+		await f.storage.updateItems(application, key, { value: 'unreadable-ciphertext', target: StorageTarget.MACHINE });
+		await f.manager.destroyBrowserView(id); await create(f);
 		f.events.length = 0;
 		const calls = challenge(f);
 		const request = await prompt(f);
 		assert.equal(request.storageFailed, true);
 		assert.equal((await f.storage.getItems(application)).entries[key]!.value, 'unreadable-ciphertext');
 		const original = f.storage.updateItems;
-		f.storage.updateItems = async () => {
-			throw new Error('OS error must not reach the page');
-		};
-		try {
-			await response(f, request.requestId, credentials);
-		} finally {
-			f.storage.updateItems = original;
-		}
+		f.storage.updateItems = async () => { throw new Error('OS error must not reach the page'); };
+		try { await response(f, request.requestId, credentials); }
+		finally { f.storage.updateItems = original; }
 		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
-		assert.equal(
-			f.events.some(event => event.type === 'authenticationStorageFailed'),
-			true,
-		);
+		assert.equal(f.events.some(event => event.type === 'authenticationStorageFailed'), true);
 		assert.doesNotMatch(JSON.stringify(f.events), /OS error|private-password/);
 	});
 
 	test('clearing a partition cancels an in-flight encrypted save before a late result can restore the credential', async () => {
-		using f = fixture();
-		await create(f);
+		using f = fixture(); await create(f);
 		const calls = challenge(f);
 		const request = await prompt(f);
 		const encryption = f.instantiation.get(IEncryptionMainService);
 		const original = encryption.encrypt.bind(encryption);
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
-		encryption.encrypt = async value => {
-			started.resolve();
-			await finish.promise;
-			return original(value);
-		};
+		encryption.encrypt = async value => { started.resolve(); await finish.promise; return original(value); };
 		const saving = response(f, request.requestId, credentials);
 		await started.promise;
-		try {
-			await f.manager.clearStorage(id);
-		} finally {
-			finish.resolve();
-			await saving;
-		}
+		try { await f.manager.clearStorage(id); }
+		finally { finish.resolve(); await saving; }
 		assert.deepEqual(calls, [[undefined, undefined]]);
-		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
-			false,
-		);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
 	});
 
 	test('login reaches validated IPC, persists only ciphertext and reuses it after reopening the page', async () => {
-		using f = fixture();
-		await create(f);
+		using f = fixture(); await create(f);
 		const calls = challenge(f);
 		const request = await prompt(f);
 		assert.equal(request.canRemember, true);
@@ -1503,47 +890,29 @@ suite('Browser authentication', () => {
 		f.events.length = 0;
 		const restored = challenge(f);
 		await new Promise<void>(resolve => {
-			if (restored.length) {
-				resolve();
-				return;
-			}
-			const listener = f.manager.onDidEvent(event => {
-				if (event.type === 'authenticationRequestClosed') {
-					listener.dispose();
-					queueMicrotask(resolve);
-				}
-			});
+			if (restored.length) { resolve(); return; }
+			const listener = f.manager.onDidEvent(event => { if (event.type === 'authenticationRequestClosed') { listener.dispose(); queueMicrotask(resolve); } });
 			f.store.add(listener);
 		});
 		assert.deepEqual(restored, [[credentials.username, credentials.password]]);
-		assert.equal(
-			f.events.some(event => event.type === 'authenticationRequested'),
-			false,
-		);
+		assert.equal(f.events.some(event => event.type === 'authenticationRequested'), false);
 		assert.doesNotMatch(JSON.stringify(f.events), /private-user|private-password/);
 	});
 
 	test('a rejected saved credential prompts again, removes the stale value and never loops automatic retries', async () => {
-		using f = fixture();
-		await create(f);
-		challenge(f);
-		await response(f, (await prompt(f)).requestId, credentials);
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
 		f.events.length = 0;
 		const retry = challenge(f, false);
 		const request = await prompt(f);
-		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
-			false,
-		);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
 		await response(f, request.requestId, null);
 		assert.deepEqual(retry, [[undefined, undefined]]);
 	});
 
 	test('protection spaces and browser storage sessions do not share credentials', async () => {
-		using f = fixture();
-		await create(f);
-		challenge(f);
-		await response(f, (await prompt(f)).requestId, credentials);
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
 		for (const overrides of [{ realm: 'other' }, { isProxy: true }, { scheme: 'digest' }]) {
 			f.events.length = 0;
 			const calls = challenge(f, true, overrides);
@@ -1552,11 +921,7 @@ suite('Browser authentication', () => {
 			await response(f, request.requestId, null);
 		}
 		await f.manager.destroyBrowserView(id);
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: user.owner,
-			session: { scope: BrowserViewStorageScope.Global },
-		});
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session: { scope: BrowserViewStorageScope.Global } });
 		f.events.length = 0;
 		const calls = challenge(f);
 		await response(f, (await prompt(f)).requestId, null);
@@ -1564,8 +929,7 @@ suite('Browser authentication', () => {
 	});
 
 	test('unavailable encryption and ephemeral sessions permit one sign-in without saving; Agent pages are denied', async () => {
-		using f = fixture();
-		await create(f);
+		using f = fixture(); await create(f);
 		f.encryptionAvailable = false;
 		const calls = challenge(f);
 		const request = await prompt(f);
@@ -1574,13 +938,8 @@ suite('Browser authentication', () => {
 		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
 		assert.equal(Object.keys((await f.storage.getItems(application)).entries).length, 0);
 		await f.manager.destroyBrowserView(id);
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: user.owner,
-			session: { scope: BrowserViewStorageScope.Ephemeral },
-		});
-		f.events.length = 0;
-		f.encryptionAvailable = true;
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		f.events.length = 0; f.encryptionAvailable = true;
 		challenge(f);
 		const ephemeral = await prompt(f);
 		assert.equal(ephemeral.canRemember, false);
@@ -1590,15 +949,11 @@ suite('Browser authentication', () => {
 		await f.create();
 		f.events.length = 0;
 		assert.deepEqual(challenge(f), [[undefined, undefined]]);
-		assert.equal(
-			f.events.some(event => event.type === 'authenticationRequested'),
-			false,
-		);
+		assert.equal(f.events.some(event => event.type === 'authenticationRequested'), false);
 	});
 
 	test('navigation cancels once, stale or malformed IPC cannot authenticate, and clearing data removes saved and cached authentication', async () => {
-		using f = fixture();
-		await create(f);
+		using f = fixture(); await create(f);
 		const calls = challenge(f);
 		const request = await prompt(f);
 		await assert.rejects(response(f, request.requestId, { ...credentials, password: 'bad\nheader' }), /Invalid browser authentication/);
@@ -1606,8 +961,7 @@ suite('Browser authentication', () => {
 		await response(f, request.requestId, credentials);
 		assert.deepEqual(calls, [[undefined, undefined]]);
 		f.events.length = 0;
-		challenge(f);
-		await response(f, (await prompt(f)).requestId, credentials);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
 		f.events.length = 0;
 		const pending = challenge(f, true, { realm: 'another-realm' });
 		const pendingRequest = await prompt(f);
@@ -1615,38 +969,18 @@ suite('Browser authentication', () => {
 		await response(f, pendingRequest.requestId, credentials);
 		assert.deepEqual(pending, [[undefined, undefined]]);
 		assert.equal(f.authCacheClears, 1);
-		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
-			false,
-		);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
 	});
 });
 
 suite('Browser webpage context menu', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	const context = (overrides: Partial<ContextMenuParams> = {}): ContextMenuParams =>
-		({
-			x: 12,
-			y: 18,
-			frame: { detached: false },
-			linkURL: '',
-			srcURL: '',
-			mediaType: 'none',
-			selectionText: '',
-			isEditable: false,
-			hasImageContents: false,
-			menuSourceType: 'mouse',
-			editFlags: {
-				canUndo: false,
-				canRedo: false,
-				canCut: false,
-				canCopy: true,
-				canPaste: true,
-				canDelete: false,
-				canSelectAll: true,
-			},
-			...overrides,
-		}) as ContextMenuParams;
+	const context = (overrides: Partial<ContextMenuParams> = {}): ContextMenuParams => ({
+		x: 12, y: 18, frame: { detached: false }, linkURL: '', srcURL: '', mediaType: 'none',
+		selectionText: '', isEditable: false, hasImageContents: false, menuSourceType: 'mouse',
+		editFlags: { canUndo: false, canRedo: false, canCut: false, canCopy: true, canPaste: true, canDelete: false, canSelectAll: true },
+		...overrides,
+	} as ContextMenuParams);
 
 	test('keyboard editing menus target the page, retain disabled actions and follow client language and zoom', async () => {
 		using f = fixture();
@@ -1670,11 +1004,7 @@ suite('Browser webpage context menu', () => {
 
 	test('link and image actions reuse page opening, clipboard and download owners', async () => {
 		using f = fixture();
-		await f.manager.getOrCreateBrowserView(id, {
-			initialUrl: 'https://example.test/',
-			owner: { type: 'user' },
-			session: { scope: BrowserViewStorageScope.Global },
-		});
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Global } });
 		f.popupMenu = async () => ({ selectedId: 'openLink' });
 		f.contents.emit('context-menu', {}, context({ linkURL: 'https://example.test/next' }));
 		await Promise.resolve();

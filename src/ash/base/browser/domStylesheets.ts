@@ -1,13 +1,27 @@
-import { Disposable, DisposableMap, DisposableStore, type IDisposable, toDisposable } from '../common/lifecycle.js';
+import {
+	Disposable,
+	DisposableMap,
+	DisposableStore,
+	type IDisposable,
+	toDisposable,
+} from '../common/lifecycle.js';
 import { observeMutations } from './observer.js';
-import { type BrowserWindow, getWindows, onDidRegisterWindow, onWillUnregisterWindow } from './window.js';
+import {
+	type BrowserWindow,
+	getWindows,
+	onDidRegisterWindow,
+	onWillUnregisterWindow,
+} from './window.js';
 import { h } from './dom.js';
 
 /** A disposable stylesheet attached to one document. */
 export class ManagedStyleSheet extends Disposable {
 	readonly element: HTMLStyleElement;
 
-	constructor(ownerDocument: Document, cssText = '') {
+	constructor(
+		ownerDocument: Document,
+		cssText = '',
+	) {
 		super();
 		const element = h(ownerDocument, 'style');
 		this.element = element;
@@ -61,7 +75,13 @@ export class GlobalStyleSheet extends Disposable {
 	}
 }
 
-export function createStyleSheet(ownerDocument: Document, cssText = ''): { readonly element: HTMLStyleElement; readonly registration: IDisposable } {
+export function createStyleSheet(
+	ownerDocument: Document,
+	cssText = '',
+): {
+	readonly element: HTMLStyleElement;
+	readonly registration: IDisposable;
+} {
 	const element = h(ownerDocument, 'style');
 	element.type = 'text/css';
 	element.media = 'screen';
@@ -78,7 +98,10 @@ export interface IClonedDocumentStyles extends IDisposable {
 }
 
 /** Mirrors stylesheet nodes while retaining unchanged links and their loaded state. */
-export function cloneDocumentStyles(sourceDocument: Document, targetDocument: Document): IClonedDocumentStyles {
+export function cloneDocumentStyles(
+	sourceDocument: Document,
+	targetDocument: Document,
+): IClonedDocumentStyles {
 	const store = new DisposableStore();
 	const clones = new Map<HTMLStyleElement | HTMLLinkElement, HTMLStyleElement | HTMLLinkElement>();
 	const pendingLoads = new Set<Promise<void>>();
@@ -109,12 +132,10 @@ export function cloneDocumentStyles(sourceDocument: Document, targetDocument: Do
 		clone.remove();
 		clones.delete(source);
 	};
-	store.add(
-		toDisposable(() => {
-			for (const source of clones.keys()) removeClone(source);
-			anchor.remove();
-		}),
-	);
+	store.add(toDisposable(() => {
+		for (const source of clones.keys()) removeClone(source);
+		anchor.remove();
+	}));
 	const synchronize = (): void => {
 		const styles = [...sourceDocument.head.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]')];
 		const live = new Set(styles);
@@ -151,18 +172,18 @@ export function cloneDocumentStyles(sourceDocument: Document, targetDocument: Do
 		}
 	};
 	synchronize();
-	store.add(
-		observeMutations(sourceDocument.head, synchronize, {
+	store.add(observeMutations(
+		sourceDocument.head,
+		synchronize,
+		{
 			attributes: true,
 			childList: true,
 			characterData: true,
 			subtree: true,
-		}),
-	);
-	return {
-		get whenStylesHaveLoaded() {
-			return Promise.all([...pendingLoads]).then(() => undefined);
 		},
+	));
+	return {
+		get whenStylesHaveLoaded() { return Promise.all([...pendingLoads]).then(() => undefined); },
 		dispose: () => store.dispose(),
 		[Symbol.dispose]: () => store.dispose(),
 	};

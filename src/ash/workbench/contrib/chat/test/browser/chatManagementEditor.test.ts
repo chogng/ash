@@ -43,36 +43,21 @@ function setup(resources: DisposableStore, read: () => Promise<readonly ModelCat
 	const writes = { fail: false };
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IAccessibleViewService, {
-		...toDisposable(() => {}),
-		show: () => false,
-		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp: () => {},
+		...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined,
+		disableHint: async () => { }, showAccessibleViewHelp: () => { },
 	});
 	const models: Partial<ILanguageModelsService> = {
-		onDidChangeModels: changes.event,
-		listModelCatalog: read,
-		listModelProviders: async () => [],
+		onDidChangeModels: changes.event, listModelCatalog: read, listModelProviders: async () => [],
 		isModelVisible: model => enabled.has(model.model),
 		setModelVisible: async (model, value) => {
-			if (writes.fail) {
-				throw new Error('Write failed');
-			}
-			if (value) {
-				enabled.add(model.model);
-			} else {
-				enabled.delete(model.model);
-			}
+			if (writes.fail) { throw new Error('Write failed'); }
+			if (value) { enabled.add(model.model); } else { enabled.delete(model.model); }
 			changes.fire();
 		},
 	};
 	services.registerInstance(ILanguageModelsService, models as ILanguageModelsService);
 	const settings: unknown[] = [];
-	services.registerInstance(IPreferencesService, {
-		openSettings: async options => {
-			settings.push(options);
-		},
-	} as IPreferencesService);
+	services.registerInstance(IPreferencesService, { openSettings: async options => { settings.push(options); } } as IPreferencesService);
 	const root = document.createElement('main');
 	document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
@@ -97,10 +82,7 @@ test('Models management command opens the registered editor, reuses it, filters 
 	assert.ok(part.activePane instanceof ModelsManagementEditor);
 	const pane = part.activePane;
 	assert.equal(opened, pane);
-	assert.deepEqual(
-		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(node => node.textContent),
-		['Older OpenAI'],
-	);
+	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(node => node.textContent), ['Older OpenAI']);
 	await commands.executeCommand(MANAGE_CHAT_COMMAND_ID);
 	assert.equal(part.activePane, pane);
 	assert.equal(root.querySelectorAll('.ash-models-management-editor').length, 1);
@@ -118,13 +100,11 @@ test('The shared catalog keeps local search independent of host search and resto
 	using resources = new DisposableStore();
 	const { services, root, enabled } = setup(resources);
 	let hostFilter = '';
-	const widget = resources.add(
-		services.createInstance(ChatModelsWidget, document, {
-			compact: true,
-			matches: (entry: ModelCatalogEntry) => !hostFilter || entry.displayName.includes(hostFilter),
-			isFiltering: () => !!hostFilter,
-		}),
-	);
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {
+		compact: true,
+		matches: (entry: ModelCatalogEntry) => !hostFilter || entry.displayName.includes(hostFilter),
+		isFiltering: () => !!hostFilter,
+	}));
 	root.append(widget.element);
 	widget.render();
 	await nextTurn();
@@ -194,9 +174,7 @@ test('Models management uses Chinese labels and accessibility content and restor
 		assert.equal(provider.provideContent(), 'openai\nOlder OpenAI, openai/older, 关闭');
 		provider.dispose();
 		assert.equal(document.activeElement, search);
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });
 
 test('Models management restoration preserves its input identity, icon and singleton capability', () => {

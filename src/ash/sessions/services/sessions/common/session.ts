@@ -29,7 +29,7 @@ export interface ISessionChangesetOperation {
 	readonly status: SessionChangesetOperationStatus;
 }
 
-export type ISessionChangesetOperationTarget = { readonly kind: 'resource'; readonly resource: URI };
+export type ISessionChangesetOperationTarget = { readonly kind: 'resource'; readonly resource: URI; };
 
 /** A captured file keeps its review identity separate from its two content resources. */
 export interface ISessionFileChange {
@@ -54,24 +54,18 @@ export interface ISessionChangeset {
 	readonly operations: IObservable<readonly ISessionChangesetOperation[]>;
 	readonly originalCheckpointRef: IObservable<string | undefined>;
 	readonly modifiedCheckpointRef: IObservable<string | undefined>;
-	readonly capabilities?: { readonly review?: boolean };
+	readonly capabilities?: { readonly review?: boolean; };
 	invokeOperation(operationId: string, target?: ISessionChangesetOperationTarget, meta?: Record<string, unknown>): Promise<void>;
 }
 
 export function createSessionFileChange(summary: TurnChangeSetSummary, file: TurnChangeFile): ISessionFileChange {
 	const uri = URI.from({
-		scheme: 'ash-turn-diff',
-		path: `/${summary.changeSetId}/${file.path}`,
+		scheme: 'ash-turn-diff', path: `/${summary.changeSetId}/${file.path}`,
 		query: `session=${encodeURIComponent(summary.sessionId)}&thread=${encodeURIComponent(summary.threadId)}&revision=${summary.revision}`,
 	});
 	return {
-		uri,
-		originalUri: uri.with({ query: `${uri.query}&side=before` }),
-		modifiedUri: uri.with({ query: `${uri.query}&side=after` }),
-		insertions: file.additions,
-		deletions: file.deletions,
-		summary,
-		file,
+		uri, originalUri: uri.with({ query: `${uri.query}&side=before` }), modifiedUri: uri.with({ query: `${uri.query}&side=after` }),
+		insertions: file.additions, deletions: file.deletions, summary, file,
 	};
 }
 
@@ -79,20 +73,10 @@ export function createSessionFileChange(summary: TurnChangeSetSummary, file: Tur
 export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type ThreadOrigin =
-	| { readonly type: 'root' }
-	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number }
-	| {
-			readonly type: 'rewind';
-			readonly parentThreadId: ThreadId;
-			readonly parentSequence: number;
-			readonly beforeTurnId: string;
-	  }
-	| {
-			readonly type: 'agentSpawn';
-			readonly parentThreadId: ThreadId;
-			readonly parentSequence: number;
-			readonly delegationId: string;
-	  };
+	| { readonly type: 'root'; }
+	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: 'rewind'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string; }
+	| { readonly type: 'agentSpawn'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; };
 export type ChatStatus = 'active' | 'archived';
 export type AgentThreadExecutionStatus = 'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 export type AgentWaitingReason = 'approval' | 'userInput' | 'capability';
@@ -113,10 +97,19 @@ export interface AgentTreeNode {
 		readonly tokenBudget?: number | null;
 		readonly tokensUsed: number;
 	};
-	readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
-	readonly role?: { readonly name: string; readonly selectionReason: 'explicit' | 'automatic' };
-	readonly result?: { readonly status: string; readonly summary: string };
-	readonly joins: readonly { readonly status: 'waiting' | 'satisfied' }[];
+	readonly usage: {
+		readonly inputTokens: number;
+		readonly outputTokens: number;
+	};
+	readonly role?: {
+		readonly name: string;
+		readonly selectionReason: 'explicit' | 'automatic';
+	};
+	readonly result?: {
+		readonly status: string;
+		readonly summary: string;
+	};
+	readonly joins: readonly { readonly status: 'waiting' | 'satisfied'; }[];
 	readonly children: readonly AgentTreeNode[];
 }
 
@@ -133,23 +126,20 @@ export interface IChat {
 
 export type SessionStatus = 'active' | 'archived';
 export type SessionWorkspaceSelection =
-	| { readonly type: 'current' }
-	| { readonly type: 'local'; readonly root: string }
-	| { readonly type: 'ssh'; readonly host: string; readonly root: string }
-	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string }
-	| {
-			readonly type: 'multiple';
-			readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[];
-	  };
+	| { readonly type: 'current'; }
+	| { readonly type: 'local'; readonly root: string; }
+	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
+	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]; };
 
-export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'provider' }>;
+export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'provider'; }>;
 
 /** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
 export interface ISessionWorkspace {
 	/** Local sentinel or canonical remote URI authority, never a bare SSH alias. */
 	readonly authorityId: string;
 	readonly root: string;
-	readonly runtime?: { readonly providerId: string; readonly workspace: string };
+	readonly runtime?: { readonly providerId: string; readonly workspace: string; };
 }
 
 /** Product application serving the Session catalog, independent of its execution authority. */

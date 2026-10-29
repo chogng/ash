@@ -35,11 +35,11 @@ interface GpuTextIntegrationHarness {
 	setFontMetrics(fontSize: number, lineHeight: number): void;
 	readDecorationRasters(): Readonly<Record<string, readonly number[]>>;
 	measureGpuAdvance(text: string): number;
-	decorationPixels(reverse: boolean): { inherited: number[]; explicit: number[]; plain: number[] };
+	decorationPixels(reverse: boolean): { inherited: number[]; explicit: number[]; plain: number[]; };
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	loseDevice(): Promise<void>;
-	mountReplacementGpuEditor(): Promise<{ deviceReady: boolean; canvasCount: number }>;
+	mountReplacementGpuEditor(): Promise<{ deviceReady: boolean; canvasCount: number; }>;
 	setBracketColor(color: string): void;
 	setSelectionColor(color: string): void;
 	prepareBracketText(length: number): void;
@@ -72,34 +72,22 @@ declare global {
 const container = requiredElement('editor-root');
 const disposables = new DisposableStore();
 disposables.add(stanzaApi.languages.registerLanguages([{ description: { id: 'typescript' } }]));
-disposables.add(
-	stanzaApi.languages.setLanguageConfiguration('typescript', {
-		brackets: [
-			['{', '}'],
-			['[', ']'],
-			['(', ')'],
-		],
-		colorizedBracketPairs: [
-			['{', '}'],
-			['[', ']'],
-			['(', ')'],
-		],
-	}),
-);
+disposables.add(stanzaApi.languages.setLanguageConfiguration('typescript', {
+	brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+	colorizedBracketPairs: [['{', '}'], ['[', ']'], ['(', ')']],
+}));
 const gpuFrameTrace = installGpuFrameTrace();
 disposables.add(toDisposable(() => gpuFrameTrace.dispose()));
 const resource = stanzaApi.URI.parse('inmemory://stanza/gpu-integration.ts');
 const model = disposables.add(stanzaApi.editor.createModel(initialText, 'typescript', resource));
-const editor = disposables.add(
-	stanzaApi.editor.create(container, {
-		model,
-		lineWrapping: stanzaApi.EditorLineWrapping.On,
-		lineNumbers: 'on',
-		guides: { indentation: true },
-		bracketPairColorization: { enabled: true },
-		experimentalGpuAcceleration: 'on',
-	}),
-);
+const editor = disposables.add(stanzaApi.editor.create(container, {
+	model,
+	lineWrapping: stanzaApi.EditorLineWrapping.On,
+	lineNumbers: 'on',
+	guides: { indentation: true },
+	bracketPairColorization: { enabled: true },
+	experimentalGpuAcceleration: 'on',
+}));
 const resizeObserver = new ResizeObserver(() => editor.layout({ width: container.clientWidth, height: container.clientHeight }));
 resizeObserver.observe(container);
 disposables.add(toDisposable(() => resizeObserver.disconnect()));
@@ -122,15 +110,13 @@ window.ashGpuTextIntegration = {
 			['zeroOpacity', FontStyle.None, { opacity: 0 }],
 			['transparentStrike', FontStyle.Strikethrough, { opacity: 1, strikethroughColor: 0 }],
 		];
-		return Object.fromEntries(
-			variants.map(([name, fontStyle, style]) => {
-				const id = cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor);
-				const glyph = rasterizer.rasterizeGlyph('m', fontStyle << MetadataConsts.FONT_STYLE_OFFSET, id, ['#ffffff']);
-				const source = glyph.source;
-				const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data;
-				return [name, Array.from(pixels)];
-			}),
-		);
+		return Object.fromEntries(variants.map(([name, fontStyle, style]) => {
+			const id = cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor);
+			const glyph = rasterizer.rasterizeGlyph('m', fontStyle << MetadataConsts.FONT_STYLE_OFFSET, id, ['#ffffff']);
+			const source = glyph.source;
+			const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data;
+			return [name, Array.from(pixels)];
+		}));
 	},
 	decorationPixels: reverse => {
 		const cache = new DecorationStyleCache();
@@ -144,6 +130,7 @@ window.ashGpuTextIntegration = {
 		};
 		const metadata = (FontStyle.Bold | FontStyle.Strikethrough) << MetadataConsts.FONT_STYLE_OFFSET;
 		return { inherited: pixels(metadata, ids[0]!), explicit: pixels(metadata, ids[1]!), plain: pixels(0, 0) };
+
 	},
 	initialText,
 	getValue: () => editor.getValue(),
@@ -159,60 +146,31 @@ window.ashGpuTextIntegration = {
 	mountReplacementGpuEditor: async () => {
 		const replacementContainer = document.createElement('div');
 		replacementContainer.id = 'replacement-gpu-editor';
-		Object.assign(replacementContainer.style, {
-			position: 'absolute',
-			top: '320px',
-			width: '800px',
-			height: '300px',
-		});
+		Object.assign(replacementContainer.style, { position: 'absolute', top: '320px', width: '800px', height: '300px' });
 		document.body.append(replacementContainer);
 		disposables.add(toDisposable(() => replacementContainer.remove()));
 		const replacement = disposables.add(stanzaApi.editor.create(replacementContainer, { model, experimentalGpuAcceleration: 'on' }));
 		replacement.layout({ width: 800, height: 300 });
 		await ViewGpuContext.device;
-		return {
-			deviceReady: Boolean(ViewGpuContext.deviceSync),
-			canvasCount: replacementContainer.querySelectorAll('canvas.stanza-editor-gpu-canvas').length,
-		};
+		return { deviceReady: Boolean(ViewGpuContext.deviceSync), canvasCount: replacementContainer.querySelectorAll('canvas.stanza-editor-gpu-canvas').length };
 	},
 	prepareBracketText: length => {
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue(`(${'x'.repeat(length)})`);
 	},
 	prepareSemanticText: () => {
-		disposables.add(
-			stanzaApi.languages.registerDocumentSemanticTokensProvider('typescript', {
-				provideSemanticTokens: request =>
-					request.model === model
-						? {
-								tokens: [
-									{
-										range: new stanzaApi.Range(1, 1, 1, 7),
-										tokenType: 'variable',
-										modifiers: ['readonly'],
-									},
-								],
-							}
-						: undefined,
-			}),
-		);
-		StandaloneServices.get(IStandaloneThemeService).setColorTheme(
-			createColorTheme({
-				id: 'gpu-semantic',
-				label: 'GPU semantic',
-				colorScheme: stanzaApi.ColorScheme.Dark,
-				semanticHighlighting: true,
-				semanticTokenRules: [
-					{
-						selector: 'variable.readonly',
-						type: 'variable',
-						modifiers: ['readonly'],
-						foreground: '#e137ab',
-						fontStyle: 'italic underline',
-					},
-				],
-			}),
-		);
+		disposables.add(stanzaApi.languages.registerDocumentSemanticTokensProvider('typescript', {
+			provideSemanticTokens: request => request.model === model ? {
+				tokens: [{
+					range: new stanzaApi.Range(1, 1, 1, 7), tokenType: 'variable', modifiers: ['readonly'],
+				}]
+			} : undefined,
+		}));
+		StandaloneServices.get(IStandaloneThemeService).setColorTheme(createColorTheme({
+			id: 'gpu-semantic', label: 'GPU semantic', colorScheme: stanzaApi.ColorScheme.Dark,
+			semanticHighlighting: true,
+			semanticTokenRules: [{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], foreground: '#e137ab', fontStyle: 'italic underline' }],
+		}));
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue('sample');
 	},
@@ -226,33 +184,12 @@ window.ashGpuTextIntegration = {
 		const domEditor = disposables.add(stanzaApi.editor.create(domContainer, { model, experimentalGpuAcceleration: 'off' }));
 		domEditor.layout({ width: 800, height: 300 });
 	},
-	clearSemanticFontStyles: () =>
-		StandaloneServices.get(IStandaloneThemeService).setColorTheme(
-			createColorTheme({
-				id: 'semantic-normal',
-				label: 'Semantic normal',
-				colorScheme: stanzaApi.ColorScheme.Dark,
-				semanticHighlighting: true,
-				semanticTokenRules: [
-					{
-						selector: 'variable.readonly',
-						type: 'variable',
-						modifiers: ['readonly'],
-						foreground: '#46ac72',
-						bold: false,
-						italic: false,
-						underline: false,
-						strikethrough: false,
-					},
-				],
-			}),
-		),
+	clearSemanticFontStyles: () => StandaloneServices.get(IStandaloneThemeService).setColorTheme(createColorTheme({
+		id: 'semantic-normal', label: 'Semantic normal', colorScheme: stanzaApi.ColorScheme.Dark, semanticHighlighting: true,
+		semanticTokenRules: [{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], foreground: '#46ac72', bold: false, italic: false, underline: false, strikethrough: false }],
+	})),
 	setSelectionColor: color => {
-		stanzaApi.editor.defineNamedTheme('gpu-selection', {
-			label: 'GPU selection',
-			colorScheme: stanzaApi.ColorScheme.Dark,
-			colors: { 'editor.selectionForeground': color },
-		});
+		stanzaApi.editor.defineNamedTheme('gpu-selection', { label: 'GPU selection', colorScheme: stanzaApi.ColorScheme.Dark, colors: { 'editor.selectionForeground': color } });
 		stanzaApi.editor.setTheme('gpu-selection');
 		editor.setSelection(new stanzaApi.Range(1, 2, 1, 7));
 	},

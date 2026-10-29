@@ -23,10 +23,7 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		if (this.active && !options) {
 			this.active.value = value;
 			this.active.show();
-			this.active.valueSelection = {
-				start: QuickAccessRegistry.get(value)?.prefix.length ?? 0,
-				end: value.length,
-			};
+			this.active.valueSelection = { start: QuickAccessRegistry.get(value)?.prefix.length ?? 0, end: value.length };
 			return;
 		}
 		this.active?.hide();
@@ -38,8 +35,7 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		let descriptor: IQuickAccessProviderDescriptor | undefined;
 		const updateNavigation = (): void => {
 			if (options) return;
-			const modes = QuickAccessRegistry.all()
-				.filter(mode => mode.tabLabel !== undefined)
+			const modes = QuickAccessRegistry.all().filter(mode => mode.tabLabel !== undefined)
 				.sort((left, right) => (left.tabOrder ?? Number.MAX_VALUE) - (right.tabOrder ?? Number.MAX_VALUE));
 			if (modes.length < 2) return;
 			picker.navigation = {
@@ -81,18 +77,16 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 			}
 		};
 		session.add(picker.onDidChangeValue(activate));
-		session.add(
-			picker.onDidHide(() => {
-				this.active = undefined;
-				// A hide listener can open a new session without prematurely disposing this picker.
-				if (this.session.value === session) this.session.clearAndLeak();
-				// Accepted commands can dispose the captured editor before deferred picker cleanup.
-				provider.clear();
-				this.visibilityChanged.fire(false);
-				// Preserve delivery to hide listeners while releasing only this session afterward.
-				queueMicrotask(() => session.dispose());
-			}),
-		);
+		session.add(picker.onDidHide(() => {
+			this.active = undefined;
+			// A hide listener can open a new session without prematurely disposing this picker.
+			if (this.session.value === session) this.session.clearAndLeak();
+			// Accepted commands can dispose the captured editor before deferred picker cleanup.
+			provider.clear();
+			this.visibilityChanged.fire(false);
+			// Preserve delivery to hide listeners while releasing only this session afterward.
+			queueMicrotask(() => session.dispose());
+		}));
 		this.session.value = session;
 		this.active = picker;
 		picker.value = value;

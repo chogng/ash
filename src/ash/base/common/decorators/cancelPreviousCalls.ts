@@ -1,7 +1,8 @@
 import { CancellationToken, CancellationTokenSource } from '../cancellation.js';
 import { Disposable, toDisposable } from '../lifecycle.js';
 
-type WithOptionalCancellationToken<TFunction extends (...args: any[]) => unknown> = TFunction extends (...args: infer TArgs) => infer TResult
+type WithOptionalCancellationToken<TFunction extends (...args: any[]) => unknown> =
+	TFunction extends (...args: infer TArgs) => infer TResult
 	? (...args: [...TArgs, cancellationToken?: CancellationToken]) => TResult
 	: never;
 
@@ -34,12 +35,10 @@ export function cancelPreviousCalls<TObject extends Disposable, TArgs extends un
 			args.push(source.token);
 		}
 		if (!previous) {
-			this._register(
-				toDisposable(() => {
-					active.get(this)?.dispose();
-					active.delete(this);
-				}),
-			);
+			this._register(toDisposable(() => {
+				active.get(this)?.dispose();
+				active.delete(this);
+			}));
 		}
 		return method.apply(this, args);
 	};

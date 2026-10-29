@@ -45,18 +45,7 @@ suite('Trusted domain rules', () => {
 			assert.equal(isURLDomainTrusted(URI.parse(target), normalized), expected);
 		});
 	}
-	for (const pattern of [
-		'ftp://example.test',
-		'example.test@evil.test',
-		'example.test?q=1',
-		'example.test#x',
-		'example.test\\evil.test',
-		'example.test:65536',
-		'example.test/docs/../',
-		'example.test/docs/%2e%2e/',
-		' example.test',
-		'',
-	]) {
+	for (const pattern of ['ftp://example.test', 'example.test@evil.test', 'example.test?q=1', 'example.test#x', 'example.test\\evil.test', 'example.test:65536', 'example.test/docs/../', 'example.test/docs/%2e%2e/', ' example.test', '']) {
 		test(`rejects invalid rule ${JSON.stringify(pattern)}`, () => assert.throws(() => normalizeURLPattern(pattern), TypeError));
 	}
 	test('malformed rules cannot turn a domain comparison into an allow', () => {

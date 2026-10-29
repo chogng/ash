@@ -12,7 +12,7 @@ test('Secret storage status reads the current backend observation on every query
 	const states: SecretStorageStatus[] = ['available', 'unavailable', 'accessDenied', 'keyMissing', 'corrupted', 'migrationFailed', 'failure'];
 	let reads = 0;
 	const service = createAppServerSecretStorageStatusService({
-		async request(definition: { method: string }, params: unknown): Promise<unknown> {
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			assert.equal(definition.method, 'secrets/status');
 			assert.deepEqual(params, {});
 			return { status: states[reads++] };
@@ -33,11 +33,7 @@ test('Secret storage adapter converts structured failures to localized domain er
 	] as const;
 	for (const [kind, status] of failures) {
 		const remoteError = new AppServerRemoteError(-32094, 'Private backend diagnostic', { kind });
-		const service = createAppServerSecretStorageStatusService({
-			request: async () => {
-				throw remoteError;
-			},
-		} as unknown as AppServerProtocolClient);
+		const service = createAppServerSecretStorageStatusService({ request: async () => { throw remoteError; } } as unknown as AppServerProtocolClient);
 		for (const operation of [() => service.readState(), () => withSecretStorageErrors(Promise.reject(remoteError))]) {
 			await assert.rejects(operation(), error => {
 				assert.ok(error instanceof SecretStorageError);
@@ -52,11 +48,7 @@ test('Secret storage adapter converts structured failures to localized domain er
 
 test('Secret storage adapter preserves unrelated operation and transport errors', async () => {
 	for (const original of [new Error('Connection closed'), new AppServerRemoteError(-32602, 'Invalid parameters', { kind: 'InvalidParams' })]) {
-		const service = createAppServerSecretStorageStatusService({
-			request: async () => {
-				throw original;
-			},
-		} as unknown as AppServerProtocolClient);
+		const service = createAppServerSecretStorageStatusService({ request: async () => { throw original; } } as unknown as AppServerProtocolClient);
 		await assert.rejects(service.readState(), error => error === original);
 		await assert.rejects(withSecretStorageErrors(Promise.reject(original)), error => error === original);
 	}
@@ -88,7 +80,7 @@ test('Secret storage recovery messages retain the Chinese language pack', () => 
 test('Secret storage controls require separate explicit requests and preserve mode observations', async () => {
 	const calls: [string, unknown][] = [];
 	const service = createAppServerSecretStorageStatusService({
-		async request(definition: { method: string }, params: unknown): Promise<unknown> {
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			calls.push([definition.method, params]);
 			return { status: 'available', mode: 'file' };
 		},
@@ -97,9 +89,5 @@ test('Secret storage controls require separate explicit requests and preserve mo
 	assert.deepEqual(calls, [['secrets/status', {}]]);
 	await service.authorizeAccess();
 	await service.setStorageMode('encrypted');
-	assert.deepEqual(calls, [
-		['secrets/status', {}],
-		['secrets/authorize', {}],
-		['secrets/storageMode/set', { mode: 'encrypted' }],
-	]);
+	assert.deepEqual(calls, [['secrets/status', {}], ['secrets/authorize', {}], ['secrets/storageMode/set', { mode: 'encrypted' }]]);
 });

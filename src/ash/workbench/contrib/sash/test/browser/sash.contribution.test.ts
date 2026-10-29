@@ -46,7 +46,10 @@ test('Sash configuration validates its public range', () => {
 	assert.equal(hoverDelay.parse(0), 0);
 	assert.equal(hoverDelay.parse(2_000), 2_000);
 	assert.throws(() => size.parse(0), /between 1 and 20/);
-	assert.throws(() => hoverDelay.parse(2_001), /between 0 and 2000/);
+	assert.throws(
+		() => hoverDelay.parse(2_001),
+		/between 0 and 2000/,
+	);
 });
 
 test('Sash settings controller projects live configuration and restores styles', async () => {
@@ -92,13 +95,27 @@ test('Sash contribution starts after restoration', () => {
 	dom.window.close();
 });
 
-function assertSashStyles(sash: HTMLElement, dragAreaSize: string, hoverFeedbackSize: string, hoverDelay: string): void {
+function assertSashStyles(
+	sash: HTMLElement,
+	dragAreaSize: string,
+	hoverFeedbackSize: string,
+	hoverDelay: string,
+): void {
 	const targetWindow = sash.ownerDocument.defaultView;
 	assert.ok(targetWindow);
 	const style = targetWindow.getComputedStyle(sash);
-	assert.equal(style.getPropertyValue('--ash-sash-dragAreaSize'), dragAreaSize);
-	assert.equal(style.getPropertyValue('--ash-sash-hoverFeedbackSize'), hoverFeedbackSize);
-	assert.equal(style.getPropertyValue('--ash-sash-hover-delay'), hoverDelay);
+	assert.equal(
+		style.getPropertyValue('--ash-sash-dragAreaSize'),
+		dragAreaSize,
+	);
+	assert.equal(
+		style.getPropertyValue('--ash-sash-hoverFeedbackSize'),
+		hoverFeedbackSize,
+	);
+	assert.equal(
+		style.getPropertyValue('--ash-sash-hover-delay'),
+		hoverDelay,
+	);
 }
 
 function appendSash(root: HTMLElement): HTMLDivElement {

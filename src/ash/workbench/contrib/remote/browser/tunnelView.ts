@@ -55,12 +55,10 @@ export class TunnelPanel extends ViewPane {
 		this.portInput.step = '1';
 		this.portInput.placeholder = '3000';
 		this.portInput.required = true;
-		this.titleActions = this._register(
-			new ActionBar(this.headerActionsElement, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, 'Ports actions'),
-			}),
-		);
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+			ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, 'Ports actions'),
+		}));
 		this.titleActions.element.classList.add('ash-toolbar');
 		this.forwardButton = h(container.ownerDocument, 'button');
 		this.forwardButton.className = 'ash-remote-ports-forward';
@@ -108,28 +106,25 @@ export class TunnelPanel extends ViewPane {
 		this.opening = true;
 		this.error = undefined;
 		this.render();
-		void Promise.resolve(this.tunnelService.openTunnel(undefined, '127.0.0.1', remotePort))
-			.then(async tunnel => {
-				if (!tunnel || typeof tunnel === 'string') {
-					throw new Error(tunnel || localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
-				}
-				if (!this.isCurrentConnection(connectionRevision)) {
-					await tunnel.dispose();
-					return;
-				}
-				this.tunnels.set(tunnelKey(tunnel), tunnel);
-				this.portInput.value = '';
-			})
-			.catch(error => {
-				if (this.isCurrentConnection(connectionRevision)) {
-					this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
-				}
-			})
-			.finally(() => {
-				if (!this.isCurrentConnection(connectionRevision)) return;
-				this.opening = false;
-				this.render();
-			});
+		void Promise.resolve(this.tunnelService.openTunnel(undefined, '127.0.0.1', remotePort)).then(async tunnel => {
+			if (!tunnel || typeof tunnel === 'string') {
+				throw new Error(tunnel || localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
+			}
+			if (!this.isCurrentConnection(connectionRevision)) {
+				await tunnel.dispose();
+				return;
+			}
+			this.tunnels.set(tunnelKey(tunnel), tunnel);
+			this.portInput.value = '';
+		}).catch(error => {
+			if (this.isCurrentConnection(connectionRevision)) {
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
+			}
+		}).finally(() => {
+			if (!this.isCurrentConnection(connectionRevision)) return;
+			this.opening = false;
+			this.render();
+		});
 	}
 
 	private activate(event: Event): void {
@@ -143,23 +138,17 @@ export class TunnelPanel extends ViewPane {
 		this.closing.add(id);
 		this.error = undefined;
 		this.render();
-		void this.tunnelService
-			.closeTunnel(tunnel.tunnelRemoteHost, tunnel.tunnelRemotePort)
-			.then(
-				() => {
-					if (this.isCurrentConnection(connectionRevision)) this.tunnels.delete(id);
-				},
-				error => {
-					if (this.isCurrentConnection(connectionRevision)) {
-						this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopFailed' }, 'Could not stop the forwarded port.'));
-					}
-				},
-			)
-			.finally(() => {
-				if (!this.isCurrentConnection(connectionRevision)) return;
-				this.closing.delete(id);
-				this.render();
-			});
+		void this.tunnelService.closeTunnel(tunnel.tunnelRemoteHost, tunnel.tunnelRemotePort).then(() => {
+			if (this.isCurrentConnection(connectionRevision)) this.tunnels.delete(id);
+		}, error => {
+			if (this.isCurrentConnection(connectionRevision)) {
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopFailed' }, 'Could not stop the forwarded port.'));
+			}
+		}).finally(() => {
+			if (!this.isCurrentConnection(connectionRevision)) return;
+			this.closing.delete(id);
+			this.render();
+		});
 	}
 
 	private stopAll(): void {
@@ -168,24 +157,18 @@ export class TunnelPanel extends ViewPane {
 		this.closingAll = true;
 		this.error = undefined;
 		this.render();
-		void this.tunnelService
-			.closeAll()
-			.then(
-				() => {
-					if (this.isCurrentConnection(connectionRevision)) this.tunnels.clear();
-				},
-				error => {
-					if (this.isCurrentConnection(connectionRevision)) {
-						this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopAllFailed' }, 'Could not stop all forwarded ports.'));
-					}
-				},
-			)
-			.finally(() => {
-				if (!this.isCurrentConnection(connectionRevision)) return;
-				this.closingAll = false;
-				this.closing.clear();
-				this.render();
-			});
+		void this.tunnelService.closeAll().then(() => {
+			if (this.isCurrentConnection(connectionRevision)) this.tunnels.clear();
+		}, error => {
+			if (this.isCurrentConnection(connectionRevision)) {
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopAllFailed' }, 'Could not stop all forwarded ports.'));
+			}
+		}).finally(() => {
+			if (!this.isCurrentConnection(connectionRevision)) return;
+			this.closingAll = false;
+			this.closing.clear();
+			this.render();
+		});
 	}
 
 	private acceptTunnelChange(tunnel: RemoteTunnel): void {
@@ -195,7 +178,7 @@ export class TunnelPanel extends ViewPane {
 		this.render();
 	}
 
-	private acceptTunnelRemoval(address: { host: string; port: number }): void {
+	private acceptTunnelRemoval(address: { host: string; port: number; }): void {
 		if (this.isDisposed) return;
 		this.tunnelRevision += 1;
 		const id = `${address.host}:${address.port}`;
@@ -227,28 +210,23 @@ export class TunnelPanel extends ViewPane {
 		const progress = this.getProgressIndicator().show(true, 150);
 		const handle = toDisposable(() => progress.done());
 		this.loadingProgress.value = handle;
-		const finish = (): void => {
-			if (this.loadingProgress.value === handle) this.loadingProgress.clear();
-		};
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
 		void loading.then(finish, finish);
-		void loading.then(
-			tunnels => {
-				if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
-				if (tunnelRevision !== this.tunnelRevision) {
-					this.refresh();
-					return;
-				}
-				this.tunnels.clear();
-				for (const tunnel of tunnels) this.tunnels.set(tunnelKey(tunnel), tunnel);
-				this.error = undefined;
-				this.render();
-			},
-			error => {
-				if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
-				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, 'Could not read forwarded ports.'));
-				this.render();
-			},
-		);
+		void loading.then(tunnels => {
+			if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
+			if (tunnelRevision !== this.tunnelRevision) {
+				this.refresh();
+				return;
+			}
+			this.tunnels.clear();
+			for (const tunnel of tunnels) this.tunnels.set(tunnelKey(tunnel), tunnel);
+			this.error = undefined;
+			this.render();
+		}, error => {
+			if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
+			this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, 'Could not read forwarded ports.'));
+			this.render();
+		});
 	}
 
 	private render(): void {
@@ -328,11 +306,11 @@ export class TunnelPanel extends ViewPane {
 			return tunnelCount === 0
 				? localize({ bundle: 'ash.workbench', key: 'ports.waiting' }, 'Waiting for the Remote connection.')
 				: localize(
-						{ bundle: 'ash.workbench', key: 'ports.disconnectedCount' },
-						'{0} forwarded ports; the Remote connection is {1}.',
-						tunnelCount,
-						remoteStateLabel(this.remoteAgentService.connectionState),
-					);
+					{ bundle: 'ash.workbench', key: 'ports.disconnectedCount' },
+					'{0} forwarded ports; the Remote connection is {1}.',
+					tunnelCount,
+					remoteStateLabel(this.remoteAgentService.connectionState),
+				);
 		}
 		if (tunnelCount === 0) return localize({ bundle: 'ash.workbench', key: 'ports.empty' }, 'No forwarded ports.');
 		return tunnelCount === 1
@@ -363,12 +341,9 @@ function remoteConnectionIdentity(connection: RemoteAgentConnection | undefined)
 
 function tunnelStateLabel(state: NonNullable<RemoteTunnel['state']>): string {
 	switch (state) {
-		case 'open':
-			return localize({ bundle: 'ash.workbench', key: 'ports.open' }, 'Open');
-		case 'recovering':
-			return localize({ bundle: 'ash.workbench', key: 'ports.recovering' }, 'Recovering');
-		case 'failed':
-			return localize({ bundle: 'ash.workbench', key: 'ports.failed' }, 'Failed');
+		case 'open': return localize({ bundle: 'ash.workbench', key: 'ports.open' }, 'Open');
+		case 'recovering': return localize({ bundle: 'ash.workbench', key: 'ports.recovering' }, 'Recovering');
+		case 'failed': return localize({ bundle: 'ash.workbench', key: 'ports.failed' }, 'Failed');
 	}
 }
 
@@ -382,17 +357,11 @@ function tunnelKey(tunnel: RemoteTunnel): string {
 
 function remoteStateLabel(state: IAppServerRemoteAgentService['connectionState']): string {
 	switch (state) {
-		case 'connecting':
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.connecting' }, 'connecting');
-		case 'connected':
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.connected' }, 'connected');
-		case 'disconnecting':
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.disconnecting' }, 'disconnecting');
-		case 'reconnecting':
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.reconnecting' }, 'reconnecting');
-		case 'disconnected':
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.disconnected' }, 'disconnected');
-		default:
-			return localize({ bundle: 'ash.workbench', key: 'ports.connection.starting' }, 'starting');
+		case 'connecting': return localize({ bundle: 'ash.workbench', key: 'ports.connection.connecting' }, 'connecting');
+		case 'connected': return localize({ bundle: 'ash.workbench', key: 'ports.connection.connected' }, 'connected');
+		case 'disconnecting': return localize({ bundle: 'ash.workbench', key: 'ports.connection.disconnecting' }, 'disconnecting');
+		case 'reconnecting': return localize({ bundle: 'ash.workbench', key: 'ports.connection.reconnecting' }, 'reconnecting');
+		case 'disconnected': return localize({ bundle: 'ash.workbench', key: 'ports.connection.disconnected' }, 'disconnected');
+		default: return localize({ bundle: 'ash.workbench', key: 'ports.connection.starting' }, 'starting');
 	}
 }

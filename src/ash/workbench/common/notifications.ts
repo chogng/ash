@@ -1,13 +1,6 @@
 import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../base/common/lifecycle.js';
-import type {
-	INotification,
-	INotificationActions,
-	INotificationHandle,
-	INotificationProgressProperties,
-	IStatusHandle,
-	IStatusMessageOptions,
-} from '../../platform/notification/common/notification.js';
+import type { INotification, INotificationActions, INotificationHandle, INotificationProgressProperties, IStatusHandle, IStatusMessageOptions } from '../../platform/notification/common/notification.js';
 import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 
 export const enum NotificationsSettings {
@@ -65,22 +58,18 @@ export class NotificationsModel extends Disposable {
 	private readonly statusChanges = this._register(new Emitter<void>());
 	readonly onDidChangeStatusMessage = this.statusChanges.event;
 	private currentStatusMessage: IStatusMessageViewItem | undefined;
-	get statusMessage(): IStatusMessageViewItem | undefined {
-		return this.currentStatusMessage;
-	}
+	get statusMessage(): IStatusMessageViewItem | undefined { return this.currentStatusMessage; }
 
 	showStatusMessage(message: string, options?: IStatusMessageOptions): IStatusHandle {
 		this.assertNotDisposed();
-		const item = (this.currentStatusMessage = { message, options: options ? { ...options } : undefined });
+		const item = this.currentStatusMessage = { message, options: options ? { ...options } : undefined };
 		this.statusChanges.fire();
 		return {
 			close: () => {
-				if (this.currentStatusMessage !== item) {
-					return;
-				}
+				if (this.currentStatusMessage !== item) { return; }
 				this.currentStatusMessage = undefined;
 				this.statusChanges.fire();
-			},
+			}
 		};
 	}
 
@@ -113,22 +102,15 @@ export class NotificationsModel extends Disposable {
 			collapse: () => this.setExpanded(id, false),
 			toggle: () => this.setExpanded(id, !this.items.get(id)?.expanded),
 			updateVisibility,
-			onDidChange: ((listener, thisArgs, disposables) =>
-				this._onDidChange.event(
-					current => {
-						if (current.id === id) listener.call(thisArgs, current);
-					},
-					undefined,
-					disposables,
-				)) as Event<NotificationItem>,
+			onDidChange: ((listener, thisArgs, disposables) => this._onDidChange.event(current => {
+				if (current.id === id) listener.call(thisArgs, current);
+			}, undefined, disposables)) as Event<NotificationItem>,
 			createdAt: Date.now(),
 			actions: freezeActions(options.actions),
 		});
 		const model = this;
 		const handle: INotificationHandle = {
-			get visible() {
-				return !closed && model.get(id)?.visible === true;
-			},
+			get visible() { return !closed && model.get(id)?.visible === true; },
 			// A producer may receive its handle after a synchronous arrival listener removed it.
 			// Replay that close on subscription so pending choices and clipboard reads can settle.
 			onDidClose: (listener, thisArgs, disposables) => {
@@ -182,12 +164,8 @@ export class NotificationsModel extends Disposable {
 		return handle;
 	}
 
-	getNotifications(): readonly NotificationItem[] {
-		return [...this.items.values()];
-	}
-	get(id: number): NotificationItem | undefined {
-		return this.items.get(id);
-	}
+	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
+	get(id: number): NotificationItem | undefined { return this.items.get(id); }
 
 	private setExpanded(id: number, expanded: boolean): void {
 		const item = this.items.get(id);
@@ -208,8 +186,7 @@ export class NotificationsModel extends Disposable {
 		const current = this.items.get(id);
 		if (!current) return;
 		const item = Object.freeze({
-			...current,
-			...changes,
+			...current, ...changes,
 			hasProgress: current.hasProgress || changes.progress !== undefined,
 			hasActiveProgress: hasActiveProgress('progress' in changes ? changes.progress : current.progress),
 			...('actions' in changes ? { expanded: !!changes.actions?.primary?.length, canCollapse: !changes.actions?.primary?.length } : {}),
@@ -235,10 +212,7 @@ export class NotificationsModel extends Disposable {
 
 	protected override disposeCore(): void {
 		this.clear();
-		if (this.currentStatusMessage) {
-			this.currentStatusMessage = undefined;
-			this.statusChanges.fire();
-		}
+		if (this.currentStatusMessage) { this.currentStatusMessage = undefined; this.statusChanges.fire(); }
 		super.disposeCore();
 	}
 }

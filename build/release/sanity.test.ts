@@ -13,19 +13,8 @@ const identity: ReleaseIdentity = { product: 'ash-code', version: '1.2.3', targe
 function descriptor(changes: Record<string, unknown> = {}): string {
 	const asset = releaseAsset(identity);
 	const payload = JSON.stringify({
-		schemaVersion: 1,
-		product: 'ashCode',
-		channel: 'latest',
-		version: identity.version,
-		releaseIdentity: 'v1.2.3',
-		target: identity.target,
-		package: {
-			fileName: asset.archive,
-			format: asset.format,
-			size: 3,
-			sha256: createHash('sha256').update('ash').digest('hex'),
-			url: `https://github.com/chogng/ash/releases/download/v1.2.3/${asset.archive}`,
-		},
+		schemaVersion: 1, product: 'ashCode', channel: 'latest', version: identity.version, releaseIdentity: 'v1.2.3', target: identity.target,
+		package: { fileName: asset.archive, format: asset.format, size: 3, sha256: createHash('sha256').update('ash').digest('hex'), url: `https://github.com/chogng/ash/releases/download/v1.2.3/${asset.archive}` },
 		...changes,
 	});
 	return JSON.stringify({ payload, signature: sign(null, Buffer.from(payload), privateKey).toString('base64') });
@@ -34,10 +23,7 @@ function descriptor(changes: Record<string, unknown> = {}): string {
 test('every distributed target gets its own OS and CPU runtime check', () => {
 	const matrix = releaseMatrix('all');
 	assert.equal(matrix.length, 15);
-	assert.deepEqual(
-		matrix.filter(row => row.product === 'ash-desktop').map(row => row.target),
-		['aarch64-apple-darwin', 'x86_64-apple-darwin', 'x86_64-pc-windows-msvc'],
-	);
+	assert.deepEqual(matrix.filter(row => row.product === 'ash-desktop').map(row => row.target), ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'x86_64-pc-windows-msvc']);
 	for (const product of ['ash-code', 'ash-app-server'] as const) {
 		assert.equal(matrix.filter(row => row.product === product).length, 6);
 		assert.equal(matrix.find(row => row.product === product && row.target === 'aarch64-pc-windows-msvc')?.runner, 'windows-11-arm');
@@ -49,16 +35,7 @@ test('every distributed target gets its own OS and CPU runtime check', () => {
 test('signed artifact identity must match version, product, target, channel and exact download', () => {
 	const package_ = verifyDescriptor(descriptor(), key, identity);
 	assert.equal(package_.fileName, 'ash-code-x86_64-pc-windows-msvc.tar.gz');
-	for (const changes of [
-		{ version: '2.0.0' },
-		{ product: 'appServer' },
-		{ target: 'aarch64-pc-windows-msvc' },
-		{ channel: 'stable' },
-		{ releaseIdentity: 'v9.0.0' },
-		{ package: { ...package_, url: 'https://example.com/ash.tar.gz' } },
-		{ package: { ...package_, fileName: '../ash.tar.gz' } },
-		{ package: { ...package_, format: 'zip' } },
-	]) {
+	for (const changes of [{ version: '2.0.0' }, { product: 'appServer' }, { target: 'aarch64-pc-windows-msvc' }, { channel: 'stable' }, { releaseIdentity: 'v9.0.0' }, { package: { ...package_, url: 'https://example.com/ash.tar.gz' } }, { package: { ...package_, fileName: '../ash.tar.gz' } }, { package: { ...package_, format: 'zip' } }]) {
 		assert.throws(() => verifyDescriptor(descriptor(changes), key, identity), /does not match/);
 	}
 	const tampered = JSON.parse(descriptor());
@@ -83,17 +60,10 @@ test('archive verification rejects truncated and modified delivered bytes', asyn
 test('promotion rejects failed checks, reports for other releases and changed assets', async t => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-sanity-test-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));
-	const archive = join(directory, 'archive'),
-		reportPath = join(directory, 'report.json');
+	const archive = join(directory, 'archive'), reportPath = join(directory, 'report.json');
 	await writeFile(archive, 'ash');
 	const package_ = verifyDescriptor(descriptor(), key, identity);
-	const report = {
-		...identity,
-		status: 'passed',
-		archive: package_.fileName,
-		size: package_.size,
-		sha256: package_.sha256,
-	};
+	const report = { ...identity, status: 'passed', archive: package_.fileName, size: package_.size, sha256: package_.sha256 };
 	await writeFile(reportPath, JSON.stringify(report));
 	await verifyAttestation(reportPath, archive, identity);
 	for (const changes of [{ status: 'failed' }, { target: 'aarch64-pc-windows-msvc' }, { version: '1.2.4' }]) {
@@ -109,17 +79,9 @@ test('Desktop cannot become stable without an installation upgrade check', async
 	const directory = await mkdtemp(join(tmpdir(), 'ash-sanity-test-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	const desktop: ReleaseIdentity = { ...identity, product: 'ash-desktop' };
-	const archive = join(directory, 'archive'),
-		reportPath = join(directory, 'report.json');
+	const archive = join(directory, 'archive'), reportPath = join(directory, 'report.json');
 	await writeFile(archive, 'ash');
-	const report = {
-		...desktop,
-		status: 'passed',
-		upgrade: 'not-requested',
-		archive: releaseAsset(desktop).archive,
-		size: 3,
-		sha256: createHash('sha256').update('ash').digest('hex'),
-	};
+	const report = { ...desktop, status: 'passed', upgrade: 'not-requested', archive: releaseAsset(desktop).archive, size: 3, sha256: createHash('sha256').update('ash').digest('hex') };
 	await writeFile(reportPath, JSON.stringify(report));
 	await assert.rejects(verifyAttestation(reportPath, archive, desktop), /requires an upgrade/);
 	await writeFile(reportPath, JSON.stringify({ ...report, upgrade: 'passed' }));

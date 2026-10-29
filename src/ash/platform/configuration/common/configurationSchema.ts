@@ -7,6 +7,7 @@ export const ConfigurationSchemaId = 'ash://schemas/user-configuration';
 
 /** Projects registered typed configuration keys into the generic JSON schema vocabulary. */
 export function createConfigurationSchema(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)): JsonSchema {
+
 	return Object.freeze({
 		id: ConfigurationSchemaId,
 		title: 'Ash User Settings',
@@ -17,10 +18,7 @@ export function createConfigurationSchema(registry: IConfigurationRegistry = Reg
 				const defaultValue = validateJsonValue(configuration.serialize(configuration.defaultValue), {
 					path: `configuration default ${configuration.key}`,
 				});
-				properties[configuration.key] = {
-					...configurationPropertySchema(defaultValue, configuration.setting),
-					...configuration.schema,
-				};
+				properties[configuration.key] = { ...configurationPropertySchema(defaultValue, configuration.setting), ...configuration.schema };
 			}
 			return Object.freeze(properties);
 		},
@@ -60,13 +58,9 @@ function jsonSchemaType(value: JsonValue): JsonSchemaType {
 	if (value === null) return 'null';
 	if (Array.isArray(value)) return 'array';
 	switch (typeof value) {
-		case 'boolean':
-			return 'boolean';
-		case 'number':
-			return 'number';
-		case 'string':
-			return 'string';
-		case 'object':
-			return 'object';
+		case 'boolean': return 'boolean';
+		case 'number': return 'number';
+		case 'string': return 'string';
+		case 'object': return 'object';
 	}
 }

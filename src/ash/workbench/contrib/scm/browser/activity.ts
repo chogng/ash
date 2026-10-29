@@ -11,10 +11,7 @@ export class SCMActiveRepositoryController extends Disposable {
 	private readonly repositoryListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly activity = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(
-		@ISCMViewService private readonly scmViewService: ISCMViewService,
-		@IActivityService private readonly activityService: IActivityService,
-	) {
+	constructor(@ISCMViewService private readonly scmViewService: ISCMViewService, @IActivityService private readonly activityService: IActivityService) {
 		super();
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.selectRepository()));
 		this.selectRepository();
@@ -33,9 +30,7 @@ export class SCMActiveRepositoryController extends Disposable {
 		const count = provider.count ?? new Set(provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
 		if (!count) return;
 		const description = count === 1 ? localize('scm.activity.oneChange', '1 changed file') : localize('scm.activity.changes', '{0} changed files', count);
-		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, {
-			badge: new NumberBadge(count, () => description),
-		});
+		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, { badge: new NumberBadge(count, () => description) });
 	}
 }
 
@@ -67,29 +62,19 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 		}
 		for (const command of commands) {
 			const alignment = command.alignment === 'right' ? StatusbarAlignment.Right : StatusbarAlignment.Left;
-			const entry = {
-				icon: command.icon,
-				showProgress: command.showProgress,
-				text: command.text,
-				ariaLabel: command.ariaLabel,
-				tooltip: command.tooltip,
-				run: command.run ? () => command.run?.() : undefined,
-			};
+			const entry = { icon: command.icon, showProgress: command.showProgress, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, run: command.run ? () => command.run?.() : undefined };
 			const current = this.entries.get(command.id);
 			if (current && this.statusbarService.getEntries(alignment).some(item => item.id === command.id)) {
 				current.update(entry);
 				continue;
 			}
 			this.entries.deleteAndDispose(command.id);
-			this.entries.set(
-				command.id,
-				this.statusbarService.addEntry(entry, {
-					id: command.id,
-					alignment,
-					priority: command.priority,
-					compactGroup: command.compactGroup,
-				}),
-			);
+			this.entries.set(command.id, this.statusbarService.addEntry(entry, {
+				id: command.id,
+				alignment,
+				priority: command.priority,
+				compactGroup: command.compactGroup,
+			}));
 		}
 	}
 }

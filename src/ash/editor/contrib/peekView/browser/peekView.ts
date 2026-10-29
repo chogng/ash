@@ -25,15 +25,13 @@ export class PeekViewWidget extends ZoneWidget {
 			...options,
 		});
 		this.create();
-		this._register(
-			addDisposableListener(this.domNode, 'keydown', event => {
-				if (event.key === 'Escape') {
-					stopEvent(event);
-					this.dispose();
-					editor.focus();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key === 'Escape') {
+				stopEvent(event);
+				this.dispose();
+				editor.focus();
+			}
+		}));
 	}
 
 	public get element(): HTMLElement {
@@ -70,5 +68,5 @@ export class PeekViewWidget extends ZoneWidget {
 		container.append(header, this.body);
 	}
 
-	protected override _doLayout(_heightInPixels: number, _widthInPixels: number): void {}
+	protected override _doLayout(_heightInPixels: number, _widthInPixels: number): void { }
 }

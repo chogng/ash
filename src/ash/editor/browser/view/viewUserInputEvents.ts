@@ -30,9 +30,7 @@ export class ViewUserInputEvents extends Disposable {
 	public readonly onMouseDropCanceled = this.mouseDropCanceledEmitter.event;
 	public readonly onMouseWheel = this.mouseWheelEmitter.event;
 
-	constructor(private readonly coordinatesConverter: ICoordinatesConverter) {
-		super();
-	}
+	constructor(private readonly coordinatesConverter: ICoordinatesConverter) { super(); }
 
 	public emitKeyDown(event: IKeyboardEvent): void {
 		this.keyDownEmitter.fire(event);
@@ -81,7 +79,9 @@ export class ViewUserInputEvents extends Disposable {
 	private convertViewToModelMouseEvent(event: IEditorMouseEvent): IEditorMouseEvent;
 	private convertViewToModelMouseEvent(event: IPartialEditorMouseEvent): IPartialEditorMouseEvent;
 	private convertViewToModelMouseEvent(event: IEditorMouseEvent | IPartialEditorMouseEvent): IEditorMouseEvent | IPartialEditorMouseEvent {
-		return event.target === null ? event : { event: event.event, target: this.convertViewToModelMouseTarget(event.target) };
+		return event.target === null
+			? event
+			: { event: event.event, target: this.convertViewToModelMouseTarget(event.target) };
 	}
 
 	private convertViewToModelMouseTarget(target: IMouseTarget): IMouseTarget {

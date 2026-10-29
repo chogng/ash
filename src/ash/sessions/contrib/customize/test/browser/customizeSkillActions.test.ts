@@ -30,58 +30,32 @@ function fixture() {
 	resources.add(files.registerProvider('file', provider));
 	resources.add(files.registerProvider(Schemas.vscodeUserData, resources.add(new FileUserDataProvider(provider, home))));
 	const state = {
-		input: {
-			confirmed: true,
-			values: ['meeting-notes', 'Summarize meeting notes.', 'Keep decisions and action items.'],
-		} as IInputDialogResult,
-		roots: [] as string[],
-		opened: [] as string[],
-		drafts: [] as string[],
-		sessions: [] as string[],
+		input: { confirmed: true, values: ['meeting-notes', 'Summarize meeting notes.', 'Keep decisions and action items.'] } as IInputDialogResult,
+		roots: [] as string[], opened: [] as string[], drafts: [] as string[], sessions: [] as string[],
 		registrationError: undefined as Error | undefined,
 	};
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IFileService, files);
-	services.registerInstance(IDialogService, {
-		input: async () => state.input,
-		prompt: async () => ({}),
-	} as unknown as IDialogService);
-	services.registerInstance(IPathService, {
-		userHome: async () => home,
-		getHostPath: async (resource: URI) => resource.path,
-	} as IPathService);
+	services.registerInstance(IDialogService, { input: async () => state.input, prompt: async () => ({}) } as unknown as IDialogService);
+	services.registerInstance(IPathService, { userHome: async () => home, getHostPath: async (resource: URI) => resource.path } as IPathService);
 	services.registerInstance(ISessionPrimaryProviderServices, {
 		host: { userDataHome: home },
 		prompts: {
 			registerSkillSource: async (root: string) => {
 				if (state.registrationError) throw state.registrationError;
 				state.roots.push(root);
-			},
-		},
+			}
+		}
 	} as unknown as SessionProviderServices);
-	services.registerInstance(IEditorService, {
-		openEditor: async (input: { resource: URI }) => {
-			state.opened.push(input.resource.toString());
-		},
-	} as unknown as IEditorService);
-	services.registerInstance(ISessionsService, {
-		openNewSession: (title: string) => {
-			state.sessions.push(title);
-		},
-	} as unknown as ISessionsService);
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: URI; }) => { state.opened.push(input.resource.toString()); } } as unknown as IEditorService);
+	services.registerInstance(ISessionsService, { openNewSession: (title: string) => { state.sessions.push(title); } } as unknown as ISessionsService);
 	services.registerInstance(IChatSessionNavigationService, {
 		appendToActiveDraft: (text: string) => {
 			assert.equal(state.sessions.length, 1);
 			state.drafts.push(text);
-		},
+		}
 	} as IChatSessionNavigationService);
-	const actions = resources.add(
-		services.createInstance(CustomizeSkillActions, {
-			createElement() {
-				throw new Error('Unexpected file picker');
-			},
-		} as unknown as Document),
-	);
+	const actions = resources.add(services.createInstance(CustomizeSkillActions, { createElement() { throw new Error('Unexpected file picker'); } } as unknown as Document));
 	return { resources, files, state, actions };
 }
 
@@ -128,10 +102,7 @@ test('Failed source registration cleans staged files and leaves the destination 
 	state.registrationError = new Error('Configuration changed in another window');
 	await assert.rejects(actions.create(), /Configuration changed/);
 	await assert.rejects(files.stat(target));
-	assert.deepEqual(
-		(await files.readDirectory(home)).map(entry => entry.name),
-		['skills'],
-	);
+	assert.deepEqual((await files.readDirectory(home)).map(entry => entry.name), ['skills']);
 	assert.deepEqual(state.opened, []);
 });
 

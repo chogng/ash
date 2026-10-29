@@ -11,7 +11,10 @@ export class ColumnSelection {
 		const selections = Array.from({ length: lastLineNumber - firstLineNumber + 1 }, (_, offset) => {
 			const lineNumber = firstLineNumber + offset;
 			const maxColumn = model.getLineContent(lineNumber).length + 1;
-			return Selection.fromPositions(new Position(lineNumber, Math.min(anchor.column, maxColumn)), new Position(lineNumber, Math.min(active.column, maxColumn)));
+			return Selection.fromPositions(
+				new Position(lineNumber, Math.min(anchor.column, maxColumn)),
+				new Position(lineNumber, Math.min(active.column, maxColumn)),
+			);
 		});
 		return Object.freeze(selections);
 	}

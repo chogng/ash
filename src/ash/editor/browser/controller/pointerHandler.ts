@@ -30,43 +30,27 @@ export class PointerHandler extends Disposable {
 		this.targetWindow = getWindow(element);
 		const pointerEvents = new EditorPointerEventFactory(element);
 		const mouseEvents = new EditorMouseEventFactory(element);
-		this._register(
-			pointerEvents.onPointerDown(element, (event, pointerId) => {
-				if ((event.browserEvent as PointerEvent).pointerType === 'mouse') {
-					this.pendingMousePointerDown = { event, pointerId };
-					return;
-				}
-				this.pointerDownEmitter.fire({ event, pointerId });
-			}),
-		);
-		this._register(
-			mouseEvents.onMouseDown(element, event => {
-				const pointerDown = this.pendingMousePointerDown;
-				this.pendingMousePointerDown = undefined;
-				if (!pointerDown) return;
-				// Chromium rounds compatibility mouse coordinates, but only that event
-				// carries the click count. Keep pointer coordinates throughout the gesture.
-				pointerDown.event.detail = event.detail;
-				if (event.defaultPrevented) pointerDown.event.preventDefault();
-				this.pointerDownEmitter.fire(pointerDown);
-				if (pointerDown.event.defaultPrevented) event.preventDefault();
-			}),
-		);
-		this._register(
-			pointerEvents.onPointerUp(element, () => {
-				this.pendingMousePointerDown = undefined;
-			}),
-		);
-		this._register(
-			addDisposableListener<PointerEvent>(element, 'pointercancel', () => {
-				this.pendingMousePointerDown = undefined;
-			}),
-		);
-		this._register(
-			addDisposableListener(this.targetWindow, 'blur', () => {
-				this.pendingMousePointerDown = undefined;
-			}),
-		);
+		this._register(pointerEvents.onPointerDown(element, (event, pointerId) => {
+			if ((event.browserEvent as PointerEvent).pointerType === 'mouse') {
+				this.pendingMousePointerDown = { event, pointerId };
+				return;
+			}
+			this.pointerDownEmitter.fire({ event, pointerId });
+		}));
+		this._register(mouseEvents.onMouseDown(element, event => {
+			const pointerDown = this.pendingMousePointerDown;
+			this.pendingMousePointerDown = undefined;
+			if (!pointerDown) return;
+			// Chromium rounds compatibility mouse coordinates, but only that event
+			// carries the click count. Keep pointer coordinates throughout the gesture.
+			pointerDown.event.detail = event.detail;
+			if (event.defaultPrevented) pointerDown.event.preventDefault();
+			this.pointerDownEmitter.fire(pointerDown);
+			if (pointerDown.event.defaultPrevented) event.preventDefault();
+		}));
+		this._register(pointerEvents.onPointerUp(element, () => { this.pendingMousePointerDown = undefined; }));
+		this._register(addDisposableListener<PointerEvent>(element, 'pointercancel', () => { this.pendingMousePointerDown = undefined; }));
+		this._register(addDisposableListener(this.targetWindow, 'blur', () => { this.pendingMousePointerDown = undefined; }));
 		this._register(mouseEvents.onContextMenu(element, event => this.contextMenuEmitter.fire(event)));
 	}
 
@@ -75,20 +59,32 @@ export class PointerHandler extends Disposable {
 	}
 
 	capturePointer(pointerId: number | undefined): void {
-		if (pointerId !== undefined && typeof this.element.setPointerCapture === 'function') {
+		if (
+			pointerId !== undefined &&
+			typeof this.element.setPointerCapture === 'function'
+		) {
 			this.element.setPointerCapture(pointerId);
 		}
 	}
 
 	releasePointer(pointerId: number | undefined): void {
-		if (pointerId !== undefined && typeof this.element.hasPointerCapture === 'function' && this.element.hasPointerCapture(pointerId)) {
+		if (
+			pointerId !== undefined &&
+			typeof this.element.hasPointerCapture === 'function' &&
+			this.element.hasPointerCapture(pointerId)
+		) {
 			this.element.releasePointerCapture(pointerId);
 		}
 	}
 }
 
 class PointerTrackingSession extends Disposable {
-	constructor(element: HTMLElement, pointerId: number, initialButtons: number, handlers: PointerTrackingHandlers) {
+	constructor(
+		element: HTMLElement,
+		pointerId: number,
+		initialButtons: number,
+		handlers: PointerTrackingHandlers,
+	) {
 		super();
 		const monitor = this._register(new GlobalEditorPointerMoveMonitor(element));
 		monitor.startMonitoring(element, pointerId, initialButtons, handlers.onMove, browserEvent => {

@@ -1,5 +1,9 @@
 import { cloneDocumentStyles } from '../../base/browser/domStylesheets.js';
-import { isRegisteredWindow, mainWindow, registerWindow } from '../../base/browser/window.js';
+import {
+	isRegisteredWindow,
+	mainWindow,
+	registerWindow,
+} from '../../base/browser/window.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { environment } from '../../base/common/platform.js';
@@ -20,7 +24,9 @@ export interface WorkbenchWindowOptions {
  * corresponding window registration, stylesheet projection, root attributes,
  * and deterministic teardown.
  */
-export class WorkbenchWindow extends Disposable implements IWorkbenchHostService {
+export class WorkbenchWindow
+	extends Disposable
+	implements IWorkbenchHostService {
 	readonly root: HTMLElement;
 	readonly ownerDocument: Document;
 	readonly targetWindow: Window | null;
@@ -37,21 +43,25 @@ export class WorkbenchWindow extends Disposable implements IWorkbenchHostService
 		options.root.setAttribute('data-runtime', environment.runtime);
 		options.root.setAttribute('data-os', environment.os);
 		this.setWorkbenchState(options.workbenchState);
-		this._register(
-			toDisposable(() => {
-				options.root.classList.remove('ash-workbench');
-				options.root.removeAttribute('data-runtime');
-				options.root.removeAttribute('data-os');
-				options.root.removeAttribute('data-workbench-state');
-				options.root.replaceChildren();
-			}),
-		);
+		this._register(toDisposable(() => {
+			options.root.classList.remove('ash-workbench');
+			options.root.removeAttribute('data-runtime');
+			options.root.removeAttribute('data-os');
+			options.root.removeAttribute('data-workbench-state');
+			options.root.replaceChildren();
+		}));
 
-		if (this.targetWindow && !isRegisteredWindow(this.targetWindow)) {
+		if (
+			this.targetWindow &&
+			!isRegisteredWindow(this.targetWindow)
+		) {
 			this._register(registerWindow(this.targetWindow));
 		}
 		if (this.ownerDocument !== mainWindow.document) {
-			this._register(cloneDocumentStyles(mainWindow.document, this.ownerDocument));
+			this._register(cloneDocumentStyles(
+				mainWindow.document,
+				this.ownerDocument,
+			));
 		}
 		if (this.targetWindow) {
 			const onError = (event: ErrorEvent): void => {
@@ -65,12 +75,10 @@ export class WorkbenchWindow extends Disposable implements IWorkbenchHostService
 			};
 			this.targetWindow.addEventListener('error', onError);
 			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener('unhandledrejection', onUnhandledRejection);
-			this._register(
-				toDisposable(() => {
-					this.targetWindow?.removeEventListener('error', onError);
-					if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener('unhandledrejection', onUnhandledRejection);
-				}),
-			);
+			this._register(toDisposable(() => {
+				this.targetWindow?.removeEventListener('error', onError);
+				if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener('unhandledrejection', onUnhandledRejection);
+			}));
 		}
 	}
 
@@ -86,6 +94,9 @@ export class WorkbenchWindow extends Disposable implements IWorkbenchHostService
 	}
 
 	setWorkbenchState(state: WorkbenchState): void {
-		this.root.setAttribute('data-workbench-state', workbenchStateToString(state));
+		this.root.setAttribute(
+			'data-workbench-state',
+			workbenchStateToString(state),
+		);
 	}
 }

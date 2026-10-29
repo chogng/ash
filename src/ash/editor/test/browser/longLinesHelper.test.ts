@@ -7,9 +7,12 @@ import { TextModel } from '../../common/model/textModel.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
 test('LineWidthIndex matches full scans across random transactions', () => {
-	const random = seededRandom(0xa17a);
+	const random = seededRandom(0xA17A);
 	const measurer = new WeightedTextMeasurer();
-	using model = new TextModel(Array.from({ length: 30 }, (_, index) => `initial ${index}`).join('\n'));
+	using model = new TextModel(Array.from(
+		{ length: 30 },
+		(_, index) => `initial ${index}`,
+	).join('\n'));
 	const index = new LineWidthIndex(model, measurer);
 	using listener = model.onDidChangeContent(change => {
 		index.applyModelChange(change);
@@ -24,7 +27,11 @@ test('LineWidthIndex matches full scans across random transactions', () => {
 		} else {
 			applyRandomTransaction(model, random);
 		}
-		assert.equal(index.maximumLineWidth, fullScanMaximum(model, measurer), `maximum width diverged at iteration ${iteration}`);
+		assert.equal(
+			index.maximumLineWidth,
+			fullScanMaximum(model, measurer),
+			`maximum width diverged at iteration ${iteration}`,
+		);
 	}
 });
 
@@ -66,12 +73,10 @@ test('LineWidthIndex restarts an incomplete scan after an edit', () => {
 	});
 	using listener = model.onDidChangeContent(change => index.applyModelChange(change));
 
-	model.applyEdits([
-		{
-			range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
-			text: 'xxxxxxxx',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
+		text: 'xxxxxxxx',
+	}]);
 	scheduler.runAll();
 
 	assert.equal(index.complete, true);
@@ -93,13 +98,16 @@ test('LineWidthIndex bounds initial work and measures later visible lines on dem
 
 	scheduler.runAll();
 	assert.equal(index.complete, false);
-	assert.equal(index.maximumLineWidth, Math.max(measurer.measureLineWidth('a'), measurer.measureLineWidth('bb')));
+	assert.equal(index.maximumLineWidth, Math.max(
+		measurer.measureLineWidth('a'),
+		measurer.measureLineWidth('bb'),
+	));
 	index.observeLines([3]);
 	assert.equal(index.maximumLineWidth, measurer.measureLineWidth('dddddddddddddddd'));
 });
 
 class ManualMeasurementScheduler {
-	private readonly pending: { readonly callback: () => void; cancelled: boolean }[] = [];
+	private readonly pending: { readonly callback: () => void; cancelled: boolean; }[] = [];
 
 	schedule(callback: () => void) {
 		const entry = { callback, cancelled: false };
@@ -131,34 +139,73 @@ class WeightedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		let width = 0;
 		for (const character of text) {
-			width += character === '\t' ? 11 : (character.codePointAt(0)! % 7) + 1;
+			width += character === '\t'
+				? 11
+				: character.codePointAt(0)! % 7 + 1;
 		}
 		return width;
 	}
 }
 
-function fullScanMaximum(model: TextModel, measurer: TextMeasurer): number {
+function fullScanMaximum(
+	model: TextModel,
+	measurer: TextMeasurer,
+): number {
 	let maximum = 0;
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex++) {
-		maximum = Math.max(maximum, measurer.measureLineWidth(model.getLineContent(lineIndex + 1)));
+		maximum = Math.max(
+			maximum,
+			measurer.measureLineWidth(model.getLineContent((lineIndex) + 1)),
+		);
 	}
 	return maximum;
 }
 
-function applyRandomTransaction(model: TextModel, random: () => number): void {
+function applyRandomTransaction(
+	model: TextModel,
+	random: () => number,
+): void {
 	const length = model.createVersionedSnapshot().length;
-	const edits =
-		random() < 0.35 && length >= 4 ? [randomEdit(model, random, 0, Math.floor(length / 2)), randomEdit(model, random, Math.floor(length / 2) + 1, length)] : [randomEdit(model, random, 0, length)];
+	const edits = random() < 0.35 && length >= 4
+		? [
+			randomEdit(model, random, 0, Math.floor(length / 2)),
+			randomEdit(
+				model,
+				random,
+				Math.floor(length / 2) + 1,
+				length,
+			),
+		]
+		: [randomEdit(model, random, 0, length)];
 	model.applyEdits(edits);
 }
 
-function randomEdit(model: TextModel, random: () => number, minimumOffset: number, maximumOffset: number): { readonly range: Range; readonly text: string } {
-	const first = randomInteger(random, minimumOffset, maximumOffset);
-	const second = randomInteger(random, minimumOffset, maximumOffset);
+function randomEdit(
+	model: TextModel,
+	random: () => number,
+	minimumOffset: number,
+	maximumOffset: number,
+): {
+	readonly range: Range;
+	readonly text: string;
+} {
+	const first = randomInteger(
+		random,
+		minimumOffset,
+		maximumOffset,
+	);
+	const second = randomInteger(
+		random,
+		minimumOffset,
+		maximumOffset,
+	);
 	const startOffset = Math.min(first, second);
 	const endOffset = Math.max(first, second);
 	return {
-		range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(endOffset)),
+		range: Range.fromPositions(
+			model.positionAt(startOffset),
+			model.positionAt(endOffset),
+		),
 		text: randomText(random),
 	};
 }
@@ -173,7 +220,11 @@ function randomText(random: () => number): string {
 	return result;
 }
 
-function randomInteger(random: () => number, minimum: number, maximum: number): number {
+function randomInteger(
+	random: () => number,
+	minimum: number,
+	maximum: number,
+): number {
 	return minimum + Math.floor(random() * (maximum - minimum + 1));
 }
 

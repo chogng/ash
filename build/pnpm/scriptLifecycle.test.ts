@@ -56,25 +56,19 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	// The direct build owns generated inputs after its addon preparation hook.
 	scripts.build = 'node build/prepare.ts && node record.ts desktop-build';
 	await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module', scripts }));
-	await writeFile(
-		join(directory, 'record.ts'),
-		`
+	await writeFile(join(directory, 'record.ts'), `
     import { appendFileSync } from 'node:fs';
     appendFileSync('operations.jsonl', JSON.stringify(process.argv[2]) + '\\n');
     if (process.argv[2] === process.env.FAIL_OPERATION) process.exitCode = 1;
-  `,
-	);
+  `);
 	await mkdir(join(directory, 'build/builtin'), { recursive: true });
-	await writeFile(
-		join(directory, 'build/prepare.ts'),
-		`
+	await writeFile(join(directory, 'build/prepare.ts'), `
 		import { spawnSync } from 'node:child_process';
 		for (const operation of ['protocol', 'localization', 'common', 'extensions', 'icons']) {
 			const result = spawnSync(process.execPath, ['record.ts', operation], { stdio: 'inherit' });
 			if (result.status !== 0) process.exit(result.status ?? 1);
 		}
-	`,
-	);
+	`);
 	await writeFile(join(directory, 'build/builtin/extensions.ts'), `process.argv[2] = 'extensions'; await import('../../record.ts');`);
 	await mkdir(join(directory, 'node_modules/.bin'), { recursive: true });
 	const checker = join(directory, 'node_modules/.bin/bun');
@@ -124,10 +118,7 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		assert.equal(result.error, undefined);
 		if (failure) assert.notEqual(result.status, 0);
 		else assert.equal(result.status, 0, result.stdout + result.stderr);
-		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8'))
-			.trim()
-			.split('\n')
-			.map(line => JSON.parse(line));
+		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 		assert.deepEqual(operations, expected, command);
 	}
 
@@ -143,39 +134,28 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		['electron', 'electron-connected-tests', [...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests']],
 	] as const) {
 		await writeFile(join(directory, 'operations.jsonl'), '');
-		const commands = smokeSteps
-			.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`))
-			.flatMap(step => {
-				const run = step.match(/^        run: (.+)$/m)?.[1];
-				assert.ok(run, step);
-				return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/\.bin\/bun ).+)$/gm)].map(match => match[1]) : [run];
-			});
+		const commands = smokeSteps.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
+			const run = step.match(/^        run: (.+)$/m)?.[1];
+			assert.ok(run, step);
+			return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/\.bin\/bun ).+)$/gm)].map(match => match[1]) : [run];
+		});
 		let status: number | null = 0;
 		for (const command of commands) {
 			// CI's direct generator/checker invocations participate in the same
 			// ordering and failure checks as its pnpm lifecycle commands.
 			const pnpmCommand = command.startsWith('pnpm ');
-			const args = pnpmCommand
-				? [...prefix, ...command.split(' ').slice(1)]
-				: command.startsWith('node ')
-					? command.split(' ').slice(1)
+			const args = pnpmCommand ? [...prefix, ...command.split(' ').slice(1)]
+				: command.startsWith('node ') ? command.split(' ').slice(1)
 					: ['record.ts', command.includes('tsconfig.renderer.json') ? 'renderer' : 'automation'];
 			const result = spawnSync(pnpmCommand ? executable : process.execPath, args, {
-				cwd: directory,
-				env: { ...process.env, FAIL_OPERATION: failure },
-				encoding: 'utf8',
-				windowsHide: true,
-				timeout: 30_000,
+				cwd: directory, env: { ...process.env, FAIL_OPERATION: failure }, encoding: 'utf8', windowsHide: true, timeout: 30_000,
 			});
 			assert.equal(result.error, undefined);
 			status = result.status;
 			if (status !== 0) break;
 		}
 		assert.equal(status, failure ? 1 : 0);
-		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8'))
-			.trim()
-			.split('\n')
-			.map(line => JSON.parse(line));
+		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 		assert.deepEqual(operations, expected, `${surface} smoke preparation (${failure || 'success'})`);
 	}
 });

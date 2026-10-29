@@ -61,7 +61,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 	}
 
 	/** Validate an entire package before changing the available editors. */
-	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void } {
+	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void; } {
 		let owned: readonly IEditorPaneDescriptor[] = [];
 		const documentTypes = DocumentTypes.registerTypes();
 		const replace = (descriptors: readonly IEditorPaneDescriptor[]): void => {
@@ -69,22 +69,16 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			for (const descriptor of descriptors) {
 				validateDescriptor(descriptor);
 				const existing = this.descriptors.get(descriptor.id);
-				if (identifiers.has(descriptor.id) || (existing && !owned.includes(existing))) {
+				if (identifiers.has(descriptor.id) || existing && !owned.includes(existing)) {
 					throw new Error(`Editor pane is already registered: ${descriptor.id}`);
 				}
 				identifiers.add(descriptor.id);
 			}
-			if (owned.length === 0 && descriptors.length === 0) {
-				return;
-			}
-			documentTypes.replace(descriptors.flatMap(descriptor => (descriptor.documentType ? [descriptor.documentType] : [])));
-			for (const descriptor of owned) {
-				this.descriptors.delete(descriptor.id);
-			}
+			if (owned.length === 0 && descriptors.length === 0) { return; }
+			documentTypes.replace(descriptors.flatMap(descriptor => descriptor.documentType ? [descriptor.documentType] : []));
+			for (const descriptor of owned) { this.descriptors.delete(descriptor.id); }
 			owned = [...descriptors];
-			for (const descriptor of owned) {
-				this.descriptors.set(descriptor.id, descriptor);
-			}
+			for (const descriptor of owned) { this.descriptors.set(descriptor.id, descriptor); }
 			this.changeEmitter.fire();
 		};
 		try {
@@ -136,13 +130,11 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 		}
 		return pane;
 	}
+
 }
 
 class EditorPaneRegistration extends AbstractDisposable {
-	constructor(
-		private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void,
-		private readonly documentTypes: IDisposable,
-	) {
+	constructor(private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void, private readonly documentTypes: IDisposable) {
 		super();
 	}
 

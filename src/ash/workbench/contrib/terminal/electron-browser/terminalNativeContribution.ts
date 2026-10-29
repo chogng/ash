@@ -42,34 +42,23 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 	) {
 		super();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmShutdown(event.reason), TerminalNativeContribution.ID)));
-		this._register(
-			lifecycle.onWillShutdown(event =>
-				event.join(
-					() => (this.shouldPersist(event.reason) ? this.prepareReload() : this.prepareExit(event.reason)),
-					localize('terminal.native.closing', 'Closing terminals'),
-					() =>
-						this.shouldPersist(event.reason)
-							? this.terminals.instances.every(instance => !this.canPersist(instance) || this.prepared.has(instance))
-							: this.terminals.instances.length === 0,
-				),
-			),
-		);
-		this._register(
-			lifecycle.onDidShutdown(reason => {
-				if (!this.shouldPersist(reason)) return;
-				// No veto or failed join can occur beyond this boundary. Earlier preparation
-				// must keep the original clients usable in case another participant fails.
-				this.processes.prepareForReload?.();
-				this.prepared.clear();
-			}),
-		);
-		this._register(
-			lifecycle.onDidShutdownError(() => {
-				for (const instance of this.prepared) instance.start();
-				this.prepared.clear();
-				void this.clearCheckpoint(true).catch(error => this.log.error('terminal', error));
-			}),
-		);
+		this._register(lifecycle.onWillShutdown(event => event.join(
+			() => this.shouldPersist(event.reason) ? this.prepareReload() : this.prepareExit(event.reason),
+			localize('terminal.native.closing', 'Closing terminals'),
+			() => this.shouldPersist(event.reason) ? this.terminals.instances.every(instance => !this.canPersist(instance) || this.prepared.has(instance)) : this.terminals.instances.length === 0,
+		)));
+		this._register(lifecycle.onDidShutdown(reason => {
+			if (!this.shouldPersist(reason)) return;
+			// No veto or failed join can occur beyond this boundary. Earlier preparation
+			// must keep the original clients usable in case another participant fails.
+			this.processes.prepareForReload?.();
+			this.prepared.clear();
+		}));
+		this._register(lifecycle.onDidShutdownError(() => {
+			for (const instance of this.prepared) instance.start();
+			this.prepared.clear();
+			void this.clearCheckpoint(true).catch(error => this.log.error('terminal', error));
+		}));
 		void this.restoreLayout(lifecycle).catch(error => this.log.error('terminal', localize('terminal.reload.failed', 'Could not restore terminal sessions after reload.'), error));
 		const transfers = this.host.onDidRequestTerminalTransfer(() => this.receiveTransfer());
 		this._register(toDisposable(() => transfers.dispose()));
@@ -85,9 +74,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 				this.transferRequested = false;
 				await this.acceptTransfer();
 			} while (this.transferRequested && !this.isDisposed);
-		})()
-			.catch(error => this.log.error('terminal', error))
-			.finally(() => (this.receivingTransfer = undefined));
+		})().catch(error => this.log.error('terminal', error)).finally(() => this.receivingTransfer = undefined);
 	}
 
 	private async acceptTransfer(): Promise<void> {
@@ -99,8 +86,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		try {
 			const state = parseTerminalReloadState(transfer.state);
 			const scope = terminalExecutionScope(this.workspace.getWorkspace());
-			if (state.kind || state.instances.length !== 1 || state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority)
-				throw new Error('Terminal transfer belongs to another workspace or host');
+			if (state.kind || state.instances.length !== 1 || state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority) throw new Error('Terminal transfer belongs to another workspace or host');
 			instance = await this.terminals.importTerminalState(state.instances[0]!, transfer.lease);
 			// Startup restores editor focus after BlockRestore contributions run. Claim
 			// the destination's input only once that restore has finished.
@@ -112,14 +98,13 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			instance.xterm?.focus();
 		} catch (error) {
 			// Return the rotated credential if attachment succeeded before a later UI failure.
-			const lease = error instanceof TerminalTransferError ? error.rollbackLease : instance ? await this.processes.detach?.(transfer.lease.terminalId).catch(() => undefined) : undefined;
-			if (instance)
-				await instance.close().catch(() => {
-					this.log.error('terminal', localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.'));
-				});
-			const message =
-				(error instanceof Error ? error.message : String(error)).slice(0, 2048) ||
-				localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.');
+			const lease = error instanceof TerminalTransferError ? error.rollbackLease
+				: instance ? await this.processes.detach?.(transfer.lease.terminalId).catch(() => undefined) : undefined;
+			if (instance) await instance.close().catch(() => {
+				this.log.error('terminal', localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.'));
+			});
+			const message = (error instanceof Error ? error.message : String(error)).slice(0, 2048)
+				|| localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.');
 			await this.host.completeTerminalTransfer({ id: transfer.id, error: message, ...(lease ? { lease } : {}) });
 			return;
 		}
@@ -139,22 +124,16 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		const enabled = this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') !== false;
 		const policy = this.configuration.getValue<string>('terminal.integrated.persistentSessionReviveProcess') ?? 'onExit';
 		const lastWindowExit = reason === 'windowClose' && !isMacintosh && (await this.host.listWindows()).length === 1;
-		const revive = enabled && policy !== 'never' && (reason === 'quit' || lastWindowExit || (policy === 'onExitAndWindowClose' && reason === 'windowClose'));
+		const revive = enabled && policy !== 'never' && (reason === 'quit' || lastWindowExit || policy === 'onExitAndWindowClose' && reason === 'windowClose');
 		try {
 			if (revive) await this.prepareReload(true);
-			else {
-				this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE);
-				await this.storage.flush();
-			}
+			else { this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE); await this.storage.flush(); }
 		} catch (error) {
 			// Exit terminates these processes regardless of revival support. A failed
 			// optional snapshot must not turn a confirmed exit into an endless retry.
 			this.log.error('terminal', 'Could not save terminal revival state during shutdown', error);
-			try {
-				await this.clearCheckpoint(true);
-			} catch (cleanupError) {
-				this.log.error('terminal', 'Could not clear terminal revival state during shutdown', cleanupError);
-			}
+			try { await this.clearCheckpoint(true); }
+			catch (cleanupError) { this.log.error('terminal', 'Could not clear terminal revival state during shutdown', cleanupError); }
 		}
 		await this.closeTerminals();
 	}
@@ -165,15 +144,12 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		if (!instances.length) return false;
 		const policy = this.configuration.getValue<string>('terminal.integrated.confirmOnExit') ?? 'never';
 		if (policy === 'never') return false;
-		if (policy === 'hasChildProcesses' && !(await Promise.all(instances.map(instance => instance.refreshProperty(ProcessPropertyType.HasChildProcesses).catch(() => true)))).some(Boolean))
-			return false;
-		return !(
-			await this.dialogs.confirm({
-				message: localize('terminal.confirmExit', 'Close the window and terminate its terminal sessions?'),
-				detail: localize('terminal.confirmExitDetail', '{0} terminal session(s) will be closed. Running processes will stop.', instances.length),
-				primaryButton: localize('terminal.closeWindow', 'Close Window'),
-			})
-		).confirmed;
+		if (policy === 'hasChildProcesses' && !(await Promise.all(instances.map(instance => instance.refreshProperty(ProcessPropertyType.HasChildProcesses).catch(() => true)))).some(Boolean)) return false;
+		return !(await this.dialogs.confirm({
+			message: localize('terminal.confirmExit', 'Close the window and terminate its terminal sessions?'),
+			detail: localize('terminal.confirmExitDetail', '{0} terminal session(s) will be closed. Running processes will stop.', instances.length),
+			primaryButton: localize('terminal.closeWindow', 'Close Window'),
+		})).confirmed;
 	}
 
 	private async prepareReload(revive = false): Promise<void> {
@@ -209,20 +185,13 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const ids = new Set(snapshots.map(snapshot => snapshot.instanceId));
 		const state: ITerminalReloadState = {
-			version: 1,
-			...(revive ? { kind: 'revive' as const } : {}),
-			workspaceId: scope.workspaceId,
-			remoteAuthority: scope.remoteAuthority,
-			instances: snapshots,
-			activeId: activeId && ids.has(activeId) ? activeId : undefined,
-			focusedId: focusedId && ids.has(focusedId) ? focusedId : undefined,
-			groups: this.groups.groups
-				.map(group => {
-					const layout = group.getLayoutInfo(group === this.groups.activeGroup);
-					const panes = layout.terminals.filter(pane => ids.has(pane.terminal));
-					return { ids: panes.map(pane => pane.terminal), sizes: panes.map(pane => pane.relativeSize) };
-				})
-				.filter(group => group.ids.length),
+			version: 1, ...(revive ? { kind: 'revive' as const } : {}), workspaceId: scope.workspaceId, remoteAuthority: scope.remoteAuthority, instances: snapshots,
+			activeId: activeId && ids.has(activeId) ? activeId : undefined, focusedId: focusedId && ids.has(focusedId) ? focusedId : undefined,
+			groups: this.groups.groups.map(group => {
+				const layout = group.getLayoutInfo(group === this.groups.activeGroup);
+				const panes = layout.terminals.filter(pane => ids.has(pane.terminal));
+				return { ids: panes.map(pane => pane.terminal), sizes: panes.map(pane => pane.relativeSize) };
+			}).filter(group => group.ids.length),
 		};
 		const text = JSON.stringify(state);
 		parseTerminalReloadState(text);
@@ -243,7 +212,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);
 		const credentials = encoded ? parseTerminalReloadCredentials(encoded) : undefined;
 		this.checkpointKey = credentials?.stateKey;
-		const text = this.storage.get(credentials?.stateKey ?? (await this.reviveStateKey()), StorageScope.WORKSPACE);
+		const text = this.storage.get(credentials?.stateKey ?? await this.reviveStateKey(), StorageScope.WORKSPACE);
 		if (text && (!credentials || credentials.expiresAt >= Date.now())) {
 			const state = parseTerminalReloadState(text);
 			const scope = terminalExecutionScope(this.workspace.getWorkspace());
@@ -297,15 +266,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		const results = await Promise.allSettled(instances.map(instance => Promise.resolve().then(() => instance.close())));
 		for (const [index, result] of results.entries()) {
 			if (result.status === 'rejected') {
-				this.log.error(
-					'terminal',
-					localize(
-						'terminal.native.closeFailed',
-						'Could not close terminal {0}: {1}',
-						instances[index]!.title,
-						result.reason instanceof Error ? result.reason.message : String(result.reason),
-					),
-				);
+				this.log.error('terminal', localize('terminal.native.closeFailed', 'Could not close terminal {0}: {1}', instances[index]!.title, result.reason instanceof Error ? result.reason.message : String(result.reason)));
 			}
 		}
 	}

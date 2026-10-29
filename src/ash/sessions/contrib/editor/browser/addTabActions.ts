@@ -10,7 +10,11 @@ import { SessionsCategories } from '../../../common/categories.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
 /** Callbacks retain the window's layout queue; tab actions do not own layout state. */
-export function registerAddTabActions(openFiles: () => Promise<void> | false, openChanges: () => Promise<void> | false, when: ContextKeyExpression): IDisposable {
+export function registerAddTabActions(
+	openFiles: () => Promise<void> | false,
+	openChanges: () => Promise<void> | false,
+	when: ContextKeyExpression,
+): IDisposable {
 	const registrations = new DisposableStore();
 	const actions = [
 		{
@@ -28,23 +32,21 @@ export function registerAddTabActions(openFiles: () => Promise<void> | false, op
 	];
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
-		registrations.add(
-			MenusRegistry.appendMenuItems([
-				{
-					id: Menus.CodeAddTab,
-					item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
+		registrations.add(MenusRegistry.appendMenuItems([
+			{
+				id: Menus.CodeAddTab,
+				item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
+			},
+			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
+				id,
+				item: {
+					command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
+					when,
+					order: order + 4,
+					group: '2_code_layout',
 				},
-				...[MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
-					id,
-					item: {
-						command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
-						when,
-						order: order + 4,
-						group: '2_code_layout',
-					},
-				})),
-			]),
-		);
+			}))),
+		]));
 	}
 	return registrations;
 }

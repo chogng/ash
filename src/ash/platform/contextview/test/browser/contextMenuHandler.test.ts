@@ -16,39 +16,25 @@ test('context menus focus the container unless first-item selection is requested
 	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
 	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
 	Object.defineProperty(dom.window.Element.prototype, 'getClientRects', { value: () => [{}] });
-	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { value(): void {} });
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { value(): void { } });
 	try {
 		const { ContextMenuHandler } = await import('../../browser/contextMenuHandler.js');
 		let options: ContextViewOptions | undefined;
 		const contextView: IContextViewService = {
 			container: dom.window.document.body,
-			show(value) {
-				options = value;
-				return true;
-			},
-			hide() {
-				options?.onHide?.(ContextViewHideReason.Programmatic);
-				options = undefined;
-			},
-			layout() {},
+			show(value) { options = value; return true; },
+			hide() { options?.onHide?.(ContextViewHideReason.Programmatic); options = undefined; },
+			layout() { },
 		};
-		using handler = new ContextMenuHandler(
-			contextView,
-			{
-				lookupKeybinding() {
-					return undefined;
-				},
-			} as unknown as IKeybindingService,
-			{
-				error(error: unknown) {
-					throw error;
-				},
-			} as unknown as INotificationService,
-		);
+		using handler = new ContextMenuHandler(contextView, {
+			lookupKeybinding() { return undefined; },
+		} as unknown as IKeybindingService, {
+			error(error: unknown) { throw error; },
+		} as unknown as INotificationService);
 		for (const autoSelectFirstItem of [undefined, false, true]) {
 			handler.showContextMenu({
 				getAnchor: () => dom.window.document.body,
-				getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() {} }],
+				getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() { } }],
 				autoSelectFirstItem,
 			});
 			const menu = dom.window.document.querySelector<HTMLElement>('[role="menu"]')!;
@@ -76,11 +62,9 @@ test('a context menu that cannot be shown releases its execution resources', asy
 	using installation = installDisposableTracker(tracker);
 	const contextView = {
 		container: dom.window.document.body,
-		show() {
-			return false;
-		},
-		hide() {},
-		layout() {},
+		show() { return false; },
+		hide() { },
+		layout() { },
 	} as IContextViewService;
 	const keybindings = {
 		inChordMode: false,
@@ -88,48 +72,26 @@ test('a context menu that cannot be shown releases its execution resources', asy
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() {
-			throw new Error('Not used');
-		},
-		resolveUserBinding() {
-			return undefined;
-		},
-		lookupKeybindings() {
-			return [];
-		},
-		lookupKeybinding() {
-			return undefined;
-		},
+		resolveKeybinding() { throw new Error('Not used'); },
+		resolveUserBinding() { return undefined; },
+		lookupKeybindings() { return []; },
+		lookupKeybinding() { return undefined; },
 	} satisfies IKeybindingService;
 	using handler = new ContextMenuHandler(contextView, keybindings, {
-		error(error: unknown) {
-			throw error;
-		},
+		error(error: unknown) { throw error; },
 	} as unknown as INotificationService);
-	const ownedBefore = tracker
-		.leaks()
-		.map(leak => leak.label)
-		.sort();
+	const ownedBefore = tracker.leaks().map(leak => leak.label).sort();
 	let hideCount = 0;
 	for (let index = 0; index < 3; index++) {
-		assert.equal(
-			handler.showContextMenu({
-				getAnchor: () => ({ x: 10, y: 20, targetWindow: dom.window as unknown as Window }),
-				getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() {} }],
-				onHide: cancelled => {
-					assert.equal(cancelled, true);
-					hideCount++;
-				},
-			}),
-			false,
-		);
-		assert.deepEqual(
-			tracker
-				.leaks()
-				.map(leak => leak.label)
-				.sort(),
-			ownedBefore,
-		);
+		assert.equal(handler.showContextMenu({
+			getAnchor: () => ({ x: 10, y: 20, targetWindow: dom.window as unknown as Window }),
+			getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() { } }],
+			onHide: (cancelled) => {
+				assert.equal(cancelled, true);
+				hideCount++;
+			},
+		}), false);
+		assert.deepEqual(tracker.leaks().map(leak => leak.label).sort(), ownedBefore);
 	}
 	assert.equal(hideCount, 3);
 	handler.dispose();

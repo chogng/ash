@@ -63,14 +63,14 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 	public updateValue(key: string, value: unknown): Promise<void>;
 	public updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
 	public updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
-	public updateValue(
+	public updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
+	public async updateValue(
 		key: string,
 		value: unknown,
-		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
-		target: ConfigurationTarget,
-		options?: IConfigurationUpdateOptions,
-	): Promise<void>;
-	public async updateValue(key: string, value: unknown, arg3?: unknown, arg4?: unknown, _options?: IConfigurationUpdateOptions): Promise<void> {
+		arg3?: unknown,
+		arg4?: unknown,
+		_options?: IConfigurationUpdateOptions,
+	): Promise<void> {
 		this.assertNotDisposed();
 		const configuration = this.getRegisteredConfiguration(key);
 		const { identifiers, overrides, target } = parseUpdateArguments(arg3, arg4);
@@ -114,15 +114,14 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		const overrideValue = matchingOverride?.get(key) as Readonly<T> | undefined;
 		const overrideEntries = this.getOverrideEntries<T>(key);
 		const memoryValue = hasOverrideValue ? overrideValue : hasBaseValue ? baseValue : undefined;
-		const value = memoryValue === undefined ? (configuration.defaultValue as Readonly<T>) : memoryValue;
-		const memory =
-			hasBaseValue || overrideEntries.length > 0
-				? {
-						...(hasBaseValue ? { value: baseValue } : {}),
-						...(hasOverrideValue ? { override: overrideValue } : {}),
-						...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
-					}
-				: undefined;
+		const value = memoryValue === undefined ? configuration.defaultValue as Readonly<T> : memoryValue;
+		const memory = hasBaseValue || overrideEntries.length > 0
+			? {
+				...(hasBaseValue ? { value: baseValue } : {}),
+				...(hasOverrideValue ? { override: overrideValue } : {}),
+				...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
+			}
+			: undefined;
 
 		return {
 			defaultValue: configuration.defaultValue as Readonly<T>,
@@ -141,14 +140,7 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		throw new Error(`Unable to reload in-memory configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`);
 	}
 
-	public keys(): {
-		default: string[];
-		policy: string[];
-		user: string[];
-		workspace: string[];
-		workspaceFolder: string[];
-		memory: string[];
-	} {
+	public keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory: string[]; } {
 		this.assertNotDisposed();
 		const memory = new Set(this.values.keys());
 		for (const values of this.overrideValues.values()) {
@@ -215,8 +207,8 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		return this.getRegisteredConfiguration(key).defaultValue;
 	}
 
-	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T> }[] {
-		const result: { identifiers: string[]; value: Readonly<T> }[] = [];
+	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T>; }[] {
+		const result: { identifiers: string[]; value: Readonly<T>; }[] = [];
 		for (const block of this.overrideBlocks.values()) {
 			if (!block.values.has(key)) continue;
 			result.push({ identifiers: [...block.identifiers], value: block.values.get(key) as Readonly<T> });
@@ -294,10 +286,7 @@ function parseUpdateArguments(arg3: unknown, arg4: unknown): ParsedUpdateArgumen
 		if (isConfigurationUpdateOverrides(arg3)) {
 			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifiers };
 		} else if (isConfigurationOverrides(arg3)) {
-			overrides = {
-				resource: arg3.resource,
-				overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined,
-			};
+			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined };
 		} else {
 			throw new TypeError('Configuration update overrides are invalid');
 		}

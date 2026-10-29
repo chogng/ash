@@ -11,23 +11,8 @@ import { createTestCodeEditor } from '../../../../../../editor/test/browser/test
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { Selection } from '../../../../../../editor/common/core/selection.js';
 import { NullLoggerService } from '../../../../../../platform/log/common/log.js';
-import {
-	ChatSpeechToTextState,
-	IChatSpeechToTextService,
-	type IChatDictationTranscript,
-	type IDictationAccuracyMeasurement,
-	type ChatDictationSurface,
-} from '../../../browser/speechToText/chatSpeechToTextService.js';
-import {
-	activeDictationEditor,
-	cancelDictation,
-	isDictating,
-	notifyDictationSubmitted,
-	onDidChangeDictationEditor,
-	startDictation,
-	stopDictation,
-	stopDictationForEditor,
-} from '../../../browser/speechToText/dictationSession.js';
+import { ChatSpeechToTextState, IChatSpeechToTextService, type IChatDictationTranscript, type IDictationAccuracyMeasurement, type ChatDictationSurface } from '../../../browser/speechToText/chatSpeechToTextService.js';
+import { activeDictationEditor, cancelDictation, isDictating, notifyDictationSubmitted, onDidChangeDictationEditor, startDictation, stopDictation, stopDictationForEditor } from '../../../browser/speechToText/dictationSession.js';
 import '../../../browser/actions/chatSpeechToTextActions.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -70,38 +55,21 @@ class Recognition extends Disposable implements IChatSpeechToTextService {
 	cancelBarrier?: DeferredPromise<void>;
 	finalText = '';
 	readonly measurements: IDictationAccuracyMeasurement[] = [];
-	async switchMicrophone() {
-		return undefined;
-	}
+	async switchMicrophone() { return undefined; }
 	async start(_window: Window & typeof globalThis, surface: ChatDictationSurface = 'chat') {
-		this.starts++;
-		this.currentSurface = surface;
-		this.isBusy = true;
-		this.state = this.startState;
-		this.states.fire(this.state);
-		await this.startBarrier?.p;
+		this.starts++; this.currentSurface = surface; this.isBusy = true; this.state = this.startState;
+		this.states.fire(this.state); await this.startBarrier?.p;
 	}
 	async stopAndTranscribe() {
 		this.stops++;
 		if (this.idleBeforeStop) this.idle();
 		await this.stopBarrier?.p;
 		this.transcripts.fire({ text: this.finalText, finalizedText: this.finalText });
-		this.idle();
-		return this.finalText;
+		this.idle(); return this.finalText;
 	}
-	async cancel() {
-		this.cancels++;
-		await this.cancelBarrier?.p;
-		this.idle();
-	}
-	idle() {
-		this.isBusy = false;
-		this.state = ChatSpeechToTextState.Idle;
-		this.states.fire(this.state);
-	}
-	logDictationAccuracy(value: IDictationAccuracyMeasurement) {
-		this.measurements.push(value);
-	}
+	async cancel() { this.cancels++; await this.cancelBarrier?.p; this.idle(); }
+	idle() { this.isBusy = false; this.state = ChatSpeechToTextState.Idle; this.states.fire(this.state); }
+	logDictationAccuracy(value: IDictationAccuracyMeasurement) { this.measurements.push(value); }
 }
 
 function fixture() {
@@ -113,34 +81,15 @@ function fixture() {
 	const model = lifetime.add(new TextModel(''));
 	const otherModel = lifetime.add(new TextModel(''));
 	const editor = lifetime.add(createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, contributions: [] }));
-	const other = lifetime.add(
-		createTestCodeEditor({
-			container: dom.window.document.querySelector('aside')!,
-			model: otherModel,
-			contributions: [],
-		}),
-	);
+	const other = lifetime.add(createTestCodeEditor({ container: dom.window.document.querySelector('aside')!, model: otherModel, contributions: [] }));
 	const speech = lifetime.add(new Recognition());
 	const log = lifetime.add(new NullLoggerService());
 	const window = dom.window as unknown as Window & typeof globalThis;
-	return {
-		editor,
-		other,
-		model,
-		otherModel,
-		speech,
-		log,
-		window,
-		dispose: () => lifetime.dispose(),
-		[Symbol.dispose]: () => lifetime.dispose(),
-	};
+	return { editor, other, model, otherModel, speech, log, window, dispose: () => lifetime.dispose(), [Symbol.dispose]: () => lifetime.dispose() };
 }
 
 suite('Dictation editor binding', () => {
-	teardown(async () => {
-		cancelDictation();
-		await stopDictation();
-	});
+	teardown(async () => { cancelDictation(); await stopDictation(); });
 	test('acquired speech remains bound while waiting for the provider Started event', async () => {
 		using f = fixture();
 		f.speech.startState = ChatSpeechToTextState.Idle;
@@ -195,9 +144,7 @@ suite('Dictation editor binding', () => {
 		const first = stopDictationForEditor(f.editor);
 		await Promise.resolve();
 		let secondFinished = false;
-		const second = stopDictationForEditor(f.editor).then(() => {
-			secondFinished = true;
-		});
+		const second = stopDictationForEditor(f.editor).then(() => { secondFinished = true; });
 		try {
 			await new Promise(resolve => setTimeout(resolve, 0));
 			assert.equal(secondFinished, false);
@@ -237,8 +184,7 @@ suite('Dictation editor binding', () => {
 		f.speech.transcripts.fire({ text: 'late', finalizedText: 'late' });
 		assert.equal(f.model.getValue(), '');
 		assert.equal(f.speech.starts, 1);
-		await f.speech.cancelBarrier.complete();
-		await next;
+		await f.speech.cancelBarrier.complete(); await next;
 		f.speech.transcripts.fire({ text: 'new draft', finalizedText: 'new draft' });
 		assert.equal(f.otherModel.getValue(), 'new draft');
 		assert.equal(f.speech.currentSurface, 'editor');
@@ -246,8 +192,7 @@ suite('Dictation editor binding', () => {
 	});
 	test('finalized prefixes insert once at the current selection and deletion stays deleted', async () => {
 		using f = fixture();
-		f.model.setValue('left right');
-		f.editor.setSelection(new Selection(1, 6, 1, 11));
+		f.model.setValue('left right'); f.editor.setSelection(new Selection(1, 6, 1, 11));
 		await startDictation(f.speech, f.editor, f.window, f.log);
 		f.speech.transcripts.fire({ text: 'first interim', finalizedText: 'first' });
 		assert.equal(f.model.getValue(), 'left first');
@@ -262,8 +207,7 @@ suite('Dictation editor binding', () => {
 		f.speech.finalText = 'draft';
 		await startDictation(f.speech, f.editor, f.window, f.log);
 		await stopDictation();
-		notifyDictationSubmitted(f.editor);
-		notifyDictationSubmitted(f.editor);
+		notifyDictationSubmitted(f.editor); notifyDictationSubmitted(f.editor);
 		assert.deepEqual(f.speech.measurements, [{ dictatedText: 'draft', submittedText: 'draft', backend: 'test', surface: 'chat', submitted: true }]);
 		await startDictation(f.speech, f.editor, f.window, f.log);
 		f.editor.setModel(f.otherModel);
@@ -281,19 +225,11 @@ function commandFixture() {
 	const hidden = resources.add(new Emitter<void>());
 	const changed = resources.add(new Emitter<void>());
 	const released = new DeferredPromise<void>();
-	const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean } = {
-		sessionId: undefined,
-		threadId: undefined,
-		onDidChangeVisibility: Event.None,
-		domNode: f.editor.getContainerDomNode(),
-		inputEditor: f.editor,
-		visible: true,
-		isTranscriptProgressActive: false,
-		onDidHide: hidden.event,
-		onDidChangeViewModel: changed.event,
-		startVoiceConversation: async () => {
-			throw new Error('Unexpected voice mode');
-		},
+	const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean; } = {
+		sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None,
+		domNode: f.editor.getContainerDomNode(), inputEditor: f.editor, visible: true,
+		isTranscriptProgressActive: false, onDidHide: hidden.event, onDidChangeViewModel: changed.event,
+		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	const registration = resources.add(widgets.register(widget));
 	f.editor.focus();
@@ -303,38 +239,15 @@ function commandFixture() {
 	services.registerInstance(IConfigurationService, {} as IConfigurationService);
 	services.registerInstance(ILocalTranscriptionModelService, {} as ILocalTranscriptionModelService);
 	services.registerInstance(ISpeechService, { hasSpeechProvider: true } as ISpeechService);
-	services.registerInstance(IPreferencesService, {
-		openSettings: async () => {
-			throw new Error('Unexpected settings');
-		},
-	} as unknown as IPreferencesService);
-	services.registerInstance(IDictationOnboardingService, {
-		showIfNeeded: () => false,
-	} as IDictationOnboardingService);
-	services.registerInstance(IKeybindingService, {
-		enableKeybindingHoldMode: () => released.p,
-	} as unknown as IKeybindingService);
+	services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected settings'); } } as unknown as IPreferencesService);
+	services.registerInstance(IDictationOnboardingService, { showIfNeeded: () => false } as IDictationOnboardingService);
+	services.registerInstance(IKeybindingService, { enableKeybindingHoldMode: () => released.p } as unknown as IKeybindingService);
 	const run = (id = 'toggleSpeechToText', context?: unknown) => services.invokeFunction(accessor => CommandsRegistry.getCommand(`workbench.action.chat.${id}`)!(accessor, context));
-	return {
-		...f,
-		services,
-		widgets,
-		widget,
-		hidden,
-		changed,
-		released,
-		registration,
-		run,
-		[Symbol.dispose]: () => resources.dispose(),
-	};
+	return { ...f, services, widgets, widget, hidden, changed, released, registration, run, [Symbol.dispose]: () => resources.dispose() };
 }
 
 suite('Chat dictation command targeting', () => {
-	teardown(async () => {
-		cancelDictation();
-		await stopDictation();
-		mock.timers.reset();
-	});
+	teardown(async () => { cancelDictation(); await stopDictation(); mock.timers.reset(); });
 
 	test('the window registry retains Chat focus when an unrelated code editor takes focus', async () => {
 		using f = commandFixture();
@@ -367,10 +280,8 @@ suite('Chat dictation command targeting', () => {
 		test(`${retirement} retires command capture before a late transcript can change the input`, async () => {
 			using f = commandFixture();
 			await f.run();
-			if (retirement === 'hide') {
-				f.widget.visible = false;
-				f.hidden.fire();
-			} else f.changed.fire();
+			if (retirement === 'hide') { f.widget.visible = false; f.hidden.fire(); }
+			else f.changed.fire();
 			f.speech.transcripts.fire({ text: 'stale', finalizedText: 'stale' });
 			await stopDictation();
 			assert.equal(f.model.getValue(), '');
@@ -393,10 +304,7 @@ suite('Chat dictation command targeting', () => {
 			const model = new DeferredPromise<Awaited<ReturnType<ILocalTranscriptionModelService['getModel']>>>();
 			Object.assign(f.services.get(ISpeechService), { hasSpeechProvider: false });
 			Object.assign(f.services.get(IConfigurationService), { getValue: () => undefined });
-			Object.assign(f.services.get(ILocalTranscriptionModelService), {
-				isSupported: true,
-				getModel: () => model.p,
-			});
+			Object.assign(f.services.get(ILocalTranscriptionModelService), { isSupported: true, getModel: () => model.p });
 			const pending = f.run();
 			await f.run(cancellation);
 			await model.complete({ available: true } as Awaited<ReturnType<ILocalTranscriptionModelService['getModel']>>);
@@ -410,9 +318,7 @@ suite('Chat dictation command targeting', () => {
 		using f = commandFixture();
 		f.speech.startBarrier = new DeferredPromise<void>();
 		const started = new DeferredPromise<void>();
-		using listener = f.speech.onDidChangeState(() => {
-			void started.complete();
-		});
+		using listener = f.speech.onDidChangeState(() => { void started.complete(); });
 		const run = f.run('holdToSpeechToText');
 		await started.p;
 		await f.released.complete();
@@ -429,9 +335,7 @@ suite('Chat dictation command targeting', () => {
 		mock.timers.enable({ apis: ['Date'], now: 1000 });
 		f.speech.finalText = 'held message';
 		const started = new DeferredPromise<void>();
-		using listener = f.speech.onDidChangeState(() => {
-			void started.complete();
-		});
+		using listener = f.speech.onDidChangeState(() => { void started.complete(); });
 		const run = f.run('holdToSpeechToText');
 		await started.p;
 		mock.timers.tick(600);
@@ -445,9 +349,7 @@ suite('Chat dictation command targeting', () => {
 		using f = commandFixture();
 		mock.timers.enable({ apis: ['Date'], now: 1000 });
 		const started = new DeferredPromise<void>();
-		using listener = f.speech.onDidChangeState(() => {
-			void started.complete();
-		});
+		using listener = f.speech.onDidChangeState(() => { void started.complete(); });
 		const run = f.run('holdToSpeechToText');
 		await started.p;
 		cancelDictation();

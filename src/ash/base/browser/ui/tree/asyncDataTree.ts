@@ -4,35 +4,10 @@ import { Emitter, type Event } from '../../../common/event.js';
 import { TaskQueue } from '../../../common/async.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
-import {
-	CompressibleObjectTree,
-	ObjectTree,
-	type CompressibleKeyboardNavigationLabelProvider,
-	type CompressibleTreeAcceptEvent,
-	type CompressibleTreeFocusChangeEvent,
-	type CompressibleTreePointerEvent,
-	type CompressibleTreeSelectionChangeEvent,
-	type ObjectTreeAcceptEvent,
-	type ObjectTreeCollapseStateChangeEvent,
-	type ObjectTreeFocusChangeEvent,
-	type ObjectTreePointerEvent,
-	type ObjectTreeSelectionChangeEvent,
-} from './objectTree.js';
+import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from './objectTree.js';
 import type { CompressibleTreeElement, CompressedTreeNode } from './compressedObjectTreeModel.js';
 import type { ObjectTreeIdentityProvider, ObjectTreeNode } from './objectTreeModel.js';
-import type {
-	AsyncTreeDataSource,
-	TreeDragAndDrop,
-	TreeElement,
-	TreeFilter,
-	TreeFindMatchType,
-	TreeFindMode,
-	TreeIndentGuides,
-	TreeKeyboardNavigationLabelProvider,
-	TreePointerTarget,
-	TreeSorter,
-	TreeTwistieState,
-} from './tree.js';
+import type { AsyncTreeDataSource, TreeDragAndDrop, TreeElement, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerTarget, TreeSorter, TreeTwistieState } from './tree.js';
 
 export interface AsyncTreeTwistieState extends TreeTwistieState {
 	readonly loading: boolean;
@@ -137,7 +112,7 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
-	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean }): void;
+	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
@@ -207,37 +182,27 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	readonly onDidChangeLoadState: Event<AsyncDataTreeLoadStateEvent<T>> = this._onDidChangeLoadState.event;
 	readonly onDidError: Event<AsyncDataTreeErrorEvent<T>> = this._onDidError.event;
 
-	constructor(
-		protected readonly container: HTMLElement,
-		protected readonly dataSource: AsyncTreeDataSource<TInput, T>,
-		protected readonly options: TOptions,
-	) {
+	constructor(protected readonly container: HTMLElement, protected readonly dataSource: AsyncTreeDataSource<TInput, T>, protected readonly options: TOptions) {
 		super();
 		this.compressionEnabled = 'renderCompressedElements' in options ? (options as unknown as CompressibleAsyncDataTreeOptions<T>).compressionEnabled !== false : undefined;
 		this.tree = this._register(this.createTree(container, options));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
-		this._register(
-			this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
-				const state = this.states.get(this.getId(element));
-				if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element)) void this.updateChildren(element).catch(() => undefined);
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.generation += 1;
-				this.requests.clear();
-				for (const queue of this.childReads) queue.clearPending();
-			}),
-		);
+		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
+			const state = this.states.get(this.getId(element));
+			if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element)) void this.updateChildren(element).catch(() => undefined);
+		}));
+		this._register(toDisposable(() => {
+			this.generation += 1;
+			this.requests.clear();
+			for (const queue of this.childReads) queue.clearPending();
+		}));
 	}
 
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
-	getInput(): TInput | undefined {
-		return this.input;
-	}
-	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean }): void {
+	getInput(): TInput | undefined { return this.input; }
+	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void {
 		const state = this.getViewState();
 		if (options.compressionEnabled !== undefined) this.compressionEnabled = options.compressionEnabled;
 		this.tree.updateOptions(options);
@@ -245,27 +210,13 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			this.restoreLoadedState(state);
 		}
 	}
-	get focus(): T | undefined {
-		return this.tree.focus;
-	}
-	get selection(): readonly T[] {
-		return this.tree.selection;
-	}
-	get scrollTop(): number {
-		return this.tree.scrollTop;
-	}
-	set scrollTop(top: number) {
-		this.tree.scrollTop = top;
-	}
-	reveal(element: T, relativeTop?: number): void {
-		this.tree.reveal(element, relativeTop);
-	}
-	getRelativeTop(element: T): number | null {
-		return this.tree.getRelativeTop(element);
-	}
-	isCollapsed(element: T): boolean | undefined {
-		return this.tree.isCollapsed(element);
-	}
+	get focus(): T | undefined { return this.tree.focus; }
+	get selection(): readonly T[] { return this.tree.selection; }
+	get scrollTop(): number { return this.tree.scrollTop; }
+	set scrollTop(top: number) { this.tree.scrollTop = top; }
+	reveal(element: T, relativeTop?: number): void { this.tree.reveal(element, relativeTop); }
+	getRelativeTop(element: T): number | null { return this.tree.getRelativeTop(element); }
+	isCollapsed(element: T): boolean | undefined { return this.tree.isCollapsed(element); }
 	getViewState(): IAsyncDataTreeViewState {
 		return {
 			focus: this.focus ? [this.getId(this.focus)] : [],
@@ -274,44 +225,22 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			scrollTop: this.scrollTop,
 		};
 	}
-	getVisibleElements(): readonly T[] {
-		return this.tree.getVisibleElements();
-	}
+	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
 	/** Reads cached children, including folded branches, without expanding or loading them. */
 	public getNode(element: TInput | T = this.requireInput()): TreeElement<TInput | T> {
 		if (element === this.input) return { element, children: this.rootChildren.map(id => this.toTreeElement(id)) };
 		return this.toTreeElement(this.getId(element as T));
 	}
-	setFocus(element: T, browserEvent?: UIEvent): void {
-		this.tree.setFocus(element, browserEvent);
-	}
-	setSelection(elements: readonly T[], browserEvent?: UIEvent): void {
-		this.tree.setSelection(elements, browserEvent);
-	}
-	domFocus(): void {
-		this.tree.domFocus();
-	}
-	openFind(): void {
-		this.tree.openFind();
-	}
-	setFindPattern(pattern: string): void {
-		this.tree.setFindPattern(pattern);
-	}
-	findNext(): T | undefined {
-		return this.tree.findNext();
-	}
-	findPrevious(): T | undefined {
-		return this.tree.findPrevious();
-	}
-	clearFind(): void {
-		this.tree.clearFind();
-	}
-	updateElementHeight(element: T, height: number | undefined): void {
-		this.tree.updateElementHeight(element, height);
-	}
-	collapse(element: T): boolean {
-		return this.tree.collapse(element);
-	}
+	setFocus(element: T, browserEvent?: UIEvent): void { this.tree.setFocus(element, browserEvent); }
+	setSelection(elements: readonly T[], browserEvent?: UIEvent): void { this.tree.setSelection(elements, browserEvent); }
+	domFocus(): void { this.tree.domFocus(); }
+	openFind(): void { this.tree.openFind(); }
+	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+	findNext(): T | undefined { return this.tree.findNext(); }
+	findPrevious(): T | undefined { return this.tree.findPrevious(); }
+	clearFind(): void { this.tree.clearFind(); }
+	updateElementHeight(element: T, height: number | undefined): void { this.tree.updateElementHeight(element, height); }
+	collapse(element: T): boolean { return this.tree.collapse(element); }
 	public collapseAll(): void {
 		for (const { element } of this.states.values()) {
 			if (this.tree.isCollapsed(element) === false) {
@@ -325,12 +254,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		await this.requests.get(this.getId(element))?.promise;
 		return expanded;
 	}
-	expandTo(element: T): boolean {
-		return this.tree.expandTo(element);
-	}
-	isLoading(element: T): boolean {
-		return this.requests.has(element === this.input ? undefined : this.getId(element));
-	}
+	expandTo(element: T): boolean { return this.tree.expandTo(element); }
+	isLoading(element: T): boolean { return this.requests.has(element === this.input ? undefined : this.getId(element)); }
 
 	async setInput(input: TInput | undefined, viewState?: IAsyncDataTreeViewState): Promise<void> {
 		const generation = ++this.generation;
@@ -355,7 +280,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (generation !== this.generation || this.isDisposed) return;
 		const focused = viewState.focus?.[0];
 		if (focused && this.states.has(focused)) this.setFocus(this.states.get(focused)!.element);
-		this.setSelection((viewState.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])));
+		this.setSelection((viewState.selection ?? []).flatMap(id => this.states.has(id) ? [this.states.get(id)!.element] : []));
 		if (viewState.scrollTop !== undefined) this.scrollTop = viewState.scrollTop;
 	}
 
@@ -371,16 +296,13 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (options.deferIfCollapsed && current) {
 			// A change arriving during a read must be resolved after that read, not lost to request coalescing.
 			await current.promise.catch(() => undefined);
-			if (this.isDisposed || generation !== this.generation || (parentId !== undefined && !this.states.has(parentId))) return;
+			if (this.isDisposed || generation !== this.generation || parentId !== undefined && !this.states.has(parentId)) return;
 			if (parentId !== undefined && this.canDeferChildren(element as T)) {
 				this.invalidateChildren(parentId);
 				return;
 			}
 		}
-		await this.loadChildren(element, parentId, this.generation, {
-			...options,
-			recursive: options.recursive !== false,
-		});
+		await this.loadChildren(element, parentId, this.generation, { ...options, recursive: options.recursive !== false });
 	}
 
 	private canDeferChildren(element: T): boolean {
@@ -418,9 +340,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		const current = this.requests.get(requestKey);
 		if (current?.generation === generation) return current.promise;
 		let start: (() => void) | undefined;
-		const gate = new Promise<void>(resolve => {
-			start = resolve;
-		});
+		const gate = new Promise<void>(resolve => { start = resolve; });
 		let request: AsyncTreeRequest;
 		const promise = gate
 			.then(() => this.readChildren(parent, () => this.isCurrentRequest(requestKey, request)))
@@ -435,25 +355,19 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				}
 				const viewState = this.getViewState();
 				if (parentId === undefined) this.render();
-				else
-					this.tree.setNodeChildren(
-						parent as T,
-						this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)),
-					);
+				else this.tree.setNodeChildren(parent as T, this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)));
 				this.restoreLoadedState(viewState);
 				if (!options.recursive) return;
-				const childIds = parentId === undefined ? this.rootChildren : (this.states.get(parentId)?.children ?? []);
+				const childIds = parentId === undefined ? this.rootChildren : this.states.get(parentId)?.children ?? [];
 				const refreshLoaded = async (ids: readonly string[]): Promise<void> => {
-					await Promise.all(
-						ids.flatMap(id => {
-							const child = this.states.get(id);
-							if (child?.children !== undefined && this.tree.isCollapsed(child.element) === false) {
-								return [resolvedCompact.has(id) ? refreshLoaded(child.children) : this.loadChildren(child.element, id, generation, options)];
-							}
-							if (options.deferIfCollapsed && !resolvedCompact.has(id) && child?.children !== undefined) this.invalidateChildren(id);
-							return [];
-						}),
-					);
+					await Promise.all(ids.flatMap(id => {
+						const child = this.states.get(id);
+						if (child?.children !== undefined && this.tree.isCollapsed(child.element) === false) {
+							return [resolvedCompact.has(id) ? refreshLoaded(child.children) : this.loadChildren(child.element, id, generation, options)];
+						}
+						if (options.deferIfCollapsed && !resolvedCompact.has(id) && child?.children !== undefined) this.invalidateChildren(id);
+						return [];
+					}));
 				};
 				await refreshLoaded(childIds);
 			})
@@ -463,12 +377,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				this.requests.delete(requestKey);
 				this.updateAriaBusy();
 				if (parentId !== undefined) this.tree.rerender(parent as T);
-				this._onDidChangeLoadState.fire({
-					element: parentId === undefined ? undefined : (parent as T),
-					loading: false,
-					error,
-				});
-				this._onDidError.fire({ element: parentId === undefined ? undefined : (parent as T), error });
+				this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: false, error });
+				this._onDidError.fire({ element: parentId === undefined ? undefined : parent as T, error });
 				throw error;
 			})
 			.finally(() => {
@@ -476,15 +386,12 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				this.requests.delete(requestKey);
 				this.updateAriaBusy();
 				if (parentId !== undefined) this.tree.rerender(parent as T);
-				this._onDidChangeLoadState.fire({
-					element: parentId === undefined ? undefined : (parent as T),
-					loading: false,
-				});
+				this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: false });
 			});
 		request = { generation, promise };
 		this.requests.set(requestKey, request);
 		this.updateAriaBusy();
-		this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : (parent as T), loading: true });
+		this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: true });
 		if (parentId !== undefined) this.tree.rerender(parent as T);
 		start?.();
 		await promise;
@@ -501,7 +408,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		}
 		const focused = state.focus?.[0];
 		if (focused && this.states.has(focused)) this.setFocus(this.states.get(focused)!.element);
-		this.setSelection((state.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])));
+		this.setSelection((state.selection ?? []).flatMap(id => this.states.has(id) ? [this.states.get(id)!.element] : []));
 	}
 
 	private async resolveCompactChain(id: string, generation: number, resolved: Set<string>, deferIfCollapsed = false): Promise<void> {
@@ -515,7 +422,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		// Inspect only the continuation of a single-directory chain. Branches stay lazy.
 		let children: readonly T[];
 		try {
-			children = [...(await this.readChildren(state.element, () => generation === this.generation && !this.isDisposed && this.states.get(id) === state))];
+			children = [...await this.readChildren(state.element, () =>
+				generation === this.generation && !this.isDisposed && this.states.get(id) === state)];
 		} catch {
 			return; // An unreadable collapsed folder reports its error when expanded.
 		}
@@ -528,32 +436,26 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	private async readChildren(element: TInput | T, isCurrent: () => boolean): Promise<Iterable<T>> {
 		const queue = this.childReads[this.nextChildRead]!;
 		this.nextChildRead = (this.nextChildRead + 1) % this.childReads.length;
-		const children = await queue.scheduleSkipIfCleared(() => (isCurrent() ? this.dataSource.getChildren(element) : []));
+		const children = await queue.scheduleSkipIfCleared(() => isCurrent() ? this.dataSource.getChildren(element) : []);
 		return children ?? [];
 	}
 
 	private replaceChildren(parentId: string | undefined, elements: readonly T[]): void {
 		const parent = parentId === undefined ? undefined : this.states.get(parentId);
 		if (parentId !== undefined && !parent) throw new RangeError(`Unknown AsyncDataTree parent: ${parentId}`);
-		const oldChildren = parentId === undefined ? this.rootChildren : (parent!.children ?? []);
+		const oldChildren = parentId === undefined ? this.rootChildren : parent!.children ?? [];
 		const oldChildIds = new Set(oldChildren);
 		const childIds: string[] = [];
 		const nextChildren: AsyncNodeState<T>[] = [];
 		const seen = new Set<string>();
 		for (const element of elements) {
 			const id = this.getId(element);
-			if (seen.has(id) || (this.states.has(id) && !oldChildIds.has(id))) throw new Error(`Duplicate tree node ID: ${id}`);
+			if (seen.has(id) || this.states.has(id) && !oldChildIds.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
 			seen.add(id);
 			childIds.push(id);
 			const previous = this.states.get(id);
 			const hasChildren = this.dataSource.hasChildren(element);
-			nextChildren.push({
-				id,
-				element,
-				parentId,
-				hasChildren,
-				children: hasChildren ? previous?.children : undefined,
-			});
+			nextChildren.push({ id, element, parentId, hasChildren, children: hasChildren ? previous?.children : undefined });
 		}
 		for (const id of oldChildren) if (!seen.has(id)) this.removeStateSubtree(id);
 		for (const child of nextChildren) {
@@ -576,9 +478,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this.states.delete(id);
 	}
 
-	private render(): void {
-		this.tree.setChildren(this.rootChildren.map(id => this.toTreeElement(id)));
-	}
+	private render(): void { this.tree.setChildren(this.rootChildren.map((id) => this.toTreeElement(id))); }
 
 	private toTreeElement(id: string): CompressibleTreeElement<T> {
 		const state = this.states.get(id);
@@ -588,16 +488,12 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			collapsible: state.hasChildren,
 			collapsed: this.options.collapseByDefault?.(state.element),
 			incompressible: this.options.isIncompressible?.(state.element),
-			children: state.children?.map(childId => this.toTreeElement(childId)),
+			children: state.children?.map((childId) => this.toTreeElement(childId)),
 		};
 	}
 
-	private isCurrentRequest(key: string | undefined, request: AsyncTreeRequest): boolean {
-		return !this.isDisposed && request.generation === this.generation && this.requests.get(key) === request;
-	}
-	private updateAriaBusy(): void {
-		this.element.setAttribute('aria-busy', String(this.requests.size > 0));
-	}
+	private isCurrentRequest(key: string | undefined, request: AsyncTreeRequest): boolean { return !this.isDisposed && request.generation === this.generation && this.requests.get(key) === request; }
+	private updateAriaBusy(): void { this.element.setAttribute('aria-busy', String(this.requests.size > 0)); }
 	private requireInput(): TInput {
 		if (this.input === undefined) throw new Error('AsyncDataTree input is not set');
 		return this.input;
@@ -606,24 +502,12 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 
 /** Lazy, race-safe data-source adapter over ObjectTree. */
 export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, AsyncDataTreeOptions<T>> {
-	get onPointer(): Event<ObjectTreePointerEvent<T>> {
-		return this.tree.onPointer as Event<ObjectTreePointerEvent<T>>;
-	}
-	get onDidDoubleClick(): Event<ObjectTreePointerEvent<T>> {
-		return this.tree.onDidDoubleClick as Event<ObjectTreePointerEvent<T>>;
-	}
-	get onDidAccept(): Event<ObjectTreeAcceptEvent<T>> {
-		return this.tree.onDidAccept as Event<ObjectTreeAcceptEvent<T>>;
-	}
-	get onDidChangeFocus(): Event<ObjectTreeFocusChangeEvent<T>> {
-		return this.tree.onDidChangeFocus as Event<ObjectTreeFocusChangeEvent<T>>;
-	}
-	get onDidChangeSelection(): Event<ObjectTreeSelectionChangeEvent<T>> {
-		return this.tree.onDidChangeSelection as Event<ObjectTreeSelectionChangeEvent<T>>;
-	}
-	get onDidChangeCollapseState(): Event<ObjectTreeCollapseStateChangeEvent<T>> {
-		return this.tree.onDidChangeCollapseState as Event<ObjectTreeCollapseStateChangeEvent<T>>;
-	}
+	get onPointer(): Event<ObjectTreePointerEvent<T>> { return this.tree.onPointer as Event<ObjectTreePointerEvent<T>>; }
+	get onDidDoubleClick(): Event<ObjectTreePointerEvent<T>> { return this.tree.onDidDoubleClick as Event<ObjectTreePointerEvent<T>>; }
+	get onDidAccept(): Event<ObjectTreeAcceptEvent<T>> { return this.tree.onDidAccept as Event<ObjectTreeAcceptEvent<T>>; }
+	get onDidChangeFocus(): Event<ObjectTreeFocusChangeEvent<T>> { return this.tree.onDidChangeFocus as Event<ObjectTreeFocusChangeEvent<T>>; }
+	get onDidChangeSelection(): Event<ObjectTreeSelectionChangeEvent<T>> { return this.tree.onDidChangeSelection as Event<ObjectTreeSelectionChangeEvent<T>>; }
+	get onDidChangeCollapseState(): Event<ObjectTreeCollapseStateChangeEvent<T>> { return this.tree.onDidChangeCollapseState as Event<ObjectTreeCollapseStateChangeEvent<T>>; }
 
 	protected createTree(container: HTMLElement, options: AsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new ObjectTree<T>(container, {
@@ -645,56 +529,29 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			findMatchType: options.findMatchType,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-			modelOptions: {
-				defaultCollapseState: 'collapsed',
-				identityProvider: { getId: element => this.getId(element) },
-				sorter: options.sorter,
-				filter: options.filter,
-			},
+			modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter },
 			onWillRender: options.onWillRender,
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
 			renderElement: options.renderElement,
-			renderTwistie: options.renderTwistie ? (element, state, container) => options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container) : undefined,
+			renderTwistie: options.renderTwistie
+				? (element, state, container) => options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container)
+				: undefined,
 		});
-		return objectTreeView(tree, element => this.getId(element));
+		return objectTreeView(tree, (element) => this.getId(element));
 	}
 }
 
 /** AsyncDataTree whose factory selects the canonical CompressibleObjectTree. */
 export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, CompressibleAsyncDataTreeOptions<T>> {
-	get onPointer(): Event<CompressibleTreePointerEvent<T>> {
-		return this.tree.onPointer as Event<CompressibleTreePointerEvent<T>>;
-	}
-	get onDidDoubleClick(): Event<CompressibleTreePointerEvent<T>> {
-		return this.tree.onDidDoubleClick as Event<CompressibleTreePointerEvent<T>>;
-	}
-	get onDidAccept(): Event<CompressibleTreeAcceptEvent<T>> {
-		return this.tree.onDidAccept as Event<CompressibleTreeAcceptEvent<T>>;
-	}
-	get onDidChangeFocus(): Event<CompressibleTreeFocusChangeEvent<T>> {
-		return this.tree.onDidChangeFocus as Event<CompressibleTreeFocusChangeEvent<T>>;
-	}
-	get onDidChangeSelection(): Event<CompressibleTreeSelectionChangeEvent<T>> {
-		return this.tree.onDidChangeSelection as Event<CompressibleTreeSelectionChangeEvent<T>>;
-	}
-	get onDidChangeCollapseState(): Event<{
-		readonly element: T;
-		readonly elements: readonly T[];
-		readonly collapsed: boolean;
-		readonly browserEvent: MouseEvent | KeyboardEvent | undefined;
-	}> {
-		return this.tree.onDidChangeCollapseState as Event<{
-			readonly element: T;
-			readonly elements: readonly T[];
-			readonly collapsed: boolean;
-			readonly browserEvent: MouseEvent | KeyboardEvent | undefined;
-		}>;
-	}
+	get onPointer(): Event<CompressibleTreePointerEvent<T>> { return this.tree.onPointer as Event<CompressibleTreePointerEvent<T>>; }
+	get onDidDoubleClick(): Event<CompressibleTreePointerEvent<T>> { return this.tree.onDidDoubleClick as Event<CompressibleTreePointerEvent<T>>; }
+	get onDidAccept(): Event<CompressibleTreeAcceptEvent<T>> { return this.tree.onDidAccept as Event<CompressibleTreeAcceptEvent<T>>; }
+	get onDidChangeFocus(): Event<CompressibleTreeFocusChangeEvent<T>> { return this.tree.onDidChangeFocus as Event<CompressibleTreeFocusChangeEvent<T>>; }
+	get onDidChangeSelection(): Event<CompressibleTreeSelectionChangeEvent<T>> { return this.tree.onDidChangeSelection as Event<CompressibleTreeSelectionChangeEvent<T>>; }
+	get onDidChangeCollapseState(): Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }> { return this.tree.onDidChangeCollapseState as Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }>; }
 
-	getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined {
-		return this.tree.getCompressedTreeNode?.(element);
-	}
+	getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined { return this.tree.getCompressedTreeNode?.(element); }
 
 	protected createTree(container: HTMLElement, options: CompressibleAsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new CompressibleObjectTree<T>(container, {
@@ -716,18 +573,14 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			findMatchType: options.findMatchType,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-			modelOptions: {
-				defaultCollapseState: 'collapsed',
-				identityProvider: { getId: element => this.getId(element) },
-				sorter: options.sorter,
-				filter: options.filter,
-				compressionEnabled: options.compressionEnabled,
-			},
+			modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter, compressionEnabled: options.compressionEnabled },
 			onWillRender: options.onWillRender,
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
 			renderCompressedElements: options.renderCompressedElements,
-			renderTwistie: options.renderTwistie ? (elements, state, container) => options.renderTwistie!(elements, { ...state, loading: this.isLoading(last(elements)) }, container) : undefined,
+			renderTwistie: options.renderTwistie
+				? (elements, state, container) => options.renderTwistie!(elements, { ...state, loading: this.isLoading(last(elements)) }, container)
+				: undefined,
 		});
 		return compressibleTreeView(tree);
 	}
@@ -743,18 +596,10 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		onDidChangeFocus: tree.onDidChangeFocus,
 		onDidChangeSelection: tree.onDidChangeSelection,
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
-		get focus() {
-			return tree.focus;
-		},
-		get selection() {
-			return tree.selection;
-		},
-		get scrollTop() {
-			return tree.scrollTop;
-		},
-		set scrollTop(top) {
-			tree.scrollTop = top;
-		},
+		get focus() { return tree.focus; },
+		get selection() { return tree.selection; },
+		get scrollTop() { return tree.scrollTop; },
+		set scrollTop(top) { tree.scrollTop = top; },
 		reveal: (element, relativeTop) => tree.reveal(getId(element), relativeTop),
 		getRelativeTop: element => tree.getRelativeTop(getId(element)),
 		setFocus: (element, browserEvent) => tree.setFocus(getId(element), browserEvent),
@@ -762,17 +607,15 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		updateOptions: options => tree.updateOptions(options),
-		setChildren: children => tree.setChildren(children),
+		setChildren: (children) => tree.setChildren(children),
 		setNodeChildren: (element, children) => tree.setNodeChildren(getId(element), children),
-		collapse: element => tree.collapse(getId(element)),
-		expand: element => tree.expand(getId(element)),
-		expandTo: element => tree.expandTo(getId(element)),
-		isCollapsed: element => tree.model.getNode(getId(element))?.collapsed,
-		rerender: element => {
-			if (tree.model.has(getId(element))) tree.rerender(getId(element));
-		},
+		collapse: (element) => tree.collapse(getId(element)),
+		expand: (element) => tree.expand(getId(element)),
+		expandTo: (element) => tree.expandTo(getId(element)),
+		isCollapsed: (element) => tree.model.getNode(getId(element))?.collapsed,
+		rerender: (element) => { if (tree.model.has(getId(element))) tree.rerender(getId(element)); },
 		openFind: () => tree.openFind(),
-		setFindPattern: pattern => tree.setFindPattern(pattern),
+		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),
 		clearFind: () => tree.clearFind(),
@@ -792,18 +635,10 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		onDidChangeFocus: tree.onDidChangeFocus,
 		onDidChangeSelection: tree.onDidChangeSelection,
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
-		get focus() {
-			return tree.focus;
-		},
-		get selection() {
-			return tree.selection;
-		},
-		get scrollTop() {
-			return tree.scrollTop;
-		},
-		set scrollTop(top) {
-			tree.scrollTop = top;
-		},
+		get focus() { return tree.focus; },
+		get selection() { return tree.selection; },
+		get scrollTop() { return tree.scrollTop; },
+		set scrollTop(top) { tree.scrollTop = top; },
 		reveal: (element, relativeTop) => tree.reveal(element, relativeTop),
 		getRelativeTop: element => tree.getRelativeTop(element),
 		setFocus: (element, browserEvent) => tree.setFocus(element, browserEvent),
@@ -812,27 +647,22 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		domFocus: () => tree.domFocus(),
 		updateOptions: options => {
 			if (options.compressionEnabled !== undefined) tree.setCompressionEnabled(options.compressionEnabled);
-			tree.updateOptions({
-				...options,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined,
-			});
+			tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined });
 		},
-		setChildren: children => tree.setChildren(children),
+		setChildren: (children) => tree.setChildren(children),
 		setNodeChildren: (element, children) => tree.setNodeChildren(element, children),
-		collapse: element => tree.collapse(element),
-		expand: element => tree.expand(element),
-		expandTo: element => tree.expandTo(element),
-		isCollapsed: element => tree.model.getNode(element)?.collapsed,
-		rerender: element => {
-			if (tree.model.getNode(element)) tree.rerender(element);
-		},
+		collapse: (element) => tree.collapse(element),
+		expand: (element) => tree.expand(element),
+		expandTo: (element) => tree.expandTo(element),
+		isCollapsed: (element) => tree.model.getNode(element)?.collapsed,
+		rerender: (element) => { if (tree.model.getNode(element)) tree.rerender(element); },
 		openFind: () => tree.openFind(),
-		setFindPattern: pattern => tree.setFindPattern(pattern),
+		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),
 		clearFind: () => tree.clearFind(),
 		updateElementHeight: (element, height) => tree.updateElementHeight(element, height),
-		getCompressedTreeNode: element => tree.getCompressedTreeNode(element),
+		getCompressedTreeNode: (element) => tree.getCompressedTreeNode(element),
 		dispose: () => tree.dispose(),
 		[Symbol.dispose]: () => tree.dispose(),
 	};

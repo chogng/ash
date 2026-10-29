@@ -23,20 +23,13 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	},
 	setting: {
 		valueType: 'select',
-		get title() {
-			return localize('workbench.startupEditor.title', 'Startup editor');
-		},
-		get description() {
-			return localize('workbench.startupEditor.description', 'Choose the editor to show when no editor is restored.');
-		},
+		get title() { return localize('workbench.startupEditor.title', 'Startup editor'); },
+		get description() { return localize('workbench.startupEditor.description', 'Choose the editor to show when no editor is restored.'); },
 		get options() {
 			return [
 				{ value: 'none', label: localize('workbench.startupEditor.none', 'None') },
 				{ value: 'welcomePage', label: localize('workbench.startupEditor.welcomePage', 'Welcome') },
-				{
-					value: 'welcomePageInEmptyWorkbench',
-					label: localize('workbench.startupEditor.welcomePageInEmptyWorkbench', 'Welcome in empty workbench'),
-				},
+				{ value: 'welcomePageInEmptyWorkbench', label: localize('workbench.startupEditor.welcomePageInEmptyWorkbench', 'Welcome in empty workbench') },
 			] as const;
 		},
 	},
@@ -45,30 +38,25 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 registerEditorPane({
 	id: GettingStartedPageId,
 	name: localize('gettingStarted.title', 'Welcome'),
-	canOpen: input => (isGettingStartedInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => isGettingStartedInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Welcome editor requires the Instantiation Service');
 		return options.instantiationService.createInstance(GettingStartedPage);
 	},
 });
 
-registerWorkbenchContribution('workbench.contrib.startupPageRunner', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(StartupPageRunnerContribution));
+registerWorkbenchContribution('workbench.contrib.startupPageRunner', WorkbenchPhase.AfterRestored, accessor =>
+	accessor.get(IInstantiationService).createInstance(StartupPageRunnerContribution));
 
-registerAction2(
-	class OpenWelcomeAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.openWelcome',
-				title: localize2('gettingStarted.openWelcome', 'Welcome'),
-				f1: true,
-			});
-		}
+registerAction2(class OpenWelcomeAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.openWelcome', title: localize2('gettingStarted.openWelcome', 'Welcome'), f1: true });
+	}
 
-		public override run(accessor: ServicesAccessor): Promise<void> {
-			return accessor.get(IEditorService).openEditor(createGettingStartedInput());
-		}
-	},
-);
+	public override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IEditorService).openEditor(createGettingStartedInput());
+	}
+});
 
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
@@ -80,11 +68,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.GettingStarted,
 			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					'gettingStarted.accessibilityHelp',
-					'Welcome\nUse Tab and Shift+Tab to move between actions and Recents. Press Enter to activate the focused item. Each recent item has a Remove from Recents button; use Enter or Space to remove its history entry. Clone repo asks for a repository URL and a destination folder.',
-				),
+			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and Recents. Press Enter to activate the focused item. Each recent item has a Remove from Recents button; use Enter or Space to remove its history entry. Clone repo asks for a repository URL and a destination folder.'),
 			() => {
 				if (isHTMLElement(focused) && focused.isConnected) {
 					focused.focus();

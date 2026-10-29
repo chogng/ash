@@ -19,13 +19,9 @@ export class SessionsExecutionSettingsService extends Disposable implements IAge
 		for (const scope of this.scopes.getScopes()) this.listeners.add(scope.services.execution.onDidChange(() => this.changed.fire()));
 	}
 	read(): ReturnType<IAgentExecutionSettingsService['read']> {
-		const scope = this.scopes.getScope();
-		scope.assertCurrent();
-		return scope.services.execution.read();
+		const scope = this.scopes.getScope(); scope.assertCurrent(); return scope.services.execution.read();
 	}
 	configure(...args: Parameters<IAgentExecutionSettingsService['configure']>): Promise<void> {
-		const scope = this.scopes.getScope();
-		scope.assertCurrent();
-		return scope.services.execution.configure(...args);
+		const scope = this.scopes.getScope(); scope.assertCurrent(); return scope.services.execution.configure(...args);
 	}
 }

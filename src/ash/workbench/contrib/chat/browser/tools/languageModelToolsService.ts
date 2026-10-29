@@ -17,13 +17,7 @@ interface Catalog {
 	readonly references: ReadonlyMap<string, IToolData | IToolSet>;
 }
 
-const emptyCatalog: Catalog = Object.freeze({
-	profiles: Object.freeze([]),
-	tools: Object.freeze([]),
-	sets: Object.freeze([]),
-	names: new Map(),
-	references: new Map(),
-});
+const emptyCatalog: Catalog = Object.freeze({ profiles: Object.freeze([]), tools: Object.freeze([]), sets: Object.freeze([]), names: new Map(), references: new Map() });
 
 /** Builds the window view of the domain catalog; the backend remains the only tool registry. */
 export class LanguageModelToolsService extends Disposable implements ILanguageModelToolsService {
@@ -48,24 +42,15 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 			else if (this.requested) this.refreshInBackground();
 		});
 		this._register(toDisposable(() => connectionState.dispose()));
-		this._register(
-			toDisposable(() => {
-				this.disposed = true;
-				this.clear();
-			}),
-		);
-		this._register(
-			api.onDidChangeTools(() => {
-				// Collapse invalidations during a read into one further read before publishing.
-				this.readAgain = true;
-				if (this.requested) this.refreshInBackground();
-			}),
-		);
+		this._register(toDisposable(() => { this.disposed = true; this.clear(); }));
+		this._register(api.onDidChangeTools(() => {
+			// Collapse invalidations during a read into one further read before publishing.
+			this.readAgain = true;
+			if (this.requested) this.refreshInBackground();
+		}));
 	}
 
-	get isAvailable(): boolean {
-		return this.api.isAvailable;
-	}
+	get isAvailable(): boolean { return this.api.isAvailable; }
 
 	refresh(): Promise<void> {
 		if (this.disposed) return Promise.reject(canceled());
@@ -80,30 +65,23 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				result = await this.api.read();
 				if (this.disposed || epoch !== this.epoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			} while (this.readAgain);
-			const tools: readonly IToolData[] = Object.freeze(
-				result.tools.map(tool =>
-					Object.freeze({
-						id: tool.name,
-						category: tool.category ?? undefined,
-						toolReferenceName: tool.name,
-						displayName: tool.name,
-						modelDescription: tool.description,
-						canBeReferencedInPrompt: tool.exposure === 'direct' || tool.exposure === 'deferred',
-						source: tool.source,
-						sourceDetails: Object.freeze(tool.sourceChain.map(sourceDetail)),
-						exposure: tool.exposure,
-						authority: tool.authority,
-					}),
-				),
-			);
+			const tools: readonly IToolData[] = Object.freeze(result.tools.map(tool => Object.freeze({
+				id: tool.name,
+				category: tool.category ?? undefined,
+				toolReferenceName: tool.name,
+				displayName: tool.name,
+				modelDescription: tool.description,
+				canBeReferencedInPrompt: tool.exposure === 'direct' || tool.exposure === 'deferred',
+				source: tool.source,
+				sourceDetails: Object.freeze(tool.sourceChain.map(sourceDetail)),
+				exposure: tool.exposure,
+				authority: tool.authority,
+			})));
 			const byId = new Map(tools.map(tool => [tool.id, tool]));
 			const sourceGroups = result.sourceGroups.map(set => {
 				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
 				return Object.freeze({
-					kind: 'source' as const,
-					id: set.id,
-					source: set.source,
-					sourceId: set.sourceId,
+					kind: 'source' as const, id: set.id, source: set.source, sourceId: set.sourceId,
 					// An empty source has a reserved segment; actual '@' IDs are encoded as '%40'.
 					referenceName: `${set.source}/${set.sourceId ? encodeURIComponent(set.sourceId) : '@'}`,
 					getTools: () => members,
@@ -111,14 +89,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 			});
 			const namedSets: IToolSet[] = result.toolSets.map(set => {
 				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
-				return Object.freeze({
-					kind: 'capability' as const,
-					id: set.id,
-					referenceName: set.id,
-					source: 'host' as const,
-					sourceId: 'product',
-					getTools: () => members,
-				});
+				return Object.freeze({ kind: 'capability' as const, id: set.id, referenceName: set.id, source: 'host' as const, sourceId: 'product', getTools: () => members });
 			});
 			const sets = Object.freeze([...sourceGroups, ...namedSets]);
 			const externalGroups = new Map<IToolData, IToolSet>();
@@ -145,13 +116,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				names.set(set, name);
 				references.set(name, set);
 			}
-			this.catalog.set({
-				profiles: Object.freeze(result.profiles.map(profile => Object.freeze({ ...profile, sets: Object.freeze([...profile.sets]) }))),
-				tools,
-				sets,
-				names,
-				references,
-			});
+			this.catalog.set({ profiles: Object.freeze(result.profiles.map(profile => Object.freeze({ ...profile, sets: Object.freeze([...profile.sets]) }))), tools, sets, names, references });
 			this.didChangeTools.fire();
 		})().finally(() => {
 			if (this.pending === pending) this.pending = undefined;
@@ -162,18 +127,12 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 
 	private refreshInBackground(): void {
 		if (this.pending) return;
-		void this.refresh().catch(error => {
-			if (!isCancellationError(error)) onUnexpectedError(error);
-		});
+		void this.refresh().catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
 	}
 
-	getAllToolsIncludingDisabled(): Iterable<IToolData> {
-		return this.catalog.get().tools;
-	}
+	getAllToolsIncludingDisabled(): Iterable<IToolData> { return this.catalog.get().tools; }
 
-	getFullReferenceNames(): Iterable<string> {
-		return this.catalog.get().names.values();
-	}
+	getFullReferenceNames(): Iterable<string> { return this.catalog.get().names.values(); }
 
 	getFullReferenceName(tool: IToolData | IToolSet, toolSet?: IToolSet): string {
 		if (isToolSet(tool)) return tool.source === 'mcp' ? `${tool.referenceName}/*` : tool.referenceName;
@@ -199,17 +158,11 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 
 function sourceDetail(source: ChatToolSource): string {
 	switch (source.type) {
-		case 'product':
-			return source.component;
-		case 'plugin':
-			return `${source.pluginId}@${source.version}`;
-		case 'mcp':
-			return source.serverId;
-		case 'dynamic':
-			return source.name;
-		case 'extension':
-			return source.id;
-		case 'system':
-			return source.id;
+		case 'product': return source.component;
+		case 'plugin': return `${source.pluginId}@${source.version}`;
+		case 'mcp': return source.serverId;
+		case 'dynamic': return source.name;
+		case 'extension': return source.id;
+		case 'system': return source.id;
 	}
 }

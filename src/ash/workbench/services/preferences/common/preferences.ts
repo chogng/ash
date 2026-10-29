@@ -61,7 +61,7 @@ export interface INumberWithOptionsSetting extends ISettingBase {
 	readonly minimum: number;
 	readonly maximum: number;
 	readonly integer: boolean;
-	readonly options: readonly { readonly value: string | null; readonly label: string }[];
+	readonly options: readonly { readonly value: string | null; readonly label: string; }[];
 }
 
 export interface ISelectSetting extends ISettingBase {
@@ -136,7 +136,7 @@ export interface IOpenSettingsOptions extends IEditorOptions {
 	/** Ash Settings page or section identity; independent of the configuration target. */
 	readonly section?: string;
 	/** Reveals a setting in JSONC, or filters the graphical editor to its ID. */
-	readonly revealSetting?: { readonly key: string; readonly edit?: boolean };
+	readonly revealSetting?: { readonly key: string; readonly edit?: boolean; };
 }
 
 /** Both graphical hosts validate opening requests before changing their live surface. */
@@ -145,21 +145,8 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidOptions' }, 'Settings opening options must be an object.'));
 	}
 	const supported = [
-		'query',
-		'section',
-		'target',
-		'folderUri',
-		'focusSearch',
-		'jsonEditor',
-		'revealSetting',
-		'openToSide',
-		'groupId',
-		'pinned',
-		'preserveFocus',
-		'forceReload',
-		'revealIfOpened',
-		'ignoreError',
-		'source',
+		'query', 'section', 'target', 'folderUri', 'focusSearch', 'jsonEditor', 'revealSetting', 'openToSide', 'groupId',
+		'pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError', 'source',
 	];
 	const unsupported = Object.keys(options).find(key => !supported.includes(key));
 	if (unsupported !== undefined) {
@@ -193,15 +180,10 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	}
 	if (options.revealSetting !== undefined) {
 		const reveal = options.revealSetting;
-		if (
-			!reveal ||
-			typeof reveal !== 'object' ||
-			Array.isArray(reveal) ||
-			typeof reveal.key !== 'string' ||
-			!reveal.key.trim() ||
-			(reveal.edit !== undefined && typeof reveal.edit !== 'boolean') ||
-			Object.keys(reveal).some(key => key !== 'key' && key !== 'edit')
-		) {
+		if (!reveal || typeof reveal !== 'object' || Array.isArray(reveal)
+			|| typeof reveal.key !== 'string' || !reveal.key.trim()
+			|| reveal.edit !== undefined && typeof reveal.edit !== 'boolean'
+			|| Object.keys(reveal).some(key => key !== 'key' && key !== 'edit')) {
 			throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidReveal' }, 'A setting to reveal must have a key and an optional edit flag.'));
 		}
 	}

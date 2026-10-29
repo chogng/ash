@@ -4,7 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 test.use({ openWorkspace: false });
 
 /** Chromium's native drag protocol keeps Electron icon drags observable across window reloads. */
-async function dragElectronView(page: Page, source: Locator, target: Locator, position: { x: number; y: number }): Promise<void> {
+async function dragElectronView(page: Page, source: Locator, target: Locator, position: { x: number; y: number; }): Promise<void> {
 	await expect(source).toBeVisible();
 	await expect(target).toBeVisible();
 	const from = (await source.boundingBox())!;
@@ -13,11 +13,7 @@ async function dragElectronView(page: Page, source: Locator, target: Locator, po
 	const y = from.y + from.height / 2;
 	const destination = { x: to.x + position.x, y: to.y + position.y };
 	const session = await page.context().newCDPSession(page);
-	type DragData = {
-		items: { mimeType: string; data: string; title?: string; baseURL?: string }[];
-		dragOperationsMask: number;
-		files?: string[];
-	};
+	type DragData = { items: { mimeType: string; data: string; title?: string; baseURL?: string; }[]; dragOperationsMask: number; files?: string[]; };
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const intercepted = new Promise<DragData>((resolve, reject) => {
 		timer = setTimeout(() => reject(new Error('Native view drag did not start')), 10000);
@@ -26,32 +22,13 @@ async function dragElectronView(page: Page, source: Locator, target: Locator, po
 	try {
 		await session.send('Input.setInterceptDrags', { enabled: true });
 		await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-		await session.send('Input.dispatchMouseEvent', {
-			type: 'mousePressed',
-			x,
-			y,
-			button: 'left',
-			buttons: 1,
-			clickCount: 1,
-		});
-		await session.send('Input.dispatchMouseEvent', {
-			type: 'mouseMoved',
-			x: x - 20,
-			y: y + 20,
-			button: 'left',
-			buttons: 1,
-		});
+		await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+		await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x - 20, y: y + 20, button: 'left', buttons: 1 });
 		const data = await intercepted;
 		for (const type of ['dragEnter', 'dragOver', 'drop'] as const) {
 			await session.send('Input.dispatchDragEvent', { type, ...destination, data });
 		}
-		await session.send('Input.dispatchMouseEvent', {
-			type: 'mouseReleased',
-			...destination,
-			button: 'left',
-			buttons: 0,
-			clickCount: 1,
-		});
+		await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...destination, button: 'left', buttons: 0, clickCount: 1 });
 	} finally {
 		clearTimeout(timer);
 		await session.send('Input.setInterceptDrags', { enabled: false });
@@ -61,8 +38,9 @@ async function dragElectronView(page: Page, source: Locator, target: Locator, po
 
 test('individual views detach, merge, persist across reload and restore their defaults', async ({ workbench, application, reloadWorkbench, target }) => {
 	let page = workbench.page;
-	const dragView = (source: Locator, destination: Locator, position: { x: number; y: number }) =>
-		target.kind === 'electron' ? dragElectronView(page, source, destination, position) : source.dragTo(destination, { targetPosition: position });
+	const dragView = (source: Locator, destination: Locator, position: { x: number; y: number; }) => target.kind === 'electron'
+		? dragElectronView(page, source, destination, position)
+		: source.dragTo(destination, { targetPosition: position });
 	const timeline = () => page.locator('[data-part="sidebar"] [data-view-id="timeline"]');
 	const right = () => page.locator('[data-part="auxiliarybar"]');
 	await page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true }).click();
@@ -97,15 +75,10 @@ test('individual views detach, merge, persist across reload and restore their de
 	await workbench.quickaccess.select('New Panel Entry');
 	const panel = page.locator('[data-part="panel"] [data-view-container-id^="workbench.views.service."]');
 	await expect(panel.locator('[data-view-id="timeline"]')).toBeVisible();
-	await dragView(page.locator('[data-part="sidebar"] [data-view-id="outline"] .ash-pane-view-header'), panel, {
-		x: 150,
-		y: 90,
-	});
+	await dragView(page.locator('[data-part="sidebar"] [data-view-id="outline"] .ash-pane-view-header'), panel, { x: 150, y: 90 });
 	await expect(panel.locator('[data-view-id="timeline"] .ash-pane-view-header')).toBeVisible();
 	await expect(panel.locator('[data-view-id="outline"] .ash-pane-view-header')).toBeVisible();
-	await workbench.menus.select(application, () => panel.locator('[data-view-id="outline"] .ash-pane-view-header').getByRole('button', { name: 'Outline', exact: true }).press('Shift+F10'), [
-		'Reset Location',
-	]);
+	await workbench.menus.select(application, () => panel.locator('[data-view-id="outline"] .ash-pane-view-header').getByRole('button', { name: 'Outline', exact: true }).press('Shift+F10'), ['Reset Location']);
 	await expect(page.locator('[data-part="sidebar"] [data-view-id="outline"]')).toBeVisible();
 	await expect(panel.locator('[data-view-id="outline"]')).toHaveCount(0);
 	await workbench.quickaccess.runCommand('workbench.action.resetViewLocations');

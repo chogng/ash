@@ -13,13 +13,7 @@ import { TestConfigurationService } from '../../../../services/configuration/tes
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { CallViewPane } from '../../browser/callViewPane.js';
 
-const shared: CallDocument = {
-	serverUrl: 'https://documents.example',
-	roomId: 'document-1',
-	schemaId: 'stanza-document-v1',
-	contentType: 'application/test-document',
-	title: 'Shared notes',
-};
+const shared: CallDocument = { serverUrl: 'https://documents.example', roomId: 'document-1', schemaId: 'stanza-document-v1', contentType: 'application/test-document', title: 'Shared notes' };
 
 function fixture() {
 	const browser = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
@@ -29,103 +23,43 @@ function fixture() {
 		Object.defineProperty(globalThis, name, { configurable: true, value: browser.window[name as 'window'] });
 	}
 	const changed = new Emitter<void>();
-	let state: CallState = {
-		connection: 'connected',
-		muted: true,
-		deafened: false,
-		microphoneAllowed: true,
-		canManage: true,
-		screenSharing: false,
-		screenAllowed: true,
-		participants: [],
-		documents: [shared],
-		error: null,
-	};
+	let state: CallState = { connection: 'connected', muted: true, deafened: false, microphoneAllowed: true, canManage: true, screenSharing: false, screenAllowed: true, participants: [], documents: [shared], error: null };
 	const linked: CallDocument[] = [];
 	const joined: CallDocument[] = [];
 	const opened: IResourceEditorInput[] = [];
 	const original = { resource: URI.file('/local-draft.ashdoc'), label: 'Local draft' };
 	const originalCopy = { resource: original.resource, isDirty: true };
 	let active: IResourceEditorInput = original;
-	let panes: readonly IEditorPane[] = [
-		{
-			workingCopy: originalCopy,
-			getCollaborationDocument: () => shared,
-			joinCollaborationDocument: async () => {
-				throw new Error('Must not join into a local dirty file');
-			},
-		} as unknown as IEditorPane,
-	];
+	let panes: readonly IEditorPane[] = [{ workingCopy: originalCopy, getCollaborationDocument: () => shared, joinCollaborationDocument: async () => { throw new Error('Must not join into a local dirty file'); } } as unknown as IEditorPane];
 	const calls: ICallService = {
-		onDidChange: changed.event,
-		onDidChangeScreens: Event.None,
-		screens: [],
-		screenError: undefined,
-		get state() {
-			return state;
-		},
-		start: async () => {},
-		mute: async () => {},
-		deafen: async () => {},
-		selectDevice: async () => {},
-		screenSources: async () => [],
-		shareScreen: async () => {},
-		stopScreenShare: async () => {},
-		invite: async () => ({ url: '', credential: '' }),
-		leave: async () => {},
-		end: async () => {},
-		shareDocument: async document => {
-			linked.push(document);
-		},
-		unshareDocument: async () => {
-			state = { ...state, documents: [] };
-			changed.fire();
-		},
+		onDidChange: changed.event, onDidChangeScreens: Event.None, screens: [], screenError: undefined,
+		get state() { return state; },
+		start: async () => { }, mute: async () => { }, deafen: async () => { }, selectDevice: async () => { },
+		screenSources: async () => [], shareScreen: async () => { }, stopScreenShare: async () => { },
+		invite: async () => ({ url: '', credential: '' }), leave: async () => { }, end: async () => { },
+		shareDocument: async document => { linked.push(document); },
+		unshareDocument: async () => { state = { ...state, documents: [] }; changed.fire(); },
 	};
 	const editors: IEditorService = {
 		...emptyEditorServiceState,
-		get activeEditor() {
-			return active;
-		},
-		get visibleEditorPanes() {
-			return panes;
-		},
+		get activeEditor() { return active; },
+		get visibleEditorPanes() { return panes; },
 		openEditor: async input => {
 			opened.push(input);
 			active = input;
-			panes = [
-				{
-					workingCopy: { resource: input.resource },
-					getCollaborationDocument: () => undefined,
-					joinCollaborationDocument: async (document: CallDocument) => {
-						joined.push(document);
-					},
-				} as unknown as IEditorPane,
-			];
+			panes = [{ workingCopy: { resource: input.resource }, getCollaborationDocument: () => undefined, joinCollaborationDocument: async (document: CallDocument) => { joined.push(document); } } as unknown as IEditorPane];
 		},
-		focusActiveEditor: () => {},
+		focusActiveEditor: () => { },
 	};
 	const registration = DocumentTypes.registerTypes();
 	registration.replace([{ id: 'test', contentType: shared.contentType, extensions: ['.ashdoc'] }]);
 	const configuration = new TestConfigurationService();
 	const view = new CallViewPane(browser.window.document.body, { id: 'calls', title: 'Calls' }, calls, configuration, editors);
 	return {
-		browser,
-		view,
-		linked,
-		joined,
-		opened,
-		originalCopy,
-		setOwner(owner: boolean) {
-			state = { ...state, canManage: owner };
-			changed.fire();
-		},
+		browser, view, linked, joined, opened, originalCopy,
+		setOwner(owner: boolean) { state = { ...state, canManage: owner }; changed.fire(); },
 		dispose() {
-			view.dispose();
-			configuration.dispose();
-			registration.dispose();
-			changed.dispose();
-			browser.window.close();
+			view.dispose(); configuration.dispose(); registration.dispose(); changed.dispose(); browser.window.close();
 			for (const [name, descriptor] of descriptors) {
 				if (descriptor) Object.defineProperty(globalThis, name, descriptor);
 				else Reflect.deleteProperty(globalThis, name);
@@ -159,9 +93,7 @@ test('Calls links references and opens a new document without touching a dirty l
 		await settled();
 		assert.equal(test.view.element.querySelectorAll('.call-document').length, 0);
 		assert.equal(button(test.view, 'Link current document').disabled, false);
-	} finally {
-		test.dispose();
-	}
+	} finally { test.dispose(); }
 });
 
 test('Calls exposes translated shared-document actions and keeps management controls owner-only', () => {
@@ -175,8 +107,5 @@ test('Calls exposes translated shared-document actions and keeps management cont
 		assert.equal(button(test.view, '关联当前文档').hidden, true);
 		assert.equal(button(test.view, '取消文档关联').hidden, true);
 		assert.equal(button(test.view, '打开文档').disabled, false);
-	} finally {
-		test.dispose();
-		resetNlsResolver();
-	}
+	} finally { test.dispose(); resetNlsResolver(); }
 });

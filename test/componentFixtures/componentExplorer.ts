@@ -4,25 +4,13 @@ import type { ThemedFixture } from '../../src/ash/workbench/test/browser/compone
 import { bindTestColorTheme } from '../fixtures/browser/themeFixture.js';
 /** Owns document slots, never copies or reparses CSS into replacement stylesheets. */
 class StylesheetOrder {
-	private readonly documents: readonly {
-		node: HTMLStyleElement;
-		slot: Comment;
-		source: string;
-		text: string;
-		position: number;
-	}[];
+	private readonly documents: readonly { node: HTMLStyleElement; slot: Comment; source: string; text: string; position: number; }[];
 
 	constructor(private readonly document: Document) {
 		this.documents = [...document.querySelectorAll<HTMLStyleElement>('style[data-vite-dev-id]')].map(node => {
 			const slot = document.createComment('fixture stylesheet slot');
 			node.before(slot);
-			return {
-				node,
-				slot,
-				source: node.dataset.viteDevId!,
-				text: node.textContent ?? '',
-				position: [...document.styleSheets].indexOf(node.sheet!),
-			};
+			return { node, slot, source: node.dataset.viteDevId!, text: node.textContent ?? '', position: [...document.styleSheets].indexOf(node.sheet!) };
 		});
 		if (!this.documents.length) throw new Error('Component fixtures require Vite development stylesheet metadata');
 	}
@@ -58,15 +46,11 @@ class StylesheetOrder {
 		for (const { slot } of this.documents) slot.remove();
 	}
 
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
-const modules = import.meta.glob<{ default: readonly ThemedFixture[] }>('../../src/**/*.fixture.ts', { eager: true });
-const fixtures = Object.values(modules)
-	.flatMap(module => module.default)
-	.sort((left, right) => left.id.localeCompare(right.id));
+const modules = import.meta.glob<{ default: readonly ThemedFixture[]; }>('../../src/**/*.fixture.ts', { eager: true });
+const fixtures = Object.values(modules).flatMap(module => module.default).sort((left, right) => left.id.localeCompare(right.id));
 if (new Set(fixtures.map(fixture => fixture.id)).size !== fixtures.length) throw new Error('Duplicate component fixture id');
 const catalog = fixtures.map(({ id, name, theme, labels }) => ({ id, name, theme: theme.id, labels: labels ?? [] }));
 const resources = new DisposableStore();
@@ -74,7 +58,7 @@ window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 
 declare global {
 	interface Window {
-		componentExplorer: { readonly catalog: typeof catalog };
+		componentExplorer: { readonly catalog: typeof catalog; };
 		componentFixture: {
 			readonly id: string;
 			readonly selectors: readonly string[];
@@ -108,19 +92,12 @@ if (!fixture) {
 		await fixture.render({ container, disposableStore: resources, theme: fixture.theme });
 		await document.fonts.ready;
 		const styles = resources.add(new MutableDisposable<StylesheetOrder>());
-		const refresh = (): void => {
-			styles.clear();
-			styles.value = new StylesheetOrder(document);
-		};
+		const refresh = (): void => { styles.clear(); styles.value = new StylesheetOrder(document); };
 		refresh();
 		window.componentFixture = {
-			id: fixture.id,
-			selectors: ['[data-fixture-target]'],
-			documents: () => styles.value!.manifest(),
-			order: () => styles.value!.order(),
-			setOrder: order => styles.value!.setOrder(order),
-			resetStyles: () => styles.value!.reset(),
-			refreshStyles: refresh,
+			id: fixture.id, selectors: ['[data-fixture-target]'],
+			documents: () => styles.value!.manifest(), order: () => styles.value!.order(),
+			setOrder: order => styles.value!.setOrder(order), resetStyles: () => styles.value!.reset(), refreshStyles: refresh,
 		};
 		document.body.dataset.ready = 'true';
 		window.parent.postMessage({ type: 'ash-component-fixture-ready', id: fixture.id }, location.origin);
@@ -137,15 +114,13 @@ if (!fixture) {
 		let selected = fixture.id;
 		const showSources = (): void => {
 			const api = preview.contentWindow!.componentFixture;
-			sources.replaceChildren(
-				...api.order().map(index => {
-					const item = document.createElement('li');
-					const code = document.createElement('code');
-					code.textContent = api.documents()[index].source;
-					item.append(code);
-					return item;
-				}),
-			);
+			sources.replaceChildren(...api.order().map(index => {
+				const item = document.createElement('li');
+				const code = document.createElement('code');
+				code.textContent = api.documents()[index].source;
+				item.append(code);
+				return item;
+			}));
 		};
 		const select = (id: string): void => {
 			selected = id;
@@ -164,10 +139,7 @@ if (!fixture) {
 			link.href = `?fixture=${encodeURIComponent(entry.id)}`;
 			link.textContent = link.title = entry.id;
 			link.dataset.fixture = entry.id;
-			link.addEventListener('click', event => {
-				event.preventDefault();
-				select(entry.id);
-			});
+			link.addEventListener('click', event => { event.preventDefault(); select(entry.id); });
 			item.append(link);
 			list.append(item);
 		}
@@ -187,10 +159,7 @@ if (!fixture) {
 			api.setOrder(api.order().reverse());
 			showSources();
 		});
-		reset.addEventListener('click', () => {
-			preview.contentWindow!.componentFixture.resetStyles();
-			showSources();
-		});
+		reset.addEventListener('click', () => { preview.contentWindow!.componentFixture.resetStyles(); showSources(); });
 		select(fixture.id);
 		document.body.dataset.ready = 'true';
 	}

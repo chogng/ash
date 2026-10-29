@@ -11,7 +11,7 @@ suite('Terminal request lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('pairs synchronous and out-of-order replies without sharing transport identities', async () => {
-		using store = new RequestStore<string, { name: string }>(undefined, new NullLoggerService());
+		using store = new RequestStore<string, { name: string; }>(undefined, new NullLoggerService());
 		const ids: number[] = [];
 		using listener = store.onCreateRequest(({ requestId, name }) => {
 			ids.push(requestId);
@@ -39,13 +39,9 @@ suite('Terminal request lifecycle', () => {
 		try {
 			using store = new RequestStore<string, object>(1, new NullLoggerService());
 			let id = 0;
-			using listener = store.onCreateRequest(({ requestId }) => {
-				id = requestId;
-			});
+			using listener = store.onCreateRequest(({ requestId }) => { id = requestId; });
 			await assert.rejects(store.createRequest({}), /终端请求已超时/);
 			store.acceptReply(id, 'late');
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 	});
 });

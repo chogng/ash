@@ -35,23 +35,18 @@ export class MessageController extends Disposable implements IEditorContribution
 	private visible = false;
 	private mouseOver = false;
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		@IOpenerService private readonly opener: IOpenerService,
-	) {
+	constructor(private readonly editor: ICodeEditor, @IOpenerService private readonly opener: IOpenerService) {
 		super();
 		this.visibleKey = editor.invokeWithinContext(accessor => accessor.getOptional(IContextKeyService))?.createKey(MessageController.MESSAGE_VISIBLE.key, false);
 		if (this.visibleKey) this._register(toDisposable(() => this.visibleKey?.reset()));
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new ReferenceError('MessageController requires an editor DOM node');
-		this._register(
-			addDisposableListener<KeyboardEvent>(domNode, 'keydown', event => {
-				if (!this.visible || event.defaultPrevented || event.key !== 'Escape') return;
-				event.preventDefault();
-				event.stopPropagation();
-				this.closeMessage();
-			}),
-		);
+		this._register(addDisposableListener<KeyboardEvent>(domNode, 'keydown', event => {
+			if (!this.visible || event.defaultPrevented || event.key !== 'Escape') return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.closeMessage();
+		}));
 	}
 
 	public override dispose(): void {
@@ -120,37 +115,21 @@ export class MessageController extends Disposable implements IEditorContribution
 		this.listeners.add(this.editor.onDidChangeCursorSelection(() => this.closeMessage()));
 		const model = this.editor.getModel();
 		if (model) this.listeners.add(model.onDidChangeContent(() => this.closeMessage()));
-		this.listeners.add(
-			addDisposableListener(widget.getDomNode(), 'mouseenter', () => {
-				this.mouseOver = true;
-			}),
-		);
-		this.listeners.add(
-			addDisposableListener(widget.getDomNode(), 'mouseleave', () => {
-				this.mouseOver = false;
-			}),
-		);
+		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseenter', () => { this.mouseOver = true; }));
+		this.listeners.add(addDisposableListener(widget.getDomNode(), 'mouseleave', () => { this.mouseOver = false; }));
 		const editorDomNode = this.editor.getDomNode()!;
-		this.listeners.add(
-			addDisposableListener<FocusEvent>(editorDomNode, 'focusout', () => {
-				const targetWindow = editorDomNode.ownerDocument.defaultView;
-				if (!targetWindow) return;
-				this.blurTimer.value = disposableWindowTimeout(
-					targetWindow,
-					() => {
-						const active = editorDomNode.ownerDocument.activeElement;
-						if (!this.mouseOver && active !== null && !widget.getDomNode().contains(active)) this.closeMessage();
-					},
-					0,
-				);
-			}),
-		);
-		this.listeners.add(
-			this.editor.onMouseMove(event => {
-				const target = event.target.position;
-				if (target && Math.abs(target.lineNumber - position.lineNumber) > 3) this.closeMessage();
-			}),
-		);
+		this.listeners.add(addDisposableListener<FocusEvent>(editorDomNode, 'focusout', () => {
+			const targetWindow = editorDomNode.ownerDocument.defaultView;
+			if (!targetWindow) return;
+			this.blurTimer.value = disposableWindowTimeout(targetWindow, () => {
+				const active = editorDomNode.ownerDocument.activeElement;
+				if (!this.mouseOver && active !== null && !widget.getDomNode().contains(active)) this.closeMessage();
+			}, 0);
+		}));
+		this.listeners.add(this.editor.onMouseMove(event => {
+			const target = event.target.position;
+			if (target && Math.abs(target.lineNumber - position.lineNumber) > 3) this.closeMessage();
+		}));
 	}
 
 	private setVisible(visible: boolean): void {
@@ -209,12 +188,10 @@ class MessageWidget extends Disposable implements IContentWidget {
 }
 
 const MessageCommand = EditorCommand.bindToContribution<MessageController>(MessageController.get);
-registerEditorCommand(
-	new MessageCommand({
-		id: 'leaveEditorMessage',
-		precondition: MessageController.MESSAGE_VISIBLE.isEqualTo(true),
-		handler: controller => controller.closeMessage(),
-	}),
-);
+registerEditorCommand(new MessageCommand({
+	id: 'leaveEditorMessage',
+	precondition: MessageController.MESSAGE_VISIBLE.isEqualTo(true),
+	handler: controller => controller.closeMessage(),
+}));
 
 registerEditorContribution(MessageController.ID, MessageController, EditorContributionInstantiation.Lazy);

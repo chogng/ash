@@ -12,11 +12,7 @@ import { validateTokenId, type ColorContribution } from '../../../../platform/th
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import type { ILocalizationContribution } from '../../../../platform/extensions/common/extensions.js';
 
-export interface ExtensionIconContribution {
-	readonly id: string;
-	readonly description: string;
-	readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string };
-}
+export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string; }; }
 export interface ExtensionGrammarContribution {
 	readonly language?: string;
 	readonly scopeName: string;
@@ -64,7 +60,7 @@ export interface ExtensionCustomEditorContribution {
 	readonly viewType: string;
 	readonly displayName: string;
 	readonly priority: 'default' | 'option' | 'explicit';
-	readonly selector: readonly { readonly filenamePattern?: string; readonly mimeType?: string }[];
+	readonly selector: readonly { readonly filenamePattern?: string; readonly mimeType?: string; }[];
 }
 
 export interface ExtensionManifest {
@@ -73,51 +69,18 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
-		readonly canvases: readonly {
-			readonly id: string;
-			readonly displayName: string;
-			readonly description: string;
-			readonly requiresInput: boolean;
-		}[];
+		readonly canvases: readonly { readonly id: string; readonly displayName: string; readonly description: string; readonly requiresInput: boolean; }[];
 		readonly keybindings: readonly IKeybindingRule[];
-		readonly imageEditors: readonly {
-			readonly id: string;
-			readonly displayName: string;
-			readonly default?: boolean;
-			readonly accessibilityHelp: string;
-		}[];
-		readonly breakpoints: readonly { readonly language: string; readonly when?: string }[];
-		readonly debugVisualizers: readonly {
-			readonly id: string;
-			readonly title: string;
-			readonly command: string;
-			readonly type?: string;
-		}[];
-		readonly speechProviders: readonly { readonly name: string; readonly description?: string }[];
-		readonly terminal: {
-			readonly profiles: readonly {
-				readonly id: string;
-				readonly title: string;
-				readonly icon?: string;
-				readonly color?: string;
-			}[];
-		};
+		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
+		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
+		readonly debugVisualizers: readonly { readonly id: string; readonly title: string; readonly command: string; readonly type?: string; }[];
+		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
+		readonly terminal: { readonly profiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[]; };
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
 		readonly configurationDefaults: readonly IConfigurationDefaults[];
-		readonly submenus: readonly {
-			id: string;
-			label: string;
-			placements: readonly { menu: string; when?: string; group?: string }[];
-		}[];
-		readonly viewsWelcome: readonly {
-			view: string;
-			contents: string;
-			when?: string;
-			precondition?: string;
-			group?: string;
-			order?: number;
-		}[];
+		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
+		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
 		readonly languages: readonly ExtensionLanguageContribution[];
 		readonly grammars: readonly ExtensionGrammarContribution[];
 		readonly snippets: readonly ExtensionSnippetContribution[];
@@ -145,7 +108,7 @@ export interface ExtensionManifestDescriptor {
 	readonly targetPlatform?: string;
 }
 
-export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string }): Promise<void> {
+export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string; }): Promise<void> {
 	const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(extension.manifestJson));
 	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`;
 	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
@@ -166,14 +129,13 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 	if (name !== descriptor.name || publisher !== descriptor.publisher || version !== descriptor.version) {
 		throw new TypeError(`Extension '${descriptor.id}' manifest identity does not match its catalog entry`);
 	}
-	const displayName = typeof manifest.displayName === 'string' && manifest.displayName.trim().length > 0 ? boundedText(manifest.displayName, 'displayName', 256) : (descriptor.displayName ?? name);
+	const displayName = typeof manifest.displayName === 'string' && manifest.displayName.trim().length > 0
+		? boundedText(manifest.displayName, 'displayName', 256)
+		: descriptor.displayName ?? name;
 	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, 'Extension contributes');
 	let themes: readonly ExtensionThemeContribution[] = [];
-	if (manifest.themes !== undefined) {
-		themes = parsePortableThemes(manifest);
-	} else if (contributes.themes !== undefined) {
-		themes = parseThemes(contributes.themes, descriptor.id);
-	}
+	if (manifest.themes !== undefined) { themes = parsePortableThemes(manifest); }
+	else if (contributes.themes !== undefined) { themes = parseThemes(contributes.themes, descriptor.id); }
 	return Object.freeze({
 		name,
 		publisher,
@@ -188,15 +150,10 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
-			configurationDefaults:
-				contributes.configurationDefaults === undefined
-					? []
-					: [
-							{
-								overrides: validateJsonValue(record(contributes.configurationDefaults, 'contributes.configurationDefaults')) as Readonly<Record<string, unknown>>,
-								source: { id: descriptor.id, displayName },
-							},
-						],
+			configurationDefaults: contributes.configurationDefaults === undefined ? [] : [{
+				overrides: validateJsonValue(record(contributes.configurationDefaults, 'contributes.configurationDefaults')) as Readonly<Record<string, unknown>>,
+				source: { id: descriptor.id, displayName },
+			}],
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			keybindings: parseKeybindings(contributes.keybindings, descriptor.id),
@@ -219,92 +176,49 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 }
 
 function parseKeybindings(value: unknown, extensionId: string): readonly IKeybindingRule[] {
-	if (value === undefined) {
-		return [];
-	}
+	if (value === undefined) { return []; }
 	const invalid = () => new TypeError(localize({ bundle: 'ash.extensions', key: 'invalidKeybindingContribution' }, 'Invalid keybinding contribution in {0}.', extensionId));
-	if (!Array.isArray(value) || value.length > 4096) {
-		throw invalid();
-	}
+	if (!Array.isArray(value) || value.length > 4096) { throw invalid(); }
 	return value.flatMap(item => {
 		const entry = record(item, 'Keybinding contribution');
-		if (typeof entry.command !== 'string' || !entry.command.length || entry.command.length > 256 || entry.command.startsWith('-')) {
-			throw invalid();
-		}
+		if (typeof entry.command !== 'string' || !entry.command.length || entry.command.length > 256 || entry.command.startsWith('-')) { throw invalid(); }
 		for (const key of ['key', 'mac', 'linux', 'win']) {
 			const binding = entry[key];
-			if (binding === undefined && key !== 'key') {
-				continue;
-			}
-			if (typeof binding !== 'string' || binding.length > 256 || (binding && !parseKeybinding(binding))) {
-				throw invalid();
-			}
+			if (binding === undefined && key !== 'key') { continue; }
+			if (typeof binding !== 'string' || binding.length > 256 || binding && !parseKeybinding(binding)) { throw invalid(); }
 		}
-		if (entry.when !== undefined && (typeof entry.when !== 'string' || entry.when.length > 4096 || !ContextKeyExpr.deserialize(entry.when))) {
-			throw invalid();
-		}
+		if (entry.when !== undefined && (typeof entry.when !== 'string' || entry.when.length > 4096 || !ContextKeyExpr.deserialize(entry.when))) { throw invalid(); }
 		const key = entry[isMacintosh ? 'mac' : isLinux ? 'linux' : 'win'] ?? entry.key;
-		if (!key) {
-			return [];
-		}
-		return [
-			{
-				command: entry.command,
-				keybinding: parseKeybinding(key as string)!,
-				when: typeof entry.when === 'string' ? ContextKeyExpr.deserialize(entry.when) : undefined,
-				args: entry.args === undefined ? undefined : [validateJsonValue(entry.args)],
-			},
-		];
+		if (!key) { return []; }
+		return [{ command: entry.command, keybinding: parseKeybinding(key as string)!, when: typeof entry.when === 'string' ? ContextKeyExpr.deserialize(entry.when) : undefined, args: entry.args === undefined ? undefined : [validateJsonValue(entry.args)] }];
 	});
 }
 
 function parseLocalizations(value: unknown): readonly ILocalizationContribution[] {
-	if (value === undefined) {
-		return [];
-	}
-	if (!Array.isArray(value) || value.length > 128) {
-		throw new TypeError('Invalid localization contributions');
-	}
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 128) { throw new TypeError('Invalid localization contributions'); }
 	const locales = new Set<string>();
 	return value.map(item => {
 		const entry = record(item, 'Localization contribution');
 		const languageId = requiredString(entry.languageId, 'Localization language', 64);
-		if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(languageId) || locales.has(languageId.toLowerCase())) {
-			throw new TypeError('Invalid or duplicate localization language');
-		}
+		if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(languageId) || locales.has(languageId.toLowerCase())) { throw new TypeError('Invalid or duplicate localization language'); }
 		locales.add(languageId.toLowerCase());
-		if (!Array.isArray(entry.translations) || !entry.translations.length || entry.translations.length > 2048) {
-			throw new TypeError('Invalid localization targets');
-		}
+		if (!Array.isArray(entry.translations) || !entry.translations.length || entry.translations.length > 2048) { throw new TypeError('Invalid localization targets'); }
 		const targets = new Set<string>();
 		const translations = entry.translations.map(item => {
 			const translation = record(item, 'Localization translation');
 			const id = requiredString(translation.id, 'Localization target', 256).toLowerCase();
-			if ((id !== 'ash' && !/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/u.test(id)) || targets.has(id)) {
-				throw new TypeError('Invalid or duplicate localization target');
-			}
+			if ((id !== 'ash' && !/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/u.test(id)) || targets.has(id)) { throw new TypeError('Invalid or duplicate localization target'); }
 			targets.add(id);
 			return { id, path: normalizeResourcePath(translation.path, 'Localization translation path') };
 		});
-		return {
-			languageId,
-			languageName: requiredString(entry.languageName, 'Localization name', 128),
-			localizedLanguageName: requiredString(entry.localizedLanguageName, 'Localized language name', 128),
-			translations,
-		};
+		return { languageId, languageName: requiredString(entry.languageName, 'Localization name', 128), localizedLanguageName: requiredString(entry.localizedLanguageName, 'Localized language name', 128), translations };
 	});
 }
 
-function parseConfigurations(value: unknown, extensionInfo: { readonly id: string; readonly displayName: string }): readonly IConfigurationNode[] {
+function parseConfigurations(value: unknown, extensionInfo: { readonly id: string; readonly displayName: string; }): readonly IConfigurationNode[] {
 	if (value === undefined) return Object.freeze([]);
-	const scopes: Readonly<Record<string, ConfigurationScope>> = {
-		application: ConfigurationScope.APPLICATION,
-		machine: ConfigurationScope.MACHINE,
-		window: ConfigurationScope.WINDOW,
-		resource: ConfigurationScope.RESOURCE,
-		'language-overridable': ConfigurationScope.LANGUAGE_OVERRIDABLE,
-		'machine-overridable': ConfigurationScope.MACHINE_OVERRIDABLE,
-	};
+	const scopes: Readonly<Record<string, ConfigurationScope>> = { application: ConfigurationScope.APPLICATION, machine: ConfigurationScope.MACHINE, window: ConfigurationScope.WINDOW, resource: ConfigurationScope.RESOURCE, 'language-overridable': ConfigurationScope.LANGUAGE_OVERRIDABLE, 'machine-overridable': ConfigurationScope.MACHINE_OVERRIDABLE };
 	const parseNode = (value: unknown): IConfigurationNode => {
 		const node = record(validateJsonValue(value), 'contributes.configuration');
 		const properties: Record<string, IConfigurationPropertySchema> = Object.create(null);
@@ -316,29 +230,15 @@ function parseConfigurations(value: unknown, extensionInfo: { readonly id: strin
 				const binding = record(schema.ashBinding, 'extension setting binding');
 				for (const field of ['readCommand', 'writeCommand', 'property']) requiredString(binding[field], 'extension setting binding ' + field, 256);
 				const setting = record(schema.ashSetting, 'extension setting presentation');
-				requiredString(setting.title, 'setting title', 32768);
-				requiredString(setting.description, 'setting description', 32768);
-				if (setting.valueType === 'number') {
-					if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range');
-				} else if (setting.valueType === 'select') {
-					if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options');
-					for (const option of setting.options) {
-						const entry = record(option, 'setting option');
-						requiredString(entry.label, 'setting option label', 32768);
-						if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value');
-					}
-				} else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
+				requiredString(setting.title, 'setting title', 32768); requiredString(setting.description, 'setting description', 32768);
+				if (setting.valueType === 'number') { if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range'); }
+				else if (setting.valueType === 'select') { if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options'); for (const option of setting.options) { const entry = record(option, 'setting option'); requiredString(entry.label, 'setting option label', 32768); if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value'); } }
+				else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
 			}
 			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
 		}
 		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
-		return Object.freeze({
-			extensionInfo,
-			...(typeof node.id === 'string' ? { id: node.id } : {}),
-			...(typeof node.title === 'string' ? { title: node.title } : {}),
-			properties: Object.freeze(properties),
-			...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}),
-		});
+		return Object.freeze({ extensionInfo, ...(typeof node.id === 'string' ? { id: node.id } : {}), ...(typeof node.title === 'string' ? { title: node.title } : {}), properties: Object.freeze(properties), ...(Array.isArray(node.allOf) ? { allOf: Object.freeze(node.allOf.map(parseNode)) } : {}) });
 	};
 	const nodes = Array.isArray(value) ? value : [value];
 	if (nodes.length > 64) throw new RangeError(localize('configuration.contributionLimit', 'An extension may contribute at most {0} configuration sections.', 64));
@@ -348,14 +248,11 @@ function parseConfigurations(value: unknown, extensionInfo: { readonly id: strin
 function parseProblemContributions(value: unknown, field: string): readonly Readonly<Record<string, unknown>>[] {
 	if (value === undefined) return Object.freeze([]);
 	if (!Array.isArray(value) || value.length > 256) throw new TypeError(localize('extensions.problemContributionArray', '{0} must be an array of at most 256 entries', field));
-	return Object.freeze(
-		value.map(item => {
-			const contribution = record(item, field);
-			if (typeof contribution.name !== 'string' || !contribution.name.trim() || contribution.name.length > 128 || contribution.name.startsWith('$') || /[\x00-\x1f\x7f]/.test(contribution.name))
-				throw new TypeError(localize('extensions.problemContributionName', 'Invalid {0} name', field));
-			return Object.freeze(contribution);
-		}),
-	);
+	return Object.freeze(value.map(item => {
+		const contribution = record(item, field);
+		if (typeof contribution.name !== 'string' || !contribution.name.trim() || contribution.name.length > 128 || contribution.name.startsWith('$') || /[\x00-\x1f\x7f]/.test(contribution.name)) throw new TypeError(localize('extensions.problemContributionName', 'Invalid {0} name', field));
+		return Object.freeze(contribution);
+	}));
 }
 
 function parseCustomEditors(value: unknown, extensionId: string): readonly ExtensionCustomEditorContribution[] {
@@ -368,7 +265,7 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 	const editors = value.map(candidate => {
 		const editor = record(candidate, 'Custom editor');
 		const priorities = typeof editor.priority === 'object' && editor.priority !== null ? record(editor.priority, 'Custom editor priorities') : undefined;
-		const priority = priorities ? priorities.textEditor : (editor.priority ?? 'default');
+		const priority = priorities ? priorities.textEditor : editor.priority ?? 'default';
 		if (priority !== 'default' && priority !== 'option' && priority !== 'explicit') {
 			throw new TypeError('Invalid custom editor priority');
 		}
@@ -388,13 +285,7 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 				...(mimeType === undefined ? {} : { mimeType: mimeType.toLowerCase() }),
 			});
 		});
-		return Object.freeze({
-			...(editor.documentType === undefined ? {} : { documentType: requiredString(editor.documentType, 'Custom editor document type', 128) }),
-			viewType: requiredString(editor.viewType, 'Custom editor view type', 256),
-			displayName: requiredString(editor.displayName, 'Custom editor display name', 256),
-			priority,
-			selector: Object.freeze(selector),
-		});
+		return Object.freeze({ ...(editor.documentType === undefined ? {} : { documentType: requiredString(editor.documentType, 'Custom editor document type', 128) }), viewType: requiredString(editor.viewType, 'Custom editor view type', 256), displayName: requiredString(editor.displayName, 'Custom editor display name', 256), priority, selector: Object.freeze(selector) });
 	});
 	if (new Set(editors.map(editor => editor.viewType)).size !== editors.length) {
 		throw new TypeError(`Extension '${extensionId}' custom editor IDs must be unique`);
@@ -414,16 +305,8 @@ function parseLanguages(value: unknown, extensionId: string): readonly Extension
 			filenames: parseTextList(language.filenames, `Extension '${extensionId}' language ${index} filenames`, true),
 			filenamePatterns: parseTextList(language.filenamePatterns, `Extension '${extensionId}' language ${index} filename patterns`, true),
 			mimetypes: parseTextList(language.mimetypes, `Extension '${extensionId}' language ${index} MIME types`, true),
-			...(language.firstLine === undefined
-				? {}
-				: {
-						firstLine: boundedText(language.firstLine, `Extension '${extensionId}' language ${index} first-line pattern`, 1024),
-					}),
-			...(language.configuration === undefined
-				? {}
-				: {
-						configuration: normalizeResourcePath(language.configuration, `Extension '${extensionId}' language ${index} configuration`),
-					}),
+			...(language.firstLine === undefined ? {} : { firstLine: boundedText(language.firstLine, `Extension '${extensionId}' language ${index} first-line pattern`, 1024) }),
+			...(language.configuration === undefined ? {} : { configuration: normalizeResourcePath(language.configuration, `Extension '${extensionId}' language ${index} configuration`) }),
 		});
 	});
 }
@@ -445,10 +328,8 @@ function parseGrammars(value: unknown, extensionId: string): readonly ExtensionG
 		const injectTo = grammar.injectTo === undefined ? Object.freeze([]) : parseScopes(grammar.injectTo, `Extension '${extensionId}' grammar ${index} injectTo`);
 		const embeddedLanguages = grammar.embeddedLanguages === undefined ? undefined : parseScopeMap(grammar.embeddedLanguages, extensionId, index, 'embeddedLanguages', languageId);
 		const tokenTypes = grammar.tokenTypes === undefined ? undefined : parseScopeMap(grammar.tokenTypes, extensionId, index, 'tokenTypes', tokenTypeValue, selectorValue);
-		const balancedBracketScopes =
-			grammar.balancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.balancedBracketScopes, `Extension '${extensionId}' grammar ${index} balancedBracketScopes`);
-		const unbalancedBracketScopes =
-			grammar.unbalancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.unbalancedBracketScopes, `Extension '${extensionId}' grammar ${index} unbalancedBracketScopes`);
+		const balancedBracketScopes = grammar.balancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.balancedBracketScopes, `Extension '${extensionId}' grammar ${index} balancedBracketScopes`);
+		const unbalancedBracketScopes = grammar.unbalancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.unbalancedBracketScopes, `Extension '${extensionId}' grammar ${index} unbalancedBracketScopes`);
 		return Object.freeze({
 			...(language === undefined ? {} : { language }),
 			scopeName,
@@ -479,16 +360,7 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 /** Portable Extensions themes share the same renderer-owned theme registration path. */
 function parsePortableThemes(manifest: Record<string, unknown>): readonly ExtensionThemeContribution[] {
 	const invalid = (): TypeError => new TypeError(localize('extensions.themes.invalidPortableManifest', 'The Extensions theme manifest is invalid.'));
-	if (
-		manifest.schemaVersion !== 1 ||
-		manifest.contributes !== undefined ||
-		!Array.isArray(manifest.themes) ||
-		!manifest.themes.length ||
-		manifest.themes.length > 128 ||
-		Object.keys(manifest).some(key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key))
-	) {
-		throw invalid();
-	}
+	if (manifest.schemaVersion !== 1 || manifest.contributes !== undefined || !Array.isArray(manifest.themes) || !manifest.themes.length || manifest.themes.length > 128 || Object.keys(manifest).some(key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key))) { throw invalid(); }
 	const ids = new Set<string>();
 	const paths = new Set<string>();
 	return manifest.themes.map((candidate, index) => {
@@ -496,15 +368,7 @@ function parsePortableThemes(manifest: Record<string, unknown>): readonly Extens
 		const id = requiredString(theme.id, 'Theme ID', 256);
 		const label = requiredString(theme.displayName, 'Theme display name', 256);
 		const path = normalizeResourcePath(theme.path, 'Theme path');
-		if (
-			!path.startsWith('themes/') ||
-			ids.has(id) ||
-			paths.has(path) ||
-			(theme.appearance !== 'dark' && theme.appearance !== 'light') ||
-			Object.keys(theme).some(key => !['id', 'displayName', 'appearance', 'path'].includes(key))
-		) {
-			throw invalid();
-		}
+		if (!path.startsWith('themes/') || ids.has(id) || paths.has(path) || (theme.appearance !== 'dark' && theme.appearance !== 'light') || Object.keys(theme).some(key => !['id', 'displayName', 'appearance', 'path'].includes(key))) { throw invalid(); }
 		ids.add(id);
 		paths.add(path);
 		return Object.freeze({ id, label, path, uiTheme: theme.appearance === 'dark' ? 'vs-dark' : 'vs' });
@@ -543,25 +407,16 @@ function parseDebuggers(value: unknown, descriptor: ExtensionManifestDescriptor)
 		const variables = debuggerContribution.variables === undefined ? undefined : parseDebuggerVariables(debuggerContribution.variables, type);
 		if (adapter) {
 			const argumentsList = adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
-			return Object.freeze({
-				type,
-				label,
-				program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096),
-				arguments: Object.freeze(argumentsList),
-				...(variables === undefined ? {} : { variables }),
-			});
+			return Object.freeze({ type, label, program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096), arguments: Object.freeze(argumentsList), ...(variables === undefined ? {} : { variables }) });
 		}
 		const platform = descriptor.targetPlatform?.split('-')[0];
 		const overrides: Record<string, unknown> = {};
 		for (const key of ['win', 'windows', 'winx86', 'osx', 'linux']) {
 			if (debuggerContribution[key] === undefined) continue;
 			const values = record(debuggerContribution[key], `Debugger ${key}`);
-			if (Object.keys(values).length && platform === undefined)
-				throw new Error(localize('extensions.debugAdapterPlatformUnavailable', "The execution platform for debug adapter '{0}' is unavailable.", type));
-			const selected =
-				(platform === 'darwin' && key === 'osx') ||
-				(platform === 'linux' && key === 'linux') ||
-				(platform === 'win32' && (key === 'win' || key === 'windows' || (key === 'winx86' && descriptor.targetPlatform === 'win32-ia32')));
+			if (Object.keys(values).length && platform === undefined) throw new Error(localize('extensions.debugAdapterPlatformUnavailable', "The execution platform for debug adapter '{0}' is unavailable.", type));
+			const selected = platform === 'darwin' && key === 'osx' || platform === 'linux' && key === 'linux'
+				|| platform === 'win32' && (key === 'win' || key === 'windows' || key === 'winx86' && descriptor.targetPlatform === 'win32-ia32');
 			if (selected) Object.assign(overrides, values);
 		}
 		const executable = { ...debuggerContribution, ...overrides };
@@ -571,8 +426,7 @@ function parseDebuggers(value: unknown, descriptor: ExtensionManifestDescriptor)
 		const runtimeArgs = executable.runtimeArgs === undefined ? [] : parseDebuggerArguments(executable.runtimeArgs, extensionId, index);
 		const resolvedProgram = program === undefined ? undefined : debuggerPath(program, descriptor, type, false);
 		return Object.freeze({
-			type,
-			label,
+			type, label,
 			...(variables === undefined ? {} : { variables }),
 			program: runtime === undefined ? resolvedProgram : debuggerPath(runtime, descriptor, type, true),
 			arguments: Object.freeze(runtime === undefined ? args : [...runtimeArgs, ...(resolvedProgram === undefined ? [] : [resolvedProgram]), ...args]),
@@ -586,13 +440,8 @@ function parseDebuggerVariables(value: unknown, type: string): Readonly<Record<s
 	const invalid = () => new TypeError(localize('extensions.invalidDebuggerVariables', "The command variable mapping for debug adapter '{0}' is invalid.", type));
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
 	const entries = Object.entries(value);
-	if (
-		entries.length > 64 ||
-		entries.some(
-			([name, command]) => !name.trim() || name.length > 256 || /[\0\r\n{}]/.test(name) || typeof command !== 'string' || !command.trim() || command.length > 256 || /[\0\r\n]/.test(command),
-		)
-	)
-		throw invalid();
+	if (entries.length > 64 || entries.some(([name, command]) => !name.trim() || name.length > 256 || /[\0\r\n{}]/.test(name)
+		|| typeof command !== 'string' || !command.trim() || command.length > 256 || /[\0\r\n]/.test(command))) throw invalid();
 	return Object.freeze(Object.fromEntries(entries));
 }
 
@@ -625,19 +474,12 @@ function parseDebuggerArguments(value: unknown, extensionId: string, index: numb
 	});
 }
 
-function parseScopeMap<T>(
-	value: unknown,
-	extensionId: string,
-	index: number,
-	field: string,
-	parseValue: (value: unknown, owner: string, maximum?: number) => T,
-	parseKey: (value: string, owner: string) => string = scopeNameValue,
-): Readonly<Record<string, T>> {
+function parseScopeMap<T>(value: unknown, extensionId: string, index: number, field: string, parseValue: (value: unknown, owner: string, maximum?: number) => T, parseKey: (value: string, owner: string) => string = scopeNameValue): Readonly<Record<string, T>> {
 	const object = record(value, `Extension '${extensionId}' grammar ${index} ${field}`);
-	const entries = Object.entries(object).map(
-		([scope, mapped]) =>
-			[parseKey(scope, `Extension '${extensionId}' grammar ${index} ${field} scope`), parseValue(mapped, `Extension '${extensionId}' grammar ${index} ${field} value`, 128)] as const,
-	);
+	const entries = Object.entries(object).map(([scope, mapped]) => [
+		parseKey(scope, `Extension '${extensionId}' grammar ${index} ${field} scope`),
+		parseValue(mapped, `Extension '${extensionId}' grammar ${index} ${field} value`, 128),
+	] as const);
 	return Object.freeze(Object.fromEntries(entries));
 }
 
@@ -721,12 +563,8 @@ function boundedText(value: unknown, owner: string, maximum = 256): string {
 }
 
 function parseColors(value: unknown, extensionId: string): readonly ColorContribution[] {
-	if (value === undefined) {
-		return [];
-	}
-	if (!Array.isArray(value) || value.length > 512) {
-		throw new TypeError('Extension colors must be an array of up to 512 contributions');
-	}
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Extension colors must be an array of up to 512 contributions'); }
 	return value.map(candidate => {
 		const color = record(candidate, 'Extension color');
 		const id = requiredString(color.id, 'Color ID', 256);
@@ -735,82 +573,49 @@ function parseColors(value: unknown, extensionId: string): readonly ColorContrib
 		const parse = (value: unknown): string => {
 			const text = requiredString(value, 'Color default', 256);
 			if (text.startsWith('#')) {
-				if (!/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(text)) {
-					throw new TypeError('Invalid color default');
-				}
-			} else {
-				validateTokenId(text, 'color');
-			}
+				if (!/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(text)) { throw new TypeError('Invalid color default'); }
+			} else { validateTokenId(text, 'color'); }
 			return text;
 		};
 		return {
-			id,
-			description: requiredString(color.description, 'Color description', 1024),
-			owner: extensionId,
-			defaults: {
-				light: parse(defaults.light),
-				dark: parse(defaults.dark),
-				hcDark: parse(defaults.highContrast ?? defaults.dark),
-				hcLight: parse(defaults.highContrastLight ?? defaults.light),
-			},
+			id, description: requiredString(color.description, 'Color description', 1024), owner: extensionId, defaults: {
+				light: parse(defaults.light), dark: parse(defaults.dark),
+				hcDark: parse(defaults.highContrast ?? defaults.dark), hcLight: parse(defaults.highContrastLight ?? defaults.light),
+			}
 		};
 	});
 }
 
 function parseClassifications(value: unknown, allowSuperType: boolean): readonly TokenTypeOrModifierContribution[] {
-	if (value === undefined) {
-		return [];
-	}
-	if (!Array.isArray(value) || value.length > 512) {
-		throw new TypeError('Semantic classifications must be an array of up to 512 contributions');
-	}
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Semantic classifications must be an array of up to 512 contributions'); }
 	return value.map(candidate => {
 		const source = record(candidate, 'Semantic classification');
 		const id = requiredString(source.id, 'Semantic classification ID', 128);
-		if (!/^[A-Za-z][\w]*$/u.test(id)) {
-			throw new TypeError('Invalid semantic classification ID');
-		}
+		if (!/^[A-Za-z][\w]*$/u.test(id)) { throw new TypeError('Invalid semantic classification ID'); }
 		const superType = allowSuperType && source.superType !== undefined ? requiredString(source.superType, 'Semantic super type', 128) : undefined;
-		if (superType && !/^[A-Za-z][\w]*$/u.test(superType)) {
-			throw new TypeError('Invalid semantic super type');
-		}
-		return {
-			id,
-			description: requiredString(source.description, 'Semantic classification description', 1024),
-			...(superType ? { superType } : {}),
-		};
+		if (superType && !/^[A-Za-z][\w]*$/u.test(superType)) { throw new TypeError('Invalid semantic super type'); }
+		return { id, description: requiredString(source.description, 'Semantic classification description', 1024), ...(superType ? { superType } : {}) };
 	});
 }
 
 function parseIcons(value: unknown): readonly ExtensionIconContribution[] {
-	if (value === undefined) {
-		return [];
-	}
+	if (value === undefined) { return []; }
 	const icons = Object.entries(record(value, 'Extension icons'));
-	if (icons.length > 512) {
-		throw new RangeError('Extension has too many icons');
-	}
+	if (icons.length > 512) { throw new RangeError('Extension has too many icons'); }
 	return icons.map(([id, candidate]) => {
-		if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/u.test(id)) {
-			throw new TypeError('Invalid contributed icon ID');
-		}
+		if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/u.test(id)) { throw new TypeError('Invalid contributed icon ID'); }
 		const icon = record(candidate, 'Extension icon');
 		const description = requiredString(icon.description, 'Icon description', 1024);
 		if (typeof icon.default === 'string') {
-			if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(icon.default)) {
-				throw new TypeError('Invalid icon reference');
-			}
+			if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(icon.default)) { throw new TypeError('Invalid icon reference'); }
 			return { id, description, defaults: icon.default };
 		}
 		const defaults = record(icon.default, 'Icon default');
 		const fontPath = normalizeResourcePath(defaults.fontPath, 'Icon font path');
-		if (!/\.(?:woff2?|ttf|otf)$/iu.test(fontPath)) {
-			throw new TypeError('Unsupported icon font');
-		}
+		if (!/\.(?:woff2?|ttf|otf)$/iu.test(fontPath)) { throw new TypeError('Unsupported icon font'); }
 		const fontCharacter = requiredString(defaults.fontCharacter, 'Icon font character', 16);
-		if (!/^(?:\\[\da-f]{1,6}|[^\\])$/iu.test(fontCharacter)) {
-			throw new TypeError('Invalid icon font character');
-		}
+		if (!/^(?:\\[\da-f]{1,6}|[^\\])$/iu.test(fontCharacter)) { throw new TypeError('Invalid icon font character'); }
 		return { id, description, defaults: { fontPath, fontCharacter } };
 	});
 }
@@ -820,23 +625,13 @@ function parseViewsWelcome(value: unknown): ExtensionManifest['contributes']['vi
 	if (!Array.isArray(value) || value.length > 128) throw new TypeError('Invalid view welcome contributions');
 	return value.map(value => {
 		const entry = record(value, 'view welcome contribution');
-		const result = {
-			view: requiredString(entry.view, 'welcome view', 256),
-			contents: welcomeContents(entry.contents),
-			when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048),
-			precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048),
-			group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256),
-			order: entry.order as number | undefined,
-		};
+		const result = { view: requiredString(entry.view, 'welcome view', 256), contents: welcomeContents(entry.contents), when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048), precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048), group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256), order: entry.order as number | undefined };
 		if (result.order !== undefined && !Number.isFinite(result.order)) throw new TypeError('Invalid welcome order');
 		return Object.freeze(result);
 	});
 }
 
-function welcomeContents(value: unknown): string {
-	if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid view welcome contents');
-	return value;
-}
+function welcomeContents(value: unknown): string { if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid view welcome contents'); return value; }
 
 function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['contributes']['submenus'] {
 	if (value === undefined) return [];
@@ -850,16 +645,10 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 		seen.add(id);
 		const contributions = Object.entries(menus).flatMap(([menu, values]) => {
 			if (!Array.isArray(values) || values.length > 128) throw new TypeError('Invalid submenu placements');
-			return values
-				.filter(value => value && typeof value === 'object' && value.submenu === id)
-				.map(value => {
-					const placement = record(value, 'submenu placement');
-					return {
-						menu: requiredString(menu, 'submenu menu', 256),
-						when: placement.when === undefined ? undefined : requiredString(placement.when, 'submenu condition', 2048),
-						group: placement.group === undefined ? undefined : requiredString(placement.group, 'submenu group', 256),
-					};
-				});
+			return values.filter(value => value && typeof value === 'object' && value.submenu === id).map(value => {
+				const placement = record(value, 'submenu placement');
+				return { menu: requiredString(menu, 'submenu menu', 256), when: placement.when === undefined ? undefined : requiredString(placement.when, 'submenu condition', 2048), group: placement.group === undefined ? undefined : requiredString(placement.group, 'submenu group', 256) };
+			});
 		});
 		return { id, label: requiredString(entry.label, 'submenu label', 512), placements: contributions };
 	});
@@ -886,86 +675,55 @@ function parseSpeechProviders(value: unknown): ExtensionManifest['contributes'][
 	return point.validate(value);
 }
 
+
 function parseDebugVisualizers(value: unknown): ExtensionManifest['contributes']['debugVisualizers'] {
 	if (value === undefined) return Object.freeze([]);
 	if (!Array.isArray(value) || value.length > 32) throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
 	const ids = new Set<string>();
-	return Object.freeze(
-		value.map(candidate => {
-			const item = record(candidate, 'contributes.debugVisualizers');
-			const id = requiredString(item.id, 'contributes.debugVisualizers.id', 128);
-			if (!/^[A-Za-z][\w.-]*$/.test(id) || ids.has(id) || Object.keys(item).some(key => !['id', 'title', 'command', 'type'].includes(key)))
-				throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
-			ids.add(id);
-			return Object.freeze({
-				id,
-				title: requiredString(item.title, 'contributes.debugVisualizers.title', 256),
-				command: requiredString(item.command, 'contributes.debugVisualizers.command', 256),
-				...(item.type === undefined ? {} : { type: requiredString(item.type, 'contributes.debugVisualizers.type', 256) }),
-			});
-		}),
-	);
+	return Object.freeze(value.map(candidate => {
+		const item = record(candidate, 'contributes.debugVisualizers');
+		const id = requiredString(item.id, 'contributes.debugVisualizers.id', 128);
+		if (!/^[A-Za-z][\w.-]*$/.test(id) || ids.has(id) || Object.keys(item).some(key => !['id', 'title', 'command', 'type'].includes(key))) throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
+		ids.add(id);
+		return Object.freeze({ id, title: requiredString(item.title, 'contributes.debugVisualizers.title', 256), command: requiredString(item.command, 'contributes.debugVisualizers.command', 256), ...(item.type === undefined ? {} : { type: requiredString(item.type, 'contributes.debugVisualizers.type', 256) }) });
+	}));
 }
+
 
 function parseBreakpointContributions(value: unknown): ExtensionManifest['contributes']['breakpoints'] {
 	if (value === undefined) return Object.freeze([]);
 	if (!Array.isArray(value) || value.length > 128) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
-	return Object.freeze(
-		value.map(candidate => {
-			const item = record(candidate, 'contributes.breakpoints');
-			if (Object.keys(item).some(key => key !== 'language' && key !== 'when')) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
-			if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when)))
-				throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
-			return Object.freeze({
-				language: languageId(item.language, 'contributes.breakpoints.language'),
-				...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }),
-			});
-		}),
-	);
+	return Object.freeze(value.map(candidate => {
+		const item = record(candidate, 'contributes.breakpoints');
+		if (Object.keys(item).some(key => key !== 'language' && key !== 'when')) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+		if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when))) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+		return Object.freeze({ language: languageId(item.language, 'contributes.breakpoints.language'), ...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }) });
+	}));
 }
 
 function parseImageEditors(value: unknown): ExtensionManifest['contributes']['imageEditors'] {
 	if (value === undefined) return Object.freeze([]);
 	if (!Array.isArray(value) || value.length > 16) throw new TypeError('Invalid image editor declarations');
 	const ids = new Set<string>();
-	return Object.freeze(
-		value.map(item => {
-			const entry = record(item, 'image editor');
-			const id = requiredString(entry.id, 'image editor id', 128);
-			if (ids.has(id) || (entry.default !== undefined && typeof entry.default !== 'boolean')) throw new TypeError('Invalid image editor declaration');
-			ids.add(id);
-			if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384))
-				throw new TypeError('Invalid image editor accessibility help');
-			return Object.freeze({
-				accessibilityHelp: (entry.accessibilityHelp as string) ?? '',
-				id,
-				displayName: requiredString(entry.displayName, 'image editor name', 256),
-				...(entry.default === undefined ? {} : { default: entry.default as boolean }),
-			});
-		}),
-	);
+	return Object.freeze(value.map(item => {
+		const entry = record(item, 'image editor');
+		const id = requiredString(entry.id, 'image editor id', 128);
+		if (ids.has(id) || entry.default !== undefined && typeof entry.default !== 'boolean') throw new TypeError('Invalid image editor declaration');
+		ids.add(id);
+		if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384)) throw new TypeError('Invalid image editor accessibility help');
+		return Object.freeze({ accessibilityHelp: entry.accessibilityHelp as string ?? '', id, displayName: requiredString(entry.displayName, 'image editor name', 256), ...(entry.default === undefined ? {} : { default: entry.default as boolean }) });
+	}));
 }
 
 function parseCanvases(value: unknown): ExtensionManifest['contributes']['canvases'] {
-	if (value === undefined) {
-		return [];
-	}
-	if (!Array.isArray(value) || value.length > 64) {
-		throw new TypeError('Invalid Canvas declarations');
-	}
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 64) { throw new TypeError('Invalid Canvas declarations'); }
 	const ids = new Set<string>();
 	return value.map(item => {
 		const entry = record(item, 'Canvas declaration');
 		const id = requiredString(entry.id, 'Canvas id', 128);
-		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || (entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean')) {
-			throw new TypeError('Invalid Canvas declaration');
-		}
+		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean') { throw new TypeError('Invalid Canvas declaration'); }
 		ids.add(id);
-		return Object.freeze({
-			id,
-			displayName: requiredString(entry.displayName, 'Canvas name', 256),
-			description: entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096),
-			requiresInput: entry.requiresInput === true,
-		});
+		return Object.freeze({ id, displayName: requiredString(entry.displayName, 'Canvas name', 256), description: entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096), requiresInput: entry.requiresInput === true });
 	});
 }

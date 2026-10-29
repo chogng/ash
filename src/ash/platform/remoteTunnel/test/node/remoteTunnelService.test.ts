@@ -15,50 +15,27 @@ class Coordinator extends Disposable implements ITunnelProcessCoordinator {
 	public readonly onDidChangeStatus = this.changed.event;
 	public readonly onDidMachineStatus = this.machine.event;
 	public readonly onDidOutput = Event.None;
-	public readonly calls: { mode: TunnelMode; root: string | undefined }[] = [];
-	public getStatus(): ITunnelProcessStatus {
-		return { mode: 'none', connectionState: 'disconnected', tunnelName: undefined, serviceInstallFailed: false };
-	}
-	public getIntendedTunnelName(): string {
-		return 'ash-relay';
-	}
-	public async restart(): Promise<void> {}
-	public setRemoteAccessStatus(_status: TunnelStatus): void {}
+	public readonly calls: { mode: TunnelMode; root: string | undefined; }[] = [];
+	public getStatus(): ITunnelProcessStatus { return { mode: 'none', connectionState: 'disconnected', tunnelName: undefined, serviceInstallFailed: false }; }
+	public getIntendedTunnelName(): string { return 'ash-relay'; }
+	public async restart(): Promise<void> { }
+	public setRemoteAccessStatus(_status: TunnelStatus): void { }
 	public async setRemoteAccess(mode: TunnelMode, _level: unknown, root?: string): Promise<void> {
 		this.calls.push({ mode, root });
 		if (mode.active) {
-			this.machine.fire({
-				mode: 'remoteAccess',
-				status: {
-					type: 'connected',
-					tunnelName: 'ash-relay',
-					isAttached: false,
-					domain: 'ash-relay',
-					tunnelId: '43123',
-					link: 'http://127.0.0.1:5174/',
-				},
-				cancel() {},
-			});
-		} else {
-			this.changed.fire(this.getStatus());
-		}
+			this.machine.fire({ mode: 'remoteAccess', status: { type: 'connected', tunnelName: 'ash-relay', isAttached: false, domain: 'ash-relay', tunnelId: '43123', link: 'http://127.0.0.1:5174/' }, cancel() { } });
+		} else { this.changed.fire(this.getStatus()); }
 	}
 }
 
 suite('Application remote tunnel service', () => {
-	const mode = {
-		active: true,
-		asService: false,
-		session: { providerId: 'ssh', sessionId: 'ash-relay', accountLabel: 'ash-relay' },
-	} as const;
+	const mode = { active: true, asService: false, session: { providerId: 'ssh', sessionId: 'ash-relay', accountLabel: 'ash-relay' } } as const;
 	test('production injection and authenticated IPC select the caller folder and share the application lease', async () => {
 		using coordinator = new Coordinator();
 		using services = new InstantiationService(new ServiceCollection([ITunnelProcessCoordinator, coordinator]));
 		using owner = services.createInstance(RemoteTunnelService);
 		const channel = owner.createChannel(context => {
-			if (context !== 'window:1' && context !== 'window:2') {
-				throw new Error('Untrusted window');
-			}
+			if (context !== 'window:1' && context !== 'window:2') { throw new Error('Untrusted window'); }
 			return context === 'window:1' ? '/selected' : '/another';
 		});
 		assert.equal((await channel.call<TunnelStatus>('window:1', 'startTunnel', mode)).type, 'connected');
@@ -74,18 +51,8 @@ suite('Application remote tunnel service', () => {
 		using coordinator = new Coordinator();
 		using services = new InstantiationService(new ServiceCollection([ITunnelProcessCoordinator, coordinator]));
 		using owner = services.createInstance(RemoteTunnelService);
-		const channel = owner.createChannel(context => {
-			if (context !== 'local' && context !== 'remote') {
-				throw new Error('Untrusted window');
-			}
-			return context === 'local' ? '/selected' : undefined;
-		});
-		for (const value of [
-			{ ...mode, workspaceRoot: '/other' },
-			{ ...mode, asService: true },
-			{ ...mode, session: { ...mode.session, token: 'secret' } },
-			{ ...mode, session: { ...mode.session, sessionId: '-oBad' } },
-		]) {
+		const channel = owner.createChannel(context => { if (context !== 'local' && context !== 'remote') { throw new Error('Untrusted window'); } return context === 'local' ? '/selected' : undefined; });
+		for (const value of [{ ...mode, workspaceRoot: '/other' }, { ...mode, asService: true }, { ...mode, session: { ...mode.session, token: 'secret' } }, { ...mode, session: { ...mode.session, sessionId: '-oBad' } }]) {
 			await assert.rejects(channel.call('local', 'startTunnel', value));
 		}
 		await assert.rejects(channel.call('remote', 'startTunnel', mode));

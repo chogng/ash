@@ -12,7 +12,7 @@ export function computeEditorIndentFoldingRanges(model: TextModel, options: Edit
 	const ranges: EditorFoldingRange[] = [];
 	let previous: IndentLine | undefined;
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const text = model.getLineContent(lineIndex + 1);
+		const text = model.getLineContent((lineIndex) + 1);
 		if (isBlank(text)) continue;
 		const indentation = leadingIndentation(text, tabSize);
 		while (true) {
@@ -38,14 +38,12 @@ interface IndentLine {
 
 function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
 	if (endLineIndex <= startLineIndex) return;
-	ranges.push(
-		Object.freeze({
-			startLineIndex,
-			endLineIndex,
-			collapsed: false,
-			source: EditorFoldingRangeSource.Provider,
-		}),
-	);
+	ranges.push(Object.freeze({
+		startLineIndex,
+		endLineIndex,
+		collapsed: false,
+		source: EditorFoldingRangeSource.Provider,
+	}));
 }
 
 function isBlank(text: string): boolean {
@@ -58,7 +56,7 @@ function leadingIndentation(text: string, tabSize: number): number {
 		if (character === ' ') {
 			indentation += 1;
 		} else if (character === '\t') {
-			indentation += tabSize - (indentation % tabSize);
+			indentation += tabSize - indentation % tabSize;
 		} else {
 			break;
 		}

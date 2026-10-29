@@ -109,7 +109,7 @@ export class TopBottomDragScrollingOperation extends DragScrollingOperation {
 		const layoutInfo = options.get(EditorOption.layoutInfo);
 		const viewportLines = layoutInfo.height / lineHeight;
 		const distanceLines = this._position.outsideDistance / lineHeight;
-		const pixels = (dragSpeed(viewportLines, distanceLines) * lineHeight * this._tick()) / 1_000;
+		const pixels = dragSpeed(viewportLines, distanceLines) * lineHeight * this._tick() / 1_000;
 		const viewLayout = this._context.viewLayout;
 		const before = viewLayout.getCurrentScrollTop();
 		viewLayout.deltaScrollNow(0, this._position.outsidePosition === 'above' ? -pixels : pixels);
@@ -130,17 +130,14 @@ export class TopBottomDragScrollingOperation extends DragScrollingOperation {
 	private createTargetAtViewportEdge(isAbove: boolean, edgeLineNumber: number): IMouseTarget {
 		const editorPos = createEditorPagePosition(this._viewHelper.viewDomNode);
 		const layoutInfo = this._context.configuration.options.get(EditorOption.layoutInfo);
-		const edgeY = isAbove ? editorPos.y + 0.1 : editorPos.y + Math.max(0.1, editorPos.height - layoutInfo.horizontalScrollbarHeight - 0.1);
+		const edgeY = isAbove
+			? editorPos.y + 0.1
+			: editorPos.y + Math.max(0.1, editorPos.height - layoutInfo.horizontalScrollbarHeight - 0.1);
 		const pos = new PageCoordinates(this._mouseEvent.pos.x, edgeY);
 		const relativePos = createCoordinatesRelativeToEditor(this._viewHelper.viewDomNode, editorPos, pos);
 		const target = this._mouseTargetFactory.createMouseTarget(this._viewHelper.getLastRenderData(), editorPos, pos, relativePos, null);
 		if (target.position?.lineNumber === edgeLineNumber) return target;
-		return MouseTarget.createOutsideEditor(
-			this._position.mouseColumn,
-			new Position(edgeLineNumber, isAbove ? 1 : this._context.viewModel.getLineMaxColumn(edgeLineNumber)),
-			isAbove ? 'above' : 'below',
-			this._position.outsideDistance,
-		);
+		return MouseTarget.createOutsideEditor(this._position.mouseColumn, new Position(edgeLineNumber, isAbove ? 1 : this._context.viewModel.getLineMaxColumn(edgeLineNumber)), isAbove ? 'above' : 'below', this._position.outsideDistance);
 	}
 }
 
@@ -157,7 +154,7 @@ export class LeftRightDragScrollingOperation extends DragScrollingOperation {
 		const layoutInfo = options.get(EditorOption.layoutInfo);
 		const viewportColumns = layoutInfo.contentWidth / charWidth;
 		const distanceColumns = this._position.outsideDistance / charWidth;
-		const pixels = (dragSpeed(viewportColumns, distanceColumns) * charWidth * 0.5 * this._tick()) / 1_000;
+		const pixels = dragSpeed(viewportColumns, distanceColumns) * charWidth * 0.5 * this._tick() / 1_000;
 		this._context.viewLayout.deltaScrollNow(this._position.outsidePosition === 'left' ? -pixels : pixels, 0);
 		this._viewHelper.renderNow();
 

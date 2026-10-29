@@ -12,4 +12,4 @@ export interface IComposite {
 }
 
 /** Control capabilities are defined by the content's owning interface. */
-export interface ICompositeControl {}
+export interface ICompositeControl { }

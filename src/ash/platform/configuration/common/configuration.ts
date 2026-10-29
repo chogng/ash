@@ -12,9 +12,7 @@ export interface IConfigurationOverrides {
 	readonly resource?: URI | null;
 }
 
-export type IConfigurationUpdateOverrides = Omit<IConfigurationOverrides, 'overrideIdentifier'> & {
-	readonly overrideIdentifiers?: string[] | null;
-};
+export type IConfigurationUpdateOverrides = Omit<IConfigurationOverrides, 'overrideIdentifier'> & { readonly overrideIdentifiers?: string[] | null; };
 
 export const enum ConfigurationTarget {
 	APPLICATION = 1,
@@ -29,22 +27,14 @@ export const enum ConfigurationTarget {
 
 export function ConfigurationTargetToString(target: ConfigurationTarget): string {
 	switch (target) {
-		case ConfigurationTarget.APPLICATION:
-			return 'APPLICATION';
-		case ConfigurationTarget.USER:
-			return 'USER';
-		case ConfigurationTarget.USER_LOCAL:
-			return 'USER_LOCAL';
-		case ConfigurationTarget.USER_REMOTE:
-			return 'USER_REMOTE';
-		case ConfigurationTarget.WORKSPACE:
-			return 'WORKSPACE';
-		case ConfigurationTarget.WORKSPACE_FOLDER:
-			return 'WORKSPACE_FOLDER';
-		case ConfigurationTarget.DEFAULT:
-			return 'DEFAULT';
-		case ConfigurationTarget.MEMORY:
-			return 'MEMORY';
+		case ConfigurationTarget.APPLICATION: return 'APPLICATION';
+		case ConfigurationTarget.USER: return 'USER';
+		case ConfigurationTarget.USER_LOCAL: return 'USER_LOCAL';
+		case ConfigurationTarget.USER_REMOTE: return 'USER_REMOTE';
+		case ConfigurationTarget.WORKSPACE: return 'WORKSPACE';
+		case ConfigurationTarget.WORKSPACE_FOLDER: return 'WORKSPACE_FOLDER';
+		case ConfigurationTarget.DEFAULT: return 'DEFAULT';
+		case ConfigurationTarget.MEMORY: return 'MEMORY';
 	}
 }
 
@@ -63,7 +53,7 @@ export interface IConfigurationChangeEvent {
 export interface IInspectValue<T> {
 	readonly value?: T;
 	readonly override?: T;
-	readonly overrides?: { readonly identifiers: string[]; readonly value: T }[];
+	readonly overrides?: { readonly identifiers: string[]; readonly value: T; }[];
 }
 
 export interface IConfigurationValue<T> {
@@ -85,7 +75,7 @@ export interface IConfigurationValue<T> {
 	readonly workspace?: IInspectValue<T>;
 	readonly workspaceFolder?: IInspectValue<T>;
 	readonly memory?: IInspectValue<T>;
-	readonly policy?: { readonly value?: T };
+	readonly policy?: { readonly value?: T; };
 	readonly overrideIdentifiers?: string[];
 }
 
@@ -121,52 +111,40 @@ export interface IConfigurationCompareResult {
 
 export function getConfigValueInTarget<T>(value: IConfigurationValue<T>, target: ConfigurationTarget): T | undefined {
 	switch (target) {
-		case ConfigurationTarget.APPLICATION:
-			return value.applicationValue;
-		case ConfigurationTarget.USER:
-			return value.userValue;
-		case ConfigurationTarget.USER_LOCAL:
-			return value.userLocalValue;
-		case ConfigurationTarget.USER_REMOTE:
-			return value.userRemoteValue;
-		case ConfigurationTarget.WORKSPACE:
-			return value.workspaceValue;
-		case ConfigurationTarget.WORKSPACE_FOLDER:
-			return value.workspaceFolderValue;
-		case ConfigurationTarget.DEFAULT:
-			return value.defaultValue;
-		case ConfigurationTarget.MEMORY:
-			return value.memoryValue;
-		default:
-			return assertNever(target);
+		case ConfigurationTarget.APPLICATION: return value.applicationValue;
+		case ConfigurationTarget.USER: return value.userValue;
+		case ConfigurationTarget.USER_LOCAL: return value.userLocalValue;
+		case ConfigurationTarget.USER_REMOTE: return value.userRemoteValue;
+		case ConfigurationTarget.WORKSPACE: return value.workspaceValue;
+		case ConfigurationTarget.WORKSPACE_FOLDER: return value.workspaceFolderValue;
+		case ConfigurationTarget.DEFAULT: return value.defaultValue;
+		case ConfigurationTarget.MEMORY: return value.memoryValue;
+		default: return assertNever(target);
 	}
 }
 
-export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfigurationValue<T> & { value: T } {
-	return (
-		value.applicationValue !== undefined ||
-		value.userValue !== undefined ||
-		value.userLocalValue !== undefined ||
-		value.userRemoteValue !== undefined ||
-		value.workspaceValue !== undefined ||
-		value.workspaceFolderValue !== undefined
-	);
+export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfigurationValue<T> & { value: T; } {
+	return value.applicationValue !== undefined
+		|| value.userValue !== undefined
+		|| value.userLocalValue !== undefined
+		|| value.userRemoteValue !== undefined
+		|| value.workspaceValue !== undefined
+		|| value.workspaceFolderValue !== undefined;
 }
 
 export function isConfigurationOverrides(value: unknown): value is IConfigurationOverrides {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IConfigurationOverrides;
-	return (candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === 'string') && (candidate.resource == null || candidate.resource instanceof URI);
+	return (candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === 'string')
+		&& (candidate.resource == null || candidate.resource instanceof URI);
 }
 
 export function isConfigurationUpdateOverrides(value: unknown): value is IConfigurationUpdateOverrides {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IConfigurationUpdateOverrides & IConfigurationOverrides;
-	return (
-		(candidate.overrideIdentifiers == null || (Array.isArray(candidate.overrideIdentifiers) && candidate.overrideIdentifiers.every(identifier => typeof identifier === 'string'))) &&
-		candidate.overrideIdentifier == null &&
-		(candidate.resource == null || candidate.resource instanceof URI)
-	);
+	return (candidate.overrideIdentifiers == null || Array.isArray(candidate.overrideIdentifiers) && candidate.overrideIdentifiers.every(identifier => typeof identifier === 'string'))
+		&& candidate.overrideIdentifier == null
+		&& (candidate.resource == null || candidate.resource instanceof URI);
 }
 
 export interface IConfigurationUpdateOptions {
@@ -188,14 +166,7 @@ export interface IConfigurationService {
 	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>>;
 	reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void>;
-	keys(): {
-		readonly default: string[];
-		readonly policy: string[];
-		readonly user: string[];
-		readonly workspace: string[];
-		readonly workspaceFolder: string[];
-		readonly memory?: string[];
-	};
+	keys(): { readonly default: string[]; readonly policy: string[]; readonly user: string[]; readonly workspace: string[]; readonly workspaceFolder: string[]; readonly memory?: string[]; };
 }
 
 export function toValuesTree(properties: IStringDictionary<unknown>, conflictReporter: (message: string) => void): IStringDictionary<unknown> {
@@ -262,7 +233,7 @@ export function getConfigurationValue<T>(config: IStringDictionary<unknown>, set
 		if (typeof current !== 'object' || current === null) return defaultValue;
 		current = (current as IStringDictionary<unknown>)[component];
 	}
-	return current === undefined ? defaultValue : (current as T);
+	return current === undefined ? defaultValue : current as T;
 }
 
 export function merge(base: IStringDictionary<unknown>, add: IStringDictionary<unknown>, overwrite: boolean): void {

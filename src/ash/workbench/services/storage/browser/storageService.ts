@@ -3,15 +3,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
-import {
-	type IStorageService,
-	type IStorageValueChangeEvent,
-	type IWillSaveStateEvent,
-	StorageScope,
-	StorageTarget,
-	type StorageValue,
-	WillSaveStateReason,
-} from '../../../../platform/storage/common/storage.js';
+import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../platform/storage/common/storage.js';
 
 interface StoredEntry {
 	readonly value: string;
@@ -37,9 +29,7 @@ export function migrateBrowserStorage(backend: Storage): void {
 			const targetSource = backend.getItem(targetKey);
 			const target = targetSource === null ? new Map<string, StoredEntry>() : parseStoredDocument(targetSource);
 			for (const [key, entry] of source) {
-				if (!target.has(key)) {
-					target.set(key, entry);
-				}
+				if (!target.has(key)) { target.set(key, entry); }
 			}
 			// Archive and destination must both reach storage before removing the source.
 			backend.setItem(`ash.storage.v1.${applicationId}.${suffix}`, original);
@@ -83,7 +73,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	constructor(options: BrowserStorageServiceOptions) {
 		super();
 		this.ownerWindow = options.ownerWindow;
-		this.onError = options.onError ?? (error => console.error('Failed to access browser storage', error));
+		this.onError = options.onError ?? ((error) => console.error('Failed to access browser storage', error));
 		validateIdentifier(options.workspaceId, 'workspace');
 		const profileId = options.profileId ?? 'default';
 		validateIdentifier(profileId, 'profile');
@@ -95,9 +85,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 		this.profileStorageKey = `${this.namespace}.profile.${encodeURIComponent(profileId)}`;
 		this.workspaceStorageKey = workspaceStorageKey(this.namespace, options.workspaceId);
 		this.backend = options.backend ?? readLocalStorage(this.ownerWindow, this.onError);
-		if (this.backend) {
-			migrateBrowserStorage(this.backend);
-		}
+		if (this.backend) { migrateBrowserStorage(this.backend); }
 		for (const scope of storageScopes) {
 			this.entries.set(scope, this.load(scope));
 		}
@@ -105,21 +93,13 @@ export class BrowserStorageService extends Disposable implements IStorageService
 		this._register(addDisposableListener(this.ownerWindow, 'storage', (event: StorageEvent) => this.handleStorageEvent(event)));
 
 		if (flushInterval > 0) {
-			this._register(
-				disposableWindowInterval(
-					this.ownerWindow,
-					() => {
-						void this.flush(WillSaveStateReason.PERIODIC);
-					},
-					flushInterval,
-				),
-			);
+			this._register(disposableWindowInterval(this.ownerWindow, () => {
+				void this.flush(WillSaveStateReason.PERIODIC);
+			}, flushInterval));
 		}
-		this._register(
-			toDisposable(() => {
-				void this.flush(WillSaveStateReason.SHUTDOWN);
-			}),
-		);
+		this._register(toDisposable(() => {
+			void this.flush(WillSaveStateReason.SHUTDOWN);
+		}));
 	}
 
 	get(key: string, scope: StorageScope, fallbackValue: string): string;
@@ -303,7 +283,11 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	}
 }
 
-const storageScopes = [StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE] as const;
+const storageScopes = [
+	StorageScope.APPLICATION,
+	StorageScope.PROFILE,
+	StorageScope.WORKSPACE,
+] as const;
 
 function readLocalStorage(ownerWindow: Window, onError: (error: unknown) => void): Storage | undefined {
 	try {

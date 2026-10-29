@@ -25,56 +25,30 @@ suite('Session Changes opening and capture contract', () => {
 		using services = new InstantiationService();
 		let provider: IDecorationsProvider | undefined;
 		let providerDisposed = false;
-		const opened: { input: IResourceEditorInput; options?: EditorOpenOptions; group?: EditorOpenTarget }[] = [];
-		const editorGroup = {
-			id: 'group',
-			get inputs() {
-				return opened.map(request => request.input);
-			},
-		} as unknown as IEditorGroup;
+		const opened: { input: IResourceEditorInput; options?: EditorOpenOptions; group?: EditorOpenTarget; }[] = [];
+		const editorGroup = { id: 'group', get inputs() { return opened.map(request => request.input); } } as unknown as IEditorGroup;
 		services.registerInstance(IEditorGroupsService, { groups: [editorGroup] } as unknown as IEditorGroupsService);
 		services.registerInstance(IDecorationsService, {
-			registerDecorationsProvider: value => {
-				provider = value;
-				return toDisposable(() => {
-					providerDisposed = true;
-				});
-			},
+			registerDecorationsProvider: value => { provider = value; return toDisposable(() => { providerDisposed = true; }); },
 		} as IDecorationsService);
 		services.registerInstance(IEditorService, {
 			onDidActiveEditorChange: Event.None,
-			openEditor: async (input, options, group) => {
-				opened.push({ input, options, group });
-			},
+			openEditor: async (input, options, group) => { opened.push({ input, options, group }); },
 		} as IEditorService);
 		services.registerInstance(ISessionsManagementService, {
 			sessions: [{ sessionId: 'session', chats: [{ threadId: 'thread' }] }],
 		} as unknown as ISessionsManagementService);
 		const details: TurnChangeDetails = {
 			summary: {
-				sessionId: 'session',
-				threadId: 'thread',
-				changeSetId: 'capture',
-				turnId: 'turn',
-				repositoryId: 'repo',
-				revision: 3,
-				captureState: 'sealed',
-				messageState: 'unconfigured',
-				commitState: 'idle',
-				committedPaths: [],
-				statistics: { files: 1, additions: 0, deletions: 2 },
-				dependencies: [],
-				externalDependencyPaths: [],
-				warnings: [],
-				conflictPaths: [],
+				sessionId: 'session', threadId: 'thread', changeSetId: 'capture', turnId: 'turn', repositoryId: 'repo',
+				revision: 3, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
+				statistics: { files: 1, additions: 0, deletions: 2 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: []
 			},
 			files: [{ path: 'deleted.ts', kind: 'deleted', binary: false, additions: 0, deletions: 2 }],
 		};
 		const prepared: unknown[] = [];
 		let currentDetails = details;
-		services.registerInstance(IQuickInputService, {
-			input: async () => 'Delete file',
-		} as unknown as IQuickInputService);
+		services.registerInstance(IQuickInputService, { input: async () => 'Delete file' } as unknown as IQuickInputService);
 		services.registerInstance(IChatService, {
 			readTurnChange: async () => currentDetails,
 			prepareTurnCommit: async (_session: string, _thread: string, selections: unknown, message: string) => {
@@ -106,23 +80,9 @@ suite('Session Changes opening and capture contract', () => {
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
 		await assert.rejects(service.openChangesEditor(URI.parse('ash-session:/session?thread=missing')));
 		assert.equal(opened.length, 1);
-		assert.deepEqual(
-			changeset.operations.get().map(operation => ({ id: operation.id, scopes: operation.scopes, status: operation.status })),
-			[
-				{
-					id: 'preview',
-					scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource],
-					status: SessionChangesetOperationStatus.Idle,
-				},
-			],
-		);
+		assert.deepEqual(changeset.operations.get().map(operation => ({ id: operation.id, scopes: operation.scopes, status: operation.status })), [{ id: 'preview', scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource], status: SessionChangesetOperationStatus.Idle }]);
 		await changeset.invokeOperation('preview', { kind: 'resource', resource: change.modifiedUri });
-		assert.deepEqual(prepared, [
-			{
-				selections: [{ changeSetId: 'capture', expectedRevision: 3, paths: ['deleted.ts'] }],
-				message: 'Delete file',
-			},
-		]);
+		assert.deepEqual(prepared, [{ selections: [{ changeSetId: 'capture', expectedRevision: 3, paths: ['deleted.ts'] }], message: 'Delete file' }]);
 		assert.equal(opened[1]?.input.resource.scheme, 'ash-multi-diff');
 		currentDetails = { ...details, summary: { ...details.summary, captureState: 'open', revision: 4 } };
 		const unsealed = await service.resolveChangeset(session, 'capture');
@@ -132,10 +92,7 @@ suite('Session Changes opening and capture contract', () => {
 		const changed: string[][] = [];
 		using listener = provider!.onDidChange(resources => changed.push(resources.map(resource => resource.toString())));
 		service.setChangesCount(editor, 1);
-		assert.deepEqual(await provider!.provideDecorations(editor, CancellationToken.None), {
-			letter: '1',
-			tooltip: '1 changed files',
-		});
+		assert.deepEqual(await provider!.provideDecorations(editor, CancellationToken.None), { letter: '1', tooltip: '1 changed files' });
 		service.setChangesCount(editor, undefined);
 		assert.equal(await provider!.provideDecorations(editor, CancellationToken.None), undefined);
 		assert.deepEqual(changed, [[editor.toString()], [editor.toString()]]);

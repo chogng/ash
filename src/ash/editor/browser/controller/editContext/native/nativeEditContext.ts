@@ -4,31 +4,12 @@ import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IME } from '../../../../../base/common/ime.js';
-import {
-	AbstractEditContext,
-	type EditContextCharacterBounds,
-	type EditContextCompositionData,
-	type EditContextOptions,
-	type EditContextPosition,
-	type EditContextState,
-	type EditContextTextFormat,
-	type EditContextTextFormatUpdate,
-	type EditContextTextUpdate,
-} from '../editContext.js';
+import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionData, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from '../editContext.js';
 import { type Position } from '../../../../common/core/position.js';
 import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
-import {
-	editContextAddDisposableListener,
-	FocusTracker,
-	MAX_CHARACTER_BOUNDS_REQUEST_LENGTH,
-	clampOffset,
-	createNativeTextWindow,
-	isFiniteOffset,
-	isNativeTextUpdateEvent,
-	isValidOffset,
-} from './nativeEditContextUtils.js';
+import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isNativeTextUpdateEvent, isValidOffset } from './nativeEditContextUtils.js';
 import { NativeEditContextRegistry } from './nativeEditContextRegistry.js';
 import { ScreenReaderSupport } from './screenReaderSupport.js';
 import { EditContext } from './editContextFactory.js';
@@ -157,17 +138,15 @@ export class NativeEditContext extends AbstractEditContext {
 		container.append(imeTextArea);
 		this.focusTracker = this._register(new FocusTracker(options.logService, element, focused => this.handleElementFocusChange(focused)));
 		this.initializeController(options);
-		this.screenReaderSupport = this._register(
-			new ScreenReaderSupport({
-				domNode: this.domNode,
-				context,
-				viewport: options.viewport,
-				viewController: options.viewController,
-				onDidFocus: this.onDidFocus,
-				onDidBlur: this.onDidBlur,
-				semanticTokenSource: options.semanticTokenSource,
-			}),
-		);
+		this.screenReaderSupport = this._register(new ScreenReaderSupport({
+			domNode: this.domNode,
+			context,
+			viewport: options.viewport,
+			viewController: options.viewController,
+			onDidFocus: this.onDidFocus,
+			onDidBlur: this.onDidBlur,
+			semanticTokenSource: options.semanticTokenSource,
+		}));
 		this.synchronizeState();
 		this.connect();
 	}
@@ -186,7 +165,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	/** The model range currently represented by the browser's native buffer. */
-	get textWindow(): { readonly startOffset: number; readonly endOffset: number } {
+	get textWindow(): { readonly startOffset: number; readonly endOffset: number; } {
 		return Object.freeze({
 			startOffset: this.shadowOffset,
 			endOffset: this.shadowOffset + this.shadowText.length,
@@ -198,29 +177,50 @@ export class NativeEditContext extends AbstractEditContext {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this._register(addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keydown', event => this.keydownEmitter.fire(new StandardKeyboardEvent(event))));
-		this._register(addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keyup', event => this.keyupEmitter.fire(new StandardKeyboardEvent(event))));
-		this._register(addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keydown', event => this.keydownEmitter.fire(new StandardKeyboardEvent(event))));
-		this._register(addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keyup', event => this.keyupEmitter.fire(new StandardKeyboardEvent(event))));
-		this._register(
-			addDisposableListener(this.imeTextArea, 'blur', () => {
-				if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode.domNode) {
-					this.imeFallbackFocused = false;
-					this.focusTracker.resume();
-					this.handleElementBlur();
-				}
-			}),
-		);
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.domNode.domNode,
+			'keydown',
+			event => this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.domNode.domNode,
+			'keyup',
+			event => this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.imeTextArea,
+			'keydown',
+			event => this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
+		));
+		this._register(addDisposableListener<KeyboardEvent>(
+			this.imeTextArea,
+			'keyup',
+			event => this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
+		));
+		this._register(addDisposableListener(this.imeTextArea, 'blur', () => {
+			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode.domNode) {
+				this.imeFallbackFocused = false;
+				this.focusTracker.resume();
+				this.handleElementBlur();
+			}
+		}));
 		this._register(IME.onDidChange(enabled => this.handleImeStateChange(enabled)));
-		this._register(
-			addDisposableListener<InputEvent>(this.domNode.domNode, 'beforeinput', event => {
+		this._register(addDisposableListener<InputEvent>(
+			this.domNode.domNode,
+			'beforeinput',
+			event => {
 				if (this.readOnlyState && isEditingInputType(event.inputType)) {
 					event.preventDefault();
 					this.pendingLineBreakTextUpdate = false;
 					this.restoreNativeState();
 					return;
 				}
-				if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo' || event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') {
+				if (
+					event.inputType === 'historyUndo' ||
+					event.inputType === 'historyRedo' ||
+					event.inputType === 'insertLineBreak' ||
+					event.inputType === 'insertParagraph'
+				) {
 					if (event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') {
 						this.pendingLineBreakTextUpdate = true;
 					}
@@ -232,11 +232,17 @@ export class NativeEditContext extends AbstractEditContext {
 						});
 					}
 				}
-			}),
-		);
-		this._register(addDisposableListener<InputEvent>(this.domNode.domNode, 'input', event => this.inputEmitter.fire(event)));
-		this._register(
-			addDisposableListener<ClipboardEvent>(this.domNode.domNode, 'copy', event => {
+			},
+		));
+		this._register(addDisposableListener<InputEvent>(
+			this.domNode.domNode,
+			'input',
+			event => this.inputEmitter.fire(event),
+		));
+		this._register(addDisposableListener<ClipboardEvent>(
+			this.domNode.domNode,
+			'copy',
+			event => {
 				if (!this.isFocused()) {
 					event.preventDefault();
 					return;
@@ -244,10 +250,12 @@ export class NativeEditContext extends AbstractEditContext {
 				CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
 				const copyEvent = this.fireWillCopy(event, false);
 				if (!copyEvent.isHandled) copyEvent.ensureClipboardGetsEditorData();
-			}),
-		);
-		this._register(
-			addDisposableListener<ClipboardEvent>(this.domNode.domNode, 'cut', event => {
+			},
+		));
+		this._register(addDisposableListener<ClipboardEvent>(
+			this.domNode.domNode,
+			'cut',
+			event => {
 				if (!this.isFocused()) {
 					event.preventDefault();
 					return;
@@ -262,10 +270,12 @@ export class NativeEditContext extends AbstractEditContext {
 				this.screenReaderSupport.onWillCut();
 				cutEvent.ensureClipboardGetsEditorData();
 				this.viewController.cut();
-			}),
-		);
-		this._register(
-			addDisposableListener<ClipboardEvent>(this.domNode.domNode, 'paste', event => {
+			},
+		));
+		this._register(addDisposableListener<ClipboardEvent>(
+			this.domNode.domNode,
+			'paste',
+			event => {
 				if (!this.isFocused()) {
 					event.preventDefault();
 					return;
@@ -289,22 +299,44 @@ export class NativeEditContext extends AbstractEditContext {
 					metadata?.multicursorText ?? null,
 					metadata?.mode ?? null,
 				);
-			}),
-		);
-		this._register(editContextAddDisposableListener(this.nativeContext, 'textupdate', event => this.handleTextUpdate(event)));
-		this._register(editContextAddDisposableListener(this.nativeContext, 'textformatupdate', event => this.handleTextFormatUpdate(event)));
-		this._register(editContextAddDisposableListener(this.nativeContext, 'characterboundsupdate', event => this.handleCharacterBoundsUpdate(event)));
-		this._register(editContextAddDisposableListener(this.nativeContext, 'compositionstart', event => this.handleCompositionStart(event as CompositionEvent)));
-		this._register(editContextAddDisposableListener(this.nativeContext, 'compositionend', event => this.handleCompositionEnd(event as CompositionEvent)));
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'compositionupdate', event => {
+			},
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'textupdate',
+			event => this.handleTextUpdate(event),
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'textformatupdate',
+			event => this.handleTextFormatUpdate(event),
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'characterboundsupdate',
+			event => this.handleCharacterBoundsUpdate(event),
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'compositionstart',
+			event => this.handleCompositionStart(event as CompositionEvent),
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'compositionend',
+			event => this.handleCompositionEnd(event as CompositionEvent),
+		));
+		this._register(editContextAddDisposableListener(
+			this.nativeContext,
+			'compositionupdate',
+			event => {
 				if (!this.composing) return;
 				const compositionEvent = event as CompositionEvent;
 				this.compositionUpdateEmitter.fire({
 					data: normalizeTextLineEndings(compositionEvent.data ?? ''),
 				});
-			}),
-		);
+			},
+		));
 	}
 
 	focus(): void {
@@ -472,7 +504,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	/** Native EditContext retains its own editing buffer; there is no textarea value to clear. */
-	clear(): void {}
+	clear(): void { }
 
 	syncState(state: EditContextState): void {
 		if (this.composing) return;
@@ -495,7 +527,10 @@ export class NativeEditContext extends AbstractEditContext {
 		this.pendingHighSurrogate = undefined;
 		const nativeText = typeof this.nativeContext.text === 'string' ? this.nativeContext.text : previousText;
 		if (nativeText !== nextText) this.nativeContext.updateText(0, nativeText.length, nextText);
-		if (this.nativeContext.selectionStart !== nextSelectionStart || this.nativeContext.selectionEnd !== nextSelectionEnd) {
+		if (
+			this.nativeContext.selectionStart !== nextSelectionStart ||
+			this.nativeContext.selectionEnd !== nextSelectionEnd
+		) {
 			this.nativeContext.updateSelection(nextSelectionStart, nextSelectionEnd);
 		}
 	}
@@ -586,8 +621,14 @@ export class NativeEditContext extends AbstractEditContext {
 			return;
 		}
 		const nextText = previousText.slice(0, updateRangeStart) + text + previousText.slice(updateRangeEnd);
-		const selectionStart = clampOffset(isFiniteOffset(event.selectionStart) ? event.selectionStart : updateRangeStart + text.length, nextText.length);
-		const selectionEnd = clampOffset(isFiniteOffset(event.selectionEnd) ? event.selectionEnd : selectionStart, nextText.length);
+		const selectionStart = clampOffset(
+			isFiniteOffset(event.selectionStart) ? event.selectionStart : updateRangeStart + text.length,
+			nextText.length,
+		);
+		const selectionEnd = clampOffset(
+			isFiniteOffset(event.selectionEnd) ? event.selectionEnd : selectionStart,
+			nextText.length,
+		);
 		if (this.readOnlyState) {
 			this.restoreNativeState();
 			return;
@@ -623,7 +664,11 @@ export class NativeEditContext extends AbstractEditContext {
 			this.restoreNativeState();
 			return;
 		}
-		if (this.composing || this.readOnlyState || this._context.viewModel.getSelections().length !== 1) {
+		if (
+			this.composing ||
+			this.readOnlyState ||
+			this._context.viewModel.getSelections().length !== 1
+		) {
 			if (this.readOnlyState || this._context.viewModel.getSelections().length !== 1) {
 				event.preventDefault();
 				this.restoreNativeState();
@@ -635,7 +680,9 @@ export class NativeEditContext extends AbstractEditContext {
 		this.compositionEndOffset = Math.max(this.shadowSelectionStart, this.shadowSelectionEnd);
 		this.compositionText = '';
 		this.compositionActiveOffset = 0;
-		this.compositionStartEmitter.fire({ data: normalizeTextLineEndings(event.data ?? '') });
+		this.compositionStartEmitter.fire({
+			data: normalizeTextLineEndings(event.data ?? ''),
+		});
 	}
 
 	private handleCompositionEnd(event: CompositionEvent): void {
@@ -657,29 +704,35 @@ export class NativeEditContext extends AbstractEditContext {
 		if (!formats) return;
 		const normalized: EditContextTextFormat[] = [];
 		for (const format of formats) {
-			if (!isValidOffset(format.rangeStart, this.shadowText.length) || !isValidOffset(format.rangeEnd, this.shadowText.length) || format.rangeEnd < format.rangeStart) {
+			if (
+				!isValidOffset(format.rangeStart, this.shadowText.length) ||
+				!isValidOffset(format.rangeEnd, this.shadowText.length) ||
+				format.rangeEnd < format.rangeStart
+			) {
 				continue;
 			}
-			normalized.push(
-				Object.freeze({
-					rangeStart: this.shadowOffset + format.rangeStart,
-					rangeEnd: this.shadowOffset + format.rangeEnd,
-					underlineThickness: typeof format.underlineThickness === 'string' ? format.underlineThickness : 'none',
-				}),
-			);
+			normalized.push(Object.freeze({
+				rangeStart: this.shadowOffset + format.rangeStart,
+				rangeEnd: this.shadowOffset + format.rangeEnd,
+				underlineThickness: typeof format.underlineThickness === 'string'
+					? format.underlineThickness
+					: 'none',
+			}));
 		}
-		this.textFormatUpdateEmitter.fire(
-			Object.freeze({
-				formats: Object.freeze(normalized),
-				browserEvent: event,
-			}),
-		);
+		this.textFormatUpdateEmitter.fire(Object.freeze({
+			formats: Object.freeze(normalized),
+			browserEvent: event,
+		}));
 	}
 
 	private handleCharacterBoundsUpdate(event: CharacterBoundsUpdateEvent): void {
 		const updateStart = event.rangeStart;
 		const updateEnd = event.rangeEnd;
-		if (!isValidOffset(updateStart, this.shadowText.length) || !isValidOffset(updateEnd, this.shadowText.length) || updateEnd < updateStart) {
+		if (
+			!isValidOffset(updateStart, this.shadowText.length) ||
+			!isValidOffset(updateEnd, this.shadowText.length) ||
+			updateEnd < updateStart
+		) {
 			return;
 		}
 		if (updateEnd - updateStart > MAX_CHARACTER_BOUNDS_REQUEST_LENGTH) return;
@@ -688,7 +741,9 @@ export class NativeEditContext extends AbstractEditContext {
 		for (let offset = updateStart; offset < requestEnd; offset += 1) {
 			const modelOffset = this.shadowOffset + offset;
 			const geometry = this.characterBoundsProvider?.(modelOffset);
-			const bound = geometry ? this.createBounds(geometry, geometry.width) : this.createFallbackCharacterBounds();
+			const bound = geometry
+				? this.createBounds(geometry, geometry.width)
+				: this.createFallbackCharacterBounds();
 			if (bound) bounds.push(bound);
 		}
 		if (bounds.length === requestEnd - updateStart) {
@@ -701,7 +756,10 @@ export class NativeEditContext extends AbstractEditContext {
 		if (nativeText !== this.shadowText) {
 			this.nativeContext.updateText(0, nativeText.length, this.shadowText);
 		}
-		if (this.nativeContext.selectionStart !== this.shadowSelectionStart || this.nativeContext.selectionEnd !== this.shadowSelectionEnd) {
+		if (
+			this.nativeContext.selectionStart !== this.shadowSelectionStart ||
+			this.nativeContext.selectionEnd !== this.shadowSelectionEnd
+		) {
 			this.nativeContext.updateSelection(this.shadowSelectionStart, this.shadowSelectionEnd);
 		}
 	}
@@ -735,11 +793,22 @@ export class NativeEditContext extends AbstractEditContext {
 		const parentBounds = this.parentBounds ?? this.container.getBoundingClientRect();
 		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : this.container.scrollLeft;
 		const scrollTop = hasPreparedBounds ? this.parentScrollTop : this.container.scrollTop;
-		return new Rect(parentBounds.left + position.left - scrollLeft, parentBounds.top + position.top - scrollTop, Math.max(1, width), Math.max(1, position.height));
+		return new Rect(
+			parentBounds.left + position.left - scrollLeft,
+			parentBounds.top + position.top - scrollTop,
+			Math.max(1, width),
+			Math.max(1, position.height),
+		);
 	}
 }
 
-function inferInputType(text: string, updateRangeStart: number, updateRangeEnd: number, previousSelectionStart: number, previousSelectionEnd: number): string | undefined {
+function inferInputType(
+	text: string,
+	updateRangeStart: number,
+	updateRangeEnd: number,
+	previousSelectionStart: number,
+	previousSelectionEnd: number,
+): string | undefined {
 	if (text.length > 0) {
 		if (text === '\n') return 'insertLineBreak';
 		return updateRangeStart === updateRangeEnd ? 'insertText' : 'insertReplacementText';
@@ -752,5 +821,8 @@ function inferInputType(text: string, updateRangeStart: number, updateRangeEnd: 
 }
 
 function isEditingInputType(inputType: string): boolean {
-	return typeof inputType === 'string' && (inputType.startsWith('insert') || inputType.startsWith('delete') || inputType === 'historyUndo' || inputType === 'historyRedo');
+	return typeof inputType === 'string' && (inputType.startsWith('insert') ||
+		inputType.startsWith('delete') ||
+		inputType === 'historyUndo' ||
+		inputType === 'historyRedo');
 }

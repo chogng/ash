@@ -99,7 +99,16 @@ export class BareFontInfo {
 
 	/** Returns a stable identity for the font environment. */
 	public getId(): string {
-		return [this.pixelRatio, this.fontFamily, this.fontWeight, this.fontSize, this.fontFeatureSettings, this.fontVariationSettings, this.lineHeight, this.letterSpacing].join('-');
+		return [
+			this.pixelRatio,
+			this.fontFamily,
+			this.fontWeight,
+			this.fontSize,
+			this.fontFeatureSettings,
+			this.fontVariationSettings,
+			this.lineHeight,
+			this.letterSpacing,
+		].join('-');
 	}
 
 	/** Adds the platform fallback and quotes family names where CSS requires it. */
@@ -130,25 +139,24 @@ export class FontInfo extends BareFontInfo {
 	public readonly wsmiddotWidth: number;
 	public readonly maxDigitWidth: number;
 
-	public constructor(
-		options: {
-			pixelRatio: number;
-			fontFamily: string;
-			fontWeight: string;
-			fontSize: number;
-			fontFeatureSettings: string;
-			fontVariationSettings: string;
-			lineHeight: number;
-			letterSpacing: number;
-			isMonospace: boolean;
-			typicalHalfwidthCharacterWidth: number;
-			typicalFullwidthCharacterWidth: number;
-			canUseHalfwidthRightwardsArrow: boolean;
-			spaceWidth: number;
-			middotWidth: number;
-			wsmiddotWidth: number;
-			maxDigitWidth: number;
-		},
+	public constructor(options: {
+		pixelRatio: number;
+		fontFamily: string;
+		fontWeight: string;
+		fontSize: number;
+		fontFeatureSettings: string;
+		fontVariationSettings: string;
+		lineHeight: number;
+		letterSpacing: number;
+		isMonospace: boolean;
+		typicalHalfwidthCharacterWidth: number;
+		typicalFullwidthCharacterWidth: number;
+		canUseHalfwidthRightwardsArrow: boolean;
+		spaceWidth: number;
+		middotWidth: number;
+		wsmiddotWidth: number;
+		maxDigitWidth: number;
+	},
 		isTrusted: boolean,
 	) {
 		super(options);
@@ -165,8 +173,7 @@ export class FontInfo extends BareFontInfo {
 
 	/** Compares the font environment and measured representative widths. */
 	public equals(other: FontInfo): boolean {
-		return (
-			this.fontFamily === other.fontFamily &&
+		return this.fontFamily === other.fontFamily &&
 			this.fontWeight === other.fontWeight &&
 			this.fontSize === other.fontSize &&
 			this.fontFeatureSettings === other.fontFeatureSettings &&
@@ -179,8 +186,7 @@ export class FontInfo extends BareFontInfo {
 			this.spaceWidth === other.spaceWidth &&
 			this.middotWidth === other.middotWidth &&
 			this.wsmiddotWidth === other.wsmiddotWidth &&
-			this.maxDigitWidth === other.maxDigitWidth
-		);
+			this.maxDigitWidth === other.maxDigitWidth;
 	}
 }
 

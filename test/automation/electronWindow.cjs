@@ -16,7 +16,7 @@ if (process.platform === 'darwin') app.setActivationPolicy('accessory');
 app.on('browser-window-created', (_event, window) => {
 	window.setFocusable(false);
 	window.webContents.setBackgroundThrottling(false);
-	window.show = mode === 'inactive' ? window.showInactive.bind(window) : () => {};
+	window.show = mode === 'inactive' ? window.showInactive.bind(window) : () => { };
 	if (mode === 'hidden') {
 		// Restore/maximize and auxiliary windows can show without calling show().
 		window.on('show', () => window.hide());

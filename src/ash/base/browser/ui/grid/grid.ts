@@ -1,17 +1,7 @@
 import { type IDimension } from '../../dom.js';
 import { type Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
-import {
-	GridView,
-	type GridLocation,
-	type GridViewDescriptor,
-	type GridViewOptions,
-	type GridViewSizing,
-	type ISerializableView as ISerializableGridView,
-	type IView as IGridView,
-	type IViewDeserializer,
-	type SerializedGridViewDescriptor,
-} from './gridview.js';
+import { GridView, type GridLocation, type GridViewDescriptor, type GridViewOptions, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from './gridview.js';
 import type { SashPresentation } from '../sash/sash.js';
 
 /** A view hosted by the identity-addressed {@link Grid}. */
@@ -34,7 +24,10 @@ export const Direction = {
 	Left: 'left',
 } as const;
 
-export type Sizing = { readonly type: 'distribute' } | { readonly type: 'split' } | { readonly type: 'invisible'; readonly cachedVisibleSize: number };
+export type Sizing =
+	| { readonly type: 'distribute'; }
+	| { readonly type: 'split'; }
+	| { readonly type: 'invisible'; readonly cachedVisibleSize: number; };
 
 export const Sizing = {
 	Distribute: { type: 'distribute' } as const,
@@ -56,36 +49,16 @@ export class Grid<TView extends IView = IView> extends Disposable {
 
 	readonly onDidChange: Event<void>;
 
-	get element(): HTMLDivElement {
-		return this.gridview.element;
-	}
-	get orientation(): 'horizontal' | 'vertical' {
-		return this.gridview.orientation;
-	}
-	get width(): number {
-		return this.gridview.width;
-	}
-	get height(): number {
-		return this.gridview.height;
-	}
-	get minimumWidth(): number {
-		return this.gridview.minimumWidth;
-	}
-	get maximumWidth(): number {
-		return this.gridview.maximumWidth;
-	}
-	get minimumHeight(): number {
-		return this.gridview.minimumHeight;
-	}
-	get maximumHeight(): number {
-		return this.gridview.maximumHeight;
-	}
-	get edgeSnapping(): boolean {
-		return this.gridview.edgeSnapping;
-	}
-	get sashPresentation(): SashPresentation {
-		return this.gridview.sashPresentation;
-	}
+	get element(): HTMLDivElement { return this.gridview.element; }
+	get orientation(): 'horizontal' | 'vertical' { return this.gridview.orientation; }
+	get width(): number { return this.gridview.width; }
+	get height(): number { return this.gridview.height; }
+	get minimumWidth(): number { return this.gridview.minimumWidth; }
+	get maximumWidth(): number { return this.gridview.maximumWidth; }
+	get minimumHeight(): number { return this.gridview.minimumHeight; }
+	get maximumHeight(): number { return this.gridview.maximumHeight; }
+	get edgeSnapping(): boolean { return this.gridview.edgeSnapping; }
+	get sashPresentation(): SashPresentation { return this.gridview.sashPresentation; }
 
 	set edgeSnapping(enabled: boolean) {
 		this.gridview.edgeSnapping = enabled;
@@ -116,13 +89,26 @@ export class Grid<TView extends IView = IView> extends Disposable {
 		this.gridview.layout(width, height);
 	}
 
-	addView(newView: TView, sizing: number | Sizing, referenceView: TView, direction: Direction): void {
+	addView(
+		newView: TView,
+		sizing: number | Sizing,
+		referenceView: TView,
+		direction: Direction,
+	): void {
 		if (this.views.has(newView)) {
 			throw new Error('Grid cannot contain the same view twice');
 		}
 		const referenceLocation = this.getViewLocation(referenceView);
-		const location = getRelativeLocation(this.gridview.orientation, referenceLocation, direction);
-		this.gridview.addView(newView, toGridViewSizing(sizing, referenceLocation), location);
+		const location = getRelativeLocation(
+			this.gridview.orientation,
+			referenceLocation,
+			direction,
+		);
+		this.gridview.addView(
+			newView,
+			toGridViewSizing(sizing, referenceLocation),
+			location,
+		);
 		this.views.add(newView);
 	}
 
@@ -131,13 +117,22 @@ export class Grid<TView extends IView = IView> extends Disposable {
 		this.views.delete(view);
 	}
 
-	moveView(view: TView, sizing: number | Sizing, referenceView: TView, direction: Direction): void {
+	moveView(
+		view: TView,
+		sizing: number | Sizing,
+		referenceView: TView,
+		direction: Direction,
+	): void {
 		if (view === referenceView) {
 			throw new Error('Grid cannot move a view relative to itself');
 		}
 		const sourceLocation = this.getViewLocation(view);
 		const referenceLocation = this.getViewLocation(referenceView);
-		const targetLocation = getRelativeLocation(this.gridview.orientation, referenceLocation, direction);
+		const targetLocation = getRelativeLocation(
+			this.gridview.orientation,
+			referenceLocation,
+			direction,
+		);
 		const sourceParent = sourceLocation.slice(0, -1);
 		const targetParent = targetLocation.slice(0, -1);
 		if (locationsEqual(sourceParent, targetParent)) {
@@ -158,31 +153,23 @@ export class Grid<TView extends IView = IView> extends Disposable {
 	/** Measures the current Grid frames once per navigation request, including nested splits. */
 	public getNeighborViews(view: TView, direction: Direction): TView[] {
 		this.getViewLocation(view);
-		if (!this.isViewVisible(view)) {
-			return [];
-		}
+		if (!this.isViewVisible(view)) { return []; }
 		const source = view.element.getBoundingClientRect();
 		const horizontal = direction === Direction.Left || direction === Direction.Right;
 		const forward = direction === Direction.Right || direction === Direction.Down;
 		const sourceStart = horizontal ? source.top : source.left;
 		const sourceEnd = horizontal ? source.bottom : source.right;
-		const boundary = horizontal ? (forward ? source.right : source.left) : forward ? source.bottom : source.top;
-		const candidates: { view: TView; gap: number; offset: number }[] = [];
+		const boundary = horizontal ? (forward ? source.right : source.left) : (forward ? source.bottom : source.top);
+		const candidates: { view: TView; gap: number; offset: number; }[] = [];
 		for (const candidate of this.views) {
-			if (candidate === view || !this.isViewVisible(candidate)) {
-				continue;
-			}
+			if (candidate === view || !this.isViewVisible(candidate)) { continue; }
 			const bounds = candidate.element.getBoundingClientRect();
 			const start = horizontal ? bounds.top : bounds.left;
 			const end = horizontal ? bounds.bottom : bounds.right;
-			if (Math.min(sourceEnd, end) <= Math.max(sourceStart, start)) {
-				continue;
-			}
-			const edge = horizontal ? (forward ? bounds.left : bounds.right) : forward ? bounds.top : bounds.bottom;
+			if (Math.min(sourceEnd, end) <= Math.max(sourceStart, start)) { continue; }
+			const edge = horizontal ? (forward ? bounds.left : bounds.right) : (forward ? bounds.top : bounds.bottom);
 			const gap = forward ? edge - boundary : boundary - edge;
-			if (gap < -0.5) {
-				continue;
-			}
+			if (gap < -0.5) { continue; }
 			candidates.push({ view: candidate, gap, offset: Math.abs(start + end - sourceStart - sourceEnd) });
 		}
 		candidates.sort((left, right) => left.gap - right.gap || left.offset - right.offset);
@@ -218,7 +205,9 @@ export class SerializableGrid<TView extends ISerializableView> extends Grid<TVie
 		deserializer: IViewDeserializer<TView>,
 		options: GridOptions = {},
 	): SerializableGrid<TView> {
-		return new SerializableGrid(GridView.deserialize(container, descriptor, deserializer, options));
+		return new SerializableGrid(
+			GridView.deserialize(container, descriptor, deserializer, options),
+		);
 	}
 
 	serialize(): SerializedGridDescriptor {
@@ -226,7 +215,10 @@ export class SerializableGrid<TView extends ISerializableView> extends Grid<TVie
 	}
 }
 
-function toGridViewSizing(sizing: number | Sizing, referenceLocation: GridLocation): GridViewSizing {
+function toGridViewSizing(
+	sizing: number | Sizing,
+	referenceLocation: GridLocation,
+): GridViewSizing {
 	if (typeof sizing === 'number') return sizing;
 	if (sizing.type === 'split') {
 		return {
@@ -237,24 +229,39 @@ function toGridViewSizing(sizing: number | Sizing, referenceLocation: GridLocati
 	return sizing;
 }
 
-function getRelativeLocation(rootOrientation: 'horizontal' | 'vertical', location: GridLocation, direction: Direction): GridLocation {
+function getRelativeLocation(
+	rootOrientation: 'horizontal' | 'vertical',
+	location: GridLocation,
+	direction: Direction,
+): GridLocation {
 	const parentDepth = location.length - 1;
-	const parentOrientation = parentDepth % 2 === 0 ? rootOrientation : orthogonal(rootOrientation);
-	const directionOrientation = direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+	const parentOrientation = parentDepth % 2 === 0
+		? rootOrientation
+		: orthogonal(rootOrientation);
+	const directionOrientation =
+		direction === 'left' || direction === 'right'
+			? 'horizontal'
+			: 'vertical';
 	if (parentOrientation === directionOrientation) {
 		const parentLocation = location.slice(0, -1);
 		const referenceIndex = location[location.length - 1]!;
-		const index = direction === 'right' || direction === 'down' ? referenceIndex + 1 : referenceIndex;
+		const index =
+			direction === 'right' || direction === 'down'
+				? referenceIndex + 1
+				: referenceIndex;
 		return [...parentLocation, index];
 	}
 	const index = direction === 'right' || direction === 'down' ? 1 : 0;
 	return [...location, index];
 }
 
-function orthogonal(orientation: 'horizontal' | 'vertical'): 'horizontal' | 'vertical' {
+function orthogonal(
+	orientation: 'horizontal' | 'vertical',
+): 'horizontal' | 'vertical' {
 	return orientation === 'horizontal' ? 'vertical' : 'horizontal';
 }
 
 function locationsEqual(left: GridLocation, right: GridLocation): boolean {
-	return left.length === right.length && left.every((index, position) => index === right[position]);
+	return left.length === right.length &&
+		left.every((index, position) => index === right[position]);
 }

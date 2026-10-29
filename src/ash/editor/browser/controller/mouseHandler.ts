@@ -66,12 +66,18 @@ export class MouseHandler extends ViewEventHandler {
 		this.viewHelper = viewHelper;
 		this.mouseTargetFactory = new MouseTargetFactory(context, viewHelper);
 		this.pointerHandler = this._register(new PointerHandler(viewHelper.viewDomNode));
-		this.topBottomDragScrolling = this._register(
-			new TopBottomDragScrolling(this._context, this.viewHelper, this.mouseTargetFactory, (target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType)),
-		);
-		this.leftRightDragScrolling = this._register(
-			new LeftRightDragScrolling(this._context, this.viewHelper, this.mouseTargetFactory, (target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType)),
-		);
+		this.topBottomDragScrolling = this._register(new TopBottomDragScrolling(
+			this._context,
+			this.viewHelper,
+			this.mouseTargetFactory,
+			(target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType),
+		));
+		this.leftRightDragScrolling = this._register(new LeftRightDragScrolling(
+			this._context,
+			this.viewHelper,
+			this.mouseTargetFactory,
+			(target, inSelectionMode, revealType) => this.dispatchTarget(target, inSelectionMode, revealType),
+		));
 		context.addEventHandler(this);
 		this._register(toDisposable(() => context.removeEventHandler(this)));
 		this._register(this.pointerHandler.onDidPointerDown(({ event, pointerId }) => this._onMouseDown(event, pointerId)));
@@ -80,11 +86,7 @@ export class MouseHandler extends ViewEventHandler {
 		this._register(mouseEvents.onMouseMove(viewHelper.viewDomNode, event => this._onMouseMove(event)));
 		this._register(mouseEvents.onMouseLeave(viewHelper.viewDomNode, event => this._onMouseLeave(event)));
 		this._register(mouseEvents.onMouseUp(viewHelper.viewDomNode, event => this._onMouseUp(event)));
-		this._register(
-			addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event), {
-				passive: false,
-			}),
-		);
+		this._register(addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event), { passive: false }));
 		this._register(addDisposableListener<DragEvent>(viewHelper.viewDomNode, 'drop', event => this._onDrop(event)));
 		this._register(toDisposable(() => this.stopPointerSelection()));
 	}
@@ -100,12 +102,8 @@ export class MouseHandler extends ViewEventHandler {
 		if (event.hasChanged(EditorOption.layoutInfo)) this.stopPointerSelection();
 		return false;
 	}
-	public override onCursorStateChanged(_event: ViewCursorStateChangedEvent): boolean {
-		return false;
-	}
-	public override onFocusChanged(_event: ViewFocusChangedEvent): boolean {
-		return false;
-	}
+	public override onCursorStateChanged(_event: ViewCursorStateChangedEvent): boolean { return false; }
+	public override onFocusChanged(_event: ViewFocusChangedEvent): boolean { return false; }
 
 	protected _createMouseTarget(event: EditorMouseEvent, testEventTarget: boolean): IMouseTarget {
 		const target = testEventTarget ? eventTargetElement(event.target, this.viewHelper.viewDomNode.ownerDocument) : null;
@@ -130,16 +128,7 @@ export class MouseHandler extends ViewEventHandler {
 			event.preventDefault();
 			this.viewHelper.focusTextArea();
 		}
-		if (
-			event.defaultPrevented ||
-			(!event.leftButton && !event.middleButton) ||
-			target.type === MouseTargetType.UNKNOWN ||
-			target.type === MouseTargetType.SCROLLBAR ||
-			target.type === MouseTargetType.GUTTER_GLYPH_MARGIN ||
-			isWidget(target) ||
-			(isViewZone(target) && !suppressedViewZone) ||
-			!target.position
-		) {
+		if (event.defaultPrevented || (!event.leftButton && !event.middleButton) || target.type === MouseTargetType.UNKNOWN || target.type === MouseTargetType.SCROLLBAR || target.type === MouseTargetType.GUTTER_GLYPH_MARGIN || isWidget(target) || isViewZone(target) && !suppressedViewZone || !target.position) {
 			this.viewController.emitMouseDown(editorEvent);
 			return;
 		}
@@ -160,14 +149,12 @@ export class MouseHandler extends ViewEventHandler {
 			};
 			this.dispatchTarget(target, false);
 			this.pointerHandler.capturePointer(pointerId);
-			this._mouseDownOperation.add(
-				this.pointerHandler.startTracking(pointerId, event.buttons || buttonMask(event), {
-					onMove: event => this.updatePointerSelection(event),
-					onUp: event => this.finishPointerSelection(event),
-					onCancel: () => this.stopPointerSelection(),
-					onBlur: () => this.stopPointerSelection(),
-				}),
-			);
+			this._mouseDownOperation.add(this.pointerHandler.startTracking(pointerId, event.buttons || buttonMask(event), {
+				onMove: event => this.updatePointerSelection(event),
+				onUp: event => this.finishPointerSelection(event),
+				onCancel: () => this.stopPointerSelection(),
+				onBlur: () => this.stopPointerSelection(),
+			}));
 		} catch (error) {
 			this.stopPointerSelection();
 			throw error;
@@ -197,9 +184,7 @@ export class MouseHandler extends ViewEventHandler {
 	}
 
 	protected _onMouseWheel(event: WheelEvent): void {
-		const wheel = new StandardWheelEvent(event, {
-			lineHeight: this._context.configuration.options.get(EditorOption.lineHeight),
-		});
+		const wheel = new StandardWheelEvent(event, { lineHeight: this._context.configuration.options.get(EditorOption.lineHeight) });
 		this.viewHelper.delegateScrollFromMouseWheelEvent(wheel);
 		this.viewController.emitMouseWheel(wheel);
 	}
@@ -267,13 +252,25 @@ export class MouseHandler extends ViewEventHandler {
 		const layoutInfo = this._context.configuration.options.get(EditorOption.layoutInfo);
 		if (event.relativePos.x <= layoutInfo.contentLeft) {
 			const isRtl = model.getTextDirection(lineNumber) === TextDirection.RTL;
-			return MouseTarget.createOutsideEditor(mouseColumn, new Position(lineNumber, isRtl ? model.getLineMaxColumn(lineNumber) : 1), 'left', layoutInfo.contentLeft - event.relativePos.x);
+			return MouseTarget.createOutsideEditor(
+				mouseColumn,
+				new Position(lineNumber, isRtl ? model.getLineMaxColumn(lineNumber) : 1),
+				'left',
+				layoutInfo.contentLeft - event.relativePos.x,
+			);
 		}
 
-		const contentRight = layoutInfo.minimap.minimapLeft === 0 ? layoutInfo.width - layoutInfo.verticalScrollbarWidth : layoutInfo.minimap.minimapLeft;
+		const contentRight = layoutInfo.minimap.minimapLeft === 0
+			? layoutInfo.width - layoutInfo.verticalScrollbarWidth
+			: layoutInfo.minimap.minimapLeft;
 		if (event.relativePos.x >= contentRight) {
 			const isRtl = model.getTextDirection(lineNumber) === TextDirection.RTL;
-			return MouseTarget.createOutsideEditor(mouseColumn, new Position(lineNumber, isRtl ? 1 : model.getLineMaxColumn(lineNumber)), 'right', event.relativePos.x - contentRight);
+			return MouseTarget.createOutsideEditor(
+				mouseColumn,
+				new Position(lineNumber, isRtl ? 1 : model.getLineMaxColumn(lineNumber)),
+				'right',
+				event.relativePos.x - contentRight,
+			);
 		}
 		return null;
 	}
@@ -341,11 +338,11 @@ function eventTargetElement(target: EventTarget | null, ownerDocument: Document)
 	return HTMLElementConstructor && target instanceof HTMLElementConstructor ? target : null;
 }
 
-function isViewZone(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE }> {
+function isViewZone(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE; }> {
 	return target.type === MouseTargetType.GUTTER_VIEW_ZONE || target.type === MouseTargetType.CONTENT_VIEW_ZONE;
 }
 
-function isWidget(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.CONTENT_WIDGET | MouseTargetType.OVERLAY_WIDGET }> {
+function isWidget(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.CONTENT_WIDGET | MouseTargetType.OVERLAY_WIDGET; }> {
 	return target.type === MouseTargetType.CONTENT_WIDGET || target.type === MouseTargetType.OVERLAY_WIDGET;
 }
 

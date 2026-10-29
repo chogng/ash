@@ -21,22 +21,16 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.recentGroups.length = 0;
-			}),
-		);
+		this._register(toDisposable(() => { this.recentGroups.length = 0; }));
 		for (const instance of terminals.instances) this.observeInstance(instance);
 		this.rememberActiveGroup();
 		this._register(terminals.onDidChangeActiveInstance(() => this.rememberActiveGroup()));
 		this._register(terminals.onDidCreateInstance(instance => this.observeInstance(instance)));
-		this._register(
-			terminals.onDidDisposeInstance(instance => {
-				this.instanceLifetimes.deleteAndDispose(instance);
-				const group = this.getGroupForInstance(instance);
-				if (group) group.removeInstance(instance);
-			}),
-		);
+		this._register(terminals.onDidDisposeInstance(instance => {
+			this.instanceLifetimes.deleteAndDispose(instance);
+			const group = this.getGroupForInstance(instance);
+			if (group) group.removeInstance(instance);
+		}));
 	}
 
 	private observeInstance(instance: ITerminalInstance): void {
@@ -50,9 +44,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		update();
 	}
 
-	get groups(): readonly ITerminalGroup[] {
-		return [...this.groupLifetimes.keys()];
-	}
+	get groups(): readonly ITerminalGroup[] { return [...this.groupLifetimes.keys()]; }
 	get activeGroup(): ITerminalGroup | undefined {
 		const active = this.terminals.activeInstance;
 		return (active && this.getGroupForInstance(active)) ?? this.recentGroups[0] ?? this.groups[0];
@@ -65,17 +57,15 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		const lifetime = new DisposableStore();
 		const group = lifetime.add(this.instantiation.createInstance(TerminalGroup, instance));
 		this.groupLifetimes.set(group, lifetime);
-		lifetime.add(
-			group.onInstancesChanged(() => {
-				if (!group.terminalInstances.length) {
-					const index = this.recentGroups.indexOf(group);
-					if (index >= 0) this.recentGroups.splice(index, 1);
-					this.groupLifetimes.deleteAndDispose(group);
-				}
-				this.rememberActiveGroup();
-				this.changed.fire();
-			}),
-		);
+		lifetime.add(group.onInstancesChanged(() => {
+			if (!group.terminalInstances.length) {
+				const index = this.recentGroups.indexOf(group);
+				if (index >= 0) this.recentGroups.splice(index, 1);
+				this.groupLifetimes.deleteAndDispose(group);
+			}
+			this.rememberActiveGroup();
+			this.changed.fire();
+		}));
 		this.changed.fire();
 		return group;
 	}

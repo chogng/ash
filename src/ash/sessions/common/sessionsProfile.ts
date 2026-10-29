@@ -18,7 +18,6 @@ export function createSessionsProfile(profile: SessionsProfile): SessionsProfile
 	if (typeof profile.id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(profile.id)) throw new TypeError('Sessions profile id must be stable kebab-case');
 	if (typeof profile.label !== 'string' || profile.label.trim().length === 0) throw new TypeError('Sessions profile label must not be empty');
 	if (typeof profile.titlebarActionId !== 'string' || !/^[a-z][a-z0-9.-]*$/.test(profile.titlebarActionId)) throw new TypeError('Sessions titlebar action id must be stable');
-	if (typeof profile.workbenchRelativePath !== 'string' || !profile.workbenchRelativePath.startsWith('../workbench/'))
-		throw new TypeError('Sessions profile must navigate back to its sibling Workbench page');
+	if (typeof profile.workbenchRelativePath !== 'string' || !profile.workbenchRelativePath.startsWith('../workbench/')) throw new TypeError('Sessions profile must navigate back to its sibling Workbench page');
 	return Object.freeze({ ...profile });
 }

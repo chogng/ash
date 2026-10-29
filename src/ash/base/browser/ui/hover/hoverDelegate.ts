@@ -37,11 +37,13 @@ export interface IHoverDelegate {
 }
 
 const defaultHoverDelegate: IHoverDelegate = {
-	setupDelayedHover: (target, options) =>
-		new NativeTitleHover(target, () => {
-			return (typeof options === 'function' ? options() : options).content;
-		}),
-	setupHover: options => new NativeTitleHover(options.target, options.content),
+	setupDelayedHover: (target, options) => new NativeTitleHover(target, () => {
+		return (typeof options === 'function' ? options() : options).content;
+	}),
+	setupHover: (options) => new NativeTitleHover(
+		options.target,
+		options.content,
+	),
 };
 
 let hoverDelegate = defaultHoverDelegate;
@@ -65,17 +67,14 @@ class NativeTitleHover implements IManagedHover {
 	private readonly previousTitle: string | null;
 	private disposed = false;
 
-	constructor(
-		private readonly target: HTMLElement,
-		content: HoverContent,
-	) {
+	constructor(private readonly target: HTMLElement, content: HoverContent) {
 		this.previousTitle = target.getAttribute('title');
 		this.update(content);
 	}
 
-	show(): void {}
+	show(): void { }
 
-	hide(): void {}
+	hide(): void { }
 
 	update(content: HoverContent): void {
 		if (this.disposed) return;

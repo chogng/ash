@@ -7,7 +7,7 @@ applyTo: "**/src/ash/**"
 
 ## Formatting
 
-- Use the repository-pinned `bun fmt` through `pnpm format:ts:fix [file|directory ...]`; `.prettierrc.toml` owns tabs, single quotes, semicolons, 200-column wrapping and trailing commas. Preserve multiline object literals; let the formatter wrap imports, signatures and expressions. Do not maintain competing manual layout rules or reformat unrelated files.
+- Use `pnpm format:ts:fix [file|directory ...]` with the TypeScript formatter and `tsfmt.json`. Preserve author-selected line breaks in imports, calls, signatures and objects; choose layout for readability, then normalize indentation, spaces and semicolons. Do not change a global width or reflow unrelated code to keep an import on one line.
 - Always use braces with the opening brace on the same line.
 
 ## Naming

@@ -89,35 +89,27 @@ export class BulkEditPane extends ViewPane {
 		this._register(addDisposableListener(this.selectAllButton, 'click', () => this.selectAll()));
 		this._register(addDisposableListener(this.applyButton, 'click', () => this.accept()));
 		this._register(addDisposableListener(this.cancelButton, 'click', () => this.discard()));
-		this._register(addDisposableListener(this.groupButton, 'click', () => (this.groupsByFile ? this.groupByType() : this.groupByFile())));
-		this._register(
-			addDisposableListener(this.previewButton, 'click', () => {
-				void this.openPreview().catch(error => {
-					this.statusElement.textContent = getErrorMessage(error);
-				});
-			}),
-		);
+		this._register(addDisposableListener(this.groupButton, 'click', () => this.groupsByFile ? this.groupByType() : this.groupByFile()));
+		this._register(addDisposableListener(this.previewButton, 'click', () => {
+			void this.openPreview().catch(error => { this.statusElement.textContent = getErrorMessage(error); });
+		}));
 		this._register(addDisposableListener(this.listElement, 'change', event => this.toggleSelection(event)));
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if (event.key === 'Escape') {
-					event.preventDefault();
-					event.stopPropagation();
-					this.discard();
-				} else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-					event.preventDefault();
-					this.accept();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				event.stopPropagation();
+				this.discard();
+			} else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+				event.preventDefault();
+				this.accept();
+			}
+		}));
 		this._register(configuration.onDidChangeConfiguration(() => this.updateAccessibilityHint()));
-		this._register(
-			toDisposable(() => {
-				const active = this.activePreview;
-				this.activePreview = undefined;
-				active?.resolve(undefined);
-			}),
-		);
+		this._register(toDisposable(() => {
+			const active = this.activePreview;
+			this.activePreview = undefined;
+			active?.resolve(undefined);
+		}));
 		this.render();
 		this.updateAccessibilityHint();
 	}
@@ -128,9 +120,7 @@ export class BulkEditPane extends ViewPane {
 
 	async setInput(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[] | undefined> {
 		this.assertNotDisposed();
-		if (this.activePreview || this.model) {
-			this.discard();
-		}
+		if (this.activePreview || this.model) { this.discard(); }
 		const inputId = ++this.inputId;
 		const previousFocus = this.element.ownerDocument.activeElement;
 		const loading = this.instantiation.invokeFunction(BulkFileOperations.create, edits, signal);
@@ -153,11 +143,9 @@ export class BulkEditPane extends ViewPane {
 			this.activePreview = {
 				resolve: value => {
 					abortListener.dispose();
-					if (isHTMLElement(previousFocus) && previousFocus.isConnected && !this.element.contains(previousFocus)) {
-						previousFocus.focus();
-					}
+					if (isHTMLElement(previousFocus) && previousFocus.isConnected && !this.element.contains(previousFocus)) { previousFocus.focus(); }
 					resolve(value);
-				},
+				}
 			};
 			this.listElement.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus();
 		});
@@ -176,13 +164,11 @@ export class BulkEditPane extends ViewPane {
 
 	private createButton(document: Document, label: string, className: string): Button {
 		const host = h(document, 'span');
-		const button = this._register(
-			new Button(host, {
-				...defaultButtonStyles,
-				label,
-				presentation: className === 'ash-bulk-edit-apply' ? 'primary' : 'quiet',
-			}),
-		);
+		const button = this._register(new Button(host, {
+			...defaultButtonStyles,
+			label,
+			presentation: className === 'ash-bulk-edit-apply' ? 'primary' : 'quiet',
+		}));
 		button.domNode.classList.add(className);
 		return button;
 	}
@@ -194,9 +180,7 @@ export class BulkEditPane extends ViewPane {
 	public accept(): void {
 		const model = this.model;
 		const active = this.activePreview;
-		if (!model || !active || !model.canApply || model.conflicts.hasConflicts() || model.checked.checkedCount === 0 || model.hasSelectionDependencyError()) {
-			return;
-		}
+		if (!model || !active || !model.canApply || model.conflicts.hasConflicts() || model.checked.checkedCount === 0 || model.hasSelectionDependencyError()) { return; }
 		this.activePreview = undefined;
 		active.resolve(model.getWorkspaceEdit());
 		this.conflictListener.clear();
@@ -208,9 +192,7 @@ export class BulkEditPane extends ViewPane {
 	private toggleSelection(event: Event): void {
 		const element = event.target;
 		// Adopted controls can retain the constructor of their original window.
-		if (!isHTMLElement(element) || element.tagName !== 'INPUT' || !this.model) {
-			return;
-		}
+		if (!isHTMLElement(element) || element.tagName !== 'INPUT' || !this.model) { return; }
 		const target = element as HTMLInputElement;
 		const index = Number(target.dataset.bulkEditIndex);
 		this.model.updateChecked(index, target.checked, target.dataset.textEditIndex === undefined ? undefined : Number(target.dataset.textEditIndex));
@@ -236,10 +218,9 @@ export class BulkEditPane extends ViewPane {
 		}
 		const errors = model.entries.filter(entry => entry.error !== undefined).length;
 		const selected = model.entries.filter(entry => this.model!.isChecked(entry.index)).length;
-		this.statusElement.textContent =
-			errors === 0
-				? localize('bulkEdit.ready', '{0} edits ready · {1} selected', model.entries.length, selected)
-				: localize('bulkEdit.errors', '{0} edits cannot be applied; resolve the problem before continuing.', errors);
+		this.statusElement.textContent = errors === 0
+			? localize('bulkEdit.ready', '{0} edits ready · {1} selected', model.entries.length, selected)
+			: localize('bulkEdit.errors', '{0} edits cannot be applied; resolve the problem before continuing.', errors);
 		this.selectAllButton.disabled = model.entries.every(entry => entry.error !== undefined);
 		const dependencyError = this.model!.hasSelectionDependencyError();
 		if (dependencyError) this.statusElement.textContent = localize('bulkEdit.selectionDependency', 'Selected changes depend on excluded replacements. Select the preceding changes to continue.');
@@ -254,10 +235,9 @@ export class BulkEditPane extends ViewPane {
 				this.rowResources.clear();
 			}
 			const previousFocus = this.element.ownerDocument.activeElement;
-			const existingEntries =
-				this.renderedModel === model
-					? new Map([...this.listElement.querySelectorAll<HTMLLIElement>('.ash-bulk-edit-entry')].map(item => [Number(item.dataset.bulkEditEntryIndex), item]))
-					: new Map<number, HTMLLIElement>();
+			const existingEntries = this.renderedModel === model
+				? new Map([...this.listElement.querySelectorAll<HTMLLIElement>('.ash-bulk-edit-entry')].map(item => [Number(item.dataset.bulkEditEntryIndex), item]))
+				: new Map<number, HTMLLIElement>();
 			this.renderedModel = model;
 			this.renderedGrouping = this.groupsByFile;
 			const groups = new Map<string, HTMLLIElement>();
@@ -339,21 +319,15 @@ export class BulkEditPane extends ViewPane {
 			item.append(replacements);
 		}
 		if (!entry.error && entry.before !== undefined && entry.after !== undefined) {
-			const open = this.rowResources.add(
-				new Button(item, {
-					...defaultButtonStyles,
-					label: localize('bulkEdit.openDiff', 'Open changes'),
-					size: 'small',
-				}),
-			);
+			const open = this.rowResources.add(new Button(item, {
+				...defaultButtonStyles,
+				label: localize('bulkEdit.openDiff', 'Open changes'),
+				size: 'small',
+			}));
 			open.domNode.classList.add('ash-bulk-edit-open-diff');
-			this.rowResources.add(
-				open.onDidClick(() => {
-					void this.openPreview(entry.index).catch(error => {
-						this.statusElement.textContent = getErrorMessage(error);
-					});
-				}),
-			);
+			this.rowResources.add(open.onDidClick(() => {
+				void this.openPreview(entry.index).catch(error => { this.statusElement.textContent = getErrorMessage(error); });
+			}));
 			if (entry.before !== entry.after) {
 				item.append(this.renderTextChange(entry.index, entry.before, entry.after));
 			}
@@ -403,7 +377,7 @@ export class BulkEditPane extends ViewPane {
 		}
 		const items: MultiDiffEditorInputItem[] = [];
 		for (const preview of model.entries) {
-			if ((index !== undefined && preview.index !== index) || preview.error || preview.before === undefined || preview.after === undefined) {
+			if (index !== undefined && preview.index !== index || preview.error || preview.before === undefined || preview.after === undefined) {
 				continue;
 			}
 			const entry = model.edit.entries[preview.index]!;
@@ -416,16 +390,8 @@ export class BulkEditPane extends ViewPane {
 			const path = `/${this.previewId}/${preview.index}`;
 			items.push({
 				label: resourceLabel(preview.resource),
-				original: {
-					resource: URI.from({ scheme: 'ash-bulkedit-preview', path: `${path}/before` }),
-					initialText: preview.before,
-					readOnly: true,
-				},
-				modified: {
-					resource: URI.from({ scheme: 'ash-bulkedit-preview', path: `${path}/after/${generateUuid()}` }),
-					initialText: after,
-					readOnly: true,
-				},
+				original: { resource: URI.from({ scheme: 'ash-bulkedit-preview', path: `${path}/before` }), initialText: preview.before, readOnly: true },
+				modified: { resource: URI.from({ scheme: 'ash-bulkedit-preview', path: `${path}/after/${generateUuid()}` }), initialText: after, readOnly: true },
 				goToFile: { resource: preview.secondaryResource ?? preview.resource },
 			});
 		}
@@ -433,40 +399,27 @@ export class BulkEditPane extends ViewPane {
 			return;
 		}
 		const title = localize('bulkEdit.title', 'Refactor Preview');
-		const input = createMultiDiffEditorInput(
-			URI.from({
-				scheme: 'ash-bulkedit-preview',
-				path: `/${this.previewId}/${index ?? 'all'}/${generateUuid()}`,
-			}),
-			items,
-			title,
-			{ kind: 'snapshot', label: title },
-		);
+		const input = createMultiDiffEditorInput(URI.from({ scheme: 'ash-bulkedit-preview', path: `/${this.previewId}/${index ?? 'all'}/${generateUuid()}` }), items, title, { kind: 'snapshot', label: title });
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
 	public getAccessibleContent(): string {
 		if (!this.model) return this.statusElement.textContent ?? '';
-		return [
-			this.statusElement.textContent,
-			...this.model.entries.map(entry => {
-				const textEdit = this.model!.edit.entries[entry.index];
-				let after = entry.after;
-				if (textEdit?.kind === 'textDocument' && entry.before !== undefined) {
-					using snapshot = new TextModel(entry.before);
-					snapshot.applyEdits(textEdit.edits.filter((_edit, index) => this.model!.isChecked(entry.index) && this.model!.selectedTextIndices(entry.index)?.has(index)));
-					after = snapshot.getText();
-				}
-				return [entry.resource.toString(), entry.secondaryResource?.toString(), entry.error ?? entry.detail, entry.before, after].filter(value => value !== undefined).join('\n');
-			}),
-		].join('\n\n');
+		return [this.statusElement.textContent, ...this.model.entries.map(entry => {
+			const textEdit = this.model!.edit.entries[entry.index];
+			let after = entry.after;
+			if (textEdit?.kind === 'textDocument' && entry.before !== undefined) {
+				using snapshot = new TextModel(entry.before);
+				snapshot.applyEdits(textEdit.edits.filter((_edit, index) => this.model!.isChecked(entry.index) && this.model!.selectedTextIndices(entry.index)?.has(index)));
+				after = snapshot.getText();
+			}
+			return [entry.resource.toString(), entry.secondaryResource?.toString(), entry.error ?? entry.detail, entry.before, after].filter(value => value !== undefined).join('\n');
+		})].join('\n\n');
 	}
 
 	private updateAccessibilityHint(): void {
-		const hint =
-			this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.BulkEditPreview) !== false
-				? localize('bulkEdit.helpHint', 'Press Alt+F1 for refactor preview help. Press Alt+F2 to read all changes.')
-				: undefined;
+		const hint = this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.BulkEditPreview) !== false
+			? localize('bulkEdit.helpHint', 'Press Alt+F1 for refactor preview help. Press Alt+F2 to read all changes.') : undefined;
 		for (const element of [this.contentElement, ...this.contentElement.querySelectorAll<HTMLElement>('button, input, summary')]) {
 			if (hint) element.setAttribute('aria-description', hint);
 			else element.removeAttribute('aria-description');
@@ -474,7 +427,7 @@ export class BulkEditPane extends ViewPane {
 	}
 }
 
-function resourceLabel(resource: { readonly path: string }): string {
+function resourceLabel(resource: { readonly path: string; }): string {
 	const path = resource.path.replaceAll('\\', '/');
 	return path.split('/').filter(Boolean).pop() ?? path;
 }
@@ -486,13 +439,9 @@ function clipText(value: string): string {
 
 function kindLabel(kind: BulkEditPreviewEntry['kind']): string {
 	switch (kind) {
-		case 'textDocument':
-			return localize('bulkEdit.textChanges', 'Text changes');
-		case 'create':
-			return localize('bulkEdit.create', 'Create file');
-		case 'rename':
-			return localize('bulkEdit.rename', 'Rename');
-		case 'delete':
-			return localize('bulkEdit.delete', 'Delete');
+		case 'textDocument': return localize('bulkEdit.textChanges', 'Text changes');
+		case 'create': return localize('bulkEdit.create', 'Create file');
+		case 'rename': return localize('bulkEdit.rename', 'Rename');
+		case 'delete': return localize('bulkEdit.delete', 'Delete');
 	}
 }

@@ -7,7 +7,7 @@ import type { WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 
 export const workbenchPartIds = ['titlebar', 'banner', 'statusbar', 'activitybar', 'sidebar', 'auxiliarybar', 'agentSidebar', 'editor', 'panel'] as const;
-export type WorkbenchPartId = (typeof workbenchPartIds)[number];
+export type WorkbenchPartId = typeof workbenchPartIds[number];
 
 export enum Position {
 	LEFT,
@@ -22,27 +22,19 @@ export function isHorizontal(position: Position): boolean {
 
 export function positionToString(position: Position): string {
 	switch (position) {
-		case Position.LEFT:
-			return 'left';
-		case Position.RIGHT:
-			return 'right';
-		case Position.BOTTOM:
-			return 'bottom';
-		case Position.TOP:
-			return 'top';
+		case Position.LEFT: return 'left';
+		case Position.RIGHT: return 'right';
+		case Position.BOTTOM: return 'bottom';
+		case Position.TOP: return 'top';
 	}
 }
 
 export function positionFromString(value: string): Position {
 	switch (value) {
-		case 'left':
-			return Position.LEFT;
-		case 'right':
-			return Position.RIGHT;
-		case 'top':
-			return Position.TOP;
-		default:
-			return Position.BOTTOM;
+		case 'left': return Position.LEFT;
+		case 'right': return Position.RIGHT;
+		case 'top': return Position.TOP;
+		default: return Position.BOTTOM;
 	}
 }
 

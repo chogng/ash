@@ -5,13 +5,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { TextModelChangeReason, type TextModelChange } from '../../../common/core/textChange.js';
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type LanguageParameterHints,
-	type LanguageParameterHintsContext,
-	type LanguageParameterHintsRequest,
-} from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageParameterHints, type LanguageParameterHintsContext, type LanguageParameterHintsRequest } from '../../../common/languages.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { provideSignatureHelp } from './provideSignatureHelp.js';
@@ -23,7 +17,7 @@ export class ParameterHintsModel extends Disposable {
 	private readonly scheduler: RunOnceScheduler;
 	private currentHints: LanguageParameterHints | undefined;
 	private pending: LanguageParameterHintsContext | undefined;
-	private request: { controller: AbortController; activeSignatureHelp: LanguageParameterHints | undefined } | undefined;
+	private request: { controller: AbortController; activeSignatureHelp: LanguageParameterHints | undefined; } | undefined;
 
 	constructor(
 		private readonly input: HTMLElement,
@@ -33,29 +27,23 @@ export class ParameterHintsModel extends Disposable {
 		private readonly languageFeaturesService: ILanguageFeaturesService,
 	) {
 		super();
-		this.scheduler = this._register(
-			new RunOnceScheduler(() => {
-				const context = this.pending;
-				if (context) void this.refresh(context);
-			}, 0),
-		);
+		this.scheduler = this._register(new RunOnceScheduler(() => {
+			const context = this.pending;
+			if (context) void this.refresh(context);
+		}, 0));
 		this._register(editor.onDidBlurEditorWidget(() => this.cancel()));
 		this._register(editor.onDidChangeModel(() => this.cancel()));
-		this._register(
-			editor.onDidChangeCursorSelection(event => {
-				// Typing updates content and selection together; only a separate move cancels hints.
-				if (event.modelVersionId === event.oldModelVersionId) this.cancel();
-			}),
-		);
+		this._register(editor.onDidChangeCursorSelection(event => {
+			// Typing updates content and selection together; only a separate move cancels hints.
+			if (event.modelVersionId === event.oldModelVersionId) this.cancel();
+		}));
 		this._register(textModel.onDidChangeContent(change => this.onContentChange(change)));
 		this._register(textModel.onDidChangeLanguage(() => this.cancel()));
 		this._register(textModel.onWillDispose(() => this.dispose()));
 		this._register(languageFeaturesService.signatureHelpProvider.onDidChange(() => this.cancel()));
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.parameterHints)) this.cancel();
-			}),
-		);
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.parameterHints)) this.cancel();
+		}));
 		this._register(toDisposable(() => this.cancel()));
 	}
 
@@ -102,13 +90,10 @@ export class ParameterHintsModel extends Disposable {
 	}
 
 	private canRequest(): boolean {
-		return (
-			!this.isDisposed &&
-			!this.textModel.isDisposed() &&
-			this.editor.getModel() === this.textModel &&
-			this.editor.getOption(EditorOption.parameterHints).enabled &&
-			this.input.contains(getActiveElement(this.input.ownerDocument))
-		);
+		return !this.isDisposed && !this.textModel.isDisposed()
+			&& this.editor.getModel() === this.textModel
+			&& this.editor.getOption(EditorOption.parameterHints).enabled
+			&& this.input.contains(getActiveElement(this.input.ownerDocument));
 	}
 
 	private onContentChange(change: TextModelChange): void {
@@ -120,11 +105,10 @@ export class ParameterHintsModel extends Disposable {
 		if (change.reason !== TextModelChangeReason.Edit || !this.canRequest()) return;
 		const inserted = change.changes.length === 1 ? change.changes[0]!.text : '';
 		const providers = this.languageFeaturesService.signatureHelpProvider.ordered(this.textModel);
-		const triggerCharacter = [...inserted]
-			.reverse()
-			.find(character =>
-				providers.some(provider => provider.signatureHelpTriggerCharacters?.includes(character) || (isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(character))),
-			);
+		const triggerCharacter = [...inserted].reverse().find(character => providers.some(provider =>
+			provider.signatureHelpTriggerCharacters?.includes(character)
+			|| (isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(character)),
+		));
 		if (triggerCharacter !== undefined) {
 			this.pending = { kind: 'triggerCharacter', triggerCharacter, isRetrigger, activeSignatureHelp };
 		} else if (active) {
@@ -144,7 +128,7 @@ export class ParameterHintsModel extends Disposable {
 		const position = this.editor.getSelections()?.[0]?.getPosition();
 		if (!this.canRequest() || !position) return;
 		const controller = new AbortController();
-		const activeRequest = (this.request = { controller, activeSignatureHelp });
+		const activeRequest = this.request = { controller, activeSignatureHelp };
 		const request: LanguageParameterHintsRequest = Object.freeze({
 			...createLanguageFeatureRequest(this.textModel, this.textModel.getLanguageId(), controller.signal),
 			resource: this.textModel.uri,
@@ -160,4 +144,5 @@ export class ParameterHintsModel extends Disposable {
 		this.currentHints = hints;
 		this.changedHints.fire(hints);
 	}
+
 }

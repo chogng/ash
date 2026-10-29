@@ -48,18 +48,16 @@ export class IconSelectBox extends Disposable {
 		const inputContainer = h(ownerDocument, 'div');
 		inputContainer.className = 'ash-icon-select-input';
 		this.domNode.append(inputContainer);
-		this.inputBox = this._register(
-			new InputBox(inputContainer, {
-				inputBoxStyles: options.inputBoxStyles,
-				placeholder: localize('iconSelect.placeholder', 'Search icons'),
-				ariaLabel: localize('iconSelect.search', 'Search icons'),
-				role: 'combobox',
-				ariaAutoComplete: 'list',
-				ariaControls: `${this.domId}-icons`,
-				ariaExpanded: true,
-				presentation: 'field',
-			}),
-		);
+		this.inputBox = this._register(new InputBox(inputContainer, {
+			inputBoxStyles: options.inputBoxStyles,
+			placeholder: localize('iconSelect.placeholder', 'Search icons'),
+			ariaLabel: localize('iconSelect.search', 'Search icons'),
+			role: 'combobox',
+			ariaAutoComplete: 'list',
+			ariaControls: `${this.domId}-icons`,
+			ariaExpanded: true,
+			presentation: 'field',
+		}));
 		const help = h(ownerDocument, 'span');
 		help.id = `${this.domId}-help`;
 		help.className = 'ash-icon-select-help';
@@ -84,13 +82,11 @@ export class IconSelectBox extends Disposable {
 
 		this._register(this.inputBox.onDidChange(value => this.renderIcons(value)));
 		this._register(this.inputBox.onKeyDown(event => this.handleKeyDown(event)));
-		this._register(
-			addDisposableListener(this.grid, 'click', event => {
-				const item = (event.target as Element).closest<HTMLElement>('.ash-icon-select-item');
-				if (!item || !this.grid.contains(item)) return;
-				this.setSelection(Number(item.dataset.index));
-			}),
-		);
+		this._register(addDisposableListener(this.grid, 'click', event => {
+			const item = (event.target as Element).closest<HTMLElement>('.ash-icon-select-item');
+			if (!item || !this.grid.contains(item)) return;
+			this.setSelection(Number(item.dataset.index));
+		}));
 		this.renderIcons('');
 	}
 
@@ -102,9 +98,7 @@ export class IconSelectBox extends Disposable {
 		this.scrollable.layout();
 	}
 
-	public getFocus(): number[] {
-		return this.focusedItemIndex < 0 ? [] : [this.focusedItemIndex];
-	}
+	public getFocus(): number[] { return this.focusedItemIndex < 0 ? [] : [this.focusedItemIndex]; }
 
 	public setSelection(index: number): void {
 		if (!Number.isInteger(index) || index < 0 || index >= this.renderedIcons.length) throw new RangeError(`Invalid icon index ${index}`);
@@ -115,24 +109,12 @@ export class IconSelectBox extends Disposable {
 		this.onDidSelectEmitter.fire(icon);
 	}
 
-	public clearInput(): void {
-		this.inputBox.value = '';
-	}
-	public focus(): void {
-		this.inputBox.focus();
-	}
-	public focusNext(): void {
-		this.moveFocus(1);
-	}
-	public focusPrevious(): void {
-		this.moveFocus(-1);
-	}
-	public focusNextRow(): void {
-		this.moveFocus(this.numberOfElementsPerRow);
-	}
-	public focusPreviousRow(): void {
-		this.moveFocus(-this.numberOfElementsPerRow);
-	}
+	public clearInput(): void { this.inputBox.value = ''; }
+	public focus(): void { this.inputBox.focus(); }
+	public focusNext(): void { this.moveFocus(1); }
+	public focusPrevious(): void { this.moveFocus(-1); }
+	public focusNextRow(): void { this.moveFocus(this.numberOfElementsPerRow); }
+	public focusPreviousRow(): void { this.moveFocus(-this.numberOfElementsPerRow); }
 
 	public getFocusedIcon(): ThemeIcon {
 		const icon = this.renderedIcons[this.focusedItemIndex]?.icon;
@@ -207,35 +189,22 @@ export class IconSelectBox extends Disposable {
 	private moveFocus(delta: number): void {
 		if (this.renderedIcons.length === 0) return;
 		const count = this.renderedIcons.length;
-		const index = (((this.focusedItemIndex + delta) % count) + count) % count;
+		const index = ((this.focusedItemIndex + delta) % count + count) % count;
 		this.focusIcon(index);
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
 		switch (event.key) {
-			case 'ArrowRight':
-				this.focusNext();
-				break;
-			case 'ArrowLeft':
-				this.focusPrevious();
-				break;
-			case 'ArrowDown':
-				this.focusNextRow();
-				break;
-			case 'ArrowUp':
-				this.focusPreviousRow();
-				break;
-			case 'Home':
-				this.focusIcon(this.renderedIcons.length > 0 ? 0 : -1);
-				break;
-			case 'End':
-				this.focusIcon(this.renderedIcons.length - 1);
-				break;
+			case 'ArrowRight': this.focusNext(); break;
+			case 'ArrowLeft': this.focusPrevious(); break;
+			case 'ArrowDown': this.focusNextRow(); break;
+			case 'ArrowUp': this.focusPreviousRow(); break;
+			case 'Home': this.focusIcon(this.renderedIcons.length > 0 ? 0 : -1); break;
+			case 'End': this.focusIcon(this.renderedIcons.length - 1); break;
 			case 'Enter':
 				if (this.focusedItemIndex >= 0) this.setSelection(this.focusedItemIndex);
 				break;
-			default:
-				return;
+			default: return;
 		}
 		event.preventDefault();
 		event.stopPropagation();

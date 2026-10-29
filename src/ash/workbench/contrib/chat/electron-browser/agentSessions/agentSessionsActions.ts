@@ -35,12 +35,7 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 			title: openInAgentsTitle,
 			tooltip: openInAgentsTooltip,
 			icon: ashTitlebarMark,
-			menu: {
-				id: MenuId.TitleBarAdjacentCenter,
-				when: IsAuxiliaryWindowContext.isEqualTo(false),
-				group: 'navigation',
-				order: 1,
-			},
+			menu: { id: MenuId.TitleBarAdjacentCenter, when: IsAuxiliaryWindowContext.isEqualTo(false), group: 'navigation', order: 1 },
 		});
 	}
 

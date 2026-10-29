@@ -45,13 +45,7 @@ import '../../browser/url.contribution.js';
 class URLFixture extends Disposable {
 	readonly dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	readonly services = this._register(new InstantiationService());
-	readonly storage = this._register(
-		new BrowserStorageService({
-			ownerWindow: this.dom.window as unknown as Window,
-			workspaceId: 'url-test',
-			flushInterval: 0,
-		}),
-	);
+	readonly storage = this._register(new BrowserStorageService({ ownerWindow: this.dom.window as unknown as Window, workspaceId: 'url-test', flushInterval: 0 }));
 	readonly notifications = this._register(new TestNotificationService());
 	readonly dialogs = this._register(new DialogService());
 	readonly files = this._register(new FileService());
@@ -70,52 +64,23 @@ class URLFixture extends Disposable {
 		this.services.registerInstance(INotificationService, this.notifications);
 		this.services.registerInstance(IDialogService, this.dialogs);
 		this.services.registerInstance(IFileService, this.files);
-		this.services.registerInstance(IClipboardService, {
-			writeText: async (value: string) => {
-				this.copied.push(value);
-			},
-		} as IClipboardService);
+		this.services.registerInstance(IClipboardService, { writeText: async (value: string) => { this.copied.push(value); } } as IClipboardService);
 		this.services.registerInstance(IQuickInputService, {
 			...quickInputServiceTestControls,
 
-			input: async (options: { value?: string }) => {
-				this.lastInput = options.value;
-				return inputTarget;
-			},
-			createQuickPick: () => {
-				throw new Error('Unexpected domain picker');
-			},
+			input: async (options: { value?: string; }) => { this.lastInput = options.value; return inputTarget; },
+			createQuickPick: () => { throw new Error('Unexpected domain picker'); },
 		});
-		this.services.registerInstance(IEditorService, {
-			openEditor: async (input: { resource: URI }) => {
-				this.editors.push(input.resource.toString());
-			},
-		} as unknown as IEditorService);
-		this.services.registerInstance(ICodeEditorService, {
-			getFocusedCodeEditor: () => null,
-			openCodeEditor: async () => null,
-		} as unknown as ICodeEditorService);
+		this.services.registerInstance(IEditorService, { openEditor: async (input: { resource: URI; }) => { this.editors.push(input.resource.toString()); } } as unknown as IEditorService);
+		this.services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		this.services.registerSingleton(ICommandService, () => this.services.createInstance(StandaloneCommandService));
 		this.opener = this._register(this.services.createInstance(OpenerService));
-		this.opener.setDefaultExternalOpener({
-			openExternal: async href => {
-				this.opened.push(href);
-				return true;
-			},
-		});
+		this.opener.setDefaultExternalOpener({ openExternal: async href => { this.opened.push(href); return true; } });
 		this.services.registerInstance(IOpenerService, this.opener);
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === ITrustedDomainService)![1];
 		this.services.registerSingleton(ITrustedDomainService, () => this.services.createInstance(descriptor) as ITrustedDomainService);
 		this.trustedDomains = this.services.get(ITrustedDomainService);
-		this.host = this._register(
-			WorkbenchContributionsRegistry.createHost(
-				this.services,
-				error => {
-					throw error;
-				},
-				['workbench.contrib.url'],
-			),
-		);
+		this.host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, ['workbench.contrib.url']));
 		this.host.advance(WorkbenchPhase.BlockRestore);
 	}
 }
@@ -125,11 +90,7 @@ suite('Workbench external link trust', () => {
 
 	test('the production contribution blocks default and contributed openers until an explicit decision', async () => {
 		using fixture = new URLFixture();
-		using contributed = fixture.opener.registerExternalOpener({
-			openExternal: async () => {
-				assert.fail('Cancelled link reached a contributed opener');
-			},
-		});
+		using contributed = fixture.opener.registerExternalOpener({ openExternal: async () => { assert.fail('Cancelled link reached a contributed opener'); } });
 		const cancelled = fixture.opener.open('https://untrusted.test/path', { allowContributedOpeners: true });
 		assert.equal(fixture.dialogs.model.dialogs.length, 1);
 		assert.deepEqual(fixture.opened, []);
@@ -162,11 +123,7 @@ suite('Workbench external link trust', () => {
 		await fixture.trustedDomains.setTrustedDomains(source);
 		assert.equal(await fixture.opener.open('https://persisted.test/docs'), true);
 		assert.equal(fixture.dialogs.model.dialogs.length, 0);
-		using storage = new BrowserStorageService({
-			ownerWindow: fixture.dom.window as unknown as Window,
-			workspaceId: 'different-workspace',
-			flushInterval: 0,
-		});
+		using storage = new BrowserStorageService({ ownerWindow: fixture.dom.window as unknown as Window, workspaceId: 'different-workspace', flushInterval: 0 });
 		assert.equal(storage.get('http.linkProtectionTrustedDomains', StorageScope.APPLICATION), source);
 		assert.equal(fixture.trustedDomains.content, source);
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('[]', 'stale source'), /changed/);
@@ -202,14 +159,7 @@ suite('Workbench external link trust', () => {
 		await fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content, expectedRevision: original.revision });
 		assert.equal(fixture.trustedDomains.content, content);
 		assert.equal(await fixture.opener.open('https://managed.test/docs/page'), true);
-		await assert.rejects(
-			fixture.files.writeFile({
-				resource: TRUSTED_DOMAINS_URI,
-				content: '[]',
-				expectedRevision: original.revision,
-			}),
-			FileRevisionConflictError,
-		);
+		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[]', expectedRevision: original.revision }), FileRevisionConflictError);
 		await assert.rejects(fixture.files.writeFile({ resource: TRUSTED_DOMAINS_URI, content: '[false]' }), /pattern/);
 		assert.equal((await fixture.files.readFile(TRUSTED_DOMAINS_URI)).content, content);
 		fixture.host.dispose();
@@ -221,12 +171,7 @@ suite('Workbench external link trust', () => {
 		using fixture = new URLFixture(target);
 		await fixture.trustedDomains.setTrustedDomains('["https://input.test"]');
 		const contributed: string[] = [];
-		using handler = fixture.opener.registerExternalOpener({
-			openExternal: async href => {
-				contributed.push(href);
-				return true;
-			},
-		});
+		using handler = fixture.opener.registerExternalOpener({ openExternal: async href => { contributed.push(href); return true; } });
 		await fixture.services.get(ICommandService).executeCommand('workbench.action.url.openUrl');
 		assert.deepEqual(contributed, [target]);
 		assert.equal(fixture.lastInput, '');
@@ -260,9 +205,7 @@ suite('Workbench external link trust', () => {
 		fixture.services.registerInstance(IWorkingCopyService, {} as IWorkingCopyService);
 		fixture.services.registerInstance(ITextFileService, {} as ITextFileService);
 		fixture.services.registerInstance(IModelService, {
-			getModels: () => [],
-			onModelAdded: Event.None,
-			onModelRemoved: Event.None,
+			getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None,
 		} as unknown as IModelService);
 		using extensionHost = fixture.services.createInstance(MainThreadEditors);
 		const request = { method: 'openExternal', uri: 'https://extension.test/docs' };
@@ -287,7 +230,7 @@ suite('Workbench external link trust', () => {
 			onDidChangeZoomLevel: Event.None,
 			onDidChangeAuxiliaryWindowState: Event.None,
 			getZoomLevel: async () => 0,
-			setZoomLevel: async () => {},
+			setZoomLevel: async () => { },
 		} as unknown as INativeHostApi);
 		using window = fixture.services.createInstance(NativeWindow);
 		links.fire('https://desktop.test/docs');
@@ -296,16 +239,8 @@ suite('Workbench external link trust', () => {
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual(fixture.opened, []);
 		let accepted!: () => void;
-		const opened = new Promise<void>(resolve => {
-			accepted = resolve;
-		});
-		fixture.opener.setDefaultExternalOpener({
-			openExternal: async target => {
-				fixture.opened.push(target);
-				accepted();
-				return true;
-			},
-		});
+		const opened = new Promise<void>(resolve => { accepted = resolve; });
+		fixture.opener.setDefaultExternalOpener({ openExternal: async target => { fixture.opened.push(target); accepted(); return true; } });
 		links.fire('https://desktop.test/docs');
 		fixture.dialogs.model.dialogs[0]!.close({ button: DialogResult.Primary, buttonIndex: 0 });
 		await opened;

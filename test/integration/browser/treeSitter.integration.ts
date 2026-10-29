@@ -21,7 +21,7 @@ import { TreeSitterLibraryService, createTreeSitterSyntaxSession } from '../../.
 const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chinese : {});
 const store = new DisposableStore();
-const defaultThemes = store.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), { subscribe: () => ({ dispose() {} }) }));
+const defaultThemes = store.add(new ExtensionColorThemeService(createBuiltinExtensionFixture(), { subscribe: () => ({ dispose() { } }) }));
 await defaultThemes.start();
 await import('../../../src/ash/workbench/contrib/codeEditor/browser/inspectEditorTokens/inspectEditorTokens.js');
 const services = store.add(StandaloneServices.initialize());
@@ -29,12 +29,9 @@ services.themeService.setTheme('vs-dark');
 const syntaxTheme = services.get(IThemeService);
 services.registerInstance(IAccessibleViewService, store.add(services.createInstance(AccessibleViewService)));
 const configuration = services.get(IConfigurationService);
-const syntax =
-	new URL(location.href).searchParams.get('backend') === 'offline'
-		? createDisconnectedSyntaxApi(operation => {
-				throw new Error(`Unexpected offline syntax request: ${operation}`);
-			})
-		: await rustSyntaxFixture();
+const syntax = new URL(location.href).searchParams.get('backend') === 'offline'
+	? createDisconnectedSyntaxApi(operation => { throw new Error(`Unexpected offline syntax request: ${operation}`); })
+	: await rustSyntaxFixture();
 const library = store.add(new TreeSitterLibraryService(syntax, new WebWorkerService()));
 const errors: string[] = [];
 let model: TextModel;
@@ -71,32 +68,17 @@ const integration = {
 		errors,
 		tokens: model.tokenization.lines.flatMap(line => line.tokens.map(token => ({ type: token.tokenType, text: model.getValueInRange(token.range) }))),
 	}),
-	edit: () => {
-		editor.pushUndoStop();
-		editor.executeEdits('test', [{ range: new Range(2, 13, 2, 13), text: 'updated ' }]);
-		editor.pushUndoStop();
-	},
+	edit: () => { editor.pushUndoStop(); editor.executeEdits('test', [{ range: new Range(2, 13, 2, 13), text: 'updated ' }]); editor.pushUndoStop(); },
 	undo: () => model.undo(),
 	inspect: (lineNumber: number, column: number) => {
 		editor.setPosition({ lineNumber, column });
 		editor.focus();
-		inspection = services
-			.get(ICommandService)
-			.executeCommand('editor.action.inspectTMScopes')
-			.catch(error => errors.push(String(error)));
+		inspection = services.get(ICommandService).executeCommand('editor.action.inspectTMScopes').catch(error => errors.push(String(error)));
 	},
 	waitForInspection: () => inspection,
 	showInspectionHelp: () => services.get(IAccessibleViewService).show(AccessibleViewType.Help),
 	focused: () => editor.hasTextFocus(),
-	dispose: () => {
-		editor.setModel(null);
-		model.dispose();
-		store.dispose();
-	},
+	dispose: () => { editor.setModel(null); model.dispose(); store.dispose(); },
 };
 Object.assign(window, { treeSitterIntegration: integration });
-declare global {
-	interface Window {
-		treeSitterIntegration: typeof integration;
-	}
-}
+declare global { interface Window { treeSitterIntegration: typeof integration; } }

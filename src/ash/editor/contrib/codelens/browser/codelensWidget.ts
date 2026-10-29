@@ -20,11 +20,7 @@ export class CodeLensWidget extends Disposable {
 	private readonly viewZoneId: string;
 	private computedHeight = 0;
 
-	public constructor(
-		private readonly viewport: View,
-		items: readonly CodeLensItem[],
-		private readonly executeCommand?: ExecuteCodeLensCommand,
-	) {
+	public constructor(private readonly viewport: View, items: readonly CodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
 		super();
 		this.items = items;
 		this.domNode = h(viewport.domNode.domNode.ownerDocument, 'div');
@@ -37,24 +33,18 @@ export class CodeLensWidget extends Disposable {
 			heightInPx: this.codeLensHeight,
 			suppressMouseDown: true,
 			domNode: this.domNode,
-			onComputedHeight: height => {
-				this.computedHeight = height;
-			},
+			onComputedHeight: height => { this.computedHeight = height; },
 		};
 		let viewZoneId = '';
-		viewport.changeViewZones(accessor => {
-			viewZoneId = accessor.addZone(this.viewZone);
-		});
+		viewport.changeViewZones(accessor => { viewZoneId = accessor.addZone(this.viewZone); });
 		this.viewZoneId = viewZoneId;
 		this._register(toDisposable(() => viewport.changeViewZones(accessor => accessor.removeZone(this.viewZoneId))));
-		this._register(
-			addDisposableListener<MouseEvent>(this.domNode, 'click', event => {
-				const button = (event.target as Element | null)?.closest<HTMLButtonElement>('.stanza-editor-codelens-command');
-				if (!isHTMLElement(button) || button.tagName !== 'BUTTON' || button.parentElement !== this.domNode || !this.executeCommand) return;
-				const command = this.currentCommands[Number(button.dataset.commandIndex)];
-				if (command) this.executeCommand(command);
-			}),
-		);
+		this._register(addDisposableListener<MouseEvent>(this.domNode, 'click', event => {
+			const button = (event.target as Element | null)?.closest<HTMLButtonElement>('.stanza-editor-codelens-command');
+			if (!isHTMLElement(button) || button.tagName !== 'BUTTON' || button.parentElement !== this.domNode || !this.executeCommand) return;
+			const command = this.currentCommands[Number(button.dataset.commandIndex)];
+			if (command) this.executeCommand(command);
+		}));
 		this.render(this.initialSymbols);
 		this.layout();
 	}
@@ -75,7 +65,9 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	public updateCommands(symbols: ReadonlyArray<CodeLens | undefined | null>): void {
-		this.items = this.items.map((item, index) => (symbols[index] ? Object.freeze({ symbol: symbols[index]!, provider: item.provider }) : item));
+		this.items = this.items.map((item, index) => symbols[index]
+			? Object.freeze({ symbol: symbols[index]!, provider: item.provider })
+			: item);
 		this.commandsResolved = true;
 		this.render(this.initialSymbols);
 	}
@@ -103,11 +95,11 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	private get initialSymbols(): readonly (CodeLens | undefined)[] {
-		return this.items.map(item => (item.symbol.command ? item.symbol : undefined));
+		return this.items.map(item => item.symbol.command ? item.symbol : undefined);
 	}
 
 	private render(symbols: readonly (CodeLens | undefined)[]): void {
-		const commands = symbols.flatMap(symbol => (symbol?.command ? [symbol.command] : []));
+		const commands = symbols.flatMap(symbol => symbol?.command ? [symbol.command] : []);
 		this.currentCommands = commands;
 		if (commands.length === 0) {
 			this.domNode.replaceChildren();

@@ -27,27 +27,11 @@ test('working-copy backups preserve text and structured metadata using the backe
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const text: WorkingCopyBackup = {
-		resource: URI.parse('untitled:/draft'),
-		kind: 'text',
-		content: '内容\nunsaved',
-		languageId: 'typescript',
-		label: 'draft',
-		updatedAt: 1,
-	};
-	const structured: WorkingCopyBackup = {
-		resource: URI.file('C:\\project\\note.ash'),
-		kind: 'structuredDocument',
-		content: '{"cells":["draft"]}',
-		contentType: 'application/ash',
-		updatedAt: 2,
-	};
+	const text: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: '内容\nunsaved', languageId: 'typescript', label: 'draft', updatedAt: 1 };
+	const structured: WorkingCopyBackup = { resource: URI.file('C:\\project\\note.ash'), kind: 'structuredDocument', content: '{"cells":["draft"]}', contentType: 'application/ash', updatedAt: 2 };
 	await backups.store(text);
 	await backups.store(structured);
-	assert.deepEqual(await backups.list(), [
-		{ ...text, updatedAt: 101 },
-		{ ...structured, updatedAt: 102 },
-	]);
+	assert.deepEqual(await backups.list(), [{ ...text, updatedAt: 101 }, { ...structured, updatedAt: 102 }]);
 	assert.deepEqual(await backend.getWorkspaces(), [{ id: 'one', folders: [] }]);
 	await backups.delete(text.resource);
 	await backups.delete(structured.resource);
@@ -72,12 +56,7 @@ test("stale editors preserve another window's latest backup when writing or dele
 	const backend = new VersionedBackups();
 	using first = assemble(services, backend, context);
 	using second = services.createInstance(WorkingCopyBackupService);
-	const backup: WorkingCopyBackup = {
-		resource: URI.parse('untitled:/draft'),
-		kind: 'text',
-		content: 'first',
-		updatedAt: 1,
-	};
+	const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
 	await first.store(backup);
 	await second.list();
 	await second.store({ ...backup, content: 'second window' });
@@ -91,12 +70,7 @@ test("switching workspaces clears observed revisions and keeps each workspace's 
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const backup: WorkingCopyBackup = {
-		resource: URI.parse('untitled:/draft'),
-		kind: 'text',
-		content: 'workspace one',
-		updatedAt: 1,
-	};
+	const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'workspace one', updatedAt: 1 };
 	await backups.store(backup);
 	backups.switchWorkspace('two');
 	context.updateWorkspace({ id: 'two' });
@@ -113,12 +87,7 @@ test('a saved checkpoint cannot discard a later recovery version from another wr
 	const backend = new VersionedBackups();
 	using saving = assemble(services, backend, context);
 	using other = services.createInstance(WorkingCopyBackupService);
-	const checkpoint: WorkingCopyBackup = {
-		resource: URI.file('/save/checkpoint.txt'),
-		kind: 'text',
-		content: 'published checkpoint',
-		updatedAt: 1,
-	};
+	const checkpoint: WorkingCopyBackup = { resource: URI.file('/save/checkpoint.txt'), kind: 'text', content: 'published checkpoint', updatedAt: 1 };
 	await saving.store(checkpoint);
 	await other.list();
 	await other.store({ ...checkpoint, content: 'newer writer recovery' });
@@ -135,10 +104,7 @@ test('unreadable backup content stays durable while supported backups still rest
 	await backend.store({ id: 'one', folders: [] }, { resource: URI.parse('untitled:/future'), format: 'future.v2', content: 'keep this' });
 	await backend.store({ id: 'one', folders: [] }, { resource: URI.parse('untitled:/corrupt'), format: 'ash.working-copy.v1', content: 'invalid json' });
 	await backups.store({ resource: URI.parse('untitled:/valid'), kind: 'text', content: 'restorable', updatedAt: 1 });
-	assert.deepEqual(
-		(await backups.list()).map(backup => backup.content),
-		['restorable'],
-	);
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['restorable']);
 	await backups.delete(URI.parse('untitled:/future'));
 	assert.equal((await backend.list('one')).length, 3);
 });
@@ -182,12 +148,7 @@ for (const operation of ['list', 'store', 'discard'] as const) {
 		using context = new TestWorkspaceService({ id: 'one' });
 		const backend = new ControlledBackups();
 		using backups = assemble(services, backend, context);
-		const backup: WorkingCopyBackup = {
-			resource: URI.parse('untitled:/draft'),
-			kind: 'text',
-			content: 'first',
-			updatedAt: 1,
-		};
+		const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
 		await backups.store(backup);
 		const held = backend.holdNext(operation);
 		const operations = {
@@ -235,12 +196,7 @@ test('invalid workspace replacement retains the current backup scope', async () 
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const backup: WorkingCopyBackup = {
-		resource: URI.parse('untitled:/draft'),
-		kind: 'text',
-		content: 'first',
-		updatedAt: 1,
-	};
+	const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
 	await backups.store(backup);
 	assert.throws(() => backups.switchWorkspace(''), TypeError);
 	await backups.store({ ...backup, content: 'latest' });
@@ -251,12 +207,8 @@ class VersionedBackups implements IBackupService {
 	private sequence = 0;
 	private readonly records = new Map<string, IBackupRecord>();
 	private readonly workspaces = new Map<string, IBackupWorkspace>();
-	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> {
-		return [...this.workspaces.values()];
-	}
-	async list(id: string): Promise<readonly IBackupRecord[]> {
-		return [...this.records.entries()].filter(([key]) => key.startsWith(`${id}\0`)).map(([, record]) => record);
-	}
+	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> { return [...this.workspaces.values()]; }
+	async list(id: string): Promise<readonly IBackupRecord[]> { return [...this.records.entries()].filter(([key]) => key.startsWith(`${id}\0`)).map(([, record]) => record); }
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		const key = `${workspace.id}\0${content.resource.toString()}`;
 		const current = this.records.get(key);
@@ -271,8 +223,7 @@ class VersionedBackups implements IBackupService {
 		const prepared = expected.map(record => {
 			const source = this.records.get(`${sourceId}\0${record.resource.toString()}`);
 			const destination = this.records.get(`${target.id}\0${record.resource.toString()}`);
-			if (!source || source.revision !== record.revision || (destination && (destination.content.format !== source.content.format || destination.content.content !== source.content.content)))
-				throw new BackupError('conflict');
+			if (!source || source.revision !== record.revision || destination && (destination.content.format !== source.content.format || destination.content.content !== source.content.content)) throw new BackupError('conflict');
 			return destination ?? source;
 		});
 		for (const record of prepared) {
@@ -295,12 +246,9 @@ class VersionedBackups implements IBackupService {
 }
 
 class ControlledBackups extends VersionedBackups {
-	private held: { operation: 'list' | 'store' | 'discard'; entered: DeferredPromise<void>; release: DeferredPromise<void> } | undefined;
+	private held: { operation: 'list' | 'store' | 'discard'; entered: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
 
-	public holdNext(operation: 'list' | 'store' | 'discard'): {
-		entered: DeferredPromise<void>;
-		release: DeferredPromise<void>;
-	} {
+	public holdNext(operation: 'list' | 'store' | 'discard'): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
 		const held = { operation, entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
 		this.held = held;
 		return held;
@@ -339,19 +287,11 @@ test('workspace entry moves crash backups and saving never resurrects the old sc
 	using context = new TestWorkspaceService({ id: 'folder' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const draft: WorkingCopyBackup = {
-		resource: URI.file('/folder/main.ts'),
-		kind: 'text',
-		content: 'unsaved draft',
-		updatedAt: 1,
-	};
+	const draft: WorkingCopyBackup = { resource: URI.file('/folder/main.ts'), kind: 'text', content: 'unsaved draft', updatedAt: 1 };
 	await backups.store(draft);
 	await backups.moveBackups({ id: 'saved', folders: [], configuration: URI.file('/saved.ash-workspace') });
 	assert.deepEqual(await backend.list('folder'), []);
-	assert.deepEqual(
-		(await backend.getWorkspaces()).map(workspace => workspace.id),
-		['saved'],
-	);
+	assert.deepEqual((await backend.getWorkspaces()).map(workspace => workspace.id), ['saved']);
 	backups.switchWorkspace('saved');
 	context.updateWorkspace({ id: 'saved' });
 	await backups.store({ ...draft, content: 'latest edit' });
@@ -364,17 +304,10 @@ test('failed migration leaves source recovery intact and never overwrites target
 	using context = new TestWorkspaceService({ id: 'old' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const draft: WorkingCopyBackup = {
-		resource: URI.file('/folder/main.ts'),
-		kind: 'text',
-		content: 'source',
-		updatedAt: 1,
-	};
+	const draft: WorkingCopyBackup = { resource: URI.file('/folder/main.ts'), kind: 'text', content: 'source', updatedAt: 1 };
 	await backups.store(draft);
 	const move = backend.move.bind(backend);
-	backend.move = async () => {
-		throw new BackupError('unavailable');
-	};
+	backend.move = async () => { throw new BackupError('unavailable'); };
 	await assert.rejects(backups.moveBackups({ id: 'new', folders: [] }), BackupError);
 	assert.equal((await backend.list('old')).length, 1);
 	backend.move = move;
@@ -389,20 +322,8 @@ test('workspace migration does not acknowledge unrelated destination recovery re
 	using context = new TestWorkspaceService({ id: 'old' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const draft: WorkingCopyBackup = {
-		resource: URI.file('/folder/recovery.ts'),
-		kind: 'text',
-		content: 'unobserved draft',
-		updatedAt: 1,
-	};
-	await backend.store(
-		{ id: 'new', folders: [] },
-		{
-			resource: draft.resource,
-			format: 'ash.working-copy.v1',
-			content: JSON.stringify({ kind: 'text', content: draft.content }),
-		},
-	);
+	const draft: WorkingCopyBackup = { resource: URI.file('/folder/recovery.ts'), kind: 'text', content: 'unobserved draft', updatedAt: 1 };
+	await backend.store({ id: 'new', folders: [] }, { resource: draft.resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: draft.content }) });
 	await backups.moveBackups({ id: 'new', folders: [] });
 	backups.switchWorkspace('new');
 	context.updateWorkspace({ id: 'new' });
@@ -411,43 +332,29 @@ test('workspace migration does not acknowledge unrelated destination recovery re
 	await assert.rejects(backups.store({ ...draft, content: 'new unrelated edit' }), BackupError);
 });
 
-for (const unreadable of [false, true])
-	test(`moving backups does not acknowledge an unobserved source revision, unreadable=${unreadable}`, async () => {
-		using services = new InstantiationService();
-		using context = new TestWorkspaceService({ id: 'old' });
-		const backend = new VersionedBackups();
-		using backups = assemble(services, backend, context);
-		const resource = URI.file('/folder/recovery.ts');
-		let previous: string | undefined;
-		if (!unreadable) {
-			await backups.store({ resource, kind: 'text', content: 'observed', updatedAt: 1 });
-			previous = (await backend.list('old'))[0]!.revision;
-		}
-		const latest = await backend.store(
-			{ id: 'old', folders: [] },
-			{
-				resource,
-				format: unreadable ? 'future-format' : 'ash.working-copy.v1',
-				content: unreadable ? 'future bytes' : JSON.stringify({ kind: 'text', content: 'another writer' }),
-			},
-			previous,
-		);
-		await backups.moveBackups({ id: 'new', folders: [] });
-		backups.switchWorkspace('new');
-		context.updateWorkspace({ id: 'new' });
-		await backups.delete(resource);
-		assert.deepEqual(await backend.list('new'), [latest]);
-		await assert.rejects(backups.store({ resource, kind: 'text', content: 'unrelated edit', updatedAt: 1 }), BackupError);
-	});
+for (const unreadable of [false, true]) test(`moving backups does not acknowledge an unobserved source revision, unreadable=${unreadable}`, async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'old' });
+	const backend = new VersionedBackups();
+	using backups = assemble(services, backend, context);
+	const resource = URI.file('/folder/recovery.ts');
+	let previous: string | undefined;
+	if (!unreadable) {
+		await backups.store({ resource, kind: 'text', content: 'observed', updatedAt: 1 });
+		previous = (await backend.list('old'))[0]!.revision;
+	}
+	const latest = await backend.store({ id: 'old', folders: [] }, { resource, format: unreadable ? 'future-format' : 'ash.working-copy.v1', content: unreadable ? 'future bytes' : JSON.stringify({ kind: 'text', content: 'another writer' }) }, previous);
+	await backups.moveBackups({ id: 'new', folders: [] });
+	backups.switchWorkspace('new'); context.updateWorkspace({ id: 'new' });
+	await backups.delete(resource);
+	assert.deepEqual(await backend.list('new'), [latest]);
+	await assert.rejects(backups.store({ resource, kind: 'text', content: 'unrelated edit', updatedAt: 1 }), BackupError);
+});
+
 
 test('Browser backup migration keeps source and target drafts intact on conflict and moves them on acceptance', async () => {
 	using backups = new IndexedDbWorkingCopyBackupService('source', undefined);
-	const draft: WorkingCopyBackup = {
-		resource: URI.parse('untitled:/browser-draft'),
-		kind: 'text',
-		content: 'unsaved browser draft',
-		updatedAt: 1,
-	};
+	const draft: WorkingCopyBackup = { resource: URI.parse('untitled:/browser-draft'), kind: 'text', content: 'unsaved browser draft', updatedAt: 1 };
 	await backups.store(draft);
 	backups.switchWorkspace('target');
 	await backups.store({ ...draft, content: 'existing target draft' });

@@ -4,6 +4,7 @@ import { type Range } from '../../../common/core/range.js';
 import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';
 
+
 /** Removes every distinct matched bracket pair containing a collapsed cursor. */
 export function createRemoveMatchingBracketsCommand(bracketPairs: IBracketPairsTextModelPart, selections: readonly Selection[]): (ICommand | null)[] | undefined {
 	let hasMatch = false;
@@ -21,10 +22,7 @@ export function createRemoveMatchingBracketsCommand(bracketPairs: IBracketPairsT
 }
 
 class RemoveMatchingBracketsCommand implements ICommand {
-	constructor(
-		private readonly opening: Range,
-		private readonly closing: Range,
-	) {}
+	constructor(private readonly opening: Range, private readonly closing: Range) { }
 
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this.opening, '');

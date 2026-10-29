@@ -3,14 +3,7 @@ import type { IListStyles } from '../list/listWidget.js';
 import type { Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
-import {
-	ObjectTree,
-	type ObjectTreeAcceptEvent,
-	type ObjectTreeCollapseStateChangeEvent,
-	type ObjectTreeFocusChangeEvent,
-	type ObjectTreePointerEvent,
-	type ObjectTreeSelectionChangeEvent,
-} from './objectTree.js';
+import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from './objectTree.js';
 import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from './objectTreeModel.js';
 import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from './tree.js';
 
@@ -56,40 +49,34 @@ export class DataTree<TInput, T> extends Disposable {
 	readonly onDidChangeSelection: Event<ObjectTreeSelectionChangeEvent<T>>;
 	readonly onDidChangeCollapseState: Event<ObjectTreeCollapseStateChangeEvent<T>>;
 
-	constructor(
-		container: HTMLElement,
-		private readonly dataSource: TreeDataSource<TInput, T>,
-		private readonly options: DataTreeOptions<T>,
-	) {
+	constructor(container: HTMLElement, private readonly dataSource: TreeDataSource<TInput, T>, private readonly options: DataTreeOptions<T>) {
 		super();
-		this.tree = this._register(
-			new ObjectTree<T>(container, {
-				styles: options.styles,
-				findWidgetStyles: options.findWidgetStyles,
-				ariaLabel: options.ariaLabel,
-				scrolling: options.scrolling,
-				smoothScrolling: options.smoothScrolling,
-				indent: options.indent,
-				indentGuides: options.indentGuides,
-				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
-				getHeight: options.getHeight,
-				dnd: options.dnd,
-				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
-				findMode: options.findMode,
-				findMatchType: options.findMatchType,
-				enableStickyScroll: options.enableStickyScroll,
-				stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-				modelOptions: {
-					identityProvider: { getId: element => this.getId(element) },
-					sorter: options.sorter,
-					filter: options.filter,
-				},
-				onWillRender: options.onWillRender,
-				renderElement: options.renderElement,
-				renderTwistie: options.renderTwistie,
-			}),
-		);
+		this.tree = this._register(new ObjectTree<T>(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
+			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
+			indent: options.indent,
+			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
+			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
+			getHeight: options.getHeight,
+			dnd: options.dnd,
+			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
+			findMode: options.findMode,
+			findMatchType: options.findMatchType,
+			enableStickyScroll: options.enableStickyScroll,
+			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			modelOptions: {
+				identityProvider: { getId: (element) => this.getId(element) },
+				sorter: options.sorter,
+				filter: options.filter,
+			},
+			onWillRender: options.onWillRender,
+			renderElement: options.renderElement,
+			renderTwistie: options.renderTwistie,
+		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this.onPointer = this.tree.onPointer;
@@ -100,9 +87,7 @@ export class DataTree<TInput, T> extends Disposable {
 		this.onDidChangeCollapseState = this.tree.onDidChangeCollapseState;
 	}
 
-	getInput(): TInput | undefined {
-		return this.input;
-	}
+	getInput(): TInput | undefined { return this.input; }
 
 	setInput(input: TInput | undefined): void {
 		this.input = input;
@@ -115,39 +100,19 @@ export class DataTree<TInput, T> extends Disposable {
 		else this.tree.setNodeChildren(this.getId(element as T), children);
 	}
 
-	collapse(element: T): boolean {
-		return this.tree.collapse(this.getId(element));
-	}
-	expand(element: T): boolean {
-		return this.tree.expand(this.getId(element));
-	}
-	expandTo(element: T): boolean {
-		return this.tree.expandTo(this.getId(element));
-	}
-	get focus(): T | undefined {
-		return this.tree.focus;
-	}
-	get selection(): readonly T[] {
-		return this.tree.selection;
-	}
-	setFindPattern(pattern: string): void {
-		this.tree.setFindPattern(pattern);
-	}
-	findNext(): T | undefined {
-		return this.tree.findNext();
-	}
-	findPrevious(): T | undefined {
-		return this.tree.findPrevious();
-	}
-	clearFind(): void {
-		this.tree.clearFind();
-	}
-	updateElementHeight(element: T, height: number | undefined): void {
-		this.tree.updateElementHeight(this.getId(element), height);
-	}
+	collapse(element: T): boolean { return this.tree.collapse(this.getId(element)); }
+	expand(element: T): boolean { return this.tree.expand(this.getId(element)); }
+	expandTo(element: T): boolean { return this.tree.expandTo(this.getId(element)); }
+	get focus(): T | undefined { return this.tree.focus; }
+	get selection(): readonly T[] { return this.tree.selection; }
+	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+	findNext(): T | undefined { return this.tree.findNext(); }
+	findPrevious(): T | undefined { return this.tree.findPrevious(); }
+	clearFind(): void { this.tree.clearFind(); }
+	updateElementHeight(element: T, height: number | undefined): void { this.tree.updateElementHeight(this.getId(element), height); }
 
 	private createChildren(parent: TInput | T, ancestry: Set<T>): readonly ObjectTreeElement<T>[] {
-		return [...this.dataSource.getChildren(parent)].map(element => {
+		return [...this.dataSource.getChildren(parent)].map((element) => {
 			if (ancestry.has(element)) throw new Error(`DataTree cycle at ${this.getId(element)}`);
 			const nextAncestry = new Set(ancestry).add(element);
 			const hasChildren = this.dataSource.hasChildren?.(element);

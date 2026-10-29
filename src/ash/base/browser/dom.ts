@@ -5,7 +5,14 @@ import { type BrowserWindow, getWindowId, getWindows, isWindow, mainWindow } fro
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
 type DomChild = Node | string;
-type DomTreeChild = Node | string | number | false | null | undefined | readonly DomTreeChild[];
+type DomTreeChild =
+	| Node
+	| string
+	| number
+	| false
+	| null
+	| undefined
+	| readonly DomTreeChild[];
 
 const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
@@ -23,10 +30,7 @@ export class Dimension implements IDimension {
 	static readonly Zero = new Dimension(0, 0);
 	static readonly None = Dimension.Zero;
 
-	constructor(
-		readonly width: number,
-		readonly height: number,
-	) {}
+	constructor(readonly width: number, readonly height: number) { }
 
 	with(width = this.width, height = this.height): Dimension {
 		return width === this.width && height === this.height ? this : new Dimension(width, height);
@@ -88,14 +92,10 @@ export function runWhenWindowIdle(targetWindow: Window | typeof globalThis, call
 	}
 
 	const started = targetWindow.performance.now();
-	const handle = targetWindow.setTimeout(
-		() =>
-			callback({
-				didTimeout: timeout !== undefined,
-				timeRemaining: () => Math.max(0, 50 - (targetWindow.performance.now() - started)),
-			}),
-		timeout ?? 0,
-	);
+	const handle = targetWindow.setTimeout(() => callback({
+		didTimeout: timeout !== undefined,
+		timeRemaining: () => Math.max(0, 50 - (targetWindow.performance.now() - started)),
+	}), timeout ?? 0);
 	return toDisposable(() => (targetWindow.clearTimeout as (value: typeof handle) => void)(handle));
 }
 
@@ -179,11 +179,14 @@ export function getExternalFocusWindow(): BrowserWindow | undefined {
 }
 
 export function hasAppFocus(): boolean {
-	return getWindows().some(({ window }) => window.document.hasFocus()) || [...externalFocusCheckers].some(checker => checker().hasFocus);
+	return getWindows().some(({ window }) => window.document.hasFocus()) ||
+		[...externalFocusCheckers].some(checker => checker().hasFocus);
 }
 
 export function getActiveWindow(): BrowserWindow {
-	return getWindows().find(({ window }) => window.document.hasFocus())?.window ?? getExternalFocusWindow() ?? getMainWindow();
+	return getWindows().find(({ window }) => window.document.hasFocus())?.window ??
+		getExternalFocusWindow() ??
+		getMainWindow();
 }
 
 export function getActiveDocument(): Document {
@@ -221,7 +224,7 @@ export function windowOpenNoOpener(url: string): void {
 	getWindow().open(url, '_blank', 'noopener,noreferrer');
 }
 
-export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any }, ...children: Array<Node | string>): T {
+export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any; }, ...children: Array<Node | string>): T {
 	const match = /^([a-zA-Z][\w-]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(description);
 	if (!match) throw new Error(`Invalid DOM description '${description}'`);
 	const result = mainWindow.document.createElement(match[1] || 'div') as T;
@@ -319,24 +322,39 @@ function emptyModifierKeyStatus(): IModifierKeyStatus {
 }
 
 function sameModifierKeyStatus(left: IModifierKeyStatus, right: IModifierKeyStatus): boolean {
-	return left.altKey === right.altKey && left.shiftKey === right.shiftKey && left.ctrlKey === right.ctrlKey && left.metaKey === right.metaKey;
+	return left.altKey === right.altKey &&
+		left.shiftKey === right.shiftKey &&
+		left.ctrlKey === right.ctrlKey &&
+		left.metaKey === right.metaKey;
 }
 
 /**
  * Registers a DOM event listener whose removal participates in disposable
  * ownership.
  */
-export function addDisposableListener<K extends keyof GlobalEventHandlersEventMap>(
+export function addDisposableListener<
+	K extends keyof GlobalEventHandlersEventMap,
+>(
 	target: EventTarget,
 	type: K,
 	listener: (event: GlobalEventHandlersEventMap[K]) => void,
 	options?: DomListenerOptions,
 ): IDisposable;
-export function addDisposableListener<TEvent extends Event>(target: EventTarget, type: string, listener: (event: TEvent) => void, options?: DomListenerOptions): IDisposable;
-export function addDisposableListener(target: EventTarget, type: string, listener: (event: Event) => void, options?: DomListenerOptions): IDisposable {
+export function addDisposableListener<TEvent extends Event>(
+	target: EventTarget,
+	type: string,
+	listener: (event: TEvent) => void,
+	options?: DomListenerOptions,
+): IDisposable;
+export function addDisposableListener(
+	target: EventTarget,
+	type: string,
+	listener: (event: Event) => void,
+	options?: DomListenerOptions,
+): IDisposable {
 	const eventListener = listener as EventListener;
 	target.addEventListener(type, eventListener, options);
-	const capture = typeof options === 'boolean' ? options : (options?.capture ?? false);
+	const capture = typeof options === 'boolean' ? options : options?.capture ?? false;
 	let activeTarget: EventTarget | undefined = target;
 	let activeListener: EventListener | undefined = eventListener;
 	return toDisposable(() => {
@@ -349,12 +367,18 @@ export function addDisposableListener(target: EventTarget, type: string, listene
 }
 
 /** Replaces a container's children with the supplied nodes or text. */
-export function reset(parent: Element | DocumentFragment, ...children: readonly DomChild[]): void {
+export function reset(
+	parent: Element | DocumentFragment,
+	...children: readonly DomChild[]
+): void {
 	parent.replaceChildren(...children);
 }
 
 /** Tests DOM ancestry without assuming that either node is connected. */
-export function isAncestor(candidate: Node | null, ancestor: Node | null): boolean {
+export function isAncestor(
+	candidate: Node | null,
+	ancestor: Node | null,
+): boolean {
 	return Boolean(candidate && ancestor?.contains(candidate));
 }
 
@@ -380,28 +404,33 @@ export function isHTMLElement(value: unknown): value is HTMLElement {
 	}
 	if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) return true;
 	const htmlElementConstructor = value.ownerDocument?.defaultView?.HTMLElement;
-	return typeof htmlElementConstructor === 'function' ? value instanceof htmlElementConstructor : value.namespaceURI === HTML_NAMESPACE;
+	return typeof htmlElementConstructor === 'function'
+		? value instanceof htmlElementConstructor
+		: value.namespaceURI === HTML_NAMESPACE;
 }
 
 export function isEditableElement(element: Element): boolean {
 	const tagName = element.tagName.toLowerCase();
-	return (
-		tagName === 'input' ||
-		tagName === 'textarea' ||
-		(isHTMLElement(element) &&
-			(element.isContentEditable ||
-				(element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false') ||
-				(element as HTMLElement & { readonly editContext?: unknown }).editContext != null))
+	return tagName === 'input' || tagName === 'textarea' || isHTMLElement(element) && (
+		element.isContentEditable ||
+		element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false' ||
+		(element as HTMLElement & { readonly editContext?: unknown; }).editContext != null
 	);
 }
 
 export function getShadowRoot(node: Node): ShadowRoot | null {
 	const root = node.getRootNode();
-	return root.nodeType === 11 && 'host' in root ? (root as ShadowRoot) : null;
+	return root.nodeType === 11 && 'host' in root ? root as ShadowRoot : null;
 }
 
 /** Stops propagation and, by default, the browser's native behavior. */
-export function stopEvent(event: Event, options: { readonly preventDefault?: boolean; readonly immediate?: boolean } = {}): void {
+export function stopEvent(
+	event: Event,
+	options: {
+		readonly preventDefault?: boolean;
+		readonly immediate?: boolean;
+	} = {},
+): void {
 	if (options.preventDefault !== false) event.preventDefault();
 	if (options.immediate) event.stopImmediatePropagation();
 	else event.stopPropagation();
@@ -410,15 +439,22 @@ export function stopEvent(event: Event, options: { readonly preventDefault?: boo
 type PrimitiveDomProperty = string | number | boolean | null | undefined;
 
 type SafeDomPropertyName<TElement> = {
-	[TKey in keyof TElement]-?: TKey extends 'innerHTML' | 'outerHTML' ? never : TElement[TKey] extends PrimitiveDomProperty ? TKey : never;
+	[TKey in keyof TElement]-?: TKey extends 'innerHTML' | 'outerHTML'
+	? never
+	: TElement[TKey] extends PrimitiveDomProperty ? TKey
+	: never;
 }[keyof TElement];
 
-export type DomElementProperties<TElement> = Partial<Pick<TElement, SafeDomPropertyName<TElement>>>;
+export type DomElementProperties<TElement> = Partial<
+	Pick<TElement, SafeDomPropertyName<TElement>>
+>;
 
 interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
 	readonly className?: string | readonly (string | false | null | undefined)[];
 	/** String-valued markup attributes. Use `properties` for native booleans. */
-	readonly attributes?: Readonly<Record<string, string | number | null | undefined>>;
+	readonly attributes?: Readonly<
+		Record<string, string | number | null | undefined>
+	>;
 	readonly properties?: Readonly<DomElementProperties<TElement>>;
 	readonly dataset?: Readonly<Record<string, string | undefined>>;
 	/** Camel-case or CSS property names map to CSS text. Length units must be explicit. */
@@ -426,7 +462,9 @@ interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
 	readonly ref?: (element: TElement) => void;
 }
 
-type HtmlElementForTag<TTag extends string> = TTag extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[TTag] : HTMLElement;
+type HtmlElementForTag<TTag extends string> =
+	TTag extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[TTag]
+	: HTMLElement;
 
 /** Creates elements in the main realm when hosted by another registered window. */
 export function h<TTag extends string>(
@@ -451,7 +489,10 @@ export function svg<K extends keyof SVGElementTagNameMap>(
 	...children: readonly DomTreeChild[]
 ): SVGElementTagNameMap[K] {
 	const args = splitElementArguments(optionsOrChild, children);
-	const element = creationDocument(ownerDocument).createElementNS('http://www.w3.org/2000/svg', tag);
+	const element = creationDocument(ownerDocument).createElementNS(
+		'http://www.w3.org/2000/svg',
+		tag,
+	);
 	applyElementOptions(element, args.options);
 	appendDomChildren(element, args.children);
 	args.options.ref?.(element);
@@ -459,12 +500,18 @@ export function svg<K extends keyof SVGElementTagNameMap>(
 }
 
 /** Creates a text node in the supplied document. */
-export function text(ownerDocument: Document, value: string | number): Text {
+export function text(
+	ownerDocument: Document,
+	value: string | number,
+): Text {
 	return creationDocument(ownerDocument).createTextNode(String(value));
 }
 
 /** Creates a document fragment containing the supplied children. */
-export function fragment(ownerDocument: Document, ...children: readonly DomTreeChild[]): DocumentFragment {
+export function fragment(
+	ownerDocument: Document,
+	...children: readonly DomTreeChild[]
+): DocumentFragment {
 	const result = creationDocument(ownerDocument).createDocumentFragment();
 	appendDomChildren(result, children);
 	return result;
@@ -472,11 +519,18 @@ export function fragment(ownerDocument: Document, ...children: readonly DomTreeC
 
 function creationDocument(ownerDocument: Document): Document {
 	const targetWindow = ownerDocument.defaultView;
-	return targetWindow && targetWindow !== mainWindow && getWindowId(targetWindow) !== undefined ? mainWindow.document : ownerDocument;
+	return targetWindow && targetWindow !== mainWindow && getWindowId(targetWindow) !== undefined
+		? mainWindow.document
+		: ownerDocument;
 }
 
-function applyElementOptions<TElement extends HTMLElement | SVGElement>(element: TElement, options: DomElementOptions<TElement>): void {
-	const classNames = typeof options.className === 'string' ? options.className.split(/\s+/) : options.className;
+function applyElementOptions<TElement extends HTMLElement | SVGElement>(
+	element: TElement,
+	options: DomElementOptions<TElement>,
+): void {
+	const classNames = typeof options.className === 'string'
+		? options.className.split(/\s+/)
+		: options.className;
 	if (classNames) {
 		element.classList.add(...classNames.filter((name): name is string => Boolean(name)));
 	}
@@ -501,13 +555,17 @@ function applyElementOptions<TElement extends HTMLElement | SVGElement>(element:
 	}
 }
 
-function isDomElementOptions<TElement extends HTMLElement | SVGElement>(value: DomElementOptions<TElement> | DomTreeChild): value is DomElementOptions<TElement> {
+function isDomElementOptions<TElement extends HTMLElement | SVGElement>(
+	value: DomElementOptions<TElement> | DomTreeChild,
+): value is DomElementOptions<TElement> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value) && !isNode(value);
 }
 
 function getNodeConstructor(value: object): typeof Node | undefined {
 	const candidate = value as Node;
-	const ownerDocument = candidate.nodeType === DOCUMENT_NODE_TYPE ? (value as Document) : candidate.ownerDocument;
+	const ownerDocument = candidate.nodeType === DOCUMENT_NODE_TYPE
+		? value as Document
+		: candidate.ownerDocument;
 	const nodeConstructor = ownerDocument?.defaultView?.Node;
 	return typeof nodeConstructor === 'function' ? nodeConstructor : undefined;
 }
@@ -515,20 +573,32 @@ function getNodeConstructor(value: object): typeof Node | undefined {
 function splitElementArguments<TElement extends HTMLElement | SVGElement>(
 	optionsOrChild: DomElementOptions<TElement> | DomTreeChild,
 	children: readonly DomTreeChild[],
-): { readonly options: DomElementOptions<TElement>; readonly children: readonly DomTreeChild[] } {
-	return isDomElementOptions(optionsOrChild) ? { options: optionsOrChild, children } : { options: {}, children: optionsOrChild === undefined ? children : [optionsOrChild, ...children] };
+): {
+	readonly options: DomElementOptions<TElement>;
+	readonly children: readonly DomTreeChild[];
+} {
+	return isDomElementOptions(optionsOrChild)
+		? { options: optionsOrChild, children }
+		: { options: {}, children: optionsOrChild === undefined ? children : [optionsOrChild, ...children] };
 }
 
 function toCssPropertyName(name: string): string {
 	return name.startsWith('--') ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 }
 
-function appendDomChildren(parent: Element | DocumentFragment, children: readonly DomTreeChild[]): void {
+function appendDomChildren(
+	parent: Element | DocumentFragment,
+	children: readonly DomTreeChild[],
+): void {
 	for (const child of children) {
 		if (Array.isArray(child)) {
 			appendDomChildren(parent, child);
 		} else if (child !== false && child !== null && child !== undefined) {
-			parent.append(typeof child === 'string' || typeof child === 'number' ? String(child) : (child as Node));
+			parent.append(
+				typeof child === 'string' || typeof child === 'number'
+					? String(child)
+					: child as Node,
+			);
 		}
 	}
 }

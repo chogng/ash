@@ -8,25 +8,20 @@ import { assertEncoding } from '../../services/textfile/common/encoding.js';
 function record(value: JsonValue): Record<string, JsonValue> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {
 		throw new TypeError('Expected extension editor object');
-	}
-	return value as Record<string, JsonValue>;
+	} return value as Record<string, JsonValue>;
 }
 function text(value: JsonValue, limit = 16 * 1024 * 1024): string {
 	if (typeof value !== 'string' || value.length > limit || value.includes('\0')) {
 		throw new TypeError('Invalid extension editor text');
-	}
-	return value;
+	} return value;
 }
-function optionalText(value: JsonValue | undefined): string | undefined {
-	return value == null ? undefined : text(value);
-}
+function optionalText(value: JsonValue | undefined): string | undefined { return value == null ? undefined : text(value); }
 function binary(value: JsonValue): boolean {
 	if (typeof value !== 'boolean') throw new TypeError('Invalid multi-diff binary state');
 	return value;
 }
 function bytes(value: JsonValue): Uint8Array {
-	if (!Array.isArray(value) || value.length > 2 * 1024 * 1024 || value.some(byte => typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255))
-		throw new TypeError('Invalid extension editor bytes');
+	if (!Array.isArray(value) || value.length > 2 * 1024 * 1024 || value.some(byte => typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255)) throw new TypeError('Invalid extension editor bytes');
 	return Uint8Array.from(value as number[]);
 }
 export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInput {
@@ -44,18 +39,7 @@ export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInpu
 		if (!Array.isArray(input.items) || input.items.length > 100000) {
 			throw new TypeError('Invalid multi-diff resources');
 		}
-		const items: MultiDiffEditorInputItem[] = input.items.map(value => {
-			const item = record(value);
-			return {
-				id: optionalText(item.id),
-				label: text(item.label),
-				original: parseExtensionEditorInput(item.original),
-				modified: parseExtensionEditorInput(item.modified),
-				...(item.binary === undefined ? {} : { binary: binary(item.binary) }),
-				actions: item.actions == null ? undefined : requireActions(item.actions),
-				goToFile: item.goToFile == null ? undefined : parseExtensionEditorInput(item.goToFile),
-			};
-		});
+		const items: MultiDiffEditorInputItem[] = input.items.map(value => { const item = record(value); return { id: optionalText(item.id), label: text(item.label), original: parseExtensionEditorInput(item.original), modified: parseExtensionEditorInput(item.modified), ...(item.binary === undefined ? {} : { binary: binary(item.binary) }), actions: item.actions == null ? undefined : requireActions(item.actions), goToFile: item.goToFile == null ? undefined : parseExtensionEditorInput(item.goToFile) }; });
 		return createMultiDiffEditorInput(URI.parse(text(input.resource)), items, text(input.label), input.source as unknown as Parameters<typeof createMultiDiffEditorInput>[3]);
 	}
 	const preferredResource = optionalText(input.preferredResource);

@@ -3,18 +3,10 @@ export type Comparator<T> = (left: T, right: T) => number;
 export type CompareResult = number;
 
 export namespace CompareResult {
-	export function isLessThan(result: CompareResult): boolean {
-		return result < 0;
-	}
-	export function isLessThanOrEqual(result: CompareResult): boolean {
-		return result <= 0;
-	}
-	export function isGreaterThan(result: CompareResult): boolean {
-		return result > 0;
-	}
-	export function isNeitherLessOrGreaterThan(result: CompareResult): boolean {
-		return result === 0;
-	}
+	export function isLessThan(result: CompareResult): boolean { return result < 0; }
+	export function isLessThanOrEqual(result: CompareResult): boolean { return result <= 0; }
+	export function isGreaterThan(result: CompareResult): boolean { return result > 0; }
+	export function isNeitherLessOrGreaterThan(result: CompareResult): boolean { return result === 0; }
 	export const greaterThan = 1;
 	export const lessThan = -1;
 	export const neitherLessOrGreaterThan = 0;
@@ -101,12 +93,8 @@ export class ArrayQueue<T> {
 		return result;
 	}
 
-	peek(): T | undefined {
-		return this.length === 0 ? undefined : this.items[this.firstIndex];
-	}
-	peekLast(): T | undefined {
-		return this.length === 0 ? undefined : this.items[this.lastIndex];
-	}
+	peek(): T | undefined { return this.length === 0 ? undefined : this.items[this.firstIndex]; }
+	peekLast(): T | undefined { return this.length === 0 ? undefined : this.items[this.lastIndex]; }
 	dequeue(): T | undefined {
 		if (this.length === 0) return undefined;
 		const result = this.items[this.firstIndex];
@@ -128,7 +116,11 @@ export class ArrayQueue<T> {
 }
 
 /** Compares two array-like sequences item by item. */
-export function arraysEqual<T>(left: readonly T[], right: readonly T[], equals: (left: T, right: T) => boolean = strictEquals): boolean {
+export function arraysEqual<T>(
+	left: readonly T[],
+	right: readonly T[],
+	equals: (left: T, right: T) => boolean = strictEquals,
+): boolean {
 	if (left === right) return true;
 	if (left.length !== right.length) return false;
 	return left.every((value, index) => equals(value, right[index]!));
@@ -153,7 +145,11 @@ export function distinct<T>(array: ReadonlyArray<T>, keyFn: (value: T) => unknow
 }
 
 /** Returns the number of equal items at the beginning of two sequences. */
-export function commonPrefixLength<T>(left: readonly T[], right: readonly T[], equals: (left: T, right: T) => boolean = strictEquals): number {
+export function commonPrefixLength<T>(
+	left: readonly T[],
+	right: readonly T[],
+	equals: (left: T, right: T) => boolean = strictEquals,
+): number {
 	const limit = Math.min(left.length, right.length);
 	let index = 0;
 	while (index < limit && equals(left[index]!, right[index]!)) index += 1;
@@ -161,14 +157,22 @@ export function commonPrefixLength<T>(left: readonly T[], right: readonly T[], e
 }
 
 /** Returns the number of equal trailing items without overlapping an already matched prefix. */
-export function commonArraySuffixLength<T>(left: readonly T[], right: readonly T[], prefixLength = 0, equals: (left: T, right: T) => boolean = strictEquals): number {
+export function commonArraySuffixLength<T>(
+	left: readonly T[],
+	right: readonly T[],
+	prefixLength = 0,
+	equals: (left: T, right: T) => boolean = strictEquals,
+): number {
 	const limit = Math.min(left.length, right.length);
 	if (!Number.isInteger(prefixLength) || prefixLength < 0 || prefixLength > limit) {
 		throw new RangeError('Prefix length must be an integer within both sequences');
 	}
 	const maximumLength = limit - prefixLength;
 	let length = 0;
-	while (length < maximumLength && equals(left[left.length - length - 1]!, right[right.length - length - 1]!)) {
+	while (
+		length < maximumLength &&
+		equals(left[left.length - length - 1]!, right[right.length - length - 1]!)
+	) {
 		length += 1;
 	}
 	return length;
@@ -180,28 +184,22 @@ function strictEquals<T>(left: T, right: T): boolean {
 
 /** A callback-based lazy sequence that can stop iteration early. */
 export class CallbackIterable<T> {
-	public static readonly empty = new CallbackIterable<never>(_callback => {});
+	public static readonly empty = new CallbackIterable<never>(_callback => { });
 
-	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) {}
+	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) { }
 
 	forEach(handler: (item: T) => void): void {
-		this.iterate(item => {
-			handler(item);
-			return true;
-		});
+		this.iterate(item => { handler(item); return true; });
 	}
 
 	toArray(): T[] {
 		const result: T[] = [];
-		this.iterate(item => {
-			result.push(item);
-			return true;
-		});
+		this.iterate(item => { result.push(item); return true; });
 		return result;
 	}
 
 	filter(predicate: (item: T) => boolean): CallbackIterable<T> {
-		return new CallbackIterable(callback => this.iterate(item => (predicate(item) ? callback(item) : true)));
+		return new CallbackIterable(callback => this.iterate(item => predicate(item) ? callback(item) : true));
 	}
 
 	map<TResult>(mapFn: (item: T) => TResult): CallbackIterable<TResult> {
@@ -210,10 +208,7 @@ export class CallbackIterable<T> {
 
 	some(predicate: (item: T) => boolean): boolean {
 		let result = false;
-		this.iterate(item => {
-			result = predicate(item);
-			return !result;
-		});
+		this.iterate(item => { result = predicate(item); return !result; });
 		return result;
 	}
 

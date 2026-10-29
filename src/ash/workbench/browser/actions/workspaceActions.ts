@@ -22,16 +22,9 @@ export const OpenFolderCommandId = 'workbench.action.files.openFolder';
 export class OpenWorkspaceAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.openWorkspace',
-			title: localize2('workspace.openFile', 'Open Workspace from File...'),
-			f1: true,
+			id: 'workbench.action.openWorkspace', title: localize2('workspace.openFile', 'Open Workspace from File...'), f1: true,
 			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-				group: '2_open',
-				order: 3,
-			},
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 3 }
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -42,10 +35,8 @@ export class OpenWorkspaceAction extends Action2 {
 export class OpenWorkspaceConfigFileAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.openWorkspaceConfigFile',
-			title: localize2('workspace.openConfiguration', 'Open Workspace Configuration File'),
-			f1: true,
-			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), WorkbenchStateContext.isEqualTo('workspace')),
+			id: 'workbench.action.openWorkspaceConfigFile', title: localize2('workspace.openConfiguration', 'Open Workspace Configuration File'), f1: true,
+			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), WorkbenchStateContext.isEqualTo('workspace'))
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -57,16 +48,9 @@ export class OpenWorkspaceConfigFileAction extends Action2 {
 export class AddRootFolderAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.addRootFolder',
-			title: localize2('workspace.addFolder', 'Add Folder to Workspace...'),
-			f1: true,
+			id: 'workbench.action.addRootFolder', title: localize2('workspace.addFolder', 'Add Folder to Workspace...'), f1: true,
 			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-				group: '2_open',
-				order: 4,
-			},
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 4 }
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -77,22 +61,13 @@ export class AddRootFolderAction extends Action2 {
 export class RemoveRootFolderAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.removeRootFolder',
-			title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...'),
-			f1: true,
+			id: 'workbench.action.removeRootFolder', title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...'), f1: true,
 			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
-				group: '2_open',
-				order: 5,
-			},
+			menu: { id: MenuId.MenubarFileMenu, when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)), group: '2_open', order: 5 }
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const folder = await accessor
-			.get(ICommandService)
-			.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('workspace.removeFolder', 'Remove Folder from Workspace...') }]);
+		const folder = await accessor.get(ICommandService).executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('workspace.removeFolder', 'Remove Folder from Workspace...') }]);
 		if (!folder) return;
 		await accessor.get(IWorkspaceEditingService).removeFolders([folder.uri]);
 		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
@@ -102,16 +77,9 @@ export class RemoveRootFolderAction extends Action2 {
 export class SaveWorkspaceAsAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.saveWorkspaceAs',
-			title: localize2('workspace.saveAs', 'Save Workspace As...'),
-			f1: true,
+			id: 'workbench.action.saveWorkspaceAs', title: localize2('workspace.saveAs', 'Save Workspace As...'), f1: true,
 			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-				group: '2_open',
-				order: 6,
-			},
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 6 }
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -122,7 +90,10 @@ export class SaveWorkspaceAsAction extends Action2 {
 		status(localize('workspace.saved', 'Workspace saved.'));
 	}
 }
-const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(OpenFolderWorkspaceSupportContext.isEqualTo(false), BrowserLocalFolderSupportContext.isEqualTo(true));
+const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(
+	OpenFolderWorkspaceSupportContext.isEqualTo(false),
+	BrowserLocalFolderSupportContext.isEqualTo(true),
+);
 const EmptyWorkspaceSupport = ContextKeyExpr.or(IsNativeContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true));
 const CloseWorkspacePrecondition = ContextKeyExpr.and(EmptyWorkspaceSupport, ContextKeyExpr.notEquals(WorkbenchStateContext.key, 'empty'));
 
@@ -149,11 +120,7 @@ MenusRegistry.appendMenuItems([
 	{
 		id: MenuId.MenubarFileMenu,
 		item: {
-			command: {
-				id: CloseWorkspaceAction.ID,
-				title: localize2({ bundle: 'ash', key: 'workbench.closeFolder' }, 'Close Folder'),
-				precondition: CloseWorkspacePrecondition,
-			},
+			command: { id: CloseWorkspaceAction.ID, title: localize2({ bundle: 'ash', key: 'workbench.closeFolder' }, 'Close Folder'), precondition: CloseWorkspacePrecondition },
 			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('folder')),
 			group: '6_close',
 			order: 3,
@@ -162,11 +129,7 @@ MenusRegistry.appendMenuItems([
 	{
 		id: MenuId.MenubarFileMenu,
 		item: {
-			command: {
-				id: CloseWorkspaceAction.ID,
-				title: localize2({ bundle: 'ash', key: 'workbench.closeWorkspace' }, 'Close Workspace'),
-				precondition: CloseWorkspacePrecondition,
-			},
+			command: { id: CloseWorkspaceAction.ID, title: localize2({ bundle: 'ash', key: 'workbench.closeWorkspace' }, 'Close Workspace'), precondition: CloseWorkspacePrecondition },
 			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('workspace')),
 			group: '6_close',
 			order: 3,
@@ -182,12 +145,7 @@ export class OpenFolderAction extends Action2 {
 			title: localize2({ bundle: 'ash', key: 'workbench.openFolder' }, 'Open Folder...'),
 			f1: true,
 			precondition: OpenFolderWorkspaceSupportContext.isEqualTo(true),
-			menu: {
-				id: MenuId.MenubarFileMenu,
-				when: OpenFolderWorkspaceSupportContext.isEqualTo(true),
-				group: '2_open',
-				order: 1,
-			},
+			menu: { id: MenuId.MenubarFileMenu, when: OpenFolderWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 1 },
 		});
 	}
 

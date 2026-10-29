@@ -18,7 +18,9 @@ export interface IPullRequestHoverDetails {
 	readonly checks: GitHubChecks | undefined;
 }
 
-export type LazyGitHubResourceState<T> = { readonly status: 'idle' | 'loading' | 'failed' } | { readonly status: 'resolved'; readonly value: T };
+export type LazyGitHubResourceState<T> =
+	| { readonly status: 'idle' | 'loading' | 'failed'; }
+	| { readonly status: 'resolved'; readonly value: T; };
 
 interface ResourceEntry<T> extends IDisposable {
 	readonly cancellation: CancellationTokenSource;
@@ -27,10 +29,7 @@ interface ResourceEntry<T> extends IDisposable {
 	isComplete: boolean;
 }
 
-enum ResourceDetail {
-	Core,
-	Checks,
-}
+enum ResourceDetail { Core, Checks }
 
 /** Core metadata appears with the link; checks are requested only on hover intent. */
 export class LazyGitHubResourceResolver extends Disposable {
@@ -69,41 +68,29 @@ export class LazyGitHubResourceResolver extends Disposable {
 		if (token.isCancellationRequested) {
 			throw new CancellationError();
 		}
-		return this.load(
-			entry,
-			async () => {
-				const state = entry.state.get();
-				if (state.status !== 'resolved') {
-					throw new Error('Pull request core metadata is not loaded');
-				}
-				const pullRequest = state.value.pullRequest;
-				const statuses: GitHubChecks['statuses'][number][] = [];
-				const checks: GitHubChecks['checks'][number][] = [];
-				let page: number | null = 1;
-				let result!: GitHubChecks;
-				while (page !== null) {
-					result = await this.github.readChecks(repository(target), pullRequest.headCommit, page, entry.cancellation.token);
-					statuses.push(...result.statuses);
-					checks.push(...result.checks);
-					page = result.nextPage;
-				}
-				return { pullRequest, checks: { ...result, statuses, checks } };
-			},
-			ResourceDetail.Checks,
-		);
+		return this.load(entry, async () => {
+			const state = entry.state.get();
+			if (state.status !== 'resolved') {
+				throw new Error('Pull request core metadata is not loaded');
+			}
+			const pullRequest = state.value.pullRequest;
+			const statuses: GitHubChecks['statuses'][number][] = [];
+			const checks: GitHubChecks['checks'][number][] = [];
+			let page: number | null = 1;
+			let result!: GitHubChecks;
+			while (page !== null) {
+				result = await this.github.readChecks(repository(target), pullRequest.headCommit, page, entry.cancellation.token);
+				statuses.push(...result.statuses);
+				checks.push(...result.checks);
+				page = result.nextPage;
+			}
+			return { pullRequest, checks: { ...result, statuses, checks } };
+		}, ResourceDetail.Checks);
 	}
 
-	public retain(references: readonly { readonly resource: URI }[]): void {
-		for (const [cache, kind] of [
-			[this.issues, 'issue'],
-			[this.pullRequests, 'pullRequest'],
-		] as const) {
-			const retained = new Set(
-				references
-					.map(reference => parseGitHubReferenceTarget(reference.resource, kind))
-					.filter(target => target !== undefined)
-					.map(referenceKey),
-			);
+	public retain(references: readonly { readonly resource: URI; }[]): void {
+		for (const [cache, kind] of [[this.issues, 'issue'], [this.pullRequests, 'pullRequest']] as const) {
+			const retained = new Set(references.map(reference => parseGitHubReferenceTarget(reference.resource, kind)).filter(target => target !== undefined).map(referenceKey));
 			for (const key of cache.keys()) {
 				if (!retained.has(key)) {
 					cache.deleteAndDispose(key);
@@ -118,15 +105,12 @@ export class LazyGitHubResourceResolver extends Disposable {
 		let entry = cache.get(key);
 		if (!entry) {
 			const cancellation = new CancellationTokenSource();
-			entry = Object.assign(
-				toDisposable(() => cancellation.dispose(true)),
-				{
-					cancellation,
-					state: observableValue<LazyGitHubResourceState<T>>(this, { status: 'idle' }),
-					pending: undefined,
-					isComplete: false,
-				},
-			);
+			entry = Object.assign(toDisposable(() => cancellation.dispose(true)), {
+				cancellation,
+				state: observableValue<LazyGitHubResourceState<T>>(this, { status: 'idle' }),
+				pending: undefined,
+				isComplete: false,
+			});
 			cache.set(key, entry);
 		}
 		return entry;
@@ -173,7 +157,7 @@ export function parseGitHubReferenceTarget(resource: URI, kind: GitHubReferenceK
 	return Number.isSafeInteger(number) ? { owner: match[1], repo: match[2], number } : undefined;
 }
 
-function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string } {
+function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string; } {
 	return { host: 'github.com', owner: target.owner, name: target.repo };
 }
 

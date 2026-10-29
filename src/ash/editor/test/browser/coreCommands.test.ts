@@ -27,6 +27,7 @@ const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeE
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
 
+
 test('workbench select-all command selects the focused or active editor model', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main><button>Outside</button></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -64,7 +65,7 @@ test('core commands select all', () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	const selections = viewport.testViewModel;
-	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position(0 + 1, 0 + 1))]));
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1))]));
 	viewport.layout({ width: 400, height: 100 });
 	const input = viewport.controller;
 	using commands = installCoreTextEditorCommands(input.element, viewport, viewport.testViewModel);
@@ -72,7 +73,7 @@ test('core commands select all', () => {
 	const selectAll = keyboardEvent(dom.window, 'a', { metaKey: true });
 	input.element.dispatchEvent(selectAll);
 	assert.equal(selectAll.defaultPrevented, true);
-	assert.deepEqual(selections.getSelections()[0]!.getEndPosition(), new Position(2 + 1, 5 + 1));
+	assert.deepEqual(selections.getSelections()[0]!.getEndPosition(), new Position((2) + 1, (5) + 1));
 
 	dom.window.close();
 });
@@ -84,14 +85,14 @@ test('line selection remains an independent editor extension', () => {
 	using model = new TextModel('one\ntwo\nthree');
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.view.layout({ width: 400, height: 100 });
-	editor.setSelection(Selection.fromPositions(new Position(0 + 1, 1 + 1)));
+	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 
 	const first = keyboardEvent(dom.window, 'l', { ctrlKey: true });
 	editor.controller.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(1 + 1, 0 + 1)));
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
 	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, 'l', { ctrlKey: true }));
-	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 0 + 1)));
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
 });
@@ -107,7 +108,9 @@ test('keyboard word navigation consumes standard WordOperations boundaries', () 
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 400, height: 100 });
-	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 11))]));
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([
+		Selection.fromPositions(new Position(1, 11)),
+	]));
 	using navigation = new KeyboardNavigationController(viewport, viewport.testViewModel, viewport.controller.userInputEvents, {
 		operatingSystem: OperatingSystem.Macintosh,
 	});
@@ -132,12 +135,7 @@ test('core commands reject dependencies from different text models', () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
-	using otherViewport = new View({
-		container: h(dom.window.document, 'div'),
-		model: otherModel,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-	});
+	using otherViewport = new View({ container: h(dom.window.document, 'div'), model: otherModel, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel), /must share one text model/);
 	dom.window.close();
 });

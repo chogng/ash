@@ -32,18 +32,11 @@ const diffPreview = new URLSearchParams(location.search).get('sample') === 'diff
 const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
 serviceCollection.set(IChatSessionNavigationService, {
 	revision: 0,
-	getConversations: () => [],
-	getActiveConversation: () => undefined,
+	getConversations: () => [], getActiveConversation: () => undefined,
 	captureActiveDraft: async () => undefined,
-	appendToActiveDraft: () => {
-		throw chatUnavailable();
-	},
-	openConversation: async () => {
-		throw chatUnavailable();
-	},
-	startVoiceConversation: async () => {
-		throw chatUnavailable();
-	},
+	appendToActiveDraft: () => { throw chatUnavailable(); },
+	openConversation: async () => { throw chatUnavailable(); },
+	startVoiceConversation: async () => { throw chatUnavailable(); },
 });
 // Registration stays behind localization and within this isolated document.
 await import('./themePreview.contribution.js');
@@ -56,13 +49,7 @@ class TerminalPreviewPane extends ViewPane {
 		this.setHeaderVisible(false);
 		const doc = container.ownerDocument;
 		this.contentElement.classList.add('ash-theme-preview-terminal');
-		const sample = h(doc, 'div', {
-			attributes: {
-				role: 'region',
-				'aria-label': localize('themeEditor.previewOnly', 'Preview only'),
-				tabindex: '0',
-			},
-		});
+		const sample = h(doc, 'div', { attributes: { role: 'region', 'aria-label': localize('themeEditor.previewOnly', 'Preview only'), tabindex: '0' } });
 		sample.append(h(doc, 'p', {}, localize('themeEditor.previewTerminalIntro', 'Terminal color preview. Commands are not executed.')));
 		for (const bright of [false, true]) {
 			const line = h(doc, 'p');
@@ -75,21 +62,14 @@ class TerminalPreviewPane extends ViewPane {
 			sample.append(line);
 		}
 		const prompt = h(doc, 'p', {}, '$ ');
-		prompt.append(
-			h(doc, 'span', { className: 'ash-theme-preview-terminal-selection' }, localize('themeEditor.previewOnly', 'Preview only')),
-			' ',
-			h(doc, 'span', { className: 'ash-theme-preview-terminal-cursor', attributes: { 'aria-hidden': 'true' } }, '▌'),
-		);
+		prompt.append(h(doc, 'span', { className: 'ash-theme-preview-terminal-selection' }, localize('themeEditor.previewOnly', 'Preview only')), ' ', h(doc, 'span', { className: 'ash-theme-preview-terminal-cursor', attributes: { 'aria-hidden': 'true' } }, '▌'));
 		sample.append(prompt);
 		this.contentElement.append(sample);
 	}
 }
 
 let services!: IInstantiationService;
-serviceCollection.set(
-	IFileDialogService,
-	host.fileDialogDescriptor(() => services),
-);
+serviceCollection.set(IFileDialogService, host.fileDialogDescriptor(() => services));
 const workbench = resources.add(
 	await startWorkbench({
 		productName: 'Ash',
@@ -98,14 +78,9 @@ const workbench = resources.add(
 		serviceCollection,
 		viewConstructors: new Map([[TERMINAL_VIEW_ID, new SyncDescriptor(TerminalPreviewPane)]]),
 		extensionHost: api.extensionHost,
-		workspace: {
-			id: 'theme-preview',
-			folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }],
-		},
+		workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 		workspaceFileSystemProvider: workspaceFiles,
-		defaultLayout: {
-			parts: { sidebar: !diffPreview, panel: !diffPreview, auxiliarybar: false, agentSidebar: false },
-		},
+		defaultLayout: { parts: { sidebar: !diffPreview, panel: !diffPreview, auxiliarybar: false, agentSidebar: false } },
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
@@ -125,10 +100,7 @@ const workbench = resources.add(
 			overrides: [],
 		},
 		// Webviews are not part of the sample. The disconnected host supplies no remote resources.
-		environmentService: {
-			webviewExternalEndpoint: 'https://{{uuid}}.invalid',
-			argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }),
-		},
+		environmentService: { webviewExternalEndpoint: 'https://{{uuid}}.invalid', argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }) },
 		clipboardService: clipboard,
 		createStorageService: async () => storage,
 		createUserDataFileSystemProvider: async () => new InMemoryFileSystemProvider(),
@@ -141,10 +113,7 @@ const workbench = resources.add(
 			host.restrictOpeners(scope);
 			return scope.createInstance(BrowserURLService, undefined);
 		},
-		createWindow: scope => {
-			services = scope;
-			return Disposable.None;
-		},
+		createWindow: scope => { services = scope; return Disposable.None; },
 	}),
 );
 await workbench.whenRestored;
@@ -186,10 +155,7 @@ export function withOpacity(color: string): string {
   return color + "cc";
 }
 `;
-	for (const [resource, text] of [
-		[original, before],
-		[modified, after],
-	] as const) {
+	for (const [resource, text] of [[original, before], [modified, after]] as const) {
 		await workspaceFiles.writeFile(resource, new TextEncoder().encode(text), { create: true, overwrite: false });
 	}
 	await editorService.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }, localize('themeEditor.diffSample', 'Color changes')), { pinned: true, preserveFocus: true });

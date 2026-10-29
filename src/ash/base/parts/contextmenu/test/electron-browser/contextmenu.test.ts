@@ -6,30 +6,20 @@ import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, t
 suite('Electron context menu transport', () => {
 	const originalGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	let menus: typeof import('../../electron-browser/contextmenu.js');
-	const calls: { readonly channel: string; readonly params: unknown }[] = [];
+	const calls: { readonly channel: string; readonly params: unknown; }[] = [];
 	let invokeResult: unknown;
 	let invokeError: Error | undefined;
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
-			send: () => {
-				throw new Error('Unexpected send');
-			},
+			send: () => { throw new Error('Unexpected send'); },
 			async invoke(channel, params) {
 				calls.push({ channel, params });
-				if (invokeError) {
-					throw invokeError;
-				}
+				if (invokeError) { throw invokeError; }
 				return invokeResult;
 			},
-			on: () => {
-				throw new Error('Unexpected subscription');
-			},
+			on: () => { throw new Error('Unexpected subscription'); },
 		},
-		ipcMessagePort: {
-			acquire: () => {
-				throw new Error('Unexpected port acquisition');
-			},
-		},
+		ipcMessagePort: { acquire: () => { throw new Error('Unexpected port acquisition'); } },
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};
@@ -40,11 +30,8 @@ suite('Electron context menu transport', () => {
 	});
 
 	suiteTeardown(() => {
-		if (originalGlobals) {
-			Object.defineProperty(globalThis, 'ash', originalGlobals);
-		} else {
-			Reflect.deleteProperty(globalThis, 'ash');
-		}
+		if (originalGlobals) { Object.defineProperty(globalThis, 'ash', originalGlobals); }
+		else { Reflect.deleteProperty(globalThis, 'ash'); }
 	});
 
 	setup(() => {
@@ -62,13 +49,9 @@ suite('Electron context menu transport', () => {
 		invokeResult = { selectedId: 'run' };
 		assert.deepEqual(await menus.popup(request), { selectedId: 'run' });
 		let finishClose!: () => void;
-		invokeResult = new Promise<void>(resolve => {
-			finishClose = resolve;
-		});
+		invokeResult = new Promise<void>(resolve => { finishClose = resolve; });
 		let closed = false;
-		const closing = menus.close().then(() => {
-			closed = true;
-		});
+		const closing = menus.close().then(() => { closed = true; });
 		await Promise.resolve();
 		assert.equal(closed, false);
 		finishClose();

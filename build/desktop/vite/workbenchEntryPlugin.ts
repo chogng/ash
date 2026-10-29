@@ -4,11 +4,16 @@ import { normalizePath, type Connect, type Plugin } from 'vite';
 import type { ICSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
 interface WorkbenchEntryServer {
-	readonly middlewares: { use(middleware: Connect.NextHandleFunction): void };
+	readonly middlewares: {
+		use(middleware: Connect.NextHandleFunction): void;
+	};
 	transformIndexHtml(url: string, html: string): Promise<string>;
 }
 
-type ProductPage = { readonly url: string; readonly inputFile: string } & ({ readonly sourceFile: string } | { readonly html: string });
+type ProductPage = {
+	readonly url: string;
+	readonly inputFile: string;
+} & ({ readonly sourceFile: string; } | { readonly html: string; });
 
 interface CSSDevelopmentHost {
 	readonly service: ICSSDevelopmentService;
@@ -29,9 +34,7 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 	let development = false;
 	let preserveSymlinks = false;
 	async function readPage(page: ProductPage): Promise<string> {
-		if ('html' in page) {
-			return page.html;
-		}
+		if ('html' in page) { return page.html; }
 		const html = await readFile(page.sourceFile, 'utf8');
 		// Vite's HTML input is rooted under Code, while the Sessions module stays at its owning source path.
 		return html.replace(/(<script\b[^>]*\bsrc=["'])(\.\/[^"']+)(["'])/gu, (_match, prefix: string, source: string, suffix: string) => {
@@ -50,17 +53,15 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 			order: 'pre',
 			async handler(html) {
 				if (!development || !cssDevelopment?.service.isEnabled) return html;
-				const modules = await Promise.all(
-					(await cssDevelopment.service.getCssModules()).map(async module => {
-						const source = resolve(cssDevelopment.sourceRoot, module);
-						// Match Vite's resolved module identity, including symlinked source roots.
-						const file = preserveSymlinks ? source : await realpath(source);
-						const path = normalizePath(relative(root, file));
-						const url = path.startsWith('../') ? `/@fs/${normalizePath(file).replace(/^\/+/, '')}` : `/${path}`;
-						const encoded = encodeURI(url).replaceAll('#', '%23').replaceAll('?', '%3F');
-						return { specifiers: [encoded, `${encoded}?import`], stylesheet: `${encoded}?direct` };
-					}),
-				);
+				const modules = await Promise.all((await cssDevelopment.service.getCssModules()).map(async module => {
+					const source = resolve(cssDevelopment.sourceRoot, module);
+					// Match Vite's resolved module identity, including symlinked source roots.
+					const file = preserveSymlinks ? source : await realpath(source);
+					const path = normalizePath(relative(root, file));
+					const url = path.startsWith('../') ? `/@fs/${normalizePath(file).replace(/^\/+/, '')}` : `/${path}`;
+					const encoded = encodeURI(url).replaceAll('#', '%23').replaceAll('?', '%3F');
+					return { specifiers: [encoded, `${encoded}?import`], stylesheet: `${encoded}?direct` };
+				}));
 				const template = await readFile(resolve(import.meta.dirname, '../../../src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
 				// Escape HTML delimiters before putting source paths in an executable page.
 				const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify(modules).replaceAll('<', '\\u003c'));

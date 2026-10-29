@@ -31,12 +31,8 @@ export abstract class AbstractPolicyService extends Disposable implements IPolic
 	private values: IStringDictionary<PolicyValue> = {};
 	protected stopped = false;
 
-	get policyDefinitions(): IStringDictionary<PolicyDefinition> {
-		return this.definitions;
-	}
-	protected get policyValues(): Readonly<IStringDictionary<PolicyValue>> {
-		return this.values;
-	}
+	get policyDefinitions(): IStringDictionary<PolicyDefinition> { return this.definitions; }
+	protected get policyValues(): Readonly<IStringDictionary<PolicyValue>> { return this.values; }
 
 	async updatePolicyDefinitions(definitions: IStringDictionary<PolicyDefinition>): Promise<IStringDictionary<PolicyValue>> {
 		for (const [name, definition] of Object.entries(definitions)) {
@@ -49,9 +45,7 @@ export abstract class AbstractPolicyService extends Disposable implements IPolic
 		return { ...this.values };
 	}
 
-	getPolicyValue(name: string): PolicyValue | undefined {
-		return Object.hasOwn(this.values, name) ? this.values[name] : undefined;
-	}
+	getPolicyValue(name: string): PolicyValue | undefined { return Object.hasOwn(this.values, name) ? this.values[name] : undefined; }
 
 	protected accept(values: IStringDictionary<PolicyValue>): void {
 		if (this.stopped) return;
@@ -63,10 +57,7 @@ export abstract class AbstractPolicyService extends Disposable implements IPolic
 
 	protected abstract refresh(): Promise<void>;
 
-	override dispose(): void {
-		this.stopped = true;
-		super.dispose();
-	}
+	override dispose(): void { this.stopped = true; super.dispose(); }
 }
 
 /** Validate the whole IPC/source snapshot before replacing the last valid values. */
@@ -76,8 +67,7 @@ export function validatePolicyValues(value: unknown, definitions: IStringDiction
 	for (const [name, candidate] of Object.entries(value)) {
 		const definition = Object.hasOwn(definitions, name) ? definitions[name] : undefined;
 		if (!definition) continue;
-		if (typeof candidate !== definition.type || (typeof candidate === 'number' && !Number.isFinite(candidate)) || (typeof candidate === 'string' && candidate.length > 1024 * 1024))
-			throw new TypeError(`Invalid policy value: ${name}`);
+		if (typeof candidate !== definition.type || typeof candidate === 'number' && !Number.isFinite(candidate) || typeof candidate === 'string' && candidate.length > 1024 * 1024) throw new TypeError(`Invalid policy value: ${name}`);
 		Object.defineProperty(values, name, { value: candidate, enumerable: true, configurable: true });
 	}
 	return values;
@@ -100,10 +90,6 @@ export class NullPolicyService implements IPolicyService {
 	readonly _serviceBrand = undefined;
 	readonly onDidChange = Event.None;
 	readonly policyDefinitions = {};
-	async updatePolicyDefinitions(): Promise<IStringDictionary<PolicyValue>> {
-		return {};
-	}
-	getPolicyValue(): undefined {
-		return undefined;
-	}
+	async updatePolicyDefinitions(): Promise<IStringDictionary<PolicyValue>> { return {}; }
+	getPolicyValue(): undefined { return undefined; }
 }

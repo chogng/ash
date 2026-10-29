@@ -14,9 +14,7 @@ import { registerOnboardingScenario } from '../../common/onboardingRegistry.js';
 
 suite('OnboardingScenarioService', () => {
 	test('starts a pending guide when its owned target appears', async () => {
-		const dom = new JSDOM('<!doctype html><body><main><button id="target">Target</button></main></body>', {
-			url: 'https://ash.invalid/',
-		});
+		const dom = new JSDOM('<!doctype html><body><main><button id="target">Target</button></main></body>', { url: 'https://ash.invalid/' });
 		const previousWindow = globalThis.window;
 		const previousHTMLElement = globalThis.HTMLElement;
 		Object.assign(globalThis, { window: dom.window, HTMLElement: dom.window.HTMLElement });
@@ -25,21 +23,11 @@ suite('OnboardingScenarioService', () => {
 			const container = dom.window.document.querySelector('main')!;
 			using services = new InstantiationService();
 			using context = new ContextKeyService();
-			services.registerInstance(IConfigurationService, {
-				getValue: () => true,
-				onDidChangeConfiguration: Event.None,
-			} as unknown as IConfigurationService);
+			services.registerInstance(IConfigurationService, { getValue: () => true, onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
 			services.registerInstance(IContextKeyService, context);
 			services.registerInstance(ILayoutService, { mainContainer: container } as ILayoutService);
-			services.registerInstance(IStorageService, {
-				getBoolean: () => false,
-				store() {},
-				remove() {},
-			} as unknown as IStorageService);
-			using scenario = registerOnboardingScenario({
-				id: 'test.lateTarget',
-				steps: [{ target: 'test.lateTarget.control', title: 'Late target', description: 'Appeared after startup' }],
-			});
+			services.registerInstance(IStorageService, { getBoolean: () => false, store() { }, remove() { } } as unknown as IStorageService);
+			using scenario = registerOnboardingScenario({ id: 'test.lateTarget', steps: [{ target: 'test.lateTarget.control', title: 'Late target', description: 'Appeared after startup' }] });
 			using service = services.createInstance(OnboardingScenarioService);
 			service.start();
 			await new Promise<void>(resolve => setImmediate(resolve));
@@ -63,9 +51,7 @@ suite('OnboardingScenarioService', () => {
 	});
 
 	test('shows an eligible guide once and saves its shown state', async () => {
-		const dom = new JSDOM('<!doctype html><body><main><button id="target">Target</button></main></body>', {
-			url: 'https://ash.invalid/',
-		});
+		const dom = new JSDOM('<!doctype html><body><main><button id="target">Target</button></main></body>', { url: 'https://ash.invalid/' });
 		const previousWindow = globalThis.window;
 		const previousHTMLElement = globalThis.HTMLElement;
 		Object.assign(globalThis, { window: dom.window, HTMLElement: dom.window.HTMLElement });
@@ -84,12 +70,8 @@ suite('OnboardingScenarioService', () => {
 			services.registerInstance(ILayoutService, { mainContainer: container } as ILayoutService);
 			services.registerInstance(IStorageService, {
 				getBoolean: (key: string, scope: StorageScope) => scope === StorageScope.PROFILE && values.get(key) === true,
-				store: (key: string, value: boolean) => {
-					values.set(key, value);
-				},
-				remove: (key: string) => {
-					values.delete(key);
-				},
+				store: (key: string, value: boolean) => { values.set(key, value); },
+				remove: (key: string) => { values.delete(key); },
 			} as unknown as IStorageService);
 			using scenario = registerOnboardingScenario({
 				id: 'test.automatic',
@@ -109,13 +91,7 @@ suite('OnboardingScenarioService', () => {
 			assert.equal(container.querySelector('[role="dialog"] h2')?.textContent, 'Automatic');
 			container.querySelector<HTMLButtonElement>('[role="dialog"] button')!.click();
 			await new Promise<void>(resolve => setImmediate(resolve));
-			assert.deepEqual(
-				{
-					shown: values.get('onboarding.shown.test.automatic'),
-					dialogs: container.querySelectorAll('[role="dialog"]').length,
-				},
-				{ shown: true, dialogs: 0 },
-			);
+			assert.deepEqual({ shown: values.get('onboarding.shown.test.automatic'), dialogs: container.querySelectorAll('[role="dialog"]').length }, { shown: true, dialogs: 0 });
 		} finally {
 			Object.assign(globalThis, { window: previousWindow, HTMLElement: previousHTMLElement });
 			dom.window.close();

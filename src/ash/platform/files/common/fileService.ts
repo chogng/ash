@@ -77,14 +77,7 @@ export class FileService extends Disposable implements IFileService {
 		if (!/^[a-z][a-z0-9+.-]*$/u.test(scheme)) {
 			throw new TypeError(`Invalid file system provider scheme: ${scheme}`);
 		}
-		if (
-			!provider ||
-			typeof provider.readFile !== 'function' ||
-			typeof provider.watch !== 'function' ||
-			typeof provider.onDidChangeFiles !== 'function' ||
-			typeof provider.onDidChangeCapabilities !== 'function' ||
-			!Number.isInteger(provider.capabilities)
-		) {
+		if (!provider || typeof provider.readFile !== 'function' || typeof provider.watch !== 'function' || typeof provider.onDidChangeFiles !== 'function' || typeof provider.onDidChangeCapabilities !== 'function' || !Number.isInteger(provider.capabilities)) {
 			throw new TypeError(`File system provider '${scheme}' does not implement the file service contract`);
 		}
 		if (this.providers.has(scheme)) {
@@ -95,24 +88,20 @@ export class FileService extends Disposable implements IFileService {
 			const listeners = new DisposableStore();
 			this.providerListeners.set(provider, listeners);
 			listeners.add(provider.onDidChangeFiles(event => this.acceptProviderChange(provider, event)));
-			listeners.add(
-				provider.onDidChangeCapabilities(() => {
-					for (const [scheme, registration] of this.providers) {
-						if (registration.provider === provider) this.capabilitiesEmitter.fire({ scheme, provider });
-					}
-					this.acceptProviderChange(provider, { resources: undefined });
-				}),
-			);
+			listeners.add(provider.onDidChangeCapabilities(() => {
+				for (const [scheme, registration] of this.providers) {
+					if (registration.provider === provider) this.capabilitiesEmitter.fire({ scheme, provider });
+				}
+				this.acceptProviderChange(provider, { resources: undefined });
+			}));
 			if (hasPathIdentityCapability(provider)) {
-				listeners.add(
-					provider.onDidChangePathIdentity(() => {
-						for (const [scheme, registration] of this.providers) {
-							if (registration.provider === provider) {
-								this.pathIdentityEmitter.fire({ scheme, provider });
-							}
+				listeners.add(provider.onDidChangePathIdentity(() => {
+					for (const [scheme, registration] of this.providers) {
+						if (registration.provider === provider) {
+							this.pathIdentityEmitter.fire({ scheme, provider });
 						}
-					}),
-				);
+					}
+				}));
 			}
 		}
 		const registration = { provider };
@@ -177,10 +166,7 @@ export class FileService extends Disposable implements IFileService {
 		let watch = this.watches.get(key);
 		if (!watch) {
 			const handle = registration.provider.watch(resource, normalized);
-			watch = Object.assign(
-				toDisposable(() => handle.dispose()),
-				{ registration, users: 0 },
-			);
+			watch = Object.assign(toDisposable(() => handle.dispose()), { registration, users: 0 });
 			this.watches.set(key, watch);
 		}
 		watch.users++;
@@ -194,10 +180,7 @@ export class FileService extends Disposable implements IFileService {
 
 	public stat(resource: URI): Promise<IFileStat> {
 		const provider = this.provider(resource);
-		return provider.stat(resource).then(stat => ({
-			...stat,
-			readonly: stat.readonly || !!(provider.capabilities & FileSystemProviderCapabilities.Readonly),
-		}));
+		return provider.stat(resource).then(stat => ({ ...stat, readonly: stat.readonly || !!(provider.capabilities & FileSystemProviderCapabilities.Readonly) }));
 	}
 
 	public readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
@@ -212,9 +195,7 @@ export class FileService extends Disposable implements IFileService {
 		return this.readFileBytes(resource).then(content => {
 			const bom = content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf;
 			return {
-				resource,
-				content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(encoding !== undefined && bom ? content.bytes.subarray(3) : content.bytes),
-				revision: content.revision,
+				resource, content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(encoding !== undefined && bom ? content.bytes.subarray(3) : content.bytes), revision: content.revision,
 				...(encoding === undefined ? {} : { encoding: bom ? 'utf8bom' : 'utf8' }),
 			};
 		});
@@ -229,13 +210,9 @@ export class FileService extends Disposable implements IFileService {
 	public async readFileStream(resource: URI, options: IReadFileStreamOptions = {}, token: CancellationToken = CancellationToken.None): Promise<IFileStreamContent> {
 		const provider = this.provider(resource);
 		for (const value of [options.position, options.length, options.limits?.size]) {
-			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-				throw new RangeError('Invalid file read range or size');
-			}
+			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) { throw new RangeError('Invalid file read range or size'); }
 		}
-		if (token.isCancellationRequested) {
-			throw canceled();
-		}
+		if (token.isCancellationRequested) { throw canceled(); }
 		const lifetime = new DisposableStore();
 		this.reads.set(lifetime, lifetime);
 		const cancellation = new CancellationTokenSource(token);
@@ -252,24 +229,17 @@ export class FileService extends Disposable implements IFileService {
 			if (hasFileReadStreamCapability(provider)) {
 				value = transform(provider.readFileStream(resource, options, cancellation.token), { data: bytes => VSBuffer.wrap(Uint8Array.from(bytes)) }, chunks => VSBuffer.concat(chunks));
 			} else {
-				if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite)) {
-					throw new FileOperationNotSupportedError(resource, 'readFileStream');
-				}
+				if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite)) { throw new FileOperationNotSupportedError(resource, 'readFileStream'); }
 				const content = await raceCancellationError(provider.readFile(resource), cancellation.token);
 				const start = options.position ?? 0;
 				const bytes = content.bytes.subarray(start, options.length === undefined ? undefined : start + options.length);
 				value = bufferToStream(VSBuffer.wrap(Uint8Array.from(bytes)));
 			}
 			const destroy = value.destroy;
-			value.destroy = (): void => {
-				this.reads.deleteAndDispose(lifetime);
-				destroy();
-			};
+			value.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
 			lifetime.add(toDisposable(destroy));
 			// Terminal delivery must reach every consumer before cleanup destroys the stream.
-			const release = (): void => {
-				queueMicrotask(() => this.reads.deleteAndDispose(lifetime));
-			};
+			const release = (): void => { queueMicrotask(() => this.reads.deleteAndDispose(lifetime)); };
 			value.on('error', release);
 			value.on('end', release);
 			return { ...stat, value };
@@ -350,15 +320,7 @@ export class FileService extends Disposable implements IFileService {
 		return registration.provider;
 	}
 
-	private async copyBetweenProviders(
-		sourceProvider: IFileSystemProviderCopyScope,
-		targetProvider: IFileSystemProviderCopyScope,
-		source: URI,
-		target: URI,
-		sameProvider: boolean,
-		token: CancellationToken,
-		staged = false,
-	): Promise<void> {
+	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken, staged = false): Promise<void> {
 		const run = <T>(operation: () => Promise<T>): Promise<T> => {
 			throwIfCancelled(token);
 			return raceCancellationError(operation(), token);
@@ -395,7 +357,7 @@ export class FileService extends Disposable implements IFileService {
 			} catch (error) {
 				// Cleanup stays on the original connection and cannot mask the copy failure.
 				if (!targetProvider.token.isCancellationRequested) {
-					await targetProvider.delete(temporary, 'ignore', 'recursive').catch(() => {});
+					await targetProvider.delete(temporary, 'ignore', 'recursive').catch(() => { });
 				}
 				throw error;
 			}
@@ -420,20 +382,15 @@ export class FileService extends Disposable implements IFileService {
 }
 
 function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSystemProviderCopyScope {
-	if (hasCopyScopeCapability(provider)) {
-		return provider.acquireCopyScope(resource);
-	}
-	return Object.assign(
-		toDisposable(() => {}),
-		{
-			token: CancellationToken.None,
-			stat: provider.stat.bind(provider),
-			readDirectory: provider.readDirectory.bind(provider),
-			readFile: provider.readFile.bind(provider),
-			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
-			createDirectory: provider.createDirectory.bind(provider),
-			rename: provider.rename.bind(provider),
-			delete: provider.delete.bind(provider),
-		},
-	);
+	if (hasCopyScopeCapability(provider)) { return provider.acquireCopyScope(resource); }
+	return Object.assign(toDisposable(() => { }), {
+		token: CancellationToken.None,
+		stat: provider.stat.bind(provider),
+		readDirectory: provider.readDirectory.bind(provider),
+		readFile: provider.readFile.bind(provider),
+		writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
+		createDirectory: provider.createDirectory.bind(provider),
+		rename: provider.rename.bind(provider),
+		delete: provider.delete.bind(provider),
+	});
 }

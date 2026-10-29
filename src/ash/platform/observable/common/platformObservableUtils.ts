@@ -4,16 +4,11 @@ import type { IConfigurationService } from '../../configuration/common/configura
 import { type ContextKeyValue, type IContextKeyService, RawContextKey } from '../../contextkey/common/contextkey.js';
 
 export function observableConfigValue<T>(key: string, defaultValue: T, configurationService: IConfigurationService): IObservable<T> {
-	return observableFromEvent(
-		key,
-		listener =>
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(key)) {
-					listener(event);
-				}
-			}),
-		() => configurationService.getValue<T>(key) ?? defaultValue,
-	);
+	return observableFromEvent(key, listener => configurationService.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(key)) {
+			listener(event);
+		}
+	}), () => configurationService.getValue<T>(key) ?? defaultValue);
 }
 
 /** The caller owns the binding for as long as it owns the computed state. */

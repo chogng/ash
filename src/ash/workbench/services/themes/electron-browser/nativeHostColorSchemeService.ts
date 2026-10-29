@@ -10,16 +10,11 @@ export class NativeHostColorSchemeService extends Disposable implements IHostCol
 	private revision = 0;
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeColorScheme = this.changed.event;
-	constructor(
-		private scheme: IColorScheme,
-		@INativeHostService private readonly host: INativeHostApi,
-	) {
+	constructor(private scheme: IColorScheme, @INativeHostService private readonly host: INativeHostApi) {
 		super();
 		const subscription = this.host.onDidChangeColorScheme(scheme => {
 			this.revision++;
-			if (scheme.dark === this.dark && scheme.highContrast === this.highContrast) {
-				return;
-			}
+			if (scheme.dark === this.dark && scheme.highContrast === this.highContrast) { return; }
 			this.scheme = scheme;
 			this.changed.fire();
 		});
@@ -29,16 +24,10 @@ export class NativeHostColorSchemeService extends Disposable implements IHostCol
 		// A system event received during the read is newer than its reply.
 		const revision = this.revision;
 		const scheme = await this.host.getOSColorScheme();
-		if (this.isDisposed || revision !== this.revision || (scheme.dark === this.dark && scheme.highContrast === this.highContrast)) {
-			return;
-		}
+		if (this.isDisposed || revision !== this.revision || scheme.dark === this.dark && scheme.highContrast === this.highContrast) { return; }
 		this.scheme = scheme;
 		this.changed.fire();
 	}
-	public get dark(): boolean {
-		return this.scheme.dark;
-	}
-	public get highContrast(): boolean {
-		return this.scheme.highContrast;
-	}
+	public get dark(): boolean { return this.scheme.dark; }
+	public get highContrast(): boolean { return this.scheme.highContrast; }
 }

@@ -2,14 +2,7 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import {
-	type TextEdit,
-	normalizeLanguageWorkspaceEdit,
-	type LanguageWorkspaceEdit,
-	type LanguageWorkspaceEditEntry,
-	type LanguageTextDocumentEdit,
-	type WorkspaceEdit,
-} from '../../common/languages.js';
+import { type TextEdit, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry, type LanguageTextDocumentEdit, type WorkspaceEdit } from '../../common/languages.js';
 import { type ICodeEditor } from '../editorBrowser.js';
 import type { TextModelEditSource } from '../../common/textModelEditSource.js';
 
@@ -43,7 +36,7 @@ interface ResourceFileEditLike {
 }
 
 export abstract class ResourceEdit {
-	protected constructor(readonly metadata?: WorkspaceEditMetadata) {}
+	protected constructor(readonly metadata?: WorkspaceEditMetadata) { }
 
 	static convert(edit: LanguageWorkspaceEdit | WorkspaceEdit): ResourceEdit[] {
 		if ('edits' in edit) {
@@ -68,7 +61,9 @@ export class ResourceTextEdit extends ResourceEdit {
 	}
 
 	static lift(edit: ResourceTextEdit | ResourceTextEditLike): ResourceTextEdit {
-		return edit instanceof ResourceTextEdit ? edit : new ResourceTextEdit(edit.resource, edit.textEdit, edit.versionId, edit.metadata);
+		return edit instanceof ResourceTextEdit
+			? edit
+			: new ResourceTextEdit(edit.resource, edit.textEdit, edit.versionId, edit.metadata);
 	}
 
 	constructor(
@@ -90,7 +85,9 @@ export class ResourceFileEdit extends ResourceEdit {
 	}
 
 	static lift(edit: ResourceFileEdit | ResourceFileEditLike): ResourceFileEdit {
-		return edit instanceof ResourceFileEdit ? edit : new ResourceFileEdit(edit.oldResource, edit.newResource, edit.options ?? {}, edit.metadata);
+		return edit instanceof ResourceFileEdit
+			? edit
+			: new ResourceFileEdit(edit.oldResource, edit.newResource, edit.options ?? {}, edit.metadata);
 	}
 
 	constructor(
@@ -106,7 +103,7 @@ export class ResourceFileEdit extends ResourceEdit {
 
 export interface IBulkEditOptions {
 	readonly editor?: ICodeEditor;
-	readonly progress?: { report(value: unknown): void };
+	readonly progress?: { report(value: unknown): void; };
 	readonly token?: AbortSignal;
 	readonly showPreview?: boolean;
 	readonly label?: string;
@@ -121,14 +118,15 @@ export interface IBulkEditOptions {
 	readonly reason?: TextModelEditSource;
 }
 
-export type IBulkEditResult =
-	| { readonly ariaSummary: string; readonly isApplied: false }
-	| {
-			readonly ariaSummary: string;
-			readonly isApplied: true;
-			readonly undo: () => Promise<void>;
-			readonly resources: readonly URI[];
-	  };
+export type IBulkEditResult = {
+	readonly ariaSummary: string;
+	readonly isApplied: false;
+} | {
+	readonly ariaSummary: string;
+	readonly isApplied: true;
+	readonly undo: () => Promise<void>;
+	readonly resources: readonly URI[];
+};
 
 export type IBulkEditPreviewHandler = (edits: ResourceEdit[], options?: IBulkEditOptions) => Promise<ResourceEdit[]>;
 
@@ -144,29 +142,23 @@ function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 		case 'textDocument':
 			return entry.edits.map(edit => new ResourceTextEdit(entry.resource, edit, entry.version, undefined, entry));
 		case 'create':
-			return [
-				new ResourceFileEdit(undefined, entry.resource, {
-					...(entry.contents !== undefined ? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) } : {}),
-					overwrite: entry.existing === 'overwrite',
-					ignoreIfExists: entry.existing === 'ignore',
-				}),
-			];
+			return [new ResourceFileEdit(undefined, entry.resource, {
+				...(entry.contents !== undefined ? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) } : {}),
+				overwrite: entry.existing === 'overwrite',
+				ignoreIfExists: entry.existing === 'ignore',
+			})];
 		case 'rename':
-			return [
-				new ResourceFileEdit(entry.source, entry.target, {
-					overwrite: entry.existing === 'overwrite',
-					ignoreIfExists: entry.existing === 'ignore',
-				}),
-			];
+			return [new ResourceFileEdit(entry.source, entry.target, {
+				overwrite: entry.existing === 'overwrite',
+				ignoreIfExists: entry.existing === 'ignore',
+			})];
 		case 'delete':
-			return [
-				new ResourceFileEdit(entry.resource, undefined, {
-					ignoreIfNotExists: entry.missing === 'ignore',
-					recursive: entry.mode === 'recursive',
-				}),
-			];
+			return [new ResourceFileEdit(entry.resource, undefined, {
+				ignoreIfNotExists: entry.missing === 'ignore',
+				recursive: entry.mode === 'recursive',
+			})];
 	}
 }
 
 /** A captured document version or content no longer matches the shared model. */
-export class WorkspaceEditConflictError extends Error {}
+export class WorkspaceEditConflictError extends Error { }

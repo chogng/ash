@@ -20,21 +20,7 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ScrollType } from '../../../common/editorCommon.js';
 import { type ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import {
-	VerticalRevealType,
-	type ViewConfigurationChangedEvent,
-	type ViewCursorStateChangedEvent,
-	type ViewDecorationsChangedEvent,
-	type ViewFlushedEvent,
-	type ViewLinesChangedEvent,
-	type ViewLinesDeletedEvent,
-	type ViewLinesInsertedEvent,
-	type ViewRevealRangeRequestEvent,
-	type ViewScrollChangedEvent,
-	type ViewThemeChangedEvent,
-	type ViewTokensChangedEvent,
-	type ViewZonesChangedEvent,
-} from '../../../common/viewEvents.js';
+import { VerticalRevealType, type ViewConfigurationChangedEvent, type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewRevealRangeRequestEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent, type ViewTokensChangedEvent, type ViewZonesChangedEvent } from '../../../common/viewEvents.js';
 import { ViewLine, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
 import { DomReadingContext } from './domReadingContext.js';
 import { ViewLineOptions } from './viewLineOptions.js';
@@ -73,7 +59,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
 	private contentRevision = 0;
-	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType } | undefined;
+	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType; } | undefined;
 
 	constructor(context: ViewContext, options: ViewLinesOptions) {
 		super(context);
@@ -85,44 +71,40 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		this.viewGpuContext = options.viewGpuContext;
 		this.textMeasurer = options.textMeasurer;
-		this.lineWidths = this._register(
-			new LineWidthIndex(this.model, this.textMeasurer, {
-				initialMeasurement: {
-					...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
-					schedule: callback => runWhenWindowIdle(options.host.ownerDocument.defaultView!, callback, 250),
-				},
-			}),
-		);
+		this.lineWidths = this._register(new LineWidthIndex(this.model, this.textMeasurer, {
+			initialMeasurement: {
+				...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
+				schedule: callback => runWhenWindowIdle(options.host.ownerDocument.defaultView!, callback, 250),
+			},
+		}));
 		this._register(this.lineWidths.onDidChange(() => this.publishLineWidth()));
 		this._register(this.model.onDidChangeContent(change => this.lineWidths.applyModelChange(change)));
-		this._visibleLines = this._register(
-			new ViewLayer<ViewLine>({
-				host: options.host,
-				readVisualProjection: options.readVisualProjection,
-				readProjectionRevision: options.readProjectionRevision,
-				readContentRevision: () => this.contentRevision,
-				lineRenderer: {
-					createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
-					getDomNode: line => line.getDomNode(),
-					isDirty: line => line.isDirty,
-					renderLine: (line, visualLine) => {
-						const lineDomNode = line.getDomNode();
-						lineDomNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
-						const renderedOnGpu = this.isGpuLine(visualLine.visualLineIndex + 1);
-						lineDomNode.classList.toggle('gpu-rendered', renderedOnGpu);
-						if (renderedOnGpu) {
-							// Retained layout rows must release glyphs from an earlier DOM frame.
-							line.renderLine('', []);
-						} else {
-							this.projectLineText(line, visualLine, this.resolveSemanticTokensForLine(visualLine));
-						}
-					},
-					layoutLine: (line, lineHeight) => {
-						line.layoutLine(lineHeight);
-					},
+		this._visibleLines = this._register(new ViewLayer<ViewLine>({
+			host: options.host,
+			readVisualProjection: options.readVisualProjection,
+			readProjectionRevision: options.readProjectionRevision,
+			readContentRevision: () => this.contentRevision,
+			lineRenderer: {
+				createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
+				getDomNode: line => line.getDomNode(),
+				isDirty: line => line.isDirty,
+				renderLine: (line, visualLine) => {
+					const lineDomNode = line.getDomNode();
+					lineDomNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
+					const renderedOnGpu = this.isGpuLine(visualLine.visualLineIndex + 1);
+					lineDomNode.classList.toggle('gpu-rendered', renderedOnGpu);
+					if (renderedOnGpu) {
+						// Retained layout rows must release glyphs from an earlier DOM frame.
+						line.renderLine('', []);
+					} else {
+						this.projectLineText(line, visualLine, this.resolveSemanticTokensForLine(visualLine));
+					}
 				},
-			}),
-		);
+				layoutLine: (line, lineHeight) => {
+					line.layoutLine(lineHeight);
+				},
+			},
+		}));
 		this.domNode = new FastDomNode(this._visibleLines.domNode);
 		this._register(options.configuration.onDidChange(() => this._onOptionsMaybeChanged(options.configuration, this._context.theme.type)));
 	}
@@ -278,9 +260,13 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!line || !visualLine) return null;
 		const textElement = row.firstElementChild as HTMLElement | null;
 		if (!textElement) return null;
-		const part = textElement === spanNode ? (textElement.children[offset] ?? textElement.children[offset - 1]) : directChildOf(textElement, spanNode);
+		const part = textElement === spanNode
+			? textElement.children[offset] ?? textElement.children[offset - 1]
+			: directChildOf(textElement, spanNode);
 		if (!isHTMLElement(part)) return null;
-		const partOffset = textElement === spanNode ? (part === textElement.children[offset] ? 0 : (part.textContent?.length ?? 0)) : Math.min(offset, part.textContent?.length ?? 0);
+		const partOffset = textElement === spanNode
+			? part === textElement.children[offset] ? 0 : part.textContent?.length ?? 0
+			: Math.min(offset, part.textContent?.length ?? 0);
 		const column = line.getColumnOfNodeOffset(part, partOffset);
 		if (column < 1) return null;
 		return new Position(lineNumber, column);
@@ -332,10 +318,11 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	private publishLineWidth(): void {
 		const options = this._context.configuration.options;
-		const width =
-			options.get(EditorOption.wrappingInfo).wrappingColumn > 0
-				? 0
-				: Math.ceil(options.get(EditorOption.layoutInfo).contentLeft + Math.max(this.lineWidths.maximumLineWidth, this._maxLineWidth) + this.textMeasurer.horizontalPadding);
+		const width = options.get(EditorOption.wrappingInfo).wrappingColumn > 0 ? 0 : Math.ceil(
+			options.get(EditorOption.layoutInfo).contentLeft
+			+ Math.max(this.lineWidths.maximumLineWidth, this._maxLineWidth)
+			+ this.textMeasurer.horizontalPadding,
+		);
 		// The bounded model scan estimates unseen rows. Rendered widths include
 		// injected text and styled spans and must survive later estimate updates.
 		this._context.viewLayout.setMaxLineWidth(width);
@@ -345,16 +332,20 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const originalEndLineNumber = range.endLineNumber;
 		const renderedLineRange = this._visibleLines.renderedLineRange;
 		if (renderedLineRange.endLineIndexExclusive <= renderedLineRange.startLineIndex) return null;
-		const visibleRange = Range.intersectRanges(
-			range,
-			new Range(renderedLineRange.startLineIndex + 1, 1, renderedLineRange.endLineIndexExclusive, this._context.viewModel.getLineMaxColumn(renderedLineRange.endLineIndexExclusive)),
-		);
+		const visibleRange = Range.intersectRanges(range, new Range(
+			renderedLineRange.startLineIndex + 1,
+			1,
+			renderedLineRange.endLineIndexExclusive,
+			this._context.viewModel.getLineMaxColumn(renderedLineRange.endLineIndexExclusive),
+		));
 		if (!visibleRange) return null;
 		const result: LineVisibleRanges[] = [];
 		// Match offscreen selection geometry after font metrics change. A width
 		// captured during construction would create false corners at viewport edges.
 		const newlineWidth = includeNewLines ? this.textMeasurer.measureLineWidth(' ') : 0;
-		let nextModelLineNumber = includeNewLines ? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(visibleRange.startLineNumber, 1)).lineNumber : 0;
+		let nextModelLineNumber = includeNewLines
+			? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(visibleRange.startLineNumber, 1)).lineNumber
+			: 0;
 		for (let lineNumber = visibleRange.startLineNumber; lineNumber <= visibleRange.endLineNumber; lineNumber += 1) {
 			const currentModelLineNumber = nextModelLineNumber;
 			if (includeNewLines && lineNumber < originalEndLineNumber) {
@@ -374,7 +365,12 @@ export class ViewLines extends ViewPart implements IViewLines {
 					if (this._lineIsRenderedRTL(lineNumber)) lastRange.left -= newlineWidth;
 				}
 			}
-			result.push(new LineVisibleRanges(visibleRanges.outsideRenderedLine, lineNumber, HorizontalRange.from(lineRanges), continuesInNextLine));
+			result.push(new LineVisibleRanges(
+				visibleRanges.outsideRenderedLine,
+				lineNumber,
+				HorizontalRange.from(lineRanges),
+				continuesInNextLine,
+			));
 		}
 		return result.length > 0 ? result : null;
 	}
@@ -426,14 +422,8 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	private isGpuLine(lineNumber: number): boolean {
 		const viewportData = this.lastViewportData;
-		return (
-			this._viewLineOptions.useGpu &&
-			!!this.viewGpuContext &&
-			!!viewportData &&
-			lineNumber >= viewportData.startLineNumber &&
-			lineNumber <= viewportData.endLineNumber &&
-			this.viewGpuContext.canRender(this._viewLineOptions, viewportData, lineNumber)
-		);
+		return this._viewLineOptions.useGpu && !!this.viewGpuContext && !!viewportData && lineNumber >= viewportData.startLineNumber && lineNumber <= viewportData.endLineNumber
+			&& this.viewGpuContext.canRender(this._viewLineOptions, viewportData, lineNumber);
 	}
 
 	private _checkMonospaceFontAssumptions(): void {
@@ -477,8 +467,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		line.renderLine(
 			lineData.content,
 			projectSemanticTokens(tokens, visualLine).map(token => ({
-				...token,
-				syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, semanticHighlightingEnabled),
+				...token, syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, semanticHighlightingEnabled),
 			})),
 			0,
 			inlineDecorations,
@@ -491,7 +480,11 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!request) return;
 		const visualLineNumber = request.range.startLineNumber;
 		if (visualLineNumber < viewportData.startLineNumber || visualLineNumber > viewportData.endLineNumber) return;
-		const ranges = this._visibleRangesForLineRange(visualLineNumber, request.range.startColumn, request.range.endColumn);
+		const ranges = this._visibleRangesForLineRange(
+			visualLineNumber,
+			request.range.startColumn,
+			request.range.endColumn,
+		);
 		if (!ranges || ranges.ranges.length === 0) return;
 		this.horizontalRevealRequest = undefined;
 		let boxStart = Math.min(...ranges.ranges.map(range => range.left));
@@ -554,30 +547,21 @@ function projectSemanticTokens(tokens: readonly ResolvedSemanticToken[], line: E
 }
 
 function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
-	return Object.freeze(
-		tokens.flatMap(token => {
-			const start = Math.max(token.startColumn, startColumn);
-			const end = Math.min(token.endColumn, endColumn);
-			if (end <= start) return [];
-			return [
-				Object.freeze({
-					startColumn: start - startColumn,
-					endColumn: end - startColumn,
-					presentation: token.presentation,
-					...(token.modifiers && token.modifiers.length > 0 ? { modifiers: token.modifiers } : {}),
-					...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
-					...(token.semanticType === undefined
-						? {}
-						: {
-								semanticType: token.semanticType,
-								semanticModifiers: token.semanticModifiers,
-								semanticLanguage: token.semanticLanguage,
-							}),
-				}),
-			];
-		}),
-	);
+	return Object.freeze(tokens.flatMap(token => {
+		const start = Math.max(token.startColumn, startColumn);
+		const end = Math.min(token.endColumn, endColumn);
+		if (end <= start) return [];
+		return [Object.freeze({
+			startColumn: start - startColumn,
+			endColumn: end - startColumn,
+			presentation: token.presentation,
+			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: token.modifiers } : {}),
+			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+			...(token.semanticType === undefined ? {} : { semanticType: token.semanticType, semanticModifiers: token.semanticModifiers, semanticLanguage: token.semanticLanguage }),
+		})];
+	}));
 }
+
 
 interface AffectedLineGroup {
 	readonly oldStartLineIndex: number;
@@ -685,10 +669,15 @@ export class LineWidthIndex extends Disposable {
 		let cumulativeLineDelta = 0;
 		const measured: MeasuredLineGroup[] = [];
 		for (const group of groups) {
-			const oldLineCount = group.oldEndLineIndex - group.oldStartLineIndex + 1;
+			const oldLineCount =
+				group.oldEndLineIndex - group.oldStartLineIndex + 1;
 			const newLineCount = oldLineCount + group.lineDelta;
-			const newStartLineIndex = group.oldStartLineIndex + cumulativeLineDelta;
-			const newWidths = Array.from({ length: newLineCount }, (_, index) => this.measure(newStartLineIndex + index));
+			const newStartLineIndex =
+				group.oldStartLineIndex + cumulativeLineDelta;
+			const newWidths = Array.from(
+				{ length: newLineCount },
+				(_, index) => this.measure(newStartLineIndex + index),
+			);
 			measured.push({ ...group, newWidths });
 			cumulativeLineDelta += group.lineDelta;
 		}
@@ -696,8 +685,13 @@ export class LineWidthIndex extends Disposable {
 		for (let index = measured.length - 1; index >= 0; index--) {
 			const group = measured[index];
 			if (!group) continue;
-			const oldLineCount = group.oldEndLineIndex - group.oldStartLineIndex + 1;
-			const removed = this.widths.splice(group.oldStartLineIndex, oldLineCount, ...group.newWidths);
+			const oldLineCount =
+				group.oldEndLineIndex - group.oldStartLineIndex + 1;
+			const removed = this.widths.splice(
+				group.oldStartLineIndex,
+				oldLineCount,
+				...group.newWidths,
+			);
 			for (const width of removed) this.removeWidth(width);
 			for (const width of group.newWidths) this.addWidth(width);
 		}
@@ -777,7 +771,9 @@ export class LineWidthIndex extends Disposable {
 	}
 
 	private measure(lineIndex: number): number {
-		const width = this.measurer.measureLineWidth(this.model.getLineContent(lineIndex + 1));
+		const width = this.measurer.measureLineWidth(
+			this.model.getLineContent((lineIndex) + 1),
+		);
 		if (!Number.isFinite(width) || width < 0) {
 			throw new RangeError('Stanza line width must be finite and non-negative');
 		}
@@ -816,27 +812,37 @@ function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | unde
 	if (!Number.isSafeInteger(maximumMeasuredLineCount) || maximumMeasuredLineCount <= 0) {
 		throw new RangeError('Stanza maximum initial line measurement count must be a positive safe integer');
 	}
-	return Object.freeze({
-		initialLineCount: Math.min(initialLineCount, maximumMeasuredLineCount),
-		linesPerSlice,
-		maximumMeasuredLineCount,
-		schedule: value.schedule,
-	});
+	return Object.freeze({ initialLineCount: Math.min(initialLineCount, maximumMeasuredLineCount), linesPerSlice, maximumMeasuredLineCount, schedule: value.schedule });
 }
 
-function groupAffectedLines(change: TextModelChange): AffectedLineGroup[] {
+function groupAffectedLines(
+	change: TextModelChange,
+): AffectedLineGroup[] {
 	const effects = change.changes
-		.map(contentChange => ({
+		.map((contentChange) => ({
 			oldStartLineIndex: contentChange.range.startLineNumber - 1,
 			oldEndLineIndex: contentChange.range.endLineNumber - 1,
-			lineDelta: lineFeedCount(contentChange.text) - (contentChange.range.getEndPosition().lineNumber - contentChange.range.getStartPosition().lineNumber),
+			lineDelta:
+				lineFeedCount(contentChange.text) -
+				(
+					contentChange.range.getEndPosition().lineNumber -
+					contentChange.range.getStartPosition().lineNumber
+				),
 		}))
-		.sort((left, right) => left.oldStartLineIndex - right.oldStartLineIndex || left.oldEndLineIndex - right.oldEndLineIndex);
+		.sort((left, right) =>
+			left.oldStartLineIndex - right.oldStartLineIndex ||
+			left.oldEndLineIndex - right.oldEndLineIndex);
 	const groups: AffectedLineGroup[] = [];
 	for (const effect of effects) {
 		const previous = groups.at(-1);
-		if (previous && effect.oldStartLineIndex <= previous.oldEndLineIndex) {
-			previous.oldEndLineIndex = Math.max(previous.oldEndLineIndex, effect.oldEndLineIndex);
+		if (
+			previous &&
+			effect.oldStartLineIndex <= previous.oldEndLineIndex
+		) {
+			previous.oldEndLineIndex = Math.max(
+				previous.oldEndLineIndex,
+				effect.oldEndLineIndex,
+			);
 			previous.lineDelta += effect.lineDelta;
 		} else {
 			groups.push({ ...effect });

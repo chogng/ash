@@ -16,51 +16,9 @@ import { containsDocumentNode, findDocumentNode, type DocumentMark, type Documen
 import { createDocumentDecoration, type DocumentDecoration } from '../../../common/model/documentDecoration.js';
 import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from '../../../common/model/documentOutline.js';
 import { documentPointToPosition } from '../../../common/core/documentPosition.js';
-import {
-	createDeleteAdjacentInlineNodeCommand,
-	createDeleteInlineSelectionCommand,
-	createDeleteNodeSelectionCommand,
-	createDeleteTableColumnCommand,
-	createDeleteTableRowCommand,
-	createExitEmptyListItemCommand,
-	createInsertFragmentCommand,
-	createInsertHardBreakCommand,
-	createInsertHorizontalRuleCommand,
-	createInsertImageAtSelectionCommand,
-	createInsertImageCommand,
-	createInsertParagraphAfterCommand,
-	createInsertTableColumnCommand,
-	createInsertTableCommand,
-	createInsertTableRowCommand,
-	createJoinAdjacentBlockCommand,
-	createJoinAdjacentListItemCommand,
-	createJoinAdjacentTextRunCommand,
-	createListItemIndentationCommand,
-	createMoveBlockCommand,
-	createRemoveMarkCommand,
-	createPasteTextCommand,
-	createReplaceTextCommand,
-	createSetBlockTypeCommand,
-	createSetLinkMarkCommand,
-	createSetTextStyleCommand,
-	createSplitBlockCommand,
-	createSplitListItemCommand,
-	createToggleBlockquoteCommand,
-	createToggleListCommand,
-	createToggleMarkCommand,
-	findAdjacentTableCell,
-	findTableCellContext,
-	type DocumentCommand,
-} from '../../../common/commands/documentCommands.js';
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from '../../../common/commands/documentCommands.js';
 import { type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
-import {
-	documentToPlainText,
-	documentSelectionToText,
-	extractDocumentFragment,
-	DOCUMENT_FRAGMENT_CLIPBOARD_MIME,
-	deserializeDocumentFragment,
-	serializeDocumentFragment,
-} from '../../../common/model/documentSerialization.js';
+import { documentToPlainText, documentSelectionToText, extractDocumentFragment, DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from 'ash:editor/editor/browser/editorDom.js';
@@ -86,7 +44,7 @@ export interface EditorExtensionOperationContext {
 }
 
 export interface RichTextEditorOptions {
-	readonly extensionApis?: Readonly<Record<string, (context: EditorExtensionOperationContext, payload: unknown) => { readonly command?: DocumentCommand; readonly result: unknown }>>;
+	readonly extensionApis?: Readonly<Record<string, (context: EditorExtensionOperationContext, payload: unknown) => { readonly command?: DocumentCommand; readonly result: unknown; }>>;
 	readonly contributions?: readonly DocumentContribution[];
 	/** Configures the generic heading query exposed by the pane. */
 	readonly outline?: DocumentOutlineOptions;
@@ -138,7 +96,7 @@ export interface EditorToolbarAction {
 	readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined | Promise<DocumentCommand | undefined>;
 }
 
-const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string }[] = [
+const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string; }[] = [
 	{ id: 'paragraph', label: 'Paragraph' },
 	{ id: 'heading', label: 'Heading' },
 	{ id: 'blockquote', label: 'Blockquote' },
@@ -169,11 +127,12 @@ interface RichTextEditorInput {
  * edit line ranges in this same DocumentTextModel rather than creating nested models.
  */
 export class RichTextEditorWidget extends Disposable {
+
 	private model: DocumentTextModel | undefined;
 	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
 	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
-	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
+	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView; }>();
 	private editorDom: EditorDom | undefined;
 	private container: HTMLDivElement | undefined;
 	private readonly formattingContributions: DocumentFormattingContribution[] = [];
@@ -188,11 +147,7 @@ export class RichTextEditorWidget extends Disposable {
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	constructor(
-		private readonly options: RichTextEditorOptions = {},
-		@IDialogService private readonly dialogs: IDialogService,
-		@IOpenerService private readonly opener: IOpenerService,
-	) {
+	constructor(private readonly options: RichTextEditorOptions = {}, @IDialogService private readonly dialogs: IDialogService, @IOpenerService private readonly opener: IOpenerService) {
 		super();
 		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
@@ -209,9 +164,7 @@ export class RichTextEditorWidget extends Disposable {
 				onClearTextStyle: () => this.handleClearTextStyleAction(),
 				onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
 				addFormattingContribution: value => this.formattingContributions.push(this._register(value)),
-				invalidateView: () => {
-					if (this.model && !this.isDisposed && !this.composition) this.render();
-				},
+				invalidateView: () => { if (this.model && !this.isDisposed && !this.composition) this.render(); },
 				selectText: (blockId, selection) => {
 					const model = this.model;
 					if (!model || this.isDisposed || this.composition) return;
@@ -227,26 +180,18 @@ export class RichTextEditorWidget extends Disposable {
 					this.pageView?.setZoom(zoom);
 					this.updateToolbar();
 				},
-				setReviewAuthor: author => {
-					this.reviewAuthor = author.trim().slice(0, 80) || localize('document.review.authorDefault', 'Author');
-				},
-				focusEditor: () => {
-					if (this.model && !this.isDisposed) this.restoreModelFocus(this.model, this.model.selection);
-				},
+				setReviewAuthor: author => { this.reviewAuthor = author.trim().slice(0, 80) || localize('document.review.authorDefault', 'Author'); },
+				focusEditor: () => { if (this.model && !this.isDisposed) this.restoreModelFocus(this.model, this.model.selection); },
 				runDocumentCommand: create => this.runContributionCommand(create),
 			});
 		}
-		this._register(
-			addDisposableListener(parent, 'keydown', event => {
-				for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
-			}),
-		);
-		const editorDom = this._register(
-			new EditorDom({
-				rootClassName: 'ash-text-editor-widget-layout',
-				contentClassName: 'ash-text-editor-widget-pane',
-			}),
-		);
+		this._register(addDisposableListener(parent, 'keydown', event => {
+			for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
+		}));
+		const editorDom = this._register(new EditorDom({
+			rootClassName: 'ash-text-editor-widget-layout',
+			contentClassName: 'ash-text-editor-widget-pane',
+		}));
 		parent.append(...this.formattingContributions.map(contribution => contribution.element));
 		editorDom.attach(parent);
 		const container = editorDom.contentDomNode;
@@ -260,17 +205,15 @@ export class RichTextEditorWidget extends Disposable {
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
 		parent.ownerDocument.addEventListener('selectionchange', onSelectionChange);
-		this._register(
-			toDisposable(() => {
-				parent.ownerDocument.removeEventListener('selectionchange', onSelectionChange);
-				outlineNavigator?.dispose();
-				for (const contribution of this.formattingContributions) contribution.element.remove();
-				this.formattingContributions.length = 0;
-				this.editorDom = undefined;
-				this.outlineNavigator = undefined;
-				this.container = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			parent.ownerDocument.removeEventListener('selectionchange', onSelectionChange);
+			outlineNavigator?.dispose();
+			for (const contribution of this.formattingContributions) contribution.element.remove();
+			this.formattingContributions.length = 0;
+			this.editorDom = undefined;
+			this.outlineNavigator = undefined;
+			this.container = undefined;
+		}));
 	}
 
 	setModel(model: DocumentTextModel, input: RichTextEditorInput): void {
@@ -314,13 +257,8 @@ export class RichTextEditorWidget extends Disposable {
 		// Release immutable document projections as soon as their model leaves the view.
 		for (const contribution of this.formattingContributions) {
 			contribution.setState({
-				context: 'none',
-				readOnly: true,
-				bold: false,
-				italic: false,
-				fontFamily: undefined,
-				fontSize: undefined,
-				checkedDocumentActionIds: new Set(),
+				context: 'none', readOnly: true, bold: false, italic: false,
+				fontFamily: undefined, fontSize: undefined, checkedDocumentActionIds: new Set(),
 			});
 			contribution.element.hidden = true;
 		}
@@ -361,23 +299,18 @@ export class RichTextEditorWidget extends Disposable {
 		if (!handler || !model) return undefined;
 		const version = model.version;
 		return {
-			version,
-			readOnly: this.isReadOnly(),
-			invoke: async (payload, signal) => {
+			version, readOnly: this.isReadOnly(), invoke: async (payload, signal) => {
 				signal.throwIfAborted();
 				if (this.isDisposed || this.model !== model || model.version !== version) throw new Error(localize('document.api.stale', 'The document changed. Refresh the target and try again.'));
 				if (this.isReadOnly() || this.composition) throw new Error(localize('document.api.readOnly', 'The document is read-only or input is still being composed.'));
-				const blockId =
-					this.activeBlockId ??
-					findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ??
-					findFirstEditableBlock(model.document)?.id;
+				const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 				if (!blockId) throw new Error(localize('document.api.selection', 'Choose an editable document position first.'));
-				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : (this.readActiveDocumentTextSelection(model, blockId) ?? model.selection);
+				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
 				const result = handler({ model, blockId, selection }, payload);
 				signal.throwIfAborted();
 				if (result.command) this.dispatchCommand(model, result.command, undefined, 'preserve-focus');
 				return result.result;
-			},
+			}
 		};
 	}
 
@@ -419,8 +352,7 @@ export class RichTextEditorWidget extends Disposable {
 			...this.formattingContributions.flatMap(contribution => contribution.getDecorations?.(model.document, model.selection) ?? []),
 		]);
 		const fragment = createFragment(container.ownerDocument);
-		for (const node of model.document.content.filter(node => node.type !== 'reviewComment' && node.type !== 'reviewChange'))
-			fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
+		for (const node of model.document.content.filter(node => node.type !== 'reviewComment' && node.type !== 'reviewChange')) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
 		this.pageView!.render(fragment, model.document);
 		this.outlineNavigator?.setOutline(this.getOutline());
 		for (const [nodeId, slot] of this.nodeViewSlots) {
@@ -479,13 +411,7 @@ export class RichTextEditorWidget extends Disposable {
 		activeNodeIds.add(node.id);
 		const nodeView = this.options.nodeViews?.[node.type];
 		if (nodeView) {
-			const context = {
-				node,
-				model,
-				ownerDocument: document,
-				previousElement: this.nodeViewSlots.get(node.id)?.view.element ?? previousElements.get(node.id),
-				renderChildren: (parent: HTMLElement) => this.renderChildren(parent, node, model, previousElements, activeNodeIds, decorations),
-			};
+			const context = { node, model, ownerDocument: document, previousElement: this.nodeViewSlots.get(node.id)?.view.element ?? previousElements.get(node.id), renderChildren: (parent: HTMLElement) => this.renderChildren(parent, node, model, previousElements, activeNodeIds, decorations) };
 			const existing = this.nodeViewSlots.get(node.id);
 			if (existing && existing.type !== node.type) {
 				existing.view.dispose?.();
@@ -599,15 +525,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private appendEditableText(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, decorations: readonly ViewDecoration[]): void {
-		if (
-			(documentPageDimensions({
-				...model.document,
-				attrs: { ...model.document.attrs, ...getDocumentPageOwner(model.document, node.id).attrs },
-			}) &&
-				node.content.some(child => child.text !== undefined && child.text.length > 0)) ||
-			usesRichTextSurface(node) ||
-			hasRenderableDecoration(model, node, decorations)
-		) {
+		if ((documentPageDimensions({ ...model.document, attrs: { ...model.document.attrs, ...getDocumentPageOwner(model.document, node.id).attrs } }) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
 			this.appendRichText(element, node, model, decorations);
 			return;
 		}
@@ -652,14 +570,7 @@ export class RichTextEditorWidget extends Disposable {
 			if (this.isReadOnly()) return;
 			if (this.composition?.element === textarea) return;
 			if (currentModel.selection?.kind === 'all') {
-				const command = createReplaceTextCommand(
-					currentModel.schema,
-					currentModel.document,
-					node.id,
-					currentModel.selection,
-					textarea.value,
-					documentInsertionMarks(currentModel, currentModel.selection),
-				);
+				const command = createReplaceTextCommand(currentModel.schema, currentModel.document, node.id, currentModel.selection, textarea.value, documentInsertionMarks(currentModel, currentModel.selection));
 				if (command) this.dispatchCommand(currentModel, command, 'typing');
 				return;
 			}
@@ -670,16 +581,11 @@ export class RichTextEditorWidget extends Disposable {
 			const selectionEnd = textarea.selectionEnd ?? selectionStart;
 			if (!currentText) {
 				if (textarea.value.length === 0) return;
-				const inserted = currentModel.schema.createText(textarea.value, {
-					id: `${node.id}-text`,
-					marks: documentInsertionMarks(currentModel, currentModel.selection) ?? [],
-				});
-				currentModel.dispatch(
-					new DocumentTransaction()
-						.insertNode(node.id, 0, inserted)
-						.withSelection(textSelection({ nodeId: inserted.id, offset: selectionEnd }))
-						.withHistoryGroup('typing'),
-				);
+				const inserted = currentModel.schema.createText(textarea.value, { id: `${node.id}-text`, marks: documentInsertionMarks(currentModel, currentModel.selection) ?? [] });
+				currentModel.dispatch(new DocumentTransaction()
+					.insertNode(node.id, 0, inserted)
+					.withSelection(textSelection({ nodeId: inserted.id, offset: selectionEnd }))
+					.withHistoryGroup('typing'));
 			} else {
 				let transaction = new DocumentTransaction().replaceText(currentText.id, 0, currentText.text?.length ?? 0, textarea.value, documentInsertionMarks(currentModel, currentModel.selection));
 				if (textarea.value.length > 0) transaction = transaction.withSelection(textSelection({ nodeId: currentText.id, offset: selectionEnd }));
@@ -716,14 +622,7 @@ export class RichTextEditorWidget extends Disposable {
 			createdEditor.addEventListener('focus', () => this.syncRichDocumentTextSelection(createdEditor, model));
 			createdEditor.addEventListener('keyup', () => this.syncRichDocumentTextSelection(createdEditor, model));
 			createdEditor.addEventListener('mouseup', () => this.syncRichDocumentTextSelection(createdEditor, model, true));
-			createdEditor.addEventListener('compositionstart', () =>
-				this.beginComposition(
-					model,
-					node.id,
-					createdEditor,
-					readDocumentTextSelection(this.requireContainer(), true)?.selection ?? (model.selection?.kind === 'text' ? model.selection : undefined),
-				),
-			);
+			createdEditor.addEventListener('compositionstart', () => this.beginComposition(model, node.id, createdEditor, readDocumentTextSelection(this.requireContainer(), true)?.selection ?? (model.selection?.kind === 'text' ? model.selection : undefined)));
 			createdEditor.addEventListener('compositionend', event => this.endComposition(event, createdEditor));
 			createdEditor.addEventListener('compositioncancel', () => this.cancelComposition(createdEditor));
 			element.replaceChildren(createdEditor);
@@ -742,10 +641,7 @@ export class RichTextEditorWidget extends Disposable {
 				const linkMark = child.marks.find(mark => mark.type === 'link');
 				const textStyleMark = child.marks.find(mark => mark.type === 'textStyle');
 				const start = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: 0 });
-				const end = documentPointToPosition(model.document, model.schema, {
-					nodeId: child.id,
-					offset: child.text.length,
-				});
+				const end = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: child.text.length });
 				const localDecorations = decorations.filter(decoration => decoration.to > start && decoration.from < end);
 				const boundaries = new Set([0, child.text.length]);
 				for (const decoration of localDecorations) {
@@ -770,9 +666,7 @@ export class RichTextEditorWidget extends Disposable {
 						run.title = localize('document.link.openHint', '{0}+click or {0}+Enter opens this link. You can also focus the link and press Enter.', isMacintosh ? '⌘' : 'Ctrl');
 						anchor.addEventListener('click', event => {
 							event.preventDefault();
-							if (event.metaKey || event.ctrlKey) {
-								this.openLink(run.getAttribute('href')!);
-							}
+							if (event.metaKey || event.ctrlKey) { this.openLink(run.getAttribute('href')!); }
 						});
 						anchor.addEventListener('keydown', event => {
 							if (event.key === 'Enter' && !event.isComposing) {
@@ -808,12 +702,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 			const inlineFactory = this.options.inlineNodeViews?.[child.type];
 			const inlineElement = inlineFactory
-				? inlineFactory({
-						node: child,
-						model,
-						ownerDocument: editor.ownerDocument,
-						select: () => this.selectInlineNode(model, node.id, child.id, editor),
-					})
+				? inlineFactory({ node: child, model, ownerDocument: editor.ownerDocument, select: () => this.selectInlineNode(model, node.id, child.id, editor) })
 				: createFallbackInlineNode(editor.ownerDocument, child);
 			if (!inlineElement || inlineElement.nodeType !== 1) throw new TypeError(`Inline node view '${child.type}' must return an HTMLElement`);
 			inlineElement.dataset.inlineNodeId = child.id;
@@ -863,22 +752,8 @@ export class RichTextEditorWidget extends Disposable {
 	private beginComposition(model: DocumentTextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
 		if (this.isReadOnly() || this.model !== model || !selection || selection.kind !== 'text') return;
 		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
-		this.composition = {
-			model,
-			blockId,
-			element,
-			selection,
-			baseText: readCompositionText(element),
-			version: model.version,
-		};
-		if (
-			model.selection?.kind !== 'text' ||
-			model.selection.anchor.nodeId !== selection.anchor.nodeId ||
-			model.selection.anchor.offset !== selection.anchor.offset ||
-			model.selection.head.nodeId !== selection.head.nodeId ||
-			model.selection.head.offset !== selection.head.offset
-		)
-			model.setSelection(selection);
+		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
+		if (model.selection?.kind !== 'text' || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
 	}
 
 	private endComposition(event: CompositionEvent, element: HTMLTextAreaElement | HTMLDivElement): void {
@@ -1079,8 +954,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (this.model !== model) return;
 		if (selection) model.setSelection(selection);
 		const command = selection
-			? (createInsertImageAtSelectionCommand(model.schema, model.document, blockId, selection, src, image.name) ??
-				createInsertImageCommand(model.schema, model.document, blockId, src, image.name))
+			? createInsertImageAtSelectionCommand(model.schema, model.document, blockId, selection, src, image.name) ?? createInsertImageCommand(model.schema, model.document, blockId, src, image.name)
 			: createInsertImageCommand(model.schema, model.document, blockId, src, image.name);
 		if (command) this.dispatchCommand(model, command);
 	}
@@ -1094,10 +968,7 @@ export class RichTextEditorWidget extends Disposable {
 			if (event.inputType === 'insertText' || event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
 				const text = event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
 				const marks = documentInsertionMarks(model, model.selection);
-				command =
-					event.inputType === 'insertFromPaste'
-						? createPasteTextCommand(model.schema, model.document, blockId, model.selection, text, marks)
-						: createReplaceTextCommand(model.schema, model.document, blockId, model.selection, text, marks);
+				command = event.inputType === 'insertFromPaste' ? createPasteTextCommand(model.schema, model.document, blockId, model.selection, text, marks) : createReplaceTextCommand(model.schema, model.document, blockId, model.selection, text, marks);
 			} else if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
 				command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, model.selection);
 			}
@@ -1107,11 +978,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 			return;
 		}
-		if (
-			model.selection?.kind === 'node' &&
-			isInlineNodeInBlock(model.document, blockId, model.selection.nodeId) &&
-			(event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward')
-		) {
+		if (model.selection?.kind === 'node' && isInlineNodeInBlock(model.document, blockId, model.selection.nodeId) && (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward')) {
 			const command = createDeleteNodeSelectionCommand(model.document, model.selection);
 			if (command) {
 				event.preventDefault();
@@ -1134,11 +1001,9 @@ export class RichTextEditorWidget extends Disposable {
 		if (event.inputType === 'insertText' || event.inputType === 'insertCompositionText' || event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
 			const text = event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
 			const marks = documentInsertionMarks(model, selection);
-			if (text.length > 0)
-				command =
-					event.inputType === 'insertFromPaste' && text.includes('\n')
-						? createPasteTextCommand(model.schema, model.document, blockId, selection, text, marks)
-						: createReplaceTextCommand(model.schema, model.document, blockId, selection, text, marks);
+			if (text.length > 0) command = event.inputType === 'insertFromPaste' && text.includes('\n')
+				? createPasteTextCommand(model.schema, model.document, blockId, selection, text, marks)
+				: createReplaceTextCommand(model.schema, model.document, blockId, selection, text, marks);
 		} else if (event.inputType === 'deleteContentBackward') {
 			command = createDeleteBoundaryCommand(model, blockId, selection, 'backward');
 		} else if (event.inputType === 'deleteContentForward') {
@@ -1150,8 +1015,7 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		if (!command) return;
 		event.preventDefault();
-		const historyGroup =
-			event.inputType === 'insertText' ? 'typing' : event.inputType === 'deleteContentBackward' ? 'delete-backward' : event.inputType === 'deleteContentForward' ? 'delete-forward' : undefined;
+		const historyGroup = event.inputType === 'insertText' ? 'typing' : event.inputType === 'deleteContentBackward' ? 'delete-backward' : event.inputType === 'deleteContentForward' ? 'delete-forward' : undefined;
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
@@ -1289,16 +1153,7 @@ export class RichTextEditorWidget extends Disposable {
 		} else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
 			command = createInsertParagraphAfterCommand(model.schema, model.document, node.id);
 		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && textNode && (event.key === 'b' || event.key === 'B' || event.key === 'i' || event.key === 'I')) {
-			command = createToggleMarkCommand(
-				model.schema,
-				model.document,
-				node.id,
-				textNode.id,
-				textSelection({ nodeId: textNode.id, offset: start }, { nodeId: textNode.id, offset: end }),
-				event.key.toLowerCase() === 'b' ? 'strong' : 'em',
-				{},
-				model.storedMarks,
-			);
+			command = createToggleMarkCommand(model.schema, model.document, node.id, textNode.id, textSelection({ nodeId: textNode.id, offset: start }, { nodeId: textNode.id, offset: end }), event.key.toLowerCase() === 'b' ? 'strong' : 'em', {}, model.storedMarks);
 		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowUp') {
 			command = createMoveBlockCommand(model.document, node.id, 'up');
 		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowDown') {
@@ -1308,7 +1163,7 @@ export class RichTextEditorWidget extends Disposable {
 		} else if (event.key === 'Enter' && !event.shiftKey && start === end) {
 			command = textNode
 				? createParagraphSplitCommand(model.schema, model.document, node.id, textNode.id, start)
-				: (createParagraphSplitCommand(model.schema, model.document, node.id, '', 0) ?? createInsertParagraphAfterCommand(model.schema, model.document, node.id));
+				: createParagraphSplitCommand(model.schema, model.document, node.id, '', 0) ?? createInsertParagraphAfterCommand(model.schema, model.document, node.id);
 		} else if (event.key === 'Backspace' && start === 0 && end === 0) {
 			command = createJoinAdjacentBlockCommand(model.document, node.id, textNode?.id ?? '', 'backward');
 		} else if (event.key === 'Delete' && textNode && start === textNode.text!.length && end === start) {
@@ -1332,11 +1187,8 @@ export class RichTextEditorWidget extends Disposable {
 	/** focus() fires synchronously before the saved DOM range has been restored. */
 	private focusEditorElement(editor: HTMLElement): void {
 		this.restoringFocus = true;
-		try {
-			editor.focus();
-		} finally {
-			this.restoringFocus = false;
-		}
+		try { editor.focus(); }
+		finally { this.restoringFocus = false; }
 	}
 
 	private restoreModelFocus(model: DocumentTextModel, selection: DocumentSelection | undefined): void {
@@ -1462,8 +1314,7 @@ export class RichTextEditorWidget extends Disposable {
 		const model = this.model;
 		if (!model) return;
 		const document = model.document;
-		const blockId =
-			this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		const selectionBlockId = selection ? findTextBearingBlockId(model.document, selection.anchor.nodeId) : undefined;
@@ -1517,14 +1368,7 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		if (!command) {
 			const toolbarAction = this.options.toolbarActions?.find(candidate => candidate.id === action);
-			if (toolbarAction)
-				command = await toolbarAction.run({
-					model,
-					blockId,
-					selection,
-					ownerDocument: this.requireContainer().ownerDocument,
-					dialogs: this.dialogs,
-				});
+			if (toolbarAction) command = await toolbarAction.run({ model, blockId, selection, ownerDocument: this.requireContainer().ownerDocument, dialogs: this.dialogs });
 		}
 		if (!command || this.isDisposed || this.model !== model || model.document !== document || this.isReadOnly()) return;
 		this.dispatchCommand(model, command);
@@ -1532,11 +1376,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private async requestLink(model: DocumentTextModel, blockId: DocumentNodeId, nodeId: DocumentNodeId, selection: DocumentTextSelection): Promise<void> {
 		const document = model.document;
-		const result = await this.dialogs.input({
-			title: 'Link',
-			message: 'Link URL',
-			inputs: [{ value: 'https://' }],
-		});
+		const result = await this.dialogs.input({ title: 'Link', message: 'Link URL', inputs: [{ value: 'https://' }] });
 		if (!result.confirmed || this.isDisposed || this.model !== model || model.document !== document || this.isReadOnly()) return;
 		const href = result.values?.[0];
 		if (!href) return;
@@ -1608,8 +1448,7 @@ export class RichTextEditorWidget extends Disposable {
 	private updateToolbar(): void {
 		const model = this.model;
 		if (!model) return;
-		const blockId =
-			this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (blockId && !this.activeBlockId) this.activeBlockId = blockId;
 		const block = blockId ? findNode(model.document, blockId) : undefined;
 		const list = block ? findListForBlock(model.document, block.id) : undefined;
@@ -1621,31 +1460,23 @@ export class RichTextEditorWidget extends Disposable {
 			let checked = false;
 			if (type === 'paragraph' || type === 'heading') checked = block?.type === type;
 			else if (type === 'blockquote') checked = block !== undefined && findBlockquoteForBlock(model.document, block.id) !== undefined;
-			else if (type === 'link')
-				checked =
-					selection !== undefined &&
-					(selectionBlock?.type === 'paragraph' || selectionBlock?.type === 'heading') &&
-					isDocumentTextSelectionMarked(selectionBlock, selection, 'link', model.storedMarks);
+			else if (type === 'link') checked = selection !== undefined && (selectionBlock?.type === 'paragraph' || selectionBlock?.type === 'heading') && isDocumentTextSelectionMarked(selectionBlock, selection, 'link', model.storedMarks);
 			else checked = list?.type === type;
 			if (checked) checkedDocumentActionIds.add(type);
 		}
 		const textContext = isTypographyBlock(block);
-		const activeSelection = textContext ? (this.readActiveDocumentTextSelection(model, block!.id) ?? selection) : undefined;
-		for (const toolbar of this.formattingContributions)
-			toolbar.setState({
-				document: model.document,
-				pageZoom: this.pageZoom,
-				blockId,
-				selection: model.selection,
-				paragraphs: blockId ? getSelectedDocumentParagraphs(model.document, blockId, model.selection) : [],
-				context: block?.type === 'codeBlock' ? 'code' : textContext ? 'text' : 'none',
-				readOnly,
-				bold: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'strong', model.storedMarks) : false,
-				italic: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'em', model.storedMarks) : false,
-				fontFamily: textContext && activeSelection ? selectedTextStyleFontFamily(block!, activeSelection, model.storedMarks) : undefined,
-				fontSize: textContext && activeSelection ? selectedTextStyleFontSize(block!, activeSelection, model.storedMarks) : undefined,
-				checkedDocumentActionIds,
-			});
+		const activeSelection = textContext ? this.readActiveDocumentTextSelection(model, block!.id) ?? selection : undefined;
+		for (const toolbar of this.formattingContributions) toolbar.setState({
+			document: model.document, pageZoom: this.pageZoom, blockId, selection: model.selection,
+			paragraphs: blockId ? getSelectedDocumentParagraphs(model.document, blockId, model.selection) : [],
+			context: block?.type === 'codeBlock' ? 'code' : textContext ? 'text' : 'none',
+			readOnly,
+			bold: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'strong', model.storedMarks) : false,
+			italic: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'em', model.storedMarks) : false,
+			fontFamily: textContext && activeSelection ? selectedTextStyleFontFamily(block!, activeSelection, model.storedMarks) : undefined,
+			fontSize: textContext && activeSelection ? selectedTextStyleFontSize(block!, activeSelection, model.storedMarks) : undefined,
+			checkedDocumentActionIds,
+		});
 	}
 
 	private runContributionCommand(create: Parameters<DocumentEditorContributionContext['runDocumentCommand']>[0]): void {
@@ -1655,20 +1486,14 @@ export class RichTextEditorWidget extends Disposable {
 		if (!model || this.isDisposed || this.isReadOnly() || this.composition) return;
 		const blockId = this.activeBlockId ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
-		const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : (this.readActiveDocumentTextSelection(model, blockId) ?? model.selection);
+		const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node'
+			? model.selection : this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
 		const command = create(model.schema, model.document, blockId, selection);
 		if (command) this.dispatchCommand(model, command, undefined, 'preserve-focus');
 		else this.updateToolbar();
 	}
 
-	private renderChildren(
-		element: HTMLElement,
-		node: DocumentNode,
-		model: DocumentTextModel,
-		previousElements: Map<string, HTMLElement>,
-		activeNodeIds: Set<string>,
-		decorations: readonly ViewDecoration[],
-	): void {
+	private renderChildren(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): void {
 		const fragment = createFragment(element.ownerDocument);
 		for (const child of node.content) fragment.append(this.renderNode(child, model, previousElements, activeNodeIds, decorations));
 		element.replaceChildren(fragment);
@@ -1705,12 +1530,10 @@ export class RichTextEditorWidget extends Disposable {
 		this.remotePresences = controller.presences;
 		const listeners = new DisposableStore();
 		this.collaborationPresenceListenerSlot.value = listeners;
-		listeners.add(
-			controller.onDidChangePresence(change => {
-				this.remotePresences = change.presences;
-				this.render();
-			}),
-		);
+		listeners.add(controller.onDidChangePresence(change => {
+			this.remotePresences = change.presences;
+			this.render();
+		}));
 		listeners.add(controller.onDidChangeState(() => this.render()));
 		this.render();
 		return controller;
@@ -1742,6 +1565,7 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
 	return element;
 }
 
+
 function editableBlockAriaLabel(node: DocumentNode): string {
 	switch (node.type) {
 		case 'heading': {
@@ -1752,10 +1576,8 @@ function editableBlockAriaLabel(node: DocumentNode): string {
 			const language = node.attrs.language;
 			return typeof language === 'string' && language.length > 0 ? `${language} code block` : 'Code block';
 		}
-		case 'paragraph':
-			return 'Paragraph';
-		default:
-			return `${node.type} text`;
+		case 'paragraph': return 'Paragraph';
+		default: return `${node.type} text`;
 	}
 }
 
@@ -1774,7 +1596,10 @@ function isTypographyBlock(node: DocumentNode | undefined): node is DocumentNode
 function isDocumentTextSelectionInDocument(document: DocumentNode, selection: DocumentTextSelection): boolean {
 	const anchor = findNode(document, selection.anchor.nodeId);
 	const head = findNode(document, selection.head.nodeId);
-	return anchor?.text !== undefined && head?.text !== undefined && selection.anchor.offset <= anchor.text.length && selection.head.offset <= head.text.length;
+	return anchor?.text !== undefined
+		&& head?.text !== undefined
+		&& selection.anchor.offset <= anchor.text.length
+		&& selection.head.offset <= head.text.length;
 }
 
 function isTextStyleFontFamily(value: unknown): value is 'sans' | 'serif' | 'monospace' {
@@ -1908,10 +1733,10 @@ interface DocumentComposition {
 }
 
 function readCompositionText(element: HTMLTextAreaElement | HTMLDivElement): string {
-	return element.tagName === 'TEXTAREA' ? (element as HTMLTextAreaElement).value : (element.textContent ?? '');
+	return element.tagName === 'TEXTAREA' ? (element as HTMLTextAreaElement).value : element.textContent ?? '';
 }
 
-function findCompositionDiff(before: string, after: string): { readonly from: number; readonly to: number; readonly text: string } | undefined {
+function findCompositionDiff(before: string, after: string): { readonly from: number; readonly to: number; readonly text: string; } | undefined {
 	let from = 0;
 	while (from < before.length && from < after.length && before[from] === after[from]) from += 1;
 	let beforeEnd = before.length;
@@ -1960,15 +1785,13 @@ function remotePresenceDecorations(document: DocumentNode, presences: readonly D
 			else if (from.offset > 0) from = { nodeId: from.nodeId, offset: from.offset - 1 };
 			else continue;
 		}
-		decorations.push(
-			createDocumentDecoration({
-				id: `remote-presence-${presence.clientId}`,
-				from,
-				to,
-				className: `stanza-document-remote-selection stanza-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
-				attrs: { 'data-collaboration-client': presence.clientId },
-			}),
-		);
+		decorations.push(createDocumentDecoration({
+			id: `remote-presence-${presence.clientId}`,
+			from,
+			to,
+			className: `stanza-document-remote-selection stanza-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
+			attrs: { 'data-collaboration-client': presence.clientId },
+		}));
 	}
 	return Object.freeze(decorations);
 }
@@ -1983,10 +1806,7 @@ function hasRenderableDecoration(model: DocumentTextModel, node: DocumentNode, d
 	for (const child of node.content) {
 		if (child.text === undefined || child.text.length === 0) continue;
 		const start = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: 0 });
-		const end = documentPointToPosition(model.document, model.schema, {
-			nodeId: child.id,
-			offset: child.text.length,
-		});
+		const end = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: child.text.length });
 		if (decorations.some(decoration => decoration.to > start && decoration.from < end)) return true;
 	}
 	return false;
@@ -2009,24 +1829,15 @@ function applyViewDecorations(element: HTMLElement, decorations: readonly Docume
 
 function nodeElementTagName(node: DocumentNode): string {
 	switch (node.type) {
-		case 'heading':
-			return 'h2';
-		case 'blockquote':
-			return 'blockquote';
-		case 'bulletList':
-			return 'ul';
-		case 'orderedList':
-			return 'ol';
-		case 'listItem':
-			return 'li';
-		case 'table':
-			return 'table';
-		case 'tableRow':
-			return 'tr';
-		case 'tableCell':
-			return 'td';
-		default:
-			return 'div';
+		case 'heading': return 'h2';
+		case 'blockquote': return 'blockquote';
+		case 'bulletList': return 'ul';
+		case 'orderedList': return 'ol';
+		case 'listItem': return 'li';
+		case 'table': return 'table';
+		case 'tableRow': return 'tr';
+		case 'tableCell': return 'td';
+		default: return 'div';
 	}
 }
 
@@ -2107,13 +1918,7 @@ function selectedTextStyleFontSize(block: DocumentNode, selection: DocumentTextS
 	return selectedTextStyleAttribute(block, selection, 'fontSize', isTextStyleFontSize, storedMarks);
 }
 
-function selectedTextStyleAttribute<T extends string | number>(
-	block: DocumentNode,
-	selection: DocumentTextSelection,
-	attribute: 'fontFamily' | 'fontSize',
-	isValid: (value: unknown) => value is T,
-	storedMarks?: readonly DocumentMark[],
-): T | undefined {
+function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: DocumentTextSelection, attribute: 'fontFamily' | 'fontSize', isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -2172,7 +1977,7 @@ function readDocumentTextSelection(container: HTMLDivElement, includeCollapsed =
 	};
 }
 
-function readInlineDocumentTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: DocumentTextSelection } | undefined {
+function readInlineDocumentTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: DocumentTextSelection; } | undefined {
 	const selection = readDocumentTextSelection(editor, includeCollapsed);
 	if (!selection || selection.blockId !== editor.dataset.blockId) return undefined;
 	return { nodeId: selection.nodeId, selection: selection.selection };
@@ -2251,7 +2056,7 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 	domSelection?.addRange(range);
 }
 
-function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly node: Node; readonly offset: number } | undefined {
+function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly node: Node; readonly offset: number; } | undefined {
 	const runs = [...editor.querySelectorAll<HTMLElement>('[data-text-node-id]')].filter(run => run.dataset.textNodeId === nodeId);
 	if (runs.length === 0) return undefined;
 	let remaining = Math.max(0, offset);
@@ -2309,8 +2114,7 @@ function createListItemIndentationForBlock(schema: DocumentSchema, document: Doc
 }
 
 function createDeleteBoundaryCommand(model: DocumentTextModel, blockId: string, selection: DocumentTextSelection, direction: 'backward' | 'forward'): DocumentCommand | undefined {
-	if (!isCollapsedDocumentTextSelection(selection))
-		return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, '');
+	if (!isCollapsedDocumentTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, '');
 	const point = selection.anchor;
 	const textNode = findNode(model.document, point.nodeId);
 	if (!textNode || textNode.text === undefined) return undefined;

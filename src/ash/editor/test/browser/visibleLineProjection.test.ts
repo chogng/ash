@@ -44,10 +44,7 @@ test('Leading hidden lines map to the start of the first visible line', () => {
 	using lines = createViewModelLines(model);
 	lines.setHiddenAreas([new Range(1, 1, 2, 12)]);
 	const converter = lines.createCoordinatesConverter();
-	assert.deepEqual(
-		lines.projection.lines.map(line => line.logicalLineIndex),
-		[2, 3],
-	);
+	assert.deepEqual(lines.projection.lines.map(line => line.logicalLineIndex), [2, 3]);
 	assert.deepEqual(converter.convertModelPositionToViewPosition(new Position(1, 4)), new Position(1, 1));
 	assert.deepEqual(converter.convertViewPositionToModelPosition(new Position(1, 1)), new Position(3, 1));
 	lines.setHiddenAreas([]);
@@ -72,58 +69,42 @@ test('Visible visual-line projection removes hidden bodies while preserving wrap
 		wrapWidth: 20,
 	});
 
-	assert.deepEqual(
-		projection.projection.lines.map(line => ({
-			logical: line.logicalLineIndex,
-			start: line.startColumn,
-			end: line.endColumn,
-		})),
-		[
-			{ logical: 0, start: 0, end: 2 },
-			{ logical: 0, start: 2, end: 4 },
-			{ logical: 0, start: 4, end: 6 },
-			{ logical: 1, start: 0, end: 2 },
-			{ logical: 1, start: 2, end: 4 },
-			{ logical: 1, start: 4, end: 6 },
-			{ logical: 2, start: 0, end: 2 },
-			{ logical: 2, start: 2, end: 3 },
-			{ logical: 3, start: 0, end: 2 },
-			{ logical: 3, start: 2, end: 4 },
-		],
-	);
+	assert.deepEqual(projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, start: line.startColumn, end: line.endColumn })), [
+		{ logical: 0, start: 0, end: 2 },
+		{ logical: 0, start: 2, end: 4 },
+		{ logical: 0, start: 4, end: 6 },
+		{ logical: 1, start: 0, end: 2 },
+		{ logical: 1, start: 2, end: 4 },
+		{ logical: 1, start: 4, end: 6 },
+		{ logical: 2, start: 0, end: 2 },
+		{ logical: 2, start: 2, end: 3 },
+		{ logical: 3, start: 0, end: 2 },
+		{ logical: 3, start: 2, end: 4 },
+	]);
 
 	using listener = hiddenRanges.onDidChange(() => projection.setHiddenAreas(hiddenRanges.hiddenRanges));
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
-	assert.deepEqual(
-		projection.projection.lines.map(line => line.logicalLineIndex),
-		[0, 0, 0, 3, 3],
-	);
+	assert.deepEqual(projection.projection.lines.map(line => line.logicalLineIndex), [0, 0, 0, 3, 3]);
 	assert.equal(projection.lineSource.lineCount, 5);
-	assert.equal(projection.projection.visualLineIndexAt(new Position(1 + 1, 3 + 1)), 2);
+	assert.equal(projection.projection.visualLineIndexAt(new Position((1) + 1, (3) + 1)), 2);
 	assert.equal(projection.projection.lineAt(2)?.logicalLineIndex, 0);
 	const converter = projection.createCoordinatesConverter();
-	assert.deepEqual(
-		[1, 2, 3, 4].map(line => converter.getModelLineViewLineCount(line)),
-		[3, 1, 1, 2],
-	);
+	assert.deepEqual([1, 2, 3, 4].map(line => converter.getModelLineViewLineCount(line)), [3, 1, 1, 2]);
 });
 
 test('Visible visual-line projection refreshes the source before collapsed ranges observe a shrinking model', () => {
 	using model = new TextModel('header\ninside\nend');
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = createViewModelLines(model, {});
+	using projection = createViewModelLines(model, {
+	});
 	using listener = hiddenRanges.onDidChange(() => projection.setHiddenAreas(hiddenRanges.hiddenRanges));
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 
-	assert.doesNotThrow(() =>
-		model.applyEdits([
-			{
-				range: Range.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)),
-				text: 'x',
-			},
-		]),
-	);
+	assert.doesNotThrow(() => model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), model.positionAt(model.length)),
+		text: 'x',
+	}]));
 	assert.equal(projection.projection.logicalLineCount, 1);
 	assert.equal(projection.projection.lines.length, 1);
 	assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
@@ -134,7 +115,7 @@ test('View-model lines keep the wrapping projection path when no visibility filt
 	using projection = createViewModelLines(model);
 
 	const initialProjection = projection.projection;
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 0 + 1)), text: 'x' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: 'x' }]);
 	assert.notEqual(projection.projection, initialProjection);
 	assert.equal(projection.projection.visualLineCount, 2);
 });
@@ -177,30 +158,33 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 function createViewModelLines(model: TextModel, options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {}): ViewModelLinesFromProjectedModel {
-	return new ViewModelLinesFromProjectedModel(model, new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()), TEST_FONT_INFO, 4, options);
+	return new ViewModelLinesFromProjectedModel(
+		model,
+		new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()),
+		TEST_FONT_INFO,
+		4,
+		options,
+	);
 }
 
-const TEST_FONT_INFO = new FontInfo(
-	{
-		pixelRatio: 1,
-		fontFamily: 'monospace',
-		fontWeight: 'normal',
-		fontSize: 10,
-		fontFeatureSettings: 'none',
-		fontVariationSettings: 'normal',
-		lineHeight: 20,
-		letterSpacing: 0,
-		isMonospace: true,
-		typicalHalfwidthCharacterWidth: 10,
-		typicalFullwidthCharacterWidth: 20,
-		canUseHalfwidthRightwardsArrow: true,
-		spaceWidth: 10,
-		middotWidth: 10,
-		wsmiddotWidth: 10,
-		maxDigitWidth: 10,
-	},
-	true,
-);
+const TEST_FONT_INFO = new FontInfo({
+	pixelRatio: 1,
+	fontFamily: 'monospace',
+	fontWeight: 'normal',
+	fontSize: 10,
+	fontFeatureSettings: 'none',
+	fontVariationSettings: 'normal',
+	lineHeight: 20,
+	letterSpacing: 0,
+	isMonospace: true,
+	typicalHalfwidthCharacterWidth: 10,
+	typicalFullwidthCharacterWidth: 20,
+	canUseHalfwidthRightwardsArrow: true,
+	spaceWidth: 10,
+	middotWidth: 10,
+	wsmiddotWidth: 10,
+	maxDigitWidth: 10,
+}, true);
 
 const codeFeatures = registerTestCodeEditorFeatures();
 afterCodeFeatures(() => codeFeatures.dispose());

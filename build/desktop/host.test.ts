@@ -12,12 +12,7 @@ import { createHash } from 'node:crypto';
 test('packaging publishes final desktop assets without hashing metadata or user files', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-publish-checksums-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	const files = [
-		'dist/main/src/main.js',
-		'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
-		'dist/renderer/ash/electron-browser/workbench/workbench.html',
-		'resources/tray/icon.png',
-	];
+	const files = ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html', 'resources/tray/icon.png'];
 	for (const file of files) {
 		await mkdir(join(root, file, '..'), { recursive: true });
 		await writeFile(join(root, file), file);
@@ -27,8 +22,7 @@ test('packaging publishes final desktop assets without hashing metadata or user 
 	await writeApplicationChecksums(root);
 	const metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 	assert.deepEqual(metadata, {
-		name: 'ash-desktop',
-		version: '1.0.0',
+		name: 'ash-desktop', version: '1.0.0',
 		checksums: Object.fromEntries(files.map(file => [file, createHash('sha256').update(file).digest('hex')])),
 	});
 	await rm(join(root, files[0]));
@@ -65,41 +59,23 @@ for (const mode of ['build', 'watch'] as const) {
 		await mkdir(join(output, 'localization'), { recursive: true });
 		await writeFile(join(desktop, '.build/protocol/typescript/shared.ts'), 'export const protocolVersion = 1;');
 		await writeFile(join(output, 'localization/messages.ts'), 'export const label = "initial";');
-		await writeFile(
-			join(desktop, 'src/main.ts'),
-			'export { protocolVersion } from "../.build/protocol/typescript/shared.js"; export { label } from "../.build/desktop/localization/messages.js"; export const version = 1;',
-		);
+		await writeFile(join(desktop, 'src/main.ts'), 'export { protocolVersion } from "../.build/protocol/typescript/shared.js"; export { label } from "../.build/desktop/localization/messages.js"; export const version = 1;');
 		await mkdir(join(desktop, 'src/ash/platform/browserView/electron-browser'), { recursive: true });
 		await writeFile(join(desktop, browserPreloadSource), 'declare function require(name: string): unknown; (() => { require("electron"); })();');
 		await writeFile(join(desktop, preloadSource), 'declare function require(name: string): unknown; export const electron = require("electron");');
 		await writeFile(join(desktop, 'tsconfig.base.json'), '{"compilerOptions":{}}');
-		for (const [project, source] of [
-			['main', 'src/main.ts'],
-			['preload', preloadSource],
-		]) {
-			await writeFile(
-				join(desktop, `tsconfig.${project}.json`),
-				JSON.stringify({
-					extends: './tsconfig.base.json',
-					compilerOptions: {
-						module: 'NodeNext',
-						moduleDetection: 'legacy',
-						target: 'ES2022',
-						types: [],
-						rootDir: '.',
-						incremental: true,
-						outDir: `.build/desktop/${project}`,
-						tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
-					},
-					include: project === 'preload' ? [source, browserPreloadSource] : [source, 'src/extra/*.ts'],
-				}),
-			);
+		for (const [project, source] of [['main', 'src/main.ts'], ['preload', preloadSource]]) {
+			await writeFile(join(desktop, `tsconfig.${project}.json`), JSON.stringify({
+				extends: './tsconfig.base.json',
+				compilerOptions: {
+					module: 'NodeNext', moduleDetection: 'legacy', target: 'ES2022', types: [], rootDir: '.', incremental: true,
+					outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
+				},
+				include: project === 'preload' ? [source, browserPreloadSource] : [source, 'src/extra/*.ts'],
+			}));
 		}
 		const initial = spawnSync(process.execPath, [compiler, '--build', 'tsconfig.main.json', 'tsconfig.preload.json', '--pretty', 'false'], {
-			cwd: desktop,
-			encoding: 'utf8',
-			windowsHide: true,
-			timeout: 10_000,
+			cwd: desktop, encoding: 'utf8', windowsHide: true, timeout: 10_000,
 		});
 		assert.equal(initial.error, undefined);
 		assert.equal(initial.status, 0, initial.stdout + initial.stderr);
@@ -121,10 +97,7 @@ for (const mode of ['build', 'watch'] as const) {
 		if (mode === 'build') {
 			await host.buildHost();
 		} else {
-			watcher = await host.watchHost(value => {
-				ready = value;
-				readyStates.push(value);
-			});
+			watcher = await host.watchHost(value => { ready = value; readyStates.push(value); });
 			await until(() => ready);
 		}
 		assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
@@ -196,10 +169,7 @@ for (const mode of ['build', 'watch'] as const) {
 			ready = false;
 			await rm(join(desktop, 'src/extra/added.ts'));
 			await until(() => ready);
-			assert.ok(
-				!JSON.parse(await readFile(join(output, 'main.tsbuildinfo'), 'utf8')).fileNames.some((file: string) => file.endsWith('/extra/added.ts')),
-				'Removing an input refreshes the compiler inventory',
-			);
+			assert.ok(!JSON.parse(await readFile(join(output, 'main.tsbuildinfo'), 'utf8')).fileNames.some((file: string) => file.endsWith('/extra/added.ts')), 'Removing an input refreshes the compiler inventory');
 		}
 	});
 }

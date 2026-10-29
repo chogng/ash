@@ -9,11 +9,7 @@ export async function prepareProductionDependencyWorkspace(repository: string, d
 	await mkdir(destination, { recursive: true });
 	for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches', 'licenses', 'THIRD_PARTY_NOTICES.md']) {
 		try {
-			await cp(join(repository, file), join(destination, file), {
-				recursive: true,
-				errorOnExist: true,
-				force: false,
-			});
+			await cp(join(repository, file), join(destination, file), { recursive: true, errorOnExist: true, force: false });
 		} catch (error) {
 			if (['licenses', 'THIRD_PARTY_NOTICES.md'].includes(file) && (error as NodeJS.ErrnoException).code === 'ENOENT') continue;
 			throw error;
@@ -37,8 +33,6 @@ export function ignoreApplicationFile(path: string, platform: NodeJS.Platform = 
 	// These two loaders only consume build/Release; retain attribution but omit
 	// C++ sources, compiler outputs and duplicate bin/<platform>-<arch>-<abi> copies.
 	const file = parts.slice(packageIndex + 1).join('/');
-	return (
-		!['', 'package.json', 'index.js', 'build', 'build/Release', `build/Release/${name === 'native-keymap' ? 'keymapping' : 'iselevated'}.node`].includes(file) &&
-		!/^(?:license(?:\.txt)?|thirdpartynotices\.txt)$/iu.test(file)
-	);
+	return !['', 'package.json', 'index.js', 'build', 'build/Release', `build/Release/${name === 'native-keymap' ? 'keymapping' : 'iselevated'}.node`].includes(file)
+		&& !/^(?:license(?:\.txt)?|thirdpartynotices\.txt)$/iu.test(file);
 }

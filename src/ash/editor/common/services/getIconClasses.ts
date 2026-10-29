@@ -65,8 +65,12 @@ export function getIconClasses(
 		classes.push('ext-file-icon');
 	}
 
-	const languageId = metadata ? languageService.getLanguageIdByMimeType(metadata.get(DataUri.META_DATA_MIME)) : modelService?.getModel(resource)?.getLanguageId();
-	const resolvedLanguageId = languageId && languageId !== PLAINTEXT_LANGUAGE_ID ? languageId : languageService.guessLanguageIdByFilepathOrFirstLine(resource);
+	const languageId = metadata
+		? languageService.getLanguageIdByMimeType(metadata.get(DataUri.META_DATA_MIME))
+		: modelService?.getModel(resource)?.getLanguageId();
+	const resolvedLanguageId = languageId && languageId !== PLAINTEXT_LANGUAGE_ID
+		? languageId
+		: languageService.guessLanguageIdByFilepathOrFirstLine(resource);
 	if (resolvedLanguageId) {
 		classes.push(`${fileIconSelectorEscape(resolvedLanguageId)}-lang-file-icon`);
 	}

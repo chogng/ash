@@ -13,21 +13,16 @@ export class UnfocusedViewDimmingContribution extends Disposable implements IWor
 		@ILayoutService private readonly layout: ILayoutService,
 	) {
 		super();
-		const sheet = createStyleSheet(
-			layout.mainContainer.ownerDocument,
-			`
+		const sheet = createStyleSheet(layout.mainContainer.ownerDocument, `
 .ash-dim-unfocused .ash-workbench-part:not(:focus-within) > .ash-workbench-part-content {
 	opacity: var(--ash-unfocused-view-opacity);
-}`,
-		);
+}`);
 		this._register(sheet.registration);
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedEnabled) || event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity)) {
-					this.update();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedEnabled) || event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity)) {
+				this.update();
+			}
+		}));
 		this._register(layout.onDidChangeActiveContainer(() => this.update()));
 		this._register(layout.onDidLayoutContainer(() => this.update()));
 		this.update();
@@ -44,13 +39,10 @@ export class UnfocusedViewDimmingContribution extends Disposable implements IWor
 		const opacity = this.configuration.getValue<number>(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity);
 		for (const container of activeContainers) {
 			if (!this.containers.has(container)) {
-				this.containers.set(
-					container,
-					toDisposable(() => {
-						container.classList.remove('ash-dim-unfocused');
-						container.style.removeProperty('--ash-unfocused-view-opacity');
-					}),
-				);
+				this.containers.set(container, toDisposable(() => {
+					container.classList.remove('ash-dim-unfocused');
+					container.style.removeProperty('--ash-unfocused-view-opacity');
+				}));
 			}
 			container.classList.toggle('ash-dim-unfocused', enabled);
 			container.style.setProperty('--ash-unfocused-view-opacity', String(opacity));

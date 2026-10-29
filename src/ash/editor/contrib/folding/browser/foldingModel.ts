@@ -48,13 +48,11 @@ export class EditorFoldingModel extends Disposable {
 	constructor(private readonly textModel: TextModel) {
 		super();
 		this._register(toDisposable(() => disposeRecords(this.records)));
-		this._register(
-			textModel.onDidChangeContent(change => {
-				// Column-only edits cannot reorder, cross or remove physical-line folds.
-				// Their tracked offsets already follow the model's transaction.
-				if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.reconcileTrackedRanges();
-			}),
-		);
+		this._register(textModel.onDidChangeContent(change => {
+			// Column-only edits cannot reorder, cross or remove physical-line folds.
+			// Their tracked offsets already follow the model's transaction.
+			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.reconcileTrackedRanges();
+		}));
 	}
 
 	get model(): TextModel {
@@ -86,15 +84,10 @@ export class EditorFoldingModel extends Disposable {
 		const next = this.regions.map(region => ({ ...region }));
 		let changed = false;
 		for (const saved of state) {
-			if (
-				!Number.isSafeInteger(saved.startLineNumber) ||
-				!Number.isSafeInteger(saved.endLineNumber) ||
-				saved.startLineNumber < 1 ||
-				saved.endLineNumber > this.textModel.lineCount ||
-				saved.startLineNumber >= saved.endLineNumber ||
-				saved.checksum !== this.getLinesChecksum(saved.startLineNumber, saved.endLineNumber)
-			)
-				continue;
+			if (!Number.isSafeInteger(saved.startLineNumber) || !Number.isSafeInteger(saved.endLineNumber)
+				|| saved.startLineNumber < 1 || saved.endLineNumber > this.textModel.lineCount
+				|| saved.startLineNumber >= saved.endLineNumber
+				|| saved.checksum !== this.getLinesChecksum(saved.startLineNumber, saved.endLineNumber)) continue;
 			const range = {
 				startLineIndex: saved.startLineNumber - 1,
 				endLineIndex: saved.endLineNumber - 1,
@@ -105,15 +98,10 @@ export class EditorFoldingModel extends Disposable {
 			if (index >= 0) {
 				next[index] = range;
 				changed = true;
-			} else if (
-				next.every(
-					current =>
-						current.endLineIndex < range.startLineIndex ||
-						range.endLineIndex < current.startLineIndex ||
-						(current.startLineIndex <= range.startLineIndex && range.endLineIndex <= current.endLineIndex) ||
-						(range.startLineIndex <= current.startLineIndex && current.endLineIndex <= range.endLineIndex),
-				)
-			) {
+			} else if (next.every(current => current.endLineIndex < range.startLineIndex
+				|| range.endLineIndex < current.startLineIndex
+				|| current.startLineIndex <= range.startLineIndex && range.endLineIndex <= current.endLineIndex
+				|| range.startLineIndex <= current.startLineIndex && current.endLineIndex <= range.endLineIndex)) {
 				next.push(range);
 				changed = true;
 			}
@@ -130,7 +118,10 @@ export class EditorFoldingModel extends Disposable {
 		const normalized = normalizeEditorFoldingRanges(this.textModel, ranges);
 		const next = normalized.map(range => ({
 			range: this.textModel.trackRange(
-				Range.fromPositions(new Position(range.startLineIndex + 1, 0 + 1), new Position(range.endLineIndex + 1, this.textModel.getLineContent(range.endLineIndex + 1).length + 1)),
+				Range.fromPositions(
+					new Position((range.startLineIndex) + 1, (0) + 1),
+					new Position((range.endLineIndex) + 1, (this.textModel.getLineContent((range.endLineIndex) + 1).length) + 1),
+				),
 				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			),
 			collapsed: range.collapsed,
@@ -150,8 +141,12 @@ export class EditorFoldingModel extends Disposable {
 		// Most edits change syntax inside existing folds. Preserve their tracked
 		// handles, manual ranges and collapse state without rebuilding decorations.
 		if (providers.length === ranges.length && providers.every((range, index) => range.startLineIndex === ranges[index].startLineIndex && range.endLineIndex === ranges[index].endLineIndex)) return;
-		const collapsedProviders = new Map(current.filter(region => region.source === EditorFoldingRangeSource.Provider).map(region => [editorFoldingRangeKey(region), region.collapsed]));
-		const manualRanges = current.filter(region => region.source === EditorFoldingRangeSource.Manual).map(region => ({ ...region }));
+		const collapsedProviders = new Map(current
+			.filter(region => region.source === EditorFoldingRangeSource.Provider)
+			.map(region => [editorFoldingRangeKey(region), region.collapsed]));
+		const manualRanges = current
+			.filter(region => region.source === EditorFoldingRangeSource.Manual)
+			.map(region => ({ ...region }));
 		const providerRanges = ranges.map(range => ({
 			...range,
 			collapsed: collapsedProviders.get(editorFoldingRangeKey(range)) ?? range.collapsed ?? false,
@@ -186,11 +181,17 @@ export class EditorFoldingModel extends Disposable {
 	}
 
 	/** Resolves all selected scopes before changing state, so repeated cursors fold a scope only once. */
-	setContainingLinesCollapsed(lineIndexes: readonly number[], collapsed: boolean, options?: { levels: number; direction: 'up' | 'down' }): void {
+	setContainingLinesCollapsed(
+		lineIndexes: readonly number[],
+		collapsed: boolean,
+		options?: { levels: number; direction: 'up' | 'down'; },
+	): void {
 		if (typeof collapsed !== 'boolean') throw new TypeError('Folding collapse state must be boolean');
 		const targets = new Set<EditorFoldingRegionRecord>();
 		const levels = options?.levels ?? 1;
-		const depths = options?.direction === 'down' && levels > 1 ? new Map(this.records.map(record => [record, this.getNestingDepth(record)])) : undefined;
+		const depths = options?.direction === 'down' && levels > 1
+			? new Map(this.records.map(record => [record, this.getNestingDepth(record)]))
+			: undefined;
 		if (lineIndexes.length === 0 && depths) {
 			for (const [record, depth] of depths) {
 				if (depth < levels && record.collapsed !== collapsed) {
@@ -199,12 +200,10 @@ export class EditorFoldingModel extends Disposable {
 			}
 		}
 		for (const lineIndex of lineIndexes) {
-			const containing = this.records
-				.filter(candidate => {
-					const range = candidate.range.range;
-					return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
-				})
-				.reverse();
+			const containing = this.records.filter(candidate => {
+				const range = candidate.range.range;
+				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
+			}).reverse();
 			if (!options) {
 				const record = containing.find(candidate => !collapsed || !candidate.collapsed);
 				if (record && record.collapsed !== collapsed) {
@@ -232,7 +231,8 @@ export class EditorFoldingModel extends Disposable {
 				const rootDepth = depths.get(record)!;
 				for (const [candidate, depth] of depths) {
 					const range = candidate.range.range;
-					if (range.startLineNumber >= root.startLineNumber && range.endLineNumber <= root.endLineNumber && depth - rootDepth < levels && candidate.collapsed !== collapsed) {
+					if (range.startLineNumber >= root.startLineNumber && range.endLineNumber <= root.endLineNumber
+						&& depth - rootDepth < levels && candidate.collapsed !== collapsed) {
 						targets.add(candidate);
 					}
 				}
@@ -268,7 +268,9 @@ export class EditorFoldingModel extends Disposable {
 			}
 			return this.toRegion(existingManual);
 		}
-		const ranges = this.regions.filter(region => region.startLineIndex !== startLineIndex || region.endLineIndex !== endLineIndex).map(region => ({ ...region }));
+		const ranges = this.regions
+			.filter(region => region.startLineIndex !== startLineIndex || region.endLineIndex !== endLineIndex)
+			.map(region => ({ ...region }));
 		ranges.push({ startLineIndex, endLineIndex, collapsed: true, source: EditorFoldingRangeSource.Manual });
 		this.setRanges(ranges);
 		return this.regions.find(region => region.source === EditorFoldingRangeSource.Manual && region.startLineIndex === startLineIndex && region.endLineIndex === endLineIndex);
@@ -280,12 +282,9 @@ export class EditorFoldingModel extends Disposable {
 		const removed = new Set<EditorFoldingRegionRecord>();
 		for (const selection of selections) {
 			if (selection.isEmpty()) {
-				const containing = this.findRecord(
-					record =>
-						record.source === EditorFoldingRangeSource.Manual &&
-						record.range.range.startLineNumber <= selection.startLineNumber &&
-						record.range.range.endLineNumber >= selection.startLineNumber,
-				);
+				const containing = this.findRecord(record => record.source === EditorFoldingRangeSource.Manual
+					&& record.range.range.startLineNumber <= selection.startLineNumber
+					&& record.range.range.endLineNumber >= selection.startLineNumber);
 				if (containing) removed.add(containing);
 				else for (const record of manual) removed.add(record);
 			} else {
@@ -378,14 +377,11 @@ export class EditorFoldingModel extends Disposable {
 
 	private getNestingDepth(record: EditorFoldingRegionRecord): number {
 		const range = record.range.range;
-		return (
-			1 +
-			this.records.filter(candidate => {
-				if (candidate === record) return false;
-				const candidateRange = candidate.range.range;
-				return candidateRange.getStartPosition().lineNumber <= range.getStartPosition().lineNumber && candidateRange.getEndPosition().lineNumber >= range.getEndPosition().lineNumber;
-			}).length
-		);
+		return 1 + this.records.filter(candidate => {
+			if (candidate === record) return false;
+			const candidateRange = candidate.range.range;
+			return candidateRange.getStartPosition().lineNumber <= range.getStartPosition().lineNumber && candidateRange.getEndPosition().lineNumber >= range.getEndPosition().lineNumber;
+		}).length;
 	}
 
 	private toRegion(record: EditorFoldingRegionRecord): EditorFoldingRegion {
@@ -399,11 +395,13 @@ export class EditorFoldingModel extends Disposable {
 	}
 
 	private findRecord(predicate: (candidate: EditorFoldingRegionRecord) => boolean): EditorFoldingRegionRecord | undefined {
-		return this.records.filter(predicate).sort((left, right) => {
-			const leftRange = left.range.range;
-			const rightRange = right.range.range;
-			return leftRange.getEndPosition().lineNumber - leftRange.getStartPosition().lineNumber - (rightRange.getEndPosition().lineNumber - rightRange.getStartPosition().lineNumber);
-		})[0];
+		return this.records
+			.filter(predicate)
+			.sort((left, right) => {
+				const leftRange = left.range.range;
+				const rightRange = right.range.range;
+				return leftRange.getEndPosition().lineNumber - leftRange.getStartPosition().lineNumber - (rightRange.getEndPosition().lineNumber - rightRange.getStartPosition().lineNumber);
+			})[0];
 	}
 }
 

@@ -7,9 +7,7 @@ test('marshalling restores nested tagged URIs without changing encoded resource 
 	const file = URI.file('/workspace/中文 #100%.ts');
 	const remote = URI.parse('ash-remote://ssh+build/workspace/a%2Fb.ts?name=a%26b&literal=%2520#L3');
 	const result = parse(JSON.stringify({ resources: [file, { remote }], value: '%20 中文', empty: null })) as {
-		resources: [URI, { remote: URI }];
-		value: string;
-		empty: null;
+		resources: [URI, { remote: URI; }]; value: string; empty: null;
 	};
 	assert.ok(result.resources[0] instanceof URI);
 	assert.ok(result.resources[1].remote instanceof URI);

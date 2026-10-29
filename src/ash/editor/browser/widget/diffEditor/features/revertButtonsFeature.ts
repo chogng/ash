@@ -17,11 +17,7 @@ export class RevertButtonsFeature extends Disposable {
 	private readonly buttons = this._register(new DisposableStore());
 	private enabled = false;
 
-	constructor(
-		private readonly editor: CodeEditorWidget,
-		private readonly model: DiffModel,
-		private readonly widget: DiffEditorWidget,
-	) {
+	constructor(private readonly editor: CodeEditorWidget, private readonly model: DiffModel, private readonly widget: DiffEditorWidget) {
 		super();
 		this._register(editor.onDidChangeCursorSelection(() => this.update(this.enabled)));
 	}
@@ -32,9 +28,8 @@ export class RevertButtonsFeature extends Disposable {
 		const diff = this.model.diff;
 		if (!enabled || !diff || this.editor.getOption(EditorOption.readOnly)) return;
 		const selections = this.editor.getSelections() ?? [];
-		const selected = diff.changes.flatMap(change =>
-			(change.innerChanges ?? []).filter(range => selections.some(selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange))),
-		);
+		const selected = diff.changes.flatMap(change => (change.innerChanges ?? []).filter(range =>
+			selections.some(selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange))));
 		if (selected.length > 0) {
 			this.addButton(selections.at(-1)!.positionLineNumber, 'selection', localize('diffEditor.revertSelection', 'Revert selected changes'), () => this.widget.revertRangeMappings(selected));
 		}
@@ -48,24 +43,18 @@ export class RevertButtonsFeature extends Disposable {
 	private addButton(lineNumber: number, id: string, label: string, run: () => void): void {
 		const container = h(this.editor.getDomNode().ownerDocument, 'div');
 		container.className = 'ash-diff-revert';
-		this.buttons.add(
-			new Button(container, {
-				...defaultButtonStyles,
-				label,
-				icon: Lxicon.arrowLeft,
-				iconOnly: true,
-				size: 'small',
-				onClick: run,
-			}),
-		);
+		this.buttons.add(new Button(container, {
+			...defaultButtonStyles,
+			label,
+			icon: Lxicon.arrowLeft,
+			iconOnly: true,
+			size: 'small',
+			onClick: run,
+		}));
 		const widget: IGlyphMarginWidget = {
 			getId: () => `diff-revert-${id}`,
 			getDomNode: () => container,
-			getPosition: () => ({
-				range: new Range(lineNumber, 1, lineNumber, 1),
-				lane: GlyphMarginLane.Right,
-				zIndex: 10,
-			}),
+			getPosition: () => ({ range: new Range(lineNumber, 1, lineNumber, 1), lane: GlyphMarginLane.Right, zIndex: 10 }),
 		};
 		this.editor.addGlyphMarginWidget(widget);
 		this.buttons.add(toDisposable(() => this.editor.removeGlyphMarginWidget(widget)));

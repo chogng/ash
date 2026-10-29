@@ -32,37 +32,22 @@ suite('ChatGPT entry', () => {
 			assert.equal(browser.descriptor.label, '浏览器');
 			assert.equal(browser.groups[0]!.description, '配置此窗口中的 ChatGPT。');
 			assert.equal(browser.groups[0]!.settings[0]!.title, 'ChatGPT 滚动优化');
-			assert.deepEqual(
-				SettingsNavigation.filter(entry => 'categories' in entry && entry.categories.some(category => category.id === browser.id)).map(entry => entry.id),
-				['workbench'],
-			);
-		} finally {
-			setNlsMessages('en', {});
+			assert.deepEqual(SettingsNavigation.filter(entry => 'categories' in entry && entry.categories.some(category => category.id === browser.id)).map(entry => entry.id), ['workbench']);
 		}
+		finally { setNlsMessages('en', {}); }
 	});
 
 	test('open and restore use a normal editor resource and independent sidebar without a BrowserView', async () => {
 		assert.equal(SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id, chatGPTNavigationContainerId);
 		using resources = new DisposableStore();
-		const entries: { entry: ISessionsEntry; source?: string }[] = [];
+		const entries: { entry: ISessionsEntry; source?: string; }[] = [];
 		let initialized = 0;
-		const services = resources.add(
-			new InstantiationService(
-				new ServiceCollection(
-					[IChatGPTService, { initialize: () => initialized++ } as unknown as IChatGPTService],
-					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
-					[IEditorService, {} as IEditorService],
-					[
-						ISessionsLayoutService,
-						{
-							openEntry: async (entry, _arg, options) => {
-								entries.push({ entry, source: options?.source });
-							},
-						} as ISessionsLayoutService,
-					],
-				),
-			),
-		);
+		const services = resources.add(new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { initialize: () => initialized++ } as unknown as IChatGPTService],
+			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
+			[IEditorService, {} as IEditorService],
+			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
+		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, 'restore');
@@ -85,38 +70,12 @@ suite('ChatGPT entry', () => {
 		let entry: ISessionsEntry | undefined;
 		let created = 0;
 		let focused = 0;
-		const services = resources.add(
-			new InstantiationService(
-				new ServiceCollection(
-					[
-						IChatGPTService,
-						{
-							initialize() {},
-							newChat: () => {
-								created++;
-							},
-						} as unknown as IChatGPTService,
-					],
-					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
-					[
-						IEditorService,
-						{
-							focusActiveEditor: () => {
-								focused++;
-							},
-						} as unknown as IEditorService,
-					],
-					[
-						ISessionsLayoutService,
-						{
-							openEntry: async value => {
-								entry = value;
-							},
-						} as ISessionsLayoutService,
-					],
-				),
-			),
-		);
+		const services = resources.add(new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { initialize() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
+			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
+			[IEditorService, { focusActiveEditor: () => { focused++; } } as unknown as IEditorService],
+			[ISessionsLayoutService, { openEntry: async value => { entry = value; } } as ISessionsLayoutService],
+		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
 		assert.ok(entry?.newSessionCommand);
@@ -127,32 +86,13 @@ suite('ChatGPT entry', () => {
 	test('Desktop New preserves the selected chat on restore and creates a draft only on explicit New', async () => {
 		using resources = new DisposableStore();
 		let created = 0;
-		const entries: { entry: ISessionsEntry; source?: string }[] = [];
-		const services = resources.add(
-			new InstantiationService(
-				new ServiceCollection(
-					[
-						IChatGPTService,
-						{
-							initialize() {},
-							newChat: () => {
-								created++;
-							},
-						} as unknown as IChatGPTService,
-					],
-					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
-					[IEditorService, {} as IEditorService],
-					[
-						ISessionsLayoutService,
-						{
-							openEntry: async (entry, _arg, options) => {
-								entries.push({ entry, source: options?.source });
-							},
-						} as ISessionsLayoutService,
-					],
-				),
-			),
-		);
+		const entries: { entry: ISessionsEntry; source?: string; }[] = [];
+		const services = resources.add(new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { initialize() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
+			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
+			[IEditorService, {} as IEditorService],
+			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
+		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.open.new')!, 'restore');
 		assert.equal(created, 0);
@@ -171,68 +111,23 @@ suite('ChatGPT entry', () => {
 		});
 		let source: IObservable<readonly SearchResult[]> | undefined;
 		const opened: string[] = [];
-		const services = resources.add(
-			new InstantiationService(
-				new ServiceCollection(
-					[
-						IChatGPTService,
-						{
-							state,
-							initialize() {},
-							select: async (id: string) => {
-								opened.push(id);
-							},
-						} as unknown as IChatGPTService,
-					],
-					[
-						ISessionsSearchService,
-						{
-							registerSource: value => {
-								source = value;
-								return toDisposable(() => {
-									source = undefined;
-								});
-							},
-						} as ISessionsSearchService,
-					],
-					[
-						IEditorService,
-						{
-							focusActiveEditor: () => {
-								opened.push('focus');
-							},
-						} as unknown as IEditorService,
-					],
-					[
-						ISessionsLayoutService,
-						{
-							openEntry: async () => {
-								opened.push('open');
-							},
-						} as unknown as ISessionsLayoutService,
-					],
-				),
-			),
-		);
+		const services = resources.add(new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { state, initialize() { }, select: async (id: string) => { opened.push(id); } } as unknown as IChatGPTService],
+			[ISessionsSearchService, {
+				registerSource: value => { source = value; return toDisposable(() => { source = undefined; }); },
+			} as ISessionsSearchService],
+			[IEditorService, { focusActiveEditor: () => { opened.push('focus'); } } as unknown as IEditorService],
+			[ISessionsLayoutService, { openEntry: async () => { opened.push('open'); } } as unknown as ISessionsLayoutService],
+		)));
 		const contribution = resources.add(services.createInstance(ChatGPTWebContribution));
-		assert.deepEqual(
-			source!.get().map(({ id, category, title, description }) => ({ id, category, title, description })),
-			[
-				{
-					id: 'chatgpt:one',
-					category: 'sessions',
-					title: 'Design review',
-					description: 'ChatGPT · Website project',
-				},
-			],
-		);
+		assert.deepEqual(source!.get().map(({ id, category, title, description }) => ({ id, category, title, description })), [
+			{ id: 'chatgpt:one', category: 'sessions', title: 'Design review', description: 'ChatGPT · Website project' },
+		]);
 		state.set({ ...state.get(), conversations: [{ ...state.get().conversations[0]!, title: 'Renamed review' }] });
 		assert.equal(source!.get()[0]!.title, 'Renamed review');
 		const target = source!.get()[0]!.target;
 		assert.equal(target.kind, 'contributed');
-		if (target.kind === 'contributed') {
-			await target.open();
-		}
+		if (target.kind === 'contributed') { await target.open(); }
 		assert.deepEqual(opened, ['open', 'one', 'focus']);
 		state.set({ ...state.get(), conversations: [] });
 		assert.deepEqual(source!.get(), []);

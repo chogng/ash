@@ -28,40 +28,19 @@ function fixture(owner: DisposableStore) {
 	let visible = false;
 	let focusCalls = 0;
 	const host: IOsc99NotificationHost = {
-		isEnabled: () => enabled,
-		isWindowFocused: () => focused,
-		isTerminalVisible: () => visible,
-		focusTerminal: () => {
-			focusCalls++;
-		},
-		notify: options => notifications.notify(options),
-		updateEnableNotifications: async value => {
-			enabled = value;
-		},
-		logWarn: message => {
-			warnings.push(message);
-		},
-		writeToProcess: data => {
-			writes.push(data);
-		},
+		isEnabled: () => enabled, isWindowFocused: () => focused, isTerminalVisible: () => visible,
+		focusTerminal: () => { focusCalls++; }, notify: options => notifications.notify(options),
+		updateEnableNotifications: async value => { enabled = value; },
+		logWarn: message => { warnings.push(message); }, writeToProcess: data => { writes.push(data); },
 	};
 	const handler = owner.add(new TerminalNotificationHandler(host));
 	return {
-		handler,
-		notifications,
-		writes,
-		warnings,
+		handler, notifications, writes, warnings,
 		items: () => notifications.model.getNotifications(),
 		focusCalls: () => focusCalls,
-		setEnabled: (value: boolean) => {
-			enabled = value;
-		},
-		setFocused: (value: boolean) => {
-			focused = value;
-		},
-		setVisible: (value: boolean) => {
-			visible = value;
-		},
+		setEnabled: (value: boolean) => { enabled = value; },
+		setFocused: (value: boolean) => { focused = value; },
+		setVisible: (value: boolean) => { visible = value; },
 	};
 }
 
@@ -72,10 +51,7 @@ test('OSC 99 assembles independently interleaved titles, bodies and UTF-8 encode
 	f.handler.handleSequence('i=b;Other process');
 	f.handler.handleSequence('i=a:d=0:p=body:e=1;5a6M5oiQ');
 	f.handler.handleSequence('i=a;finished');
-	assert.deepEqual(
-		f.items().map(item => item.message),
-		['Other process', 'Build finished: 完成'],
-	);
+	assert.deepEqual(f.items().map(item => item.message), ['Other process', 'Build finished: 完成']);
 	const id = f.items()[1].id;
 	f.handler.handleSequence('i=a:u=2;New warning');
 	assert.equal(f.items().length, 2);
@@ -84,13 +60,7 @@ test('OSC 99 assembles independently interleaved titles, bodies and UTF-8 encode
 	assert.equal(f.items()[1].severity, Severity.Warning);
 	f.handler.handleSequence(';Anonymous one');
 	f.handler.handleSequence(';Anonymous two');
-	assert.deepEqual(
-		f
-			.items()
-			.slice(-2)
-			.map(item => item.message),
-		['Anonymous one', 'Anonymous two'],
-	);
+	assert.deepEqual(f.items().slice(-2).map(item => item.message), ['Anonymous one', 'Anonymous two']);
 });
 
 test('OSC 99 reports buttons and closes through their original notification, and exposes only alive identified handles', async () => {
@@ -128,9 +98,7 @@ test('OSC 99 protocol close, dismiss and auto-close do not masquerade as button 
 		f.handler.handleSequence('i=c:p=close;');
 		assert.deepEqual(f.writes.slice(-2), ['\x1b]99;i=b:p=close;\x1b\\', '\x1b]99;i=c:p=close;\x1b\\']);
 		assert.equal(f.focusCalls(), 0);
-	} finally {
-		mock.timers.reset();
-	}
+	} finally { mock.timers.reset(); }
 });
 
 test('OSC 99 ordinary close reports body activation and user disable retires all notifications', async () => {
@@ -161,9 +129,7 @@ test('OSC 99 releases a notification removed by a synchronous arrival listener b
 		f.handler.handleSequence('i=q:p=alive;');
 		assert.equal(f.writes.at(-1), '\x1b]99;i=q:p=alive;\x1b\\');
 		assert.equal(f.writes.length, 3);
-	} finally {
-		mock.timers.reset();
-	}
+	} finally { mock.timers.reset(); }
 });
 
 test('OSC 99 honors focus, visibility and the enable setting without retaining suppressed drafts', () => {
@@ -209,43 +175,27 @@ test('OSC 99 production contribution binds parser and replies to the emitting te
 	let parser: ((data: string) => boolean) | undefined;
 	let parserDisposed = false;
 	const instance = {
-		state: 'running',
-		processId: 1,
-		target: TerminalLocation.Panel,
-		onDidChangeState: changed.event,
-		onDidExit: Event.None,
-		sendText: async (data: string) => {
-			writes.push(data);
-		},
+		state: 'running', processId: 1, target: TerminalLocation.Panel,
+		onDidChangeState: changed.event, onDidExit: Event.None,
+		sendText: async (data: string) => { writes.push(data); },
 	} as unknown as ITerminalInstance;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IHostService, { hasFocus: false } as IHostService);
-	services.registerInstance(ITerminalService, {
-		instances: [instance],
-		setActiveInstance: () => {},
-	} as unknown as ITerminalService);
-	services.registerInstance(ITerminalGroupService, { showPanel: async () => {} } as unknown as ITerminalGroupService);
+	services.registerInstance(ITerminalService, { instances: [instance], setActiveInstance: () => { } } as unknown as ITerminalService);
+	services.registerInstance(ITerminalGroupService, { showPanel: async () => { } } as unknown as ITerminalGroupService);
 	services.registerInstance(ITerminalEditorService, {} as ITerminalEditorService);
-	services.registerInstance(ITerminalLogService, { warn: () => {} } as unknown as ITerminalLogService);
+	services.registerInstance(ITerminalLogService, { warn: () => { } } as unknown as ITerminalLogService);
 	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(entry => entry.id === 'terminal.oscNotifications')!;
 	const contribution = owner.add(services.createInstance(definition.ctor, { instance }));
 	contribution.xtermReady!({
 		raw: {
 			parser: {
 				registerOscHandler: (id: number, callback: (data: string) => boolean) => {
-					assert.equal(id, 99);
-					parser = callback;
-					return {
-						dispose: () => {
-							parserDisposed = true;
-						},
-					};
-				},
-			},
-		},
-		element: { isConnected: false },
-		isDisposed: false,
+					assert.equal(id, 99); parser = callback; return { dispose: () => { parserDisposed = true; } };
+				}
+			}
+		}, element: { isConnected: false }, isDisposed: false
 	} as unknown as IXtermTerminal);
 	assert.ok(parser);
 	parser('i=a:a=report;Hello');
@@ -306,16 +256,15 @@ suite('terminalNotification browser component', () => {
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('debug\nline');
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
-		await page.evaluate(() => {
-			void window.ashTerminalInputIntegration.command('workbench.action.terminal.recordSession');
-		});
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.recordSession'); });
 		await expect.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.recording())).toBe(true);
 		await page.evaluate(() => window.ashTerminalOscIntegration.feedActive('recorded real process output\r\n'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.snapshotActive())).toContain('recorded real process output');
 		await page.evaluate(() => window.ashTerminalOscIntegration.stopRecording());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied.length)).toBe(1);
 		const recording = await page.evaluate(() => JSON.parse(window.ashTerminalClipboardIntegration.copied[0]));
-		expect(recording.replay.events.map((entry: { data: string }) => entry.data).join('')).toContain('recorded real process output');
+		expect(recording.replay.events.map((entry: { data: string; }) => entry.data).join('')).toContain('recorded real process output');
 		expect(recording.truncated).toBe(false);
 	});
+
 });

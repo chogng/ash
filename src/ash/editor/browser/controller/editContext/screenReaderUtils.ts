@@ -55,10 +55,9 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 		if (selectionStartPage === selectionEndPage || selectionStartPage + 1 === selectionEndPage) {
 			text = model.getValueInRange(selection, EndOfLinePreference.LF);
 		} else {
-			text =
-				model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF) +
-				String.fromCharCode(8230) +
-				model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
+			text = model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF)
+				+ String.fromCharCode(8230)
+				+ model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
 		}
 		if (trimLongText && text.length > 2 * limitCharacters) {
 			text = text.substring(0, limitCharacters) + String.fromCharCode(8230) + text.substring(text.length - limitCharacters);

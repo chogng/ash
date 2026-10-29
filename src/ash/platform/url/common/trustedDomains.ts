@@ -5,7 +5,8 @@ import { testUrlMatchesGlob } from './urlGlob.js';
 export function isURLSafeForTrust(resource: URI): boolean {
 	// URI owns browser normalization and credential rejection. Escaped control
 	// characters still require a decision even when the domain has a trust rule.
-	return (resource.scheme === 'http' || resource.scheme === 'https') && !!resource.authority && !/[\u0000-\u001f\u007f]/u.test(resource.toString(true));
+	return (resource.scheme === 'http' || resource.scheme === 'https') && !!resource.authority
+		&& !/[\u0000-\u001f\u007f]/u.test(resource.toString(true));
 }
 
 /** Validates a user rule without widening its scheme, authority, or path. */
@@ -29,7 +30,8 @@ export function normalizeURLPattern(pattern: string): string {
 	}
 	const port = /:(\d+)$/u.exec(authority)?.[1];
 	// A scheme-less :443 rule also applies to HTTP, where 443 is not the default.
-	const host = anyPort ? `${url.hostname}:*` : !explicitScheme && port ? `${url.hostname}:${Number(port)}` : url.host;
+	const host = anyPort ? `${url.hostname}:*`
+		: !explicitScheme && port ? `${url.hostname}:${Number(port)}` : url.host;
 	return explicitScheme ? `${url.protocol}//${host}${url.pathname}` : `${host}${url.pathname}`;
 }
 

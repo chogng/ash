@@ -1,4 +1,8 @@
-import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../../platform/theme/browser/defaultStyles.js';
 import { h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
@@ -65,12 +69,8 @@ export class AICustomizationManagementEditor extends EditorPane {
 	private sources: readonly HookSource[] | undefined;
 	private loadedSessionId: string | undefined;
 	private actionPending = false;
-	private readonly refreshAfterSave = this._register(
-		new RunOnceScheduler(() => {
-			if (this.visible) void this.refresh();
-		}, 100),
-	);
-	private statusMessage: { readonly key: string; readonly text: string; readonly parameters?: readonly (string | number)[] } | undefined;
+	private readonly refreshAfterSave = this._register(new RunOnceScheduler(() => { if (this.visible) void this.refresh(); }, 100));
+	private statusMessage: { readonly key: string; readonly text: string; readonly parameters?: readonly (string | number)[]; } | undefined;
 	private visible = false;
 	private loadVersion = 0;
 
@@ -103,77 +103,46 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.note = h(document, 'p');
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-hooks-toolbar';
-		this.scope = this._register(
-			new SelectBox(
-				toolbar,
-				{
-					options: [],
-					presentation: 'field',
-					contextViewProvider: this.contextView,
-				},
-				defaultSelectBoxStyles,
-			),
-		);
+		this.scope = this._register(new SelectBox(toolbar, {
+			options: [], presentation: 'field', contextViewProvider: this.contextView
+		}, defaultSelectBoxStyles));
 		this.edit = this.button(toolbar, 'edit-scope');
 		this.ask = this.button(toolbar, 'ask-scope');
 		this.refreshButton = this.button(toolbar, 'refresh');
 		const title = h(document, 'h2');
 		title.textContent = localize('hooks.managementTitle', 'Agent Customizations: Hooks');
-		this.search = this._register(
-			new InputBox(this.domNode, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: 'search',
-				ariaLabel: this.label('search', 'Search events, Hooks, commands, or paths'),
-				presentation: 'field',
-			}),
-		);
+		this.search = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			ariaLabel: this.label('search', 'Search events, Hooks, commands, or paths'),
+			presentation: 'field',
+		}));
 		this._register(this.search.onDidChange(() => this.filter()));
-		const configure = this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('hooks.configureButton', 'Configure Hooks…'),
-				presentation: 'secondary',
-			}),
-		);
-		this._register(
-			configure.onDidClick(() => {
-				void this.instantiation.invokeFunction(showConfigureHooksQuickPick);
-			}),
-		);
+		const configure = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('hooks.configureButton', 'Configure Hooks…'),
+			presentation: 'secondary',
+		}));
+		this._register(configure.onDidClick(() => { void this.instantiation.invokeFunction(showConfigureHooksQuickPick); }));
 		this.domNode.prepend(title, this.note, toolbar, this.status);
 		for (const event of HookEvents) this.createEventRow(event);
 		this._register(this.scope.onDidSelect(() => this.updateActions()));
-		this._register(
-			this.prompts.onDidChangeHooks(() => {
-				if (this.visible) void this.refresh();
-			}),
-		);
-		this._register(
-			this.textFiles.onDidSave(event => {
-				if (
-					this.visible &&
-					this.sources?.some(source => (source.namespace === 'user' ? source.configPath === event.resource.fsPath : extUri.isEqual(this.sourceResource(source), event.resource)))
-				)
-					this.refreshAfterSave.schedule();
-			}),
-		);
+		this._register(this.prompts.onDidChangeHooks(() => { if (this.visible) void this.refresh(); }));
+		this._register(this.textFiles.onDidSave(event => {
+			if (this.visible && this.sources?.some(source => source.namespace === 'user'
+				? source.configPath === event.resource.fsPath
+				: extUri.isEqual(this.sourceResource(source), event.resource))) this.refreshAfterSave.schedule();
+		}));
 		this._register(this.workspace.onDidChangeWorkspace(() => this.changeSourceContext()));
-		this._register(
-			this.remote.onDidChangeConnectionState(state => {
-				this.loadVersion++;
-				this.sources = undefined;
-				this.render();
-				if (this.visible && state === 'connected') void this.refresh();
-				else this.setStatus('disconnected', 'App Server is disconnected.');
-			}),
-		);
+		this._register(this.remote.onDidChangeConnectionState(state => {
+			this.loadVersion++;
+			this.sources = undefined;
+			this.render();
+			if (this.visible && state === 'connected') void this.refresh();
+			else this.setStatus('disconnected', 'App Server is disconnected.');
+		}));
 		this._register(this.remote.onDidChangeConnection(() => this.changeSourceContext()));
-		this._register(
-			toDisposable(() => {
-				this.loadVersion++;
-				this.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => { this.loadVersion++; this.domNode.remove(); }));
 		const scopedContext = this._register(this.contextKeys.createScoped(this.domNode));
 		CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR.bindTo(scopedContext).set(true);
 	}
@@ -194,19 +163,14 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.domNode.style.height = `${dimension.height}px`;
 	}
 
-	public override focus(): void {
-		this.search.focus();
-	}
+	public override focus(): void { this.search.focus(); }
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (visible) void this.refresh();
-		else {
-			this.loadVersion++;
-			this.refreshAfterSave.cancel();
-		}
+		else { this.loadVersion++; this.refreshAfterSave.cancel(); }
 	}
 
 	private changeSourceContext(): void {
@@ -264,20 +228,14 @@ export class AICustomizationManagementEditor extends EditorPane {
 		if (this.statusMessage) this.status.textContent = this.label(this.statusMessage.key, this.statusMessage.text, this.statusMessage.parameters);
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.HooksSettings);
 		this.domNode.setAttribute('aria-label', `${this.label('aria', 'Agent Hooks')}${hint ? ` ${hint}` : ''}`);
-		this.note.textContent = this.label(
-			'note',
-			'Choose a scope to edit its TOML or ask Ash to configure it. Hook declarations do not grant execution permission. Save the file, then refresh to check your changes.',
-		);
+		this.note.textContent = this.label('note', 'Choose a scope to edit its TOML or ask Ash to configure it. Hook declarations do not grant execution permission. Save the file, then refresh to check your changes.');
 		this.scope.setAriaLabel(this.label('scope', 'Configuration scope'));
 		this.edit.label = this.label('edit', 'Edit TOML');
 		this.ask.label = this.label('ask', 'Ask Ash to configure');
 		this.refreshButton.label = this.label('refresh', 'Refresh');
 		this.scope.setOptions([
 			{ value: 'user', label: this.label('user', 'User configuration') },
-			...this.workspace.getWorkspace().folders.map(folder => ({
-				value: folder.id,
-				label: this.label('project', 'Project: {0}', [folder.name]),
-			})),
+			...this.workspace.getWorkspace().folders.map(folder => ({ value: folder.id, label: this.label('project', 'Project: {0}', [folder.name]) })),
 		]);
 		this.updateActions();
 		const declarations = (this.sources ?? []).flatMap(source => source.hooks.map(hook => ({ source, hook })));
@@ -300,7 +258,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 			row.ask.enabled = !!this.selectedConfiguration();
 			row.empty.textContent = this.label('empty', 'No Hooks configured for this event.');
 			row.empty.hidden = !this.sources || matches.length !== 0;
-			row.domNode.hidden = !HookEvents.includes(event as (typeof HookEvents)[number]) && matches.length === 0;
+			row.domNode.hidden = !HookEvents.includes(event as typeof HookEvents[number]) && matches.length === 0;
 			for (const { source, hook } of matches) {
 				let hookRow = this.hookRows.get(hook.id);
 				if (!hookRow) {
@@ -348,7 +306,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 				hookRow.domNode.hidden = !eventMatches && !matches([hook.id, source.configPath, hook.program, ...hook.args, ...hook.toolNames]);
 				hasVisibleHook ||= !hookRow.domNode.hidden;
 			}
-			row.domNode.hidden = (!HookEvents.includes(event as (typeof HookEvents)[number]) && entries.length === 0) || (!eventMatches && !hasVisibleHook);
+			row.domNode.hidden = (!HookEvents.includes(event as typeof HookEvents[number]) && entries.length === 0) || (!eventMatches && !hasVisibleHook);
 		}
 	}
 
@@ -368,20 +326,14 @@ export class AICustomizationManagementEditor extends EditorPane {
 	}
 
 	private button(container: HTMLElement, action: string, hookId?: string, resources: DisposableStore = this._store): Button {
-		const button = resources.add(
-			new Button(container, {
-				...defaultButtonStyles,
-				label: '',
-				presentation: 'secondary',
-			}),
-		);
+		const button = resources.add(new Button(container, {
+			...defaultButtonStyles,
+			label: '',
+			presentation: 'secondary',
+		}));
 		button.domNode.dataset.hookAction = action;
 		if (hookId) button.domNode.dataset.hookId = hookId;
-		resources.add(
-			button.onDidClick(() => {
-				void this.performAction(button.domNode);
-			}),
-		);
+		resources.add(button.onDidClick(() => { void this.performAction(button.domNode); }));
 		return button;
 	}
 
@@ -413,20 +365,13 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.edit.enabled = this.scope.value === 'user' ? this.canEditUserConfiguration() : !!source && this.canEdit(source);
 		this.ask.enabled = !!source;
 		for (const row of this.eventRows.values()) row.ask.enabled = !!source;
-		this.edit.domNode.title =
-			source && !this.canEdit(source) ? this.label('editUnavailable', 'Edit this configuration on its owning host, or ask Ash to configure it.') : (source?.configPath ?? '');
+		this.edit.domNode.title = source && !this.canEdit(source) ? this.label('editUnavailable', 'Edit this configuration on its owning host, or ask Ash to configure it.') : source?.configPath ?? '';
 	}
 
 	private async performAction(button: HTMLButtonElement): Promise<void> {
 		if (this.actionPending || this.isDisposed || !this.visible) return;
-		if (button.dataset.hookAction === 'refresh') {
-			await this.refresh();
-			return;
-		}
-		if (this.sources && this.loadedSessionId !== this.chats.getActiveConversation()?.sessionId) {
-			await this.refresh();
-			return;
-		}
+		if (button.dataset.hookAction === 'refresh') { await this.refresh(); return; }
+		if (this.sources && this.loadedSessionId !== this.chats.getActiveConversation()?.sessionId) { await this.refresh(); return; }
 		const version = this.loadVersion;
 		const id = button.dataset.hookId;
 		const hookSource = id ? this.sources?.find(source => source.hooks.some(hook => hook.id === id)) : undefined;
@@ -437,58 +382,29 @@ export class AICustomizationManagementEditor extends EditorPane {
 			if (button.dataset.hookAction?.startsWith('ask-')) {
 				if (!source) return;
 				const hook = hookSource?.hooks.find(hook => hook.id === id);
-				const trigger = hook?.event ?? (button.dataset.hookTrigger as HookEvent | undefined);
+				const trigger = hook?.event ?? button.dataset.hookTrigger as HookEvent | undefined;
 				const event = trigger ? eventName(trigger) : this.label('custom', 'custom');
 				const prompt = source.namespace
-					? this.label(
-							'prompt',
-							'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Use the source namespace ({2}) for Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ',
-							[event, source.configPath, source.namespace],
-						)
-					: this.label(
-							'projectPrompt',
-							'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Resolve the project directory namespace through App Server before choosing Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ',
-							[event, source.configPath],
-						);
+					? this.label('prompt', 'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Use the source namespace ({2}) for Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ', [event, source.configPath, source.namespace])
+					: this.label('projectPrompt', 'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Resolve the project directory namespace through App Server before choosing Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ', [event, source.configPath]);
 				this.chats.appendToActiveDraft(prompt);
 				return;
 			}
 			const target = button.dataset.hookAction === 'edit-scope' && this.scope.value === 'user' ? { namespace: 'user', configPath: '' } : source;
-			if (!target) {
-				return;
-			}
+			if (!target) { return; }
 			await this.instantiation.invokeFunction(openHookConfiguration, target);
-			if (!this.isDisposed && version === this.loadVersion && this.visible) {
-				this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.');
-			}
+			if (!this.isDisposed && version === this.loadVersion && this.visible) { this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.'); }
+
 		} catch (error) {
-			if (!isCancellationError(error) && !this.isDisposed && version === this.loadVersion && this.visible)
-				this.setStatus('actionFailed', 'Could not configure Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
+			if (!isCancellationError(error) && !this.isDisposed && version === this.loadVersion && this.visible) this.setStatus('actionFailed', 'Could not configure Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
 		} finally {
 			this.actionPending = false;
-			if (!this.isDisposed) {
-				button.disabled = false;
-				this.updateActions();
-			}
+			if (!this.isDisposed) { button.disabled = false; this.updateActions(); }
 		}
 	}
 
 	public getAccessibleContent(): string {
-		return [
-			this.note.textContent,
-			this.status.textContent,
-			...[...this.eventRows]
-				.filter(([, row]) => !row.domNode.hidden)
-				.flatMap(([event, row]) => [
-					row.summary.textContent,
-					row.description.textContent,
-					...(this.sources ?? []).flatMap(source =>
-						source.hooks
-							.filter(hook => hook.event === event && !this.hookRows.get(hook.id)?.domNode.hidden)
-							.flatMap(hook => [hook.id, ...this.fields(source, hook).map(([label, value]) => `${label}: ${value}`)]),
-					),
-				]),
-		].join('\n');
+		return [this.note.textContent, this.status.textContent, ...[...this.eventRows].filter(([, row]) => !row.domNode.hidden).flatMap(([event, row]) => [row.summary.textContent, row.description.textContent, ...(this.sources ?? []).flatMap(source => source.hooks.filter(hook => hook.event === event && !this.hookRows.get(hook.id)?.domNode.hidden).flatMap(hook => [hook.id, ...this.fields(source, hook).map(([label, value]) => `${label}: ${value}`)]))])].join('\n');
 	}
 
 	private setStatus(key: string, text: string, parameters?: readonly (string | number)[]): void {
@@ -497,12 +413,7 @@ export class AICustomizationManagementEditor extends EditorPane {
 	}
 
 	private label(key: string, fallback: string, parameters?: readonly (string | number)[]): string {
-		return this.localization.translate(
-			'ash.settings',
-			`hooks.${key}`,
-			fallback,
-			parameters === undefined ? undefined : Object.fromEntries(parameters.map((value, index) => [String(index), value])),
-		);
+		return this.localization.translate('ash.settings', `hooks.${key}`, fallback, parameters === undefined ? undefined : Object.fromEntries(parameters.map((value, index) => [String(index), value])));
 	}
 }
 

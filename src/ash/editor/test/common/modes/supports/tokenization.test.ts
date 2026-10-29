@@ -5,15 +5,12 @@ import { FontStyle, type LanguageId, TokenMetadata } from '../../../../common/en
 import { TokenTheme } from '../../../../common/languages/supports/tokenization.js';
 
 test('token rules inherit properties by scope and preserve segment boundaries', () => {
-	const theme = TokenTheme.createFromRawTokenTheme(
-		[
-			{ token: '', foreground: '101010', background: 'fafafa' },
-			{ token: 'entity.member', fontStyle: '', background: 'dadada' },
-			{ token: 'entity', foreground: '123456', fontStyle: 'bold italic' },
-			{ token: 'entity.member', foreground: '654321' },
-		],
-		[],
-	);
+	const theme = TokenTheme.createFromRawTokenTheme([
+		{ token: '', foreground: '101010', background: 'fafafa' },
+		{ token: 'entity.member', fontStyle: '', background: 'dadada' },
+		{ token: 'entity', foreground: '123456', fontStyle: 'bold italic' },
+		{ token: 'entity.member', foreground: '654321' },
+	], []);
 	const colors = theme.getColorMap();
 	const member = theme.match(17 as LanguageId, 'entity.member.function');
 	assert.equal(TokenMetadata.getLanguageId(member), 17);

@@ -54,11 +54,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		if (this.pending) return this.pending;
 		const operation = this.export(accessor);
 		this.pending = operation;
-		void operation
-			.finally(() => {
-				this.pending = undefined;
-			})
-			.catch(() => {});
+		void operation.finally(() => { this.pending = undefined; }).catch(() => { });
 		return operation;
 	}
 
@@ -79,7 +75,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		let backend: IChatSessionConnection | undefined;
 		let backendFailure: unknown;
 		let failedToCapture = false;
-		let connectionListener: { dispose(): void } | undefined;
+		let connectionListener: { dispose(): void; } | undefined;
 		const cancellation = new AbortController();
 		let connectionChanged = false;
 		const assertCurrent = (): void => {
@@ -99,254 +95,186 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		};
 		try {
 			if (conversation && navigation.captureConnection) {
-				try {
-					backend = navigation.captureConnection(conversation.sessionId);
-					generation = backend.generation;
-				} catch (error) {
-					failedToCapture = true;
-					backendFailure = error;
-				}
+				try { backend = navigation.captureConnection(conversation.sessionId); generation = backend.generation; }
+				catch (error) { failedToCapture = true; backendFailure = error; }
 			} else {
 				generation = appServer.connectionGeneration;
-				connectionListener = appServer.onConnectionState(() => {
-					connectionChanged = true;
-				});
+				connectionListener = appServer.onConnectionState(() => { connectionChanged = true; });
 			}
-			await progressService.withProgress(
-				{
-					location: ProgressLocation.Notification,
-					title: localize('debugLogs.collecting', 'Collecting Agent Host debug logs…'),
-					cancellable: true,
-				},
-				async progress => {
-					const files: BundleFile[] = [];
-					const issues: CollectionIssue[] = [];
-					const sources: { path: string; source: string }[] = [];
-					const payloads: {
-						captureId: string | null;
-						payloadId: string;
-						kind: string;
-						path?: string;
-						status: 'saved' | 'omitted' | 'failed';
-					}[] = [];
-					const seenPayloads = new Set<string>();
-					let processLogsStatus: 'collected' | 'partial' | 'unavailable' = 'unavailable';
-					let recordingStatus: string | undefined;
-					let captureId: string | null | undefined;
-					const selectedThreads = new Set(conversation ? [conversation.threadId] : []);
-					const childThreads = new Map<string, Set<string>>();
-					const encoder = new TextEncoder();
-					let totalBytes = 0;
-					const add = (path: string, source: string, content: string | Uint8Array): boolean => {
-						assertCurrent();
-						// Reserve one entry and a separate byte budget for the coverage manifest.
-						if (files.length >= MaxFiles - 1) {
-							issues.push({ source, reason: 'fileLimit' });
-							return false;
-						}
-						const bytes = typeof content === 'string' ? encoder.encode(content) : Uint8Array.from(content);
-						if (bytes.length > MaxFileBytes || totalBytes + bytes.length > MaxDataBytes) {
-							issues.push({ source, reason: 'byteLimit' });
-							return false;
-						}
-						files.push({ path, bytes });
-						sources.push({ path, source });
-						totalBytes += bytes.length;
-						return true;
-					};
-					const attempt = async (source: string, read: () => Promise<void>): Promise<void> => {
-						assertCurrent();
-						try {
-							await read();
-						} catch (error) {
-							assertCurrent();
-							issues.push({
-								source,
-								reason: 'readFailed',
-								detail: (error instanceof Error ? error.message : String(error)).slice(0, 2048),
-							});
-						}
-						assertCurrent();
-					};
-					if (conversation) {
-						await attempt('sessionHostLogs', async () => {
-							await assertBackend();
-							const logs = await sessions.collectDebugLogs({ sessionId: conversation.sessionId }, cancellation.signal);
-							await assertBackend();
-							processLogsStatus = logs.files.length ? 'collected' : 'unavailable';
-							if (!logs.files.length) issues.push({ source: 'sessionHostLogs', reason: 'unavailable' });
-							if (logs.omittedFiles) {
-								issues.push({ source: 'sessionHostLogs', reason: 'collectionLimit' });
-								processLogsStatus = 'partial';
-							}
-							for (const [index, file] of logs.files.entries()) {
-								if (!add(`host/${index + 1}.log`, `sessionHost:${file.name}`, file.bytes)) processLogsStatus = 'partial';
-								if (file.truncated) {
-									issues.push({ source: `sessionHost:${file.name}`, reason: 'truncated' });
-									processLogsStatus = 'partial';
-								}
-							}
-						});
-					}
-					for (const info of [...loggers.getRegisteredLoggers()].slice(0, MaxFiles)) {
-						const logger = loggers.getLogger(info.id);
-						if (logger) await attempt(`flush:${info.id}`, () => logger.flush());
-					}
-					if (loggers.files) {
-						await attempt('hostLogs', () => collectHostLogs(loggers.files!, add, issues, attempt));
-					} else {
-						issues.push({ source: 'hostLogs', reason: 'unavailable' });
-					}
-					// Output owns retained extension/provider log channels. Do not clear or subscribe to them.
-					const logChannels = output.channels.filter(channel => channel.kind === 'log' && !channel.id.startsWith('saved-log.'));
-					if (logChannels.length > MaxFiles) issues.push({ source: 'outputLogs', reason: 'fileLimit' });
-					for (const channel of logChannels.slice(0, MaxFiles)) {
-						add(`output/${files.length + 1}.log`, channel.id, channel.getText());
-					}
-					if (conversation) {
-						progress.report({
-							message: localize('debugLogs.sessionEvidence', 'Collecting session execution evidence…'),
-						});
-						await attempt('sessionTrace', async () => {
-							let after: Readonly<Record<string, number>> = {};
-							for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
-								await assertBackend();
-								const page = await traces.readTrace(conversation.sessionId, after);
-								await assertBackend();
-								for (const thread of page.trace.threads) {
-									for (const record of thread.events) {
-										const origin = record.event.origin;
-										if (record.event.type === 'threadCreated' && isRecord(origin) && origin.type === 'agentSpawn' && typeof origin.parentThreadId === 'string') {
-											let children = childThreads.get(origin.parentThreadId);
-											if (!children) childThreads.set(origin.parentThreadId, (children = new Set()));
-											children.add(thread.threadId);
-										}
-									}
-								}
-								if (!add(`session/trace-${pageNumber}.json`, 'sessionTrace', JSON.stringify(page))) break;
-								if (!page.hasMore) break;
-								after = page.cursors;
-								if (pageNumber === MaxTracePages) issues.push({ source: 'sessionTrace', reason: 'pageLimit' });
-							}
-						});
-						// Peer chats have independent model bodies. Include only this chat and its recorded subagents.
-						const descendants = [conversation.threadId];
-						for (let index = 0; index < descendants.length; index++) {
-							for (const child of childThreads.get(descendants[index]) ?? []) {
-								if (!selectedThreads.has(child)) {
-									selectedThreads.add(child);
-									descendants.push(child);
-								}
-							}
-						}
-						await attempt('sessionDiagnostics', async () => {
-							let after = 0;
-							for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
-								await assertBackend();
-								const page = await traces.readTraceDiagnostics(conversation.sessionId, after);
-								await assertBackend();
-								if (captureId !== undefined && captureId !== page.diagnostics.captureId) {
-									throw new Error(localize('debugLogs.captureChanged', 'The session evidence capture changed during export.'));
-								}
-								captureId = page.diagnostics.captureId;
-								recordingStatus = page.diagnostics.recordingStatus;
-								if (!add(`session/diagnostics-${pageNumber}.json`, 'sessionDiagnostics', JSON.stringify(page))) break;
-								if (page.diagnostics.droppedRecords || page.diagnostics.pendingRecords || recordingStatus === 'incomplete') {
-									issues.push({ source: 'sessionDiagnostics', reason: 'truncated' });
-								}
-								for (const record of page.diagnostics.events) {
-									if (!selectedThreads.has(record.threadId)) continue;
-									const reference = diagnosticPayload(record);
-									if (!reference) continue;
-									const key = `${captureId}:${reference.payloadId}`;
-									if (seenPayloads.has(key)) continue;
-									if (payloads.length >= MaxFiles) {
-										issues.push({ source: 'sessionPayloadIndex', reason: 'fileLimit' });
-										break;
-									}
-									seenPayloads.add(key);
-									const entry: (typeof payloads)[number] = {
-										captureId,
-										payloadId: reference.payloadId,
-										kind: reference.kind,
-										status: 'omitted',
-									};
-									payloads.push(entry);
-									if (reference.status !== 'saved') {
-										issues.push({ source: key, reason: 'notRecorded' });
-										continue;
-									}
-									if (!captureId) {
-										issues.push({ source: key, reason: 'unavailable' });
-										continue;
-									}
-									if (files.length >= MaxFiles - 1 || totalBytes + reference.byteLength > MaxDataBytes) {
-										issues.push({
-											source: 'sessionPayloads',
-											reason: files.length >= MaxFiles - 1 ? 'fileLimit' : 'byteLimit',
-										});
-										break;
-									}
-									entry.status = 'failed';
-									const payloadCapture = captureId;
-									await attempt(key, async () => {
-										await assertBackend();
-										const payload = await traces.readTracePayload(conversation.sessionId, payloadCapture, reference.payloadId);
-										await assertBackend();
-										const path = `session/payloads/${payloads.length}.json`;
-										if (add(path, key, JSON.stringify(payload))) {
-											entry.path = path;
-											entry.status = 'saved';
-										} else entry.status = 'omitted';
-									});
-								}
-								if (!page.hasMore) break;
-								after = page.cursor;
-								if (pageNumber === MaxTracePages) issues.push({ source: 'sessionDiagnostics', reason: 'pageLimit' });
-							}
-						});
-					}
-					const manifest = {
-						formatVersion: 2,
-						createdAt: new Date().toISOString(),
-						conversation: conversation ?? null,
-						connectionGeneration: generation,
-						limits: {
-							maxFiles: MaxFiles,
-							maxFileBytes: MaxFileBytes,
-							maxBundleBytes: MaxBundleBytes,
-							maxTracePages: MaxTracePages,
-						},
-						coverage: {
-							hostLogs: 'local-main-current-window-and-local-app-server',
-							providerLogs: 'retained-output-log-channels-only',
-							sessionEvidence: conversation ? 'session-trace-and-diagnostic-pages' : 'no-active-conversation',
-							sessionHostProcessLogs: conversation ? processLogsStatus : 'no-active-conversation',
-							requestPayloads: {
-								recordingStatus: recordingStatus ?? 'unavailable',
-								captureId: captureId ?? null,
-								threadIds: [...selectedThreads],
-								references: payloads,
-							},
-						},
-						sources,
-						issues,
-					};
-					const manifestBytes = encoder.encode(JSON.stringify(manifest, undefined, 2));
-					if (manifestBytes.length > MaxManifestBytes) throw new Error(localize('debugLogs.manifestSize', 'The debug log coverage manifest exceeds its size limit.'));
-					files.push({ path: 'manifest.json', bytes: manifestBytes });
+			await progressService.withProgress({
+				location: ProgressLocation.Notification,
+				title: localize('debugLogs.collecting', 'Collecting Agent Host debug logs…'),
+				cancellable: true,
+			}, async progress => {
+				const files: BundleFile[] = [];
+				const issues: CollectionIssue[] = [];
+				const sources: { path: string; source: string; }[] = [];
+				const payloads: { captureId: string | null; payloadId: string; kind: string; path?: string; status: 'saved' | 'omitted' | 'failed'; }[] = [];
+				const seenPayloads = new Set<string>();
+				let processLogsStatus: 'collected' | 'partial' | 'unavailable' = 'unavailable';
+				let recordingStatus: string | undefined;
+				let captureId: string | null | undefined;
+				const selectedThreads = new Set(conversation ? [conversation.threadId] : []);
+				const childThreads = new Map<string, Set<string>>();
+				const encoder = new TextEncoder();
+				let totalBytes = 0;
+				const add = (path: string, source: string, content: string | Uint8Array): boolean => {
 					assertCurrent();
-					const archive = createZip(files);
-					assertCurrent();
-					triggerDownload(new Blob([archive], { type: 'application/zip' }), 'ash-agent-host-debug-logs.zip', ownerDocument);
-					if (issues.length) {
-						notifications.warn(localize('debugLogs.partial', 'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.', issues.length));
-					} else {
-						notifications.info(localize('debugLogs.exported', 'Agent Host debug logs exported.'));
+					// Reserve one entry and a separate byte budget for the coverage manifest.
+					if (files.length >= MaxFiles - 1) { issues.push({ source, reason: 'fileLimit' }); return false; }
+					const bytes = typeof content === 'string' ? encoder.encode(content) : Uint8Array.from(content);
+					if (bytes.length > MaxFileBytes || totalBytes + bytes.length > MaxDataBytes) {
+						issues.push({ source, reason: 'byteLimit' });
+						return false;
 					}
-				},
-				() => cancellation.abort(),
-			);
+					files.push({ path, bytes });
+					sources.push({ path, source });
+					totalBytes += bytes.length;
+					return true;
+				};
+				const attempt = async (source: string, read: () => Promise<void>): Promise<void> => {
+					assertCurrent();
+					try { await read(); }
+					catch (error) {
+						assertCurrent();
+						issues.push({ source, reason: 'readFailed', detail: (error instanceof Error ? error.message : String(error)).slice(0, 2048) });
+					}
+					assertCurrent();
+				};
+				if (conversation) {
+					await attempt('sessionHostLogs', async () => {
+						await assertBackend();
+						const logs = await sessions.collectDebugLogs({ sessionId: conversation.sessionId }, cancellation.signal);
+						await assertBackend();
+						processLogsStatus = logs.files.length ? 'collected' : 'unavailable';
+						if (!logs.files.length) issues.push({ source: 'sessionHostLogs', reason: 'unavailable' });
+						if (logs.omittedFiles) { issues.push({ source: 'sessionHostLogs', reason: 'collectionLimit' }); processLogsStatus = 'partial'; }
+						for (const [index, file] of logs.files.entries()) {
+							if (!add(`host/${index + 1}.log`, `sessionHost:${file.name}`, file.bytes)) processLogsStatus = 'partial';
+							if (file.truncated) { issues.push({ source: `sessionHost:${file.name}`, reason: 'truncated' }); processLogsStatus = 'partial'; }
+						}
+					});
+				}
+				for (const info of [...loggers.getRegisteredLoggers()].slice(0, MaxFiles)) {
+					const logger = loggers.getLogger(info.id);
+					if (logger) await attempt(`flush:${info.id}`, () => logger.flush());
+				}
+				if (loggers.files) {
+					await attempt('hostLogs', () => collectHostLogs(loggers.files!, add, issues, attempt));
+				} else {
+					issues.push({ source: 'hostLogs', reason: 'unavailable' });
+				}
+				// Output owns retained extension/provider log channels. Do not clear or subscribe to them.
+				const logChannels = output.channels.filter(channel => channel.kind === 'log' && !channel.id.startsWith('saved-log.'));
+				if (logChannels.length > MaxFiles) issues.push({ source: 'outputLogs', reason: 'fileLimit' });
+				for (const channel of logChannels.slice(0, MaxFiles)) {
+					add(`output/${files.length + 1}.log`, channel.id, channel.getText());
+				}
+				if (conversation) {
+					progress.report({ message: localize('debugLogs.sessionEvidence', 'Collecting session execution evidence…') });
+					await attempt('sessionTrace', async () => {
+						let after: Readonly<Record<string, number>> = {};
+						for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
+							await assertBackend();
+							const page = await traces.readTrace(conversation.sessionId, after);
+							await assertBackend();
+							for (const thread of page.trace.threads) {
+								for (const record of thread.events) {
+									const origin = record.event.origin;
+									if (record.event.type === 'threadCreated' && isRecord(origin) && origin.type === 'agentSpawn' && typeof origin.parentThreadId === 'string') {
+										let children = childThreads.get(origin.parentThreadId);
+										if (!children) childThreads.set(origin.parentThreadId, children = new Set());
+										children.add(thread.threadId);
+									}
+								}
+							}
+							if (!add(`session/trace-${pageNumber}.json`, 'sessionTrace', JSON.stringify(page))) break;
+							if (!page.hasMore) break;
+							after = page.cursors;
+							if (pageNumber === MaxTracePages) issues.push({ source: 'sessionTrace', reason: 'pageLimit' });
+						}
+					});
+					// Peer chats have independent model bodies. Include only this chat and its recorded subagents.
+					const descendants = [conversation.threadId];
+					for (let index = 0; index < descendants.length; index++) {
+						for (const child of childThreads.get(descendants[index]) ?? []) {
+							if (!selectedThreads.has(child)) { selectedThreads.add(child); descendants.push(child); }
+						}
+					}
+					await attempt('sessionDiagnostics', async () => {
+						let after = 0;
+						for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
+							await assertBackend();
+							const page = await traces.readTraceDiagnostics(conversation.sessionId, after);
+							await assertBackend();
+							if (captureId !== undefined && captureId !== page.diagnostics.captureId) {
+								throw new Error(localize('debugLogs.captureChanged', 'The session evidence capture changed during export.'));
+							}
+							captureId = page.diagnostics.captureId;
+							recordingStatus = page.diagnostics.recordingStatus;
+							if (!add(`session/diagnostics-${pageNumber}.json`, 'sessionDiagnostics', JSON.stringify(page))) break;
+							if (page.diagnostics.droppedRecords || page.diagnostics.pendingRecords || recordingStatus === 'incomplete') {
+								issues.push({ source: 'sessionDiagnostics', reason: 'truncated' });
+							}
+							for (const record of page.diagnostics.events) {
+								if (!selectedThreads.has(record.threadId)) continue;
+								const reference = diagnosticPayload(record);
+								if (!reference) continue;
+								const key = `${captureId}:${reference.payloadId}`;
+								if (seenPayloads.has(key)) continue;
+								if (payloads.length >= MaxFiles) { issues.push({ source: 'sessionPayloadIndex', reason: 'fileLimit' }); break; }
+								seenPayloads.add(key);
+								const entry: typeof payloads[number] = { captureId, payloadId: reference.payloadId, kind: reference.kind, status: 'omitted' };
+								payloads.push(entry);
+								if (reference.status !== 'saved') { issues.push({ source: key, reason: 'notRecorded' }); continue; }
+								if (!captureId) { issues.push({ source: key, reason: 'unavailable' }); continue; }
+								if (files.length >= MaxFiles - 1 || totalBytes + reference.byteLength > MaxDataBytes) {
+									issues.push({ source: 'sessionPayloads', reason: files.length >= MaxFiles - 1 ? 'fileLimit' : 'byteLimit' });
+									break;
+								}
+								entry.status = 'failed';
+								const payloadCapture = captureId;
+								await attempt(key, async () => {
+									await assertBackend();
+									const payload = await traces.readTracePayload(conversation.sessionId, payloadCapture, reference.payloadId);
+									await assertBackend();
+									const path = `session/payloads/${payloads.length}.json`;
+									if (add(path, key, JSON.stringify(payload))) { entry.path = path; entry.status = 'saved'; }
+									else entry.status = 'omitted';
+								});
+							}
+							if (!page.hasMore) break;
+							after = page.cursor;
+							if (pageNumber === MaxTracePages) issues.push({ source: 'sessionDiagnostics', reason: 'pageLimit' });
+						}
+					});
+				}
+				const manifest = {
+					formatVersion: 2, createdAt: new Date().toISOString(), conversation: conversation ?? null,
+					connectionGeneration: generation,
+					limits: { maxFiles: MaxFiles, maxFileBytes: MaxFileBytes, maxBundleBytes: MaxBundleBytes, maxTracePages: MaxTracePages },
+					coverage: {
+						hostLogs: 'local-main-current-window-and-local-app-server',
+						providerLogs: 'retained-output-log-channels-only',
+						sessionEvidence: conversation ? 'session-trace-and-diagnostic-pages' : 'no-active-conversation',
+						sessionHostProcessLogs: conversation ? processLogsStatus : 'no-active-conversation',
+						requestPayloads: { recordingStatus: recordingStatus ?? 'unavailable', captureId: captureId ?? null, threadIds: [...selectedThreads], references: payloads },
+					},
+					sources, issues,
+				};
+				const manifestBytes = encoder.encode(JSON.stringify(manifest, undefined, 2));
+				if (manifestBytes.length > MaxManifestBytes) throw new Error(localize('debugLogs.manifestSize', 'The debug log coverage manifest exceeds its size limit.'));
+				files.push({ path: 'manifest.json', bytes: manifestBytes });
+				assertCurrent();
+				const archive = createZip(files);
+				assertCurrent();
+				triggerDownload(new Blob([archive], { type: 'application/zip' }), 'ash-agent-host-debug-logs.zip', ownerDocument);
+				if (issues.length) {
+					notifications.warn(localize('debugLogs.partial', 'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.', issues.length));
+				} else {
+					notifications.info(localize('debugLogs.exported', 'Agent Host debug logs exported.'));
+				}
+			}, () => cancellation.abort());
 		} catch (error) {
 			if (!isCancellationError(error)) notifications.error(localize('debugLogs.failed', 'Could not export Agent Host debug logs: {0}', error instanceof Error ? error.message : String(error)));
 		} finally {
@@ -365,7 +293,8 @@ async function collectHostLogs(
 	const sources = await logs.list();
 	const currentWindow = sources.find(source => source.currentWindow);
 	const live = sources.filter(source => source.live && (source.currentWindow || source.source === 'main' || source.source === 'app-server'));
-	const selected = sources.filter(source => live.some(current => current.id === source.id || (current.source === source.source && current.id.split('/')[0] === source.id.split('/')[0])));
+	const selected = sources.filter(source => live.some(current =>
+		current.id === source.id || (current.source === source.source && current.id.split('/')[0] === source.id.split('/')[0])));
 	if (!currentWindow) issues.push({ source: 'currentWindowLog', reason: 'unavailable' });
 	if (!sources.some(source => source.live && source.source === 'main')) issues.push({ source: 'mainLog', reason: 'unavailable' });
 	if (!sources.some(source => source.source === 'app-server')) issues.push({ source: 'localAppServerLog', reason: 'unavailable' });
@@ -389,10 +318,10 @@ function createZip(files: readonly BundleFile[]): Uint8Array<ArrayBuffer> {
 	const crcTable = new Uint32Array(256);
 	for (let index = 0; index < 256; index++) {
 		let value = index;
-		for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+		for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ ((value & 1) ? 0xedb88320 : 0);
 		crcTable[index] = value;
 	}
-	const entries: { offset: number; crc: number }[] = [];
+	const entries: { offset: number; crc: number; }[] = [];
 	let offset = 0;
 	for (const [index, file] of files.entries()) {
 		let crc = 0xffffffff;

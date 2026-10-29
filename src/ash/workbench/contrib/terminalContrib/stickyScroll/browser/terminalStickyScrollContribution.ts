@@ -11,9 +11,7 @@ export class TerminalStickyScrollContribution extends Disposable implements ITer
 	constructor(
 		private readonly context: ITerminalContributionContext,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	public xtermReady(xterm: IXtermTerminal): void {
 		this._register(this.instantiation.createInstance(TerminalStickyScrollOverlay, this.context.instance, xterm));

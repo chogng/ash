@@ -42,19 +42,8 @@ test('empty-editor navigation commands open the file picker and focus file searc
 	using services = new InstantiationService();
 	const prefixes: string[] = [];
 	const views: string[] = [];
-	services.registerInstance(IQuickInputService, {
-		quickAccess: {
-			show: (prefix: string) => {
-				prefixes.push(prefix);
-			},
-		},
-	} as unknown as IQuickInputService);
-	services.registerInstance(IViewsService, {
-		focusView: async (id: string) => {
-			views.push(id);
-			return true;
-		},
-	} as unknown as IViewsService);
+	services.registerInstance(IQuickInputService, { quickAccess: { show: (prefix: string) => { prefixes.push(prefix); } } } as unknown as IQuickInputService);
+	services.registerInstance(IViewsService, { focusView: async (id: string) => { views.push(id); return true; } } as unknown as IViewsService);
 	using commands = new CommandService(services, CommandsRegistry);
 	await commands.executeCommand('workbench.action.quickOpen');
 	await commands.executeCommand('workbench.action.findInFiles');
@@ -70,27 +59,12 @@ function registerHistoryServices(services: InstantiationService, resources: Disp
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => dom.window.close()));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
-	services.registerInstance(
-		IStorageService,
-		resources.add(
-			new BrowserStorageService({
-				ownerWindow: dom.window as unknown as Window,
-				workspaceId: 'commands',
-				flushInterval: 0,
-			}),
-		),
-	);
+	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
 	services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services })));
 	services.registerInstance(IPreferencesService, {
-		openSettings: async () => {
-			throw new Error('Unexpected settings request');
-		},
-		openUserSettings: async () => {
-			throw new Error('Unexpected user settings request');
-		},
-		openGlobalKeybindingSettings: async () => {
-			throw new Error('Unexpected keybindings request');
-		},
+		openSettings: async () => { throw new Error('Unexpected settings request'); },
+		openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+		openGlobalKeybindingSettings: async () => { throw new Error('Unexpected keybindings request'); },
 	});
 }
 
@@ -98,28 +72,17 @@ test('Command Palette finds localized commands by their English title and report
 	using resources = new DisposableStore();
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsResolver((bundle, key, fallback, parameters) =>
+		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const registry = new CommandRegistry();
-		resources.add(
-			registry.register('test.commandFailure', () => {
-				throw new Error('Command failed');
-			}),
-		);
-		resources.add(
-			MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-				command: { id: 'test.commandFailure', title: localize2('debug.start', 'Start Debugging') },
-			}),
-		);
-		resources.add(
-			MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-				command: {
-					id: 'test.categorized',
-					title: localize2('debug.start', 'Start Debugging'),
-					category: localize2({ bundle: 'ash.menu', key: 'file' }, 'File'),
-				},
-			}),
-		);
+		resources.add(registry.register('test.commandFailure', () => { throw new Error('Command failed'); }));
+		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+			command: { id: 'test.commandFailure', title: localize2('debug.start', 'Start Debugging') },
+		}));
+		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+			command: { id: 'test.categorized', title: localize2('debug.start', 'Start Debugging'), category: localize2({ bundle: 'ash.menu', key: 'file' }, 'File') },
+		}));
 		using services = new InstantiationService();
 		registerHistoryServices(services, resources);
 		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
@@ -137,28 +100,16 @@ test('Command Palette finds localized commands by their English title and report
 		const provider = resources.add(services.createInstance(CommandsQuickAccessProvider));
 		const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
 		const picker = {
-			selectedItems: [],
-			value: '',
-			filterValue: (value: string) => value,
-			onDidChangeValue: Event.None,
-			onDidTriggerItemButton: Event.None,
+			selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
-			hide() {},
+			hide() { },
 		} as unknown as IQuickPick<IQuickPickItem>;
 		resources.add(provider.provide(picker));
-		const item = filterQuickPickItems(
-			picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)),
-			'Start Debugging',
-		).find(candidate => candidate.description === 'test.commandFailure');
+		const item = filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), 'Start Debugging').find(candidate => candidate.description === 'test.commandFailure');
 		assert.ok(item && !('type' in item));
 		assert.deepEqual([item.label, item.detail], ['启动调试', 'Start Debugging']);
-		assert.ok(
-			filterQuickPickItems(
-				picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)),
-				'启动调试',
-			).includes(item),
-		);
+		assert.ok(filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), '启动调试').includes(item));
 		const categorized = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.categorized');
 		assert.ok(categorized && !('type' in categorized));
 		assert.deepEqual([categorized.label, categorized.detail], ['文件: 启动调试', 'File: Start Debugging']);
@@ -185,16 +136,10 @@ test('Command Palette finds localized commands by their English title and report
 test('Command Palette does not show a dialog for cancelled commands', async () => {
 	using resources = new DisposableStore();
 	const registry = new CommandRegistry();
-	resources.add(
-		registry.register('test.cancelCommand', () => {
-			throw new CancellationError();
-		}),
-	);
-	resources.add(
-		MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-			command: { id: 'test.cancelCommand', title: 'Cancelled command' },
-		}),
-	);
+	resources.add(registry.register('test.cancelCommand', () => { throw new CancellationError(); }));
+	resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+		command: { id: 'test.cancelCommand', title: 'Cancelled command' },
+	}));
 	using services = new InstantiationService();
 	registerHistoryServices(services, resources);
 	services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
@@ -212,14 +157,10 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	const provider = resources.add(services.createInstance(CommandsQuickAccessProvider));
 	const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
 	const picker = {
-		selectedItems: [],
-		value: '',
-		filterValue: (value: string) => value,
-		onDidChangeValue: Event.None,
-		onDidTriggerItemButton: Event.None,
+		selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None,
 		items: [] as readonly IQuickPickItem[],
 		onDidAccept: accept.event,
-		hide() {},
+		hide() { },
 	} as unknown as IQuickPick<IQuickPickItem>;
 	resources.add(provider.provide(picker));
 	const item = picker.items.find(candidate => candidate.label === 'Cancelled command');
@@ -239,43 +180,23 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	let focused = true;
 	const editor = {
-		getId: () => 'output',
-		hasTextFocus: () => focused,
-		hasWidgetFocus: () => false,
+		getId: () => 'output', hasTextFocus: () => focused, hasWidgetFocus: () => false,
 		getSupportedActions: () => [{ id: 'test.outputCommand', label: 'Output action', alias: 'Output action' }],
 	} as unknown as ICodeEditor;
 	const editors = services.get(ICodeEditorService);
 	editors.addCodeEditor(editor);
 	const executed: boolean[] = [];
 	const registry = new CommandRegistry();
-	resources.add(
-		registry.register('test.outputCommand', () => {
-			executed.push(focused);
-		}),
-	);
+	resources.add(registry.register('test.outputCommand', () => { executed.push(focused); }));
 	const commands = resources.add(new CommandService(services, registry));
 	const contexts = resources.add(new ContextKeyService());
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, new MenuService(commands, contexts));
 	services.registerInstance(IDialogService, resources.add(new DialogService()));
 	const updated = resources.add(new Emitter<void>());
-	services.registerInstance(IKeybindingService, {
-		lookupKeybinding: () => undefined,
-		onDidUpdateKeybindings: updated.event,
-	} as unknown as IKeybindingService);
+	services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined, onDidUpdateKeybindings: updated.event } as unknown as IKeybindingService);
 	const accept = resources.add(new Emitter<IQuickPickDidAcceptEvent>());
-	const picker = {
-		items: [] as readonly IQuickPickItem[],
-		selectedItems: [],
-		value: '',
-		filterValue: (value: string) => value,
-		onDidChangeValue: Event.None,
-		onDidTriggerItemButton: Event.None,
-		onDidAccept: accept.event,
-		hide: () => {
-			focused = true;
-		},
-	} as unknown as IQuickPick<IQuickPickItem>;
+	const picker = { items: [] as readonly IQuickPickItem[], selectedItems: [], value: '', filterValue: (value: string) => value, onDidChangeValue: Event.None, onDidTriggerItemButton: Event.None, onDidAccept: accept.event, hide: () => { focused = true; } } as unknown as IQuickPick<IQuickPickItem>;
 	resources.add(resources.add(services.createInstance(CommandsQuickAccessProvider)).provide(picker));
 	focused = false;
 	updated.fire();
@@ -287,25 +208,16 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	assert.deepEqual(executed, [true]);
 	editors.removeCodeEditor(editor);
 	// Refresh after the captured preview editor has left its owning registry.
-	editor.getSupportedActions = () => {
-		throw new Error('Disposed preview editor');
-	};
+	editor.getSupportedActions = () => { throw new Error('Disposed preview editor'); };
 	assert.doesNotThrow(() => updated.fire());
-	assert.equal(
-		picker.items.some(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand'),
-		false,
-	);
+	assert.equal(picker.items.some(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand'), false);
 });
 
 test('Command history restores profile recency, bounds entries and follows live settings and storage changes', async () => {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	try {
 		using configuration = new InMemoryConfigurationService();
-		using storage = new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'first',
-			flushInterval: 0,
-		});
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 });
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
@@ -315,11 +227,7 @@ test('Command history restores profile recency, bounds entries and follows live 
 		history.push('alpha');
 		assert.deepEqual([history.peek('beta'), history.peek('alpha'), history.peek('missing')], [1, 2, undefined]);
 		await storage.flush();
-		using restoredStorage = new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'second',
-			flushInterval: 0,
-		});
+		using restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'second', flushInterval: 0 });
 		using restoredServices = new InstantiationService();
 		restoredServices.registerInstance(IConfigurationService, configuration);
 		restoredServices.registerInstance(IStorageService, restoredStorage);
@@ -347,12 +255,7 @@ test('Command history restores profile recency, bounds entries and follows live 
 		}
 		storage.store('commandPalette.mru.cache', '{"version":1,"entries":["external"]}', StorageScope.PROFILE, StorageTarget.USER);
 		assert.equal(history.peek('external'), 1);
-		using otherProfile = new BrowserStorageService({
-			ownerWindow: dom.window as unknown as Window,
-			workspaceId: 'first',
-			profileId: 'other',
-			flushInterval: 0,
-		});
+		using otherProfile = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'first', profileId: 'other', flushInterval: 0 });
 		assert.equal(otherProfile.get('commandPalette.mru.cache', StorageScope.PROFILE), undefined);
 	} finally {
 		dom.window.close();

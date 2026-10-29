@@ -1,12 +1,5 @@
 import { type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	type ViewConfigurationChangedEvent,
-	type ViewLinesChangedEvent,
-	type ViewLinesDeletedEvent,
-	type ViewLinesInsertedEvent,
-	type ViewScrollChangedEvent,
-	type ViewTokensChangedEvent,
-} from '../../common/viewEvents.js';
+import { type ViewConfigurationChangedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewScrollChangedEvent, type ViewTokensChangedEvent } from '../../common/viewEvents.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { type ViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
 import { type IGlyphRasterizer } from './raster/raster.js';

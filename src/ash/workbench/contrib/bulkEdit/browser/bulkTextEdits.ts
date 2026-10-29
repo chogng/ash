@@ -8,12 +8,7 @@ import type { TextModelUndoRedoSnapshot } from '../../../../editor/common/model/
 
 interface TextOperation {
 	readonly entry: LanguageTextDocumentEdit;
-	readonly model: {
-		readonly reference: TextModelReference;
-		readonly wasOpen: boolean;
-		version: number;
-		undoRedoSnapshot?: TextModelUndoRedoSnapshot;
-	};
+	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number; undoRedoSnapshot?: TextModelUndoRedoSnapshot; };
 	readonly before: string;
 	readonly after: string;
 }
@@ -28,7 +23,7 @@ export class BulkTextEdits {
 		private readonly signal: AbortSignal,
 		private readonly reason: TextModelEditSource | undefined,
 		private readonly skipSave: boolean,
-	) {}
+	) { }
 
 	public async apply(): Promise<readonly URI[]> {
 		const { entry, model, before, after } = this.operation;

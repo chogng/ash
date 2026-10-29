@@ -32,8 +32,7 @@ test('response resource reads cannot substitute a remote URI or another generate
 	using provider = new ChatResponseResourceFileSystemProvider();
 	using association = provider.associate(Uint8Array.from([0, 255, 1]), { name: 'data.bin' });
 	assert.deepEqual((await provider.readFile(association.resource)).bytes, Uint8Array.from([0, 255, 1]));
-	for (const resource of [URI.parse('file:///data.bin'), association.resource.with({ authority: 'other' }), association.resource.with({ path: '/other.bin' })])
-		await assert.rejects(provider.readFile(resource), /no longer available/iu);
+	for (const resource of [URI.parse('file:///data.bin'), association.resource.with({ authority: 'other' }), association.resource.with({ path: '/other.bin' })]) await assert.rejects(provider.readFile(resource), /no longer available/iu);
 	provider.dispose();
 	await assert.rejects(provider.readFile(association.resource), /disposed/iu);
 });

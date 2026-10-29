@@ -11,11 +11,7 @@ import type { IAppServerRemoteAgentService } from '../../../../services/remote/c
 test('remote extension recovery reloads only after a known non-connected state', async () => {
 	using remoteAgentService = new TestRemoteAgentService();
 	let reloads = 0;
-	const extensionService = {
-		reload: async () => {
-			reloads += 1;
-		},
-	} as unknown as IExtensionService;
+	const extensionService = { reload: async () => { reloads += 1; } } as unknown as IExtensionService;
 	using contribution = new RemoteExtensionRecoveryContribution({ extensionService, remoteAgentService });
 
 	remoteAgentService.emit('connected');
@@ -34,12 +30,8 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	connection: RemoteAgentConnection | undefined;
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
-	async reconnect() {
-		return { kind: 'reconnected' } as const;
-	}
-	async rollbackRuntime() {
-		return { kind: 'rolledBack' } as const;
-	}
+	async reconnect() { return { kind: 'reconnected' } as const; }
+	async rollbackRuntime() { return { kind: 'rolledBack' } as const; }
 
 	emit(state: RemoteConnectionState): void {
 		this.connectionState = state;

@@ -43,17 +43,12 @@ test('Electron bootstrap keeps the event loop responsive after launcher output p
 		process.send('ready');
 	`;
 	const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
-		stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-		env: { ...process.env, NODE_OPTIONS: undefined },
+		stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_OPTIONS: undefined },
 	});
-	t.after(() => {
-		if (child.exitCode === null) child.kill();
-	});
+	t.after(() => { if (child.exitCode === null) child.kill(); });
 	let result: unknown;
 	let stderr = '';
-	child.stderr!.on('data', data => {
-		stderr += data.toString();
-	});
+	child.stderr!.on('data', data => { stderr += data.toString(); });
 	child.on('message', message => {
 		if (message === 'ready') {
 			child.stdout!.destroy();
@@ -63,7 +58,7 @@ test('Electron bootstrap keeps the event loop responsive after launcher output p
 			result = message;
 		}
 	});
-	const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done, fail) => {
+	const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; }>((done, fail) => {
 		child.once('error', fail);
 		child.once('exit', (code, signal) => done({ code, signal }));
 	});

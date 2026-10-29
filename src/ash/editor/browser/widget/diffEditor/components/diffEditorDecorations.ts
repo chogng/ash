@@ -4,16 +4,7 @@ import { type LineDiffRows, type LineDiffRow } from '../../../../common/diff/lin
 import { type IEditorDecorationsCollection } from '../../../../common/editorCommon.js';
 import { type IModelDeltaDecoration, type IModelDecorationOptions } from '../../../../common/model.js';
 import { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
-import {
-	diffAddDecoration,
-	diffAddDecorationEmpty,
-	diffDeleteDecoration,
-	diffDeleteDecorationEmpty,
-	diffLineAddDecorationBackground,
-	diffLineAddDecorationBackgroundWithIndicator,
-	diffLineDeleteDecorationBackground,
-	diffLineDeleteDecorationBackgroundWithIndicator,
-} from '../registrations.contribution.js';
+import { diffAddDecoration, diffAddDecorationEmpty, diffDeleteDecoration, diffDeleteDecorationEmpty, diffLineAddDecorationBackground, diffLineAddDecorationBackgroundWithIndicator, diffLineDeleteDecorationBackground, diffLineDeleteDecorationBackgroundWithIndicator } from '../registrations.contribution.js';
 
 export class DiffEditorDecorations extends Disposable {
 	private readonly original: IEditorDecorationsCollection;
@@ -23,12 +14,10 @@ export class DiffEditorDecorations extends Disposable {
 		super();
 		this.original = originalEditor.createDecorationsCollection();
 		this.modified = modifiedEditor.createDecorationsCollection();
-		this._register(
-			toDisposable(() => {
-				this.original.clear();
-				this.modified.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.original.clear();
+			this.modified.clear();
+		}));
 	}
 
 	public update(rows: LineDiffRows, showInlineChanges: boolean, renderIndicators: boolean): void {
@@ -59,13 +48,7 @@ export class DiffEditorDecorations extends Disposable {
 	}
 }
 
-function addInlineDecorations(
-	target: IModelDeltaDecoration[],
-	lineNumber: number,
-	changes: LineDiffRow['originalChanges'],
-	options: IModelDecorationOptions,
-	emptyOptions: IModelDecorationOptions,
-): void {
+function addInlineDecorations(target: IModelDeltaDecoration[], lineNumber: number, changes: LineDiffRow['originalChanges'], options: IModelDecorationOptions, emptyOptions: IModelDecorationOptions): void {
 	for (const change of changes) {
 		target.push({
 			range: new Range(lineNumber, change.startColumn + 1, lineNumber, change.endColumn + 1),

@@ -21,28 +21,29 @@ test('Completion service crosses a structured-clone worker boundary', async () =
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(remoteRegistry));
+	using server = new WorkerTextModelSyncServer(
+		serverPort,
+		languageCompletionWireCodec,
+		new LanguageCompletionProviderWorker(remoteRegistry),
+	);
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
 	const line = 'const connection = con';
-	const position = new Position(1 + 1, line.length + 1);
+	const position = new Position((1) + 1, (line.length) + 1);
 
 	const outcome = await service.request('typescript', position, createLanguageCompletionInvokeContext());
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	const result = service.results.result!.value;
-	assert.deepEqual(
-		result.items.map(item => item.label),
-		['connection', 'console', 'const'],
-	);
-	assert.equal(
-		result.items.every(item => item.providerId === 'language.word'),
-		true,
-	);
+	assert.deepEqual(result.items.map(item => item.label), ['connection', 'console', 'const']);
+	assert.equal(result.items.every(item => item.providerId === 'language.word'), true);
 	assert.equal(result.position instanceof Position, true);
 	assert.equal(result.items[0]!.range instanceof Range, true);
-	assert.deepEqual(result.items[0]!.range, Range.fromPositions(new Position(1 + 1, line.length - 3 + 1), position));
+	assert.deepEqual(result.items[0]!.range, Range.fromPositions(
+		new Position((1) + 1, (line.length - 3) + 1),
+		position,
+	));
 });
 
 test('Completion wire synchronizes model changes and then references the mirror', async () => {
@@ -51,31 +52,27 @@ test('Completion wire synchronizes model changes and then references the mirror'
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(remoteRegistry));
+	using server = new WorkerTextModelSyncServer(
+		serverPort,
+		languageCompletionWireCodec,
+		new LanguageCompletionProviderWorker(remoteRegistry),
+	);
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
-	const firstPosition = new Position(0 + 1, model.getText().length + 1);
+	const firstPosition = new Position((0) + 1, (model.getText().length) + 1);
 	assert.equal((await service.request('plaintext', firstPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
-	model.applyEdits([
-		{
-			range: Range.fromPositions(firstPosition),
-			text: 'p',
-		},
-	]);
-	const secondPosition = new Position(0 + 1, model.getText().length + 1);
+	model.applyEdits([{
+		range: Range.fromPositions(firstPosition),
+		text: 'p',
+	}]);
+	const secondPosition = new Position((0) + 1, (model.getText().length) + 1);
 	assert.equal((await service.request('plaintext', secondPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
-	assert.deepEqual(
-		service.results.result!.value.items.map(item => item.label),
-		['alpha'],
-	);
+	assert.deepEqual(service.results.result!.value.items.map(item => item.label), ['alpha']);
 	const messages = clientPort.sentMessages as WireMessage[];
-	assert.deepEqual(
-		messages.map(message => message.kind),
-		['request', 'sync', 'request'],
-	);
+	assert.deepEqual(messages.map(message => message.kind), ['request', 'sync', 'request']);
 	assert.equal(messages[0]!.snapshot?.kind, 'full');
 	assert.equal(messages[0]!.snapshot?.text, 'alpha al');
 	assert.equal(messages[1]!.previousVersion, 1);
@@ -89,24 +86,23 @@ test('A skipped model version makes the next wire request send a full snapshot',
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(registry));
+	using server = new WorkerTextModelSyncServer(
+		serverPort,
+		languageCompletionWireCodec,
+		new LanguageCompletionProviderWorker(registry),
+	);
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 	let skipped: TextModelChange | undefined;
-	using listener = model.onDidChangeContent(change => {
-		skipped = change;
-	});
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 8 + 1)), text: 'p' }]);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 9 + 1)), text: 'h' }]);
+	using listener = model.onDidChangeContent(change => { skipped = change; });
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (8) + 1)), text: 'p' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (9) + 1)), text: 'h' }]);
 
 	client.synchronizeModel(skipped!);
 	await client.run(request(model, 2), new AbortController().signal);
 
 	const messages = clientPort.sentMessages as WireMessage[];
-	assert.deepEqual(
-		messages.map(message => message.kind),
-		['request', 'request'],
-	);
+	assert.deepEqual(messages.map(message => message.kind), ['request', 'request']);
 	assert.equal(messages[1]!.snapshot?.kind, 'full');
 	assert.equal(messages[1]!.snapshot?.text, 'alpha alph');
 });
@@ -124,14 +120,10 @@ test('Wire cancellation aborts remote work and ignores late messages', async () 
 	const worker = new TestCompletionWorker(async (_request, signal) => {
 		startRequest();
 		await new Promise<void>((_resolve, reject) => {
-			signal.addEventListener(
-				'abort',
-				() => {
-					observeAbort();
-					reject(new Error('remote cancelled'));
-				},
-				{ once: true },
-			);
+			signal.addEventListener('abort', () => {
+				observeAbort();
+				reject(new Error('remote cancelled'));
+			}, { once: true });
 		});
 		throw new Error('unreachable');
 	});
@@ -153,24 +145,25 @@ test('Remote failures and invalid DTO results reject in the client realm', async
 		new TestCompletionWorker(async () => {
 			throw new TypeError('provider host exploded');
 		}),
-		error => error instanceof WebWorkerRemoteError && error.remoteName === 'TypeError' && error.message === 'provider host exploded',
+		error => error instanceof WebWorkerRemoteError &&
+			error.remoteName === 'TypeError' &&
+			error.message === 'provider host exploded',
 	);
 	await assertRemoteFailure(
 		new TestCompletionWorker(async request => ({
 			position: request.payload.position,
-			items: [
-				{
-					providerId: 'broken',
-					id: 'outside',
-					label: 'outside',
-					kind: LanguageCompletionItemKind.Text,
-					range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 99 + 1)),
-					insertText: 'outside',
-				},
-			],
+			items: [{
+				providerId: 'broken',
+				id: 'outside',
+				label: 'outside',
+				kind: LanguageCompletionItemKind.Text,
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (99) + 1)),
+				insertText: 'outside',
+			}],
 			isIncomplete: false,
 		})),
-		error => error instanceof RangeError && error.message.includes('outside its snapshot'),
+		error => error instanceof RangeError &&
+			error.message.includes('outside its snapshot'),
 	);
 });
 
@@ -185,27 +178,23 @@ test('Completion service replaces a failed wire worker on the next request', asy
 		workerFactory: () => {
 			workerCount += 1;
 			const [clientPort, serverPort] = createPortPair();
-			const worker =
-				workerCount === 1
-					? new TestCompletionWorker(async () => {
-							throw new Error('first worker failed');
-						})
-					: new LanguageCompletionProviderWorker(remoteRegistry);
+			const worker = workerCount === 1
+				? new TestCompletionWorker(async () => {
+					throw new Error('first worker failed');
+				})
+				: new LanguageCompletionProviderWorker(remoteRegistry);
 			servers.add(new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker));
 			return new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 		},
 	});
-	const position = new Position(0 + 1, model.getText().length + 1);
+	const position = new Position((0) + 1, (model.getText().length) + 1);
 
 	await assert.rejects(service.request('typescript', position, createLanguageCompletionInvokeContext()), /first worker failed/);
 	const outcome = await service.request('typescript', position, createLanguageCompletionInvokeContext());
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.equal(workerCount, 2);
-	assert.deepEqual(
-		service.results.result!.value.items.map(item => item.label),
-		['console'],
-	);
+	assert.deepEqual(service.results.result!.value.items.map(item => item.label), ['console']);
 });
 
 test('Wire rejects inconsistent snapshots and unsupported protocol responses', async () => {
@@ -226,7 +215,7 @@ test('Wire rejects inconsistent snapshots and unsupported protocol responses', a
 		payload: {},
 	});
 
-	assert.match(((await response) as WireFailure).error.message, /length does not match/);
+	assert.match((await response as WireFailure).error.message, /length does not match/);
 
 	const [clientPort, peerPort] = createPortPair();
 	using peer = peerPort;
@@ -249,7 +238,11 @@ test('Invalid incremental synchronization drops the mirror and poisons its clien
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(registry));
+	using server = new WorkerTextModelSyncServer(
+		serverPort,
+		languageCompletionWireCodec,
+		new LanguageCompletionProviderWorker(registry),
+	);
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 
@@ -264,7 +257,10 @@ test('Invalid incremental synchronization drops the mirror and poisons its clien
 	});
 	await new Promise<void>(resolve => setImmediate(resolve));
 
-	assert.throws(() => client.run(request(model, 2), new AbortController().signal), /inside the mirror/);
+	assert.throws(
+		() => client.run(request(model, 2), new AbortController().signal),
+		/inside the mirror/,
+	);
 });
 
 test('Wire ports fail pending requests and validate service factory options', async () => {
@@ -279,14 +275,10 @@ test('Wire ports fail pending requests and validate service factory options', as
 	await assert.rejects(pending, /worker process crashed/);
 	assert.throws(() => client.run(request(model, 2), new AbortController().signal), /worker process crashed/);
 	using registry = new LanguageCompletionProviderRegistry();
-	assert.throws(
-		() =>
-			new LanguageCompletionService(model, registry, {
-				workerFactory: () => client,
-				onProviderError: () => undefined,
-			}),
-		/owns its provider error policy/,
-	);
+	assert.throws(() => new LanguageCompletionService(model, registry, {
+		workerFactory: () => client,
+		onProviderError: () => undefined,
+	}), /owns its provider error policy/);
 });
 
 async function assertRemoteFailure(worker: LanguageCompletionWorker, predicate: (error: unknown) => boolean): Promise<void> {
@@ -304,7 +296,7 @@ function request(model: TextModel, requestId: number): LanguageWorkerRequest<typ
 		snapshot: model.createVersionedSnapshot(),
 		payload: Object.freeze({
 			languageId: 'typescript',
-			position: new Position(0 + 1, model.getText().length + 1),
+			position: new Position((0) + 1, (model.getText().length) + 1),
 			context: createLanguageCompletionInvokeContext(),
 		}),
 	});
@@ -319,14 +311,19 @@ function createPortPair(): readonly [MemoryWirePort, MemoryWirePort] {
 }
 
 interface WireFailure {
-	readonly error: { readonly message: string };
+	readonly error: {
+		readonly message: string;
+	};
 }
 
 interface WireMessage {
 	readonly kind: string;
 	readonly previousVersion?: number;
 	readonly changes?: unknown;
-	readonly snapshot?: { readonly kind: string; readonly text?: string };
+	readonly snapshot?: {
+		readonly kind: string;
+		readonly text?: string;
+	};
 }
 
 function nextMessage(port: MemoryWirePort): Promise<unknown> {
@@ -349,11 +346,9 @@ class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.peer = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.peer = undefined;
+		}));
 	}
 
 	connect(peer: MemoryWirePort): void {
@@ -378,9 +373,7 @@ class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 }
 
 class TestCompletionWorker extends Disposable implements LanguageCompletionWorker {
-	constructor(
-		private readonly runRequest: (request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>, signal: AbortSignal) => ReturnType<LanguageCompletionWorker['run']>,
-	) {
+	constructor(private readonly runRequest: (request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>, signal: AbortSignal) => ReturnType<LanguageCompletionWorker['run']>) {
 		super();
 	}
 

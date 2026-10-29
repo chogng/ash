@@ -9,20 +9,18 @@ export const enum RemoteConnectionType {
 
 export class ManagedRemoteConnection {
 	public readonly type = RemoteConnectionType.Managed;
-	constructor(public readonly id: number) {}
+	constructor(public readonly id: number) { }
 }
 
 export class WebSocketRemoteConnection {
 	public readonly type = RemoteConnectionType.WebSocket;
-	constructor(
-		public readonly host: string,
-		public readonly port: number,
-	) {}
+	constructor(public readonly host: string, public readonly port: number) { }
 }
 
 export type RemoteConnection = WebSocketRemoteConnection | ManagedRemoteConnection;
 
-export type RemoteConnectionOfType<T extends RemoteConnectionType> = RemoteConnection & { type: T };
+
+export type RemoteConnectionOfType<T extends RemoteConnectionType> = RemoteConnection & { type: T; };
 
 export interface ResolvedAuthority {
 	readonly authority: string;
@@ -31,9 +29,9 @@ export interface ResolvedAuthority {
 }
 
 export interface ResolvedOptions {
-	readonly extensionHostEnv?: { [key: string]: string | null };
+	readonly extensionHostEnv?: { [key: string]: string | null; };
 	readonly isTrusted?: boolean;
-	readonly authenticationSession?: { id: string; providerId: string };
+	readonly authenticationSession?: { id: string; providerId: string; };
 }
 
 export interface ResolverResult {
@@ -57,11 +55,7 @@ export enum RemoteAuthorityResolverErrorCode {
 export class RemoteAuthorityResolverError extends Error {
 	public readonly isHandled: boolean;
 
-	constructor(
-		public readonly _message?: string,
-		public readonly _code = RemoteAuthorityResolverErrorCode.Unknown,
-		public readonly _detail?: unknown,
-	) {
+	constructor(public readonly _message?: string, public readonly _code = RemoteAuthorityResolverErrorCode.Unknown, public readonly _detail?: unknown) {
 		super(_message);
 		this.name = 'RemoteAuthorityResolverError';
 		this.isHandled = _code === RemoteAuthorityResolverErrorCode.NotAvailable && _detail === true;

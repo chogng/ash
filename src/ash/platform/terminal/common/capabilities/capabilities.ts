@@ -74,18 +74,9 @@ export interface ICommandDetectionCapability {
 	deserialize(value: ISerializedCommandDetectionCapability): void;
 }
 
-export const enum CommandInvalidationReason {
-	Windows = 'windows',
-	NoProblemsReported = 'noProblemsReported',
-}
-export interface ICommandInvalidationRequest {
-	reason: CommandInvalidationReason;
-}
-export interface IHandleCommandOptions {
-	ignoreCommandLine?: boolean;
-	marker?: IMarkProperties['marker'];
-	markProperties?: IMarkProperties;
-}
+export const enum CommandInvalidationReason { Windows = 'windows', NoProblemsReported = 'noProblemsReported' }
+export interface ICommandInvalidationRequest { reason: CommandInvalidationReason; }
+export interface IHandleCommandOptions { ignoreCommandLine?: boolean; marker?: IMarkProperties['marker']; markProperties?: IMarkProperties; }
 
 interface IBaseTerminalCommand {
 	command: string;
@@ -144,7 +135,7 @@ export interface TerminalCapabilityChangeEvent<T extends TerminalCapability> {
 }
 
 export type AnyTerminalCapabilityChangeEvent = {
-	[K in TerminalCapability]: TerminalCapabilityChangeEvent<K>;
+	[K in TerminalCapability]: TerminalCapabilityChangeEvent<K>
 }[TerminalCapability];
 
 export interface ITerminalCapabilityImplMap {
@@ -166,7 +157,7 @@ export interface IMarkProperties {
 		readonly id: number;
 		readonly line: number;
 		readonly isDisposed: boolean;
-		onDispose(listener: () => void): { dispose(): void };
+		onDispose(listener: () => void): { dispose(): void; };
 		dispose(): void;
 	};
 	id?: string;
@@ -196,18 +187,16 @@ export interface ITerminalCapabilityStore {
 }
 
 export interface TerminalShellIntegrationEnvironment {
-	value: { [key: string]: string | undefined } | undefined;
+	value: { [key: string]: string | undefined; } | undefined;
 	/** Provenance of the reported values, never execution or filesystem authority. */
 	isTrusted: boolean;
 }
-export interface TerminalShellIntegration {
-	readonly env: TerminalShellIntegrationEnvironment;
-}
+export interface TerminalShellIntegration { readonly env: TerminalShellIntegrationEnvironment; }
 export interface IShellEnvDetectionCapability {
 	readonly type: TerminalCapability.ShellEnvDetection;
 	readonly onDidChangeEnv: Event<TerminalShellIntegrationEnvironment>;
 	readonly env: TerminalShellIntegrationEnvironment;
-	setEnvironment(values: { [key: string]: string | undefined } | undefined, isTrusted: boolean): void;
+	setEnvironment(values: { [key: string]: string | undefined; } | undefined, isTrusted: boolean): void;
 	startEnvironmentSingleVar(clear: boolean, isTrusted: boolean): void;
 	setEnvironmentSingleVar(key: string, value: string | undefined, isTrusted: boolean): void;
 	deleteEnvironmentSingleVar(key: string, value: string | undefined, isTrusted: boolean): void;

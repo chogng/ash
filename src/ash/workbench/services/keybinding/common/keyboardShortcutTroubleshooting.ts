@@ -11,4 +11,7 @@ export interface IKeyboardShortcutTroubleshootingService {
 	toggle(): boolean;
 }
 
-export const IKeyboardShortcutTroubleshootingService = createServiceIdentifier<IKeyboardShortcutTroubleshootingService>('keyboardShortcutTroubleshootingService');
+export const IKeyboardShortcutTroubleshootingService =
+	createServiceIdentifier<IKeyboardShortcutTroubleshootingService>(
+		'keyboardShortcutTroubleshootingService',
+	);

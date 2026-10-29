@@ -16,9 +16,7 @@ export class StartDebugQuickAccessProvider extends PickerQuickAccessProvider<IPi
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
-	) {
-		super(DEBUG_QUICK_ACCESS_PREFIX);
-	}
+	) { super(DEBUG_QUICK_ACCESS_PREFIX); }
 
 	protected override async _getPicks(filter: string, resources: DisposableStore, token: CancellationToken): Promise<Picks<IPickerQuickAccessItem>> {
 		const workspace = this.workspace.getWorkspace();
@@ -29,31 +27,25 @@ export class StartDebugQuickAccessProvider extends PickerQuickAccessProvider<IPi
 		const picks: IPickerQuickAccessItem[] = manager.getAllConfigurations().flatMap(configuration => {
 			const highlights = matchesSubString(filter, configuration.name);
 			if (!highlights) return [];
-			return [
-				{
-					label: configuration.name,
-					description: configuration.workspaceFolderName,
-					accept: () => {
-						// Closing the picker retires its query, but the accepted launch owns its operation.
-						if (this.workspace.getWorkspace() !== workspace || !manager.getAllConfigurations().includes(configuration)) return;
-						void (async () => {
-							await manager.selectConfiguration(configuration);
-							if (this.workspace.getWorkspace() !== workspace) return;
-							if ('configurations' in configuration) await this.debug.startCompound(configuration);
-							else await this.debug.start(configuration);
-						})().catch(error => this.notifications.error(error));
-					},
+			return [{
+				label: configuration.name, description: configuration.workspaceFolderName,
+				accept: () => {
+					// Closing the picker retires its query, but the accepted launch owns its operation.
+					if (this.workspace.getWorkspace() !== workspace || !manager.getAllConfigurations().includes(configuration)) return;
+					void (async () => {
+						await manager.selectConfiguration(configuration);
+						if (this.workspace.getWorkspace() !== workspace) return;
+						if ('configurations' in configuration) await this.debug.startCompound(configuration);
+						else await this.debug.start(configuration);
+					})().catch(error => this.notifications.error(error));
 				},
-			];
+			}];
 		});
 		const dynamicLabel = localize('debug.moreConfigurations', 'Select and Start Debugging…');
-		if (!filter || matchesSubString(filter, dynamicLabel))
-			picks.push({
-				label: dynamicLabel,
-				accept: () => {
-					void this.commands.executeCommand(SELECT_AND_START_ID).catch(error => this.notifications.error(error));
-				},
-			});
+		if (!filter || matchesSubString(filter, dynamicLabel)) picks.push({
+			label: dynamicLabel,
+			accept: () => { void this.commands.executeCommand(SELECT_AND_START_ID).catch(error => this.notifications.error(error)); },
+		});
 		return picks;
 	}
 }

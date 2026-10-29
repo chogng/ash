@@ -55,38 +55,29 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly alternateScroll = new AlternateScrollMode();
 	readonly shellIntegration: ShellIntegrationAddon;
 	private readonly decorationAddon: DecorationAddon;
-	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean }>;
-	private readonly markNavigationAddon = this._register(
-		new MarkNavigationAddon(() =>
-			this.instance.capabilities?.has(TerminalCapability.CommandDetection)
-				? this.decorationAddon.markers
-				: (this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers),
-		),
-	);
+	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean; }>;
+	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
+		? this.decorationAddon.markers : this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers));
 	private visible = false;
 	private opened = false;
 	private readonly _onDidOpen = this._register(new Emitter<void>());
 	readonly onDidOpen = this._onDidOpen.event;
-	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(
-		new TerminalResizeDebouncer(
-			() => this.visible,
-			() => (this.terminal ? this : undefined),
-			(cols, rows) => this.applyDimensions(cols, rows),
-			cols => this.applyDimensions(cols, this.raw.rows),
-			rows => this.applyDimensions(this.raw.cols, rows),
-		),
-	);
+	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
+		() => this.visible,
+		() => this.terminal ? this : undefined,
+		(cols, rows) => this.applyDimensions(cols, rows),
+		cols => this.applyDimensions(cols, this.raw.rows),
+		rows => this.applyDimensions(this.raw.cols, rows),
+	));
 	private searchAddon: SearchAddon | undefined;
 	private serializeAddon: SerializeAddon | undefined;
 	private searchInitialization: Promise<SearchAddon> | undefined;
 	private searchGeneration = 0;
-	private activeSearch: { term: string; options: ISearchOptions } | undefined;
+	private activeSearch: { term: string; options: ISearchOptions; } | undefined;
 	private lastFindResult: ISearchResultChangeEvent | undefined;
 	private readonly _onDidChangeFindResults = this._register(new Emitter<ISearchResultChangeEvent>());
 	public readonly onDidChangeFindResults = this._onDidChangeFindResults.event;
-	public get findResult(): ISearchResultChangeEvent | undefined {
-		return this.lastFindResult;
-	}
+	public get findResult(): ISearchResultChangeEvent | undefined { return this.lastFindResult; }
 
 	constructor(
 		container: HTMLElement,
@@ -105,85 +96,67 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.element.hidden = true;
 		container.append(this.element);
 		this.widgets.attachToElement(this.element);
-		this._register(
-			toDisposable(() => {
-				this.pendingWrites.length = 0;
-				this.element.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.pendingWrites.length = 0;
+			this.element.remove();
+		}));
 		const commandListeners = this._register(new MutableDisposable<DisposableStore>());
-		this._register(
-			this.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CommandDetection)(capability => {
-				const listeners = new DisposableStore();
-				commandListeners.value = listeners;
-				const decorate = (command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand, running: boolean) => {
-					if (!command.id || !command.marker) return;
-					this.decorationAddon.registerCommandDecoration(
-						{
-							commandId: command.id,
-							command: command.command,
-							isTrusted: command.isTrusted,
-							cwd: command.cwd,
-							status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed',
-							exitCode: command.exitCode,
-						},
-						this.instance.processId,
-						command.marker,
-					);
-				};
-				listeners.add(
-					capability.onCommandStarted(command => {
-						if (command.marker) this.decorationAddon.registerCommandDecoration(undefined, this.instance.processId, command.marker);
-					}),
-				);
-				listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
-				listeners.add(capability.onCommandFinished(command => decorate(command, false)));
-			}),
-		);
-		this._register(
-			instance.onDidChangeState(state => {
-				this.element.dataset.state = state;
-			}),
-		);
+		this._register(this.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CommandDetection)(capability => {
+			const listeners = new DisposableStore();
+			commandListeners.value = listeners;
+			const decorate = (command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand, running: boolean) => {
+				if (!command.id || !command.marker) return;
+				this.decorationAddon.registerCommandDecoration({
+					commandId: command.id, command: command.command, isTrusted: command.isTrusted, cwd: command.cwd,
+					status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed', exitCode: command.exitCode
+				}, this.instance.processId, command.marker);
+			};
+			listeners.add(capability.onCommandStarted(command => {
+				if (command.marker) this.decorationAddon.registerCommandDecoration(undefined, this.instance.processId, command.marker);
+			}));
+			listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
+			listeners.add(capability.onCommandFinished(command => decorate(command, false)));
+		}));
+		this._register(instance.onDidChangeState((state) => {
+			this.element.dataset.state = state;
+		}));
 		this.element.dataset.state = instance.state;
 		if (instance.onDidChangeTarget) {
-			this._register(
-				instance.onDidChangeTarget(() => {
-					if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
-				}),
-			);
+			this._register(instance.onDidChangeTarget(() => {
+				if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
+			}));
 		}
 		// Fitting can flush pending xterm writes and initialize contributions that
 		// observe this same element. Do it outside ResizeObserver delivery so those
 		// observers receive their first notification without a depth-loop error.
 		const fit = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.fit()));
 		this._register(observeResize(this.element, () => fit.schedule()));
-		this._register(
-			configuration.onConfigChanged(() => {
-				if (!this.terminal) return;
-				this.terminal.options = this.screenOptions();
-				if (this.opened) updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
-				this.fit();
-			}),
-		);
+		this._register(configuration.onConfigChanged(() => {
+			if (!this.terminal) return;
+			this.terminal.options = this.screenOptions();
+			if (this.opened) updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
+			this.fit();
+		}));
 	}
 
 	public get raw(): Terminal {
 		this.assertNotDisposed();
-		if (!this.terminal) {
-			throw new Error('The terminal renderer has not been initialized');
-		}
+		if (!this.terminal) { throw new Error('The terminal renderer has not been initialized'); }
 		return this.terminal;
 	}
 
-	initialize(restored?: ITerminalDimensions & { readonly vt: string }): Promise<void> {
+	initialize(restored?: ITerminalDimensions & { readonly vt: string; }): Promise<void> {
 		this.assertNotDisposed();
 		this.initialization ??= this.loadTerminal(restored);
 		return this.initialization;
 	}
 
-	private async loadTerminal(restored?: ITerminalDimensions & { readonly vt: string }): Promise<void> {
-		const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/xterm/css/xterm.css')]);
+	private async loadTerminal(restored?: ITerminalDimensions & { readonly vt: string; }): Promise<void> {
+		const [{ Terminal }, { FitAddon }] = await Promise.all([
+			import('@xterm/xterm'),
+			import('@xterm/addon-fit'),
+			import('@xterm/xterm/css/xterm.css'),
+		]);
 		if (this.isDisposed) return;
 		const terminal = new Terminal({
 			disableStdin: this.instance.isReadOnly === true,
@@ -214,22 +187,13 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this._onDidOpen.fire();
 		}
 
-		const bell = terminal.onBell(() => {
-			void this.signals.playSignal(AccessibilitySignal.terminalBell);
-		});
+		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
 		this._register(toDisposable(() => bell.dispose()));
 		this.registerAlternateScrollMode(terminal);
-		this._register(
-			this.themeService.onDidColorThemeChange(theme => {
-				terminal.options.theme = terminalTheme(theme, this.instance.target);
-				if (this.activeSearch) {
-					void this.findNext(this.activeSearch.term, {
-						...this.activeSearch.options,
-						incremental: true,
-					}).catch(onUnexpectedError);
-				}
-			}),
-		);
+		this._register(this.themeService.onDidColorThemeChange(theme => {
+			terminal.options.theme = terminalTheme(theme, this.instance.target);
+			if (this.activeSearch) { void this.findNext(this.activeSearch.term, { ...this.activeSearch.options, incremental: true }).catch(onUnexpectedError); }
+		}));
 		for (const write of this.pendingWrites) write(terminal);
 		this.pendingWrites.length = 0;
 		this.fit();
@@ -240,16 +204,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		const config = this.configuration.config;
 		return {
 			scrollbar: { width: 14, overviewRuler: { showTopBorder: false, showBottomBorder: false } },
-			fontFamily: config.fontFamily,
-			fontSize: config.fontSize,
-			letterSpacing: config.letterSpacing,
-			lineHeight: config.lineHeight,
-			cursorBlink: config.cursorBlinking,
-			cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
+			fontFamily: config.fontFamily, fontSize: config.fontSize,
+			letterSpacing: config.letterSpacing, lineHeight: config.lineHeight,
+			cursorBlink: config.cursorBlinking, cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
 			cursorInactiveStyle: config.cursorStyleInactive === 'line' ? 'bar' : config.cursorStyleInactive,
-			cursorWidth: config.cursorWidth,
-			scrollback: config.scrollback,
-			minimumContrastRatio: config.minimumContrastRatio,
+			cursorWidth: config.cursorWidth, scrollback: config.scrollback, minimumContrastRatio: config.minimumContrastRatio,
 			wordSeparator: config.wordSeparators,
 		};
 	}
@@ -269,10 +228,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				this.write(data, resolve);
 			});
 		} finally {
-			if (release) {
-				this._store.delete(release);
-				release.dispose();
-			}
+			if (release) { this._store.delete(release); release.dispose(); }
 		}
 	}
 
@@ -343,9 +299,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private async search(term: string, options: ISearchOptions, previous: boolean): Promise<boolean> {
 		const generation = ++this.searchGeneration;
 		const addon = await (this.searchInitialization ??= this.loadSearchAddon());
-		if (this.isDisposed || generation !== this.searchGeneration) {
-			return false;
-		}
+		if (this.isDisposed || generation !== this.searchGeneration) { return false; }
 		const previousOptions = this.activeSearch?.options;
 		if (previousOptions && (previousOptions.regex !== options.regex || previousOptions.wholeWord !== options.wholeWord || previousOptions.caseSensitive !== options.caseSensitive)) {
 			// The addon caches decorated matches by query; option changes need a fresh cache too.
@@ -387,9 +341,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private async loadSearchAddon(): Promise<SearchAddon> {
 		await this.initialize();
 		const SearchAddon = await addonImporter.importAddon('search');
-		if (this.isDisposed) {
-			throw new CancellationError();
-		}
+		if (this.isDisposed) { throw new CancellationError(); }
 		const addon = new SearchAddon({ highlightLimit: 1000 });
 		this.raw.loadAddon(addon);
 		this.searchAddon = addon;
@@ -404,13 +356,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	/** Uses xterm's parsed screen, including a selection when present; raw PTY bytes are not a transcript. */
 	public async getBufferText(maxCharacters: number, signal: AbortSignal): Promise<string | undefined> {
-		if (this.isDisposed || signal.aborted) {
-			return undefined;
-		}
+		if (this.isDisposed || signal.aborted) { return undefined; }
 		await this.initialize();
-		if (this.isDisposed || signal.aborted) {
-			return undefined;
-		}
+		if (this.isDisposed || signal.aborted) { return undefined; }
 		// An empty write completes after queued output. Disposal or cancellation must also release the reader.
 		let release: ReturnType<typeof toDisposable> | undefined;
 		let abort: (() => void) | undefined;
@@ -422,19 +370,16 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				this.write('', resolve);
 			});
 		} finally {
-			if (abort) {
-				signal.removeEventListener('abort', abort);
-			}
+			if (abort) { signal.removeEventListener('abort', abort); }
 			if (release) {
 				this._store.delete(release);
 				release.dispose();
 			}
 		}
-		if (this.isDisposed || signal.aborted) {
-			return undefined;
-		}
+		if (this.isDisposed || signal.aborted) { return undefined; }
 		return this.lineData.getBufferText(maxCharacters);
 	}
+
 
 	fit(): void {
 		if (!this.visible || !this.fitAddon || this.isDisposed) return;
@@ -458,7 +403,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	private applyDimensions(cols: number, rows: number): void {
-		if (this.isDisposed || !this.terminal || (cols === this.terminal.cols && rows === this.terminal.rows)) return;
+		if (this.isDisposed || !this.terminal || cols === this.terminal.cols && rows === this.terminal.rows) return;
 		this.terminal.resize(cols, rows);
 		this.instance.resize(this.dimensions());
 	}
@@ -482,15 +427,14 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		registerMode('l', parameters => this.alternateScroll.set(parameters, false));
 		registerMode('s', parameters => this.alternateScroll.save(parameters));
 		registerMode('r', parameters => this.alternateScroll.restore(parameters));
-		terminal.attachCustomWheelEventHandler(() => this.alternateScroll.shouldProcessWheel(terminal.buffer.active.type, terminal.modes.mouseTrackingMode));
+		terminal.attachCustomWheelEventHandler(() => this.alternateScroll.shouldProcessWheel(
+			terminal.buffer.active.type,
+			terminal.modes.mouseTrackingMode,
+		));
 	}
 
-	public scrollToPreviousCommand(): void {
-		this.markNavigationAddon.scrollToPreviousMark();
-	}
-	public scrollToNextCommand(): void {
-		this.markNavigationAddon.scrollToNextMark();
-	}
+	public scrollToPreviousCommand(): void { this.markNavigationAddon.scrollToPreviousMark(); }
+	public scrollToNextCommand(): void { this.markNavigationAddon.scrollToNextMark(); }
 }
 
 /** Projects the workbench theme into xterm's renderer theme contract. */

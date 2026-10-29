@@ -4,80 +4,23 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerCallService } from '../../browser/appServerCallService.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
-import {
-	APP_SERVER_SCHEMA_HASH,
-	APP_SERVER_PROTOCOL_MAJOR,
-	type InitializeResult,
-	type ServerCapabilities,
-	type CallStatus,
-	type CallDocumentParams,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type CallStatus, type CallDocumentParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 
 class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 	public readonly pending: number[] = [];
 	public readonly documentRequests: CallDocumentParams[] = [];
-	public status: CallStatus = {
-		resourceId: '',
-		sequence: 1,
-		connection: 'connected',
-		call: {
-			id: 'call',
-			revision: 1,
-			mediaEpoch: 1,
-			mediaRoom: 'room',
-			mediaState: { state: 'ready' },
-			members: [{ id: 'owner', role: 'owner' }],
-			documents: [],
-		},
-		memberId: 'owner',
-		participants: [],
-		muted: true,
-		deafened: false,
-		microphoneAllowed: true,
-		screenSharing: false,
-		error: null,
-	};
-	public on(event: string, listener: (value: unknown) => void): void {
-		const listeners = this.listeners.get(event) ?? new Set();
-		listeners.add(listener);
-		this.listeners.set(event, listeners);
-	}
-	public off(event: string, listener: (value: unknown) => void): void {
-		this.listeners.get(event)?.delete(listener);
-	}
-	private emit(event: string, value: unknown): void {
-		for (const listener of this.listeners.get(event) ?? []) {
-			listener(value);
-		}
-	}
-	public reply(id: number, result: unknown): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, result }) });
-	}
-	public changed(connection: CallStatus['connection']): void {
-		this.status = { ...this.status, sequence: this.status.sequence + 1, connection };
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, {
-			frame: JSON.stringify({ jsonrpc: '2.0', method: 'call/changed', params: this.status }),
-		});
-	}
+	public status: CallStatus = { resourceId: '', sequence: 1, connection: 'connected', call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' }, members: [{ id: 'owner', role: 'owner' }], documents: [] }, memberId: 'owner', participants: [], muted: true, deafened: false, microphoneAllowed: true, screenSharing: false, error: null };
+	public on(event: string, listener: (value: unknown) => void): void { const listeners = this.listeners.get(event) ?? new Set(); listeners.add(listener); this.listeners.set(event, listeners); }
+	public off(event: string, listener: (value: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
+	private emit(event: string, value: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(value); } }
+	public reply(id: number, result: unknown): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, result }) }); }
+	public changed(connection: CallStatus['connection']): void { this.status = { ...this.status, sequence: this.status.sequence + 1, connection }; this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'call/changed', params: this.status }) }); }
 	public send(event: string, payload?: unknown): void {
-		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
-				protocolVersion: 1,
-				workspaceId: 'test',
-				workspaceRoot: '/test',
-			});
-			return;
-		}
-		if (event !== WEB_APP_SERVER_FRAME_EVENT) {
-			return;
-		}
-		const request = JSON.parse((payload as { frame: string }).frame) as {
-			id: number;
-			method: string;
-			params: { resourceId: string };
-		};
+		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'test', workspaceRoot: '/test' }); return; }
+		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
+		const request = JSON.parse((payload as { frame: string; }).frame) as { id: number; method: string; params: { resourceId: string; }; };
 		let result: unknown;
 		if (request.method === 'initialize') {
 			const capabilities = {
@@ -87,8 +30,7 @@ class Transport implements AppServerTransport {
 				threads: true,
 				turns: true,
 				projects: true,
-				memories: true,
-				approvalEnvironment: true,
+				memories: true, approvalEnvironment: true,
 				resources: true,
 				attachments: true,
 				fileSystem: true,
@@ -108,50 +50,29 @@ class Transport implements AppServerTransport {
 				mcp: true,
 				mcpOAuth: true,
 			} satisfies Omit<ServerCapabilities, 'contracts'>;
-			result = {
-				serverInfo: { name: 'ash-app-server', version: '1' },
-				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR },
-				schemaHash: APP_SERVER_SCHEMA_HASH,
-				capabilities: { ...capabilities, contracts: { memoryDiagnostics: { version: 1 } } },
-				slashCommands: [],
-			} satisfies InitializeResult;
-		} else if (request.method === 'call/start') {
-			this.status.resourceId = request.params.resourceId;
-			result = this.status;
-		} else if (request.method === 'call/document') {
+			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { memoryDiagnostics: { version: 1 } } }, slashCommands: [] } satisfies InitializeResult;
+		} else if (request.method === 'call/start') { this.status.resourceId = request.params.resourceId; result = this.status; }
+		else if (request.method === 'call/document') {
 			const params = request.params as CallDocumentParams;
 			this.documentRequests.push(params);
 			const change = params.change;
 			const documents = change.type === 'share' ? [change.document] : [];
-			this.status = {
-				...this.status,
-				sequence: this.status.sequence + 1,
-				call: { ...this.status.call, revision: this.status.call.revision + 1, documents },
-			};
+			this.status = { ...this.status, sequence: this.status.sequence + 1, call: { ...this.status.call, revision: this.status.call.revision + 1, documents } };
 			result = this.status;
-		} else if (request.method === 'call/screenFrames') {
-			this.pending.push(request.id);
-			return;
-		} else {
-			throw new Error(`Unexpected request ${request.method}`);
 		}
+		else if (request.method === 'call/screenFrames') { this.pending.push(request.id); return; }
+		else { throw new Error(`Unexpected request ${request.method}`); }
 		this.reply(request.id, result);
 	}
 }
 
 async function pending(transport: Transport): Promise<number> {
-	for (let attempt = 0; attempt < 100 && transport.pending.length === 0; attempt++) {
-		await delay(5);
-	}
+	for (let attempt = 0; attempt < 100 && transport.pending.length === 0; attempt++) { await delay(5); }
 	assert.equal(transport.pending.length, 1);
 	return transport.pending.shift()!;
 }
 
-const pixels = {
-	mediaEpoch: 1,
-	tracks: ['screen'],
-	frames: [{ trackId: 'screen', participantId: 'speaker', jpeg: btoa('pixels') }],
-};
+const pixels = { mediaEpoch: 1, tracks: ['screen'], frames: [{ trackId: 'screen', participantId: 'speaker', jpeg: btoa('pixels') }] };
 
 test('shared screens reject a delayed response after reconnecting in the same media room', async () => {
 	const tracker = new DisposableTracker();
@@ -180,12 +101,10 @@ test('shared screens reject a delayed response after reconnecting in the same me
 		await delay(100);
 		assert.equal(service.screens.length, 0);
 		assert.deepEqual(transport.pending, []);
-	} finally {
-		service.dispose();
-		client.dispose();
-	}
+	} finally { service.dispose(); client.dispose(); }
 	tracker.assertNoLeaks();
 });
+
 
 test('call document changes use the resource and current revision and expose only domain references', async () => {
 	const transport = new Transport();
@@ -193,13 +112,7 @@ test('call document changes use the resource and current revision and expose onl
 	await client.connect();
 	using service = new AppServerCallService(client);
 	await service.start({ type: 'local' });
-	const document = {
-		serverUrl: 'https://documents.example',
-		roomId: 'document-shared',
-		schemaId: 'stanza-document-v1',
-		contentType: 'application/test-document',
-		title: 'Notes',
-	};
+	const document = { serverUrl: 'https://documents.example', roomId: 'document-shared', schemaId: 'stanza-document-v1', contentType: 'application/test-document', title: 'Notes' };
 	await service.shareDocument(document);
 	assert.deepEqual(service.state?.documents, [document]);
 	assert.equal(transport.documentRequests[0]?.resourceId, transport.status.resourceId);
@@ -208,11 +121,7 @@ test('call document changes use the resource and current revision and expose onl
 	await service.unshareDocument(document);
 	assert.deepEqual(service.state?.documents, []);
 	assert.equal(transport.documentRequests[1]?.revision, 2);
-	assert.deepEqual(transport.documentRequests[1]?.change, {
-		type: 'unshare',
-		serverUrl: document.serverUrl,
-		roomId: document.roomId,
-	});
+	assert.deepEqual(transport.documentRequests[1]?.change, { type: 'unshare', serverUrl: document.serverUrl, roomId: document.roomId });
 	service.dispose();
 	client.dispose();
 });

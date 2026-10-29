@@ -8,12 +8,8 @@ const connection = { name: 'build', host: 'build-linux', workspace: '/srv/projec
 function createServices(): InstantiationService {
 	const services = new InstantiationService();
 	services.registerInstance(IRemoteConnectionApi, {
-		available: true,
-		list: async () => [connection],
-		save: async value => value,
-		update: async (_name, value) => value,
-		remove: async () => undefined,
-		connect: async () => assert.fail('Resolution must not connect'),
+		available: true, list: async () => [connection], save: async value => value, update: async (_name, value) => value,
+		remove: async () => undefined, connect: async () => assert.fail('Resolution must not connect'),
 	});
 	return services;
 }
@@ -21,19 +17,14 @@ function createServices(): InstantiationService {
 test('built-in SSH and contributed authorities resolve through the same saved catalog', async () => {
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
-	using registration = resolver.registerResolvers([
-		{
-			authorityPrefix: 'ssh',
-			resolve: async authority => ({ connectionName: authority.slice(4) }),
-		},
-		{
-			authorityPrefix: 'team',
-			resolve: async authority => {
-				assert.equal(authority, 'team+linux');
-				return { connectionName: 'build' };
-			},
-		},
-	]);
+	using registration = resolver.registerResolvers([{
+		authorityPrefix: 'ssh', resolve: async authority => ({ connectionName: authority.slice(4) }),
+	}, {
+		authorityPrefix: 'team', resolve: async authority => {
+			assert.equal(authority, 'team+linux');
+			return { connectionName: 'build' };
+		}
+	}]);
 	const signal = new AbortController().signal;
 	assert.deepEqual(await Promise.all([resolver.resolveConnection('ssh+build', signal), resolver.resolveConnection('team+linux', signal)]), [connection, connection]);
 });
@@ -42,14 +33,10 @@ test('Remote resolution rejects arbitrary targets and conflicting prefixes atomi
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
 	using registration = resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'missing' }) }]);
-	assert.throws(
-		() =>
-			registration.replace([
-				{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
-				{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
-			]),
-		/already has a resolver/,
-	);
+	assert.throws(() => registration.replace([
+		{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
+		{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
+	]), /already has a resolver/);
 	assert.throws(() => resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) }]), /already has a resolver/);
 	await assert.rejects(resolver.resolveConnection('team+linux', new AbortController().signal), /no longer exists/);
 	await assert.rejects(resolver.resolveConnection('unknown+target', new AbortController().signal), /No Remote resolver/);
@@ -60,18 +47,13 @@ test('replacing a resolver cancels its pending invocation and prevents a late ta
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
 	let pendingSignal: AbortSignal | undefined;
-	let finish!: (value: { connectionName: string }) => void;
-	using registration = resolver.registerResolvers([
-		{
-			authorityPrefix: 'team',
-			resolve: (_authority, signal) => {
-				pendingSignal = signal;
-				return new Promise(resolve => {
-					finish = resolve;
-				});
-			},
-		},
-	]);
+	let finish!: (value: { connectionName: string; }) => void;
+	using registration = resolver.registerResolvers([{
+		authorityPrefix: 'team', resolve: (_authority, signal) => {
+			pendingSignal = signal;
+			return new Promise(resolve => { finish = resolve; });
+		}
+	}]);
 	const pending = resolver.resolveConnection('team+linux', new AbortController().signal);
 	registration.replace([]);
 	assert.equal(pendingSignal?.aborted, true);
@@ -91,57 +73,41 @@ test('cancelled and malformed authorities cannot invoke a resolver or read the c
 	}
 });
 
+
 test('disposing a selector or its window service cancels a pending catalog read', async () => {
 	for (const retireService of [false, true]) {
 		using services = new InstantiationService();
-		let finish!: (value: readonly (typeof connection)[]) => void;
+		let finish!: (value: readonly typeof connection[]) => void;
 		let readStarted!: () => void;
-		const reading = new Promise<void>(resolve => {
-			readStarted = resolve;
-		});
+		const reading = new Promise<void>(resolve => { readStarted = resolve; });
 		services.registerInstance(IRemoteConnectionApi, {
 			available: true,
-			list: () => {
-				readStarted();
-				return new Promise(resolve => {
-					finish = resolve;
-				});
-			},
-			save: async value => value,
-			update: async (_name, value) => value,
-			remove: async () => undefined,
-			connect: async () => assert.fail('Resolution must not connect'),
+			list: () => { readStarted(); return new Promise(resolve => { finish = resolve; }); },
+			save: async value => value, update: async (_name, value) => value,
+			remove: async () => undefined, connect: async () => assert.fail('Resolution must not connect'),
 		});
 		using resolver = services.createInstance(RemoteConnectionService);
 		using registration = resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) }]);
 		const pending = resolver.resolveConnection('team+linux', new AbortController().signal);
 		await reading;
-		if (retireService) {
-			resolver.dispose();
-		} else {
-			registration.dispose();
-		}
+		if (retireService) { resolver.dispose(); } else { registration.dispose(); }
 		finish([connection]);
 		await assert.rejects(pending, /[Cc]ancel/);
 	}
 });
 
+
 test('caller cancellation reaches the selector and rejects a late connection result', async () => {
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
 	let pendingSignal: AbortSignal | undefined;
-	let finish!: (value: { connectionName: string }) => void;
-	using registration = resolver.registerResolvers([
-		{
-			authorityPrefix: 'team',
-			resolve: (_authority, signal) => {
-				pendingSignal = signal;
-				return new Promise(resolve => {
-					finish = resolve;
-				});
-			},
+	let finish!: (value: { connectionName: string; }) => void;
+	using registration = resolver.registerResolvers([{
+		authorityPrefix: 'team', resolve: (_authority, signal) => {
+			pendingSignal = signal;
+			return new Promise(resolve => { finish = resolve; });
 		},
-	]);
+	}]);
 	const caller = new AbortController();
 	const pending = resolver.resolveConnection('team+linux', caller.signal);
 	caller.abort('Connection picker closed');

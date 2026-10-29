@@ -10,13 +10,12 @@ test('dedicated Sessions profile belongs to the Code product', () => {
 
 test('Sessions profiles reject a non-sibling Workbench return path', () => {
 	assert.throws(
-		() =>
-			createSessionsProfile({
-				id: 'invalid',
-				label: 'Invalid',
-				titlebarActionId: 'ash.invalid',
-				workbenchRelativePath: '../../outside.html',
-			}),
+		() => createSessionsProfile({
+			id: 'invalid',
+			label: 'Invalid',
+			titlebarActionId: 'ash.invalid',
+			workbenchRelativePath: '../../outside.html',
+		}),
 		/sibling Workbench page/,
 	);
 });

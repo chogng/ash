@@ -11,29 +11,21 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 	await writeFile(testWorkspace.file, 'const value = 1;\nworkspace only 1\nworkspace only 2\nworkspace only 3\n');
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 	const client = connection.client;
-	type Conversation = { sessionId: string; threadId: string; title: string };
+	type Conversation = { sessionId: string; threadId: string; title: string; };
 	const identity = ({ sessionId, threadId }: Conversation) => ({ sessionId, threadId });
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const pill = chat.locator('.ash-chat-changes-pill');
 	const sidebar = page.locator('.ash-chat-sessions-sidebar');
 	const showSidebar = async () => {
-		if (!(await sidebar.isVisible())) await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
+		if (!await sidebar.isVisible()) await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
 	};
 	const create = async (title: string): Promise<Conversation> => {
-		const created = await client.request(methods['session/create'], {
-			commandId: title,
-			title,
-			agent: { type: 'default' },
-			executionTarget: { type: 'local', root: testWorkspace.directory },
-		});
+		const created = await client.request(methods['session/create'], { commandId: title, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		return { sessionId: created.session.sessionId, threadId: created.session.threads[0].threadId, title };
 	};
 	const open = async (conversation: Conversation) => {
 		await showSidebar();
-		await sidebar
-			.locator('.ash-agent-session-row')
-			.filter({ has: page.locator('.ash-agent-session-title', { hasText: conversation.title }) })
-			.click();
+		await sidebar.locator('.ash-agent-session-row').filter({ has: page.locator('.ash-agent-session-title', { hasText: conversation.title }) }).click();
 		await expect(chat).toHaveAttribute('data-thread-id', conversation.threadId);
 	};
 	const summary = (conversation: Conversation) => client.request(methods['turnChanges/summary'], identity(conversation));
@@ -44,33 +36,13 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 	};
 	const shell = async (conversation: Conversation, command: string, commandId: string) => {
 		const { thread } = await client.request(methods['session/thread/read'], identity(conversation));
-		await client.request(methods['session/request'], {
-			sessionId: conversation.sessionId,
-			commandId,
-			request: {
-				type: 'startShellTurn',
-				threadId: conversation.threadId,
-				expectedSequence: thread.sequence,
-				approvalMode: 'bypassPermissions',
-				command,
-				workingDirectory: '.',
-			},
-		});
+		await client.request(methods['session/request'], { sessionId: conversation.sessionId, commandId, request: { type: 'startShellTurn', threadId: conversation.threadId, expectedSequence: thread.sequence, approvalMode: 'bypassPermissions', command, workingDirectory: '.' } });
 		await expect.poll(async () => (await client.request(methods['session/thread/read'], identity(conversation))).thread.turns.at(-1)?.status, { timeout: 30_000 }).toBe('completed');
 		await expect.poll(async () => (await client.request(methods['turnChanges/list'], identity(conversation))).changeSets.at(-1)?.captureState, { timeout: 30_000 }).toBe('sealed');
 	};
 	const move = async (conversation: Conversation, direction: 'undo' | 'redo') => {
 		const history = await client.request(methods['session/thread/history'], identity(conversation));
-		await client.request(methods['session/request'], {
-			sessionId: conversation.sessionId,
-			commandId: `${direction}-${history.sequence}`,
-			request: {
-				type: 'moveThreadHistory',
-				threadId: conversation.threadId,
-				expectedSequence: history.sequence,
-				direction,
-			},
-		});
+		await client.request(methods['session/request'], { sessionId: conversation.sessionId, commandId: `${direction}-${history.sequence}`, request: { type: 'moveThreadHistory', threadId: conversation.threadId, expectedSequence: history.sequence, direction } });
 	};
 	const openDiff = async (path: string, line: string) => {
 		await pill.click();
@@ -80,10 +52,11 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 		return editor;
 	};
 	// Use the real shell/tool/checkpoint stack with deterministic content; no provider is needed in CI.
-	const writeLines = (path: string, prefix: string, count: number) =>
-		process.platform === 'win32' ? `for /L %i in (1,1,${count}) do @echo ${prefix} %i>>${path}` : `i=1; while [ "$i" -le ${count} ]; do printf '${prefix} %s\\n' "$i"; i=$((i+1)); done > ${path}`;
+	const writeLines = (path: string, prefix: string, count: number) => process.platform === 'win32'
+		? `for /L %i in (1,1,${count}) do @echo ${prefix} %i>>${path}`
+		: `i=1; while [ "$i" -le ${count} ]; do printf '${prefix} %s\\n' "$i"; i=$((i+1)); done > ${path}`;
 	try {
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		await expect(pill).toHaveAttribute('aria-label', 'Open Workspace Changes: 1 files, 3 lines added, 0 lines removed', { timeout: 30_000 });
 		const a = await create('Conversation A');
 		const b = await create('Conversation B');

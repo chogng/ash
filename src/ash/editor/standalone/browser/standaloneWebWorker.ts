@@ -22,6 +22,7 @@ export interface StandaloneWorkerOptions {
 	readonly keepIdleModels?: boolean;
 }
 
+
 export interface MonacoWebWorker<T extends object> extends IDisposable {
 	getProxy(): Promise<T>;
 	withSyncedResources(resources: URI[]): Promise<T>;
@@ -46,7 +47,7 @@ export interface StandaloneWorkerContext {
 export interface StandaloneWorkerScope {
 	addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
 	removeEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
-	postMessage(message: unknown, options?: { transfer: ArrayBuffer[] }): void;
+	postMessage(message: unknown, options?: { transfer: ArrayBuffer[]; }): void;
 }
 
 /** Called once by the supplied Worker module to serve foreign method requests. */
@@ -56,107 +57,82 @@ export function startStandaloneWebWorker<T extends object>(scope: StandaloneWork
 	const listener = (event: MessageEvent<unknown>): void => messages.fire(event.data);
 	scope.addEventListener('message', listener);
 	store.add(toDisposable(() => scope.removeEventListener('message', listener)));
-	const port: WebWorkerClientPort = {
-		onMessage: messages.event,
-		onFailure: Event.None,
-		send: (value, transfer) => scope.postMessage(value, { transfer: transfer ? [...transfer] : [] }),
-		...Disposable.None,
-	};
+	const port: WebWorkerClientPort = { onMessage: messages.event, onFailure: Event.None, send: (value, transfer) => scope.postMessage(value, { transfer: transfer ? [...transfer] : [] }), ...Disposable.None };
 
-	const mirrors = new Map<string, { readonly uri: URI; readonly document: LanguageWorkerDocumentMirror }>();
+	const mirrors = new Map<string, { readonly uri: URI; readonly document: LanguageWorkerDocumentMirror; }>();
 	const context: StandaloneWorkerContext = {
-		getMirrorModels: () =>
-			[...mirrors.values()].map(({ uri, document }) => ({
-				uri,
-				get version() {
-					return document.version;
-				},
-				getValue: () => document.createSnapshot().getText(),
-			})),
+		getMirrorModels: () => [...mirrors.values()].map(({ uri, document }) => ({
+			uri,
+			get version() { return document.version; },
+			getValue: () => document.createSnapshot().getText(),
+		})),
 		callHost: (method, ...args) => server.getChannel<Record<string, (...args: unknown[]) => Promise<unknown>>>('host')[method]!(...args),
 	};
 	const instance = Promise.resolve().then(() => create(context));
-	void instance.catch(() => {});
-	const server = store.add(
-		new WebWorkerServer(port, standaloneWorkerChannel, {
-			handleRequest: async message => {
-				switch (message.operation) {
-					case 'ready':
-						await instance;
-						return null;
-					case 'sync': {
-						if (!Array.isArray(message.snapshots)) throw new TypeError('Invalid standalone Worker snapshots');
-						for (const value of message.snapshots) {
-							const item = value as StandaloneWorkerSnapshot;
-							if (typeof item.uri !== 'string' || typeof item.text !== 'string' || !Number.isSafeInteger(item.version) || !Number.isSafeInteger(item.lineCount)) {
-								throw new TypeError('Invalid standalone Worker snapshot');
-							}
-							const old = mirrors.get(item.uri);
-							old?.document.dispose();
-							const document = new LanguageWorkerDocumentMirror({
-								version: item.version,
-								length: item.text.length,
-								lineCount: item.lineCount,
-								getText: () => item.text,
-								getTextBetweenOffsets: (start, end) => item.text.slice(start, end),
-							});
-							mirrors.set(item.uri, { uri: URI.parse(item.uri), document });
+	void instance.catch(() => { });
+	const server = store.add(new WebWorkerServer(port, standaloneWorkerChannel, {
+		handleRequest: async message => {
+			switch (message.operation) {
+				case 'ready':
+					await instance;
+					return null;
+				case 'sync': {
+					if (!Array.isArray(message.snapshots)) throw new TypeError('Invalid standalone Worker snapshots');
+					for (const value of message.snapshots) {
+						const item = value as StandaloneWorkerSnapshot;
+						if (typeof item.uri !== 'string' || typeof item.text !== 'string' || !Number.isSafeInteger(item.version) || !Number.isSafeInteger(item.lineCount)) {
+							throw new TypeError('Invalid standalone Worker snapshot');
 						}
-						return null;
+						const old = mirrors.get(item.uri);
+						old?.document.dispose();
+						const document = new LanguageWorkerDocumentMirror({
+							version: item.version, length: item.text.length, lineCount: item.lineCount,
+							getText: () => item.text,
+							getTextBetweenOffsets: (start, end) => item.text.slice(start, end),
+						});
+						mirrors.set(item.uri, { uri: URI.parse(item.uri), document });
 					}
-					default:
-						throw new TypeError('Unknown standalone Worker operation');
+					return null;
 				}
-			},
-			handleNotification: message => {
-				switch (message.kind) {
-					case 'change': {
-						if (typeof message.uri !== 'string' || !Array.isArray(message.changes)) throw new TypeError('Invalid standalone Worker change');
-						const mirror = mirrors.get(message.uri);
-						if (!mirror) return;
-						if (message.previousVersion !== mirror.document.version || message.modelVersion !== mirror.document.version + 1)
-							throw new Error(`Standalone Worker mirror ${message.uri} is at ${mirror.document.version}, received ${String(message.previousVersion)} -> ${String(message.modelVersion)}`);
-						mirror.document.synchronize(message.previousVersion as number, message.modelVersion as number, message.changes, message.eol as '\n' | '\r\n');
-						return;
-					}
-					case 'drop': {
-						if (typeof message.uri !== 'string') throw new TypeError('Invalid standalone Worker model');
-						mirrors.get(message.uri)?.document.dispose();
-						mirrors.delete(message.uri);
-						return;
-					}
-					case 'clear':
-						for (const mirror of mirrors.values()) mirror.document.dispose();
-						mirrors.clear();
-						return;
-					default:
-						throw new TypeError('Unknown standalone Worker notification');
+				default: throw new TypeError('Unknown standalone Worker operation');
+			}
+		},
+		handleNotification: message => {
+			switch (message.kind) {
+				case 'change': {
+					if (typeof message.uri !== 'string' || !Array.isArray(message.changes)) throw new TypeError('Invalid standalone Worker change');
+					const mirror = mirrors.get(message.uri);
+					if (!mirror) return;
+					if (message.previousVersion !== mirror.document.version || message.modelVersion !== mirror.document.version + 1) throw new Error(`Standalone Worker mirror ${message.uri} is at ${mirror.document.version}, received ${String(message.previousVersion)} -> ${String(message.modelVersion)}`);
+					mirror.document.synchronize(message.previousVersion as number, message.modelVersion as number, message.changes, message.eol as '\n' | '\r\n');
+					return;
 				}
-			},
-		}),
-	);
-	server.setChannel(
-		'foreign',
-		new Proxy(
-			{},
-			{
-				get:
-					(_target, method) =>
-					async (...args: unknown[]) => {
-						const target = await instance;
-						const fn = (target as Record<string, unknown>)[method as string];
-						if (typeof fn !== 'function') throw new ReferenceError(`Unknown standalone Worker method '${String(method)}'`);
-						return fn.apply(target, args);
-					},
-			},
-		),
-	);
-	store.add(
-		toDisposable(() => {
-			for (const mirror of mirrors.values()) mirror.document.dispose();
-			mirrors.clear();
-		}),
-	);
+				case 'drop': {
+					if (typeof message.uri !== 'string') throw new TypeError('Invalid standalone Worker model');
+					mirrors.get(message.uri)?.document.dispose();
+					mirrors.delete(message.uri);
+					return;
+				}
+				case 'clear':
+					for (const mirror of mirrors.values()) mirror.document.dispose();
+					mirrors.clear();
+					return;
+				default: throw new TypeError('Unknown standalone Worker notification');
+			}
+		},
+	}));
+	server.setChannel('foreign', new Proxy({}, {
+		get: (_target, method) => async (...args: unknown[]) => {
+			const target = await instance;
+			const fn = (target as Record<string, unknown>)[method as string];
+			if (typeof fn !== 'function') throw new ReferenceError(`Unknown standalone Worker method '${String(method)}'`);
+			return fn.apply(target, args);
+		},
+	}));
+	store.add(toDisposable(() => {
+		for (const mirror of mirrors.values()) mirror.document.dispose();
+		mirrors.clear();
+	}));
 	return store;
 }
 
@@ -169,11 +145,7 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 	private idleTimer: ReturnType<typeof setTimeout> | undefined;
 	private proxy: T | undefined;
 
-	constructor(
-		private readonly modelService: IModelService,
-		webWorkerService: IWebWorkerService,
-		private readonly options: StandaloneWorkerOptions,
-	) {
+	constructor(private readonly modelService: IModelService, webWorkerService: IWebWorkerService, private readonly options: StandaloneWorkerOptions) {
 		super();
 		const client = this._register(webWorkerService.createWorkerClient<object>(options.worker, standaloneWorkerChannel));
 		this.client = client;
@@ -219,28 +191,20 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 		this.tracked.set(key, model);
 		const listeners = new DisposableStore();
 		this.models.set(key, listeners);
-		listeners.add(
-			model.onDidChangeContent(change => {
-				client.send('change', {
-					uri: key,
-					previousVersion: change.version - 1,
-					modelVersion: change.version,
-					eol: change.eol,
-					changes: change.changes.map(item => ({
-						rangeOffset: item.rangeOffset,
-						rangeLength: item.rangeLength,
-						text: item.text,
-					})),
-				});
-			}),
-		);
-		listeners.add(
-			Event.once(model.onWillDispose)(() => {
-				this.tracked.delete(key);
-				client.send('drop', { uri: key });
-				this.models.deleteAndDispose(key);
-			}),
-		);
+		listeners.add(model.onDidChangeContent(change => {
+			client.send('change', {
+				uri: key,
+				previousVersion: change.version - 1,
+				modelVersion: change.version,
+				eol: change.eol,
+				changes: change.changes.map(item => ({ rangeOffset: item.rangeOffset, rangeLength: item.rangeLength, text: item.text })),
+			});
+		}));
+		listeners.add(Event.once(model.onWillDispose)(() => {
+			this.tracked.delete(key);
+			client.send('drop', { uri: key });
+			this.models.deleteAndDispose(key);
+		}));
 	}
 
 	private scheduleIdle(): void {
@@ -262,10 +226,5 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 }
 
 function snapshot(model: ITextModel): StandaloneWorkerSnapshot {
-	return {
-		uri: model.uri.toString(),
-		version: model.getVersionId(),
-		text: model.getValue(),
-		lineCount: model.getLineCount(),
-	};
+	return { uri: model.uri.toString(), version: model.getVersionId(), text: model.getValue(), lineCount: model.getLineCount() };
 }

@@ -63,19 +63,14 @@ export class BrowserUpdateService extends Disposable implements IUpdateService {
 		const provider = this.environment.options.updateProvider;
 		if (!provider) return Promise.reject(new Error('The Web host has no update provider'));
 		// Manual and startup checks share a request and cannot overwrite each other's result.
-		const checking = Promise.resolve()
-			.then(() => provider.checkForUpdate())
-			.then(update => {
-				if (this.isDisposed) throw new CancellationError();
-				if (update !== null && (typeof update !== 'object' || typeof update.version !== 'string' || !update.version.trim())) {
-					throw new TypeError('Web update provider returned an invalid version');
-				}
-				this.available = update === null ? undefined : { version: update.version };
-				return update === null ? { status: 'current' as const } : { status: 'available' as const, version: update.version };
-			})
-			.finally(() => {
-				this.checking = undefined;
-			});
+		const checking = Promise.resolve().then(() => provider.checkForUpdate()).then(update => {
+			if (this.isDisposed) throw new CancellationError();
+			if (update !== null && (typeof update !== 'object' || typeof update.version !== 'string' || !update.version.trim())) {
+				throw new TypeError('Web update provider returned an invalid version');
+			}
+			this.available = update === null ? undefined : { version: update.version };
+			return update === null ? { status: 'current' as const } : { status: 'available' as const, version: update.version };
+		}).finally(() => { this.checking = undefined; });
 		this.checking = checking;
 		return checking;
 	}

@@ -31,24 +31,10 @@ export class SessionsWorkspaceContextService extends Disposable {
 			const uri = sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
 			if (target.type === 'provider') {
 				// Drafts have no SessionDirectory authority yet; expose no writable Explorer root.
-				this.updateWorkspace({ id: host.id, folders: [] });
-				return;
+				this.updateWorkspace({ id: host.id, folders: [] }); return;
 			}
 			const known = host.folders.filter(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri));
-			this.updateWorkspace({
-				id: host.id,
-				folders:
-					known.length || target.type !== 'ssh'
-						? known
-						: [
-								{
-									id: `agent-host:${selected?.kind === 'untitled' ? (selected.session.providerId ?? '') : ''}`,
-									uri,
-									name: basename(uri),
-									index: 0,
-								},
-							],
-			});
+			this.updateWorkspace({ id: host.id, folders: known.length || target.type !== 'ssh' ? known : [{ id: `agent-host:${selected?.kind === 'untitled' ? selected.session.providerId ?? '' : ''}`, uri, name: basename(uri), index: 0 }] });
 			return;
 		}
 		this.updateWorkspace(host);
@@ -59,15 +45,8 @@ function sessionFolder(session: ISession, threadId?: string): IWorkspaceFolder |
 	// Undefined Thread detail is not permission to use the source directory;
 	// null is an authoritative Thread without a filesystem directory.
 	const workspace = threadId ? session.chats.find(chat => chat.threadId === threadId)?.workspace : session.workspace;
-	if (!workspace) {
-		return undefined;
-	}
+	if (!workspace) { return undefined; }
 	const uri = sessionWorkspaceUri(workspace);
 	// Bind the root into the folder identity: moving a Session must not redirect an already open file.
-	return {
-		id: `session:${encodeURIComponent(session.sessionId)}:${encodeURIComponent(workspace.root)}`,
-		uri,
-		name: basename(uri),
-		index: 0,
-	};
+	return { id: `session:${encodeURIComponent(session.sessionId)}:${encodeURIComponent(workspace.root)}`, uri, name: basename(uri), index: 0 };
 }

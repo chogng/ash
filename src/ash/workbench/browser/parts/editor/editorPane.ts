@@ -35,19 +35,15 @@ export abstract class EditorPane extends Composite implements IEditorPane {
 	/** Assigned by the group host before the pane creates its content. Modal panes have no document group. */
 	public group: IEditorGroup | undefined;
 	/** Pane-owned controls borrowed by modal or compact window chrome while this pane is active. */
-	public getTitleControl(): HTMLElement | undefined {
-		return undefined;
-	}
+	public getTitleControl(): HTMLElement | undefined { return undefined; }
 	/** Lets a pane omit actions already hosted by its compact window title control. */
-	public override getActions(_menuId?: MenuId): readonly IAction[] {
-		return super.getActions();
-	}
+	public override getActions(_menuId?: MenuId): readonly IAction[] { return super.getActions(); }
 	public abstract setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	public abstract clearInput(): void;
 	public abstract layout(dimension: IDimension): void;
 }
 
-export interface EditorPane extends IEditorPane {}
+export interface EditorPane extends IEditorPane { }
 
 export interface EditorPaneCreationOptions {
 	/** The input used to choose a profile-specific pane implementation. */

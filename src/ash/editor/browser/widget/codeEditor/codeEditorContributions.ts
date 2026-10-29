@@ -33,17 +33,15 @@ export class CodeEditorContributions extends Disposable {
 
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.pending.clear();
-				this.instances.clear();
-				this.configurations.clear();
-				this.descriptions = undefined;
-				this.configurationContext = undefined;
-				this.installationContext = undefined;
-				this.editor = null;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.pending.clear();
+			this.instances.clear();
+			this.configurations.clear();
+			this.descriptions = undefined;
+			this.configurationContext = undefined;
+			this.installationContext = undefined;
+			this.editor = null;
+		}));
 	}
 
 	/** The initial batch configures model services before the View is constructed. */
@@ -77,13 +75,11 @@ export class CodeEditorContributions extends Disposable {
 					this.configurations.set(description.id, configuration);
 					description.configure({
 						...context,
-						...(scope
-							? {
-									getService: scope.services.get.bind(scope.services),
-									getOptionalService: scope.services.getOptional.bind(scope.services),
-									provideService: scope.services.registerInstance.bind(scope.services),
-								}
-							: {}),
+						...(scope ? {
+							getService: scope.services.get.bind(scope.services),
+							getOptionalService: scope.services.getOptional.bind(scope.services),
+							provideService: scope.services.registerInstance.bind(scope.services),
+						} : {}),
 						register: value => configuration.add(value),
 					});
 				}
@@ -96,7 +92,7 @@ export class CodeEditorContributions extends Disposable {
 		// Configure the complete batch before any controller reads another contribution's service.
 		for (const description of added) this.schedule(description);
 		for (const description of added) {
-			const phase = 'ctor' in description ? description.instantiation : (description.instantiation ?? EditorContributionInstantiation.Eager);
+			const phase = 'ctor' in description ? description.instantiation : description.instantiation ?? EditorContributionInstantiation.Eager;
 			if (this.completedInstantiation.has(phase)) this.instantiateById(description.id);
 		}
 	}
@@ -110,19 +106,12 @@ export class CodeEditorContributions extends Disposable {
 			ids: new Set<string>(),
 		});
 		this.providerScopes.set(signal, scope);
-		resources.add(
-			addDisposableListener(
-				signal,
-				'abort',
-				() => {
-					const current = this.providerScopes.get(signal);
-					if (!current) return;
-					for (const id of [...current.ids]) this.retire(id);
-					this.providerScopes.deleteAndDispose(signal);
-				},
-				{ once: true },
-			),
-		);
+		resources.add(addDisposableListener(signal, 'abort', () => {
+			const current = this.providerScopes.get(signal);
+			if (!current) return;
+			for (const id of [...current.ids]) this.retire(id);
+			this.providerScopes.deleteAndDispose(signal);
+		}, { once: true }));
 		return scope;
 	}
 
@@ -144,30 +133,28 @@ export class CodeEditorContributions extends Disposable {
 		if (!description.install) return;
 		const contributionContext = {
 			...context,
-			...(scope
-				? {
-						instantiationService: scope.services,
-						getService: scope.services.get.bind(scope.services),
-						getOptionalService: scope.services.getOptional.bind(scope.services),
-					}
-				: {}),
+			...(scope ? {
+				instantiationService: scope.services,
+				getService: scope.services.get.bind(scope.services),
+				getOptionalService: scope.services.getOptional.bind(scope.services),
+			} : {}),
 			register: <T extends IDisposable>(value: T): T => resources.add(value),
 		};
 		this.pending.set(description.id, {
 			id: description.id,
 			instantiation: description.instantiation ?? EditorContributionInstantiation.Eager,
 			create: () => {
-				try {
-					return description.install?.(contributionContext);
-				} catch (error) {
-					resources.dispose();
-					throw error;
-				}
+				try { return description.install?.(contributionContext); }
+				catch (error) { resources.dispose(); throw error; }
 			},
 		});
 	}
 
-	initialize(editor: ICodeEditor, context: TextEditorContributionContext, onError?: (error: unknown) => void): void {
+	initialize(
+		editor: ICodeEditor,
+		context: TextEditorContributionContext,
+		onError?: (error: unknown) => void,
+	): void {
 		this.assertNotDisposed();
 		if (this.editor) throw new Error('Code editor contributions have already been initialized');
 		if (typeof onError === 'function') this.onError = onError;
@@ -187,15 +174,15 @@ export class CodeEditorContributions extends Disposable {
 		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.Eventually), 5_000));
 	}
 
-	saveViewState(): { [key: string]: unknown } {
-		const state: { [key: string]: unknown } = {};
+	saveViewState(): { [key: string]: unknown; } {
+		const state: { [key: string]: unknown; } = {};
 		for (const [id, contribution] of this.instances) {
 			if (typeof contribution.saveViewState === 'function') state[id] = contribution.saveViewState();
 		}
 		return state;
 	}
 
-	restoreViewState(state: { [key: string]: unknown }): void {
+	restoreViewState(state: { [key: string]: unknown; }): void {
 		for (const [id, contribution] of this.instances) {
 			if (typeof contribution.restoreViewState === 'function') contribution.restoreViewState(state[id]);
 		}
@@ -246,11 +233,7 @@ export class CodeEditorContributions extends Disposable {
 		} finally {
 			// Retirement ends provider work immediately; the shared text model and view stay alive.
 			const configuration = this.configurations.get(id);
-			try {
-				configuration?.dispose();
-			} catch (error) {
-				this.onError(error);
-			}
+			try { configuration?.dispose(); } catch (error) { this.onError(error); }
 			this.configurations.delete(id);
 			const signal = description?.providerSignal;
 			const scope = signal ? this.providerScopes.get(signal) : undefined;
@@ -291,12 +274,9 @@ export class CodeEditorContributions extends Disposable {
 function validateDescriptions(descriptions: readonly EditorContributionRegistration[]): void {
 	const ids = new Set<string>();
 	for (const description of descriptions) {
-		if (
-			!description?.id?.trim() ||
-			('ctor' in description
-				? !description.ctor || !isInstantiation(description.instantiation)
-				: !(description.configure || description.install) || (description.instantiation !== undefined && !isInstantiation(description.instantiation)))
-		) {
+		if (!description?.id?.trim() || ('ctor' in description
+			? !description.ctor || !isInstantiation(description.instantiation)
+			: !(description.configure || description.install) || (description.instantiation !== undefined && !isInstantiation(description.instantiation)))) {
 			throw new TypeError('Code editor contribution is invalid');
 		}
 		if (ids.has(description.id)) throw new RangeError(`Duplicate code editor contribution '${description.id}'`);
@@ -305,13 +285,11 @@ function validateDescriptions(descriptions: readonly EditorContributionRegistrat
 }
 
 function isInstantiation(value: EditorContributionInstantiation): boolean {
-	return (
-		value === EditorContributionInstantiation.Eager ||
-		value === EditorContributionInstantiation.AfterFirstRender ||
-		value === EditorContributionInstantiation.BeforeFirstInteraction ||
-		value === EditorContributionInstantiation.Eventually ||
-		value === EditorContributionInstantiation.Lazy
-	);
+	return value === EditorContributionInstantiation.Eager
+		|| value === EditorContributionInstantiation.AfterFirstRender
+		|| value === EditorContributionInstantiation.BeforeFirstInteraction
+		|| value === EditorContributionInstantiation.Eventually
+		|| value === EditorContributionInstantiation.Lazy;
 }
 
 function reportContributionError(error: unknown): void {

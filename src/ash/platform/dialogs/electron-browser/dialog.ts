@@ -7,14 +7,12 @@ let nextDialogId = 0;
 /** Sends a renderer dialog request to its owning Electron window. */
 export async function showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
 	const { signal, ...parameters } = options;
-	const cancelled = (): MessageBoxReturnValue => ({
-		response: options.cancelId ?? 0,
-		checkboxChecked: options.checkboxChecked ?? false,
-	});
+	const cancelled = (): MessageBoxReturnValue => ({ response: options.cancelId ?? 0, checkboxChecked: options.checkboxChecked ?? false });
 	if (signal?.aborted) return cancelled();
 	const id = ++nextDialogId;
 	const abort = (): void => {
-		void invoke<void>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'cancel', id }).catch(error => console.error('Failed to cancel system dialog', error));
+		void invoke<void>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'cancel', id })
+			.catch(error => console.error('Failed to cancel system dialog', error));
 	};
 	signal?.addEventListener('abort', abort, { once: true });
 	try {

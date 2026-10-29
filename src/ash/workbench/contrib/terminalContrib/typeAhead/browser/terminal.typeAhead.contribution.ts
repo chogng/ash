@@ -5,12 +5,7 @@ import { registerTerminalContribution, type ITerminalContributionContext } from 
 import { TerminalTypeAheadAddon } from './terminalTypeAheadAddon.js';
 
 class TerminalTypeAheadContribution extends Disposable implements ITerminalContribution {
-	constructor(
-		private readonly context: ITerminalContributionContext,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) {
-		super();
-	}
+	constructor(private readonly context: ITerminalContributionContext, @IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
 	xtermReady(screen: IXtermTerminal): void {
 		const addon = this._register(this.instantiation.createInstance(TerminalTypeAheadAddon, this.context.instance, screen));
 		screen.raw.loadAddon(addon);

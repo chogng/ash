@@ -18,10 +18,7 @@ test('TextModel semantic-token owner publishes only current model results', asyn
 	using registration = providers.register('typescript', {
 		provideSemanticTokens: () => new Promise<LanguageTokenResult | undefined>(resolve => pending.push(resolve)),
 	});
-	using model = new TextModel('value', {
-		languageId: 'typescript',
-		tokenization: { documentSemanticTokensProvider: providers },
-	});
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => pending.length === 1);
 	model.setValue('value!');
@@ -38,72 +35,44 @@ test('TextModel semantic-token owner publishes only current model results', asyn
 test('TextModel renders semantic token names and modifiers', async () => {
 	const providers = new LanguageFeatureRegistry<LanguageSemanticTokensProvider>();
 	using registration = providers.register('typescript', {
-		provideSemanticTokens: request => ({
-			tokens: [
-				{
-					range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-					tokenType: 'variable',
-					modifiers: ['readonly'],
-				},
-			],
-		}),
+		provideSemanticTokens: request => ({ tokens: [{ range: new Range(1, 1, 1, request.snapshot.getText().length + 1), tokenType: 'variable', modifiers: ['readonly'] }] }),
 	});
-	using model = new TextModel('value', {
-		languageId: 'typescript',
-		tokenization: { documentSemanticTokensProvider: providers },
-	});
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => semanticTokens.lines.length === 1);
 	const token = semanticTokens.getLineTokens(0)[0]!;
 
 	assert.equal(token.tokenType, 'variable');
 	assert.deepEqual(token.modifiers, ['readonly']);
-	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [
-		{
-			startColumn: 0,
-			endColumn: 5,
-			presentation: SemanticTokenPresentation.Variable,
-			semanticType: 'variable',
-			semanticModifiers: ['readonly'],
-			semanticLanguage: 'typescript',
-			modifiers: [SemanticTokenModifier.Readonly],
-		},
-	]);
+	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 5,
+		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: ['readonly'],
+		semanticLanguage: 'typescript',
+		modifiers: [SemanticTokenModifier.Readonly],
+	}]);
 });
 
 test('TextModel owns styled token caching, invalidation and disposal', async () => {
 	const providers = new LanguageFeatureRegistry<LanguageSemanticTokensProvider>();
 	using registration = providers.register('typescript', {
-		provideSemanticTokens: request => ({
-			tokens: [
-				{
-					range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-					tokenType: 'variable',
-					modifiers: [],
-				},
-			],
-		}),
+		provideSemanticTokens: request => ({ tokens: [{ range: new Range(1, 1, 1, request.snapshot.getText().length + 1), tokenType: 'variable', modifiers: [] }] }),
 	});
-	using model = new TextModel('value', {
-		languageId: 'typescript',
-		tokenization: { documentSemanticTokensProvider: providers },
-	});
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const source = model.tokenization.renderedTokens;
 	await waitFor(() => source.getLineTokens(0).length === 1);
-	assert.deepEqual(source.getLineTokens(0), [
-		{
-			startColumn: 0,
-			endColumn: 5,
-			presentation: SemanticTokenPresentation.Variable,
-			semanticType: 'variable',
-			semanticModifiers: [],
-			semanticLanguage: 'typescript',
-		},
-	]);
+	assert.deepEqual(source.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 5,
+		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: [],
+		semanticLanguage: 'typescript',
+	}]);
 	let changes = 0;
-	using listener = source.onDidChange(() => {
-		changes += 1;
-	});
+	using listener = source.onDidChange(() => { changes += 1; });
 	model.setValue('next');
 	assert.deepEqual(source.getLineTokens(0), []);
 	await waitFor(() => source.getLineTokens(0).length === 1);
@@ -126,30 +95,26 @@ test('model renders semantic tokens after provider replacement and clears them o
 	using model = new TextModel('name', { tokenization: { documentSemanticTokensProvider: providers } });
 	using first = providers.register('*', { provideSemanticTokens: () => tokens('variable', ['readonly']) });
 	await setImmediate();
-	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [
-		{
-			startColumn: 0,
-			endColumn: 4,
-			presentation: SemanticTokenPresentation.Variable,
-			semanticType: 'variable',
-			semanticModifiers: ['readonly'],
-			semanticLanguage: 'plaintext',
-			modifiers: [SemanticTokenModifier.Readonly],
-		},
-	]);
+	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 4,
+		presentation: SemanticTokenPresentation.Variable,
+		semanticType: 'variable',
+		semanticModifiers: ['readonly'],
+		semanticLanguage: 'plaintext',
+		modifiers: [SemanticTokenModifier.Readonly],
+	}]);
 
 	using second = providers.register('*', { provideSemanticTokens: () => tokens('function') });
 	await setImmediate();
-	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [
-		{
-			startColumn: 0,
-			endColumn: 4,
-			presentation: SemanticTokenPresentation.Function,
-			semanticType: 'function',
-			semanticModifiers: [],
-			semanticLanguage: 'plaintext',
-		},
-	]);
+	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 4,
+		presentation: SemanticTokenPresentation.Function,
+		semanticType: 'function',
+		semanticModifiers: [],
+		semanticLanguage: 'plaintext',
+	}]);
 
 	second.dispose();
 	first.dispose();
@@ -166,7 +131,7 @@ test('removed semantic provider cannot publish its delayed result', async () => 
 		provideSemanticTokens: (_request, signal) => {
 			requestSignal = signal;
 			return pending.p;
-		},
+		}
 	});
 	await setImmediate();
 	assert.ok(requestSignal);
@@ -176,16 +141,14 @@ test('removed semantic provider cannot publish its delayed result', async () => 
 	await setImmediate();
 	await pending.complete(tokens('variable', ['deprecated']));
 	await setImmediate();
-	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [
-		{
-			startColumn: 0,
-			endColumn: 4,
-			presentation: SemanticTokenPresentation.Function,
-			semanticType: 'function',
-			semanticModifiers: [],
-			semanticLanguage: 'plaintext',
-		},
-	]);
+	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [{
+		startColumn: 0,
+		endColumn: 4,
+		presentation: SemanticTokenPresentation.Function,
+		semanticType: 'function',
+		semanticModifiers: [],
+		semanticLanguage: 'plaintext',
+	}]);
 });
 
 function tokens(tokenType: string, modifiers: readonly string[] = []): LanguageTokenResult {

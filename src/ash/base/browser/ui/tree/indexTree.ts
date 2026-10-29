@@ -3,20 +3,7 @@ import { Disposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
 import { AbstractTree } from './abstractTree.js';
 import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from './indexTreeModel.js';
-import {
-	flattenTreeNodes,
-	mapTreeDragData,
-	type IndexTreeLocation,
-	type TreeDragAndDrop,
-	type TreeElement,
-	type TreeFindMatchType,
-	type TreeFindMode,
-	type TreeIndentGuides,
-	type TreeKeyboardNavigationLabelProvider,
-	type TreePointerTarget,
-	type TreeTwistieState,
-	type TreeVisibleSplice,
-} from './tree.js';
+import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState, type TreeVisibleSplice } from './tree.js';
 
 export interface IndexTreeOptions<T> {
 	readonly ariaLabel?: string;
@@ -82,7 +69,7 @@ export class IndexTree<T> extends Disposable {
 	private readonly _onDidChangeFocus = this._register(new Emitter<IndexTreeEvent<T>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<IndexTreeSelectionEvent<T>>());
 	private readonly _onDidChangeCollapseState = this._register(new Emitter<IndexTreeCollapseStateChangeEvent<T>>());
-	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent } | undefined;
+	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 
 	readonly onPointer: Event<IndexTreePointerEvent<T>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<IndexTreePointerEvent<T>> = this._onDidDoubleClick.event;
@@ -95,109 +82,69 @@ export class IndexTree<T> extends Disposable {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.model = this._register(new IndexTreeModel(rootElement, options.modelOptions));
-		this.tree = this._register(
-			new AbstractTree(container, {
-				ariaLabel: options.ariaLabel,
-				scrolling: options.scrolling,
-				smoothScrolling: options.smoothScrolling,
-				indent: options.indent,
-				indentGuides: options.indentGuides,
-				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
-				getHeight: options.getHeight ? node => options.getHeight!(node.element) : undefined,
-				dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
-				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
-				findMode: options.findMode,
-				findMatchType: options.findMatchType,
-				enableStickyScroll: options.enableStickyScroll,
-				stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-				renderElement: node => options.renderElement(node.element, node),
-				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
-			}),
-		);
+		this.tree = this._register(new AbstractTree(container, {
+			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
+			indent: options.indent,
+			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
+			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
+			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
+			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
+			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
+			findMode: options.findMode,
+			findMatchType: options.findMatchType,
+			enableStickyScroll: options.enableStickyScroll,
+			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			renderElement: (node) => options.renderElement(node.element, node),
+			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
+		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(({ visibleSplice }) => this.render(visibleSplice)));
-		this._register(
-			this.model.onDidChangeCollapseState(({ node, collapsed }) => {
-				this._onDidChangeCollapseState.fire({
-					element: node.element,
-					node,
-					collapsed,
-					browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
-				});
-			}),
-		);
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
+			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
+		}));
 		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: node.element, node, target, browserEvent })));
 		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent })));
 		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: node.element, node, browserEvent })));
 		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent })));
-		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map(node => node.element), nodes, browserEvent })));
-		this._register(
-			this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
-				this.collapseBrowserEvent = { id: node.id, event: browserEvent };
-				try {
-					if (expanded) this.model.expand(node.location);
-					else this.model.collapse(node.location);
-				} finally {
-					this.collapseBrowserEvent = undefined;
-				}
-			}),
-		);
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map((node) => node.element), nodes, browserEvent })));
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
+			this.collapseBrowserEvent = { id: node.id, event: browserEvent };
+			try {
+				if (expanded) this.model.expand(node.location);
+				else this.model.collapse(node.location);
+			} finally {
+				this.collapseBrowserEvent = undefined;
+			}
+		}));
 		this.render();
 	}
 
-	splice(location: IndexTreeLocation, deleteCount: number, toInsert: readonly TreeElement<T>[] = []): void {
-		this.model.splice(location, deleteCount, toInsert);
-	}
-	setChildren(children: readonly TreeElement<T>[]): void {
-		this.model.setChildren(children);
-	}
-	collapse(location: IndexTreeLocation): boolean {
-		return this.model.collapse(location);
-	}
-	expand(location: IndexTreeLocation): boolean {
-		return this.model.expand(location);
-	}
-	toggleCollapsed(location: IndexTreeLocation): boolean {
-		return this.model.toggleCollapsed(location);
-	}
-	expandTo(location: IndexTreeLocation): boolean {
-		return this.model.expandTo(location);
-	}
-	get focus(): T | undefined {
-		return this.tree.focus?.element;
-	}
-	get selection(): readonly T[] {
-		return this.tree.selection.map(node => node.element);
-	}
+	splice(location: IndexTreeLocation, deleteCount: number, toInsert: readonly TreeElement<T>[] = []): void { this.model.splice(location, deleteCount, toInsert); }
+	setChildren(children: readonly TreeElement<T>[]): void { this.model.setChildren(children); }
+	collapse(location: IndexTreeLocation): boolean { return this.model.collapse(location); }
+	expand(location: IndexTreeLocation): boolean { return this.model.expand(location); }
+	toggleCollapsed(location: IndexTreeLocation): boolean { return this.model.toggleCollapsed(location); }
+	expandTo(location: IndexTreeLocation): boolean { return this.model.expandTo(location); }
+	get focus(): T | undefined { return this.tree.focus?.element; }
+	get selection(): readonly T[] { return this.tree.selection.map((node) => node.element); }
 
 	setFocus(location: IndexTreeLocation, browserEvent?: UIEvent): void {
 		this.tree.setFocus(this.model.getNode(location).id, browserEvent);
 	}
 
 	setSelection(locations: readonly IndexTreeLocation[], browserEvent?: UIEvent): void {
-		this.tree.setSelection(
-			locations.map(location => this.model.getNode(location).id),
-			browserEvent,
-		);
+		this.tree.setSelection(locations.map((location) => this.model.getNode(location).id), browserEvent);
 	}
 
-	setFindPattern(pattern: string): void {
-		this.tree.setFindPattern(pattern);
-	}
-	findNext(): T | undefined {
-		return this.tree.findNext()?.element;
-	}
-	findPrevious(): T | undefined {
-		return this.tree.findPrevious()?.element;
-	}
-	clearFind(): void {
-		this.tree.clearFind();
-	}
-	updateElementHeight(location: IndexTreeLocation, height: number | undefined): void {
-		this.tree.updateElementHeight(this.model.getNode(location).id, height);
-	}
+	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+	findNext(): T | undefined { return this.tree.findNext()?.element; }
+	findPrevious(): T | undefined { return this.tree.findPrevious()?.element; }
+	clearFind(): void { this.tree.clearFind(); }
+	updateElementHeight(location: IndexTreeLocation, height: number | undefined): void { this.tree.updateElementHeight(this.model.getNode(location).id, height); }
 
 	private render(visibleSplice?: TreeVisibleSplice<IndexTreeNode<T>>): void {
 		this.tree.setFindCandidates(() => flattenTreeNodes(this.model.rootNodes));
@@ -207,42 +154,14 @@ export class IndexTree<T> extends Disposable {
 }
 
 function mapDragAndDrop<T>(dnd: TreeDragAndDrop<T>): TreeDragAndDrop<IndexTreeNode<T>> {
-	const elements = (nodes: readonly IndexTreeNode<T>[]) => nodes.map(node => node.element);
+	const elements = (nodes: readonly IndexTreeNode<T>[]) => nodes.map((node) => node.element);
 	return {
-		getDragURI: node => dnd.getDragURI(node.element),
+		getDragURI: (node) => dnd.getDragURI(node.element),
 		getDragLabel: dnd.getDragLabel ? (nodes, event) => dnd.getDragLabel!(elements(nodes), event) : undefined,
-		onDragStart: dnd.onDragStart
-			? (data, event) =>
-					dnd.onDragStart!(
-						mapTreeDragData(data, node => node.element),
-						event,
-					)
-			: undefined,
-		onDragOver: (data, target, index, sector, event) =>
-			dnd.onDragOver(
-				mapTreeDragData(data, node => node.element),
-				target?.element,
-				index,
-				sector,
-				event,
-			),
-		onDragLeave: dnd.onDragLeave
-			? (data, target, index, event) =>
-					dnd.onDragLeave!(
-						mapTreeDragData(data, node => node.element),
-						target?.element,
-						index,
-						event,
-					)
-			: undefined,
-		drop: (data, target, index, sector, event) =>
-			dnd.drop(
-				mapTreeDragData(data, node => node.element),
-				target?.element,
-				index,
-				sector,
-				event,
-			),
+		onDragStart: dnd.onDragStart ? (data, event) => dnd.onDragStart!(mapTreeDragData(data, (node) => node.element), event) : undefined,
+		onDragOver: (data, target, index, sector, event) => dnd.onDragOver(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
+		onDragLeave: dnd.onDragLeave ? (data, target, index, event) => dnd.onDragLeave!(mapTreeDragData(data, (node) => node.element), target?.element, index, event) : undefined,
+		drop: (data, target, index, sector, event) => dnd.drop(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
 		onDragEnd: dnd.onDragEnd,
 	};
 }

@@ -68,10 +68,13 @@ export class SashSettingsBinding extends Disposable {
 
 	constructor(container: HTMLElement) {
 		super();
-		this.scopeClass = `ash-sash-settings-${nextSashSettingsBindingId++}`;
+		this.scopeClass =
+			`ash-sash-settings-${nextSashSettingsBindingId++}`;
 		container.classList.add(this.scopeClass);
 		this._register(toDisposable(() => container.classList.remove(this.scopeClass)));
-		this.styleSheet = this._register(new ManagedStyleSheet(container.ownerDocument));
+		this.styleSheet = this._register(new ManagedStyleSheet(
+			container.ownerDocument,
+		));
 	}
 
 	update(settings: SashSettings): void {
@@ -132,22 +135,28 @@ export class Sash extends Disposable {
 		this.orthogonalEndListener = this._register(new MutableDisposable<IDisposable>());
 		this.orthogonalStartResources = this._register(new DisposableStore());
 		this.orthogonalEndResources = this._register(new DisposableStore());
-		this._register(
-			toDisposable(() => {
-				const linkedSash = this._linkedSash;
-				this._linkedSash = undefined;
-				if (linkedSash?.linkedSash === this) linkedSash.linkedSash = undefined;
-				this.startListeners.clear();
-				this.changeListeners.clear();
-				this.resetListeners.clear();
-				this.endListeners.clear();
-				this.stateListeners.clear();
-			}),
-		);
-		this._register(addDisposableListener(element, 'pointerdown', (event: PointerEvent) => this.beginDrag(event)));
-		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => this.handleKeydown(event)));
-		this._register(addDisposableListener(element, 'pointerenter', () => this.beginHover()));
-		this._register(addDisposableListener(element, 'pointerleave', () => this.endHover()));
+		this._register(toDisposable(() => {
+			const linkedSash = this._linkedSash;
+			this._linkedSash = undefined;
+			if (linkedSash?.linkedSash === this) linkedSash.linkedSash = undefined;
+			this.startListeners.clear();
+			this.changeListeners.clear();
+			this.resetListeners.clear();
+			this.endListeners.clear();
+			this.stateListeners.clear();
+		}));
+		this._register(addDisposableListener(element, 'pointerdown', (event: PointerEvent) =>
+			this.beginDrag(event),
+		));
+		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) =>
+			this.handleKeydown(event),
+		));
+		this._register(addDisposableListener(element, 'pointerenter', () =>
+			this.beginHover(),
+		));
+		this._register(addDisposableListener(element, 'pointerleave', () =>
+			this.endHover(),
+		));
 		this._register(addDisposableListener(element, 'dblclick', () => this.reset()));
 	}
 
@@ -253,7 +262,11 @@ export class Sash extends Disposable {
 		this.dragListeners.clear();
 		const start = this.coordinate(event);
 		this.fire(this.startListeners);
-		if (!fromLinkedSash && typeof event.pointerId === 'number' && typeof this.element.setPointerCapture === 'function') {
+		if (
+			!fromLinkedSash &&
+			typeof event.pointerId === 'number' &&
+			typeof this.element.setPointerCapture === 'function'
+		) {
 			this.element.setPointerCapture(event.pointerId);
 		}
 		const move = (next: PointerEvent) => {
@@ -267,16 +280,40 @@ export class Sash extends Disposable {
 		const stop = () => {
 			this.dragListeners.clear();
 			this.element.classList.remove('ash-sash-active');
-			if (!fromLinkedSash && typeof event.pointerId === 'number' && typeof this.element.hasPointerCapture === 'function' && this.element.hasPointerCapture(event.pointerId)) {
+			if (
+				!fromLinkedSash &&
+				typeof event.pointerId === 'number' &&
+				typeof this.element.hasPointerCapture === 'function' &&
+				this.element.hasPointerCapture(event.pointerId)
+			) {
 				this.element.releasePointerCapture(event.pointerId);
 			}
 			this.fire(this.endListeners);
 		};
 		const targetWindow = getWindow(this.element);
-		this.dragListeners.add(addDisposableListener(targetWindow, 'pointermove', move));
-		this.dragListeners.add(addDisposableListener(targetWindow, 'pointerup', stop, { once: true }));
-		this.dragListeners.add(addDisposableListener(targetWindow, 'pointercancel', stop, { once: true }));
-		this.dragListeners.add(addDisposableListener(targetWindow, 'blur', stop, { once: true }));
+		this.dragListeners.add(addDisposableListener(
+			targetWindow,
+			'pointermove',
+			move,
+		));
+		this.dragListeners.add(addDisposableListener(
+			targetWindow,
+			'pointerup',
+			stop,
+			{ once: true },
+		));
+		this.dragListeners.add(addDisposableListener(
+			targetWindow,
+			'pointercancel',
+			stop,
+			{ once: true },
+		));
+		this.dragListeners.add(addDisposableListener(
+			targetWindow,
+			'blur',
+			stop,
+			{ once: true },
+		));
 		if (!fromLinkedSash) this._linkedSash?.beginDrag(event, true);
 	}
 
@@ -290,13 +327,9 @@ export class Sash extends Disposable {
 			return;
 		}
 		const targetWindow = getWindow(this.element);
-		this.hoverTimer.value = disposableWindowTimeout(
-			targetWindow,
-			() => {
-				this.element.classList.add('ash-sash-hover');
-			},
-			delay,
-		);
+		this.hoverTimer.value = disposableWindowTimeout(targetWindow, () => {
+			this.element.classList.add('ash-sash-hover');
+		}, delay);
 	}
 
 	private endHover(fromLinkedSash = false): void {
@@ -348,26 +381,20 @@ export class Sash extends Disposable {
 		handle.className = `ash-sash-orthogonal-handle ash-sash-orthogonal-handle-${edge}`;
 		this.element.append(handle);
 		this.element.classList.add(stateClass);
-		resources.add(
-			toDisposable(() => {
-				handle.remove();
-				this.element.classList.remove(stateClass);
-			}),
-		);
-		resources.add(
-			addDisposableListener(handle, 'pointerdown', (event: PointerEvent) => {
-				event.stopPropagation();
-				this.beginDrag(event);
-				orthogonalSash.beginDrag(event);
-			}),
-		);
-		resources.add(
-			addDisposableListener(handle, 'dblclick', (event: MouseEvent) => {
-				event.stopPropagation();
-				this.reset();
-				orthogonalSash.reset();
-			}),
-		);
+		resources.add(toDisposable(() => {
+			handle.remove();
+			this.element.classList.remove(stateClass);
+		}));
+		resources.add(addDisposableListener(handle, 'pointerdown', (event: PointerEvent) => {
+			event.stopPropagation();
+			this.beginDrag(event);
+			orthogonalSash.beginDrag(event);
+		}));
+		resources.add(addDisposableListener(handle, 'dblclick', (event: MouseEvent) => {
+			event.stopPropagation();
+			this.reset();
+			orthogonalSash.reset();
+		}));
 		resources.add(addDisposableListener(handle, 'pointerenter', () => orthogonalSash.beginHover()));
 		resources.add(addDisposableListener(handle, 'pointerleave', () => orthogonalSash.endHover()));
 	}
@@ -396,10 +423,16 @@ export class Sash extends Disposable {
 }
 
 function sashHoverDelay(element: HTMLElement): number {
-	const value = getWindow(element).getComputedStyle(element).getPropertyValue(SashHoverDelayProperty).trim();
+	const value = getWindow(element).getComputedStyle(element)
+		.getPropertyValue(SashHoverDelayProperty)
+		.trim();
 	if (value === '') return DefaultSashHoverDelay;
-	const milliseconds = value.endsWith('ms') ? Number(value.slice(0, -2)) : Number.NaN;
-	return isFiniteNumber(milliseconds) && milliseconds >= 0 ? milliseconds : DefaultSashHoverDelay;
+	const milliseconds = value.endsWith('ms')
+		? Number(value.slice(0, -2))
+		: Number.NaN;
+	return isFiniteNumber(milliseconds) && milliseconds >= 0
+		? milliseconds
+		: DefaultSashHoverDelay;
 }
 
 function sameSashPresentation(left: SashPresentation, right: SashPresentation): boolean {
@@ -415,6 +448,8 @@ function assertPositiveFinite(value: number, name: string): void {
 
 function assertNonNegativeFinite(value: number, name: string): void {
 	if (!isFiniteNumber(value) || value < 0) {
-		throw new RangeError(`Sash ${name} must be a non-negative finite number`);
+		throw new RangeError(
+			`Sash ${name} must be a non-negative finite number`,
+		);
 	}
 }

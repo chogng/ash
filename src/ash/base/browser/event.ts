@@ -4,7 +4,7 @@ import { AbstractDisposable, setDisposableOwner } from '../common/lifecycle.js';
 type DomListenerOptions = boolean | AddEventListenerOptions;
 
 /** Browser event names shared by HTML elements, documents, and windows. */
-export interface DOMEventMap extends HTMLElementEventMap, DocumentEventMap, WindowEventMap {}
+export interface DOMEventMap extends HTMLElementEventMap, DocumentEventMap, WindowEventMap { }
 
 /** Exposes one native DOM event through the common disposable Event contract. */
 export class DomEmitter<K extends keyof DOMEventMap> extends AbstractDisposable {

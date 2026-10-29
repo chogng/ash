@@ -14,7 +14,7 @@ import './preferencesActions.js';
 registerEditorPane({
 	id: SettingsEditorId,
 	name: 'Settings',
-	canOpen: input => (isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Settings editor requires the Instantiation Service');
 		return options.instantiationService.createInstance(SettingsEditor);
@@ -26,7 +26,7 @@ registerWorkbenchContribution(PreferencesContribution.ID, WorkbenchPhase.BlockSt
 registerEditorPane({
 	id: KeybindingsEditor.ID,
 	name: 'Keyboard Shortcuts',
-	canOpen: input => (isKeybindingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => isKeybindingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Keyboard Shortcuts requires the editor service scope');
 		return options.instantiationService.createInstance(KeybindingsEditor);

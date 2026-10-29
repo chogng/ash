@@ -5,6 +5,7 @@ import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySet
 import type { ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { BufferContentTracker } from './bufferContentTracker.js';
 
+
 /** Reads the displayed buffer; process output and parser replies are not a second transcript. */
 export class TerminalAccessibleBufferProvider extends Disposable implements IAccessibleViewContentProvider {
 	public readonly id = AccessibleViewProviderId.Terminal;
@@ -14,10 +15,7 @@ export class TerminalAccessibleBufferProvider extends Disposable implements IAcc
 	public readonly onDidChangeContent = this.changed.event;
 	private readonly tracker: BufferContentTracker;
 
-	constructor(
-		private readonly instance: ITerminalInstance,
-		private readonly screen: IXtermTerminal,
-	) {
+	constructor(private readonly instance: ITerminalInstance, private readonly screen: IXtermTerminal) {
 		super();
 		this.tracker = this._register(new BufferContentTracker(screen));
 		const parsed = screen.raw.onWriteParsed(() => this.changed.fire());

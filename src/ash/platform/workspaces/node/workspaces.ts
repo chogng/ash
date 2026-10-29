@@ -10,11 +10,7 @@ export function createEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 
 /** Creates the stable identity of one multi-root workspace file. */
 export function getWorkspaceIdentifier(configPath: URI, remoteAuthority?: string): IWorkspaceIdentifier {
-	return Object.freeze({
-		id: stableWorkspaceId(configPath),
-		configPath,
-		...(remoteAuthority ? { remoteAuthority } : {}),
-	});
+	return Object.freeze({ id: stableWorkspaceId(configPath), configPath, ...(remoteAuthority ? { remoteAuthority } : {}) });
 }
 
 /** Creates the stable identity of one single-folder workspace. */
@@ -48,7 +44,11 @@ export const nodeWorkspacePathService: IWorkspacePathService = {
 	async resolvePath(path): Promise<IResolvedWorkspacePath> {
 		const canonicalPath = await realpath(path);
 		const metadata = await stat(canonicalPath);
-		const kind = metadata.isDirectory() ? WorkspacePathKind.Directory : metadata.isFile() ? WorkspacePathKind.File : WorkspacePathKind.Other;
+		const kind = metadata.isDirectory()
+			? WorkspacePathKind.Directory
+			: metadata.isFile()
+				? WorkspacePathKind.File
+				: WorkspacePathKind.Other;
 		return { kind, path: canonicalPath };
 	},
 	readFile: path => readFile(path, 'utf8'),

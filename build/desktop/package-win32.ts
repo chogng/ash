@@ -81,24 +81,9 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 
 	await writeApplicationChecksums(appStage);
 
-	const sourceBackend = options.get('--backend-package') ?? (await buildBackend(stage, electronMetadata.version));
+	const sourceBackend = options.get('--backend-package') ?? await buildBackend(stage, electronMetadata.version);
 	const backend = join(stage, 'desktop-backend');
-	await run(
-		python,
-		[
-			'-B',
-			join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'),
-			'--source',
-			sourceBackend,
-			'--output',
-			backend,
-			'--electron-version',
-			electronMetadata.version,
-			'--remote-release',
-			resolve(remoteRelease),
-		],
-		repositoryRoot,
-	);
+	await run(python, ['-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'), '--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version, '--remote-release', resolve(remoteRelease)], repositoryRoot);
 	await validateBackend(backend, electronMetadata.version);
 
 	await mkdir(destination, { recursive: true });
@@ -125,25 +110,18 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		await cp(join(backend, entry), join(resources, entry), { recursive: true, errorOnExist: true, force: false });
 	}
 	const updateArtifact = join(stage, 'update-host.json');
-	await run(python, ['-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host', '--target', 'x86_64-pc-windows-msvc', '--artifact-file', updateArtifact], repositoryRoot);
+	await run(python, [
+		'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host',
+		'--target', 'x86_64-pc-windows-msvc', '--artifact-file', updateArtifact,
+	], repositoryRoot);
 	const updateHost: string = JSON.parse(await readFile(updateArtifact, 'utf8')).binary;
 	await cp(updateHost, join(resources, 'bin', 'ash-update-host.exe'), { errorOnExist: true, force: false });
 	if (process.env.ASH_SYMBOLS_DIR) {
-		await run(
-			python,
-			[
-				'-B',
-				join(repositoryRoot, 'build', 'release', 'symbols.py'),
-				'collect',
-				'--binary',
-				updateHost,
-				'--staged',
-				join(resources, 'bin', 'ash-update-host.exe'),
-				'--target',
-				'x86_64-pc-windows-msvc',
-			],
-			repositoryRoot,
-		);
+		await run(python, [
+			'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'collect',
+			'--binary', updateHost,
+			'--staged', join(resources, 'bin', 'ash-update-host.exe'), '--target', 'x86_64-pc-windows-msvc',
+		], repositoryRoot);
 	}
 	await writeFile(join(resources, 'update-public-key'), `${updatePublicKey}\n`, { flag: 'wx' });
 	await validateBundle(bundlePath);
@@ -152,49 +130,31 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 
 async function buildBackend(stage: string, electronVersion: string): Promise<string> {
 	const backend = join(stage, 'backend');
-	await run(
-		python,
-		[
-			'-B',
-			join(repositoryRoot, 'build', 'app_server.py'),
-			'--target',
-			'x86_64-pc-windows-msvc',
-			'--javascript-runtime',
-			'host-provided-node',
-			'--media-distribution',
-			'bundled',
-			'--electron-version',
-			electronVersion,
-			'--package-dir',
-			backend,
-			'--capability-archive-dir',
-			join(repositoryRoot, '.build', 'releases'),
-		],
-		repositoryRoot,
-	);
+	await run(python, [
+		'-B', join(repositoryRoot, 'build', 'app_server.py'),
+		'--target', 'x86_64-pc-windows-msvc',
+		'--javascript-runtime', 'host-provided-node',
+		'--media-distribution', 'bundled',
+		'--electron-version', electronVersion,
+		'--package-dir', backend,
+		'--capability-archive-dir', join(repositoryRoot, '.build', 'releases'),
+	], repositoryRoot);
 	return backend;
 }
 
 async function validateBackend(path: string, electronVersion: string): Promise<void> {
 	const metadata = JSON.parse(await readFile(join(path, 'ash-package.json'), 'utf8'));
 	const application = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'));
-	if (
-		metadata.target !== 'x86_64-pc-windows-msvc' ||
-		metadata.javascriptRuntime?.kind !== 'hostProvidedNode' ||
-		metadata.javascriptRuntime.electronVersion !== electronVersion ||
-		metadata.components?.node !== undefined ||
-		metadata.components?.remoteServer !== undefined ||
-		typeof metadata.remoteRuntimeCatalog?.url !== 'string' ||
-		metadata.layoutVersion !== 2 ||
-		metadata.version !== application.version ||
-		metadata.entrypoint !== 'bin/ash-app-server.exe' ||
-		metadata.protocol?.major !== APP_SERVER_PROTOCOL_MAJOR ||
-		metadata.protocol?.schemaHash !== APP_SERVER_SCHEMA_HASH ||
-		typeof metadata.buildId !== 'string' ||
-		!/^sha256:[a-f0-9]{64}$/u.test(metadata.buildId) ||
-		!/^[a-f0-9]{64}$/u.test(metadata.components?.appServer?.binarySha256) ||
-		!/^[a-f0-9]{64}$/u.test(metadata.components?.appServerDaemon?.binarySha256)
-	) {
+	if (metadata.target !== 'x86_64-pc-windows-msvc' || metadata.javascriptRuntime?.kind !== 'hostProvidedNode'
+		|| metadata.javascriptRuntime.electronVersion !== electronVersion || metadata.components?.node !== undefined
+		|| metadata.components?.remoteServer !== undefined || typeof metadata.remoteRuntimeCatalog?.url !== 'string'
+		|| metadata.layoutVersion !== 2 || metadata.version !== application.version
+		|| metadata.entrypoint !== 'bin/ash-app-server.exe'
+		|| metadata.protocol?.major !== APP_SERVER_PROTOCOL_MAJOR
+		|| metadata.protocol?.schemaHash !== APP_SERVER_SCHEMA_HASH
+		|| typeof metadata.buildId !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(metadata.buildId)
+		|| !/^[a-f0-9]{64}$/u.test(metadata.components?.appServer?.binarySha256)
+		|| !/^[a-f0-9]{64}$/u.test(metadata.components?.appServerDaemon?.binarySha256)) {
 		throw new Error(`Backend does not match this Windows desktop build: ${path}`);
 	}
 	await lstat(join(path, metadata.entrypoint));
@@ -220,8 +180,7 @@ async function validateBundle(path: string): Promise<void> {
 		'resources/bin/ash-app-server.exe',
 		'resources/bin/ash-update-host.exe',
 		'resources/update-public-key',
-	])
-		await lstat(join(path, file));
+	]) await lstat(join(path, file));
 }
 
 function requireUpdatePublicKey(): string {
@@ -239,11 +198,14 @@ async function installer(options: Map<string, string>): Promise<void> {
 	await mkdir(output, { recursive: true });
 	const compiler = process.env.ISCC_PATH ?? 'ISCC.exe';
 	const metadata = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'));
-	await run(
-		compiler,
-		[`/DBundleDir=${bundle}`, `/DAppVersion=${metadata.version}`, `/DAppUserId=${AshApplicationId}`, `/DIconPath=${icon}`, `/O${output}`, join(import.meta.dirname, 'win32', 'ash.iss')],
-		repositoryRoot,
-	);
+	await run(compiler, [
+		`/DBundleDir=${bundle}`,
+		`/DAppVersion=${metadata.version}`,
+		`/DAppUserId=${AshApplicationId}`,
+		`/DIconPath=${icon}`,
+		`/O${output}`,
+		join(import.meta.dirname, 'win32', 'ash.iss'),
+	], repositoryRoot);
 	console.log(`Packaged Windows installer: ${join(output, `AshSetup-${metadata.version}-win32-x64.exe`)}`);
 }
 
@@ -252,13 +214,8 @@ function requireWindows(): void {
 }
 
 async function exists(path: string): Promise<boolean> {
-	try {
-		await lstat(path);
-		return true;
-	} catch (error) {
-		if (error?.code === 'ENOENT') return false;
-		throw error;
-	}
+	try { await lstat(path); return true; }
+	catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
 }
 
 async function runPnpm(args: string[], cwd = repositoryRoot): Promise<void> {
@@ -270,12 +227,7 @@ async function runPnpm(args: string[], cwd = repositoryRoot): Promise<void> {
 
 async function run(program: string, args: string[], cwd: string): Promise<void> {
 	await new Promise<void>((done, fail) => {
-		const child = spawn(program, args, {
-			cwd,
-			stdio: 'inherit',
-			windowsHide: true,
-			env: { ...process.env, PYTHON: python },
-		});
+		const child = spawn(program, args, { cwd, stdio: 'inherit', windowsHide: true, env: { ...process.env, PYTHON: python } });
 		child.once('error', fail);
 		child.once('close', (code, signal) => {
 			if (code === 0) done();

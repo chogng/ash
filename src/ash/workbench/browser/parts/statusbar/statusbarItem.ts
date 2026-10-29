@@ -19,7 +19,11 @@ export class StatusbarEntryItem extends Disposable {
 	private segmentDomNodes: HTMLElement[] = [];
 	private entry: IStatusbarEntry | undefined;
 
-	constructor(container: HTMLElement, id: string, entry: IStatusbarEntry) {
+	constructor(
+		container: HTMLElement,
+		id: string,
+		entry: IStatusbarEntry,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.id = id;
@@ -37,28 +41,24 @@ export class StatusbarEntryItem extends Disposable {
 		this.labelDomNode = labelDomNode;
 		domNode.append(labelDomNode);
 
-		this._register(
-			addDisposableListener(labelDomNode, 'click', event => {
-				if (!this.isFocusable()) {
-					event.preventDefault();
-					return;
-				}
+		this._register(addDisposableListener(labelDomNode, 'click', (event) => {
+			if (!this.isFocusable()) {
 				event.preventDefault();
-				this.entry?.run?.();
-			}),
-		);
-		this._register(
-			addDisposableListener(labelDomNode, 'keydown', event => {
-				if (event.key !== 'Enter' && event.key !== ' ') return;
-				if (!this.isFocusable()) {
-					event.preventDefault();
-					return;
-				}
+				return;
+			}
+			event.preventDefault();
+			this.entry?.run?.();
+		}));
+		this._register(addDisposableListener(labelDomNode, 'keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ' ') return;
+			if (!this.isFocusable()) {
 				event.preventDefault();
-				event.stopPropagation();
-				this.entry?.run?.();
-			}),
-		);
+				return;
+			}
+			event.preventDefault();
+			event.stopPropagation();
+			this.entry?.run?.();
+		}));
 
 		this.update(entry);
 	}
@@ -93,10 +93,10 @@ export class StatusbarEntryItem extends Disposable {
 		if (!previousEntry || previousEntry.tooltip !== entry.tooltip) {
 			this.hover.value = entry.tooltip
 				? getHoverDelegate().setupHover({
-						target: this.labelDomNode,
-						content: entry.tooltip,
-						groupId: StatusbarHoverGroupId,
-					})
+					target: this.labelDomNode,
+					content: entry.tooltip,
+					groupId: StatusbarHoverGroupId,
+				})
 				: undefined;
 		}
 	}
@@ -118,7 +118,7 @@ export class StatusbarEntryItem extends Disposable {
 		this.hover.value?.hide();
 	}
 
-	setCompactNeighbors(neighbors: { readonly left: boolean; readonly right: boolean }): void {
+	setCompactNeighbors(neighbors: { readonly left: boolean; readonly right: boolean; }): void {
 		this.domNode.classList.toggle('compact-left', neighbors.left);
 		this.domNode.classList.toggle('compact-right', neighbors.right);
 	}
@@ -194,7 +194,11 @@ function segmentsEqual(first: readonly IStatusbarEntrySegment[] | undefined, sec
 	return first?.length === second.length && first.every((segment, index) => segment.icon?.id === second[index]?.icon?.id && segment.text === second[index]?.text);
 }
 
-function setOptionalAttribute(element: HTMLElement, name: string, value: string): void {
+function setOptionalAttribute(
+	element: HTMLElement,
+	name: string,
+	value: string,
+): void {
 	if (value) element.setAttribute(name, value);
 	else element.removeAttribute(name);
 }

@@ -25,26 +25,11 @@ test('Attachment resource gestures reach the Workbench file, editor and clipboar
 		const text = 'Explain main.ts';
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData(
-			'application/vnd.chat.attachment+json',
-			JSON.stringify({
-				version: 1,
-				draft: {
-					mode: 'agent',
-					text,
-					contexts: [
-						{
-							id: 'source',
-							kind: 'file',
-							name: 'main.ts',
-							resource: `${resource}#2,3-2,7`,
-							content: 'Frozen before the live source changed',
-							reference: { start: 8, end: text.length },
-						},
-					],
-				},
-			}),
-		);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+			version: 1, draft: {
+				mode: 'agent', text, contexts: [{ id: 'source', kind: 'file', name: 'main.ts', resource: `${resource}#2,3-2,7`, content: 'Frozen before the live source changed', reference: { start: 8, end: text.length } }],
+			}
+		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, resource);
 	const source = chat.getByRole('button', { name: 'Open main.ts', exact: true });
@@ -62,9 +47,7 @@ test('Attachment resource gestures reach the Workbench file, editor and clipboar
 		await source.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
 		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('main.ts');
-	} finally {
-		await page.evaluate(value => navigator.clipboard.writeText(value), previousClipboard);
-	}
+	} finally { await page.evaluate(value => navigator.clipboard.writeText(value), previousClipboard); }
 	await source.press('Shift+F10');
 	await page.getByRole('menuitem', { name: 'Open to the Side', exact: true }).click();
 	await expect(workbench.editors.groups).toHaveCount(2);
@@ -108,26 +91,16 @@ test('Restored session references use the window widget factory through removal,
 		const text = 'Explain Earlier design';
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData(
-			'application/vnd.chat.attachment+json',
-			JSON.stringify({
-				version: 1,
-				draft: {
-					mode: 'agent',
-					text,
-					contexts: [
-						{
-							id: 'previous',
-							kind: 'sessionReference',
-							name: 'Earlier design',
-							resource: 'private://chat-session?sessionId=previous-session&threadId=previous-thread',
-							content: 'Captured earlier conversation',
-							reference: { start: 8, end: 22 },
-						},
-					],
-				},
-			}),
-		);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+			version: 1,
+			draft: {
+				mode: 'agent', text, contexts: [{
+					id: 'previous', kind: 'sessionReference', name: 'Earlier design',
+					resource: 'private://chat-session?sessionId=previous-session&threadId=previous-thread',
+					content: 'Captured earlier conversation', reference: { start: 8, end: 22 },
+				}]
+			},
+		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const source = chat.getByRole('button', { name: 'Open Earlier design', exact: true });
@@ -284,25 +257,11 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 		const text = 'broken.png';
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData(
-			'application/vnd.chat.attachment+json',
-			JSON.stringify({
-				version: 1,
-				draft: {
-					mode: 'agent',
-					text,
-					contexts: [
-						{
-							id: 'broken',
-							kind: 'image',
-							name: text,
-							content: 'data:image/png;base64,Y2FwdHVyZWQ=',
-							reference: { start: 0, end: text.length },
-						},
-					],
-				},
-			}),
-		);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+			version: 1, draft: {
+				mode: 'agent', text, contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
+			}
+		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const failed = chat.getByRole('button', { name: 'Preview unavailable: broken.png', exact: true });
@@ -329,26 +288,15 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 		const text = 'Explain Saved terminal';
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData(
-			'application/vnd.chat.attachment+json',
-			JSON.stringify({
-				version: 1,
-				draft: {
-					mode: 'agent',
-					text,
-					contexts: [
-						{
-							id: 'terminal',
-							kind: 'terminal',
-							name: 'Saved terminal',
-							content: 'captured before source closed',
-							reference: { start: 8, end: 22 },
-							terminalSnapshot: { text: 'captured before source closed\r\n', columns: 80 },
-						},
-					],
-				},
-			}),
-		);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+			version: 1, draft: {
+				mode: 'agent', text, contexts: [{
+					id: 'terminal', kind: 'terminal', name: 'Saved terminal',
+					content: 'captured before source closed', reference: { start: 8, end: 22 },
+					terminalSnapshot: { text: 'captured before source closed\r\n', columns: 80 },
+				}],
+			},
+		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const preview = chat.getByRole('button', { name: 'Preview terminal snapshot', exact: true });
@@ -398,25 +346,15 @@ test('Other captured contexts use native controls and retain readonly content af
 		const text = `Explain ${name}`;
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData(
-			'application/vnd.chat.attachment+json',
-			JSON.stringify({
-				version: 1,
-				draft: {
-					mode: 'agent',
-					text,
-					contexts: [
-						{
-							id: 'commit',
-							kind: 'scmHistoryItem',
-							name,
-							content: 'Commit captured before repository closed\n+ original change',
-							reference: { start: 8, end: text.length },
-						},
-					],
-				},
-			}),
-		);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+			version: 1, draft: {
+				mode: 'agent', text, contexts: [{
+					id: 'commit', kind: 'scmHistoryItem', name,
+					content: 'Commit captured before repository closed\n+ original change',
+					reference: { start: 8, end: text.length },
+				}],
+			},
+		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const source = chat.getByRole('button', { name: 'Open Captured commit', exact: true });
@@ -455,87 +393,67 @@ test('Other captured contexts use native controls and retain readonly content af
 	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
 });
 
-for (const kind of ['browserElement', 'scmHistoryItemChange'])
-	test(`${kind} dedicated controls keep captured content and source identity through clipboard, undo and readonly opening`, async ({ workbench }) => {
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
-		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-		const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
-		const name = kind === 'browserElement' ? 'Captured element' : 'src/captured.ts';
-		const content = kind === 'browserElement' ? '<button onclick="captured()">Original element</button>\ncolor: red;' : 'History file captured before repository closed\n+ original change';
-		const resource =
-			kind === 'browserElement'
-				? 'https://example.test/original#element'
-				: `private://scm-history/change?${encodeURIComponent(JSON.stringify({ repositoryId: 'closed:repository', revision: 'captured:commit', baseRevision: 'captured:parent', path: name }))}`;
-		await input.focus();
-		await input.evaluate(
-			(element, attachment) => {
-				const text = `Explain ${attachment.name}`;
-				const transfer = new DataTransfer();
-				transfer.setData('text/plain', text);
-				transfer.setData(
-					'application/vnd.chat.attachment+json',
-					JSON.stringify({
-						version: 1,
-						draft: {
-							mode: 'agent',
-							text,
-							contexts: [{ id: 'captured', ...attachment, reference: { start: 8, end: text.length } }],
-						},
-					}),
-				);
-				element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
-			},
-			{ kind, name, content, resource },
-		);
-		const open = chat.getByRole('button', { name: `Open ${name}`, exact: true });
-		const origin = chat.getByRole('button', {
-			name: kind === 'browserElement' ? `Open source page for ${name}` : `Open revision file for ${name}`,
-			exact: true,
-		});
-		const remove = chat.getByRole('button', { name: `Remove ${name}`, exact: true });
-		await expect(origin).toBeVisible();
-		await input.press('Tab');
-		await expect(open).toBeFocused();
-		await open.press('Tab');
-		await expect(origin).toBeFocused();
-		await origin.press('Tab');
-		await expect(remove).toBeFocused();
-		await remove.press('Delete');
-		await expect(open).toHaveCount(0);
-		await expect(input).toBeFocused();
-		await input.press('ControlOrMeta+z');
-		await expect(origin).toBeVisible();
-		await input.press('ControlOrMeta+a');
-		const copied = await input.evaluate(element => {
-			const transfer = new DataTransfer();
-			element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
-			return transfer.types.map(type => [type, transfer.getData(type)]);
-		});
-		await input.press('Backspace');
-		await input.evaluate((element, values) => {
-			const transfer = new DataTransfer();
-			for (const [type, value] of values) transfer.setData(type!, value!);
-			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
-		}, copied);
-		await expect(origin).toBeVisible();
-		await open.hover();
-		await expect(page.getByRole('tooltip').locator('pre')).toContainText(content);
-		await expect(page.getByRole('tooltip').locator('[onclick], [onerror]')).toHaveCount(0);
-		await input.press('Home');
-		for (let step = 0; step < 8; step++) await input.press('ArrowRight');
-		await input.press('ControlOrMeta+k');
-		await input.press('ControlOrMeta+i');
-		const hover = page.locator('.stanza-editor-hover:not([hidden])');
-		await expect(hover.locator('.stanza-editor-hover-content')).toBeFocused();
-		await expect.poll(async () => (await hover.locator('pre').innerText()).replace(/\u00a0/gu, ' ').trim()).toBe(content);
-		await page.keyboard.press('Escape');
-		await expect(input).toBeFocused();
-		await input.press('End');
-		await input.press('Alt+Enter');
-		const editor = new Editor(page.locator('[data-part="editor"]'));
-		await editor.waitForEditorContents(contents => contents === content);
-		await expect(editor.input).toHaveAttribute('aria-readonly', 'true');
-		await expect(chat.locator('[onclick]')).toHaveCount(0);
-		await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
+for (const kind of ['browserElement', 'scmHistoryItemChange']) test(`${kind} dedicated controls keep captured content and source identity through clipboard, undo and readonly opening`, async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
+	const name = kind === 'browserElement' ? 'Captured element' : 'src/captured.ts';
+	const content = kind === 'browserElement' ? '<button onclick="captured()">Original element</button>\ncolor: red;' : 'History file captured before repository closed\n+ original change';
+	const resource = kind === 'browserElement' ? 'https://example.test/original#element' : `private://scm-history/change?${encodeURIComponent(JSON.stringify({ repositoryId: 'closed:repository', revision: 'captured:commit', baseRevision: 'captured:parent', path: name }))}`;
+	await input.focus();
+	await input.evaluate((element, attachment) => {
+		const text = `Explain ${attachment.name}`;
+		const transfer = new DataTransfer();
+		transfer.setData('text/plain', text);
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({ version: 1, draft: { mode: 'agent', text, contexts: [{ id: 'captured', ...attachment, reference: { start: 8, end: text.length } }] } }));
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+	}, { kind, name, content, resource });
+	const open = chat.getByRole('button', { name: `Open ${name}`, exact: true });
+	const origin = chat.getByRole('button', { name: kind === 'browserElement' ? `Open source page for ${name}` : `Open revision file for ${name}`, exact: true });
+	const remove = chat.getByRole('button', { name: `Remove ${name}`, exact: true });
+	await expect(origin).toBeVisible();
+	await input.press('Tab');
+	await expect(open).toBeFocused();
+	await open.press('Tab');
+	await expect(origin).toBeFocused();
+	await origin.press('Tab');
+	await expect(remove).toBeFocused();
+	await remove.press('Delete');
+	await expect(open).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await input.press('ControlOrMeta+z');
+	await expect(origin).toBeVisible();
+	await input.press('ControlOrMeta+a');
+	const copied = await input.evaluate(element => {
+		const transfer = new DataTransfer();
+		element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
+		return transfer.types.map(type => [type, transfer.getData(type)]);
 	});
+	await input.press('Backspace');
+	await input.evaluate((element, values) => {
+		const transfer = new DataTransfer();
+		for (const [type, value] of values) transfer.setData(type!, value!);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+	}, copied);
+	await expect(origin).toBeVisible();
+	await open.hover();
+	await expect(page.getByRole('tooltip').locator('pre')).toContainText(content);
+	await expect(page.getByRole('tooltip').locator('[onclick], [onerror]')).toHaveCount(0);
+	await input.press('Home');
+	for (let step = 0; step < 8; step++) await input.press('ArrowRight');
+	await input.press('ControlOrMeta+k');
+	await input.press('ControlOrMeta+i');
+	const hover = page.locator('.stanza-editor-hover:not([hidden])');
+	await expect(hover.locator('.stanza-editor-hover-content')).toBeFocused();
+	await expect.poll(async () => (await hover.locator('pre').innerText()).replace(/\u00a0/gu, ' ').trim()).toBe(content);
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await input.press('End');
+	await input.press('Alt+Enter');
+	const editor = new Editor(page.locator('[data-part="editor"]'));
+	await editor.waitForEditorContents(contents => contents === content);
+	await expect(editor.input).toHaveAttribute('aria-readonly', 'true');
+	await expect(chat.locator('[onclick]')).toHaveCount(0);
+	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
+});

@@ -11,10 +11,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	private _typicalHalfwidthCharacterWidth: number;
 	private _renderResult: string[] | null = null;
 
-	constructor(
-		private readonly _context: ViewContext,
-		private readonly readTextLeft: () => number,
-	) {
+	constructor(private readonly _context: ViewContext, private readonly readTextLeft: () => number) {
 		super();
 		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		this._context.addEventHandler(this);
@@ -30,31 +27,16 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		return true;
 	}
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
-		return true;
-	}
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
-		return true;
-	}
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
-		return true;
-	}
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
-		return true;
-	}
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
-		return true;
-	}
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		return event.scrollTopChanged || event.scrollWidthChanged;
-	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
-		return true;
-	}
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged || event.scrollWidthChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
-		const decorations = context
-			.getDecorationsInViewport()
+		const decorations = context.getDecorationsInViewport()
 			.filter(decoration => Boolean(decoration.options.className))
 			.sort(compareModelDecorations);
 		const output = Array.from({ length: context.visibleRange.endLineNumber - context.visibleRange.startLineNumber + 1 }, () => '');
@@ -124,15 +106,16 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 			for (let index = 0; index < lineVisibleRanges.ranges.length; index += 1) {
 				const visibleRange = lineVisibleRanges.ranges[index]!;
 				const fillToLineEnd = shouldFillLineOnLineBreak && lineVisibleRanges.continuesOnNextLine && lineVisibleRanges.ranges.length === 1;
-				output[lineVisibleRanges.lineNumber - context.visibleRange.startLineNumber] +=
-					`<div class="cdr ${escapeAttribute(className)}" style="left:${textLeft + visibleRange.left}px;width:${fillToLineEnd ? '100%' : `${visibleRange.width}px`};"></div>`;
+				output[lineVisibleRanges.lineNumber - context.visibleRange.startLineNumber] += `<div class="cdr ${escapeAttribute(className)}" style="left:${textLeft + visibleRange.left}px;width:${fillToLineEnd ? '100%' : `${visibleRange.width}px`};"></div>`;
 			}
 		}
 	}
 }
 
 function compareModelDecorations(left: ViewModelDecoration, right: ViewModelDecoration): number {
-	return (left.options.zIndex ?? 0) - (right.options.zIndex ?? 0) || left.options.className!.localeCompare(right.options.className!) || Range.compareRangesUsingStarts(left.range, right.range);
+	return (left.options.zIndex ?? 0) - (right.options.zIndex ?? 0)
+		|| left.options.className!.localeCompare(right.options.className!)
+		|| Range.compareRangesUsingStarts(left.range, right.range);
 }
 
 function escapeAttribute(value: string): string {

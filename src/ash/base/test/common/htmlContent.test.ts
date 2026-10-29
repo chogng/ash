@@ -17,13 +17,7 @@ test('MarkdownString distinguishes escaped text from trusted markdown fragments'
 
 test('MarkdownString lift preserves resource context and options', () => {
 	const baseUri = URI.parse('https://example.com/docs/');
-	const lifted = MarkdownString.lift({
-		value: 'content',
-		isTrusted: { enabledCommands: ['open'] },
-		supportHtml: true,
-		supportAlertSyntax: true,
-		baseUri,
-	});
+	const lifted = MarkdownString.lift({ value: 'content', isTrusted: { enabledCommands: ['open'] }, supportHtml: true, supportAlertSyntax: true, baseUri });
 	assert.equal(lifted.baseUri, baseUri);
 	assert.equal(lifted.supportHtml, true);
 	assert.equal(lifted.supportAlertSyntax, true);

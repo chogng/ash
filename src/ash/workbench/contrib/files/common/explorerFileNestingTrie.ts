@@ -36,7 +36,7 @@ export class ExplorerFileNestingTrie {
 	}
 
 	public nest(files: string[], dirname: string): Map<string, Set<string>> {
-		const candidates: { readonly parent: string; readonly child: string }[] = [];
+		const candidates: { readonly parent: string; readonly child: string; }[] = [];
 		const fileSet = new Set(files);
 		for (const rule of this.rules) {
 			for (const parent of files) {
@@ -91,7 +91,7 @@ export class ExplorerFileNestingTrie {
 			}
 			let children = result.get(root);
 			if (!children) {
-				result.set(root, (children = new Set()));
+				result.set(root, children = new Set());
 			}
 			if (file !== root) {
 				children.add(file);

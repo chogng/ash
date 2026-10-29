@@ -50,14 +50,10 @@ interface ConnectionHarness {
 	readonly application: ElectronApplication;
 	readonly page: Page;
 	readonly workspaceFolder: string | undefined;
-	backend(): Promise<{ pid: number; instanceId: string }>;
+	backend(): Promise<{ pid: number; instanceId: string; }>;
 }
 
-const test = baseTest.extend<{
-	connectionHarness: ConnectionHarness;
-	connectionSurface: 'agents' | 'workbench';
-	connectionWorkspace: 'empty' | 'readOnly';
-}>({
+const test = baseTest.extend<{ connectionHarness: ConnectionHarness; connectionSurface: 'agents' | 'workbench'; connectionWorkspace: 'empty' | 'readOnly'; }>({
 	connectionSurface: ['agents', { option: true }],
 	connectionWorkspace: ['empty', { option: true }],
 	connectionHarness: async ({ target, connectionSurface, connectionWorkspace }, use, testInfo) => {
@@ -68,15 +64,9 @@ const test = baseTest.extend<{
 			await mkdir(workspaceFolder);
 			await writeFile(join(workspaceFolder, 'example.txt'), 'Workspace permission fixture\n');
 		}
-		const configuration = resolveElectronConfiguration({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: workspaceFolder,
-		});
+		const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: workspaceFolder });
 		const entry = testInfo.outputPath('connection-restart.mjs');
-		await writeFile(
-			entry,
-			`
+		await writeFile(entry, `
 import { app } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
@@ -200,113 +190,57 @@ AppServerConnectionRelay.prototype.routes = function(...args) {
 };
 const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 startElectronApplication();
-`,
-		);
-		const application = await _electron.launch({
-			executablePath: configuration.executablePath,
-			args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
-			cwd: configuration.cwd,
-			env: {
-				...configuration.env,
-				ASH_DEV_APP_SERVER_RELOAD: '1',
-				ASH_DEV_AGENTS_WINDOW: connectionSurface === 'agents' ? '1' : '0',
-			},
-		});
+`);
+		const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: { ...configuration.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_AGENTS_WINDOW: connectionSurface === 'agents' ? '1' : '0' } });
 		try {
 			const page = await application.firstWindow();
 			const startupErrors: string[] = [];
 			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
-			page.on('console', message => {
-				if (message.type() === 'error') startupErrors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
 			if (workspaceFolder) {
-				await page
-					.getByRole('dialog', { name: 'Ash', exact: true })
-					.getByRole('button', {
-						name: connectionWorkspace === 'readOnly' ? 'Open Read-Only' : 'Trust Folder',
-						exact: true,
-					})
-					.click();
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'readOnly' ? 'Open Read-Only' : 'Trust Folder', exact: true }).click();
 			}
 			try {
 				await new Workbench(page).waitForReady();
 				await expect(page.locator(connectionSurface === 'agents' ? '.ash-sessions-window' : '.ash-workbench')).toBeVisible();
 			} catch (error) {
-				const details = await page.evaluate(() =>
-					[
-						document.body.innerText,
-						...Array.from(document.querySelectorAll('textarea'), field => field.value),
-						'Root: ' + document.querySelector('#app')?.outerHTML.slice(0, 1600),
-						'Marks: ' +
-							performance
-								.getEntriesByType('mark')
-								.map(entry => entry.name)
-								.join(', '),
-					].join('\n'),
-				);
-				throw new Error(
-					`${connectionSurface} startup failed at ${page.url()}:\n${details}\n${startupErrors.join('\n')}\nWindows: ${application
-						.windows()
-						.map(window => window.url())
-						.join(', ')}`,
-					{ cause: error },
-				);
+				const details = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value), 'Root: ' + document.querySelector('#app')?.outerHTML.slice(0, 1600), 'Marks: ' + performance.getEntriesByType('mark').map(entry => entry.name).join(', ')].join('\n'));
+				throw new Error(`${connectionSurface} startup failed at ${page.url()}:\n${details}\n${startupErrors.join('\n')}\nWindows: ${application.windows().map(window => window.url()).join(', ')}`, { cause: error });
 			}
 			// Fault injection starts only after both the Workbench and its carrier are ready.
-			await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.state)).toBe('ready');
+			await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('ready');
 			await use({
-				application,
-				page,
-				workspaceFolder,
-				backend: async () => {
+				application, page, workspaceFolder, backend: async () => {
 					const runtime = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktop));
-					if (!runtime) {
-						throw new Error('Prepare the development backend before this scenario');
-					}
-					const output = await execFileAsync(join(runtime, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`), ['version'], {
-						env: configuration.env,
-						windowsHide: true,
-					});
-					return JSON.parse(output.stdout) as { pid: number; instanceId: string };
-				},
+					if (!runtime) { throw new Error('Prepare the development backend before this scenario'); }
+					const output = await execFileAsync(join(runtime, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`), ['version'], { env: configuration.env, windowsHide: true });
+					return JSON.parse(output.stdout) as { pid: number; instanceId: string; };
+				}
 			});
 			if (testInfo.status !== testInfo.expectedStatus) {
 				const rendererErrors = testInfo.outputPath('renderer-errors.txt');
 				await writeFile(rendererErrors, startupErrors.join('\n'));
 				await testInfo.attach('renderer-errors.txt', { path: rendererErrors, contentType: 'text/plain' });
 				const connectionState = testInfo.outputPath('connection-state.txt');
-				await writeFile(connectionState, JSON.stringify(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario)));
+				await writeFile(connectionState, JSON.stringify(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario)));
 				await testInfo.attach('connection-state.txt', { path: connectionState, contentType: 'text/plain' });
-				await testInfo.attach('connection-marks.txt', {
-					body: await page.evaluate(() =>
-						performance
-							.getEntriesByType('mark')
-							.filter(entry => /appServer|rendererApi/.test(entry.name))
-							.map(entry => entry.name)
-							.join('\n'),
-					),
-					contentType: 'text/plain',
-				});
+				await testInfo.attach('connection-marks.txt', { body: await page.evaluate(() => performance.getEntriesByType('mark').filter(entry => /appServer|rendererApi/.test(entry.name)).map(entry => entry.name).join('\n')), contentType: 'text/plain' });
 			}
 		} finally {
 			await application.evaluate(({ BrowserWindow }) => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 				scenario.releaseClose?.();
 				scenario.releaseValidation?.();
 				scenario.releaseInitialization?.();
 				scenario.releaseWorkspaceRead?.();
-				for (const window of BrowserWindow.getAllWindows()) {
-					window.destroy();
-				}
+				for (const window of BrowserWindow.getAllWindows()) { window.destroy(); }
 			});
 			const runtime = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktop));
-			if (runtime) {
-				await execFileAsync(join(runtime, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`), ['stop'], { env: configuration.env, windowsHide: true });
-			}
+			if (runtime) { await execFileAsync(join(runtime, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`), ['stop'], { env: configuration.env, windowsHide: true }); }
 			await application.close();
 			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 		}
-	},
+	}
 });
 
 test('Agents shows a persistent banner and automatically restores its connection after the carrier exits', async ({ connectionHarness: { application, page } }, testInfo) => {
@@ -314,15 +248,15 @@ test('Agents shows a persistent banner and automatically restores its connection
 	// failure only after the window is usable, so this exercises recovery.
 	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeEditable();
 	const before = await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 	});
 	await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		scenario.holdNextAcquisitionValidation();
 		scenario.killConnection();
 	});
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingValidation)).toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
 	const banner = page.locator('[data-part="banner"]');
 	await expect(banner).toContainText('Reconnecting to the Agent Host');
 	await banner.focus();
@@ -333,16 +267,12 @@ test('Agents shows a persistent banner and automatically restores its connection
 	await help.press('Escape');
 	await expect(banner).toBeFocused();
 	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-banner.png') });
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseValidation());
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.acquisitions)).toBeGreaterThan(before.acquisitions);
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { state: scenario.state, readyCount: scenario.readyCount };
-			}),
-		)
-		.toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.acquisitions)).toBeGreaterThan(before.acquisitions);
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { state: scenario.state, readyCount: scenario.readyCount };
+	})).toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
 	await expect(banner).toBeHidden();
 	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
@@ -353,11 +283,11 @@ test.describe('main Workbench recovery', () => {
 	test.use({ connectionSurface: 'workbench' });
 	test('Workbench shows a persistent banner while restoring its backend connection', async ({ connectionHarness: { application, page } }, testInfo) => {
 		await application.evaluate(() => {
-			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.holdNextAcquisitionValidation();
 			scenario.killConnection();
 		});
-		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingValidation)).toBe(true);
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
 		const banner = page.locator('[data-part="banner"]');
 		await expect(banner).toContainText('Reconnecting to the Agent Host');
 		await banner.focus();
@@ -367,36 +297,34 @@ test.describe('main Workbench recovery', () => {
 		await help.press('Escape');
 		await expect(banner).toBeFocused();
 		await page.screenshot({ path: testInfo.outputPath('workbench-agent-host-recovery-banner.png') });
-		await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseValidation());
+		await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
 		await expect(banner).toBeHidden();
 		await expect(page.locator('[data-part="editor"]')).toBeVisible();
 	});
 	test('workspace restore failure keeps the Banner visible and retries without replacing the ready connection', async ({ connectionHarness: { application, page } }, testInfo) => {
 		await application.evaluate(() => {
-			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.holdNextWorkspaceRead();
 			scenario.killConnection();
 		});
-		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingWorkspaceRead)).toBe(true);
-		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.state)).toBe('ready');
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingWorkspaceRead)).toBe(true);
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('ready');
 		const banner = page.locator('[data-part="banner"]');
 		await expect(banner).toContainText('Reconnecting to the Agent Host');
 		const before = await application.evaluate(() => {
-			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.releaseWorkspaceRead();
 			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 		});
 		await expect(banner).toContainText('Could not restore the Agent Host connection or workspace');
-		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.workspaceReadFailures)).toBe(1);
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.workspaceReadFailures)).toBe(1);
 		await page.screenshot({ path: testInfo.outputPath('workspace-recovery-failed-banner.png') });
 		await banner.getByRole('button', { name: 'Reconnect', exact: true }).click();
 		await expect(banner).toBeHidden();
-		expect(
-			await application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
-			}),
-		).toEqual(before);
+		expect(await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+		})).toEqual(before);
 		await expect(page.locator('[data-part="editor"]')).toBeVisible();
 	});
 });
@@ -404,63 +332,51 @@ test.describe('main Workbench recovery', () => {
 test('Agents reload waits for a connection restart to finish closing its previous carrier', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
 	const before = await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		scenario.beginRestart();
 		return scenario.acquisitions;
 	});
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.isClosing)).toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.isClosing)).toBe(true);
 	await page.reload();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.acquisitions)).toBeGreaterThan(before);
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseClose());
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.acquisitions)).toBeGreaterThan(before);
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseClose());
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { settled: scenario.restartSettled, error: scenario.restartError };
-			}),
-		)
-		.toEqual({ settled: true, error: undefined });
-	expect(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.sameStartPromise)).toBe(true);
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { settled: scenario.restartSettled, error: scenario.restartError };
+	})).toEqual({ settled: true, error: undefined });
+	expect(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.sameStartPromise)).toBe(true);
 	expect(await backend()).toEqual(beforeBackend);
 });
 
 test('a committed Agents reload prepares its carrier before Renderer acquisition without a second handshake', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
 	const before = await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		return { prepared: scenario.preparedAcquisitions, ready: scenario.readyCount };
 	});
 	await page.reload();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { prepared: scenario.preparedAcquisitions, ready: scenario.readyCount, state: scenario.state };
-			}),
-		)
-		.toEqual({ prepared: before.prepared + 1, ready: before.ready + 1, state: 'ready' });
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { prepared: scenario.preparedAcquisitions, ready: scenario.readyCount, state: scenario.state };
+	})).toEqual({ prepared: before.prepared + 1, ready: before.ready + 1, state: 'ready' });
 	expect(await backend()).toEqual(beforeBackend);
 });
 
 test('an acquisition delayed in an old Agents document cannot replace the reloaded connection', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.holdNextAcquisitionValidation());
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.holdNextAcquisitionValidation());
 	await page.reload();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingValidation)).toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
 	await page.reload();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseValidation());
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { settled: scenario.delayedAcquisitionSettled, error: scenario.delayedAcquisitionError };
-			}),
-		)
-		.toEqual({ settled: true, error: 'CancellationError' });
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { settled: scenario.delayedAcquisitionSettled, error: scenario.delayedAcquisitionError };
+	})).toEqual({ settled: true, error: 'CancellationError' });
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
 	expect(await backend()).toEqual(beforeBackend);
 });
@@ -468,24 +384,20 @@ test('an acquisition delayed in an old Agents document cannot replace the reload
 test('stopping a delayed restart cancels it before the reloaded Agents connection is acquired', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
 	await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		scenario.holdNextValidation();
 		scenario.beginRestart();
 		scenario.releaseClose();
 	});
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingValidation)).toBe(true);
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.stop());
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.stop());
 	await page.reload();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseValidation());
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { settled: scenario.restartSettled, error: scenario.restartError };
-			}),
-		)
-		.toEqual({ settled: true, error: 'CancellationError' });
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { settled: scenario.restartSettled, error: scenario.restartError };
+	})).toEqual({ settled: true, error: 'CancellationError' });
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
 	expect(await backend()).toEqual(beforeBackend);
 });
@@ -493,27 +405,23 @@ test('stopping a delayed restart cancels it before the reloaded Agents connectio
 test('initialization of an exited carrier cannot report a ready Agents connection', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
 	const beforeReady = await application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		scenario.holdNextInitialization();
 		scenario.beginRestart();
 		scenario.releaseClose();
 		return scenario.readyCount;
 	});
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.waitingInitialization)).toBe(true);
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.killConnection());
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.state)).toBe('crashed');
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseInitialization());
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
-				return { settled: scenario.delayedInitializationSettled, error: scenario.delayedInitializationError };
-			}),
-		)
-		.toEqual({ settled: true, error: 'CancellationError' });
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingInitialization)).toBe(true);
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.killConnection());
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('crashed');
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseInitialization());
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { settled: scenario.delayedInitializationSettled, error: scenario.delayedInitializationError };
+	})).toEqual({ settled: true, error: 'CancellationError' });
 	await page.reload();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
-	expect(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.readyCount)).toBe(beforeReady + 1);
+	expect(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.readyCount)).toBe(beforeReady + 1);
 	expect(await backend()).toEqual(beforeBackend);
 });
 

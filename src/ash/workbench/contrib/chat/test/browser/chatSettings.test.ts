@@ -16,10 +16,8 @@ suite('chatSettings browser component', () => {
 				await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(false, cowork), cowork);
 				const chat = page.locator('#app-chat');
 				const input = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
-				if (cowork) {
-					await input.focus();
-					await page.keyboard.insertText('Preserved synthetic AI draft');
-				} else await input.fill('Preserved synthetic AI draft');
+				if (cowork) { await input.focus(); await page.keyboard.insertText('Preserved synthetic AI draft'); }
+				else await input.fill('Preserved synthetic AI draft');
 				await page.evaluate(() => window.ashChatTranscriptIntegration.addUserContext());
 				const originalDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
 				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.isCodeChatActive())).toBe(true);
@@ -54,16 +52,10 @@ suite('chatSettings browser component', () => {
 				await page.goto(`/chatTranscript.html${locale === 'en' ? '' : '?locale=zh-CN'}`);
 				await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(true, cowork), cowork);
 				const chat = page.locator('#app-chat');
-				const voice = chat.getByRole('button', {
-					name: locale === 'en' ? 'Voice conversation' : '语音对话',
-					exact: true,
-				});
+				const voice = chat.getByRole('button', { name: locale === 'en' ? 'Voice conversation' : '语音对话', exact: true });
 				await voice.focus();
 				await voice.press('Enter');
-				const options = page.getByRole('combobox', {
-					name: locale === 'en' ? 'Voice conversation options' : '语音对话选项',
-					exact: true,
-				});
+				const options = page.getByRole('combobox', { name: locale === 'en' ? 'Voice conversation options' : '语音对话选项', exact: true });
 				await options.fill('marin');
 				await options.press('Enter');
 				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start']);

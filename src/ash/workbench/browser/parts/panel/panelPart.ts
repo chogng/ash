@@ -14,12 +14,8 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 
 /** Movable tool region with Panel tabs and a contextual title toolbar. */
 export class PanelPart extends PaneCompositePart {
-	override get minimumWidth(): number {
-		return 300;
-	}
-	override get minimumHeight(): number {
-		return 77;
-	}
+	override get minimumWidth(): number { return 300; }
+	override get minimumHeight(): number { return 77; }
 
 	constructor(
 		container: HTMLElement,
@@ -33,27 +29,21 @@ export class PanelPart extends PaneCompositePart {
 		@IThemeService themeService: IThemeService,
 		@IActivityService activityService: IActivityService,
 	) {
-		super(
-			container,
-			{
-				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-				viewDescriptorService,
-				contextKeyService,
-				localizationService,
-				id: 'panel',
-				location: ViewContainerLocation.Panel,
-				ariaLabel: 'Panel',
-				ariaLabelKey: { bundle: 'ash.regions', key: 'panel' },
-				viewsAriaLabel: 'Panel views',
-				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'panelViews' },
-				compositeBarPresentation: 'label',
-				compositeBarContextMenuProvider: contextMenuService,
-				titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
-			},
-			themeService,
-			storageService,
-			activityService,
-		);
+		super(container, {
+			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+			viewDescriptorService,
+			contextKeyService,
+			localizationService,
+			id: 'panel',
+			location: ViewContainerLocation.Panel,
+			ariaLabel: 'Panel',
+			ariaLabelKey: { bundle: 'ash.regions', key: 'panel' },
+			viewsAriaLabel: 'Panel views',
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'panelViews' },
+			compositeBarPresentation: 'label',
+			compositeBarContextMenuProvider: contextMenuService,
+			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
+		}, themeService, storageService, activityService);
 		this.titleDomNode.classList.add('ash-panel-title-control');
 	}
 

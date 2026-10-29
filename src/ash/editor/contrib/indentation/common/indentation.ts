@@ -5,7 +5,12 @@ import { type ITextModel } from '../../../common/model.js';
 import { generateIndent, getSpaceCnt } from './indentUtils.js';
 
 /** Computes deterministic brace/rule-based reindent edits for a physical line range. */
-export function getReindentEditOperations(model: ITextModel, languageConfigurationService: ILanguageConfigurationService, startLineNumber: number, endLineNumber: number): ISingleEditOperation[] {
+export function getReindentEditOperations(
+	model: ITextModel,
+	languageConfigurationService: ILanguageConfigurationService,
+	startLineNumber: number,
+	endLineNumber: number,
+): ISingleEditOperation[] {
 	if (!Number.isSafeInteger(startLineNumber) || !Number.isSafeInteger(endLineNumber)) {
 		throw new TypeError('Reindent line numbers must be safe integers');
 	}
@@ -28,7 +33,9 @@ export function getReindentEditOperations(model: ITextModel, languageConfigurati
 		const before = leadingWhitespace(line);
 		const after = generateIndent(currentColumns, options.tabSize, options.insertSpaces);
 		if (before !== after) edits.push({ range: new Range(lineNumber, 1, lineNumber, before.length + 1), text: after });
-		nextColumns = rules.shouldIncrease(line) || rules.shouldIndentNextLine(line) ? currentColumns + options.indentSize : currentColumns;
+		nextColumns = rules.shouldIncrease(line) || rules.shouldIndentNextLine(line)
+			? currentColumns + options.indentSize
+			: currentColumns;
 	}
 	return edits;
 }

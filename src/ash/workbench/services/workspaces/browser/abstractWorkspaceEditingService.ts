@@ -15,9 +15,7 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 		@IFileDialogService protected readonly dialogs: IFileDialogService,
 		@IWorkingCopyService protected readonly workingCopies: IWorkingCopyService,
 		@IHostService protected readonly hostService: IHostService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	validateFolders(folders: readonly URI[]): void {
 		for (const copy of this.workingCopies.getAll()) {
@@ -32,7 +30,7 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 		}
 	}
 
-	addFolders(folders: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void> {
+	addFolders(folders: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void> {
 		return this.updateFolders(this.workspace.getWorkspace().folders.length, 0, folders);
 	}
 
@@ -45,27 +43,19 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 	async pickNewWorkspacePath(): Promise<URI | undefined> {
 		const workspace = this.workspace.getWorkspace();
 		const folder = workspace.folders[0]?.uri;
-		const defaultUri =
-			workspace.configuration?.scheme === 'file'
-				? workspace.configuration
-				: folder?.scheme === 'file'
-					? URI.joinPath(folder.path.startsWith('/@browser/') ? folder : dirname(folder), 'workspace.ash-workspace')
-					: URI.file('/workspace.ash-workspace');
+		const defaultUri = workspace.configuration?.scheme === 'file' ? workspace.configuration
+			: folder?.scheme === 'file' ? URI.joinPath(folder.path.startsWith('/@browser/') ? folder : dirname(folder), 'workspace.ash-workspace')
+				: URI.file('/workspace.ash-workspace');
 		const resource = await this.dialogs.showSaveDialog({
 			title: localize('workspace.saveAs', 'Save Workspace As...'),
 			defaultUri,
-			filters: [
-				{
-					name: localize('workspace.fileType', 'Ash Workspace'),
-					extensions: ['ash-workspace', 'code-workspace'],
-				},
-			],
+			filters: [{ name: localize('workspace.fileType', 'Ash Workspace'), extensions: ['ash-workspace', 'code-workspace'] }],
 		});
 		if (!resource || workspace !== this.workspace.getWorkspace()) return undefined;
 		return /\.(ash|code)-workspace$/i.test(resource.path) ? resource : resource.with({ path: `${resource.path}.ash-workspace` });
 	}
 
-	abstract updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void>;
+	abstract updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
 	abstract saveAndEnterWorkspace(path: URI): Promise<void>;
 
 	async enterWorkspace(path: URI): Promise<void> {

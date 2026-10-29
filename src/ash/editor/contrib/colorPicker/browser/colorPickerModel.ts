@@ -42,11 +42,7 @@ export class ColorPickerModel extends Disposable {
 	private readonly _onDidChangePresentation = this._register(new Emitter<IColorPresentation>());
 	readonly onDidChangePresentation: Event<IColorPresentation> = this._onDidChangePresentation.event;
 
-	constructor(
-		color: Color,
-		availableColorPresentations: IColorPresentation[],
-		private presentationIndex: number,
-	) {
+	constructor(color: Color, availableColorPresentations: IColorPresentation[], private presentationIndex: number) {
 		super();
 		this.originalColor = color;
 		this._color = color;
@@ -54,9 +50,7 @@ export class ColorPickerModel extends Disposable {
 	}
 
 	selectNextColorPresentation(): void {
-		if (this.colorPresentations.length === 0) {
-			return;
-		}
+		if (this.colorPresentations.length === 0) { return; }
 		this.selectColorPresentation((this.presentationIndex + 1) % this.colorPresentations.length);
 	}
 

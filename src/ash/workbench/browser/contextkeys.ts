@@ -3,26 +3,7 @@ import type { IContextKey } from '../../platform/contextkey/common/contextkey.js
 import type { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import {
-	ActiveEditorGroupEmptyContext,
-	ActiveEditorGroupIndexContext,
-	ActiveEditorGroupLastContext,
-	AgentSidebarVisibleContext,
-	AuxiliaryBarMaximizedContext,
-	AuxiliaryBarVisibleContext,
-	BrowserLocalFolderSupportContext,
-	DirtyWorkingCopiesContext,
-	EditorAreaVisibleContext,
-	EditorsVisibleContext,
-	MultipleEditorGroupsContext,
-	OpenFolderWorkspaceSupportContext,
-	PanelMaximizedContext,
-	PanelVisibleContext,
-	PanelPositionContext,
-	SideBarVisibleContext,
-	WorkbenchStateContext,
-	WorkspaceFolderCountContext,
-} from '../common/contextkeys.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, PanelPositionContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
 import { positionToString, type IWorkbenchLayoutService, type WorkbenchPartId } from '../services/layout/browser/layoutService.js';
@@ -56,12 +37,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		key.set(this.openFolderWorkspaceSupported);
 		const browserKey = BrowserLocalFolderSupportContext.bindTo(contextKeyService);
 		browserKey.set(this.browserLocalFolderSupported);
-		this._register(
-			toDisposable(() => {
-				key.reset();
-				browserKey.reset();
-			}),
-		);
+		this._register(toDisposable(() => { key.reset(); browserKey.reset(); }));
 	}
 
 	private bindPlatformKeys(contextKeyService: IContextKeyService): void {
@@ -110,23 +86,20 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			panelPosition: PanelPositionContext.bindTo(contextKeyService),
 			auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
 		}));
-		const updateAll = (): void =>
+		const updateAll = (): void => contextKeyService.bufferChangeEvents(() => {
+			for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
+			panelMaximized.set(layoutService.isPanelMaximized());
+			panelPosition.set(positionToString(layoutService.getPanelPosition()));
+			auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
+		});
+		updateAll();
+		this._register(layoutService.onDidChangePartVisibility(event => {
 			contextKeyService.bufferChangeEvents(() => {
-				for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
+				visibilityKeys.get(event.partId)?.set(event.visible);
 				panelMaximized.set(layoutService.isPanelMaximized());
-				panelPosition.set(positionToString(layoutService.getPanelPosition()));
 				auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
 			});
-		updateAll();
-		this._register(
-			layoutService.onDidChangePartVisibility(event => {
-				contextKeyService.bufferChangeEvents(() => {
-					visibilityKeys.get(event.partId)?.set(event.visible);
-					panelMaximized.set(layoutService.isPanelMaximized());
-					auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
-				});
-			}),
-		);
+		}));
 		this._register(layoutService.onDidChangeAuxiliaryBarMaximized(updateAll));
 		this._register(layoutService.onDidChangePanelPosition(updateAll));
 		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, panelPosition, auxiliaryBarMaximized])));
@@ -144,17 +117,16 @@ export class WorkbenchEditorContextKeysHandler extends Disposable {
 			multipleEditorGroups: MultipleEditorGroupsContext.bindTo(contextKeyService),
 			editorsVisible: EditorsVisibleContext.bindTo(contextKeyService),
 		}));
-		const update = (): void =>
-			contextKeyService.bufferChangeEvents(() => {
-				const groups = editorGroupsService.groups;
-				const activeGroup = editorGroupsService.activeGroup;
-				const activeGroupIndex = groups.findIndex(group => group.id === activeGroup.id);
-				keys.activeEditorGroupEmpty.set(activeGroup.editors.length === 0 && editorService.activeEditor === undefined);
-				keys.activeEditorGroupIndex.set(activeGroupIndex >= 0 ? activeGroupIndex + 1 : 0);
-				keys.activeEditorGroupLast.set(activeGroupIndex >= 0 && activeGroupIndex === groups.length - 1);
-				keys.multipleEditorGroups.set(groups.length > 1);
-				keys.editorsVisible.set(editorService.visibleEditors.length > 0);
-			});
+		const update = (): void => contextKeyService.bufferChangeEvents(() => {
+			const groups = editorGroupsService.groups;
+			const activeGroup = editorGroupsService.activeGroup;
+			const activeGroupIndex = groups.findIndex(group => group.id === activeGroup.id);
+			keys.activeEditorGroupEmpty.set(activeGroup.editors.length === 0 && editorService.activeEditor === undefined);
+			keys.activeEditorGroupIndex.set(activeGroupIndex >= 0 ? activeGroupIndex + 1 : 0);
+			keys.activeEditorGroupLast.set(activeGroupIndex >= 0 && activeGroupIndex === groups.length - 1);
+			keys.multipleEditorGroups.set(groups.length > 1);
+			keys.editorsVisible.set(editorService.visibleEditors.length > 0);
+		});
 		update();
 		this._register(editorGroupsService.onDidChangeGroups(update));
 		this._register(editorService.onDidActiveEditorChange(update));

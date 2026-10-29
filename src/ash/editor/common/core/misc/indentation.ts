@@ -22,13 +22,10 @@ export const DEFAULT_EDITOR_INDENTATION = Object.freeze<ResolvedEditorIndentatio
 });
 
 export function normalizeIndentation(value: string, indentSize: number, insertSpaces: boolean): string {
-	return normalizeEditorIndentationText(
-		value,
-		resolveEditorIndentationOptions({
-			kind: insertSpaces ? EditorIndentationKind.Spaces : EditorIndentationKind.Tabs,
-			tabSize: indentSize,
-		}),
-	);
+	return normalizeEditorIndentationText(value, resolveEditorIndentationOptions({
+		kind: insertSpaces ? EditorIndentationKind.Spaces : EditorIndentationKind.Tabs,
+		tabSize: indentSize,
+	}));
 }
 
 export function resolveEditorIndentationOptions(options: EditorIndentationOptions = {}): ResolvedEditorIndentationOptions {
@@ -64,7 +61,9 @@ export function unshiftEditorIndentation(indentation: string, options: ResolvedE
 }
 
 function indentationFromColumns(columns: number, options: ResolvedEditorIndentationOptions): string {
-	return options.kind === EditorIndentationKind.Spaces ? ' '.repeat(columns) : '\t'.repeat(Math.floor(columns / options.tabSize)) + ' '.repeat(columns % options.tabSize);
+	return options.kind === EditorIndentationKind.Spaces
+		? ' '.repeat(columns)
+		: '\t'.repeat(Math.floor(columns / options.tabSize)) + ' '.repeat(columns % options.tabSize);
 }
 
 function indentationColumns(indentation: string, tabSize: number): number {

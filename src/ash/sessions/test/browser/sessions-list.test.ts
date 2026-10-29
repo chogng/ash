@@ -25,30 +25,19 @@ import type { ISessionsService } from '../../services/sessions/browser/sessionsS
 import { SessionsList } from '../../browser/parts/sidebar/sessionsList.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 
-const listCustomViews = {
-	activeCustomView: observableValue('testCustomView', undefined),
-} as unknown as ICustomViewService;
-const listMenus = {
-	createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => {}) }),
-} as unknown as IMenuService;
-const listNotifications = {
-	error: (error: unknown) => {
-		throw error;
-	},
-} as unknown as INotificationService;
+
+const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
+const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
+const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const emptyGroups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 const emptyProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
 const listCommands = { executeCommand: async () => undefined } as unknown as ICommandService;
-const listContextMenus = { showContextMenu() {} } as unknown as IContextMenuService;
+const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 
 test('SessionsList keeps session buttons and focus while refreshing', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const changes = new Emitter<void>();
-	using storage = new BrowserStorageService({
-		ownerWindow: dom.window as unknown as Window,
-		workspaceId: 'list',
-		flushInterval: 0,
-	});
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const opened: string[] = [];
 	let untitledSessions = [
 		{ untitledSessionId: 'first', title: 'First' },
@@ -58,75 +47,30 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
 	}
 	const sessionService = {
-		get untitledSessions() {
-			return untitledSessions;
-		},
+		get untitledSessions() { return untitledSessions; },
 		sessions: [],
-		state: 'ready',
-		onDidChange: changes.event,
+		state: 'ready', onDidChange: changes.event,
 		error: undefined,
 	} as unknown as ISessionsManagementService;
 	const viewService = {
 		onDidChange: changes.event,
 		activeSelection: undefined,
-		get visibleSelections() {
-			return untitledSessions.map(session => ({ kind: 'untitled', session }));
-		},
-		openNewSession() {},
-		openUntitledSession(id: string) {
-			opened.push(id);
-		},
+		get visibleSelections() { return untitledSessions.map(session => ({ kind: 'untitled', session })); },
+		openNewSession() { },
+		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;
 	const executed: unknown[][] = [];
-	const contextMenus = {
-		showContextMenu: (delegate: IContextMenuDelegate) => {
-			menu = delegate;
-		},
-	} as IContextMenuService;
-	const commands = {
-		executeCommand: async (...args: unknown[]) => {
-			executed.push(args);
-		},
-	} as ICommandService;
-	const list = new SessionsList(
-		dom.window.document.body,
-		'Sessions',
-		'chat',
-		sessionService,
-		viewService,
-		{
-			onDidChange: Event.None,
-			getSessionPullRequests: () => [],
-			getSessionIssues: () => [],
-			attachIssue: async () => {},
-			detachIssue: async () => {},
-			initialize: () => {},
-			attachPullRequest: async () => {},
-			detachPullRequest: async () => {},
-		},
-		emptyGroups,
-		storage,
-		emptyProjects,
-		commands,
-		contextMenus,
-		listCustomViews,
-		listMenus,
-		listNotifications,
-	);
+	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
+	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
 	assert.equal(actions.length, 7);
-	assert.ok(
-		actions.every(action => action.enabled),
-		'Every new chat item exposes all actions before sending',
-	);
+	assert.ok(actions.every(action => action.enabled), 'Every new chat item exposes all actions before sending');
 	for (const action of actions.slice(0, 5)) await action.run();
-	assert.deepEqual(
-		executed.map(args => args[1]),
-		Array.from({ length: 5 }, () => ({ untitledSessionId: 'first' })),
-	);
+	assert.deepEqual(executed.map(args => args[1]), Array.from({ length: 5 }, () => ({ untitledSessionId: 'first' })));
 	menu!.onHide?.(false);
 
 	buttons[0].focus();
@@ -165,68 +109,26 @@ for (const mode of ['chat', 'code'] as const) {
 	for (const locale of ['en', 'zh-CN']) {
 		test(`SessionsList hides empty drafts and retains content drafts in ${mode} in ${locale}`, () => {
 			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(locale === 'zh-CN' ? (chinese.bundles[bundle]?.[key] ?? fallback) : fallback, parameters));
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(locale === 'zh-CN' ? chinese.bundles[bundle]?.[key] ?? fallback : fallback, parameters));
 			try {
 				const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 				using domLifetime = toDisposable(() => dom.window.close());
 				using changes = new Emitter<void>();
-				using storage = new BrowserStorageService({
-					ownerWindow: dom.window as unknown as Window,
-					workspaceId: 'draft-list',
-					flushInterval: 0,
-				});
+				using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'draft-list', flushInterval: 0 });
 				const blank = { untitledSessionId: 'blank', title: '' };
 				const attachment = { untitledSessionId: 'attachment', title: 'Attachment' };
 				const corrupt = { untitledSessionId: 'corrupt', title: 'Unreadable' };
 				let drafts = [blank, attachment, corrupt];
-				const saved = {
-					sessionId: 'saved',
-					title: 'Saved conversation',
-					status: 'active',
-					chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }],
-				};
-				const management = {
-					get untitledSessions() {
-						return drafts;
-					},
-					sessions: [saved],
-					state: 'ready',
-					onDidChange: changes.event,
-				} as unknown as ISessionsManagementService;
+				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
+				const management = { get untitledSessions() { return drafts; }, sessions: [saved], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 				const opened: string[] = [];
 				const view = {
 					onDidChange: changes.event,
 					activeSelection: { kind: 'untitled', session: blank },
 					visibleSelections: [{ kind: 'untitled', session: blank }],
-					openUntitledSession(id: string) {
-						opened.push(id);
-					},
+					openUntitledSession(id: string) { opened.push(id); },
 				} as unknown as ISessionsService;
-				using list = new SessionsList(
-					dom.window.document.body,
-					'Sessions',
-					mode,
-					management,
-					view,
-					{
-						onDidChange: Event.None,
-						getSessionPullRequests: () => [],
-						getSessionIssues: () => [],
-						attachIssue: async () => {},
-						detachIssue: async () => {},
-						initialize: () => {},
-						attachPullRequest: async () => {},
-						detachPullRequest: async () => {},
-					},
-					emptyGroups,
-					storage,
-					emptyProjects,
-					listCommands,
-					listContextMenus,
-					listCustomViews,
-					listMenus,
-					listNotifications,
-				);
+				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications);
 				const rowIds = (): string[] => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
 				assert.deepEqual(rowIds(), ['session:saved']);
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank');
@@ -245,15 +147,7 @@ for (const mode of ['chat', 'code'] as const) {
 				assert.equal(list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'), button);
 
 				// The attachment-only draft is parked outside the visible arrangement.
-				writeNewChatDraftState(
-					storage,
-					{
-						mode: 'agent',
-						text: '',
-						contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }],
-					},
-					'untitled:attachment',
-				);
+				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment');
 				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
 				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
 				assert.deepEqual(opened, ['attachment']);
@@ -266,98 +160,36 @@ for (const mode of ['chat', 'code'] as const) {
 				changes.fire();
 				assert.deepEqual(rowIds(), ['session:saved']);
 				assert.equal(readNewChatDraftState(storage, 'untitled:attachment')?.contexts[0]?.name, 'source.txt');
-			} finally {
-				resetNlsResolver();
-			}
+			} finally { resetNlsResolver(); }
 		});
 	}
 }
+
 
 test('SessionsList updates passive status without changing row identity or selection', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using changes = new Emitter<void>();
-	using storage = new BrowserStorageService({
-		ownerWindow: dom.window as unknown as Window,
-		workspaceId: 'list',
-		flushInterval: 0,
-	});
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const opened: string[] = [];
 	const executed: unknown[][] = [];
 	let menu: IContextMenuDelegate | undefined;
-	const contextMenus = {
-		showContextMenu: (delegate: IContextMenuDelegate) => {
-			menu = delegate;
-		},
-	} as IContextMenuService;
+	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const commands = {
 		executeCommand: async (...args: unknown[]) => {
 			executed.push(args);
-			if (args[0] === 'sessions.list.togglePin') {
-				storage.store('sessions.list.pinned.background', true, StorageScope.PROFILE, StorageTarget.USER);
-				return 'background';
-			}
-		},
+			if (args[0] === 'sessions.list.togglePin') { storage.store('sessions.list.pinned.background', true, StorageScope.PROFILE, StorageTarget.USER); return 'background'; }
+		}
 	} as ICommandService;
 	let session = {
-		sessionId: 'background',
-		title: 'Background session',
-		status: 'active' as const,
-		nextApprovalMode: 'manual' as const,
+		sessionId: 'background', title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
 		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const }],
 		management: { status: 'working', statusChangedAtUnixMs: 10 },
 	};
-	const sessionService = {
-		get sessions() {
-			return [session];
-		},
-		untitledSessions: [],
-		state: 'ready',
-		onDidChange: changes.event,
-	} as unknown as ISessionsManagementService;
-	const viewService = {
-		onDidChange: changes.event,
-		activeSelection: undefined,
-		visibleSelections: [],
-		openSession(id: string) {
-			opened.push(id);
-		},
-	} as unknown as ISessionsService;
-	const request: IResolvedSessionPullRequest = {
-		uri: URI.parse('https://github.com/fixture/repo/pull/7'),
-		owner: 'fixture',
-		repo: 'repo',
-		number: 7,
-		title: 'Synthetic PR',
-		state: 'open',
-		status: { hasFailingChecks: true },
-		icon: computePullRequestIcon('open', { hasFailingChecks: true }),
-	};
-	using list = new SessionsList(
-		dom.window.document.body,
-		'Sessions',
-		'chat',
-		sessionService,
-		viewService,
-		{
-			onDidChange: Event.None,
-			getSessionPullRequests: () => [request],
-			getSessionIssues: () => [],
-			attachIssue: async () => {},
-			detachIssue: async () => {},
-			initialize: () => {},
-			attachPullRequest: async () => {},
-			detachPullRequest: async () => {},
-		},
-		emptyGroups,
-		storage,
-		emptyProjects,
-		commands,
-		contextMenus,
-		listCustomViews,
-		listMenus,
-		listNotifications,
-	);
+	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
+	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
@@ -380,10 +212,10 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.deepEqual(opened, [], 'opening More must not select the chat');
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
-	assert.deepEqual(
-		actions.map(action => action.id),
-		['sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive', 'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow'],
-	);
+	assert.deepEqual(actions.map(action => action.id), [
+		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive',
+		'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow',
+	]);
 	actions[1]!.run();
 	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
 	menu!.onHide?.(true);
@@ -398,17 +230,13 @@ test('SessionsList updates passive status without changing row identity or selec
 	dom.window.close();
 });
 
+
 test('passive management labels use the installed Chinese catalog and retain unknown states', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const statuses = ['idle', 'needsInput', 'working', 'readyForReview', 'completed', 'failed', 'stopped'] as const;
-		assert.deepEqual(
-			statuses.map(status => sessionManagementLabel({ status, statusChangedAtUnixMs: 10 })),
-			['空闲', '需要回应', '进行中', '待审阅', '已完成', '失败', '已停止'],
-		);
+		assert.deepEqual(statuses.map(status => sessionManagementLabel({ status, statusChangedAtUnixMs: 10 })), ['空闲', '需要回应', '进行中', '待审阅', '已完成', '失败', '已停止']);
 		assert.equal(sessionManagementLabel(undefined), undefined);
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });

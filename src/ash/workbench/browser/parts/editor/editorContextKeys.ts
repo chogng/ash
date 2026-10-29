@@ -3,27 +3,7 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '.
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
-import {
-	ActiveEditorAvailableEditorIdsContext,
-	ActiveEditorCanRevertContext,
-	ActiveEditorContext,
-	ActiveEditorDirtyContext,
-	ActiveEditorFirstInGroupContext,
-	ActiveEditorLastInGroupContext,
-	ActiveEditorPinnedContext,
-	ActiveEditorStickyContext,
-	ActiveEditorReadonlyContext,
-	EditorGroupEditorsCountContext,
-	EditorPartModalVisibleContext,
-	ResourceContext,
-	ResourceDirnameContext,
-	ResourceExtensionContext,
-	ResourceFilenameContext,
-	ResourceLanguageIdContext,
-	ResourcePathContext,
-	ResourceSchemeContext,
-	ResourceSetContext,
-} from '../../../common/contextkeys.js';
+import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 
@@ -76,11 +56,11 @@ export class EditorContextKeyController extends Disposable {
 			applyEditorContextKeys(this.contextKeyService, keys, this.editorRegistry, this.languageResolver, {
 				input,
 				paneId: state.isModalEditorVisible ? pane?.id : activeEditor?.paneId,
-				isDirty: state.isModalEditorVisible ? (workingCopy?.isDirty ?? false) : (activeEditor?.isDirty ?? false),
-				isPreview: state.isModalEditorVisible ? false : (activeEditor?.isPreview ?? false),
-				isSticky: state.isModalEditorVisible ? false : (activeEditor?.isSticky ?? false),
-				canRevert: state.isModalEditorVisible ? workingCopy !== undefined : (activeEditor?.canRevert ?? false),
-				index: state.isModalEditorVisible ? -1 : (activeEditor?.index ?? -1),
+				isDirty: state.isModalEditorVisible ? workingCopy?.isDirty ?? false : activeEditor?.isDirty ?? false,
+				isPreview: state.isModalEditorVisible ? false : activeEditor?.isPreview ?? false,
+				isSticky: state.isModalEditorVisible ? false : activeEditor?.isSticky ?? false,
+				canRevert: state.isModalEditorVisible ? workingCopy !== undefined : activeEditor?.canRevert ?? false,
+				index: state.isModalEditorVisible ? -1 : activeEditor?.index ?? -1,
 				groupEditorCount: group?.editors.length ?? 0,
 				isModal: state.isModalEditorVisible,
 			});
@@ -191,9 +171,7 @@ function applyEditorContextKeys(
 	projection: EditorContextKeyProjection,
 ): void {
 	const resourceInput = projection.input && isDiffEditorInput(projection.input) ? projection.input.modified : projection.input;
-	const resource = EditorResourceAccessor.getOriginalUri(projection.input, {
-		supportSideBySide: SideBySideEditor.PRIMARY,
-	});
+	const resource = EditorResourceAccessor.getOriginalUri(projection.input, { supportSideBySide: SideBySideEditor.PRIMARY });
 	const path = resource ? resourceContextPath(resource) : undefined;
 	const filename = path ? resourceFilename(path) : undefined;
 	contextKeyService.bufferChangeEvents(() => {
@@ -205,14 +183,7 @@ function applyEditorContextKeys(
 		keys.activeEditorLastInGroup.set(projection.index >= 0 && projection.index === projection.groupEditorCount - 1);
 		keys.activeEditorReadonly.set(projection.input?.readOnly === true);
 		keys.activeEditorCanRevert.set(projection.canRevert);
-		keys.activeEditorAvailableEditorIds.set(
-			projection.input
-				? editorRegistry
-						.getEditorPanesForInput(projection.input)
-						.map(editor => editor.id)
-						.join(',')
-				: '',
-		);
+		keys.activeEditorAvailableEditorIds.set(projection.input ? editorRegistry.getEditorPanesForInput(projection.input).map(editor => editor.id).join(',') : '');
 		keys.editorGroupEditorsCount.set(projection.groupEditorCount);
 		keys.editorPartModalVisible.set(projection.isModal);
 		keys.resource.set(resource?.toString());

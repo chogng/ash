@@ -7,20 +7,10 @@ suite('Webview host environment', () => {
 	test('retains a valid Web update provider and rejects malformed host callbacks', () => {
 		const dom = new JSDOM('', { url: 'http://localhost/' });
 		try {
-			const provider = {
-				async checkForUpdate() {
-					return null;
-				},
-			};
+			const provider = { async checkForUpdate() { return null; } };
 			assert.equal(new BrowserWorkbenchEnvironmentService(dom.window.location, undefined, { updateProvider: provider }).options.updateProvider, provider);
 			for (const invalid of [null, {}, { checkForUpdate: true }]) {
-				assert.throws(
-					() =>
-						new BrowserWorkbenchEnvironmentService(dom.window.location, undefined, {
-							updateProvider: invalid as unknown as typeof provider,
-						}),
-					/updateProvider/,
-				);
+				assert.throws(() => new BrowserWorkbenchEnvironmentService(dom.window.location, undefined, { updateProvider: invalid as unknown as typeof provider }), /updateProvider/);
 			}
 		} finally {
 			dom.window.close();

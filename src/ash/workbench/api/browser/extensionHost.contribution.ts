@@ -22,25 +22,7 @@ import { IViewsService } from '../../services/views/common/viewsService.js';
 
 registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
-	dependencies: [
-		IImageEditorService,
-		IDebugService,
-		ISpeechService,
-		ITerminalService,
-		ITerminalProfileService,
-		ITerminalProfileResolverService,
-		IConfigurationService,
-		IWorkspaceContextService,
-		IExtensionService,
-		IExtensionHostApi,
-		ILogService,
-		ILanguageFeaturesService,
-		ITaskService,
-		ITestingService,
-		IOutputService,
-		IQuickInputService,
-		IViewsService,
-	],
+	dependencies: [IImageEditorService, IDebugService, ISpeechService, ITerminalService, ITerminalProfileService, ITerminalProfileResolverService, IConfigurationService, IWorkspaceContextService, IExtensionService, IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService, IQuickInputService, IViewsService],
 	install: context => {
 		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();

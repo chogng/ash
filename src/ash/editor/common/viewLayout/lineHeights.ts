@@ -37,12 +37,8 @@ export class LineHeightsManager {
 		for (const data of customLineHeightData) this.ranges.set(data.decorationId, data);
 	}
 
-	set defaultLineHeight(value: number) {
-		this.lineHeight = value;
-	}
-	get defaultLineHeight(): number {
-		return this.lineHeight;
-	}
+	set defaultLineHeight(value: number) { this.lineHeight = value; }
+	get defaultLineHeight(): number { return this.lineHeight; }
 
 	removeCustomLineHeight(decorationId: string): void {
 		this.ranges.delete(decorationId);
@@ -126,13 +122,18 @@ export class CustomLineHeightData {
 		readonly startLineNumber: number,
 		readonly endLineNumber: number,
 		readonly lineHeight: number,
-	) {}
+	) { }
 
 	static fromDecorations(decorations: IModelDecoration[], coordinatesConverter: ICoordinatesConverter, configuration: IEditorConfiguration): CustomLineHeightData[] {
 		const baseHeight = configuration.options.get(EditorOption.lineHeight);
 		return decorations.map(decoration => {
 			const range = coordinatesConverter.convertModelRangeToViewRange(decoration.range);
-			return new CustomLineHeightData(decoration.id, range.startLineNumber, range.endLineNumber, (decoration.options.lineHeight ?? 0) * baseHeight);
+			return new CustomLineHeightData(
+				decoration.id,
+				range.startLineNumber,
+				range.endLineNumber,
+				(decoration.options.lineHeight ?? 0) * baseHeight,
+			);
 		});
 	}
 }

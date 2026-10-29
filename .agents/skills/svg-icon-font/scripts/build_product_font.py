@@ -45,7 +45,7 @@ def output_files(args):
 
 def tool_files():
     return sorted(path for path in SCRIPTS.glob("*.py") if not path.name.startswith("test_")) + [REQUIREMENTS, ROOT / ".agents/skills/variable-iconfont/scripts/vifont.py",
-        ROOT / "build/resources/icons/generate.ts", ROOT / "build/resources/icons/generate-to-ts.ts", ROOT / "build/lib/generatedTypeScript.ts", ROOT / "pnpm-lock.yaml", ROOT / ".prettierrc.toml"]
+        ROOT / "build/resources/icons/generate.ts", ROOT / "build/resources/icons/generate-to-ts.ts", ROOT / "build/lib/generatedTypeScript.ts", ROOT / "build/format.ts", ROOT / "tsfmt.json", ROOT / "pnpm-lock.yaml", ROOT / ".prettierrc.toml"]
 
 
 def fingerprint(args):

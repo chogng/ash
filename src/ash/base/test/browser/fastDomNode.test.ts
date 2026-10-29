@@ -105,8 +105,8 @@ test('Layer hinting and explicit transforms share one cache', () => {
 
 function createWriteFixture(): {
 	readonly element: HTMLElement;
-	readonly values: { width: string; transform: string; className: string };
-	readonly writes: { width: number; transform: number; className: number };
+	readonly values: { width: string; transform: string; className: string; };
+	readonly writes: { width: number; transform: number; className: number; };
 } {
 	const values = { width: '', transform: '', className: '' };
 	const writes = { width: 0, transform: 0, className: 0 };

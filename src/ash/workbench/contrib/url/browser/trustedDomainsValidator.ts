@@ -33,13 +33,7 @@ export class OpenerValidatorContributions extends Disposable {
 		if (this.trustedDomains.isValid(resource)) return true;
 		const buttons: IActionPromptButton<boolean>[] = [
 			{ label: localize('url.trust.open', 'Open'), run: () => !this.isDisposed },
-			{
-				label: localize('url.trust.copy', 'Copy'),
-				run: async () => {
-					await this.clipboard.writeText(typeof target === 'string' ? target : target.toString());
-					return false;
-				},
-			},
+			{ label: localize('url.trust.copy', 'Copy'), run: async () => { await this.clipboard.writeText(typeof target === 'string' ? target : target.toString()); return false; } },
 		];
 		if (isURLSafeForTrust(resource)) {
 			buttons.push({

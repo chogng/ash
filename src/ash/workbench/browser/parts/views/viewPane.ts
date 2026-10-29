@@ -56,9 +56,7 @@ export abstract class ViewPane extends Pane implements IView {
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 
 	/** Intrinsic horizontal content constraint, independent of the current Part allocation. */
-	get minimumWidth(): number {
-		return 0;
-	}
+	get minimumWidth(): number { return 0; }
 
 	protected notifyConstraintsChanged(): void {
 		this.constraintsChanged.fire();
@@ -67,12 +65,8 @@ export abstract class ViewPane extends Pane implements IView {
 	private readonly titleAreaUpdate = this._register(new Emitter<void>());
 	public readonly onDidChangeTitleArea = this.titleAreaUpdate.event;
 
-	public getActions(): readonly IAction[] {
-		return [];
-	}
-	public getSecondaryActions(): readonly IAction[] {
-		return [];
-	}
+	public getActions(): readonly IAction[] { return []; }
+	public getSecondaryActions(): readonly IAction[] { return []; }
 
 	protected updateTitleArea(): void {
 		this.titleAreaUpdate.fire();
@@ -80,17 +74,13 @@ export abstract class ViewPane extends Pane implements IView {
 
 	/** Keeps secondary context beside the title, inside the pane's collapse button. */
 	protected updateTitleDescription(description?: string): void {
-		if (!this.titleDescriptionElement && !description) {
-			return;
-		}
+		if (!this.titleDescriptionElement && !description) { return; }
 		if (!this.titleDescriptionElement) {
 			this.titleDescriptionElement = h(this.element.ownerDocument, 'span');
 			this.titleDescriptionElement.className = 'ash-view-pane-header-description';
 			this.titleElement.after(this.titleDescriptionElement);
 		}
-		if (this.titleDescriptionElement.textContent === (description ?? '')) {
-			return;
-		}
+		if (this.titleDescriptionElement.textContent === (description ?? '')) { return; }
 		this.titleDescriptionElement.textContent = description ?? '';
 		this.titleDescriptionElement.hidden = !description;
 		this.titleElement.classList.toggle('ash-view-pane-header-title-with-description', !!description);
@@ -100,24 +90,16 @@ export abstract class ViewPane extends Pane implements IView {
 	/** Includes fixed controls in the body constraint while retaining an independent content viewport. */
 	protected trackBodyMinimum(scrollableContent: HTMLElement, minimumContentHeight: number, enabled: () => boolean = () => true): void {
 		const minimumBodyHeight = this.minimumBodySize;
-		const update = this._register(
-			new AnimationFrameScheduler(getWindow(this.element), () => {
-				if (!this.isBodyVisible()) {
-					return;
-				}
-				const reservedHeight = enabled() ? Math.max(0, Math.max(this.contentElement.clientHeight, this.contentElement.scrollHeight) - scrollableContent.offsetHeight) : 0;
-				this.minimumBodySize = Math.max(minimumBodyHeight, minimumContentHeight + reservedHeight);
-			}),
-		);
+		const update = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
+			if (!this.isBodyVisible()) { return; }
+			const reservedHeight = enabled()
+				? Math.max(0, Math.max(this.contentElement.clientHeight, this.contentElement.scrollHeight) - scrollableContent.offsetHeight)
+				: 0;
+			this.minimumBodySize = Math.max(minimumBodyHeight, minimumContentHeight + reservedHeight);
+		}));
 		// Apply constraints outside ResizeObserver delivery to avoid a resize/layout feedback loop.
 		this._register(observeResize([this.contentElement, ...this.contentElement.children], () => update.schedule()));
-		this._register(
-			this.onDidChangeBodyVisibility(visible => {
-				if (visible) {
-					update.schedule();
-				}
-			}),
-		);
+		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { update.schedule(); } }));
 	}
 
 	public override setTitle(title: string): void {
@@ -139,14 +121,10 @@ export abstract class ViewPane extends Pane implements IView {
 			bar.element.classList.add('ash-view-pane-progress-indicator', 'thin');
 			bar.element.setAttribute('aria-label', this.paneTitle);
 			const pane = this;
-			this.progressIndicator = this._register(
-				new ScopedProgressIndicator(bar, {
-					get isActive() {
-						return pane.isBodyVisible();
-					},
-					onDidChangeActive: Event.map(this.onDidChangeBodyVisibility, () => undefined),
-				}),
-			);
+			this.progressIndicator = this._register(new ScopedProgressIndicator(bar, {
+				get isActive() { return pane.isBodyVisible(); },
+				onDidChangeActive: Event.map(this.onDidChangeBodyVisibility, () => undefined),
+			}));
 		}
 		return this.progressIndicator;
 	}
@@ -155,7 +133,7 @@ export abstract class ViewPane extends Pane implements IView {
 		super.setHeaderActionsHost(host);
 		if (!host || !actions) return;
 		// The Part owns the renderer; this View keeps the scope and focus tracker on the lent action root.
-		const focused = actions.contains(actions.ownerDocument.activeElement) ? (actions.ownerDocument.activeElement as HTMLElement) : undefined;
+		const focused = actions.contains(actions.ownerDocument.activeElement) ? actions.ownerDocument.activeElement as HTMLElement : undefined;
 		this.headerActionsElement.append(actions);
 		actions.setAttribute('aria-label', this.headerActionsElement.getAttribute('aria-label') ?? this.paneTitle);
 		focused?.focus();
@@ -198,8 +176,7 @@ export abstract class ViewPane extends Pane implements IView {
 		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;
 		this.headerElement.draggable = options.canMoveView === true;
-		if (options.canMoveView)
-			this.headerElement.querySelector('button')?.setAttribute('aria-description', localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'));
+		if (options.canMoveView) this.headerElement.querySelector('button')?.setAttribute('aria-description', localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'));
 		this.element.hidden = true;
 	}
 
@@ -251,9 +228,11 @@ export abstract class ViewPane extends Pane implements IView {
 export abstract class FilterViewPane extends ViewPane {
 	readonly filterWidget: FilterWidget;
 	protected readonly filterContainer: HTMLElement;
-	private bodyDimension: { height: number; width: number } | undefined;
+	private bodyDimension: { height: number; width: number; } | undefined;
 
-	constructor(container: HTMLElement, options: IFilterViewPaneOptions, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, options: IFilterViewPaneOptions,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super(container, options);
 		this.element.classList.add('ash-filter-view-pane');
 		this.filterWidget = this._register(instantiationService.createInstance(FilterWidget, options.filterOptions));
@@ -264,9 +243,7 @@ export abstract class FilterViewPane extends ViewPane {
 		this._register(this.filterWidget.onDidAcceptFilterText(() => this.focusBodyContent()));
 	}
 
-	getFilterWidget(): FilterWidget {
-		return this.filterWidget;
-	}
+	getFilterWidget(): FilterWidget { return this.filterWidget; }
 
 	shouldShowFilterInHeader(): boolean {
 		return this.bodyDimension !== undefined && (this.bodyDimension.width >= 600 || this.bodyDimension.height <= 100);
@@ -294,9 +271,7 @@ export abstract class FilterViewPane extends ViewPane {
 
 	protected abstract layoutBodyContent(height: number, width: number): void;
 
-	protected focusBodyContent(): void {
-		this.focus();
-	}
+	protected focusBodyContent(): void { this.focus(); }
 }
 
 /** Owns welcome DOM and listeners for the pane that creates it. */
@@ -305,11 +280,9 @@ export class ViewWelcomeController extends Disposable {
 	private readonly domNode: HTMLElement;
 	private readonly scrollable: ScrollableElement;
 	private descriptors: readonly IViewContentDescriptor[] = [];
-	private readonly buttons: { button: Button; descriptor: IViewContentDescriptor }[] = [];
+	private readonly buttons: { button: Button; descriptor: IViewContentDescriptor; }[] = [];
 	private isEnabled = false;
-	public get enabled(): boolean {
-		return this.isEnabled;
-	}
+	public get enabled(): boolean { return this.isEnabled; }
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -330,31 +303,25 @@ export class ViewWelcomeController extends Disposable {
 		this.scrollable = this._register(new ScrollableElement(this.domNode, { direction: 'vertical', tabIndex: -1 }));
 		this.scrollable.element.classList.add('ash-view-welcome-viewport');
 		this.scrollable.contentElement.classList.add('ash-view-welcome-content');
-		this._register(
-			toDisposable(() => {
-				container.classList.remove('welcome');
-				this.domNode.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			container.classList.remove('welcome');
+			this.domNode.remove();
+		}));
 		this._register(delegate.onDidChangeViewWelcomeState(() => this.update()));
-		this._register(
-			registry.onDidChangeViewWelcomeContent(id => {
-				if (id === delegate.id) this.update();
-			}),
-		);
-		this._register(
-			contextKeyService.onDidChangeContext(event => {
-				const keys = new Set<string>();
-				for (const descriptor of registry.getViewWelcomeContent(delegate.id)) {
-					for (const expression of [descriptor.when, descriptor.precondition]) {
-						if (expression && expression !== 'default') {
-							for (const key of expression.keys()) keys.add(key);
-						}
+		this._register(registry.onDidChangeViewWelcomeContent(id => {
+			if (id === delegate.id) this.update();
+		}));
+		this._register(contextKeyService.onDidChangeContext(event => {
+			const keys = new Set<string>();
+			for (const descriptor of registry.getViewWelcomeContent(delegate.id)) {
+				for (const expression of [descriptor.when, descriptor.precondition]) {
+					if (expression && expression !== 'default') {
+						for (const key of expression.keys()) keys.add(key);
 					}
 				}
-				if (event.affectsSome(keys)) this.update();
-			}),
-		);
+			}
+			if (event.affectsSome(keys)) this.update();
+		}));
 	}
 
 	public focus(): void {
@@ -379,23 +346,16 @@ export class ViewWelcomeController extends Disposable {
 			this.scrollable.replaceChildren();
 			this.descriptors = selected;
 			for (const descriptor of selected) {
-				for (const line of descriptor.content
-					.split('\n')
-					.map(line => line.trim())
-					.filter(Boolean)) {
+				for (const line of descriptor.content.split('\n').map(line => line.trim()).filter(Boolean)) {
 					const link = /^\[([^\]]+)\]\((command:[^\s)]+)\)$/u.exec(line);
 					if (link) {
-						const button = this.renderedContent.add(
-							new Button(this.scrollable.contentElement, {
-								...defaultButtonStyles,
-								label: link[1],
-								title: link[1],
-								presentation: 'primary',
-								onClick: () => {
-									void this.open(link[2], descriptor);
-								},
-							}),
-						);
+						const button = this.renderedContent.add(new Button(this.scrollable.contentElement, {
+							...defaultButtonStyles,
+							label: link[1],
+							title: link[1],
+							presentation: 'primary',
+							onClick: () => { void this.open(link[2], descriptor); },
+						}));
 						this.buttons.push({ button, descriptor });
 					} else {
 						const paragraph = h(this.domNode.ownerDocument, 'p');

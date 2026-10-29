@@ -38,10 +38,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly channel: BroadcastDataChannel<null>;
 
-	private constructor(
-		private readonly database: IndexedDB,
-		private readonly scheme: string,
-	) {
+	private constructor(private readonly database: IndexedDB, private readonly scheme: string) {
 		super();
 		this._register(toDisposable(() => database.close()));
 		this.channel = this._register(new BroadcastDataChannel<null>('ash-user-data-files'));
@@ -63,13 +60,8 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 				throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
 			}
 			const prefix = this.key(resource).replace(/\/$/u, '') + '/';
-			return [...entries]
-				.filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
-				.map(([key, entry]) => ({
-					resource: URI.parse(key),
-					name: key.slice(prefix.length),
-					kind: entry.kind,
-				}));
+			return [...entries].filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
+				.map(([key, entry]) => ({ resource: URI.parse(key), name: key.slice(prefix.length), kind: entry.kind }));
 		});
 	}
 
@@ -224,20 +216,14 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 								}
 							}
 						}
-					} catch (error) {
-						failure = error;
-						store.transaction.abort();
-					}
+					} catch (error) { failure = error; store.transaction.abort(); }
 				};
 				return values;
 			});
 		} catch (error) {
 			throw failure ?? error;
 		}
-		if (write && !this.isDisposed) {
-			this.channel.postData(null);
-			this.changes.fire({ resources: undefined });
-		}
+		if (write && !this.isDisposed) { this.channel.postData(null); this.changes.fire({ resources: undefined }); }
 		return result;
 	}
 
@@ -275,12 +261,6 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	private fileStat(resource: URI, entry: Entry): IFileStat {
-		return {
-			resource,
-			kind: entry.kind,
-			sizeBytes: entry.bytes.byteLength,
-			readonly: false,
-			modifiedAtMillis: entry.modifiedAtMillis,
-		};
+		return { resource, kind: entry.kind, sizeBytes: entry.bytes.byteLength, readonly: false, modifiedAtMillis: entry.modifiedAtMillis };
 	}
 }

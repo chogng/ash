@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('Chat input history is shared with Agents while composer drafts remain independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, target }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const editor = page.locator('.ash-chat-view-pane .ash-chat:visible .stanza-editor');
@@ -37,7 +37,7 @@ test('Chat input history is shared with Agents while composer drafts remain inde
 test('Chat input history persists across renderer reload and search confirmation never sends', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, reloadWorkbench }) => {
 	let page = workbench.page;
 	const showChat = async (): Promise<void> => {
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		}
 	};

@@ -19,13 +19,7 @@ test('Desktop packages the shared backend host instead of the Ash Code CLI', () 
 	const forbiddenProductCrate = ['ash', 'cli'].join('-');
 	const forbiddenProductPath = ['ash', 'code', 'cli'].join('/');
 
-	for (const [name, contents] of [
-		['package script', packageScript],
-		['package manifest', packageManifest],
-		['frontend watcher', watcher],
-		['backend builder', backendBuilder],
-		['Electron Main', electronMain],
-	] as const) {
+	for (const [name, contents] of [['package script', packageScript], ['package manifest', packageManifest], ['frontend watcher', watcher], ['backend builder', backendBuilder], ['Electron Main', electronMain]] as const) {
 		assert.equal(contents.includes(forbiddenProductCrate), false, `${name} must not reference the Ash Code CLI crate`);
 		assert.equal(contents.includes(forbiddenProductPath), false, `${name} must not reference the Ash Code CLI source path`);
 	}

@@ -39,23 +39,14 @@ class HistoryFixture extends Disposable {
 		this.history = this._register(this.services.createInstance(HistoryService));
 		this.services.registerInstance(IHistoryService, this.history);
 		this.commands = this._register(new CommandService(this.services));
-		this._register({
-			dispose: () => container.remove(),
-			[Symbol.dispose]() {
-				this.dispose();
-			},
-		});
+		this._register({ dispose: () => container.remove(), [Symbol.dispose]() { this.dispose(); } });
 	}
 
 	registerPane(id: string) {
-		return this._register(
-			this.registry.registerEditorPane({
-				id,
-				name: id,
-				canOpen: () => EditorPaneMatch.Default,
-				create: () => new HistoryPane(id, this),
-			}),
-		);
+		return this._register(this.registry.registerEditorPane({
+			id, name: id, canOpen: () => EditorPaneMatch.Default,
+			create: () => new HistoryPane(id, this),
+		}));
 	}
 
 	async close(input: IResourceEditorInput): Promise<void> {
@@ -64,10 +55,7 @@ class HistoryFixture extends Disposable {
 }
 
 class HistoryPane extends EditorPane {
-	constructor(
-		readonly id: string,
-		private readonly fixture: HistoryFixture,
-	) {
+	constructor(readonly id: string, private readonly fixture: HistoryFixture) {
 		super(id, fixture.services.get(IThemeService), fixture.services.get(IStorageService));
 	}
 
@@ -86,11 +74,9 @@ class HistoryPane extends EditorPane {
 		if (failure) throw failure;
 	}
 
-	clearInput(): void {}
-	layout(_dimension: IDimension): void {}
-	override focus(): void {
-		this.getContainer()?.focus();
-	}
+	clearInput(): void { }
+	layout(_dimension: IDimension): void { }
+	override focus(): void { this.getContainer()?.focus(); }
 }
 
 const resource = (name: string): IResourceEditorInput => ({ resource: URI.file(`/workspace/${name}.ts`) });
@@ -211,10 +197,7 @@ test('repeated closes are deduplicated and the retained history is bounded', asy
 	}
 	for (let index = 0; index < 22; index++) await fixture.history.reopenLastClosedEditor();
 	assert.equal(fixture.editor.activeGroup.inputs.length, 20);
-	assert.equal(
-		fixture.editor.activeGroup.inputs.some(input => input.resource.path.endsWith('bounded-0.ts')),
-		false,
-	);
+	assert.equal(fixture.editor.activeGroup.inputs.some(input => input.resource.path.endsWith('bounded-0.ts')), false);
 });
 
 test('concurrent reopen commands are serialized instead of canceling an opening editor', async () => {

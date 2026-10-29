@@ -1,7 +1,7 @@
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 
 /** Owns only the file templates intersecting the current viewport. */
-export class VirtualizedItemManager<TItem extends IDisposable & { readonly domNode: HTMLElement }> extends Disposable {
+export class VirtualizedItemManager<TItem extends IDisposable & { readonly domNode: HTMLElement; }> extends Disposable {
 	private readonly visible = new Map<number, TItem>();
 
 	constructor(

@@ -31,10 +31,7 @@ export class Canvas extends Disposable {
 	private readonly selectionBoundsDomNodes: SVGRectElement[] = [];
 	private cursorVersion = 0;
 
-	constructor(
-		ownerDocument: Document,
-		@IThemeService private readonly themeService: IThemeService,
-	) {
+	constructor(ownerDocument: Document, @IThemeService private readonly themeService: IThemeService) {
 		super();
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-canvas-viewport' });
 		this.worldDomNode = h(ownerDocument, 'div', { className: 'ash-canvas-world' });
@@ -46,16 +43,8 @@ export class Canvas extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', () => this.setFocused(false)));
 		this._register(toDisposable(() => this.cursorVersion++));
-		this._register(
-			themeService.onDidColorThemeChange(() => {
-				void this.updatePointerCursor();
-			}),
-		);
-		this._register(
-			themeService.onDidProductIconThemeChange(() => {
-				void this.updatePointerCursor();
-			}),
-		);
+		this._register(themeService.onDidColorThemeChange(() => { void this.updatePointerCursor(); }));
+		this._register(themeService.onDidProductIconThemeChange(() => { void this.updatePointerCursor(); }));
 		void this.updatePointerCursor();
 	}
 
@@ -63,12 +52,8 @@ export class Canvas extends Disposable {
 		this.worldDomNode.replaceChildren(content, this.selectionDomNode);
 	}
 
-	public setFocused(isFocused: boolean): void {
-		this.domNode.classList.toggle('focused', isFocused);
-	}
-	public setPointerCursor(isEnabled: boolean): void {
-		this.domNode.classList.toggle('pointer-cursor', isEnabled);
-	}
+	public setFocused(isFocused: boolean): void { this.domNode.classList.toggle('focused', isFocused); }
+	public setPointerCursor(isEnabled: boolean): void { this.domNode.classList.toggle('pointer-cursor', isEnabled); }
 
 	public setCursor(cursor: CanvasCursor): void {
 		this.domNode.classList.toggle('hand-tool', cursor === CanvasCursor.Pan);
@@ -83,9 +68,7 @@ export class Canvas extends Disposable {
 	}
 
 	public renderSelection(bounds: readonly CanvasSelectionBounds[]): void {
-		for (const rect of this.selectionBoundsDomNodes.splice(bounds.length)) {
-			rect.remove();
-		}
+		for (const rect of this.selectionBoundsDomNodes.splice(bounds.length)) { rect.remove(); }
 		for (const [index, bound] of bounds.entries()) {
 			let rect = this.selectionBoundsDomNodes[index];
 			if (!rect) {
@@ -93,9 +76,7 @@ export class Canvas extends Disposable {
 				this.selectionBoundsDomNodes.push(rect);
 				this.selectionDomNode.append(rect);
 			}
-			for (const key of ['x', 'y', 'width', 'height'] as const) {
-				rect.setAttribute(key, `${bound[key]}`);
-			}
+			for (const key of ['x', 'y', 'width', 'height'] as const) { rect.setAttribute(key, `${bound[key]}`); }
 			rect.setAttribute('transform', `rotate(${bound.rotation} ${bound.x + bound.width / 2} ${bound.y + bound.height / 2})`);
 		}
 		this.selectionDomNode.classList.toggle('visible', bounds.length > 0);
@@ -118,9 +99,7 @@ export class Canvas extends Disposable {
 		// than importing, recoloring or converting its source SVG in the renderer.
 		try {
 			if (!(await document.fonts.load(font, character)).length || version !== this.cursorVersion) return;
-		} catch {
-			return;
-		}
+		} catch { return; }
 		const canvas = document.createElement('canvas');
 		canvas.width = canvas.height = 24;
 		const context = canvas.getContext('2d');

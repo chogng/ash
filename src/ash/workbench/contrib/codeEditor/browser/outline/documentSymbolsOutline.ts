@@ -37,15 +37,11 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 	) {
 		super();
 		this.config = {
-			treeDataSource: {
-				getChildren: element => (element === this ? this.roots() : (element as OutlineElement).children.values()),
-			},
+			treeDataSource: { getChildren: element => element === this ? this.roots() : (element as OutlineElement).children.values() },
 			comparator: {
 				compareByPosition: (a, b) => Range.compareRangesUsingStarts(a.symbol.range, b.symbol.range),
 				compareByName: (a, b) => a.symbol.name.localeCompare(b.symbol.name),
-				compareByType: (a, b) =>
-					(typeof a.symbol.kind === 'number' && typeof b.symbol.kind === 'number' ? a.symbol.kind - b.symbol.kind : String(a.symbol.kind).localeCompare(String(b.symbol.kind))) ||
-					a.symbol.name.localeCompare(b.symbol.name),
+				compareByType: (a, b) => (typeof a.symbol.kind === 'number' && typeof b.symbol.kind === 'number' ? a.symbol.kind - b.symbol.kind : String(a.symbol.kind).localeCompare(String(b.symbol.kind))) || a.symbol.name.localeCompare(b.symbol.name),
 			},
 			options: {
 				modelOptions: { identityProvider: { getId: element => element.id }, defaultCollapseState: 'expanded' },
@@ -69,23 +65,17 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 				},
 			},
 		};
-		this._register(
-			editor.onDidChangeModel(() => {
-				this.bindModel();
-				this.updateSoon.schedule(0);
-			}),
-		);
+		this._register(editor.onDidChangeModel(() => {
+			this.bindModel();
+			this.updateSoon.schedule(0);
+		}));
 		this._register(editor.onDidChangeCursorPosition(() => this.changed.fire({ affectOnlyActiveElement: true })));
 		this._register(features.documentSymbolProvider.onDidChange(() => this.updateSoon.schedule(0)));
 		this.bindModel();
 	}
 
-	public get uri() {
-		return this.editor.getModel()?.uri;
-	}
-	public get isEmpty(): boolean {
-		return this.roots().length === 0;
-	}
+	public get uri() { return this.editor.getModel()?.uri; }
+	public get isEmpty(): boolean { return this.roots().length === 0; }
 
 	public get activeElement(): OutlineElement | undefined {
 		const position = this.editor.getPosition();
@@ -114,7 +104,9 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 		const controller = new AbortController();
 		this.request.value = toDisposable(() => controller.abort());
 		const model = this.editor.getModel();
-		const outline = model instanceof TextModel ? await OutlineModel.create(this.features.documentSymbolProvider, model, controller.signal, onUnexpectedExternalError) : null;
+		const outline = model instanceof TextModel
+			? await OutlineModel.create(this.features.documentSymbolProvider, model, controller.signal, onUnexpectedExternalError)
+			: null;
 		if (this.isDisposed || controller.signal.aborted) return;
 		this.model = outline ?? undefined;
 		this.changed.fire({});
@@ -131,20 +123,16 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 		this.modelListeners.value = resources;
 		const model = this.editor.getModel();
 		if (!model) return;
-		resources.add(
-			model.onDidChangeContent(() => {
-				this.request.clear();
-				this.updateSoon.schedule();
-			}),
-		);
+		resources.add(model.onDidChangeContent(() => {
+			this.request.clear();
+			this.updateSoon.schedule();
+		}));
 		resources.add(model.onDidChangeLanguage(() => this.updateSoon.schedule(0)));
-		resources.add(
-			model.onWillDispose(() => {
-				this.request.clear();
-				this.model = undefined;
-				this.changed.fire({});
-			}),
-		);
+		resources.add(model.onWillDispose(() => {
+			this.request.clear();
+			this.model = undefined;
+			this.changed.fire({});
+		}));
 	}
 }
 
@@ -172,10 +160,7 @@ export class DocumentSymbolsOutlineCreator extends Disposable implements IOutlin
 		using cancellation = token.onCancellationRequested(() => outline.dispose());
 		try {
 			await raceCancellationError(outline.update(), token);
-			if (token.isCancellationRequested) {
-				outline.dispose();
-				return undefined;
-			}
+			if (token.isCancellationRequested) { outline.dispose(); return undefined; }
 			return outline;
 		} catch (error) {
 			outline.dispose();

@@ -7,16 +7,9 @@ import type { LanguageLocation } from '../../common/languages.js';
 const environment = new JSDOM('<!doctype html><body></body>');
 environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
-	},
+	window: environment.window, document: environment.window.document,
+	Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement,
+	ResizeObserver: class { observe(): void { } unobserve(): void { } disconnect(): void { } },
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -31,28 +24,13 @@ export function createLanguageFeatureEditor() {
 	const opened: LanguageLocation[] = [];
 	const errors: unknown[] = [];
 	const editor = createTestCodeEditor({
-		container,
-		model,
-		languageFeaturesService: features,
-		dimension: { width: 500, height: 200 },
-		onOpenLocation: location => {
-			opened.push(location);
-		},
-		onLanguageError: error => errors.push(error),
+		container, model,
+		languageFeaturesService: features, dimension: { width: 500, height: 200 },
+		onOpenLocation: location => { opened.push(location); }, onLanguageError: error => errors.push(error),
 	});
 	return {
-		container,
-		model,
-		features,
-		editor,
-		opened,
-		errors,
-		[Symbol.dispose]: () => {
-			editor.dispose();
-			features.dispose();
-			model.dispose();
-			container.remove();
-		},
+		container, model, features, editor, opened, errors,
+		[Symbol.dispose]: () => { editor.dispose(); features.dispose(); model.dispose(); container.remove(); },
 	};
 }
 

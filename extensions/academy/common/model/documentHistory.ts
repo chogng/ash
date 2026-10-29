@@ -108,19 +108,8 @@ export class DocumentHistory {
 
 function mergeHistoryEntries(previous: DocumentHistoryEntry, next: DocumentHistoryEntry): DocumentHistoryEntry {
 	return Object.freeze({
-		transaction: new DocumentTransaction([...previous.transaction.steps, ...next.transaction.steps], {
-			label: next.transaction.label,
-			selection: next.transaction.selection,
-			selectionSet: next.transaction.selectionSet,
-			storedMarks: next.transaction.storedMarks,
-			storedMarksSet: next.transaction.storedMarksSet,
-			historyGroup: next.historyGroup,
-			metadata: [...previous.transaction.metadata, ...next.transaction.metadata],
-		}),
-		inverse: new DocumentTransaction([...next.inverse.steps, ...previous.inverse.steps], {
-			addToHistory: false,
-			label: next.inverse.label,
-		}),
+		transaction: new DocumentTransaction([...previous.transaction.steps, ...next.transaction.steps], { label: next.transaction.label, selection: next.transaction.selection, selectionSet: next.transaction.selectionSet, storedMarks: next.transaction.storedMarks, storedMarksSet: next.transaction.storedMarksSet, historyGroup: next.historyGroup, metadata: [...previous.transaction.metadata, ...next.transaction.metadata] }),
+		inverse: new DocumentTransaction([...next.inverse.steps, ...previous.inverse.steps], { addToHistory: false, label: next.inverse.label }),
 		selectionBefore: previous.selectionBefore,
 		selectionAfter: next.selectionAfter,
 		historyGroup: next.historyGroup,

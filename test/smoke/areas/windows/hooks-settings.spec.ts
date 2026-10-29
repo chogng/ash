@@ -14,11 +14,7 @@ test('Hooks management opens from Settings with keyboard search and accessibilit
 	const hooks = page.locator('.ash-ai-customization-management');
 	await expect(hooks).toBeVisible();
 	await expect(hooks.locator('.ash-hooks-event')).toHaveCount(33);
-	const layout = await hooks.evaluate(element => ({
-		overflow: getComputedStyle(element).overflowY,
-		height: element.clientHeight,
-		contentHeight: element.scrollHeight,
-	}));
+	const layout = await hooks.evaluate(element => ({ overflow: getComputedStyle(element).overflowY, height: element.clientHeight, contentHeight: element.scrollHeight }));
 	expect(layout.overflow).toBe('auto');
 	expect(layout.contentHeight).toBeGreaterThan(layout.height);
 
@@ -65,12 +61,11 @@ test('Hooks management reads TOML, appends a draft, and configures a project thr
 	const configurationPath = join(profile, 'config.toml');
 	const original = await readFile(configurationPath, 'utf8');
 	const resolvedConfigurationPath = await realpath(configurationPath);
-	const declaration =
-		'\n[hooks.hooks."user:hook:settings-check"]\nid = "user:hook:settings-check"\nevent = "preToolUse"\nenablement = "disabled"\n[hooks.hooks."user:hook:settings-check".action]\ntype = "process"\nprogram = "/never-execute/program with spaces"\nargs = ["two words", "quote\\\"value"]\n';
+	const declaration = '\n[hooks.hooks."user:hook:settings-check"]\nid = "user:hook:settings-check"\nevent = "preToolUse"\nenablement = "disabled"\n[hooks.hooks."user:hook:settings-check".action]\ntype = "process"\nprogram = "/never-execute/program with spaces"\nargs = ["two words", "quote\\\"value"]\n';
 	try {
 		await writeFile(configurationPath, original + declaration);
 		const page = workbench.page;
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-editor');
 		await composer.locator('.stanza-editor-input').focus();
 		await page.keyboard.insertText('Existing draft');
@@ -112,10 +107,9 @@ test('Hooks management reads TOML, appends a draft, and configures a project thr
 		await expect(page.getByRole('tab', { name: /config.toml/ })).toBeVisible();
 		await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('Keep project comments'));
 		expect(await readFile(projectPath, 'utf8')).toBe(projectText);
-	} finally {
-		await writeFile(configurationPath, original);
-	}
+	} finally { await writeFile(configurationPath, original); }
 });
+
 
 test('Settings links to Hooks without loading declarations into its search', async ({ workbench }) => {
 	const page = workbench.page;

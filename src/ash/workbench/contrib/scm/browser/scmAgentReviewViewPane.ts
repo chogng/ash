@@ -13,15 +13,13 @@ export class ScmAgentReviewViewPane extends ViewPane {
 		const empty = h(container.ownerDocument, 'p');
 		empty.className = 'ash-scm-empty';
 		empty.textContent = 'No agent changes to review.';
-		const findIssues = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: 'Find Issues',
-				icon: Lxicon.codeReview,
-				contentAlignment: 'labelCentered',
-				title: 'Find Issues',
-			}),
-		);
+		const findIssues = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: 'Find Issues',
+			icon: Lxicon.codeReview,
+			contentAlignment: 'labelCentered',
+			title: 'Find Issues',
+		}));
 		findIssues.toggleClassName('ash-scm-find-issues', true);
 		this.contentElement.append(empty, findIssues.domNode);
 	}

@@ -54,11 +54,7 @@ export async function rebuild(options) {
 		assert.equal(options.env?.ELECTRON_RUN_AS_NODE, '1');
 		assert.equal(options.windowsHide, true);
 		let error: Error | null = null;
-		try {
-			assert.equal(readFileSync(args[2]!, 'utf8'), 'loadable');
-		} catch {
-			error = new Error('Binding cannot load');
-		}
+		try { assert.equal(readFileSync(args[2]!, 'utf8'), 'loadable'); } catch { error = new Error('Binding cannot load'); }
 		queueMicrotask(() => callback(error, '', ''));
 		return new childProcess.ChildProcess();
 	});
@@ -66,11 +62,7 @@ export async function rebuild(options) {
 	const { pythonCommand: fixturePythonCommand } = await import(pathToFileURL(join(root, 'build/python.ts')).href);
 	const binary = join(root, 'node_modules/native-keymap/build/Release/keymapping.node');
 	const cacheDirectory = join(root, '.build/desktop-addons/v1', `${process.platform}-${process.arch}`, '44.4.5');
-	const rebuilds = async () =>
-		(await readFile(join(root, 'rebuilds.jsonl'), 'utf8'))
-			.trim()
-			.split('\n')
-			.map(line => JSON.parse(line));
+	const rebuilds = async () => (await readFile(join(root, 'rebuilds.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 
 	await prepareElectronAddons(root);
 	await assert.rejects(readFile(join(root, 'rebuilds.jsonl')), { code: 'ENOENT' });
@@ -84,10 +76,7 @@ export async function rebuild(options) {
 	await assert.rejects(readFile(join(root, 'rebuilds.jsonl')), { code: 'ENOENT' });
 
 	// A checksum failure must not publish the cached bytes into node_modules.
-	const cache = join(
-		cacheDirectory,
-		(await readdir(cacheDirectory)).find(file => file.startsWith('native-keymap-'))!,
-	);
+	const cache = join(cacheDirectory, (await readdir(cacheDirectory)).find(file => file.startsWith('native-keymap-'))!);
 	const record = JSON.parse(await readFile(cache, 'utf8'));
 	record.data = Buffer.from('tampered').toString('base64');
 	await writeFile(cache, JSON.stringify(record));
@@ -101,13 +90,7 @@ export async function rebuild(options) {
 
 	// Integrity alone is insufficient: even checksummed bytes must load in Electron.
 	const incompatible = Buffer.from('incompatible binding');
-	await writeFile(
-		cache,
-		JSON.stringify({
-			sha256: createHash('sha256').update(incompatible).digest('hex'),
-			data: incompatible.toString('base64'),
-		}),
-	);
+	await writeFile(cache, JSON.stringify({ sha256: createHash('sha256').update(incompatible).digest('hex'), data: incompatible.toString('base64') }));
 	await rm(binary);
 	await prepareElectronAddons(root);
 	assert.equal((await rebuilds()).length, 2);

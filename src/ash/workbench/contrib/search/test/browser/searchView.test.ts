@@ -62,9 +62,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { IContentSearchComplete, IContentSearchOptions } from '../../../../../platform/search/common/search.js';
 import type { SearchReplaceResult } from '../../browser/replace.js';
 
-interface ViewSearchProvider {
-	search(query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>;
-}
+interface ViewSearchProvider { search(query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>; }
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -92,26 +90,14 @@ test('Search sidebar hides line numbers by default and applies explicit changes 
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
 				searches++;
-				options?.onProgress?.([
-					...matches,
-					{
-						dirId: 'workspace',
-						path: 'src/main.ts',
-						lineNumber: 10,
-						preview: 'needle\nnext',
-						ranges: [{ start: 0, end: 11 }],
-					},
-				]);
+				options?.onProgress?.([...matches, { dirId: 'workspace', path: 'src/main.ts', lineNumber: 10, preview: 'needle\nnext', ranges: [{ start: 0, end: 11 }] }]);
 				return { resultCount: 3, limitHit: false, error: undefined };
 			},
 		});
 		const configuration = services.get(IConfigurationService);
 		assert.equal(configuration.getValue(ContentSearchConfiguration.showLineNumbers), false);
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -137,14 +123,9 @@ test('Search exposes query and replacement as multiline inputs and folding repla
 	const globals = installDomGlobals(browser);
 	try {
 		using store = new DisposableStore();
-		const services = createServices(store, browser, {
-			search: async () => ({ resultCount: 0, limitHit: false, error: undefined }),
-		});
+		const services = createServices(store, browser, { search: async () => ({ resultCount: 0, limitHit: false, error: undefined }) });
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const query = input(view.element, 'Search workspace');
 		const replacement = input(view.element, 'Replace');
@@ -169,9 +150,7 @@ test('Search exposes query and replacement as multiline inputs and folding repla
 		assert.equal(replacement.value, 'first\nsecond');
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -189,10 +168,7 @@ test('Search presents a bounded preview around a late match without changing com
 			},
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.triggerQueryChange();
@@ -206,9 +182,7 @@ test('Search presents a bounded preview around a late match without changing com
 		assert.ok(view.getSearchResultSnapshot()!.content.includes(`4:${start + 1}-4:${start + 7}: needle`));
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -227,10 +201,7 @@ test('Search bounds expanded multiline preview context without splitting emoji o
 			},
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = hit;
 		view.triggerQueryChange();
@@ -244,9 +215,7 @@ test('Search bounds expanded multiline preview context without splitting emoji o
 		assert.deepEqual({ ...match.range }, { startLineNumber: 34, startColumn: 1, endLineNumber: 35, endColumn: 5 });
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -262,21 +231,11 @@ test('Search compresses directory chains while retaining match identity, copy pa
 				return { resultCount: 1, limitHit: false, error: undefined };
 			},
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.triggerQueryChange();
@@ -284,9 +243,7 @@ test('Search compresses directory chains while retaining match identity, copy pa
 		const before = view.getSearchResultSnapshot();
 		const match = view.searchResult.files[0]!.matches[0]!;
 		let actions: readonly IAction[] = [];
-		services.get(IContextMenuService).showContextMenu = delegate => {
-			actions = delegate.getActions?.() ?? [];
-		};
+		services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
 		await actions.find(action => action.id === 'search.treeView')!.run();
 		const tree = view.getControl();
@@ -299,27 +256,20 @@ test('Search compresses directory chains while retaining match identity, copy pa
 		assert.deepEqual(view.getSearchResultSnapshot(), before);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, folder);
 		assert.deepEqual(written, ['/workspace/deep/nested/folder']);
-		tree.setFocus(match.id);
-		tree.setSelection([match.id]);
+		tree.setFocus(match.id); tree.setSelection([match.id]);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
 		assert.equal(view.searchResult.count, 0);
 		assert.equal(tree.model.rootNodes.length, 0);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
 test('Search lifecycle commands cancel retained results, replace running queries and clear inputs in two stages', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const globals = installDomGlobals(browser);
-	const jobs: {
-		query: IContentSearchQuery;
-		options: IContentSearchOptions;
-		completion: DeferredPromise<IContentSearchComplete>;
-	}[] = [];
+	const jobs: { query: IContentSearchQuery; options: IContentSearchOptions; completion: DeferredPromise<IContentSearchComplete>; }[] = [];
 	try {
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
@@ -332,10 +282,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 			},
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const queryInput = input(view.element, 'Search workspace');
 		const replacement = input(view.element, 'Replace');
@@ -343,20 +290,11 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		const excludes = input(view.element, 'Files to exclude');
 		const commands = services.get(ICommandService);
 		const menus = services.createInstance(MenuService);
-		const palette = (id: string) =>
-			menus
-				.getMenuActions(MenuId.CommandPalette)
-				.flatMap(([, actions]) => actions)
-				.find(action => action.id === id);
+		const palette = (id: string) => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === id);
 		assert.equal(palette('search.action.cancel'), undefined);
 		assert.equal(palette('search.action.clearSearchResults'), undefined);
-		queryInput.value = 'needle';
-		replacement.value = 'replacement';
-		includes.value = 'src/**';
-		excludes.value = '**/*.test.ts';
-		for (const field of [queryInput, replacement, includes, excludes]) {
-			field.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
-		}
+		queryInput.value = 'needle'; replacement.value = 'replacement'; includes.value = 'src/**'; excludes.value = '**/*.test.ts';
+		for (const field of [queryInput, replacement, includes, excludes]) { field.dispatchEvent(new browser.window.Event('input', { bubbles: true })); }
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="Match Case"]')!.click();
 		assert.equal(palette('search.action.refreshSearchResults')?.enabled, true);
 		await commands.executeCommand('search.action.refreshSearchResults');
@@ -373,8 +311,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		jobs[0]!.options.onProgress?.([{ ...matches[0]!, path: 'late-cancel.ts' }]);
 		assert.equal(view.searchResult.count, 2);
 		await commands.executeCommand('search.action.refreshSearchResults');
-		queryInput.value = 'again';
-		queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		queryInput.value = 'again'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		await commands.executeCommand('search.action.refreshSearchResults');
 		assert.equal(jobs.length, 3);
 		assert.equal(jobs[1]!.options.signal?.aborted, true);
@@ -385,15 +322,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		await commands.executeCommand('search.action.clearSearchResults');
 		assert.equal(jobs[2]!.options.signal?.aborted, true);
 		assert.deepEqual([queryInput.value, replacement.value, includes.value, excludes.value], ['', '', 'src/**', '**/*.test.ts']);
-		assert.deepEqual(
-			{
-				results: view.searchResult.count,
-				snapshot: view.getSearchResultSnapshot(),
-				state: services.get(IContextKeyService).getValue('searchState'),
-				status: view.element.querySelector('.ash-search-status')?.textContent,
-			},
-			{ results: 0, snapshot: undefined, state: 0, status: '' },
-		);
+		assert.deepEqual({ results: view.searchResult.count, snapshot: view.getSearchResultSnapshot(), state: services.get(IContextKeyService).getValue('searchState'), status: view.element.querySelector('.ash-search-status')?.textContent }, { results: 0, snapshot: undefined, state: 0, status: '' });
 		assert.equal(palette('search.action.clearSearchResults')?.enabled, true);
 		jobs[2]!.options.onProgress?.([{ ...matches[0]!, path: 'late-clear.ts' }]);
 		assert.equal(view.searchResult.count, 0);
@@ -404,8 +333,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		assert.equal(queryInput.value, 'again');
 		queryInput.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 		assert.equal(queryInput.value, '');
-		queryInput.value = 'final';
-		queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		queryInput.value = 'final'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		await commands.executeCommand('search.action.refreshSearchResults');
 		assert.equal(jobs[3]!.query.caseSensitivity, 'sensitive');
 		assert.deepEqual(jobs[3]!.query.includePatterns, []);
@@ -423,13 +351,9 @@ test('Search lifecycle commands cancel retained results, replace running queries
 			assert.equal(services.get(IContextKeyService).getValue(key), key === 'searchState' ? 0 : false);
 		}
 	} finally {
-		for (const job of jobs) {
-			await job.completion.complete({ resultCount: 2, limitHit: false, error: undefined });
-		}
+		for (const job of jobs) { await job.completion.complete({ resultCount: 2, limitHit: false, error: undefined }); }
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -439,28 +363,15 @@ test('Search lifecycle clears zero-result queries and input-only patterns and an
 	let searches = 0;
 	try {
 		using store = new DisposableStore();
-		const services = createServices(store, browser, {
-			search: async () => {
-				searches++;
-				return { resultCount: 0, limitHit: false, error: undefined };
-			},
-		});
+		const services = createServices(store, browser, { search: async () => { searches++; return { resultCount: 0, limitHit: false, error: undefined }; } });
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const commands = services.get(ICommandService);
 		const menus = services.createInstance(MenuService);
-		const clear = () =>
-			menus
-				.getMenuActions(MenuId.CommandPalette)
-				.flatMap(([, actions]) => actions)
-				.find(action => action.id === 'search.action.clearSearchResults');
+		const clear = () => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === 'search.action.clearSearchResults');
 		const queryInput = input(view.element, 'Search workspace');
-		queryInput.value = 'absent';
-		queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		queryInput.value = 'absent'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		await commands.executeCommand('search.action.refreshSearchResults');
 		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
 		assert.equal(view.element.querySelector('.ash-search-status')?.textContent, 'No results found.');
@@ -469,28 +380,17 @@ test('Search lifecycle clears zero-result queries and input-only patterns and an
 		assert.equal(queryInput.value, '');
 		for (const label of ['Replace', 'Files to include', 'Files to exclude']) {
 			const field = input(view.element, label);
-			field.value = 'pattern';
-			field.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+			field.value = 'pattern'; field.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 			assert.equal(clear()?.enabled, true);
 			await commands.executeCommand('search.action.clearSearchResults');
 			assert.deepEqual({ value: field.value, clear: clear(), results: view.searchResult.count }, { value: '', clear: undefined, results: 0 });
 		}
 		input(view.element, 'Files to include').value = 'src/**';
 		await commands.executeCommand('search.action.refreshSearchResults');
-		assert.deepEqual(
-			{
-				searches,
-				query: queryInput.value,
-				includes: input(view.element, 'Files to include').value,
-				status: view.element.querySelector('.ash-search-status')?.textContent,
-			},
-			{ searches: 1, query: '', includes: 'src/**', status: '' },
-		);
+		assert.deepEqual({ searches, query: queryInput.value, includes: input(view.element, 'Files to include').value, status: view.element.querySelector('.ash-search-status')?.textContent }, { searches: 1, query: '', includes: 'src/**', status: '' });
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -500,51 +400,23 @@ for (const operation of ['replace', 'undo'] as const) {
 		const globals = installDomGlobals(browser);
 		const replacement = new DeferredPromise<SearchReplaceResult>();
 		const undo = new DeferredPromise<void>();
-		const result: SearchReplaceResult = {
-			ariaSummary: 'applied',
-			isApplied: true,
-			resources: [],
-			undo: () => undo.p,
-			saveErrors: ['late save failure'],
-		};
+		const result: SearchReplaceResult = { ariaSummary: 'applied', isApplied: true, resources: [], undo: () => undo.p, saveErrors: ['late save failure'] };
 		let searches = 0;
 		let signal: AbortSignal | undefined;
 		let pending: Promise<unknown> | undefined;
 		try {
 			using store = new DisposableStore();
-			const services = createServices(
-				store,
-				browser,
-				{
-					search: async (_query, options) => {
-						searches++;
-						options?.onProgress?.(matches);
-						return { resultCount: 2, limitHit: false, error: undefined };
-					},
-				},
-				undefined,
-				undefined,
-				{
-					replace: async (_matches, _query, _replacement, options) => {
-						signal = options.signal;
-						return operation === 'replace' ? replacement.p : result;
-					},
-				},
-			);
+			const services = createServices(store, browser, { search: async (_query, options) => { searches++; options?.onProgress?.(matches); return { resultCount: 2, limitHit: false, error: undefined }; } }, undefined, undefined,
+				{ replace: async (_matches, _query, _replacement, options) => { signal = options.signal; return operation === 'replace' ? replacement.p : result; } });
 			const { SearchView } = await import('../../browser/searchView.js');
-			using view = services.createInstance(SearchView, browser.window.document.body, {
-				id: SEARCH_VIEW_ID,
-				title: 'Search',
-			});
+			using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 			registerView(services, view);
 			input(view.element, 'Search workspace').value = 'needle';
 			view.triggerQueryChange();
 			await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
 			view.getControl().setFocus(view.searchResult.files[0]!.matches[0]!.id);
 			let actions: readonly IAction[] = [];
-			services.get(IContextMenuService).showContextMenu = delegate => {
-				actions = delegate.getActions?.() ?? [];
-			};
+			services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
 			const action = (id: string) => {
 				view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
 				return actions.find(action => action.id === id)!;
@@ -556,30 +428,16 @@ for (const operation of ['replace', 'undo'] as const) {
 				pending = Promise.resolve(action('search.undoReplacement').run());
 			}
 			await services.get(ICommandService).executeCommand('search.action.clearSearchResults');
-			if (operation === 'replace') {
-				assert.equal(signal?.aborted, true);
-				await replacement.complete(result);
-			} else {
-				await undo.error(new Error('late undo failure'));
-			}
+			if (operation === 'replace') { assert.equal(signal?.aborted, true); await replacement.complete(result); }
+			else { await undo.error(new Error('late undo failure')); }
 			await pending;
-			assert.deepEqual(
-				{
-					searches,
-					results: view.searchResult.count,
-					query: input(view.element, 'Search workspace').value,
-					status: view.element.querySelector('.ash-search-status')?.textContent,
-				},
-				{ searches: operation === 'replace' ? 1 : 2, results: 0, query: '', status: '' },
-			);
+			assert.deepEqual({ searches, results: view.searchResult.count, query: input(view.element, 'Search workspace').value, status: view.element.querySelector('.ash-search-status')?.textContent }, { searches: operation === 'replace' ? 1 : 2, results: 0, query: '', status: '' });
 		} finally {
 			await replacement.complete(result);
 			await undo.complete();
 			await pending;
 			browser.window.close();
-			for (const name of globals) {
-				Reflect.deleteProperty(globalThis, name);
-			}
+			for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 		}
 	});
 }
@@ -595,34 +453,17 @@ test('Search lifecycle slow-search timer belongs to its query and errors restore
 	const jobs: DeferredPromise<IContentSearchComplete>[] = [];
 	// Control only the owner's two-second UI timer; jsdom and widget scheduling remain real.
 	browser.window.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
-		if (delay !== 2_000 || typeof handler !== 'function') {
-			return originalTimeout(handler, delay, ...args);
-		}
+		if (delay !== 2_000 || typeof handler !== 'function') { return originalTimeout(handler, delay, ...args); }
 		const id = nextTimer++;
 		scheduled.set(id, () => handler(...args));
 		return id;
 	}) as typeof browser.window.setTimeout;
-	browser.window.clearTimeout = id => {
-		if (id !== undefined && scheduled.has(id)) {
-			cancelled.push(id);
-		} else {
-			originalClearTimeout(id);
-		}
-	};
+	browser.window.clearTimeout = id => { if (id !== undefined && scheduled.has(id)) { cancelled.push(id); } else { originalClearTimeout(id); } };
 	try {
 		using store = new DisposableStore();
-		const services = createServices(store, browser, {
-			search() {
-				const job = new DeferredPromise<IContentSearchComplete>();
-				jobs.push(job);
-				return job.p;
-			},
-		});
+		const services = createServices(store, browser, { search() { const job = new DeferredPromise<IContentSearchComplete>(); jobs.push(job); return job.p; } });
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const queryInput = input(view.element, 'Search workspace');
 		queryInput.value = 'needle';
@@ -653,15 +494,11 @@ test('Search lifecycle slow-search timer belongs to its query and errors restore
 		scheduled.get(disposedTimer)!();
 		assert.equal(services.get(IContextKeyService).getValue('searchState'), 0);
 	} finally {
-		for (const job of jobs) {
-			await job.complete({ resultCount: 0, limitHit: false, error: undefined });
-		}
+		for (const job of jobs) { await job.complete({ resultCount: 0, limitHit: false, error: undefined }); }
 		browser.window.setTimeout = originalTimeout;
 		browser.window.clearTimeout = originalClearTimeout;
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -669,17 +506,17 @@ test('BrowserContentSearchService pulls bounded batches and releases the job', a
 	const readCursors: number[] = [];
 	let cancelCount = 0;
 	const api: IContentSearchApi = {
-		start: async params => {
+		start: async (params) => {
 			assert.equal(params.query, 'needle');
 			assert.equal(params.maxResults, 2_000);
 			return { searchId: 'search-1' };
 		},
-		read: async params => {
+		read: async (params) => {
 			readCursors.push(params.afterMatch);
 			if (params.afterMatch === 0) {
 				return {
 					searchId: params.searchId,
-					matches: [{ ...matches[0], ranges: matches[0].ranges.map(range => ({ ...range })) }],
+					matches: [{ ...matches[0], ranges: matches[0].ranges.map((range) => ({ ...range })) }],
 					nextMatch: 1,
 					completed: false,
 					limitHit: false,
@@ -688,7 +525,7 @@ test('BrowserContentSearchService pulls bounded batches and releases the job', a
 			}
 			return {
 				searchId: params.searchId,
-				matches: [{ ...matches[1], ranges: matches[1].ranges.map(range => ({ ...range })) }],
+				matches: [{ ...matches[1], ranges: matches[1].ranges.map((range) => ({ ...range })) }],
 				nextMatch: 2,
 				completed: true,
 				limitHit: true,
@@ -703,14 +540,11 @@ test('BrowserContentSearchService pulls bounded batches and releases the job', a
 	const progress: ContentSearchMatch[] = [];
 
 	const complete = await service.search({ id: 'workspace', uri: URI.file('/workspace'), name: 'workspace', index: 0 }, query(), {
-		onProgress: batch => progress.push(...batch),
+		onProgress: (batch) => progress.push(...batch),
 	});
 
 	assert.deepEqual(readCursors, [0, 1]);
-	assert.deepEqual(
-		progress,
-		matches.map(match => ({ ...match, dirName: 'workspace' })),
-	);
+	assert.deepEqual(progress, matches.map(match => ({ ...match, dirName: 'workspace' })));
 	assert.deepEqual(complete, {
 		resultCount: 2,
 		limitHit: true,
@@ -727,18 +561,27 @@ test('SearchView submits typed filters and groups highlighted matches', async ()
 		search: async (searchQuery, options) => {
 			submitted = searchQuery;
 			options?.onProgress?.(matches);
-			return { resultCount: matches.length, limitHit: false, error: undefined };
+			return {
+				resultCount: matches.length,
+				limitHit: false,
+				error: undefined,
+			};
 		},
 	};
 
 	try {
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service);
-		const { SearchView } = await import('../../../../../workbench/contrib/search/browser/searchView.js');
-		using pane = services.createInstance(SearchView, browser.window.document.body, {
-			id: 'ash.search',
-			title: 'Search',
-		});
+		const { SearchView } = await import(
+			'../../../../../workbench/contrib/search/browser/searchView.js'
+		);
+		using pane = services.createInstance(SearchView,
+			browser.window.document.body,
+			{
+				id: 'ash.search',
+				title: 'Search',
+			},
+		);
 		browser.window.document.body.append(pane.element);
 		const details = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Toggle Search Details"]')!;
 		assert.equal(details.getAttribute('aria-expanded'), 'false');
@@ -761,7 +604,10 @@ test('SearchView submits typed filters and groups highlighted matches', async ()
 			}),
 		);
 
-		await waitFor(() => pane.element.querySelector('.ash-search-status')?.textContent === '2 results');
+		await waitFor(() =>
+			pane.element.querySelector('.ash-search-status')?.textContent ===
+			'2 results'
+		);
 		assert.deepEqual(submitted, {
 			text: 'needle',
 			wholeWord: false,
@@ -772,11 +618,19 @@ test('SearchView submits typed filters and groups highlighted matches', async ()
 			maxResults: 2_000,
 			freshness: 'current',
 		});
-		assert.equal(pane.element.querySelector('.ash-search-file-path .ash-icon-label-text')?.textContent, 'main.ts');
+		assert.equal(
+			pane.element.querySelector('.ash-search-file-path .ash-icon-label-text')?.textContent,
+			'main.ts',
+		);
 		assert.equal(pane.element.querySelector('.ash-search-file-path .ash-icon-label-description')?.textContent, 'src');
-		assert.equal(pane.element.querySelector('.ash-search-file-count')?.textContent, '2');
+		assert.equal(
+			pane.element.querySelector('.ash-search-file-count')?.textContent,
+			'2',
+		);
 		assert.deepEqual(
-			[...pane.element.querySelectorAll('mark')].map(element => element.textContent),
+			[...pane.element.querySelectorAll('mark')].map(
+				(element) => element.textContent,
+			),
 			['needle', 'needle'],
 		);
 	} finally {
@@ -809,10 +663,7 @@ test('SearchView applies configured query defaults and result limits', async () 
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service, configuration);
 		const { SearchView } = await import('../../../../../workbench/contrib/search/browser/searchView.js');
-		using pane = services.createInstance(SearchView, browser.window.document.body, {
-			id: 'ash.search',
-			title: 'Search',
-		});
+		using pane = services.createInstance(SearchView, browser.window.document.body, { id: 'ash.search', title: 'Search' });
 		browser.window.document.body.append(pane.element);
 		input(pane.element, 'Search workspace').value = 'Needle';
 		assert.equal(pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'), 'true');
@@ -848,18 +699,23 @@ function query(): IContentSearchQuery {
 }
 
 function input(container: Element, label: string): HTMLInputElement | HTMLTextAreaElement {
-	const element = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${label}"]`);
+	const element = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+		`[aria-label="${label}"]`,
+	);
 	assert.ok(element);
 	return element;
 }
 
-async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {
+async function waitFor(
+	condition: () => boolean,
+	timeoutMillis = 1_000,
+): Promise<void> {
 	const deadline = Date.now() + timeoutMillis;
 	while (!condition()) {
 		if (Date.now() >= deadline) {
 			throw new Error('Timed out waiting for SearchView');
 		}
-		await new Promise(resolve => setTimeout(resolve, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
 }
 
@@ -886,31 +742,16 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
-function createServices(
-	store: DisposableStore,
-	browser: JSDOM,
-	search: ViewSearchProvider,
-	configured?: WorkbenchConfigurationService,
-	workspace?: TestWorkspaceService,
-	replace?: IReplaceService,
-): InstantiationService {
+function createServices(store: DisposableStore, browser: JSDOM, search: ViewSearchProvider, configured?: WorkbenchConfigurationService, workspace?: TestWorkspaceService, replace?: IReplaceService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
-	const menus: IContextMenuService = {
-		contextMenuStyle: 'custom' as const,
-		onDidShowContextMenu: Event.None,
-		onDidHideContextMenu: Event.None,
-		showContextMenu() {},
-		hideContextMenu() {},
-	};
+	const menus: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 	const contextView = store.add(new BrowserContextViewService(browser.window.document.body));
 	services.registerInstance(ContentSearchServiceId, {
-		search: (folder, query, options) =>
-			search.search(query, {
-				...options,
-				onProgress: matches => options?.onProgress?.(matches.filter(match => match.dirId === folder.id)),
-			}),
+		search: (folder, query, options) => search.search(query, {
+			...options, onProgress: matches => options?.onProgress?.(matches.filter(match => match.dirId === folder.id)),
+		}),
 	});
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
@@ -918,25 +759,8 @@ function createServices(
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })));
 	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
-	services.registerInstance(IEditorService, {
-		...emptyEditorServiceState,
-		onDidActiveEditorChange: Event.None,
-		onDidVisibleEditorsChange: Event.None,
-		activeEditor: undefined,
-		visibleEditors: [],
-		openEditor: async () => {},
-		focusActiveEditor() {},
-	});
-	services.registerInstance(
-		IStorageService,
-		store.add(
-			new BrowserStorageService({
-				ownerWindow: browser.window as unknown as Window,
-				workspaceId: 'workspace',
-				flushInterval: 0,
-			}),
-		),
-	);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
+	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
 	const editing = store.add(new BulkEditTestServices([]));
 	services.registerInstance(ITextModelResourceService, editing.models);
@@ -961,20 +785,17 @@ function registerView(services: InstantiationService, view: SearchView): void {
 		isViewContainerVisible: () => true,
 		isViewContainerActive: () => true,
 		openViewContainer: async () => null,
-		closeViewContainer() {},
+		closeViewContainer() { },
 		getVisibleViewContainer: () => null,
 		getActiveViewPaneContainerWithId: () => null,
 		getFocusedView: () => null,
 		getFocusedViewName: () => 'Search',
 		isViewVisible: id => id === SEARCH_VIEW_ID,
 		openView: async <T extends IView>(): Promise<T | null> => view as unknown as T,
-		closeView() {},
-		getActiveViewWithId: <T extends IView>(id: string) => (id === SEARCH_VIEW_ID && view.isVisible() ? (view as unknown as T) : null),
-		getViewWithId: <T extends IView>(id: string) => (id === SEARCH_VIEW_ID ? (view as unknown as T) : null),
-		focusView: async () => {
-			view.focus();
-			return true;
-		},
+		closeView() { },
+		getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID && view.isVisible() ? view as unknown as T : null,
+		getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? view as unknown as T : null,
+		focusView: async () => { view.focus(); return true; },
 	});
 }
 
@@ -988,14 +809,11 @@ test('Dismiss runs the registered command, restores focus and updates retained s
 			search: async (_query, options) => {
 				options?.onProgress?.(delivered);
 				return { resultCount: delivered.length, limitHit: true, error: undefined };
-			},
+			}
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1006,72 +824,29 @@ test('Dismiss runs the registered command, restores focus and updates retained s
 		tree.setFocus(file.matches[0]!.id);
 		tree.setSelection([file.matches[0]!.id]);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
-		assert.deepEqual(
-			{
-				count: view.getSearchResultSnapshot()?.matchCount,
-				focused: tree.focus?.id,
-				status: view.element.querySelector('[role="status"]')!.textContent,
-			},
-			{
-				count: 2,
-				focused: next.id,
-				status: '2 results (result limit reached)',
-			},
-		);
+		assert.deepEqual({ count: view.getSearchResultSnapshot()?.matchCount, focused: tree.focus?.id, status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 2, focused: next.id, status: '2 results (result limit reached)',
+		});
 		assert.match(view.getSearchResultSnapshot()!.content, /# File: file:\/\/\/workspace\/src\/main\.ts\n  9:5-9:11: needle\n\n/);
 		tree.setSelection([next.id, view.searchResult.files[1]!.id]);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
-		assert.deepEqual(
-			{
-				count: view.searchResult.count,
-				focused: tree.focus,
-				snapshot: view.getSearchResultSnapshot(),
-				status: view.element.querySelector('[role="status"]')!.textContent,
-			},
-			{
-				count: 0,
-				focused: undefined,
-				snapshot: undefined,
-				status: 'No results found.',
-			},
-		);
+		assert.deepEqual({ count: view.searchResult.count, focused: tree.focus, snapshot: view.getSearchResultSnapshot(), status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 0, focused: undefined, snapshot: undefined, status: 'No results found.',
+		});
 		assert.equal(browser.window.document.activeElement, tree.element);
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.click();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
 for (const scenario of [
-	{
-		name: 'the next collapsed file',
-		focusedFile: 'a.ts',
-		expectedFile: 'b.ts',
-		expectedMatch: 0,
-		selectedFile: undefined,
-		count: 5,
-	},
-	{
-		name: 'the last collapsed file when no later match remains',
-		focusedFile: 'c.ts',
-		expectedFile: 'b.ts',
-		expectedMatch: 1,
-		selectedFile: 'c.ts',
-		count: 4,
-	},
-	{
-		name: 'the next collapsed file beyond a selected branch',
-		focusedFile: 'a.ts',
-		expectedFile: 'c.ts',
-		expectedMatch: 0,
-		selectedFile: 'b.ts',
-		count: 3,
-	},
+	{ name: 'the next collapsed file', focusedFile: 'a.ts', expectedFile: 'b.ts', expectedMatch: 0, selectedFile: undefined, count: 5 },
+	{ name: 'the last collapsed file when no later match remains', focusedFile: 'c.ts', expectedFile: 'b.ts', expectedMatch: 1, selectedFile: 'c.ts', count: 4 },
+	{ name: 'the next collapsed file beyond a selected branch', focusedFile: 'a.ts', expectedFile: 'c.ts', expectedMatch: 0, selectedFile: 'b.ts', count: 3 },
 ]) {
 	test(`Dismiss restores match focus in ${scenario.name}`, async () => {
 		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -1083,14 +858,11 @@ for (const scenario of [
 				search: async (_query, options) => {
 					options?.onProgress?.(delivered);
 					return { resultCount: delivered.length, limitHit: false, error: undefined };
-				},
+				}
 			});
 			const { SearchView } = await import('../../browser/searchView.js');
 			await import('../../browser/searchActionsRemoveReplace.js');
-			using view = services.createInstance(SearchView, browser.window.document.body, {
-				id: SEARCH_VIEW_ID,
-				title: 'Search',
-			});
+			using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 			registerView(services, view);
 			input(view.element, 'Search workspace').value = 'needle';
 			view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1101,39 +873,22 @@ for (const scenario of [
 			const expected = expectedFile.matches[scenario.expectedMatch]!;
 			const selected = view.searchResult.files.find(file => file.path === scenario.selectedFile);
 			for (const file of view.searchResult.files) {
-				if (file.path !== scenario.focusedFile) {
-					tree.collapse(file.id);
-				}
+				if (file.path !== scenario.focusedFile) { tree.collapse(file.id); }
 			}
 			tree.setFocus(focused.id);
 			tree.setSelection(selected ? [focused.id, selected.id] : [focused.id]);
 			await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
-			assert.deepEqual(
-				{
-					focus: tree.focus?.id,
-					selection: tree.selection.map(element => element.id),
-					collapsed: tree.isCollapsed(expectedFile.id),
-					count: view.getSearchResultSnapshot()?.matchCount,
-				},
-				{
-					focus: expected.id,
-					selection: [expected.id],
-					collapsed: false,
-					count: scenario.count,
-				},
-			);
+			assert.deepEqual({ focus: tree.focus?.id, selection: tree.selection.map(element => element.id), collapsed: tree.isCollapsed(expectedFile.id), count: view.getSearchResultSnapshot()?.matchCount }, {
+				focus: expected.id, selection: [expected.id], collapsed: false, count: scenario.count,
+			});
 			assert.equal(browser.window.document.activeElement, tree.element);
 			assert.ok(tree.getVisibleElements().includes(expected));
 			for (const file of view.searchResult.files) {
-				if (file.path !== scenario.focusedFile && file !== expectedFile) {
-					assert.equal(tree.isCollapsed(file.id), true);
-				}
+				if (file.path !== scenario.focusedFile && file !== expectedFile) { assert.equal(tree.isCollapsed(file.id), true); }
 			}
 		} finally {
 			browser.window.close();
-			for (const name of globals) {
-				Reflect.deleteProperty(globalThis, name);
-			}
+			for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 		}
 	});
 }
@@ -1147,21 +902,13 @@ test('Dismiss during a running search retains the job and accepts later batches 
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
 				options?.onProgress?.(matches.slice(0, 1));
-				await new Promise<void>(resolve => {
-					finish = () => {
-						options?.onProgress?.(matches);
-						resolve();
-					};
-				});
+				await new Promise<void>(resolve => { finish = () => { options?.onProgress?.(matches); resolve(); }; });
 				return { resultCount: 3, limitHit: false, error: undefined };
-			},
+			}
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1170,27 +917,16 @@ test('Dismiss during a running search retains the job and accepts later batches 
 		const file = view.searchResult.files[0]!;
 		tree.setFocus(file.id);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
-		assert.deepEqual(
-			{
-				count: view.searchResult.count,
-				busy: tree.element.getAttribute('aria-busy'),
-				status: view.element.querySelector('[role="status"]')!.textContent,
-			},
-			{
-				count: 0,
-				busy: 'true',
-				status: '0 results…',
-			},
-		);
+		assert.deepEqual({ count: view.searchResult.count, busy: tree.element.getAttribute('aria-busy'), status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 0, busy: 'true', status: '0 results…',
+		});
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
 		assert.equal(view.element.querySelector('[role="status"]')!.textContent, '2 results');
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1199,100 +935,40 @@ test('Copy All formats the retained model in root, folder, filename and range or
 	const globals = installDomGlobals(browser);
 	const block = 'context\r\n  needle\r\nnext\r\nunused';
 	const delivered: ContentSearchMatch[] = [
-		{
-			dirId: 'other',
-			path: 'src/file2.ts',
-			lineNumber: 8,
-			preview: 'remote needle',
-			ranges: [{ start: 7, end: 13 }],
-		},
-		{
-			dirId: 'workspace',
-			path: 'alpha.ts',
-			lineNumber: 1,
-			preview: 'root needle',
-			ranges: [{ start: 5, end: 11 }],
-		},
-		{
-			dirId: 'workspace',
-			path: 'src/file10.ts',
-			lineNumber: 3,
-			preview: 'ten needle',
-			ranges: [{ start: 4, end: 10 }],
-		},
-		{
-			dirId: 'workspace',
-			path: 'src/file2.ts',
-			lineNumber: 20,
-			preview: 'a needle b needle',
-			ranges: [
-				{ start: 11, end: 17 },
-				{ start: 2, end: 8 },
-			],
-		},
-		{
-			dirId: 'workspace',
-			path: 'src/file2.ts',
-			lineNumber: 10,
-			preview: block,
-			ranges: [{ start: block.indexOf('needle'), end: block.indexOf('next') + 4 }],
-		},
-		{
-			dirId: 'workspace',
-			path: 'src/nested/z.ts',
-			lineNumber: 4,
-			preview: 'nested needle',
-			ranges: [{ start: 7, end: 13 }],
-		},
+		{ dirId: 'other', path: 'src/file2.ts', lineNumber: 8, preview: 'remote needle', ranges: [{ start: 7, end: 13 }] },
+		{ dirId: 'workspace', path: 'alpha.ts', lineNumber: 1, preview: 'root needle', ranges: [{ start: 5, end: 11 }] },
+		{ dirId: 'workspace', path: 'src/file10.ts', lineNumber: 3, preview: 'ten needle', ranges: [{ start: 4, end: 10 }] },
+		{ dirId: 'workspace', path: 'src/file2.ts', lineNumber: 20, preview: 'a needle b needle', ranges: [{ start: 11, end: 17 }, { start: 2, end: 8 }] },
+		{ dirId: 'workspace', path: 'src/file2.ts', lineNumber: 10, preview: block, ranges: [{ start: block.indexOf('needle'), end: block.indexOf('next') + 4 }] },
+		{ dirId: 'workspace', path: 'src/nested/z.ts', lineNumber: 4, preview: 'nested needle', ranges: [{ start: 7, end: 13 }] },
 	];
 	const written: string[] = [];
 	try {
 		using store = new DisposableStore();
-		const workspace = store.add(
-			new TestWorkspaceService({
-				id: 'multi',
-				folders: [
-					{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
-					{ id: 'other', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
-				],
-			}),
-		);
-		const services = createServices(
-			store,
-			browser,
-			{
-				search: async (_query, options) => {
-					options?.onProgress?.(delivered);
-					return { resultCount: 7, limitHit: false, error: undefined };
-				},
-			},
-			undefined,
-			workspace,
-		);
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		const workspace = store.add(new TestWorkspaceService({
+			id: 'multi', folders: [
+				{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
+				{ id: 'other', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
+			]
+		}));
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.(delivered);
+				return { resultCount: 7, limitHit: false, error: undefined };
+			}
+		}, undefined, workspace);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 7);
 		const before = view.getSearchResultSnapshot();
 		const modelOrder = view.searchResult.files.map(file => [file.id, ...file.matches.map(match => match.id)]);
-		for (const file of view.searchResult.files) {
-			view.getControl().collapse(file.id);
-		}
+		for (const file of view.searchResult.files) { view.getControl().collapse(file.id); }
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
 		const delimiter = isWindows ? '\r\n' : '\n';
 		const blocks = [
@@ -1304,10 +980,7 @@ test('Copy All formats the retained model in root, folder, filename and range or
 		];
 		assert.deepEqual(written, [blocks.join(delimiter + delimiter)]);
 		assert.deepEqual(view.getSearchResultSnapshot(), before);
-		assert.deepEqual(
-			view.searchResult.files.map(file => [file.id, ...file.matches.map(match => match.id)]),
-			modelOrder,
-		);
+		assert.deepEqual(view.searchResult.files.map(file => [file.id, ...file.matches.map(match => match.id)]), modelOrder);
 		const dismissed = view.searchResult.files.find(file => file.path === 'src/file10.ts')!;
 		view.getControl().setFocus(dismissed.id);
 		view.getControl().setSelection([dismissed.id]);
@@ -1318,9 +991,7 @@ test('Copy All formats the retained model in root, folder, filename and range or
 		assert.ok(!view.getSearchResultSnapshot()?.content.includes('file10.ts'));
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1334,22 +1005,12 @@ test('Copy All leaves the clipboard intact while Search is inactive and reads re
 			search: async (_query, options) => {
 				options?.onProgress?.(matches);
 				return { resultCount: matches.length, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1366,9 +1027,7 @@ test('Copy All leaves the clipboard intact while Search is inactive and reads re
 		assert.deepEqual(written, [['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter)]);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1385,39 +1044,23 @@ test('Copy All uses the latest running batch and leaves the search and clipboard
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
-				options?.signal?.addEventListener(
-					'abort',
-					() => {
-						aborted = true;
-					},
-					{ once: true },
-				);
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
 				options?.onProgress?.([matches[0]!]);
 				addBatch = () => options?.onProgress?.([matches[1]!]);
-				await new Promise<void>(resolve => {
-					finish = resolve;
-				});
+				await new Promise<void>(resolve => { finish = resolve; });
 				return { resultCount: 2, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					if (rejectWrite) {
-						throw denied;
-					}
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({
+			writeText: async value => {
+				if (rejectWrite) { throw denied; }
+				written.push(value);
+			}
+		} as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const commands = services.get(ICommandService);
 		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
@@ -1431,14 +1074,14 @@ test('Copy All uses the latest running batch and leaves the search and clipboard
 		addBatch!();
 		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
 		const delimiter = isWindows ? '\r\n' : '\n';
-		assert.deepEqual(written.slice(1), ['/workspace/src/main.ts' + delimiter + '  4,7: const needle = true;', '/workspace/src/main.ts' + delimiter + '  9,5: use(needle);']);
+		assert.deepEqual(written.slice(1), [
+			'/workspace/src/main.ts' + delimiter + '  4,7: const needle = true;',
+			'/workspace/src/main.ts' + delimiter + '  9,5: use(needle);',
+		]);
 		rejectWrite = true;
 		const before = view.searchResult.files[0]!.matches.map(match => match.id);
 		await assert.rejects(commands.executeCommand(SearchCommandIds.CopyAllCommandId), error => error === denied);
-		assert.deepEqual(
-			view.searchResult.files[0]!.matches.map(match => match.id),
-			before,
-		);
+		assert.deepEqual(view.searchResult.files[0]!.matches.map(match => match.id), before);
 		assert.equal(written.length, 3);
 		assert.equal(aborted, false);
 		assert.equal(view.getControl().element.getAttribute('aria-busy'), 'true');
@@ -1448,9 +1091,7 @@ test('Copy All uses the latest running batch and leaves the search and clipboard
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1462,40 +1103,14 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
-				options?.onProgress?.([
-					...matches,
-					{
-						dirId: 'workspace',
-						path: 'src/nested/file2.ts',
-						lineNumber: 10,
-						preview: '中文😀 needle\r\nnext',
-						ranges: [{ start: 5, end: 17 }],
-					},
-					{
-						dirId: 'workspace',
-						path: 'root.ts',
-						lineNumber: 1,
-						preview: 'root needle',
-						ranges: [{ start: 5, end: 11 }],
-					},
-				]);
+				options?.onProgress?.([...matches, { dirId: 'workspace', path: 'src/nested/file2.ts', lineNumber: 10, preview: '中文😀 needle\r\nnext', ranges: [{ start: 5, end: 17 }] }, { dirId: 'workspace', path: 'root.ts', lineNumber: 1, preview: 'root needle', ranges: [{ start: 5, end: 11 }] }]);
 				return { resultCount: 4, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1510,10 +1125,7 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		const commands = services.get(ICommandService);
 		await commands.executeCommand('search.action.copyMatch');
 		await commands.executeCommand('search.action.copyMatch', nested.matches[0]);
-		assert.deepEqual(
-			tree.selection.map(element => element.id),
-			selection,
-		);
+		assert.deepEqual(tree.selection.map(element => element.id), selection);
 		tree.collapse(main.id);
 		const collapsedSelection = tree.selection.map(element => element.id);
 		await commands.executeCommand('search.action.copyMatch', main);
@@ -1524,10 +1136,7 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		const nestedBlock = '/workspace/src/nested/file2.ts' + delimiter + '  10,6: 中文😀 needle\n  11:   next';
 		assert.deepEqual(written, ['4,7: const needle = true;', '10,6: 中文😀 needle\n11:   next', mainBlock, nestedBlock + delimiter + delimiter + mainBlock]);
 		assert.deepEqual(view.getSearchResultSnapshot(), before);
-		assert.deepEqual(
-			tree.selection.map(element => element.id),
-			collapsedSelection,
-		);
+		assert.deepEqual(tree.selection.map(element => element.id), collapsedSelection);
 		assert.equal(tree.model.getNode(main.id)?.collapsed, true);
 		view.searchResult.batchRemove([main.matches[0]!]);
 		await view.queueRefreshTree();
@@ -1536,9 +1145,7 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		assert.equal(view.searchResult.count, 3);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1554,38 +1161,17 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
-				options?.signal?.addEventListener(
-					'abort',
-					() => {
-						aborted = true;
-					},
-					{ once: true },
-				);
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
 				options?.onProgress?.(matches);
-				await new Promise<void>(resolve => {
-					finish = resolve;
-				});
+				await new Promise<void>(resolve => { finish = resolve; });
 				return { resultCount: 2, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					if (rejectWrite) {
-						throw denied;
-					}
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { if (rejectWrite) { throw denied; } written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const commands = services.get(ICommandService);
 		await commands.executeCommand('search.action.copyMatch');
@@ -1610,10 +1196,7 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 		const before = view.searchResult.files[0]!.matches.map(match => match.id);
 		rejectWrite = true;
 		await assert.rejects(commands.executeCommand('search.action.copyMatch', view.searchResult.files[0]!), error => error === denied);
-		assert.deepEqual(
-			view.searchResult.files[0]!.matches.map(match => match.id),
-			before,
-		);
+		assert.deepEqual(view.searchResult.files[0]!.matches.map(match => match.id), before);
 		assert.deepEqual(written, ['4,7: const needle = true;']);
 		assert.equal(aborted, false);
 		assert.equal(tree.element.getAttribute('aria-busy'), 'true');
@@ -1622,9 +1205,7 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1636,34 +1217,14 @@ test('Copy context menu uses its row and closes and releases listeners when that
 	const written: string[] = [];
 	try {
 		using store = new DisposableStore();
-		const services = createServices(store, browser, {
-			search: async (_query, options) => {
-				options?.onProgress?.(matches);
-				return { resultCount: 2, limitHit: false, error: undefined };
-			},
-		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		const services = createServices(store, browser, { search: async (_query, options) => { options?.onProgress?.(matches); return { resultCount: 2, limitHit: false, error: undefined }; } });
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const menus = services.get(IContextMenuService);
-		menus.showContextMenu = delegate => {
-			shown.push(delegate as IContextMenuDelegate);
-		};
-		menus.hideContextMenu = () => {
-			hidden++;
-			shown.at(-1)?.onHide?.(true);
-		};
+		menus.showContextMenu = delegate => { shown.push(delegate as IContextMenuDelegate); };
+		menus.hideContextMenu = () => { hidden++; shown.at(-1)?.onHide?.(true); };
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1696,9 +1257,7 @@ test('Copy context menu uses its row and closes and releases listeners when that
 		assert.equal(shown.length, 3);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1719,27 +1278,15 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 				}
 				progress = batch => options?.onProgress?.(batch);
 				progress([...matches, { ...matches[0]!, path: 'keep.ts', preview: 'keep needle', ranges: [{ start: 5, end: 11 }] }]);
-				await new Promise<void>(resolve => {
-					finish = resolve;
-				});
+				await new Promise<void>(resolve => { finish = resolve; });
 				return { resultCount: 3, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1785,9 +1332,7 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1798,24 +1343,12 @@ test('Copy menu callbacks cannot clear a replacement and keyboard menus ignore i
 	let hidden = 0;
 	try {
 		using store = new DisposableStore();
-		const services = createServices(store, browser, {
-			search: async (_query, options) => {
-				options?.onProgress?.(matches);
-				return { resultCount: 2, limitHit: false, error: undefined };
-			},
-		});
+		const services = createServices(store, browser, { search: async (_query, options) => { options?.onProgress?.(matches); return { resultCount: 2, limitHit: false, error: undefined }; } });
 		const menus = services.get(IContextMenuService);
-		menus.showContextMenu = delegate => {
-			shown.push(delegate as IContextMenuDelegate);
-		};
-		menus.hideContextMenu = () => {
-			hidden++;
-		};
+		menus.showContextMenu = delegate => { shown.push(delegate as IContextMenuDelegate); };
+		menus.hideContextMenu = () => { hidden++; };
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1824,19 +1357,8 @@ test('Copy menu callbacks cannot clear a replacement and keyboard menus ignore i
 		tree.setFocus(view.searchResult.files[0]!.matches[0]!.id);
 		const embeddedInput = browser.window.document.createElement('input');
 		tree.domNode.append(embeddedInput);
-		for (const [target, options] of [
-			[embeddedInput, { shiftKey: true }],
-			[tree.element, { shiftKey: true, ctrlKey: true }],
-			[tree.element, { shiftKey: true, altKey: true }],
-			[tree.element, { shiftKey: true, metaKey: true }],
-			[tree.element, { shiftKey: true, isComposing: true }],
-		] as const) {
-			const event = new browser.window.KeyboardEvent('keydown', {
-				key: 'F10',
-				bubbles: true,
-				cancelable: true,
-				...options,
-			});
+		for (const [target, options] of [[embeddedInput, { shiftKey: true }], [tree.element, { shiftKey: true, ctrlKey: true }], [tree.element, { shiftKey: true, altKey: true }], [tree.element, { shiftKey: true, metaKey: true }], [tree.element, { shiftKey: true, isComposing: true }]] as const) {
+			const event = new browser.window.KeyboardEvent('keydown', { key: 'F10', bubbles: true, cancelable: true, ...options });
 			target.dispatchEvent(event);
 			assert.equal(event.defaultPrevented, false);
 		}
@@ -1854,9 +1376,7 @@ test('Copy menu callbacks cannot clear a replacement and keyboard menus ignore i
 		assert.equal(hidden, 2);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1870,22 +1390,12 @@ test('Copy Path uses only the first selected file while explicit detached files 
 			search: async (_query, options) => {
 				options?.onProgress?.([...matches, { ...matches[0]!, path: 'other.ts' }]);
 				return { resultCount: 3, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1897,10 +1407,7 @@ test('Copy Path uses only the first selected file while explicit detached files 
 		const commands = services.get(ICommandService);
 		tree.setFocus(file!.id);
 		tree.setSelection([file!.id, other!.id]);
-		assert.deepEqual(
-			tree.selection.map(element => element.id),
-			[other!.id, file!.id],
-		);
+		assert.deepEqual(tree.selection.map(element => element.id), [other!.id, file!.id]);
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId);
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, folder);
@@ -1926,9 +1433,7 @@ test('Copy Path uses only the first selected file while explicit detached files 
 		assert.equal(written.at(-1), 'formatted:/workspace/src/main.ts');
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -1944,37 +1449,16 @@ test('Copy Path preserves a running search and propagates clipboard failures wit
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
-				options?.signal?.addEventListener(
-					'abort',
-					() => {
-						aborted = true;
-					},
-					{ once: true },
-				);
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
 				options?.onProgress?.(matches);
-				await new Promise<void>(resolve => {
-					finish = resolve;
-				});
+				await new Promise<void>(resolve => { finish = resolve; });
 				return { resultCount: 2, limitHit: false, error: undefined };
-			},
+			}
 		});
-		services.registerInstance(
-			IClipboardService,
-			new BrowserClipboardService({
-				writeText: async value => {
-					if (rejected) {
-						throw denied;
-					}
-					written.push(value);
-				},
-			} as Clipboard),
-		);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { if (rejected) { throw denied; } written.push(value); } } as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -1984,23 +1468,13 @@ test('Copy Path preserves a running search and propagates clipboard failures wit
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file);
 		rejected = true;
 		await assert.rejects(services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file), error => error === denied);
-		assert.deepEqual(
-			{
-				written,
-				matches: file.matches.map(match => match.id),
-				aborted,
-				busy: view.getControl().element.getAttribute('aria-busy'),
-			},
-			{ written: ['/workspace/src/main.ts'], matches: before, aborted: false, busy: 'true' },
-		);
+		assert.deepEqual({ written, matches: file.matches.map(match => match.id), aborted, busy: view.getControl().element.getAttribute('aria-busy') }, { written: ['/workspace/src/main.ts'], matches: before, aborted: false, busy: 'true' });
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -2010,34 +1484,22 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 	let searched = 0;
 	try {
 		using store = new DisposableStore();
-		const workspace = store.add(
-			new TestWorkspaceService({
-				id: 'multiple',
-				folders: [
-					{ id: 'workspace', name: 'Workspace', index: 0, uri: URI.file('/workspace') },
-					{ id: 'other', name: 'Other', index: 1, uri: URI.file('/other') },
-				],
-			}),
-		);
+		const workspace = store.add(new TestWorkspaceService({
+			id: 'multiple', folders: [
+				{ id: 'workspace', name: 'Workspace', index: 0, uri: URI.file('/workspace') },
+				{ id: 'other', name: 'Other', index: 1, uri: URI.file('/other') },
+			]
+		}));
 		const delivered = [...matches, { ...matches[0]!, dirId: 'other', path: 'deep/nested/other.ts' }];
-		const services = createServices(
-			store,
-			browser,
-			{
-				search: async (_query, options) => {
-					searched++;
-					options?.onProgress?.(delivered);
-					return { resultCount: delivered.length, limitHit: false, error: undefined };
-				},
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				searched++;
+				options?.onProgress?.(delivered);
+				return { resultCount: delivered.length, limitHit: false, error: undefined };
 			},
-			undefined,
-			workspace,
-		);
+		}, undefined, workspace);
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const command = () => services.get(ICommandService).executeCommand('search.action.expandSearchResults');
 		await command();
@@ -2047,9 +1509,7 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
 		let actions: readonly IAction[] = [];
-		services.get(IContextMenuService).showContextMenu = delegate => {
-			actions = delegate.getActions?.() ?? [];
-		};
+		services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
 		await actions.find(action => action.id === 'search.treeView')!.run();
 		const tree = view.getControl();
@@ -2062,27 +1522,12 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 		queryInput.focus();
 		await command();
 		await command();
-		assert.deepEqual(
-			{
-				visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length,
-				selection: tree.selection.map(element => element.id),
-				focus: tree.focus?.id,
-				snapshot: view.getSearchResultSnapshot(),
-				searched,
-				inputFocused: browser.window.document.activeElement === queryInput,
-			},
-			{
-				visibleMatches: 3,
-				selection: [selected.id],
-				focus: selected.id,
-				snapshot: before,
-				searched: 2,
-				inputFocused: true,
-			},
-		);
-		for (const node of tree.model.rootNodes) {
-			tree.collapseRecursive(node.id);
-		}
+		assert.deepEqual({
+			visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length,
+			selection: tree.selection.map(element => element.id), focus: tree.focus?.id,
+			snapshot: view.getSearchResultSnapshot(), searched, inputFocused: browser.window.document.activeElement === queryInput,
+		}, { visibleMatches: 3, selection: [selected.id], focus: selected.id, snapshot: before, searched: 2, inputFocused: true });
+		for (const node of tree.model.rootNodes) { tree.collapseRecursive(node.id); }
 		view.setVisible(false);
 		await command();
 		assert.equal(tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, 0);
@@ -2091,9 +1536,7 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 		assert.equal(tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, 3);
 	} finally {
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -2106,35 +1549,17 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 		using store = new DisposableStore();
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
-				options?.signal?.addEventListener(
-					'abort',
-					() => {
-						aborted = true;
-					},
-					{ once: true },
-				);
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
 				options?.onProgress?.(matches);
-				await new Promise<void>(resolve => {
-					finish = () => {
-						options?.onProgress?.([{ ...matches[0]!, path: 'late.ts' }]);
-						resolve();
-					};
-				});
+				await new Promise<void>(resolve => { finish = () => { options?.onProgress?.([{ ...matches[0]!, path: 'late.ts' }]); resolve(); }; });
 				return { resultCount: 3, limitHit: false, error: undefined };
 			},
 		});
 		const { SearchView } = await import('../../browser/searchView.js');
-		using view = services.createInstance(SearchView, browser.window.document.body, {
-			id: SEARCH_VIEW_ID,
-			title: 'Search',
-		});
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
 		registerView(services, view);
 		const menus = services.createInstance(MenuService);
-		const palette = () =>
-			menus
-				.getMenuActions(MenuId.CommandPalette)
-				.flatMap(([, actions]) => actions)
-				.find(action => action.id === 'search.action.expandSearchResults');
+		const palette = () => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === 'search.action.expandSearchResults');
 		assert.equal(palette(), undefined);
 		input(view.element, 'Search workspace').value = 'needle';
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
@@ -2142,61 +1567,31 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 		assert.equal(palette(), undefined);
 		const tree = view.getControl();
 		tree.collapseRecursive(tree.model.rootNodes[0]!.id);
-		assert.deepEqual(
-			{
-				label: palette()?.label,
-				enabled: palette()?.enabled,
-				busy: tree.element.getAttribute('aria-busy'),
-				aborted,
-			},
-			{
-				label: 'Search: Expand All',
-				enabled: true,
-				busy: 'true',
-				aborted: false,
-			},
-		);
+		assert.deepEqual({ label: palette()?.label, enabled: palette()?.enabled, busy: tree.element.getAttribute('aria-busy'), aborted }, {
+			label: 'Search: Expand All', enabled: true, busy: 'true', aborted: false,
+		});
 		await palette()!.run();
 		assert.equal(palette(), undefined);
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
 		assert.deepEqual({ expandedMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, aborted }, { expandedMatches: 3, aborted: false });
-		for (const node of tree.model.rootNodes) {
-			tree.collapseRecursive(node.id);
-		}
+		for (const node of tree.model.rootNodes) { tree.collapseRecursive(node.id); }
 		assert.equal(palette()?.enabled, true);
 		view.setVisible(false);
 		assert.equal(palette()?.enabled, true);
 		await palette()!.run();
-		assert.deepEqual(
-			{
-				visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length,
-				visible: view.isVisible(),
-			},
-			{ visibleMatches: 0, visible: false },
-		);
+		assert.deepEqual({ visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, visible: view.isVisible() }, { visibleMatches: 0, visible: false });
 		view.setVisible(true);
 		assert.equal(palette()?.enabled, true);
 		view.dispose();
 		await services.get(ICommandService).executeCommand('search.action.expandSearchResults');
-		assert.deepEqual(
-			{
-				palette: palette(),
-				hasResults: services.get(IContextKeyService).getValue('hasSearchResult'),
-				hasCollapsible: services.get(IContextKeyService).getValue('viewHasSomeCollapsibleResult'),
-			},
-			{
-				palette: undefined,
-				hasResults: false,
-				hasCollapsible: false,
-			},
-		);
+		assert.deepEqual({ palette: palette(), hasResults: services.get(IContextKeyService).getValue('hasSearchResult'), hasCollapsible: services.get(IContextKeyService).getValue('viewHasSomeCollapsibleResult') }, {
+			palette: undefined, hasResults: false, hasCollapsible: false,
+		});
 	} finally {
 		finish?.();
 		browser.window.close();
-		for (const name of globals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
 
@@ -2209,10 +1604,7 @@ function createTestLabelService(workspace: ConstructorParameters<typeof LabelSer
 suite('search browser component', () => {
 	const browserTests = useBrowserTests();
 	// Default fixtures model a POSIX host; the Windows suite below supplies its own browser identity.
-	if (process.platform === 'win32')
-		browserTests.use({
-			userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36',
-		});
+	if (process.platform === 'win32') browserTests.use({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' });
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Sidebar auto hide follows active containers, moves and settings without losing focus (${locale})`, async function () {
 			const { page } = browserTests;
@@ -2225,19 +1617,15 @@ suite('search browser component', () => {
 			const setting = await page.evaluate(() => window.ashSearchIntegration.autoHideSetting());
 			expect(setting).toEqual({
 				title: locale === 'en' ? 'Auto Hide Activity Bar' : '自动隐藏活动栏',
-				description:
-					locale === 'en'
-						? 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'
-						: '侧边栏的视图切换栏位于顶部或底部，且该位置最多只有一个容器具有可用视图时，隐藏该切换栏。',
+				description: locale === 'en'
+					? 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'
+					: '侧边栏的视图切换栏位于顶部或底部，且该位置最多只有一个容器具有可用视图时，隐藏该切换栏。',
 				value: false,
 			});
 			const sidebar = page.locator('[data-part="sidebar"]');
 			const content = sidebar.locator(':scope > .ash-composite-content');
 			const switcher = sidebar.locator('.ash-composite-bar');
-			const query = page.getByRole('textbox', {
-				name: locale === 'en' ? 'Search workspace' : '搜索工作区',
-				exact: true,
-			});
+			const query = page.getByRole('textbox', { name: locale === 'en' ? 'Search workspace' : '搜索工作区', exact: true });
 			for (const position of ['top', 'bottom']) {
 				await page.evaluate(position => window.ashSearchIntegration.setActivityBarLocation(position as ActivityBarPosition), position);
 				await expect(switcher).toBeVisible();
@@ -2319,17 +1707,13 @@ suite('search browser component', () => {
 			await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
 			for (const width of [180, 400]) {
 				await page.evaluate(width => window.ashSearchIntegration.setWidth(width), width);
-				await expect
-					.poll(() =>
-						replaceAll.evaluate(element => {
-							const button = element.getBoundingClientRect();
-							const svg = element.querySelector('.ash-icon');
-							if (!svg) return Number.POSITIVE_INFINITY;
-							const icon = svg.getBoundingClientRect();
-							return Math.max(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2), Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2));
-						}),
-					)
-					.toBeLessThan(0.01);
+				await expect.poll(() => replaceAll.evaluate(element => {
+					const button = element.getBoundingClientRect();
+					const svg = element.querySelector('.ash-icon');
+					if (!svg) return Number.POSITIVE_INFINITY;
+					const icon = svg.getBoundingClientRect();
+					return Math.max(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2), Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2));
+				})).toBeLessThan(0.01);
 				await expect(preserveCase.locator('.ash-action-label-text')).toBeVisible();
 				await expect(preserveCase).toHaveText('AB');
 			}
@@ -2401,9 +1785,7 @@ suite('search browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/search.html?locale=zh-CN');
-		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain(
-			'搜索会使用已打开文件和无标题文档的当前编辑器文本，包括工作区外的资源。搜索不会保存文件。替换无标题文档的结果后，草稿仍保持未保存状态。',
-		);
+		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('搜索会使用已打开文件和无标题文档的当前编辑器文本，包括工作区外的资源。搜索不会保存文件。替换无标题文档的结果后，草稿仍保持未保存状态。');
 	});
 
 	test('Search line numbers default off and change live without altering matches or submitting another query', async function () {
@@ -2417,13 +1799,10 @@ suite('search browser component', () => {
 		const rows = page.locator('.ash-search-match');
 		await expect(rows.locator('.ash-search-line-number')).toHaveCount(0);
 		const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
-		const measure = () =>
-			rows.evaluateAll(elements =>
-				elements.map(element => ({
-					preview: element.querySelector('.ash-search-preview')!.getBoundingClientRect().width,
-					origin: element.querySelector('.ash-search-preview')!.getBoundingClientRect().left - element.getBoundingClientRect().left,
-				})),
-			);
+		const measure = () => rows.evaluateAll(elements => elements.map(element => ({
+			preview: element.querySelector('.ash-search-preview')!.getBoundingClientRect().width,
+			origin: element.querySelector('.ash-search-preview')!.getBoundingClientRect().left - element.getBoundingClientRect().left,
+		})));
 		const unnumbered = await measure();
 		await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
 		expect((await rows.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
@@ -2515,20 +1894,10 @@ suite('search browser component', () => {
 		await query.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
 		await expect.poll(() => query.evaluate((input: HTMLTextAreaElement) => input.scrollTop)).toBeGreaterThan(0);
 		const scrolling = await query.evaluate((input: HTMLTextAreaElement) => ({
-			value: input.value,
-			caret: input.selectionEnd,
-			scroll: input.scrollTop,
-			overflowing: input.scrollHeight > input.clientHeight,
-			browserBar: getComputedStyle(input).scrollbarWidth,
-			managed: input.parentElement!.querySelectorAll('.ash-scrollbar-track-vertical').length,
+			value: input.value, caret: input.selectionEnd, scroll: input.scrollTop, overflowing: input.scrollHeight > input.clientHeight,
+			browserBar: getComputedStyle(input).scrollbarWidth, managed: input.parentElement!.querySelectorAll('.ash-scrollbar-track-vertical').length,
 		}));
-		expect(scrolling).toMatchObject({
-			value: long,
-			caret: long.length,
-			overflowing: true,
-			browserBar: 'none',
-			managed: 1,
-		});
+		expect(scrolling).toMatchObject({ value: long, caret: long.length, overflowing: true, browserBar: 'none', managed: 1 });
 		expect(scrolling.scroll).toBeGreaterThan(0);
 		await query.fill('first\nsecond');
 		await query.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
@@ -2574,12 +1943,7 @@ suite('search browser component', () => {
 		await expect(tree.locator('.ash-search-match')).toHaveCount(3);
 		await expect(tree.locator('[aria-expanded="false"]')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
-		expect(
-			await page.evaluate(() => ({
-				queries: window.ashSearchIntegration.queries.length,
-				opened: window.ashSearchIntegration.opened.length,
-			})),
-		).toEqual({ queries: 1, opened: 0 });
+		expect(await page.evaluate(() => ({ queries: window.ashSearchIntegration.queries.length, opened: window.ashSearchIntegration.opened.length }))).toEqual({ queries: 1, opened: 0 });
 		await tree.getByRole('treeitem', { name: 'other', exact: true }).locator('.ash-tree-twistie').click();
 		await expect(tree).toBeFocused();
 		await expect(collapse).toBeVisible();
@@ -2631,12 +1995,8 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('3 results');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const first = tree.getByRole('treeitem').filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-		});
-		const other = tree.getByRole('treeitem').filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
-		});
+		const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
+		const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }) });
 		await first.click();
 		await other.click({ modifiers: ['ControlOrMeta'] });
 		const shortcut = 'ControlOrMeta+Alt+c';
@@ -2660,12 +2020,8 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('3 results');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const first = tree.getByRole('treeitem').filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-		});
-		const other = tree.getByRole('treeitem').filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
-		});
+		const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
+		const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }) });
 		await first.click();
 		await other.click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true }).locator('.ash-menu-keybinding')).toBeVisible();
@@ -2868,12 +2224,7 @@ suite('search browser component', () => {
 		const activeId = await tree.getAttribute('aria-activedescendant');
 		await expect(page.locator(`[id="${activeId}"]`)).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
 		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot()?.matchCount)).toBe(2);
-		await tree
-			.getByRole('treeitem')
-			.filter({
-				has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-			})
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) }).click();
 		await page.evaluate(() => window.ashSearchIntegration.dismiss());
 		await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['main.ts']);
 		await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
@@ -2903,7 +2254,7 @@ suite('search browser component', () => {
 		await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
 		const next = tree.getByRole('treeitem', { name: 'Line 8, column 7: const needle = true;', exact: true });
 		await expect(next).toHaveAttribute('aria-selected', 'true');
-		await expect(tree).toHaveAttribute('aria-activedescendant', (await next.getAttribute('id')) as string);
+		await expect(tree).toHaveAttribute('aria-activedescendant', await next.getAttribute('id') as string);
 		await expect(tree).toBeFocused();
 
 		await folder('b/nested').locator('.ash-tree-twistie').click();
@@ -2915,7 +2266,7 @@ suite('search browser component', () => {
 		await expect(file).toHaveAttribute('aria-expanded', 'true');
 		const last = tree.getByRole('treeitem', { name: 'Line 9, column 7: const needle = true;', exact: true });
 		await expect(last).toHaveAttribute('aria-selected', 'true');
-		await expect(tree).toHaveAttribute('aria-activedescendant', (await last.getAttribute('id')) as string);
+		await expect(tree).toHaveAttribute('aria-activedescendant', await last.getAttribute('id') as string);
 		await expect(tree).toBeFocused();
 	});
 
@@ -2941,7 +2292,7 @@ suite('search browser component', () => {
 		await expect(folder('b/nested')).toHaveAttribute('aria-expanded', 'true');
 		await expect(file('b.ts')).toHaveAttribute('aria-expanded', 'false');
 		await expect(file('b.ts')).toHaveAttribute('aria-selected', 'true');
-		await expect(tree).toHaveAttribute('aria-activedescendant', (await file('b.ts').getAttribute('id')) as string);
+		await expect(tree).toHaveAttribute('aria-activedescendant', await file('b.ts').getAttribute('id') as string);
 		await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
 		await expect(tree).toBeFocused();
 	});
@@ -2974,14 +2325,9 @@ suite('search browser component', () => {
 		await query.fill('中文');
 		await query.press('Enter');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const file = tree.getByRole('treeitem').filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-		});
+		const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
 		await file.click();
-		await tree
-			.locator('.ash-search-match')
-			.first()
-			.click({ modifiers: ['ControlOrMeta'] });
+		await tree.locator('.ash-search-match').first().click({ modifiers: ['ControlOrMeta'] });
 		await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(2);
 		await page.evaluate(() => window.ashSearchIntegration.dismiss());
 		await expect(page.getByRole('status')).toHaveText('1 results');
@@ -3046,18 +2392,10 @@ suite('search browser component', () => {
 		await query.fill('needle');
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('1 results');
-		expect(await page.evaluate(() => window.ashSearchIntegration.queries)).toEqual([
-			{
-				text: 'needle',
-				wholeWord: false,
-				patternKind: 'regex',
-				caseSensitivity: 'sensitive',
-				includePatterns: ['src/**', 'docs/**'],
-				excludePatterns: ['**/*.test.ts'],
-				maxResults: 2000,
-				freshness: 'current',
-			},
-		]);
+		expect(await page.evaluate(() => window.ashSearchIntegration.queries)).toEqual([{
+			text: 'needle', wholeWord: false, patternKind: 'regex', caseSensitivity: 'sensitive',
+			includePatterns: ['src/**', 'docs/**'], excludePatterns: ['**/*.test.ts'], maxResults: 2000, freshness: 'current',
+		}]);
 		await expect(page.locator('.ash-search-preview mark')).toHaveText('needle');
 		await details.click();
 		await expect(include).toHaveValue('src/**, docs/**');
@@ -3076,20 +2414,11 @@ suite('search browser component', () => {
 					const narrow = widget.classList.contains('ash-search-widget-narrow');
 					const widgetBounds = widget.getBoundingClientRect();
 					return {
-						inputWidth: input.width,
-						aligned: Math.abs(input.left - replacement.left) < 0.01 && Math.abs(input.right - replacement.right) < 0.01,
+						inputWidth: input.width, aligned: Math.abs(input.left - replacement.left) < 0.01 && Math.abs(input.right - replacement.right) < 0.01,
 						inside: controls.left >= bounds.left && controls.right <= bounds.right + 0.01 && controls.top >= bounds.top && controls.bottom <= bounds.bottom + 0.01,
-						narrowOptions: !narrow || controls.top >= input.bottom,
-						fits: widget.scrollWidth <= widget.clientWidth,
-						width: widget.clientWidth,
-						scrollWidth: widget.scrollWidth,
-						overflowing: Array.from(widget.querySelectorAll('*'))
-							.filter(element => element.getBoundingClientRect().right > widgetBounds.right + 0.01)
-							.map(element => ({
-								className: element.className,
-								right: element.getBoundingClientRect().right,
-								width: element.getBoundingClientRect().width,
-							})),
+						narrowOptions: !narrow || controls.top >= input.bottom, fits: widget.scrollWidth <= widget.clientWidth,
+						width: widget.clientWidth, scrollWidth: widget.scrollWidth,
+						overflowing: Array.from(widget.querySelectorAll('*')).filter(element => element.getBoundingClientRect().right > widgetBounds.right + 0.01).map(element => ({ className: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width })),
 					};
 				});
 				expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
@@ -3140,24 +2469,22 @@ suite('search browser component', () => {
 				await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 			}
 			// Resize and measure in the same browser task: a ResizeObserver cannot repair stale geometry.
-			const samples = await page.evaluate(() =>
-				[600, 180, 400, 220, 280, 180, 600].map(width => {
-					window.ashSearchIntegration.setWidth(width);
-					const sidebar = document.querySelector<HTMLElement>('[data-part="sidebar"]')!;
-					const host = sidebar.querySelector<HTMLElement>('.ash-view-pane-container')!;
-					const pane = host.querySelector<HTMLElement>('.ash-split-view-pane')!;
-					return {
-						width,
-						hostWidth: host.clientWidth,
-						paneWidth: pane.getBoundingClientRect().width,
-						previews: Array.from(pane.querySelectorAll('.ash-search-preview')).map(preview => ({
-							width: preview.getBoundingClientRect().width,
-							right: preview.getBoundingClientRect().right,
-						})),
-						right: sidebar.getBoundingClientRect().right,
-					};
-				}),
-			);
+			const samples = await page.evaluate(() => [600, 180, 400, 220, 280, 180, 600].map(width => {
+				window.ashSearchIntegration.setWidth(width);
+				const sidebar = document.querySelector<HTMLElement>('[data-part="sidebar"]')!;
+				const host = sidebar.querySelector<HTMLElement>('.ash-view-pane-container')!;
+				const pane = host.querySelector<HTMLElement>('.ash-split-view-pane')!;
+				return {
+					width,
+					hostWidth: host.clientWidth,
+					paneWidth: pane.getBoundingClientRect().width,
+					previews: Array.from(pane.querySelectorAll('.ash-search-preview')).map(preview => ({
+						width: preview.getBoundingClientRect().width,
+						right: preview.getBoundingClientRect().right,
+					})),
+					right: sidebar.getBoundingClientRect().right,
+				};
+			}));
 			for (const sample of samples) {
 				expect(sample.paneWidth, JSON.stringify(sample)).toBe(sample.hostWidth);
 				expect(sample.previews).toHaveLength(3);
@@ -3196,9 +2523,7 @@ suite('search browser component', () => {
 					'other • src/ash/workbench/contrib/search/browser',
 				]);
 			}
-			await expect(tree.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(
-				mode === 'tree' ? ['searchView.ts', 'inputbox.ts', 'searchView.ts'] : ['inputbox.ts', 'searchView.ts', 'searchView.ts'],
-			);
+			await expect(tree.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(mode === 'tree' ? ['searchView.ts', 'inputbox.ts', 'searchView.ts'] : ['inputbox.ts', 'searchView.ts', 'searchView.ts']);
 			await expect(tree.locator('.ash-search-preview mark')).toHaveText(['layout', 'layout', 'layout']);
 			expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
 			const late = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-line-number').getByText('3456:', { exact: true }) });
@@ -3207,14 +2532,7 @@ suite('search browser component', () => {
 			await late.dblclick();
 			expect((await page.evaluate(() => window.ashSearchIntegration.opened)).at(-1)).toMatchObject({
 				resource: 'file:///workspace/src/ash/workbench/contrib/search/browser/searchView.ts',
-				options: {
-					selection: {
-						startLineNumber: 3456,
-						startColumn: '中文😀 long context '.repeat(36).length + 1,
-						endLineNumber: 3456,
-						endColumn: '中文😀 long context '.repeat(36).length + 7,
-					},
-				},
+				options: { selection: { startLineNumber: 3456, startColumn: '中文😀 long context '.repeat(36).length + 1, endLineNumber: 3456, endColumn: '中文😀 long context '.repeat(36).length + 7 } },
 			});
 			for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 				await page.evaluate(value => window.ashSearchIntegration.setTheme(value), theme);
@@ -3233,38 +2551,16 @@ suite('search browser component', () => {
 							const line = row.querySelector('.ash-search-line-number')!.getBoundingClientRect();
 							const preview = row.querySelector('.ash-search-preview')!.getBoundingClientRect();
 							const highlight = row.querySelector('.ash-search-preview mark')!.getBoundingClientRect();
-							return {
-								lineWidth: line.width,
-								origin: preview.left - content.left,
-								width: preview.width,
-								fits: preview.right <= bounds.right + 0.01,
-								highlightFits: highlight.left >= preview.left - 0.01 && highlight.right <= preview.right + 0.01,
-							};
+							return { lineWidth: line.width, origin: preview.left - content.left, width: preview.width, fits: preview.right <= bounds.right + 0.01, highlightFits: highlight.left >= preview.left - 0.01 && highlight.right <= preview.right + 0.01 };
 						});
-						const files = Array.from(element.querySelectorAll('.ash-search-file-heading'))
-							.filter(row => row.querySelector('.ash-search-file-count'))
-							.map(row => {
-								const label = row.querySelector('.ash-icon-label-text')!.getBoundingClientRect();
-								const count = row.querySelector('.ash-search-file-count')!.getBoundingClientRect();
-								return {
-									width: label.width,
-									separated: label.right <= count.left + 0.01,
-									fits: count.right <= bounds.right + 0.01,
-								};
-							});
-						return {
-							width: bounds.width,
-							titleFits: title.right <= toolbar.left,
-							toolbarAtTop: toolbar.bottom <= input.top,
-							alignedInputs: input.left === replacement.left && input.right === replacement.right,
-							previews,
-							files,
-						};
+						const files = Array.from(element.querySelectorAll('.ash-search-file-heading')).filter(row => row.querySelector('.ash-search-file-count')).map(row => {
+							const label = row.querySelector('.ash-icon-label-text')!.getBoundingClientRect();
+							const count = row.querySelector('.ash-search-file-count')!.getBoundingClientRect();
+							return { width: label.width, separated: label.right <= count.left + 0.01, fits: count.right <= bounds.right + 0.01 };
+						});
+						return { width: bounds.width, titleFits: title.right <= toolbar.left, toolbarAtTop: toolbar.bottom <= input.top, alignedInputs: input.left === replacement.left && input.right === replacement.right, previews, files };
 					});
-					await browserTests.info.attach(`search-${mode}-${theme}-${width}px-geometry`, {
-						body: JSON.stringify(geometry, null, 2),
-						contentType: 'application/json',
-					});
+					await browserTests.info.attach(`search-${mode}-${theme}-${width}px-geometry`, { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
 					expect(geometry.titleFits).toBe(true);
 					expect(geometry.toolbarAtTop).toBe(true);
 					expect(geometry.alignedInputs).toBe(true);
@@ -3277,16 +2573,9 @@ suite('search browser component', () => {
 						expect(preview.fits).toBe(true);
 						expect(preview.highlightFits).toBe(true);
 					}
-					for (const file of geometry.files) {
-						expect(file.width).toBeGreaterThan(0);
-						expect(file.separated).toBe(true);
-						expect(file.fits).toBe(true);
-					}
+					for (const file of geometry.files) { expect(file.width).toBeGreaterThan(0); expect(file.separated).toBe(true); expect(file.fits).toBe(true); }
 					await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
-					await browserTests.info.attach(`search-${mode}-${theme}-${width}px`, {
-						body: await sidebar.screenshot(),
-						contentType: 'image/png',
-					});
+					await browserTests.info.attach(`search-${mode}-${theme}-${width}px`, { body: await sidebar.screenshot(), contentType: 'image/png' });
 				}
 			}
 			await expect(toolbar).toBeVisible();
@@ -3306,9 +2595,7 @@ suite('search browser component', () => {
 		await expect(page.locator('.ash-search-file-count')).toHaveText(['2', '1']);
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		const rows = tree.getByRole('treeitem');
-		const workspaceFile = rows.filter({
-			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-		});
+		const workspaceFile = rows.filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
 		await workspaceFile.locator('.ash-tree-twistie').click();
 		await expect(workspaceFile).toHaveAttribute('aria-expanded', 'false');
 		await expect(tree.locator('.ash-search-match')).toHaveCount(1);
@@ -3316,34 +2603,20 @@ suite('search browser component', () => {
 		await expect(workspaceFile).toHaveAttribute('aria-expanded', 'true');
 		await tree.locator('.ash-search-match').filter({ hasText: '中文😀 needle needle' }).last().click();
 		await expect(rows.filter({ has: page.locator('.ash-search-match', { hasText: '中文😀 needle needle' }) }).last()).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
-			.toMatchObject({
-				resource: 'file:///workspace/src/main.ts',
-				target: 'activeGroup',
-				options: {
-					pinned: false,
-					preserveFocus: true,
-					selection: { startLineNumber: 1, startColumn: 13, endLineNumber: 1, endColumn: 19 },
-				},
-			});
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({
+			resource: 'file:///workspace/src/main.ts', target: 'activeGroup',
+			options: { pinned: false, preserveFocus: true, selection: { startLineNumber: 1, startColumn: 13, endLineNumber: 1, endColumn: 19 } },
+		});
 		await tree.press('ControlOrMeta+Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ target: 'sideGroup', options: { pinned: true } });
 		await tree.press('F4');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
-			.toMatchObject({
-				resource: 'ssh://host/other/src/main.ts',
-				options: { selection: { startLineNumber: 8, startColumn: 7, endColumn: 13 } },
-			});
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ resource: 'ssh://host/other/src/main.ts', options: { selection: { startLineNumber: 8, startColumn: 7, endColumn: 13 } } });
 		await expect(tree).toBeFocused();
 		await page.getByRole('button', { name: 'Collapse all results', exact: true }).click();
 		await expect(tree.locator('.ash-search-match')).toHaveCount(0);
 		await query.press('Shift+F4');
 		await expect(tree.locator('.ash-search-match')).toHaveCount(2);
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
-			.toMatchObject({ resource: 'file:///workspace/src/main.ts', options: { selection: { startColumn: 13 } } });
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ resource: 'file:///workspace/src/main.ts', options: { selection: { startColumn: 13 } } });
 	});
 
 	test('Custom tree progress follows provider loading and releases its view', async function () {
@@ -3412,13 +2685,7 @@ suite('search browser component', () => {
 				const bar = element.getBoundingClientRect();
 				const body = element.closest('.ash-view-pane')!.querySelector('.ash-pane-view-content')!.getBoundingClientRect();
 				const style = getComputedStyle(element);
-				return {
-					top: bar.top - body.top,
-					width: bar.width - body.width,
-					height: bar.height,
-					color: style.color,
-					accent: style.accentColor,
-				};
+				return { top: bar.top - body.top, width: bar.width - body.width, height: bar.height, color: style.color, accent: style.accentColor };
 			});
 			expect(geometry).toEqual({ top: 0, width: 0, height: 2, color: geometry.accent, accent: geometry.accent });
 		}
@@ -3561,12 +2828,9 @@ suite('search browser component', () => {
 		expect(await rows.count()).toBeLessThan(100);
 		await tree.focus();
 		await tree.press('End');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
-			.toMatchObject({
-				resource: 'file:///workspace/src/main.ts',
-				options: { preserveFocus: true, selection: { startLineNumber: 1000, endLineNumber: 1000 } },
-			});
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({
+			resource: 'file:///workspace/src/main.ts', options: { preserveFocus: true, selection: { startLineNumber: 1000, endLineNumber: 1000 } },
+		});
 		await expect(tree.locator('.ash-search-line-number').last()).toHaveText('1000:');
 		expect(await rows.count()).toBeLessThan(100);
 	});
@@ -3654,18 +2918,13 @@ suite('search browser component', () => {
 		await tree.locator('.ash-tree-twistie').first().click();
 		const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
-		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-			'',
-			'/workspace/src/main.ts\n  1,6: 中文😀 needle needle\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;',
-		]);
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['', '/workspace/src/main.ts\n  1,6: 中文😀 needle needle\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;']);
 		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
 		await tree.locator('.ash-tree-twistie').first().click();
 		await tree.locator('.ash-search-match').first().click();
 		await page.evaluate(() => window.ashSearchIntegration.dismiss());
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
-		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe(
-			'/workspace/src/main.ts\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;',
-		);
+		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;');
 		await page.evaluate(() => window.ashSearchIntegration.setClipboardFailure(true));
 		await expect(page.evaluate(() => window.ashSearchIntegration.copyAll())).rejects.toThrow('Clipboard permission denied');
 		await expect(page.getByRole('status')).toHaveText('2 results');
@@ -3707,17 +2966,13 @@ suite('search browser component', () => {
 		await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
-		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe(
-			'/workspace/src/main.ts\n  1,7: const needle = true;\n\n/workspace/late.ts\n  1,7: const needle = true;',
-		);
+		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,7: const needle = true;\n\n/workspace/late.ts\n  1,7: const needle = true;');
 		expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(0);
 		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('已移除的结果不会复制');
 	});
 
 	suite('Windows search clipboard formatting', () => {
-		browserTests.use({
-			userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36',
-		});
+		browserTests.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' });
 		test('Copy Path uses the Windows shortcut and does not claim Control+Alt+C', async function () {
 			const { page } = browserTests;
 
@@ -3749,9 +3004,7 @@ suite('search browser component', () => {
 			await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
 			await page.locator('.ash-search-file-path').filter({ hasText: 'main.ts' }).click({ button: 'right' });
 			await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-				.toEqual(['9,1: needle\n10:  next', 'C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next']);
+			await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['9,1: needle\n10:  next', 'C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next']);
 		});
 		test('Copy All uses Windows labels and block separators while preserving multi-line previews', async function () {
 			const { page } = browserTests;
@@ -3762,9 +3015,7 @@ suite('search browser component', () => {
 			await query.press('Enter');
 			await expect(page.getByRole('status')).toHaveText('2 results');
 			await page.evaluate(() => window.ashSearchIntegration.copyAll());
-			expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-				'C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next\r\n\r\nC:\\workspace\\root.ts\r\n  2,1: needle',
-			]);
+			expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next\r\n\r\nC:\\workspace\\root.ts\r\n  2,1: needle']);
 		});
 	});
 
@@ -3772,11 +3023,7 @@ suite('search browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/search.html');
-		await page.evaluate(async () => {
-			window.ashSearchIntegration.closeWorkspace();
-			await window.ashSearchIntegration.setDraftText('# Search: draft_token', 'untitled:/Search-results.code-search');
-			await window.ashSearchIntegration.setDraftText('中文😀 draft_token draft_token');
-		});
+		await page.evaluate(async () => { window.ashSearchIntegration.closeWorkspace(); await window.ashSearchIntegration.setDraftText('# Search: draft_token', 'untitled:/Search-results.code-search'); await window.ashSearchIntegration.setDraftText('中文😀 draft_token draft_token'); });
 		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 		await query.fill('draft_token');
 		await query.press('Enter');

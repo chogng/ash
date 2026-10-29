@@ -7,8 +7,12 @@ import { ChatReferenceAttachmentWidget } from './chatAttachmentWidgets.js';
 export class ChatReferenceAttachmentWidgetContribution extends Disposable {
 	static readonly ID = 'workbench.contrib.chatReferenceAttachmentWidgetFactory';
 
-	constructor(@IChatAttachmentWidgetRegistry registry: IChatAttachmentWidgetRegistry, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(
+		@IChatAttachmentWidgetRegistry registry: IChatAttachmentWidgetRegistry,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
 		super();
-		this._register(registry.registerFactory('sessionReference', (attachment, options, container) => instantiation.createInstance(ChatReferenceAttachmentWidget, attachment, options, container)));
+		this._register(registry.registerFactory('sessionReference', (attachment, options, container) =>
+			instantiation.createInstance(ChatReferenceAttachmentWidget, attachment, options, container)));
 	}
 }

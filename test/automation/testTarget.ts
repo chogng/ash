@@ -1,6 +1,14 @@
 export type AppServerTestMode = 'disabled' | 'required';
 
-export type PlaywrightTarget = { readonly kind: 'browser'; readonly appServerMode: AppServerTestMode } | { readonly kind: 'electron'; readonly appServerMode: AppServerTestMode };
+export type PlaywrightTarget =
+	| {
+		readonly kind: 'browser';
+		readonly appServerMode: AppServerTestMode;
+	}
+	| {
+		readonly kind: 'electron';
+		readonly appServerMode: AppServerTestMode;
+	};
 
 export function playwrightTargetForProject(projectName: string): PlaywrightTarget {
 	switch (projectName) {
@@ -24,9 +32,9 @@ const platformTags = ['@darwin', '@linux', '@win32'];
 
 export function supportsTestTarget(tags: readonly string[], target: PlaywrightTarget, platform: string): boolean {
 	const targetTag = `@${target.kind}-${target.appServerMode === 'required' ? 'app-server' : 'ui'}`;
-	return (
-		!tags.includes('@unsupported') && (!tags.some(tag => targetTags.includes(tag)) || tags.includes(targetTag)) && (!tags.some(tag => platformTags.includes(tag)) || tags.includes(`@${platform}`))
-	);
+	return !tags.includes('@unsupported')
+		&& (!tags.some(tag => targetTags.includes(tag)) || tags.includes(targetTag))
+		&& (!tags.some(tag => platformTags.includes(tag)) || tags.includes(`@${platform}`));
 }
 
 /** Collect only applicable scenarios; the fixture also guards custom configs. */

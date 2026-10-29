@@ -16,22 +16,10 @@ test('presentation queries aggregate providers without requiring document color 
 	const color = { red: 0, green: 1, blue: 0, alpha: 1 };
 	const signal = new AbortController().signal;
 	const service = new ColorService(model, providers);
-	using first = providers.register('*', {
-		provideDocumentColors: () => [],
-		provideColorPresentations: () => [{ label: 'first' }],
-	});
-	using second = providers.register('*', {
-		provideDocumentColors: () => [],
-		provideColorPresentations: () => [{ label: 'second' }],
-	});
-	assert.deepEqual(
-		(await service.provideColorPresentationsFromProviders('plaintext', range, color, 'auto', signal)).map(value => value.label),
-		['second', 'first'],
-	);
-	assert.deepEqual(
-		(await service.provideColorPresentationsFromProviders('plaintext', range, color, 'always', signal)).map(value => value.label),
-		['second', 'first', 'rgb(0, 255, 0)', 'hsl(120, 100%, 50%)', '#00ff00'],
-	);
+	using first = providers.register('*', { provideDocumentColors: () => [], provideColorPresentations: () => [{ label: 'first' }] });
+	using second = providers.register('*', { provideDocumentColors: () => [], provideColorPresentations: () => [{ label: 'second' }] });
+	assert.deepEqual((await service.provideColorPresentationsFromProviders('plaintext', range, color, 'auto', signal)).map(value => value.label), ['second', 'first']);
+	assert.deepEqual((await service.provideColorPresentationsFromProviders('plaintext', range, color, 'always', signal)).map(value => value.label), ['second', 'first', 'rgb(0, 255, 0)', 'hsl(120, 100%, 50%)', '#00ff00']);
 	first.dispose();
 	second.dispose();
 	assert.deepEqual(await service.provideColorPresentationsFromProviders('plaintext', range, color, 'never', signal), []);
@@ -41,27 +29,10 @@ test('presentation queries discard previously collected results when the documen
 	using model = new TextModel('token');
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	let complete!: () => void;
-	using slow = providers.register('*', {
-		provideDocumentColors: () => [],
-		provideColorPresentations: () =>
-			new Promise(resolve => {
-				complete = () => resolve([{ label: 'late' }]);
-			}),
-	});
-	using fast = providers.register('*', {
-		provideDocumentColors: () => [],
-		provideColorPresentations: () => [{ label: 'early' }],
-	});
-	const pending = new ColorService(model, providers).provideColorPresentationsFromProviders(
-		'plaintext',
-		new Range(1, 1, 1, 6),
-		{ red: 1, green: 0, blue: 0, alpha: 1 },
-		'auto',
-		new AbortController().signal,
-	);
-	while (!complete) {
-		await Promise.resolve();
-	}
+	using slow = providers.register('*', { provideDocumentColors: () => [], provideColorPresentations: () => new Promise(resolve => { complete = () => resolve([{ label: 'late' }]); }) });
+	using fast = providers.register('*', { provideDocumentColors: () => [], provideColorPresentations: () => [{ label: 'early' }] });
+	const pending = new ColorService(model, providers).provideColorPresentationsFromProviders('plaintext', new Range(1, 1, 1, 6), { red: 1, green: 0, blue: 0, alpha: 1 }, 'auto', new AbortController().signal);
+	while (!complete) { await Promise.resolve(); }
 	model.setValue('changed');
 	complete();
 	assert.deepEqual(await pending, []);
@@ -75,40 +46,31 @@ test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations'
 
 	const colors = await service.provideDocumentColors('css', 'auto', signal);
 
-	assert.deepEqual(
-		colors.map(data => ({
-			text: model.getTextInRange(data.information.range),
-			color: {
-				r: Math.round(data.information.color.red * 255),
-				g: Math.round(data.information.color.green * 255),
-				b: Math.round(data.information.color.blue * 255),
-				a: Math.round(data.information.color.alpha * 255),
-			},
-		})),
-		[
-			{ text: '#f00', color: { r: 255, g: 0, b: 0, a: 255 } },
-			{ text: 'rgba(0, 128, 255, .5)', color: { r: 0, g: 128, b: 255, a: 128 } },
-			{ text: 'hsl(120, 100%, 25%)', color: { r: 0, g: 128, b: 0, a: 255 } },
-			{ text: '#11223344', color: { r: 17, g: 34, b: 51, a: 68 } },
-		],
-	);
+	assert.deepEqual(colors.map(data => ({
+		text: model.getTextInRange(data.information.range),
+		color: { r: Math.round(data.information.color.red * 255), g: Math.round(data.information.color.green * 255), b: Math.round(data.information.color.blue * 255), a: Math.round(data.information.color.alpha * 255) },
+	})), [
+		{ text: '#f00', color: { r: 255, g: 0, b: 0, a: 255 } },
+		{ text: 'rgba(0, 128, 255, .5)', color: { r: 0, g: 128, b: 255, a: 128 } },
+		{ text: 'hsl(120, 100%, 25%)', color: { r: 0, g: 128, b: 0, a: 255 } },
+		{ text: '#11223344', color: { r: 17, g: 34, b: 51, a: 68 } },
+	]);
 	const presentations = await service.provideColorPresentations('css', colors[1]!, colors[1]!.information.color, signal);
-	assert.deepEqual(
-		presentations.map(presentation => presentation.label),
-		['rgba(0, 128, 255, 0.502)', 'hsla(210, 100%, 50%, 0.502)', '#0080ff80'],
-	);
+	assert.deepEqual(presentations.map(presentation => presentation.label), [
+		'rgba(0, 128, 255, 0.502)',
+		'hsla(210, 100%, 50%, 0.502)',
+		'#0080ff80',
+	]);
 });
 
 test('explicit providers suppress the default provider in auto mode and retain presentation ownership', async () => {
 	using model = new TextModel('const color = #f00;', { languageId: 'typescript' });
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	using registration = providers.register('typescript', {
-		provideDocumentColors: () => [
-			{
-				range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, model.getLineContent(0 + 1).length + 1)),
-				color: { red: 1 / 255, green: 2 / 255, blue: 3 / 255, alpha: 1 },
-			},
-		],
+		provideDocumentColors: () => [{
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (model.getLineContent((0) + 1).length) + 1)),
+			color: { red: 1 / 255, green: 2 / 255, blue: 3 / 255, alpha: 1 },
+		}],
 		provideColorPresentations: request => [{ label: 'provider-color', textEdit: { range: request.range, text: 'provider-color' } }],
 	});
 	const service = new ColorService(model, providers);
@@ -119,10 +81,7 @@ test('explicit providers suppress the default provider in auto mode and retain p
 
 	assert.equal(auto.length, 1);
 	assert.equal(always.length, 2);
-	assert.deepEqual(
-		(await service.provideColorPresentations('typescript', auto[0]!, auto[0]!.information.color, signal)).map(value => value.label),
-		['provider-color'],
-	);
+	assert.deepEqual((await service.provideColorPresentations('typescript', auto[0]!, auto[0]!.information.color, signal)).map(value => value.label), ['provider-color']);
 });
 
 test('default color coordinates belong to the request snapshot after the model changes', async () => {
@@ -131,10 +90,7 @@ test('default color coordinates belong to the request snapshot after the model c
 	const request = createLanguageFeatureRequest(model, 'css', signal);
 	model.setValue('short');
 	const colors = await new DefaultDocumentColorProvider().provideDocumentColors(request, signal);
-	assert.deepEqual(
-		colors.map(color => color.range),
-		[new Range(2, 8, 2, 15)],
-	);
+	assert.deepEqual(colors.map(color => color.range), [new Range(2, 8, 2, 15)]);
 });
 
 for (const change of ['content', 'language', 'dispose'] as const) {
@@ -146,13 +102,8 @@ for (const change of ['content', 'language', 'dispose'] as const) {
 		const signal = new AbortController().signal;
 		const [data] = await service.provideDocumentColors('css', 'auto', signal);
 		let reject!: (error: Error) => void;
-		const pending = new Promise<never>((_resolve, fail) => {
-			reject = fail;
-		});
-		const provider: LanguageColorProvider = {
-			provideDocumentColors: () => [],
-			provideColorPresentations: () => pending,
-		};
+		const pending = new Promise<never>((_resolve, fail) => { reject = fail; });
+		const provider: LanguageColorProvider = { provideDocumentColors: () => [], provideColorPresentations: () => pending };
 		const result = service.provideColorPresentations('css', { ...data!, provider }, data!.information.color, signal);
 		if (change === 'content') model.setValue('');
 		else if (change === 'language') model.setLanguage('plaintext');
@@ -168,9 +119,7 @@ test('an aborted default color request rejects even when there are no literals',
 	const controller = new AbortController();
 	const request = createLanguageFeatureRequest(model, 'plaintext', controller.signal);
 	controller.abort();
-	assert.throws(() => new DefaultDocumentColorProvider().provideDocumentColors(request, controller.signal), {
-		name: 'AbortError',
-	});
+	assert.throws(() => new DefaultDocumentColorProvider().provideDocumentColors(request, controller.signal), { name: 'AbortError' });
 });
 
 test('a provider without presentations never fabricates a document edit', async () => {
@@ -188,6 +137,7 @@ test('a provider without presentations never fabricates a document edit', async 
 	assert.deepEqual(errors, []);
 });
 
+
 test('large color scans keep snapshot UTF-16 and multiline coordinates, and yield to cancellation', async () => {
 	const text = '😀 #f00\r\nrgb(\r\n1, 2, 3)\r\n'.repeat(4096);
 	using model = new TextModel(text);
@@ -204,31 +154,20 @@ test('large color scans keep snapshot UTF-16 and multiline coordinates, and yiel
 	const cancelled = new AbortController();
 	const timer = setTimeout(() => cancelled.abort(), 0);
 	try {
-		await assert.rejects(Promise.resolve(new DefaultDocumentColorProvider().provideDocumentColors(createLanguageFeatureRequest(large, 'css', cancelled.signal), cancelled.signal)), {
-			name: 'AbortError',
-		});
-	} finally {
-		clearTimeout(timer);
-	}
+		await assert.rejects(Promise.resolve(new DefaultDocumentColorProvider().provideDocumentColors(createLanguageFeatureRequest(large, 'css', cancelled.signal), cancelled.signal)), { name: 'AbortError' });
+	} finally { clearTimeout(timer); }
 });
 
 test('a model edit while a large provider color result is normalized discards the entire stale result', async () => {
 	using model = new TextModel('color');
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	using registration = providers.register('*', {
-		provideDocumentColors: () =>
-			Array.from({ length: 2048 }, () => ({
-				range: new Range(1, 1, 1, 2),
-				color: { red: 1, green: 0, blue: 0, alpha: 1 },
-			})),
+		provideDocumentColors: () => Array.from({ length: 2048 }, () => ({ range: new Range(1, 1, 1, 2), color: { red: 1, green: 0, blue: 0, alpha: 1 } })),
 		provideColorPresentations: () => [],
 	});
 	const timer = setTimeout(() => model.setValue('edited'), 0);
-	try {
-		assert.deepEqual(await new ColorService(model, providers).provideDocumentColors('css', 'never', new AbortController().signal), []);
-	} finally {
-		clearTimeout(timer);
-	}
+	try { assert.deepEqual(await new ColorService(model, providers).provideDocumentColors('css', 'never', new AbortController().signal), []); }
+	finally { clearTimeout(timer); }
 });
 
 const codeFeatures = registerTestCodeEditorFeatures();

@@ -35,22 +35,19 @@ import perl from '../../../extensions/perl/package.json' with { type: 'json' };
 import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
-const resourceUrls = import.meta.glob<string>(
-	[
-		'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,ini,diff,markdown-basics}/*language-configuration.json',
-		'../../../extensions/git-base/languages/*language-configuration.json',
-		'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,markdown-basics}/snippets/*',
-		'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv,yaml}/*language-configuration.json',
-		'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv}/snippets/*',
-		'../../../extensions/{lua,ruby,php,swift,dart,log}/*language-configuration.json',
-		'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/*language-configuration.json',
-		'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/snippets/*',
-		'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/package.nls*.json',
-		'../../../extensions/{lua,ruby,php,swift,dart,json}/snippets/*',
-		'../../../extensions/{lua,ruby,php,swift,dart,log,json}/package.nls*.json',
-	],
-	{ eager: true, query: '?url', import: 'default' },
-);
+const resourceUrls = import.meta.glob<string>([
+	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,ini,diff,markdown-basics}/*language-configuration.json',
+	'../../../extensions/git-base/languages/*language-configuration.json',
+	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,markdown-basics}/snippets/*',
+	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv,yaml}/*language-configuration.json',
+	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv}/snippets/*',
+	'../../../extensions/{lua,ruby,php,swift,dart,log}/*language-configuration.json',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/*language-configuration.json',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/snippets/*',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/package.nls*.json',
+	'../../../extensions/{lua,ruby,php,swift,dart,json}/snippets/*',
+	'../../../extensions/{lua,ruby,php,swift,dart,log,json}/package.nls*.json',
+], { eager: true, query: '?url', import: 'default' });
 
 export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>, adapters: IAdapterManager): Promise<AppServerExtensionService> {
 	const directories = new Map<string, string>();
@@ -106,26 +103,22 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 			packageSha256: hash,
 		});
 	}
-	return new AppServerExtensionService(
-		{
-			...options,
-			api: {
-				list: async () => ({ generation: 1, diagnostics: [], extensions: descriptors }),
-				resources: new ExtensionResourceLoaderService(async request => {
-					const path = request.path.replace(/^\.\//u, '');
-					const url = resourceUrls[`../../../extensions/${directories.get(request.extensionId)}/${path}`];
-					if (!url) {
-						throw new Error(`Missing extension fixture: ${request.extensionId}/${path}`);
-					}
-					const response = await fetch(url);
-					if (!response.ok) {
-						throw new Error(`Extension fixture failed: ${path}`);
-					}
-					return new Uint8Array(await response.arrayBuffer());
-				}),
-			},
+	return new AppServerExtensionService({
+		...options,
+		api: {
+			list: async () => ({ generation: 1, diagnostics: [], extensions: descriptors }),
+			resources: new ExtensionResourceLoaderService(async request => {
+				const path = request.path.replace(/^\.\//u, '');
+				const url = resourceUrls[`../../../extensions/${directories.get(request.extensionId)}/${path}`];
+				if (!url) {
+					throw new Error(`Missing extension fixture: ${request.extensionId}/${path}`);
+				}
+				const response = await fetch(url);
+				if (!response.ok) {
+					throw new Error(`Extension fixture failed: ${path}`);
+				}
+				return new Uint8Array(await response.arrayBuffer());
+			}),
 		},
-		createEmptyTestLanguagePacks(),
-		adapters,
-	);
+	}, createEmptyTestLanguagePacks(), adapters);
 }

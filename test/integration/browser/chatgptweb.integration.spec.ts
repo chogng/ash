@@ -9,31 +9,22 @@ const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/
 	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
 }).outputText;
 const rule = { origin: 'https://chatgpt.com', selector: '.ash-chatgpt-turn.complete' };
-type TestHost = { configureRendering: (value: typeof rule | undefined) => void };
+type TestHost = { configureRendering: (value: typeof rule | undefined) => void; };
 // Fake-device flags alone can leave the local ICE candidates hidden.
-const voiceTest = test.extend({
-	permissions: ['microphone'],
-	launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
-});
+const voiceTest = test.extend({ permissions: ['microphone'], launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
 
 async function fixture(page: Page, origin = rule.origin): Promise<void> {
-	await page.route(`${origin}/**`, route =>
-		route.fulfill({
-			contentType: 'text/html',
-			body: `<!doctype html><style>body{margin:0;font:16px/1.5 sans-serif}main{width:70%;margin:auto}.turn{padding:16px;border-bottom:1px solid #ccc}p{margin:0}</style><main>${Array.from({ length: 100 }, (_, i) => `<section class="turn ash-chatgpt-turn complete"><p>${`Synthetic reply ${i}. `.repeat(40)}</p><button>Copy ${i}</button></section>`).join('')}<section id="stream" class="ash-chatgpt-turn">Synthetic reply in progress</section></main>`,
-		}),
-	);
+	await page.route(`${origin}/**`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><style>body{margin:0;font:16px/1.5 sans-serif}main{width:70%;margin:auto}.turn{padding:16px;border-bottom:1px solid #ccc}p{margin:0}</style><main>${Array.from({ length: 100 }, (_, i) => `<section class="turn ash-chatgpt-turn complete"><p>${(`Synthetic reply ${i}. `).repeat(40)}</p><button>Copy ${i}</button></section>`).join('')}<section id="stream" class="ash-chatgpt-turn">Synthetic reply in progress</section></main>` }));
 	await page.addInitScript(() => {
 		Object.assign(window, {
 			require: () => ({
-				contextBridge: { exposeInIsolatedWorld() {} },
+				contextBridge: { exposeInIsolatedWorld() { } },
 				ipcRenderer: {
-					send() {},
-					on(_channel: string, listener: (event: unknown, data: unknown) => void) {
+					send() { }, on(_channel: string, listener: (event: unknown, data: unknown) => void) {
 						(window as unknown as TestHost).configureRendering = rule => listener(undefined, { command: 'contentVisibility', data: rule });
-					},
+					}
 				},
-			}),
+			})
 		});
 	});
 	await page.addInitScript(preload);
@@ -86,9 +77,7 @@ test('ChatGPT rendering rules reset on print and SPA replacement', async ({ page
 	await expect(page.locator('.turn').first()).toHaveCSS('content-visibility', 'visible');
 	await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
 	await expect(page.locator('.turn').first()).toHaveCSS('content-visibility', 'auto');
-	await page.locator('main').evaluate(main => {
-		main.innerHTML = '<section class="turn ash-chatgpt-turn complete">A different synthetic conversation</section>';
-	});
+	await page.locator('main').evaluate(main => { main.innerHTML = '<section class="turn ash-chatgpt-turn complete">A different synthetic conversation</section>'; });
 	await expect(page.locator('.turn')).toHaveCSS('content-visibility', 'auto');
 	await configure(page, false);
 	await expect(page.locator('.turn')).toHaveCSS('content-visibility', 'visible');
@@ -110,11 +99,7 @@ async function expectDraft(page: Page, text: string): Promise<void> {
 async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Promise<void> {
 	await page.route('**/service/**', async route => {
 		const path = new URL(route.request().url()).pathname;
-		const message = (id: string, role: string, text: string): object => ({
-			id,
-			author: { role },
-			content: { content_type: 'text', parts: [text] },
-		});
+		const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		if (path.endsWith('/models')) {
 			await route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
 		} else if (path.endsWith('/pins')) {
@@ -122,32 +107,18 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 		} else if (path.endsWith('/gizmos/snorlax/sidebar')) {
 			await route.fulfill({ json: { items: [], cursor: null } });
 		} else if (path.endsWith('/conversations')) {
-			await route.fulfill({
-				json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }], total: 1 },
-			});
+			await route.fulfill({ json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }], total: 1 } });
 		} else if (path.endsWith('/conversation/fixture-chat')) {
 			await route.fulfill({
 				json: {
-					title: 'Synthetic conversation',
-					current_node: 'previous-reply',
-					mapping: {
+					title: 'Synthetic conversation', current_node: 'previous-reply', mapping: {
 						question: { parent: null, message: message('question', 'user', 'Synthetic question') },
 						empty: { parent: 'question', message: message('empty', 'assistant', '') },
-						recap: {
-							parent: 'empty',
-							message: {
-								id: 'recap',
-								author: { role: 'assistant' },
-								content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' },
-							},
-						},
+						recap: { parent: 'empty', message: { id: 'recap', author: { role: 'assistant' }, content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' } } },
 						whitespace: { parent: 'recap', message: message('whitespace', 'assistant', ' \n\t ') },
-						'previous-reply': {
-							parent: 'whitespace',
-							message: message('previous-reply', 'assistant', answer),
-						},
-					},
-				},
+						'previous-reply': { parent: 'whitespace', message: message('previous-reply', 'assistant', answer) },
+					}
+				}
 			});
 		} else if (path.endsWith('/prepare')) {
 			await route.fulfill({ json: { conduit_token: 'fixture-conduit' } });
@@ -160,45 +131,27 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 }
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>> | undefined;
-test.afterAll(async () => {
-	await math?.dispose();
-});
-async function installMathProvider(page: Page): Promise<{ lists: number; renders: number }> {
+test.afterAll(async () => { await math?.dispose(); });
+async function installMathProvider(page: Page): Promise<{ lists: number; renders: number; }> {
 	const counters = { lists: 0, renders: 0 };
 	math ??= await startMarkdownMathExtension();
 	await page.route('**/__chat_math', async route => {
 		try {
 			if (route.request().method() === 'POST') {
 				counters.renders++;
-				await route.fulfill({
-					json: await math!.invoke('math.render.v2', 'receiveData', route.request().postDataJSON()),
-				});
+				await route.fulfill({ json: await math!.invoke('math.render.v2', 'receiveData', route.request().postDataJSON()) });
 			} else {
 				counters.lists++;
 				await route.fulfill({
 					json: {
-						generation: 1,
-						extensions: [
-							{
-								id: 'ash.markdown-math',
-								version: '1',
-								packageDigest: `sha256:${'a'.repeat(64)}`,
-								runtimeApiVersion: 1,
-								activationGeneration: 1,
-								incarnation: 1,
-								lifecycle: 'ready',
-								stderr: '',
-								failure: null,
-								outputEvents: [],
-								registrations: math!.registrations,
-							},
-						],
-					},
+						generation: 1, extensions: [{
+							id: 'ash.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+							activationGeneration: 1, incarnation: 1, lifecycle: 'ready', stderr: '', failure: null, outputEvents: [], registrations: math!.registrations,
+						}]
+					}
 				});
 			}
-		} catch (error) {
-			await route.fulfill({ status: 503, json: { error: String(error) } });
-		}
+		} catch (error) { await route.fulfill({ status: 503, json: { error: String(error) } }); }
 	});
 	return counters;
 }
@@ -276,52 +229,30 @@ test('ChatGPT Send finishes dictation before submitting the final transcript', a
 
 test('ChatGPT uploads images and documents, waits for readiness and preserves attachments on rejection', async ({ page }) => {
 	await mockChatGPTRequests(page);
-	const uploads: { name: string; useCase: string; bytes?: Buffer }[] = [];
+	const uploads: { name: string; useCase: string; bytes?: Buffer; }[] = [];
 	let releaseImage!: () => Promise<void>;
-	let submitted:
-		| {
-				messages: {
-					content: { content_type: string; parts: unknown[] };
-					metadata: { attachments: { id: string; name: string }[] };
-				}[];
-		  }
-		| undefined;
+	let submitted: { messages: { content: { content_type: string; parts: unknown[]; }; metadata: { attachments: { id: string; name: string; }[]; }; }[]; } | undefined;
 	await page.route('**/service/backend-api/files', async route => {
 		const body = route.request().postDataJSON();
 		uploads.push({ name: body.file_name, useCase: body.use_case });
-		await route.fulfill({
-			json: {
-				file_id: body.file_name.endsWith('.png') ? 'file_image' : 'file_document',
-				upload_url: `https://files.oaiusercontent.com/${body.file_name}?signature=fixture`,
-			},
-		});
+		await route.fulfill({ json: { file_id: body.file_name.endsWith('.png') ? 'file_image' : 'file_document', upload_url: `https://files.oaiusercontent.com/${body.file_name}?signature=fixture` } });
 	});
 	await page.route('**/service/.upload?*', async route => {
 		const url = new URL(new URL(route.request().url()).searchParams.get('url')!);
 		const upload = uploads.find(item => url.pathname.endsWith(item.name))!;
 		upload.bytes = route.request().postDataBuffer()!;
-		if (upload.name.endsWith('.png')) {
-			releaseImage = () => route.fulfill({ status: 201, body: '' });
-		} else {
-			await route.fulfill({ status: 201, body: '' });
-		}
+		if (upload.name.endsWith('.png')) { releaseImage = () => route.fulfill({ status: 201, body: '' }); }
+		else { await route.fulfill({ status: 201, body: '' }); }
 	});
 	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
-	await page.route('**/service/backend-api/f/conversation', async route => {
-		submitted = route.request().postDataJSON();
-		await route.fulfill({ status: 403, json: {} });
-	});
+	await page.route('**/service/backend-api/f/conversation', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ status: 403, json: {} }); });
 	await page.goto('/chatgptNavigation.html?locale=en');
 	const composer = page.locator('.ash-chatgpt-composer');
 	await expect(composer.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
-	const image = Buffer.from(
-		await page.evaluate(() => {
-			const canvas = document.createElement('canvas');
-			canvas.width = canvas.height = 1;
-			return canvas.toDataURL('image/png').split(',')[1]!;
-		}),
-		'base64',
-	);
+	const image = Buffer.from(await page.evaluate(() => {
+		const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+		return canvas.toDataURL('image/png').split(',')[1]!;
+	}), 'base64');
 	await composer.locator('input[type=file]').setInputFiles([
 		{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Selected file content') },
 		{ name: 'pixel.png', mimeType: 'image/png', buffer: image },
@@ -339,15 +270,7 @@ test('ChatGPT uploads images and documents, waits for readiness and preserves at
 	await composer.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect.poll(() => submitted?.messages[0]?.content.content_type).toBe('multimodal_text');
 	expect(submitted!.messages[0]!.metadata.attachments.map(item => item.name)).toEqual(['notes.txt', 'pixel.png']);
-	expect(submitted!.messages[0]!.content.parts).toEqual([
-		{
-			content_type: 'image_asset_pointer',
-			asset_pointer: 'file-service://file_image',
-			size_bytes: image.byteLength,
-			width: 1,
-			height: 1,
-		},
-	]);
+	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'file-service://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
 	await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
 });
@@ -357,19 +280,10 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 	let attempts = 0;
 	let release!: () => Promise<void>;
 	await page.route('**/service/backend-api/files', async route => {
-		if (++attempts === 1) {
-			await route.fulfill({ status: 500, json: {} });
-			return;
-		}
-		await route.fulfill({
-			json: { file_id: 'file_retry', upload_url: 'https://files.oaiusercontent.com/retry?signature=fixture' },
-		});
+		if (++attempts === 1) { await route.fulfill({ status: 500, json: {} }); return; }
+		await route.fulfill({ json: { file_id: 'file_retry', upload_url: 'https://files.oaiusercontent.com/retry?signature=fixture' } });
 	});
-	await page.route('**/service/.upload?*', route => {
-		release = async () => {
-			await route.fulfill({ status: 201, body: '' }).catch(() => {});
-		};
-	});
+	await page.route('**/service/.upload?*', route => { release = async () => { await route.fulfill({ status: 201, body: '' }).catch(() => { }); }; });
 	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
 	await page.goto('/chatgptNavigation.html?locale=en');
 	await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
@@ -393,9 +307,7 @@ voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or inva
 	let requests = 0;
 	await page.route('**/service/realtime/vp**', route => {
 		requests++;
-		release = async () => {
-			await route.fulfill({ contentType: 'application/sdp', body: 'Invalid SDP answer' }).catch(() => {});
-		};
+		release = async () => { await route.fulfill({ contentType: 'application/sdp', body: 'Invalid SDP answer' }).catch(() => { }); };
 	});
 	await page.goto('/chatgptNavigation.html?locale=en');
 	const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
@@ -434,12 +346,7 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 	// The remote peer answers the real client's SDP and negotiated data channel;
 	// only the HTTP service boundary is synthetic.
 	const remote = await peer.evaluateHandle(() => {
-		const resources: {
-			peer: RTCPeerConnection;
-			channel: RTCDataChannel;
-			stream: MediaStream;
-			audio: HTMLAudioElement;
-		}[] = [];
+		const resources: { peer: RTCPeerConnection; channel: RTCDataChannel; stream: MediaStream; audio: HTMLAudioElement; }[] = [];
 		return {
 			async answer(sdp: string): Promise<string> {
 				const peer = new RTCPeerConnection();
@@ -450,9 +357,7 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 				resources.push({ peer, channel, stream, audio });
 				for (const track of stream.getTracks()) peer.addTrack(track, stream);
-				peer.ontrack = event => {
-					if (event.track.kind === 'audio') audio.srcObject = new MediaStream([event.track]);
-				};
+				peer.ontrack = event => { if (event.track.kind === 'audio') audio.srcObject = new MediaStream([event.track]); };
 				await peer.setRemoteDescription({ type: 'offer', sdp });
 				await peer.setLocalDescription(await peer.createAnswer());
 				if (peer.iceGatheringState !== 'complete') {
@@ -467,12 +372,8 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 				}
 				return peer.localDescription!.sdp;
 			},
-			state(): { connection: string; ice: string; channel: string }[] {
-				return resources.map(({ peer, channel }) => ({
-					connection: peer.connectionState,
-					ice: peer.iceConnectionState,
-					channel: channel.readyState,
-				}));
+			state(): { connection: string; ice: string; channel: string; }[] {
+				return resources.map(({ peer, channel }) => ({ connection: peer.connectionState, ice: peer.iceConnectionState, channel: channel.readyState }));
 			},
 			dispose(): boolean {
 				for (const { peer, channel, stream, audio } of resources) {
@@ -493,9 +394,7 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 		let negotiations = 0;
 		await page.route('**/service/realtime/vp**', async route => {
 			const request = route.request();
-			const form = await new Response(request.postData()!, {
-				headers: { 'Content-Type': request.headers()['content-type']! },
-			}).formData();
+			const form = await new Response(request.postData()!, { headers: { 'Content-Type': request.headers()['content-type']! } }).formData();
 			const offer = form.get('sdp');
 			expect(typeof offer).toBe('string');
 			expect(offer).toMatch(/^v=0\r?\n/u);
@@ -506,30 +405,17 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 		await page.goto('/chatgptNavigation.html?locale=en');
 		const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
 		await voice.click();
-		await expect
-			.poll(async () => ({
-				status: await page.locator('.ash-chatgpt-voice-status').textContent(),
-				peers: await remote.evaluate(remote => remote.state()),
-			}))
-			.toEqual({
-				status: 'Voice conversation is active',
-				peers: [
-					{
-						connection: 'connected',
-						ice: expect.stringMatching(/^(connected|completed)$/u),
-						channel: 'open',
-					},
-				],
-			});
+		await expect.poll(async () => ({ status: await page.locator('.ash-chatgpt-voice-status').textContent(), peers: await remote.evaluate(remote => remote.state()) })).toEqual({
+			status: 'Voice conversation is active', peers: [{ connection: 'connected', ice: expect.stringMatching(/^(connected|completed)$/u), channel: 'open' }],
+		});
 		await expect(page.locator('audio')).toHaveCount(1);
 		for (const participant of [page, peer]) {
 			await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
 		}
-		const microphoneStates = (): Promise<MediaStreamTrackState[]> =>
-			page.evaluate(() => {
-				const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[] }).testMediaTracks;
-				return tracks.map(track => track.readyState);
-			});
+		const microphoneStates = (): Promise<MediaStreamTrackState[]> => page.evaluate(() => {
+			const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[]; }).testMediaTracks;
+			return tracks.map(track => track.readyState);
+		});
 		await expect.poll(microphoneStates).toEqual(['live']);
 		await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
 		await expect.poll(microphoneStates).toEqual(['ended']);
@@ -545,12 +431,8 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 		await expect(page.locator('audio')).toHaveCount(0);
 		await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
 	} finally {
-		try {
-			expect(await remote.evaluate(remote => remote.dispose())).toBe(true);
-		} finally {
-			await remote.dispose();
-			await peer.close();
-		}
+		try { expect(await remote.evaluate(remote => remote.dispose())).toBe(true); }
+		finally { await remote.dispose(); await peer.close(); }
 	}
 });
 
@@ -568,10 +450,7 @@ test('ChatGPT rich diagrams retain their nested content without enabling HTML or
   <row justify="center"><icon name="arrow-down"/></row>
   <box padding={3} align="center">**Syntax colors**</box>
 </box>`;
-	await chatPage(
-		page,
-		`Before the diagram.\n\n${diagram}\n\nAfter the diagram.\n\n\`<box border>literal example</box>\`\n\n<box onclick="globalThis.auditXss = true" background="url(https://audit-image.invalid/pixel)"><text>Safe text</text><script>globalThis.auditXss = true</script><img src="https://audit-image.invalid/pixel"></box>`,
-	);
+	await chatPage(page, `Before the diagram.\n\n${diagram}\n\nAfter the diagram.\n\n\`<box border>literal example</box>\`\n\n<box onclick="globalThis.auditXss = true" background="url(https://audit-image.invalid/pixel)"><text>Safe text</text><script>globalThis.auditXss = true</script><img src="https://audit-image.invalid/pixel"></box>`);
 	const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
 	const root = body.locator('.ash-chatgpt-rich-box').first();
 	await expect(root).toHaveCSS('display', 'flex');
@@ -603,36 +482,20 @@ test('ChatGPT replies omit internal citation tags while preserving literal code 
 
 test('ChatGPT retains text around structured media and names file attachments', async ({ page }) => {
 	await mockChatGPTRequests(page);
-	await page.route('**/service/backend-api/conversation/fixture-chat', route =>
-		route.fulfill({
-			json: {
-				title: 'Synthetic conversation',
-				current_node: 'mixed',
-				mapping: {
-					question: {
-						parent: null,
-						message: {
-							id: 'question',
-							author: { role: 'user' },
-							content: { parts: ['<box>User literal</box>'] },
-						},
-					},
-					mixed: {
-						parent: 'question',
-						message: {
-							id: 'mixed',
-							author: { role: 'assistant' },
-							content: {
-								content_type: 'multimodal_text',
-								parts: ['Before image', { content_type: 'image_asset_pointer', alt: 'Architecture drawing' }, 'After image'],
-							},
-							metadata: { attachments: [{ name: 'report.pdf' }] },
-						},
-					},
+	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
+		json: {
+			title: 'Synthetic conversation', current_node: 'mixed', mapping: {
+				question: { parent: null, message: { id: 'question', author: { role: 'user' }, content: { parts: ['<box>User literal</box>'] } } },
+				mixed: {
+					parent: 'question', message: {
+						id: 'mixed', author: { role: 'assistant' },
+						content: { content_type: 'multimodal_text', parts: ['Before image', { content_type: 'image_asset_pointer', alt: 'Architecture drawing' }, 'After image'] },
+						metadata: { attachments: [{ name: 'report.pdf' }] },
+					}
 				},
-			},
-		}),
-	);
+			}
+		}
+	}));
 	await page.goto('/chatgptNavigation.html');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
@@ -643,53 +506,29 @@ test('ChatGPT retains text around structured media and names file attachments', 
 
 test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({ page }) => {
 	await mockChatGPTRequests(page);
-	const html =
-		'<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
+	const html = '<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
 	const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 	await page.route('https://frame.example.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
-	await page.route('**/service/backend-api/conversation/fixture-chat', route =>
-		route.fulfill({
-			json: {
-				title: 'Synthetic conversation',
-				current_node: 'reply',
-				mapping: {
-					reply: {
-						parent: null,
-						message: {
-							id: 'reply',
-							author: { role: 'assistant' },
-							content: {
-								content_type: 'text',
-								parts: [
-									`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n[report.csv](sandbox:/mnt/data/report.csv)`,
-								],
-							},
-							metadata: {
-								search_result_groups: [
-									{
-										entries: [
-											{
-												ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 },
-												title: 'CSV documentation',
-												url: 'https://docs.python.org/3/library/csv.html',
-												snippet: 'Read and write tabular data.',
-											},
-										],
-									},
-								],
-							},
-						},
-					},
-				},
+	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
+		json: {
+			title: 'Synthetic conversation', current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						id: 'reply', author: { role: 'assistant' }, content: {
+							content_type: 'text', parts: [
+								`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n[report.csv](sandbox:/mnt/data/report.csv)`
+							]
+						}, metadata: { search_result_groups: [{ entries: [{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }] }] },
+					}
+				}
 			},
-		}),
-	);
+		}
+	}));
 	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
 	await page.goto('/chatgptNavigation.html');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	const citation = page.locator('.ash-chatgpt-citation');
-	await citation.locator('summary').focus();
-	await citation.locator('summary').press('Enter');
+	await citation.locator('summary').focus(); await citation.locator('summary').press('Enter');
 	await expect(citation).toContainText('CSV documentation');
 	await expect(citation).toContainText('Read and write tabular data.');
 	await expect(page.getByRole('link', { name: 'Python docs', exact: true })).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
@@ -703,8 +542,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(external.locator('output')).toHaveText('1');
 	const chart = page.frameLocator('iframe[title="Dataset chart"]').frameLocator('iframe');
 	await expect(chart.getByRole('cell', { name: '64', exact: true })).toBeVisible();
-	await chart.locator('canvas').focus();
-	await chart.locator('canvas').press('ArrowRight');
+	await chart.locator('canvas').focus(); await chart.locator('canvas').press('ArrowRight');
 	await expect(chart.locator('#point')).toContainText('June');
 	expect(await page.locator('body').getAttribute('data-escaped')).toBeNull();
 	const file = page.locator('.ash-chat-media').filter({ has: page.locator('figcaption', { hasText: 'report.csv' }) });
@@ -722,22 +560,13 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 test('ChatGPT waits for the streamed conversation ID before resolving a sandbox attachment', async ({ page }) => {
 	await chatPage(page);
 	await page.getByRole('button', { name: '新聊天', exact: true }).click();
-	const message = {
-		id: 'late-reply',
-		author: { role: 'assistant' },
-		content: { parts: ['[report.csv](sandbox:/mnt/data/report.csv)'] },
-	};
+	const message = { id: 'late-reply', author: { role: 'assistant' }, content: { parts: ['[report.csv](sandbox:/mnt/data/report.csv)'] } };
 	const paths: string[] = [];
 	await page.route('**/service/.resource?*', route => {
 		paths.push(new URL(route.request().url()).searchParams.get('url')!);
 		return route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' });
 	});
-	await page.route('**/service/backend-api/f/conversation', route =>
-		route.fulfill({
-			contentType: 'text/event-stream',
-			body: `data: ${JSON.stringify({ message })}\n\ndata: {"conversation_id":"late-chat"}\n\ndata: [DONE]\n\n`,
-		}),
-	);
+	await page.route('**/service/backend-api/f/conversation', route => route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ message })}\n\ndata: {"conversation_id":"late-chat"}\n\ndata: [DONE]\n\n` }));
 	await fillMessage(page, 'Synthetic rich content probe');
 	await page.getByRole('button', { name: '发送', exact: true }).click();
 	await expect(page.locator('.ash-chat-media pre')).toContainText('May,42');
@@ -747,14 +576,8 @@ test('ChatGPT waits for the streamed conversation ID before resolving a sandbox 
 
 test('ChatGPT can embed public images while rejecting local files and executable Markdown', async ({ page }) => {
 	const images: string[] = [];
-	await page.route('https://audit-image.invalid/**', async route => {
-		images.push(route.request().url());
-		await route.abort();
-	});
-	await chatPage(
-		page,
-		'![tracker](https://audit-image.invalid/pixel) ![file](file:///audit-fixture.png) ![wrong-type](data:text/html,%3Cbutton%3Ebad%3C/button%3E)\n\n<script>globalThis.auditXss = true</script>\n\n[unsafe](javascript:alert(1))',
-	);
+	await page.route('https://audit-image.invalid/**', async route => { images.push(route.request().url()); await route.abort(); });
+	await chatPage(page, '![tracker](https://audit-image.invalid/pixel) ![file](file:///audit-fixture.png) ![wrong-type](data:text/html,%3Cbutton%3Ebad%3C/button%3E)\n\n<script>globalThis.auditXss = true</script>\n\n[unsafe](javascript:alert(1))');
 	await expect(page.locator('.ash-chatgpt-messages img[src^="file:"]')).toHaveCount(0);
 	await expect(page.locator('.ash-chatgpt-messages iframe')).toHaveCount(0);
 	await expect(page.locator('.ash-chatgpt-messages a[href^="javascript:"]')).toHaveCount(0);
@@ -767,22 +590,10 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 	let sent = 0;
 	let stops = 0;
 	let verify!: () => Promise<void>;
-	await page.route('**/service/.headers/**', route => {
-		verify = async () => {
-			await route.fulfill({ json: { 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-verification' } }).catch(() => {});
-		};
-	});
-	await page.route('**/service/backend-api/f/conversation', async route => {
-		sent++;
-		await route.fulfill({ contentType: 'text/event-stream', body: 'data: [DONE]\n\n' });
-	});
+	await page.route('**/service/.headers/**', route => { verify = async () => { await route.fulfill({ json: { 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-verification' } }).catch(() => { }); }; });
+	await page.route('**/service/backend-api/f/conversation', async route => { sent++; await route.fulfill({ contentType: 'text/event-stream', body: 'data: [DONE]\n\n' }); });
 	let stop!: () => Promise<void>;
-	await page.route('**/service/backend-api/stop_conversation', route => {
-		stops++;
-		stop = async () => {
-			await route.fulfill({ json: {} }).catch(() => {});
-		};
-	});
+	await page.route('**/service/backend-api/stop_conversation', route => { stops++; stop = async () => { await route.fulfill({ json: {} }).catch(() => { }); }; });
 	await fillMessage(page, 'Synthetic cancellation probe');
 	const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
 	await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
@@ -804,10 +615,7 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 		expect(stops).toBe(0);
 		await expectDraft(page, 'Synthetic cancellation probe');
 		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
-	} finally {
-		await verify();
-		await stop?.();
-	}
+	} finally { await verify(); await stop?.(); }
 });
 
 for (const locale of ['en', 'zh-CN']) {
@@ -825,14 +633,10 @@ for (const locale of ['en', 'zh-CN']) {
 		const bounds = await body.locator('.katex-display').first().boundingBox();
 		expect(bounds!.height).toBeGreaterThan(10);
 		await page.evaluate(() => document.fonts.ready);
-		const geometry = await body.locator('.katex-html svg').evaluateAll(elements =>
-			elements.map(element => ({
-				width: element.getAttribute('width'),
-				height: element.getAttribute('height'),
-				actual: element.getBoundingClientRect().height,
-				fontSize: parseFloat(getComputedStyle(element).fontSize),
-			})),
-		);
+		const geometry = await body.locator('.katex-html svg').evaluateAll(elements => elements.map(element => ({
+			width: element.getAttribute('width'), height: element.getAttribute('height'),
+			actual: element.getBoundingClientRect().height, fontSize: parseFloat(getComputedStyle(element).fontSize),
+		})));
 		expect(geometry.length).toBeGreaterThanOrEqual(5);
 		for (const svg of geometry) {
 			expect(svg.width).toMatch(/^(400em|100%)$/);
@@ -852,11 +656,7 @@ for (const locale of ['en', 'zh-CN']) {
 for (const locale of ['en', 'zh-CN']) {
 	test(`chat and Markdown share formula syntax, MathML and styles (${locale})`, async ({ page, context }) => {
 		test.setTimeout(600000);
-		const corpus = JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as {
-			name: string;
-			markdown: string;
-			formulas: { source: string; display: string }[];
-		}[];
+		const corpus = JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 		const cases = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
 		const text = cases.map(entry => entry.markdown).join('\n\n');
 		const expected = cases.flatMap(entry => entry.formulas);
@@ -864,11 +664,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const editor = await context.newPage();
 		try {
 			await editor.route('**/__markdown_render**', async route => {
-				await route.fulfill({
-					json: await extension.render('vscode.markdown.editor', {
-						document: { languageId: 'markdown', ...route.request().postDataJSON() },
-					}),
-				});
+				await route.fulfill({ json: await extension.render('vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
 			});
 			await installMathProvider(page);
 			await mockChatGPTRequests(page, text);
@@ -884,23 +680,13 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(content.locator('[data-math-diagnostic]')).toHaveCount(2);
 				await expect(content.locator('math')).toHaveCount(expected.length - 2);
 				await expect(content.locator('code').first()).toHaveText('$x$');
-				await content.evaluate(element => {
-					Object.assign((element as HTMLElement).style, {
-						fontSize: '16px',
-						lineHeight: '1.5',
-						width: '360px',
-					});
-				});
+				await content.evaluate(element => { Object.assign((element as HTMLElement).style, { fontSize: '16px', lineHeight: '1.5', width: '360px' }); });
 			}
 			await Promise.all([page.evaluate(() => document.fonts.ready), editor.evaluate(() => document.fonts.ready)]);
 			for (const content of [chat, markdown]) {
 				const overflow = await content.evaluate(element => {
 					const formula = [...element.querySelectorAll<HTMLElement>('.ash-markdown-math')].find(node => node.querySelector('annotation')?.textContent?.startsWith('\\underbrace{'))!;
-					return {
-						behavior: getComputedStyle(formula).overflowX,
-						width: formula.clientWidth,
-						contentWidth: formula.scrollWidth,
-					};
+					return { behavior: getComputedStyle(formula).overflowX, width: formula.clientWidth, contentWidth: formula.scrollWidth };
 				});
 				expect(overflow.behavior).toBe('auto');
 				expect(overflow.width).toBeLessThanOrEqual(360);
@@ -912,83 +698,50 @@ for (const locale of ['en', 'zh-CN']) {
 					await content.evaluate((element, color) => {
 						(element as HTMLElement).style.color = color;
 						// Give both hosts the same inherited link context for formula comparison.
-						for (const link of element.querySelectorAll('a')) {
-							link.style.color = color;
-						}
+						for (const link of element.querySelectorAll('a')) { link.style.color = color; }
 					}, color);
 				}
-				const values = await Promise.all(
-					[chat, markdown].map(content =>
-						content.locator('.ash-markdown-math').evaluateAll(elements =>
-							elements.map(element => {
-								const semantic = (node: Node): unknown =>
-									node instanceof Element
-										? {
-												tag: node.localName,
-												attributes: [...node.attributes].map(attribute => [attribute.name, attribute.value]).sort(([a], [b]) => a.localeCompare(b)),
-												children: [...node.childNodes].map(semantic),
-											}
-										: node.textContent;
-								const math = element.querySelector('math');
-								const katex = element.querySelector('.katex');
-								const style = getComputedStyle(katex ?? element);
-								return {
-									source: math?.querySelector('annotation')?.textContent,
-									display: (element as HTMLElement).dataset.mathDisplay,
-									math: math ? semantic(math) : undefined,
-									color: style.color,
-									fontSize: style.fontSize,
-									fontFamily: style.fontFamily,
-									diagnostic: element.querySelector('[data-math-diagnostic]')?.getAttribute('data-math-diagnostic') ?? element.getAttribute('data-math-diagnostic'),
-									height: katex?.getBoundingClientRect().height,
-								};
-							}),
-						),
-					),
-				);
+				const values = await Promise.all([chat, markdown].map(content => content.locator('.ash-markdown-math').evaluateAll(elements => elements.map(element => {
+					const semantic = (node: Node): unknown => node instanceof Element
+						? { tag: node.localName, attributes: [...node.attributes].map(attribute => [attribute.name, attribute.value]).sort(([a], [b]) => a.localeCompare(b)), children: [...node.childNodes].map(semantic) }
+						: node.textContent;
+					const math = element.querySelector('math');
+					const katex = element.querySelector('.katex');
+					const style = getComputedStyle(katex ?? element);
+					return {
+						source: math?.querySelector('annotation')?.textContent,
+						display: (element as HTMLElement).dataset.mathDisplay,
+						math: math ? semantic(math) : undefined, color: style.color, fontSize: style.fontSize, fontFamily: style.fontFamily,
+						diagnostic: element.querySelector('[data-math-diagnostic]')?.getAttribute('data-math-diagnostic') ?? element.getAttribute('data-math-diagnostic'),
+						height: katex?.getBoundingClientRect().height,
+					};
+				}))));
 				for (let index = 0; index < expected.length; index++) {
 					const { height: chatHeight, ...chatValue } = values[0][index];
 					const { height: markdownHeight, ...markdownValue } = values[1][index];
 					expect(chatValue, expected[index].source).toEqual(markdownValue);
 					expect(chatValue.color).toBe(color);
-					if (chatHeight !== undefined) {
-						expect(Math.abs(chatHeight - markdownHeight!)).toBeLessThan(1);
-					}
+					if (chatHeight !== undefined) { expect(Math.abs(chatHeight - markdownHeight!)).toBeLessThan(1); }
 				}
 			}
-		} finally {
-			await editor.close();
-			await extension.dispose();
-		}
+		} finally { await editor.close(); await extension.dispose(); }
 	});
 }
+
 
 test('ChatGPT streaming reuses math while prose grows and renders one new ordered batch when formulas change', async ({ page }) => {
 	await page.addInitScript(() => {
 		const fetcher = globalThis.fetch.bind(globalThis);
 		globalThis.fetch = async (input, init) => {
-			if (String(input) !== '/service/backend-api/f/conversation') {
-				return fetcher(input, init);
-			}
-			return new Response(
-				new ReadableStream({
-					start(controller) {
-						const push = (text: string) =>
-							controller.enqueue(
-								new TextEncoder().encode(
-									`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message: { id: 'math-stream', author: { role: 'assistant' }, content: { parts: [text] } } })}\n\n`,
-								),
-							);
-						Reflect.set(globalThis, 'pushMathStream', push);
-						Reflect.set(globalThis, 'endMathStream', () => {
-							controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-							controller.close();
-						});
-						push('$x$ prose 0');
-					},
-				}),
-				{ headers: { 'Content-Type': 'text/event-stream' } },
-			);
+			if (String(input) !== '/service/backend-api/f/conversation') { return fetcher(input, init); }
+			return new Response(new ReadableStream({
+				start(controller) {
+					const push = (text: string) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message: { id: 'math-stream', author: { role: 'assistant' }, content: { parts: [text] } } })}\n\n`));
+					Reflect.set(globalThis, 'pushMathStream', push);
+					Reflect.set(globalThis, 'endMathStream', () => { controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close(); });
+					push('$x$ prose 0');
+				},
+			}), { headers: { 'Content-Type': 'text/event-stream' } });
 		};
 	});
 	const counters = await installMathProvider(page);
@@ -1011,12 +764,11 @@ test('ChatGPT streaming reuses math while prose grows and renders one new ordere
 	expect(counters).toEqual({ lists: 1, renders: 2 });
 });
 
+
 test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({ page }, testInfo) => {
 	test.setTimeout(600000);
 	await installMathProvider(page);
-	await chatPage(
-		page,
-		`<FuturePanel title="Overview"><FutureCard>**Card body**</FutureCard></FuturePanel>
+	await chatPage(page, `<FuturePanel title="Overview"><FutureCard>**Card body**</FutureCard></FuturePanel>
 
 <details><summary>More details</summary><table><tr><th>Name</th><td>Retained cell</td></tr></table>H<sub>2</sub>O and x<sup>2</sup></details>
 
@@ -1036,8 +788,7 @@ $$x^2 + y^2 = z^2$$
 
 Last paragraph.
 
-<img>`,
-	);
+<img>`);
 	const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
 	await expect(body).toContainText('Overview');
 	await expect(body.locator('strong')).toHaveText('Card body');
@@ -1053,23 +804,16 @@ Last paragraph.
 	await expect(chart.getByRole('cell', { name: '42', exact: true })).toBeVisible();
 	await chart.getByRole('combobox').selectOption('line');
 	await expect(chart.getByRole('combobox')).toHaveValue('line');
-	for (const text of ['Architecture image', 'Demo video', 'SVG diagram', 'Node A', 'Last paragraph.']) {
-		await expect(body).toContainText(text);
-	}
+	for (const text of ['Architecture image', 'Demo video', 'SVG diagram', 'Node A', 'Last paragraph.']) { await expect(body).toContainText(text); }
 	await expect(body.getByRole('link', { name: 'https://example.com/source', exact: true })).toHaveAttribute('href', 'https://example.com/source');
 	await expect(body.locator('code').last()).toHaveText('<FutureCard>literal code</FutureCard>');
 	await expect(body.locator('.ash-katex-container')).toHaveAttribute('data-latex', 'x^2 + y^2 = z^2');
 	await expect(body.locator('.ash-katex-container math')).toBeAttached();
 	const links = body.getByRole('link', { name: '在 ChatGPT 中查看此内容', exact: true });
 	expect(await links.count()).toBe(1);
-	for (const link of await links.all()) {
-		await expect(link).toHaveAttribute('href', 'https://chatgpt.com/c/fixture-chat');
-	}
+	for (const link of await links.all()) { await expect(link).toHaveAttribute('href', 'https://chatgpt.com/c/fixture-chat'); }
 	await links.last().focus();
 	await expect(links.last()).toBeFocused();
 	await expect(body.locator('script, [onclick]')).toHaveCount(0);
-	await testInfo.attach('chatgpt-rich-content-retention', {
-		body: await page.screenshot(),
-		contentType: 'image/png',
-	});
+	await testInfo.attach('chatgpt-rich-content-retention', { body: await page.screenshot(), contentType: 'image/png' });
 });

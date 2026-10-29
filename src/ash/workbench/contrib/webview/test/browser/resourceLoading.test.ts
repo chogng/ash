@@ -21,12 +21,10 @@ suite('Webview resource loading', () => {
 		] as const;
 		const files = new MemoryFileService(expected.map(([name]) => [URI.joinPath(root, name), name]));
 		using fileService = createTestFileService(files);
-		const responses = await Promise.all(
-			expected.map(async ([name]) => {
-				const result = await loadLocalResource(URI.joinPath(root, name), { roots: [root] }, fileService, CancellationToken.None);
-				return result.status === 200 ? [name, result.mimeType] : [name, result.status];
-			}),
-		);
+		const responses = await Promise.all(expected.map(async ([name]) => {
+			const result = await loadLocalResource(URI.joinPath(root, name), { roots: [root] }, fileService, CancellationToken.None);
+			return result.status === 200 ? [name, result.mimeType] : [name, result.status];
+		}));
 		assert.deepEqual(responses, expected);
 	});
 
@@ -36,26 +34,21 @@ suite('Webview resource loading', () => {
 		const files = new MemoryFileService([[file, '<svg/>']]);
 		const read = files.readFile.bind(files);
 		const reads: string[] = [];
-		files.readFile = resource => {
-			reads.push(resource.toString());
-			return read(resource);
-		};
+		files.readFile = resource => { reads.push(resource.toString()); return read(resource); };
 		using fileService = createTestFileService(files);
 		const result = await loadLocalResource(file, { roots: [root] }, fileService, CancellationToken.None);
 		using fileService2 = createTestFileService(files);
-		const denied = await Promise.all(
-			[root, URI.parse('file:///workspace/assets-other/icon.svg'), URI.parse('file:///workspace/assets/../secret.svg'), URI.parse('ash-remote://other/workspace/assets/icon.svg')].map(resource =>
-				loadLocalResource(resource, { roots: [root] }, fileService2, CancellationToken.None),
-			),
-		);
-		assert.deepEqual(
-			{ result, denied: denied.map(response => response.status), reads },
-			{
-				result: { status: 200, mimeType: 'image/svg+xml', bytes: new TextEncoder().encode('<svg/>') },
-				denied: [403, 403, 403, 403],
-				reads: [file.toString()],
-			},
-		);
+		const denied = await Promise.all([
+			root,
+			URI.parse('file:///workspace/assets-other/icon.svg'),
+			URI.parse('file:///workspace/assets/../secret.svg'),
+			URI.parse('ash-remote://other/workspace/assets/icon.svg'),
+		].map(resource => loadLocalResource(resource, { roots: [root] }, fileService2, CancellationToken.None)));
+		assert.deepEqual({ result, denied: denied.map(response => response.status), reads }, {
+			result: { status: 200, mimeType: 'image/svg+xml', bytes: new TextEncoder().encode('<svg/>') },
+			denied: [403, 403, 403, 403],
+			reads: [file.toString()],
+		});
 	});
 
 	test('does not deliver a read completed after its document is cancelled', async () => {
@@ -64,13 +57,8 @@ suite('Webview resource loading', () => {
 		const files = new MemoryFileService([[file, 'image']]);
 		const read = files.readFile.bind(files);
 		let finish!: () => void;
-		const pending = new Promise<void>(resolve => {
-			finish = resolve;
-		});
-		files.readFile = async resource => {
-			await pending;
-			return read(resource);
-		};
+		const pending = new Promise<void>(resolve => { finish = resolve; });
+		files.readFile = async resource => { await pending; return read(resource); };
 		using fileService = createTestFileService(files);
 		const result = loadLocalResource(file, { roots: [URI.parse('file:///workspace')] }, fileService, cancellation.token);
 		cancellation.cancel();
@@ -81,12 +69,9 @@ suite('Webview resource loading', () => {
 	test('maps local and remote paths without losing authority, escaped names or relative CSS dependencies', () => {
 		const source = URI.parse('ash-remote://ssh-example/workspace/space%20dir/style.css');
 		const uri = asWebviewUri(source);
-		assert.deepEqual(
-			{ uri: uri.toString(), sibling: new URL('./image.svg', uri.toString()).href },
-			{
-				uri: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/style.css',
-				sibling: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/image.svg',
-			},
-		);
+		assert.deepEqual({ uri: uri.toString(), sibling: new URL('./image.svg', uri.toString()).href }, {
+			uri: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/style.css',
+			sibling: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/image.svg',
+		});
 	});
 });

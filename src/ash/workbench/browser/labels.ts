@@ -21,16 +21,16 @@ import { IUntitledTextEditorService } from '../services/untitled/common/untitled
 import { IDecorationsService, type IDecoration, type IResourceDecorationChangeEvent } from '../services/decorations/common/decorations.js';
 
 export interface IResourceLabelProps {
-	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI };
+	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI; };
 	readonly name?: string | readonly string[];
 	readonly description?: string;
-	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number };
+	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number; };
 }
 
 export interface IResourceLabelOptions extends Omit<IconLabelValueOptions, 'icon' | 'iconPath'> {
 	readonly icon?: ThemeIcon | URI;
 	readonly fileKind?: FileKind;
-	readonly fileDecorations?: { readonly colors: boolean; readonly badges: boolean };
+	readonly fileDecorations?: { readonly colors: boolean; readonly badges: boolean; };
 	readonly forceLabel?: boolean;
 	readonly namePrefix?: string;
 	readonly nameSuffix?: string;
@@ -39,7 +39,7 @@ export interface IResourceLabelOptions extends Omit<IconLabelValueOptions, 'icon
 export interface IFileLabelOptions extends IResourceLabelOptions {
 	readonly hideLabel?: boolean;
 	readonly hidePath?: boolean;
-	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number };
+	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number; };
 }
 
 export interface IResourceLabel extends IDisposable {
@@ -95,14 +95,15 @@ export class ResourceLabels extends Disposable {
 
 	readonly onDidChangeDecorations = this.decorationChangeEmitter.event;
 
-	constructor(container: IResourceLabelsContainer = DEFAULT_LABELS_CONTAINER, services: ResourceLabelServices) {
+	constructor(
+		container: IResourceLabelsContainer = DEFAULT_LABELS_CONTAINER,
+		services: ResourceLabelServices,
+	) {
 		super();
 		this.services = services;
-		this._register(
-			container.onDidChangeVisibility(visible => {
-				for (const widget of this.widgets) widget.setVisibility(visible);
-			}),
-		);
+		this._register(container.onDidChangeVisibility(visible => {
+			for (const widget of this.widgets) widget.setVisibility(visible);
+		}));
 		this._register(services.workspaceContextService.onDidChangeWorkspace(() => this.rerenderAll()));
 		this._register(services.resourceIconRenderer.onDidChangeResourceIcons(() => this.rerenderAll(true)));
 		if (services.fileModels) {
@@ -118,7 +119,7 @@ export class ResourceLabels extends Disposable {
 		if (services.decorationsService) this._register(services.decorationsService.onDidChangeDecorations(event => this.onDecorationChange(event)));
 	}
 
-	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
+	create(container: HTMLElement, options?: { readonly supportIcons?: boolean; }): IResourceLabel {
 		const widget = new ResourceLabelWidget(container, this.services, options);
 		widget.setIconVisibility(this.iconsVisible);
 		this.widgets.add(widget);
@@ -200,7 +201,7 @@ export class ResourceLabelService implements IResourceLabelService {
 		@ILabelService private readonly labelService: ILabelService,
 		@IFileTextModelService private readonly fileModels: IFileTextModelService,
 		@ILanguageService private readonly languageService: ILanguageService,
-	) {}
+	) { }
 
 	createGroup(): ResourceLabels {
 		return new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
@@ -223,7 +224,11 @@ export class ResourceLabel extends Disposable implements IResourceLabel {
 	readonly element: HTMLElement;
 	readonly onDidRender: Event<void>;
 
-	constructor(container: HTMLElement, services: ResourceLabelServices, options?: { readonly supportIcons?: boolean }) {
+	constructor(
+		container: HTMLElement,
+		services: ResourceLabelServices,
+		options?: { readonly supportIcons?: boolean; },
+	) {
 		super();
 		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
 		this.label = this.labels.create(container, options);
@@ -270,7 +275,7 @@ class ResourceLabelWidget extends Disposable {
 		return resourceOf(this.current);
 	}
 
-	constructor(container: HTMLElement, services: ResourceLabelServices, options: { readonly supportIcons?: boolean } | undefined) {
+	constructor(container: HTMLElement, services: ResourceLabelServices, options: { readonly supportIcons?: boolean; } | undefined) {
 		super();
 		this.services = services;
 		this.supportIcons = options?.supportIcons === true;
@@ -280,15 +285,11 @@ class ResourceLabelWidget extends Disposable {
 
 	setLabel(label: string | readonly string[], description?: string, options?: IconLabelValueOptions): void {
 		const { iconPath, ...valueOptions } = options ?? {};
-		this.setResourceInternal(
-			{ name: label, description },
-			{
-				...valueOptions,
-				icon: iconPath ?? options?.icon,
-				hideIcon: options?.hideIcon ?? (options?.icon === undefined && iconPath === undefined && options?.renderIcon === undefined),
-			},
-			false,
-		);
+		this.setResourceInternal({ name: label, description }, {
+			...valueOptions,
+			icon: iconPath ?? options?.icon,
+			hideIcon: options?.hideIcon ?? (options?.icon === undefined && iconPath === undefined && options?.renderIcon === undefined),
+		}, false);
 	}
 
 	setFile(resource: URI, options: IFileLabelOptions = {}): void {
@@ -318,11 +319,7 @@ class ResourceLabelWidget extends Disposable {
 				: `:${label.range.startLineNumber}`
 			: options.suffix;
 
-		this.current = Object.freeze({
-			...label,
-			...(name === undefined ? {} : { name }),
-			...(description === undefined ? {} : { description }),
-		});
+		this.current = Object.freeze({ ...label, ...(name === undefined ? {} : { name }), ...(description === undefined ? {} : { description }) });
 		this.currentTitle = title;
 		this.currentSuffix = suffix;
 		this.currentOptions = Object.freeze({ ...options });
@@ -368,20 +365,29 @@ class ResourceLabelWidget extends Disposable {
 		let displayName = current.name;
 		let displayDescription = current.description;
 		if (this.fromFileLabel && resource) {
-			const workspaceFolder = fileKind === FileKind.Directory ? this.services.workspaceContextService.getWorkspaceFolder(resource) : undefined;
-			const fileName = fileOptions.hideLabel ? undefined : workspaceFolder && isEqualResource(workspaceFolder.uri, resource) ? workspaceFolder.name : basenameOrAuthority(resource);
+			const workspaceFolder = fileKind === FileKind.Directory
+				? this.services.workspaceContextService.getWorkspaceFolder(resource)
+				: undefined;
+			const fileName = fileOptions.hideLabel
+				? undefined
+				: workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
+					? workspaceFolder.name
+					: basenameOrAuthority(resource);
 			displayName = applyNameAffixes(fileName, options.namePrefix, options.nameSuffix);
-			displayDescription =
-				fileOptions.hidePath || (workspaceFolder && isEqualResource(workspaceFolder.uri, resource))
-					? undefined
-					: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
-			const untitled = resource.scheme === 'untitled' && !options.forceLabel ? this.services.untitledTextEditorService?.get(resource) : undefined;
+			displayDescription = fileOptions.hidePath || workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
+				? undefined
+				: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
+			const untitled = resource.scheme === 'untitled' && !options.forceLabel
+				? this.services.untitledTextEditorService?.get(resource)
+				: undefined;
 			if (untitled && displayName === basenameOrAuthority(resource)) {
 				displayName = untitled.name;
 				displayDescription = resource.path;
 			}
 		}
-		const decoration = resource && options.fileDecorations ? this.services.decorationsService?.getDecoration(resource, fileKind === FileKind.Directory) : undefined;
+		const decoration = resource && options.fileDecorations
+			? this.services.decorationsService?.getDecoration(resource, fileKind === FileKind.Directory)
+			: undefined;
 		this.decoration.value = decoration;
 		const extraClasses = decorationClasses(options, decoration);
 		let title = this.currentTitle ?? (resource ? pathLabel(resource, this.services.workspaceContextService, this.services.labelService) : undefined);
@@ -392,24 +398,19 @@ class ResourceLabelWidget extends Disposable {
 		if (decoration?.tooltip) title = title ? `${title} • ${decoration.tooltip}` : decoration.tooltip;
 		const hideIcon = !this.iconsVisible || options.hideIcon === true;
 		const hasFileIcons = this.services.resourceIconRenderer.getFileIconTheme().hasFileIcons;
-		const iconClasses =
-			resource && this.services.fileModels && this.services.languageService ? getIconClasses(this.services.fileModels, this.services.languageService, resource, FileKind.File) : undefined;
+		const iconClasses = resource && this.services.fileModels && this.services.languageService
+			? getIconClasses(this.services.fileModels, this.services.languageService, resource, FileKind.File)
+			: undefined;
 		const customIcon = options.icon instanceof URI ? undefined : options.icon;
 		const customIconColor = customIcon?.color;
-		const renderIcon =
-			customIcon && customIconColor
-				? (container: HTMLSpanElement) => {
-						appendIcon(customIcon, container).style.color = `var(${colorCssVariable(customIconColor.id)})`;
-					}
-				: (options.renderIcon ??
-					(resource && !hideIcon && !options.icon && hasFileIcons && fileKind !== FileKind.Directory
-						? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container, iconClasses)
-						: undefined));
+		const renderIcon = customIcon && customIconColor
+			? (container: HTMLSpanElement) => { appendIcon(customIcon, container).style.color = `var(${colorCssVariable(customIconColor.id)})`; }
+			: options.renderIcon ?? (resource && !hideIcon && !options.icon && hasFileIcons && fileKind !== FileKind.Directory
+				? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container, iconClasses)
+				: undefined);
 		const iconOptions: IconLabelValueOptions = {
 			...options,
-			ariaLabel: decoration?.tooltip
-				? localize('workbench.explorerDecoratedFile', '{0}, {1}', options.ariaLabel ?? (typeof displayName === 'string' ? displayName : displayName?.join('/')), decoration.tooltip)
-				: options.ariaLabel,
+			ariaLabel: decoration?.tooltip ? localize('workbench.explorerDecoratedFile', '{0}, {1}', options.ariaLabel ?? (typeof displayName === 'string' ? displayName : displayName?.join('/')), decoration.tooltip) : options.ariaLabel,
 			hideIcon,
 			title,
 			extraClasses,
@@ -417,7 +418,7 @@ class ResourceLabelWidget extends Disposable {
 			icon: !hideIcon && !customIconColor ? customIcon : undefined,
 			iconPath: !hideIcon && options.icon instanceof URI ? options.icon : undefined,
 			renderIcon,
-			reserveIconSpace: !hideIcon && (options.reserveIconSpace ?? (options.icon !== undefined || (resource !== undefined && hasFileIcons && fileKind !== FileKind.Directory))),
+			reserveIconSpace: !hideIcon && (options.reserveIconSpace ?? (options.icon !== undefined || resource !== undefined && hasFileIcons && fileKind !== FileKind.Directory)),
 			suffix: this.currentSuffix,
 			suffixIcon: options.fileDecorations?.badges && decoration?.icon ? decoration.icon : options.suffixIcon,
 			supportIcons: options.supportIcons ?? this.supportIcons,
@@ -430,7 +431,9 @@ class ResourceLabelWidget extends Disposable {
 
 function resourceOf(props: IResourceLabelProps | undefined): URI | undefined {
 	if (!props?.resource) return undefined;
-	return props.resource instanceof Object && 'primary' in props.resource ? props.resource.primary : (props.resource as URI);
+	return props.resource instanceof Object && 'primary' in props.resource
+		? props.resource.primary
+		: props.resource as URI;
 }
 
 function parentLabel(resource: URI, context: IWorkspaceContextService, labelService?: ILabelService): string | undefined {
@@ -452,11 +455,18 @@ function pathLabel(resource: URI, context: IWorkspaceContextService, labelServic
 	}
 }
 
-function applyNameAffixes(name: string | readonly string[] | undefined, prefix: string | undefined, suffix: string | undefined): string | readonly string[] | undefined {
+function applyNameAffixes(
+	name: string | readonly string[] | undefined,
+	prefix: string | undefined,
+	suffix: string | undefined,
+): string | readonly string[] | undefined {
 	if (name === undefined) return undefined;
 	if (typeof name === 'string') return `${prefix ?? ''}${name}${suffix ?? ''}`;
 	if (name.length === 0) return name;
-	return [...name.slice(0, -1), `${prefix ?? ''}${name[name.length - 1] ?? ''}${suffix ?? ''}`];
+	return [
+		...name.slice(0, -1),
+		`${prefix ?? ''}${name[name.length - 1] ?? ''}${suffix ?? ''}`,
+	];
 }
 
 function decorationClasses(options: IResourceLabelOptions, decoration: IDecoration | undefined): readonly string[] {
@@ -464,7 +474,11 @@ function decorationClasses(options: IResourceLabelOptions, decoration: IDecorati
 	return [
 		...(options.extraClasses ?? []),
 		...(options.fileDecorations.colors && decoration.labelClassName ? [decoration.labelClassName] : []),
-		...(options.fileDecorations.badges && decoration.badgeClassName ? ['ash-resource-label-badge', decoration.badgeClassName, ...(decoration.isTextBadge ? ['ash-decoration-badge'] : [])] : []),
+		...(options.fileDecorations.badges && decoration.badgeClassName ? [
+			'ash-resource-label-badge',
+			decoration.badgeClassName,
+			...(decoration.isTextBadge ? ['ash-decoration-badge'] : []),
+		] : []),
 		...(options.fileDecorations.badges && decoration.iconClassName ? [decoration.iconClassName] : []),
 		...(decoration.strikethrough ? ['strikethrough'] : []),
 	];

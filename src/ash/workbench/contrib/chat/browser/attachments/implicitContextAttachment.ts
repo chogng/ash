@@ -35,26 +35,15 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-suggested-context';
 		container.append(this.domNode);
-		this._register(
-			toDisposable(() => {
-				this.controller.abort();
-				this.domNode.remove();
-			}),
-		);
-		this.button = this._register(
-			new Button(this.domNode, {
-				...defaultButtonStyles,
-				label: '',
-				icon: Lxicon.addSmall,
-				size: 'small',
-				presentation: 'quiet',
-			}),
-		);
-		this._register(
-			this.button.onDidClick(() => {
-				void this.attach();
-			}),
-		);
+		this._register(toDisposable(() => { this.controller.abort(); this.domNode.remove(); }));
+		this.button = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
+			label: '',
+			icon: Lxicon.addSmall,
+			size: 'small',
+			presentation: 'quiet',
+		}));
+		this._register(this.button.onDidClick(() => { void this.attach(); }));
 		this._register(editors.onDidActiveEditorChange(() => this.render()));
 		this._register(attachments.onDidChange(() => this.render()));
 		this.render();
@@ -68,12 +57,9 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		if (input?.initialBytes || input?.contentType === 'application/octet-stream') return undefined;
 		const resource = input?.resource;
 		// Read-only Git snapshots carry text in the input even without a filesystem provider.
-		return resource &&
-			resource.scheme !== Schemas.internal &&
-			(input.initialText !== undefined || [Schemas.file, Schemas.untitled, Schemas.ashRemote, Schemas.vscodeUserData].includes(resource.scheme)) &&
-			!this.attachments.attachments.some(attachment => attachment.kind === 'file' && extUri.isEqual(attachment.resource, resource))
-			? input
-			: undefined;
+		return resource && resource.scheme !== Schemas.internal && (input.initialText !== undefined || [Schemas.file, Schemas.untitled, Schemas.ashRemote, Schemas.vscodeUserData].includes(resource.scheme))
+			&& !this.attachments.attachments.some(attachment => attachment.kind === 'file' && extUri.isEqual(attachment.resource, resource))
+			? input : undefined;
 	}
 
 	public get accessibleContent(): string | undefined {

@@ -1,5 +1,8 @@
 import { localize2 } from '../../../../nls.js';
-import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import {
+	MenuId,
+	MenusRegistry,
+} from '../../../../platform/actions/common/actions.js';
 
 const applicationMenus = [
 	[localize2({ bundle: 'ash.menu', key: 'file' }, 'File'), MenuId.MenubarFileMenu],
@@ -12,14 +15,12 @@ const applicationMenus = [
 	[localize2({ bundle: 'ash.menu', key: 'help' }, 'Help'), MenuId.MenubarHelpMenu],
 ] as const;
 
-MenusRegistry.appendMenuItems(
-	applicationMenus.map(([title, submenu], index) => ({
-		id: MenuId.MenubarMainMenu,
-		item: {
-			title,
-			submenu,
-			group: 'navigation',
-			order: index + 1,
-		},
-	})),
-);
+MenusRegistry.appendMenuItems(applicationMenus.map(([title, submenu], index) => ({
+	id: MenuId.MenubarMainMenu,
+	item: {
+		title,
+		submenu,
+		group: 'navigation',
+		order: index + 1,
+	},
+})));

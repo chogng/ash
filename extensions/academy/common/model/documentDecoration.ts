@@ -80,15 +80,7 @@ export class DocumentDecorationSet {
 		for (const decoration of this.decorations) {
 			const selection = applied.mapping.mapSelection(textSelectionForDecoration(decoration));
 			if (!selection || selection.kind !== 'text') continue;
-			mapped.push(
-				createDocumentDecoration({
-					id: decoration.id,
-					from: selection.anchor,
-					to: selection.head,
-					className: decoration.className,
-					attrs: decoration.attrs,
-				}),
-			);
+			mapped.push(createDocumentDecoration({ id: decoration.id, from: selection.anchor, to: selection.head, className: decoration.className, attrs: decoration.attrs }));
 		}
 		return new DocumentDecorationSet(mapped);
 	}

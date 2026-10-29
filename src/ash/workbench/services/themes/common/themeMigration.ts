@@ -50,24 +50,14 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 	if (document.version !== 1) throw new Error('User theme version must be 1');
 	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL) throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
 	if (typeof document.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id)) throw new Error('User theme id must be lowercase kebab-case');
-	if (typeof document.label !== 'string' || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80)
-		throw new Error('User theme label must contain 1 to 80 trimmed characters');
+	if (typeof document.label !== 'string' || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80) throw new Error('User theme label must contain 1 to 80 trimmed characters');
 	let colorScheme: ColorScheme;
 	switch (document.colorScheme) {
-		case 'dark':
-			colorScheme = ColorScheme.Dark;
-			break;
-		case 'light':
-			colorScheme = ColorScheme.Light;
-			break;
-		case 'high-contrast-dark':
-			colorScheme = ColorScheme.HighContrastDark;
-			break;
-		case 'high-contrast-light':
-			colorScheme = ColorScheme.HighContrastLight;
-			break;
-		default:
-			throw new Error(`Unknown user theme colorScheme: ${String(document.colorScheme)}`);
+		case 'dark': colorScheme = ColorScheme.Dark; break;
+		case 'light': colorScheme = ColorScheme.Light; break;
+		case 'high-contrast-dark': colorScheme = ColorScheme.HighContrastDark; break;
+		case 'high-contrast-light': colorScheme = ColorScheme.HighContrastLight; break;
+		default: throw new Error(`Unknown user theme colorScheme: ${String(document.colorScheme)}`);
 	}
 	const colors = record(document.colors, 'colors');
 	const entries = Object.entries(colors);
@@ -98,36 +88,21 @@ function validateJsonColorValue(value: unknown, path: string, depth: number): Co
 	switch (transform.op) {
 		case 'transparent':
 			requireExactKeys(transform, ['factor', 'op', 'value'], path);
-			return Object.freeze({
-				op: 'transparent',
-				value: source,
-				factor: factor(transform.factor, `${path}.factor`),
-			});
+			return Object.freeze({ op: 'transparent', value: source, factor: factor(transform.factor, `${path}.factor`) });
 		case 'lighten':
 		case 'darken':
 			requireExactKeys(transform, ['factor', 'op', 'value'], path);
 			// Version-1 resources used RGBA mixing for brightness; preserve their saved appearance during migration.
 			return Object.freeze({
-				op: 'mix',
-				value: source,
-				other: transform.op === 'lighten' ? '#ffffff' : '#000000',
+				op: 'mix', value: source, other: transform.op === 'lighten' ? '#ffffff' : '#000000',
 				factor: factor(transform.factor, `${path}.factor`),
 			});
 		case 'mix':
 			requireExactKeys(transform, ['factor', 'op', 'other', 'value'], path);
-			return Object.freeze({
-				op: 'mix',
-				value: source,
-				other: validateJsonColorValue(transform.other, `${path}.other`, depth + 1),
-				factor: factor(transform.factor, `${path}.factor`),
-			});
+			return Object.freeze({ op: 'mix', value: source, other: validateJsonColorValue(transform.other, `${path}.other`, depth + 1), factor: factor(transform.factor, `${path}.factor`) });
 		case 'opaque':
 			requireExactKeys(transform, ['background', 'op', 'value'], path);
-			return Object.freeze({
-				op: 'opaque',
-				value: source,
-				background: validateJsonColorValue(transform.background, `${path}.background`, depth + 1),
-			});
+			return Object.freeze({ op: 'opaque', value: source, background: validateJsonColorValue(transform.background, `${path}.background`, depth + 1) });
 		default:
 			throw new Error(`${path}.op is not a supported color transform`);
 	}
@@ -141,15 +116,13 @@ function factor(value: unknown, path: string): number {
 function exactRecord(value: unknown, allowedKeys: readonly string[]): Record<string, unknown> {
 	const result = record(value, 'value');
 	const allowed = new Set(allowedKeys);
-	const unknown = Object.keys(result).filter(key => !allowed.has(key));
+	const unknown = Object.keys(result).filter((key) => !allowed.has(key));
 	if (unknown.length > 0) throw new Error(`Object contains unknown fields: ${unknown.join(', ')}`);
 	return result;
 }
 
 function requireExactKeys(value: Record<string, unknown>, keys: readonly string[], path: string): void {
-	const actual = Object.keys(value)
-		.filter(key => value[key] !== undefined)
-		.sort();
+	const actual = Object.keys(value).filter((key) => value[key] !== undefined).sort();
 	const expected = [...keys].sort();
 	if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new Error(`${path} has invalid fields for '${String(value.op)}'`);
 }
@@ -160,13 +133,9 @@ function record(value: unknown, path: string): Record<string, unknown> {
 }
 
 /** One-way conversion of the retired version-1 resource, before normal loading. */
-export function migrateUserTheme(source: string): { readonly id: string; readonly content: string } | undefined {
+export function migrateUserTheme(source: string): { readonly id: string; readonly content: string; } | undefined {
 	let value: unknown;
-	try {
-		value = JSON.parse(source);
-	} catch {
-		return undefined;
-	}
+	try { value = JSON.parse(source); } catch { return undefined; }
 	if (typeof value !== 'object' || value === null || !('version' in value)) return undefined;
 	const theme = parseLegacyTheme(source);
 	return { id: theme.id, content: serializeUserColorThemeDraft(theme, theme.label) };

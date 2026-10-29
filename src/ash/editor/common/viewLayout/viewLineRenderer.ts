@@ -75,7 +75,7 @@ export class RenderLineInput {
 		this.renderWhitespace = whitespaceMode(renderWhitespace);
 		const useWordSeparator = Math.abs(wsmiddotWidth - spaceWidth) < Math.abs(middotWidth - spaceWidth);
 		this.renderSpaceWidth = useWordSeparator ? wsmiddotWidth : middotWidth;
-		this.renderSpaceCharCode = useWordSeparator ? 0x2e31 : 0xb7;
+		this.renderSpaceCharCode = useWordSeparator ? 0x2E31 : 0xB7;
 	}
 
 	get isLTR(): boolean {
@@ -83,38 +83,33 @@ export class RenderLineInput {
 	}
 
 	equals(other: RenderLineInput): boolean {
-		return (
-			this.useMonospaceOptimizations === other.useMonospaceOptimizations &&
-			this.canUseHalfwidthRightwardsArrow === other.canUseHalfwidthRightwardsArrow &&
-			this.lineContent === other.lineContent &&
-			this.continuesWithWrappedLine === other.continuesWithWrappedLine &&
-			this.isBasicASCII === other.isBasicASCII &&
-			this.containsRTL === other.containsRTL &&
-			this.fauxIndentLength === other.fauxIndentLength &&
-			this.lineTokens.equals(other.lineTokens) &&
-			LineDecoration.equalsArr(this.lineDecorations, other.lineDecorations) &&
-			this.tabSize === other.tabSize &&
-			this.startVisibleColumn === other.startVisibleColumn &&
-			this.spaceWidth === other.spaceWidth &&
-			this.renderSpaceWidth === other.renderSpaceWidth &&
-			this.renderSpaceCharCode === other.renderSpaceCharCode &&
-			this.stopRenderingLineAfter === other.stopRenderingLineAfter &&
-			this.renderWhitespace === other.renderWhitespace &&
-			this.renderControlCharacters === other.renderControlCharacters &&
-			this.fontLigatures === other.fontLigatures &&
-			sameRanges(this.selectionsOnLine, other.selectionsOnLine) &&
-			this.textDirection === other.textDirection &&
-			this.verticalScrollbarSize === other.verticalScrollbarSize &&
-			this.renderNewLineWhenEmpty === other.renderNewLineWhenEmpty
-		);
+		return this.useMonospaceOptimizations === other.useMonospaceOptimizations
+			&& this.canUseHalfwidthRightwardsArrow === other.canUseHalfwidthRightwardsArrow
+			&& this.lineContent === other.lineContent
+			&& this.continuesWithWrappedLine === other.continuesWithWrappedLine
+			&& this.isBasicASCII === other.isBasicASCII
+			&& this.containsRTL === other.containsRTL
+			&& this.fauxIndentLength === other.fauxIndentLength
+			&& this.lineTokens.equals(other.lineTokens)
+			&& LineDecoration.equalsArr(this.lineDecorations, other.lineDecorations)
+			&& this.tabSize === other.tabSize
+			&& this.startVisibleColumn === other.startVisibleColumn
+			&& this.spaceWidth === other.spaceWidth
+			&& this.renderSpaceWidth === other.renderSpaceWidth
+			&& this.renderSpaceCharCode === other.renderSpaceCharCode
+			&& this.stopRenderingLineAfter === other.stopRenderingLineAfter
+			&& this.renderWhitespace === other.renderWhitespace
+			&& this.renderControlCharacters === other.renderControlCharacters
+			&& this.fontLigatures === other.fontLigatures
+			&& sameRanges(this.selectionsOnLine, other.selectionsOnLine)
+			&& this.textDirection === other.textDirection
+			&& this.verticalScrollbarSize === other.verticalScrollbarSize
+			&& this.renderNewLineWhenEmpty === other.renderNewLineWhenEmpty;
 	}
 }
 
 export class DomPosition {
-	constructor(
-		public readonly partIndex: number,
-		public readonly charIndex: number,
-	) {}
+	constructor(public readonly partIndex: number, public readonly charIndex: number) { }
 }
 
 /** Bidirectional mapping between one-based source columns and rendered span positions. */
@@ -192,7 +187,7 @@ export class RenderLineOutput {
 	constructor(
 		readonly characterMapping: CharacterMapping,
 		readonly containsForeignElements: ForeignElementType,
-	) {}
+	) { }
 }
 
 export class RenderLineOutput2 {
@@ -200,7 +195,7 @@ export class RenderLineOutput2 {
 		public readonly characterMapping: CharacterMapping,
 		public readonly html: string,
 		public readonly containsForeignElements: ForeignElementType,
-	) {}
+	) { }
 }
 
 export function renderViewLine(input: RenderLineInput, builder: StringBuilder): RenderLineOutput {
@@ -253,7 +248,9 @@ function render(input: RenderLineInput): RenderedLine {
 			charIndex += cell.domLength;
 			visibleColumn += cell.width;
 		}
-		parts.push(classes.length > 0 ? `<span class="${escapeAttribute(classes.join(' '))}">${content}</span>` : `<span>${content}</span>`);
+		parts.push(classes.length > 0
+			? `<span class="${escapeAttribute(classes.join(' '))}">${content}</span>`
+			: `<span>${content}</span>`);
 		if (end === text.length) mapping.setColumnInfo(text.length + 1, partIndex, charIndex, visibleColumn);
 		partIndex++;
 	}
@@ -270,12 +267,10 @@ function render(input: RenderLineInput): RenderedLine {
 function renderEmpty(input: RenderLineInput): RenderedLine {
 	const decorations = input.lineDecorations.filter(decoration => isForeign(decoration.type));
 	let foreignElements = ForeignElementType.None;
-	const spans = decorations
-		.map(decoration => {
-			foreignElements |= decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
-			return `<span class="${escapeAttribute(decoration.className)}"></span>`;
-		})
-		.join('');
+	const spans = decorations.map(decoration => {
+		foreignElements |= decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
+		return `<span class="${escapeAttribute(decoration.className)}"></span>`;
+	}).join('');
 	if (decorations.length > 0) {
 		const mapping = new CharacterMapping(1, decorations.length);
 		mapping.setColumnInfo(1, decorations.filter(decoration => decoration.type !== InlineDecorationType.After).length, 0, 0);
@@ -310,16 +305,12 @@ function classesAt(input: RenderLineInput, offset: number): string[] {
 	return classes;
 }
 
-interface RenderedCell {
-	readonly html: string;
-	readonly domLength: number;
-	readonly width: number;
-}
+interface RenderedCell { readonly html: string; readonly domLength: number; readonly width: number; }
 
 function renderCell(input: RenderLineInput, text: string, offset: number, visibleColumn: number, trailingStart: number): RenderedCell {
 	const code = text.charCodeAt(offset);
 	if (code === 9) {
-		const width = input.tabSize - (visibleColumn % input.tabSize);
+		const width = input.tabSize - visibleColumn % input.tabSize;
 		const show = shouldRenderWhitespace(input, offset, trailingStart);
 		const marker = input.canUseHalfwidthRightwardsArrow ? '→' : '→';
 		const value = show ? marker + '\u00a0'.repeat(Math.max(0, width - 1)) : '\u00a0'.repeat(width);
@@ -340,18 +331,14 @@ function renderCell(input: RenderLineInput, text: string, offset: number, visibl
 
 function shouldRenderWhitespace(input: RenderLineInput, offset: number, trailingStart: number): boolean {
 	switch (input.renderWhitespace) {
-		case RenderWhitespace.All:
-			return true;
-		case RenderWhitespace.Trailing:
-			return offset >= trailingStart;
-		case RenderWhitespace.Selection:
-			return input.selectionsOnLine?.some(range => range.start <= offset && offset < range.endExclusive) ?? false;
+		case RenderWhitespace.All: return true;
+		case RenderWhitespace.Trailing: return offset >= trailingStart;
+		case RenderWhitespace.Selection: return input.selectionsOnLine?.some(range => range.start <= offset && offset < range.endExclusive) ?? false;
 		case RenderWhitespace.Boundary: {
 			const text = input.lineContent;
 			return offset >= trailingStart || offset === 0 || offset === text.length - 1 || !/\s/.test(text[offset - 1]!) || !/\s/.test(text[offset + 1]!);
 		}
-		default:
-			return false;
+		default: return false;
 	}
 }
 

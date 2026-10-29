@@ -5,7 +5,16 @@ import type { DomElementProperties } from './dom.js';
 type ReactiveValue<T> = T | IObservable<T>;
 type ReactiveValueList<T> = ReactiveValue<T> | readonly ReactiveValueList<T>[];
 
-export type ReactiveDomChild = Node | string | number | false | null | undefined | IReactiveElement | IObservable<ReactiveDomChild> | readonly ReactiveDomChild[];
+export type ReactiveDomChild =
+	| Node
+	| string
+	| number
+	| false
+	| null
+	| undefined
+	| IReactiveElement
+	| IObservable<ReactiveDomChild>
+	| readonly ReactiveDomChild[];
 
 export interface IReactiveElement {
 	readonly element: HTMLElement | SVGElement;
@@ -14,38 +23,78 @@ export interface IReactiveElement {
 }
 
 export type ReactiveDomElementProperties<TElement> = {
-	readonly [TKey in keyof DomElementProperties<TElement>]?: ReactiveValue<DomElementProperties<TElement>[TKey]>;
+	readonly [TKey in keyof DomElementProperties<TElement>]?: ReactiveValue<
+		DomElementProperties<TElement>[TKey]
+	>;
 };
 
-export interface ReactiveDomElementOptions<TElement extends HTMLElement | SVGElement> {
+export interface ReactiveDomElementOptions<
+	TElement extends HTMLElement | SVGElement,
+> {
 	readonly className?: ReactiveValueList<string | false | null | undefined>;
-	readonly attributes?: Readonly<Record<string, ReactiveValue<string | number | null | undefined>>>;
+	readonly attributes?: Readonly<
+		Record<string, ReactiveValue<string | number | null | undefined>>
+	>;
 	readonly properties?: ReactiveDomElementProperties<TElement>;
-	readonly dataset?: Readonly<Record<string, ReactiveValue<string | undefined>>>;
-	readonly style?: Readonly<Record<string, ReactiveValue<string | undefined>>>;
+	readonly dataset?: Readonly<
+		Record<string, ReactiveValue<string | undefined>>
+	>;
+	readonly style?: Readonly<
+		Record<string, ReactiveValue<string | undefined>>
+	>;
 	readonly ref?: (element: TElement) => void;
 }
 
 export interface ReactiveDomFactory {
 	readonly document: Document;
 
-	div(options?: ReactiveDomElementOptions<HTMLDivElement>, children?: ReactiveDomChild): ReactiveElement<HTMLDivElement>;
+	div(
+		options?: ReactiveDomElementOptions<HTMLDivElement>,
+		children?: ReactiveDomChild,
+	): ReactiveElement<HTMLDivElement>;
 
-	elem<K extends keyof HTMLElementTagNameMap>(tag: K, options?: ReactiveDomElementOptions<HTMLElementTagNameMap[K]>, children?: ReactiveDomChild): ReactiveElement<HTMLElementTagNameMap[K]>;
+	elem<K extends keyof HTMLElementTagNameMap>(
+		tag: K,
+		options?: ReactiveDomElementOptions<HTMLElementTagNameMap[K]>,
+		children?: ReactiveDomChild,
+	): ReactiveElement<HTMLElementTagNameMap[K]>;
 
-	svg(options?: ReactiveDomElementOptions<SVGSVGElement>, children?: ReactiveDomChild): ReactiveElement<SVGSVGElement>;
+	svg(
+		options?: ReactiveDomElementOptions<SVGSVGElement>,
+		children?: ReactiveDomChild,
+	): ReactiveElement<SVGSVGElement>;
 
-	svgElem<K extends keyof SVGElementTagNameMap>(tag: K, options?: ReactiveDomElementOptions<SVGElementTagNameMap[K]>, children?: ReactiveDomChild): ReactiveElement<SVGElementTagNameMap[K]>;
+	svgElem<K extends keyof SVGElementTagNameMap>(
+		tag: K,
+		options?: ReactiveDomElementOptions<SVGElementTagNameMap[K]>,
+		children?: ReactiveDomChild,
+	): ReactiveElement<SVGElementTagNameMap[K]>;
 }
 
 /** Creates `n.div`/`n.elem` helpers bound to a specific document. */
 export function createReactiveDom(ownerDocument: Document): ReactiveDomFactory {
 	return {
 		document: ownerDocument,
-		div: (options = {}, children) => new ReactiveElement(ownerDocument, 'div', undefined, options, children),
-		elem: (tag, options = {}, children) => new ReactiveElement(ownerDocument, tag, undefined, options, children),
-		svg: (options = {}, children) => new ReactiveElement(ownerDocument, 'svg', 'http://www.w3.org/2000/svg', options, children),
-		svgElem: (tag, options = {}, children) => new ReactiveElement(ownerDocument, tag, 'http://www.w3.org/2000/svg', options, children),
+		div: (options = {}, children) =>
+			new ReactiveElement(ownerDocument, 'div', undefined, options, children),
+		elem: (tag, options = {}, children) =>
+			new ReactiveElement(ownerDocument, tag, undefined, options, children),
+		svg: (options = {}, children) =>
+			new ReactiveElement(
+				ownerDocument,
+				'svg',
+				'http://www.w3.org/2000/svg',
+				options,
+				children,
+			),
+		svgElem: (tag, options = {}, children) =>
+			new ReactiveElement(
+				ownerDocument,
+				tag,
+				'http://www.w3.org/2000/svg',
+				options,
+				children,
+			),
 	};
 }
 
@@ -55,7 +104,9 @@ export function createReactiveDom(ownerDocument: Document): ReactiveDomFactory {
  * Nested descriptions share the root reaction. Call `toLiveElement` at the
  * component boundary and register the result with its disposable owner.
  */
-export class ReactiveElement<TElement extends HTMLElement | SVGElement = HTMLElement | SVGElement> implements IReactiveElement {
+export class ReactiveElement<
+	TElement extends HTMLElement | SVGElement = HTMLElement | SVGElement,
+> implements IReactiveElement {
 	readonly element: TElement;
 	private renderedChildren: readonly (Node | string)[] | undefined;
 
@@ -66,7 +117,9 @@ export class ReactiveElement<TElement extends HTMLElement | SVGElement = HTMLEle
 		private readonly options: ReactiveDomElementOptions<TElement>,
 		private readonly children: ReactiveDomChild,
 	) {
-		this.element = (namespace ? ownerDocument.createElementNS(namespace, tag) : ownerDocument.createElement(tag)) as TElement;
+		this.element = (namespace
+			? ownerDocument.createElementNS(namespace, tag)
+			: ownerDocument.createElement(tag)) as TElement;
 		options.ref?.(this.element);
 	}
 
@@ -133,10 +186,13 @@ export class LiveElement<TElement extends HTMLElement | SVGElement> extends Abst
 }
 
 function read<T>(value: ReactiveValue<T>, reader: IReader): T {
-	return isObservable(value) ? (value.read(reader) as T) : value;
+	return isObservable(value) ? value.read(reader) as T : value;
 }
 
-function resolveClassName(value: ReactiveValueList<string | false | null | undefined> | undefined, reader: IReader): string {
+function resolveClassName(
+	value: ReactiveValueList<string | false | null | undefined> | undefined,
+	reader: IReader,
+): string {
 	const names: string[] = [];
 	resolveValues(value, reader, resolved => {
 		if (resolved) names.push(resolved);
@@ -144,7 +200,11 @@ function resolveClassName(value: ReactiveValueList<string | false | null | undef
 	return names.join(' ');
 }
 
-function resolveValues<T>(value: ReactiveValueList<T> | undefined, reader: IReader, accept: (value: T) => void): void {
+function resolveValues<T>(
+	value: ReactiveValueList<T> | undefined,
+	reader: IReader,
+	accept: (value: T) => void,
+): void {
 	if (isObservable(value)) {
 		resolveValues(value.read(reader) as ReactiveValueList<T>, reader, accept);
 	} else if (Array.isArray(value)) {
@@ -154,7 +214,11 @@ function resolveValues<T>(value: ReactiveValueList<T> | undefined, reader: IRead
 	}
 }
 
-function resolveChildren(child: ReactiveDomChild, reader: IReader, result: (Node | string)[]): void {
+function resolveChildren(
+	child: ReactiveDomChild,
+	reader: IReader,
+	result: (Node | string)[],
+): void {
 	if (isObservable(child)) {
 		resolveChildren(child.read(reader) as ReactiveDomChild, reader, result);
 	} else if (isReactiveDomChildArray(child)) {
@@ -175,16 +239,27 @@ function toCssPropertyName(name: string): string {
 	return name.startsWith('--') ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 }
 
-function setOrRemoveAttribute(element: Element, name: string, value: string | number | null | undefined): void {
+function setOrRemoveAttribute(
+	element: Element,
+	name: string,
+	value: string | number | null | undefined,
+): void {
 	if (value === null || value === undefined) element.removeAttribute(name);
 	else element.setAttribute(name, String(value));
 }
 
-function equalChildren(previous: readonly (Node | string)[] | undefined, next: readonly (Node | string)[]): boolean {
-	return previous !== undefined && previous.length === next.length && previous.every((child, index) => child === next[index]);
+function equalChildren(
+	previous: readonly (Node | string)[] | undefined,
+	next: readonly (Node | string)[],
+): boolean {
+	return previous !== undefined &&
+		previous.length === next.length &&
+		previous.every((child, index) => child === next[index]);
 }
 
-function isReactiveDomChildArray(child: ReactiveDomChild): child is readonly ReactiveDomChild[] {
+function isReactiveDomChildArray(
+	child: ReactiveDomChild,
+): child is readonly ReactiveDomChild[] {
 	return Array.isArray(child);
 }
 

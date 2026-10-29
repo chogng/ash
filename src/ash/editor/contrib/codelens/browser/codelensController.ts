@@ -40,37 +40,29 @@ export class CodeLensContribution extends Disposable {
 	) {
 		super();
 		this.bindProviderListeners();
-		this._register(
-			providers.onDidChange(() => {
-				this.bindProviderListeners();
-				this.scheduleRefresh();
-			}),
-		);
-		this._register(
-			viewport.textModel.onDidChangeContent(() => {
-				this.setModel(CodeLensModel.Empty);
-				this.clearWidgets();
-				this.scheduleRefresh();
-			}),
-		);
-		this._register(
-			viewport.textModel.onDidChangeLanguage(() => {
-				if (this.resource) {
-					this.cache.delete(this.resource);
-				}
+		this._register(providers.onDidChange(() => {
+			this.bindProviderListeners();
+			this.scheduleRefresh();
+		}));
+		this._register(viewport.textModel.onDidChangeContent(() => {
+			this.setModel(CodeLensModel.Empty);
+			this.clearWidgets();
+			this.scheduleRefresh();
+		}));
+		this._register(viewport.textModel.onDidChangeLanguage(() => {
+			if (this.resource) {
+				this.cache.delete(this.resource);
+			}
+			this.clear();
+			this.bindProviderListeners();
+			this.scheduleRefresh();
+		}));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.codeLens)) {
 				this.clear();
-				this.bindProviderListeners();
 				this.scheduleRefresh();
-			}),
-		);
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.codeLens)) {
-					this.clear();
-					this.scheduleRefresh();
-				}
-			}),
-		);
+			}
+		}));
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
 		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? this.cache.get(resource, viewport.textModel.lineCount) : undefined;
 		if (cachedModel) {
@@ -130,7 +122,7 @@ export class CodeLensContribution extends Disposable {
 			this.showCachedModelUntilExpiry();
 			return;
 		}
-		const request = (this.request = new CancellationTokenSource());
+		const request = this.request = new CancellationTokenSource();
 		const model = await getCodeLensModel(this.providers, this.viewport.textModel, request.token);
 		if (request.token.isCancellationRequested || request !== this.request) {
 			if (model !== CodeLensModel.Empty) model.dispose();
@@ -213,12 +205,12 @@ export class CodeLensContribution extends Disposable {
 		if (visible.length === 0) return;
 		const batchPromise = Promise.all(visible.map(widget => this.resolveWidget(widget, request))).then(
 			() => undefined,
-			error => {
-				if (!request.token.isCancellationRequested) this.onError(error);
-			},
+			error => { if (!request.token.isCancellationRequested) this.onError(error); },
 		);
 		const previousPromise = this.resolvePromise;
-		const resolvePromise = previousPromise ? Promise.all([previousPromise, batchPromise]).then(() => undefined) : batchPromise;
+		const resolvePromise = previousPromise
+			? Promise.all([previousPromise, batchPromise]).then(() => undefined)
+			: batchPromise;
 		this.resolvePromise = resolvePromise;
 		void resolvePromise.finally(() => {
 			if (this.resolvePromise === resolvePromise) this.resolvePromise = undefined;
@@ -247,7 +239,7 @@ export class CodeLensContribution extends Disposable {
 	private async resolveItem(item: CodeLensItem, request: CancellationTokenSource): Promise<CodeLens | undefined> {
 		if (item.symbol.command || !item.provider.resolveCodeLens) return item.symbol;
 		try {
-			return (await Promise.resolve(item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token))) ?? undefined;
+			return await Promise.resolve(item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token)) ?? undefined;
 		} catch (error) {
 			if (!request.token.isCancellationRequested) this.onError(error);
 			return undefined;
@@ -266,7 +258,7 @@ export class CodeLensContribution extends Disposable {
 	private executeCommand(command: Command): void {
 		try {
 			const result = this.onExecuteCommand!(command.id, command.arguments);
-			if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
+			if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
 				void Promise.resolve(result as PromiseLike<void>).catch(this.onError);
 			}
 		} catch (error) {

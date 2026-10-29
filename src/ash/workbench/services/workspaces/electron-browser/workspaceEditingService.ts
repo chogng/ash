@@ -15,25 +15,16 @@ export class WorkspaceEditingService extends AbstractWorkspaceEditingService {
 		@IFileDialogService dialogs: IFileDialogService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,
 		@IHostService hostService: IHostService,
-	) {
-		super(workspace, dialogs, workingCopies, hostService);
-	}
+	) { super(workspace, dialogs, workingCopies, hostService); }
 
-	updateFolders(index: number, deleteCount = 0, foldersToAdd: readonly { readonly uri: URI; readonly name?: string }[] = []): Promise<void> {
-		return this.edit({
-			operation: 'folders',
-			index,
-			deleteCount,
-			folders: foldersToAdd.map(folder => ({
-				uri: folder.uri.toString(),
-				...(folder.name === undefined ? {} : { name: folder.name }),
-			})),
-		});
+	updateFolders(index: number, deleteCount = 0, foldersToAdd: readonly { readonly uri: URI; readonly name?: string; }[] = []): Promise<void> {
+		return this.edit({ operation: 'folders', index, deleteCount, folders: foldersToAdd.map(folder => ({ uri: folder.uri.toString(), ...(folder.name === undefined ? {} : { name: folder.name }) })) });
 	}
 
 	saveAndEnterWorkspace(path: URI): Promise<void> {
 		return this.edit({ operation: 'save', path: path.fsPath });
 	}
+
 
 	private async edit(request: WorkspaceEditRequest): Promise<void> {
 		if (!this.host.editWorkspace) throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));

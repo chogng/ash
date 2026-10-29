@@ -12,7 +12,7 @@ export class SessionConversationLinks {
 		private readonly defaultProviderId: string,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 		@ISessionsService private readonly sessions: ISessionsService,
-	) {}
+	) { }
 	async prepare(sessionId: string, threadId: string): Promise<OpenSessionLink> {
 		const scope = this.scopes.getScope(sessionId);
 		scope.assertCurrent();
@@ -21,21 +21,14 @@ export class SessionConversationLinks {
 		const appServer = scope.services.host.appServer;
 		const generation = appServer.connectionGeneration;
 		let retired = false;
-		const listener = appServer.onConnectionState(state => {
-			if (state !== 'ready') retired = true;
-		});
+		const listener = appServer.onConnectionState(state => { if (state !== 'ready') retired = true; });
 		using listenerLifetime = toDisposable(() => listener.dispose());
 		const result = await scope.services.chat.readThread(backendSessionId, backendThreadId);
 		const state = await appServer.getConnectionState();
 		scope.assertCurrent();
 		if (retired || appServer.connectionGeneration !== generation || state !== 'ready') throw canceled();
-		if (result.thread.sessionId !== backendSessionId || result.thread.threadId !== backendThreadId)
-			throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
-		return {
-			connectionAuthority: sessionProviderAuthority(scope.providerId, this.defaultProviderId),
-			sessionId: backendSessionId,
-			threadId: backendThreadId,
-		};
+		if (result.thread.sessionId !== backendSessionId || result.thread.threadId !== backendThreadId) throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
+		return { connectionAuthority: sessionProviderAuthority(scope.providerId, this.defaultProviderId), sessionId: backendSessionId, threadId: backendThreadId };
 	}
 	async open(address: OpenSessionLink): Promise<void> {
 		const providerId = parseSessionProviderAuthority(address.connectionAuthority, this.defaultProviderId);

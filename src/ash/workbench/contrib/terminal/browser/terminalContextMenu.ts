@@ -47,28 +47,19 @@ export function openContextMenu(
 	const runner = lifetime.add(new TerminalContextActionRunner());
 	let executing = false;
 	let hidden = false;
-	lifetime.add(
-		runner.onWillRun(() => {
-			executing = true;
-		}),
-	);
-	lifetime.add(
-		runner.onDidRun(() => {
-			executing = false;
-			// Let the host finish its notification and execution cleanup listeners first.
-			if (hidden) queueMicrotask(() => lifetime.dispose());
-		}),
-	);
+	lifetime.add(runner.onWillRun(() => { executing = true; }));
+	lifetime.add(runner.onDidRun(() => {
+		executing = false;
+		// Let the host finish its notification and execution cleanup listeners first.
+		if (hidden) queueMicrotask(() => lifetime.dispose());
+	}));
 	try {
 		contextMenuService.showContextMenu({
 			getAnchor: () => ({ x: event.clientX, y: event.clientY, targetWindow }),
 			getActions: () => actions,
 			getActionsContext: () => contexts,
 			actionRunner: runner,
-			onHide: () => {
-				hidden = true;
-				if (!executing) lifetime.dispose();
-			},
+			onHide: () => { hidden = true; if (!executing) lifetime.dispose(); },
 		});
 	} catch (error) {
 		lifetime.dispose();

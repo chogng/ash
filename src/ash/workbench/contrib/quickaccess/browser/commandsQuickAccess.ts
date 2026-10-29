@@ -44,16 +44,12 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 		this.menu = this._register(this.menuService.createMenu(MenuId.CommandPalette));
 		this._register(this.menu.onDidChange(() => this.refresh()));
 		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.refresh()));
-		this._register(
-			this.configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('workbench.commandPalette.history')) this.refresh();
-			}),
-		);
-		this._register(
-			this.storageService.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key === 'commandPalette.mru.cache') this.refresh();
-			}),
-		);
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('workbench.commandPalette.history')) this.refresh();
+		}));
+		this._register(this.storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === 'commandPalette.mru.cache') this.refresh();
+		}));
 	}
 
 	private readonly history: CommandsHistory;
@@ -75,8 +71,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 			};
 		});
 		const editorCommandIds = new Set(editorCommands.map(command => command.commandId));
-		const globalCommands = menu
-			.getActions()
+		const globalCommands = menu.getActions()
 			.flatMap(([, actions]) => actions)
 			.filter((action): action is MenuItemAction => action instanceof MenuItemAction && action.enabled)
 			.filter(action => !editorCommandIds.has(action.id))
@@ -88,9 +83,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 				const originalTitle = typeof title === 'string' ? title : title.original;
 				const original = category
 					? localize2('quickAccess.categoryTitle', '{0}: {1}', typeof category === 'string' ? category : category.original, originalTitle).original
-					: typeof title === 'string'
-						? undefined
-						: originalTitle;
+					: typeof title === 'string' ? undefined : originalTitle;
 				return {
 					commandId: action.id,
 					label,
@@ -104,7 +97,9 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 		commands.sort((left, right) => {
 			const leftExact = query.length > 0 && [left.label, left.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
 			const rightExact = query.length > 0 && [right.label, right.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
-			return Number(rightExact) - Number(leftExact) || (history.peek(right.commandId) ?? 0) - (history.peek(left.commandId) ?? 0) || left.label.localeCompare(right.label);
+			return Number(rightExact) - Number(leftExact)
+				|| (history.peek(right.commandId) ?? 0) - (history.peek(left.commandId) ?? 0)
+				|| left.label.localeCompare(right.label);
 		});
 		const picks: (ICommandQuickPickItem | IQuickPickSeparator)[] = [];
 		let section: boolean | undefined;
@@ -127,7 +122,10 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 					acceptedHistory.push(command.commandId);
 					void this.commandService.executeCommand(command.commandId).catch((error: unknown) => {
 						if (isCancellationError(error)) return;
-						void this.dialogService.error(localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label), getErrorMessage(error)).catch(onUnexpectedError);
+						void this.dialogService.error(
+							localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label),
+							getErrorMessage(error),
+						).catch(onUnexpectedError);
 					});
 				},
 				trigger: buttonIndex => {
@@ -140,35 +138,27 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 					history.remove(command.commandId);
 					return TriggerAction.REFRESH_PICKER;
 				},
-				buttons: [
-					{
-						id: 'configureKeybinding',
-						label: localize('quickAccess.configureKeybinding', 'Configure Keybinding'),
-						iconClass: ThemeIcon.asClassName(Lxicon.gear),
-					},
-					...(recent
-						? [
-								{
-									id: 'removeFromHistory',
-									label: localize('quickAccess.removeFromHistory', 'Remove from Command History'),
-									iconClass: ThemeIcon.asClassName(Lxicon.close),
-								},
-							]
-						: []),
-				],
+				buttons: [{
+					id: 'configureKeybinding',
+					label: localize('quickAccess.configureKeybinding', 'Configure Keybinding'),
+					iconClass: ThemeIcon.asClassName(Lxicon.gear),
+				}, ...(recent ? [{
+					id: 'removeFromHistory',
+					label: localize('quickAccess.removeFromHistory', 'Remove from Command History'),
+					iconClass: ThemeIcon.asClassName(Lxicon.close),
+				}] : [])],
 			});
 		}
 		return picks;
 	}
+
 }
 
 export class ClearCommandHistoryAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.clearCommandHistory',
-			get title() {
-				return localize2('quickAccess.clearCommandHistory', 'Clear Command History');
-			},
+			get title() { return localize2('quickAccess.clearCommandHistory', 'Clear Command History'); },
 			f1: true,
 		});
 	}
@@ -185,10 +175,7 @@ export class ClearCommandHistoryAction extends Action2 {
 }
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: {
-		id: ShowAllCommandsCommandId,
-		title: localize2({ bundle: 'ash', key: 'workbench.commandPalette' }, 'Command Palette...'),
-	},
+	command: { id: ShowAllCommandsCommandId, title: localize2({ bundle: 'ash', key: 'workbench.commandPalette' }, 'Command Palette...') },
 	group: '1_command',
 	order: 1,
 });
@@ -197,9 +184,7 @@ export class ShowAllCommandsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllCommandsCommandId,
-			get title() {
-				return localize2('quickAccess.showAllCommands', 'Show All Commands');
-			},
+			get title() { return localize2('quickAccess.showAllCommands', 'Show All Commands'); },
 			menu: [
 				{ id: MenuId.MenubarViewMenu, group: '1_commands', order: 1 },
 				{ id: MenuId.MenubarHelpMenu, group: '1_commands', order: 1 },

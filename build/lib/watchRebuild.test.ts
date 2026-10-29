@@ -7,22 +7,11 @@ function serverFixture() {
 	const reloads: unknown[] = [];
 	const errors: unknown[] = [];
 	return {
-		reloads,
-		errors,
+		reloads, errors,
 		watcher: new EventEmitter(),
 		httpServer: new EventEmitter(),
-		ws: {
-			send(message: unknown) {
-				reloads.push(message);
-			},
-		},
-		config: {
-			logger: {
-				error(_message: string, options?: { error?: unknown }) {
-					errors.push(options?.error);
-				},
-			},
-		},
+		ws: { send(message: unknown) { reloads.push(message); } },
+		config: { logger: { error(_message: string, options?: { error?: unknown; }) { errors.push(options?.error); } } },
 	};
 }
 
@@ -33,19 +22,15 @@ test('changes during a rebuild coalesce into one serial run reading the latest i
 	let output = -1;
 	const reads: number[] = [];
 	const runs: ReturnType<typeof Promise.withResolvers<boolean>>[] = [];
-	const close = watchRebuild(
-		server,
-		path => path.endsWith('.ts'),
-		async () => {
-			const snapshot = input;
-			reads.push(snapshot);
-			const run = Promise.withResolvers<boolean>();
-			runs.push(run);
-			const changed = await run.promise;
-			output = snapshot;
-			return changed;
-		},
-	);
+	const close = watchRebuild(server, path => path.endsWith('.ts'), async () => {
+		const snapshot = input;
+		reads.push(snapshot);
+		const run = Promise.withResolvers<boolean>();
+		runs.push(run);
+		const changed = await run.promise;
+		output = snapshot;
+		return changed;
+	});
 	t.after(close);
 	server.watcher.emit('all', 'change', 'first.ts');
 	t.mock.timers.tick(50);
@@ -75,17 +60,11 @@ test('async shutdown waits for the active writer before a replacement server can
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const server = serverFixture();
 	const finish = Promise.withResolvers<boolean>();
-	const close = watchRebuild(
-		server,
-		() => true,
-		() => finish.promise,
-	);
+	const close = watchRebuild(server, () => true, () => finish.promise);
 	server.watcher.emit('all', 'change', 'source.ts');
 	t.mock.timers.tick(50);
 	let stopped = false;
-	const closed = close().then(() => {
-		stopped = true;
-	});
+	const closed = close().then(() => { stopped = true; });
 	await Promise.resolve();
 	assert.equal(stopped, false);
 	finish.resolve(true);
@@ -99,13 +78,7 @@ test('the trailing debounce still applies when generation finishes before the ne
 	const server = serverFixture();
 	const first = Promise.withResolvers<boolean>();
 	let calls = 0;
-	t.after(
-		watchRebuild(
-			server,
-			path => path.endsWith('.ts'),
-			() => (++calls === 1 ? first.promise : Promise.resolve(false)),
-		),
-	);
+	t.after(watchRebuild(server, path => path.endsWith('.ts'), () => ++calls === 1 ? first.promise : Promise.resolve(false)));
 	server.watcher.emit('all', 'addDir', 'folder.ts');
 	server.watcher.emit('all', 'change', 'ignored.json');
 	t.mock.timers.tick(100);
@@ -133,13 +106,7 @@ test('a failed generation reports its error and still processes pending and late
 	const server = serverFixture();
 	const first = Promise.withResolvers<boolean>();
 	let calls = 0;
-	t.after(
-		watchRebuild(
-			server,
-			() => true,
-			() => (++calls === 1 ? first.promise : Promise.resolve(true)),
-		),
-	);
+	t.after(watchRebuild(server, () => true, () => ++calls === 1 ? first.promise : Promise.resolve(true)));
 	server.watcher.emit('all', 'change', 'first.ts');
 	t.mock.timers.tick(50);
 	server.watcher.emit('all', 'change', 'second.ts');
@@ -160,17 +127,11 @@ test('edits during a follow-up generation request another pass', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const server = serverFixture();
 	const runs: ReturnType<typeof Promise.withResolvers<boolean>>[] = [];
-	t.after(
-		watchRebuild(
-			server,
-			() => true,
-			() => {
-				const run = Promise.withResolvers<boolean>();
-				runs.push(run);
-				return run.promise;
-			},
-		),
-	);
+	t.after(watchRebuild(server, () => true, () => {
+		const run = Promise.withResolvers<boolean>();
+		runs.push(run);
+		return run.promise;
+	}));
 	server.watcher.emit('all', 'change', 'first.ts');
 	t.mock.timers.tick(50);
 	for (let index = 0; index < 2; index++) {
@@ -193,14 +154,7 @@ test('HTTP shutdown and middleware cleanup discard timers, queued work and late 
 			const server = serverFixture();
 			const first = Promise.withResolvers<boolean>();
 			let calls = 0;
-			const close = watchRebuild(
-				{ ...server, httpServer: shutdown === 'http' ? server.httpServer : null },
-				() => true,
-				() => {
-					calls++;
-					return first.promise;
-				},
-			);
+			const close = watchRebuild({ ...server, httpServer: shutdown === 'http' ? server.httpServer : null }, () => true, () => { calls++; return first.promise; });
 			t.after(close);
 			server.watcher.emit('all', 'change', 'first.ts');
 			if (active) {
@@ -208,11 +162,7 @@ test('HTTP shutdown and middleware cleanup discard timers, queued work and late 
 				server.watcher.emit('all', 'change', 'second.ts');
 				t.mock.timers.tick(50);
 			}
-			if (shutdown === 'http') {
-				server.httpServer.emit('close');
-			} else {
-				close();
-			}
+			if (shutdown === 'http') { server.httpServer.emit('close'); } else { close(); }
 			assert.equal(server.watcher.listenerCount('all'), 0);
 			assert.equal(server.httpServer.listenerCount('close'), 0);
 			server.watcher.emit('all', 'change', 'third.ts');

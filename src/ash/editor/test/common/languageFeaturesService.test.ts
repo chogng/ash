@@ -62,7 +62,7 @@ test('language feature registries report effective provider changes', () => {
 	using languageConfigurationService = new TestLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService();
 	let changes = 0;
-	using listener = languageFeaturesService.colorProvider.onDidChange(() => (changes += 1));
+	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);
 	assert.equal(changes, 0);
 	const registration = languageFeaturesService.colorProvider.register('css', {
 		provideDocumentColors: () => [],
@@ -76,10 +76,7 @@ test('language feature registries report effective provider changes', () => {
 });
 
 test('language feature registries preserve canonical selector ordering and candidate invalidation', () => {
-	using model = new TextModel('value', {
-		languageId: 'typescript',
-		resource: URI.parse('file:///workspace/value.ts'),
-	});
+	using model = new TextModel('value', { languageId: 'typescript', resource: URI.parse('file:///workspace/value.ts') });
 	using registry = new LanguageFeatureRegistry<string>();
 	const counts: number[] = [];
 	using listener = registry.onDidChange(count => counts.push(count));
@@ -117,10 +114,7 @@ test('extension provider replacement updates diagnostics and navigation atomical
 	using registration = service.registerProviderBatch({ syntax: [diagnostics], definitions: [definitions] });
 	const observations: number[] = [];
 	using listener = service.syntaxProvider.onDidChange(() => observations.push(service.definitionProvider.all(model).length));
-	registration.replace({
-		syntax: [{ ...diagnostics }],
-		documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }],
-	});
+	registration.replace({ syntax: [{ ...diagnostics }], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
 	assert.deepEqual(observations, [0]);
 	assert.equal(service.documentSymbolProvider.all(model).length, 1);
 	assert.throws(() => registration.replace({ syntax: [{ ...diagnostics, id: 'bad id' }] }), /Syntax provider ID/);
@@ -137,10 +131,7 @@ test('navigation-only batch updates retain syntax providers without invalidating
 	const selected = service.syntaxProvider.getDiagnosticProviders('markdown')[0];
 	let changes = 0;
 	using listener = service.syntaxProvider.onDidChange(() => changes++);
-	registration.replace({
-		syntax: [diagnostics],
-		documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }],
-	});
+	registration.replace({ syntax: [diagnostics], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
 	assert.equal(changes, 0);
 	assert.equal(service.syntaxProvider.getDiagnosticProviders('markdown')[0], selected);
 	registration.replace({ syntax: [{ ...diagnostics }] });

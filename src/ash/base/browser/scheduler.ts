@@ -15,7 +15,11 @@ interface AnimationFrameQueue {
 const animationFrameQueues = new WeakMap<Window, AnimationFrameQueue>();
 
 /** Schedules a cancellable callback in the next animation frame. */
-export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () => void, priority = 0): IDisposable {
+export function scheduleAtNextAnimationFrame(
+	targetWindow: Window,
+	callback: () => void,
+	priority = 0,
+): IDisposable {
 	const queue = getAnimationFrameQueue(targetWindow);
 	const task: ScheduledAnimationFrame = {
 		callback,
@@ -46,7 +50,9 @@ export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () 
 				queue.currentTasks = undefined;
 			}
 		};
-		queue.frame = typeof targetWindow.requestAnimationFrame === 'function' ? targetWindow.requestAnimationFrame(flush) : targetWindow.setTimeout(flush, 16);
+		queue.frame = typeof targetWindow.requestAnimationFrame === 'function'
+			? targetWindow.requestAnimationFrame(flush)
+			: targetWindow.setTimeout(flush, 16);
 	}
 	return toDisposable(() => {
 		task.cancelled = true;
@@ -57,7 +63,11 @@ export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () 
  * Runs during the current animation-frame flush when possible, otherwise
  * schedules the callback for the next frame.
  */
-export function runAtThisOrScheduleAtNextAnimationFrame(targetWindow: Window, callback: () => void, priority = 0): IDisposable {
+export function runAtThisOrScheduleAtNextAnimationFrame(
+	targetWindow: Window,
+	callback: () => void,
+	priority = 0,
+): IDisposable {
 	const queue = getAnimationFrameQueue(targetWindow);
 	if (!queue.currentTasks) {
 		return scheduleAtNextAnimationFrame(targetWindow, callback, priority);
@@ -74,12 +84,18 @@ export function runAtThisOrScheduleAtNextAnimationFrame(targetWindow: Window, ca
 }
 
 /** Schedules layout reads before writes queued for the same frame. */
-export function measure(targetWindow: Window, callback: () => void): IDisposable {
+export function measure(
+	targetWindow: Window,
+	callback: () => void,
+): IDisposable {
 	return scheduleAtNextAnimationFrame(targetWindow, callback, 10_000);
 }
 
 /** Schedules layout writes after reads queued for the same frame. */
-export function modify(targetWindow: Window, callback: () => void): IDisposable {
+export function modify(
+	targetWindow: Window,
+	callback: () => void,
+): IDisposable {
 	return scheduleAtNextAnimationFrame(targetWindow, callback, -10_000);
 }
 
@@ -90,7 +106,12 @@ export function disposableWindowTimeout(targetWindow: Window, callback: () => vo
 }
 
 /** Creates a cancellable interval scoped to a particular browser window. */
-export function disposableWindowInterval(targetWindow: Window, callback: () => void | boolean | Promise<unknown>, intervalMs: number, iterations?: number): IDisposable {
+export function disposableWindowInterval(
+	targetWindow: Window,
+	callback: () => void | boolean | Promise<unknown>,
+	intervalMs: number,
+	iterations?: number,
+): IDisposable {
 	let iteration = 0;
 	const handle = targetWindow.setInterval(() => {
 		iteration += 1;
@@ -118,10 +139,13 @@ export class AnimationFrameScheduler extends Disposable {
 
 	schedule(): void {
 		if (this.scheduled) return;
-		this.pending.value = scheduleAtNextAnimationFrame(this.targetWindow, () => {
-			this.pending.clear();
-			this.callback();
-		});
+		this.pending.value = scheduleAtNextAnimationFrame(
+			this.targetWindow,
+			() => {
+				this.pending.clear();
+				this.callback();
+			},
+		);
 	}
 
 	cancel(): void {
@@ -129,7 +153,9 @@ export class AnimationFrameScheduler extends Disposable {
 	}
 }
 
-function getAnimationFrameQueue(targetWindow: Window): AnimationFrameQueue {
+function getAnimationFrameQueue(
+	targetWindow: Window,
+): AnimationFrameQueue {
 	let queue = animationFrameQueues.get(targetWindow);
 	if (!queue) {
 		queue = { frame: undefined, tasks: [], currentTasks: undefined };

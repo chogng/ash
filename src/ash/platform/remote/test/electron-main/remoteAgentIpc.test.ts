@@ -11,38 +11,26 @@ import type { IAnyWorkspaceIdentifier } from '../../../../platform/workspace/com
 test('Remote Agent IPC projects only sanitized authority and connection generation', () => {
 	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 
-	assert.deepEqual(remoteAgentConnection(supervisor, { id: 'local', uri: URI.file('/tmp') }), {
-		kind: 'local',
-		generation: 7,
-	});
+	assert.deepEqual(remoteAgentConnection(supervisor, { id: 'local', uri: URI.file('/tmp') }), { kind: 'local', generation: 7 });
 	assert.deepEqual(remoteAgentConnection(supervisor, { id: 'empty-remote', remoteAuthority: 'ssh+work-server' }), {
+		kind: 'ssh', generation: 7, authority: 'ssh+work-server', host: 'work-server',
+	});
+	assert.deepEqual(remoteAgentConnection(supervisor, {
+		id: 'remote',
+		uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project'),
+	}), {
 		kind: 'ssh',
 		generation: 7,
 		authority: 'ssh+work-server',
 		host: 'work-server',
 	});
-	assert.deepEqual(
-		remoteAgentConnection(supervisor, {
-			id: 'remote',
-			uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project'),
-		}),
-		{
-			kind: 'ssh',
-			generation: 7,
-			authority: 'ssh+work-server',
-			host: 'work-server',
-		},
-	);
 });
 
 test('Remote Agent IPC delegates path-free reconnect and rollback only for a Remote Workspace', async () => {
 	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 	let reconnects = 0;
 	let rollbacks = 0;
-	let workspace: IAnyWorkspaceIdentifier = {
-		id: 'remote',
-		uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project'),
-	};
+	let workspace: IAnyWorkspaceIdentifier = { id: 'remote', uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project') };
 	const routes = remoteAgentIpcRoutes(supervisor, () => workspace, {
 		reconnect: async () => {
 			reconnects += 1;

@@ -25,17 +25,13 @@ export class ListNumberingContribution extends DocumentFormattingControls implem
 			this.order.showValidation('');
 			context.runDocumentCommand((_schema, document, blockId) => createSetListNumberingCommand(document, blockId, { order }));
 		});
-		this.numbering = this.addSelect(
-			localize('document.list.format', 'Number format'),
-			[
-				{ value: 'decimal', label: '1, 2, 3' },
-				{ value: 'lower-alpha', label: 'a, b, c' },
-				{ value: 'upper-alpha', label: 'A, B, C' },
-				{ value: 'lower-roman', label: 'i, ii, iii' },
-				{ value: 'upper-roman', label: 'I, II, III' },
-			],
-			numbering => context.runDocumentCommand((_schema, document, blockId) => createSetListNumberingCommand(document, blockId, { numbering })),
-		);
+		this.numbering = this.addSelect(localize('document.list.format', 'Number format'), [
+			{ value: 'decimal', label: '1, 2, 3' },
+			{ value: 'lower-alpha', label: 'a, b, c' },
+			{ value: 'upper-alpha', label: 'A, B, C' },
+			{ value: 'lower-roman', label: 'i, ii, iii' },
+			{ value: 'upper-roman', label: 'I, II, III' },
+		], numbering => context.runDocumentCommand((_schema, document, blockId) => createSetListNumberingCommand(document, blockId, { numbering })));
 	}
 
 	setState(state: DocumentFormattingState): void {

@@ -25,12 +25,8 @@ test('dictation inserts at the rich editor selection and preserves undo', async 
 	await editor.focus();
 	await page.keyboard.type('before old after');
 	await page.keyboard.press('Home');
-	for (let index = 0; index < 7; index++) {
-		await page.keyboard.press('ArrowRight');
-	}
-	for (let index = 0; index < 3; index++) {
-		await page.keyboard.press('Shift+ArrowRight');
-	}
+	for (let index = 0; index < 7; index++) { await page.keyboard.press('ArrowRight'); }
+	for (let index = 0; index < 3; index++) { await page.keyboard.press('Shift+ArrowRight'); }
 	await page.evaluate(() => window.ashTableIntegration.startDictation());
 	await page.evaluate(() => window.ashTableIntegration.transcript('partial', false));
 	await expect(page.locator('#dictation-preview')).toHaveText('partial');
@@ -97,6 +93,7 @@ test('dictation microphone menu uses Chinese settings and commands still work wi
 	expect(await page.evaluate(() => window.ashTableIntegration.starts)).toBe(starts);
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('command draft');
 });
+
 
 test('ordinary editor dictation command replaces its selection, supports undo and cancels on Escape', async ({ page }) => {
 	await page.goto('/table.html');
@@ -173,12 +170,10 @@ test('manual dictation introduction keeps trial text out of drafts and saves mic
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('写入草稿');
 });
 
+
 test('closing the dictation introduction while capture starts releases the acquired microphone', async ({ page }) => {
 	await page.goto('/table.html');
-	await page.evaluate(() => {
-		window.ashTableIntegration.freshIntroduction();
-		window.ashTableIntegration.holdCapture();
-	});
+	await page.evaluate(() => { window.ashTableIntegration.freshIntroduction(); window.ashTableIntegration.holdCapture(); });
 	const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 	await page.evaluate(() => window.ashTableIntegration.showIntroduction());
 	const intro = page.getByRole('region', { name: 'Dictation introduction', exact: true });
@@ -209,8 +204,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.goto(`/table.html?locale=${locale}`);
 		await page.evaluate(() => window.ashTableIntegration.extensionSpeech(true));
 		expect(await page.evaluate(() => window.ashTableIntegration.speechFlags)).toEqual([true, false, false]);
-		const editor = page.getByRole('textbox', { name: 'Dictation draft' });
-		await editor.focus();
+		const editor = page.getByRole('textbox', { name: 'Dictation draft' }); await editor.focus();
 		await page.evaluate(() => window.ashTableIntegration.startDictation());
 		await page.evaluate(() => window.ashTableIntegration.transcript('你好', true));
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.draft)).toBe('你好');
@@ -221,8 +215,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashTableIntegration.stopDictation());
 		expect(await page.evaluate(() => window.ashTableIntegration.speechFlags)).toEqual([true, false, false]);
 		const ordinary = page.getByRole('textbox', { name: 'Ordinary dictation editor' });
-		await ordinary.focus();
-		await page.keyboard.press('ControlOrMeta+a');
+		await ordinary.focus(); await page.keyboard.press('ControlOrMeta+a');
 		await page.evaluate(() => window.ashTableIntegration.codeDictation());
 		await page.evaluate(() => window.ashTableIntegration.transcript('first', true));
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.codeText)).toBe('first');
@@ -237,10 +230,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 	test(`extension Speech trial hides unrelated device settings and accumulates final phrases (${locale})`, async ({ page }) => {
 		await page.goto(`/table.html?locale=${locale}`);
-		await page.evaluate(() => {
-			window.ashTableIntegration.extensionSpeech(true);
-			window.ashTableIntegration.freshIntroduction();
-		});
+		await page.evaluate(() => { window.ashTableIntegration.extensionSpeech(true); window.ashTableIntegration.freshIntroduction(); });
 		await page.evaluate(() => window.ashTableIntegration.showIntroduction());
 		const region = page.getByRole('region', { name: locale === 'zh-CN' ? '听写入门' : 'Dictation introduction' });
 		await expect(region).toBeVisible();
@@ -275,16 +265,9 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 	test(`cancel during onSpeech activation prevents late capture and keeps the Chat draft (${locale})`, async ({ page }) => {
 		await page.goto(`/table.html?extensionOnly&locale=${locale}`);
-		await page.evaluate(async () => {
-			await window.ashTableIntegration.extensionSpeech(true, true);
-			window.ashTableIntegration.holdSpeechActivation();
-		});
-		const editor = page.getByRole('textbox', { name: 'Dictation draft' });
-		await editor.focus();
-		await page.keyboard.type('keep');
-		await page.evaluate(() => {
-			void window.ashTableIntegration.startDictation();
-		});
+		await page.evaluate(async () => { await window.ashTableIntegration.extensionSpeech(true, true); window.ashTableIntegration.holdSpeechActivation(); });
+		const editor = page.getByRole('textbox', { name: 'Dictation draft' }); await editor.focus(); await page.keyboard.type('keep');
+		await page.evaluate(() => { void window.ashTableIntegration.startDictation(); });
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.speechActivations)).toBe(1);
 		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toBeDisabled();
 		expect(await page.evaluate(() => window.ashTableIntegration.speechFlags)).toEqual([true, true, false]);
@@ -314,10 +297,7 @@ for (const locale of ['en', 'zh-CN']) {
 for (const locale of ['en', 'zh-CN']) {
 	test(`Chat reports Speech activation before announcing real listening (${locale})`, async ({ page }) => {
 		await page.goto(`/table.html?extensionOnly&locale=${locale}`);
-		await page.evaluate(async () => {
-			await window.ashTableIntegration.extensionSpeech(true, true);
-			window.ashTableIntegration.holdSpeechActivation();
-		});
+		await page.evaluate(async () => { await window.ashTableIntegration.extensionSpeech(true, true); window.ashTableIntegration.holdSpeechActivation(); });
 		const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 		const status = page.locator('#second-input').getByRole('status', { includeHidden: true });
 		await microphone.click();
@@ -329,8 +309,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashTableIntegration.transcript('kept phrase', true));
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('kept phrase');
 		await page.evaluate(() => window.ashTableIntegration.cancelSpeechCommand());
-		await expect(status).toHaveText('');
-		await expect(microphone).toBeEnabled();
+		await expect(status).toHaveText(''); await expect(microphone).toBeEnabled();
 		expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('kept phrase');
 	});
 }

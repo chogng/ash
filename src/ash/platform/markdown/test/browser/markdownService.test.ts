@@ -49,22 +49,13 @@ suite('markdown browser component', () => {
 		await expect(input).toBeFocused();
 		expect(await page.evaluate(() => window.ashMarkdownIntegration.chatSelection())).toEqual(selection);
 		await paragraph.click();
-		await paragraph.evaluate(element => {
-			const selection = window.getSelection()!;
-			selection.setBaseAndExtent(element.firstChild!, 5, element.firstChild!, 9);
-		});
+		await paragraph.evaluate(element => { const selection = window.getSelection()!; selection.setBaseAndExtent(element.firstChild!, 5, element.firstChild!, 9); });
 		await page.evaluate(value => window.ashMarkdownIntegration.streamChat(value, true), `${initial}\nconst second = 2;\n\x60\x60\x60\n\nComplete.`);
 		expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('this');
-		expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({
-			editors: 1,
-			defaultCodeCalls: 0,
-		});
+		expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({ editors: 1, defaultCodeCalls: 0 });
 		await page.evaluate(() => window.ashMarkdownIntegration.streamChat('Replacement', true));
 		await expect(editor).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({
-			editors: 0,
-			defaultCodeCalls: 0,
-		});
+		expect(await page.evaluate(() => window.ashMarkdownIntegration.chatState())).toEqual({ editors: 0, defaultCodeCalls: 0 });
 		await page.evaluate(() => window.ashMarkdownIntegration.dispose());
 		await editorNode?.dispose();
 		await paragraphNode?.dispose();
@@ -145,10 +136,7 @@ suite('markdown browser component', () => {
 		await expect(advanced.locator('img')).toHaveAttribute('height', '16');
 		await expect(advanced.locator('img')).toHaveJSProperty('naturalWidth', 1);
 		const imageBounds = await advanced.locator('img').boundingBox();
-		expect(imageBounds && { width: imageBounds.width, height: imageBounds.height }).toEqual({
-			width: 32,
-			height: 16,
-		});
+		expect(imageBounds && { width: imageBounds.width, height: imageBounds.height }).toEqual({ width: 32, height: 16 });
 	});
 
 	test('Markdown keeps supported resource URIs and image dimensions in the browser DOM', async function () {
@@ -169,16 +157,14 @@ suite('markdown browser component', () => {
 		await expect(image).toHaveJSProperty('naturalWidth', 1);
 		const url = await image.getAttribute('src');
 		expect(url).toMatch(/^blob:/);
-		expect(await page.evaluate(() => window.ashMarkdownIntegration.loadedResources())).toEqual(['ash-remote://ssh+host/images/pixel.gif']);
+		expect(await page.evaluate(() => window.ashMarkdownIntegration.loadedResources())).toEqual([
+			'ash-remote://ssh+host/images/pixel.gif',
+		]);
 		await page.evaluate(() => window.ashMarkdownIntegration.clearLoadedResource());
 		await expect(page.locator('#loaded-resource img')).toHaveCount(0);
 		const isRevoked = await page.evaluate(async value => {
-			try {
-				await fetch(value!);
-				return false;
-			} catch {
-				return true;
-			}
+			try { await fetch(value!); return false; }
+			catch { return true; }
 		}, url);
 		expect(isRevoked).toBe(true);
 	});

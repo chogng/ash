@@ -12,31 +12,22 @@ export class BrowserWorkerClientPort extends Disposable {
 	public readonly onFailure: Event<unknown> = this.failureEmitter.event;
 	private worker: Worker | undefined;
 	private startupError: Error | undefined;
-	private readonly queued: { message: unknown; transfer: Transferable[] }[] = [];
+	private readonly queued: { message: unknown; transfer: Transferable[]; }[] = [];
 
 	constructor(worker: Worker | Promise<Worker>) {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.queued.length = 0;
-			}),
-		);
+		this._register(toDisposable(() => { this.queued.length = 0; }));
 		if (typeof (worker as Promise<Worker>).then === 'function') {
-			void Promise.resolve(worker)
-				.then(worker => {
-					if (this.isDisposed) {
-						worker.terminate();
-						return;
-					}
-					this.attach(worker);
-					for (const queued of this.queued.splice(0)) worker.postMessage(queued.message, queued.transfer);
-				})
-				.catch(error => {
-					if (this.isDisposed) return;
-					this.queued.length = 0;
-					this.startupError = toError(error);
-					this.failureEmitter.fire(this.startupError);
-				});
+			void Promise.resolve(worker).then(worker => {
+				if (this.isDisposed) { worker.terminate(); return; }
+				this.attach(worker);
+				for (const queued of this.queued.splice(0)) worker.postMessage(queued.message, queued.transfer);
+			}).catch(error => {
+				if (this.isDisposed) return;
+				this.queued.length = 0;
+				this.startupError = toError(error);
+				this.failureEmitter.fire(this.startupError);
+			});
 		} else {
 			this.attach(worker as Worker);
 		}

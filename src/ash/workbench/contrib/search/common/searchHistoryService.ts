@@ -25,28 +25,18 @@ export class SearchHistoryService extends Disposable implements ISearchHistorySe
 	private readonly clearEmitter = this._register(new Emitter<void>());
 	public readonly onDidClearHistory = this.clearEmitter.event;
 
-	constructor(@IStorageService private readonly storage: IStorageService) {
-		super();
-	}
+	constructor(@IStorageService private readonly storage: IStorageService) { super(); }
 
 	public load(): ISearchHistoryValues {
 		const raw = this.storage.get(SearchHistoryService.SEARCH_HISTORY_KEY, StorageScope.WORKSPACE);
-		if (raw === undefined) {
-			return {};
-		}
+		if (raw === undefined) { return {}; }
 		const parsed: unknown = JSON.parse(raw);
-		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-			throw new TypeError('Invalid search history');
-		}
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { throw new TypeError('Invalid search history'); }
 		const history: ISearchHistoryValues = {};
 		for (const key of ['search', 'replace', 'include', 'exclude'] as const) {
 			const values = (parsed as Record<string, unknown>)[key];
-			if (values === undefined) {
-				continue;
-			}
-			if (!Array.isArray(values) || values.some(value => typeof value !== 'string')) {
-				throw new TypeError('Invalid search history values');
-			}
+			if (values === undefined) { continue; }
+			if (!Array.isArray(values) || values.some(value => typeof value !== 'string')) { throw new TypeError('Invalid search history values'); }
 			history[key] = [...new Set<string>(values)].slice(-100);
 		}
 		return history;

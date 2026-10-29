@@ -11,19 +11,11 @@ test('pending notification work is cancelled before rendering removed records, h
 	const current = new Set([1, 2, 3]);
 	const rendered: number[] = [];
 	let cancelled = 0;
-	using pending = new PendingNotificationToasts<number>(
-		item => current.has(item),
-		callback => {
-			callbacks.push(callback);
-			return toDisposable(() => {
-				cancelled++;
-			});
-		},
-	);
-	const render = (item: number, resources: DisposableStore): void => {
-		rendered.push(item);
-		resources.dispose();
-	};
+	using pending = new PendingNotificationToasts<number>(item => current.has(item), callback => {
+		callbacks.push(callback);
+		return toDisposable(() => { cancelled++; });
+	});
+	const render = (item: number, resources: DisposableStore): void => { rendered.push(item); resources.dispose(); };
 	pending.add(1, render);
 	pending.add(2, render);
 	pending.remove(1);
@@ -46,31 +38,18 @@ test('a stale toast callback cannot consume replacement work, and rendering tran
 	const callbacks: (() => void)[] = [];
 	const rendered: string[] = [];
 	using accepted = new DisposableStore();
-	using pending = new PendingNotificationToasts<string>(
-		() => true,
-		callback => {
-			callbacks.push(callback);
-			return toDisposable(() => {});
-		},
-	);
-	pending.add('same', (_item, resources) => {
-		resources.dispose();
-		assert.fail('Replaced work rendered');
+	using pending = new PendingNotificationToasts<string>(() => true, callback => {
+		callbacks.push(callback);
+		return toDisposable(() => { });
 	});
-	pending.add('same', (item, resources) => {
-		rendered.push(item);
-		accepted.add(resources);
-	});
+	pending.add('same', (_item, resources) => { resources.dispose(); assert.fail('Replaced work rendered'); });
+	pending.add('same', (item, resources) => { rendered.push(item); accepted.add(resources); });
 	callbacks[0]();
 	assert.deepEqual(rendered, []);
 	callbacks[1]();
 	assert.deepEqual(rendered, ['same']);
 	let released = false;
-	accepted.add(
-		toDisposable(() => {
-			released = true;
-		}),
-	);
+	accepted.add(toDisposable(() => { released = true; }));
 	pending.clear();
 	assert.equal(released, false);
 	accepted.dispose();
@@ -79,30 +58,18 @@ test('a stale toast callback cannot consume replacement work, and rendering tran
 
 test('a synchronous toast scheduler and a failed renderer release their cancellation resources', () => {
 	let cancelled = 0;
-	using immediate = new PendingNotificationToasts<number>(
-		() => true,
-		callback => {
-			callback();
-			return toDisposable(() => {
-				cancelled++;
-			});
-		},
-	);
+	using immediate = new PendingNotificationToasts<number>(() => true, callback => {
+		callback();
+		return toDisposable(() => { cancelled++; });
+	});
 	immediate.add(1, (_item, resources) => resources.dispose());
 	assert.equal(cancelled, 1);
 	const callbacks: (() => void)[] = [];
-	using queued = new PendingNotificationToasts<number>(
-		() => true,
-		callback => {
-			callbacks.push(callback);
-			return toDisposable(() => {
-				cancelled++;
-			});
-		},
-	);
-	queued.add(2, () => {
-		throw new Error('Rendering failed');
+	using queued = new PendingNotificationToasts<number>(() => true, callback => {
+		callbacks.push(callback);
+		return toDisposable(() => { cancelled++; });
 	});
+	queued.add(2, () => { throw new Error('Rendering failed'); });
 	assert.throws(callbacks[0], /Rendering failed/);
 	assert.equal(cancelled, 2);
 });
@@ -131,10 +98,7 @@ suite('notifications browser component', () => {
 					hit: element.contains(document.elementFromPoint(target.x + target.width / 2, target.y + target.height / 2)),
 				};
 			});
-			await testInfo.attach('startup-statusbar-geometry', {
-				body: JSON.stringify(geometry),
-				contentType: 'application/json',
-			});
+			await testInfo.attach('startup-statusbar-geometry', { body: JSON.stringify(geometry), contentType: 'application/json' });
 			await testInfo.attach('startup-statusbar', { body: await page.screenshot(), contentType: 'image/png' });
 			await expect(statusbar).toHaveCSS('flex-direction', 'row');
 			expect(geometry.inside).toBe(true);
@@ -186,10 +150,7 @@ suite('notifications browser component', () => {
 			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toBeFocused();
 			await page.evaluate(() => window.ashNotificationsIntegration.setPosition('bottom-right' as import('../../common/notifications.js').NotificationsPosition));
 			await expect(hide).toHaveAttribute('data-ash-icon-id', 'chevron-down');
-			await browserTests.info.attach(`expanded-${language ? 'zh' : 'en'}`, {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await browserTests.info.attach(`expanded-${language ? 'zh' : 'en'}`, { body: await page.screenshot(), contentType: 'image/png' });
 		}
 	});
 
@@ -250,10 +211,7 @@ suite('notifications browser component', () => {
 				const bounds = (await center.boundingBox())!;
 				const headerBounds = (await header.boundingBox())!;
 				expect(bounds.height).toBe(headerBounds.height + 2);
-				await browserTests.info.attach(`empty-center-${language ? 'zh' : 'en'}-theme-${theme}`, {
-					body: await center.screenshot(),
-					contentType: 'image/png',
-				});
+				await browserTests.info.attach(`empty-center-${language ? 'zh' : 'en'}-theme-${theme}`, { body: await center.screenshot(), contentType: 'image/png' });
 			}
 			const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retained notification'));
 			await expect(title).toHaveText(language ? '通知' : 'Notifications');
@@ -298,12 +256,10 @@ suite('notifications browser component', () => {
 				await expect(rows.first()).toHaveCSS('border-radius', '0px');
 				await expect(rows.first()).toHaveCSS('border-width', '0px');
 				await expect(rows.nth(1)).toHaveCSS('border-top-width', '1px');
-				const bounds = await rows.evaluateAll(elements =>
-					elements.map(element => {
-						const { x, y, width, height } = element.getBoundingClientRect();
-						return { x, y, width, height };
-					}),
-				);
+				const bounds = await rows.evaluateAll(elements => elements.map(element => {
+					const { x, y, width, height } = element.getBoundingClientRect();
+					return { x, y, width, height };
+				}));
 				expect(bounds[0].x).toBe(bounds[1].x);
 				expect(bounds[0].width).toBe(bounds[1].width);
 				expect(bounds[0].y + bounds[0].height).toBe(bounds[1].y);
@@ -313,10 +269,7 @@ suite('notifications browser component', () => {
 					await expect(button).toHaveCSS('box-sizing', 'border-box');
 					await expect(button.locator('.ash-icon-label-container')).toBeHidden();
 				}
-				await browserTests.info.attach(`center-${language ? 'zh' : 'en'}-theme-${theme}`, {
-					body: await center.screenshot(),
-					contentType: 'image/png',
-				});
+				await browserTests.info.attach(`center-${language ? 'zh' : 'en'}-theme-${theme}`, { body: await center.screenshot(), contentType: 'image/png' });
 			}
 			await buttons.nth(0).focus();
 			await page.keyboard.press('ArrowRight');
@@ -365,12 +318,7 @@ suite('notifications browser component', () => {
 				const bounds = element.getBoundingClientRect();
 				const close = element.querySelector('.ash-notification-close')!.getBoundingClientRect();
 				const message = element.querySelector('.ash-notification-message')!.getBoundingClientRect();
-				return {
-					width: bounds.width,
-					messageBeforeClose: message.right <= close.left,
-					closeInside: close.right <= bounds.right && close.top >= bounds.top,
-					border: getComputedStyle(element).borderTopColor,
-				};
+				return { width: bounds.width, messageBeforeClose: message.right <= close.left, closeInside: close.right <= bounds.right && close.top >= bounds.top, border: getComputedStyle(element).borderTopColor };
 			});
 			expect(geometry.width).toBeLessThanOrEqual(420);
 			expect(geometry.messageBeforeClose).toBe(true);
@@ -408,11 +356,7 @@ suite('notifications browser component', () => {
 			origin.textContent = 'Notification focus origin';
 			document.body.append(origin);
 		});
-		const origin = page.getByRole('button', {
-			name: 'Notification focus origin',
-			exact: true,
-			includeHidden: true,
-		});
+		const origin = page.getByRole('button', { name: 'Notification focus origin', exact: true, includeHidden: true });
 		for (const property of ['display', 'visibility'] as const) {
 			await origin.focus();
 			const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retain history without restoring hidden focus'));
@@ -515,10 +459,7 @@ suite('notifications browser component', () => {
 				expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 				await expect(toast.locator('.ash-notification-severity .ash-icon')).toBeVisible();
 			}
-			await testInfo.attach(`severity-theme-${theme}`, {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach(`severity-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 		}
 		await error.getByRole('button', { name: '更多操作', exact: true }).click();
 		await expect(page.getByRole('menuitem', { name: '管理扩展', exact: true })).toBeVisible();
@@ -539,9 +480,7 @@ suite('notifications browser component', () => {
 			const label = locale === 'zh' ? '在智能体窗口中继续' : 'Continue in Agents Window';
 			const action = toast.getByRole('button', { name: label, exact: true });
 			await expect(action).toBeVisible();
-			await expect(toast.locator('.ash-notification-message')).toHaveText(
-				locale === 'zh' ? '在智能体窗口中继续，统一查看各个项目的智能体对话。' : 'Continue in the Agents Window to keep track of your agent conversations across projects.',
-			);
+			await expect(toast.locator('.ash-notification-message')).toHaveText(locale === 'zh' ? '在智能体窗口中继续，统一查看各个项目的智能体对话。' : 'Continue in the Agents Window to keep track of your agent conversations across projects.');
 			await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown?.editorSessionCount)).toBe(1);
 			for (let theme = 0; theme < 4; theme++) {
 				await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
@@ -620,10 +559,8 @@ suite('notifications browser component', () => {
 			const glyph = await icon.evaluate(element => {
 				const style = getComputedStyle(element, '::before');
 				return {
-					color: style.color,
-					foreground: getComputedStyle(element).color,
-					content: style.content,
-					character: element.getAttribute('data-ash-icon-character'),
+					color: style.color, foreground: getComputedStyle(element).color,
+					content: style.content, character: element.getAttribute('data-ash-icon-character'),
 					visibility: style.visibility,
 				};
 			});
@@ -672,10 +609,7 @@ suite('notifications browser component', () => {
 		await expect(page.getByRole('menuitemcheckbox', { name: 'Compiler', exact: true })).toHaveAttribute('aria-checked', 'false');
 		await expect(page.getByRole('menuitemcheckbox', { name: 'Git', exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.getByRole('menuitem', { name: 'More...', exact: true }).click();
-		const picker = page.getByRole('dialog', {
-			name: 'Select sources to enable all notifications from',
-			exact: true,
-		});
+		const picker = page.getByRole('dialog', { name: 'Select sources to enable all notifications from', exact: true });
 		await expect(picker.getByRole('option')).toHaveCount(12);
 		await picker.getByRole('combobox').fill('Compiler');
 		await picker.getByRole('option').click();
@@ -701,11 +635,7 @@ suite('notifications browser component', () => {
 		const statusBell = page.locator('[data-statusbar-item-id="ash.status.notifications"]');
 		const titleBell = page.getByRole('button', { name: 'Toggle Notifications', exact: true });
 		const id = await page.locator('.ash-notification').getAttribute('data-notification-id');
-		for (const [label, value] of [
-			['Bottom Left', 'bottom-left'],
-			['Top Right', 'top-right'],
-			['Bottom Right', 'bottom-right'],
-		] as const) {
+		for (const [label, value] of [['Bottom Left', 'bottom-left'], ['Top Right', 'top-right'], ['Bottom Right', 'bottom-right']] as const) {
 			await page.evaluate(() => window.ashNotificationsIntegration.show());
 			await page.getByRole('button', { name: 'Configure Notifications Position...', exact: true }).focus();
 			await page.keyboard.press('ArrowDown');
@@ -730,10 +660,7 @@ suite('notifications browser component', () => {
 				expect(rect!.x + rect!.width).toBeLessThanOrEqual(640);
 				if (value === 'top-right') expect(rect!.y).toBe(43);
 				if (value === 'bottom-left') expect(rect!.x).toBe(12);
-				await testInfo.attach(`${value}-theme-${theme}`, {
-					body: await page.screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(`${value}-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 			}
 		}
 		expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([Number(id)]);
@@ -832,10 +759,7 @@ suite('notifications browser component', () => {
 		await expect(page.locator('[data-statusbar-item-id="ash.status.notifications"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 		await page.evaluate(() => window.ashNotificationsIntegration.show());
 		await expect(page.locator('.ash-notifications-row')).toHaveCount(3);
-		await testInfo.attach('expired-toasts-retain-history', {
-			body: await page.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach('expired-toasts-retain-history', { body: await page.screenshot(), contentType: 'image/png' });
 	});
 
 	test('hovered and focused toasts survive expiry and regain a full interval after window focus returns', async function () {
@@ -856,9 +780,7 @@ suite('notifications browser component', () => {
 		await expect(toast).toBeFocused();
 		await page.evaluate(() => {
 			const origin = document.createElement('button');
-			origin.textContent = 'Reading origin';
-			document.body.append(origin);
-			origin.focus();
+			origin.textContent = 'Reading origin'; document.body.append(origin); origin.focus();
 			window.ashNotificationsIntegration.setHostFocus(false);
 		});
 		await page.clock.fastForward(10001);
@@ -878,10 +800,7 @@ suite('notifications browser component', () => {
 		await page.evaluate(() => window.ashNotificationsIntegration.startProgress());
 		const toast = page.locator('.ash-notification');
 		await expect(toast).toBeVisible();
-		await page.evaluate(() => {
-			window.ashNotificationsIntegration.reportProgress();
-			window.ashNotificationsIntegration.reportProgress();
-		});
+		await page.evaluate(() => { window.ashNotificationsIntegration.reportProgress(); window.ashNotificationsIntegration.reportProgress(); });
 		await expect(toast.getByRole('progressbar')).toHaveAttribute('value', '0.5');
 		await toast.getByRole('button', { name: 'Cancel', exact: true }).focus();
 		await page.keyboard.press('Escape');
@@ -891,10 +810,7 @@ suite('notifications browser component', () => {
 		expect(await page.evaluate(() => window.ashNotificationsIntegration.history().length)).toBe(1);
 		await status.click();
 		await expect(page.locator('.ash-notifications-row').getByRole('progressbar')).toHaveAttribute('value', '0.5');
-		await testInfo.attach('progress-escape-retains-task', {
-			body: await page.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach('progress-escape-retains-task', { body: await page.screenshot(), contentType: 'image/png' });
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expect(page.locator('.ash-notifications-row')).toHaveCount(0);
 	});
@@ -916,45 +832,33 @@ suite('notifications browser component', () => {
 		const origin = page.getByRole('button', { name: 'Toast keyboard origin', exact: true });
 		for (let theme = 0; theme < 4; theme++) {
 			await page.evaluate(theme => window.ashNotificationsIntegration.theme(theme), theme);
-			await origin.focus();
-			await page.keyboard.press('Tab');
+			await origin.focus(); await page.keyboard.press('Tab');
 			await expect(toast).toBeFocused();
 			await expect(toast).toHaveCSS('outline-style', 'solid');
 			await expect(toast).toHaveCSS('outline-width', '1px');
 			await expect(toast).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
-			await testInfo.attach(`toast-keyboard-theme-${theme}`, {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach(`toast-keyboard-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 		}
 		await page.keyboard.press('Escape');
 		await expect(toast).toHaveCount(0);
 		await expect(origin).toBeFocused();
 	});
 
-	for (const [position, left, top] of [
-		['bottom-right', 500, 380],
-		['bottom-left', 20, 380],
-		['top-right', 500, 60],
-	] as const) {
+	for (const [position, left, top] of [['bottom-right', 500, 380], ['bottom-left', 20, 380], ['top-right', 500, 60]] as const) {
 		test(`optional ${position} toast does not cover the active input and remains in history`, async function () {
 			const { page } = browserTests;
 
 			await page.setViewportSize({ width: 640, height: 480 });
 			await page.goto('/notifications.html');
-			await page.evaluate(
-				async ({ position, left, top }) => {
-					await window.ashNotificationsIntegration.configure('workbench.notifications.position', position);
-					const input = document.createElement('textarea');
-					input.setAttribute('aria-label', 'Active notification input');
-					input.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: 80px; height: 30px`;
-					document.querySelector('main')!.append(input);
-					input.focus();
-					window.ashNotificationsIntegration.notifyOptions('Optional information', 1, 1);
-					await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-				},
-				{ position, left, top },
-			);
+			await page.evaluate(async ({ position, left, top }) => {
+				await window.ashNotificationsIntegration.configure('workbench.notifications.position', position);
+				const input = document.createElement('textarea');
+				input.setAttribute('aria-label', 'Active notification input');
+				input.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: 80px; height: 30px`;
+				document.querySelector('main')!.append(input); input.focus();
+				window.ashNotificationsIntegration.notifyOptions('Optional information', 1, 1);
+				await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			}, { position, left, top });
 			await expect(page.locator('.ash-notification')).toHaveCount(0);
 			await expect(page.getByRole('textbox', { name: 'Active notification input', exact: true })).toBeFocused();
 			expect(await page.evaluate(() => window.ashNotificationsIntegration.history().length)).toBe(1);

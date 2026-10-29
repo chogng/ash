@@ -13,7 +13,7 @@ import { acceptWorkspaceSymbol } from '../../browser/workspaceSymbolNavigation.j
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 
 const resource = URI.file('/workspace/src/main.rs');
-const range = Range.fromPositions(new Position(2 + 1, 4 + 1), new Position(2 + 1, 8 + 1));
+const range = Range.fromPositions(new Position((2) + 1, (4) + 1), new Position((2) + 1, (8) + 1));
 
 test('workspace symbol acceptance refreshes instead of opening a stale local result', async () => {
 	const events = acceptanceEvents('current');
@@ -54,31 +54,15 @@ function acceptanceEvents(revision: string, workingCopyContent?: string) {
 	let hidden = 0;
 	let refreshed = 0;
 	let opened = 0;
-	const files = {
-		readFile: async () => ({ resource, content: 'fn main() {}\n', revision }),
-	} as unknown as IFileService;
-	const workingCopies = {
-		get: () => (workingCopyContent === undefined ? [] : [{ backupKind: 'text', backup: () => workingCopyContent }]),
-	} as unknown as IWorkingCopyService;
-	const editor = {
-		...emptyEditorServiceState,
-		openEditor: async () => {
-			opened += 1;
-		},
-		focusActiveEditor() {},
-	} satisfies IEditorService;
+	const files = { readFile: async () => ({ resource, content: 'fn main() {}\n', revision }) } as unknown as IFileService;
+	const workingCopies = { get: () => workingCopyContent === undefined ? [] : [{ backupKind: 'text', backup: () => workingCopyContent }] } as unknown as IWorkingCopyService;
+	const editor = { ...emptyEditorServiceState, openEditor: async () => { opened += 1; }, focusActiveEditor() { } } satisfies IEditorService;
 	return {
 		files,
 		workingCopies,
 		editor,
-		quickPick: {
-			hide: () => {
-				hidden += 1;
-			},
-		},
-		refresh: () => {
-			refreshed += 1;
-		},
+		quickPick: { hide: () => { hidden += 1; } },
+		refresh: () => { refreshed += 1; },
 		hidden: () => hidden,
 		refreshed: () => refreshed,
 		opened: () => opened,

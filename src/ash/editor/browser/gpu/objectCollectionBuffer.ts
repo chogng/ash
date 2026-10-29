@@ -41,10 +41,7 @@ class ObjectCollectionBuffer<T extends readonly ObjectCollectionBufferPropertySp
 	private readonly bufferChangeEmitter = this._register(new Emitter<void>());
 	private mutableCapacity: number;
 
-	constructor(
-		private readonly propertySpecs: T,
-		capacity: number,
-	) {
+	constructor(private readonly propertySpecs: T, capacity: number) {
 		super();
 		if (!Number.isSafeInteger(capacity) || capacity < 1) throw new RangeError('Object collection buffer capacity must be a positive integer');
 		if (propertySpecs.length < 1) throw new RangeError('Object collection buffer requires at least one property');
@@ -56,42 +53,18 @@ class ObjectCollectionBuffer<T extends readonly ObjectCollectionBufferPropertySp
 		}
 	}
 
-	public get buffer(): ArrayBufferLike {
-		return this.mutableView.buffer;
-	}
-	public get view(): Float32Array {
-		return this.mutableView;
-	}
-	public get bufferUsedSize(): number {
-		return this.viewUsedSize * Float32Array.BYTES_PER_ELEMENT;
-	}
-	public get viewUsedSize(): number {
-		return this.entries.length * this.propertySpecs.length;
-	}
-	public get entryCount(): number {
-		return this.entries.length;
-	}
-	public get dirtyTracker(): IBufferDirtyTrackerReader {
-		return this.tracker;
-	}
-	public get onDidChange(): Event<void> {
-		return this.changeEmitter.event;
-	}
-	public get onDidChangeBuffer(): Event<void> {
-		return this.bufferChangeEmitter.event;
-	}
+	public get buffer(): ArrayBufferLike { return this.mutableView.buffer; }
+	public get view(): Float32Array { return this.mutableView; }
+	public get bufferUsedSize(): number { return this.viewUsedSize * Float32Array.BYTES_PER_ELEMENT; }
+	public get viewUsedSize(): number { return this.entries.length * this.propertySpecs.length; }
+	public get entryCount(): number { return this.entries.length; }
+	public get dirtyTracker(): IBufferDirtyTrackerReader { return this.tracker; }
+	public get onDidChange(): Event<void> { return this.changeEmitter.event; }
+	public get onDidChangeBuffer(): Event<void> { return this.bufferChangeEmitter.event; }
 
 	public createEntry(data: ObjectCollectionPropertyValues<T>): IObjectCollectionBufferEntry<T> {
 		if (this.entries.length === this.mutableCapacity) this.expand();
-		const entry = new ObjectCollectionBufferEntry(
-			this.mutableView,
-			this.offsets,
-			this.tracker,
-			this.entries.length,
-			data,
-			removed => this.remove(removed),
-			() => this.changeEmitter.fire(),
-		);
+		const entry = new ObjectCollectionBufferEntry(this.mutableView, this.offsets, this.tracker, this.entries.length, data, removed => this.remove(removed), () => this.changeEmitter.fire());
 		this.entries.push(entry);
 		return entry;
 	}
@@ -127,15 +100,7 @@ class ObjectCollectionBufferEntry<T extends readonly ObjectCollectionBufferPrope
 	private mutableView: Float32Array;
 	private index: number;
 
-	constructor(
-		view: Float32Array,
-		private readonly offsets: ReadonlyMap<string, number>,
-		private readonly tracker: BufferDirtyTracker,
-		index: number,
-		data: ObjectCollectionPropertyValues<T>,
-		private readonly remove: (entry: ObjectCollectionBufferEntry<T>) => void,
-		private readonly changed: () => void,
-	) {
+	constructor(view: Float32Array, private readonly offsets: ReadonlyMap<string, number>, private readonly tracker: BufferDirtyTracker, index: number, data: ObjectCollectionPropertyValues<T>, private readonly remove: (entry: ObjectCollectionBufferEntry<T>) => void, private readonly changed: () => void) {
 		super();
 		this.mutableView = view;
 		this.index = index;
@@ -166,12 +131,8 @@ class ObjectCollectionBufferEntry<T extends readonly ObjectCollectionBufferPrope
 		this.changed();
 	}
 
-	public replaceView(view: Float32Array): void {
-		this.mutableView = view;
-	}
-	public setIndex(index: number): void {
-		this.index = index;
-	}
+	public replaceView(view: Float32Array): void { this.mutableView = view; }
+	public setIndex(index: number): void { this.index = index; }
 
 	protected override disposeCore(): void {
 		this.remove(this);

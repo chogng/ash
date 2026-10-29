@@ -42,11 +42,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	) {
 		super(GettingStartedPageId, themeService, storageService);
 		this._register(CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())));
-		this._register(
-			this.workspacesService.onDidChangeRecentlyOpened(() => {
-				void this.refreshProjects();
-			}),
-		);
+		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => { void this.refreshProjects(); }));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -59,23 +55,19 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		const scopedContext = this._register(this.contextKeyService.createScoped(domNode));
 		this.focusedContext = GettingStartedFocusedContext.bindTo(scopedContext);
 		this._register(addDisposableListener(domNode, 'focusin', () => this.focusedContext?.set(true)));
-		this._register(
-			addDisposableListener(domNode, 'focusout', event => {
-				if (!domNode.contains(event.relatedTarget as Node | null)) this.focusedContext?.set(false);
-			}),
-		);
+		this._register(addDisposableListener(domNode, 'focusout', event => {
+			if (!domNode.contains(event.relatedTarget as Node | null)) this.focusedContext?.set(false);
+		}));
 
-		this.content = this._register(
-			new GettingStarted(domNode, {
-				recentProjects: [],
-				actions: {
-					openFolder: this.canOpenFolder ? () => this.fileDialogs.pickFolderAndOpen() : undefined,
-					cloneRepository: this.cloneAction(),
-					connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
-					connectGitHub: () => this.githubConnection.connect(),
-				},
-			}),
-		);
+		this.content = this._register(new GettingStarted(domNode, {
+			recentProjects: [],
+			actions: {
+				openFolder: this.canOpenFolder ? () => this.fileDialogs.pickFolderAndOpen() : undefined,
+				cloneRepository: this.cloneAction(),
+				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
+				connectGitHub: () => this.githubConnection.connect(),
+			},
+		}));
 		void this.refreshProjects();
 	}
 
@@ -84,9 +76,9 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		if (signal.aborted) throw signal.reason;
 	}
 
-	public override clearInput(): void {}
+	public override clearInput(): void { }
 
-	public override layout(_dimension: IDimension): void {}
+	public override layout(_dimension: IDimension): void { }
 
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
@@ -114,19 +106,12 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 			const projects: IGettingStartedProject[] = recents.workspaces.map(recent => {
 				const resource = recentWorkspaceUri(recent);
 				return {
-					name: recent.label ?? basename(resource),
-					path: resource.fsPath,
+					name: recent.label ?? basename(resource), path: resource.fsPath,
 					onRemove: () => this.workspacesService.removeRecentlyOpened([resource]),
-					...(this.canOpenFolder
-						? {
-								onOpen: () => this.host.openWindow(['workspace' in recent ? { workspaceUri: resource } : { folderUri: resource }]),
-							}
-						: {}),
+					...(this.canOpenFolder ? { onOpen: () => this.host.openWindow(['workspace' in recent ? { workspaceUri: resource } : { folderUri: resource }]) } : {}),
 				};
 			});
 			this.content?.setRecentProjects(projects);
-		} catch (error) {
-			console.error('Failed to read recent projects', error);
-		}
+		} catch (error) { console.error('Failed to read recent projects', error); }
 	}
 }

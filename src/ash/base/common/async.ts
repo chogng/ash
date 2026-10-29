@@ -22,19 +22,16 @@ export function createCancelablePromise<T>(callback: (token: CancellationToken) 
 			cancelled = true;
 			reject(canceled());
 		});
-		Promise.resolve(thenable).then(
-			value => {
-				cancellation.dispose();
-				source.dispose();
-				if (!cancelled) resolve(value);
-				else disposePromiseResult(value);
-			},
-			error => {
-				cancellation.dispose();
-				source.dispose();
-				if (!cancelled) reject(error);
-			},
-		);
+		Promise.resolve(thenable).then(value => {
+			cancellation.dispose();
+			source.dispose();
+			if (!cancelled) resolve(value);
+			else disposePromiseResult(value);
+		}, error => {
+			cancellation.dispose();
+			source.dispose();
+			if (!cancelled) reject(error);
+		});
 	}) as CancelablePromise<T>;
 	promise.cancel = (): void => {
 		source.cancel();
@@ -62,17 +59,14 @@ export function raceCancellation<T>(promise: Promise<T>, token: CancellationToke
 			}
 		};
 		// Keep observing the work after cancellation, including when the token was already cancelled.
-		promise.then(
-			value => {
-				// Fix the winner before cleanup can reenter; awaiting callers resume after release returns.
-				resolve(value);
-				release();
-			},
-			error => {
-				reject(error);
-				release();
-			},
-		);
+		promise.then(value => {
+			// Fix the winner before cleanup can reenter; awaiting callers resume after release returns.
+			resolve(value);
+			release();
+		}, error => {
+			reject(error);
+			release();
+		});
 		if (token.isCancellationRequested) {
 			resolve(defaultValue);
 			return;
@@ -123,16 +117,13 @@ export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: 
 			}
 		} finally {
 			// Even a cancelled or failed subscription must keep observing the already-started work.
-			Promise.resolve(promise).then(
-				value => {
-					resolve(value);
-					release();
-				},
-				error => {
-					reject(error);
-					release();
-				},
-			);
+			Promise.resolve(promise).then(value => {
+				resolve(value);
+				release();
+			}, error => {
+				reject(error);
+				release();
+			});
 		}
 	});
 }
@@ -161,11 +152,7 @@ export function rejectIfNotCanceled(error: unknown): undefined {
 	return Promise.reject(error) as never;
 }
 
-export function promiseWithResolvers<T>(): {
-	readonly promise: Promise<T>;
-	readonly resolve: (value: T | PromiseLike<T>) => void;
-	readonly reject: (reason?: unknown) => void;
-} {
+export function promiseWithResolvers<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T | PromiseLike<T>) => void; readonly reject: (reason?: unknown) => void; } {
 	let resolve!: (value: T | PromiseLike<T>) => void;
 	let reject!: (reason?: unknown) => void;
 	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
@@ -346,19 +333,17 @@ export class Delayer<T> implements IDisposable {
 		validateDelay(delay);
 		this.task = task;
 		if (this.handle !== undefined) clearTimeout(this.handle);
-		const completion = (this.completion ??= new DeferredPromise<T>());
+		const completion = this.completion ??= new DeferredPromise<T>();
 		this.handle = setTimeout(() => {
 			this.handle = undefined;
 			this.completion = undefined;
 			const pendingTask = this.task;
 			this.task = undefined;
 			if (!pendingTask) return;
-			Promise.resolve()
-				.then(pendingTask)
-				.then(
-					value => void completion.complete(value),
-					error => void completion.error(error),
-				);
+			Promise.resolve().then(pendingTask).then(
+				value => void completion.complete(value),
+				error => void completion.error(error),
+			);
 		}, delay);
 		return completion.p;
 	}
@@ -396,7 +381,7 @@ export class DeferredPromise<T> {
 
 	private readonly resolvePromise: (value: T | PromiseLike<T>) => void;
 	private readonly rejectPromise: (reason?: unknown) => void;
-	private outcome: { readonly kind: 'resolved'; readonly value: T } | { readonly kind: 'rejected'; readonly reason: unknown } | undefined;
+	private outcome: { readonly kind: 'resolved'; readonly value: T; } | { readonly kind: 'rejected'; readonly reason: unknown; } | undefined;
 	readonly p: Promise<T>;
 
 	constructor() {
@@ -406,18 +391,10 @@ export class DeferredPromise<T> {
 		this.rejectPromise = resolvers.reject;
 	}
 
-	get isRejected(): boolean {
-		return this.outcome?.kind === 'rejected';
-	}
-	get isResolved(): boolean {
-		return this.outcome?.kind === 'resolved';
-	}
-	get isSettled(): boolean {
-		return this.outcome !== undefined;
-	}
-	get value(): T | undefined {
-		return this.outcome?.kind === 'resolved' ? this.outcome.value : undefined;
-	}
+	get isRejected(): boolean { return this.outcome?.kind === 'rejected'; }
+	get isResolved(): boolean { return this.outcome?.kind === 'resolved'; }
+	get isSettled(): boolean { return this.outcome !== undefined; }
+	get value(): T | undefined { return this.outcome?.kind === 'resolved' ? this.outcome.value : undefined; }
 
 	complete(value: T): Promise<void> {
 		if (this.isSettled) return Promise.resolve();
@@ -453,11 +430,7 @@ export function first<T>(promiseFactories: readonly (() => PromiseLike<T>)[], sh
 
 export class TaskQueue {
 	private running = false;
-	private pending: Array<{
-		readonly task: () => unknown | PromiseLike<unknown>;
-		readonly deferred: DeferredPromise<unknown>;
-		readonly skipIfCleared: boolean;
-	}> = [];
+	private pending: Array<{ readonly task: () => unknown | PromiseLike<unknown>; readonly deferred: DeferredPromise<unknown>; readonly skipIfCleared: boolean; }> = [];
 
 	schedule<T>(task: () => T | PromiseLike<T>): Promise<T> {
 		return this.enqueue(task, false) as Promise<T>;
@@ -503,12 +476,10 @@ export class TaskQueue {
 
 /** Serializes operations on the same resource and drops each queue when it becomes empty. */
 export class ResourceQueue extends AbstractDisposable {
-	private readonly queues = new Map<string, { queue: TaskQueue; size: number }>();
+	private readonly queues = new Map<string, { queue: TaskQueue; size: number; }>();
 
 	public queueFor<T>(resource: URI, factory: () => Promise<T>, identity: IExtUri = extUri): Promise<T> {
-		if (this.isDisposed) {
-			return Promise.reject(canceled());
-		}
+		if (this.isDisposed) { return Promise.reject(canceled()); }
 		const key = identity.getComparisonKey(resource);
 		let entry = this.queues.get(key);
 		if (!entry) {
@@ -525,9 +496,7 @@ export class ResourceQueue extends AbstractDisposable {
 	}
 
 	protected override disposeCore(): void {
-		for (const entry of this.queues.values()) {
-			entry.queue.clearPending();
-		}
+		for (const entry of this.queues.values()) { entry.queue.clearPending(); }
 		this.queues.clear();
 	}
 }
@@ -539,7 +508,7 @@ export interface IdleDeadline {
 
 export function runWhenGlobalIdle(callback: (deadline: IdleDeadline) => void, timeoutMs?: number): IDisposable {
 	const idleGlobal = globalThis as typeof globalThis & {
-		requestIdleCallback?: (callback: (deadline: IdleDeadline) => void, options?: { readonly timeout?: number }) => number;
+		requestIdleCallback?: (callback: (deadline: IdleDeadline) => void, options?: { readonly timeout?: number; }) => number;
 		cancelIdleCallback?: (handle: number) => void;
 	};
 	if (idleGlobal.requestIdleCallback && idleGlobal.cancelIdleCallback) {
@@ -547,16 +516,10 @@ export function runWhenGlobalIdle(callback: (deadline: IdleDeadline) => void, ti
 		return toDisposable(() => idleGlobal.cancelIdleCallback?.(handle));
 	}
 	const started = Date.now();
-	const handle = setTimeout(
-		() =>
-			callback(
-				Object.freeze({
-					didTimeout: timeoutMs !== undefined,
-					timeRemaining: () => Math.max(0, 15 - (Date.now() - started)),
-				}),
-			),
-		0,
-	);
+	const handle = setTimeout(() => callback(Object.freeze({
+		didTimeout: timeoutMs !== undefined,
+		timeRemaining: () => Math.max(0, 15 - (Date.now() - started)),
+	})), 0);
 	return toDisposable(() => clearTimeout(handle));
 }
 
@@ -565,6 +528,6 @@ function validateDelay(delay: number): void {
 }
 
 function disposePromiseResult(value: unknown): void {
-	const disposable = value as { readonly dispose?: unknown } | undefined;
+	const disposable = value as { readonly dispose?: unknown; } | undefined;
 	if (typeof disposable?.dispose === 'function') disposable.dispose();
 }

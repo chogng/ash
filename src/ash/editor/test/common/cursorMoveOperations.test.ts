@@ -61,5 +61,11 @@ test('MoveOperations finds blank lines and standard line and buffer boundaries',
 });
 
 function state(selection: Selection): SingleCursorState {
-	return new SingleCursorState(Range.fromPositions(selection.getSelectionStart()), SelectionStartKind.Simple, 0, selection.getPosition(), 0);
+	return new SingleCursorState(
+		Range.fromPositions(selection.getSelectionStart()),
+		SelectionStartKind.Simple,
+		0,
+		selection.getPosition(),
+		0,
+	);
 }

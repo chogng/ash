@@ -5,7 +5,9 @@ import { localize } from '../../../nls.js';
 
 /** The source callbacks bind one renderer's browser snapshot or backend connection; this service owns no transport. */
 export class ExtensionResourceLoaderService implements IExtensionResourceLoaderService {
-	constructor(private readonly readInstalled: (request: ExtensionResourceRequest) => Promise<Uint8Array>) {}
+	constructor(
+		private readonly readInstalled: (request: ExtensionResourceRequest) => Promise<Uint8Array>,
+	) { }
 
 	public async readExtensionResource(uri: URI): Promise<string> {
 		return new TextDecoder('utf-8', { fatal: true }).decode(await this.readExtensionResourceBytes(uri));

@@ -11,7 +11,7 @@ export interface IHostService {
 	openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;
 	restart(): Promise<void>;
-	reload(options?: { disableExtensions?: boolean }): Promise<void>;
+	reload(options?: { disableExtensions?: boolean; }): Promise<void>;
 	/** Raw PNG capture without workbench editing; browser hosts ask the user to choose a display surface. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
 }

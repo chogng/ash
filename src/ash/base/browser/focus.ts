@@ -1,8 +1,23 @@
 import { Emitter, type Event } from '../common/event.js';
-import { Disposable, MutableDisposable, type IDisposable } from '../common/lifecycle.js';
-import { addDisposableListener, getActiveDocument, getActiveElement, getWindow, isAncestor, isHTMLElement, isNode } from './dom.js';
+import {
+	Disposable,
+	MutableDisposable,
+	type IDisposable,
+} from '../common/lifecycle.js';
+import {
+	addDisposableListener,
+	getActiveDocument,
+	getActiveElement,
+	getWindow,
+	isAncestor,
+	isHTMLElement,
+	isNode,
+} from './dom.js';
 import { disposableWindowTimeout } from './scheduler.js';
-import { type BrowserWindow, isWindow } from './window.js';
+import {
+	type BrowserWindow,
+	isWindow,
+} from './window.js';
 
 export interface IFocusTracker extends IDisposable {
 	readonly onDidFocus: Event<void>;
@@ -43,10 +58,15 @@ export function isActiveElement(element: Element): boolean {
 }
 
 export function isAncestorOfActiveElement(ancestor: Element): boolean {
-	return isComposedAncestor(getActiveElement(ancestor.ownerDocument), ancestor);
+	return isComposedAncestor(
+		getActiveElement(ancestor.ownerDocument),
+		ancestor,
+	);
 }
 
-export function trackFocus(target: HTMLElement | BrowserWindow): IFocusTracker {
+export function trackFocus(
+	target: HTMLElement | BrowserWindow,
+): IFocusTracker {
 	return new FocusTracker(target);
 }
 
@@ -58,7 +78,9 @@ export function focusPreservingScroll(element: HTMLElement): void {
 }
 
 /** Restores focus only while the captured element remains connected. */
-export function restoreFocus(element: HTMLElement | null | undefined): boolean {
+export function restoreFocus(
+	element: HTMLElement | null | undefined,
+): boolean {
 	if (!element?.isConnected) return false;
 	focusPreservingScroll(element);
 	return isAncestorOfActiveElement(element);
@@ -95,14 +117,18 @@ export function isFocusable(element: HTMLElement): boolean {
 
 /** Returns whether an element participates in sequential Tab navigation. */
 export function isTabbable(element: HTMLElement): boolean {
-	return isFocusable(element) && element.tabIndex >= 0 && isTabbableRadio(element);
+	return isFocusable(element) &&
+		element.tabIndex >= 0 &&
+		isTabbableRadio(element);
 }
 
 /**
  * Returns tabbable descendants in browser navigation order: positive
  * `tabindex` values first, then normal DOM order.
  */
-export function getTabbableElements(container: ParentNode): readonly HTMLElement[] {
+export function getTabbableElements(
+	container: ParentNode,
+): readonly HTMLElement[] {
 	return Array.from(container.querySelectorAll<HTMLElement>(tabbableSelector))
 		.filter(isTabbable)
 		.map((element, order) => ({ element, order }))
@@ -138,13 +164,21 @@ export function focusLast(container: ParentNode): HTMLElement | undefined {
  * `boundary` makes wrapping explicit at call sites instead of encoding it as
  * an ambiguous boolean argument.
  */
-export function moveFocus(container: ParentNode, direction: FocusNavigationDirection, boundary: FocusNavigationBoundary = FocusNavigationBoundary.Stop): HTMLElement | undefined {
+export function moveFocus(
+	container: ParentNode,
+	direction: FocusNavigationDirection,
+	boundary: FocusNavigationBoundary = FocusNavigationBoundary.Stop,
+): HTMLElement | undefined {
 	const elements = getTabbableElements(container);
 	if (elements.length === 0) return undefined;
 	const ownerDocument = getOwnerDocument(container);
 	const activeElement = getActiveElement(ownerDocument);
-	const currentIndex = elements.findIndex(element => element === activeElement);
-	let nextIndex = direction === FocusNavigationDirection.Forward ? currentIndex + 1 : currentIndex < 0 ? elements.length - 1 : currentIndex - 1;
+	const currentIndex = elements.findIndex((element) =>
+		element === activeElement
+	);
+	let nextIndex = direction === FocusNavigationDirection.Forward
+		? currentIndex + 1
+		: currentIndex < 0 ? elements.length - 1 : currentIndex - 1;
 
 	if (nextIndex < 0 || nextIndex >= elements.length) {
 		if (boundary === FocusNavigationBoundary.Stop) return undefined;
@@ -158,21 +192,28 @@ export function moveFocus(container: ParentNode, direction: FocusNavigationDirec
 
 /** Keeps sequential Tab navigation inside a container until disposed. */
 export function trapTabFocus(container: HTMLElement): IDisposable {
-	return addDisposableListener(
-		container,
-		'keydown',
-		(event: KeyboardEvent) => {
-			if (event.isComposing || event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) {
-				return;
-			}
-			const direction = event.shiftKey ? FocusNavigationDirection.Backward : FocusNavigationDirection.Forward;
-			const next = moveFocus(container, direction, FocusNavigationBoundary.Wrap);
-			if (next || isAncestorOfActiveElement(container)) {
-				event.preventDefault();
-			}
-		},
-		true,
-	);
+	return addDisposableListener(container, 'keydown', (event: KeyboardEvent) => {
+		if (
+			event.isComposing ||
+			event.key !== 'Tab' ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey
+		) {
+			return;
+		}
+		const direction = event.shiftKey
+			? FocusNavigationDirection.Backward
+			: FocusNavigationDirection.Forward;
+		const next = moveFocus(
+			container,
+			direction,
+			FocusNavigationBoundary.Wrap,
+		);
+		if (next || isAncestorOfActiveElement(container)) {
+			event.preventDefault();
+		}
+	}, true);
 }
 
 export interface ScrollPosition {
@@ -181,9 +222,13 @@ export interface ScrollPosition {
 	readonly top: number;
 }
 
-export function saveAncestorScrollPositions(node: Element): readonly ScrollPosition[] {
+export function saveAncestorScrollPositions(
+	node: Element,
+): readonly ScrollPosition[] {
 	const positions: ScrollPosition[] = [];
-	for (let current = composedParent(node); current; current = composedParent(current)) {
+	for (let current = composedParent(node); current; current = composedParent(
+		current,
+	)) {
 		positions.push({
 			element: current,
 			left: current.scrollLeft,
@@ -193,7 +238,9 @@ export function saveAncestorScrollPositions(node: Element): readonly ScrollPosit
 	return positions;
 }
 
-export function restoreAncestorScrollPositions(positions: readonly ScrollPosition[]): void {
+export function restoreAncestorScrollPositions(
+	positions: readonly ScrollPosition[],
+): void {
 	for (const position of positions) {
 		position.element.scrollTo(position.left, position.top);
 	}
@@ -213,20 +260,26 @@ class FocusTracker extends Disposable implements IFocusTracker {
 		this.target = target;
 		if (isWindow(target)) {
 			this._hasFocus = target.document.hasFocus();
-			this._register(addDisposableListener(target, 'focus', () => this.setFocused(true)));
-			this._register(addDisposableListener(target, 'blur', () => this.setFocused(false)));
+			this._register(addDisposableListener(target, 'focus', () =>
+				this.setFocused(true),
+			));
+			this._register(addDisposableListener(target, 'blur', () =>
+				this.setFocused(false),
+			));
 			return;
 		}
 
 		this._hasFocus = isAncestorOfActiveElement(target);
-		this._register(
-			addDisposableListener(target, 'focusin', () => {
-				this.pendingRefresh.clear();
-				this.setFocused(true);
-			}),
-		);
-		this._register(addDisposableListener(target, 'focusout', () => this.scheduleRefresh()));
-		this._register(addDisposableListener(getWindow(target), 'blur', () => this.setFocused(false)));
+		this._register(addDisposableListener(target, 'focusin', () => {
+			this.pendingRefresh.clear();
+			this.setFocused(true);
+		}));
+		this._register(addDisposableListener(target, 'focusout', () =>
+			this.scheduleRefresh()
+		));
+		this._register(addDisposableListener(getWindow(target), 'blur', () =>
+			this.setFocused(false),
+		));
 	}
 
 	get hasFocus(): boolean {
@@ -235,20 +288,18 @@ class FocusTracker extends Disposable implements IFocusTracker {
 
 	refreshState(): void {
 		this.pendingRefresh.clear();
-		this.setFocused(isWindow(this.target) ? this.target.document.hasFocus() : isAncestorOfActiveElement(this.target));
+		this.setFocused(isWindow(this.target)
+			? this.target.document.hasFocus()
+			: isAncestorOfActiveElement(this.target));
 	}
 
 	private scheduleRefresh(): void {
 		if (this.pendingRefresh.value) return;
 		const targetWindow = getWindow(this.target);
-		this.pendingRefresh.value = disposableWindowTimeout(
-			targetWindow,
-			() => {
-				this.pendingRefresh.clear();
-				this.refreshState();
-			},
-			0,
-		);
+		this.pendingRefresh.value = disposableWindowTimeout(targetWindow, () => {
+			this.pendingRefresh.clear();
+			this.refreshState();
+		}, 0);
 	}
 
 	private setFocused(focused: boolean): void {
@@ -260,16 +311,25 @@ class FocusTracker extends Disposable implements IFocusTracker {
 }
 
 function isUnavailableForFocus(element: HTMLElement): boolean {
-	if (element.hidden || element.closest("[inert], [aria-hidden='true']") !== null || element.matches(':disabled')) {
+	if (
+		element.hidden ||
+		element.closest("[inert], [aria-hidden='true']") !== null ||
+		element.matches(':disabled')
+	) {
 		return true;
 	}
 	const style = getWindow(element).getComputedStyle(element);
-	return style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || element.getClientRects().length === 0;
+	return style.display === 'none' ||
+		style.visibility === 'hidden' ||
+		style.visibility === 'collapse' ||
+		element.getClientRects().length === 0;
 }
 
 function getOwnerDocument(node: ParentNode): Document {
 	if (isNode(node)) {
-		return node.nodeType === 9 ? (node as Document) : (node.ownerDocument ?? getActiveDocument());
+		return node.nodeType === 9
+			? node as Document
+			: node.ownerDocument ?? getActiveDocument();
 	}
 	return getActiveDocument();
 }
@@ -280,7 +340,10 @@ function composedParent(element: Element): Element | null {
 	return isShadowRoot(root) ? root.host : null;
 }
 
-function isComposedAncestor(candidate: Element | null, ancestor: Element): boolean {
+function isComposedAncestor(
+	candidate: Element | null,
+	ancestor: Element,
+): boolean {
 	for (let current = candidate; current; current = composedParent(current)) {
 		if (current === ancestor || isAncestor(current, ancestor)) return true;
 	}
@@ -288,18 +351,28 @@ function isComposedAncestor(candidate: Element | null, ancestor: Element): boole
 }
 
 function isShadowRoot(node: Node): node is ShadowRoot {
-	return node.nodeType === 11 && 'host' in node && isHTMLElement((node as ShadowRoot).host);
+	return node.nodeType === 11 &&
+		'host' in node &&
+		isHTMLElement((node as ShadowRoot).host);
 }
 
 function isTabbableRadio(element: HTMLElement): boolean {
-	if (element.tagName !== 'INPUT' || (element as HTMLInputElement).type !== 'radio') {
+	if (
+		element.tagName !== 'INPUT' ||
+		(element as HTMLInputElement).type !== 'radio'
+	) {
 		return true;
 	}
 	const radio = element as HTMLInputElement;
 	if (!radio.name) return true;
-	const root: ParentNode = radio.form ?? (radio.getRootNode() as Document | ShadowRoot);
-	const group = Array.from(root.querySelectorAll<HTMLInputElement>("input[type='radio']")).filter(
-		candidate => candidate.name === radio.name && candidate.form === radio.form && isFocusable(candidate),
+	const root: ParentNode = radio.form ??
+		(radio.getRootNode() as Document | ShadowRoot);
+	const group = Array.from(
+		root.querySelectorAll<HTMLInputElement>("input[type='radio']"),
+	).filter((candidate) =>
+		candidate.name === radio.name &&
+		candidate.form === radio.form &&
+		isFocusable(candidate)
 	);
-	return (group.find(candidate => candidate.checked) ?? group[0]) === radio;
+	return (group.find((candidate) => candidate.checked) ?? group[0]) === radio;
 }

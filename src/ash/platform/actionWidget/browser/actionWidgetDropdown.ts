@@ -9,7 +9,7 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionListItemKind, type IActionListOptions } from './actionList.js';
 import { IActionWidgetService } from './actionWidget.js';
 
-export interface IActionWidgetDropdownAction extends IAction {}
+export interface IActionWidgetDropdownAction extends IAction { }
 
 export interface IActionWidgetDropdownActionProvider {
 	getActions(): readonly IActionWidgetDropdownAction[] | Promise<readonly IActionWidgetDropdownAction[]>;
@@ -40,70 +40,48 @@ export class ActionWidgetDropdown extends Disposable {
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 	) {
 		super();
-		if (!options.actions && !options.actionProvider) {
-			throw new TypeError('An action dropdown requires actions or an action provider');
-		}
-		const button = this._register(
-			new Button(container, {
-				...defaultButtonStyles,
-				label: options.label,
-				ariaLabel: options.ariaLabel,
-				icon: options.labelRenderer ? undefined : Lxicon.chevronDown,
-				presentation: options.labelRenderer ? 'quiet' : 'secondary',
-				size: options.labelRenderer ? 'standard' : 'small',
-			}),
-		);
+		if (!options.actions && !options.actionProvider) { throw new TypeError('An action dropdown requires actions or an action provider'); }
+		const button = this._register(new Button(container, {
+			...defaultButtonStyles,
+			label: options.label,
+			ariaLabel: options.ariaLabel,
+			icon: options.labelRenderer ? undefined : Lxicon.chevronDown,
+			presentation: options.labelRenderer ? 'quiet' : 'secondary',
+			size: options.labelRenderer ? 'standard' : 'small',
+		}));
 		this.element = button.domNode;
 		this.element.classList.add('ash-action-widget-dropdown');
 		if (options.labelRenderer) {
 			const label = options.labelRenderer(this.element);
-			if (label) {
-				this._register(label);
-			}
+			if (label) { this._register(label); }
 		}
 		this.element.setAttribute('aria-haspopup', 'menu');
 		this.element.setAttribute('aria-expanded', 'false');
 		this._register(toDisposable(() => this.hide()));
-		this._register(
-			addDisposableListener(this.element, 'mousedown', event => {
-				if (event.button !== 0 || this.element.disabled) {
-					return;
-				}
+		this._register(addDisposableListener(this.element, 'mousedown', event => {
+			if (event.button !== 0 || this.element.disabled) { return; }
+			stopEvent(event);
+			this.activate();
+		}));
+		this._register(Gesture.addTarget(this.element));
+		this._register(addDisposableListener(this.element, EventType.Tap, event => {
+			stopEvent(event);
+			if (!this.element.disabled) { this.activate(); }
+		}));
+		// Assistive technology activates semantic buttons via click without a preceding pointer sequence.
+		this._register(addDisposableListener(this.element, 'click', event => {
+			if (event.detail === 0 && !this.element.disabled) { this.activate(); }
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.isComposing || this.element.disabled) { return; }
+			if (event.key === 'Enter' || event.key === ' ') {
 				stopEvent(event);
 				this.activate();
-			}),
-		);
-		this._register(Gesture.addTarget(this.element));
-		this._register(
-			addDisposableListener(this.element, EventType.Tap, event => {
+			} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 				stopEvent(event);
-				if (!this.element.disabled) {
-					this.activate();
-				}
-			}),
-		);
-		// Assistive technology activates semantic buttons via click without a preceding pointer sequence.
-		this._register(
-			addDisposableListener(this.element, 'click', event => {
-				if (event.detail === 0 && !this.element.disabled) {
-					this.activate();
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if (event.isComposing || this.element.disabled) {
-					return;
-				}
-				if (event.key === 'Enter' || event.key === ' ') {
-					stopEvent(event);
-					this.activate();
-				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-					stopEvent(event);
-					this.show();
-				}
-			}),
-		);
+				this.show();
+			}
+		}));
 	}
 
 	public show(): void {
@@ -111,7 +89,7 @@ export class ActionWidgetDropdown extends Disposable {
 			return;
 		}
 		if (this.options.actionProvider) {
-			const request = (this.opening = {});
+			const request = this.opening = {};
 			void this.readActions(request);
 			return;
 		}
@@ -123,52 +101,39 @@ export class ActionWidgetDropdown extends Disposable {
 		try {
 			actions = await this.options.actionProvider!.getActions();
 		} catch {
-			if (this.opening === request) {
-				this.opening = undefined;
-			}
+			if (this.opening === request) { this.opening = undefined; }
 			return;
 		}
 		// Dismissal or disposal invalidates a pending catalog read before it can display a menu.
-		if (this.opening !== request || this.isDisposed) {
-			return;
-		}
+		if (this.opening !== request || this.isDisposed) { return; }
 		this.opening = undefined;
 		this.showActions(actions);
 	}
 
 	private showActions(actions: readonly IActionWidgetDropdownAction[]): void {
-		if (actions.length === 0) {
-			return;
-		}
+		if (actions.length === 0) { return; }
 		this.visible = true;
 		this.element.setAttribute('aria-expanded', 'true');
 		this.visibilityChanged.fire(true);
-		this.actionWidgetService.show(
-			'actionWidgetDropdown',
-			false,
-			actions.map(action => ({
-				kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
-				item: action,
-				label: action.label,
-				disabled: !action.enabled,
-				checked: action.checked,
-				group: { title: '', icon: action.icon },
-			})),
-			{
-				onSelect: async action => {
-					// Running a choice may replace its trigger; retire this popup before that replacement opens another.
-					this.hide();
-					await action.run();
-				},
-				onHide: () => {
-					this.visible = false;
-					this.element.setAttribute('aria-expanded', 'false');
-					this.visibilityChanged.fire(false);
-				},
+		this.actionWidgetService.show('actionWidgetDropdown', false, actions.map(action => ({
+			kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
+			item: action,
+			label: action.label,
+			disabled: !action.enabled,
+			checked: action.checked,
+			group: { title: '', icon: action.icon },
+		})), {
+			onSelect: async action => {
+				// Running a choice may replace its trigger; retire this popup before that replacement opens another.
+				this.hide();
+				await action.run();
 			},
-			this.options.getAnchor?.() ?? this.element,
-			this.options.listOptions,
-		);
+			onHide: () => {
+				this.visible = false;
+				this.element.setAttribute('aria-expanded', 'false');
+				this.visibilityChanged.fire(false);
+			},
+		}, this.options.getAnchor?.() ?? this.element, this.options.listOptions);
 	}
 
 	public hide(): void {
@@ -181,17 +146,12 @@ export class ActionWidgetDropdown extends Disposable {
 	public setEnabled(enabled: boolean): void {
 		this.element.disabled = !enabled;
 		this.element.setAttribute('aria-disabled', String(!enabled));
-		if (!enabled) {
-			this.hide();
-		}
+		if (!enabled) { this.hide(); }
 	}
 
 	private activate(): void {
 		this.element.focus();
-		if (this.visible || this.opening) {
-			this.hide();
-		} else {
-			this.show();
-		}
+		if (this.visible || this.opening) { this.hide(); }
+		else { this.show(); }
 	}
 }

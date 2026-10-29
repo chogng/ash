@@ -28,47 +28,27 @@ import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContent
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>>;
 const snapshot = (): ExtensionHostFleetSnapshot => ({
-	generation: 1,
-	extensions: [
-		{
-			id: 'ash.markdown-math',
-			version: '1',
-			packageDigest: `sha256:${'a'.repeat(64)}`,
-			runtimeApiVersion: 1,
-			activationGeneration: 1,
-			incarnation: 1,
-			lifecycle: 'ready',
-			stderr: '',
-			failure: undefined,
-			outputEvents: [],
-			registrations: [{ kind: 'dataChannel', registrationId: 'math.render.v2', channelId: 'math.render.v2' }],
-		},
-	],
+	generation: 1, extensions: [{
+		id: 'ash.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+		activationGeneration: 1, incarnation: 1, lifecycle: 'ready', stderr: '', failure: undefined, outputEvents: [],
+		registrations: [{ kind: 'dataChannel', registrationId: 'math.render.v2', channelId: 'math.render.v2' }],
+	}]
 });
 
 function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerService = { open: async () => true } as unknown as IOpenerService): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({
-		key: 'markdown.math.enabled',
-		defaultValue: true,
-		parse: value => Boolean(value),
-	});
+	registry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 	registry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
 	instance.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService(registry));
 	instance.registerInstance(IExtensionHostApi, {
-		...createDisconnectedExtensionHostApi(async () => {
-			throw new Error('No host');
-		}),
+		...createDisconnectedExtensionHostApi(async () => { throw new Error('No host'); }),
 		list: async () => snapshot(),
 		invoke: (request, signal) => math.invoke(request.registrationId, request.operation, request.payload, signal),
 		...overrides,
 	});
 	instance.registerInstance(IMarkdownRendererService, instance.createInstance(MarkdownRendererService));
-	instance.registerInstance(ILinkPresentationService, {
-		onDidChangeLinkPresentationRules: Event.None,
-		getLinkPresentationRule: () => undefined,
-	} as unknown as ILinkPresentationService);
+	instance.registerInstance(ILinkPresentationService, { onDidChangeLinkPresentationRules: Event.None, getLinkPresentationRule: () => undefined } as unknown as ILinkPresentationService);
 	instance.registerInstance(IHoverService, {} as IHoverService);
 	return instance;
 }
@@ -82,31 +62,16 @@ function fragmentContents(element: HTMLElement): string {
 suite('Shared chat Markdown rendering', () => {
 	ensureNoStylesAreLeakedInTestSuite();
 	ensureNoDisposablesAreLeakedInTestSuite();
-	suiteSetup(async function () {
-		this.timeout(600000);
-		math = await startMarkdownMathExtension();
-	});
-	suiteTeardown(async () => {
-		await math?.dispose();
-	});
+	suiteSetup(async function () { this.timeout(600000); math = await startMarkdownMathExtension(); });
+	suiteTeardown(async () => { await math?.dispose(); });
 
-	const corpus = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as {
-		name: string;
-		markdown: string;
-		formulas: { source: string; display: string }[];
-	}[];
+	const corpus = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 	for (const entry of corpus) {
 		test(`shared formula syntax: ${entry.name}`, () => {
 			using scope = services();
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 			using result = renderer.render({ value: entry.markdown });
-			assert.deepEqual(
-				[...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({
-					source: element.dataset.latex,
-					display: element.dataset.mathDisplay,
-				})),
-				entry.formulas,
-			);
+			assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas);
 		});
 	}
 
@@ -116,22 +81,10 @@ suite('Shared chat Markdown rendering', () => {
 		const prose = '**strong** [link](https://example.com) `code` 中文😀 '.repeat(96);
 		for (const entry of corpus) {
 			using result = renderer.render({ value: `${prose}\n\n${entry.markdown}` });
-			assert.deepEqual(
-				[...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({
-					source: element.dataset.latex,
-					display: element.dataset.mathDisplay,
-				})),
-				entry.formulas,
-				entry.name,
-			);
+			assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas, entry.name);
 		}
-		using inline = renderer.render({
-			value: prose + String.raw`\$escaped\$ \\(escaped\\) \\[escaped\\] $x$ \(y\)`,
-		});
-		assert.deepEqual(
-			[...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => element.dataset.latex),
-			['x', 'y'],
-		);
+		using inline = renderer.render({ value: prose + String.raw`\$escaped\$ \\(escaped\\) \\[escaped\\] $x$ \(y\)` });
+		assert.deepEqual([...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => element.dataset.latex), ['x', 'y']);
 	});
 
 	test('dense incomplete formulas retain literal text and later complete formulas', () => {
@@ -139,16 +92,10 @@ suite('Shared chat Markdown rendering', () => {
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		const incomplete = String.raw`Incomplete \( candidate **bold** and price $5. `.repeat(256);
 		using result = renderer.render({ value: incomplete + String.raw` Complete $x+1$ and \[y^2\].` });
-		assert.deepEqual(
-			[...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({
-				source: element.dataset.latex,
-				display: element.dataset.mathDisplay,
-			})),
-			[
-				{ source: 'x+1', display: 'inline' },
-				{ source: 'y^2', display: 'block' },
-			],
-		);
+		assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), [
+			{ source: 'x+1', display: 'inline' },
+			{ source: 'y^2', display: 'block' },
+		]);
 		assert.equal(result.element.querySelectorAll('strong').length, 256);
 		assert.equal((result.element.textContent!.match(/Incomplete/g) ?? []).length, 256);
 	});
@@ -156,34 +103,16 @@ suite('Shared chat Markdown rendering', () => {
 	test('formula closing delimiters retain the existing scan limit', () => {
 		using scope = services();
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
-		for (const [opening, closing] of [
-			['$', '$'],
-			['$$', '$$'],
-			['\\(', '\\)'],
-			['\\[', '\\]'],
-		]) {
+		for (const [opening, closing] of [['$', '$'], ['$$', '$$'], ['\\(', '\\)'], ['\\[', '\\]']]) {
 			for (const end of [19_999, 20_000]) {
 				const text = 'x'.repeat(end - opening.length);
 				using result = renderer.render({ value: opening + text + closing });
 				// An over-limit $$ candidate can still contain a valid single-dollar
 				// formula starting one character later. Preserve that existing fallback.
-				const expected =
-					end < 20_000 || opening === '$$'
-						? [
-								{
-									source: text,
-									display: (opening === '$$' && end < 20_000) || opening === '\\[' ? 'block' : 'inline',
-								},
-							]
-						: [];
-				assert.deepEqual(
-					[...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({
-						source: element.dataset.latex,
-						display: element.dataset.mathDisplay,
-					})),
-					expected,
-					`${opening} closing at ${end}`,
-				);
+				const expected = end < 20_000 || opening === '$$'
+					? [{ source: text, display: opening === '$$' && end < 20_000 || opening === '\\[' ? 'block' : 'inline' }]
+					: [];
+				assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), expected, `${opening} closing at ${end}`);
 			}
 		}
 	});
@@ -224,8 +153,7 @@ suite('Shared chat Markdown rendering', () => {
 		using scope = services();
 		const actions: string[] = [];
 		using part = scope.createInstance(ChatMarkdownContentPart, {
-			ownerDocument: document,
-			markdown: 'Same.\n\nSame.\n\n[Open](https://example.com)\n\nTail',
+			ownerDocument: document, markdown: 'Same.\n\nSame.\n\n[Open](https://example.com)\n\nTail',
 			actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value),
 		});
 		const paragraphs = [...part.domNode.querySelectorAll('p')];
@@ -242,18 +170,11 @@ suite('Shared chat Markdown rendering', () => {
 	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {
 		using scope = services();
 		const actions: string[] = [];
-		using part = scope.createInstance(ChatMarkdownContentPart, {
-			ownerDocument: document,
-			actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value),
-		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value) });
 		const render = mock.method(ChatContentMarkdownRenderer.prototype, 'render');
-		const frame = () =>
-			new Promise<void>(resolve => {
-				const scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => {
-					scheduled.dispose();
-					resolve();
-				});
-			});
+		const frame = () => new Promise<void>(resolve => {
+			const scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => { scheduled.dispose(); resolve(); });
+		});
 		const prefix = 'Large **stable** [Open](https://example.com) response. '.repeat(128);
 		try {
 			part.tryIncrementalUpdate({ value: prefix + 'intermediate' }, true);
@@ -284,9 +205,7 @@ suite('Shared chat Markdown rendering', () => {
 			part.dispose();
 			await frame();
 			assert.equal(render.mock.callCount(), completed);
-		} finally {
-			render.mock.restore();
-		}
+		} finally { render.mock.restore(); }
 	});
 
 	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', () => {
@@ -316,12 +235,7 @@ suite('Shared chat Markdown rendering', () => {
 
 	test('large scheduled formulas retain the entire ordered macro scope', async () => {
 		const batches: unknown[] = [];
-		using scope = services({
-			invoke: (request, signal) => {
-				batches.push(request.payload);
-				return math.invoke(request.registrationId, request.operation, request.payload, signal);
-			},
-		});
+		using scope = services({ invoke: (request, signal) => { batches.push(request.payload); return math.invoke(request.registrationId, request.operation, request.payload, signal); } });
 		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
 		const prefix = 'Large formula response. '.repeat(256);
 		part.tryIncrementalUpdate({ value: prefix + '$x$' }, true);
@@ -333,30 +247,12 @@ suite('Shared chat Markdown rendering', () => {
 
 	test('large-tail links retain the shared default opener and command trust policy', () => {
 		const opened: unknown[] = [];
-		using scope = services({}, {
-			open: async (href, options) => {
-				opened.push([href, options]);
-				return true;
-			},
-		} as IOpenerService);
+		using scope = services({}, { open: async (href, options) => { opened.push([href, options]); return true; } } as IOpenerService);
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		const trusted = { enabledCommands: ['allowed.command'] };
-		using result = renderer.render({
-			value: 'Large **response**. '.repeat(256) + '[Command](command:allowed.command)',
-			isTrusted: trusted,
-		});
+		using result = renderer.render({ value: 'Large **response**. '.repeat(256) + '[Command](command:allowed.command)', isTrusted: trusted });
 		result.element.querySelector('a')!.click();
-		assert.deepEqual(opened, [
-			[
-				'command:allowed.command',
-				{
-					fromUserGesture: true,
-					allowContributedOpeners: true,
-					allowCommands: ['allowed.command'],
-					skipValidation: undefined,
-				},
-			],
-		]);
+		assert.deepEqual(opened, [['command:allowed.command', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['allowed.command'], skipValidation: undefined }]]);
 	});
 
 	test('corrections can merge an unchanged preceding block with a new continuation', () => {
@@ -375,13 +271,12 @@ suite('Shared chat Markdown rendering', () => {
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
 		const value = '<details><summary>Details</summary>Body</details>\n\n[run](command:test)\n\nTail';
-		for (const supportHtml of [false, true, false])
-			for (const isTrusted of [false, true]) {
-				const markdown = { value, supportHtml, isTrusted };
-				part.tryIncrementalUpdate(markdown);
-				using expected = renderer.render(markdown);
-				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
-			}
+		for (const supportHtml of [false, true, false]) for (const isTrusted of [false, true]) {
+			const markdown = { value, supportHtml, isTrusted };
+			part.tryIncrementalUpdate(markdown);
+			using expected = renderer.render(markdown);
+			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+		}
 		const before = fragmentContents(part.domNode);
 		assert.throws(() => part.tryIncrementalUpdate({ value: 'x'.repeat(4 * 1024 * 1024 + 1) }), /supported size/u);
 		assert.equal(fragmentContents(part.domNode), before);
@@ -392,25 +287,14 @@ suite('Shared chat Markdown rendering', () => {
 		using scope = services({
 			invoke: async request => {
 				requests.push(request.payload);
-				const { formulas } = request.payload as { formulas: JsonValue[] };
+				const { formulas } = request.payload as { formulas: JsonValue[]; };
 				return { results: formulas.map(() => ({ status: 'rendered', html: '<math><mi>x</mi></math>' })) };
-			},
+			}
 		});
-		using part = scope.createInstance(ChatMarkdownContentPart, {
-			ownerDocument: document,
-			markdown: 'Intro.\n\n$\\gdef\\foo{x}\\foo$',
-		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, markdown: 'Intro.\n\n$\\gdef\\foo{x}\\foo$' });
 		part.tryIncrementalUpdate({ value: 'Intro.\n\n$\\gdef\\foo{x}\\foo$\n\nBetween.\n\n$\\foo$' }, true);
 		await changedUntil(part.domNode, () => part.domNode.querySelectorAll('math').length === 2);
-		assert.deepEqual(requests, [
-			{
-				formulas: [
-					{ source: '\\gdef\\foo{x}\\foo', display: 'inline' },
-					{ source: '\\foo', display: 'inline' },
-				],
-				macros: {},
-			},
-		]);
+		assert.deepEqual(requests, [{ formulas: [{ source: '\\gdef\\foo{x}\\foo', display: 'inline' }, { source: '\\foo', display: 'inline' }], macros: {} }]);
 	});
 
 	test('coalesces streaming batches and reuses completed results for prose-only updates', async () => {
@@ -419,21 +303,14 @@ suite('Shared chat Markdown rendering', () => {
 			let lists = 0;
 			const requests: JsonValue[] = [];
 			using scope = services({
-				list: async () => {
-					lists++;
-					return snapshot();
-				},
-				invoke: async request => {
-					requests.push(request.payload);
-					return { results: [{ status: 'rendered', html: '<math><mi>x</mi></math>' }] };
-				},
+				list: async () => { lists++; return snapshot(); },
+				invoke: async request => { requests.push(request.payload); return { results: [{ status: 'rendered', html: '<math><mi>x</mi></math>' }] }; },
 			});
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 			let current = renderer.render({ value: '$a$' });
 			try {
 				for (const value of ['$b$', '$x$', '$x$ prose', '$x$ more prose']) {
-					current.dispose();
-					current = renderer.render({ value });
+					current.dispose(); current = renderer.render({ value });
 					await new Promise<void>(resolve => setImmediate(resolve));
 					mock.timers.tick(1);
 				}
@@ -442,17 +319,12 @@ suite('Shared chat Markdown rendering', () => {
 				await changedUntil(current.element, () => !!current.element.querySelector('math'));
 				assert.deepEqual(requests, [{ formulas: [{ source: 'x', display: 'inline' }], macros: {} }]);
 				assert.equal(lists, 1);
-				current.dispose();
-				current = renderer.render({ value: '$x$ final prose' });
+				current.dispose(); current = renderer.render({ value: '$x$ final prose' });
 				await changedUntil(current.element, () => !!current.element.querySelector('math'));
 				assert.equal(requests.length, 1);
 				assert.equal(lists, 1);
-			} finally {
-				current.dispose();
-			}
-		} finally {
-			mock.timers.reset();
-		}
+			} finally { current.dispose(); }
+		} finally { mock.timers.reset(); }
 	});
 
 	test('bounds completed batch reuse and does not cache formulas independently of macro scope', async () => {
@@ -462,9 +334,9 @@ suite('Shared chat Markdown rendering', () => {
 			using scope = services({
 				invoke: async request => {
 					requests.push(request.payload);
-					const { formulas } = request.payload as { formulas: JsonValue[] };
+					const { formulas } = request.payload as { formulas: JsonValue[]; };
 					return { results: formulas.map(() => ({ status: 'rendered', html: '<math><mi>x</mi></math>' })) };
-				},
+				}
 			});
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 			for (const value of [...Array.from({ length: 10 }, (_, i) => `$x+${i}$`), '$x+9$', '$x+0$', '$\\gdef\\foo{x}\\foo$ $\\foo$', '$\\gdef\\foo{y}\\foo$ $\\foo$']) {
@@ -475,47 +347,23 @@ suite('Shared chat Markdown rendering', () => {
 			}
 			assert.equal(requests.length, 13);
 			assert.deepEqual(requests.slice(-2), [
-				{
-					formulas: [
-						{ source: '\\gdef\\foo{x}\\foo', display: 'inline' },
-						{ source: '\\foo', display: 'inline' },
-					],
-					macros: {},
-				},
-				{
-					formulas: [
-						{ source: '\\gdef\\foo{y}\\foo', display: 'inline' },
-						{ source: '\\foo', display: 'inline' },
-					],
-					macros: {},
-				},
+				{ formulas: [{ source: '\\gdef\\foo{x}\\foo', display: 'inline' }, { source: '\\foo', display: 'inline' }], macros: {} },
+				{ formulas: [{ source: '\\gdef\\foo{y}\\foo', display: 'inline' }, { source: '\\foo', display: 'inline' }], macros: {} },
 			]);
-		} finally {
-			mock.timers.reset();
-		}
+		} finally { mock.timers.reset(); }
 	});
 
 	test('uses the service code renderer and retains safe HTML and formulas in one result', async () => {
 		using scope = services();
 		let completed!: () => void;
-		const pending = new Promise<void>(resolve => {
-			completed = resolve;
-		});
+		const pending = new Promise<void>(resolve => { completed = resolve; });
 		scope.get(IMarkdownRendererService).setDefaultCodeBlockRenderer({
 			renderCodeBlock: async (_language, text) => {
-				const code = document.createElement('code');
-				code.textContent = `highlighted ${text}`;
-				return code;
-			},
+				const code = document.createElement('code'); code.textContent = `highlighted ${text}`; return code;
+			}
 		});
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
-		using result = resultRenderer.render(
-			{
-				value: '<details><summary>Details</summary>Retained</details>\n\n$$\\frac{a}{b}+\\sqrt{x}$$\n\n```ts\nconst value = 1;\n```',
-				supportHtml: true,
-			},
-			{ asyncRenderCallback: completed },
-		);
+		using result = resultRenderer.render({ value: '<details><summary>Details</summary>Retained</details>\n\n$$\\frac{a}{b}+\\sqrt{x}$$\n\n```ts\nconst value = 1;\n```', supportHtml: true }, { asyncRenderCallback: completed });
 		await Promise.all([pending, changedUntil(result.element, () => !!result.element.querySelector('math mfrac'))]);
 		assert.equal(result.element.querySelector('summary')?.textContent, 'Details');
 		assert.ok(result.element.querySelector('math mfrac'));
@@ -526,18 +374,9 @@ suite('Shared chat Markdown rendering', () => {
 	test('retains blocked media descriptions without provider URLs or duplicate network policy', () => {
 		using scope = services();
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
-		using result = resultRenderer.render(
-			{
-				value: '![Diagram](https://example.com/image)\n\n<video src="https://example.com/movie" title="Demo"/>',
-				supportHtml: true,
-			},
-			{ sanitizerConfig: { replaceWithPlaintext: false } },
-		);
+		using result = resultRenderer.render({ value: '![Diagram](https://example.com/image)\n\n<video src="https://example.com/movie" title="Demo"/>', supportHtml: true }, { sanitizerConfig: { replaceWithPlaintext: false } });
 		assert.equal(result.element.querySelector('img[src],video[src]'), null);
-		assert.deepEqual(
-			Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent),
-			['Diagram', 'Demo'],
-		);
+		assert.deepEqual(Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent), ['Diagram', 'Demo']);
 		assert.doesNotMatch(result.element.innerHTML, /chatgpt|https:\/\/example/u);
 	});
 
@@ -552,41 +391,23 @@ suite('Shared chat Markdown rendering', () => {
 				const descriptor = Object.getOwnPropertyDescriptor(urls, key);
 				Object.defineProperty(urls, key, {
 					configurable: true,
-					value:
-						key === 'createObjectURL'
-							? (blob: Blob) => {
-									created.push(blob);
-									return objectUrl;
-								}
-							: (value: string) => {
-									revoked.push(value);
-								},
+					value: key === 'createObjectURL' ? (blob: Blob) => { created.push(blob); return objectUrl; } : (value: string) => { revoked.push(value); },
 				});
-				resources.add(
-					toDisposable(() => {
-						if (descriptor) Object.defineProperty(urls, key, descriptor);
-						else Reflect.deleteProperty(urls, key);
-					}),
-				);
+				resources.add(toDisposable(() => {
+					if (descriptor) Object.defineProperty(urls, key, descriptor);
+					else Reflect.deleteProperty(urls, key);
+				}));
 			}
 			using scope = services();
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 			const read = new DeferredPromise<Blob>();
 			const completed = new DeferredPromise<void>();
 			const requests: string[] = [];
-			using result = renderer.render(
-				{ value: '![Workspace](ash-remote://ssh+host/image.png)\n\n![Blocked](https://example.com/image)' },
-				{
-					sanitizerConfig: { replaceWithPlaintext: false },
-					imageResourceLoader: resource => {
-						requests.push(resource.toString());
-						return read.p;
-					},
-					asyncRenderCallback: () => {
-						void completed.complete();
-					},
-				},
-			);
+			using result = renderer.render({ value: '![Workspace](ash-remote://ssh+host/image.png)\n\n![Blocked](https://example.com/image)' }, {
+				sanitizerConfig: { replaceWithPlaintext: false },
+				imageResourceLoader: resource => { requests.push(resource.toString()); return read.p; },
+				asyncRenderCallback: () => { void completed.complete(); },
+			});
 			const image = result.element.querySelector('img[alt="Workspace"]');
 			assert.ok(image, 'A pending file image must remain owned by the base renderer');
 			assert.equal(image.hasAttribute('src'), false);
@@ -607,10 +428,7 @@ suite('Shared chat Markdown rendering', () => {
 				assert.equal(result.element.querySelector('img'), image);
 				assert.equal(image.getAttribute('src'), objectUrl);
 				assert.deepEqual(created, [blob]);
-				assert.deepEqual(
-					Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent),
-					['Blocked'],
-				);
+				assert.deepEqual(Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent), ['Blocked']);
 				result.dispose();
 				assert.deepEqual(revoked, [objectUrl]);
 			}
@@ -620,9 +438,7 @@ suite('Shared chat Markdown rendering', () => {
 	test('does not render code examples or currency as math, and retains invalid formulas', async () => {
 		using scope = services();
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
-		using result = resultRenderer.render({
-			value: '`$x$`\n\n```latex\n$$x$$\n```\n\ncost$x$word and $("#id")\n\n$\\notAFormula{x}$\n\n\\(x+1\\)',
-		});
+		using result = resultRenderer.render({ value: '`$x$`\n\n```latex\n$$x$$\n```\n\ncost$x$word and $("#id")\n\n$\\notAFormula{x}$\n\n\\(x+1\\)' });
 		await changedUntil(result.element, () => !!result.element.querySelector('math'));
 		assert.equal(result.element.querySelectorAll('.ash-katex-container').length, 2);
 		assert.equal(result.element.querySelector('code')?.textContent, '$x$');
@@ -632,13 +448,7 @@ suite('Shared chat Markdown rendering', () => {
 	test('sanitizes formula markup, links and inline styles without expanding trust', () => {
 		using scope = services();
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
-		using result = resultRenderer.render(
-			{
-				value: '$\\href{javascript:alert(1)}{unsafe}$\n\n<span onclick="alert(1)" style="position:fixed;background:url(https://example.com/tracker);color:red">Visible</span>',
-				supportHtml: true,
-			},
-			{ sanitizerConfig: { replaceWithPlaintext: false } },
-		);
+		using result = resultRenderer.render({ value: '$\\href{javascript:alert(1)}{unsafe}$\n\n<span onclick="alert(1)" style="position:fixed;background:url(https://example.com/tracker);color:red">Visible</span>', supportHtml: true }, { sanitizerConfig: { replaceWithPlaintext: false } });
 		assert.equal(result.element.querySelector('[onclick],script,a[href^="javascript:"]'), null);
 		assert.match(result.element.textContent ?? '', /Visible/u);
 		assert.doesNotMatch(result.element.querySelector('span[style]')?.getAttribute('style') ?? '', /fixed|url\(/u);
@@ -648,24 +458,9 @@ suite('Shared chat Markdown rendering', () => {
 		const requests: unknown[] = [];
 		let activated = false;
 		using scope = services({
-			list: async () => ({
-				...snapshot(),
-				extensions: snapshot().extensions.map(runtime => ({
-					...runtime,
-					lifecycle: 'dormant',
-					incarnation: undefined,
-					registrations: [],
-				})),
-			}),
-			activateByEvent: async request => {
-				requests.push(request.event);
-				activated = true;
-				return snapshot();
-			},
-			invoke: (request, signal) => {
-				requests.push(request.payload);
-				return math.invoke(request.registrationId, request.operation, request.payload, signal);
-			},
+			list: async () => ({ ...snapshot(), extensions: snapshot().extensions.map(runtime => ({ ...runtime, lifecycle: 'dormant', incarnation: undefined, registrations: [] })) }),
+			activateByEvent: async request => { requests.push(request.event); activated = true; return snapshot(); },
+			invoke: (request, signal) => { requests.push(request.payload); return math.invoke(request.registrationId, request.operation, request.payload, signal); },
 		});
 		await scope.get(IConfigurationService).updateValue('markdown.math.macros', { '\\RR': '\\mathbb{R}' });
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
@@ -674,13 +469,7 @@ suite('Shared chat Markdown rendering', () => {
 		assert.equal(activated, true);
 		assert.deepEqual(requests, [
 			{ type: 'capability', capability: 'math.render.v2' },
-			{
-				formulas: [
-					{ source: '\\newcommand{\\chatfoo}{x^2}\\chatfoo', display: 'inline' },
-					{ source: '\\chatfoo+\\RR', display: 'inline' },
-				],
-				macros: { '\\RR': '\\mathbb{R}' },
-			},
+			{ formulas: [{ source: '\\newcommand{\\chatfoo}{x^2}\\chatfoo', display: 'inline' }, { source: '\\chatfoo+\\RR', display: 'inline' }], macros: { '\\RR': '\\mathbb{R}' } },
 		]);
 		assert.doesNotMatch(result.element.innerHTML, /katex-error|#cc0000/);
 	});
@@ -692,26 +481,20 @@ suite('Shared chat Markdown rendering', () => {
 		using scope = services({
 			list: async () => current,
 			onDidChange: listener => changed.event(listener),
-			invoke: (request, signal) => {
-				calls++;
-				return math.invoke(request.registrationId, request.operation, request.payload, signal);
-			},
+			invoke: (request, signal) => { calls++; return math.invoke(request.registrationId, request.operation, request.payload, signal); },
 		});
 		const configuration = scope.get(IConfigurationService);
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using result = resultRenderer.render({ value: '$x$' });
 		await changedUntil(result.element, () => !!result.element.querySelector('math'));
-		current = { ...current, generation: 2 };
-		changed.fire(2);
-		await Promise.resolve();
-		await Promise.resolve();
+		current = { ...current, generation: 2 }; changed.fire(2);
+		await Promise.resolve(); await Promise.resolve();
 		assert.equal(calls, 1);
 		await configuration.updateValue('markdown.math.enabled', false);
 		assert.equal(result.element.textContent?.trim(), '$x$');
 		await configuration.updateValue('markdown.math.enabled', true);
 		await changedUntil(result.element, () => !!result.element.querySelector('math'));
-		current = { generation: 3, extensions: [] };
-		changed.fire(3);
+		current = { generation: 3, extensions: [] }; changed.fire(3);
 		await changedUntil(result.element, () => !result.element.querySelector('math'));
 		assert.equal(result.element.textContent?.trim(), '$x$');
 	});
@@ -731,27 +514,21 @@ suite('Shared chat Markdown rendering', () => {
 	test('aborts rendering on connection loss and restores formulas after reconnecting', async () => {
 		using connection = new Emitter<'ready' | 'stopped'>();
 		let entered!: () => void;
-		const pending = new Promise<void>(resolve => {
-			entered = resolve;
-		});
+		const pending = new Promise<void>(resolve => { entered = resolve; });
 		let signal: AbortSignal | undefined;
 		let disconnected = false;
 		using scope = services({
 			onConnectionState: listener => connection.event(listener),
 			invoke: (request, cancellation) => {
-				if (disconnected) {
-					return math.invoke(request.registrationId, request.operation, request.payload, cancellation);
-				}
-				signal = cancellation;
-				entered();
-				return new Promise(() => {});
+				if (disconnected) { return math.invoke(request.registrationId, request.operation, request.payload, cancellation); }
+				signal = cancellation; entered();
+				return new Promise(() => { });
 			},
 		});
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using result = resultRenderer.render({ value: '$x$' });
 		await pending;
-		connection.fire('stopped');
-		disconnected = true;
+		connection.fire('stopped'); disconnected = true;
 		assert.equal(signal?.aborted, true);
 		assert.equal(result.element.textContent?.trim(), '$x$');
 		connection.fire('ready');
@@ -760,41 +537,27 @@ suite('Shared chat Markdown rendering', () => {
 
 	test('streaming keeps async math on the current nodes while reusing ordinary paragraphs', async () => {
 		let entered!: () => void;
-		const pending = new Promise<void>(resolve => {
-			entered = resolve;
-		});
+		const pending = new Promise<void>(resolve => { entered = resolve; });
 		let firstSignal: AbortSignal | undefined;
 		let finish!: (value: JsonValue) => void;
 		using scope = services({
 			invoke: (request, signal) => {
 				if (!firstSignal) {
-					firstSignal = signal;
-					entered();
-					return new Promise(resolve => {
-						finish = resolve;
-					});
+					firstSignal = signal; entered();
+					return new Promise(resolve => { finish = resolve; });
 				}
 				return math.invoke(request.registrationId, request.operation, request.payload, signal);
-			},
+			}
 		});
-		using part = scope.createInstance(ChatMarkdownContentPart, {
-			ownerDocument: document,
-			markdown: 'Stable paragraph\n\n$x$',
-		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, markdown: 'Stable paragraph\n\n$x$' });
 		await pending;
 		const paragraph = part.domNode.querySelector('p');
 		part.tryIncrementalUpdate({ value: 'Stable paragraph\n\n$x$\n\nAppended text' }, true);
 		assert.equal(firstSignal?.aborted, false);
 		assert.equal(part.domNode.querySelector('p'), paragraph);
-		finish(
-			await math.invoke('math.render.v2', 'receiveData', {
-				formulas: [{ source: 'x', display: 'inline' }],
-				macros: {},
-			}),
-		);
+		finish(await math.invoke('math.render.v2', 'receiveData', { formulas: [{ source: 'x', display: 'inline' }], macros: {} }));
 		await changedUntil(part.domNode, () => !!part.domNode.querySelector('math'));
-		await Promise.resolve();
-		await Promise.resolve();
+		await Promise.resolve(); await Promise.resolve();
 		assert.ok(part.domNode.querySelector('math'));
 		assert.doesNotMatch(part.domNode.textContent ?? '', /stale formula/);
 	});
@@ -802,24 +565,11 @@ suite('Shared chat Markdown rendering', () => {
 	test('cancels retired renders and ignores late results even when the output element is reused', async () => {
 		let finish!: (value: JsonValue) => void;
 		let entered!: () => void;
-		const pending = new Promise<void>(resolve => {
-			entered = resolve;
-		});
+		const pending = new Promise<void>(resolve => { entered = resolve; });
 		let invocationSignal: AbortSignal | undefined;
 		let cancelled!: () => void;
-		const aborted = new Promise<void>(resolve => {
-			cancelled = resolve;
-		});
-		using scope = services({
-			invoke: (_request, signal) => {
-				invocationSignal = signal;
-				signal?.addEventListener('abort', cancelled, { once: true });
-				entered();
-				return new Promise(resolve => {
-					finish = resolve;
-				});
-			},
-		});
+		const aborted = new Promise<void>(resolve => { cancelled = resolve; });
+		using scope = services({ invoke: (_request, signal) => { invocationSignal = signal; signal?.addEventListener('abort', cancelled, { once: true }); entered(); return new Promise(resolve => { finish = resolve; }); } });
 		const target = document.createElement('div');
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		const result = resultRenderer.render({ value: '$old$' }, {}, target);
@@ -830,46 +580,23 @@ suite('Shared chat Markdown rendering', () => {
 		using nextRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using next = nextRenderer.render({ value: 'New message' }, {}, target);
 		finish({ results: [{ status: 'rendered', html: '<span>Stale math</span>' }] });
-		await Promise.resolve();
-		await Promise.resolve();
+		await Promise.resolve(); await Promise.resolve();
 		assert.equal(target.textContent?.trim(), 'New message');
 	});
 
 	test('retains source for unavailable, malformed and failed providers and sanitizes successful output', async () => {
-		const responses: readonly JsonValue[] = [
-			null,
-			{ html: ['old contract'] },
-			{ results: [] },
-			{ results: [{ status: 'rendered', html: 42 }] },
-			{ results: [{ status: 'source', diagnostic: { code: 'unknown' } }] },
-		];
+		const responses: readonly JsonValue[] = [null, { html: ['old contract'] }, { results: [] }, { results: [{ status: 'rendered', html: 42 }] }, { results: [{ status: 'source', diagnostic: { code: 'unknown' } }] }];
 		for (const response of responses) {
 			let entered!: () => void;
-			const invoked = new Promise<void>(resolve => {
-				entered = resolve;
-			});
-			using scope = services({
-				invoke: async () => {
-					entered();
-					return response;
-				},
-			});
+			const invoked = new Promise<void>(resolve => { entered = resolve; });
+			using scope = services({ invoke: async () => { entered(); return response; } });
 			using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 			using result = resultRenderer.render({ value: '$x$' });
 			await invoked;
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(result.element.textContent?.trim(), '$x$');
 		}
-		using scope = services({
-			invoke: async () => ({
-				results: [
-					{
-						status: 'rendered',
-						html: '<math><mi>x</mi></math><img src="https://example.com/tracker" onerror="alert(1)"><script>alert(1)</script><span style="position:fixed;color:red">safe</span>',
-					},
-				],
-			}),
-		});
+		using scope = services({ invoke: async () => ({ results: [{ status: 'rendered', html: '<math><mi>x</mi></math><img src="https://example.com/tracker" onerror="alert(1)"><script>alert(1)</script><span style="position:fixed;color:red">safe</span>' }] }) });
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using result = resultRenderer.render({ value: '$x$' });
 		await changedUntil(result.element, () => !!result.element.querySelector('math'));
@@ -880,17 +607,13 @@ suite('Shared chat Markdown rendering', () => {
 	test('retains source when the provider rejects or throws before returning a promise', async () => {
 		for (const synchronous of [true, false]) {
 			let entered!: () => void;
-			const invoked = new Promise<void>(resolve => {
-				entered = resolve;
-			});
+			const invoked = new Promise<void>(resolve => { entered = resolve; });
 			using scope = services({
 				invoke: () => {
 					entered();
-					if (synchronous) {
-						throw new Error('Unavailable');
-					}
+					if (synchronous) { throw new Error('Unavailable'); }
 					return Promise.reject(new Error('Unavailable'));
-				},
+				}
 			});
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 			using result = renderer.render({ value: '$x$' });
@@ -901,18 +624,9 @@ suite('Shared chat Markdown rendering', () => {
 	});
 
 	test('disabled math does not query or activate the optional provider', async () => {
-		const unexpected = async (): Promise<never> => {
-			throw new Error('Disabled math must not request a provider');
-		};
+		const unexpected = async (): Promise<never> => { throw new Error('Disabled math must not request a provider'); };
 		let calls = 0;
-		using scope = services({
-			list: () => {
-				calls++;
-				return unexpected();
-			},
-			activateByEvent: unexpected,
-			invoke: unexpected,
-		});
+		using scope = services({ list: () => { calls++; return unexpected(); }, activateByEvent: unexpected, invoke: unexpected });
 		await scope.get(IConfigurationService).updateValue('markdown.math.enabled', false);
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using result = renderer.render({ value: '$x$' });
@@ -930,16 +644,7 @@ suite('Shared chat Markdown rendering', () => {
 			assert.match(svg.getAttribute('width') ?? '', /^(?:400em|100%)$/);
 			assert.match(svg.getAttribute('height') ?? '', /^[\d.]+em$/);
 		}
-		using unsafe = services({
-			invoke: async () => ({
-				results: [
-					{
-						status: 'rendered',
-						html: '<svg width="url(https://example.com)" height="100000em"><path d="M0 0"/></svg>',
-					},
-				],
-			}),
-		});
+		using unsafe = services({ invoke: async () => ({ results: [{ status: 'rendered', html: '<svg width="url(https://example.com)" height="100000em"><path d="M0 0"/></svg>' }] }) });
 		using rejectedRenderer = unsafe.createInstance(ChatContentMarkdownRenderer);
 		using rejected = rejectedRenderer.render({ value: '$x$' });
 		await changedUntil(rejected.element, () => !!rejected.element.querySelector('svg'));
@@ -952,13 +657,10 @@ suite('Shared chat Markdown rendering', () => {
 			invoke: async (): Promise<JsonValue> => ({
 				results: [
 					{ status: 'rendered', html: '<math><mi>x</mi></math>' },
-					{
-						status: 'source',
-						diagnostic: { code: 'invalidFormula', message: '<img src=x onerror=alert(1)>' },
-					},
+					{ status: 'source', diagnostic: { code: 'invalidFormula', message: '<img src=x onerror=alert(1)>' } },
 					{ status: 'source', diagnostic: { code: 'outputLimit' } },
-				],
-			}),
+				]
+			})
 		});
 		using resultRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using result = resultRenderer.render({ value: '$x$ $bad$ $large$' });
@@ -969,19 +671,15 @@ suite('Shared chat Markdown rendering', () => {
 		assert.equal(result.element.querySelector('[data-math-diagnostic=outputLimit]')?.textContent, '$large$');
 		assert.equal(result.element.querySelector('img,[onerror]'), null);
 	});
+
 });
 
 /** Observe the DOM effect of an asynchronous provider instead of sleeping for IPC. */
 function changedUntil(element: HTMLElement, predicate: () => boolean): Promise<void> {
-	if (predicate()) {
-		return Promise.resolve();
-	}
+	if (predicate()) { return Promise.resolve(); }
 	return new Promise(resolve => {
 		const observer = new element.ownerDocument.defaultView!.MutationObserver(() => {
-			if (predicate()) {
-				observer.disconnect();
-				resolve();
-			}
+			if (predicate()) { observer.disconnect(); resolve(); }
 		});
 		observer.observe(element, { childList: true, subtree: true, attributes: true });
 	});

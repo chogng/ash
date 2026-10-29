@@ -15,42 +15,18 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 test('two desktops isolate browser targets and closing one preserves the other', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const profile = join(directory, 'profile');
-	const packageLocation = {
-		appPath: resolve(import.meta.dirname, '../../../..'),
-		isPackaged: false,
-		platform: process.platform,
-		resourcesPath: '',
-	};
+	const packageLocation = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
 	const daemon = appServerDaemonExecutablePath(packageLocation);
-	const environment = {
-		...process.env,
-		ASH_HOME: profile,
-		ASH_APP_SERVER_PATH: appServerExecutablePath(packageLocation),
-	};
+	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(packageLocation) };
 	const desktops: Awaited<ReturnType<typeof launchElectron>>[] = [];
 	const closed = new Set<Awaited<ReturnType<typeof launchElectron>>>();
-	const hostCall = (page: Page, method: string, params: Record<string, unknown>) =>
-		page.evaluate(
-			({ method, params }) => {
-				return globalThis.ashTestMainProcess.call('browserHost', method, {
-					id: crypto.randomUUID(),
-					params: { threadId: 'browser-window-thread', ...params },
-				});
-			},
-			{ method, params },
-		);
+	const hostCall = (page: Page, method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
+	}, { method, params });
 	try {
 		await promisify(execFile)(daemon, ['start'], { env: environment, windowsHide: true, timeout: 30_000 });
 		for (let index = 0; index < 2; index++) {
-			desktops.push(
-				await launchElectron({
-					appServerMode: 'required',
-					userDataDirectory: join(directory, String(index)),
-					profileDirectory: profile,
-					workspaceDirectory: testWorkspace.directory,
-					workspacePermissions: 'development',
-				}),
-			);
+			desktops.push(await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, String(index)), profileDirectory: profile, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' }));
 		}
 		const first = desktops[0]!.driver.workbench.page;
 		const second = desktops[1]!.driver.workbench.page;
@@ -59,12 +35,7 @@ test('two desktops isolate browser targets and closing one preserves the other',
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall(second, 'create', { url: 'about:blank' }));
 		await expect(second.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
 		await expect(first.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(0);
-		const observe = {
-			targetId: created.targetId,
-			includeAccessibilityTree: false,
-			includeDomSnapshot: false,
-			includeScreenshot: false,
-		};
+		const observe = { targetId: created.targetId, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
 		await expect(hostCall(first, 'observe', observe)).rejects.toThrow();
 		await desktops[0]!.close();
 		closed.add(desktops[0]!);
@@ -72,23 +43,10 @@ test('two desktops isolate browser targets and closing one preserves the other',
 		expect(state.targetId).toBe(created.targetId);
 		await second.reload();
 		await desktops[1]!.driver.workbench.waitForReady();
-		await expect
-			.poll(() =>
-				desktops[1]!.application.evaluate(
-					({ BrowserWindow }) =>
-						BrowserWindow.getAllWindows()
-							.flatMap(window => window.contentView.children)
-							.filter(view => 'webContents' in view).length,
-				),
-			)
-			.toBe(0);
+		await expect.poll(() => desktops[1]!.application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).length)).toBe(0);
 		await expect(hostCall(second, 'observe', observe)).rejects.toThrow();
 	} finally {
-		for (const desktop of desktops) {
-			if (!closed.has(desktop)) {
-				await desktop.close();
-			}
-		}
+		for (const desktop of desktops) { if (!closed.has(desktop)) { await desktop.close(); } }
 		await promisify(execFile)(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -102,48 +60,25 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 		url.protocol = 'ws:';
 		return new Promise<unknown>((resolve, reject) => {
 			const socket = new WebSocket(url, `ash-session.${token}`);
-			const timeout = setTimeout(() => {
-				socket.close();
-				reject(new Error('Authority check timed out'));
-			}, 5_000);
-			socket.onopen = () =>
-				socket.send(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: 1,
-						method: 'initialize',
-						params: {
-							clientInfo: { name: 'untrusted-browser', version: '1' },
-							capabilities: { directoryGrantsHost: { version: 1 } },
-						},
-					}),
-				);
-			socket.onmessage = event => {
-				const response = JSON.parse(String(event.data)) as { id?: number; error?: unknown };
-				if (response.id === 1) {
-					clearTimeout(timeout);
-					socket.close();
-					resolve(response.error);
+			const timeout = setTimeout(() => { socket.close(); reject(new Error('Authority check timed out')); }, 5_000);
+			socket.onopen = () => socket.send(JSON.stringify({
+				jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+					clientInfo: { name: 'untrusted-browser', version: '1' }, capabilities: { directoryGrantsHost: { version: 1 } },
 				}
+			}));
+			socket.onmessage = event => {
+				const response = JSON.parse(String(event.data)) as { id?: number; error?: unknown; };
+				if (response.id === 1) { clearTimeout(timeout); socket.close(); resolve(response.error); }
 			};
-			socket.onerror = () => {
-				clearTimeout(timeout);
-				socket.close();
-				reject(new Error('Authority check connection failed'));
-			};
+			socket.onerror = () => { clearTimeout(timeout); socket.close(); reject(new Error('Authority check connection failed')); };
 		});
 	});
 	expect(denial).toMatchObject({ code: -32073 });
 	const foreignRead = await workbench.page.evaluate(async () => {
 		try {
-			await globalThis.ashWebWorkbenchHost!.api.fs.readFile({
-				dirId: 'ungranted-workspace',
-				path: 'secret.txt',
-			});
+			await globalThis.ashWebWorkbenchHost!.api.fs.readFile({ dirId: 'ungranted-workspace', path: 'secret.txt' });
 			return 'allowed';
-		} catch {
-			return 'denied';
-		}
+		} catch { return 'denied'; }
 	});
 	expect(foreignRead).toBe('denied');
 });
@@ -187,7 +122,7 @@ test('Web opens a selected server folder with explicit authorization and a separ
 		headers: { Origin: new URL(original.endpoint).origin, Authorization: `Bearer ${original.token}` },
 	});
 	expect(prior.status()).toBe(200);
-	expect(URI.file(((await prior.json()) as { workspaceRoot: string }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
+	expect(URI.file((await prior.json() as { workspaceRoot: string; }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
 });
 
 test('built Web workbench reads workspace files and reconnects after reload', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -197,14 +132,11 @@ test('built Web workbench reads workspace files and reconnects after reload', { 
 			await page.reload();
 			await page.waitForFunction(() => globalThis.ashWebWorkbenchHost !== undefined);
 		}
-		const result = await page.evaluate(
-			async path => {
-				const host: IWebWorkbenchHost | undefined = globalThis.ashWebWorkbenchHost;
-				if (!host?.workspace) throw new Error('Web workspace is unavailable');
-				return host.api.fs.readFile({ dirId: host.workspace.id, path });
-			},
-			relative(testWorkspace.directory, testWorkspace.file),
-		);
+		const result = await page.evaluate(async path => {
+			const host: IWebWorkbenchHost | undefined = globalThis.ashWebWorkbenchHost;
+			if (!host?.workspace) throw new Error('Web workspace is unavailable');
+			return host.api.fs.readFile({ dirId: host.workspace.id, path });
+		}, relative(testWorkspace.directory, testWorkspace.file));
 		expect(result.content).toBe('const value = 1;\n');
 		expect(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/@vite/')))).toBe(false);
 	}

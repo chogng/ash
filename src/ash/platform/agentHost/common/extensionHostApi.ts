@@ -6,64 +6,16 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 
 export type ExtensionHostReconcileMode = 'refresh' | 'restartFailed';
 export type ExtensionHostRuntimeLifecycle = 'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
-export type ExtensionHostFailureCode =
-	| 'authorityDenied'
-	| 'staleSnapshot'
-	| 'isolationUnavailable'
-	| 'launchFailed'
-	| 'handshakeFailed'
-	| 'activationFailed'
-	| 'registrationNotFound'
-	| 'operationNotSupported'
-	| 'cancelled'
-	| 'deadlineExceeded'
-	| 'quotaExceeded'
-	| 'hostExited'
-	| 'hostRestarted'
-	| 'outcomeIndeterminate'
-	| 'crashLoop'
-	| 'invalidProtocol'
-	| 'internal';
-export type ExtensionHostLanguageProviderOperation =
-	| 'diagnostics'
-	| 'selectionRanges'
-	| 'documentHighlights'
-	| 'workspaceSymbols'
-	| 'completion'
-	| 'definition'
-	| 'hover'
-	| 'references'
-	| 'rename'
-	| 'formatting'
-	| 'codeAction'
-	| 'codeLens'
-	| 'documentSymbols'
-	| 'foldingRanges'
-	| 'documentLinks'
-	| 'documentColors'
-	| 'semanticTokens'
-	| 'inlayHints'
-	| 'linkedEditing'
-	| 'parameterHints';
+export type ExtensionHostFailureCode = 'authorityDenied' | 'staleSnapshot' | 'isolationUnavailable' | 'launchFailed' | 'handshakeFailed' | 'activationFailed' | 'registrationNotFound' | 'operationNotSupported' | 'cancelled' | 'deadlineExceeded' | 'quotaExceeded' | 'hostExited' | 'hostRestarted' | 'outcomeIndeterminate' | 'crashLoop' | 'invalidProtocol' | 'internal';
+export type ExtensionHostLanguageProviderOperation = 'diagnostics' | 'selectionRanges' | 'documentHighlights' | 'workspaceSymbols' | 'completion' | 'definition' | 'hover' | 'references' | 'rename' | 'formatting' | 'codeAction' | 'codeLens' | 'documentSymbols' | 'foldingRanges' | 'documentLinks' | 'documentColors' | 'semanticTokens' | 'inlayHints' | 'linkedEditing' | 'parameterHints';
 export type ExtensionHostCancellationReason = 'caller' | 'deadline' | 'authorityRevoked' | 'shutdown';
 export type ExtensionHostOutputSeverity = 'trace' | 'debug' | 'information' | 'warning' | 'error' | 'log';
 export type ExtensionHostOutputOperation =
-	| {
-			readonly operation: 'create';
-			readonly channelId: string;
-			readonly label: string;
-			readonly kind: 'output' | 'log';
-	  }
-	| {
-			readonly operation: 'append' | 'replace';
-			readonly channelId: string;
-			readonly text: string;
-			readonly severity: ExtensionHostOutputSeverity;
-			readonly category: string | undefined;
-	  }
-	| { readonly operation: 'clear' | 'dispose'; readonly channelId: string }
-	| { readonly operation: 'show'; readonly channelId: string; readonly preserveFocus: boolean };
-export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+	| { readonly operation: 'create'; readonly channelId: string; readonly label: string; readonly kind: 'output' | 'log'; }
+	| { readonly operation: 'append' | 'replace'; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined; }
+	| { readonly operation: 'clear' | 'dispose'; readonly channelId: string; }
+	| { readonly operation: 'show'; readonly channelId: string; readonly preserveFocus: boolean; };
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };
 
 export interface ExtensionHostRuntimeFailure {
 	readonly code: ExtensionHostFailureCode;
@@ -94,12 +46,7 @@ export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrat
 	readonly category?: string;
 	readonly enablement?: string;
 	readonly icon?: string;
-	readonly menus?: readonly {
-		readonly menu: string;
-		readonly when?: string;
-		readonly group?: string;
-		readonly alt?: string;
-	}[];
+	readonly menus?: readonly { readonly menu: string; readonly when?: string; readonly group?: string; readonly alt?: string; }[];
 }
 
 /** Browser custom text providers render a shared document, without owning its persistence. */
@@ -130,7 +77,7 @@ export interface ExtensionStatusBarEntry {
 	readonly ariaLabel: string | null;
 	readonly alignment: 'left' | 'right';
 	readonly priority: number;
-	readonly command: { readonly command: string; readonly arguments: readonly JsonValue[] } | null;
+	readonly command: { readonly command: string; readonly arguments: readonly JsonValue[]; } | null;
 }
 
 export interface ExtensionHostStatusBarRegistration extends ExtensionHostRegistrationBase {
@@ -252,58 +199,13 @@ export interface ExtensionHostTreeDataProviderRegistration {
 	readonly containerId?: string;
 }
 
-export type ExtensionHostRegistration =
-	| ExtensionHostTreeDataProviderRegistration
-	| { readonly kind: 'outputEvents'; readonly registrationId: string }
-	| ExtensionHostSpeechProviderRegistration
-	| ExtensionHostTerminalCompletionProviderRegistration
-	| ExtensionHostTerminalQuickFixProviderRegistration
-	| ExtensionHostTerminalLinkProviderRegistration
-	| ExtensionHostTerminalEnvironmentRegistration
-	| ExtensionHostTerminalProfileProviderRegistration
-	| ExtensionHostTerminalPtyRegistration
-	| ExtensionHostSCMRegistration
-	| ExtensionHostRemoteConnectionResolverRegistration
-	| ExtensionHostRemoteAuthorityResolverRegistration
-	| ExtensionHostWorkspaceEventsRegistration
-	| ExtensionHostStatusBarRegistration
-	| ExtensionHostDocumentEventsRegistration
-	| ExtensionHostCustomEditorRegistration
-	| ExtensionHostExternalUriOpenerRegistration
-	| ExtensionHostCommandRegistration
-	| ExtensionHostLanguageRegistration
-	| ExtensionHostDebugAdapterRegistration
-	| ExtensionHostDebugConfigurationProviderRegistration
-	| ExtensionHostDebugAdapterTrackerRegistration
-	| ExtensionHostTaskProviderRegistration
-	| ExtensionHostTaskEventsRegistration
-	| ExtensionHostDebugEventsRegistration
-	| ExtensionHostTestProfileProviderRegistration
-	| ExtensionHostDataChannelRegistration
-	| ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostTreeDataProviderRegistration | { readonly kind: 'outputEvents'; readonly registrationId: string; } | ExtensionHostSpeechProviderRegistration | ExtensionHostTerminalCompletionProviderRegistration | ExtensionHostTerminalQuickFixProviderRegistration | ExtensionHostTerminalLinkProviderRegistration | ExtensionHostTerminalEnvironmentRegistration | ExtensionHostTerminalProfileProviderRegistration | ExtensionHostTerminalPtyRegistration | ExtensionHostSCMRegistration | ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostWorkspaceEventsRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostDebugConfigurationProviderRegistration | ExtensionHostDebugAdapterTrackerRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTaskEventsRegistration | ExtensionHostDebugEventsRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
-export type ExtensionHostActivationEvent =
-	| { readonly type: 'capability'; readonly capability: string }
-	| { readonly type: 'terminalProfile'; readonly profileId: string }
-	| { readonly type: 'command'; readonly command: string }
-	| { readonly type: 'language'; readonly languageId: string }
-	| { readonly type: 'taskType'; readonly taskType: string | null }
-	| {
-			readonly type: 'debug';
-			readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration';
-			readonly debugType: string | null;
-	  }
-	| { readonly type: 'speech' }
-	| { readonly type: 'startupFinished' }
-	| { readonly type: 'resolveAuthority'; readonly authorityPrefix: string };
+export type ExtensionHostActivationEvent = { readonly type: 'capability'; readonly capability: string; } | { readonly type: 'terminalProfile'; readonly profileId: string; } | { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'taskType'; readonly taskType: string | null; } | { readonly type: 'debug'; readonly phase: 'start' | 'initialConfigurations' | 'dynamicConfigurations' | 'resolveConfiguration'; readonly debugType: string | null; } | { readonly type: 'speech'; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
 export interface ExtensionHostInitialization {
 	readonly language?: string;
-	readonly localization?: {
-		readonly uri: string;
-		readonly bundle: Readonly<Record<string, string>>;
-		readonly package: Readonly<Record<string, string>>;
-	};
-	readonly workspaceFolders: readonly { readonly uri: string; readonly name: string; readonly index: number }[];
+	readonly localization?: { readonly uri: string; readonly bundle: Readonly<Record<string, string>>; readonly package: Readonly<Record<string, string>>; };
+	readonly workspaceFolders: readonly { readonly uri: string; readonly name: string; readonly index: number; }[];
 	readonly workspaceName: string | null;
 	readonly workspaceFile: string | null;
 	readonly configurationValues: Readonly<Record<string, unknown>>;
@@ -319,7 +221,7 @@ export interface ExtensionHostActivationRequest {
 /** Manifest facts available while waiting; these are not process registrations. */
 export interface ExtensionHostActivation {
 	readonly events: readonly string[];
-	readonly commands: readonly { readonly command: string; readonly title: string }[];
+	readonly commands: readonly { readonly command: string; readonly title: string; }[];
 }
 
 export interface ExtensionHostRuntime {
@@ -381,10 +283,7 @@ export type ExtensionHostClientHandler = (operation: unknown, signal: AbortSigna
 export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>('extensionHostApi');
 
 export class ExtensionHostInvocationError extends Error {
-	constructor(
-		readonly code: ExtensionHostFailureCode,
-		message: string,
-	) {
+	constructor(readonly code: ExtensionHostFailureCode, message: string) {
 		super(message);
 		this.name = 'ExtensionHostInvocationError';
 	}

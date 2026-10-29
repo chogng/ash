@@ -12,7 +12,7 @@ export class DefaultLinesDiffComputer implements ILinesDiffComputer {
 	public computeDiff(originalLines: string[], modifiedLines: string[], options: ILinesDiffComputerOptions): LinesDiff {
 		const computation = diffLines(originalLines, modifiedLines, options);
 		const deadline = options.maxComputationTimeMs === 0 ? Infinity : performance.now() + options.maxComputationTimeMs;
-		for (;;) {
+		for (; ;) {
 			const step = computation.next();
 			if (step.done) return step.value;
 			if (performance.now() >= deadline) return timedOutDiff(originalLines.length, modifiedLines.length);
@@ -24,7 +24,7 @@ export class DefaultLinesDiffComputer implements ILinesDiffComputer {
 		const computation = diffLines(originalLines, modifiedLines, options);
 		const deadline = options.maxComputationTimeMs === 0 ? Infinity : performance.now() + options.maxComputationTimeMs;
 		let yieldAt = performance.now() + 8;
-		for (;;) {
+		for (; ;) {
 			signal.throwIfAborted();
 			const step = computation.next();
 			if (step.done) return step.value;
@@ -59,12 +59,19 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 		const innerChanges: RangeMapping[] = [];
 		const pairs = yield* pairChangedLines(original.slice(originalStart, originalEnd), modified.slice(modifiedStart, modifiedEnd));
 		for (const [left, right] of pairs) {
-			innerChanges.push(...(yield* diffCharacters(original[originalStart + left]!, modified[modifiedStart + right]!, originalStart + left + 1, modifiedStart + right + 1)));
+			innerChanges.push(...(yield* diffCharacters(
+				original[originalStart + left]!,
+				modified[modifiedStart + right]!,
+				originalStart + left + 1,
+				modifiedStart + right + 1,
+			)));
 			yield;
 		}
-		changes.push(
-			new DetailedLineRangeMapping(new LineRange(originalStart + 1, originalEnd + 1), new LineRange(modifiedStart + 1, modifiedEnd + 1), innerChanges.length === 0 ? undefined : innerChanges),
-		);
+		changes.push(new DetailedLineRangeMapping(
+			new LineRange(originalStart + 1, originalEnd + 1),
+			new LineRange(modifiedStart + 1, modifiedEnd + 1),
+			innerChanges.length === 0 ? undefined : innerChanges,
+		));
 	}
 	const moves = options.computeMoves ? yield* findMoves(changes, original, modified, options) : [];
 	return new LinesDiff(changes, moves, false);
@@ -108,7 +115,8 @@ function* alignLineChangeBoundaries(original: readonly string[], modified: reado
 			let position = contextPosition;
 			let from = start;
 			let to = end;
-			while (position + direction >= minimumContext && position + direction <= maximumContext && from + direction >= minimumEdited && to + direction <= maximumEdited) {
+			while (position + direction >= minimumContext && position + direction <= maximumContext
+				&& from + direction >= minimumEdited && to + direction <= maximumEdited) {
 				const edgeOffset = direction < 0 ? -1 : 0;
 				const line = edited[from + edgeOffset]!;
 				// Exact equality on both documents keeps ignored whitespace from
@@ -122,7 +130,7 @@ function* alignLineChangeBoundaries(original: readonly string[], modified: reado
 				const cost = lineIndentation(edited[from]!) + lineIndentation(edited[to - 1]!);
 				// Prefer shallower block edges, then the earlier equivalent range
 				// so a leading blank separator stays with the inserted block.
-				if (cost < bestCost || (cost === bestCost && from < bestStart)) {
+				if (cost < bestCost || cost === bestCost && from < bestStart) {
 					bestPosition = position;
 					bestStart = from;
 					bestCost = cost;
@@ -176,12 +184,10 @@ function* diffCharacters(original: string, modified: string, originalLineNumber:
 	let modifiedIndex = 0;
 	for (const [originalMatch, modifiedMatch] of matches) {
 		if (originalMatch > originalIndex || modifiedMatch > modifiedIndex) {
-			changes.push(
-				new RangeMapping(
-					new Range(originalLineNumber, originalTokens.boundaries[originalIndex]! + 1, originalLineNumber, originalTokens.boundaries[originalMatch]! + 1),
-					new Range(modifiedLineNumber, modifiedTokens.boundaries[modifiedIndex]! + 1, modifiedLineNumber, modifiedTokens.boundaries[modifiedMatch]! + 1),
-				),
-			);
+			changes.push(new RangeMapping(
+				new Range(originalLineNumber, originalTokens.boundaries[originalIndex]! + 1, originalLineNumber, originalTokens.boundaries[originalMatch]! + 1),
+				new Range(modifiedLineNumber, modifiedTokens.boundaries[modifiedIndex]! + 1, modifiedLineNumber, modifiedTokens.boundaries[modifiedMatch]! + 1),
+			));
 		}
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
@@ -228,7 +234,7 @@ function tokenContentRange(tokens: readonly string[]): readonly [number, number]
 }
 
 /** Identifiers are indivisible; punctuation and whitespace retain grapheme-level precision. */
-function diffTokens(text: string): { values: string[]; boundaries: number[] } {
+function diffTokens(text: string): { values: string[]; boundaries: number[]; } {
 	const graphemes = getTextGraphemeBoundaries(text);
 	const boundaries = [0];
 	let previousIsWord = false;
@@ -269,7 +275,7 @@ function lineSimilarity(original: LineWords, modified: LineWords): number {
 	}
 	// Shared punctuation cannot anchor a pair, and weak word overlap should not
 	// consume a line that has a more convincing counterpart later in the hunk.
-	return overlap === 0 ? 0 : Math.max(0, (2 * overlap) / (original.weight + modified.weight) - 0.3);
+	return overlap === 0 ? 0 : Math.max(0, 2 * overlap / (original.weight + modified.weight) - 0.3);
 }
 
 /** Weighted ordered alignment with linear memory, yielding for the diff's deadline and cancellation. */
@@ -345,10 +351,7 @@ function* pairChangedLines(original: readonly string[], modified: readonly strin
 	}
 	const originals: LineWords[] = [];
 	const modifications: LineWords[] = [];
-	for (const [lines, words] of [
-		[original, originals],
-		[modified, modifications],
-	] as const) {
+	for (const [lines, words] of [[original, originals], [modified, modifications]] as const) {
 		for (const line of lines) {
 			words.push(lineWords(line));
 			if (words.length % 256 === 0) {
@@ -420,10 +423,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 	const destinations: MoveSpan[] = [];
 	const destinationWords = new Map<string, Set<MoveSpan>>();
 	let work = 0;
-	for (const [lines, side, spans] of [
-		[original, 'original', sources],
-		[modified, 'modified', destinations],
-	] as const) {
+	for (const [lines, side, spans] of [[original, 'original', sources], [modified, 'modified', destinations]] as const) {
 		for (const change of changes) {
 			const range = change[side];
 			if (range.isEmpty) {
@@ -446,11 +446,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 				}
 			}
 			const span: MoveSpan = {
-				change,
-				range,
-				lines: content,
-				words,
-				weight,
+				change, range, lines: content, words, weight,
 				text: (options.ignoreTrimWhitespace ? content.map(line => line.trim()) : content).join('\n'),
 			};
 			spans.push(span);
@@ -468,7 +464,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 	}
 	const candidates: MoveCandidate[] = [];
 	for (const source of sources) {
-		const overlaps = new Map<MoveSpan, { weight: number; words: number }>();
+		const overlaps = new Map<MoveSpan, { weight: number; words: number; }>();
 		for (const [word, count] of source.words) {
 			for (const destination of destinationWords.get(word) ?? []) {
 				if (source.change === destination.change) {
@@ -500,37 +496,30 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 					}
 				}
 				if (equal) {
-					candidates.push({
-						source,
-						destination: moveFragment(destination, start, start + source.lines.length),
-						score: 2,
-					});
+					candidates.push({ source, destination: moveFragment(destination, start, start + source.lines.length), score: 2 });
 				}
 			}
 			const exact = source.text === destination.text;
-			const similarity = (2 * overlap.weight) / (source.weight + destination.weight);
+			const similarity = 2 * overlap.weight / (source.weight + destination.weight);
 			// Renaming can replace entire words while retaining nearly all characters.
-			const characterSimilarity =
-				source.change.modified.isEmpty && destination.change.original.isEmpty && source.lines.length >= 3 && destination.lines.length >= 3
-					? yield* moveCharacterSimilarity(source.text, destination.text)
-					: 0;
+			const characterSimilarity = source.change.modified.isEmpty && destination.change.original.isEmpty
+				&& source.lines.length >= 3 && destination.lines.length >= 3
+				? yield* moveCharacterSimilarity(source.text, destination.text) : 0;
 			// Punctuation and a single shared keyword cannot establish an edited move.
-			if (exact || (overlap.words >= 2 && overlap.weight >= 8 && (similarity >= 0.7 || characterSimilarity > 0.9))) {
+			if (exact || overlap.words >= 2 && overlap.weight >= 8 && (similarity >= 0.7 || characterSimilarity > 0.9)) {
 				candidates.push({ source, destination, score: exact ? 2 : Math.max(similarity, characterSimilarity) });
 			}
 		}
 		yield;
 	}
-	candidates.sort(
-		(left, right) =>
-			right.score - left.score ||
-			Math.abs(left.source.range.startLineNumber - left.destination.range.startLineNumber) - Math.abs(right.source.range.startLineNumber - right.destination.range.startLineNumber),
-	);
+	candidates.sort((left, right) => right.score - left.score
+		|| Math.abs(left.source.range.startLineNumber - left.destination.range.startLineNumber) - Math.abs(right.source.range.startLineNumber - right.destination.range.startLineNumber));
 	const usedSources: LineRange[] = [];
 	const usedDestinations: LineRange[] = [];
 	const moves: MovedText[] = [];
 	for (const { source, destination } of candidates) {
-		if (usedSources.some(range => range.intersect(source.range)?.isEmpty === false) || usedDestinations.some(range => range.intersect(destination.range)?.isEmpty === false)) {
+		if (usedSources.some(range => range.intersect(source.range)?.isEmpty === false)
+			|| usedDestinations.some(range => range.intersect(destination.range)?.isEmpty === false)) {
 			continue;
 		}
 		usedSources.push(source.range);
@@ -538,30 +527,14 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 		const result = yield* diffLines(source.lines, destination.lines, { ...options, computeMoves: false });
 		const originalOffset = source.range.startLineNumber - 1;
 		const modifiedOffset = destination.range.startLineNumber - 1;
-		const moveChanges = result.changes.map(
-			change =>
-				new DetailedLineRangeMapping(
-					change.original.delta(originalOffset),
-					change.modified.delta(modifiedOffset),
-					change.innerChanges?.map(
-						inner =>
-							new RangeMapping(
-								new Range(
-									inner.originalRange.startLineNumber + originalOffset,
-									inner.originalRange.startColumn,
-									inner.originalRange.endLineNumber + originalOffset,
-									inner.originalRange.endColumn,
-								),
-								new Range(
-									inner.modifiedRange.startLineNumber + modifiedOffset,
-									inner.modifiedRange.startColumn,
-									inner.modifiedRange.endLineNumber + modifiedOffset,
-									inner.modifiedRange.endColumn,
-								),
-							),
-					),
-				),
-		);
+		const moveChanges = result.changes.map(change => new DetailedLineRangeMapping(
+			change.original.delta(originalOffset),
+			change.modified.delta(modifiedOffset),
+			change.innerChanges?.map(inner => new RangeMapping(
+				new Range(inner.originalRange.startLineNumber + originalOffset, inner.originalRange.startColumn, inner.originalRange.endLineNumber + originalOffset, inner.originalRange.endColumn),
+				new Range(inner.modifiedRange.startLineNumber + modifiedOffset, inner.modifiedRange.startColumn, inner.modifiedRange.endLineNumber + modifiedOffset, inner.modifiedRange.endColumn),
+			)),
+		));
 		moves.push(new MovedText(new LineRangeMapping(source.range, destination.range), moveChanges));
 	}
 	return moves.sort((left, right) => left.lineRangeMapping.original.startLineNumber - right.lineRangeMapping.original.startLineNumber);
@@ -580,37 +553,35 @@ function* anchoredMoveCandidates(source: MoveSpan, destination: MoveSpan): Gener
 	const remainingOriginal = new Set(original.map((_, index) => index));
 	const remainingModified = new Set(modified.map((_, index) => index));
 	const candidates: MoveCandidate[] = [];
-	for (;;) {
+	for (; ;) {
 		const originalIndexes = [...remainingOriginal];
 		const modifiedIndexes = [...remainingModified];
-		const matches = yield* matchingItems(
-			originalIndexes.map(index => original[index]!),
-			modifiedIndexes.map(index => modified[index]!),
-		);
+		const matches = yield* matchingItems(originalIndexes.map(index => original[index]!), modifiedIndexes.map(index => modified[index]!));
 		const anchors = matches.map(([left, right]): Match => [originalIndexes[left]!, modifiedIndexes[right]!]);
 		let found = false;
 		// Line anchors identify the moved portion of a hunk containing other code.
 		// Short gaps may contain edits; unrelated neighboring lines end the fragment.
 		for (let first = 0; first < anchors.length;) {
 			let last = first;
-			while (last + 1 < anchors.length && anchors[last + 1]![0] - anchors[last]![0] <= 3 && anchors[last + 1]![1] - anchors[last]![1] <= 3) {
+			while (last + 1 < anchors.length
+				&& anchors[last + 1]![0] - anchors[last]![0] <= 3
+				&& anchors[last + 1]![1] - anchors[last]![1] <= 3) {
 				last++;
 			}
 			const meaningful = anchors.slice(first, last + 1).filter(([line]) => original[line]!.length >= 2);
-			if (last - first >= 2 && meaningful.length >= 2 && meaningful.reduce((length, [line]) => length + original[line]!.length, 0) >= 15) {
+			if (last - first >= 2 && meaningful.length >= 2
+				&& meaningful.reduce((length, [line]) => length + original[line]!.length, 0) >= 15) {
 				let [sourceStart, destinationStart] = anchors[first]!;
 				let [sourceEnd, destinationEnd] = anchors[last]!;
 				sourceEnd++;
 				destinationEnd++;
-				while (
-					remainingOriginal.has(sourceStart - 1) &&
-					remainingModified.has(destinationStart - 1) &&
-					(yield* similarMoveLines(original[sourceStart - 1]!, modified[destinationStart - 1]!))
-				) {
+				while (remainingOriginal.has(sourceStart - 1) && remainingModified.has(destinationStart - 1)
+					&& (yield* similarMoveLines(original[sourceStart - 1]!, modified[destinationStart - 1]!))) {
 					sourceStart--;
 					destinationStart--;
 				}
-				while (remainingOriginal.has(sourceEnd) && remainingModified.has(destinationEnd) && (yield* similarMoveLines(original[sourceEnd]!, modified[destinationEnd]!))) {
+				while (remainingOriginal.has(sourceEnd) && remainingModified.has(destinationEnd)
+					&& (yield* similarMoveLines(original[sourceEnd]!, modified[destinationEnd]!))) {
 					sourceEnd++;
 					destinationEnd++;
 				}
@@ -651,10 +622,7 @@ function* moveCharacterSimilarity(left: string, right: string): Generator<void, 
 	const counts = new Map<string, number>();
 	let length = 0;
 	let shared = 0;
-	for (const [text, direction] of [
-		[left, 1],
-		[right, -1],
-	] as const) {
+	for (const [text, direction] of [[left, 1], [right, -1]] as const) {
 		for (const character of text) {
 			if (/\s/u.test(character)) continue;
 			length++;
@@ -664,11 +632,13 @@ function* moveCharacterSimilarity(left: string, right: string): Generator<void, 
 			if (length % 256 === 0) yield;
 		}
 	}
-	return length === 0 ? 0 : (2 * shared) / length;
+	return length === 0 ? 0 : 2 * shared / length;
 }
 
 function timedOutDiff(originalLineCount: number, modifiedLineCount: number): LinesDiff {
-	return new LinesDiff([new DetailedLineRangeMapping(new LineRange(1, originalLineCount + 1), new LineRange(1, modifiedLineCount + 1), undefined)], [], true);
+	return new LinesDiff([
+		new DetailedLineRangeMapping(new LineRange(1, originalLineCount + 1), new LineRange(1, modifiedLineCount + 1), undefined),
+	], [], true);
 }
 type Match = readonly [originalIndex: number, modifiedIndex: number];
 type Span = readonly [originalStart: number, originalEnd: number, modifiedStart: number, modifiedEnd: number];
@@ -755,7 +725,9 @@ function* partition(original: readonly string[], modified: readonly string[], sp
 			const frontier = reverse ? backward : forward;
 			for (let diagonal = -edits; diagonal <= edits; diagonal += 2) {
 				const index = offset + diagonal;
-				let left = diagonal === -edits || (diagonal !== edits && frontier[index - 1]! < frontier[index + 1]!) ? frontier[index + 1]! : frontier[index - 1]! + 1;
+				let left = diagonal === -edits || (diagonal !== edits && frontier[index - 1]! < frontier[index + 1]!)
+					? frontier[index + 1]!
+					: frontier[index - 1]! + 1;
 				let right = left - diagonal;
 				while (left < leftLength && right < rightLength && original[reverse ? leftEnd - left - 1 : leftStart + left] === modified[reverse ? rightEnd - right - 1 : rightStart + right]) {
 					left++;

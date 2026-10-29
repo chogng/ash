@@ -4,27 +4,15 @@ import { editorForeground } from '../../../../platform/theme/common/colors/edito
 import { localize } from '../../../../nls.js';
 
 const owner = 'terminal.presentation';
-const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string => registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
-const alias = (id: string, value: string, description: string): string =>
-	registerColor(
-		id,
-		{
-			dark: value,
-			light: value,
-			hcDark: value,
-			hcLight: value,
-		},
-		{ description, owner },
-	);
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
+const alias = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, hcDark: value, hcLight: value,
+}, { description, owner });
 
-export const terminalBackground = registerColor(
-	'terminal.background',
-	{ dark: null, light: null, hcDark: null, hcLight: null },
-	{
-		description: localize('color.terminal.background', 'Terminal background. When unset, follows the background of its panel or editor.'),
-		owner,
-	},
-);
+export const terminalBackground = registerColor('terminal.background', { dark: null, light: null, hcDark: null, hcLight: null }, {
+	description: localize('color.terminal.background', 'Terminal background. When unset, follows the background of its panel or editor.'), owner,
+});
 export const terminalForeground = alias('terminal.foreground', editorForeground, 'Terminal default foreground.');
 export const terminalCursorForeground = alias('terminal.cursorForeground', foreground, 'Terminal cursor foreground.');
 export const terminalAnsiBlack = color('terminal.ansiBlack', '#24292f', '#24292f', '#808080', '#333333', 'Terminal ANSI black.');
@@ -44,18 +32,9 @@ export const terminalAnsiBrightMagenta = color('terminal.ansiBrightMagenta', '#a
 export const terminalAnsiBrightCyan = color('terminal.ansiBrightCyan', '#3192aa', '#3192aa', '#aaffff', '#004455', 'Terminal ANSI bright cyan.');
 export const terminalAnsiBrightWhite = color('terminal.ansiBrightWhite', '#8c959f', '#8c959f', '#ffffff', '#000000', 'Terminal ANSI bright white.');
 
-export const TERMINAL_COMMAND_DECORATION_DEFAULT_BACKGROUND_COLOR = alias(
-	'terminalCommandDecoration.defaultBackground',
-	descriptionForeground,
-	localize('terminal.command.defaultColor', 'Color of pending terminal command markers.'),
-);
-export const TERMINAL_COMMAND_DECORATION_SUCCESS_BACKGROUND_COLOR = alias(
-	'terminalCommandDecoration.successBackground',
-	terminalAnsiBlue,
-	localize('terminal.command.successColor', 'Color of successful terminal command markers.'),
-);
-export const TERMINAL_COMMAND_DECORATION_ERROR_BACKGROUND_COLOR = alias(
-	'terminalCommandDecoration.errorBackground',
-	terminalAnsiRed,
-	localize('terminal.command.errorColor', 'Color of failed terminal command markers.'),
-);
+export const TERMINAL_COMMAND_DECORATION_DEFAULT_BACKGROUND_COLOR = alias('terminalCommandDecoration.defaultBackground', descriptionForeground,
+	localize('terminal.command.defaultColor', 'Color of pending terminal command markers.'));
+export const TERMINAL_COMMAND_DECORATION_SUCCESS_BACKGROUND_COLOR = alias('terminalCommandDecoration.successBackground', terminalAnsiBlue,
+	localize('terminal.command.successColor', 'Color of successful terminal command markers.'));
+export const TERMINAL_COMMAND_DECORATION_ERROR_BACKGROUND_COLOR = alias('terminalCommandDecoration.errorBackground', terminalAnsiRed,
+	localize('terminal.command.errorColor', 'Color of failed terminal command markers.'));

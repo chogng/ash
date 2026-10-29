@@ -26,33 +26,19 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 	let menu: IContextMenuDelegate | undefined;
 	const copied: string[] = [];
 	let copyFailure = false;
-	const clipboard = {
-		writeText: async (text: string) => {
-			if (copyFailure) throw new Error('Denied');
-			copied.push(text);
-		},
-	} as IClipboardService;
-	const contextMenus = {
-		showContextMenu: (delegate: IContextMenuDelegate) => {
-			menu = delegate;
-		},
-	} as unknown as IContextMenuService;
+	const clipboard = { writeText: async (text: string) => { if (copyFailure) throw new Error('Denied'); copied.push(text); } } as IClipboardService;
+	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as unknown as IContextMenuService;
 	markerService.changeAll('fixture', [
 		marker(main, MarkerSeverity.Error, 'cannot find value', 1),
 		marker(main, MarkerSeverity.Warning, 'unused import', 2),
 		marker(library, MarkerSeverity.Info, 'consider simplifying', 4),
 	]);
-	let opened: { readonly input: IResourceEditorInput; readonly options?: EditorOpenOptions } | undefined;
+	let opened: { readonly input: IResourceEditorInput; readonly options?: EditorOpenOptions; } | undefined;
 	let focusCount = 0;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
-		openEditor: async (input, options) => {
-			opened = { input, options };
-			if (options?.preserveFocus !== true) focusCount += 1;
-		},
-		focusActiveEditor() {
-			focusCount += 1;
-		},
+		openEditor: async (input, options) => { opened = { input, options }; if (options?.preserveFocus !== true) focusCount += 1; },
+		focusActiveEditor() { focusCount += 1; },
 	};
 
 	try {
@@ -93,10 +79,7 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		filter.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		filterAction.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		assert.ok(menu);
-		await menu
-			.getActions()
-			.find(action => action.id.endsWith('.warning'))!
-			.run();
+		await menu.getActions().find(action => action.id.endsWith('.warning'))!.run();
 		menu.onHide?.(false);
 		assert.equal(pane.element.querySelectorAll('.ash-problems-item').length, 2);
 		filterAction.click();
@@ -106,7 +89,7 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		pane.element.querySelector<HTMLButtonElement>('.ash-problems-item.error .ash-problems-item-button')!.click();
 		await Promise.resolve();
 		assert.equal(opened?.input.resource.toString(), main.toString());
-		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 4 + 1)));
+		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)));
 		assert.equal(focusCount, 1);
 
 		markerService.changeAll('fixture', []);
@@ -154,18 +137,7 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 });
 
 function marker(resource: URI, severity: MarkerSeverity, message: string, lineNumber: number) {
-	return {
-		resource,
-		marker: {
-			startLineNumber: lineNumber + 1,
-			startColumn: 1,
-			endLineNumber: lineNumber + 1,
-			endColumn: 5,
-			severity,
-			message,
-			source: 'fixture',
-		},
-	};
+	return { resource, marker: { startLineNumber: (lineNumber) + 1, startColumn: 1, endLineNumber: (lineNumber) + 1, endColumn: 5, severity, message, source: 'fixture' } };
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {

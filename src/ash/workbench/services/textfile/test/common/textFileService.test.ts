@@ -13,7 +13,12 @@ import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser
 import { Range } from '../../../../../editor/common/core/range.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileKind, FileRevisionConflictError, type IFileWriteRequest } from '../../../../../platform/files/common/files.js';
-import { TextFileBinaryError, TextFileContentSource, TextFileSaveConflictError, TextFileTooLargeError } from '../../../../../workbench/services/textfile/common/textFileService.js';
+import {
+	TextFileBinaryError,
+	TextFileContentSource,
+	TextFileSaveConflictError,
+	TextFileTooLargeError,
+} from '../../../../../workbench/services/textfile/common/textFileService.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -65,7 +70,10 @@ test('TextFileService preserves file-system failures', async () => {
 	const failure = new Error('unreadable');
 	using service = createTestTextFileService(new TestFileService(Promise.reject(failure)));
 
-	await assert.rejects(service.resolve({ resource: URI.file('C:\\project\\main.ts') }, new AbortController().signal), error => error === failure);
+	await assert.rejects(
+		service.resolve({ resource: URI.file('C:\\project\\main.ts') }, new AbortController().signal),
+		error => error === failure,
+	);
 });
 
 test('TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 content', async () => {
@@ -73,15 +81,24 @@ test('TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 co
 	const withBom = new TestFileService(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]));
 	assert.equal((await createTestTextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, 'hi');
 
-	await assert.rejects(createTestTextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal), TextFileBinaryError);
-	await assert.rejects(createTestTextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal), TextFileBinaryError);
+	await assert.rejects(
+		createTestTextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal),
+		TextFileBinaryError,
+	);
+	await assert.rejects(
+		createTestTextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal),
+		TextFileBinaryError,
+	);
 });
 
 test('TextFileService rejects oversized resources before reading their bytes', async () => {
 	const files = new TestFileService('small');
 	files.reportedSizeBytes = 32 * 1024 * 1024 + 1;
 
-	await assert.rejects(createTestTextFileService(files).resolve({ resource: URI.file('C:\\project\\large.txt') }, new AbortController().signal), TextFileTooLargeError);
+	await assert.rejects(
+		createTestTextFileService(files).resolve({ resource: URI.file('C:\\project\\large.txt') }, new AbortController().signal),
+		TextFileTooLargeError,
+	);
 	assert.equal(files.readCount, 0);
 });
 
@@ -135,22 +152,10 @@ test('cancelled replacement waits for an in-flight provider write before restori
 	using fixture = new BulkEditTestServices([]);
 	using bulk = new BulkEditService(models, fixture.workingCopies, files, fixture.configuration, fixture.dialogs);
 	const controller = new AbortController();
-	const replacing = bulk.apply(
-		{
-			entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 10), text: 'replacement' }] }],
-		},
-		{ token: controller.signal },
-	);
+	const replacing = bulk.apply({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 10), text: 'replacement' }] }] }, { token: controller.signal });
 	const rejected = assert.rejects(replacing, isCancellationError);
 	let settled = false;
-	void replacing.then(
-		() => {
-			settled = true;
-		},
-		() => {
-			settled = true;
-		},
-	);
+	void replacing.then(() => { settled = true; }, () => { settled = true; });
 	await started.promise;
 	controller.abort();
 	try {
@@ -166,20 +171,18 @@ test('cancelled replacement waits for an in-flight provider write before restori
 class TestFileService implements IFileSystemProvider {
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
-	public watch(): IDisposable {
-		return Disposable.None;
-	}
+	public watch(): IDisposable { return Disposable.None; }
 
 	readCount = 0;
 	reportedSizeBytes: number | undefined;
 	readonly writes: IFileWriteRequest[] = [];
 	rejectWritesWithRevisionConflict = false;
 	readonly onDidChangeFiles = () => ({
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 
-	constructor(private readonly content: string | Uint8Array | Promise<string>) {}
+	constructor(private readonly content: string | Uint8Array | Promise<string>) { }
 
 	async stat(resource: URI) {
 		return {
@@ -198,22 +201,12 @@ class TestFileService implements IFileSystemProvider {
 	async readFile(resource: URI) {
 		this.readCount += 1;
 		const content = await this.content;
-		return {
-			resource,
-			bytes: typeof content === 'string' ? new TextEncoder().encode(content) : content,
-			revision: 'revision-1',
-		};
+		return { resource, bytes: typeof content === 'string' ? new TextEncoder().encode(content) : content, revision: 'revision-1' };
 	}
 
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) {
-			throw new Error('Text file tests do not paste files');
-		}
-		const request = {
-			resource,
-			content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
-			...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
-		};
+		if (!options.overwrite) { throw new Error('Text file tests do not paste files'); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		if (this.rejectWritesWithRevisionConflict) throw new FileRevisionConflictError(request.resource);
 		this.writes.push(request);
 		return {
@@ -228,24 +221,14 @@ class TestFileService implements IFileSystemProvider {
 		};
 	}
 
-	async createFile(): Promise<never> {
-		throw new Error('Text file tests do not create empty files');
-	}
-	async createDirectory(): Promise<never> {
-		throw new Error('Text file tests do not create directories');
-	}
-	async copy(): Promise<void> {
-		throw new Error('Copy is not used in this test');
-	}
-	async rename(): Promise<never> {
-		throw new Error('Text file tests do not rename files');
-	}
-	async delete(): Promise<never> {
-		throw new Error('Text file tests do not delete files');
-	}
+	async createFile(): Promise<never> { throw new Error('Text file tests do not create empty files'); }
+	async createDirectory(): Promise<never> { throw new Error('Text file tests do not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename(): Promise<never> { throw new Error('Text file tests do not rename files'); }
+	async delete(): Promise<never> { throw new Error('Text file tests do not delete files'); }
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(resolver => {
 		resolve = resolver;
@@ -261,14 +244,9 @@ test('text-file editing preserves UTF-8 BOM through the model, resource adapter 
 		using reference = await models.acquire({ resource: URI.file('C:\\project\\bom.txt') }, new AbortController().signal);
 		reference.model.applyOperations([{ range: new Range(1, 1, 1, 6), text: 'saved' }]);
 		await reference.save(new AbortController().signal);
-		assert.deepEqual(
-			{ text: reference.model.getText(), dirty: reference.isDirty, written: files.writes[0]?.content },
-			{
-				text: 'saved\r\nsecond',
-				dirty: false,
-				written: (hasBom ? '\uFEFF' : '') + 'saved\r\nsecond',
-			},
-		);
+		assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, written: files.writes[0]?.content }, {
+			text: 'saved\r\nsecond', dirty: false, written: (hasBom ? '\uFEFF' : '') + 'saved\r\nsecond',
+		});
 	}
 });
 

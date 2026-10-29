@@ -20,16 +20,7 @@ suite('Execution Trace location', () => {
 		assert.notEqual(resource.toString(), createAgentTraceResource({ ...target, turnId: 'another' }).toString());
 	});
 
-	for (const target of [
-		null,
-		{},
-		'',
-		{ sessionId: 'session', turnId: 'turn' },
-		{ sessionId: 'session', eventId: 'event' },
-		{ sessionId: 'session', threadId: '' },
-		{ sessionId: 'session', threadId: 1 },
-		{ sessionId: 'session\n' },
-	]) {
+	for (const target of [null, {}, '', { sessionId: 'session', turnId: 'turn' }, { sessionId: 'session', eventId: 'event' }, { sessionId: 'session', threadId: '' }, { sessionId: 'session', threadId: 1 }, { sessionId: 'session\n' }]) {
 		test(`rejects invalid command location ${JSON.stringify(target)}`, () => {
 			assert.throws(() => createAgentTraceResource(target as unknown as AgentTraceLocation), /Invalid execution trace location/);
 		});
@@ -42,10 +33,8 @@ suite('Execution Trace location', () => {
 	}
 	test('reports invalid locations in Chinese using the shipped catalog', () => {
 		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
-		try {
-			assert.throws(() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }), /定位 Turn 或事件时必须提供所属 Thread ID/);
-		} finally {
-			resetNlsResolver();
-		}
+		try { assert.throws(() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }), /定位 Turn 或事件时必须提供所属 Thread ID/); }
+		finally { resetNlsResolver(); }
 	});
+
 });

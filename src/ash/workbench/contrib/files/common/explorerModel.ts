@@ -12,7 +12,7 @@ export class ExplorerItem {
 		public readonly kind: FileKind,
 		public readonly children?: readonly ExplorerItem[],
 		public readonly mtime?: number,
-	) {}
+	) { }
 
 	public static fromFileEntry(entry: IFileEntry): ExplorerItem {
 		return new ExplorerItem(entry.resource, entry.name, entry.kind);
@@ -28,12 +28,10 @@ export class ExplorerModel extends Disposable {
 	constructor(workspace: IWorkspaceContextService) {
 		super();
 		this.currentRoot = explorerRoot(workspace.getWorkspace());
-		this._register(
-			workspace.onDidChangeWorkspace(({ workspace }) => {
-				this.currentRoot = explorerRoot(workspace);
-				this.rootChanged.fire();
-			}),
-		);
+		this._register(workspace.onDidChangeWorkspace(({ workspace }) => {
+			this.currentRoot = explorerRoot(workspace);
+			this.rootChanged.fire();
+		}));
 	}
 
 	get root(): ExplorerItem | undefined {
@@ -47,5 +45,10 @@ function explorerRoot(workspace: IWorkspace): ExplorerItem | undefined {
 	// A workspace file stays a workspace after removing all but one root. Its
 	// remaining root must remain visible so root-specific menus still have a target.
 	if (roots.length === 1 && !workspace.configuration) return roots[0];
-	return new ExplorerItem(URI.parse(`ash-workspace:/${encodeURIComponent(workspace.id)}`), workspace.name ?? 'Workspace', FileKind.Directory, Object.freeze(roots));
+	return new ExplorerItem(
+		URI.parse(`ash-workspace:/${encodeURIComponent(workspace.id)}`),
+		workspace.name ?? 'Workspace',
+		FileKind.Directory,
+		Object.freeze(roots),
+	);
 }

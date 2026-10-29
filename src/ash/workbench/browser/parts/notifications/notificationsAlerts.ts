@@ -8,10 +8,7 @@ import type { NotificationItem } from '../../../common/notifications.js';
 export class NotificationsAlerts extends Disposable {
 	private readonly itemListeners = this._register(new DisposableMap<number>());
 
-	constructor(
-		model: NotificationsModel,
-		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
-	) {
+	constructor(model: NotificationsModel, @IAccessibilityService private readonly accessibilityService: IAccessibilityService) {
 		super();
 		this._register(model.onDidAdd(item => this.observe(item)));
 		this._register(model.onDidRemove(item => this.itemListeners.deleteAndDispose(item.id)));
@@ -22,14 +19,11 @@ export class NotificationsAlerts extends Disposable {
 
 	private observe(item: NotificationItem): void {
 		let message = item.message;
-		this.itemListeners.set(
-			item.id,
-			item.onDidChange(current => {
-				if (current.message === message) return;
-				message = current.message;
-				this.announce(current);
-			}),
-		);
+		this.itemListeners.set(item.id, item.onDidChange(current => {
+			if (current.message === message) return;
+			message = current.message;
+			this.announce(current);
+		}));
 		this.announce(item);
 	}
 

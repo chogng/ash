@@ -21,25 +21,17 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		super();
 		this.observeGroups();
 		this._register(editorGroups.onDidChangeGroups(() => this.observeGroups()));
-		this._register(
-			editors.onDidActiveEditorChange(() => {
-				const input = editors.activeEditor;
-				if (input instanceof TerminalEditorInput) {
-					const instance = this.getInstanceFromResource(input.resource);
-					if (instance && !this.backgroundOpens.has(instance)) terminals.setActiveInstance(instance);
-				}
-			}),
-		);
-		this._register(
-			terminals.onDidDisposeInstance(instance => {
-				void this.detachInstance(instance).catch(onUnexpectedError);
-			}),
-		);
+		this._register(editors.onDidActiveEditorChange(() => {
+			const input = editors.activeEditor;
+			if (input instanceof TerminalEditorInput) {
+				const instance = this.getInstanceFromResource(input.resource);
+				if (instance && !this.backgroundOpens.has(instance)) terminals.setActiveInstance(instance);
+			}
+		}));
+		this._register(terminals.onDidDisposeInstance(instance => { void this.detachInstance(instance).catch(onUnexpectedError); }));
 	}
 
-	getInstanceFromResource(resource: URI): ITerminalInstance | undefined {
-		return getInstanceFromResource(this.terminals.instances, resource);
-	}
+	getInstanceFromResource(resource: URI): ITerminalInstance | undefined { return getInstanceFromResource(this.terminals.instances, resource); }
 
 	async openEditor(instance: ITerminalInstance, editorOptions?: import('./terminal.js').TerminalEditorLocation): Promise<void> {
 		if (!this.terminals.instances.includes(instance) || !instance.resource) return;
@@ -51,11 +43,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 			this.backgroundOpens.set(instance, (this.backgroundOpens.get(instance) ?? 0) + 1);
 		}
 		try {
-			await this.editors.openEditor(
-				new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances),
-				{ pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus },
-				editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn },
-			);
+			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
 			if (!editorOptions?.preserveFocus && this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
 			if (this.terminals.instances.includes(instance)) instance.target = previousTarget;
@@ -81,12 +69,11 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 
 	async splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance> {
 		const source = this.editorGroups.groups.find(group => group.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path));
-		if (!source || instanceToSplit.target !== TerminalLocation.Editor || instanceToSplit.state !== 'running' || instanceToSplit.isReadOnly || !this.terminals.instances.includes(instanceToSplit))
-			throw canceled();
+		if (!source || instanceToSplit.target !== TerminalLocation.Editor || instanceToSplit.state !== 'running' || instanceToSplit.isReadOnly || !this.terminals.instances.includes(instanceToSplit)) throw canceled();
 		using lifetime = new DisposableStore();
 		let retired = false;
-		lifetime.add(instanceToSplit.onDidChangeState(() => (retired = true)));
-		if (instanceToSplit.onDidChangeTarget) lifetime.add(instanceToSplit.onDidChangeTarget(() => (retired = true)));
+		lifetime.add(instanceToSplit.onDidChangeState(() => retired = true));
+		if (instanceToSplit.onDidChangeTarget) lifetime.add(instanceToSplit.onDidChangeTarget(() => retired = true));
 		// Capture the source group before profile resolution can activate another editor.
 		const destination = this.editorGroups.addGroup(source, GroupDirection.RIGHT);
 		let created: ITerminalInstance | undefined;
@@ -95,13 +82,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 				config: shellLaunchConfig ?? instanceToSplit.shellLaunchConfig,
 				location: { parentTerminal: instanceToSplit, viewColumn: destination.id },
 			});
-			if (
-				this.isDisposed ||
-				retired ||
-				!this.terminals.instances.includes(instanceToSplit) ||
-				!this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path)
-			)
-				throw canceled();
+			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path)) throw canceled();
 			return created;
 		} catch (error) {
 			if (created && this.terminals.instances.includes(created)) await this.terminals.closeTerminal(created);
@@ -117,13 +98,11 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		for (const group of this.editorGroups.groups) {
 			if (!this.groups.has(group.id)) {
 				const lifetime = new DisposableStore();
-				lifetime.add(
-					group.onDidChangeEditors(event => {
-						if (event.kind === 'editorClosed' && event.reason !== 'move' && event.editor.input instanceof TerminalEditorInput) {
-							this.closeTerminalIfUnhosted(event.editor.input);
-						}
-					}),
-				);
+				lifetime.add(group.onDidChangeEditors(event => {
+					if (event.kind === 'editorClosed' && event.reason !== 'move' && event.editor.input instanceof TerminalEditorInput) {
+						this.closeTerminalIfUnhosted(event.editor.input);
+					}
+				}));
 				this.groups.set(group.id, lifetime);
 			}
 		}

@@ -38,8 +38,7 @@ export function validateEditorClientApi(value: unknown): EditorClientApi {
 	const api = value as EditorClientApi;
 	if (!api || api.apiVersion !== 1 || !api.modules || typeof api.modules !== 'object' || Array.isArray(api.modules) || !Array.isArray(api.types)) throw new Error('Unsupported editor client API');
 	for (const key of [...Object.keys(api.modules), ...api.types]) {
-		if (typeof key !== 'string' || !/^[a-zA-Z0-9_./-]+\.js$/u.test(key) || key.split('/').some((part: string) => !part || part === '.' || part === '..'))
-			throw new Error('Invalid editor API module');
+		if (typeof key !== 'string' || !/^[a-zA-Z0-9_./-]+\.js$/u.test(key) || key.split('/').some((part: string) => !part || part === '.' || part === '..')) throw new Error('Invalid editor API module');
 	}
 	for (const names of Object.values(api.modules)) {
 		if (!Array.isArray(names) || names.some(name => typeof name !== 'string' || !/^[A-Za-z_$][\w$]*$/u.test(name))) throw new Error('Invalid editor API binding');

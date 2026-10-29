@@ -12,6 +12,7 @@ import { ViewModelDecoration } from '../viewModel/viewModelDecoration.js';
  * Contains all data needed to render at a specific viewport.
  */
 export class ViewportData {
+
 	public readonly selections: Selection[];
 
 	/**
@@ -48,7 +49,12 @@ export class ViewportData {
 
 	public readonly lineHeight: number;
 
-	constructor(selections: Selection[], partialData: IPartialViewLinesViewportData, whitespaceViewportData: IViewWhitespaceViewportData[], model: IViewModel) {
+	constructor(
+		selections: Selection[],
+		partialData: IPartialViewLinesViewportData,
+		whitespaceViewportData: IViewWhitespaceViewportData[],
+		model: IViewModel
+	) {
 		this.selections = selections;
 		this.startLineNumber = partialData.startLineNumber | 0;
 		this.endLineNumber = partialData.endLineNumber | 0;
@@ -63,7 +69,7 @@ export class ViewportData {
 			partialData.startLineNumber,
 			this._model.getLineMinColumn(partialData.startLineNumber),
 			partialData.endLineNumber,
-			this._model.getLineMaxColumn(partialData.endLineNumber),
+			this._model.getLineMaxColumn(partialData.endLineNumber)
 		);
 	}
 

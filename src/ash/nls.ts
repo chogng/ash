@@ -18,15 +18,19 @@ export interface ILocalizedString {
 
 type LocalizeArgument = string | number | boolean | undefined | null;
 
-export type NlsResolver = (bundle: string, key: string, fallback: string, parameters?: LocalizationParameters) => string;
+export type NlsResolver = (
+	bundle: string,
+	key: string,
+	fallback: string,
+	parameters?: LocalizationParameters,
+) => string;
 
 let language = 'en';
-const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters);
+const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) =>
+	formatNlsMessage(fallback, parameters);
 let resolver: NlsResolver = fallbackResolver;
 
-export function getNLSLanguage(): string {
-	return language;
-}
+export function getNLSLanguage(): string { return language; }
 
 /** Bootstrap must finish before importing modules that register translated metadata. */
 export function setNlsMessages(locale: string, bundles: Readonly<Record<string, Readonly<Record<string, string>>>>): void {
@@ -66,7 +70,10 @@ export function resetNlsResolver(): void {
 	language = 'en';
 }
 
-export function formatNlsMessage(message: string, parameters: LocalizationParameters | undefined): string {
+export function formatNlsMessage(
+	message: string,
+	parameters: LocalizationParameters | undefined,
+): string {
 	if (!parameters) return message;
 	return message.replaceAll(/\{([A-Za-z0-9_.-]+)\}/gu, (placeholder, key: string) => {
 		const value = parameters[key];

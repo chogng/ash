@@ -33,7 +33,7 @@ export interface IVoiceCodeTranscriptionClient {
 	readonly onDidClose: Event<number>;
 	readonly isConnected: boolean;
 	connect(window: Window & typeof globalThis, authToken: string): Promise<void>;
-	startSession(options?: { readonly backend: DictationBackend; readonly language: string | null }): Promise<void>;
+	startSession(options?: { readonly backend: DictationBackend; readonly language: string | null; }): Promise<void>;
 	sendPttStart(turnId: string): void;
 	sendPttAudioChunk(turnId: string, audio: string): void;
 	sendPttEnd(turnId: string): void;
@@ -64,75 +64,53 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 	public readonly onDidClose = this.closed.event;
 	private connected = false;
 	private connecting: AbortController | undefined;
-	private session:
-		| {
-				backend: DictationBackend;
-				language: string | null;
-				resourceId: string;
-				claimed: boolean;
-				operations: Promise<void>;
-				error?: string;
-		  }
-		| undefined;
+	private session: { backend: DictationBackend; language: string | null; resourceId: string; claimed: boolean; operations: Promise<void>; error?: string; } | undefined;
 	private active: TranscriptionTurn | undefined;
 	private release = Promise.resolve();
-	public get isConnected(): boolean {
-		return this.connected && !!this.backend?.isConnected;
-	}
+	public get isConnected(): boolean { return this.connected && !!this.backend?.isConnected; }
 
 	constructor(
-		@IVoiceCodeTranscriptionBackendService
-		private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
+		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		if (!backend) return;
-		this._register(
-			backend.onDidTranscribe(result => {
-				const turn = this.active;
-				if (!turn || turn.resourceId !== result.resourceId) return;
-				turn.text = result.text;
-				// The host may publish its final notification before stop acknowledges
-				// resource release. Keep final delivery behind that acknowledgment.
-				if (!result.isFinal) this.publish(turn, false);
-			}),
-		);
-		this._register(
-			backend.onDidEnd(result => {
-				const turn = this.active;
-				if (!turn || turn.resourceId !== result.resourceId) {
-					if (this.session?.resourceId === result.resourceId && !this.session.claimed) {
-						this.session.error = result.error ?? localize('dictation.sessionUnavailable', 'Transcription session is not initialized');
-						this.release = backend.cancel(result.resourceId).catch(() => undefined);
-						this.errors.fire({ detail: this.session.error, terminal: true });
-					}
-					return;
+		this._register(backend.onDidTranscribe(result => {
+			const turn = this.active;
+			if (!turn || turn.resourceId !== result.resourceId) return;
+			turn.text = result.text;
+			// The host may publish its final notification before stop acknowledges
+			// resource release. Keep final delivery behind that acknowledgment.
+			if (!result.isFinal) this.publish(turn, false);
+		}));
+		this._register(backend.onDidEnd(result => {
+			const turn = this.active;
+			if (!turn || turn.resourceId !== result.resourceId) {
+				if (this.session?.resourceId === result.resourceId && !this.session.claimed) {
+					this.session.error = result.error ?? localize('dictation.sessionUnavailable', 'Transcription session is not initialized');
+					this.release = backend.cancel(result.resourceId).catch(() => undefined);
+					this.errors.fire({ detail: this.session.error, terminal: true });
 				}
-				turn.error = result.error;
-				if (!turn.stopping) this.sendPttEnd(turn.id);
-			}),
-		);
-		this._register(
-			backend.onDidChangeConnection(() => {
-				if (!this.connected || backend.isConnected) return;
-				const turnId = this.active?.id;
-				this.connected = false;
-				this.session = undefined;
-				this.active = undefined;
-				this.closed.fire(1006);
-				this.errors.fire({
-					detail: localize('dictation.connectionLost', 'Dictation connection lost'),
-					turnId,
-					terminal: true,
-				});
-			}),
-		);
+				return;
+			}
+			turn.error = result.error;
+			if (!turn.stopping) this.sendPttEnd(turn.id);
+		}));
+		this._register(backend.onDidChangeConnection(() => {
+			if (!this.connected || backend.isConnected) return;
+			const turnId = this.active?.id;
+			this.connected = false;
+			this.session = undefined;
+			this.active = undefined;
+			this.closed.fire(1006);
+			this.errors.fire({ detail: localize('dictation.connectionLost', 'Dictation connection lost'), turnId, terminal: true });
+		}));
 	}
 
 	public async connect(_window: Window & typeof globalThis, _authToken: string): Promise<void> {
 		this.assertNotDisposed();
 		this.disconnect();
-		const connecting = (this.connecting = new AbortController());
+		const connecting = this.connecting = new AbortController();
 		try {
 			// A cancelled caller can leave immediately; a replacement still waits for backend release.
 			await raceCancellationError(this.release, connecting.signal);
@@ -146,7 +124,7 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		}
 	}
 
-	public async startSession(options?: { readonly backend: DictationBackend; readonly language: string | null }): Promise<void> {
+	public async startSession(options?: { readonly backend: DictationBackend; readonly language: string | null; }): Promise<void> {
 		this.requireConnection();
 		if (this.active) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
 		if (this.session && !this.session.claimed) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
@@ -154,15 +132,11 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		const language = options ? options.language : dictationInputOptions(this.configuration, backend.type).language;
 		const resourceId = generateUuid();
 		const session: NonNullable<VoiceCodeTranscriptionClient['session']> = {
-			backend,
-			language,
-			resourceId,
-			claimed: false,
-			operations: this.release.then(() => {
+			backend, language, resourceId, claimed: false, operations: this.release.then(() => {
 				if (this.session !== session) throw canceled();
 				this.requireConnection();
 				return this.backend!.start(resourceId, { backend, language });
-			}),
+			})
 		};
 		this.session = session;
 		try {
@@ -184,24 +158,13 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		if (session.error) throw new Error(session.error);
 		const primed = !session.claimed;
 		session.claimed = true;
-		const turn: TranscriptionTurn = {
-			id: turnId,
-			resourceId: primed ? session.resourceId : generateUuid(),
-			operations: primed ? session.operations : this.release,
-			started: primed ? session.operations : this.release,
-			accepted: primed,
-			queuedBytes: 0,
-			revision: 0,
-			text: '',
-			stopping: false,
-		};
+		const turn: TranscriptionTurn = { id: turnId, resourceId: primed ? session.resourceId : generateUuid(), operations: primed ? session.operations : this.release, started: primed ? session.operations : this.release, accepted: primed, queuedBytes: 0, revision: 0, text: '', stopping: false };
 		this.active = turn;
-		if (!primed)
-			this.enqueue(turn, async () => {
-				await this.backend!.start(turn.resourceId, { backend: session.backend, language: session.language });
-				turn.accepted = true;
-				if (this.active !== turn) await this.backend!.cancel(turn.resourceId);
-			});
+		if (!primed) this.enqueue(turn, async () => {
+			await this.backend!.start(turn.resourceId, { backend: session.backend, language: session.language });
+			turn.accepted = true;
+			if (this.active !== turn) await this.backend!.cancel(turn.resourceId);
+		});
 		turn.started = turn.operations;
 	}
 
@@ -214,11 +177,8 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		}
 		turn.queuedBytes += audio.length;
 		this.enqueue(turn, async () => {
-			try {
-				await this.backend!.pushAudio(turn.resourceId, audio);
-			} finally {
-				turn.queuedBytes -= audio.length;
-			}
+			try { await this.backend!.pushAudio(turn.resourceId, audio); }
+			finally { turn.queuedBytes -= audio.length; }
 		});
 	}
 
@@ -255,18 +215,17 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 			]).then(() => undefined);
 		} else if (session && !session.claimed && this.backend) {
 			const backend = this.backend;
-			this.release = Promise.all([backend.cancel(session.resourceId).catch(() => undefined), session.operations.then(() => backend.cancel(session.resourceId)).catch(() => undefined)]).then(
-				() => undefined,
-			);
+			this.release = Promise.all([
+				backend.cancel(session.resourceId).catch(() => undefined),
+				session.operations.then(() => backend.cancel(session.resourceId)).catch(() => undefined),
+			]).then(() => undefined);
 		}
 	}
 
 	private enqueue(turn: TranscriptionTurn, operation: () => Promise<void>): void {
-		turn.operations = turn.operations
-			.then(async () => {
-				if (this.active === turn) await operation();
-			})
-			.catch(error => this.fail(turn, error));
+		turn.operations = turn.operations.then(async () => {
+			if (this.active === turn) await operation();
+		}).catch(error => this.fail(turn, error));
 	}
 
 	private fail(turn: TranscriptionTurn, error: unknown): void {
@@ -277,13 +236,7 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 	}
 
 	private publish(turn: TranscriptionTurn, final: boolean): void {
-		this.transcriptions.fire({
-			turnId: turn.id,
-			text: turn.text,
-			status: final ? 'final' : 'partial',
-			revision: ++turn.revision,
-			committed: final ? turn.text : '',
-		});
+		this.transcriptions.fire({ turnId: turn.id, text: turn.text, status: final ? 'final' : 'partial', revision: ++turn.revision, committed: final ? turn.text : '' });
 	}
 
 	private requireConnection(): void {
@@ -304,29 +257,13 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 }
 
 function dictationError(message: string | undefined): string | undefined {
-	if (!message) {
-		return message;
-	}
-	if (message.includes('CodexDictationAuthenticationRequired')) {
-		return localize('dictation.codex.authenticationRequired', 'Connect your Codex account in Models. If its login has expired, sign in again.');
-	}
-	if (message.includes('CodexDictationAccessDenied')) {
-		return localize('dictation.codex.accessDenied', 'This Codex account cannot currently use subscription dictation. Check the account or choose another dictation service.');
-	}
-	if (message.includes('CodexDictationAccountChanged')) {
-		return localize('dictation.codex.accountChanged', 'The Codex account changed during recording. Record again with the current account.');
-	}
-	if (message.includes('CodexDictationAudioTooLong')) {
-		return localize('dictation.codex.audioTooLong', 'Codex dictation recordings can be up to 3 minutes long.');
-	}
-	if (message.includes('CodexDictationRateLimited')) {
-		return localize('dictation.codex.rateLimited', 'Codex dictation is temporarily rate limited. Try again later.');
-	}
-	if (message.includes('CodexDictationCancelled')) {
-		return localize('dictation.codex.cancelled', 'Codex dictation was cancelled.');
-	}
-	if (/CodexDictation(?:InvalidAudio|InvalidResponse|RequestFailed)/.test(message)) {
-		return localize('dictation.codex.failed', 'Could not transcribe this recording with Codex. Record again and try once more.');
-	}
+	if (!message) { return message; }
+	if (message.includes('CodexDictationAuthenticationRequired')) { return localize('dictation.codex.authenticationRequired', 'Connect your Codex account in Models. If its login has expired, sign in again.'); }
+	if (message.includes('CodexDictationAccessDenied')) { return localize('dictation.codex.accessDenied', 'This Codex account cannot currently use subscription dictation. Check the account or choose another dictation service.'); }
+	if (message.includes('CodexDictationAccountChanged')) { return localize('dictation.codex.accountChanged', 'The Codex account changed during recording. Record again with the current account.'); }
+	if (message.includes('CodexDictationAudioTooLong')) { return localize('dictation.codex.audioTooLong', 'Codex dictation recordings can be up to 3 minutes long.'); }
+	if (message.includes('CodexDictationRateLimited')) { return localize('dictation.codex.rateLimited', 'Codex dictation is temporarily rate limited. Try again later.'); }
+	if (message.includes('CodexDictationCancelled')) { return localize('dictation.codex.cancelled', 'Codex dictation was cancelled.'); }
+	if (/CodexDictation(?:InvalidAudio|InvalidResponse|RequestFailed)/.test(message)) { return localize('dictation.codex.failed', 'Could not transcribe this recording with Codex. Record again and try once more.'); }
 	return message;
 }

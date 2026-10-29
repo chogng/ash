@@ -19,37 +19,7 @@ import { localize } from '../../../../nls.js';
 import { ITextFileService } from '../../../services/textfile/common/textfiles.js';
 import type { IBreakpointUpdateData } from '../common/debug.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	CONTEXT_DEBUG_STATE,
-	IAdapterManager,
-	type IResolvedDebugConfiguration,
-	type IDebugStackFrame,
-	type IDebugThread,
-	type IViewModel,
-	type DebugBreakpoint,
-	type IBaseBreakpoint,
-	type IDebugBreakpoint,
-	type IDebugBreakpointUpdate,
-	type IDebugCompound,
-	type IDebugConfiguration,
-	type IDataBreakpoint,
-	type IDataBreakpointOptions,
-	type IFunctionBreakpoint,
-	type IFunctionBreakpointOptions,
-	type IInstructionBreakpoint,
-	type IInstructionBreakpointOptions,
-	IDebugService,
-	DebugConsoleMode,
-	type IDebugSessionOptions,
-	type IDebugSession,
-	DebugConfigurationProviderTriggerKind,
-	type DebugConfiguration,
-	type IDebugConfigurationProvider,
-	type DebugConfigurationProviderRegistration,
-	type IDebugAdapterTracker,
-	type IDebugAdapterTrackerFactory,
-	type DebugAdapterTrackerFactoryRegistration,
-} from '../common/debug.js';
+import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type IDebugThread, type IViewModel, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -96,7 +66,7 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly willSessionEmitter = this._register(new Emitter<IDebugSession>());
 	private readonly newSessionEmitter = this._register(new Emitter<IDebugSession>());
 	private readonly endSessionEmitter = this._register(new Emitter<IDebugSession>());
-	private readonly terminalOutputEmitter = this._register(new Emitter<{ readonly session: IDebugSession; readonly data: string }>());
+	private readonly terminalOutputEmitter = this._register(new Emitter<{ readonly session: IDebugSession; readonly data: string; }>());
 	private readonly terminalOutputListeners = new Map<string, DisposableStore>();
 	private focusGeneration = 0;
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
@@ -118,15 +88,8 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly descriptorOwners = new Map<AbortController, Set<object>>();
 	private readonly preparingSessions = new Map<string, IDebugSession>();
 	private readonly descriptorControllers = new Map<string, AbortController>();
-	private readonly trackerFactories = new Map<string, { readonly owner: object; readonly factory: IDebugAdapterTrackerFactory }>();
-	private readonly configurationProviders = new Map<
-		string,
-		{
-			readonly owner: object;
-			readonly source: IDebugConfigurationProvider;
-			readonly provider: IDebugConfigurationProvider;
-		}
-	>();
+	private readonly trackerFactories = new Map<string, { readonly owner: object; readonly factory: IDebugAdapterTrackerFactory; }>();
+	private readonly configurationProviders = new Map<string, { readonly owner: object; readonly source: IDebugConfigurationProvider; readonly provider: IDebugConfigurationProvider; }>();
 
 	readonly onDidChangeConfigurations = this.configurationManager.onDidChangeConfigurations;
 	readonly onDidChangeBreakpoints: Event<readonly DebugBreakpoint[]> = this.breakpointsEmitter.event;
@@ -137,9 +100,7 @@ export class DebugService extends Disposable implements IDebugService {
 	readonly onDidNewSession = this.newSessionEmitter.event;
 	readonly onDidEndSession = this.endSessionEmitter.event;
 	readonly onDidWriteTerminalData = this.terminalOutputEmitter.event;
-	getViewModel(): IViewModel {
-		return this.viewModel;
-	}
+	getViewModel(): IViewModel { return this.viewModel; }
 
 	constructor(
 		@IFileService private readonly files: IFileService,
@@ -168,121 +129,48 @@ export class DebugService extends Disposable implements IDebugService {
 		this._register(terminalProcesses.onConnectionState(() => this.terminalGeneration++));
 		// Session changes include state changes; inactive debugging must leave F6 available for region navigation.
 		const debugState = CONTEXT_DEBUG_STATE.bindTo(contextKeys);
-		this._register(
-			this.onDidChangeSession(session => {
-				debugState.set(session?.state ?? 'inactive');
-				void this.refreshFocusedStack();
-			}),
-		);
+		this._register(this.onDidChangeSession(session => {
+			debugState.set(session?.state ?? 'inactive');
+			void this.refreshFocusedStack();
+		}));
 		this._register(toDisposable(() => debugState.reset()));
-		try {
-			this.debugStorage = this._register(instantiationService.createInstance(DebugStorage));
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
+		try { this.debugStorage = this._register(instantiationService.createInstance(DebugStorage)); } catch (error) { this.dispose(); throw error; }
 		this.restoreState(this.debugStorage.state);
-		this._register(
-			textFiles.onDidSave(event => {
-				if (this.breakpointsToSendOnResourceSaved.delete(event.resource.toString())) this.syncSessionBreakpoints();
-			}),
-		);
+		this._register(textFiles.onDidSave(event => {
+			if (this.breakpointsToSendOnResourceSaved.delete(event.resource.toString())) this.syncSessionBreakpoints();
+		}));
 		this._register(workspace.onDidChangeWorkspace(() => this.breakpointsToSendOnResourceSaved.clear()));
 		this._register(this.debugStorage.onDidChangeState(state => this.restoreState(state)));
-		this._register(
-			files.onDidChangeFiles(event => {
-				if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error));
-			}),
-		);
+		this._register(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
 		let previousFactories = adapters.factories;
-		this._register(
-			adapters.onDidChange(factories => {
-				// Catalog replacement may retire an unrelated extension while another
-				// launch awaits a provider. Revoke only callbacks using retired owners.
-				this.cancelRetiredDescriptors(previousFactories.filter(factory => !factories.includes(factory)));
-				previousFactories = factories;
-				this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([]));
-				void this.refresh().catch(error => this.reportError(error));
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				this.workspaceGeneration++;
-				this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(point => point.canPersist));
-				this.currentInstructionBreakpoints = Object.freeze([]);
-				this.restoreState(this.debugStorage.state);
-				this.cancelPendingDescriptors();
-				this.refreshGeneration += 1;
-				this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([]));
-				void this.stopAll();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.cancelPendingDescriptors();
-				this.configurationProviders.clear();
-				this.trackerFactories.clear();
-				for (const session of this.preparingSessions.values()) {
-					session.dispose();
-				}
-				this.preparingSessions.clear();
-				for (const record of this.sessionRecords.values()) {
-					record.listener.dispose();
-					record.session.dispose();
-				}
-				this.sessionRecords.clear();
-			}),
-		);
-		this._register(
-			this.onDidEndSession(session => {
-				this.terminalOutputListeners.get(session.id)?.dispose();
-				this.terminalOutputListeners.delete(session.id);
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				for (const listeners of this.terminalOutputListeners.values()) listeners.dispose();
-				this.terminalOutputListeners.clear();
-			}),
-		);
+		this._register(adapters.onDidChange(factories => {
+			// Catalog replacement may retire an unrelated extension while another
+			// launch awaits a provider. Revoke only callbacks using retired owners.
+			this.cancelRetiredDescriptors(previousFactories.filter(factory => !factories.includes(factory)));
+			previousFactories = factories;
+			this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([]));
+			void this.refresh().catch(error => this.reportError(error));
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(point => point.canPersist)); this.currentInstructionBreakpoints = Object.freeze([]); this.restoreState(this.debugStorage.state); this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
+		this._register(toDisposable(() => { this.cancelPendingDescriptors(); this.configurationProviders.clear(); this.trackerFactories.clear(); for (const session of this.preparingSessions.values()) { session.dispose(); } this.preparingSessions.clear(); for (const record of this.sessionRecords.values()) { record.listener.dispose(); record.session.dispose(); } this.sessionRecords.clear(); }));
+		this._register(this.onDidEndSession(session => { this.terminalOutputListeners.get(session.id)?.dispose(); this.terminalOutputListeners.delete(session.id); }));
+		this._register(toDisposable(() => { for (const listeners of this.terminalOutputListeners.values()) listeners.dispose(); this.terminalOutputListeners.clear(); }));
 		this.replModel = this._register(new ReplModel(this));
 	}
 
-	getConfigurationManager() {
-		return this.configurationManager;
-	}
-	get configurations() {
-		return this.configurationManager.configurations;
-	}
-	get compounds() {
-		return this.configurationManager.compounds;
-	}
-	get breakpoints() {
-		return this.currentBreakpoints;
-	}
-	get functionBreakpoints() {
-		return this.currentFunctionBreakpoints;
-	}
-	get dataBreakpoints() {
-		return this.currentDataBreakpoints;
-	}
-	get instructionBreakpoints() {
-		return this.currentInstructionBreakpoints;
-	}
-	get watchExpressions() {
-		return this.currentWatchExpressions;
-	}
-	get exceptionBreakpoints() {
-		return this.session?.exceptionBreakpoints ?? Object.freeze([]);
-	}
-	getSession(id: string): IDebugSession | undefined {
-		return this.sessionRecords.get(id)?.session ?? this.preparingSessions.get(id);
-	}
+	getConfigurationManager() { return this.configurationManager; }
+	get configurations() { return this.configurationManager.configurations; }
+	get compounds() { return this.configurationManager.compounds; }
+	get breakpoints() { return this.currentBreakpoints; }
+	get functionBreakpoints() { return this.currentFunctionBreakpoints; }
+	get dataBreakpoints() { return this.currentDataBreakpoints; }
+	get instructionBreakpoints() { return this.currentInstructionBreakpoints; }
+	get watchExpressions() { return this.currentWatchExpressions; }
+	get exceptionBreakpoints() { return this.session?.exceptionBreakpoints ?? Object.freeze([]); }
+	getSession(id: string): IDebugSession | undefined { return this.sessionRecords.get(id)?.session ?? this.preparingSessions.get(id); }
 	// Release retains canonical identities for extension callbacks, but disposed
 	// session emitters must never be advertised to views as subscribable sessions.
-	get sessions(): readonly IDebugSession[] {
-		return Object.freeze([...this.sessionRecords.values()].map(record => record.session).filter(session => !session.isDisposed));
-	}
+	get sessions(): readonly IDebugSession[] { return Object.freeze([...this.sessionRecords.values()].map(record => record.session).filter(session => !session.isDisposed)); }
 	get session(): IDebugSession | undefined {
 		const session = this.viewModel.focusedSession ? this.sessionRecords.get(this.viewModel.focusedSession.id)?.session : undefined;
 		return session?.isDisposed ? undefined : session;
@@ -294,16 +182,12 @@ export class DebugService extends Disposable implements IDebugService {
 		this.replaceTrackerFactories(owner, factories);
 		let disposed = false;
 		const registration = toDisposable(() => {
-			if (disposed) {
-				return;
-			}
+			if (disposed) { return; }
 			disposed = true;
 			this.replaceTrackerFactories(owner, []);
 		}) as DebugAdapterTrackerFactoryRegistration;
 		registration.replace = replacement => {
-			if (disposed) {
-				throw new ReferenceError('Debug Adapter tracker registration is disposed');
-			}
+			if (disposed) { throw new ReferenceError('Debug Adapter tracker registration is disposed'); }
 			this.assertNotDisposed();
 			this.replaceTrackerFactories(owner, replacement);
 		};
@@ -311,39 +195,18 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	private replaceTrackerFactories(owner: object, factories: readonly IDebugAdapterTrackerFactory[]): void {
-		if (!Array.isArray(factories) || factories.length > 2048) {
-			throw new TypeError('Debug Adapter tracker factories must be a bounded array');
-		}
+		if (!Array.isArray(factories) || factories.length > 2048) { throw new TypeError('Debug Adapter tracker factories must be a bounded array'); }
 		const ids = new Set<string>();
 		for (const factory of factories) {
-			if (
-				!factory ||
-				typeof factory.id !== 'string' ||
-				!factory.id.trim() ||
-				factory.id.length > 32768 ||
-				factory.id.includes('\0') ||
-				typeof factory.type !== 'string' ||
-				!factory.type.trim() ||
-				factory.type.length > 256 ||
-				factory.type.includes('\0') ||
-				typeof factory.createDebugAdapterTracker !== 'function'
-			) {
-				throw new TypeError('Invalid Debug Adapter tracker factory');
-			}
+			if (!factory || typeof factory.id !== 'string' || !factory.id.trim() || factory.id.length > 32768 || factory.id.includes('\0') || typeof factory.type !== 'string' || !factory.type.trim() || factory.type.length > 256 || factory.type.includes('\0') || typeof factory.createDebugAdapterTracker !== 'function') { throw new TypeError('Invalid Debug Adapter tracker factory'); }
 			const existing = this.trackerFactories.get(factory.id);
-			if (ids.has(factory.id) || (existing && existing.owner !== owner)) {
-				throw new TypeError(`Debug Adapter tracker '${factory.id}' is already registered`);
-			}
+			if (ids.has(factory.id) || existing && existing.owner !== owner) { throw new TypeError(`Debug Adapter tracker '${factory.id}' is already registered`); }
 			ids.add(factory.id);
 		}
 		for (const [id, entry] of this.trackerFactories) {
-			if (entry.owner === owner) {
-				this.trackerFactories.delete(id);
-			}
+			if (entry.owner === owner) { this.trackerFactories.delete(id); }
 		}
-		for (const factory of factories) {
-			this.trackerFactories.set(factory.id, { owner, factory });
-		}
+		for (const factory of factories) { this.trackerFactories.set(factory.id, { owner, factory }); }
 		// Active trackers belong to sessions and survive factory unregistration.
 		// Pending creations check their factory identity before accepting a handle.
 	}
@@ -357,54 +220,27 @@ export class DebugService extends Disposable implements IDebugService {
 		// Optional instrumentation has one second for all factories, so a hung
 		// extension cannot delay launching a debuggee indefinitely.
 		let expire: (() => void) | undefined;
-		const deadlinePromise = new Promise<void>(resolve => {
-			expire = resolve;
-		});
-		const deadline = setTimeout(() => {
-			expired = true;
-			expire?.();
-		}, 1000);
+		const deadlinePromise = new Promise<void>(resolve => { expire = resolve; });
+		const deadline = setTimeout(() => { expired = true; expire?.(); }, 1000);
 		try {
-			const creations = [...this.trackerFactories.values()]
-				.filter(({ factory }) => factory.type === '*' || factory.type === session.resolvedConfiguration?.type)
-				.map(async ({ factory }) => {
-					try {
-						const tracker = await factory.createDebugAdapterTracker(session, controller.signal);
-						if (expired || controller.signal.aborted || this.trackerFactories.get(factory.id)?.factory !== factory) {
-							tracker?.dispose();
-							return;
-						}
-						if (tracker) {
-							trackers.push(tracker);
-						}
-						return tracker;
-					} catch (error) {
-						if (!controller.signal.aborted) {
-							this.reportError(error);
-						}
-					}
-				});
-			const result = await raceCancellationError(Promise.race([Promise.all(creations), deadlinePromise]), controller.signal);
-			if (expired) {
-				for (const tracker of trackers) {
-					tracker.dispose();
+			const creations = [...this.trackerFactories.values()].filter(({ factory }) => factory.type === '*' || factory.type === session.resolvedConfiguration?.type).map(async ({ factory }) => {
+				try {
+					const tracker = await factory.createDebugAdapterTracker(session, controller.signal);
+					if (expired || controller.signal.aborted || this.trackerFactories.get(factory.id)?.factory !== factory) { tracker?.dispose(); return; }
+					if (tracker) { trackers.push(tracker); }
+					return tracker;
+				} catch (error) {
+					if (!controller.signal.aborted) { this.reportError(error); }
 				}
-				return [];
-			}
-			if (generation !== this.workspaceGeneration || this.isDisposed || controller.signal.aborted) {
-				throw new CancellationError();
-			}
+			});
+			const result = await raceCancellationError(Promise.race([Promise.all(creations), deadlinePromise]), controller.signal);
+			if (expired) { for (const tracker of trackers) { tracker.dispose(); } return []; }
+			if (generation !== this.workspaceGeneration || this.isDisposed || controller.signal.aborted) { throw new CancellationError(); }
 			return result?.filter((tracker): tracker is IDebugAdapterTracker => tracker !== undefined) ?? [];
 		} catch (error) {
-			for (const tracker of trackers) {
-				tracker.dispose();
-			}
+			for (const tracker of trackers) { tracker.dispose(); }
 			throw error;
-		} finally {
-			clearTimeout(deadline);
-			this.pendingDescriptors.delete(controller);
-			this.descriptorControllers.delete(session.id);
-		}
+		} finally { clearTimeout(deadline); this.pendingDescriptors.delete(controller); this.descriptorControllers.delete(session.id); }
 	}
 
 	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration {
@@ -429,31 +265,18 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!Array.isArray(providers) || providers.length > 2048) throw new TypeError('Debug configuration providers must be a bounded array');
 		const ids = new Set<string>();
 		const normalized = providers.map(provider => {
-			if (
-				!provider ||
-				typeof provider !== 'object' ||
-				[provider.id, provider.type].some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || value.includes('\0')) ||
-				![1, 2].includes(provider.triggerKind)
-			)
-				throw new TypeError('Invalid Debug configuration provider identity');
+			if (!provider || typeof provider !== 'object' || [provider.id, provider.type].some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || value.includes('\0')) || ![1, 2].includes(provider.triggerKind)) throw new TypeError('Invalid Debug configuration provider identity');
 			const existing = this.configurationProviders.get(provider.id);
-			if (ids.has(provider.id) || (existing && existing.owner !== owner)) throw new TypeError(`Debug configuration provider '${provider.id}' is already registered`);
+			if (ids.has(provider.id) || existing && existing.owner !== owner) throw new TypeError(`Debug configuration provider '${provider.id}' is already registered`);
 			ids.add(provider.id);
 			if (existing && existing.source === provider) return existing.provider;
 			const methods = ['provideDebugConfigurations', 'resolveDebugConfiguration', 'resolveDebugConfigurationWithSubstitutedVariables'] as const;
-			if (!methods.some(method => typeof provider[method] === 'function') || methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function'))
-				throw new TypeError('A Debug configuration provider requires callbacks');
+			if (!methods.some(method => typeof provider[method] === 'function') || methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function')) throw new TypeError('A Debug configuration provider requires callbacks');
 			return Object.freeze({
-				id: provider.id,
-				type: provider.type,
-				triggerKind: provider.triggerKind,
+				id: provider.id, type: provider.type, triggerKind: provider.triggerKind,
 				...(provider.provideDebugConfigurations ? { provideDebugConfigurations: provider.provideDebugConfigurations.bind(provider) } : {}),
 				...(provider.resolveDebugConfiguration ? { resolveDebugConfiguration: provider.resolveDebugConfiguration.bind(provider) } : {}),
-				...(provider.resolveDebugConfigurationWithSubstitutedVariables
-					? {
-							resolveDebugConfigurationWithSubstitutedVariables: provider.resolveDebugConfigurationWithSubstitutedVariables.bind(provider),
-						}
-					: {}),
+				...(provider.resolveDebugConfigurationWithSubstitutedVariables ? { resolveDebugConfigurationWithSubstitutedVariables: provider.resolveDebugConfigurationWithSubstitutedVariables.bind(provider) } : {}),
 			});
 		});
 		const previous = [...this.configurationProviders.values()].filter(entry => entry.owner === owner);
@@ -475,8 +298,7 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async provideDebugConfigurations(folder: URI, signal?: AbortSignal, triggerKind = DebugConfigurationProviderTriggerKind.Initial): Promise<readonly DebugConfiguration[]> {
 		this.assertNotDisposed();
-		if (triggerKind !== DebugConfigurationProviderTriggerKind.Initial && triggerKind !== DebugConfigurationProviderTriggerKind.Dynamic)
-			throw new TypeError('Invalid debug configuration provider trigger');
+		if (triggerKind !== DebugConfigurationProviderTriggerKind.Initial && triggerKind !== DebugConfigurationProviderTriggerKind.Dynamic) throw new TypeError('Invalid debug configuration provider trigger');
 		if (!this.workspace.getWorkspace().folders.some(candidate => candidate.uri.toString() === folder.toString())) throw new CancellationError();
 		const workspaceGeneration = this.workspaceGeneration;
 		await this.extensions.activateByEvent('onDebug', signal);
@@ -538,7 +360,10 @@ export class DebugService extends Disposable implements IDebugService {
 				const type = current.type;
 				seen.add(type);
 				const providers = [...this.configurationProviders.values()].map(entry => entry.provider);
-				const matching = [...providers.filter(provider => provider.type !== '*' && provider.type === type), ...providers.filter(provider => provider.type === '*')];
+				const matching = [
+					...providers.filter(provider => provider.type !== '*' && provider.type === type),
+					...providers.filter(provider => provider.type === '*'),
+				];
 				for (const provider of matching) {
 					const callback = substituted ? provider.resolveDebugConfigurationWithSubstitutedVariables : provider.resolveDebugConfiguration;
 					if (!callback) continue;
@@ -560,8 +385,7 @@ export class DebugService extends Disposable implements IDebugService {
 						...parsed,
 						...(substituted && current.type === parsed.type && current.adapterExplicit === false && parsed.adapterExplicit === false ? { adapter: current.adapter } : {}),
 						id: configuration.id,
-						dirId: configuration.dirId,
-						workspaceFolderName: configuration.workspaceFolderName,
+						dirId: configuration.dirId, workspaceFolderName: configuration.workspaceFolderName,
 					};
 				}
 				// A provider may redirect to another debugger before substitution.
@@ -582,35 +406,23 @@ export class DebugService extends Disposable implements IDebugService {
 		const multiRoot = folders.length > 1;
 		const configurations: IDebugConfiguration[] = [];
 		const compounds: IDebugCompound[] = [];
-		await Promise.all(
-			folders.map(async folder => {
-				try {
-					const document = parseLaunchConfigurationDocument((await this.files.readFile(childResource(folder.uri, '.vscode/launch.json'))).content, type => this.resolveDebugAdapter(type));
-					configurations.push(
-						...document.configurations.map(configuration =>
-							Object.freeze({
-								...configuration,
-								id: multiRoot ? `${folder.id}:${configuration.id}` : configuration.id,
-								dirId: folder.id,
-								workspaceFolderName: folder.name,
-							}),
-						),
-					);
-					compounds.push(
-						...document.compounds.map(compound =>
-							Object.freeze({
-								...compound,
-								id: multiRoot ? `${folder.id}:${compound.id}` : compound.id,
-								dirId: folder.id,
-								workspaceFolderName: folder.name,
-							}),
-						),
-					);
-				} catch (error) {
-					if (!(error instanceof FileNotFoundError)) throw error;
-				}
-			}),
-		);
+		await Promise.all(folders.map(async folder => {
+			try {
+				const document = parseLaunchConfigurationDocument((await this.files.readFile(childResource(folder.uri, '.vscode/launch.json'))).content, type => this.resolveDebugAdapter(type));
+				configurations.push(...document.configurations.map(configuration => Object.freeze({
+					...configuration,
+					id: multiRoot ? `${folder.id}:${configuration.id}` : configuration.id,
+					dirId: folder.id,
+					workspaceFolderName: folder.name,
+				})));
+				compounds.push(...document.compounds.map(compound => Object.freeze({
+					...compound,
+					id: multiRoot ? `${folder.id}:${compound.id}` : compound.id,
+					dirId: folder.id,
+					workspaceFolderName: folder.name,
+				})));
+			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+		}));
 		if (generation === this.refreshGeneration) this.configurationManager.setConfigurations(Object.freeze(configurations), Object.freeze(compounds));
 		return this.configurations;
 	}
@@ -627,15 +439,7 @@ export class DebugService extends Disposable implements IDebugService {
 		const currentFolder = folder && this.workspace.getWorkspace().folders.find(candidate => candidate.uri.toString() === folder.toString());
 		if (folder && !currentFolder) throw new CancellationError();
 		const parsed = this.parseProviderConfiguration(configuration);
-		return this.startDebugging(
-			Object.freeze({
-				...parsed,
-				id: generateUuid(),
-				dirId: currentFolder?.id ?? null,
-				workspaceFolderName: currentFolder?.name,
-			}),
-			options,
-		);
+		return this.startDebugging(Object.freeze({ ...parsed, id: generateUuid(), dirId: currentFolder?.id ?? null, workspaceFolderName: currentFolder?.name }), options);
 	}
 
 	async startDebugging(current: IDebugConfiguration, options: IDebugSessionOptions = {}): Promise<IDebugSession> {
@@ -643,9 +447,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const generation = this.workspaceGeneration;
 		const relation = await this.processes.reserveSession({
-			id: generateUuid(),
-			workspaceId: this.workspace.getWorkspace().id,
-			parentId: sessionOptions.parentSession?.id ?? null,
+			id: generateUuid(), workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
 			lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
 			mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
 			noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
@@ -654,30 +456,18 @@ export class DebugService extends Disposable implements IDebugService {
 		this.launchControllers.set(relation.id, controller);
 		try {
 			if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
-			const launch =
-				relation.noDebug === null
-					? current
-					: Object.freeze({
-							...current,
-							arguments: Object.freeze({ ...current.arguments, noDebug: relation.noDebug }),
-						});
+			const launch = relation.noDebug === null ? current : Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: relation.noDebug }) });
 			return await this.startAdmittedDebugging(launch, sessionOptions, relation.id, controller.signal);
 		} catch (error) {
-			await this.processes.manageSession(relation.id, 'end').catch(() => {});
+			await this.processes.manageSession(relation.id, 'end').catch(() => { });
 			throw error;
-		} finally {
-			this.launchControllers.delete(relation.id);
-		}
+		} finally { this.launchControllers.delete(relation.id); }
 	}
 
 	private async startAdmittedDebugging(current: IDebugConfiguration, sessionOptions: IDebugSessionOptions, id: string, signal: AbortSignal): Promise<IDebugSession> {
 		const assertParent = (): void => {
 			throwIfCancelled(signal);
-			if (
-				sessionOptions.parentSession &&
-				(this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession || ['terminated', 'error'].includes(sessionOptions.parentSession.state))
-			)
-				throw new CancellationError();
+			if (sessionOptions.parentSession && (this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession || ['terminated', 'error'].includes(sessionOptions.parentSession.state))) throw new CancellationError();
 		};
 		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const assertAdmitted = async (): Promise<void> => {
@@ -688,12 +478,9 @@ export class DebugService extends Disposable implements IDebugService {
 		await this.debugStorage.whenReady();
 		const activeResource = this.editors.activeEditor?.resource;
 		const folders = this.workspace.getWorkspace().folders;
-		const folder =
-			current.dirId === null
-				? undefined
-				: current.dirId
-					? this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)
-					: (activeResource && this.workspace.getWorkspaceFolder(activeResource)) || (folders.length === 1 ? folders[0] : undefined);
+		const folder = current.dirId === null ? undefined : current.dirId
+			? this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)
+			: (activeResource && this.workspace.getWorkspaceFolder(activeResource)) || (folders.length === 1 ? folders[0] : undefined);
 		if (current.dirId === undefined && folders.length > 1 && !folder) throw new Error(localize('debug.selectFolder', 'Select a workspace folder to configure debugging.'));
 		if (folder && current.dirId === undefined) current = Object.freeze({ ...current, dirId: folder.id, workspaceFolderName: folder.name });
 		const root = folder?.uri;
@@ -701,9 +488,7 @@ export class DebugService extends Disposable implements IDebugService {
 		const workspaceGeneration = this.workspaceGeneration;
 		if (!sessionOptions.parentSession && !sessionOptions.suppressSaveBeforeStart) {
 			await saveAllBeforeDebugStart(this.configuration, this.editors);
-			if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed) {
-				throw new CancellationError();
-			}
+			if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed) { throw new CancellationError(); }
 		}
 		await this.extensions.activateByEvent('onDebug');
 		await this.extensions.activateByEvent(`onDebugResolve:${current.type}`);
@@ -716,23 +501,23 @@ export class DebugService extends Disposable implements IDebugService {
 		const generation = this.workspaceGeneration;
 		// Defaults can become available while a dormant extension activates. Read
 		// them from the canonical registry before substitution, not from discovery.
-		const launch = current.adapterExplicit === false ? { ...current, adapter: this.resolveDebugAdapter(current.type) ?? undefined } : current;
+		const launch = current.adapterExplicit === false
+			? { ...current, adapter: this.resolveDebugAdapter(current.type) ?? undefined } : current;
 		await assertAdmitted();
 		const providedConfiguration = await this.resolveConfigurationProviders(launch, root, false, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
 		let resolvedConfiguration;
-		try {
-			resolvedConfiguration = await raceCancellationError(this.debugger.substituteVariables(folder, providedConfiguration), signal);
-		} catch (error) {
+		try { resolvedConfiguration = await raceCancellationError(this.debugger.substituteVariables(folder, providedConfiguration), signal); }
+		catch (error) {
 			if (generation !== this.workspaceGeneration) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
 			throw error;
 		}
-		if (generation !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
+		if (generation !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
 		if (!resolvedConfiguration) throw new CancellationError();
 		resolvedConfiguration = await this.resolveConfigurationProviders(resolvedConfiguration, root, true, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
-		const factory = resolvedConfiguration.adapter && resolvedConfiguration.adapterExplicit !== false ? undefined : this.adapters.get(resolvedConfiguration.type);
+		const factory = resolvedConfiguration.adapter && resolvedConfiguration.adapterExplicit !== false
+			? undefined : this.adapters.get(resolvedConfiguration.type);
 		if (!resolvedConfiguration.adapter && !factory?.createDebugAdapterDescriptor) throw new Error(`No Debug Adapter factory is available for '${resolvedConfiguration.type}'`);
 		assertParent();
 		await assertAdmitted();
@@ -740,33 +525,22 @@ export class DebugService extends Disposable implements IDebugService {
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
 		if (factory && this.adapters.get(resolvedConfiguration.type) !== factory) throw new CancellationError();
 
-		if (generation !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
+		if (generation !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
 		let initializingSession: IDebugSession | undefined;
-		const acceptsBreakpointEvents = (): boolean =>
-			!this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
+		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
 		const session = await DebugSession.start({
-			id,
-			admitted: true,
-			configuration: current,
-			sessionOptions,
+			id, admitted: true, configuration: current, sessionOptions,
 			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
-			workspace: root,
-			breakpoints: () => this.currentBreakpoints,
+			workspace: root, breakpoints: () => this.currentBreakpoints,
 			deferredBreakpointIds: () => new Set(this.currentBreakpoints.filter(point => this.breakpointsToSendOnResourceSaved.has(point.resource.toString())).map(point => point.id)),
 			additionalBreakpoints: () => [...this.currentFunctionBreakpoints, ...this.currentDataBreakpoints, ...this.currentInstructionBreakpoints],
 			runInTerminal: value => {
 				const terminalGeneration = this.terminalGeneration;
 				const assertCurrent = (): void => {
-					if (
-						this.isDisposed ||
-						workspaceGeneration !== this.workspaceGeneration ||
-						terminalGeneration !== this.terminalGeneration ||
-						!initializingSession ||
-						this.getSession(initializingSession.id) !== initializingSession ||
-						['terminated', 'error'].includes(initializingSession.state)
-					) {
+					if (this.isDisposed || workspaceGeneration !== this.workspaceGeneration || terminalGeneration !== this.terminalGeneration
+						|| !initializingSession || this.getSession(initializingSession.id) !== initializingSession
+						|| ['terminated', 'error'].includes(initializingSession.state)) {
 						throw new CancellationError();
 					}
 				};
@@ -774,59 +548,31 @@ export class DebugService extends Disposable implements IDebugService {
 				const os = this.terminalProcesses.operatingSystem;
 				if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 				return runDebuggeeInTerminal(
-					this.terminals,
-					this.terminalProfiles,
-					{
-						os,
-						remoteAuthority: root && getRemoteAuthority(root),
-						workspaceFolder: folder,
-						allowAutomationShell: true,
-					},
-					value,
-					assertCurrent,
-					current.dirId ?? undefined,
+					this.terminals, this.terminalProfiles,
+					{ os, remoteAuthority: root && getRemoteAuthority(root), workspaceFolder: folder, allowAutomationShell: true },
+					value, assertCurrent, current.dirId ?? undefined,
 					terminal => {
 						assertCurrent();
 						const owner = initializingSession!;
 						const listeners = new DisposableStore();
 						this.terminalOutputListeners.get(owner.id)?.dispose();
 						this.terminalOutputListeners.set(owner.id, listeners);
-						listeners.add(
-							terminal.onDidWriteData(event => {
-								if (this.getSession(owner.id) !== owner || ['terminated', 'error'].includes(owner.state)) return;
-								for (let offset = 0; offset < event.data.length; offset += 8192)
-									this.terminalOutputEmitter.fire({
-										session: owner,
-										data: event.data.slice(offset, offset + 8192),
-									});
-							}),
-						);
-						listeners.add(
-							terminal.onDidExit(() => {
-								listeners.dispose();
-								this.terminalOutputListeners.delete(owner.id);
-							}),
-						);
+						listeners.add(terminal.onDidWriteData(event => {
+							if (this.getSession(owner.id) !== owner || ['terminated', 'error'].includes(owner.state)) return;
+							for (let offset = 0; offset < event.data.length; offset += 8192) this.terminalOutputEmitter.fire({ session: owner, data: event.data.slice(offset, offset + 8192) });
+						}));
+						listeners.add(terminal.onDidExit(() => { listeners.dispose(); this.terminalOutputListeners.delete(owner.id); }));
 					},
 				);
 			},
 			startDebugging: value => this.startChildSession(initializingSession!, value),
-			updateBreakpoints: updates => {
-				if (acceptsBreakpointEvents()) this.acceptBreakpointUpdates(updates);
-			},
+			updateBreakpoints: updates => { if (acceptsBreakpointEvents()) this.acceptBreakpointUpdates(updates); },
 			addBreakpoint: (source, line, column, id) => {
 				if (!initializingSession || !acceptsBreakpointEvents()) return undefined;
 				const resource = getUriFromSource(source, source.path, initializingSession.id, this.uriIdentity, this.logService);
 				const existing = this.currentBreakpoints.find(point => this.uriIdentity.extUri.isEqual(point.resource, resource) && point.lineNumber === line && point.columnNumber === column);
 				if (existing) return existing.enabled ? existing : undefined;
-				const point = Object.freeze({
-					id: id ?? generateUuid(),
-					resource,
-					lineNumber: line,
-					...(column === undefined ? {} : { columnNumber: column }),
-					enabled: true,
-					verified: false,
-				});
+				const point = Object.freeze({ id: id ?? generateUuid(), resource, lineNumber: line, ...(column === undefined ? {} : { columnNumber: column }), enabled: true, verified: false });
 				this.currentBreakpoints = Object.freeze([...this.currentBreakpoints, point].sort(compareBreakpoints));
 				this.persistState();
 				return point;
@@ -841,43 +587,22 @@ export class DebugService extends Disposable implements IDebugService {
 				this.persistState();
 			},
 			exceptionBreakpoints: () => this.exceptionBreakpointsByType[resolvedConfiguration.type],
-			onWillStart: session => {
-				assertParent();
-				initializingSession = session;
-				this.preparingSessions.set(session.id, session);
-				this.willSessionEmitter.fire(session);
-			},
+			onWillStart: session => { assertParent(); initializingSession = session; this.preparingSessions.set(session.id, session); this.willSessionEmitter.fire(session); },
 			createDebugAdapterTrackers: session => this.createAdapterTrackers(session, generation),
-			createDebugAdapterDescriptor: factory?.createDebugAdapterDescriptor
-				? async session => {
-						const controller = new AbortController();
-						this.pendingDescriptors.add(controller);
-						this.descriptorControllers.set(session.id, controller);
-						this.bindDescriptorOwner(controller, factory!);
-						try {
-							if (this.adapters.get(resolvedConfiguration.type) !== factory) throw new CancellationError();
-							const pending = Promise.resolve(factory!.createDebugAdapterDescriptor!(resolvedConfiguration, controller.signal, session));
-							void pending.then(
-								adapter => {
-									if (controller.signal.aborted || generation !== this.workspaceGeneration || this.isDisposed) {
-										void adapter?.inline?.close().catch(() => {});
-									}
-								},
-								() => {},
-							);
-							const adapter = await raceCancellationError(pending, controller.signal);
-							if (generation !== this.workspaceGeneration || this.isDisposed || controller.signal.aborted) {
-								await adapter?.inline?.close().catch(() => {});
-								throw new CancellationError();
-							}
-							return adapter;
-						} finally {
-							this.pendingDescriptors.delete(controller);
-							this.descriptorControllers.delete(session.id);
-							this.descriptorOwners.delete(controller);
-						}
-					}
-				: undefined,
+			createDebugAdapterDescriptor: factory?.createDebugAdapterDescriptor ? async session => {
+				const controller = new AbortController();
+				this.pendingDescriptors.add(controller);
+				this.descriptorControllers.set(session.id, controller);
+				this.bindDescriptorOwner(controller, factory!);
+				try {
+					if (this.adapters.get(resolvedConfiguration.type) !== factory) throw new CancellationError();
+					const pending = Promise.resolve(factory!.createDebugAdapterDescriptor!(resolvedConfiguration, controller.signal, session));
+					void pending.then(adapter => { if (controller.signal.aborted || generation !== this.workspaceGeneration || this.isDisposed) { void adapter?.inline?.close().catch(() => { }); } }, () => { });
+					const adapter = await raceCancellationError(pending, controller.signal);
+					if (generation !== this.workspaceGeneration || this.isDisposed || controller.signal.aborted) { await adapter?.inline?.close().catch(() => { }); throw new CancellationError(); }
+					return adapter;
+				} finally { this.pendingDescriptors.delete(controller); this.descriptorControllers.delete(session.id); this.descriptorOwners.delete(controller); }
+			} : undefined,
 		}).catch(async error => {
 			if (initializingSession) {
 				this.preparingSessions.delete(initializingSession.id);
@@ -887,72 +612,43 @@ export class DebugService extends Disposable implements IDebugService {
 			throw error;
 		});
 		this.preparingSessions.delete(session.id);
-		if (generation !== this.workspaceGeneration || this.isDisposed || (sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession)) {
+		if (generation !== this.workspaceGeneration || this.isDisposed || sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) {
 			// Initialization can finish after the workspace or service lifetime ends.
 			// Release the returned process before publishing a session to any consumer.
-			try {
-				await session.disconnect();
-			} finally {
-				session.dispose();
-				await this.stopChildSessions(session);
-				this.endSessionEmitter.fire(session);
-			}
+			try { await session.disconnect(); } finally { session.dispose(); await this.stopChildSessions(session); this.endSessionEmitter.fire(session); }
 			throw new CancellationError();
 		}
 		const listener = new DisposableStore();
-		listener.add(
-			session.onDidChangeExceptionBreakpoints(() => {
-				if (this.session === session) this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-			}),
-		);
+		listener.add(session.onDidChangeExceptionBreakpoints(() => { if (this.session === session) this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints); }));
 		listener.add(session.onDidChangeName(() => this.sessionEmitter.fire(this.session)));
-		listener.add(
-			session.onDidChangeThread(() => {
-				if (this.session === session) void this.refreshFocusedStack();
-			}),
-		);
-		listener.add(
-			session.onDidChangeState(state => {
-				if (state === 'stopped' && this.session !== session) {
-					this.viewModel.setFocus(undefined, undefined, session, false);
-					this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-				}
-				if (this.session === session && state !== 'stopped') void this.focusStackFrame(undefined);
-				if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
-				if (state === 'terminated' || state === 'error')
-					queueMicrotask(() => {
-						void this.finishSession(session);
-					});
-			}),
-		);
-		this.sessionRecords.set(session.id, {
-			session,
-			workspaceGeneration,
-			workspaceId: this.workspace.getWorkspace().id,
-			listener,
-			postDebugTask: resolvedConfiguration.postDebugTask,
-		});
+		listener.add(session.onDidChangeThread(() => {
+			if (this.session === session) void this.refreshFocusedStack();
+		}));
+		listener.add(session.onDidChangeState(state => {
+			if (state === 'stopped' && this.session !== session) {
+				this.viewModel.setFocus(undefined, undefined, session, false);
+				this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
+			}
+			if (this.session === session && state !== 'stopped') void this.focusStackFrame(undefined);
+			if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
+			if (state === 'terminated' || state === 'error') queueMicrotask(() => { void this.finishSession(session); });
+		}));
+		this.sessionRecords.set(session.id, { session, workspaceGeneration, workspaceId: this.workspace.getWorkspace().id, listener, postDebugTask: resolvedConfiguration.postDebugTask });
 		// Discovering a running worker must preserve the frame being inspected.
 		const preserveFocus = sessionOptions.lifecycleManagedByParent && session.state !== 'stopped' && this.session?.state === 'stopped';
 		if (!preserveFocus) this.viewModel.setFocus(undefined, undefined, session, true);
 		this.newSessionEmitter.fire(session);
 		if (!preserveFocus) this.sessionEmitter.fire(session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-		if (session.state === 'terminated' || session.state === 'error') {
-			await this.finishSession(session);
-		}
+		if (session.state === 'terminated' || session.state === 'error') { await this.finishSession(session); }
 		return session;
 	}
 
 	private normalizeSessionOptions(options: IDebugSessionOptions): IDebugSessionOptions {
-		if (
-			!options ||
-			typeof options !== 'object' ||
-			Array.isArray(options) ||
-			Object.keys(options).some(key => !['parentSession', 'lifecycleManagedByParent', 'consoleMode', 'noDebug', 'suppressSaveBeforeStart'].includes(key)) ||
-			[options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(value => value !== undefined && typeof value !== 'boolean') ||
-			(options.consoleMode !== undefined && options.consoleMode !== DebugConsoleMode.Separate && options.consoleMode !== DebugConsoleMode.MergeWithParent)
-		) {
+		if (!options || typeof options !== 'object' || Array.isArray(options)
+			|| Object.keys(options).some(key => !['parentSession', 'lifecycleManagedByParent', 'consoleMode', 'noDebug', 'suppressSaveBeforeStart'].includes(key))
+			|| [options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(value => value !== undefined && typeof value !== 'boolean')
+			|| options.consoleMode !== undefined && options.consoleMode !== DebugConsoleMode.Separate && options.consoleMode !== DebugConsoleMode.MergeWithParent) {
 			throw new TypeError(localize('debug.invalidSessionOptions', 'Invalid debug session options.'));
 		}
 		if (options.parentSession && (this.getSession(options.parentSession.id) !== options.parentSession || ['terminated', 'error'].includes(options.parentSession.state))) {
@@ -965,18 +661,12 @@ export class DebugService extends Disposable implements IDebugService {
 		const input = record(value, 'startDebugging arguments');
 		if (input.request !== 'launch' && input.request !== 'attach') throw new TypeError(localize('debug.invalidStartDebuggingRequest', 'A startDebugging request must specify launch or attach.'));
 		const configuration = record(input.configuration, 'startDebugging configuration');
-		const parsed = this.parseProviderConfiguration({
-			...configuration,
-			type: parent.resolvedConfiguration?.type ?? parent.configuration.type,
-			name: configuration.name || parent.name,
-			request: input.request,
-		});
+		const parsed = this.parseProviderConfiguration({ ...configuration, type: parent.resolvedConfiguration?.type ?? parent.configuration.type, name: configuration.name || parent.name, request: input.request });
 		// DAP requests start without a selected folder. An explicitly configured
 		// executable still supplies the same adapter when no type factory exists.
 		const executable = parent.resolvedConfiguration?.adapter ?? parent.configuration.adapter;
 		const child = Object.freeze({
-			...parsed,
-			dirId: null,
+			...parsed, dirId: null,
 			...(parent.configuration.adapterExplicit && parsed.adapterExplicit === false ? { adapter: executable, adapterExplicit: true } : {}),
 		});
 		// Reverse requests create targets owned by the requesting adapter session.
@@ -993,7 +683,7 @@ export class DebugService extends Disposable implements IDebugService {
 
 	private bindDescriptorOwner(controller: AbortController, owner: object): void {
 		let owners = this.descriptorOwners.get(controller);
-		if (!owners) this.descriptorOwners.set(controller, (owners = new Set()));
+		if (!owners) this.descriptorOwners.set(controller, owners = new Set());
 		owners.add(owner);
 	}
 
@@ -1018,14 +708,11 @@ export class DebugService extends Disposable implements IDebugService {
 		}
 		if (current.stopAll) {
 			let stopping = false;
-			for (const session of started)
-				this.sessionRecords.get(session.id)?.listener.add(
-					session.onDidChangeState(state => {
-						if (stopping || (state !== 'terminated' && state !== 'error')) return;
-						stopping = true;
-						void Promise.allSettled(started.filter(candidate => candidate !== session).map(candidate => this.stop(candidate)));
-					}),
-				);
+			for (const session of started) this.sessionRecords.get(session.id)?.listener.add(session.onDidChangeState(state => {
+				if (stopping || (state !== 'terminated' && state !== 'error')) return;
+				stopping = true;
+				void Promise.allSettled(started.filter(candidate => candidate !== session).map(candidate => this.stop(candidate)));
+			}));
 		}
 		return Object.freeze(started);
 	}
@@ -1038,8 +725,8 @@ export class DebugService extends Disposable implements IDebugService {
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 	}
 
-	async focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session = this.session, options?: { explicit?: boolean; preserveFocus?: boolean }): Promise<void> {
-		if (session !== this.session || (frame && session?.state !== 'stopped')) throw new Error('A stack frame requires the active paused session');
+	async focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session = this.session, options?: { explicit?: boolean; preserveFocus?: boolean; }): Promise<void> {
+		if (session !== this.session || frame && session?.state !== 'stopped') throw new Error('A stack frame requires the active paused session');
 		const generation = ++this.focusGeneration;
 		this.viewModel.setFocus(frame, thread, session, options?.explicit ?? true);
 		if (frame && session && (options?.explicit !== false || this.editors.activeEditor?.editorId !== DISASSEMBLY_VIEW_ID)) {
@@ -1049,14 +736,7 @@ export class DebugService extends Disposable implements IDebugService {
 
 	private async openStackFrameSource(session: IDebugSession, frame: IDebugStackFrame, generation: number, preserveFocus?: boolean): Promise<void> {
 		const workspaceGeneration = this.workspaceGeneration;
-		const isCurrent = (): boolean =>
-			!this.isDisposed &&
-			generation === this.focusGeneration &&
-			workspaceGeneration === this.workspaceGeneration &&
-			this.sessionRecords.get(session.id)?.workspaceGeneration === workspaceGeneration &&
-			this.session === session &&
-			session.state === 'stopped' &&
-			this.viewModel.focusedStackFrame === frame;
+		const isCurrent = (): boolean => !this.isDisposed && generation === this.focusGeneration && workspaceGeneration === this.workspaceGeneration && this.sessionRecords.get(session.id)?.workspaceGeneration === workspaceGeneration && this.session === session && session.state === 'stopped' && this.viewModel.focusedStackFrame === frame;
 		if (!isCurrent() || !frame.source) return;
 		const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
 		const source = frame.source;
@@ -1079,13 +759,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.viewModel.setFocus(undefined, undefined, session, false);
 		if (!session || session.state !== 'stopped') return;
 		const workspaceGeneration = this.workspaceGeneration;
-		const isCurrent = (): boolean =>
-			!this.isDisposed &&
-			generation === this.focusGeneration &&
-			workspaceGeneration === this.workspaceGeneration &&
-			this.sessionRecords.get(session.id)?.workspaceGeneration === workspaceGeneration &&
-			this.session === session &&
-			session.state === 'stopped';
+		const isCurrent = (): boolean => !this.isDisposed && generation === this.focusGeneration && workspaceGeneration === this.workspaceGeneration && this.sessionRecords.get(session.id)?.workspaceGeneration === workspaceGeneration && this.session === session && session.state === 'stopped';
 		try {
 			const inspection = await session.inspectStack(session.threadId);
 			if (!isCurrent()) return;
@@ -1095,18 +769,10 @@ export class DebugService extends Disposable implements IDebugService {
 			session.selectThread(inspection.threadId);
 			if (!isCurrent()) return;
 			const frame = inspection.frames[0];
-			this.viewModel.setFocus(
-				frame,
-				inspection.threads.find(thread => thread.id === inspection.threadId),
-				session,
-				false,
-			);
+			this.viewModel.setFocus(frame, inspection.threads.find(thread => thread.id === inspection.threadId), session, false);
 			if (frame && frame.lineNumber > 0 && frame.columnNumber > 0 && this.editors.activeEditor?.editorId !== DISASSEMBLY_VIEW_ID) {
-				try {
-					await this.openStackFrameSource(session, frame, generation);
-				} catch (error) {
-					if (isCurrent() && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error));
-				}
+				try { await this.openStackFrameSource(session, frame, generation); }
+				catch (error) { if (isCurrent() && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error)); }
 			}
 		} catch (error) {
 			if (isCurrent() && !isCancellationError(error)) this.reportError(error);
@@ -1118,10 +784,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!this.sessionRecords.has(session.id)) throw new Error('Debug session is no longer active');
 		const target = await this.processes!.manageSession(session.id, 'route');
 		if (target.lifecycleTargetId !== session.id) return this.restart(this.getSession(target.lifecycleTargetId));
-		if (session.capabilities.supportsRestart) {
-			await session.restart();
-			return session;
-		}
+		if (session.capabilities.supportsRestart) { await session.restart(); return session; }
 		const configuration = session.configuration;
 		await this.stop(session);
 		return this.startDebugging(configuration, session.sessionOptions);
@@ -1136,12 +799,7 @@ export class DebugService extends Disposable implements IDebugService {
 			if (this.preparingSessions.get(session.id) === session) {
 				this.preparingSessions.delete(session.id);
 				this.descriptorControllers.get(session.id)?.abort();
-				try {
-					await session.disconnect();
-				} finally {
-					session.dispose();
-					await this.stopChildSessions(session);
-				}
+				try { await session.disconnect(); } finally { session.dispose(); await this.stopChildSessions(session); }
 			}
 			return;
 		}
@@ -1156,39 +814,24 @@ export class DebugService extends Disposable implements IDebugService {
 	addBreakpoints(points: readonly (IDebugBreakpoint | IFunctionBreakpoint)[]): void {
 		this.assertNotDisposed();
 		const currentIds = new Set(this.allBreakpoints().map(point => point.id));
-		const added = points
-			.map(point => {
-				const id = normalizePersistedString(point.id, 'breakpoint ID', 32768);
-				if (typeof point.enabled !== 'boolean') throw new TypeError('Breakpoint enabled must be a boolean');
-				const state = {
-					id,
-					enabled: point.enabled,
-					verified: false,
-					...breakpointConditions(point),
-					...(point.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.logMessage, 'logMessage') }),
-				};
-				if ('kind' in point) {
-					return Object.freeze({
-						...state,
-						kind: 'function' as const,
-						name: normalizePersistedString(point.name, 'function breakpoint name', 32768),
-					});
-				}
-				if (!Number.isSafeInteger(point.lineNumber) || point.lineNumber < 1 || (point.columnNumber !== undefined && (!Number.isSafeInteger(point.columnNumber) || point.columnNumber < 1)))
-					throw new TypeError('Breakpoint position must be positive integers');
-				return Object.freeze({
-					...state,
-					resource: point.resource,
-					lineNumber: point.lineNumber,
-					...(point.columnNumber === undefined ? {} : { columnNumber: point.columnNumber }),
-					...(point.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.logMessage, 'logMessage') }),
-				});
-			})
-			.filter(point => {
-				if (currentIds.has(point.id)) return false;
-				currentIds.add(point.id);
-				return true;
+		const added = points.map(point => {
+			const id = normalizePersistedString(point.id, 'breakpoint ID', 32768);
+			if (typeof point.enabled !== 'boolean') throw new TypeError('Breakpoint enabled must be a boolean');
+			const state = { id, enabled: point.enabled, verified: false, ...breakpointConditions(point), ...(point.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.logMessage, 'logMessage') }) };
+			if ('kind' in point) {
+				return Object.freeze({ ...state, kind: 'function' as const, name: normalizePersistedString(point.name, 'function breakpoint name', 32768) });
+			}
+			if (!Number.isSafeInteger(point.lineNumber) || point.lineNumber < 1 || point.columnNumber !== undefined && (!Number.isSafeInteger(point.columnNumber) || point.columnNumber < 1)) throw new TypeError('Breakpoint position must be positive integers');
+			return Object.freeze({
+				...state, resource: point.resource, lineNumber: point.lineNumber,
+				...(point.columnNumber === undefined ? {} : { columnNumber: point.columnNumber }),
+				...(point.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.logMessage, 'logMessage') }),
 			});
+		}).filter(point => {
+			if (currentIds.has(point.id)) return false;
+			currentIds.add(point.id);
+			return true;
+		});
 		if (added.length === 0) return;
 		this.currentBreakpoints = Object.freeze([...this.currentBreakpoints, ...added.filter((point): point is IDebugBreakpoint => 'resource' in point)].sort(compareBreakpoints));
 		this.currentFunctionBreakpoints = Object.freeze([...this.currentFunctionBreakpoints, ...added.filter((point): point is IFunctionBreakpoint => 'kind' in point)]);
@@ -1208,9 +851,7 @@ export class DebugService extends Disposable implements IDebugService {
 	toggleBreakpoint(resource: URI, lineNumber: number): void {
 		if (!Number.isSafeInteger(lineNumber) || lineNumber <= 0) throw new RangeError('Breakpoint line number must be positive');
 		const existing = this.currentBreakpoints.find(breakpoint => breakpoint.resource.toString() === resource.toString() && breakpoint.lineNumber === lineNumber);
-		this.currentBreakpoints = existing
-			? Object.freeze(this.currentBreakpoints.filter(breakpoint => breakpoint !== existing))
-			: Object.freeze([...this.currentBreakpoints, createBreakpoint(resource, lineNumber, true)].sort(compareBreakpoints));
+		this.currentBreakpoints = existing ? Object.freeze(this.currentBreakpoints.filter(breakpoint => breakpoint !== existing)) : Object.freeze([...this.currentBreakpoints, createBreakpoint(resource, lineNumber, true)].sort(compareBreakpoints));
 		this.breakpointStateChanged();
 	}
 
@@ -1233,28 +874,17 @@ export class DebugService extends Disposable implements IDebugService {
 			if (!('kind' in breakpoint) || breakpoint.kind !== 'function') throw new TypeError('Only function breakpoints have a name');
 			patch.name = normalizePersistedString(patch.name, 'name', 32_768);
 		}
-		if (patch.accessType !== undefined && (!('kind' in breakpoint) || breakpoint.kind !== 'data' || !breakpoint.accessTypes.includes(patch.accessType)))
-			throw new TypeError('Unsupported data breakpoint access type');
+		if (patch.accessType !== undefined && (!('kind' in breakpoint) || breakpoint.kind !== 'data' || !breakpoint.accessTypes.includes(patch.accessType))) throw new TypeError('Unsupported data breakpoint access type');
 		if (patch.instructionReference !== undefined || patch.offset !== undefined) {
 			if (!('kind' in breakpoint) || breakpoint.kind !== 'instruction') throw new TypeError('Only instruction breakpoints have an instruction reference or offset');
 			if (patch.instructionReference !== undefined) patch.instructionReference = normalizeBreakpointReference(patch.instructionReference, 'instructionReference');
 			if (patch.offset !== undefined && !Number.isSafeInteger(patch.offset)) throw new TypeError('Instruction offset must be an integer');
 		}
 		if (update.logMessage !== undefined && !('resource' in breakpoint)) throw new TypeError('Log messages require a source breakpoint');
-		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] =>
-			Object.freeze(points.map(point => (point.id === id ? Object.freeze({ ...point, ...patch, verified: false, message: undefined }) : point)));
-		this.currentBreakpoints = Object.freeze(
-			this.currentBreakpoints.map(point =>
-				point.id === id
-					? Object.freeze({
-							...updateSourceBreakpoint(point, patch),
-							...(patch.enabled === undefined ? {} : { enabled: patch.enabled }),
-							verified: false,
-							message: undefined,
-						})
-					: point,
-			),
-		);
+		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] => Object.freeze(points.map(point => point.id === id ? Object.freeze({ ...point, ...patch, verified: false, message: undefined }) : point));
+		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(point => point.id === id
+			? Object.freeze({ ...updateSourceBreakpoint(point, patch), ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }), verified: false, message: undefined })
+			: point));
 		this.currentFunctionBreakpoints = change(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = change(this.currentDataBreakpoints);
 		this.currentInstructionBreakpoints = change(this.currentInstructionBreakpoints);
@@ -1303,39 +933,26 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void {
-		this.addBreakpoints([
-			{
-				kind: 'function',
-				id: generateUuid(),
-				name: options.name,
-				enabled: true,
-				verified: false,
-				...breakpointConditions(options),
-			},
-		]);
+		this.addBreakpoints([{ kind: 'function', id: generateUuid(), name: options.name, enabled: true, verified: false, ...breakpointConditions(options) }]);
 	}
 
 	addDataBreakpoint(options: IDataBreakpointOptions): void {
 		const session = this.session;
-		if (!session || session.id !== options.sessionId || session.state !== 'stopped')
-			throw new Error(localize('debug.dataRequiresPause', 'Data breakpoints require the paused session that identified the variable.'));
+		if (!session || session.id !== options.sessionId || session.state !== 'stopped') throw new Error(localize('debug.dataRequiresPause', 'Data breakpoints require the paused session that identified the variable.'));
 		if (!session.capabilities.supportsDataBreakpoints) throw new Error(localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints'));
 		if (!options.accessTypes.includes(options.accessType)) throw new TypeError('Unsupported data breakpoint access type');
 		const dataId = normalizeBreakpointReference(options.dataId, 'dataId');
-		this.currentDataBreakpoints = Object.freeze([
-			...this.currentDataBreakpoints,
-			Object.freeze({
-				...options,
-				dataId,
-				accessTypes: Object.freeze([...options.accessTypes]),
-				id: generateUuid(),
-				kind: 'data' as const,
-				enabled: true,
-				verified: false,
-				adapterType: session.configuration.type,
-				...breakpointConditions(options),
-			}),
-		]);
+		this.currentDataBreakpoints = Object.freeze([...this.currentDataBreakpoints, Object.freeze({
+			...options,
+			dataId,
+			accessTypes: Object.freeze([...options.accessTypes]),
+			id: generateUuid(),
+			kind: 'data' as const,
+			enabled: true,
+			verified: false,
+			adapterType: session.configuration.type,
+			...breakpointConditions(options),
+		})]);
 		this.breakpointStateChanged();
 	}
 
@@ -1345,19 +962,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!session.capabilities.supportsInstructionBreakpoints) throw new Error(localize('debug.unsupportedInstructionBreakpoints', 'Debug Adapter does not support instruction breakpoints'));
 		if (options.offset !== undefined && !Number.isSafeInteger(options.offset)) throw new TypeError('Instruction offset must be an integer');
 		const instructionReference = normalizeBreakpointReference(options.instructionReference, 'instructionReference');
-		this.currentInstructionBreakpoints = Object.freeze([
-			...this.currentInstructionBreakpoints,
-			Object.freeze({
-				...options,
-				instructionReference,
-				id: generateUuid(),
-				kind: 'instruction' as const,
-				enabled: true,
-				verified: false,
-				sessionId: session.id,
-				...breakpointConditions(options),
-			}),
-		]);
+		this.currentInstructionBreakpoints = Object.freeze([...this.currentInstructionBreakpoints, Object.freeze({ ...options, instructionReference, id: generateUuid(), kind: 'instruction' as const, enabled: true, verified: false, sessionId: session.id, ...breakpointConditions(options) })]);
 		this.breakpointStateChanged();
 	}
 
@@ -1387,30 +992,22 @@ export class DebugService extends Disposable implements IDebugService {
 		const generation = this.workspaceGeneration;
 		await session.setExceptionBreakpoints(filters);
 		if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
-		this.exceptionBreakpointsByType = Object.freeze({
-			...this.exceptionBreakpointsByType,
-			[session.configuration.type]: Object.freeze([...session.exceptionBreakpoints]),
-		});
+		this.exceptionBreakpointsByType = Object.freeze({ ...this.exceptionBreakpointsByType, [session.configuration.type]: Object.freeze([...session.exceptionBreakpoints]) });
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 		this.persistState();
 	}
 
-	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]): void {
+	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]): void {
 		if (updates.length === 0) return;
 		const byId = new Map(updates.map(update => [update.id, update]));
-		this.currentBreakpoints = Object.freeze(
-			this.currentBreakpoints.map(breakpoint => {
-				const update = byId.get(breakpoint.id);
-				return update ? Object.freeze({ ...breakpoint, verified: update.verified, message: update.message }) : breakpoint;
-			}),
-		);
-		const accept = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] =>
-			Object.freeze(
-				points.map(point => {
-					const update = byId.get(point.id);
-					return update ? Object.freeze({ ...point, verified: update.verified, message: update.message }) : point;
-				}),
-			);
+		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(breakpoint => {
+			const update = byId.get(breakpoint.id);
+			return update ? Object.freeze({ ...breakpoint, verified: update.verified, message: update.message }) : breakpoint;
+		}));
+		const accept = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] => Object.freeze(points.map(point => {
+			const update = byId.get(point.id);
+			return update ? Object.freeze({ ...point, verified: update.verified, message: update.message }) : point;
+		}));
 		this.currentFunctionBreakpoints = accept(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = accept(this.currentDataBreakpoints);
 		this.currentInstructionBreakpoints = accept(this.currentInstructionBreakpoints);
@@ -1421,7 +1018,7 @@ export class DebugService extends Disposable implements IDebugService {
 		const record = this.sessionRecords.get(session.id);
 		if (!record) return Promise.resolve();
 		// Stop and adapter exit share the same release and post-task completion.
-		return (record.completion ??= this.releaseSession(record));
+		return record.completion ??= this.releaseSession(record);
 	}
 
 	private async releaseSession(record: DebugSessionRecord): Promise<void> {
@@ -1441,11 +1038,8 @@ export class DebugService extends Disposable implements IDebugService {
 		}
 		this.sessionEmitter.fire(this.session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-		try {
-			await this.runTask(record.postDebugTask, 'postDebugTask', session.configuration.dirId ?? undefined);
-		} catch (error) {
-			this.reportError(error);
-		}
+		try { await this.runTask(record.postDebugTask, 'postDebugTask', session.configuration.dirId ?? undefined); }
+		catch (error) { this.reportError(error); }
 	}
 
 	private async stopChildSessions(session: IDebugSession): Promise<void> {
@@ -1453,26 +1047,20 @@ export class DebugService extends Disposable implements IDebugService {
 		const relation = await this.processes.manageSession(session.id, 'end');
 		// Rust has already revoked resources across directories. Release only the
 		// editor/extension objects returned by its graph, without reconstructing it.
-		await Promise.allSettled(
-			relation.descendants.map(async id => {
-				this.launchControllers.get(id)?.abort();
-				const preparing = this.preparingSessions.get(id);
-				if (preparing) {
-					this.preparingSessions.delete(id);
-					this.descriptorControllers.get(id)?.abort();
-					try {
-						await preparing.disconnect();
-					} finally {
-						preparing.dispose();
-					}
-				}
-				const record = this.sessionRecords.get(id);
-				if (record) {
-					await record.session.disconnect();
-					await (record.completion ?? this.finishSession(record.session));
-				}
-			}),
-		);
+		await Promise.allSettled(relation.descendants.map(async id => {
+			this.launchControllers.get(id)?.abort();
+			const preparing = this.preparingSessions.get(id);
+			if (preparing) {
+				this.preparingSessions.delete(id);
+				this.descriptorControllers.get(id)?.abort();
+				try { await preparing.disconnect(); } finally { preparing.dispose(); }
+			}
+			const record = this.sessionRecords.get(id);
+			if (record) {
+				await record.session.disconnect();
+				await (record.completion ?? this.finishSession(record.session));
+			}
+		}));
 	}
 
 	private async runTask(reference: string | undefined, role: string, dirId?: string, signal?: AbortSignal): Promise<void> {
@@ -1502,23 +1090,9 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	private restoreState(state: Readonly<PersistedDebugState>): void {
-		this.currentBreakpoints = Object.freeze(
-			state.breakpoints
-				.map(value =>
-					Object.freeze({
-						...createBreakpoint(URI.parse(value.resource), value.lineNumber, value.enabled),
-						...(value.id === undefined ? {} : { id: value.id }),
-						...(value.columnNumber === undefined ? {} : { columnNumber: value.columnNumber }),
-						...breakpointExpressions(value),
-					}),
-				)
-				.sort(compareBreakpoints),
-		);
+		this.currentBreakpoints = Object.freeze(state.breakpoints.map(value => Object.freeze({ ...createBreakpoint(URI.parse(value.resource), value.lineNumber, value.enabled), ...(value.id === undefined ? {} : { id: value.id }), ...(value.columnNumber === undefined ? {} : { columnNumber: value.columnNumber }), ...breakpointExpressions(value) })).sort(compareBreakpoints));
 		this.currentFunctionBreakpoints = Object.freeze(state.functionBreakpoints.map(point => Object.freeze({ ...point, verified: false })));
-		this.currentDataBreakpoints = Object.freeze([
-			...state.dataBreakpoints.map(point => Object.freeze({ ...point, verified: false })),
-			...this.currentDataBreakpoints.filter(point => !point.canPersist),
-		]);
+		this.currentDataBreakpoints = Object.freeze([...state.dataBreakpoints.map(point => Object.freeze({ ...point, verified: false })), ...this.currentDataBreakpoints.filter(point => !point.canPersist)]);
 		this.currentWatchExpressions = Object.freeze([...state.watchExpressions]);
 		this.exceptionBreakpointsByType = Object.freeze(Object.fromEntries(Object.entries(state.exceptionBreakpoints).map(([type, filters]) => [type, Object.freeze([...filters])])));
 		this.breakpointsEmitter.fire(this.allBreakpoints());
@@ -1531,8 +1105,7 @@ export class DebugService extends Disposable implements IDebugService {
 		for (const record of this.sessionRecords.values()) {
 			// A previous workspace's adapter can still be acknowledging disconnect
 			// when the new workspace publishes its first definitions snapshot.
-			if (record.workspaceGeneration === this.workspaceGeneration && record.workspaceId === this.workspace.getWorkspace().id)
-				void record.session.syncBreakpoints().catch(error => this.reportError(error));
+			if (record.workspaceGeneration === this.workspaceGeneration && record.workspaceId === this.workspace.getWorkspace().id) void record.session.syncBreakpoints().catch(error => this.reportError(error));
 		}
 	}
 
@@ -1555,41 +1128,30 @@ export class DebugService extends Disposable implements IDebugService {
 		this.debugStorage.storeState(state, commands);
 	}
 
+
 	private reportError(error: unknown): void {
 		this.logService.error('debug.service', 'Debug service operation failed', error);
 	}
 }
 
-function childResource(root: URI, relativePath: string): URI {
-	return URI.joinPath(root, ...relativePath.split('/'));
-}
-function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint {
-	return Object.freeze({ id: generateUuid(), resource, lineNumber, enabled, verified: false });
-}
+function childResource(root: URI, relativePath: string): URI { return URI.joinPath(root, ...relativePath.split('/')); }
+function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: generateUuid(), resource, lineNumber, enabled, verified: false }); }
 
 function updateSourceBreakpoint(point: IDebugBreakpoint, update: IBreakpointUpdateData): IDebugBreakpoint {
 	const lineNumber = update.lineNumber ?? point.lineNumber;
 	const columnNumber = 'column' in update ? update.column : point.columnNumber;
-	if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || (columnNumber !== undefined && (!Number.isSafeInteger(columnNumber) || columnNumber < 1))) {
+	if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || columnNumber !== undefined && (!Number.isSafeInteger(columnNumber) || columnNumber < 1)) {
 		throw new TypeError('Breakpoint position must be positive integers');
 	}
 	const expressions = { condition: point.condition, hitCondition: point.hitCondition, logMessage: point.logMessage };
 	for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
 		if (field in update) expressions[field] = update[field] === undefined ? undefined : normalizeBreakpointExpression(update[field], field);
 	}
-	if (
-		lineNumber === point.lineNumber &&
-		columnNumber === point.columnNumber &&
-		expressions.condition === point.condition &&
-		expressions.hitCondition === point.hitCondition &&
-		expressions.logMessage === point.logMessage
-	)
-		return point;
+	if (lineNumber === point.lineNumber && columnNumber === point.columnNumber
+		&& expressions.condition === point.condition && expressions.hitCondition === point.hitCondition && expressions.logMessage === point.logMessage) return point;
 	return Object.freeze({ ...point, lineNumber, columnNumber, ...expressions, verified: false, message: undefined });
 }
-function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number {
-	return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber;
-}
+function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number { return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber; }
 function normalizeBreakpointExpression(value: string, field: string): string | undefined {
 	if (value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
 	return value.trim() ? value : undefined;
@@ -1618,7 +1180,9 @@ function resolveCompoundConfiguration(reference: IDebugCompound['configurations'
 	const name = typeof reference === 'string' ? reference : reference.name;
 	const matches = configurations.filter(configuration => {
 		if (configuration.id !== name && configuration.name !== name) return false;
-		return typeof reference === 'string' ? dirId === undefined || configuration.dirId === dirId : configuration.workspaceFolderName === reference.folder;
+		return typeof reference === 'string'
+			? dirId === undefined || configuration.dirId === dirId
+			: configuration.workspaceFolderName === reference.folder;
 	});
 	if (matches.length === 0) throw new Error(`Debug compound configuration '${name}' was not found`);
 	if (matches.length > 1) throw new Error(`Debug compound configuration '${name}' is ambiguous`);
@@ -1635,6 +1199,7 @@ function normalizeBreakpointReference(value: unknown, field: string): string {
 	if (typeof value !== 'string' || !value.trim() || value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain 1 to 32768 characters`);
 	return value;
 }
+
 
 interface RunInTerminalArguments {
 	readonly kind: 'integrated' | 'external';
@@ -1654,19 +1219,12 @@ async function runDebuggeeInTerminal(
 	assertCurrent: () => void,
 	dirId?: string,
 	observeTerminal?: (terminal: ITerminalInstance) => void,
-): Promise<Readonly<{ shellProcessId: number }>> {
+): Promise<Readonly<{ shellProcessId: number; }>> {
 	const request = parseRunInTerminalArguments(value);
 	if (request.kind === 'external') throw new Error('External debug terminals are not supported; use an integrated terminal');
 	const profile = await profiles.getDefaultProfile(options);
 	assertCurrent();
-	const shell: IShellLaunchConfig = {
-		name: profile.profileName,
-		executable: profile.path,
-		args: profile.args,
-		env: profile.env,
-		icon: profile.icon,
-		color: profile.color,
-	};
+	const shell: IShellLaunchConfig = { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color };
 	await profiles.resolveShellLaunchConfig(shell, options);
 	assertCurrent();
 	// DAP environment and cwd are literal adapter data. Resolve configuration
@@ -1676,14 +1234,9 @@ async function runDebuggeeInTerminal(
 	mergeEnvironments(env, request.env, options.os !== OperatingSystem.Windows);
 	const executable = typeof shell.executable === 'string' ? shell.executable : shell.executable![0]!;
 	const terminal = await terminalService.createTerminal({
-		dirId,
-		dimensions: { rows: 30, cols: 120 },
+		dirId, dimensions: { rows: 30, cols: 120 },
 		profile: { type: 'custom', name: profile.profileName, path: [executable], args: shell.args ?? [] },
-		title: request.title ?? localize('debug.terminalTitle', 'Debug'),
-		env,
-		cwd: request.cwd ?? shell.cwd,
-		icon: shell.icon,
-		color: shell.color,
+		title: request.title ?? localize('debug.terminalTitle', 'Debug'), env, cwd: request.cwd ?? shell.cwd, icon: shell.icon, color: shell.color,
 	});
 	try {
 		assertCurrent();
@@ -1693,7 +1246,7 @@ async function runDebuggeeInTerminal(
 		assertCurrent();
 	} catch (error) {
 		// Preserve the dispatch error even if the unavailable transport also rejects close.
-		await terminalService.closeTerminal(terminal).catch(() => {});
+		await terminalService.closeTerminal(terminal).catch(() => { });
 		throw error;
 	}
 	return Object.freeze({ shellProcessId: terminal.processId });
@@ -1706,14 +1259,7 @@ function parseRunInTerminalArguments(value: unknown): RunInTerminalArguments {
 	const args = stringArray(input.args, 'runInTerminal args', 256, 4096);
 	if (args.length === 0) throw new TypeError('runInTerminal args must contain the executable');
 	const env = input.env === undefined ? {} : environment(input.env);
-	return Object.freeze({
-		kind,
-		title: optionalString(input.title, 'runInTerminal title', 256),
-		cwd: optionalString(input.cwd, 'runInTerminal cwd', 4096),
-		args,
-		env,
-		argsCanBeInterpretedByShell: input.argsCanBeInterpretedByShell === true,
-	});
+	return Object.freeze({ kind, title: optionalString(input.title, 'runInTerminal title', 256), cwd: optionalString(input.cwd, 'runInTerminal cwd', 4096), args, env, argsCanBeInterpretedByShell: input.argsCanBeInterpretedByShell === true });
 }
 
 function terminalCommand(request: RunInTerminalArguments, executable: string): string {
@@ -1749,10 +1295,7 @@ function quote(value: string, shell: 'powershell' | 'cmd' | 'posix'): string {
 }
 
 function shellKind(executable: string): 'powershell' | 'cmd' | 'posix' {
-	const basename = executable
-		.split(/[\\/]/)
-		.at(-1)!
-		.replace(/\.exe$/i, '');
+	const basename = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '');
 	if (/^(?:powershell|pwsh)$/i.test(basename)) return 'powershell';
 	if (/^(?:cmd|command-prompt)$/i.test(basename)) return 'cmd';
 	return 'posix';
@@ -1761,25 +1304,19 @@ function shellKind(executable: string): 'powershell' | 'cmd' | 'posix' {
 function environment(value: unknown): Readonly<Record<string, string | null>> {
 	const input = record(value, 'runInTerminal env');
 	if (Object.keys(input).length > 128) throw new RangeError('runInTerminal env cannot contain more than 128 entries');
-	return Object.freeze(
-		Object.fromEntries(
-			Object.entries(input).map(([key, item]) => {
-				if (!key || key.length > 256 || /[=\0]/.test(key)) throw new TypeError(`runInTerminal env key '${key}' is invalid`);
-				if (item !== null && (typeof item !== 'string' || item.length > 32_768 || item.includes('\0'))) throw new TypeError(`runInTerminal env '${key}' must be a bounded string or null`);
-				return [key, item as string | null];
-			}),
-		),
-	);
+	return Object.freeze(Object.fromEntries(Object.entries(input).map(([key, item]) => {
+		if (!key || key.length > 256 || /[=\0]/.test(key)) throw new TypeError(`runInTerminal env key '${key}' is invalid`);
+		if (item !== null && (typeof item !== 'string' || item.length > 32_768 || item.includes('\0'))) throw new TypeError(`runInTerminal env '${key}' must be a bounded string or null`);
+		return [key, item as string | null];
+	})));
 }
 
 function stringArray(value: unknown, path: string, maximumItems: number, maximumLength: number): readonly string[] {
 	if (!Array.isArray(value) || value.length > maximumItems) throw new TypeError(`${path} must be an array with at most ${maximumItems} items`);
-	return Object.freeze(
-		value.map((item, index) => {
-			if (typeof item !== 'string' || item.length > maximumLength || item.includes('\0')) throw new TypeError(`${path}[${index}] must be a bounded string`);
-			return item;
-		}),
-	);
+	return Object.freeze(value.map((item, index) => {
+		if (typeof item !== 'string' || item.length > maximumLength || item.includes('\0')) throw new TypeError(`${path}[${index}] must be a bounded string`);
+		return item;
+	}));
 }
 
 function optionalString(value: unknown, path: string, maximumLength: number): string | undefined {
@@ -1793,28 +1330,16 @@ function record(value: unknown, path: string): Record<string, unknown> {
 	return value as Record<string, unknown>;
 }
 
+
 function toExtensionDebugConfiguration(configuration: IDebugConfiguration): DebugConfiguration {
 	// Extension mutations belong to this callback, never the source used for restart.
-	return JSON.parse(
-		JSON.stringify({
-			...configuration.arguments,
-			name: configuration.name,
-			type: configuration.type,
-			request: configuration.request,
-			...(configuration.adapter === undefined || configuration.adapterExplicit === false
-				? {}
-				: {
-						debugAdapter: {
-							...(configuration.adapter.connection ? { connection: configuration.adapter.connection } : { program: configuration.adapter.program }),
-							args: configuration.adapter.arguments,
-							...(configuration.adapter.cwd === undefined ? {} : { cwd: configuration.adapter.cwd }),
-							...(configuration.adapter.env === undefined ? {} : { env: configuration.adapter.env }),
-						},
-					}),
-			...(configuration.preLaunchTask === undefined ? {} : { preLaunchTask: configuration.preLaunchTask }),
-			...(configuration.postDebugTask === undefined ? {} : { postDebugTask: configuration.postDebugTask }),
-		}),
-	);
+	return JSON.parse(JSON.stringify({
+		...configuration.arguments,
+		name: configuration.name, type: configuration.type, request: configuration.request,
+		...(configuration.adapter === undefined || configuration.adapterExplicit === false ? {} : { debugAdapter: { ...(configuration.adapter.connection ? { connection: configuration.adapter.connection } : { program: configuration.adapter.program }), args: configuration.adapter.arguments, ...(configuration.adapter.cwd === undefined ? {} : { cwd: configuration.adapter.cwd }), ...(configuration.adapter.env === undefined ? {} : { env: configuration.adapter.env }) } }),
+		...(configuration.preLaunchTask === undefined ? {} : { preLaunchTask: configuration.preLaunchTask }),
+		...(configuration.postDebugTask === undefined ? {} : { postDebugTask: configuration.postDebugTask }),
+	}));
 }
 
 function linkCancellation(signal: AbortSignal | undefined, controller: AbortController) {

@@ -19,44 +19,31 @@ for (const host of ['github.com', 'ghe.example']) {
 			revision: 2n,
 			accounts: [{ provider: 'github', accountId: 'octocat', status: 'ready', credentialRevision: 1n }],
 		};
-		let finishStart: (challenge: AccountLoginChallenge) => void = () => {};
-		const startResult = new Promise<AccountLoginChallenge>(resolve => {
-			finishStart = resolve;
-		});
+		let finishStart: (challenge: AccountLoginChallenge) => void = () => { };
+		const startResult = new Promise<AccountLoginChallenge>(resolve => { finishStart = resolve; });
 		const methods: AccountLoginMethod[] = [];
 		const accounts: IAccountService = {
 			onDidChangeAccounts: Event.None,
 			onDidCompleteLogin: completed.event,
 			read: async () => accountState,
-			startLogin: async method => {
-				methods.push(method);
-				return startResult;
-			},
-			cancelLogin: async () => {},
-			logout: async () => {},
+			startLogin: async method => { methods.push(method); return startResult; },
+			cancelLogin: async () => { },
+			logout: async () => { },
 		};
 		services.registerInstance(IAccountService, accounts);
 		const announcements: string[] = [];
 		services.registerInstance(IAccessibilityService, {
-			status: (message: string) => {
-				announcements.push(message);
-			},
+			status: (message: string) => { announcements.push(message); },
 		} as IAccessibilityService);
 		services.registerInstance(IDialogService, {
-			showMessage: async () => {
-				throw new Error('Unexpected dialog');
-			},
+			showMessage: async () => { throw new Error('Unexpected dialog'); },
 		} as unknown as IDialogService);
 		services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
 			translate: (_bundle: string, _key: string, fallback: string) => fallback,
 		});
 		services.registerInstance(ILogService, {
-			trace() {},
-			debug() {},
-			info() {},
-			warn() {},
-			error() {},
+			trace() { }, debug() { }, info() { }, warn() { }, error() { },
 		});
 		const connection = disposables.add(services.createInstance(GitHubConnectionService));
 
@@ -67,12 +54,10 @@ for (const host of ['github.com', 'ghe.example']) {
 		await connecting;
 
 		assert.deepEqual(methods, [host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host }]);
-		assert.deepEqual(
-			{ isConnecting: connection.isConnecting, announcements },
-			{
-				isConnecting: false,
-				announcements: ['GitHub account connected.'],
-			},
-		);
+		assert.deepEqual({ isConnecting: connection.isConnecting, announcements }, {
+			isConnecting: false,
+			announcements: ['GitHub account connected.'],
+		});
 	});
+
 }

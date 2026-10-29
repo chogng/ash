@@ -12,14 +12,7 @@ import { LaunchMainService, parseWindowLaunch } from '../../electron-main/launch
 
 test('launch parsing separates files, project options, window policy and literal filenames', () => {
 	assert.deepEqual(parseLaunchArguments(['--folder', 'project', '--reuse-window', '--goto', 'one.ts:2:7', 'two.ts', '--', '-literal']), {
-		paths: ['one.ts:2:7', 'two.ts', '-literal'],
-		urls: [],
-		workspace: { kind: WorkspaceOpenTargetKind.Folder, path: 'project' },
-		newWindow: false,
-		reuseWindow: true,
-		goto: true,
-		wait: false,
-		waitMarkerFilePath: undefined,
+		paths: ['one.ts:2:7', 'two.ts', '-literal'], urls: [], workspace: { kind: WorkspaceOpenTargetKind.Folder, path: 'project' }, newWindow: false, reuseWindow: true, goto: true, wait: false, waitMarkerFilePath: undefined,
 	});
 	assert.throws(() => parseLaunchArguments(['-n', '-r']), /cannot be combined/);
 	assert.throws(() => parseLaunchArguments(['--waitMarkerFilePath=x']), /requires --wait/);
@@ -47,17 +40,12 @@ test('launch creation requires the window service and resolves folders and file 
 			open: async configuration => {
 				opened = configuration;
 				return { whenClosed: Promise.resolve(), whenFilesClosed: Promise.resolve() };
-			},
+			}
 		});
 		using launch = services.createInstance(LaunchMainService);
 		await launch.start({ args: parseLaunchArguments(['project', '-g', 'one.ts:2:3']), cwd: root });
 		assert.deepEqual(opened, {
-			workspace: { kind: WorkspaceOpenTargetKind.Folder, path: join(root, 'project') },
-			cwd: root,
-			files: [{ uri: pathToFileURL(join(root, 'one.ts')).href, line: 2, column: 3 }],
-			forceNewWindow: false,
-			forceReuseWindow: false,
-			waitForFiles: false,
+			workspace: { kind: WorkspaceOpenTargetKind.Folder, path: join(root, 'project') }, cwd: root, files: [{ uri: pathToFileURL(join(root, 'one.ts')).href, line: 2, column: 3 }], forceNewWindow: false, forceReuseWindow: false, waitForFiles: false,
 		});
 	} finally {
 		await rm(root, { recursive: true, force: true });
@@ -69,21 +57,11 @@ test('waiting launches release their marker after file completion, failure or ap
 	try {
 		let finish!: () => void;
 		using services = new InstantiationService();
-		services.registerInstance(IWindowsMainService, {
-			open: async () => ({
-				whenClosed: new Promise<void>(() => {}),
-				whenFilesClosed: new Promise<void>(resolve => {
-					finish = resolve;
-				}),
-			}),
-		});
+		services.registerInstance(IWindowsMainService, { open: async () => ({ whenClosed: new Promise<void>(() => { }), whenFilesClosed: new Promise<void>(resolve => { finish = resolve; }) }) });
 		using launch = services.createInstance(LaunchMainService);
 		const marker = join(root, 'marker');
 		await writeFile(marker, '');
-		const request = {
-			args: parseLaunchArguments(['--wait', `--waitMarkerFilePath=${marker}`, 'one.ts']),
-			cwd: root,
-		};
+		const request = { args: parseLaunchArguments(['--wait', `--waitMarkerFilePath=${marker}`, 'one.ts']), cwd: root };
 		await launch.start(request);
 		await access(marker);
 		finish();
@@ -94,11 +72,7 @@ test('waiting launches release their marker after file completion, failure or ap
 		launch.dispose();
 		await assert.rejects(access(marker), { code: 'ENOENT' });
 		using failingServices = new InstantiationService();
-		failingServices.registerInstance(IWindowsMainService, {
-			open: async () => {
-				throw new Error('Open failed');
-			},
-		});
+		failingServices.registerInstance(IWindowsMainService, { open: async () => { throw new Error('Open failed'); } });
 		using failing = failingServices.createInstance(LaunchMainService);
 		await writeFile(marker, '');
 		await assert.rejects(failing.start(request), /Open failed/);

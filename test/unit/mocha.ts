@@ -71,14 +71,9 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
-				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8'))) ? await startBrowserUnitServer(run, environment) : undefined;
-				const testEnvironment = browserServer
-					? {
-							...environment,
-							ASH_BROWSER_UNIT_BASE_URL: browserServer.url,
-							ASH_BROWSER_UNIT_RESULTS: browserServer.results,
-						}
-					: environment;
+				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
+					? await startBrowserUnitServer(run, environment) : undefined;
+				const testEnvironment = browserServer ? { ...environment, ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : environment;
 				try {
 					let nextFile = 0;
 					const worker = async (): Promise<void> => {
@@ -86,26 +81,17 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 							const index = nextFile++;
 							const file = files[index];
 							const countFile = resolve(resultDirectory, `${index}.txt`);
-							const result = await run.command(
-								process.execPath,
-								[
-									...preloads.flatMap(path => ['--import', `./${path}`]),
-									'node_modules/mocha/bin/mocha.js',
-									'--ui',
-									'tdd',
-									'--forbid-only',
-									'--reporter',
-									'./test/unit/reporter.ts',
-									'--reporter-option',
-									`countFile=${countFile}`,
-									'--timeout',
-									String(selection.timeout),
-									...(selection.grep ? ['--grep', selection.grep] : []),
-									file,
-								],
-								{ ...testEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory },
-								true,
-							);
+							const result = await run.command(process.execPath, [
+								...preloads.flatMap(path => ['--import', `./${path}`]),
+								'node_modules/mocha/bin/mocha.js',
+								'--ui', 'tdd',
+								'--forbid-only',
+								'--reporter', './test/unit/reporter.ts',
+								'--reporter-option', `countFile=${countFile}`,
+								'--timeout', String(selection.timeout),
+								...(selection.grep ? ['--grep', selection.grep] : []),
+								file,
+							], { ...testEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory }, true);
 							// Print one completed file at a time so concurrent reporters stay readable.
 							process.stdout.write(result.output);
 							if (run.stopped || result.code === 130 || result.code === 143) {
@@ -119,22 +105,14 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 							if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
 						}
 					};
-					const results = await Promise.allSettled(
-						Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
-							try {
-								await worker();
-							} catch (error) {
-								await run.close();
-								throw error;
-							}
-						}),
-					);
+					const results = await Promise.allSettled(Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
+						try { await worker(); }
+						catch (error) { await run.close(); throw error; }
+					}));
 					for (const result of results) {
 						if (result.status === 'rejected') throw result.reason;
 					}
-				} finally {
-					await browserServer?.dispose();
-				}
+				} finally { await browserServer?.dispose(); }
 			});
 		} finally {
 			rmSync(resultDirectory, { recursive: true, force: true });
@@ -174,12 +152,8 @@ function parseSelection(args: readonly string[]): Selection {
 		const value = args[index + 1];
 		if (!value) throw new Error(`Missing value for ${option}`);
 		switch (option) {
-			case '--run':
-				runs.push(value);
-				break;
-			case '--runGlob':
-				runGlob = value;
-				break;
+			case '--run': runs.push(value); break;
+			case '--runGlob': runGlob = value; break;
 			case '--affected': {
 				if (affected || !value.trim() || value.startsWith('--')) throw new Error('--affected requires one base revision.');
 				affected = value;
@@ -200,8 +174,7 @@ function parseSelection(args: readonly string[]): Selection {
 				if (!Number.isSafeInteger(workers) || workers <= 0) throw new Error(`Invalid worker count: ${value}`);
 				break;
 			}
-			default:
-				throw new Error(`Unsupported unit test option: ${option}`);
+			default: throw new Error(`Unsupported unit test option: ${option}`);
 		}
 		index += 1;
 	}

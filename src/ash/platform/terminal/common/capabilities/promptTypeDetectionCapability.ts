@@ -8,9 +8,7 @@ export class PromptTypeDetectionCapability extends Disposable implements IPrompt
 	private value: string | undefined;
 	private readonly changed = this._register(new Emitter<string | undefined>());
 	readonly onPromptTypeChanged = this.changed.event;
-	get promptType(): string | undefined {
-		return this.value;
-	}
+	get promptType(): string | undefined { return this.value; }
 
 	setPromptType(value: string): void {
 		if (this.isDisposed) return;

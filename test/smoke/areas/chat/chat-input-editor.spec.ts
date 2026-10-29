@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('Empty chat anchors its input and secondary toolbar to the bottom pane edge', async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -68,7 +68,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 
 test('Chat mode changes reach the input and keyboard help restores its selected action', async ({ workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
@@ -109,7 +109,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
 	})();
 	try {
-		if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		}
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -166,7 +166,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 
 test('Chat input grows upward with wrapped text and retains keyboard focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const host = page.locator('.ash-chat-input-editor-host');
@@ -177,7 +177,7 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-container');
 	const initialBounds = await composer.boundingBox();
 	expect(initialBounds).not.toBeNull();
-	await host.evaluate(element => (element.style.width = '180px'));
+	await host.evaluate(element => element.style.width = '180px');
 	await input.focus();
 	await page.keyboard.insertText('word '.repeat(80));
 	await expect(editor).toHaveCSS('height', '314px');
@@ -187,11 +187,11 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 	expect(expandedBounds!.y).toBeLessThan(initialBounds!.y);
 	expect(expandedBounds!.y + expandedBounds!.height).toBeCloseTo(initialBounds!.y + initialBounds!.height, 0);
 
-	await host.evaluate(element => (element.style.width = '1000px'));
+	await host.evaluate(element => element.style.width = '1000px');
 	await expect.poll(() => editor.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(314);
 	await expect(input).toBeFocused();
 
-	await host.evaluate(element => (element.style.width = '180px'));
+	await host.evaluate(element => element.style.width = '180px');
 	await expect(editor).toHaveCSS('height', '314px');
 	await page.keyboard.press('ControlOrMeta+A');
 	await page.keyboard.press('Backspace');
@@ -203,7 +203,7 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 
 test('Chat completes catalog commands from the keyboard and restores the empty input', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
-	if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const editor = page.locator('.ash-chat-input-editor');

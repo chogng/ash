@@ -60,12 +60,7 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 			provisionRuntime: host => this.provisionRuntime(host),
 			settleRuntimeProvision: () => this.settleRuntimeProvision(),
 			resolveRuntime: profiles === undefined ? undefined : async (host, workspace) => (await profiles.get(host, workspace))?.activeRuntime,
-			activateRuntime:
-				profiles === undefined
-					? undefined
-					: async (host, workspace, runtime) => {
-							await profiles.activate(host, workspace, runtime, options.sshExecutable);
-						},
+			activateRuntime: profiles === undefined ? undefined : async (host, workspace, runtime) => { await profiles.activate(host, workspace, runtime, options.sshExecutable); },
 			rollbackRuntime: profiles === undefined ? undefined : async (host, workspace, runtimeSshExecutable) => (await profiles.rollback(host, workspace, runtimeSshExecutable)).activeRuntime,
 		});
 	}
@@ -98,7 +93,7 @@ export function createRemoteRuntimeInstallProgressLogger(log: (message: string, 
 	return progress => {
 		if (progress.phase === 'downloadingCatalog') nextDownloadPercent = 0;
 		if (progress.phase === 'downloadingArtifact') {
-			const percent = Math.floor((progress.transferredBytes * 100) / progress.totalBytes);
+			const percent = Math.floor(progress.transferredBytes * 100 / progress.totalBytes);
 			if (percent < nextDownloadPercent && progress.transferredBytes !== progress.totalBytes) return;
 			nextDownloadPercent = Math.min(100, percent + 10);
 			log(`Remote runtime installation: downloaded ${percent}%`);
@@ -106,7 +101,7 @@ export function createRemoteRuntimeInstallProgressLogger(log: (message: string, 
 		}
 		if (progress.phase === 'validatingArtifact') nextUploadPercent = 0;
 		if (progress.phase === 'uploading') {
-			const percent = Math.floor((progress.transferredBytes * 100) / progress.totalBytes);
+			const percent = Math.floor(progress.transferredBytes * 100 / progress.totalBytes);
 			if (percent < nextUploadPercent && progress.transferredBytes !== progress.totalBytes) return;
 			nextUploadPercent = Math.min(100, percent + 10);
 			log(`Remote runtime installation: uploaded ${percent}%`);

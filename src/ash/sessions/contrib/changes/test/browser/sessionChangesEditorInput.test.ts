@@ -8,11 +8,7 @@ import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInp
 
 suite('Session Changes editor restoration', () => {
 	test('restores the capture choice and opaque conversation identity through JSON', () => {
-		const resource = URI.from({
-			scheme: 'ash-session',
-			path: '/session #1',
-			query: new URLSearchParams({ thread: 'thread&peer=2' }).toString(),
-		});
+		const resource = URI.from({ scheme: 'ash-session', path: '/session #1', query: new URLSearchParams({ thread: 'thread&peer=2' }).toString() });
 		const input = new SessionChangesEditorInput(resource, { kind: 'id', id: 'capture #2' });
 		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 		assert.ok(restored instanceof SessionChangesEditorInput);
@@ -23,28 +19,15 @@ suite('Session Changes editor restoration', () => {
 
 	test('persists a transient selection as its backing capture rather than resolved state or operations', () => {
 		const changeset: ISessionChangeset = {
-			id: 'capture',
-			label: 'Temporary comparison',
-			isEnabled: constObservable(true),
-			isDefault: constObservable(false),
-			isLoadingChanges: constObservable(false),
-			changes: constObservable([]),
-			operations: constObservable([]),
-			originalCheckpointRef: constObservable(undefined),
-			modifiedCheckpointRef: constObservable(undefined),
-			invokeOperation: async () => {
-				throw new Error('Restoration must not invoke operations');
-			},
+			id: 'capture', label: 'Temporary comparison',
+			isEnabled: constObservable(true), isDefault: constObservable(false), isLoadingChanges: constObservable(false),
+			changes: constObservable([]), operations: constObservable([]),
+			originalCheckpointRef: constObservable(undefined), modifiedCheckpointRef: constObservable(undefined),
+			invokeOperation: async () => { throw new Error('Restoration must not invoke operations'); },
 		};
-		const input = new SessionChangesEditorInput(URI.parse('ash-session:/session?thread=thread'), {
-			kind: 'transient',
-			changeset,
-		});
+		const input = new SessionChangesEditorInput(URI.parse('ash-session:/session?thread=thread'), { kind: 'transient', changeset });
 		const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
-		assert.deepEqual(serialized.value, {
-			resource: 'ash-session-changes:/session?thread=thread',
-			changesetId: 'capture',
-		});
+		assert.deepEqual(serialized.value, { resource: 'ash-session-changes:/session?thread=thread', changesetId: 'capture' });
 		const restored = EditorInputSerializers.deserialize(serialized);
 		assert.ok(restored instanceof SessionChangesEditorInput);
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
@@ -54,22 +37,8 @@ suite('Session Changes editor restoration', () => {
 		const input = new SessionChangesEditorInput(URI.parse('ash-session:/session?thread=thread'));
 		const serialized = EditorInputSerializers.serialize(input);
 		for (const changesetId of [0, '', {}, null]) {
-			assert.throws(
-				() =>
-					EditorInputSerializers.deserialize({
-						...serialized,
-						value: { resource: input.resource.toString(), changesetId },
-					}),
-				TypeError,
-			);
+			assert.throws(() => EditorInputSerializers.deserialize({ ...serialized, value: { resource: input.resource.toString(), changesetId } }), TypeError);
 		}
-		assert.throws(
-			() =>
-				EditorInputSerializers.deserialize({
-					...serialized,
-					value: { resource: 'file:/session', changesetId: 'capture' },
-				}),
-			TypeError,
-		);
+		assert.throws(() => EditorInputSerializers.deserialize({ ...serialized, value: { resource: 'file:/session', changesetId: 'capture' } }), TypeError);
 	});
 });

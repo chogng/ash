@@ -64,7 +64,13 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const [{ ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }, { TerminalTitleActions }] = await Promise.all([
+const [
+	{ ContextKeyService },
+	{ MenuService },
+	{ InstantiationService },
+	{ CommandService },
+	{ TerminalTitleActions },
+] = await Promise.all([
 	import('../../../../../platform/contextkey/browser/contextKeyService.js'),
 	import('../../../../../platform/actions/common/menuService.js'),
 	import('../../../../../platform/instantiation/common/instantiationService.js'),
@@ -96,7 +102,7 @@ const contextMenuService: IContextMenuService = {
 		shownProfileActions = options.getActions?.() ?? [];
 		shownProfileAnchor = options.getAnchor();
 	},
-	hideContextMenu() {},
+	hideContextMenu() { },
 };
 
 test('Terminal profile menu launches the selected shell profile', async () => {
@@ -117,30 +123,15 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	using registryOwner = new InstantiationService();
 	const registry = new CommandRegistry();
 	using registration = registry.registerMany([
-		{
-			id: TerminalCommandId.New,
-			handler: () => {
-				createdProfiles.push(undefined);
-			},
-		},
-		...['workbench.action.terminal.newInNewWindow', 'workbench.action.terminal.openSettings', 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner'].map(id => ({
-			id,
-			handler: () => {
-				dropdownCommands.push(id);
-			},
-		})),
-		{
-			id: TerminalCommandId.NewWithProfile,
-			handler: (_accessor, profileId) => {
-				createdProfiles.push(String(profileId));
-			},
-		},
+		{ id: TerminalCommandId.New, handler: () => { createdProfiles.push(undefined); } },
+		...['workbench.action.terminal.newInNewWindow', 'workbench.action.terminal.openSettings', 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner'].map(id => ({ id, handler: () => { dropdownCommands.push(id); } })),
+		{ id: TerminalCommandId.NewWithProfile, handler: (_accessor, profileId) => { createdProfiles.push(String(profileId)); } },
 		{ id: TerminalCommandId.Focus, handler: () => focusCount++ },
-		{ id: TerminalCommandId.Relaunch, handler: () => {} },
-		{ id: TerminalCommandId.Kill, handler: () => {} },
+		{ id: TerminalCommandId.Relaunch, handler: () => { } },
+		{ id: TerminalCommandId.Kill, handler: () => { } },
 		{ id: TerminalCommandId.Clear, handler: () => clearCount++ },
 		{ id: TerminalCommandId.Split, handler: () => splitCount++ },
-		{ id: TerminalCommandId.SelectDefaultProfile, handler: () => {} },
+		{ id: TerminalCommandId.SelectDefaultProfile, handler: () => { } },
 	]);
 	using commandService = new CommandService(registryOwner, registry);
 	const menuService = new MenuService(commandService, contextKeyService);
@@ -157,10 +148,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	using hoverService = new HoverService(configuration, hoverContext, contextMenuService);
 	registryOwner.registerInstance(IHoverService, hoverService);
 	registryOwner.registerSingleton(IEnvironmentVariableService, () => registryOwner.createInstance(EnvironmentVariableService));
-	registryOwner.registerInstance(IKeybindingService, {
-		onDidUpdateKeybindings: Event.None,
-		lookupKeybinding: () => undefined,
-	} as unknown as IKeybindingService);
+	registryOwner.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
 
@@ -185,17 +173,11 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.ok(profile.querySelector('.ash-icon'));
 	assert.equal(toolbar.querySelectorAll("[data-action-id='workbench.action.terminal.new']").length, 1);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.terminal.newWithProfile']"), null);
-	const newTerminal = [...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal');
+	const newTerminal = [...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal');
 	assert.ok(newTerminal);
-	assert.equal(
-		[...toolbar.querySelectorAll('button')].some(button => button.textContent === 'Close Panel'),
-		false,
-	);
-	assert.equal(
-		[...toolbar.querySelectorAll('button')].some(button => button.textContent === 'Maximize Panel'),
-		false,
-	);
-	const currentNewTerminal = [...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal');
+	assert.equal([...toolbar.querySelectorAll('button')].some((button) => button.textContent === 'Close Panel'), false);
+	assert.equal([...toolbar.querySelectorAll('button')].some((button) => button.textContent === 'Maximize Panel'), false);
+	const currentNewTerminal = [...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal');
 	assert.ok(currentNewTerminal);
 	currentNewTerminal.click();
 	await Promise.resolve();
@@ -205,7 +187,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	appServerAvailable.set(true);
 	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, false);
 	titleActions.setCreating(true);
-	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, true);
+	assert.equal([...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal')?.disabled, true);
 	titleActions.setCreating(false);
 	const activeInstance = {
 		id: 'terminal-1',
@@ -229,10 +211,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.equal(activeTerminal.getAttribute('aria-expanded'), 'true');
 	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Rename));
 	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Split));
-	assert.equal(
-		shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch),
-		true,
-	);
+	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), true);
 	await shownProfileActions.find(action => action.id === TerminalCommandId.Focus)!.run();
 	assert.equal(focusCount, 1);
 	activeTerminal.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, altKey: true }));
@@ -240,19 +219,16 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.equal(splitCount, 1);
 	assert.equal(toolbar.textContent?.includes('Kill Terminal'), true);
 	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false);
-	const killTerminal = [...toolbar.querySelectorAll('[data-action-id]')].find(item => item.getAttribute('data-action-id') === 'workbench.action.terminal.kill');
+	const killTerminal = [...toolbar.querySelectorAll('[data-action-id]')].find((item) => item.getAttribute('data-action-id') === 'workbench.action.terminal.kill');
 	const moreActions = toolbar.querySelector<HTMLElement>("[data-action-id='ash.toolbar.moreActions']");
 	assert.ok(killTerminal);
 	assert.ok(moreActions);
 	assert.equal(killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.toggleMaximizedPanel']"), null);
 	moreActions.querySelector('button')?.click();
-	const clearTerminal = shownProfileActions.find(action => action.id === 'workbench.action.terminal.clear');
+	const clearTerminal = shownProfileActions.find((action) => action.id === 'workbench.action.terminal.clear');
 	assert.ok(clearTerminal);
-	assert.equal(
-		shownProfileActions.some(action => action.id.startsWith('ash.compositeBar.open.')),
-		false,
-	);
+	assert.equal(shownProfileActions.some((action) => action.id.startsWith('ash.compositeBar.open.')), false);
 	await clearTerminal.run();
 	shownProfileMenu?.onHide?.(false);
 	assert.equal(clearCount, 1);
@@ -260,11 +236,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	shownProfileActions = [];
 	toolbar.querySelector<HTMLButtonElement>('.ash-terminal-active-action .ash-action-label')!.click();
 	await Promise.resolve();
-	assert.equal(
-		shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch),
-		false,
-		'Reattachment must preserve its existing process',
-	);
+	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), false, 'Reattachment must preserve its existing process');
 	titleActions.setActiveInstance(activeInstance, 'list');
 	assert.equal(toolbar.querySelector('.ash-terminal-active-action'), null);
 	assert.equal(toolbar.textContent?.includes('Kill Terminal'), false);
@@ -280,16 +252,13 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	contextKeyService.setContext(TerminalContextKeys.tabsNarrow.key, false);
 	await configuration.updateValue('terminal.integrated.tabs.showActiveTerminal', 'singleTerminalOrNarrow');
 	await configuration.updateValue('terminal.integrated.tabs.showActions', 'singleTerminalOrNarrow');
-	titleActions.setActiveInstance(
-		{
-			id: 'terminal-1',
-			title: 'Backend shell',
-			profile: commandPromptProfile,
-			state: 'exited',
-			onDidChangeState: Event.None,
-		} as ITerminalInstance,
-		'list',
-	);
+	titleActions.setActiveInstance({
+		id: 'terminal-1',
+		title: 'Backend shell',
+		profile: commandPromptProfile,
+		state: 'exited',
+		onDidChangeState: Event.None,
+	} as ITerminalInstance, 'list');
 	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false, 'Relaunch is available in the overflow menu');
 	titleActions.setActiveInstance(activeInstance, 'title');
 	assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, 'title'));
@@ -304,31 +273,18 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.equal(currentProfile.getAttribute('aria-expanded'), 'true');
 	assert.equal(shownProfileAnchor, currentProfile);
 	assert.equal(ownerDocument.querySelector('.ash-quick-pick'), null);
-	assert.deepEqual(
-		shownProfileActions.map(action => action.id),
-		[
-			TerminalCommandId.New,
-			TerminalCommandId.NewInNewWindow,
-			TerminalCommandId.Split,
-			'ash.actions.separator',
-			`${TerminalCommandId.NewWithProfile}.cmd`,
-			`${TerminalCommandId.NewWithProfile}.pwsh`,
-			'ash.actions.separator',
-			'split.profile',
-			'ash.actions.separator',
-			TerminalCommandId.ConfigureTerminalSettings,
-			TerminalCommandId.SelectDefaultProfile,
-			'ash.actions.separator',
-			'workbench.action.tasks.runTask',
-			'workbench.action.tasks.configureTaskRunner',
-		],
-	);
+	assert.deepEqual(shownProfileActions.map(action => action.id), [
+		TerminalCommandId.New, TerminalCommandId.NewInNewWindow, TerminalCommandId.Split, 'ash.actions.separator',
+		`${TerminalCommandId.NewWithProfile}.cmd`, `${TerminalCommandId.NewWithProfile}.pwsh`, 'ash.actions.separator', 'split.profile', 'ash.actions.separator',
+		TerminalCommandId.ConfigureTerminalSettings, TerminalCommandId.SelectDefaultProfile, 'ash.actions.separator',
+		'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner',
+	]);
 	for (const id of [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']) {
 		await shownProfileActions.find(action => action.id === id)!.run();
 	}
 	assert.deepEqual(dropdownCommands, [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']);
-	const commandPrompt = shownProfileActions.find(action => action.label.includes('Command Prompt'));
-	const powerShell = shownProfileActions.find(action => action.label.includes('PowerShell'));
+	const commandPrompt = shownProfileActions.find((action) => action.label.includes('Command Prompt'));
+	const powerShell = shownProfileActions.find((action) => action.label.includes('PowerShell'));
 	assert.ok(commandPrompt);
 	assert.ok(powerShell);
 	assert.match(commandPrompt.label, /Default/);
@@ -345,10 +301,8 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	const profiles = [commandPromptProfile, ...extensionProfiles, powerShellProfile];
 	titleActions.setProfiles(profiles);
 	toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button')!.click();
-	assert.deepEqual(
-		shownProfileActions.slice(4, 4 + profiles.length).map(action => action.id),
-		profiles.map(profile => `${TerminalCommandId.NewWithProfile}.${profile.profileId}`),
-	);
+	assert.deepEqual(shownProfileActions.slice(4, 4 + profiles.length).map(action => action.id),
+		profiles.map(profile => `${TerminalCommandId.NewWithProfile}.${profile.profileId}`));
 	for (const profile of extensionProfiles) {
 		await shownProfileActions.find(action => action.id === `${TerminalCommandId.NewWithProfile}.${profile.profileId}`)!.run();
 	}
@@ -372,9 +326,7 @@ test('Terminal profile menu survives presentation refreshes and restores its dro
 	let menu: Parameters<IContextMenuService['showContextMenu']>[0] | undefined;
 	services.registerInstance(IContextMenuService, {
 		...contextMenuService,
-		showContextMenu(options) {
-			menu = options;
-		},
+		showContextMenu(options) { menu = options; },
 	});
 	using configuration = new TestConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
@@ -393,13 +345,7 @@ test('Terminal profile menu survives presentation refreshes and restores its dro
 	using titleActions = services.createInstance(TerminalTitleActions, ownerDocument.body);
 	const originalProfile = { profileId: 'original', title: 'Original shell', isDefault: true };
 	const nextProfile = { profileId: 'next', title: 'Next shell', isDefault: false };
-	const instance = {
-		id: 'profile-menu',
-		title: 'Original title',
-		profile: originalProfile,
-		state: 'running' as const,
-		onDidChangeState: Event.None,
-	};
+	const instance = { id: 'profile-menu', title: 'Original title', profile: originalProfile, state: 'running' as const, onDidChangeState: Event.None };
 	titleActions.setProfiles([originalProfile]);
 	titleActions.setActiveInstance(instance as ITerminalInstance, 'title');
 	const selector = '.ash-dropdown-with-primary-dropdown button';
@@ -420,10 +366,7 @@ test('Terminal profile menu survives presentation refreshes and restores its dro
 	assert.equal(trigger.isConnected, true);
 	assert.equal(titleActions.element.querySelector(selector), trigger);
 	assert.equal(openedMenu.cancellationToken?.isCancellationRequested, false);
-	assert.equal(
-		snapshot.some(action => action.id.endsWith('.next')),
-		false,
-	);
+	assert.equal(snapshot.some(action => action.id.endsWith('.next')), false);
 
 	openedMenu.onHide?.(true);
 	await Promise.resolve();
@@ -442,6 +385,7 @@ test('Terminal profile menu survives presentation refreshes and restores its dro
 	await Promise.resolve();
 	assert.equal(titleActions.element.isConnected, false, 'Pending refreshes cannot recreate a disposed toolbar');
 });
+
 
 test('Terminal View lends its actual title toolbar to Panel and retains it through switching', async () => {
 	const { Disposable, DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
@@ -476,89 +420,36 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	AppServerAvailableContext.bindTo(context).set(true);
 	const commands = new CommandRegistry();
 	let created = 0;
-	resources.add(
-		commands.registerMany([
-			{
-				id: TerminalCommandId.New,
-				handler: () => {
-					created++;
-				},
-			},
-		]),
-	);
+	resources.add(commands.registerMany([{ id: TerminalCommandId.New, handler: () => { created++; } }]));
 	const commandService = resources.add(new CommandService(services, commands));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IKeybindingService, {
-		onDidUpdateKeybindings: Event.None,
-		lookupKeybinding: () => undefined,
-	} as unknown as IKeybindingService);
+	services.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	services.registerInstance(IMenuService, new MenuService(commandService, context));
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'terminal-title-test', folders: [] })));
 	// This scenario has no workspace or shell. Any shell acquisition would violate the title lifecycle boundary.
 	services.registerInstance(ITerminalService, {
-		instances: [],
-		activeInstance: undefined,
-		onDidCreateInstance: Event.None,
-		onDidDisposeInstance: Event.None,
-		onDidChangeInstances: Event.None,
-		onDidChangeActiveInstance: Event.None,
-		createTerminal: async () => {
-			throw new Error('Unexpected shell acquisition');
-		},
-		relaunchTerminal: async () => {},
-		setActiveInstance() {},
-		moveTerminal() {},
-		whenConnected: Promise.resolve(),
-		importTerminalState: async () => {
-			throw new Error('Transfer is not used in this fixture');
-		},
-		confirmTerminalClose: async () => true,
-		safeDisposeTerminal: async () => {},
-		closeTerminal: async () => {},
-		...toDisposable(() => {}),
+		instances: [], activeInstance: undefined,
+		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
+		createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
+		...toDisposable(() => { }),
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
 	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
 	services.registerInstance(ITerminalGroupService, resources.add(services.createInstance(TerminalGroupService)));
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
-	services.registerInstance(ITerminalContributionService, {
-		terminalProfiles: [],
-		onDidChangeTerminalProfiles: Event.None,
-		...Disposable.None,
-	});
-	services.registerInstance(IExtensionService, {
-		getExtensionPointContributions: () => [],
-		onDidChange: Event.None,
-	} as unknown as IExtensionService);
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
+	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [], onDidChange: Event.None } as unknown as IExtensionService);
 	services.registerInstance(ITerminalProfileService, resources.add(services.createInstance(TerminalProfileService)));
 	services.registerInstance(IEditorService, { activeEditor: undefined } as unknown as IEditorService);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
-	services.registerInstance(ITerminalProfileResolverService, {
-		resolveShellLaunchConfig: async () => {
-			throw new Error('Unexpected shell resolution');
-		},
-	} as unknown as ITerminalProfileResolverService);
-	services.registerInstance(
-		IWorkbenchLayoutService,
-		resources.add(
-			services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, {
-				initialDimension: new Dimension(800, 600),
-			}),
-		),
-	);
-	services.registerInstance(IPreferencesService, {
-		openSettings: async () => {},
-	} as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
+	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);
+	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
-	services.registerInstance(IAccessibleViewService, {
-		...toDisposable(() => {}),
-		show: () => false,
-		getOpenAriaHint: () => undefined,
-		disableHint: async () => {},
-		showAccessibleViewHelp() {},
-	});
+	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
@@ -569,16 +460,8 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
 	services.registerInstance(ILogService, resources.add(new NullLoggerService()));
 	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
-	services.registerInstance(ILocalizationService, {
-		whenReady: Promise.resolve(),
-		translate: (_bundle, _key, source) => source,
-	});
-	const unhosted = resources.add(
-		services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, {
-			id: 'test.terminalGeometry',
-			title: 'Terminal',
-		}),
-	);
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	const unhosted = resources.add(services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, { id: 'test.terminalGeometry', title: 'Terminal' }));
 	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize, 'A hidden Terminal header must not reserve body space');
 	unhosted.setHeaderVisible(true);
 	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize + 28);
@@ -588,27 +471,14 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const empty = { id: 'test.empty', title: 'Empty', location: ViewContainerLocation.Panel };
 	resources.add(registry.registerViewContainer(terminal));
 	resources.add(registry.registerViewContainer(empty));
-	resources.add(
-		registry.registerViews(terminal.id, [
-			{
-				id: 'test.terminalView',
-				title: 'Terminal',
-				canToggleVisibility: false,
-				ctorDescriptor: new SyncDescriptor(TerminalViewPane),
-			},
-		]),
-	);
+	resources.add(registry.registerViews(terminal.id, [{ id: 'test.terminalView', title: 'Terminal', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(TerminalViewPane) }]));
 	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	services.registerInstance(IViewDescriptorService, descriptors);
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
-	const create = (descriptor: typeof terminal) =>
-		services.createInstance(PaneComposite, panel.domNode, {
-			viewContainer: descriptor,
-			model: descriptors.getViewContainerModel(descriptor.id),
-			paneHeaders: 'hidden',
-			paneLayout: 'fill',
-		});
+	const create = (descriptor: typeof terminal) => services.createInstance(PaneComposite, panel.domNode, {
+		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), paneHeaders: 'hidden', paneLayout: 'fill',
+	});
 	const composite = create(terminal);
 	panel.addComposite(composite);
 	panel.addComposite(create(empty));
@@ -630,6 +500,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	assert.equal(toolbar.isConnected, false);
 });
 
+
 suite('Terminal context command lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
@@ -637,85 +508,28 @@ suite('Terminal context command lifecycle', () => {
 		const { ITerminalService } = await import('../../browser/terminal.js');
 		const { Disposable } = await import('../../../../../base/common/lifecycle.js');
 		const effects: unknown[] = [];
-		const create = (instanceId: number) =>
-			({
-				...Disposable.None,
-				instanceId,
-				id: `terminal-instance-${instanceId}`,
-				state: 'exited',
-				xterm: undefined,
-				dirId: 'workspace',
-				processId: 100 + instanceId,
-				initialCwd: '/workspace',
-				title: 'Shell',
-				profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-				exitCode: 0,
-				onDidWriteData: Event.None,
-				onDidChangeCommandStatus: Event.None,
-				onDidExit: Event.None,
-				onDidChangeState: Event.None,
-				xtermReadyPromise: Promise.resolve(undefined),
-				getContribution: () => null,
-				start() {},
-				attachToElement() {},
-				detachFromElement() {},
-				async setAutoReplies() {},
-				async sendSignal() {},
-				async sendText() {},
-				async sendPath() {
-					throw new Error('Title fixture does not insert file paths');
-				},
-				async processBinary() {},
-				resize() {},
-				async reuseTerminal() {},
-				async close() {},
-				clearBuffer: () => {
-					effects.push(['clear', instanceId]);
-				},
-				refreshProperty: async () => {
-					throw new Error('No OS process in action fixture');
-				},
-				serializeState: async () => {
-					throw new Error('No process checkpoint in action fixture');
-				},
-			}) satisfies ITerminalInstance;
+		const create = (instanceId: number) => ({
+			...Disposable.None, instanceId, id: `terminal-instance-${instanceId}`, state: 'exited', xterm: undefined,
+			dirId: 'workspace', processId: 100 + instanceId, initialCwd: '/workspace', title: 'Shell',
+			profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
+			onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
+			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
+			start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Title fixture does not insert file paths'); }, async processBinary() { }, resize() { },
+			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
+			refreshProperty: async () => { throw new Error('No OS process in action fixture'); }, serializeState: async () => { throw new Error('No process checkpoint in action fixture'); },
+		} satisfies ITerminalInstance);
 		const first = create(1);
 		const second = create(2);
 		const instances: ITerminalInstance[] = [first, second];
 		let active: ITerminalInstance | undefined = second;
 		using services = new InstantiationService();
 		services.registerInstance(ITerminalService, {
-			...Disposable.None,
-			instances,
-			get activeInstance() {
-				return active;
-			},
-			onDidCreateInstance: Event.None,
-			onDidDisposeInstance: Event.None,
-			onDidChangeInstances: Event.None,
-			onDidChangeActiveInstance: Event.None,
-			createTerminal: async () => {
-				throw new Error('Unexpected creation');
-			},
-			setActiveInstance: instance => {
-				active = instance;
-			},
-			moveTerminal() {},
-			whenConnected: Promise.resolve(),
-			importTerminalState: async () => {
-				throw new Error('Transfer is not used in this fixture');
-			},
-			confirmTerminalClose: async () => true,
-			safeDisposeTerminal: async instance => {
-				effects.push(['close', instance.instanceId]);
-				instances.splice(instances.indexOf(instance), 1);
-			},
-			closeTerminal: async instance => {
-				await instance.close();
-			},
-			relaunchTerminal: async (instance, dimensions) => {
-				effects.push(['relaunch', instance.instanceId, dimensions]);
-			},
+			...Disposable.None, instances, get activeInstance() { return active; },
+			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
+			createTerminal: async () => { throw new Error('Unexpected creation'); },
+			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
+			whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
+			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
 		});
 		using commands = new CommandService(services);
 		const context = new InstanceContext(first);
@@ -726,12 +540,7 @@ suite('Terminal context command lifecycle', () => {
 		await commands.executeCommand(TerminalCommandId.Clear, second.id);
 		assert.equal(active, second);
 		await commands.executeCommand(TerminalCommandId.Relaunch, context);
-		assert.deepEqual(effects, [
-			['clear', 1],
-			['clear', 1],
-			['clear', 2],
-			['relaunch', 1, { cols: 80, rows: 24 }],
-		]);
+		assert.deepEqual(effects, [['clear', 1], ['clear', 1], ['clear', 2], ['relaunch', 1, { cols: 80, rows: 24 }]]);
 		for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
 			await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
 		}
@@ -746,36 +555,12 @@ suite('Terminal context command lifecycle', () => {
 		const contexts = [1, 2].map(instanceId => new InstanceContext({ instanceId } as ITerminalInstance));
 		let args: readonly unknown[] = [];
 		using runner = new TerminalContextActionRunner();
-		await runner.run(
-			{
-				id: 'selected',
-				label: 'Selected',
-				tooltip: '',
-				enabled: true,
-				run: (...values) => {
-					args = values;
-				},
-			},
-			contexts,
-		);
+		await runner.run({ id: 'selected', label: 'Selected', tooltip: '', enabled: true, run: (...values) => { args = values; } }, contexts);
 		assert.deepEqual(args, [contexts[0], contexts]);
 		const error = new Error('action failed');
 		let reported: unknown;
-		using listener = runner.onDidRun(event => {
-			reported = event.error;
-		});
-		await runner.run(
-			{
-				id: 'failed',
-				label: 'Failed',
-				tooltip: '',
-				enabled: true,
-				run: async () => {
-					throw error;
-				},
-			},
-			contexts,
-		);
+		using listener = runner.onDidRun(event => { reported = event.error; });
+		await runner.run({ id: 'failed', label: 'Failed', tooltip: '', enabled: true, run: async () => { throw error; } }, contexts);
 		assert.equal(reported, error);
 	});
 
@@ -789,22 +574,15 @@ suite('Terminal context command lifecycle', () => {
 			using modifiers = ModifierKeyEmitter.getInstance(menuDom.window as unknown as Window);
 			const ready = new DeferredPromise<void>();
 			const action: IAction = { id: 'async', label: 'Async', tooltip: '', enabled: true, run: () => ready.p };
-			const menu = {
-				...Disposable.None,
-				onDidChange: Event.None,
-				getActions: () => [['terminal', [action]] as const],
-			};
+			const menu = { ...Disposable.None, onDidChange: Event.None, getActions: () => [['terminal', [action]] as const] };
 			let delegate: import('../../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
 			const service: IContextMenuService = {
 				contextMenuStyle: 'custom',
-				onDidShowContextMenu: Event.None,
-				onDidHideContextMenu: Event.None,
-				hideContextMenu() {},
-				showContextMenu: value => {
-					delegate = value as typeof delegate;
-				},
+				onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { },
+				showContextMenu: value => { delegate = value as typeof delegate; },
 			};
-			const show = () => openContextMenu(menuDom.window as unknown as Window, new menuDom.window.MouseEvent('contextmenu'), { instanceId: 1 } as ITerminalInstance, menu, service);
+			const show = () => openContextMenu(menuDom.window as unknown as Window,
+				new menuDom.window.MouseEvent('contextmenu'), { instanceId: 1 } as ITerminalInstance, menu, service);
 			show();
 			const canceled = delegate!.actionRunner;
 			assert.ok(canceled instanceof TerminalContextActionRunner);
@@ -814,9 +592,7 @@ suite('Terminal context command lifecycle', () => {
 			const runner = delegate!.actionRunner;
 			assert.ok(runner instanceof TerminalContextActionRunner);
 			let completed = 0;
-			using listener = runner.onDidRun(() => {
-				completed++;
-			});
+			using listener = runner.onDidRun(() => { completed++; });
 			const operation = runner.run(action, delegate!.getActionsContext!());
 			delegate!.onHide!(false);
 			assert.equal(runner.isDisposed, false);
@@ -824,8 +600,7 @@ suite('Terminal context command lifecycle', () => {
 			await operation;
 			assert.equal(completed, 1);
 			assert.equal(runner.isDisposed, true);
-		} finally {
-			menuDom.window.close();
-		}
+		} finally { menuDom.window.close(); }
 	});
+
 });

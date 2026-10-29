@@ -8,11 +8,7 @@ test('standalone browser searches granted files and disables process commands', 
 	await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
 		const folder = await root.getDirectoryHandle(`ash-search-${crypto.randomUUID()}`, { create: true });
-		for (const [name, text] of [
-			['main.txt', 'browser needle\nother line'],
-			['ignore.txt', 'browser needle'],
-			['main.js', 'const value = "web";'],
-		]) {
+		for (const [name, text] of [['main.txt', 'browser needle\nother line'], ['ignore.txt', 'browser needle'], ['main.js', 'const value = "web";']]) {
 			const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
 			await writer.write(text);
 			await writer.close();
@@ -34,11 +30,7 @@ test('standalone browser searches granted files and disables process commands', 
 	await expect(page.locator('.ash-search-results')).toContainText('main.txt');
 	await expect(page.locator('.ash-search-results')).not.toContainText('ignore.txt');
 	await workbench.quickaccess.open('>workbench.action.tasks.runTask');
-	await expect(
-		workbench.quickaccess.items.filter({
-			has: page.locator('.ash-quick-pick-row-description').getByText('workbench.action.tasks.runTask', { exact: true }),
-		}),
-	).toHaveCount(0);
+	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('workbench.action.tasks.runTask', { exact: true }) })).toHaveCount(0);
 	await workbench.quickaccess.close();
 	await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
 	await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
@@ -59,34 +51,25 @@ test('standalone browser executes its extension command in a Worker and retires 
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.web.fixture.run');
 	let extensionWorker: ReturnType<typeof page.workers>[number] | undefined;
-	await expect
-		.poll(async () => {
-			for (const worker of page.workers()) {
-				const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
-				if (state) {
-					extensionWorker = worker;
-					return state;
-				}
-			}
-			return undefined;
-		})
-		.toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+	await expect.poll(async () => {
+		for (const worker of page.workers()) {
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
+			if (state) { extensionWorker = worker; return state; }
+		}
+		return undefined;
+	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
 	const stopped = new Promise<void>(resolve => extensionWorker!.once('close', () => resolve()));
 	await page.reload();
 	await stopped;
 	await workbench.waitForReady();
 	await workbench.quickaccess.runCommand('ash.web.fixture.run');
-	await expect
-		.poll(async () => {
-			for (const worker of page.workers()) {
-				const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
-				if (state) {
-					return state;
-				}
-			}
-			return undefined;
-		})
-		.toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+	await expect.poll(async () => {
+		for (const worker of page.workers()) {
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
+			if (state) { return state; }
+		}
+		return undefined;
+	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
 	if (process.env.ASH_PLAYWRIGHT_SERVER === 'development') {
 		const entry = new URL('../../../fixtures/web-extension/extension.js', import.meta.url);
 		const original = await readFile(entry, 'utf8');
@@ -96,17 +79,13 @@ test('standalone browser executes its extension command in a Worker and retires 
 			await reloaded;
 			await workbench.waitForReady();
 			await workbench.quickaccess.runCommand('ash.web.fixture.run');
-			await expect
-				.poll(async () => {
-					for (const worker of page.workers()) {
-						const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
-						if (state) {
-							return state;
-						}
-					}
-					return undefined;
-				})
-				.toEqual({ count: 11, operation: 'execute', payload: { arguments: [] }, worker: true });
+			await expect.poll(async () => {
+				for (const worker of page.workers()) {
+					const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
+					if (state) { return state; }
+				}
+				return undefined;
+			}).toEqual({ count: 11, operation: 'execute', payload: { arguments: [] }, worker: true });
 		} finally {
 			const restored = page.waitForEvent('domcontentloaded');
 			await writeFile(entry, original);
@@ -138,26 +117,20 @@ test('browser reload restores its folder, dirty editor and stable directory iden
 	await editor.waitForEditorFocus();
 	await editor.input.press('ControlOrMeta+A');
 	await editor.waitForTypeInEditor('draft survives reload');
-	await expect
-		.poll(() =>
-			page.evaluate(async () => {
-				const database = await new Promise<IDBDatabase>((resolve, reject) => {
-					const request = indexedDB.open('ash-working-copy-backups', 1);
-					request.onsuccess = () => resolve(request.result);
-					request.onerror = () => reject(request.error);
-				});
-				try {
-					return await new Promise<boolean>((resolve, reject) => {
-						const request = database.transaction('backups').objectStore('backups').getAll();
-						request.onsuccess = () => resolve(request.result.some(record => record.content === 'draft survives reload'));
-						request.onerror = () => reject(request.error);
-					});
-				} finally {
-					database.close();
-				}
-			}),
-		)
-		.toBe(true);
+	await expect.poll(() => page.evaluate(async () => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('ash-working-copy-backups', 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			return await new Promise<boolean>((resolve, reject) => {
+				const request = database.transaction('backups').objectStore('backups').getAll();
+				request.onsuccess = () => resolve(request.result.some(record => record.content === 'draft survives reload'));
+				request.onerror = () => reject(request.error);
+			});
+		} finally { database.close(); }
+	})).toBe(true);
 	await page.reload();
 	await expect(workbench.element).toBeVisible();
 	await expect(file).toBeVisible();
@@ -166,14 +139,10 @@ test('browser reload restores its folder, dirty editor and stable directory iden
 	expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
 	await editor.input.focus();
 	await editor.input.press('ControlOrMeta+S');
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				return (await (await folder.getFileHandle('main.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('draft survives reload');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('main.txt')).getFile()).text();
+	}, folderName)).toBe('draft survives reload');
 	await page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
@@ -291,20 +260,16 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read())[0]?.types.includes('web application/x-ash-resources'))).toBe(true);
 	await explorer.getByRole('treeitem', { name: 'src', exact: true }).click();
 	await page.keyboard.press('ControlOrMeta+v');
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				const source = await folder.getDirectoryHandle('src');
-				try {
-					return (await (await source.getFileHandle('hello %中.txt')).getFile()).text();
-				} catch (error) {
-					if (error instanceof DOMException && error.name === 'NotFoundError') return undefined;
-					throw error;
-				}
-			}, folderName),
-		)
-		.toBe('first value');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		const source = await folder.getDirectoryHandle('src');
+		try {
+			return (await (await source.getFileHandle('hello %中.txt')).getFile()).text();
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'NotFoundError') return undefined;
+			throw error;
+		}
+	}, folderName)).toBe('first value');
 	await fileRow.click();
 	await page.keyboard.press('F1');
 	await workbench.quickaccess.search('>Copy Relative Path');
@@ -319,14 +284,10 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
 	await input.press('ControlOrMeta+S');
 	await expect(page.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				return (await (await folder.getFileHandle('hello %中.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('second value');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('hello %中.txt')).getFile()).text();
+	}, folderName)).toBe('second value');
 	await page.keyboard.press('ControlOrMeta+k');
 	await page.keyboard.press('e');
 	const openEditors = page.locator('[data-view-id="workbench.explorer.openEditorsView"]');
@@ -346,7 +307,10 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	await fileRow.click({ button: 'right' });
 	const downloadFile = page.getByRole('menuitem', { name: 'Download File...' });
 	await expect(downloadFile).toBeVisible();
-	const [download] = await Promise.all([page.waitForEvent('download'), downloadFile.click()]);
+	const [download] = await Promise.all([
+		page.waitForEvent('download'),
+		downloadFile.click(),
+	]);
 	expect(download.suggestedFilename()).toBe('hello %中.txt');
 	expect(await readFile(await download.path(), 'utf8')).toBe('second value');
 	await workbench.quickaccess.runCommand('explorer.newFile');
@@ -354,31 +318,23 @@ test('browser opens an authorized local folder and saves its files', { tag: ['@b
 	await newFileName.fill('created.txt');
 	await newFileName.press('Enter');
 	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'created.txt' })).toHaveCount(1);
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				return (await (await folder.getFileHandle('created.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('created.txt')).getFile()).text();
+	}, folderName)).toBe('');
 	const sourceFolderRow = explorer.getByRole('treeitem', { name: 'src', exact: true });
 	await sourceFolderRow.click();
-	if ((await sourceFolderRow.getAttribute('aria-expanded')) === 'false') await sourceFolderRow.click();
+	if (await sourceFolderRow.getAttribute('aria-expanded') === 'false') await sourceFolderRow.click();
 	await workbench.quickaccess.runCommand('explorer.newFile');
 	const nestedFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
 	await nestedFileName.fill('nested.txt');
 	await nestedFileName.press('Enter');
 	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(1);
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				const source = await folder.getDirectoryHandle('src');
-				return (await (await source.getFileHandle('nested.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		const source = await folder.getDirectoryHandle('src');
+		return (await (await source.getFileHandle('nested.txt')).getFile()).text();
+	}, folderName)).toBe('');
 	const originalEditor = openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ });
 	await originalEditor.getByRole('button', { name: 'Close hello %中.txt' }).focus();
 	await page.keyboard.press('Enter');

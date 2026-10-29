@@ -23,14 +23,7 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
 const previous = new Map<string, PropertyDescriptor | undefined>();
-for (const [name, value] of Object.entries({
-	window: environment.window,
-	document: environment.window.document,
-	Node: environment.window.Node,
-	Element: environment.window.Element,
-	HTMLElement: environment.window.HTMLElement,
-	navigator: environment.window.navigator,
-})) {
+for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, navigator: environment.window.navigator })) {
 	previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -73,9 +66,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 		registerPinActions();
 		services.registerInstance(IMenuService, menus);
 		services.registerInstance(ICommandService, commands);
-		services.registerInstance(IQuickInputService, {
-			quickAccess: { onDidChangeVisibility: Event.None, show() {} },
-		} as IQuickInputService);
+		services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as IQuickInputService);
 		const applied: INativeWindowTheme[] = [];
 		let titleBarStyle: 'custom' | 'system' = 'custom';
 		using pinChanges = new Emitter<IWindowAlwaysOnTopChangedEvent>();
@@ -85,113 +76,70 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 		services.registerInstance(IThemeService, themes);
 		registerTestComponentServices(services, environment.window.document);
 		services.registerInstance(INativeHostService, {
-			onDidSuspendOS: () => ({ dispose() {} }),
-			onDidResumeOS: () => ({ dispose() {} }),
-			getScreenshot: async () => {
-				throw new Error('Unused screenshot capability');
-			},
-			moveTerminalToWindow: async () => {
-				throw new Error('Unexpected terminal transfer');
-			},
+			onDidSuspendOS: () => ({ dispose() { } }),
+			onDidResumeOS: () => ({ dispose() { } }),
+			getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
+			moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 			takeTerminalTransfer: async () => undefined,
-			completeTerminalTransfer: async () => {
-				throw new Error('Unexpected terminal transfer completion');
-			},
-			onDidRequestTerminalTransfer: () => ({ dispose() {} }),
-			getAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
-			updateAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
-			claimAgentsWindowInvitation: () => {
-				throw new Error('Unused invitation capability');
-			},
-			markAgentsWindowInvitationShown: () => {
-				throw new Error('Unused invitation capability');
-			},
-			releaseAgentsWindowInvitation: () => {
-				throw new Error('Unused invitation capability');
-			},
-			onDidChangeAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
+			completeTerminalTransfer: async () => { throw new Error('Unexpected terminal transfer completion'); },
+			onDidRequestTerminalTransfer: () => ({ dispose() { } }),
+			getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			getTitleBarStyle: async () => titleBarStyle,
 			getWindowClientSize: async () => undefined,
-			onDidChangeWindowClientSize: () => ({ dispose() {} }),
+			onDidChangeWindowClientSize: () => ({ dispose() { } }),
 			isAdmin: async () => false,
-			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
-			openExternal: async () => {
-				throw new Error('unused');
-			},
-			showMessageBox: async () => {
-				throw new Error('unused');
-			},
+			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
+			openExternal: async () => { throw new Error('unused'); },
+			showMessageBox: async () => { throw new Error('unused'); },
 			listWindows: async () => [],
-			focusWindowById: async () => {},
-			focusWindow: async () => {},
-			closeWindow: async () => {},
-			closeOtherWindows: async () => {},
+			focusWindowById: async () => { },
+			focusWindow: async () => { },
+			closeWindow: async () => { },
+			closeOtherWindows: async () => { },
 			getZoomLevel: async () => 0,
-			onDidChangeZoomLevel: () => ({ dispose() {} }),
-			setZoomLevel: async () => {},
-			getAuxiliaryWindowState: async () => {
-				throw new Error('Unused window state');
-			},
-			onDidChangeAuxiliaryWindowState: () => ({ dispose() {} }),
+			onDidChangeZoomLevel: () => ({ dispose() { } }),
+			setZoomLevel: async () => { },
+			getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+			onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
 			onDidChangeWindowAlwaysOnTop: pinChanges.event,
-			isAlwaysOnTop: async () => {
-				const snapshot = pinned;
-				await pinRead;
-				return snapshot;
-			},
+			isAlwaysOnTop: async () => { const snapshot = pinned; await pinRead; return snapshot; },
 			setAlwaysOnTop: async (enabled, windowName) => {
 				pinned = enabled;
 				pinTargets.push(windowName);
 				pinChanges.fire({ windowName, alwaysOnTop: enabled });
 			},
-			performNativeTabAction: async () => {},
-			openNewWindowTab: async () => {},
-			setWindowTheme: async theme => {
-				applied.push(theme);
-			},
-			setWindowDimmed: async () => {},
+			performNativeTabAction: async () => { },
+			openNewWindowTab: async () => { },
+			setWindowTheme: async theme => { applied.push(theme); },
+			setWindowDimmed: async () => { },
 			pickFolder: async () => undefined,
 			showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
-			openWorkspace: async () => {},
-			openWindow: async () => {},
-			openAgentsWindow: async () => {},
+			openWorkspace: async () => { },
+			openWindow: async () => { },
+			openAgentsWindow: async () => { },
 			syncSystemWideKeybindings: async () => ({ failed: [] }),
-			revealFile: async () => {},
-			toggleDeveloperTools: async () => {},
+			revealFile: async () => { },
+			toggleDeveloperTools: async () => { },
 			showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
-			onDidChangeColorScheme: () => ({ dispose() {} }),
+			onDidChangeColorScheme: () => ({ dispose() { } }),
 			isAccessibilitySupportEnabled: async () => false,
-			onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
+			onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
 		});
-		services.registerInstance(IMenubarService, {
-			_serviceBrand: undefined,
-			updateMenubar: async () => {},
-			onDidSelect: Event.None,
-		});
+		services.registerInstance(IMenubarService, { _serviceBrand: undefined, updateMenubar: async () => { }, onDidSelect: Event.None });
 		using notifications = new TestNotificationService();
 		services.registerInstance(INotificationService, notifications);
 		const factory = createElectronTitlebarPartFactory();
 		const options = {
-			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() {}, registerVariables() {} },
+			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 			menuService: menus,
-			contextMenuService: {
-				contextMenuStyle: 'custom' as const,
-				onDidShowContextMenu: Event.None,
-				onDidHideContextMenu: Event.None,
-				showContextMenu() {},
-				hideContextMenu() {},
-			},
-			localizationService: {
-				whenReady: Promise.resolve(),
-				translate: (_bundle: string, _key: string, fallback: string) => fallback,
-			},
+			contextMenuService: { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } },
+			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);
 		services.registerInstance(ILocalizationService, options.localizationService);
@@ -203,25 +151,14 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 		assert.equal(leftActions?.getAttribute('role'), 'toolbar');
 		assert.equal(leftActions.querySelector('[data-action-id="ash.applicationMenu"]') === null, isMacintosh);
 		themes.setColorTheme(lightColorTheme);
-		assert.deepEqual(
-			applied,
-			[darkColorTheme, lightColorTheme].map(theme => ({
-				backgroundColor: theme.getColorCss('titleBar.background'),
-				symbolColor: theme.getColorCss('titleBar.actionForeground'),
-				backdropColor: theme.getColorCss('dialog.backdropBackground'),
-			})),
-		);
+		assert.deepEqual(applied, [darkColorTheme, lightColorTheme].map(theme => ({ backgroundColor: theme.getColorCss('titleBar.background'), symbolColor: theme.getColorCss('titleBar.actionForeground'), backdropColor: theme.getColorCss('dialog.backdropBackground') })));
 		titlebar.dispose();
 		themes.setColorTheme(darkColorTheme);
 		assert.equal(applied.length, 2);
 		assert.equal(environment.window.document.querySelector('.ash-electron-titlebar'), null);
 		using editorServices = createTestEditorServices(undefined, services, environment.window.document);
 		const groups: IEditorGroupsContainer = {
-			activeGroup: {
-				createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
-				activeInput: undefined,
-				onDidChangeEditors: Event.None,
-			} as unknown as IEditorGroup,
+			activeGroup: { createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }), activeInput: undefined, onDidChangeEditors: Event.None } as unknown as IEditorGroup,
 			onDidChangeActiveGroup: Event.None,
 		};
 		using titleService = editorServices.createInstance(ElectronTitleService, environment.window.document.body, 'Ash Code', factory, groups);
@@ -235,8 +172,9 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			assert.equal(auxiliary.container.querySelector('[data-action-id="ash.applicationMenu"]') === null, isMacintosh);
 			assert.equal(titleService.getPart(popup.window.document.body), auxiliary);
 			// Ordinary auxiliary windows and compact tools use the same menu-backed toolbar.
-			const action = (enabled: boolean): HTMLButtonElement | null =>
-				auxiliary.container.querySelector(`[data-action-id="workbench.action.${enabled ? 'enable' : 'disable'}WindowAlwaysOnTop"] button`);
+			const action = (enabled: boolean): HTMLButtonElement | null => auxiliary.container.querySelector(
+				`[data-action-id="workbench.action.${enabled ? 'enable' : 'disable'}WindowAlwaysOnTop"] button`,
+			);
 			assert.equal(titleService.getPart(environment.window.document.body).domNode.querySelector('[data-action-id="workbench.action.enableWindowAlwaysOnTop"]'), null);
 			assert.equal(action(true)?.closest('[role="toolbar"]')?.parentElement?.className, 'ash-titlebar-actions ash-titlebar-interactive-region');
 			assert.equal(action(true)?.getAttribute('aria-label'), 'Turn On Always on Top');
@@ -267,9 +205,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 				action(true)!.click();
 				await new Promise<void>(resolve => setImmediate(resolve));
 				assert.equal(action(false)?.getAttribute('aria-label'), '取消窗口置顶');
-			} finally {
-				resetNlsResolver();
-			}
+			} finally { resetNlsResolver(); }
 
 			const beforeThemeChange = applied.length;
 			themes.setColorTheme(lightColorTheme);

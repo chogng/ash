@@ -30,7 +30,9 @@ export class InlineCompletionsService extends Disposable implements IInlineCompl
 	private _recentCompletionIds: string[] = [];
 
 	get snoozeTimeLeft(): number {
-		return this._snoozeTimeEnd === undefined ? 0 : Math.max(0, this._snoozeTimeEnd - Date.now());
+		return this._snoozeTimeEnd === undefined
+			? 0
+			: Math.max(0, this._snoozeTimeEnd - Date.now());
 	}
 
 	snooze(durationMs: number = InlineCompletionsService.SNOOZE_DURATION): void {

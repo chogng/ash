@@ -15,34 +15,27 @@ export class QuickInputBox extends Disposable {
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	private validating = false;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: IInputOptions,
-	) {
+	constructor(container: HTMLElement, private readonly options: IInputOptions) {
 		super();
-		this.inputBox = this._register(
-			new InputBox(container, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: options.password ? 'password' : 'text',
-				placeholder: options.placeHolder,
-				ariaLabel: options.title ?? options.placeHolder ?? localize('quickInput.inputTitle', 'Quick Input'),
-			}),
-		);
+		this.inputBox = this._register(new InputBox(container, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: options.password ? 'password' : 'text',
+			placeholder: options.placeHolder,
+			ariaLabel: options.title ?? options.placeHolder ?? localize('quickInput.inputTitle', 'Quick Input'),
+		}));
 		this.inputBox.element.classList.add('ash-quick-pick-input');
 		if (options.value !== undefined) this.inputBox.value = options.value;
 		if (options.validationMessage) this.inputBox.showValidation(options.validationMessage);
 		this.onDidAccept = this.acceptEmitter.event;
 		this.onDidError = this.errorEmitter.event;
 		this._register(this.inputBox.onDidChange(() => this.inputBox.showValidation('')));
-		this._register(
-			this.inputBox.onKeyDown(event => {
-				if (event.key === 'Tab') {
-					stopEvent(event);
-					this.focus();
-					return;
-				}
-			}),
-		);
+		this._register(this.inputBox.onKeyDown(event => {
+			if (event.key === 'Tab') {
+				stopEvent(event);
+				this.focus();
+				return;
+			}
+		}));
 		this._register(toDisposable(() => this.clear()));
 	}
 

@@ -11,24 +11,14 @@ import type { EditorProfile } from 'ash:editor/workbench/services/documentEditor
 
 /** Academy profile; shared document editing semantics remain in editor browser/common. */
 export const academyProfile: EditorProfile = Object.freeze({
-	id: 'academy',
-	editorId: 'stanza.editor.document',
-	contentType: ACADEMY_DOCUMENT_CONTENT_TYPE,
-	collaborationSchemaId: 'stanza-academy-v1',
+	id: 'academy', editorId: 'stanza.editor.document', contentType: ACADEMY_DOCUMENT_CONTENT_TYPE, collaborationSchemaId: 'stanza-academy-v1',
 	create: () => {
 		const schema = createAcademyDocumentSchema();
-		return createEditorProfileConfiguration(
-			schema,
-			{
-				outlineNavigator: true,
-				contributions: documentContributions,
-				extensionApis: { 'academy.citations.v1': runLibraryCitationOperation },
-				inlineNodeViews: citationInlineNodeViews,
-				toolbarActions: citationToolbarActions,
-				nodeViews: { ...profileNodeViews, ...citationNodeViews },
-			},
-			[createReferenceIndexPlugin()],
-			() => createEmptyAcademyDocument(schema),
-		);
+		return createEditorProfileConfiguration(schema, {
+			outlineNavigator: true, contributions: documentContributions,
+			extensionApis: { 'academy.citations.v1': runLibraryCitationOperation },
+			inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions,
+			nodeViews: { ...profileNodeViews, ...citationNodeViews },
+		}, [createReferenceIndexPlugin()], () => createEmptyAcademyDocument(schema));
 	},
 });

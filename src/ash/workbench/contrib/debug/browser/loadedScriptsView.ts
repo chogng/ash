@@ -20,7 +20,7 @@ export class LoadedScriptsView extends ViewPane {
 	private readonly rows = this._register(new DisposableStore());
 	private readonly search: InputBox;
 	private readonly list: HTMLUListElement;
-	private entries: readonly { session: IDebugSession; source: IDebugSource }[] = [];
+	private entries: readonly { session: IDebugSession; source: IDebugSource; }[] = [];
 	private generation = 0;
 
 	constructor(
@@ -68,7 +68,7 @@ export class LoadedScriptsView extends ViewPane {
 	private refresh(): void {
 		this.loadingProgress.clear();
 		const generation = ++this.generation;
-		const current = new Set(this.debug.sessions.map(session => session.id));
+		const current = new Set(this.debug.sessions.map((session) => session.id));
 		for (const id of this.sessions.keys()) if (!current.has(id)) this.sessions.deleteAndDispose(id);
 		if (!this.isVisible()) return;
 		for (const session of this.debug.sessions)
@@ -78,12 +78,13 @@ export class LoadedScriptsView extends ViewPane {
 			}
 		const loading = Promise.all(
 			this.debug.sessions
-				.filter(session => session.capabilities.supportsLoadedSourcesRequest)
-				.map(async session => {
+				.filter((session) => session.capabilities.supportsLoadedSourcesRequest)
+				.map(async (session) => {
 					try {
 						return { session, sources: await session.loadedSources() };
 					} catch (error) {
-						if (!this.isDisposed && generation === this.generation) this.notifications.error(error instanceof Error ? error : String(error));
+						if (!this.isDisposed && generation === this.generation)
+							this.notifications.error(error instanceof Error ? error : String(error));
 						return { session, sources: [] };
 					}
 				}),
@@ -91,17 +92,17 @@ export class LoadedScriptsView extends ViewPane {
 		const progress = this.getProgressIndicator().show(true, 150);
 		const handle = toDisposable(() => progress.done());
 		this.loadingProgress.value = handle;
-		const finish = (): void => {
-			if (this.loadingProgress.value === handle) this.loadingProgress.clear();
-		};
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
 		void loading.then(finish, finish);
 		void loading.then(
-			catalogs => {
+			(catalogs) => {
 				if (this.isDisposed || generation !== this.generation) return;
-				this.entries = catalogs.flatMap(({ session, sources }) => (this.debug.getSession(session.id) === session ? sources.map(source => ({ session, source })) : []));
+				this.entries = catalogs.flatMap(({ session, sources }) =>
+					this.debug.getSession(session.id) === session ? sources.map((source) => ({ session, source })) : [],
+				);
 				this.render();
 			},
-			error => {
+			(error) => {
 				if (!this.isDisposed && generation === this.generation) this.notifications.error(error);
 			},
 		);
@@ -112,14 +113,18 @@ export class LoadedScriptsView extends ViewPane {
 		const filter = this.search.value.toLocaleLowerCase();
 		this.list.replaceChildren(
 			...this.entries
-				.filter(({ source }) => `${source.name ?? ''} ${source.path ?? ''}`.toLocaleLowerCase().includes(filter))
+				.filter(({ source }) =>
+					`${source.name ?? ''} ${source.path ?? ''}`.toLocaleLowerCase().includes(filter),
+				)
 				.map(({ session, source }) => {
 					const item = h(this.element.ownerDocument, 'li');
 					const button = h(this.element.ownerDocument, 'button');
 					button.type = 'button';
 					button.className = 'ash-debug-frame';
 					button.textContent = `${source.name ?? source.path ?? localize('debug.repl.source', 'Source')} — ${session.name}`;
-					this.rows.add(getHoverDelegate().setupHover({ target: button, content: source.path ?? button.textContent }));
+					this.rows.add(
+						getHoverDelegate().setupHover({ target: button, content: source.path ?? button.textContent }),
+					);
 					this.rows.add(
 						addDisposableListener(button, 'click', () => {
 							if (this.debug.getSession(session.id) !== session) return;
@@ -134,7 +139,7 @@ export class LoadedScriptsView extends ViewPane {
 									},
 									{ pinned: true },
 								)
-								.catch(error => {
+								.catch((error) => {
 									if (!this.isDisposed) this.notifications.error(error);
 								});
 						}),

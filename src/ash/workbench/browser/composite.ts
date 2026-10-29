@@ -13,9 +13,7 @@ export abstract class Composite<MementoType extends object = object> extends Com
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 
 	/** Hosted content reports its minimum; the outer Part adds its own chrome and frame. */
-	get minimumWidth(): number {
-		return 0;
-	}
+	get minimumWidth(): number { return 0; }
 
 	protected notifyConstraintsChanged(): void {
 		this.constraintsChanged.fire();
@@ -41,12 +39,10 @@ export abstract class Composite<MementoType extends object = object> extends Com
 		this.compositeFocusTracker = tracker;
 		this._register(tracker.onDidFocus(() => this.focused.fire()));
 		this._register(tracker.onDidBlur(() => this.blurred.fire()));
-		this._register(
-			toDisposable(() => {
-				this.compositeFocusTracker = undefined;
-				this.compositeContainer = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.compositeFocusTracker = undefined;
+			this.compositeContainer = undefined;
+		}));
 	}
 
 	public getContainer(): HTMLElement | undefined {
@@ -61,18 +57,10 @@ export abstract class Composite<MementoType extends object = object> extends Com
 		return undefined;
 	}
 
-	public getActions(): readonly IAction[] {
-		return [];
-	}
-	public getActionViewItem(_action: IAction, _options: ActionViewItemOptions): ActionViewItem | undefined {
-		return undefined;
-	}
-	public getSecondaryActions(): readonly IAction[] {
-		return [];
-	}
-	public getContextMenuActions(): readonly IAction[] {
-		return [];
-	}
+	public getActions(): readonly IAction[] { return []; }
+	public getActionViewItem(_action: IAction, _options: ActionViewItemOptions): ActionViewItem | undefined { return undefined; }
+	public getSecondaryActions(): readonly IAction[] { return []; }
+	public getContextMenuActions(): readonly IAction[] { return []; }
 
 	protected updateTitleArea(): void {
 		this.titleAreaUpdate.fire();

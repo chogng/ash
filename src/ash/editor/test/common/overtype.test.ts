@@ -62,30 +62,17 @@ for (const input of ['e\u0301', '👩‍💻', '🇨🇳', '😀', '中']) {
 			}
 
 			const after = [caret(0, 1 + input.length)];
-			assert.deepEqual(
-				{ text: model.getText(), selections: controller.getSelections() },
-				{
-					text: `a${input}😀e\u0301z\nend`,
-					selections: after,
-				},
-			);
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
+				text: `a${input}😀e\u0301z\nend`, selections: after,
+			});
 			model.undo();
-			assert.deepEqual(
-				{ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() },
-				{
-					text: original,
-					selections: before,
-					canUndo: false,
-				},
-			);
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() }, {
+				text: original, selections: before, canUndo: false,
+			});
 			model.redo();
-			assert.deepEqual(
-				{ text: model.getText(), selections: controller.getSelections() },
-				{
-					text: `a${input}😀e\u0301z\nend`,
-					selections: after,
-				},
-			);
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
+				text: `a${input}😀e\u0301z\nend`, selections: after,
+			});
 		});
 	}
 }
@@ -108,7 +95,7 @@ test('Composition overtype removes the whole following combining grapheme', () =
 });
 
 function caret(lineIndex: number, columnIndex: number): Selection {
-	return Selection.fromPositions(new Position(lineIndex + 1, columnIndex + 1));
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

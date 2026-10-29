@@ -20,16 +20,7 @@ function fixture(t: TestContext) {
 		return git('rev-parse', 'HEAD');
 	};
 	git('init', '--quiet');
-	write(
-		'tsconfig.base.json',
-		JSON.stringify({
-			compilerOptions: {
-				module: 'NodeNext',
-				moduleResolution: 'NodeNext',
-				paths: { 'ash:editor/*': ['./src/*'] },
-			},
-		}),
-	);
+	write('tsconfig.base.json', JSON.stringify({ compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext', paths: { 'ash:editor/*': ['./src/*'] } } }));
 	write('src/value.ts', 'export const value = 1;');
 	write('src/barrel.ts', "export { value } from './value.js';");
 	write('src/types.ts', 'export interface Value { value: number; }');
@@ -77,10 +68,7 @@ test('resolves configured aliases and CSS dependencies', t => {
 	f.write('src/test/a.test.ts', "import { value } from 'ash:editor/value.js'; void value; import '../style.css';");
 	f.write('src/style.css', '.widget { color: red; }');
 	const base = f.commit();
-	for (const [path, text] of [
-		['src/value.ts', 'export const value = 2;'],
-		['src/style.css', '.widget { color: blue; }'],
-	]) {
+	for (const [path, text] of [['src/value.ts', 'export const value = 2;'], ['src/style.css', '.widget { color: blue; }']]) {
 		f.write(path, text);
 		const plan = planAffectedTests(f.root, base, f.tests);
 		assert.equal(plan.full, false, `${path}: ${plan.reason}`);

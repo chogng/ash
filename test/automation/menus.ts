@@ -5,7 +5,7 @@ import type { PlaywrightApplication } from './playwrightDriver.js';
 
 /** Exercises context menus through their real Browser or Main owner. */
 export class Menus {
-	constructor(private readonly page: Page) {}
+	constructor(private readonly page: Page) { }
 
 	/** macOS application menus belong to the focused native window, rather than a titlebar popup. */
 	async inspectApplication(application: PlaywrightApplication, path: readonly string[] = []): Promise<readonly ElectronMenuItem[]> {
@@ -19,15 +19,10 @@ export class Menus {
 					if (!submenu) throw new Error(`Expected application submenu: ${path.join(' > ')}`);
 					menu = submenu;
 				}
-				const snapshot = (menu: NonNullable<ReturnType<typeof Menu.getApplicationMenu>>): ElectronMenuItem[] =>
-					menu.items
-						.filter(item => item.type !== 'separator')
-						.map(item => ({
-							label: item.label,
-							enabled: item.enabled,
-							checked: item.checked,
-							...(item.submenu ? { submenu: snapshot(item.submenu) } : {}),
-						}));
+				const snapshot = (menu: NonNullable<ReturnType<typeof Menu.getApplicationMenu>>): ElectronMenuItem[] => menu.items.filter(item => item.type !== 'separator').map(item => ({
+					label: item.label, enabled: item.enabled, checked: item.checked,
+					...(item.submenu ? { submenu: snapshot(item.submenu) } : {}),
+				}));
 				return snapshot(menu);
 			}, path);
 		}
@@ -50,13 +45,7 @@ export class Menus {
 					if (index === path.length - 1) {
 						const window = BrowserWindow.getFocusedWindow();
 						if (!window) throw new Error('Application menu selection requires a focused window');
-						item.click(item, window, {
-							shiftKey: false,
-							ctrlKey: false,
-							altKey: false,
-							metaKey: false,
-							triggeredByAccelerator: false,
-						});
+						item.click(item, window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
 					} else {
 						if (!item.submenu) throw new Error(`Expected application submenu: ${label}`);
 						menu = item.submenu;
@@ -71,38 +60,26 @@ export class Menus {
 	}
 
 	async select(application: PlaywrightApplication, open: () => Promise<unknown>, path: readonly string[]): Promise<void> {
-		if ((await this.isSystemMenu(application)) && 'windows' in application) {
+		if (await this.isSystemMenu(application) && 'windows' in application) {
 			await captureElectronMenu(application, open, { label: path.at(-1)!, path });
 			return;
 		}
 		await open();
 		for (const label of path.slice(0, -1)) {
 			const menus = this.page.getByRole('menu');
-			const submenu = menus.nth((await menus.count()) - 1).getByRole('menuitem', { name: label, exact: true });
+			const submenu = menus.nth(await menus.count() - 1).getByRole('menuitem', { name: label, exact: true });
 			await submenu.press('ArrowRight');
 			await expect(submenu).toHaveAttribute('aria-expanded', 'true');
 		}
-		await this.page
-			.getByRole('menu')
-			.last()
-			.getByRole('menuitem', { name: path.at(-1)!, exact: true })
-			.or(
-				this.page
-					.getByRole('menu')
-					.last()
-					.getByRole('menuitemcheckbox', { name: path.at(-1)!, exact: true }),
-			)
-			.or(
-				this.page
-					.getByRole('menu')
-					.last()
-					.getByRole('menuitemradio', { name: path.at(-1)!, exact: true }),
-			)
-			.click();
+		await this.page.getByRole('menu').last().getByRole('menuitem', { name: path.at(-1)!, exact: true }).or(
+			this.page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: path.at(-1)!, exact: true }),
+		).or(
+			this.page.getByRole('menu').last().getByRole('menuitemradio', { name: path.at(-1)!, exact: true }),
+		).click();
 	}
 
 	async inspect(application: PlaywrightApplication, open: () => Promise<unknown>, path: readonly string[] = []): Promise<readonly ElectronMenuItem[]> {
-		if ((await this.isSystemMenu(application)) && 'windows' in application) {
+		if (await this.isSystemMenu(application) && 'windows' in application) {
 			let items = await captureElectronMenu(application, open);
 			for (const label of path) {
 				const item = items.find(item => item.label === label);
@@ -114,44 +91,34 @@ export class Menus {
 		await open();
 		for (const label of path) {
 			const menus = this.page.getByRole('menu');
-			const submenu = menus.nth((await menus.count()) - 1).getByRole('menuitem', { name: label, exact: true });
+			const submenu = menus.nth(await menus.count() - 1).getByRole('menuitem', { name: label, exact: true });
 			await submenu.press('ArrowRight');
 			await expect(submenu).toHaveAttribute('aria-expanded', 'true');
 		}
 		const menu = this.page.getByRole('menu').last();
 		await expect(menu).toBeVisible();
-		const items = await menu.locator('[role^="menuitem"]').evaluateAll(elements =>
-			elements.map(element => ({
-				label: element.getAttribute('aria-label') ?? element.textContent!.trim(),
-				enabled: !element.matches(':disabled') && element.getAttribute('aria-disabled') !== 'true',
-				checked: element.getAttribute('aria-checked') === 'true',
-			})),
-		);
-		for (let level = 0; level <= path.length; level++) {
-			await this.page.keyboard.press('Escape');
-		}
+		const items = await menu.locator('[role^="menuitem"]').evaluateAll(elements => elements.map(element => ({
+			label: element.getAttribute('aria-label') ?? element.textContent!.trim(),
+			enabled: !element.matches(':disabled') && element.getAttribute('aria-disabled') !== 'true',
+			checked: element.getAttribute('aria-checked') === 'true',
+		})));
+		for (let level = 0; level <= path.length; level++) { await this.page.keyboard.press('Escape'); }
 		return items;
 	}
 
 	async isSystemMenu(application: PlaywrightApplication): Promise<boolean> {
-		if (!('windows' in application)) {
-			return false;
-		}
-		if (await this.page.locator('.ash-sessions-window').count()) {
-			return false;
-		}
+		if (!('windows' in application)) { return false; }
+		if (await this.page.locator('.ash-sessions-window').count()) { return false; }
 		const settings = await (async () => {
 			const snapshot = await readUserSettings(this.page);
 			return JSON.parse(snapshot.content) as Record<string, unknown>;
 		})();
 		// Stored settings omit default values; the product registry owns them.
-		return (
-			resolveContextMenuStyle(
-				parseMenuStyle(settings['window.menuStyle'] ?? DEFAULT_MENU_STYLE),
-				parseTitleBarStyle(settings['window.titleBarStyle'] ?? DEFAULT_TITLE_BAR_STYLE),
-				process.platform === 'darwin' ? 'macos' : 'desktop',
-			) === 'system'
-		);
+		return resolveContextMenuStyle(
+			parseMenuStyle(settings['window.menuStyle'] ?? DEFAULT_MENU_STYLE),
+			parseTitleBarStyle(settings['window.titleBarStyle'] ?? DEFAULT_TITLE_BAR_STYLE),
+			process.platform === 'darwin' ? 'macos' : 'desktop',
+		) === 'system';
 	}
 }
 
@@ -168,47 +135,34 @@ interface CapturedMenu {
 }
 
 interface MenuCaptureGlobal {
-	ashTestMenuCapture?: { readonly restore: () => void; result?: CapturedMenu };
+	ashTestMenuCapture?: { readonly restore: () => void; result?: CapturedMenu; };
 }
 
 /** Selects only the OS popup item; renderer dispatch, IPC and action execution remain real. */
-export async function captureElectronMenu(
-	application: ElectronApplication,
-	trigger: () => Promise<unknown>,
-	selection?: { readonly label: string; readonly checked?: boolean; readonly path?: readonly string[] },
-): Promise<readonly ElectronMenuItem[]> {
+export async function captureElectronMenu(application: ElectronApplication, trigger: () => Promise<unknown>, selection?: { readonly label: string; readonly checked?: boolean; readonly path?: readonly string[]; }): Promise<readonly ElectronMenuItem[]> {
 	await application.evaluate(({ Menu }, selection) => {
 		const state = globalThis as MenuCaptureGlobal;
 		if (state.ashTestMenuCapture) throw new Error('Another test menu capture is active');
 		const popup = Menu.prototype.popup;
-		const capture = (state.ashTestMenuCapture = {
-			restore: () => {
-				Menu.prototype.popup = popup;
-			},
-		} as NonNullable<MenuCaptureGlobal['ashTestMenuCapture']>);
+		const capture = state.ashTestMenuCapture = { restore: () => { Menu.prototype.popup = popup; } } as NonNullable<MenuCaptureGlobal['ashTestMenuCapture']>;
 		Menu.prototype.popup = function (options) {
 			capture.restore();
-			const snapshot = (items: typeof this.items): ElectronMenuItem[] =>
-				items
-					.filter(item => item.type !== 'separator')
-					.map(item => ({
-						label: item.label,
-						enabled: item.enabled,
-						checked: item.checked,
-						...(item.submenu ? { submenu: snapshot(item.submenu.items) } : {}),
-					}));
+			const snapshot = (items: typeof this.items): ElectronMenuItem[] => items.filter(item => item.type !== 'separator').map(item => ({
+				label: item.label, enabled: item.enabled, checked: item.checked,
+				...(item.submenu ? { submenu: snapshot(item.submenu.items) } : {}),
+			}));
 			const items = snapshot(this.items);
 			try {
 				if (selection) {
 					// Chords are rendered in the native label because Electron's accelerator column cannot display them.
-					const selectLabel = (items: typeof this.items, label: string): (typeof this.items)[number] | undefined => {
+					const selectLabel = (items: typeof this.items, label: string): typeof this.items[number] | undefined => {
 						const exact = items.find(item => item.label === label);
 						if (exact) return exact;
 						const matches = items.filter(item => item.label.startsWith(`${label} [`) && item.label.endsWith(']'));
 						if (matches.length > 1) throw new Error(`Ambiguous menu label: ${label}`);
 						return matches[0];
 					};
-					const find = (items: typeof this.items): (typeof this.items)[number] | undefined => {
+					const find = (items: typeof this.items): typeof this.items[number] | undefined => {
 						const match = selectLabel(items, selection.label);
 						if (match) return match;
 						for (const item of items) {
@@ -229,13 +183,7 @@ export async function captureElectronMenu(
 					}
 					if (!item || !item.enabled) throw new Error(`Expected enabled menu item: ${selection.label}`);
 					if (selection.checked !== undefined && item.checked !== selection.checked) throw new Error(`Unexpected menu checked state: ${selection.label}`);
-					item.click(item, options?.window, {
-						shiftKey: false,
-						ctrlKey: false,
-						altKey: false,
-						metaKey: false,
-						triggeredByAccelerator: false,
-					});
+					item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
 				}
 				capture.result = { items };
 			} catch (error) {

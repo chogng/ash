@@ -1,18 +1,7 @@
 import { createTextModelFeatures } from '../../../../common/model/modelFeatures.js';
 import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
 import { after as afterModelFeatures } from 'mocha';
-import {
-	TokenizationRegistry,
-	type IState,
-	type ILanguageIdCodec,
-	type SyntaxRequest,
-	LanguageDiagnosticSeverity,
-	SYNTAX_DIAGNOSTIC_LANE,
-	SYNTAX_TOKEN_LANE,
-	type SyntaxResult,
-	type SyntaxWorker,
-	type SyntaxLane,
-} from '../../../../common/languages.js';
+import { TokenizationRegistry, type IState, type ILanguageIdCodec, type SyntaxRequest, LanguageDiagnosticSeverity, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxResult, type SyntaxWorker, type SyntaxLane } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -47,8 +36,7 @@ test('lexical readiness follows the current version and shares analysis across c
 	const secondResult = new DeferredPromise<LanguageTokenResult>();
 	let requests = 0;
 	using registration = registry.register({
-		id: 'test.readiness',
-		languageIds: ['demo'],
+		id: 'test.readiness', languageIds: ['demo'],
 		provideTokens: () => {
 			requests++;
 			void (requests === 1 ? firstStarted : secondStarted).complete();
@@ -59,9 +47,7 @@ test('lexical readiness follows the current version and shares analysis across c
 	const cancelled = new AbortController();
 	const cancelledReader = model.tokenization.whenReady(cancelled.signal);
 	let ready = false;
-	const reader = model.tokenization.whenReady(new AbortController().signal).then(() => {
-		ready = true;
-	});
+	const reader = model.tokenization.whenReady(new AbortController().signal).then(() => { ready = true; });
 	await firstStarted.p;
 	cancelled.abort();
 	await assert.rejects(cancelledReader, isCancellationError);
@@ -79,18 +65,13 @@ test('lexical readiness rejects worker failures and model disposal', async () =>
 	const started = new DeferredPromise<void>();
 	const result = new DeferredPromise<SyntaxResult>();
 	using model = new TextModel('text', {
-		languageId: 'demo',
-		tokenization: {
+		languageId: 'demo', tokenization: {
 			syntaxService: {
 				workerFactory: () => ({
-					run: () => {
-						void started.complete();
-						return result.p;
-					},
-					dispose() {},
-					[Symbol.dispose]() {},
-				}),
-			},
+					run: () => { void started.complete(); return result.p; },
+					dispose() { }, [Symbol.dispose]() { },
+				})
+			}
 		},
 	});
 	const failed = model.tokenization.whenReady(new AbortController().signal);
@@ -105,8 +86,7 @@ test('disposing a model rejects readers already waiting for its lexical result',
 	const started = new DeferredPromise<void>();
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register({
-		id: 'test.disposed-readiness',
-		languageIds: ['demo'],
+		id: 'test.disposed-readiness', languageIds: ['demo'],
 		provideTokens: (_request, signal) => {
 			void started.complete();
 			return new Promise<LanguageTokenResult>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
@@ -129,9 +109,9 @@ test('plaintext and models above the tokenization limit are immediately ready', 
 				workerFactory: () => {
 					workers++;
 					throw new Error('Large files must not start syntax analysis');
-				},
-			},
-		},
+				}
+			}
+		}
 	});
 	await large.tokenization.whenReady(new AbortController().signal);
 	assert.equal(workers, 0);
@@ -143,23 +123,14 @@ test('scoped language tokens expose standard comment, string and regex categorie
 	using registration = registry.register({
 		id: 'test.scoped-tokens',
 		languageIds: ['scoped'],
-		provideTokens: () => ({
-			tokens: scopes.map((tokenType, index) => ({
-				range: new Range(index + 1, 1, index + 1, 2),
-				tokenType,
-				modifiers: [],
-			})),
-		}),
+		provideTokens: () => ({ tokens: scopes.map((tokenType, index) => ({ range: new Range(index + 1, 1, index + 1, 2), tokenType, modifiers: [] })) }),
 	});
-	using model = new TextModel(scopes.map(() => 'x').join('\n'), {
-		languageId: 'scoped',
-		tokenization: { syntaxProviderRegistry: registry },
-	});
+	using model = new TextModel(scopes.map(() => 'x').join('\n'), { languageId: 'scoped', tokenization: { syntaxProviderRegistry: registry } });
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
-	assert.deepEqual(
-		scopes.map((_, index) => model.tokenization.getLineTokens(index + 1).getStandardTokenType(0)),
-		[StandardTokenType.Comment, StandardTokenType.String, StandardTokenType.RegEx, StandardTokenType.RegEx, StandardTokenType.Other, StandardTokenType.Other, StandardTokenType.Other],
-	);
+	assert.deepEqual(scopes.map((_, index) => model.tokenization.getLineTokens(index + 1).getStandardTokenType(0)), [
+		StandardTokenType.Comment, StandardTokenType.String, StandardTokenType.RegEx, StandardTokenType.RegEx,
+		StandardTokenType.Other, StandardTokenType.Other, StandardTokenType.Other,
+	]);
 });
 
 test('TextModel publishes current provider tokens through the standard and renderer projections', async () => {
@@ -171,13 +142,11 @@ test('TextModel publishes current provider tokens through the standard and rende
 		provideTokens: request => {
 			requests += 1;
 			return {
-				tokens: [
-					{
-						range: new Range(1, 1, 1, 8),
-						tokenType: 'comment',
-						modifiers: [],
-					},
-				],
+				tokens: [{
+					range: new Range(1, 1, 1, 8),
+					tokenType: 'comment',
+					modifiers: [],
+				}]
 			};
 		},
 	});
@@ -206,13 +175,11 @@ test('model edits invalidate accuracy until the new provider result is accepted'
 		id: 'test.tokens',
 		languageIds: ['typescript'],
 		provideTokens: request => ({
-			tokens: [
-				{
-					range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-					tokenType: request.snapshot.getText().startsWith('//') ? 'comment' : 'string',
-					modifiers: [],
-				},
-			],
+			tokens: [{
+				range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
+				tokenType: request.snapshot.getText().startsWith('//') ? 'comment' : 'string',
+				modifiers: [],
+			}]
 		}),
 	});
 	using model = new TextModel('"value"', {
@@ -266,10 +233,7 @@ test('hypothetical tokenization reports the asynchronous backend boundary', asyn
 		languageIds: ['typescript'],
 		provideTokens: () => ({ tokens: [] }),
 	});
-	using model = new TextModel('value', {
-		languageId: 'typescript',
-		tokenization: { syntaxProviderRegistry: registry },
-	});
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { syntaxProviderRegistry: registry } });
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
 	assert.throws(() => model.tokenization.getTokenTypeIfInsertingCharacter(1, 1, 'x'), SynchronousTokenizationUnavailableError);
 	assert.equal(model.tokenization.tokenizeLinesAt(1, ['inserted']), null);
@@ -287,26 +251,19 @@ test('TextModel owns the syntax worker lifecycle and reanalyzes language-support
 				if (request.lane === SYNTAX_TOKEN_LANE) {
 					tokenRequestCount += 1;
 					return {
-						lane: SYNTAX_TOKEN_LANE,
-						value: {
-							tokens: [
-								{
-									range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-									tokenType: tokenRequestCount === 1 ? 'string' : 'comment',
-									modifiers: [],
-								},
-							],
-						},
+						lane: SYNTAX_TOKEN_LANE, value: {
+							tokens: [{
+								range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
+								tokenType: tokenRequestCount === 1 ? 'string' : 'comment',
+								modifiers: [],
+							}]
+						}
 					};
 				}
 				return { lane: SYNTAX_DIAGNOSTIC_LANE, value: { diagnostics: [] } };
 			},
-			dispose(): void {
-				disposedWorkerCount += 1;
-			},
-			[Symbol.dispose](): void {
-				this.dispose();
-			},
+			dispose(): void { disposedWorkerCount += 1; },
+			[Symbol.dispose](): void { this.dispose(); },
 		};
 	};
 	using model = new TextModel('value', {
@@ -332,14 +289,8 @@ test('TextModel owns the syntax worker lifecycle and reanalyzes language-support
 });
 
 function codec(): ILanguageIdCodec {
-	const ids = new Map<string, number>([
-		['plaintext', 1],
-		['typescript', 2],
-	]);
-	const languages = new Map<number, string>([
-		[1, 'plaintext'],
-		[2, 'typescript'],
-	]);
+	const ids = new Map<string, number>([['plaintext', 1], ['typescript', 2]]);
+	const languages = new Map<number, string>([[1, 'plaintext'], [2, 'typescript']]);
 	return {
 		encodeLanguageId: languageId => {
 			const current = ids.get(languageId);
@@ -364,26 +315,13 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 test('registered line tokenizers refresh existing models without clearing diagnostics', async () => {
 	using providers = new SyntaxProviderRegistry();
 	using diagnostic = providers.register({
-		id: 'test.diagnostic',
-		languageIds: ['registry-test'],
-		provideDiagnostics: () => ({
-			diagnostics: [{ range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Warning, message: 'problem' }],
-		}),
+		id: 'test.diagnostic', languageIds: ['registry-test'],
+		provideDiagnostics: () => ({ diagnostics: [{ range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Warning, message: 'problem' }] }),
 	});
-	using model = new TextModel('alpha\nbeta', {
-		languageId: 'registry-test',
-		tokenization: { syntaxProviderRegistry: providers },
-	});
+	using model = new TextModel('alpha\nbeta', { languageId: 'registry-test', tokenization: { syntaxProviderRegistry: providers } });
 	await waitFor(() => model.diagnostics.results.result !== undefined);
 	const result = model.diagnostics.results.result;
-	const state: IState = {
-		clone() {
-			return this;
-		},
-		equals(other) {
-			return other === this;
-		},
-	};
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
 	const first = TokenizationRegistry.register('registry-test', {
 		getInitialState: () => state,
 		tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: 'registry-test' }], endState: state }),
@@ -408,20 +346,10 @@ for (const reason of ['provider removal', 'language support change', 'syntax pro
 	test(`line tokenizer clears rendered tokens and notifies its model on ${reason}`, () => {
 		using supportChanges = new Emitter<void>();
 		using providers = new SyntaxProviderRegistry();
-		const state: IState = {
-			clone() {
-				return this;
-			},
-			equals(other) {
-				return other === this;
-			},
-		};
+		const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
 		using registration = TokenizationRegistry.register('token-reset-test', {
 			getInitialState: () => state,
-			tokenize: () => ({
-				tokens: [{ offset: 0, type: 'comment', language: 'token-reset-test' }],
-				endState: state,
-			}),
+			tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: 'token-reset-test' }], endState: state }),
 		});
 		using model = new TextModel('alpha', {
 			languageId: 'token-reset-test',
@@ -431,41 +359,26 @@ for (const reason of ['provider removal', 'language support change', 'syntax pro
 		assert.equal(model.tokenization.renderedTokens.getLineTokens(0).length, 1);
 		let notifications = 0;
 		using listener = model.onDidChangeTokens(() => notifications++);
-		using provider =
-			reason === 'syntax provider change'
-				? providers.register({
-						id: 'token-reset-diagnostic',
-						languageIds: ['token-reset-test'],
-						provideDiagnostics: () => ({ diagnostics: [] }),
-					})
-				: undefined;
+		using provider = reason === 'syntax provider change' ? providers.register({
+			id: 'token-reset-diagnostic', languageIds: ['token-reset-test'], provideDiagnostics: () => ({ diagnostics: [] }),
+		}) : undefined;
 		if (reason === 'provider removal') {
 			registration.dispose();
 		}
 		if (reason === 'language support change') {
 			supportChanges.fire();
 		}
-		assert.deepEqual(
-			{
-				tokens: model.tokenization.languageTokens.getLineTokens(0),
-				rendered: model.tokenization.renderedTokens.getLineTokens(0),
-				notifications,
-			},
-			{ tokens: [], rendered: [], notifications: 1 },
-		);
+		assert.deepEqual({
+			tokens: model.tokenization.languageTokens.getLineTokens(0),
+			rendered: model.tokenization.renderedTokens.getLineTokens(0),
+			notifications,
+		}, { tokens: [], rendered: [], notifications: 1 });
 	});
 }
 
 test('line tokenization reuses unchanged lines after a model edit', async () => {
 	let scanned = 0;
-	const state: IState = {
-		clone() {
-			return this;
-		},
-		equals(other) {
-			return other === this;
-		},
-	};
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
 	using support = TokenizationRegistry.register('incremental-test', {
 		getInitialState: () => state,
 		tokenize: () => {
@@ -482,18 +395,15 @@ test('line tokenization reuses unchanged lines after a model edit', async () => 
 	assert.equal(model.tokenization.getLineTokens(2).getLineContent(), 'changed');
 });
 
+
 test('async hypothetical tokens are bounded by proposed text and never change live tokens or model state', async () => {
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register({
-		id: 'test.preview',
-		languageIds: ['demo'],
-		provideTokens: () => ({ tokens: [] }),
+		id: 'test.preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
 		provideTokensForLines: request => ({
 			tokens: request.tokenize.lines.map((line, index) => ({
-				range: new Range(index + 1, 1, index + 1, line.length + 1),
-				tokenType: 'string',
-				modifiers: [],
-			})),
+				range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [],
+			}))
 		}),
 	});
 	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
@@ -501,13 +411,7 @@ test('async hypothetical tokens are bounded by proposed text and never change li
 	let changes = 0;
 	using listener = model.tokenization.onDidChange(() => changes++);
 	const preview = await model.tokenization.tokenizeLinesAtAsync(1, ['long ( string', 'second'], new AbortController().signal);
-	assert.deepEqual(
-		preview!.map(line => [line.getLineContent(), line.getStandardTokenType(0)]),
-		[
-			['long ( string', StandardTokenType.String],
-			['second', StandardTokenType.String],
-		],
-	);
+	assert.deepEqual(preview!.map(line => [line.getLineContent(), line.getStandardTokenType(0)]), [['long ( string', StandardTokenType.String], ['second', StandardTokenType.String]]);
 	assert.equal(model.getText(), 'x');
 	assert.equal(model.getVersionId(), 1);
 	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Other);
@@ -519,13 +423,8 @@ for (const reason of ['edit', 'language', 'abort', 'dispose'] as const) {
 		using registry = new SyntaxProviderRegistry();
 		let resolve: ((result: LanguageTokenResult) => void) | undefined;
 		using registration = registry.register({
-			id: 'test.deferred-preview',
-			languageIds: ['demo'],
-			provideTokens: () => ({ tokens: [] }),
-			provideTokensForLines: () =>
-				new Promise<LanguageTokenResult>(done => {
-					resolve = done;
-				}),
+			id: 'test.deferred-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+			provideTokensForLines: () => new Promise<LanguageTokenResult>(done => { resolve = done; }),
 		});
 		using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
 		await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
@@ -547,46 +446,25 @@ test('hypothetical tokenization reports unavailable lexers and rejects malformed
 	assert.equal(await plain.tokenization.tokenizeLinesAtAsync(1, ['('], signal), null);
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register({
-		id: 'test.invalid-preview',
-		languageIds: ['demo'],
-		provideTokens: () => ({ tokens: [] }),
-		provideTokensForLines: () => ({
-			tokens: [{ range: new Range(1, 1, 1, 100), tokenType: 'string', modifiers: [] }],
-		}),
+		id: 'test.invalid-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+		provideTokensForLines: () => ({ tokens: [{ range: new Range(1, 1, 1, 100), tokenType: 'string', modifiers: [] }] }),
 	});
 	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
 	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['()'], signal), /range|column/i);
 	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['a\nb'], signal), /line endings/);
 });
 
+
 test('file readiness computes only the first line and attached view ranges drive coloring without a worker', async () => {
 	let scanned = 0;
 	let workers = 0;
-	const state: IState = {
-		clone() {
-			return this;
-		},
-		equals(other) {
-			return other === this;
-		},
-	};
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
 	using registration = TokenizationRegistry.register('viewport-test', {
 		getInitialState: () => state,
-		tokenize: () => {
-			scanned++;
-			return { tokens: [{ offset: 0, type: 'keyword', language: 'viewport-test' }], endState: state };
-		},
+		tokenize: () => { scanned++; return { tokens: [{ offset: 0, type: 'keyword', language: 'viewport-test' }], endState: state }; },
 	});
 	using model = new TextModel(Array.from({ length: 5000 }, () => 'keyword').join('\n'), {
-		languageId: 'viewport-test',
-		tokenization: {
-			syntaxService: {
-				workerFactory: () => {
-					workers++;
-					throw new Error('Line tokenizers do not start workers');
-				},
-			},
-		},
+		languageId: 'viewport-test', tokenization: { syntaxService: { workerFactory: () => { workers++; throw new Error('Line tokenizers do not start workers'); } } },
 	});
 	await model.tokenization.whenReady(new AbortController().signal);
 	assert.deepEqual([scanned, workers, model.tokenization.hasAccurateTokensForLine(1), model.tokenization.hasAccurateTokensForLine(5000)], [1, 0, true, false]);
@@ -599,42 +477,28 @@ test('file readiness computes only the first line and attached view ranges drive
 		view.setVisibleLines([{ startLineNumber: 4900, endLineNumber: 4940 }], true);
 		assert.equal(scanned, 81);
 		assert.equal(model.tokenization.tokenCount, 81);
-	} finally {
-		model.onBeforeDetached(view);
-	}
+	} finally { model.onBeforeDetached(view); }
 });
 
 test('idle tokenization publishes bounded batches and stops when the last view detaches', async () => {
 	let scanned = 0;
-	const state: IState = {
-		clone() {
-			return this;
-		},
-		equals(other) {
-			return other === this;
-		},
-	};
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
 	using registration = TokenizationRegistry.register('idle-test', {
 		getInitialState: () => state,
-		tokenize: () => {
-			scanned++;
-			return { tokens: [{ offset: 0, type: 'keyword', language: 'idle-test' }], endState: state };
-		},
+		tokenize: () => { scanned++; return { tokens: [{ offset: 0, type: 'keyword', language: 'idle-test' }], endState: state }; },
 	});
 	using model = new TextModel(Array.from({ length: 350 }, () => 'keyword').join('\n'), { languageId: 'idle-test' });
-	const ranges: { readonly fromLineNumber: number; readonly toLineNumber: number }[][] = [];
+	const ranges: { readonly fromLineNumber: number; readonly toLineNumber: number; }[][] = [];
 	using listener = model.onDidChangeTokens(event => ranges.push(event.ranges));
 	const view = model.onBeforeAttached();
 	try {
 		await waitFor(() => model.tokenization.hasAccurateTokensForLine(350));
 		assert.ok(ranges.length >= 4 && ranges.every(batch => batch.every(range => range.toLineNumber - range.fromLineNumber < 100)));
-	} finally {
-		model.onBeforeDetached(view);
-	}
+	} finally { model.onBeforeDetached(view); }
 	model.applyEdits([{ range: new Range(1, 1, 1, 8), text: 'changed' }]);
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.deepEqual([scanned, model.tokenization.hasAccurateTokensForLine(1)], [350, false]);
-	const changed: { fromLineNumber: number; toLineNumber: number }[] = [];
+	const changed: { fromLineNumber: number; toLineNumber: number; }[] = [];
 	using changes = model.onDidChangeTokens(event => changed.push(...event.ranges));
 	model.tokenization.forceTokenization(350);
 	assert.deepEqual([scanned, changed], [351, [{ fromLineNumber: 1, toLineNumber: 1 }]]);

@@ -10,10 +10,7 @@ import { addMicButtonContextMenuListener, getDictationContextMenuActions } from 
 
 /** The ActionBar owns this button's lifetime; the editor session owns its action and state. */
 export class DictationActionViewItem extends MenuEntryActionViewItem {
-	constructor(
-		action: MenuItemAction,
-		options: IMenuEntryActionViewItemOptions | undefined,
-		private readonly isActive: IObservable<boolean>,
+	constructor(action: MenuItemAction, options: IMenuEntryActionViewItemOptions | undefined, private readonly isActive: IObservable<boolean>,
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,

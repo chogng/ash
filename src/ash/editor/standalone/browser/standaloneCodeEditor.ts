@@ -19,7 +19,11 @@ import type { IEditorOptions } from '../../common/config/editorOptions.js';
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 import { StandaloneThemeService } from './standaloneThemeService.js';
 
-type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions, 'container' | 'model' | 'editorWorkerFactory' | 'completionWorkerFactory' | 'registerBeforeSave' | 'formatOnSave'>;
+type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
+	'container' | 'model' |
+	'editorWorkerFactory' | 'completionWorkerFactory' |
+	'registerBeforeSave' | 'formatOnSave'
+>;
 
 export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {
 	readonly model?: ITextModel | null;

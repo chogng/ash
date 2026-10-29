@@ -48,95 +48,69 @@ class SymbolNavigationAction extends EditorAction {
 	}
 }
 
-onActivate(() =>
-	MenusRegistry.appendMenuItem(MenuId.EditorContext, {
-		submenu: MenuId.EditorContextPeek,
-		title: localize('peek.submenu', 'Peek'),
-		group: 'navigation',
-		order: 100,
-	}),
-);
+onActivate(() => MenusRegistry.appendMenuItem(MenuId.EditorContext, {
+	submenu: MenuId.EditorContextPeek,
+	title: localize('peek.submenu', 'Peek'),
+	group: 'navigation',
+	order: 100,
+}));
 
 const commands: readonly NavigationCommand[] = [
 	{
 		id: 'editor.action.revealDefinition',
 		label: localize2('goToDefinition.label', 'Go to Definition'),
-		kind: 'definition',
-		precondition: EditorContextKeys.hasDefinitionProvider.isEqualTo(true),
-		order: 1.1,
-		keybinding: KeyCode.F12,
+		kind: 'definition', precondition: EditorContextKeys.hasDefinitionProvider.isEqualTo(true),
+		order: 1.1, keybinding: KeyCode.F12,
 	},
 	{
 		id: 'editor.action.revealDeclaration',
 		label: localize2('goToDeclaration.label', 'Go to Declaration'),
-		kind: 'declaration',
-		precondition: EditorContextKeys.hasDeclarationProvider.isEqualTo(true),
-		order: 1.3,
+		kind: 'declaration', precondition: EditorContextKeys.hasDeclarationProvider.isEqualTo(true), order: 1.3,
 	},
 	{
 		id: 'editor.action.goToTypeDefinition',
 		label: localize2('goToTypeDefinition.label', 'Go to Type Definition'),
-		kind: 'typeDefinition',
-		precondition: EditorContextKeys.hasTypeDefinitionProvider.isEqualTo(true),
-		order: 1.4,
+		kind: 'typeDefinition', precondition: EditorContextKeys.hasTypeDefinitionProvider.isEqualTo(true), order: 1.4,
 	},
 	{
 		id: 'editor.action.goToImplementation',
 		label: localize2('goToImplementation.label', 'Go to Implementations'),
-		kind: 'implementation',
-		precondition: EditorContextKeys.hasImplementationProvider.isEqualTo(true),
-		order: 1.45,
-		keybinding: KeyMod.CtrlCmd | KeyCode.F12,
+		kind: 'implementation', precondition: EditorContextKeys.hasImplementationProvider.isEqualTo(true),
+		order: 1.45, keybinding: KeyMod.CtrlCmd | KeyCode.F12,
 	},
 	{
 		id: 'editor.action.goToReferences',
 		label: localize2('goToReferences.label', 'Go to References'),
-		kind: 'references',
-		precondition: EditorContextKeys.hasReferenceProvider.isEqualTo(true),
-		order: 1.5,
-		keybinding: KeyMod.Shift | KeyCode.F12,
+		kind: 'references', precondition: EditorContextKeys.hasReferenceProvider.isEqualTo(true),
+		order: 1.5, keybinding: KeyMod.Shift | KeyCode.F12,
 	},
 	{
 		id: 'editor.action.peekDefinition',
 		label: localize2('peekDefinition.label', 'Peek Definition'),
-		kind: 'definition',
-		precondition: EditorContextKeys.hasDefinitionProvider.isEqualTo(true),
-		order: 2,
-		keybinding: KeyMod.Alt | KeyCode.F12,
-		peek: true,
+		kind: 'definition', precondition: EditorContextKeys.hasDefinitionProvider.isEqualTo(true),
+		order: 2, keybinding: KeyMod.Alt | KeyCode.F12, peek: true,
 	},
 	{
 		id: 'editor.action.peekDeclaration',
 		label: localize2('peekDeclaration.label', 'Peek Declaration'),
-		kind: 'declaration',
-		precondition: EditorContextKeys.hasDeclarationProvider.isEqualTo(true),
-		order: 3,
-		peek: true,
+		kind: 'declaration', precondition: EditorContextKeys.hasDeclarationProvider.isEqualTo(true), order: 3, peek: true,
 	},
 	{
 		id: 'editor.action.peekTypeDefinition',
 		label: localize2('peekTypeDefinition.label', 'Peek Type Definition'),
-		kind: 'typeDefinition',
-		precondition: EditorContextKeys.hasTypeDefinitionProvider.isEqualTo(true),
-		order: 4,
-		peek: true,
+		kind: 'typeDefinition', precondition: EditorContextKeys.hasTypeDefinitionProvider.isEqualTo(true),
+		order: 4, peek: true,
 	},
 	{
 		id: 'editor.action.peekImplementation',
 		label: localize2('peekImplementation.label', 'Peek Implementations'),
-		kind: 'implementation',
-		precondition: EditorContextKeys.hasImplementationProvider.isEqualTo(true),
-		order: 5,
-		keybinding: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.F12,
-		peek: true,
+		kind: 'implementation', precondition: EditorContextKeys.hasImplementationProvider.isEqualTo(true),
+		order: 5, keybinding: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.F12, peek: true,
 	},
 	{
 		id: 'editor.action.referenceSearch.trigger',
 		label: localize2('peekReferences.label', 'Peek References'),
-		kind: 'references',
-		precondition: EditorContextKeys.hasReferenceProvider.isEqualTo(true),
-		order: 6,
-		peek: true,
+		kind: 'references', precondition: EditorContextKeys.hasReferenceProvider.isEqualTo(true), order: 6, peek: true,
 	},
 ];
 

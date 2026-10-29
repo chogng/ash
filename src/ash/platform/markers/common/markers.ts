@@ -27,7 +27,7 @@ export interface IRelatedInformation {
 
 /** Diagnostic data uses one-based lines and UTF-16 columns, like editor ranges. */
 export interface IMarkerData {
-	code?: string | { value: string; target: URI };
+	code?: string | { value: string; target: URI; };
 	severity: MarkerSeverity;
 	message: string;
 	source?: string;

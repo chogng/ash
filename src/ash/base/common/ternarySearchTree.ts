@@ -13,7 +13,7 @@ interface IndexedValue<V> {
 export class TernarySearchTree<K, V> {
 	private readonly entries: IndexedValue<V>[] = [];
 
-	private constructor(private readonly segmentsFor: (key: K) => readonly string[]) {}
+	private constructor(private readonly segmentsFor: (key: K) => readonly string[]) { }
 
 	static forUris<E>(ignorePathCasing: (key: URI) => boolean = () => false, ignoreQueryAndFragment: (key: URI) => boolean = () => false): TernarySearchTree<URI, E> {
 		return new TernarySearchTree(resource => {

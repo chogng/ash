@@ -180,32 +180,19 @@ test('Stanza collaboration publishes local selections without versioning them an
 	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
-	const received: (readonly { readonly clientId: string }[])[] = [];
+	const received: (readonly { readonly clientId: string; }[])[] = [];
 	controller.onDidChangePresence(change => received.push(change.presences));
 
 	const local = textSelection({ nodeId: 'text-1', offset: 1 });
 	model.setSelection(local);
 	await flushMicrotasks();
 	assert.deepEqual(connection.presenceUpdates.at(-1), local);
-	connection.acceptPresence([
-		{
-			clientId: 'client-b',
-			selection: textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 }),
-		},
-	]);
+	connection.acceptPresence([{ clientId: 'client-b', selection: textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 }) }]);
 	assert.equal(received[0]?.[0]?.clientId, 'client-b');
 });
 
 function createDocument(schema: DocumentSchema): DocumentNode {
-	return schema.createDocument(
-		[
-			schema.createNode('paragraph', {
-				id: 'paragraph-1',
-				content: [schema.createText('Hello', { id: 'text-1' })],
-			}),
-		],
-		'document-1',
-	);
+	return schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] })], 'document-1');
 }
 
 function firstText(document: DocumentNode): string | undefined {
@@ -236,10 +223,7 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 	readonly submissions: Submission[] = [];
 	readonly presenceUpdates: (DocumentSelection | undefined)[] = [];
 
-	constructor(
-		readonly schema: DocumentSchema,
-		document: DocumentNode,
-	) {
+	constructor(readonly schema: DocumentSchema, document: DocumentNode) {
 		super();
 		this.initialSnapshot = Object.freeze({ roomId: this.roomId, version: 0, document });
 	}
@@ -254,6 +238,10 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 		this.presenceUpdates.push(selection);
 		return Promise.resolve();
 	}
+
+
+
+
 
 	acceptPresence(presences: readonly DocumentCollaborationPresence[]): void {
 		this.presenceEmitter.fire(presences);
@@ -275,22 +263,13 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 	}
 
 	receiveRemote(transaction: DocumentTransaction, version: number): void {
-		this.updateEmitter.fire({
-			clientId: 'client-b',
-			sequence: version,
-			baseVersion: version - 1,
-			version,
-			transaction,
-		});
+		this.updateEmitter.fire({ clientId: 'client-b', sequence: version, baseVersion: version - 1, version, transaction });
 	}
 
 	conflictWithRemote(index: number, transaction: DocumentTransaction, version: number): void {
 		const submission = this.submissions[index];
 		assert.ok(submission, `Expected collaboration submission ${index}`);
-		submission.resolve({
-			kind: 'conflict',
-			updates: [{ clientId: 'client-b', sequence: version, baseVersion: version - 1, version, transaction }],
-		});
+		submission.resolve({ kind: 'conflict', updates: [{ clientId: 'client-b', sequence: version, baseVersion: version - 1, version, transaction }] });
 	}
 }
 
@@ -299,10 +278,7 @@ class Submission {
 
 	readonly promise: Promise<DocumentCollaborationSubmitOutcome>;
 
-	constructor(
-		readonly envelope: DocumentCollaborationEnvelope,
-		readonly document: DocumentNode,
-	) {
+	constructor(readonly envelope: DocumentCollaborationEnvelope, readonly document: DocumentNode) {
 		this.deferred = new Deferred<DocumentCollaborationSubmitOutcome>();
 		this.promise = this.deferred.promise;
 	}
@@ -351,14 +327,10 @@ test('Academy style creation and undo preserve remote paragraph formatting throu
 	assert.equal(controller.state, 'connected');
 });
 
+
 test('Academy replace-all collaboration rebases atomic marked-run edits and retains remote formatting on undo', async () => {
 	const schema = createDefaultDocumentSchema();
-	const document = schema.createDocument([
-		schema.createNode('paragraph', {
-			id: 'paragraph-1',
-			content: [schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'text-2' })],
-		}),
-	]);
+	const document = schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'text-2' })] })]);
 	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);

@@ -6,5 +6,7 @@ export function getInProgressSessionDescription(activity: AgentSessionActivity |
 	if (activity?.status !== 'working' && activity?.status !== 'needsInput') return undefined;
 	const description = activity.activity?.text.replace(/\s+/gu, ' ').trim();
 	if (description) return description;
-	return activity.status === 'needsInput' ? localize('chat.sessions.description.needsInput', 'Waiting for input…') : localize('chat.sessions.description.working', 'Working…');
+	return activity.status === 'needsInput'
+		? localize('chat.sessions.description.needsInput', 'Waiting for input…')
+		: localize('chat.sessions.description.working', 'Working…');
 }

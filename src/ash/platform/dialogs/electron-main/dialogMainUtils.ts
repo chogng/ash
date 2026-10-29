@@ -1,8 +1,11 @@
 import type { MessageBoxOptions } from '../../../base/parts/sandbox/common/electronTypes.js';
 import { release } from 'node:os';
 
-export function massageMessageBoxOptions(options: MessageBoxOptions, platform: NodeJS.Platform = process.platform): { options: MessageBoxOptions; buttonIndices: readonly number[] } {
-	const buttons = [...(options.buttons ?? [])];
+export function massageMessageBoxOptions(
+	options: MessageBoxOptions,
+	platform: NodeJS.Platform = process.platform,
+): { options: MessageBoxOptions; buttonIndices: readonly number[]; } {
+	const buttons = [...options.buttons ?? []];
 	const buttonIndices = buttons.map((_, index) => index);
 	const originalDefault = options.defaultId ?? 0;
 	const originalCancel = options.cancelId ?? buttons.length - 1;
@@ -18,13 +21,11 @@ export function massageMessageBoxOptions(options: MessageBoxOptions, platform: N
 	return {
 		options: {
 			...options,
-			...(buttons.length
-				? {
-						buttons,
-						defaultId: buttonIndices.indexOf(originalDefault),
-						cancelId: buttonIndices.indexOf(originalCancel),
-					}
-				: {}),
+			...(buttons.length ? {
+				buttons,
+				defaultId: buttonIndices.indexOf(originalDefault),
+				cancelId: buttonIndices.indexOf(originalCancel),
+			} : {}),
 			noLink: true,
 		},
 		buttonIndices,

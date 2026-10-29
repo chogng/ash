@@ -9,9 +9,7 @@ export class AppServerFrameDecoder extends Disposable {
 	private readonly worker = this._register(new MutableDisposable<IWebWorkerClient<object>>());
 	private requestId = 0;
 
-	constructor(private readonly createPort?: () => WebWorkerClientPort | IWebWorkerClient<object>) {
-		super();
-	}
+	constructor(private readonly createPort?: () => WebWorkerClientPort | IWebWorkerClient<object>) { super(); }
 
 	public decode(frame: string, byteLength: number, context: AppServerDecodeContext): DecodedAppServerFrame | Promise<DecodedAppServerFrame> {
 		this.assertNotDisposed();
@@ -26,27 +24,13 @@ export class AppServerFrameDecoder extends Disposable {
 	}
 
 	/** Terminate work from a retired connection; never retry invalid data on the UI thread. */
-	public reset(): void {
-		this.worker.clear();
-	}
+	public reset(): void { this.worker.clear(); }
 }
 
 /** Runtime composition supplies Worker authority; Node tools retain the synchronous decoder. */
 export function createAppServerFrameDecoder(workers: IWebWorkerService): AppServerFrameDecoder {
-	return new AppServerFrameDecoder(
-		typeof Worker === 'undefined'
-			? undefined
-			: () =>
-					workers.createWorkerClient(
-						new WebWorkerDescriptor({
-							label: 'ash-app-server-decode',
-							channel: appServerDecodeChannel,
-							createWorker: () =>
-								new Worker(new URL('./appServerProtocolWorkerMain.ts', import.meta.url), {
-									type: 'module',
-									name: 'ash-app-server-decode',
-								}),
-						}),
-					),
-	);
+	return new AppServerFrameDecoder(typeof Worker === 'undefined' ? undefined : () => workers.createWorkerClient(new WebWorkerDescriptor({
+		label: 'ash-app-server-decode', channel: appServerDecodeChannel,
+		createWorker: () => new Worker(new URL('./appServerProtocolWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-app-server-decode' }),
+	})));
 }

@@ -41,59 +41,39 @@ export class ChatDragAndDrop extends Disposable {
 		overlay.hidden = true;
 		overlayContainer.append(overlay);
 		resources.add(toDisposable(() => overlay.remove()));
-		resources.add(
-			addDisposableListener(target, 'dragover', event => {
-				if (!hasResourceTransfer(event)) {
-					overlay.hidden = true;
-					return;
-				}
+		resources.add(addDisposableListener(target, 'dragover', event => {
+			if (!hasResourceTransfer(event)) {
+				overlay.hidden = true;
+				return;
+			}
+			event.preventDefault();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+			overlay.hidden = false;
+		}));
+		resources.add(addDisposableListener(target, 'dragleave', event => {
+			if (!target.contains(event.relatedTarget as Node | null)) {
+				overlay.hidden = true;
+			}
+		}));
+		resources.add(addDisposableListener(target.ownerDocument, 'dragend', () => { overlay.hidden = true; }, true));
+		resources.add(addDisposableListener(target, 'drop', event => {
+			overlay.hidden = true;
+			if (!event.dataTransfer || !hasResourceTransfer(event)) return;
+			let drop: ResourceDrop;
+			try {
+				// Native transfer values are readable only during this event, before any await.
+				drop = readResourceDrop(event.dataTransfer);
+			} catch (error) {
 				event.preventDefault();
-				if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-				overlay.hidden = false;
-			}),
-		);
-		resources.add(
-			addDisposableListener(target, 'dragleave', event => {
-				if (!target.contains(event.relatedTarget as Node | null)) {
-					overlay.hidden = true;
-				}
-			}),
-		);
-		resources.add(
-			addDisposableListener(
-				target.ownerDocument,
-				'dragend',
-				() => {
-					overlay.hidden = true;
-				},
-				true,
-			),
-		);
-		resources.add(
-			addDisposableListener(
-				target,
-				'drop',
-				event => {
-					overlay.hidden = true;
-					if (!event.dataTransfer || !hasResourceTransfer(event)) return;
-					let drop: ResourceDrop;
-					try {
-						// Native transfer values are readable only during this event, before any await.
-						drop = readResourceDrop(event.dataTransfer);
-					} catch (error) {
-						event.preventDefault();
-						event.stopPropagation();
-						this.reportError(error);
-						return;
-					}
-					if (!drop.files.length && !drop.resources.length) return;
-					event.preventDefault();
-					event.stopPropagation();
-					void this.accept(drop);
-				},
-				true,
-			),
-		);
+				event.stopPropagation();
+				this.reportError(error);
+				return;
+			}
+			if (!drop.files.length && !drop.resources.length) return;
+			event.preventDefault();
+			event.stopPropagation();
+			void this.accept(drop);
+		}, true));
 	}
 
 	private async accept(drop: ResourceDrop): Promise<void> {
@@ -103,19 +83,17 @@ export class ChatDragAndDrop extends Disposable {
 				signal = AbortSignal.any([signal, batch.signal]);
 				try {
 					const [resources, native] = await Promise.all([
-						Promise.all(
-							drop.resources.map(async resource => {
-								if (signal.aborted) throw new CancellationError();
-								const uri = extractSelection(resource).uri;
-								const hasProvider = this.files.hasProvider(uri);
-								const directory = hasProvider && (await this.files.stat(uri)).kind === FileKind.Directory;
-								if (hasProvider && !directory && /^image\/(png|jpeg|gif|webp)$/u.test(getMediaMime(uri.path) ?? '') && !this.supportsImages()) {
-									throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-								}
-								if (signal.aborted) throw new CancellationError();
-								return this.resolver.resolveResourceAttachContext(resource, directory, signal);
-							}),
-						),
+						Promise.all(drop.resources.map(async resource => {
+							if (signal.aborted) throw new CancellationError();
+							const uri = extractSelection(resource).uri;
+							const hasProvider = this.files.hasProvider(uri);
+							const directory = hasProvider && (await this.files.stat(uri)).kind === FileKind.Directory;
+							if (hasProvider && !directory && /^image\/(png|jpeg|gif|webp)$/u.test(getMediaMime(uri.path) ?? '') && !this.supportsImages()) {
+								throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+							}
+							if (signal.aborted) throw new CancellationError();
+							return this.resolver.resolveResourceAttachContext(resource, directory, signal);
+						})),
 						createChatFileAttachments(drop.files, signal, this.supportsImages, this.resolver),
 					]);
 					if (signal.aborted) throw new CancellationError();
@@ -133,9 +111,7 @@ export class ChatDragAndDrop extends Disposable {
 				status(localize('chat.context.filesAdded', 'Added {0} attachments', accepted.length));
 				this.target.focus();
 			}
-		} catch (error) {
-			this.reportError(error);
-		}
+		} catch (error) { this.reportError(error); }
 	}
 
 	private reportError(error: unknown): void {
@@ -157,28 +133,16 @@ function readResourceDrop(transfer: DataTransfer): ResourceDrop {
 	let values: string[];
 	if (encoded) {
 		let data: unknown;
-		try {
-			data = JSON.parse(encoded);
-		} catch {
-			throw invalid();
-		}
+		try { data = JSON.parse(encoded); } catch { throw invalid(); }
 		if (!Array.isArray(data) || !data.every(value => typeof value === 'string')) throw invalid();
 		values = data;
-	} else
-		values = uriList
-			.split(/\r?\n/u)
-			.map(value => value.trim())
-			.filter(value => value && !value.startsWith('#'));
+	} else values = uriList.split(/\r?\n/u).map(value => value.trim()).filter(value => value && !value.startsWith('#'));
 	const native = [...transfer.files];
 	if (values.length + native.length > 1000) throw invalid();
 	const resources = new Map<string, URI>();
 	for (const value of values) {
 		let resource: URI;
-		try {
-			resource = URI.parse(value);
-		} catch {
-			throw invalid();
-		}
+		try { resource = URI.parse(value); } catch { throw invalid(); }
 		if (![Schemas.file, Schemas.ashRemote, Schemas.untitled, Schemas.vscodeUserData].includes(resource.scheme)) {
 			if (encoded) throw invalid();
 			continue;

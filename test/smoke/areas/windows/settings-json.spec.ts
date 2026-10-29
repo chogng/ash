@@ -15,50 +15,32 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
-async function captureCopiedSetting(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; restore(): Promise<void> }> {
+async function captureCopiedSetting(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; restore(): Promise<void>; }> {
 	if ('windows' in application) {
 		await application.evaluate(({ clipboard }) => {
-			const captured = globalThis as typeof globalThis & {
-				settingsCopyText: string;
-				restoreSettingsCopy(): void;
-			};
+			const captured = globalThis as typeof globalThis & { settingsCopyText: string; restoreSettingsCopy(): void; };
 			const write = clipboard.writeText.bind(clipboard);
 			captured.settingsCopyText = '';
-			clipboard.writeText = async text => {
-				captured.settingsCopyText = text;
-				await write(text);
-			};
-			captured.restoreSettingsCopy = () => {
-				clipboard.writeText = write;
-			};
+			clipboard.writeText = async text => { captured.settingsCopyText = text; await write(text); };
+			captured.restoreSettingsCopy = () => { clipboard.writeText = write; };
 		});
 		return {
 			// Read the captured IPC write, never the user's system clipboard.
-			read: () => application.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string }).settingsCopyText),
-			restore: () =>
-				application.evaluate(() => {
-					(globalThis as typeof globalThis & { restoreSettingsCopy(): void }).restoreSettingsCopy();
-				}),
+			read: () => application.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string; }).settingsCopyText),
+			restore: () => application.evaluate(() => { (globalThis as typeof globalThis & { restoreSettingsCopy(): void; }).restoreSettingsCopy(); }),
 		};
 	}
 	await page.evaluate(() => {
-		const captured = globalThis as typeof globalThis & { settingsCopyText: string; restoreSettingsCopy(): void };
+		const captured = globalThis as typeof globalThis & { settingsCopyText: string; restoreSettingsCopy(): void; };
 		const write = navigator.clipboard.writeText.bind(navigator.clipboard);
 		captured.settingsCopyText = '';
 		// Each test owns its browser context; keep clipboard data inside that context.
-		navigator.clipboard.writeText = async text => {
-			captured.settingsCopyText = text;
-		};
-		captured.restoreSettingsCopy = () => {
-			navigator.clipboard.writeText = write;
-		};
+		navigator.clipboard.writeText = async text => { captured.settingsCopyText = text; };
+		captured.restoreSettingsCopy = () => { navigator.clipboard.writeText = write; };
 	});
 	return {
-		read: () => page.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string }).settingsCopyText),
-		restore: () =>
-			page.evaluate(() => {
-				(globalThis as typeof globalThis & { restoreSettingsCopy(): void }).restoreSettingsCopy();
-			}),
+		read: () => page.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string; }).settingsCopyText),
+		restore: () => page.evaluate(() => { (globalThis as typeof globalThis & { restoreSettingsCopy(): void; }).restoreSettingsCopy(); }),
 	};
 }
 
@@ -75,23 +57,12 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const group = workbench.editors.groupAt(0);
 		await group.editor.input.press('ControlOrMeta+A');
-		await pasteJson(
-			group.editor.input,
-			JSON.stringify(
-				[
-					{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'editor.fontSize' },
-					{
-						key: 'ctrl+alt+u',
-						command: 'workbench.action.openSettings',
-						args: { query: '@id:editor.fontSize', target: 3 },
-					},
-					{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
-					{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
-				],
-				null,
-				2,
-			),
-		);
+		await pasteJson(group.editor.input, JSON.stringify([
+			{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'editor.fontSize' },
+			{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:editor.fontSize', target: 3 } },
+			{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
+			{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
+		], null, 2));
 		await group.editor.input.press('ControlOrMeta+S');
 		await expect(group.tabs.filter({ hasText: chinese ? '键盘快捷方式（JSON）' : 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		const openQuery = async (): Promise<void> => {
@@ -123,10 +94,7 @@ for (const locale of ['en', 'zh-CN']) {
 					throw error;
 				}
 			}
-			return (async () => {
-				const snapshot = await readUserSettings(workbench.page);
-				return JSON.parse(snapshot.content)['editor.fontSize'];
-			})();
+			return (async () => { const snapshot = await readUserSettings(workbench.page); return JSON.parse(snapshot.content)['editor.fontSize']; })();
 		};
 		await expect.poll(readSaved).toBe(26);
 		await settings.getByRole('searchbox').press('Control+Alt+I');
@@ -147,10 +115,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await settings.getByRole('searchbox').press('Escape');
 		await expect(settings.getByRole('searchbox')).toHaveValue('');
 		await settings.locator('.ash-modal-editor-close').click();
-		await testInfo.attach('settings-query-diagnostics', {
-			body: JSON.stringify(runningApplication.diagnostics),
-			contentType: 'application/json',
-		});
+		await testInfo.attach('settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 		expect(runningApplication.diagnostics.errors).toEqual([]);
 	});
 
@@ -166,21 +131,10 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const first = workbench.editors.groupAt(0);
 		await first.editor.input.press('ControlOrMeta+A');
-		await pasteJson(
-			first.editor.input,
-			JSON.stringify([
-				{
-					key: 'ctrl+alt+y',
-					command: 'workbench.action.openSettings',
-					args: { groupId: 0, query: '@id:editor.fontFamily' },
-				},
-				{
-					key: 'ctrl+alt+u',
-					command: 'workbench.action.openSettings',
-					args: { openToSide: true, query: '@id:editor.fontSize' },
-				},
-			]),
-		);
+		await pasteJson(first.editor.input, JSON.stringify([
+			{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: { groupId: 0, query: '@id:editor.fontFamily' } },
+			{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
+		]));
 		await first.editor.input.press('ControlOrMeta+S');
 		await expect(first.tabs.filter({ hasText: chinese ? '键盘快捷方式（JSON）' : 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		await workbench.page.keyboard.press('Control+Alt+Y');
@@ -234,13 +188,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const group = workbench.editors.groupAt(0);
 		const saved = {
-			'window.menuStyle': 'custom',
-			'workbench.locale': locale,
-			'editor.fontSize': fontDefault,
-			'workbench.activityBar.badges': false,
-			'editor.lineHeight': 0,
-			'window.zoomLevel': 0,
-			'window.title': '',
+			'window.menuStyle': 'custom', 'workbench.locale': locale, 'editor.fontSize': fontDefault,
+			'workbench.activityBar.badges': false, 'editor.lineHeight': 0, 'window.zoomLevel': 0, 'window.title': '',
 			'[typescript]': { 'editor.fontFamily': 'Language-only font' },
 		};
 		await group.editor.input.press('ControlOrMeta+A');
@@ -252,10 +201,7 @@ for (const locale of ['en', 'zh-CN']) {
 				const profile = await application.evaluate(() => process.env.ASH_HOME!);
 				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'));
 			}
-			return (async () => {
-				const snapshot = await readUserSettings(workbench.page);
-				return JSON.parse(snapshot.content);
-			})();
+			return (async () => { const snapshot = await readUserSettings(workbench.page); return JSON.parse(snapshot.content); })();
 		};
 		await expect.poll(readSaved).toEqual(saved);
 		const assertModified = async (): Promise<void> => {
@@ -283,12 +229,7 @@ for (const locale of ['en', 'zh-CN']) {
 					size: { width: bounds.width, height: bounds.height },
 				};
 			});
-			expect(geometry).toEqual({
-				inside: true,
-				afterText: true,
-				iconFits: true,
-				size: { width: 22, height: 22 },
-			});
+			expect(geometry).toEqual({ inside: true, afterText: true, iconFits: true, size: { width: 22, height: 22 } });
 			await settings.getByRole('searchbox').press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('Enter');
@@ -311,12 +252,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(settings.locator('.ash-settings-navigation-tree [data-settings-category-id], .ash-settings-navigation-tree [data-settings-group-id]')).toHaveCount(0);
 		// Global search reports an empty result once, in the content pane.
 		await expect(settings.locator('.ash-settings-navigation-empty')).toBeHidden();
-		await expect(
-			settings
-				.getByRole('status')
-				.filter({ hasText: chinese ? '未找到设置。' : 'No settings found.' })
-				.last(),
-		).toBeVisible();
+		await expect(settings.getByRole('status').filter({ hasText: chinese ? '未找到设置。' : 'No settings found.' }).last()).toBeVisible();
 		const { 'editor.fontSize': _removed, ...remaining } = saved;
 		await expect.poll(readSaved).toEqual(remaining);
 		await settings.getByRole('searchbox').fill('@modified @id:window.title window');
@@ -325,10 +261,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.page.getByRole('menuitem', { name: chinese ? '清除筛选条件' : 'Clear Filters', exact: true }).press('Enter');
 		await expect(settings.getByRole('searchbox')).toHaveValue('window');
 		await settings.locator('.ash-modal-editor-close').click();
-		await testInfo.attach('modified-settings-diagnostics', {
-			body: JSON.stringify(runningApplication.diagnostics),
-			contentType: 'application/json',
-		});
+		await testInfo.attach('modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 		expect(runningApplication.diagnostics.errors).toEqual([]);
 	});
 
@@ -347,19 +280,10 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const group = workbench.editors.groupAt(0);
 		await group.editor.input.press('ControlOrMeta+A');
-		await pasteJson(
-			group.editor.input,
-			JSON.stringify(
-				{
-					'window.menuStyle': 'custom',
-					'window.title': title,
-					'editor.tokenColorCustomizations': tokenColors,
-					...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
-				},
-				null,
-				2,
-			),
-		);
+		await pasteJson(group.editor.input, JSON.stringify({
+			'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors,
+			...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+		}, null, 2));
 		await group.editor.input.press('ControlOrMeta+S');
 		const tab = group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' });
 		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -372,19 +296,13 @@ for (const locale of ['en', 'zh-CN']) {
 				const settings = workbench.settingsEditor.element;
 				await workbench.settingsEditor.selectGroup('workbench');
 				await workbench.settingsEditor.selectCategory('appearance');
-				for (const [key, value] of [
-					['window.title', title],
-					['editor.tokenColorCustomizations', tokenColors],
-				] as const) {
+				for (const [key, value] of [['window.title', title], ['editor.tokenColorCustomizations', tokenColors]] as const) {
 					await settings.getByRole('searchbox').fill(`@id:${key}`);
 					const row = settings.locator(`[data-settings-item-id="${key}"]`);
 					const more = row.getByRole('button', { name: chinese ? /更多操作/u : /^More actions/u });
 					await more.focus();
 					await more.press('Enter');
-					const action = currentPage.getByRole('menuitem', {
-						name: chinese ? '复制设置为 JSON' : 'Copy Setting as JSON',
-						exact: true,
-					});
+					const action = currentPage.getByRole('menuitem', { name: chinese ? '复制设置为 JSON' : 'Copy Setting as JSON', exact: true });
 					await action.focus();
 					await expect(action).toBeFocused();
 					await action.press('Enter');
@@ -406,28 +324,13 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		if ('windows' in application) {
 			const profile = await application.evaluate(() => process.env.ASH_HOME!);
-			await expect
-				.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')))
-				.toEqual({
-					'window.menuStyle': 'custom',
-					'window.title': title,
-					'editor.tokenColorCustomizations': tokenColors,
-					...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
-				});
+			await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual({
+				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+			});
 		} else {
-			await expect
-				.poll(() =>
-					(async () => {
-						const snapshot = await readUserSettings(page);
-						return snapshot.content;
-					})().then(source => JSON.parse(source)),
-				)
-				.toEqual({
-					'window.menuStyle': 'custom',
-					'window.title': title,
-					'editor.tokenColorCustomizations': tokenColors,
-					...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
-				});
+			await expect.poll(() => (async () => { const snapshot = await readUserSettings(page); return snapshot.content; })().then(source => JSON.parse(source))).toEqual({
+				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+			});
 		}
 		({ application, workbench } = await reloadWorkbench());
 		// Copy again from the reopened configuration owner, independent of editor viewport state.
@@ -440,17 +343,10 @@ test('Code Action settings offer save modes and persist file and notebook config
 	let group = workbench.editors.groupAt(0);
 	await expect(group.editor.input).toBeFocused();
 	await group.editor.input.press('ControlOrMeta+A');
-	await pasteJson(
-		group.editor.input,
-		JSON.stringify(
-			{
-				'editor.codeActionsOnSave': { 'source.organizeImports': '' },
-				'notebook.codeActionsOnSave': { 'notebook.source.fixAll': 'explicit' },
-			},
-			null,
-			2,
-		),
-	);
+	await pasteJson(group.editor.input, JSON.stringify({
+		'editor.codeActionsOnSave': { 'source.organizeImports': '' },
+		'notebook.codeActionsOnSave': { 'notebook.source.fixAll': 'explicit' },
+	}, null, 2));
 	await group.editor.input.press('ControlOrMeta+Home');
 	await group.editor.input.press('ArrowDown');
 	await group.editor.input.press('ArrowDown');
@@ -469,7 +365,8 @@ test('Code Action settings offer save modes and persist file and notebook config
 	group = workbench.editors.groupAt(0);
 	await group.editor.waitForEditorContents(content => {
 		const settings = JSON.parse(content);
-		return settings['editor.codeActionsOnSave']?.['source.organizeImports'] === 'explicit' && settings['notebook.codeActionsOnSave']?.['notebook.source.fixAll'] === 'explicit';
+		return settings['editor.codeActionsOnSave']?.['source.organizeImports'] === 'explicit'
+			&& settings['notebook.codeActionsOnSave']?.['notebook.source.fixAll'] === 'explicit';
 	});
 });
 
@@ -496,7 +393,8 @@ test('Preferred paste and drop commands reveal editable settings and persist the
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	await group.editor.waitForEditorContents(content => {
 		const settings = JSON.parse(content);
-		return ['editor.pasteAs.preferences', 'editor.dropIntoEditor.preferences'].every(key => JSON.stringify(settings[key]) === JSON.stringify(preferences));
+		return ['editor.pasteAs.preferences', 'editor.dropIntoEditor.preferences'].every(key =>
+			JSON.stringify(settings[key]) === JSON.stringify(preferences));
 	});
 });
 
@@ -558,13 +456,7 @@ for (const locale of ['en', 'zh-CN']) {
 				gap: close.left - bounds.right,
 			};
 		});
-		expect(titleGeometry).toEqual({
-			beforeClose: true,
-			aligned: true,
-			buttonSize: { width: 22, height: 22 },
-			sameSize: true,
-			gap: 2,
-		});
+		expect(titleGeometry).toEqual({ beforeClose: true, aligned: true, buttonSize: { width: 22, height: 22 }, sameSize: true, gap: 2 });
 		const chromeScreenshot = testInfo.outputPath('settings-search-title.png');
 		await settings.screenshot({ path: chromeScreenshot });
 		await testInfo.attach('settings-search-title', { path: chromeScreenshot, contentType: 'image/png' });
@@ -593,10 +485,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await selector.press('Enter');
 		await workbench.page.getByRole('option', { name: 'JSON', exact: true }).click();
 		await expect.poll(readDefault).toBe('json');
-		await testInfo.attach(`settings-editor-default-${locale}`, {
-			body: await settings.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach(`settings-editor-default-${locale}`, { body: await settings.screenshot(), contentType: 'image/png' });
 		await settings.locator('.ash-modal-editor-close').click();
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
 		let group = workbench.editors.groupAt(0);
@@ -742,17 +631,14 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const group = workbench.editors.groupAt(0);
 		await group.editor.input.press('ControlOrMeta+A');
-		await pasteJson(
-			group.editor.input,
-			`{
+		await pasteJson(group.editor.input, `{
 	// Keep this comment and unrelated setting.
 	"editor.fontSize": ${fontDefault},
 	"workbench.colorCustomizations": {},
 	"workbench.locale": ${JSON.stringify(locale)},
 	"window.menuStyle": "custom",
 	"extension.marker": 99,
-}\n`,
-		);
+}\n`);
 		await group.editor.input.press('ControlOrMeta+S');
 		await expect(group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 
@@ -876,15 +762,11 @@ test('Configured markers and modified filtering update after external persisted 
 		await expect(marker).toBeVisible();
 		for (const scheme of ['light', 'dark'] as const) {
 			await workbench.setAppearance(application, scheme);
-			await expect
-				.poll(() =>
-					row.evaluate(element => {
-						const description = element.querySelector('.ash-configuration-setting-description')!;
-						const marker = element.querySelector('.ash-settings-configured-marker')!;
-						return getComputedStyle(marker).backgroundColor === getComputedStyle(description).color;
-					}),
-				)
-				.toBe(true);
+			await expect.poll(() => row.evaluate(element => {
+				const description = element.querySelector('.ash-configuration-setting-description')!;
+				const marker = element.querySelector('.ash-settings-configured-marker')!;
+				return getComputedStyle(marker).backgroundColor === getComputedStyle(description).color;
+			})).toBe(true);
 		}
 		await marker.hover();
 		await expect(page.getByRole('tooltip')).toHaveText('Configured in local user settings.');
@@ -914,68 +796,57 @@ test('Configured markers and modified filtering update after external persisted 
 			await writer.page.close();
 		}
 	}
-	await testInfo.attach('external-modified-settings-diagnostics', {
-		body: JSON.stringify(runningApplication.diagnostics),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('external-modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test(
-	'Saving JSON token customization refreshes Markdown and the canonical profile settings',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ application, target, testWorkspace, workbench }) => {
-		const page = workbench.page;
-		await writeFile(join(testWorkspace.directory, 'settings-style.md'), '# Heading\n');
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'settings-style.md' });
-		await expect(file).toHaveCount(1);
-		await file.click();
-		const group = workbench.editors.groupAt(0);
-		const heading = group.editor.element.locator('.stanza-editor-token').filter({ hasText: /^\s*Heading$/u });
-		await expect(heading).toHaveCSS('font-weight', '700');
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('appearance');
-		await settings.getByRole('searchbox').fill('@id:editor.semanticTokenColorCustomizations');
-		await settings.locator('[data-settings-item-id="editor.semanticTokenColorCustomizations"]').getByRole('button', { name: 'Edit in settings.json', exact: true }).click();
-		await expect(group.editor.input).toBeFocused();
-		await pasteJson(group.editor.input, JSON.stringify({ rules: { 'text.title': { foreground: '#654321', fontStyle: 'italic' } } }));
-		await group.editor.input.press('ControlOrMeta+S');
-		const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
-		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
-		await file.click();
-		await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
-		await expect(heading).toHaveCSS('font-style', 'italic');
-		await expect(heading).toHaveCSS('font-weight', '400');
-		if (target.kind === 'electron' && 'windows' in application) {
-			const profile = await application.evaluate(() => process.env.ASH_HOME);
-			if (!profile) throw new Error('Test profile is unavailable');
-			await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.semanticTokenColorCustomizations'].rules['text.title'].foreground).toBe('#654321');
-		}
-		await page.reload();
-		await workbench.waitForReady();
-		await file.click();
-		await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
-	},
-);
+test('Saving JSON token customization refreshes Markdown and the canonical profile settings', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	const page = workbench.page;
+	await writeFile(join(testWorkspace.directory, 'settings-style.md'), '# Heading\n');
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'settings-style.md' });
+	await expect(file).toHaveCount(1);
+	await file.click();
+	const group = workbench.editors.groupAt(0);
+	const heading = group.editor.element.locator('.stanza-editor-token').filter({ hasText: /^\s*Heading$/u });
+	await expect(heading).toHaveCSS('font-weight', '700');
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('appearance');
+	await settings.getByRole('searchbox').fill('@id:editor.semanticTokenColorCustomizations');
+	await settings.locator('[data-settings-item-id="editor.semanticTokenColorCustomizations"]').getByRole('button', { name: 'Edit in settings.json', exact: true }).click();
+	await expect(group.editor.input).toBeFocused();
+	await pasteJson(group.editor.input, JSON.stringify({ rules: { 'text.title': { foreground: '#654321', fontStyle: 'italic' } } }));
+	await group.editor.input.press('ControlOrMeta+S');
+	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
+	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	await file.click();
+	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
+	await expect(heading).toHaveCSS('font-style', 'italic');
+	await expect(heading).toHaveCSS('font-weight', '400');
+	if (target.kind === 'electron' && 'windows' in application) {
+		const profile = await application.evaluate(() => process.env.ASH_HOME);
+		if (!profile) throw new Error('Test profile is unavailable');
+		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.semanticTokenColorCustomizations'].rules['text.title'].foreground).toBe('#654321');
+	}
+	await page.reload();
+	await workbench.waitForReady();
+	await file.click();
+	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Appearance preserves an unavailable theme and allows returning to System (${locale})`, async ({ workbench, reloadWorkbench, runningApplication }) => {
 		const chinese = locale === 'zh-CN';
 		const saved = await readUserSettings(workbench.page);
 		const theme = 'missing-preferences-smoke-theme';
-		await writeUserSettings(
-			workbench.page,
-			JSON.stringify({
-				...(parseJsonc(saved.content) as Record<string, unknown>),
-				'workbench.colorTheme': theme,
-				'workbench.locale': locale,
-			}),
-			saved.revision,
-		);
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...parseJsonc(saved.content) as Record<string, unknown>,
+			'workbench.colorTheme': theme,
+			'workbench.locale': locale,
+		}), saved.revision);
 		({ workbench } = await reloadWorkbench());
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectGroup('workbench');
@@ -1051,539 +922,410 @@ async function workingCopyBackupContents(page: Page): Promise<string[]> {
 		try {
 			return await new Promise<string[]>((resolve, reject) => {
 				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
-				request.onsuccess = () => resolve(request.result.map((record: { content: string }) => record.content));
+				request.onsuccess = () => resolve(request.result.map((record: { content: string; }) => record.content));
 				request.onerror = () => reject(request.error);
 			});
-		} finally {
-			database.close();
-		}
+		} finally { database.close(); }
 	});
 }
 
-test(
-	'Electron closes after optional storage and log flush failures and restores the unsaved document',
-	{ tag: ['@electron-ui'] },
-	async ({ application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-		if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
-		await workbench.page.keyboard.press('ControlOrMeta+N');
-		await workbench.editors.groupAt(0).editor.input.type('draft survives optional shutdown failure');
-		await expect.poll(() => workingCopyBackupContents(workbench.page)).toContain('draft survives optional shutdown failure');
-		const evidence = testInfo.outputPath('optional-shutdown-failures.json');
-		await application.evaluate(
-			({ app, dialog }, options) => {
-				const { writeFileSync } = process.getBuiltinModule('fs');
-				const requireModule = process.getBuiltinModule('module').createRequire(`${app.getAppPath()}/package.json`);
-				const { StorageDatabaseChannel } = requireModule(options.storageModule) as typeof import('../../../../src/ash/platform/storage/electron-main/storageIpc.js');
-				const { LoggerChannel } = requireModule(options.loggerModule) as typeof import('../../../../src/ash/platform/log/electron-main/logIpc.js');
-				const storageCall = StorageDatabaseChannel.prototype.call;
-				const loggerCall = LoggerChannel.prototype.call;
-				const originalDialog = dialog.showMessageBox;
-				const state = { storageFailures: 0, logFailures: 0, dialogs: [] as string[] };
-				const record = () => writeFileSync(options.evidence, JSON.stringify(state));
-				StorageDatabaseChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
-					if (args[1] === 'flush') {
-						state.storageFailures++;
-						record();
-						throw new Error('Injected optional storage flush failure');
-					}
-					return storageCall.apply(this, args) as Promise<T>;
-				};
-				LoggerChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
-					if (args[1] === 'flush') {
-						state.logFailures++;
-						record();
-						throw new Error('Injected optional log flush failure');
-					}
-					return loggerCall.apply(this, args) as Promise<T>;
-				};
-				dialog.showMessageBox = (async (...args: unknown[]) => {
-					state.dialogs.push((args.at(-1) as { message: string }).message);
-					record();
-					return { response: 0, checkboxChecked: false };
-				}) as typeof dialog.showMessageBox;
-				(globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void }).restoreOptionalShutdownFaults = () => {
-					StorageDatabaseChannel.prototype.call = storageCall;
-					LoggerChannel.prototype.call = loggerCall;
-					dialog.showMessageBox = originalDialog;
-				};
-			},
-			{
-				storageModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/storage/electron-main/storageIpc.js'),
-				loggerModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/log/electron-main/logIpc.js'),
-				evidence,
-			},
-		);
-		try {
-			({ workbench } = await reloadWorkbench());
-		} catch (error) {
-			await writeFile(testInfo.outputPath('shutdown-console.json'), JSON.stringify(runningApplication.diagnostics.consoleErrors));
-			await application.evaluate(() => (globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void }).restoreOptionalShutdownFaults()).catch(() => undefined);
-			throw error;
-		}
-		const observed = JSON.parse(await readFile(evidence, 'utf8')) as {
-			storageFailures: number;
-			logFailures: number;
-			dialogs: string[];
+test('Electron closes after optional storage and log flush failures and restores the unsaved document', { tag: ['@electron-ui'] }, async ({ application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	await workbench.page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.groupAt(0).editor.input.type('draft survives optional shutdown failure');
+	await expect.poll(() => workingCopyBackupContents(workbench.page)).toContain('draft survives optional shutdown failure');
+	const evidence = testInfo.outputPath('optional-shutdown-failures.json');
+	await application.evaluate(({ app, dialog }, options) => {
+		const { writeFileSync } = process.getBuiltinModule('fs');
+		const requireModule = process.getBuiltinModule('module').createRequire(`${app.getAppPath()}/package.json`);
+		const { StorageDatabaseChannel } = requireModule(options.storageModule) as typeof import('../../../../src/ash/platform/storage/electron-main/storageIpc.js');
+		const { LoggerChannel } = requireModule(options.loggerModule) as typeof import('../../../../src/ash/platform/log/electron-main/logIpc.js');
+		const storageCall = StorageDatabaseChannel.prototype.call;
+		const loggerCall = LoggerChannel.prototype.call;
+		const originalDialog = dialog.showMessageBox;
+		const state = { storageFailures: 0, logFailures: 0, dialogs: [] as string[] };
+		const record = () => writeFileSync(options.evidence, JSON.stringify(state));
+		StorageDatabaseChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
+			if (args[1] === 'flush') { state.storageFailures++; record(); throw new Error('Injected optional storage flush failure'); }
+			return storageCall.apply(this, args) as Promise<T>;
 		};
-		expect(observed.storageFailures).toBeGreaterThan(0);
-		expect(observed.logFailures).toBeGreaterThan(0);
-		expect(observed.dialogs).toEqual([]);
-		expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not save Workbench state during shutdown'))).toBe(true);
-		expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not flush Desktop logs during shutdown'))).toBe(true);
-		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
-		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['draft survives optional shutdown failure']);
-		await testInfo.attach('optional-shutdown-failures', { path: evidence, contentType: 'application/json' });
-	},
-);
+		LoggerChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
+			if (args[1] === 'flush') { state.logFailures++; record(); throw new Error('Injected optional log flush failure'); }
+			return loggerCall.apply(this, args) as Promise<T>;
+		};
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			state.dialogs.push((args.at(-1) as { message: string; }).message);
+			record();
+			return { response: 0, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+		(globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void; }).restoreOptionalShutdownFaults = () => {
+			StorageDatabaseChannel.prototype.call = storageCall;
+			LoggerChannel.prototype.call = loggerCall;
+			dialog.showMessageBox = originalDialog;
+		};
+	}, {
+		storageModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/storage/electron-main/storageIpc.js'),
+		loggerModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/log/electron-main/logIpc.js'),
+		evidence,
+	});
+	try {
+		({ workbench } = await reloadWorkbench());
+	} catch (error) {
+		await writeFile(testInfo.outputPath('shutdown-console.json'), JSON.stringify(runningApplication.diagnostics.consoleErrors));
+		await application.evaluate(() => (globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void; }).restoreOptionalShutdownFaults()).catch(() => undefined);
+		throw error;
+	}
+	const observed = JSON.parse(await readFile(evidence, 'utf8')) as { storageFailures: number; logFailures: number; dialogs: string[]; };
+	expect(observed.storageFailures).toBeGreaterThan(0);
+	expect(observed.logFailures).toBeGreaterThan(0);
+	expect(observed.dialogs).toEqual([]);
+	expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not save Workbench state during shutdown'))).toBe(true);
+	expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not flush Desktop logs during shutdown'))).toBe(true);
+	expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
+	await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['draft survives optional shutdown failure']);
+	await testInfo.attach('optional-shutdown-failures', { path: evidence, contentType: 'application/json' });
+});
 
-test(
-	'Electron backup shutdown failure resumes editing and a later close restores the new draft',
-	{ tag: ['@electron-ui'] },
-	async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-		if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
-		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+N');
-		const group = workbench.editors.groupAt(0);
-		await group.editor.input.focus();
-		await group.editor.input.type('before failed close');
-		const backupContents = () => workingCopyBackupContents(page);
-		await expect.poll(backupContents).toContain('before failed close');
-		await application.evaluate(({ dialog }) => {
-			const state = globalThis as typeof globalThis & {
-				backupCloseDialogs: string[];
-				restoreBackupCloseDialogs(): void;
-			};
-			const original = dialog.showMessageBox;
-			state.backupCloseDialogs = [];
-			dialog.showMessageBox = (async (...args: unknown[]) => {
-				state.backupCloseDialogs.push((args.at(-1) as { message: string }).message);
-				return { response: 0, checkboxChecked: false };
-			}) as typeof dialog.showMessageBox;
-			state.restoreBackupCloseDialogs = () => {
-				dialog.showMessageBox = original;
-			};
-		});
-		await page.evaluate(() => {
-			const original = IDBDatabase.prototype.transaction;
-			const state = globalThis as typeof globalThis & {
-				backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void };
-			};
-			state.backupCloseFault = {
-				calls: 0,
-				failedAt: 0,
-				fired: false,
-				restore: () => {
-					IDBDatabase.prototype.transaction = original;
-				},
-			};
-			IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
-				if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite') {
-					// The first store is the before-shutdown check; fail the final joined drain.
-					if (++state.backupCloseFault.calls === 2) {
-						state.backupCloseFault.failedAt = state.backupCloseFault.calls;
-						state.backupCloseFault.fired = true;
-						throw new DOMException('Injected final backup shutdown failure', 'InvalidStateError');
-					}
+test('Electron backup shutdown failure resumes editing and a later close restores the new draft', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.focus();
+	await group.editor.input.type('before failed close');
+	const backupContents = () => workingCopyBackupContents(page);
+	await expect.poll(backupContents).toContain('before failed close');
+	await application.evaluate(({ dialog }) => {
+		const state = globalThis as typeof globalThis & { backupCloseDialogs: string[]; restoreBackupCloseDialogs(): void; };
+		const original = dialog.showMessageBox;
+		state.backupCloseDialogs = [];
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			state.backupCloseDialogs.push((args.at(-1) as { message: string; }).message);
+			return { response: 0, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+		state.restoreBackupCloseDialogs = () => { dialog.showMessageBox = original; };
+	});
+	await page.evaluate(() => {
+		const original = IDBDatabase.prototype.transaction;
+		const state = globalThis as typeof globalThis & { backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void; }; };
+		state.backupCloseFault = { calls: 0, failedAt: 0, fired: false, restore: () => { IDBDatabase.prototype.transaction = original; } };
+		IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
+			if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite') {
+				// The first store is the before-shutdown check; fail the final joined drain.
+				if (++state.backupCloseFault.calls === 2) {
+					state.backupCloseFault.failedAt = state.backupCloseFault.calls;
+					state.backupCloseFault.fired = true;
+					throw new DOMException('Injected final backup shutdown failure', 'InvalidStateError');
 				}
-				return original.apply(this, args);
-			};
-		});
-		let restored = false;
-		try {
-			const window = await application.browserWindow(page);
-			await window.evaluate(window => window.close());
-			await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { calls: number; fired: boolean } }).backupCloseFault.fired)).toBe(true);
-			await expect
-				.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDialogs: string[] }).backupCloseDialogs))
-				.toEqual(['The window could not close because its state was not saved.']);
-			await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(false);
-			expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toHaveLength(1);
-			expect(runningApplication.diagnostics.consoleErrors.some(message => /shutdown participants failed/u.test(message))).toBe(true);
-			const fault = await page.evaluate(() => {
-				const state = (
-					globalThis as typeof globalThis & {
-						backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void };
-					}
-				).backupCloseFault;
-				state.restore();
-				return { calls: state.calls, failedAt: state.failedAt, fired: state.fired, inert: document.body.inert };
-			});
-			// Recovery can already have retried pending writes; the injected failure stays at the final join.
-			expect(fault).toMatchObject({ failedAt: 2, fired: true, inert: false });
-			expect(fault.calls).toBeGreaterThanOrEqual(fault.failedAt);
-			await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void }).restoreBackupCloseDialogs());
-			restored = true;
-			await group.editor.input.focus();
-			await group.editor.input.press('ControlOrMeta+A');
-			await group.editor.input.type('after failed close');
-			await expect.poll(backupContents).toContain('after failed close');
-			const errors = [...runningApplication.diagnostics.consoleErrors];
-			({ workbench } = await reloadWorkbench());
-			await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
-			await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['after failed close']);
-			const evidence = testInfo.outputPath('backup-shutdown-failure-retry.json');
-			await writeFile(
-				evidence,
-				JSON.stringify({
-					fault,
-					expectedFailure: errors,
-					subsequentEditDurable: true,
-					retryCloseAndRestore: true,
-				}),
-			);
-			await testInfo.attach('backup-shutdown-failure-retry', { path: evidence, contentType: 'application/json' });
-		} finally {
-			if (!restored && !page.isClosed()) {
-				await page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { restore(): void } }).backupCloseFault.restore());
-				await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void }).restoreBackupCloseDialogs());
 			}
-		}
-	},
-);
-
-test(
-	'Electron keeps waiting for a slow shutdown and accepts its original close request after recovery',
-	{ tag: ['@electron-ui'] },
-	async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-		if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
-		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+N');
-		const group = workbench.editors.groupAt(0);
+			return original.apply(this, args);
+		};
+	});
+	let restored = false;
+	try {
+		const window = await application.browserWindow(page);
+		await window.evaluate(window => window.close());
+		await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { calls: number; fired: boolean; }; }).backupCloseFault.fired)).toBe(true);
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDialogs: string[]; }).backupCloseDialogs)).toEqual(['The window could not close because its state was not saved.']);
+		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(false);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toHaveLength(1);
+		expect(runningApplication.diagnostics.consoleErrors.some(message => /shutdown participants failed/u.test(message))).toBe(true);
+		const fault = await page.evaluate(() => {
+			const state = (globalThis as typeof globalThis & { backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void; }; }).backupCloseFault;
+			state.restore();
+			return { calls: state.calls, failedAt: state.failedAt, fired: state.fired, inert: document.body.inert };
+		});
+		// Recovery can already have retried pending writes; the injected failure stays at the final join.
+		expect(fault).toMatchObject({ failedAt: 2, fired: true, inert: false });
+		expect(fault.calls).toBeGreaterThanOrEqual(fault.failedAt);
+		await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void; }).restoreBackupCloseDialogs());
+		restored = true;
 		await group.editor.input.focus();
-		await group.editor.input.type('committed draft before expired close');
-		await expect.poll(() => workingCopyBackupContents(page)).toContain('committed draft before expired close');
-		await application.evaluate(({ dialog }) => {
-			const originalTimeout = globalThis.setTimeout;
-			const originalDialog = dialog.showMessageBox;
-			const state = {
-				messages: [] as string[],
-				expire: undefined as (() => void) | undefined,
-				timer: undefined as ReturnType<typeof setTimeout> | undefined,
-			};
-			(globalThis as typeof globalThis & { backupCloseDeadline: typeof state & { restore(): void } }).backupCloseDeadline = {
-				...state,
-				restore: () => {
-					globalThis.setTimeout = originalTimeout;
-					dialog.showMessageBox = originalDialog;
-					if (state.timer) clearTimeout(state.timer);
-				},
-			};
-			const capture = (globalThis as typeof globalThis & { backupCloseDeadline: typeof state }).backupCloseDeadline;
-			globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
-				const timer = originalTimeout(...args);
-				const [callback, delay, ...parameters] = args;
-				if (delay === 30_000) {
-					state.timer = timer;
-					capture.expire = () => {
-						clearTimeout(timer);
-						callback(...parameters);
-					};
-				}
-				return timer;
-			}) as typeof setTimeout;
-			dialog.showMessageBox = (async (...args: unknown[]) => {
-				capture.messages.push((args.at(-1) as { message: string }).message);
-				return { response: 2, checkboxChecked: false }; // Keep Waiting
-			}) as typeof dialog.showMessageBox;
+		await group.editor.input.press('ControlOrMeta+A');
+		await group.editor.input.type('after failed close');
+		await expect.poll(backupContents).toContain('after failed close');
+		const errors = [...runningApplication.diagnostics.consoleErrors];
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['after failed close']);
+		const evidence = testInfo.outputPath('backup-shutdown-failure-retry.json');
+		await writeFile(evidence, JSON.stringify({ fault, expectedFailure: errors, subsequentEditDurable: true, retryCloseAndRestore: true }));
+		await testInfo.attach('backup-shutdown-failure-retry', { path: evidence, contentType: 'application/json' });
+	} finally {
+		if (!restored && !page.isClosed()) {
+			await page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { restore(): void; }; }).backupCloseFault.restore());
+			await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void; }).restoreBackupCloseDialogs());
+		}
+	}
+});
+
+test('Electron keeps waiting for a slow shutdown and accepts its original close request after recovery', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.focus();
+	await group.editor.input.type('committed draft before expired close');
+	await expect.poll(() => workingCopyBackupContents(page)).toContain('committed draft before expired close');
+	await application.evaluate(({ dialog }) => {
+		const originalTimeout = globalThis.setTimeout;
+		const originalDialog = dialog.showMessageBox;
+		const state = { messages: [] as string[], expire: undefined as (() => void) | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+		(globalThis as typeof globalThis & { backupCloseDeadline: typeof state & { restore(): void; }; }).backupCloseDeadline = {
+			...state,
+			restore: () => { globalThis.setTimeout = originalTimeout; dialog.showMessageBox = originalDialog; if (state.timer) clearTimeout(state.timer); },
+		};
+		const capture = (globalThis as typeof globalThis & { backupCloseDeadline: typeof state; }).backupCloseDeadline;
+		globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+			const timer = originalTimeout(...args);
+			const [callback, delay, ...parameters] = args;
+			if (delay === 30_000) {
+				state.timer = timer;
+				capture.expire = () => { clearTimeout(timer); callback(...parameters); };
+			}
+			return timer;
+		}) as typeof setTimeout;
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			capture.messages.push((args.at(-1) as { message: string; }).message);
+			return { response: 2, checkboxChecked: false }; // Keep Waiting
+		}) as typeof dialog.showMessageBox;
+	});
+	await page.evaluate(() => {
+		const original = IDBDatabase.prototype.transaction;
+		const state = { writes: 0, heldAt: 0, release: undefined as (() => void) | undefined, restore: () => { IDBDatabase.prototype.transaction = original; } };
+		(globalThis as typeof globalThis & { backupCompletionGate: typeof state; }).backupCompletionGate = state;
+		IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
+			const transaction = original.apply(this, args);
+			if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite' && ++state.writes === 2) {
+				// The real final transaction commits; delay only its completion notification until the main token expires.
+				let completed: typeof transaction.oncomplete = null;
+				Object.defineProperty(transaction, 'oncomplete', { configurable: true, get: () => completed, set: (handler: typeof completed) => { completed = handler; } });
+				transaction.addEventListener('complete', event => {
+					state.heldAt = state.writes;
+					state.release = () => { Reflect.deleteProperty(transaction, 'oncomplete'); completed?.call(transaction, event); state.release = undefined; };
+				}, { once: true });
+			}
+			return transaction;
+		};
+	});
+	let restored = false;
+	try {
+		const reloaded = reloadWorkbench();
+		await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCompletionGate: { heldAt: number; }; }).backupCompletionGate.heldAt)).toBe(2);
+		await application.evaluate(() => {
+			const deadline = (globalThis as typeof globalThis & { backupCloseDeadline: { expire?: () => void; }; }).backupCloseDeadline;
+			if (!deadline.expire) throw new Error('Main close deadline was not captured');
+			deadline.expire();
 		});
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { messages: string[]; }; }).backupCloseDeadline.messages)).toEqual(['The window is not responding.']);
+		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(true);
+		await expect(group.editor.lines).toHaveText(['committed draft before expired close']);
+		await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
+		restored = true;
 		await page.evaluate(() => {
-			const original = IDBDatabase.prototype.transaction;
-			const state = {
-				writes: 0,
-				heldAt: 0,
-				release: undefined as (() => void) | undefined,
-				restore: () => {
-					IDBDatabase.prototype.transaction = original;
-				},
-			};
-			(globalThis as typeof globalThis & { backupCompletionGate: typeof state }).backupCompletionGate = state;
-			IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
-				const transaction = original.apply(this, args);
-				if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite' && ++state.writes === 2) {
-					// The real final transaction commits; delay only its completion notification until the main token expires.
-					let completed: typeof transaction.oncomplete = null;
-					Object.defineProperty(transaction, 'oncomplete', {
-						configurable: true,
-						get: () => completed,
-						set: (handler: typeof completed) => {
-							completed = handler;
-						},
-					});
-					transaction.addEventListener(
-						'complete',
-						event => {
-							state.heldAt = state.writes;
-							state.release = () => {
-								Reflect.deleteProperty(transaction, 'oncomplete');
-								completed?.call(transaction, event);
-								state.release = undefined;
-							};
-						},
-						{ once: true },
-					);
-				}
-				return transaction;
-			};
+			const gate = (globalThis as typeof globalThis & { backupCompletionGate: { release?: () => void; restore(): void; }; }).backupCompletionGate;
+			if (!gate.release) throw new Error('Final transaction notification was not held');
+			gate.release();
+			gate.restore();
 		});
-		let restored = false;
-		try {
-			const reloaded = reloadWorkbench();
-			await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCompletionGate: { heldAt: number } }).backupCompletionGate.heldAt)).toBe(2);
-			await application.evaluate(() => {
-				const deadline = (globalThis as typeof globalThis & { backupCloseDeadline: { expire?: () => void } }).backupCloseDeadline;
-				if (!deadline.expire) throw new Error('Main close deadline was not captured');
-				deadline.expire();
-			});
-			await expect
-				.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { messages: string[] } }).backupCloseDeadline.messages))
-				.toEqual(['The window is not responding.']);
-			await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(true);
-			await expect(group.editor.lines).toHaveText(['committed draft before expired close']);
-			await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void } }).backupCloseDeadline.restore());
-			restored = true;
+		({ workbench } = await reloaded);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to complete window close request/u.test(message))).toEqual([]);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
+		const errors = [...runningApplication.diagnostics.consoleErrors];
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['committed draft before expired close']);
+		const evidence = testInfo.outputPath('backup-completion-after-timeout.json');
+		await writeFile(evidence, JSON.stringify({ finalWriteHeldAt: 2, consoleErrors: errors, sealedWhileWaiting: true, originalCloseAccepted: true, restored: true }));
+		await testInfo.attach('backup-completion-after-timeout', { path: evidence, contentType: 'application/json' });
+	} finally {
+		if (!restored && !page.isClosed()) {
 			await page.evaluate(() => {
-				const gate = (
-					globalThis as typeof globalThis & {
-						backupCompletionGate: { release?: () => void; restore(): void };
-					}
-				).backupCompletionGate;
-				if (!gate.release) throw new Error('Final transaction notification was not held');
-				gate.release();
+				const gate = (globalThis as typeof globalThis & { backupCompletionGate: { release?: () => void; restore(): void; }; }).backupCompletionGate;
+				gate.release?.();
 				gate.restore();
 			});
-			({ workbench } = await reloaded);
-			expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to complete window close request/u.test(message))).toEqual([]);
-			expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
-			const errors = [...runningApplication.diagnostics.consoleErrors];
-			await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
-			await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['committed draft before expired close']);
-			const evidence = testInfo.outputPath('backup-completion-after-timeout.json');
-			await writeFile(
-				evidence,
-				JSON.stringify({
-					finalWriteHeldAt: 2,
-					consoleErrors: errors,
-					sealedWhileWaiting: true,
-					originalCloseAccepted: true,
-					restored: true,
-				}),
-			);
-			await testInfo.attach('backup-completion-after-timeout', {
-				path: evidence,
-				contentType: 'application/json',
-			});
-		} finally {
-			if (!restored && !page.isClosed()) {
-				await page.evaluate(() => {
-					const gate = (
-						globalThis as typeof globalThis & {
-							backupCompletionGate: { release?: () => void; restore(): void };
-						}
-					).backupCompletionGate;
-					gate.release?.();
-					gate.restore();
-				});
-				await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void } }).backupCloseDeadline.restore());
-			}
+			await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
 		}
-	},
-);
+	}
+});
+
 
 test.describe('Settings configuration scopes', () => {
 	test.use({ electronUserSettings: { 'window.menuStyle': 'custom' } });
 	for (const locale of ['en', 'zh-CN']) {
-		test(
-			`Settings targets and language overrides save and reset independently (${locale})`,
-			{ tag: ['@browser-ui', '@electron-app-server'] },
-			async ({ target, workbench, restartWorkbench, reloadWorkbench, runningApplication, testWorkspace }, testInfo) => {
-				const chinese = locale === 'zh-CN';
-				if (chinese) {
-					await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-					const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
-					await picker.getByRole('combobox').fill('简体中文');
-					await picker.getByRole('combobox').press('Enter');
-					({ workbench } = await restartWorkbench());
-				}
-				let page = workbench.page;
-				const workspaceSettings = { 'editor.fontSize': 21, '[plaintext]': { 'editor.fontSize': 22 } };
-				let folderName: string | undefined;
-				if (target.kind === 'browser') {
-					folderName = await page.evaluate(async source => {
-						const storage = await navigator.storage.getDirectory();
-						const root = await storage.getDirectoryHandle(`ash-settings-${crypto.randomUUID()}`, {
-							create: true,
-						});
-						const settings = await root.getDirectoryHandle('.vscode', { create: true });
-						const writer = await (await settings.getFileHandle('settings.json', { create: true })).createWritable();
-						await writer.write(source);
-						await writer.close();
-						const note = await (await root.getFileHandle('scope.txt', { create: true })).createWritable();
-						await note.write('scoped font');
-						await note.close();
-						Object.defineProperty(window, 'showDirectoryPicker', {
-							configurable: true,
-							value: async () => root,
-						});
-						return root.name;
-					}, JSON.stringify(workspaceSettings));
-					await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
-					const entry = page.locator('.ash-explorer').getByRole('treeitem', { name: '.vscode', exact: true });
-					await expect(entry).toBeVisible();
-					await entry.click();
-				} else {
-					await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
-					await writeFile(join(testWorkspace.directory, '.vscode', 'settings.json'), JSON.stringify(workspaceSettings));
-				}
-				const readWorkspace = async (): Promise<unknown> =>
-					target.kind === 'browser'
-						? page.evaluate(async name => {
-								const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name!);
-								const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
-								return JSON.parse(await (await file.getFile()).text());
-							}, folderName)
-						: JSON.parse(await readFile(join(testWorkspace.directory, '.vscode', 'settings.json'), 'utf8'));
-				await workbench.settingsEditor.openUserSettingsUI();
-				let settings = workbench.settingsEditor.element;
-				let search = settings.getByRole('searchbox');
-				await expect(settings.locator('.ash-settings-target-folder')).toBeHidden();
-				const headerScreenshot = testInfo.outputPath('settings-target-header.png');
-				await settings.screenshot({ path: headerScreenshot });
-				await testInfo.attach('settings-target-header', { path: headerScreenshot, contentType: 'image/png' });
-				const targetLabel = chinese ? '设置目标' : 'Settings target';
-				const switchTarget = async (label: string): Promise<void> => {
-					const query = await search.inputValue();
-					const targets = settings.locator('.ash-modal-editor-header').getByRole('toolbar', { name: targetLabel, exact: true });
-					const userLabel = chinese ? '用户' : 'User';
-					const workspaceLabel = chinese ? '工作区' : 'Workspace';
-					if (label === userLabel || label === workspaceLabel) {
-						const selected = targets.getByRole('button', { pressed: true });
-						const previous = await selected.getAttribute('aria-label');
-						await selected.focus();
-						await selected.press(label === userLabel ? 'ArrowLeft' : 'ArrowRight');
-						const segment = targets.getByRole('button', { name: label, exact: true });
-						await expect(segment).toBeFocused();
-						await expect(targets.getByRole('button', { name: previous!, exact: true })).toHaveAttribute('aria-pressed', 'true');
-						await segment.press('Enter');
-						await expect(segment).toHaveAttribute('aria-pressed', 'true');
-					} else {
-						const folders = settings.locator('.ash-settings-target-folder');
-						await folders.press('Enter');
-						await expect(folders).toHaveAttribute('aria-expanded', 'true');
-						await page.getByRole('menuitemradio', { name: label, exact: true }).press('Enter');
-						await expect(folders).toHaveAttribute('aria-expanded', 'false');
-					}
-					await expect(search).toBeFocused();
-					await expect(search).toHaveValue(query);
-				};
-				await search.fill('@lang:plaintext @id:editor.fontSize');
-				let size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
-				await size.fill('23');
-				await size.press('Tab');
-				await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['[plaintext]']?.['editor.fontSize']).toBe(23);
-				expect(JSON.parse((await readUserSettings(page)).content)['editor.fontSize']).toBeUndefined();
-				await switchTarget(chinese ? '工作区' : 'Workspace');
-				await expect(size).toHaveValue('22');
-				await size.fill('27');
-				await size.press('Tab');
-				await expect.poll(readWorkspace).toEqual({ ...workspaceSettings, '[plaintext]': { 'editor.fontSize': 27 } });
-				await search.fill('@lang:plaintext @modified @id:editor.fontSize');
-				await expect(settings.locator('.ash-settings-configured-description')).toContainText('plaintext');
-				await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
-				await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
-				await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
-				await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
-				await search.fill('@id:editor.fontSize');
-				await expect(size).toHaveValue('21');
-				await switchTarget(chinese ? '用户' : 'User');
-				await search.fill('@lang:unregistered-language @id:editor.fontSize');
-				await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
-				await search.fill('@lang:plaintext @id:editor.fontSize');
-				await expect(size).toHaveValue('23');
-				const geometry = await settings.locator('.ash-settings-target').evaluate(element => {
-					const bounds = element.getBoundingClientRect();
-					const header = element.closest('.ash-modal-editor-header')!.getBoundingClientRect();
-					const title = element.closest('.ash-modal-editor-header')!.querySelector('.ash-modal-editor-title')!.getBoundingClientRect();
-					return {
-						inHeader: bounds.width > 0 && bounds.top >= header.top && bounds.bottom <= header.bottom && bounds.right <= header.right,
-						besideTitle: bounds.left >= title.right && bounds.left - title.right <= 16,
-						labelsFit: [...element.querySelectorAll('.ash-segmented-control-label')].every(label => label.scrollWidth <= label.clientWidth),
-					};
-				});
-				expect(geometry).toEqual({ inHeader: true, besideTitle: true, labelsFit: true });
-				await expect(settings.locator('.ash-settings-search .ash-settings-target')).toHaveCount(0);
-				if (target.kind === 'browser') {
-					await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' });
-					await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-high-contrast-dark');
-					const selected = settings.getByRole('toolbar', { name: targetLabel, exact: true }).getByRole('button', { pressed: true });
+		test(`Settings targets and language overrides save and reset independently (${locale})`, { tag: ['@browser-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench, reloadWorkbench, runningApplication, testWorkspace }, testInfo) => {
+			const chinese = locale === 'zh-CN';
+			if (chinese) {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			let page = workbench.page;
+			const workspaceSettings = { 'editor.fontSize': 21, '[plaintext]': { 'editor.fontSize': 22 } };
+			let folderName: string | undefined;
+			if (target.kind === 'browser') {
+				folderName = await page.evaluate(async source => {
+					const storage = await navigator.storage.getDirectory();
+					const root = await storage.getDirectoryHandle(`ash-settings-${crypto.randomUUID()}`, { create: true });
+					const settings = await root.getDirectoryHandle('.vscode', { create: true });
+					const writer = await (await settings.getFileHandle('settings.json', { create: true })).createWritable();
+					await writer.write(source);
+					await writer.close();
+					const note = await (await root.getFileHandle('scope.txt', { create: true })).createWritable();
+					await note.write('scoped font');
+					await note.close();
+					Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => root });
+					return root.name;
+				}, JSON.stringify(workspaceSettings));
+				await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+				const entry = page.locator('.ash-explorer').getByRole('treeitem', { name: '.vscode', exact: true });
+				await expect(entry).toBeVisible();
+				await entry.click();
+			} else {
+				await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
+				await writeFile(join(testWorkspace.directory, '.vscode', 'settings.json'), JSON.stringify(workspaceSettings));
+			}
+			const readWorkspace = async (): Promise<unknown> => target.kind === 'browser' ? page.evaluate(async name => {
+				const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name!);
+				const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
+				return JSON.parse(await (await file.getFile()).text());
+			}, folderName) : JSON.parse(await readFile(join(testWorkspace.directory, '.vscode', 'settings.json'), 'utf8'));
+			await workbench.settingsEditor.openUserSettingsUI();
+			let settings = workbench.settingsEditor.element;
+			let search = settings.getByRole('searchbox');
+			await expect(settings.locator('.ash-settings-target-folder')).toBeHidden();
+			const headerScreenshot = testInfo.outputPath('settings-target-header.png');
+			await settings.screenshot({ path: headerScreenshot });
+			await testInfo.attach('settings-target-header', { path: headerScreenshot, contentType: 'image/png' });
+			const targetLabel = chinese ? '设置目标' : 'Settings target';
+			const switchTarget = async (label: string): Promise<void> => {
+				const query = await search.inputValue();
+				const targets = settings.locator('.ash-modal-editor-header').getByRole('toolbar', { name: targetLabel, exact: true });
+				const userLabel = chinese ? '用户' : 'User';
+				const workspaceLabel = chinese ? '工作区' : 'Workspace';
+				if (label === userLabel || label === workspaceLabel) {
+					const selected = targets.getByRole('button', { pressed: true });
+					const previous = await selected.getAttribute('aria-label');
 					await selected.focus();
-					await expect(selected).toHaveCSS('outline-style', 'solid');
-					await page.setViewportSize({ width: 720, height: 900 });
-					await expect(settings.getByRole('searchbox')).toBeVisible();
-					await expect(settings.locator('.ash-settings-target')).toBeVisible();
+					await selected.press(label === userLabel ? 'ArrowLeft' : 'ArrowRight');
+					const segment = targets.getByRole('button', { name: label, exact: true });
+					await expect(segment).toBeFocused();
+					await expect(targets.getByRole('button', { name: previous!, exact: true })).toHaveAttribute('aria-pressed', 'true');
+					await segment.press('Enter');
+					await expect(segment).toHaveAttribute('aria-pressed', 'true');
+				} else {
+					const folders = settings.locator('.ash-settings-target-folder');
+					await folders.press('Enter');
+					await expect(folders).toHaveAttribute('aria-expanded', 'true');
+					await page.getByRole('menuitemradio', { name: label, exact: true }).press('Enter');
+					await expect(folders).toHaveAttribute('aria-expanded', 'false');
 				}
+				await expect(search).toBeFocused();
+				await expect(search).toHaveValue(query);
+			};
+			await search.fill('@lang:plaintext @id:editor.fontSize');
+			let size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+			await size.fill('23');
+			await size.press('Tab');
+			await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['[plaintext]']?.['editor.fontSize']).toBe(23);
+			expect(JSON.parse((await readUserSettings(page)).content)['editor.fontSize']).toBeUndefined();
+			await switchTarget(chinese ? '工作区' : 'Workspace');
+			await expect(size).toHaveValue('22');
+			await size.fill('27');
+			await size.press('Tab');
+			await expect.poll(readWorkspace).toEqual({ ...workspaceSettings, '[plaintext]': { 'editor.fontSize': 27 } });
+			await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+			await expect(settings.locator('.ash-settings-configured-description')).toContainText('plaintext');
+			await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
+			await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
+			await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
+			await search.fill('@id:editor.fontSize');
+			await expect(size).toHaveValue('21');
+			await switchTarget(chinese ? '用户' : 'User');
+			await search.fill('@lang:unregistered-language @id:editor.fontSize');
+			await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			await search.fill('@lang:plaintext @id:editor.fontSize');
+			await expect(size).toHaveValue('23');
+			const geometry = await settings.locator('.ash-settings-target').evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const header = element.closest('.ash-modal-editor-header')!.getBoundingClientRect();
+				const title = element.closest('.ash-modal-editor-header')!.querySelector('.ash-modal-editor-title')!.getBoundingClientRect();
+				return {
+					inHeader: bounds.width > 0 && bounds.top >= header.top && bounds.bottom <= header.bottom && bounds.right <= header.right,
+					besideTitle: bounds.left >= title.right && bounds.left - title.right <= 16,
+					labelsFit: [...element.querySelectorAll('.ash-segmented-control-label')].every(label => label.scrollWidth <= label.clientWidth),
+				};
+			});
+			expect(geometry).toEqual({ inHeader: true, besideTitle: true, labelsFit: true });
+			await expect(settings.locator('.ash-settings-search .ash-settings-target')).toHaveCount(0);
+			if (target.kind === 'browser') {
+				await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' });
+				await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-high-contrast-dark');
+				const selected = settings.getByRole('toolbar', { name: targetLabel, exact: true }).getByRole('button', { pressed: true });
+				await selected.focus();
+				await expect(selected).toHaveCSS('outline-style', 'solid');
+				await page.setViewportSize({ width: 720, height: 900 });
+				await expect(settings.getByRole('searchbox')).toBeVisible();
+				await expect(settings.locator('.ash-settings-target')).toBeVisible();
+			}
 
+			await settings.locator('.ash-modal-editor-close').click();
+			await expect(page.locator('.ash-modal-editor-title-controls .ash-settings-target')).toHaveCount(0);
+			({ workbench } = await reloadWorkbench());
+			page = workbench.page;
+			await workbench.settingsEditor.openUserSettingsUI();
+			settings = workbench.settingsEditor.element;
+			search = settings.getByRole('searchbox');
+			await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+			size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+			await expect(size).toHaveValue('23');
+			if (target.kind === 'browser') {
 				await settings.locator('.ash-modal-editor-close').click();
-				await expect(page.locator('.ash-modal-editor-title-controls .ash-settings-target')).toHaveCount(0);
-				({ workbench } = await reloadWorkbench());
-				page = workbench.page;
+				await page.locator('.ash-explorer').getByRole('treeitem', { name: 'scope.txt', exact: true }).dblclick();
+				await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
+				const secondName = await page.evaluate(async () => {
+					const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-settings-second-${crypto.randomUUID()}`, { create: true });
+					const directory = await root.getDirectoryHandle('.vscode', { create: true });
+					const writer = await (await directory.getFileHandle('settings.json', { create: true })).createWritable();
+					await writer.write(JSON.stringify({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 33 } }));
+					await writer.close();
+					Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => root });
+					return root.name;
+				});
+				await workbench.quickaccess.runCommand('workbench.action.addRootFolder');
+				await page.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true }).click();
+				const secondRoot = page.locator('.ash-explorer').getByRole('treeitem', { name: secondName, exact: true });
+				await expect(secondRoot).toBeVisible();
+				await secondRoot.click();
 				await workbench.settingsEditor.openUserSettingsUI();
 				settings = workbench.settingsEditor.element;
 				search = settings.getByRole('searchbox');
-				await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+				await search.fill('@lang:plaintext @id:editor.fontSize');
+				await switchTarget(secondName);
 				size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
-				await expect(size).toHaveValue('23');
-				if (target.kind === 'browser') {
-					await settings.locator('.ash-modal-editor-close').click();
-					await page.locator('.ash-explorer').getByRole('treeitem', { name: 'scope.txt', exact: true }).dblclick();
-					await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
-					const secondName = await page.evaluate(async () => {
-						const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-settings-second-${crypto.randomUUID()}`, { create: true });
-						const directory = await root.getDirectoryHandle('.vscode', { create: true });
-						const writer = await (await directory.getFileHandle('settings.json', { create: true })).createWritable();
-						await writer.write(JSON.stringify({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 33 } }));
-						await writer.close();
-						Object.defineProperty(window, 'showDirectoryPicker', {
-							configurable: true,
-							value: async () => root,
-						});
-						return root.name;
-					});
-					await workbench.quickaccess.runCommand('workbench.action.addRootFolder');
-					await page.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true }).click();
-					const secondRoot = page.locator('.ash-explorer').getByRole('treeitem', { name: secondName, exact: true });
-					await expect(secondRoot).toBeVisible();
-					await secondRoot.click();
-					await workbench.settingsEditor.openUserSettingsUI();
-					settings = workbench.settingsEditor.element;
-					search = settings.getByRole('searchbox');
-					await search.fill('@lang:plaintext @id:editor.fontSize');
-					await switchTarget(secondName);
-					size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
-					await expect(size).toHaveValue('33');
-					await size.fill('35');
-					await size.press('Tab');
-					const readSecond = () =>
-						page.evaluate(async name => {
-							const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-							const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
-							return JSON.parse(await (await file.getFile()).text());
-						}, secondName);
-					await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 35 } });
-					await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
-					expect(JSON.parse((await readUserSettings(page)).content)['[plaintext]']['editor.fontSize']).toBe(23);
-					await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
-					await search.fill('@lang:plaintext @modified @id:editor.fontSize');
-					await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
-					await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
-					await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32 });
-					await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
-				}
-				await testInfo.attach('settings-target-language', {
-					body: await page.screenshot(),
-					contentType: 'image/png',
-				});
-				expect(runningApplication.diagnostics.errors).toEqual([]);
-			},
-		);
+				await expect(size).toHaveValue('33');
+				await size.fill('35');
+				await size.press('Tab');
+				const readSecond = () => page.evaluate(async name => {
+					const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
+					return JSON.parse(await (await file.getFile()).text());
+				}, secondName);
+				await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 35 } });
+				await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
+				expect(JSON.parse((await readUserSettings(page)).content)['[plaintext]']['editor.fontSize']).toBe(23);
+				await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
+				await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+				await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
+				await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32 });
+				await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			}
+			await testInfo.attach('settings-target-language', { body: await page.screenshot(), contentType: 'image/png' });
+			expect(runningApplication.diagnostics.errors).toEqual([]);
+		});
 	}
 });

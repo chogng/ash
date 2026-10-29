@@ -11,28 +11,13 @@ test('production loading baseline', { tag: '@browser-app-server' }, async ({ tar
 	await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
 	await cdp.send('Performance.enable');
 	let stage = 'startup';
-	const requests = new Map<
-		string,
-		{
-			stage: string;
-			url: string;
-			type: string;
-			bytes: number | null;
-			status?: number;
-			cached?: boolean;
-			failed?: string;
-		}
-	>();
+	const requests = new Map<string, { stage: string; url: string; type: string; bytes: number | null; status?: number; cached?: boolean; failed?: string; }>();
 	cdp.on('Network.requestWillBeSent', event => {
 		if (event.request.url.startsWith('http')) requests.set(event.requestId, { stage, url: event.request.url, type: event.type ?? 'Other', bytes: null });
 	});
 	cdp.on('Network.responseReceived', event => {
 		const request = requests.get(event.requestId);
-		if (request)
-			Object.assign(request, {
-				status: event.response.status,
-				cached: Boolean(event.response.fromDiskCache || event.response.fromServiceWorker),
-			});
+		if (request) Object.assign(request, { status: event.response.status, cached: Boolean(event.response.fromDiskCache || event.response.fromServiceWorker) });
 	});
 	cdp.on('Network.loadingFinished', event => {
 		const request = requests.get(event.requestId);
@@ -42,7 +27,7 @@ test('production loading baseline', { tag: '@browser-app-server' }, async ({ tar
 		const request = requests.get(event.requestId);
 		if (request) request.failed = event.errorText;
 	});
-	const samples: { stage: string; elapsedMs: number; scriptMs: number; taskMs: number; resources: unknown[] }[] = [];
+	const samples: { stage: string; elapsedMs: number; scriptMs: number; taskMs: number; resources: unknown[]; }[] = [];
 	async function measure(name: string, action: () => Promise<void>): Promise<void> {
 		stage = name;
 		const before = await metrics(cdp);
@@ -51,13 +36,7 @@ test('production loading baseline', { tag: '@browser-app-server' }, async ({ tar
 		await workbench.waitForUiIdle();
 		const elapsedMs = performance.now() - start;
 		const after = await metrics(cdp);
-		samples.push({
-			stage,
-			elapsedMs,
-			scriptMs: (after.ScriptDuration - before.ScriptDuration) * 1000,
-			taskMs: (after.TaskDuration - before.TaskDuration) * 1000,
-			resources: [...requests.values()].filter(request => request.stage === stage).map(request => ({ ...request })),
-		});
+		samples.push({ stage, elapsedMs, scriptMs: (after.ScriptDuration - before.ScriptDuration) * 1000, taskMs: (after.TaskDuration - before.TaskDuration) * 1000, resources: [...requests.values()].filter(request => request.stage === stage).map(request => ({ ...request })) });
 	}
 	try {
 		await measure('startup', async () => {
@@ -86,28 +65,7 @@ test('production loading baseline', { tag: '@browser-app-server' }, async ({ tar
 		expect([...requests.values()].some(request => request.stage === 'terminal' && /\/xterm-[^/]+\.js/u.test(request.url))).toBe(true);
 	} finally {
 		const path = testInfo.outputPath('loading-baseline.json');
-		await writeFile(
-			path,
-			JSON.stringify(
-				{
-					schemaVersion: 1,
-					repeat: testInfo.repeatEachIndex,
-					environment: {
-						platform: process.platform,
-						arch: process.arch,
-						browser: page.context().browser()?.version(),
-						cache: 'HTTP cache disabled; existing browser process; sequential first-use scenarios',
-						transport: 'loopback HTTP, uncompressed static artifacts',
-						cpu: 'CDP main-renderer ScriptDuration and TaskDuration; excludes worker CPU',
-						timing: 'Playwright action to DOM readiness plus two animation frames; includes automation overhead',
-						network: 'CDP page target; bytes include response overhead; null means completion not observed on this target, not zero bytes; worker-internal requests excluded',
-					},
-					samples,
-				},
-				null,
-				2,
-			),
-		);
+		await writeFile(path, JSON.stringify({ schemaVersion: 1, repeat: testInfo.repeatEachIndex, environment: { platform: process.platform, arch: process.arch, browser: page.context().browser()?.version(), cache: 'HTTP cache disabled; existing browser process; sequential first-use scenarios', transport: 'loopback HTTP, uncompressed static artifacts', cpu: 'CDP main-renderer ScriptDuration and TaskDuration; excludes worker CPU', timing: 'Playwright action to DOM readiness plus two animation frames; includes automation overhead', network: 'CDP page target; bytes include response overhead; null means completion not observed on this target, not zero bytes; worker-internal requests excluded' }, samples }, null, 2));
 		await testInfo.attach('loading-baseline', { path, contentType: 'application/json' });
 		await cdp.detach();
 	}

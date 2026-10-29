@@ -35,41 +35,32 @@ class DocumentTypeRegistry {
 		return toDisposable(() => this.reservations.delete(types));
 	}
 
-	public requiresProvider(input: { readonly resource: URI; readonly contentType?: string }): boolean {
+	public requiresProvider(input: { readonly resource: URI; readonly contentType?: string; }): boolean {
 		const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-		return (
-			this.find(input) !== undefined ||
-			[...this.reservations].some(types => types.some(type => mediaType === type.contentType || type.extensions.some(extension => input.resource.path.toLowerCase().endsWith(extension))))
-		);
+		return this.find(input) !== undefined || [...this.reservations].some(types => types.some(type =>
+			mediaType === type.contentType || type.extensions.some(extension => input.resource.path.toLowerCase().endsWith(extension))));
 	}
 
 	/** Routing declarations have the same lifetime as their available editor panes. */
-	public registerTypes(): IDisposable & { replace(types: readonly DocumentType[]): void } {
+	public registerTypes(): IDisposable & { replace(types: readonly DocumentType[]): void; } {
 		let owned: readonly DocumentType[] = [];
 		const replace = (types: readonly DocumentType[]): void => {
 			const identifiers = new Set<string>();
 			for (const type of types) {
 				const existing = this.types.get(type.id);
-				if (identifiers.has(type.id) || (existing && !owned.includes(existing))) {
+				if (identifiers.has(type.id) || existing && !owned.includes(existing)) {
 					throw new Error(`Document type is already registered: ${type.id}`);
 				}
 				identifiers.add(type.id);
 			}
-			for (const type of owned) {
-				this.types.delete(type.id);
-			}
+			for (const type of owned) { this.types.delete(type.id); }
 			owned = [...types];
-			for (const type of owned) {
-				this.types.set(type.id, type);
-			}
+			for (const type of owned) { this.types.set(type.id, type); }
 		};
-		return Object.assign(
-			toDisposable(() => replace([])),
-			{ replace },
-		);
+		return Object.assign(toDisposable(() => replace([])), { replace });
 	}
 
-	public find(input: { readonly resource: URI; readonly contentType?: string }): DocumentType | undefined {
+	public find(input: { readonly resource: URI; readonly contentType?: string; }): DocumentType | undefined {
 		if (input.contentType !== undefined) {
 			return [...this.types.values()].find(type => type.contentType === input.contentType);
 		}

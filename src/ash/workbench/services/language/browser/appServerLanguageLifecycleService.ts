@@ -48,15 +48,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 			const key = `${dirId}:${event.params.server}`;
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = {
-					dirId,
-					serverId: event.params.server,
-					languages: [],
-					state: 'starting',
-					capabilitiesCurrent: false,
-					progress: new Set(),
-					requests: 0,
-				};
+				entry = { dirId, serverId: event.params.server, languages: [], state: 'starting', capabilitiesCurrent: false, progress: new Set(), requests: 0 };
 				this.entries.set(key, entry);
 			}
 			if (event.method === 'language/serverCapabilities') {
@@ -79,21 +71,14 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(models.onModelLanguageChanged(() => this.refreshAll()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('languageServers')) {
-					for (const entry of this.entries.values()) this.cancelTimer(entry);
-					this.refreshAll();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('languageServers')) {
+				for (const entry of this.entries.values()) this.cancelTimer(entry);
+				this.refreshAll();
+			}
+		}));
 		this._register(workspace.onDidChangeWorkspace(() => this.clear()));
-		this._register(
-			toDisposable(() => {
-				this.alive = false;
-				this.clear();
-			}),
-		);
+		this._register(toDisposable(() => { this.alive = false; this.clear(); }));
 	}
 
 	start(): void {
@@ -102,26 +87,19 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		// CodeEditorService depends on EditorParts. The host calls start only after its
 		// synchronous service graph and configuration layers have finished construction.
 		const attach = (editor: ICodeEditor): void => {
-			this.editorListeners.set(
-				editor,
-				editor.onDidChangeModel(() => this.refreshAll()),
-			);
+			this.editorListeners.set(editor, editor.onDidChangeModel(() => this.refreshAll()));
 			this.refreshAll();
 		};
 		for (const editor of this.editors.listCodeEditors()) attach(editor);
 		this._register(this.editors.onCodeEditorAdd(attach));
-		this._register(
-			this.editors.onCodeEditorRemove(editor => {
-				this.editorListeners.deleteAndDispose(editor);
-				queueMicrotask(() => {
-					if (this.alive) this.refreshAll();
-				});
-			}),
-		);
+		this._register(this.editors.onCodeEditorRemove(editor => {
+			this.editorListeners.deleteAndDispose(editor);
+			queueMicrotask(() => { if (this.alive) this.refreshAll(); });
+		}));
 		this.refreshAll();
 	}
 
-	async withActivity<T>(document: { readonly dirId?: string; readonly languageId: string }, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
+	async withActivity<T>(document: { readonly dirId?: string; readonly languageId: string; }, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
 		const dirId = document.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 		const entry = [...this.entries.values()].find(value => value.dirId === dirId && value.languages.includes(document.languageId));
 		if (!entry) return operation();
@@ -140,9 +118,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		}
 	}
 
-	private refreshAll(): void {
-		for (const entry of this.entries.values()) this.refresh(entry);
-	}
+	private refreshAll(): void { for (const entry of this.entries.values()) this.refresh(entry); }
 
 	private hasOpenModel(entry: Server): boolean {
 		// A closed resource can retain a cached TextModel for undo or working-copy reuse.
@@ -160,67 +136,45 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 			if (entry.state === 'idle' || entry.stopping) void this.activate(entry).catch(error => this.log.warn('Language server resume failed', error));
 			return;
 		}
-		if (entry.state !== 'ready' || entry.requests || entry.progress.size || entry.stopping || entry.waking) {
-			this.cancelTimer(entry);
-			return;
-		}
+		if (entry.state !== 'ready' || entry.requests || entry.progress.size || entry.stopping || entry.waking) { this.cancelTimer(entry); return; }
 		if (entry.timer !== undefined) return;
-		entry.timer = setTimeout(
-			() => {
-				entry.timer = undefined;
-				if (this.hasOpenModel(entry) || entry.requests || entry.progress.size || !this.configuration.getValue<boolean>(LanguageServerLifecycleConfiguration.autoSuspend)) return;
-				entry.stopping = this.servers.control({
-					action: 'suspend',
-					dirId: this.wireId(entry),
-					serverId: entry.serverId,
-				});
-				void entry.stopping
-					.catch(error => this.log.warn('Idle language server release failed', error))
-					.finally(() => {
-						entry.stopping = undefined;
-						this.refresh(entry);
-					});
-			},
-			this.configuration.getValue<number>(LanguageServerLifecycleConfiguration.idleTimeoutMinutes) * 60_000,
-		);
+		entry.timer = setTimeout(() => {
+			entry.timer = undefined;
+			if (this.hasOpenModel(entry) || entry.requests || entry.progress.size || !this.configuration.getValue<boolean>(LanguageServerLifecycleConfiguration.autoSuspend)) return;
+			entry.stopping = this.servers.control({ action: 'suspend', dirId: this.wireId(entry), serverId: entry.serverId });
+			void entry.stopping.catch(error => this.log.warn('Idle language server release failed', error)).finally(() => {
+				entry.stopping = undefined;
+				this.refresh(entry);
+			});
+		}, this.configuration.getValue<number>(LanguageServerLifecycleConfiguration.idleTimeoutMinutes) * 60_000);
 	}
 
 	private activate(entry: Server): Promise<void> {
 		if (entry.waking) return entry.waking;
 		if (!entry.stopping && entry.state !== 'idle') return Promise.resolve();
-		entry.waking = Promise.resolve()
-			.then(async () => {
-				await entry.stopping;
-				if (!this.alive || this.entries.get(`${entry.dirId}:${entry.serverId}`) !== entry || entry.state !== 'idle') return;
-				const ready = (entry.ready = new DeferredPromise<void>());
-				const timeout = setTimeout(() => ready.error(new Error('Language server resume timed out')), 30_000);
-				try {
-					await Promise.all([this.servers.control({ action: 'resume', dirId: this.wireId(entry), serverId: entry.serverId }), ready.p]);
-				} finally {
-					clearTimeout(timeout);
-					entry.ready = undefined;
-				}
-			})
-			.finally(() => {
-				entry.waking = undefined;
-				// A failed activation waits for new demand instead of retrying on its own completion.
-				if (entry.state === 'ready') this.refresh(entry);
-			});
+		entry.waking = Promise.resolve().then(async () => {
+			await entry.stopping;
+			if (!this.alive || this.entries.get(`${entry.dirId}:${entry.serverId}`) !== entry || entry.state !== 'idle') return;
+			const ready = entry.ready = new DeferredPromise<void>();
+			const timeout = setTimeout(() => ready.error(new Error('Language server resume timed out')), 30_000);
+			try {
+				await Promise.all([
+					this.servers.control({ action: 'resume', dirId: this.wireId(entry), serverId: entry.serverId }),
+					ready.p,
+				]);
+			} finally { clearTimeout(timeout); entry.ready = undefined; }
+		}).finally(() => {
+			entry.waking = undefined;
+			// A failed activation waits for new demand instead of retrying on its own completion.
+			if (entry.state === 'ready') this.refresh(entry);
+		});
 		return entry.waking;
 	}
 
-	private wireId(entry: Server): string | undefined {
-		return this.workspace.getWorkspace().folders.length > 1 ? entry.dirId : undefined;
-	}
-	private cancelTimer(entry: Server): void {
-		if (entry.timer !== undefined) clearTimeout(entry.timer);
-		entry.timer = undefined;
-	}
+	private wireId(entry: Server): string | undefined { return this.workspace.getWorkspace().folders.length > 1 ? entry.dirId : undefined; }
+	private cancelTimer(entry: Server): void { if (entry.timer !== undefined) clearTimeout(entry.timer); entry.timer = undefined; }
 	private clear(): void {
-		for (const entry of this.entries.values()) {
-			this.cancelTimer(entry);
-			entry.ready?.error(new Error('Language workspace closed'));
-		}
+		for (const entry of this.entries.values()) { this.cancelTimer(entry); entry.ready?.error(new Error('Language workspace closed')); }
 		this.entries.clear();
 	}
 }

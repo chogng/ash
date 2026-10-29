@@ -22,33 +22,17 @@ export const IDesignEditorService = createServiceIdentifier<IDesignEditorService
 
 export class DesignEditorService extends Disposable implements IDesignEditorService {
 	private readonly documents = new Map<CreatorMode, DesignDocumentController>();
-	public get document(): DesignDocumentController {
-		return this.getDocument(CreatorMode.Design);
-	}
+	public get document(): DesignDocumentController { return this.getDocument(CreatorMode.Design); }
 	private readonly active = observableValue<DesignEditorWidget | undefined>(this, undefined);
 	public readonly activeEditor: IObservable<DesignEditorWidget | undefined> = this.active;
-	constructor(
-		@IInstantiationService private readonly instantiation: IInstantiationService,
-		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
-		@ILifecycleService lifecycle: ILifecycleService,
-	) {
+	constructor(@IInstantiationService private readonly instantiation: IInstantiationService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILifecycleService lifecycle: ILifecycleService) {
 		super();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmDiscard(), 'unsavedCreator')));
-		this._register(
-			lifecycle.onWillShutdown(event =>
-				event.join(
-					async () => {
-						for (const document of this.documents.values()) {
-							if (document.automaticallySaves && !(await document.flushAutoSave())) {
-								throw new Error(document.saveStatus);
-							}
-						}
-					},
-					'Creator automatic save',
-					() => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)),
-				),
-			),
-		);
+		this._register(lifecycle.onWillShutdown(event => event.join(async () => {
+			for (const document of this.documents.values()) {
+				if (document.automaticallySaves && !(await document.flushAutoSave())) { throw new Error(document.saveStatus); }
+			}
+		}, 'Creator automatic save', () => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
 	}
 	public getDocument(mode: CreatorMode): DesignDocumentController {
 		let document = this.documents.get(mode);
@@ -61,17 +45,10 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 	}
 	private async confirmDiscard(): Promise<boolean> {
 		for (const document of this.documents.values()) {
-			if (await document.confirmDiscard()) {
-				return true;
-			}
+			if (await document.confirmDiscard()) { return true; }
 		}
 		return false;
 	}
-	public setActiveEditor(editor: DesignEditorWidget | undefined): void {
-		this.active.set(editor);
-	}
-	protected override disposeCore(): void {
-		this.active.set(undefined);
-		super.disposeCore();
-	}
+	public setActiveEditor(editor: DesignEditorWidget | undefined): void { this.active.set(editor); }
+	protected override disposeCore(): void { this.active.set(undefined); super.disposeCore(); }
 }

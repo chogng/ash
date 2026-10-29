@@ -19,16 +19,11 @@ export interface IChatSessionNavigationService {
 	prepareConversationLink?(sessionId: string, threadId: string): Promise<OpenSessionLink>;
 	/** Resolves an opaque authority without interpreting it in shared Workbench code. */
 	openConversationLink?(address: OpenSessionLink): Promise<void>;
-	getConversations(): readonly {
-		readonly providerId?: string;
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly title: string;
-	}[];
+	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;
-	getActiveConversation(): { readonly sessionId: string; readonly threadId: string } | undefined;
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined>;
+	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined;
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	/** A supplied provider must be resolved before any host-local Session ID is used. */
 	openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void>;
 	/** Starts voice through the visible Chat's controller, preserving its composer and submission policy. */

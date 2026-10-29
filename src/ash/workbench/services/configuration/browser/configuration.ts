@@ -30,7 +30,7 @@ export async function migrateSettings(source: string, onError: (error: unknown) 
 		const parsed = parseJsonDocument(output, { allowComments: true, allowTrailingComma: true });
 		const node = block === undefined || parsed.root?.type !== 'object' ? undefined : parsed.root.properties.find(property => property.key === block)?.valueNode;
 		let text = node ? output.slice(node.offset, node.offset + node.length) : output;
-		if (!text || (block !== undefined && (typeof original[block] !== 'object' || !original[block] || Array.isArray(original[block])))) continue;
+		if (!text || block !== undefined && (typeof original[block] !== 'object' || !original[block] || Array.isArray(original[block]))) continue;
 		for (const migration of migrations) {
 			const values = parse(text);
 			if (!Object.hasOwn(values, migration.key)) continue;
@@ -40,9 +40,7 @@ export async function migrateSettings(source: string, onError: (error: unknown) 
 				let next = text;
 				for (const [key, value] of updates) next = editJsonObjectProperty(next, key, value.value);
 				text = next;
-			} catch (error) {
-				onError(error);
-			}
+			} catch (error) { onError(error); }
 		}
 		if (block === undefined) output = text;
 		else if (node && !equals(parse(text), original[block])) output = output.slice(0, node.offset) + text + output.slice(node.offset + node.length);
@@ -67,15 +65,11 @@ class SettingsFile extends Disposable {
 	) {
 		super();
 		this._register(files.watch(dirname(resource), { recursive: false, excludes: [] }));
-		this._register(
-			files.onDidChangeFiles(event => {
-				if (!event.resources || event.resources.some(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate))) {
-					void this.loadConfiguration().catch(error => {
-						if (!this.stopped) onError(error);
-					});
-				}
-			}),
-		);
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || event.resources.some(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate))) {
+				void this.loadConfiguration().catch(error => { if (!this.stopped) onError(error); });
+			}
+		}));
 	}
 
 	getConfiguration(): ConfigurationModel {
@@ -124,12 +118,11 @@ class SettingsFile extends Disposable {
 		if (!this.nested) return settings;
 		const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 		const node = parsed.root?.type === 'object' ? parsed.root.properties.find(property => property.key === 'settings')?.valueNode : undefined;
-		return node
-			? source.slice(0, node.offset) + settings + source.slice(node.offset + node.length)
+		return node ? source.slice(0, node.offset) + settings + source.slice(node.offset + node.length)
 			: editJsonObjectProperty(source, 'settings', parseJsonDocument(settings, { allowComments: true, allowTrailingComma: true }).value);
 	}
 
-	private async read(): Promise<{ source: string; revision?: string }> {
+	private async read(): Promise<{ source: string; revision?: string; }> {
 		try {
 			const file = await this.files.readFile(this.resource);
 			return { source: file.content, revision: file.revision };
@@ -139,25 +132,24 @@ class SettingsFile extends Disposable {
 		}
 	}
 
-	private parseSource(source: string): { source: string; model: ConfigurationModel } {
+	private parseSource(source: string): { source: string; model: ConfigurationModel; } {
 		const parser = new ConfigurationModelParser(this.resource.toString(), settingsLog);
 		parser.parse(source);
 		if (parser.errors.length) throw new TypeError(localize('configuration.invalidWorkspace', 'Workspace settings in {0} contain invalid JSONC.', this.resource.toString()));
 		return { source, model: parser.configurationModel };
 	}
 
-	private extract(source: string): { source: string; model: ConfigurationModel } {
+	private extract(source: string): { source: string; model: ConfigurationModel; } {
 		if (!this.nested) return this.parseSource(source);
 		const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
-		if (parsed.errors.length || parsed.root?.type !== 'object')
-			throw new TypeError(localize('configuration.invalidWorkspace', 'Workspace settings in {0} contain invalid JSONC.', this.resource.toString()));
+		if (parsed.errors.length || parsed.root?.type !== 'object') throw new TypeError(localize('configuration.invalidWorkspace', 'Workspace settings in {0} contain invalid JSONC.', this.resource.toString()));
 		const settings = parsed.root.properties.find(property => property.key === 'settings')?.valueNode;
 		return this.parseSource(settings ? source.slice(settings.offset, settings.offset + settings.length) : '{}');
 	}
 
 	private enqueue(operation: () => Promise<void>): Promise<void> {
 		const result = this.queue.then(operation);
-		this.queue = result.catch(() => {});
+		this.queue = result.catch(() => { });
 		return result;
 	}
 

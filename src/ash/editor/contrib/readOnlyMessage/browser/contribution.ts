@@ -20,7 +20,8 @@ export class ReadOnlyMessageController extends Disposable implements IEditorCont
 		const controller = MessageController.get(this.editor);
 		const position = this.editor.getPosition();
 		if (!controller || !position) return;
-		const message = this.editor.getOption(EditorOption.readOnlyMessage) ?? new MarkdownString(nls.localize('editor.readonly', 'Cannot edit in read-only editor'));
+		const message = this.editor.getOption(EditorOption.readOnlyMessage)
+			?? new MarkdownString(nls.localize('editor.readonly', 'Cannot edit in read-only editor'));
 		controller.showMessage(message, position);
 	}
 }

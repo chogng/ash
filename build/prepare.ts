@@ -23,16 +23,10 @@ export async function prepareGenerated(): Promise<void> {
 
 async function runBun(args: string[]): Promise<void> {
 	await new Promise<void>((done, fail) => {
-		const child = spawn(resolve(root, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'), args, {
-			cwd: root,
-			stdio: 'inherit',
-			windowsHide: true,
-		});
+		const child = spawn(resolve(root, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'), args, { cwd: root, stdio: 'inherit', windowsHide: true });
 		child.once('error', fail);
-		child.once('close', (code, signal) => (code === 0 ? done() : fail(new Error(`Preparation ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`))));
+		child.once('close', (code, signal) => code === 0 ? done() : fail(new Error(`Preparation ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`)));
 	});
 }
 
-if (import.meta.main) {
-	await prepareGenerated();
-}
+if (import.meta.main) { await prepareGenerated(); }

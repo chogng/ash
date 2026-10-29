@@ -69,12 +69,9 @@ export class InlineProgressManager extends Disposable {
 	public async showWhile<R>(position: IPosition, title: string, promise: Promise<R>, delegate: InlineProgressDelegate, delayOverride = 500): Promise<R> {
 		const operation = ++this.operation;
 		this.clear();
-		this.pending.value = disposableTimeout(
-			() => {
-				this.widget.value = this.instantiationService.createInstance(inlineProgressWidget, this.id, this.editor, position, title, delegate);
-			},
-			Math.max(0, delayOverride),
-		);
+		this.pending.value = disposableTimeout(() => {
+			this.widget.value = this.instantiationService.createInstance(inlineProgressWidget, this.id, this.editor, position, title, delegate);
+		}, Math.max(0, delayOverride));
 		try {
 			return await promise;
 		} finally {

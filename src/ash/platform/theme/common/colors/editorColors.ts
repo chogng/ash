@@ -11,94 +11,37 @@ import {
 	widgetBorder as baseWidgetBorder,
 	widgetShadow as baseWidgetShadow,
 } from './baseColors.js';
-import { hoverBackground as componentHoverBackground, hoverBorder as componentHoverBorder, hoverForeground as componentHoverForeground } from './componentColors.js';
+import {
+	hoverBackground as componentHoverBackground,
+	hoverBorder as componentHoverBorder,
+	hoverForeground as componentHoverForeground,
+} from './componentColors.js';
 import { inputBackground as defaultInputBackground } from './inputColors.js';
 import { listHoverBackground as defaultListHoverBackground } from './listColors.js';
 
 const owner = 'editor.presentation';
-const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string => registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
-const alias = (id: string, value: string, description: string): string =>
-	registerColor(
-		id,
-		{
-			dark: value,
-			light: value,
-			hcDark: value,
-			hcLight: value,
-		},
-		{ description, owner },
-	);
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
+const alias = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, hcDark: value, hcLight: value,
+}, { description, owner });
 
-export const editorBackground = registerColor(
-	'editor.background',
-	{
-		dark: '#1e1e1e',
-		light: '#ffffff',
-		hcDark: '#000000',
-		hcLight: '#ffffff',
-	},
-	{ description: 'Editor background.', owner },
-);
-export const editorForeground = registerColor(
-	'editor.foreground',
-	{
-		dark: '#d4d4d4',
-		light: '#333333',
-		hcDark: '#ffffff',
-		hcLight: '#000000',
-	},
-	{ description: 'Editor foreground.', owner },
-);
+export const editorBackground = registerColor('editor.background', {
+	dark: '#1e1e1e', light: '#ffffff',
+	hcDark: '#000000', hcLight: '#ffffff',
+}, { description: 'Editor background.', owner });
+export const editorForeground = registerColor('editor.foreground', {
+	dark: '#d4d4d4', light: '#333333',
+	hcDark: '#ffffff', hcLight: '#000000',
+}, { description: 'Editor foreground.', owner });
 
-export const tokenCommentForeground = color(
-	'editor.token.commentForeground',
-	'#6a9955',
-	'#008000',
-	'#80ff80',
-	'#006b00',
-	'Foreground for comment tokens independently of their syntax or semantic source.',
-);
-export const tokenKeywordForeground = color(
-	'editor.token.keywordForeground',
-	'#c586c0',
-	'#af00db',
-	'#ff80ff',
-	'#800080',
-	'Foreground for keyword tokens independently of their syntax or semantic source.',
-);
-export const tokenStringForeground = color(
-	'editor.token.stringForeground',
-	'#ce9178',
-	'#a31515',
-	'#ffbd80',
-	'#924000',
-	'Foreground for string tokens independently of their syntax or semantic source.',
-);
-export const tokenNumberForeground = color(
-	'editor.token.numberForeground',
-	'#b5cea8',
-	'#098658',
-	'#ffff80',
-	'#6b5500',
-	'Foreground for number tokens independently of their syntax or semantic source.',
-);
-export const tokenRegexpForeground = color(
-	'editor.token.regexpForeground',
-	'#d16969',
-	'#811f3f',
-	'#ff8080',
-	'#9c0000',
-	'Foreground for regular-expression tokens independently of their syntax or semantic source.',
-);
+export const tokenCommentForeground = color('editor.token.commentForeground', '#6a9955', '#008000', '#80ff80', '#006b00', 'Foreground for comment tokens independently of their syntax or semantic source.');
+export const tokenKeywordForeground = color('editor.token.keywordForeground', '#c586c0', '#af00db', '#ff80ff', '#800080', 'Foreground for keyword tokens independently of their syntax or semantic source.');
+export const tokenStringForeground = color('editor.token.stringForeground', '#ce9178', '#a31515', '#ffbd80', '#924000', 'Foreground for string tokens independently of their syntax or semantic source.');
+export const tokenNumberForeground = color('editor.token.numberForeground', '#b5cea8', '#098658', '#ffff80', '#6b5500', 'Foreground for number tokens independently of their syntax or semantic source.');
+export const tokenRegexpForeground = color('editor.token.regexpForeground', '#d16969', '#811f3f', '#ff8080', '#9c0000', 'Foreground for regular-expression tokens independently of their syntax or semantic source.');
 export const tokenTypeForeground = color('editor.token.typeForeground', '#4ec9b0', '#267f99', '#80ffff', '#006070', 'Foreground for type tokens independently of their syntax or semantic source.');
-export const tokenFunctionForeground = color(
-	'editor.token.functionForeground',
-	'#dcdcaa',
-	'#795e26',
-	'#ffff80',
-	'#654000',
-	'Foreground for function tokens independently of their syntax or semantic source.',
-);
+export const tokenFunctionForeground = color('editor.token.functionForeground', '#dcdcaa', '#795e26', '#ffff80', '#654000', 'Foreground for function tokens independently of their syntax or semantic source.');
 export const tokenVariableForeground = alias('editor.token.variableForeground', foreground, 'Foreground for variable tokens independently of their syntax or semantic source.');
 export const tokenOperatorForeground = alias('editor.token.operatorForeground', foreground, 'Foreground for operator tokens independently of their syntax or semantic source.');
 export const tokenAttributeForeground = alias('editor.token.attributeForeground', tokenVariableForeground, 'Foreground for attribute tokens.');
@@ -125,12 +68,7 @@ export const inlineCompletionForeground = alias('editor.inlineCompletionForegrou
 export const compositionBorder = color('editor.compositionBorder', '#a0a0a0', '#a0a0a0', contrastBorder, contrastBorder, 'Border under text in an active input method composition.');
 export const foldBackground = registerColor(
 	'editor.foldBackground',
-	{
-		dark: transparent(selectionBackground, 0.3),
-		light: transparent(selectionBackground, 0.3),
-		hcDark: null,
-		hcLight: null,
-	},
+	{ dark: transparent(selectionBackground, 0.3), light: transparent(selectionBackground, 0.3), hcDark: null, hcLight: null },
 	{ description: 'Background behind collapsed editor ranges.', owner, needsTransparency: true },
 );
 export const foldPlaceholderForeground = color('editor.foldPlaceholderForeground', '#808080', '#808080', foreground, foreground, 'Foreground for the collapsed-range placeholder.');
@@ -146,58 +84,24 @@ export const diffUnchangedRegionBackground = color('diffEditor.unchangedRegionBa
 export const diffUnchangedRegionForeground = alias('diffEditor.unchangedRegionForeground', mutedForeground, 'Foreground for collapsed unchanged diff regions.');
 export const diffRemovedLineMarker = alias('diffEditor.removedLineMarker', errorForeground, 'Marker foreground for removed diff lines.');
 export const diffInsertedLineMarker = alias('diffEditor.insertedLineMarker', successForeground, 'Marker foreground for inserted diff lines.');
-export const diffInsertedLineGutter = registerColor(
-	'diffEditorGutter.insertedLineBackground',
-	{
-		dark: null,
-		light: null,
-		hcDark: null,
-		hcLight: null,
-	},
-	{ description: 'Background for the margin beside inserted diff lines.', owner },
-);
-export const diffRemovedLineGutter = registerColor(
-	'diffEditorGutter.removedLineBackground',
-	{
-		dark: null,
-		light: null,
-		hcDark: null,
-		hcLight: null,
-	},
-	{ description: 'Background for the margin beside removed diff lines.', owner },
-);
-export const diffOverviewRulerInserted = registerColor(
-	'diffEditorOverview.insertedForeground',
-	{
-		dark: transparent(diffInsertedLineMarker, 0.55),
-		light: transparent(diffInsertedLineMarker, 0.55),
-		hcDark: diffInsertedLineMarker,
-		hcLight: diffInsertedLineMarker,
-	},
-	{ description: 'Overview ruler marker for inserted diff lines.', owner },
-);
-export const diffOverviewRulerRemoved = registerColor(
-	'diffEditorOverview.removedForeground',
-	{
-		dark: transparent(diffRemovedLineMarker, 0.55),
-		light: transparent(diffRemovedLineMarker, 0.55),
-		hcDark: diffRemovedLineMarker,
-		hcLight: diffRemovedLineMarker,
-	},
-	{ description: 'Overview ruler marker for removed diff lines.', owner },
-);
+export const diffInsertedLineGutter = registerColor('diffEditorGutter.insertedLineBackground', {
+	dark: null, light: null, hcDark: null, hcLight: null,
+}, { description: 'Background for the margin beside inserted diff lines.', owner });
+export const diffRemovedLineGutter = registerColor('diffEditorGutter.removedLineBackground', {
+	dark: null, light: null, hcDark: null, hcLight: null,
+}, { description: 'Background for the margin beside removed diff lines.', owner });
+export const diffOverviewRulerInserted = registerColor('diffEditorOverview.insertedForeground', {
+	dark: transparent(diffInsertedLineMarker, 0.55), light: transparent(diffInsertedLineMarker, 0.55),
+	hcDark: diffInsertedLineMarker, hcLight: diffInsertedLineMarker,
+}, { description: 'Overview ruler marker for inserted diff lines.', owner });
+export const diffOverviewRulerRemoved = registerColor('diffEditorOverview.removedForeground', {
+	dark: transparent(diffRemovedLineMarker, 0.55), light: transparent(diffRemovedLineMarker, 0.55),
+	hcDark: diffRemovedLineMarker, hcLight: diffRemovedLineMarker,
+}, { description: 'Overview ruler marker for removed diff lines.', owner });
 
-const legacy = (id: string, value: string, description: string): string =>
-	registerColor(
-		id,
-		{
-			dark: value,
-			light: value,
-			hcDark: value,
-			hcLight: value,
-		},
-		{ deprecated: 'Use the corresponding editor.token.* token.', description, owner },
-	);
+const legacy = (id: string, value: string, description: string): string => registerColor(id, {
+	dark: value, light: value, hcDark: value, hcLight: value,
+}, { deprecated: 'Use the corresponding editor.token.* token.', description, owner });
 export const semanticTokenCommentForeground = legacy('editor.semanticToken.commentForeground', tokenCommentForeground, 'Compatibility alias for comment token foreground.');
 export const semanticTokenKeywordForeground = legacy('editor.semanticToken.keywordForeground', tokenKeywordForeground, 'Compatibility alias for keyword token foreground.');
 export const semanticTokenStringForeground = legacy('editor.semanticToken.stringForeground', tokenStringForeground, 'Compatibility alias for string token foreground.');

@@ -18,30 +18,27 @@ const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
 	using languages = new TestLanguageFeaturesService();
-	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 2 + 1)));
+	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
 
-	assert.deepEqual(
-		harness.decorations.decorations.map(decoration => decoration.range),
-		[
-			Range.fromPositions(new Position(0 + 1, 5 + 1), new Position(0 + 1, 7 + 1)),
-			Range.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 16 + 1)),
-			Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 2 + 1)),
-		],
-	);
+	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
+		Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (7) + 1)),
+		Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (16) + 1)),
+		Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
+	]);
 	assert.equal(harness.model.getAllDecorations().filter(decoration => decoration.options.className === 'selection-highlight').length, 3);
 });
 
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
 	using languages = new TestLanguageFeaturesService();
-	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 4 + 1)));
+	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 
-	assert.deepEqual(
-		harness.decorations.decorations.map(decoration => decoration.range),
-		[Range.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 18 + 1)), Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 4 + 1))],
-	);
-	harness.editor.setSelection(Selection.fromPositions(new Position(0 + 1, 4 + 1), new Position(0 + 1, 5 + 1)), 'test');
+	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
+		Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)),
+		Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
+	]);
+	harness.editor.setSelection(Selection.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (5) + 1)), 'test');
 	assert.equal(harness.decorations.size, 0);
-	harness.editor.setSelection(Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(1 + 1, 1 + 1)), 'test');
+	harness.editor.setSelection(Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (1) + 1)), 'test');
 	assert.equal(harness.decorations.size, 0);
 });
 
@@ -85,7 +82,7 @@ class SelectionHarness implements Disposable {
 		readonly decorations: TextDecorationCollection<boolean>,
 		readonly controller: InstanceType<typeof SelectionHighlighter>,
 		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
-	) {}
+	) { }
 
 	dispose(): void {
 		this.textualProvider.dispose();

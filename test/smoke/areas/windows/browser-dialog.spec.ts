@@ -8,31 +8,20 @@ import { Workbench } from '../../../automation/workbench.js';
 test.use({ openWorkspace: false });
 
 test('desktop Workbench and Agents install the complete Host contract and target developer tools at their own window', { tag: ['@electron-ui'] }, async ({ target, application, workbench }) => {
-	if (!('windows' in application)) {
-		throw new Error('Expected Electron windows');
-	}
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const agentsPage = await workbench.openAgentsWindow('electron');
 	const routes = nativeHostIpcRoutes({} as INativeHostMainService).map(route => {
-		try {
-			route.validate(null);
-		} catch (error) {
-			return { channel: route.channel, validationError: (error as Error).message };
-		}
+		try { route.validate(null); }
+		catch (error) { return { channel: route.channel, validationError: (error as Error).message }; }
 		throw new Error(`Host route ${route.channel} unexpectedly accepts null`);
 	});
 	for (const page of [workbench.page, agentsPage]) {
 		const validation = await page.evaluate(async routes => {
-			const host = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
-			return Promise.all(
-				routes.map(async ({ channel, validationError }) => {
-					try {
-						await host.ipcRenderer.invoke(channel, null);
-						return { channel, validated: false };
-					} catch (error) {
-						return { channel, validated: String(error).includes(validationError) };
-					}
-				}),
-			);
+			const host = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+			return Promise.all(routes.map(async ({ channel, validationError }) => {
+				try { await host.ipcRenderer.invoke(channel, null); return { channel, validated: false }; }
+				catch (error) { return { channel, validated: String(error).includes(validationError) }; }
+			}));
 		}, routes);
 		expect(validation, page.url()).toEqual(routes.map(({ channel }) => ({ channel, validated: true })));
 		const owner = await application.browserWindow(page);
@@ -77,14 +66,11 @@ test('desktop dirty editor sends its choices through the owning window dialog', 
 
 test('desktop file dialog bridge preserves shared options and complete results in its owning window', { tag: ['@electron-ui'] }, async ({ target, application, workbench, testWorkspace }) => {
 	if (!('windows' in application)) return;
-	const originals = await application.evaluateHandle(({ dialog }) => ({
-		open: dialog.showOpenDialog,
-		save: dialog.showSaveDialog,
-	}));
+	const originals = await application.evaluateHandle(({ dialog }) => ({ open: dialog.showOpenDialog, save: dialog.showSaveDialog }));
 	try {
 		await application.evaluate(({ dialog }, path) => {
 			const calls: unknown[] = [];
-			(globalThis as unknown as { fileDialogCalls: unknown[] }).fileDialogCalls = calls;
+			(globalThis as unknown as { fileDialogCalls: unknown[]; }).fileDialogCalls = calls;
 			dialog.showOpenDialog = (async (window: Electron.BaseWindow, options: Electron.OpenDialogOptions) => {
 				calls.push({ windowId: (window as Electron.BrowserWindow).id, options });
 				return { canceled: false, filePaths: [path], bookmarks: ['opened-bookmark'] };
@@ -94,42 +80,18 @@ test('desktop file dialog bridge preserves shared options and complete results i
 				return { canceled: true, filePath: '', bookmark: 'cancelled-bookmark' };
 			}) as typeof dialog.showSaveDialog;
 		}, testWorkspace.file);
-		const open = {
-			title: 'Import',
-			filters: [{ name: 'TypeScript', extensions: ['ts'] }],
-			properties: ['openFile', 'multiSelections', 'showHiddenFiles'],
-			securityScopedBookmarks: true,
-		};
-		const save = {
-			title: 'Export',
-			defaultPath: testWorkspace.file,
-			nameFieldLabel: 'Name',
-			showsTagField: false,
-			properties: ['showOverwriteConfirmation'],
-			securityScopedBookmarks: true,
-		};
-		const result = await workbench.page.evaluate(
-			async ({ openChannel, saveChannel, open, save }) => {
-				const host = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
-				return [await host.ipcRenderer.invoke(openChannel, open), await host.ipcRenderer.invoke(saveChannel, save)];
-			},
-			{ openChannel: NATIVE_HOST_PICK_FILE_CHANNEL, saveChannel: NATIVE_HOST_SAVE_FILE_CHANNEL, open, save },
-		);
-		expect(result).toEqual([
-			{ canceled: false, filePaths: [testWorkspace.file], bookmarks: ['opened-bookmark'] },
-			{ canceled: true, filePath: '', bookmark: 'cancelled-bookmark' },
-		]);
+		const open = { title: 'Import', filters: [{ name: 'TypeScript', extensions: ['ts'] }], properties: ['openFile', 'multiSelections', 'showHiddenFiles'], securityScopedBookmarks: true };
+		const save = { title: 'Export', defaultPath: testWorkspace.file, nameFieldLabel: 'Name', showsTagField: false, properties: ['showOverwriteConfirmation'], securityScopedBookmarks: true };
+		const result = await workbench.page.evaluate(async ({ openChannel, saveChannel, open, save }) => {
+			const host = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+			return [await host.ipcRenderer.invoke(openChannel, open), await host.ipcRenderer.invoke(saveChannel, save)];
+		}, { openChannel: NATIVE_HOST_PICK_FILE_CHANNEL, saveChannel: NATIVE_HOST_SAVE_FILE_CHANNEL, open, save });
+		expect(result).toEqual([{ canceled: false, filePaths: [testWorkspace.file], bookmarks: ['opened-bookmark'] }, { canceled: true, filePath: '', bookmark: 'cancelled-bookmark' }]);
 		const owner = await application.browserWindow(workbench.page);
 		const windowId = await owner.evaluate(window => window.id);
-		expect(await application.evaluate(() => (globalThis as unknown as { fileDialogCalls: unknown[] }).fileDialogCalls)).toEqual([
-			{ windowId, options: open },
-			{ windowId, options: save },
-		]);
+		expect(await application.evaluate(() => (globalThis as unknown as { fileDialogCalls: unknown[]; }).fileDialogCalls)).toEqual([{ windowId, options: open }, { windowId, options: save }]);
 	} finally {
-		await application.evaluate(({ dialog }, originals) => {
-			dialog.showOpenDialog = originals.open;
-			dialog.showSaveDialog = originals.save;
-		}, originals);
+		await application.evaluate(({ dialog }, originals) => { dialog.showOpenDialog = originals.open; dialog.showSaveDialog = originals.save; }, originals);
 		await originals.dispose();
 	}
 });
@@ -161,14 +123,10 @@ test('browser Save As writes an untitled editor to the selected folder', { tag: 
 		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'draft.txt' })).toHaveCount(1);
 		await expect(workbench.editors.groupAt(index).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 	}
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('saved through the file dialog');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
+	}, folderName)).toBe('saved through the file dialog');
 	await expect.poll(() => hasWorkingCopyBackup(page, 'saved through the file dialog')).toBe(false);
 	await firstGroup.tabs.filter({ hasText: 'draft.txt' }).click();
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -182,14 +140,10 @@ test('browser Save As writes an untitled editor to the selected folder', { tag: 
 	const replacement = page.getByRole('dialog', { name: 'Confirm' });
 	await expect(replacement).toContainText('Replace the existing file draft.txt?');
 	await replacement.getByRole('button', { name: 'Cancel' }).click();
-	await expect
-		.poll(() =>
-			page.evaluate(async name => {
-				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-				return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
-			}, folderName),
-		)
-		.toBe('saved through the file dialog');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
+	}, folderName)).toBe('saved through the file dialog');
 });
 
 async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
@@ -200,7 +154,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 			request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
 		});
 		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
+			const records = await new Promise<Array<{ readonly content?: string; }>>((resolve, reject) => {
 				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));

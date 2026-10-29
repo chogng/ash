@@ -24,20 +24,9 @@ import { AppServerApprovalEnvironmentService } from '../../platform/approvalEnvi
 import { AppServerMemoriesService } from '../../platform/memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../base/common/uuid.js';
-import {
-	createAppServerAppServerApi,
-	createAppServerResourceApi,
-	createAppServerServerEventApi,
-	createAppServerSkillOperations,
-	createAppServerHookOperations,
-} from '../../platform/agentHost/browser/appServerApi.js';
+import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi, createAppServerSkillOperations, createAppServerHookOperations } from '../../platform/agentHost/browser/appServerApi.js';
 import { type AppServerTransport } from '../../platform/agentHost/common/appServerTransport.js';
-import {
-	AppServerConnectionRecovery,
-	AppServerProtocolClient,
-	type AppServerProtocolClientOptions,
-	type AppServerConnectionMetadata,
-} from '../../platform/agentHost/browser/appServerProtocolClient.js';
+import { AppServerConnectionRecovery, AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerFileApi } from '../../platform/files/browser/fileApi.js';
 import { createAppServerExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createAppServerSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
@@ -75,92 +64,33 @@ export interface ConnectedWebRendererApi {
 }
 
 /** Connects a browser Renderer host through its transport. */
-export async function connectWebRendererApi(
-	transport: AppServerTransport,
-	connectorHostServices: BrowserConnectorHostServices,
-	options: AppServerProtocolClientOptions = {},
-	contributions: readonly RendererCapabilityContribution[] = [],
-	decoder?: AppServerFrameDecoder,
-): Promise<ConnectedWebRendererApi> {
-	const connection = new AppServerProtocolClient(
-		transport,
-		{
-			...options,
-			capabilities: {
-				agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-				...options.capabilities,
-			},
-		},
-		decoder,
-	);
+export async function connectWebRendererApi(transport: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = [], decoder?: AppServerFrameDecoder): Promise<ConnectedWebRendererApi> {
+	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...options.capabilities } }, decoder);
 	let metadata: AppServerConnectionMetadata;
-	const recovery = new AppServerConnectionRecovery(
-		connection,
-		async () => {
-			connection.disconnect();
-			metadata = await connection.connect();
-		},
-		() => {},
-		{
-			autoRestore: true,
-			initialDelayMs: 500,
-			maxDelayMs: 10_000,
-			maxAttempts: Number.POSITIVE_INFINITY,
-			maxElapsedTimeMs: 5 * 60_000,
-		},
-	);
+	const recovery = new AppServerConnectionRecovery(connection, async () => {
+		connection.disconnect();
+		metadata = await connection.connect();
+	}, () => { }, {
+		autoRestore: true,
+		initialDelayMs: 500,
+		maxDelayMs: 10_000,
+		maxAttempts: Number.POSITIVE_INFINITY,
+		maxElapsedTimeMs: 5 * 60_000,
+	});
 	try {
 		await recovery.connect();
 		const instanceId = generateUuid();
-		const memoryDiagnostics =
-			connection.capabilities?.contracts.memoryDiagnostics?.version === 1
-				? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [
-						{
-							instanceId,
-							processId: null,
-							role: 'renderer',
-							phase: 'unknown',
-							metrics: [
-								{
-									kind: 'domNodes',
-									value: document.getElementsByTagName('*').length,
-									unavailable: null,
-								},
-								{ kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' },
-								{ kind: 'residentBytes', value: null, unavailable: 'unsupported' },
-							],
-						},
-					])
-				: undefined;
+		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
 		const channels = connection.capabilities?.contracts.channels?.version === 1 ? new AppServerChannelService(connection) : undefined;
 		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection, false) : undefined;
 		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
-		const api = {
-			...createRendererHost(connection, connectorHostServices, contributions, undefined, recovery),
-			channels,
-			calls,
-			automation,
-			symphony,
-			memoryDiagnostics,
-			memories,
-		};
+		const api = { ...createRendererHost(connection, connectorHostServices, contributions, undefined, recovery), channels, calls, automation, symphony, memoryDiagnostics, memories };
 		return {
 			api,
 			metadata: metadata!,
-			dispose: () => {
-				recovery.dispose();
-				memories?.dispose();
-				memoryDiagnostics?.dispose();
-				automation?.dispose();
-				symphony?.dispose();
-				calls?.dispose();
-				channels?.dispose();
-				api.mcpServerManagement.dispose();
-				api.contextResourceHost?.dispose();
-				connection.dispose();
-			},
+			dispose: () => { recovery.dispose(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); channels?.dispose(); api.mcpServerManagement.dispose(); api.contextResourceHost?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		recovery.dispose();
@@ -173,19 +103,11 @@ export async function connectWebRendererApi(
  * Workbench composes domain adapters; the supplied client remains the connection owner.
  * For a host-bound SSH client, domain paths retain that host while the wire uses server-local paths.
  */
-export function createRendererHost(
-	connection: AppServerProtocolClient,
-	connectorHostServices: BrowserConnectorHostServices,
-	contributions: readonly RendererCapabilityContribution[],
-	sshHost?: string,
-	recovery?: IAppServerConnectionRecovery,
-): IRendererHost {
+export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], sshHost?: string, recovery?: IAppServerConnectionRecovery): IRendererHost {
 	const contextResourceHost = connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
 	const snapshots = contextResourceHost?.add(new AgentHostResourceService());
 	try {
-		if (contextResourceHost && snapshots) {
-			contextResourceHost.add(registerAgentHostResourceHost(connection, snapshots));
-		}
+		if (contextResourceHost && snapshots) { contextResourceHost.add(registerAgentHostResourceHost(connection, snapshots)); }
 		const appServer = createAppServerAppServerApi(connection, recovery);
 		const resource = createAppServerResourceApi(connection);
 		const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));

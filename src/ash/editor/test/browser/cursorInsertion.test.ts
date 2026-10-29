@@ -15,12 +15,7 @@ const { TestView } = await import('./viewModel/testViewModel.js');
 test('Adjacent cursor insertion adds clamped carets and preserves existing selection state', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('zero\nx\nthree');
-	using view = new TestView({
-		container: dom.window.document.querySelector('main')!,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-	});
+	using view = new TestView({ container: dom.window.document.querySelector('main')!, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections([Selection.fromPositions(new Position(2, 2))]));
 	let states = CursorMoveCommands.addCursorDown(view.testViewModel, view.testViewModel.getCursorStates(), true);
 	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, states);
@@ -34,12 +29,7 @@ test('Adjacent cursor insertion adds clamped carets and preserves existing selec
 test('Adjacent cursor insertion does not emit an unchanged edge cursor', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('zero\none\ntwo');
-	using view = new TestView({
-		container: dom.window.document.querySelector('main')!,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-	});
+	using view = new TestView({ container: dom.window.document.querySelector('main')!, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 1), new Position(3, 4))]));
 	assert.equal(CursorMoveCommands.addCursorDown(view.testViewModel, view.testViewModel.getCursorStates(), true).length, 1);
 	dom.window.close();
@@ -48,12 +38,7 @@ test('Adjacent cursor insertion does not emit an unchanged edge cursor', () => {
 test('CursorMoveCommands owns standard point, word, line, selection, and buffer commands', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('alpha beta\nlast');
-	using view = new TestView({
-		container: dom.window.document.querySelector('main')!,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-	});
+	using view = new TestView({ container: dom.window.document.querySelector('main')!, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	view.layout({ width: 200, height: 40 });
 	setSelections(view, [Selection.fromPositions(new Position(1, 3))]);
 
@@ -85,10 +70,6 @@ function apply(view: InstanceType<typeof TestView>, state: PartialCursorState): 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;
-	refresh(): boolean {
-		return false;
-	}
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
+	refresh(): boolean { return false; }
+	measureLineWidth(text: string): number { return text.length * 10; }
 }

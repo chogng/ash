@@ -9,7 +9,7 @@ test('the built-in Web provider compares the running page with a real HTTP deplo
 	const next = 'b'.repeat(64);
 	let latest: unknown = { version: running };
 	let status = 200;
-	const requests: { url: string | undefined; cache: string | undefined }[] = [];
+	const requests: { url: string | undefined; cache: string | undefined; }[] = [];
 	const server = createServer((request, response) => {
 		requests.push({ url: request.url, cache: request.headers['cache-control'] });
 		response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' });
@@ -18,9 +18,7 @@ test('the built-in Web provider compares the running page with a real HTTP deplo
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	const address = server.address();
 	assert.ok(address && typeof address !== 'string');
-	const dom = new JSDOM(`<meta name="ash-web-build" content="${running}" data-version-url="../../web-version.json">`, {
-		url: `http://127.0.0.1:${address.port}/prefix/browser/workbench/workbench.html`,
-	});
+	const dom = new JSDOM(`<meta name="ash-web-build" content="${running}" data-version-url="../../web-version.json">`, { url: `http://127.0.0.1:${address.port}/prefix/browser/workbench/workbench.html` });
 	Object.defineProperty(dom.window, 'fetch', { value: globalThis.fetch });
 	try {
 		const provider = createWebUpdateProvider(dom.window.document)!;
@@ -41,7 +39,7 @@ test('the built-in Web provider compares the running page with a real HTTP deplo
 		assert.ok(requests.every(request => request.url === '/prefix/web-version.json' && request.cache === 'no-cache'));
 	} finally {
 		dom.window.close();
-		const stopped = new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
+		const stopped = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 		server.closeAllConnections();
 		await stopped;
 	}

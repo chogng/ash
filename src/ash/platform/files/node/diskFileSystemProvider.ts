@@ -40,12 +40,7 @@ import {
 
 /** Local file access restricted to the roots granted by the desktop host. */
 export class DiskFileSystemProvider extends Disposable implements IFileSystemProviderWithOpenReadWriteCloseCapability, IFileSystemProviderWithFileReadStreamCapability {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite |
-		FileSystemProviderCapabilities.FileFolderCopy |
-		FileSystemProviderCapabilities.FileOpenReadWriteClose |
-		FileSystemProviderCapabilities.FileReadStream |
-		(isLinux ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileOpenReadWriteClose | FileSystemProviderCapabilities.FileReadStream | (isLinux ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
@@ -53,7 +48,7 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 	public readonly onDidWatchError = this.watchErrors.event;
 	private readonly watchers = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly reads = this._register(new DisposableMap<object>());
-	private readonly handles = this._register(new DisposableMap<number, IDisposable & { handle: FileHandle }>());
+	private readonly handles = this._register(new DisposableMap<number, IDisposable & { handle: FileHandle; }>());
 	private nextDescriptor = 0;
 	private readonly roots: readonly string[];
 	// Windows have separate provider instances; compare-and-write must share one host queue.
@@ -62,7 +57,7 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 	constructor(
 		roots: readonly URI[],
 		private readonly watcher?: Pick<IFileSystemProvider, 'watch' | 'onDidChangeFiles'>,
-		private readonly nativeWatchOptions: { readonly persistent: boolean } = { persistent: false },
+		private readonly nativeWatchOptions: { readonly persistent: boolean; } = { persistent: false },
 	) {
 		super();
 		this.roots = roots.map(root => resolve(root.fsPath));
@@ -78,201 +73,163 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		if (this.watcher) {
 			// A desktop host can isolate native watch registration/teardown from its UI loop.
 			// File reads, writes and their serialization remain with this provider.
-			try {
-				resources.add(this.watcher.watch(resource, options));
-			} catch (error) {
-				this.watchers.deleteAndDispose(id);
-				throw error;
-			}
+			try { resources.add(this.watcher.watch(resource, options)); }
+			catch (error) { this.watchers.deleteAndDispose(id); throw error; }
 			return toDisposable(() => this.watchers.deleteAndDispose(id));
 		}
-		void this.path(resource)
-			.then(async path => {
-				const entryWatch = resources.add(new MutableDisposable<DisposableStore>());
-				const missingEntryPoll = resources.add(new MutableDisposable<IDisposable>());
-				let entryIdentity: string | undefined;
-				let revision = 0;
-				const fail = (error: unknown): void => {
-					if (!resources.isDisposed) {
-						this.watchErrors.fire(String(error));
-						this.watchers.deleteAndDispose(id);
-					}
-				};
-				const bindEntry = async (): Promise<void> => {
-					const current = ++revision;
-					// Recheck the filesystem boundary: a restored root may now be a symlink.
-					await this.path(resource);
-					let metadata: Awaited<ReturnType<typeof lstat>> | undefined;
-					try {
-						metadata = await lstat(path);
-					} catch (error) {
-						if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-					}
-					if (resources.isDisposed || current !== revision) return;
-					if (!metadata || (!metadata.isDirectory() && !metadata.isFile())) {
-						entryWatch.clear();
-						entryIdentity = undefined;
-						if (!metadata) startMissingEntryPoll();
-						else missingEntryPoll.clear();
-						return;
-					}
-					const identity = `${metadata.dev}:${metadata.ino}`;
-					// Parent events also describe content changes. Replacing a live watch for
-					// the same inode can discard its queued child notifications on macOS.
-					if (entryWatch.value && entryIdentity === identity) return;
-					const isDirectory = metadata.isDirectory();
-					const owner = new DisposableStore();
-					let watcher: ReturnType<typeof watch>;
-					try {
-						// Native directory events use the physical path on macOS (for example
-						// /private/var). Publish changes using the caller's granted resource spelling.
-						const physicalPath = await realpath(path);
-						if (resources.isDisposed || current !== revision) {
-							owner.dispose();
-							return;
-						}
-						watcher = watch(
-							physicalPath,
-							{
-								persistent: this.nativeWatchOptions.persistent,
-								recursive: isDirectory && options.recursive,
-							},
-							(event, filename) => {
-								if (resources.isDisposed || entryWatch.value !== owner) return;
-								if (!isDirectory) {
-									this.changes.fire({ resources: [resource] });
-									// File watches follow an inode; rebind after deletion or atomic replacement.
-									if (event === 'rename') void bindEntry().catch(fail);
-									return;
-								}
-								if (filename === null) {
-									this.changes.fire({ resources: [resource] });
-									return;
-								}
-								const name = filename.toString();
-								// macOS can report the watched directory's own name for inode changes.
-								// Recheck that entry instead of publishing a nonexistent child of it.
-								if (name === basename(path)) {
-									this.changes.fire({ resources: [resource] });
-									void bindEntry().catch(fail);
-									return;
-								}
-								// Root replacement can produce synthetic names on Windows. A watcher hint
-								// cannot escape its root or turn into an invalid file URI; rescan that root.
-								if (isAbsolute(name) || name.split(/[\\/]/u).some(segment => segment === '..' || (process.platform === 'win32' && /[<>:"|?*]/u.test(segment)))) {
-									this.changes.fire({ resources: [resource] });
-									return;
-								}
-								if (excludes.some(matches => matches(name) || matches(resolve(path, name)))) return;
-								// Publish under the granted URI, including its Windows drive spelling.
-								this.changes.fire({
-									resources: [URI.joinPath(resource, process.platform === 'win32' ? name.replaceAll('\\', '/') : name)],
-								});
-							},
-						);
-					} catch (error) {
-						owner.dispose();
-						// Deletion can win the race between stat and opening the watch. Keep
-						// the parent alive so recreation can bind this entry again.
-						if (resources.isDisposed || current !== revision) return;
-						if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-							startMissingEntryPoll();
-							return;
-						}
-						throw error;
-					}
-					owner.add(toDisposable(() => watcher.close()));
-					const onError = (error: Error): void => {
-						void lstat(path).then(
-							metadata => {
-								if (resources.isDisposed || entryWatch.value !== owner) return;
-								// The old inode can fail after its replacement already exists.
-								if (`${metadata.dev}:${metadata.ino}` !== identity) void bindEntry().catch(fail);
-								else fail(error);
-							},
-							missing => {
-								if (resources.isDisposed || entryWatch.value !== owner) return;
-								if ((missing as NodeJS.ErrnoException).code !== 'ENOENT') {
-									fail(error);
-									return;
-								}
-								// The parent watch will attach the replacement. Genuine I/O failures
-								// remain visible instead of entering an unlimited watcher restart loop.
-								revision++;
-								entryWatch.clear();
-								entryIdentity = undefined;
-								this.changes.fire({ resources: [resource] });
-								void bindEntry().catch(fail);
-							},
-						);
-					};
-					watcher.on('error', onError);
-					owner.add(toDisposable(() => watcher.off('error', onError)));
-					entryWatch.value = owner;
-					entryIdentity = identity;
-					missingEntryPoll.clear();
-					// Registration is asynchronous. A consumer may have read the file before
-					// this watch became active, so invalidate once to cover that unobserved gap.
-					this.changes.fire({ resources: [resource] });
-				};
-				const startMissingEntryPoll = (): void => {
-					if (missingEntryPoll.value || resources.isDisposed) return;
-					// Directory hints can be delayed or lost. Recheck only the absent entry,
-					// with one outstanding read; stop as soon as its native watch is bound.
-					let stopped = false;
-					let timer: ReturnType<typeof setTimeout>;
-					const schedule = (): void => {
-						timer = setTimeout(() => {
-							if (stopped || resources.isDisposed) return;
-							void bindEntry().then(() => {
-								if (!stopped && !resources.isDisposed) schedule();
-							}, fail);
-						}, 500);
-						if (!this.nativeWatchOptions.persistent) timer.unref();
-					};
-					missingEntryPoll.value = toDisposable(() => {
-						stopped = true;
-						clearTimeout(timer);
-					});
-					schedule();
-				};
-				if (resources.isDisposed) return;
-				// A provider write can create a previously absent settings file before the
-				// host's parent-directory watcher reports it. Bind that entry without polling.
-				resources.add(
-					this.onDidChangeFiles(event => {
-						if (!entryWatch.value && (!event.resources || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed)))) {
-							void bindEntry().catch(fail);
-						}
-					}),
-				);
-				// Observe only this entry in its parent. Files survive atomic replacement and
-				// directory roots can be rebound after deletion without exposing sibling changes.
-				if (dirname(path) !== path) {
-					const parentPath = await realpath(dirname(path));
-					if (resources.isDisposed) return;
-					const parentWatch = watch(parentPath, { persistent: this.nativeWatchOptions.persistent }, (_event, filename) => {
-						if (resources.isDisposed) return;
-						if (filename !== null) {
-							const name = filename.toString();
-							if (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path)) return;
-							if (excludes.some(matches => matches(name) || matches(path))) return;
-						}
-						this.changes.fire({ resources: [resource] });
-						void bindEntry().catch(fail);
-					});
-					resources.add(toDisposable(() => parentWatch.close()));
-					parentWatch.on('error', fail);
-					resources.add(toDisposable(() => parentWatch.off('error', fail)));
-				}
-				await bindEntry();
-			})
-			.catch(error => {
+		void this.path(resource).then(async path => {
+			const entryWatch = resources.add(new MutableDisposable<DisposableStore>());
+			const missingEntryPoll = resources.add(new MutableDisposable<IDisposable>());
+			let entryIdentity: string | undefined;
+			let revision = 0;
+			const fail = (error: unknown): void => {
 				if (!resources.isDisposed) {
 					this.watchErrors.fire(String(error));
 					this.watchers.deleteAndDispose(id);
 				}
-			});
+			};
+			const bindEntry = async (): Promise<void> => {
+				const current = ++revision;
+				// Recheck the filesystem boundary: a restored root may now be a symlink.
+				await this.path(resource);
+				let metadata: Awaited<ReturnType<typeof lstat>> | undefined;
+				try { metadata = await lstat(path); }
+				catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+				if (resources.isDisposed || current !== revision) return;
+				if (!metadata || (!metadata.isDirectory() && !metadata.isFile())) {
+					entryWatch.clear();
+					entryIdentity = undefined;
+					if (!metadata) startMissingEntryPoll();
+					else missingEntryPoll.clear();
+					return;
+				}
+				const identity = `${metadata.dev}:${metadata.ino}`;
+				// Parent events also describe content changes. Replacing a live watch for
+				// the same inode can discard its queued child notifications on macOS.
+				if (entryWatch.value && entryIdentity === identity) return;
+				const isDirectory = metadata.isDirectory();
+				const owner = new DisposableStore();
+				let watcher: ReturnType<typeof watch>;
+				try {
+					// Native directory events use the physical path on macOS (for example
+					// /private/var). Publish changes using the caller's granted resource spelling.
+					const physicalPath = await realpath(path);
+					if (resources.isDisposed || current !== revision) { owner.dispose(); return; }
+					watcher = watch(physicalPath, { persistent: this.nativeWatchOptions.persistent, recursive: isDirectory && options.recursive }, (event, filename) => {
+						if (resources.isDisposed || entryWatch.value !== owner) return;
+						if (!isDirectory) {
+							this.changes.fire({ resources: [resource] });
+							// File watches follow an inode; rebind after deletion or atomic replacement.
+							if (event === 'rename') void bindEntry().catch(fail);
+							return;
+						}
+						if (filename === null) { this.changes.fire({ resources: [resource] }); return; }
+						const name = filename.toString();
+						// macOS can report the watched directory's own name for inode changes.
+						// Recheck that entry instead of publishing a nonexistent child of it.
+						if (name === basename(path)) {
+							this.changes.fire({ resources: [resource] });
+							void bindEntry().catch(fail);
+							return;
+						}
+						// Root replacement can produce synthetic names on Windows. A watcher hint
+						// cannot escape its root or turn into an invalid file URI; rescan that root.
+						if (isAbsolute(name) || name.split(/[\\/]/u).some(segment => segment === '..' || (process.platform === 'win32' && /[<>:"|?*]/u.test(segment)))) {
+							this.changes.fire({ resources: [resource] });
+							return;
+						}
+						if (excludes.some(matches => matches(name) || matches(resolve(path, name)))) return;
+						// Publish under the granted URI, including its Windows drive spelling.
+						this.changes.fire({ resources: [URI.joinPath(resource, process.platform === 'win32' ? name.replaceAll('\\', '/') : name)] });
+					});
+				} catch (error) {
+					owner.dispose();
+					// Deletion can win the race between stat and opening the watch. Keep
+					// the parent alive so recreation can bind this entry again.
+					if (resources.isDisposed || current !== revision) return;
+					if ((error as NodeJS.ErrnoException).code === 'ENOENT') { startMissingEntryPoll(); return; }
+					throw error;
+				}
+				owner.add(toDisposable(() => watcher.close()));
+				const onError = (error: Error): void => {
+					void lstat(path).then(metadata => {
+						if (resources.isDisposed || entryWatch.value !== owner) return;
+						// The old inode can fail after its replacement already exists.
+						if (`${metadata.dev}:${metadata.ino}` !== identity) void bindEntry().catch(fail);
+						else fail(error);
+					}, missing => {
+						if (resources.isDisposed || entryWatch.value !== owner) return;
+						if ((missing as NodeJS.ErrnoException).code !== 'ENOENT') { fail(error); return; }
+						// The parent watch will attach the replacement. Genuine I/O failures
+						// remain visible instead of entering an unlimited watcher restart loop.
+						revision++;
+						entryWatch.clear();
+						entryIdentity = undefined;
+						this.changes.fire({ resources: [resource] });
+						void bindEntry().catch(fail);
+					});
+				};
+				watcher.on('error', onError);
+				owner.add(toDisposable(() => watcher.off('error', onError)));
+				entryWatch.value = owner;
+				entryIdentity = identity;
+				missingEntryPoll.clear();
+				// Registration is asynchronous. A consumer may have read the file before
+				// this watch became active, so invalidate once to cover that unobserved gap.
+				this.changes.fire({ resources: [resource] });
+			};
+			const startMissingEntryPoll = (): void => {
+				if (missingEntryPoll.value || resources.isDisposed) return;
+				// Directory hints can be delayed or lost. Recheck only the absent entry,
+				// with one outstanding read; stop as soon as its native watch is bound.
+				let stopped = false;
+				let timer: ReturnType<typeof setTimeout>;
+				const schedule = (): void => {
+					timer = setTimeout(() => {
+						if (stopped || resources.isDisposed) return;
+						void bindEntry().then(() => {
+							if (!stopped && !resources.isDisposed) schedule();
+						}, fail);
+					}, 500);
+					if (!this.nativeWatchOptions.persistent) timer.unref();
+				};
+				missingEntryPoll.value = toDisposable(() => { stopped = true; clearTimeout(timer); });
+				schedule();
+			};
+			if (resources.isDisposed) return;
+			// A provider write can create a previously absent settings file before the
+			// host's parent-directory watcher reports it. Bind that entry without polling.
+			resources.add(this.onDidChangeFiles(event => {
+				if (!entryWatch.value && (!event.resources || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed)))) {
+					void bindEntry().catch(fail);
+				}
+			}));
+			// Observe only this entry in its parent. Files survive atomic replacement and
+			// directory roots can be rebound after deletion without exposing sibling changes.
+			if (dirname(path) !== path) {
+				const parentPath = await realpath(dirname(path));
+				if (resources.isDisposed) return;
+				const parentWatch = watch(parentPath, { persistent: this.nativeWatchOptions.persistent }, (_event, filename) => {
+					if (resources.isDisposed) return;
+					if (filename !== null) {
+						const name = filename.toString();
+						if (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path)) return;
+						if (excludes.some(matches => matches(name) || matches(path))) return;
+					}
+					this.changes.fire({ resources: [resource] });
+					void bindEntry().catch(fail);
+				});
+				resources.add(toDisposable(() => parentWatch.close()));
+				parentWatch.on('error', fail);
+				resources.add(toDisposable(() => parentWatch.off('error', fail)));
+			}
+			await bindEntry();
+		}).catch(error => {
+			if (!resources.isDisposed) {
+				this.watchErrors.fire(String(error));
+				this.watchers.deleteAndDispose(id);
+			}
+		});
 		return toDisposable(() => this.watchers.deleteAndDispose(id));
 	}
 
@@ -280,29 +237,15 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const path = await this.path(resource);
 		try {
 			const metadata = await lstat(path);
-			return {
-				resource,
-				kind: metadata.isFile() ? FileKind.File : metadata.isDirectory() ? FileKind.Directory : FileKind.Other,
-				sizeBytes: metadata.size,
-				readonly: (metadata.mode & 0o222) === 0,
-				modifiedAtMillis: metadata.mtimeMs,
-			};
-		} catch (error) {
-			throw fileError(error, resource);
-		}
+			return { resource, kind: metadata.isFile() ? FileKind.File : metadata.isDirectory() ? FileKind.Directory : FileKind.Other, sizeBytes: metadata.size, readonly: (metadata.mode & 0o222) === 0, modifiedAtMillis: metadata.mtimeMs };
+		} catch (error) { throw fileError(error, resource); }
 	}
 
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		try {
 			const path = await this.path(resource);
-			return (await readdir(path, { withFileTypes: true })).map(entry => ({
-				resource: URI.file(resolve(path, entry.name)),
-				name: entry.name,
-				kind: entry.isSymbolicLink() ? FileKind.SymbolicLink : entry.isFile() ? FileKind.File : entry.isDirectory() ? FileKind.Directory : FileKind.Other,
-			}));
-		} catch (error) {
-			throw fileError(error, resource);
-		}
+			return (await readdir(path, { withFileTypes: true })).map(entry => ({ resource: URI.file(resolve(path, entry.name)), name: entry.name, kind: entry.isSymbolicLink() ? FileKind.SymbolicLink : entry.isFile() ? FileKind.File : entry.isDirectory() ? FileKind.Directory : FileKind.Other }));
+		} catch (error) { throw fileError(error, resource); }
 	}
 
 	public async readFile(resource: URI): Promise<IFileBytes> {
@@ -310,16 +253,11 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 			const bytes = await consumeStream(this.readFileStream(resource, {}, CancellationToken.None), chunks => {
 				const result = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.byteLength, 0));
 				let offset = 0;
-				for (const chunk of chunks) {
-					result.set(chunk, offset);
-					offset += chunk.byteLength;
-				}
+				for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
 				return result;
 			});
 			return { resource, bytes, revision: revision(bytes) };
-		} catch (error) {
-			throw fileError(error, resource);
-		}
+		} catch (error) { throw fileError(error, resource); }
 	}
 
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
@@ -327,149 +265,89 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 		const cancellation = new CancellationTokenSource(token);
 		const lifetime = {};
-		this.reads.set(
-			lifetime,
-			toDisposable(() => cancellation.dispose(true)),
-		);
+		this.reads.set(lifetime, toDisposable(() => cancellation.dispose(true)));
 		const destroy = stream.destroy;
-		stream.destroy = (): void => {
-			this.reads.deleteAndDispose(lifetime);
-			destroy();
-		};
-		void readFileIntoStream(
-			this,
-			resource,
-			stream,
-			buffer => buffer.buffer,
-			{ ...options, bufferSize: 256 * 1024, errorTransformer: error => fileError(error, resource) as Error },
-			cancellation.token,
-		).finally(() => this.reads.deleteAndDispose(lifetime));
+		stream.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
+		void readFileIntoStream(this, resource, stream, buffer => buffer.buffer, { ...options, bufferSize: 256 * 1024, errorTransformer: error => fileError(error, resource) as Error }, cancellation.token)
+			.finally(() => this.reads.deleteAndDispose(lifetime));
 		return stream;
 	}
 
 	public async open(resource: URI, options: IFileOpenOptions): Promise<number> {
 		this.assertNotDisposed();
 		let handle: FileHandle;
-		try {
-			handle = await open(await this.path(resource), options.create ? 'w+' : 'r');
-		} catch (error) {
-			throw fileError(error, resource);
-		}
-		if (this.isDisposed) {
-			await handle.close();
-			throw canceled();
-		}
+		try { handle = await open(await this.path(resource), options.create ? 'w+' : 'r'); }
+		catch (error) { throw fileError(error, resource); }
+		if (this.isDisposed) { await handle.close(); throw canceled(); }
 		const descriptor = ++this.nextDescriptor;
-		this.handles.set(
-			descriptor,
-			Object.assign(
-				toDisposable(() => {
-					void handle.close().catch(() => undefined);
-				}),
-				{ handle },
-			),
-		);
+		this.handles.set(descriptor, Object.assign(toDisposable(() => { void handle.close().catch(() => undefined); }), { handle }));
 		return descriptor;
 	}
 
 	public async read(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number> {
 		const entry = this.handles.get(fd);
-		if (!entry) {
-			throw new Error('File descriptor is closed');
-		}
+		if (!entry) { throw new Error('File descriptor is closed'); }
 		return (await entry.handle.read(data, offset, length, position)).bytesRead;
 	}
 
 	public async write(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number> {
 		const entry = this.handles.get(fd);
-		if (!entry) {
-			throw new Error('File descriptor is closed');
-		}
+		if (!entry) { throw new Error('File descriptor is closed'); }
 		return (await entry.handle.write(data, offset, length, position)).bytesWritten;
 	}
 
 	public async close(fd: number): Promise<void> {
 		const entry = this.handles.get(fd);
-		if (!entry) {
-			return;
-		}
-		try {
-			await entry.handle.close();
-		} finally {
-			this.handles.deleteAndDispose(fd);
-		}
+		if (!entry) { return; }
+		try { await entry.handle.close(); } finally { this.handles.deleteAndDispose(fd); }
 	}
 
 	public async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		const path = await this.path(resource);
-		return DiskFileSystemProvider.pendingWrites
-			.queueFor(
-				URI.file(path),
-				async () => {
-					this.assertNotDisposed();
-					let exists = true;
-					try {
-						await lstat(path);
-					} catch (error) {
-						if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-						exists = false;
+		return DiskFileSystemProvider.pendingWrites.queueFor(URI.file(path), async () => {
+			this.assertNotDisposed();
+			let exists = true;
+			try { await lstat(path); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; exists = false; }
+			if (exists && !options.overwrite) throw createFileSystemProviderError(`File already exists: ${resource.toString()}`, FileSystemProviderErrorCode.FileExists);
+			if (!exists && !options.create) throw new FileNotFoundError(resource);
+			await mkdir(dirname(path), { recursive: true });
+			const temporary = `${path}.${randomUUID()}.tmp`;
+			try {
+				// Reserve the unique publication path before opening its descriptor for writing.
+				await writeFile(temporary, '', { flag: 'wx' });
+				const descriptor = await this.open(URI.file(temporary), { create: true });
+				try {
+					let offset = 0;
+					while (offset < content.byteLength) {
+						const count = await this.write(descriptor, offset, content, offset, content.byteLength - offset);
+						if (count === 0) { throw new Error('File write made no progress'); }
+						offset += count;
 					}
-					if (exists && !options.overwrite) throw createFileSystemProviderError(`File already exists: ${resource.toString()}`, FileSystemProviderErrorCode.FileExists);
-					if (!exists && !options.create) throw new FileNotFoundError(resource);
-					await mkdir(dirname(path), { recursive: true });
-					const temporary = `${path}.${randomUUID()}.tmp`;
-					try {
-						// Reserve the unique publication path before opening its descriptor for writing.
-						await writeFile(temporary, '', { flag: 'wx' });
-						const descriptor = await this.open(URI.file(temporary), { create: true });
-						try {
-							let offset = 0;
-							while (offset < content.byteLength) {
-								const count = await this.write(descriptor, offset, content, offset, content.byteLength - offset);
-								if (count === 0) {
-									throw new Error('File write made no progress');
-								}
-								offset += count;
-							}
-						} finally {
-							await this.close(descriptor);
-						}
-						if (options.expectedRevision !== undefined && (await this.readFile(resource)).revision !== options.expectedRevision) {
-							throw new FileRevisionConflictError(resource);
-						}
-						if (options.overwrite) await Promises.rename(temporary, path);
-						else await link(temporary, path);
-					} finally {
-						await rm(temporary, { force: true });
-					}
-					this.changes.fire({ resources: [resource] });
-					return { stat: await this.stat(resource), revision: revision(content) };
-				},
-				extUriBiasedIgnorePathCase,
-			)
-			.catch(error => {
-				throw fileError(error, resource);
-			});
+				} finally { await this.close(descriptor); }
+				if (options.expectedRevision !== undefined && (await this.readFile(resource)).revision !== options.expectedRevision) {
+					throw new FileRevisionConflictError(resource);
+				}
+				if (options.overwrite) await Promises.rename(temporary, path);
+				else await link(temporary, path);
+			} finally { await rm(temporary, { force: true }); }
+			this.changes.fire({ resources: [resource] });
+			return { stat: await this.stat(resource), revision: revision(content) };
+		}, extUriBiasedIgnorePathCase).catch(error => { throw fileError(error, resource); });
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const path = await this.path(resource);
 		await mkdir(dirname(path), { recursive: true });
-		try {
-			await writeFile(path, '', { flag: existing === 'overwrite' ? 'w' : 'wx' });
-		} catch (error) {
-			if (existing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw fileError(error, resource);
-		}
+		try { await writeFile(path, '', { flag: existing === 'overwrite' ? 'w' : 'wx' }); }
+		catch (error) { if (existing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw fileError(error, resource); }
 		this.changes.fire({ resources: [resource] });
 		return this.stat(resource);
 	}
 
 	public async createDirectory(resource: URI): Promise<IFileStat> {
-		try {
-			await mkdir(await this.path(resource), { recursive: true });
-		} catch (error) {
-			throw fileError(error, resource);
-		}
+		try { await mkdir(await this.path(resource), { recursive: true }); }
+		catch (error) { throw fileError(error, resource); }
 		this.changes.fire({ resources: [resource] });
 		return this.stat(resource);
 	}
@@ -478,12 +356,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const from = await this.path(source);
 		const to = await this.path(target);
 		if (this.roots.includes(from) || this.roots.includes(to) || to === from || to.startsWith(`${from}${sep}`)) throw new Error('Cannot copy a granted root or into itself');
-		try {
-			await lstat(to);
-			throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists);
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-		}
+		try { await lstat(to); throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists); }
+		catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 		let created = false;
 		const copyEntry = async (fromPath: string, toPath: string): Promise<void> => {
 			const metadata = await lstat(fromPath);
@@ -492,17 +366,11 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 				await mkdir(toPath);
 				if (fromPath === from) created = true;
 				for (const entry of await readdir(fromPath)) await copyEntry(resolve(fromPath, entry), resolve(toPath, entry));
-			} else if (metadata.isFile()) {
-				await copyFile(fromPath, toPath, constants.COPYFILE_EXCL);
-				if (fromPath === from) created = true;
-			} else throw new Error('Unsupported file type');
+			} else if (metadata.isFile()) { await copyFile(fromPath, toPath, constants.COPYFILE_EXCL); if (fromPath === from) created = true; }
+			else throw new Error('Unsupported file type');
 		};
-		try {
-			await copyEntry(from, to);
-		} catch (error) {
-			if (created) await rm(to, { recursive: true, force: true });
-			throw fileError(error, target);
-		}
+		try { await copyEntry(from, to); }
+		catch (error) { if (created) await rm(to, { recursive: true, force: true }); throw fileError(error, target); }
 		this.changes.fire({ resources: [target] });
 	}
 
@@ -512,31 +380,18 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		if (this.roots.includes(from) || this.roots.includes(to)) throw new Error('Cannot rename a granted root');
 		await mkdir(dirname(to), { recursive: true });
 		if (existing === 'overwrite') {
-			await Promises.rename(from, to).catch(error => {
-				throw fileError(error, target);
-			});
+			await Promises.rename(from, to).catch(error => { throw fileError(error, target); });
 		} else if ((await lstat(from)).isDirectory()) {
 			let exists = false;
-			try {
-				await lstat(to);
-				exists = true;
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-			}
+			try { await lstat(to); exists = true; } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 			if (exists) {
 				if (existing === 'ignore') return;
 				throw createFileSystemProviderError('Target directory already exists', FileSystemProviderErrorCode.FileExists);
 			}
-			await Promises.rename(from, to).catch(error => {
-				throw fileError(error, target);
-			});
+			await Promises.rename(from, to).catch(error => { throw fileError(error, target); });
 		} else {
-			try {
-				await link(from, to);
-			} catch (error) {
-				if (existing === 'ignore' && (error as NodeJS.ErrnoException).code === 'EEXIST') return;
-				throw fileError(error, target);
-			}
+			try { await link(from, to); }
+			catch (error) { if (existing === 'ignore' && (error as NodeJS.ErrnoException).code === 'EEXIST') return; throw fileError(error, target); }
 			await rm(from);
 		}
 		this.changes.fire({ resources: [source, target] });
@@ -548,28 +403,19 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		try {
 			if (mode === 'fileOrEmptyDirectory' && (await lstat(path)).isDirectory()) await rmdir(path);
 			else await rm(path, { force: missing === 'ignore', recursive: mode === 'recursive' });
-		} catch (error) {
-			if (missing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw fileError(error, resource);
-		}
+		} catch (error) { if (missing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw fileError(error, resource); }
 		this.changes.fire({ resources: [resource] });
 	}
 
 	private async path(resource: URI): Promise<string> {
 		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new Error('Expected a local file resource');
 		const path = resolve(resource.fsPath);
-		const root = this.roots.find(candidate => {
-			const child = relative(candidate, path);
-			return child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`));
-		});
+		const root = this.roots.find(candidate => { const child = relative(candidate, path); return child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`)); });
 		if (!root) throw createFileSystemProviderError('File resource is outside the granted roots', FileSystemProviderErrorCode.NoPermissions);
 		let current = path;
 		while (true) {
-			try {
-				if ((await lstat(current)).isSymbolicLink())
-					throw createFileSystemProviderError('Symbolic links are not permitted in granted file resources', FileSystemProviderErrorCode.NoPermissions);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-			}
+			try { if ((await lstat(current)).isSymbolicLink()) throw createFileSystemProviderError('Symbolic links are not permitted in granted file resources', FileSystemProviderErrorCode.NoPermissions); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 			if (current === root) break;
 			current = dirname(current);
 		}
@@ -583,9 +429,7 @@ function revision(bytes: Uint8Array): string {
 
 function fileError(error: unknown, resource: URI): unknown {
 	const failure = error as NodeJS.ErrnoException;
-	if (failure.code === 'ENOENT') {
-		return new FileNotFoundError(resource);
-	}
+	if (failure.code === 'ENOENT') { return new FileNotFoundError(resource); }
 	const codes: Record<string, FileSystemProviderErrorCode> = {
 		EEXIST: FileSystemProviderErrorCode.FileExists,
 		ENOTDIR: FileSystemProviderErrorCode.FileNotADirectory,

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { validateNativeContextMenuClose, validateNativeContextMenuRequest } from '../../parts/contextmenu/common/contextmenu.js';
+import {
+	validateNativeContextMenuClose,
+	validateNativeContextMenuRequest,
+} from '../../parts/contextmenu/common/contextmenu.js';
 
 test('native context menu validation accepts bounded nested menus', () => {
 	assert.deepEqual(
@@ -77,40 +80,36 @@ test('native context menu validation rejects unsafe payloads', () => {
 	};
 
 	assert.throws(
-		() =>
-			validateNativeContextMenuRequest({
-				x: 0,
-				y: 0,
-				items: [action, action],
-			}),
+		() => validateNativeContextMenuRequest({
+			x: 0,
+			y: 0,
+			items: [action, action],
+		}),
 		/duplicate/,
 	);
 	assert.throws(
-		() =>
-			validateNativeContextMenuRequest({
-				x: 0,
-				y: 0,
-				items: [{ ...action, unexpected: true }],
-			}),
+		() => validateNativeContextMenuRequest({
+			x: 0,
+			y: 0,
+			items: [{ ...action, unexpected: true }],
+		}),
 		/exactly/,
 	);
 	assert.throws(
-		() =>
-			validateNativeContextMenuRequest({
-				x: Number.POSITIVE_INFINITY,
-				y: 0,
-				items: [action],
-			}),
+		() => validateNativeContextMenuRequest({
+			x: Number.POSITIVE_INFINITY,
+			y: 0,
+			items: [action],
+		}),
 		/bounded finite number/,
 	);
 	assert.throws(
-		() =>
-			validateNativeContextMenuRequest({
-				x: 0,
-				y: 0,
-				positioningItem: 1,
-				items: [action],
-			}),
+		() => validateNativeContextMenuRequest({
+			x: 0,
+			y: 0,
+			positioningItem: 1,
+			items: [action],
+		}),
 		/top-level menu item/,
 	);
 });

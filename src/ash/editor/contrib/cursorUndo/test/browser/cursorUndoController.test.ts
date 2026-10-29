@@ -17,6 +17,7 @@ const { createTestCodeEditor } = await import('../../../../test/browser/testCode
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
+
 test('CursorUndoRedoController restores and reapplies cursor-only history', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -47,15 +48,7 @@ afterCodeFeatures(() => codeFeatures.dispose());
 test('Cursor Undo shortcut reaches the shell outside text inputs and retains editor cursor undo', () => {
 	using context = new ContextKeyService();
 	const resolver = new KeybindingResolver();
-	const shortcut = {
-		key: 'u',
-		code: 'KeyU',
-		keyCode: KeyCode.KeyU,
-		ctrlKey: !isMacintosh,
-		metaKey: isMacintosh,
-		altKey: false,
-		shiftKey: false,
-	};
+	const shortcut = { key: 'u', code: 'KeyU', keyCode: KeyCode.KeyU, ctrlKey: !isMacintosh, metaKey: isMacintosh, altKey: false, shiftKey: false };
 	context.setContext('terminalFocus', true);
 	context.setContext('textInputFocus', false);
 	assert.equal(resolver.resolve(context, [shortcut]).kind, KeybindingResolveKind.NoMatch, 'the editor action must leave the native shell control key available');
@@ -67,11 +60,7 @@ test('Cursor Undo shortcut reaches the shell outside text inputs and retains edi
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo');
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 2)));
 	const action = [...EditorExtensionsRegistry.getEditorActions()].find(value => value.id === resolved.command);
 	assert.ok(action);

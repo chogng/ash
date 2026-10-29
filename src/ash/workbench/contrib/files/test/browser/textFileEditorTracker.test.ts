@@ -24,17 +24,9 @@ test('File editor tracker reloads clean visible files after window focus and kee
 		onDidChangeFiles: Event.None,
 		resolve: async request => {
 			reads++;
-			return {
-				resource: request.resource,
-				text: diskText,
-				source: TextFileContentSource.FileSystem,
-				revision: String(revision),
-				encoding: 'utf8',
-			};
+			return { resource: request.resource, text: diskText, source: TextFileContentSource.FileSystem, revision: String(revision), encoding: 'utf8' };
 		},
-		save: async () => {
-			throw new Error('Unexpected save');
-		},
+		save: async () => { throw new Error('Unexpected save'); },
 	};
 	using services = new TestUriIdentityServices();
 	using models = getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services);
@@ -42,8 +34,8 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	const editorService = {
 		...emptyEditorServiceState,
 		visibleEditors: [{ resource }],
-		openEditor: async () => {},
-		focusActiveEditor: () => {},
+		openEditor: async () => { },
+		focusActiveEditor: () => { },
 	};
 	using tracker = new TextFileEditorTracker(browser.window as unknown as Window, editorService, models);
 

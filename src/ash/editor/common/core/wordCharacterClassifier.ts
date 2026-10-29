@@ -7,10 +7,11 @@ import { CharacterClassifier } from './characterClassifier.js';
 export const enum WordCharacterClass {
 	Regular = 0,
 	Whitespace = 1,
-	WordSeparator = 2,
+	WordSeparator = 2
 }
 
 export class WordCharacterClassifier extends CharacterClassifier<WordCharacterClass> {
+
 	public readonly intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[];
 	private readonly _segmenter: Lazy<Intl.Segmenter> | null = null;
 	private _cachedLine: string | null = null;

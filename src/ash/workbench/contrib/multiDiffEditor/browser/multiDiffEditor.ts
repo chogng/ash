@@ -49,16 +49,9 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { IMultiDiffEditorOptionsViewState } from '../../../../editor/common/multiDiffEditor.js';
 import {
-	ActiveEditorContext,
-	ActiveEditorReadonlyContext,
-	ResourceContext,
-	ResourceSchemeContext,
-	ResourcePathContext,
-	ResourceFilenameContext,
-	ResourceDirnameContext,
-	ResourceExtensionContext,
-	ResourceLanguageIdContext,
-	ResourceSetContext,
+	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
+	ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext,
+	ResourceLanguageIdContext, ResourceSetContext,
 } from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
@@ -139,12 +132,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		parent.append(editorContainerDomNode);
 		super.create(editorContainerDomNode);
 		this.editorContainerDomNode = editorContainerDomNode;
-		this._register(
-			toDisposable(() => {
-				editorContainerDomNode.remove();
-				this.editorContainerDomNode = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			editorContainerDomNode.remove();
+			this.editorContainerDomNode = undefined;
+		}));
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -153,7 +144,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		throwIfCancelled(signal, 'Multi-diff editor input loading was cancelled');
 		let next: MultiDiffEditorSession | undefined;
 		try {
-			next = this.instantiationService.createInstance(MultiDiffEditorSession, container, input, input.label ?? 'Changes', this.options, signal);
+			next = this.instantiationService.createInstance(
+				MultiDiffEditorSession, container, input,
+				input.label ?? 'Changes', this.options, signal,
+			);
 			this.pendingSession.value = next;
 			next.layout(this.dimension);
 			await next.resolveVisible();
@@ -171,9 +165,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.updateCollapseContext();
 		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
-		if (input.source?.kind !== 'snapshot') {
-			await this.options.viewsService?.focusView(VIEW_PANE_ID);
-		}
+		if (input.source?.kind !== 'snapshot') { await this.options.viewsService?.focusView(VIEW_PANE_ID); }
 	}
 
 	public override clearInput(): void {
@@ -218,25 +210,16 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		if (!editor) throw new Error('Multi-diff editor view-state restoration is unavailable');
 		if (isRecord(state) && (Object.keys(state).length === 0 || 'revealData' in state)) {
 			const reveal = state.revealData;
-			if (reveal === undefined) {
-				return;
-			}
-			if (
-				!isRecord(reveal) ||
-				!isRecord(reveal.resource) ||
-				![reveal.resource.original, reveal.resource.modified].some(resource => resource instanceof URI) ||
-				![reveal.resource.original, reveal.resource.modified].every(resource => resource === undefined || resource instanceof URI) ||
-				(reveal.range !== undefined &&
-					(!Range.isIRange(reveal.range) ||
-						![reveal.range.startLineNumber, reveal.range.startColumn, reveal.range.endLineNumber, reveal.range.endColumn].every(value => Number.isSafeInteger(value) && value > 0)))
-			) {
+			if (reveal === undefined) { return; }
+			if (!isRecord(reveal) || !isRecord(reveal.resource)
+				|| ![reveal.resource.original, reveal.resource.modified].some(resource => resource instanceof URI)
+				|| ![reveal.resource.original, reveal.resource.modified].every(resource => resource === undefined || resource instanceof URI)
+				|| (reveal.range !== undefined && (!Range.isIRange(reveal.range)
+					|| ![reveal.range.startLineNumber, reveal.range.startColumn, reveal.range.endLineNumber, reveal.range.endColumn].every(value => Number.isSafeInteger(value) && value > 0)))) {
 				throw new TypeError('Invalid multi-diff editor view state');
 			}
 			const options = reveal as unknown as NonNullable<IMultiDiffEditorOptionsViewState['revealData']>;
-			editor.reveal(options.resource, {
-				range: options.range ? Range.lift(options.range) : undefined,
-				highlight: false,
-			});
+			editor.reveal(options.resource, { range: options.range ? Range.lift(options.range) : undefined, highlight: false });
 			return;
 		}
 		editor.restoreViewState(state);
@@ -288,9 +271,7 @@ class MultiDiffEditorSession extends Disposable {
 	private readonly copies = new Map<string, IWorkingCopy>();
 	private readonly copiesEmitter = this._register(new Emitter<void>());
 	public readonly onDidChangeWorkingCopies = this.copiesEmitter.event;
-	public get workingCopies(): readonly IWorkingCopy[] {
-		return [...this.copies.values()];
-	}
+	public get workingCopies(): readonly IWorkingCopy[] { return [...this.copies.values()]; }
 	public readonly editor: MultiDiffEditorWidget | undefined;
 	private readonly models = new Set<DiffModel>();
 	private readonly idleComparisons = new Map<DocumentDiffItem, number>();
@@ -341,91 +322,64 @@ class MultiDiffEditorSession extends Disposable {
 			this.itemResources.value = resources;
 			const items = this.createItems(paneInput, resources);
 			this.model = this._register(new MultiDiffEditorModel(items));
-			this._register(
-				configuration.onDidChangeConfiguration(event => {
-					if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap) || event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
-						this.editor?.setConfiguredWordWrap(getDiffWordWrap(configuration));
+			this._register(configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap)
+					|| event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
+					this.editor?.setConfiguredWordWrap(getDiffWordWrap(configuration));
+				}
+				if ([CodeEditorConfiguration.wordWrapColumn, CodeEditorConfiguration.lineHeight, CodeEditorConfiguration.fontFamily,
+				CodeEditorConfiguration.fontSize, CodeEditorConfiguration.fontLigatures,
+				CodeEditorConfiguration.diffShowLineNumbers, CodeEditorConfiguration.diffShowInlineChanges,
+				CodeEditorConfiguration.diffLoopChanges].some(key => event.affectsConfiguration(key))) {
+					this.editor?.updateOptions(this.getEditorOptions());
+				}
+				for (const model of this.models) {
+					const languageId = model.modified.getLanguageId();
+					if (event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, { overrideIdentifier: languageId })
+						|| event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, { overrideIdentifier: languageId })
+						|| event.affectsConfiguration('diffEditor.experimental.showMoves')) {
+						model.updateOptions(getDiffComputationOptions(configuration, languageId));
 					}
-					if (
-						[
-							CodeEditorConfiguration.wordWrapColumn,
-							CodeEditorConfiguration.lineHeight,
-							CodeEditorConfiguration.fontFamily,
-							CodeEditorConfiguration.fontSize,
-							CodeEditorConfiguration.fontLigatures,
-							CodeEditorConfiguration.diffShowLineNumbers,
-							CodeEditorConfiguration.diffShowInlineChanges,
-							CodeEditorConfiguration.diffLoopChanges,
-						].some(key => event.affectsConfiguration(key))
-					) {
-						this.editor?.updateOptions(this.getEditorOptions());
-					}
-					for (const model of this.models) {
-						const languageId = model.modified.getLanguageId();
-						if (
-							event.affectsConfiguration(CodeEditorConfiguration.diffIgnoreTrimWhitespace, {
-								overrideIdentifier: languageId,
-							}) ||
-							event.affectsConfiguration(CodeEditorConfiguration.diffMaxComputationTime, {
-								overrideIdentifier: languageId,
-							}) ||
-							event.affectsConfiguration('diffEditor.experimental.showMoves')
-						) {
-							model.updateOptions(getDiffComputationOptions(configuration, languageId));
-						}
-					}
-				}),
-			);
+				}
+			}));
 			const fileActions = options.fileActions;
 			this._register(toDisposable(() => this.abortController.abort()));
 			this.emptyDomNode = h(container.ownerDocument, 'div');
 			this.emptyDomNode.className = 'stanza-multi-diff-editor-empty';
 			this.emptyDomNode.textContent = localize('multiDiff.empty', 'No changes in this selection.');
-			this.editor = this._register(
-				instantiationService.createInstance(MultiDiffEditorWidget, {
-					container: this.editorDomNode,
-					model: this.model,
-					wordWrap: getDiffWordWrap(configuration),
-					...this.getEditorOptions(),
-					...(fileActions
-						? {
-								workbenchUIElementFactory: {
-									createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
-										const input = this.inputsById.get(item.id);
-										if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
-										const resource = (input.goToFile ?? input.modified).resource;
-										const resources = new DisposableStore();
-										const label = resources.add(new IconLabel(container, { label: item.label, title: item.label }));
-										const render = (): void => {
-											const hasFileIcons = this.resourceIcons.getFileIconTheme().hasFileIcons;
-											label.setIcon(undefined, hasFileIcons ? target => this.resourceIcons.renderFileIcon(resource, target) : undefined, hasFileIcons);
-										};
-										render();
-										resources.add(this.resourceIcons.onDidChangeResourceIcons(render));
-										return resources;
-									},
-									createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
-										const input = this.inputsById.get(item.id);
-										if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
-										return this.createFileActions(container, item, input, options, fileActions.contextMenuProvider);
-									},
-								},
-							}
-						: {}),
-				}),
-			);
+			this.editor = this._register(instantiationService.createInstance(MultiDiffEditorWidget, {
+				container: this.editorDomNode,
+				model: this.model,
+				wordWrap: getDiffWordWrap(configuration),
+				...this.getEditorOptions(),
+				...(fileActions ? {
+					workbenchUIElementFactory: {
+						createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
+							const input = this.inputsById.get(item.id);
+							if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
+							const resource = (input.goToFile ?? input.modified).resource;
+							const resources = new DisposableStore();
+							const label = resources.add(new IconLabel(container, { label: item.label, title: item.label }));
+							const render = (): void => {
+								const hasFileIcons = this.resourceIcons.getFileIconTheme().hasFileIcons;
+								label.setIcon(undefined, hasFileIcons ? target => this.resourceIcons.renderFileIcon(resource, target) : undefined, hasFileIcons);
+							};
+							render();
+							resources.add(this.resourceIcons.onDidChangeResourceIcons(render));
+							return resources;
+						},
+						createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
+							const input = this.inputsById.get(item.id);
+							if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
+							return this.createFileActions(container, item, input, options, fileActions.contextMenuProvider);
+						},
+					},
+				} : {}),
+			}));
 			this.createToolbar();
 			this.updateEmptyState();
-			this._register(
-				this.sourceResolvers.onDidChange(() => {
-					void this.refreshSource().catch(error => {
-						if (!this.isDisposed) void this.dialogs.error(String(error));
-					});
-				}),
-			);
-			void this.refreshSource().catch(error => {
-				if (!this.isDisposed) void this.dialogs.error(String(error));
-			});
+			this._register(this.sourceResolvers.onDidChange(() => { void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); }); }));
+			void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); });
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -445,14 +399,7 @@ class MultiDiffEditorSession extends Disposable {
 		this.domNode.classList.remove('pending');
 	}
 
-	private async loadItem(
-		input: MultiDiffEditorInputItem,
-		modelService: ITextModelResourceService,
-		computationService: IDocumentDiffProvider,
-		configuration: IConfigurationService,
-		resources: DisposableStore,
-		signal: AbortSignal,
-	): Promise<DiffModel | undefined> {
+	private async loadItem(input: MultiDiffEditorInputItem, modelService: ITextModelResourceService, computationService: IDocumentDiffProvider, configuration: IConfigurationService, resources: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {
 		try {
 			const original = await modelService.acquire(input.original, signal);
 			if (this.isDisposed || signal.aborted || resources.isDisposed) {
@@ -471,29 +418,23 @@ class MultiDiffEditorSession extends Disposable {
 				const copy = resources.add(new EditorWorkingCopy(modified, input.modified, this.workingCopyService, undefined));
 				const id = multiDiffEditorItemKey(input);
 				this.copies.set(id, copy);
-				resources.add(
-					toDisposable(() => {
-						if (this.copies.get(id) === copy) {
-							this.copies.delete(id);
-							if (!this.isDisposed) this.copiesEmitter.fire();
-						}
-					}),
-				);
+				resources.add(toDisposable(() => {
+					if (this.copies.get(id) === copy) {
+						this.copies.delete(id);
+						if (!this.isDisposed) this.copiesEmitter.fire();
+					}
+				}));
 				this.copiesEmitter.fire();
 			}
-			const model = resources.add(
-				new DiffModel({
-					original: original.model,
-					modified: modified.model,
-					diffProvider: computationService,
-					diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
-				}),
-			);
-			resources.add(
-				modified.model.onDidChangeLanguage(() => {
-					model.updateOptions(getDiffComputationOptions(configuration, model.modified.getLanguageId()));
-				}),
-			);
+			const model = resources.add(new DiffModel({
+				original: original.model,
+				modified: modified.model,
+				diffProvider: computationService,
+				diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
+			}));
+			resources.add(modified.model.onDidChangeLanguage(() => {
+				model.updateOptions(getDiffComputationOptions(configuration, model.modified.getLanguageId()));
+			}));
 			this.models.add(model);
 			resources.add(toDisposable(() => this.models.delete(model)));
 			return model;
@@ -527,28 +468,16 @@ class MultiDiffEditorSession extends Disposable {
 		return item ? this.paneInput.items.find(input => multiDiffEditorItemKey(input) === item.id) : undefined;
 	}
 
-	private createFileActions(
-		container: HTMLElement,
-		item: IDocumentDiffItem,
-		input: MultiDiffEditorInputItem,
-		options: MultiDiffEditorOptions,
-		contextMenuProvider: IContextMenuProvider,
-	): IDisposable {
+	private createFileActions(container: HTMLElement, item: IDocumentDiffItem, input: MultiDiffEditorInputItem, options: MultiDiffEditorOptions, contextMenuProvider: IContextMenuProvider): IDisposable {
 		const actions: IAction[] = [];
 		for (const action of input.actions ?? []) {
-			actions.push(
-				new PaneAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined, action.enabled !== false, () =>
-					this.commandService.executeCommand(action.command, ...action.arguments),
-				),
-			);
+			actions.push(new PaneAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined, action.enabled !== false, () => this.commandService.executeCommand(action.command, ...action.arguments)));
 		}
 		const resources = new DisposableStore();
 		const scoped = resources.add(options.fileActions!.contextKeyService.createScoped(container));
 		ActiveEditorContext.bindTo(scoped).set(options.activeEditorId ?? MULTI_DIFF_EDITOR_ID);
 		scoped.createKey('multiDiffEditorFileIsBinary', input.binary === true);
-		for (const [key, value] of Object.entries(input.contextKeys ?? {})) {
-			scoped.createKey(key, value);
-		}
+		for (const [key, value] of Object.entries(input.contextKeys ?? {})) { scoped.createKey(key, value); }
 		const resource = (input.goToFile ?? input.modified).resource;
 		ActiveEditorReadonlyContext.bindTo(scoped).set(input.modified.readOnly === true);
 		ResourceContext.bindTo(scoped).set(resource.toString());
@@ -566,14 +495,12 @@ class MultiDiffEditorSession extends Disposable {
 		};
 		resources.add(item.onDidChange(updateLanguage));
 		updateLanguage();
-		const toolbar = resources.add(
-			new MenuWorkbenchToolBar(container, options.fileActions!.menuService, contextMenuProvider, MenuId.MultiDiffEditorFileToolbar, {
-				ariaLabel: localize('multiDiff.fileActions', '{0} actions', input.label),
-				presentation: 'inherit-foreground',
-				contextKeyService: scoped,
-				menuOptions: { arg: input.goToFile ?? input.modified },
-			}),
-		);
+		const toolbar = resources.add(new MenuWorkbenchToolBar(container, options.fileActions!.menuService, contextMenuProvider, MenuId.MultiDiffEditorFileToolbar, {
+			ariaLabel: localize('multiDiff.fileActions', '{0} actions', input.label),
+			presentation: 'inherit-foreground',
+			contextKeyService: scoped,
+			menuOptions: { arg: input.goToFile ?? input.modified },
+		}));
 		toolbar.setTrailingActions(actions.map(action => bindActionContext(action, () => input)));
 		return resources;
 	}
@@ -626,33 +553,19 @@ class MultiDiffEditorSession extends Disposable {
 			const id = multiDiffEditorItemKey(item);
 			this.inputsById.set(id, item);
 			const loaded = resources.add(new MutableDisposable<DisposableStore>());
-			const comparison = resources.add(
-				new DocumentDiffItem(
-					{
-						id,
-						label: item.label,
-						binary: item.binary,
-						originalUri: item.original.resource,
-						modifiedUri: item.modified.resource,
-						originalLabel: item.original.label,
-						modifiedLabel: item.modified.label,
-						readOnly: item.modified.readOnly,
-					},
-					item.binary
-						? undefined
-						: () => {
-								const lifetime = new DisposableStore();
-								loaded.value = lifetime;
-								return this.loadItem(item, this.options.modelService, this.computationService, this.configuration, lifetime, abort.signal);
-							},
-					item.modified.readOnly === true
-						? {
-								onDidChange: comparison => this.updateComparisonCache(comparison),
-								release: () => loaded.clear(),
-							}
-						: undefined,
-				),
-			);
+			const comparison = resources.add(new DocumentDiffItem({
+				id, label: item.label, binary: item.binary,
+				originalUri: item.original.resource, modifiedUri: item.modified.resource,
+				originalLabel: item.original.label, modifiedLabel: item.modified.label,
+				readOnly: item.modified.readOnly,
+			}, item.binary ? undefined : () => {
+				const lifetime = new DisposableStore();
+				loaded.value = lifetime;
+				return this.loadItem(item, this.options.modelService, this.computationService, this.configuration, lifetime, abort.signal);
+			}, item.modified.readOnly === true ? {
+				onDidChange: comparison => this.updateComparisonCache(comparison),
+				release: () => loaded.clear(),
+			} : undefined));
 			resources.add(toDisposable(() => this.idleComparisons.delete(comparison)));
 			return comparison;
 		});
@@ -700,18 +613,11 @@ class MultiDiffEditorSession extends Disposable {
 			throw error;
 		}
 	}
+
 }
 
 class PaneAction implements IAction {
-	constructor(
-		readonly id: string,
-		readonly label: string,
-		readonly tooltip: string,
-		readonly icon: IAction['icon'],
-		readonly enabled: boolean,
-		private readonly execute: (input: MultiDiffEditorInputItem) => unknown,
-		readonly checked?: boolean,
-	) {}
+	constructor(readonly id: string, readonly label: string, readonly tooltip: string, readonly icon: IAction['icon'], readonly enabled: boolean, private readonly execute: (input: MultiDiffEditorInputItem) => unknown, readonly checked?: boolean) { }
 
 	public run(context?: unknown): unknown {
 		return this.execute(context as MultiDiffEditorInputItem);

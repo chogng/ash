@@ -37,14 +37,7 @@ test('Pane retains one focus owner and releases its actions when their host move
 	pane.onDidBlur(() => events.push('blur'));
 	action.focus();
 	pane.setHeaderActionsHost(host);
-	assert.deepEqual(
-		{
-			focused: document.activeElement === action,
-			paneFocus: pane.hasFocus(),
-			count: host.querySelectorAll('button').length,
-		},
-		{ focused: true, paneFocus: true, count: 1 },
-	);
+	assert.deepEqual({ focused: document.activeElement === action, paneFocus: pane.hasFocus(), count: host.querySelectorAll('button').length }, { focused: true, paneFocus: true, count: 1 });
 	pane.setHeaderActionsHost();
 	await new Promise<void>(resolve => browserEnvironment.window.setTimeout(resolve, 0));
 	assert.deepEqual(events, ['focus']);
@@ -58,8 +51,7 @@ test('Pane retains one focus owner and releases its actions when their host move
 	assert.equal(pane.hasFocus(), false);
 	pane.dispose();
 	assert.equal(host.childElementCount, 0);
-	host.remove();
-	outside.remove();
+	host.remove(); outside.remove();
 });
 
 test('Pane owns titled collapse semantics and its stable visual state', () => {
@@ -71,8 +63,12 @@ test('Pane owns titled collapse semantics and its stable visual state', () => {
 	});
 	dom.window.document.body.append(pane.element);
 
-	const button = pane.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button');
-	const content = pane.element.querySelector<HTMLElement>('.ash-pane-view-content');
+	const button = pane.element.querySelector<HTMLButtonElement>(
+		'.ash-pane-view-header-button',
+	);
+	const content = pane.element.querySelector<HTMLElement>(
+		'.ash-pane-view-content',
+	);
 	assert.ok(button);
 	assert.ok(content);
 	assert.equal(pane.element.classList.contains('collapsed'), true);
@@ -90,7 +86,10 @@ test('Pane owns titled collapse semantics and its stable visual state', () => {
 	assert.equal(content.hidden, false);
 
 	pane.setTitle('Renamed');
-	assert.equal(pane.element.querySelector('.ash-pane-view-header-title')?.textContent, 'Renamed');
+	assert.equal(
+		pane.element.querySelector('.ash-pane-view-header-title')?.textContent,
+		'Renamed',
+	);
 
 	pane.dispose();
 	dom.window.close();
@@ -98,13 +97,7 @@ test('Pane owns titled collapse semantics and its stable visual state', () => {
 
 test('Pane custom header size keeps collapse and body constraints consistent', () => {
 	const document = browserEnvironment.window.document;
-	using pane = new Pane(document.body, {
-		id: 'custom-header',
-		title: 'Custom header',
-		headerSize: 32,
-		minimumBodySize: 64,
-		maximumBodySize: 64,
-	});
+	using pane = new Pane(document.body, { id: 'custom-header', title: 'Custom header', headerSize: 32, minimumBodySize: 64, maximumBodySize: 64 });
 	const body = pane.element.querySelector<HTMLElement>('.ash-pane-view-content')!;
 	assert.equal(pane.element.style.getPropertyValue('--ash-pane-header-height'), '32px');
 	assert.equal(pane.minimumSize, 96);
@@ -143,10 +136,7 @@ test('PaneView restores expanded sizes, retains content across moves and detache
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [230, 270]);
 	input.focus();
 	view.movePane(second, first);
-	assert.deepEqual(
-		[...view.element.querySelectorAll('.ash-pane-view')].map(element => (element as HTMLElement).dataset.paneViewId),
-		['second', 'first'],
-	);
+	assert.deepEqual([...view.element.querySelectorAll('.ash-pane-view')].map(element => (element as HTMLElement).dataset.paneViewId), ['second', 'first']);
 	assert.equal(document.activeElement, input);
 	assert.equal(input.value, 'draft');
 	view.removePane(second);
@@ -203,24 +193,15 @@ test('PaneView updates maximum body sizes through empty, constrained and filling
 	first.setCollapsed(false);
 	second.maximumBodySize = 66;
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [306, 94]);
-	assert.throws(() => {
-		second.maximumBodySize = 65;
-	}, RangeError);
-	assert.throws(() => {
-		second.maximumBodySize = Number.NaN;
-	}, RangeError);
+	assert.throws(() => { second.maximumBodySize = 65; }, RangeError);
+	assert.throws(() => { second.maximumBodySize = Number.NaN; }, RangeError);
 });
 
 test('PaneView retains changing content constraints through overflow, collapse and detachment', () => {
 	const document = browserEnvironment.window.document;
 	using view = new PaneView(document.body);
 	using first = new Pane(document.body, { id: 'dynamic-first', title: 'First', maximumBodySize: 400 });
-	using second = new Pane(document.body, {
-		id: 'dynamic-second',
-		title: 'Second',
-		minimumBodySize: 80,
-		maximumBodySize: 200,
-	});
+	using second = new Pane(document.body, { id: 'dynamic-second', title: 'Second', minimumBodySize: 80, maximumBodySize: 200 });
 	view.addPane(first, 220);
 	view.addPane(second, 180);
 	view.layout(400, 280);
@@ -281,22 +262,19 @@ test('PaneView lays out once per toggle and retains its resize boundary', () => 
 		assert.equal(sash.getAttribute('aria-disabled'), 'true');
 		second.setCollapsed(false);
 	}
-	assert.deepEqual(
-		{
-			layouts: first.layouts - layouts,
-			sash: view.element.querySelector('.ash-sash'),
-			sashCount: view.element.querySelectorAll('.ash-sash').length,
-			resizable: sash.getAttribute('aria-disabled'),
-			sizes: [view.getPaneSize(first), view.getPaneSize(second)],
-		},
-		{
-			layouts: 20,
-			sash,
-			sashCount: 1,
-			resizable: 'false',
-			sizes: [200, 200],
-		},
-	);
+	assert.deepEqual({
+		layouts: first.layouts - layouts,
+		sash: view.element.querySelector('.ash-sash'),
+		sashCount: view.element.querySelectorAll('.ash-sash').length,
+		resizable: sash.getAttribute('aria-disabled'),
+		sizes: [view.getPaneSize(first), view.getPaneSize(second)],
+	}, {
+		layouts: 20,
+		sash,
+		sashCount: 1,
+		resizable: 'false',
+		sizes: [200, 200],
+	});
 	assert.equal(view.element.querySelector('.ash-split-view')!.classList.contains('animated'), true);
 	sash.focus();
 	sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));

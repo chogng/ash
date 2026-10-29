@@ -9,15 +9,7 @@ import type { IView } from '../../../common/views.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	IProcessDataEvent,
-	IShellLaunchConfig,
-	TerminalProcessExecution,
-	TerminalProcessProfileSelection,
-	TerminalLocation,
-	ProcessPropertyType,
-	IProcessPropertyMap,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation, ProcessPropertyType, IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatusList } from './terminalStatusList.js';
 import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../platform/terminal/common/capabilities/capabilities.js';
@@ -61,6 +53,8 @@ export interface ITerminalScreenHost {
 	readonly onDidChangeState: Event<TerminalInstanceState>;
 	resize(dimensions: ITerminalDimensions): void;
 }
+
+
 
 /** Renderer-independent lifecycle state of one shell command. */
 export type TerminalCommandStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
@@ -121,18 +115,11 @@ export type ITerminalCreateOptions = {
 	readonly waitOnExit?: IShellLaunchConfig['waitOnExit'];
 	/** The caller subscribes to output and exit before opening a custom PTY or polling a process. */
 	readonly deferStart?: boolean;
-	readonly attachPersistentProcess?: {
-		readonly state: ITerminalSerializedState;
-		readonly process: ITerminalProcessCreation;
-		readonly ownership?: ITerminalProcessOwnership;
-	};
+	readonly attachPersistentProcess?: { readonly state: ITerminalSerializedState; readonly process: ITerminalProcessCreation; readonly ownership?: ITerminalProcessOwnership; };
 } & (
-	| { readonly profile: ITerminalProfileSelection; readonly config?: never }
-	| {
-			readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>;
-			readonly profile?: never;
-	  }
-);
+		| { readonly profile: ITerminalProfileSelection; readonly config?: never; }
+		| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never; }
+	);
 
 /** Creation intent; TerminalService resolves it before handing launch data to the instance factory. */
 export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'config' | 'cwd'> & {
@@ -144,8 +131,7 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 	readonly preserveFocus?: boolean;
 };
 
-export type ITerminalLocationOptions =
-	TerminalLocation | TerminalEditorLocation | { readonly parentTerminal: ITerminalInstance | Promise<ITerminalInstance> } | { readonly splitActiveTerminal: boolean };
+export type ITerminalLocationOptions = TerminalLocation | TerminalEditorLocation | { readonly parentTerminal: ITerminalInstance | Promise<ITerminalInstance>; } | { readonly splitActiveTerminal: boolean; };
 
 /** Captures a group in the main or an auxiliary editor part. */
 export interface TerminalEditorLocation {
@@ -223,9 +209,9 @@ export interface IXtermTerminal extends IDisposable {
 	readonly raw: Terminal;
 	readonly isDisposed: boolean;
 	readonly onDidChangeFindResults: Event<ISearchResultChangeEvent>;
-	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean }>;
+	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean; }>;
 	readonly findResult: ISearchResultChangeEvent | undefined;
-	attachWidget(widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void }): IDisposable | undefined;
+	attachWidget(widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void; }): IDisposable | undefined;
 	setVisible(visible: boolean): void;
 	focus(): void;
 	fit(): void;

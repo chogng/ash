@@ -44,26 +44,20 @@ export class CommandCenterControl extends Disposable {
 		this.domNode.append(navigationDomNode);
 		const navigation = options
 			? this._register(new WorkbenchToolBar(navigationDomNode, contextMenuService, { presentation: 'inherit-foreground' }))
-			: this._register(
-					new MenuWorkbenchToolBar(navigationDomNode, menuService, contextMenuService, MenuId.CommandCenter, {
-						presentation: 'inherit-foreground',
-					}),
-				);
+			: this._register(new MenuWorkbenchToolBar(navigationDomNode, menuService, contextMenuService, MenuId.CommandCenter, { presentation: 'inherit-foreground' }));
 		this.domNode.classList.toggle('ash-titlebar-command-center-custom', options !== undefined);
 
 		const label = () => localize(localizationService, { bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands');
-		this.button = this._register(
-			new Button(this.domNode, {
-				label: label(),
-				...getButtonStyles({ buttonSecondaryForeground: 'commandCenter.foreground' }),
-				ariaLabel: options?.ariaLabel ?? label(),
-				icon: Lxicon.search,
-				onClick: () => {
-					if (options) options.onClick();
-					else this.quickInput.quickAccess.show();
-				},
-			}),
-		);
+		this.button = this._register(new Button(this.domNode, {
+			label: label(),
+			...getButtonStyles({ buttonSecondaryForeground: 'commandCenter.foreground' }),
+			ariaLabel: options?.ariaLabel ?? label(),
+			icon: Lxicon.search,
+			onClick: () => {
+				if (options) options.onClick();
+				else this.quickInput.quickAccess.show();
+			},
+		}));
 		this.button.toggleClassName('ash-titlebar-command-center-button', true);
 		const updateTitle = (): void => {
 			if (options?.showTitle) this.button.label = windowTitle.value;

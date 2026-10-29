@@ -32,14 +32,16 @@ test('AriaLiveRegion announces repeated status and alert messages', async () => 
 	region.status('Ready');
 	await nextAnimationFrame(dom.window);
 	assert.deepEqual(
-		[...dom.window.document.querySelectorAll('.ash-aria-status')].map(element => element.textContent),
+		[...dom.window.document.querySelectorAll('.ash-aria-status')]
+			.map((element) => element.textContent),
 		['Ready', ''],
 	);
 
 	region.status('Ready');
 	await nextAnimationFrame(dom.window);
 	assert.deepEqual(
-		[...dom.window.document.querySelectorAll('.ash-aria-status')].map(element => element.textContent),
+		[...dom.window.document.querySelectorAll('.ash-aria-status')]
+			.map((element) => element.textContent),
 		['', 'Ready'],
 	);
 
@@ -51,9 +53,15 @@ test('AriaLiveRegion announces repeated status and alert messages', async () => 
 	assert.equal(alert?.textContent, 'Failed');
 
 	region.clear();
-	assert.equal(dom.window.document.querySelector('.ash-aria-live')?.textContent, '');
+	assert.equal(
+		dom.window.document.querySelector('.ash-aria-live')?.textContent,
+		'',
+	);
 	region.dispose();
-	assert.equal(dom.window.document.querySelector('.ash-aria-live'), null);
+	assert.equal(
+		dom.window.document.querySelector('.ash-aria-live'),
+		null,
+	);
 	dom.window.close();
 });
 
@@ -76,10 +84,11 @@ test('module ARIA owner announces through the configured workbench container', a
 });
 
 function nextAnimationFrame(targetWindow: DOMWindow): Promise<void> {
-	return new Promise(resolve => {
+	return new Promise((resolve) => {
 		scheduleAtNextAnimationFrame(targetWindow as unknown as Window, resolve);
 	});
 }
+
 
 test('ARIA container initialization returns the lifetime that cancels pending announcements', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -90,7 +99,5 @@ test('ARIA container initialization returns the lifetime that cancels pending an
 		region.dispose();
 		await nextAnimationFrame(dom.window);
 		assert.equal(dom.window.document.querySelectorAll('.ash-aria-live').length, 0);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });

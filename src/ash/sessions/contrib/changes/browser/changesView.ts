@@ -31,7 +31,10 @@ import { CreatePullRequestContextView } from './createPullRequestContextView.js'
 import { IChangesViewService } from '../common/changesViewService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
-import { buildTreeChildren, ChangesTreeRenderer, fileState, isChangesFileItem, type ChangesTreeElement, type IChangesFileItem } from './changesViewRenderer.js';
+import {
+	buildTreeChildren, ChangesTreeRenderer, fileState,
+	isChangesFileItem, type ChangesTreeElement, type IChangesFileItem,
+} from './changesViewRenderer.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
@@ -86,54 +89,39 @@ export class ChangesViewPane extends ViewPane {
 		this.statusDomNode = h(container.ownerDocument, 'p');
 		this.statusDomNode.setAttribute('role', 'status');
 		this.contentElement.append(this.statusDomNode);
-		this.review = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.review', 'Review all changes'),
-				onClick: () => {
-					const epoch = this.ownerEpoch;
-					void this.openReview().catch(error => this.reportOperationError(error, epoch));
-				},
-			}),
-		);
-		this.preview = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.previewSelected', 'Preview selected changes'),
-				onClick: () => {
-					const epoch = this.ownerEpoch;
-					void this.previewSelection().catch(error => this.reportOperationError(error, epoch));
-				},
-			}),
-		);
+		this.review = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.review', 'Review all changes'),
+			onClick: () => {
+				const epoch = this.ownerEpoch;
+				void this.openReview().catch(error => this.reportOperationError(error, epoch));
+			},
+		}));
+		this.preview = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.previewSelected', 'Preview selected changes'),
+			onClick: () => {
+				const epoch = this.ownerEpoch;
+				void this.previewSelection().catch(error => this.reportOperationError(error, epoch));
+			},
+		}));
 		this.preview.enabled = false;
 		this.review.enabled = false;
-		this.retry = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.retry', 'Retry loading changes'),
-				onClick: () => {
-					void this.refresh();
-				},
-			}),
-		);
+		this.retry = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.retry', 'Retry loading changes'),
+			onClick: () => { void this.refresh(); },
+		}));
 		this.retry.domNode.hidden = true;
-		this.createPullRequest = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.createPR', 'Create pull request'),
-				onClick: () => {
-					const view = this.instantiation.createInstance(CreatePullRequestContextView);
-					this.pullRequest.value = view;
-					void view.show(this.createPullRequest.domNode).catch(error => {
-						if (!view.isDisposed) {
-							this.notifications.error(getErrorMessage(error));
-							view.dispose();
-						}
-					});
-				},
-			}),
-		);
+		this.createPullRequest = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.createPR', 'Create pull request'),
+			onClick: () => {
+				const view = this.instantiation.createInstance(CreatePullRequestContextView);
+				this.pullRequest.value = view;
+				void view.show(this.createPullRequest.domNode).catch(error => { if (!view.isDisposed) { this.notifications.error(getErrorMessage(error)); view.dispose(); } });
+			},
+		}));
 		const updatePullRequest = (): void => {
 			const selected = this.sessions.activeSelection;
 			this.createPullRequest.domNode.hidden = selected?.kind !== 'session' || !selected.active.session.workspace;
@@ -157,32 +145,24 @@ export class ChangesViewPane extends ViewPane {
 			this.modePicker.append(option);
 		}
 		controls.append(this.changesetPicker, this.modePicker);
-		this.markReviewed = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.markReviewed', 'Mark reviewed'),
-				onClick: () => this.setReviewState(true),
-			}),
-		);
-		this.markUnread = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('sessions.changes.markUnread', 'Mark unreviewed'),
-				onClick: () => this.setReviewState(false),
-			}),
-		);
-		this._register(
-			addDisposableListener(this.changesetPicker, 'change', () => {
-				this.saveTreeState();
-				this.changesetId = this.changesetPicker.value || undefined;
-				this.renderRows();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.modePicker, 'change', () => {
-				this.viewState.setViewMode(this.modePicker.value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List);
-			}),
-		);
+		this.markReviewed = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.markReviewed', 'Mark reviewed'),
+			onClick: () => this.setReviewState(true),
+		}));
+		this.markUnread = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.markUnread', 'Mark unreviewed'),
+			onClick: () => this.setReviewState(false),
+		}));
+		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
+			this.saveTreeState();
+			this.changesetId = this.changesetPicker.value || undefined;
+			this.renderRows();
+		}));
+		this._register(addDisposableListener(this.modePicker, 'change', () => {
+			this.viewState.setViewMode(this.modePicker.value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List);
+		}));
 		const treeContainer = h(container.ownerDocument, 'div');
 		treeContainer.className = 'ash-sessions-changes-tree';
 		this.contentElement.append(treeContainer);
@@ -190,123 +170,73 @@ export class ChangesViewPane extends ViewPane {
 		treeContainer.before(this.skeleton.element);
 		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
 		const renderer = new ChangesTreeRenderer(container.ownerDocument);
-		this.tree = this._register(
-			new WorkbenchObjectTree<ChangesTreeElement>(treeContainer, {
-				configurationService: configuration,
-				multipleSelectionSupport: true,
-				openOnSingleClick: false,
-				ariaLabel: localize('sessions.changes.title', 'Changes'),
-				modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
-				keyboardNavigationLabelProvider: {
-					getKeyboardNavigationLabel: row => (isChangesFileItem(row) ? row.file.path : row.name),
-				},
-				renderElement: row =>
-					renderer.renderElement(
-						row,
-						isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
-						this.viewMode === ChangesViewMode.Tree,
-					),
-			}),
-		);
-		this._register(
-			autorun(reader => {
-				const mode = viewState.viewModeObs.read(reader);
-				if (mode !== this.viewMode) {
-					this.saveTreeState();
-					this.viewMode = mode;
-					this.renderRows();
-				}
-				this.modePicker.value = mode;
-			}),
-		);
-		this._register(
-			viewState.reviewedFilesObs.onDidChange(() => {
-				this.tree.rerender();
-				this.updatePreviewSelection();
-			}),
-		);
-		this._register(
-			autorun(reader => {
-				const id = viewState.getChangesetId(this.stateResource, reader);
-				if (!this.loading && this.rows.length && this.changesetPicker.value !== (id ?? '')) {
-					this.changesetPicker.value = id ?? '';
-					this.renderRows();
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(event => {
-				this.updatePreviewSelection();
-				if (event.browserEvent) {
-					this.saveTreeState();
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeFocus(event => {
-				if (event.browserEvent) {
-					this.saveTreeState();
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeCollapseState(event => {
-				if (event.browserEvent) {
-					this.saveTreeState();
-				}
-			}),
-		);
+		this.tree = this._register(new WorkbenchObjectTree<ChangesTreeElement>(treeContainer, {
+			configurationService: configuration,
+			multipleSelectionSupport: true,
+			openOnSingleClick: false,
+			ariaLabel: localize('sessions.changes.title', 'Changes'),
+			modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => isChangesFileItem(row) ? row.file.path : row.name },
+			renderElement: row => renderer.renderElement(row,
+				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
+				this.viewMode === ChangesViewMode.Tree),
+		}));
+		this._register(autorun(reader => {
+			const mode = viewState.viewModeObs.read(reader);
+			if (mode !== this.viewMode) {
+				this.saveTreeState();
+				this.viewMode = mode;
+				this.renderRows();
+			}
+			this.modePicker.value = mode;
+		}));
+		this._register(viewState.reviewedFilesObs.onDidChange(() => {
+			this.tree.rerender();
+			this.updatePreviewSelection();
+		}));
+		this._register(autorun(reader => {
+			const id = viewState.getChangesetId(this.stateResource, reader);
+			if (!this.loading && this.rows.length && this.changesetPicker.value !== (id ?? '')) {
+				this.changesetPicker.value = id ?? '';
+				this.renderRows();
+			}
+		}));
+		this._register(this.tree.onDidChangeSelection(event => {
+			this.updatePreviewSelection();
+			if (event.browserEvent) { this.saveTreeState(); }
+		}));
+		this._register(this.tree.onDidChangeFocus(event => { if (event.browserEvent) { this.saveTreeState(); } }));
+		this._register(this.tree.onDidChangeCollapseState(event => { if (event.browserEvent) { this.saveTreeState(); } }));
 		const scoped = this._register(contextKeys.createScoped(this.contentElement));
 		scoped.createKey('sessionsChangesFocused', true);
 		const updateHint = (): void => {
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsChanges);
-			if (hint) {
-				this.tree.domNode.setAttribute('aria-description', hint);
-			} else {
-				this.tree.domNode.removeAttribute('aria-description');
-			}
+			if (hint) { this.tree.domNode.setAttribute('aria-description', hint); }
+			else { this.tree.domNode.removeAttribute('aria-description'); }
 		};
 		this._register(configuration.onDidChangeConfiguration(updateHint));
 		updateHint();
-		this._register(
-			this.tree.onDidOpen(event => {
-				const epoch = this.ownerEpoch;
-				if (isChangesFileItem(event.element)) {
-					const resource = getChangesEditorFileResource(event.element);
-					void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => {
-						if (findChangesEditorFileChange(resource, this.rows)) {
-							this.reportOperationError(error, epoch);
-						}
-					});
-				}
-			}),
-		);
-		this._register(
-			sessions.onDidChange(() => {
-				void this.refresh();
-			}),
-		);
-		this._register(
-			chat.onDidUpdateTurnChanges(event => {
-				const active = sessions.activeSelection;
-				if (active?.kind === 'session' && active.active.session.sessionId === event.sessionId && active.active.threadId === event.threadId) {
-					void this.refresh();
-				}
-			}),
-		);
-		this._register(
-			chat.onDidBecomeReady(() => {
-				void this.refresh();
-			}),
-		);
+		this._register(this.tree.onDidOpen(event => {
+			const epoch = this.ownerEpoch;
+			if (isChangesFileItem(event.element)) {
+				const resource = getChangesEditorFileResource(event.element);
+				void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => {
+					if (findChangesEditorFileChange(resource, this.rows)) { this.reportOperationError(error, epoch); }
+				});
+			}
+		}));
+		this._register(sessions.onDidChange(() => { void this.refresh(); }));
+		this._register(chat.onDidUpdateTurnChanges(event => {
+			const active = sessions.activeSelection;
+			if (active?.kind === 'session' && active.active.session.sessionId === event.sessionId && active.active.threadId === event.threadId) { void this.refresh(); }
+		}));
+		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
 		this._register(addDisposableListener(this.tree.domNode, 'focus', updateHint));
 		this._register(storage.onWillSaveState(() => this.saveTreeState()));
 	}
 
 	public override setVisible(visible: boolean): void {
-		if (visible === this.isVisible()) {
-			return;
-		}
+		if (visible === this.isVisible()) { return; }
 		super.setVisible(visible);
 		if (visible) {
 			this.gitActions.value = this.instantiation.createInstance(SessionSyncChangesActionViewItem, this.contentElement);
@@ -323,14 +253,10 @@ export class ChangesViewPane extends ViewPane {
 		}
 	}
 
-	public focus(): void {
-		this.tree.domFocus();
-	}
+	public focus(): void { this.tree.domFocus(); }
 
 	public override dispose(): void {
-		if (this.isDisposed) {
-			return;
-		}
+		if (this.isDisposed) { return; }
 		this.saveTreeState();
 		this.request++;
 		this.ownerEpoch++;
@@ -338,26 +264,20 @@ export class ChangesViewPane extends ViewPane {
 	}
 
 	private reportOperationError(error: unknown, epoch: number): void {
-		if (!this.isDisposed && this.isVisible() && epoch === this.ownerEpoch) {
-			this.notifications.error(getErrorMessage(error));
-		}
+		if (!this.isDisposed && this.isVisible() && epoch === this.ownerEpoch) { this.notifications.error(getErrorMessage(error)); }
 	}
 
 	public getAccessibleContent(): string {
 		const selected = new Set(this.tree.selection);
-		const files = this.visibleRows().map(row =>
-			[
-				`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
-				localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
-				fileState(row),
-				this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
-				selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
-				row.summary.failureMessage,
-				...row.summary.warnings,
-			]
-				.filter(Boolean)
-				.join('; '),
-		);
+		const files = this.visibleRows().map(row => [
+			`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
+			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
+			fileState(row),
+			this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+			selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
+			row.summary.failureMessage,
+			...row.summary.warnings,
+		].filter(Boolean).join('; '));
 		return [
 			localize('sessions.changes.title', 'Changes'),
 			this.statusDomNode.textContent,
@@ -371,17 +291,7 @@ export class ChangesViewPane extends ViewPane {
 	private updatePreviewSelection(): void {
 		const selected = this.tree.selection.filter(isChangesFileItem);
 		const onlyFiles = selected.length > 0 && selected.length === this.tree.selection.length;
-		this.preview.enabled =
-			!this.loading &&
-			onlyFiles &&
-			selected.every(
-				row =>
-					row.summary.captureState === 'sealed' &&
-					!row.summary.committedPaths.includes(row.file.path) &&
-					row.summary.commitState !== 'queued' &&
-					row.summary.commitState !== 'committing' &&
-					row.summary.repositoryId === selected[0]!.summary.repositoryId,
-			);
+		this.preview.enabled = !this.loading && onlyFiles && selected.every(row => row.summary.captureState === 'sealed' && !row.summary.committedPaths.includes(row.file.path) && row.summary.commitState !== 'queued' && row.summary.commitState !== 'committing' && row.summary.repositoryId === selected[0]!.summary.repositoryId);
 		this.markReviewed.enabled = !this.loading && onlyFiles;
 		this.markUnread.enabled = !this.loading && onlyFiles;
 	}
@@ -395,34 +305,24 @@ export class ChangesViewPane extends ViewPane {
 	}
 
 	private set changesetId(id: string | undefined) {
-		if (!this.stateResource) {
-			return;
-		}
+		if (!this.stateResource) { return; }
 		this.viewState.setChangesetId(id, this.stateResource);
 	}
 
 	private setReviewState(reviewed: boolean): void {
-		if (!this.isVisible() || this.loading) {
-			return;
-		}
+		if (!this.isVisible() || this.loading) { return; }
 		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesEditorFileResource), reviewed);
 	}
 
 	private saveTreeState(): void {
-		if (!this.stateResource || !this.rows.length) {
-			return;
-		}
+		if (!this.stateResource || !this.rows.length) { return; }
 		const expanded: Record<string, 0 | 1> = {};
 		for (const item of this.tree.getVisibleElements()) {
-			if (!isChangesFileItem(item)) {
-				expanded[item.id] = this.tree.isCollapsed(item.id) ? 0 : 1;
-			}
+			if (!isChangesFileItem(item)) { expanded[item.id] = this.tree.isCollapsed(item.id) ? 0 : 1; }
 		}
 		this.viewState.setDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode, {
 			focus: this.tree.focus ? [this.tree.focus.id] : [],
-			selection: this.tree.selection.map(row => row.id),
-			expanded,
-			scrollTop: this.tree.scrollTop,
+			selection: this.tree.selection.map(row => row.id), expanded, scrollTop: this.tree.scrollTop,
 		});
 	}
 
@@ -431,21 +331,15 @@ export class ChangesViewPane extends ViewPane {
 		const children = this.viewMode === ChangesViewMode.Tree ? buildTreeChildren(rows) : rows.map(element => ({ element }));
 		this.tree.setChildren(children);
 		for (const child of children) {
-			if (!isChangesFileItem(child.element)) {
-				this.tree.expandRecursive(child.element.id);
-			}
+			if (!isChangesFileItem(child.element)) { this.tree.expandRecursive(child.element.id); }
 		}
 		const state = this.stateResource && this.viewState.getDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode);
 		if (state) {
 			for (const [id, expanded] of Object.entries(state.expanded)) {
-				if (!expanded && this.tree.isCollapsed(id) !== undefined) {
-					this.tree.collapse(id);
-				}
+				if (!expanded && this.tree.isCollapsed(id) !== undefined) { this.tree.collapse(id); }
 			}
 			this.tree.setSelection(state.selection);
-			if (state.focus[0]) {
-				this.tree.setFocus(state.focus[0]);
-			}
+			if (state.focus[0]) { this.tree.setFocus(state.focus[0]); }
 			this.tree.scrollTop = state.scrollTop;
 		} else {
 			this.tree.setSelection([]);
@@ -453,21 +347,14 @@ export class ChangesViewPane extends ViewPane {
 		}
 		this.review.enabled = !this.loading && rows.length > 0;
 		this.updatePreviewSelection();
-		this.statistics.set(
-			rows.length
-				? {
-						files: rows.length,
-						additions: rows.reduce((sum, row) => sum + row.file.additions, 0),
-						deletions: rows.reduce((sum, row) => sum + row.file.deletions, 0),
-					}
-				: undefined,
-		);
+		this.statistics.set(rows.length ? {
+			files: rows.length, additions: rows.reduce((sum, row) => sum + row.file.additions, 0),
+			deletions: rows.reduce((sum, row) => sum + row.file.deletions, 0),
+		} : undefined);
 	}
 
 	private async refresh(): Promise<void> {
-		if (!this.isVisible() || this.isDisposed) {
-			return;
-		}
+		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
 		this.skeleton.setVisible(false);
 		this.statusDomNode.hidden = false;
@@ -484,9 +371,7 @@ export class ChangesViewPane extends ViewPane {
 		const resource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
 		const owner = selection?.kind === 'session' ? resource!.toString() : undefined;
 		const ownerChanged = owner !== this.owner;
-		if (ownerChanged) {
-			this.ownerEpoch++;
-		}
+		if (ownerChanged) { this.ownerEpoch++; }
 		this.owner = owner;
 		this.stateResource = resource;
 		if (ownerChanged || !owner) {
@@ -512,24 +397,14 @@ export class ChangesViewPane extends ViewPane {
 		try {
 			const active = selection.active;
 			const summaries = await this.chat.listTurnChanges(active.session.sessionId, active.threadId);
-			if (this.isDisposed || request !== this.request) {
-				return;
-			}
-			const details = await Promise.all(
-				summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)),
-			);
-			if (this.isDisposed || request !== this.request) {
-				return;
-			}
+			if (this.isDisposed || request !== this.request) { return; }
+			const details = await Promise.all(summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)));
+			if (this.isDisposed || request !== this.request) { return; }
 			this.loading = false;
-			this.rows = details.flatMap((details, index) =>
-				details.files.map(file => ({
-					type: 'file' as const,
-					id: `${details.summary.changeSetId}:${file.path}`,
-					...createSessionFileChange(details.summary, file),
-					turnNumber: index + 1,
-				})),
-			);
+			this.rows = details.flatMap((details, index) => details.files.map(file => ({
+				type: 'file' as const, id: `${details.summary.changeSetId}:${file.path}`,
+				...createSessionFileChange(details.summary, file), turnNumber: index + 1,
+			})));
 			const selectedTurn = this.changesetId;
 			this.changesetPicker.replaceChildren();
 			const all = h(this.contentElement.ownerDocument, 'option');
@@ -546,13 +421,9 @@ export class ChangesViewPane extends ViewPane {
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
 			this.renderRows();
-			this.statusDomNode.textContent = this.rows.length
-				? localize('sessions.changes.count', '{0} changed files', this.rows.length)
-				: localize('sessions.changes.empty', 'No changes in this conversation.');
+			this.statusDomNode.textContent = this.rows.length ? localize('sessions.changes.count', '{0} changed files', this.rows.length) : localize('sessions.changes.empty', 'No changes in this conversation.');
 		} catch (error) {
-			if (this.isDisposed || request !== this.request) {
-				return;
-			}
+			if (this.isDisposed || request !== this.request) { return; }
 			this.rows = [];
 			this.tree.setChildren([]);
 			this.statistics.set(undefined, undefined);
@@ -573,9 +444,7 @@ export class ChangesViewPane extends ViewPane {
 
 	private async openReview(): Promise<void> {
 		const selection = this.sessions.activeSelection;
-		if (!this.isVisible() || selection?.kind !== 'session') {
-			return;
-		}
+		if (!this.isVisible() || selection?.kind !== 'session') { return; }
 		await this.changesService.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, {
 			changesetSelection: { kind: 'id', id: this.changesetId },
 		});
@@ -583,89 +452,53 @@ export class ChangesViewPane extends ViewPane {
 
 	private async previewSelection(): Promise<void> {
 		const selection = this.sessions.activeSelection;
-		if (!this.isVisible() || selection?.kind !== 'session') {
-			return;
-		}
+		if (!this.isVisible() || selection?.kind !== 'session') { return; }
 		const ownerEpoch = this.ownerEpoch;
 		const selected = this.tree.selection.filter(isChangesFileItem);
 		const active = selection.active;
 		const grouped = new Map<string, TurnCommitSelection>();
 		for (const row of selected) {
 			const existing = grouped.get(row.summary.changeSetId);
-			grouped.set(row.summary.changeSetId, {
-				changeSetId: row.summary.changeSetId,
-				expectedRevision: row.summary.revision,
-				paths: [...(existing?.paths ?? []), row.file.path],
-			});
+			grouped.set(row.summary.changeSetId, { changeSetId: row.summary.changeSetId, expectedRevision: row.summary.revision, paths: [...(existing?.paths ?? []), row.file.path] });
 		}
-		if (!grouped.size) {
-			return;
-		}
-		const message = await this.quickInput.input({
-			title: localize('sessions.changes.commitMessage', 'Commit message'),
-			validateInput: async value => (value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.')),
-		});
-		if (message === undefined || this.isDisposed || ownerEpoch !== this.ownerEpoch) {
-			return;
-		}
+		if (!grouped.size) { return; }
+		const message = await this.quickInput.input({ title: localize('sessions.changes.commitMessage', 'Commit message'), validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.') });
+		if (message === undefined || this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		const preview = await this.chat.prepareTurnCommit(active.session.sessionId, active.threadId, [...grouped.values()], message);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) {
-			return;
-		}
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		const input = await createTurnCommitPreviewInput(this.chat, active.session.sessionId, active.threadId, preview);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) {
-			return;
-		}
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) { return; }
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
 	private async openFile(row: IChangesFileItem, options: IEditorOptions, sideBySide: boolean): Promise<void> {
-		if (!this.isVisible() || this.loading) {
-			return;
-		}
+		if (!this.isVisible() || this.loading) { return; }
 		const ownerEpoch = this.ownerEpoch;
 		const summary = row.summary;
 		const resource = getChangesEditorFileResource(row);
 		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
 		// A refresh can replace a capture without changing the selected conversation.
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) {
-			return;
-		}
-		if (contents.truncated && !contents.binary) {
-			throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
-		}
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) { return; }
+		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const current = await this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) {
-			return;
-		}
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) { return; }
 		if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
 			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 		}
 		const before = resource.with({ query: `${resource.query}&side=before` });
 		const after = resource.with({ query: `${resource.query}&side=after` });
 		if (contents.binary) {
-			await this.editors.openEditor(
-				createMultiDiffEditorInput(
-					resource.with({ scheme: 'ash-multi-diff' }),
-					[
-						{
-							label: row.file.path,
-							binary: true,
-							original: { resource: before, readOnly: true },
-							modified: { resource: after, readOnly: true },
-						},
-					],
-					row.file.path,
-				),
-				options,
-				sideBySide ? 'sideGroup' : 'activeGroup',
-			);
+			await this.editors.openEditor(createMultiDiffEditorInput(resource.with({ scheme: 'ash-multi-diff' }), [{
+				label: row.file.path, binary: true,
+				original: { resource: before, readOnly: true },
+				modified: { resource: after, readOnly: true },
+			}], row.file.path), options, sideBySide ? 'sideGroup' : 'activeGroup');
 			return;
 		}
-		await this.editors.openEditor(
-			createDiffEditorInput({ resource: before, initialText: contents.before ?? '', readOnly: true }, { resource: after, initialText: contents.after ?? '', readOnly: true }, row.file.path),
-			options,
-			sideBySide ? 'sideGroup' : 'activeGroup',
-		);
+		await this.editors.openEditor(createDiffEditorInput(
+			{ resource: before, initialText: contents.before ?? '', readOnly: true },
+			{ resource: after, initialText: contents.after ?? '', readOnly: true },
+			row.file.path,
+		), options, sideBySide ? 'sideGroup' : 'activeGroup');
 	}
 }

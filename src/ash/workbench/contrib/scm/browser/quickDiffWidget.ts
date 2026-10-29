@@ -19,14 +19,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	private readonly modelReference: QuickDiffModelReference | undefined;
 	private currentChange: QuickDiffChange | undefined;
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		private readonly editorView: View,
-		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IQuickDiffModelService modelService: IQuickDiffModelService,
-		@IQuickDiffEditorControllerService controllerService: IQuickDiffEditorControllerService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
-	) {
+	constructor(private readonly editor: ICodeEditor, private readonly editorView: View, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickDiffModelService modelService: IQuickDiffModelService, @IQuickDiffEditorControllerService controllerService: IQuickDiffEditorControllerService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.modelReference = this._register(modelService.createModelReference(editorView.textModel.uri, editorView.textModel));
 		this._register(new QuickDiffDecorator(editor, this.modelReference, configurationService));
@@ -64,10 +57,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	private handlePointerDown(event: PointerEvent): void {
 		if (event.button !== 0 || this.configurationService.getValue('scm.diffDecorationsGutterAction') !== 'diff') return;
 		if (!isHTMLElement(event.target) || !event.target.closest('.ash-quick-diff-gutter')) return;
-		const target = this.editorView.getNearestTargetAtClientPoint({
-			clientX: event.clientX,
-			clientY: event.clientY,
-		});
+		const target = this.editorView.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
 		if (!target) return;
 		const change = this.modelReference?.object.findChangeAtLine(target.position.lineNumber - 1);
 		if (!change) return;
@@ -96,10 +86,9 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 		const model = this.modelReference?.object;
 		if (!model) return;
 		this.currentChange = change;
-		this.editorView.revealPosition(new Position(change.lineIndex + 1, 0 + 1));
+		this.editorView.revealPosition(new Position((change.lineIndex) + 1, (0) + 1));
 		const index = model.state.changes.indexOf(change);
-		this.view.value = this.instantiationService.createInstance(
-			QuickDiffPeekView,
+		this.view.value = this.instantiationService.createInstance(QuickDiffPeekView,
 			this.editor,
 			change,
 			Math.max(0, index) + 1,
@@ -119,12 +108,10 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.controllers.clear();
-				this._activeController = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.controllers.clear();
+			this._activeController = undefined;
+		}));
 	}
 
 	get activeController(): IQuickDiffEditorController | undefined {
@@ -149,16 +136,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 }
 
 class QuickDiffPeekView extends Disposable {
-	constructor(
-		editor: ICodeEditor,
-		change: QuickDiffChange,
-		index: number,
-		count: number,
-		showPrevious: () => void,
-		showNext: () => void,
-		close: () => void,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(editor: ICodeEditor, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new Error('Quick Diff requires an attached editor');
@@ -183,19 +161,13 @@ class QuickDiffPeekView extends Disposable {
 		this._register(addDisposableListener(previous, 'click', showPrevious));
 		this._register(addDisposableListener(next, 'click', showNext));
 		this._register(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this._register(
-			instantiationService.createInstance(
-				EmbeddedDiffEditorWidget,
-				{
-					container: diffContainer,
-					model: change.comparison.model,
-					readOnly: true,
-					originalAriaLabel: change.comparison.original.label,
-					modifiedAriaLabel: editor.getOption(EditorOption.ariaLabel),
-				},
-				editor,
-			),
-		);
+		const diffWidget = this._register(instantiationService.createInstance(EmbeddedDiffEditorWidget, {
+			container: diffContainer,
+			model: change.comparison.model,
+			readOnly: true,
+			originalAriaLabel: change.comparison.original.label,
+			modifiedAriaLabel: editor.getOption(EditorOption.ariaLabel),
+		}, editor));
 		const reveal = (): void => {
 			if (!change.comparison.model.diff) return;
 			try {

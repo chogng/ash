@@ -7,18 +7,10 @@ import { toDisposable } from '../../../../common/lifecycle.js';
 
 class LabelItem extends BreadcrumbsItem {
 	public disposeCount = 0;
-	constructor(public readonly label: string) {
-		super();
-	}
-	public dispose(): void {
-		this.disposeCount++;
-	}
-	public equals(other: BreadcrumbsItem): boolean {
-		return other instanceof LabelItem && other.label === this.label;
-	}
-	public render(container: HTMLElement): void {
-		container.textContent = this.label;
-	}
+	constructor(public readonly label: string) { super(); }
+	public dispose(): void { this.disposeCount++; }
+	public equals(other: BreadcrumbsItem): boolean { return other instanceof LabelItem && other.label === this.label; }
+	public render(container: HTMLElement): void { container.textContent = this.label; }
 }
 
 const styles: IBreadcrumbsWidgetStyles = {
@@ -40,12 +32,7 @@ suite('BreadcrumbsWidget', () => {
 			});
 			const viewport = dom.window.document.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 			let reads = 0;
-			Object.defineProperty(viewport, 'clientWidth', {
-				get: () => {
-					reads++;
-					return 100;
-				},
-			});
+			Object.defineProperty(viewport, 'clientWidth', { get: () => { reads++; return 100; } });
 			widget.setItems([new LabelItem('folder'), new LabelItem('old.ts')]);
 			const last = new LabelItem('new.ts');
 			widget.setItems([new LabelItem('folder'), last]);
@@ -67,9 +54,7 @@ suite('BreadcrumbsWidget', () => {
 			widget.layout(undefined);
 			widget.dispose();
 			assert.equal(pending.size, 0);
-		} finally {
-			dom.window.close();
-		}
+		} finally { dom.window.close(); }
 	});
 
 	test('moves focus independently of activation and blocks disabled clicks', () => {

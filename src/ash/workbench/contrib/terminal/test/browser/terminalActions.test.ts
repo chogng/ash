@@ -36,12 +36,8 @@ class InputTerminal {
 	readonly input: unknown[][] = [];
 	readonly paths: unknown[][] = [];
 	readonly instance = this as unknown as ITerminalInstance;
-	async sendText(...args: unknown[]): Promise<void> {
-		this.input.push(args);
-	}
-	async sendPath(...args: unknown[]): Promise<void> {
-		this.paths.push(args);
-	}
+	async sendText(...args: unknown[]): Promise<void> { this.input.push(args); }
+	async sendPath(...args: unknown[]): Promise<void> { this.paths.push(args); }
 }
 
 suite('Terminal retained screen commands', () => {
@@ -105,7 +101,7 @@ class SelectionFixture extends Disposable {
 	readonly instances: ITerminalInstance[] = [];
 	active: ITerminalInstance | undefined;
 	readonly effects: unknown[] = [];
-	open = async (): Promise<void> => {};
+	open = async (): Promise<void> => { };
 	create = async (): Promise<ITerminalInstance | undefined> => {
 		this.effects.push('create');
 		return this.add(new InputTerminal());
@@ -115,15 +111,11 @@ class SelectionFixture extends Disposable {
 
 	constructor() {
 		super();
-		this.services.registerInstance(ICodeEditorService, {
-			getActiveCodeEditor: () => this.editor,
-		} as ICodeEditorService);
+		this.services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => this.editor } as ICodeEditorService);
 		const fixture = this;
 		this.services.registerInstance(ITerminalService, {
 			instances: this.instances,
-			get activeInstance() {
-				return fixture.active;
-			},
+			get activeInstance() { return fixture.active; },
 			createTerminal: () => this.create(),
 		} as unknown as ITerminalService);
 		this.services.registerInstance(IViewsService, {
@@ -134,14 +126,10 @@ class SelectionFixture extends Disposable {
 			},
 		} as unknown as IViewsService);
 		this.services.registerInstance(ITerminalGroupService, {
-			showPanel: async (focus: boolean) => {
-				this.effects.push(['panel', focus]);
-			},
+			showPanel: async (focus: boolean) => { this.effects.push(['panel', focus]); },
 		} as ITerminalGroupService);
 		this.services.registerInstance(ITerminalEditorService, {
-			openEditor: async (instance: ITerminalInstance, options: unknown) => {
-				this.effects.push(['editor', instance, options]);
-			},
+			openEditor: async (instance: ITerminalInstance, options: unknown) => { this.effects.push(['editor', instance, options]); },
 		} as ITerminalEditorService);
 	}
 
@@ -151,12 +139,8 @@ class SelectionFixture extends Disposable {
 		return terminal.instance;
 	}
 
-	run(): Promise<unknown> {
-		return this.commands.executeCommand(TerminalCommandId.RunSelectedText);
-	}
-	runFile(): Promise<unknown> {
-		return this.commands.executeCommand(TerminalCommandId.RunActiveFile);
-	}
+	run(): Promise<unknown> { return this.commands.executeCommand(TerminalCommandId.RunSelectedText); }
+	runFile(): Promise<unknown> { return this.commands.executeCommand(TerminalCommandId.RunActiveFile); }
 }
 
 test('Run Active File sends the captured resource to the existing instance without saving or replacing its text', async () => {
@@ -205,10 +189,7 @@ suite('Terminal run selected text', () => {
 	test('creates through the service before revealing the panel', async () => {
 		using fixture = new SelectionFixture();
 		const terminal = new InputTerminal();
-		fixture.create = async () => {
-			fixture.effects.push('create');
-			return fixture.add(terminal);
-		};
+		fixture.create = async () => { fixture.effects.push('create'); return fixture.add(terminal); };
 		await fixture.run();
 		assert.deepEqual(terminal.input, [['echo first  \necho second', true, true]]);
 		assert.deepEqual(fixture.effects, ['create', ['panel', false]]);
@@ -233,10 +214,7 @@ suite('Terminal run selected text', () => {
 		using fixture = new SelectionFixture();
 		const requested = new DeferredPromise<void>();
 		const result = new DeferredPromise<ITerminalInstance>();
-		fixture.create = async () => {
-			await requested.complete();
-			return result.p;
-		};
+		fixture.create = async () => { await requested.complete(); return result.p; };
 		const running = fixture.run();
 		await requested.p;
 		fixture.model.setValue('different editor content');
@@ -283,6 +261,7 @@ suite('Terminal run selected text', () => {
 	});
 });
 
+
 suite('Terminal dropdown commands', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -301,43 +280,21 @@ suite('Terminal dropdown commands', () => {
 			services.registerInstance(IWorkspaceTrustManagementService, trust);
 			const effects: string[] = [];
 			services.registerInstance(IWorkspaceTrustRequestService, {
-				onDidInitiateWorkspaceTrustRequest: Event.None,
-				onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
-				requestWorkspaceTrust: async () => {
-					effects.push('request');
-					await requested.complete();
-					return response.p;
-				},
-				requestWorkspaceTrustOnStartup() {},
-				cancelWorkspaceTrustRequest() {},
-				completeWorkspaceTrustRequest: async () => {},
+				onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+				requestWorkspaceTrust: async () => { effects.push('request'); await requested.complete(); return response.p; },
+				requestWorkspaceTrustOnStartup() { }, cancelWorkspaceTrustRequest() { }, completeWorkspaceTrustRequest: async () => { },
 			});
 			const terminal = { xterm: { focus: () => effects.push('focus') } } as unknown as ITerminalInstance;
 			let active: ITerminalInstance | undefined;
 			services.registerSingleton(ITerminalService, () => {
 				effects.push('construct');
 				return {
-					get activeInstance() {
-						return active;
-					},
-					createTerminal: async () => {
-						effects.push('create');
-						return terminal;
-					},
-					setActiveInstance: (instance: ITerminalInstance) => {
-						active = instance;
-					},
+					get activeInstance() { return active; }, createTerminal: async () => { effects.push('create'); return terminal; },
+					setActiveInstance: (instance: ITerminalInstance) => { active = instance; },
 				} as unknown as ITerminalService;
 			});
-			services.registerInstance(IQuickInputService, {
-				onShow: Event.None,
-				currentQuickInput: undefined,
-			} as unknown as IQuickInputService);
-			services.registerInstance(ITerminalGroupService, {
-				showPanel: async () => {
-					effects.push('panel');
-				},
-			} as unknown as ITerminalGroupService);
+			services.registerInstance(IQuickInputService, { onShow: Event.None, currentQuickInput: undefined } as unknown as IQuickInputService);
+			services.registerInstance(ITerminalGroupService, { showPanel: async () => { effects.push('panel'); } } as unknown as ITerminalGroupService);
 			using commands = new CommandService(services);
 			const operation = commands.executeCommand(TerminalCommandId.New);
 			assert.deepEqual(effects, []);
@@ -353,11 +310,7 @@ suite('Terminal dropdown commands', () => {
 	test('settings opens the graphical editor filtered to terminal settings', async () => {
 		using services = new InstantiationService();
 		const requests: unknown[] = [];
-		services.registerInstance(IPreferencesService, {
-			openSettings: async options => {
-				requests.push(options);
-			},
-		} as IPreferencesService);
+		services.registerInstance(IPreferencesService, { openSettings: async options => { requests.push(options); } } as IPreferencesService);
 		using commands = new CommandService(services);
 		await commands.executeCommand(TerminalCommandId.ConfigureTerminalSettings);
 		assert.deepEqual(requests, [{ jsonEditor: false, query: '@id:terminal.integrated.*' }]);
@@ -367,52 +320,25 @@ suite('Terminal dropdown commands', () => {
 		test(`New Terminal creates before revealing a ${initialized ? 'populated' : 'hidden'} panel`, async () => {
 			using services = new InstantiationService();
 			const effects: unknown[] = [];
-			const terminal = {
-				xterm: {
-					focus: () => {
-						effects.push('focus');
-					},
-				},
-			} as ITerminalInstance;
+			const terminal = { xterm: { focus: () => { effects.push('focus'); } } } as ITerminalInstance;
 			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 			using trust = new TestWorkspaceTrustManagementService();
 			services.registerInstance(IWorkspaceContextService, workspace);
 			services.registerInstance(IWorkspaceTrustManagementService, trust);
 			services.registerInstance(IWorkspaceTrustRequestService, {
-				onDidInitiateWorkspaceTrustRequest: Event.None,
-				onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
-				requestWorkspaceTrust: async () => {
-					throw new Error('An authorized terminal does not need a trust request');
-				},
-				requestWorkspaceTrustOnStartup() {},
-				cancelWorkspaceTrustRequest() {},
-				completeWorkspaceTrustRequest: async () => {},
+				onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+				requestWorkspaceTrust: async () => { throw new Error('An authorized terminal does not need a trust request'); },
+				requestWorkspaceTrustOnStartup() { }, cancelWorkspaceTrustRequest() { }, completeWorkspaceTrustRequest: async () => { },
 			});
 			const instances: ITerminalInstance[] = initialized ? [new InputTerminal().instance] : [];
 			let active: ITerminalInstance | undefined;
 			services.registerInstance(ITerminalService, {
-				get activeInstance() {
-					return active;
-				},
-				createTerminal: async () => {
-					effects.push('create');
-					instances.push(terminal);
-					return terminal;
-				},
-				setActiveInstance: (instance: ITerminalInstance) => {
-					assert.equal(instance, terminal);
-					active = instance;
-				},
+				get activeInstance() { return active; },
+				createTerminal: async () => { effects.push('create'); instances.push(terminal); return terminal; },
+				setActiveInstance: (instance: ITerminalInstance) => { assert.equal(instance, terminal); active = instance; },
 			} as unknown as ITerminalService);
-			services.registerInstance(IQuickInputService, {
-				onShow: Event.None,
-				currentQuickInput: undefined,
-			} as unknown as IQuickInputService);
-			services.registerInstance(ITerminalGroupService, {
-				showPanel: async (focus: boolean) => {
-					effects.push(['panel', focus]);
-				},
-			} as ITerminalGroupService);
+			services.registerInstance(IQuickInputService, { onShow: Event.None, currentQuickInput: undefined } as unknown as IQuickInputService);
+			services.registerInstance(ITerminalGroupService, { showPanel: async (focus: boolean) => { effects.push(['panel', focus]); } } as ITerminalGroupService);
 			using commands = new CommandService(services);
 			await commands.executeCommand(TerminalCommandId.New);
 			assert.deepEqual(effects, ['create', ['panel', false], 'focus']);
@@ -427,11 +353,7 @@ suite('Terminal dropdown commands', () => {
 			const instances: ITerminalInstance[] = [];
 			const terminal = new InputTerminal().instance;
 			services.registerInstance(ITerminalService, {
-				instances,
-				closeTerminal: async () => {
-					effects.push('close terminal');
-					instances.length = 0;
-				},
+				instances, closeTerminal: async () => { effects.push('close terminal'); instances.length = 0; },
 				createTerminal: async (options: unknown) => {
 					effects.push(['create terminal', options]);
 					if (outcome === 'canceled' || outcome === 'closed') throw new CancellationError();
@@ -444,24 +366,9 @@ suite('Terminal dropdown commands', () => {
 				createAuxiliaryEditorPart: async () => {
 					effects.push('open window');
 					if (outcome === 'blocked') throw new Error('popup blocked');
-					return {
-						domNode: {
-							ownerDocument: {
-								defaultView: {
-									focus: () => {
-										effects.push('focus window');
-										if (outcome === 'focus-failed') throw new Error('focus failed');
-									},
-								},
-							},
-						},
-						activeGroup: { id: 12, focus: () => effects.push('focus auxiliary') },
-					};
+					return { domNode: { ownerDocument: { defaultView: { focus: () => { effects.push('focus window'); if (outcome === 'focus-failed') throw new Error('focus failed'); } } } }, activeGroup: { id: 12, focus: () => effects.push('focus auxiliary') } };
 				},
-				closeAuxiliaryEditorPart: async () => {
-					effects.push('close window');
-					return true;
-				},
+				closeAuxiliaryEditorPart: async () => { effects.push('close window'); return true; },
 			} as unknown as IEditorPartsService);
 
 			using commands = new CommandService(services);
@@ -470,16 +377,10 @@ suite('Terminal dropdown commands', () => {
 			else if (outcome === 'canceled' || outcome === 'closed') await assert.rejects(operation, isCancellationError);
 			else if (outcome === 'focus-failed') await assert.rejects(operation, /focus failed/);
 			else await operation;
-			assert.deepEqual(
-				effects,
-				outcome === 'blocked'
-					? ['open window']
-					: [
-							'open window',
-							['create terminal', { location: { viewColumn: 12 } }],
-							...(outcome === 'opened' ? ['focus window', 'focus auxiliary'] : outcome === 'focus-failed' ? ['focus window', 'close terminal', 'close window'] : ['close window']),
-						],
-			);
+			assert.deepEqual(effects, outcome === 'blocked' ? ['open window'] : [
+				'open window', ['create terminal', { location: { viewColumn: 12 } }],
+				...(outcome === 'opened' ? ['focus window', 'focus auxiliary'] : outcome === 'focus-failed' ? ['focus window', 'close terminal', 'close window'] : ['close window']),
+			]);
 			assert.equal(instances.length, outcome === 'opened' ? 1 : 0);
 		});
 	}

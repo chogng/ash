@@ -5,13 +5,10 @@ export namespace WebFileSystemAccess {
 	}
 
 	export function isFileSystemHandle(value: unknown): value is FileSystemHandle {
-		return (
-			typeof value === 'object' &&
-			value !== null &&
-			['file', 'directory'].includes(Reflect.get(value, 'kind')) &&
-			typeof Reflect.get(value, 'queryPermission') === 'function' &&
-			typeof Reflect.get(value, 'requestPermission') === 'function'
-		);
+		return typeof value === 'object' && value !== null
+			&& ['file', 'directory'].includes(Reflect.get(value, 'kind'))
+			&& typeof Reflect.get(value, 'queryPermission') === 'function'
+			&& typeof Reflect.get(value, 'requestPermission') === 'function';
 	}
 
 	export function isFileSystemFileHandle(handle: FileSystemHandle): handle is FileSystemFileHandle {
@@ -39,7 +36,7 @@ export interface FileSystemObserverRecord {
 
 export declare class FileSystemObserver {
 	constructor(callback: (records: FileSystemObserverRecord[], observer: FileSystemObserver) => void);
-	observe(handle: FileSystemHandle, options?: { recursive: boolean }): Promise<void>;
+	observe(handle: FileSystemHandle, options?: { recursive: boolean; }): Promise<void>;
 	unobserve(handle: FileSystemHandle): void;
 	disconnect(): void;
 }

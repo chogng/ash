@@ -10,7 +10,7 @@ import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHo
 test('the packaged extension binds the public SDK, observes schemas and retires its diagnostics', async () => {
 	const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8'));
 	for (const id of ['ash.json', 'ash.json-language-features']) {
-		const manifest = JSON.parse(fixture.catalog.extensions.find((value: { id: string }) => value.id === id).manifestJson);
+		const manifest = JSON.parse(fixture.catalog.extensions.find((value: { id: string; }) => value.id === id).manifestJson);
 		assert.deepEqual(manifest.ashUiTargets, ['ide', 'agents']);
 	}
 	const resources = fixture.resources['ash.json-language-features'];
@@ -22,12 +22,7 @@ test('the packaged extension binds the public SDK, observes schemas and retires 
 		const translations = JSON.parse(Buffer.from(resources['l10n/bundle.l10n.zh-CN.json'], 'base64').toString());
 		await writeFile(locale, JSON.stringify(normalizeExtensionHostPayload(translations)));
 		// Execute the shipped module in an isolated realm with the existing host request boundary.
-		const { stdout } = await promisify(execFile)(
-			process.execPath,
-			[
-				'--input-type=module',
-				'-e',
-				String.raw`
+		const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', String.raw`
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
@@ -82,12 +77,7 @@ assert.deepEqual(entries, []);
 await runtime.deactivate();
 await assert.rejects(invoke('completion', { ...source, position: { lineIndex: 0, columnIndex: 1 }, context: { kind: 'invoke' } }), /not active|disposed/);
 console.log('Packaged JSON extension contracts passed');
-`,
-				module,
-				locale,
-			],
-			{ timeout: 15_000 },
-		);
+`, module, locale], { timeout: 15_000 });
 		assert.match(stdout, /Packaged JSON extension contracts passed/u);
 	} finally {
 		await rm(directory, { recursive: true, force: true });

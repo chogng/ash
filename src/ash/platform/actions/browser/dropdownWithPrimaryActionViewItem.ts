@@ -42,7 +42,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	) {
 		const viewItemOptions = {
 			buttonStyles: defaultButtonStyles,
-			...options,
+			...options
 		};
 		super(primaryAction, viewItemOptions);
 		this.contextMenuProvider = contextMenuProvider;
@@ -73,22 +73,18 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		this.renderDropdownItem();
 
 		container.append(primaryContainer, dropdownContainer);
-		this._register(
-			this.onDidChangeDropdownVisibility(visible => {
-				container.classList.toggle('active', visible);
-			}),
-		);
+		this._register(this.onDidChangeDropdownVisibility((visible) => {
+			container.classList.toggle('active', visible);
+		}));
 
-		this._register(
-			addDisposableListener(primaryButton, 'keydown', event => {
-				const dropdownButton = this.dropdownButton;
-				if (event.key !== 'ArrowRight' || !dropdownButton || dropdownButton.disabled) return;
-				stopEvent(event);
-				primaryButton.tabIndex = -1;
-				dropdownButton.tabIndex = 0;
-				dropdownButton.focus();
-			}),
-		);
+		this._register(addDisposableListener(primaryButton, 'keydown', (event) => {
+			const dropdownButton = this.dropdownButton;
+			if (event.key !== 'ArrowRight' || !dropdownButton || dropdownButton.disabled) return;
+			stopEvent(event);
+			primaryButton.tabIndex = -1;
+			dropdownButton.tabIndex = 0;
+			dropdownButton.focus();
+		}));
 	}
 
 	override focus(fromRight = false): void {
@@ -128,9 +124,14 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			this.changeDropdownVisibilityEmitter.fire(false);
 		}
 		this.dropdownVisibilityListener.clear();
-		const item = new DropdownMenuActionViewItem(dropdownAction, dropdownActions, this.contextMenuProvider, this.viewItemOptions);
+		const item = new DropdownMenuActionViewItem(
+			dropdownAction,
+			dropdownActions,
+			this.contextMenuProvider,
+			this.viewItemOptions,
+		);
 		this.dropdownItem.value = item;
-		this.dropdownVisibilityListener.value = item.onDidChangeVisibility(visible => {
+		this.dropdownVisibilityListener.value = item.onDidChangeVisibility((visible) => {
 			this.dropdownVisible = visible;
 			this.changeDropdownVisibilityEmitter.fire(visible);
 		});
@@ -150,26 +151,22 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		item.setTabbable(false);
 
 		const renderStore = new DisposableStore();
-		renderStore.add(
-			addDisposableListener(dropdownButton, 'keydown', event => {
-				const primaryButton = this.primaryButton;
-				if (event.key !== 'ArrowLeft' || !primaryButton || primaryButton.disabled) return;
-				stopEvent(event);
-				dropdownButton.tabIndex = -1;
-				primaryButton.tabIndex = 0;
-				primaryButton.focus();
-			}),
-		);
+		renderStore.add(addDisposableListener(dropdownButton, 'keydown', (event) => {
+			const primaryButton = this.primaryButton;
+			if (event.key !== 'ArrowLeft' || !primaryButton || primaryButton.disabled) return;
+			stopEvent(event);
+			dropdownButton.tabIndex = -1;
+			primaryButton.tabIndex = 0;
+			primaryButton.focus();
+		}));
 		if (this.viewItemOptions.buttonPresentation === 'primary') {
 			const primaryButton = this.primaryButton;
 			assertDefined(primaryButton, `Primary action button is not available: ${this.action.id}`);
-			renderStore.add(
-				observeElementSize(primaryButton, size => {
-					if (size.height > 0) {
-						dropdownButton.style.width = `${size.height}px`;
-					}
-				}),
-			);
+			renderStore.add(observeElementSize(primaryButton, size => {
+				if (size.height > 0) {
+					dropdownButton.style.width = `${size.height}px`;
+				}
+			}));
 		}
 		this.dropdownRenderStore.value = renderStore;
 	}

@@ -1,4 +1,7 @@
-import type { IContextMenuDelegate, IContextMenuProvider } from '../../contextmenu.js';
+import type {
+	IContextMenuDelegate,
+	IContextMenuProvider,
+} from '../../contextmenu.js';
 import { addDisposableListener, stopEvent, h } from '../../dom.js';
 import type { IAction } from '../../../common/actions.js';
 import { CancellationTokenSource } from '../../../common/cancellation.js';
@@ -9,7 +12,9 @@ import { ActionViewItem, type ActionViewItemOptions } from '../actionbar/actionV
 import { Button } from '../button/button.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 
-export type DropdownMenuActions = readonly IAction[] | (() => readonly IAction[]);
+export type DropdownMenuActions =
+	| readonly IAction[]
+	| (() => readonly IAction[]);
 
 /**
  * ActionBar item that delegates a dropdown action menu to the host provider.
@@ -64,13 +69,11 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		indicator.className = 'ash-dropdown-menu-indicator';
 		appendIcon(Lxicon.chevronDown, indicator);
 		button.domNode.append(indicator);
-		this._register(
-			addDisposableListener(button.domNode, 'keydown', event => {
-				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-				stopEvent(event);
-				this.show();
-			}),
-		);
+		this._register(addDisposableListener(button.domNode, 'keydown', (event) => {
+			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+			stopEvent(event);
+			this.show();
+		}));
 	}
 
 	override focus(): void {
@@ -84,7 +87,9 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	show(): void {
 		const button = this.button;
 		if (this.isDisposed || !button?.enabled || this.visible) return;
-		const actions = typeof this.actions === 'function' ? this.actions() : this.actions;
+		const actions = typeof this.actions === 'function'
+			? this.actions()
+			: this.actions;
 		if (actions.length === 0) return;
 
 		const cancellation = new CancellationTokenSource();

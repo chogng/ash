@@ -14,14 +14,14 @@ interface HotReloadContext {
 	readonly file: string;
 	readonly read?: () => string | Promise<string>;
 	readonly server: {
-		readonly config: { readonly logger: { info(message: string): void } };
-		readonly ws: { send(payload: { readonly type: 'full-reload'; readonly path: '*' }): void };
+		readonly config: { readonly logger: { info(message: string): void; }; };
+		readonly ws: { send(payload: { readonly type: 'full-reload'; readonly path: '*'; }): void; };
 	};
 }
 
 export interface AshHotReloadPlugin extends Plugin {
-	readonly transformIndexHtml: { readonly order: 'pre'; readonly handler: () => HtmlTagDescriptor[] };
-	readonly transform: { readonly order: 'pre'; readonly handler: (code: string, id: string) => string | undefined };
+	readonly transformIndexHtml: { readonly order: 'pre'; readonly handler: () => HtmlTagDescriptor[]; };
+	readonly transform: { readonly order: 'pre'; readonly handler: (code: string, id: string) => string | undefined; };
 	readonly handleHotUpdate: (context: HotReloadContext) => Promise<[] | undefined>;
 }
 
@@ -65,13 +65,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				// Replacing their methods would bind live instances to the replacement
 				// module's empty registries even though only the view opted into patching.
 				const boundaryExports = analysis.classNames.length > 0 ? analysis.classNames : analysis.exportNames;
-				return injectHotReloadBoundary(
-					code,
-					boundaryExports,
-					neutralModuleId(file, desktopRoot),
-					analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)),
-					analysis.widgetClassNames,
-				);
+				return injectHotReloadBoundary(code, boundaryExports, neutralModuleId(file, desktopRoot), analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)), analysis.widgetClassNames);
 			},
 		},
 		async handleHotUpdate(context) {

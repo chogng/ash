@@ -16,9 +16,7 @@ import { localize2, resetNlsResolver } from '../../../../../nls.js';
 
 class RecordingClipboard extends BrowserClipboardService {
 	public readonly writes: [string, string | undefined][] = [];
-	constructor() {
-		super(undefined);
-	}
+	constructor() { super(undefined); }
 	public override async writeText(text: string, type?: string): Promise<void> {
 		this.writes.push([text, type]);
 		await super.writeText(text, type);
@@ -34,14 +32,12 @@ function createFixture(clipboard: IClipboardService, text = 'alpha beta gamma') 
 		const services = resources.add(new InstantiationService());
 		services.registerInstance(IClipboardService, clipboard);
 		const model = resources.add(new TextModel(text));
-		const editor = resources.add(
-			createTestCodeEditor({
-				container: dom.window.document.querySelector<HTMLElement>('main')!,
-				model,
-				instantiationService: services,
-				contributions: [],
-			}),
-		);
+		const editor = resources.add(createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			model,
+			instantiationService: services,
+			contributions: [],
+		}));
 		editor.layout({ width: 600, height: 120 });
 		const contribution = resources.add(editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)).createInstance(SelectionClipboard, editor));
 		return { dom, editor, model, contribution, [Symbol.dispose]: () => resources.dispose() };
@@ -64,24 +60,12 @@ test('selection clipboard cancels pending writes on disable, model switch, resto
 		using clipboard = new RecordingClipboard();
 		using fixture = createFixture(clipboard, change === 'large' ? 'x'.repeat(65_537) : undefined);
 		fixture.editor.setSelection(new Selection(1, 1, 1, 6));
-		if (change === 'disable') {
-			fixture.editor.updateOptions({ selectionClipboard: false });
-		}
-		if (change === 'model') {
-			fixture.editor.setModel(null);
-		}
-		if (change === 'restore') {
-			fixture.editor.setSelections([new Selection(1, 7, 1, 11)], 'restoreState');
-		}
-		if (change === 'dispose') {
-			fixture.contribution.dispose();
-		}
-		if (change === 'empty') {
-			fixture.editor.setSelections([new Selection(1, 1, 1, 6), new Selection(1, 7, 1, 7)]);
-		}
-		if (change === 'large') {
-			fixture.editor.setSelection(new Selection(1, 1, 1, 65_538));
-		}
+		if (change === 'disable') { fixture.editor.updateOptions({ selectionClipboard: false }); }
+		if (change === 'model') { fixture.editor.setModel(null); }
+		if (change === 'restore') { fixture.editor.setSelections([new Selection(1, 7, 1, 11)], 'restoreState'); }
+		if (change === 'dispose') { fixture.contribution.dispose(); }
+		if (change === 'empty') { fixture.editor.setSelections([new Selection(1, 1, 1, 6), new Selection(1, 7, 1, 7)]); }
+		if (change === 'large') { fixture.editor.setSelection(new Selection(1, 1, 1, 65_538)); }
 		// This independent editor's write runs after the cancelled task would have run.
 		using control = createFixture(clipboard, 'sentinel');
 		control.editor.setSelection(new Selection(1, 1, 1, 9));
@@ -97,9 +81,7 @@ test('middle-click paste reads the selection type and rejects delayed results af
 		class DeferredSelection extends BrowserClipboardService {
 			public override readText(type?: string): Promise<string> {
 				reads.push(type);
-				return new Promise(done => {
-					resolve = done;
-				});
+				return new Promise(done => { resolve = done; });
 			}
 		}
 		using clipboard = new DeferredSelection(undefined);
@@ -111,28 +93,15 @@ test('middle-click paste reads the selection type and rejects delayed results af
 		input.dispatchEvent(event);
 		assert.deepEqual(reads, ['selection']);
 		assert.equal(event.defaultPrevented, true);
-		if (change === 'selection') {
-			fixture.editor.setSelection(new Selection(1, 1, 1, 1));
-		}
-		if (change === 'model') {
-			fixture.editor.setModel(null);
-		}
-		if (change === 'readonly') {
-			fixture.editor.updateOptions({ readOnly: true });
-		}
-		if (change === 'disable') {
-			fixture.editor.updateOptions({ selectionClipboard: false });
-		}
-		if (change === 'blur') {
-			input.blur();
-		}
-		if (change === 'close') {
-			fixture.editor.dispose();
-		}
+		if (change === 'selection') { fixture.editor.setSelection(new Selection(1, 1, 1, 1)); }
+		if (change === 'model') { fixture.editor.setModel(null); }
+		if (change === 'readonly') { fixture.editor.updateOptions({ readOnly: true }); }
+		if (change === 'disable') { fixture.editor.updateOptions({ selectionClipboard: false }); }
+		if (change === 'blur') { input.blur(); }
+		if (change === 'close') { fixture.editor.dispose(); }
 		resolve('!');
-		if (change === 'none') {
-			await waitFor(() => fixture.model.getText() === 'alpha!');
-		} else await Promise.resolve();
+		if (change === 'none') { await waitFor(() => fixture.model.getText() === 'alpha!'); }
+		else await Promise.resolve();
 		assert.equal(fixture.model.getText(), change === 'none' ? 'alpha!' : 'alpha', change);
 	}
 });
@@ -149,9 +118,7 @@ test('the selection clipboard command has a Chinese label', () => {
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (!predicate()) {
-		if (Date.now() >= deadline) {
-			throw new Error('Selection clipboard did not reach the expected state');
-		}
+		if (Date.now() >= deadline) { throw new Error('Selection clipboard did not reach the expected state'); }
 		await new Promise<void>(resolve => setTimeout(resolve, 5));
 	}
 }

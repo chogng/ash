@@ -25,6 +25,7 @@ import { type TextModelChange } from './core/textChange.js';
 import { type EditorVisualLineProjection } from './viewModel/modelLineProjection.js';
 
 export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
+
 	readonly model: ITextModel;
 
 	readonly coordinatesConverter: ICoordinatesConverter;
@@ -85,8 +86,8 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getInjectedTextAt(viewPosition: Position): InjectedText | null;
 
 	deduceModelPositionRelativeToViewPosition(viewAnchorPosition: Position, deltaOffset: number, lineFeedCnt: number): Position;
-	getPlainTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean, forceCRLF: boolean): { sourceRanges: Range[]; sourceText: string | string[] };
-	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string } | null;
+	getPlainTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean, forceCRLF: boolean): { sourceRanges: Range[]; sourceText: string | string[]; };
+	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string; } | null;
 
 	onDidChangeContentOrInjectedText(e: InternalModelContentChangeEvent | ModelInjectedTextChangedEvent): void;
 	emitContentChangeEvent(e: InternalModelContentChangeEvent | ModelInjectedTextChangedEvent): void;
@@ -133,6 +134,7 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 }
 
 export interface IViewLayout {
+
 	getScrollable(): Scrollable;
 
 	getScrollWidth(): number;
@@ -254,7 +256,10 @@ export class MinimapLinesRenderingData {
 	public readonly tabSize: number;
 	public readonly data: Array<ViewLineData | null>;
 
-	constructor(tabSize: number, data: Array<ViewLineData | null>) {
+	constructor(
+		tabSize: number,
+		data: Array<ViewLineData | null>
+	) {
 		this.tabSize = tabSize;
 		this.data = data;
 	}
@@ -290,7 +295,7 @@ export class ViewLineData {
 
 	/**
 	 * Additional inline decorations for this line.
-	 */
+	*/
 	public readonly inlineDecorations: readonly InlineDecoration[] | null;
 
 	constructor(
@@ -300,7 +305,7 @@ export class ViewLineData {
 		maxColumn: number,
 		startVisibleColumn: number,
 		tokens: IViewLineTokens,
-		inlineDecorations: readonly InlineDecoration[] | null,
+		inlineDecorations: readonly InlineDecoration[] | null
 	) {
 		this.content = content;
 		this.continuesWithWrappedLine = continuesWithWrappedLine;
@@ -374,7 +379,7 @@ export class ViewLineRenderingData {
 		tabSize: number,
 		startVisibleColumn: number,
 		textDirection: TextDirection,
-		hasVariableFonts: boolean,
+		hasVariableFonts: boolean
 	) {
 		this.minColumn = minColumn;
 		this.maxColumn = maxColumn;
@@ -420,6 +425,7 @@ export class ViewModelDecoration {
 }
 
 export class OverviewRulerDecorationsGroup {
+
 	constructor(
 		public readonly color: string,
 		public readonly zIndex: number,
@@ -429,8 +435,8 @@ export class OverviewRulerDecorationsGroup {
 		 *  - 3*i+1 = startLineNumber
 		 *  - 3*i+2 = endLineNumber
 		 */
-		public readonly data: number[],
-	) {}
+		public readonly data: number[]
+	) { }
 
 	public static compareByRenderingProps(a: OverviewRulerDecorationsGroup, b: OverviewRulerDecorationsGroup): number {
 		if (a.zIndex === b.zIndex) {
@@ -446,7 +452,11 @@ export class OverviewRulerDecorationsGroup {
 	}
 
 	public static equals(a: OverviewRulerDecorationsGroup, b: OverviewRulerDecorationsGroup): boolean {
-		return a.color === b.color && a.zIndex === b.zIndex && arrays.equals(a.data, b.data);
+		return (
+			a.color === b.color
+			&& a.zIndex === b.zIndex
+			&& arrays.equals(a.data, b.data)
+		);
 	}
 
 	public static equalsArr(a: OverviewRulerDecorationsGroup[], b: OverviewRulerDecorationsGroup[]): boolean {

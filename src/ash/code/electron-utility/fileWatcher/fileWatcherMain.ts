@@ -39,18 +39,11 @@ process.parentPort.on('message', (event: Electron.MessageEvent) => {
 	}
 	connected = true;
 	const [port] = event.ports;
-	const client = resources.add(
-		new Client(
-			{
-				postMessage: data => port.postMessage(data),
-				start: () => port.start(),
-				close: () => port.close(),
-				addEventListener: (type, listener) => (type === 'message' ? port.on('message', listener) : port.on('close', listener as () => void)),
-				removeEventListener: (type, listener) => (type === 'message' ? port.off('message', listener) : port.off('close', listener as () => void)),
-			},
-			'profile',
-		),
-	);
+	const client = resources.add(new Client({
+		postMessage: data => port.postMessage(data), start: () => port.start(), close: () => port.close(),
+		addEventListener: (type, listener) => type === 'message' ? port.on('message', listener) : port.on('close', listener as () => void),
+		removeEventListener: (type, listener) => type === 'message' ? port.off('message', listener) : port.off('close', listener as () => void),
+	}, 'profile'));
 	client.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, resources.add(new FileWatcherChannel(provider)));
 	port.once('close', () => resources.dispose());
 });

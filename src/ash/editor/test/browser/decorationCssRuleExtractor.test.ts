@@ -28,23 +28,13 @@ teardown(() => {
 test('ViewGpuContext and its shared CSS extractor import without creating a browser window', () => {
 	const moduleUrl = new URL('../../browser/gpu/viewGpuContext.js', import.meta.url).href;
 	const cssLoader = pathToFileURL(resolve('test/unit/ignore-css-loader.ts')).href;
-	const result = spawnSync(
-		process.execPath,
-		[
-			'--loader',
-			cssLoader,
-			'--input-type=module',
-			'-e',
-			`
+	const result = spawnSync(process.execPath, ['--loader', cssLoader, '--input-type=module', '-e', `
 		import assert from 'node:assert/strict';
 		assert.equal(globalThis.window, undefined);
 		const { ViewGpuContext } = await import(${JSON.stringify(moduleUrl)});
 		ViewGpuContext.decorationCssRuleExtractor.clear();
 		assert.equal(globalThis.window, undefined);
-	`,
-		],
-		{ encoding: 'utf8' },
-	);
+	`], { encoding: 'utf8' });
 	assert.equal(result.error, undefined);
 	assert.equal(result.signal, null);
 	assert.equal(result.status, 0, result.stderr);
@@ -64,10 +54,7 @@ test('DecorationCssRuleExtractor creates its probe on first use in the canvas do
 	assert.equal(created.length, 0);
 	const first = extractor.getStyleRules(canvas, 'owned');
 	assert.equal(first.length, 1);
-	assert.deepEqual(
-		created.map(element => element.tagName),
-		['DIV', 'SPAN'],
-	);
+	assert.deepEqual(created.map(element => element.tagName), ['DIV', 'SPAN']);
 	assert.ok(created.every(element => element.ownerDocument === document));
 	assert.equal(canvas.childElementCount, 0);
 	document.styleSheets[0]!.insertRule('.owned { font-weight: bold; }', 1);
@@ -97,10 +84,7 @@ test('DecorationCssRuleExtractor disposal removes its owned probe and is safe be
 	const extractor = new DecorationCssRuleExtractor();
 	let probe: Node | undefined;
 	const appendChild = canvas.appendChild.bind(canvas);
-	canvas.appendChild = <T extends Node>(node: T): T => {
-		probe = node;
-		return appendChild(node);
-	};
+	canvas.appendChild = (<T extends Node>(node: T): T => { probe = node; return appendChild(node); });
 	extractor.getStyleRules(canvas, 'owned');
 	assert.ok(probe);
 	appendChild(probe);

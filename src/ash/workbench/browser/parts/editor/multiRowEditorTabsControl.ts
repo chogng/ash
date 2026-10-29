@@ -49,4 +49,5 @@ export class MultiRowEditorControl extends EditorTabsControl {
 			this.rowsEmitter.fire();
 		}
 	}
+
 }

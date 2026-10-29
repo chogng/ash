@@ -20,10 +20,13 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 /**
  * Maps the platform dialog API onto the workbench-owned dialog model.
  */
-export class DialogService extends Disposable implements IDialogService {
+export class DialogService extends Disposable
+	implements IDialogService {
 	readonly model = this._register(new DialogsModel());
-	readonly onWillShowDialog: Event<void> = (listener, thisArgs, disposables) => this.model.onWillShowDialog(() => listener.call(thisArgs, undefined), undefined, disposables);
-	readonly onDidShowDialog: Event<void> = (listener, thisArgs, disposables) => this.model.onDidCloseDialog(() => listener.call(thisArgs, undefined), undefined, disposables);
+	readonly onWillShowDialog: Event<void> = (listener, thisArgs, disposables) =>
+		this.model.onWillShowDialog(() => listener.call(thisArgs, undefined), undefined, disposables);
+	readonly onDidShowDialog: Event<void> = (listener, thisArgs, disposables) =>
+		this.model.onDidCloseDialog(() => listener.call(thisArgs, undefined), undefined, disposables);
 
 	async showMessage(options: IMessageDialogOptions): Promise<void> {
 		const handle = this.model.show({
@@ -68,10 +71,13 @@ export class DialogService extends Disposable implements IDialogService {
 			severity: options.severity,
 			checkbox: options.checkbox,
 			buttons: options.buttons.map(button => button.label),
-			cancelButton: typeof options.cancelButton === 'object' ? options.cancelButton.label : (options.cancelButton ?? localize('dialog.cancel', 'Cancel')),
+			cancelButton: typeof options.cancelButton === 'object'
+				? options.cancelButton.label : options.cancelButton ?? localize('dialog.cancel', 'Cancel'),
 		}).result;
 		const checkbox = { checkboxChecked: result.checkboxChecked };
-		const action = result.buttonIndex === undefined ? (typeof options.cancelButton === 'object' ? options.cancelButton : undefined) : options.buttons[result.buttonIndex];
+		const action = result.buttonIndex === undefined
+			? typeof options.cancelButton === 'object' ? options.cancelButton : undefined
+			: options.buttons[result.buttonIndex];
 		return { result: action ? await action.run(checkbox) : undefined, ...checkbox };
 	}
 

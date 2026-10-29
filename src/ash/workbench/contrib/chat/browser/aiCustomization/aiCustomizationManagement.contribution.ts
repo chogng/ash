@@ -17,72 +17,40 @@ import { AICustomizationManagementEditorInput } from './aiCustomizationManagemen
 registerEditorPane({
 	id: AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
 	name: localize('hooks.managementTitle', 'Agent Customizations: Hooks'),
-	canOpen: input => (input.resource.scheme === 'ash-customizations' && input.resource.path === '/hooks' ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => input.resource.scheme === 'ash-customizations' && input.resource.path === '/hooks' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
-		if (!options.instantiationService) {
-			throw new Error('Hooks management requires Workbench services');
-		}
+		if (!options.instantiationService) { throw new Error('Hooks management requires Workbench services'); }
 		return options.instantiationService.createInstance(AICustomizationManagementEditor);
 	},
 });
 
-registerAction2(
-	class OpenCustomizationManagementEditor extends Action2 {
-		constructor() {
-			super({
-				id: 'aiCustomization.openManagementEditor',
-				title: localize2('hooks.managementTitle', 'Agent Customizations: Hooks'),
-				f1: true,
-			});
-		}
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(IEditorService).openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
-		}
-	},
-);
+registerAction2(class OpenCustomizationManagementEditor extends Action2 {
+	constructor() { super({ id: 'aiCustomization.openManagementEditor', title: localize2('hooks.managementTitle', 'Agent Customizations: Hooks'), f1: true }); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IEditorService).openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
+	}
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.HooksSettings,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') {
-			throw new TypeError('Hooks accessibility verbosity must be boolean');
-		}
+		if (typeof value !== 'boolean') { throw new TypeError('Hooks accessibility verbosity must be boolean'); }
 		return value;
 	},
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
-		type,
-		priority: 100,
-		name: `aiCustomizationManagement-${type}`,
+		type, priority: 100, name: `aiCustomizationManagement-${type}`,
 		when: CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR.isEqualTo(true),
 		getProvider: accessor => {
 			const pane = accessor.get(IEditorPart).activePane;
-			if (!(pane instanceof AICustomizationManagementEditor) || !pane.isVisible() || !pane.hasFocus()) {
-				return undefined;
-			}
+			if (!(pane instanceof AICustomizationManagementEditor) || !pane.isVisible() || !pane.hasFocus()) { return undefined; }
 			const focused = pane.getContainer()?.ownerDocument.activeElement;
-			return new AccessibleContentProvider(
-				AccessibleViewProviderId.HooksSettings,
-				{ type },
-				() =>
-					type === AccessibleViewType.Help
-						? localize(
-								{ bundle: 'ash.settings', key: 'hooks.help' },
-								'Agent Hooks\nThis page shows Hook declarations and their Enabled or Disabled configuration state. Use Tab and Shift+Tab to reach search, the configuration scope, Edit TOML, Ask Ash, Refresh, Configure Hooks, and events. Press Enter or Space on an event or Hook to expand its details. Search filters event names, Hook IDs, commands, and paths. Configure Hooks selects an event, then a Hook or configuration scope. Edit TOML opens the selected configuration. Saving a listed configuration refreshes this page when it is visible; Refresh reloads declarations manually. Search and expanded details are preserved for declarations with the same ID. Ask Ash appends a configuration request to the current chat draft without sending it. Configured Hooks still require execution permission. Execution results appear in the conversation as running, allowed to continue, blocked, failed, or cancelled; configuration enablement does not indicate a successful execution.',
-							)
-						: pane.getAccessibleContent(),
-				() => {
-					if (isHTMLElement(focused) && focused.isConnected) {
-						focused.focus();
-					} else {
-						pane.focus();
-					}
-				},
-				AccessibilityVerbositySettingId.HooksSettings,
-			);
+			return new AccessibleContentProvider(AccessibleViewProviderId.HooksSettings, { type },
+				() => type === AccessibleViewType.Help ? localize({ bundle: 'ash.settings', key: 'hooks.help' }, 'Agent Hooks\nThis page shows Hook declarations and their Enabled or Disabled configuration state. Use Tab and Shift+Tab to reach search, the configuration scope, Edit TOML, Ask Ash, Refresh, Configure Hooks, and events. Press Enter or Space on an event or Hook to expand its details. Search filters event names, Hook IDs, commands, and paths. Configure Hooks selects an event, then a Hook or configuration scope. Edit TOML opens the selected configuration. Saving a listed configuration refreshes this page when it is visible; Refresh reloads declarations manually. Search and expanded details are preserved for declarations with the same ID. Ask Ash appends a configuration request to the current chat draft without sending it. Configured Hooks still require execution permission. Execution results appear in the conversation as running, allowed to continue, blocked, failed, or cancelled; configuration enablement does not indicate a successful execution.') : pane.getAccessibleContent(),
+				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.HooksSettings);
 		},
 	});
 }

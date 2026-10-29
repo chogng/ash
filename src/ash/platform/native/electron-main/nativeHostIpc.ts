@@ -5,7 +5,9 @@ import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
 import { WINDOW_SPLASH_READ_CHANNEL, WINDOW_SPLASH_SAVE_CHANNEL, validatePartsSplash, type IPartsSplash } from '../../theme/common/themeService.js';
-import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type {
+	IpcRoute,
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
@@ -15,13 +17,9 @@ import {
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	NATIVE_HOST_TERMINAL_MOVE_CHANNEL,
-	NATIVE_HOST_TERMINAL_TAKE_CHANNEL,
-	NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
-	validateTerminalWindowTransferMove,
-	validateTerminalWindowTransferResult,
-	type ITerminalWindowTransfer,
-	type ITerminalWindowTransferResult,
+	NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
+	validateTerminalWindowTransferMove, validateTerminalWindowTransferResult,
+	type ITerminalWindowTransfer, type ITerminalWindowTransferResult,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
 	NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
@@ -53,14 +51,9 @@ import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type Titl
 import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import {
-	AGENT_HOST_EDITOR_STATE_CHANNEL,
-	AGENT_HOST_EDITOR_UPDATE_CHANNEL,
-	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
-	AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL,
-	AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
-	validateAgentHostEditorUpdate,
-	validateAgentHostEditorResource,
-	validateAgentsWindowInvitationId,
+	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
+	AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
+	validateAgentHostEditorUpdate, validateAgentHostEditorResource, validateAgentsWindowInvitationId,
 } from '../common/nativeHost.js';
 
 /** Main-process implementation of native operations for one window. */
@@ -92,7 +85,9 @@ export interface INativeHostMainService {
 }
 
 /** Exposes one window's native operations through the trusted IPC router. */
-export function nativeHostIpcRoutes(service: INativeHostMainService): readonly IpcRoute<unknown, unknown>[] {
+export function nativeHostIpcRoutes(
+	service: INativeHostMainService,
+): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL,
@@ -113,51 +108,23 @@ export function nativeHostIpcRoutes(service: INativeHostMainService): readonly I
 		},
 		{
 			channel: NATIVE_HOST_TERMINAL_TAKE_CHANNEL,
-			validate: value => {
-				if (value !== undefined) throw new TypeError('Terminal transfer reads accept no arguments');
-				return undefined;
-			},
+			validate: value => { if (value !== undefined) throw new TypeError('Terminal transfer reads accept no arguments'); return undefined; },
 			invoke: () => service.takeTerminalTransfer(),
 		},
-		{
-			channel: NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
-			validate: validateTerminalWindowTransferResult,
-			invoke: value => service.completeTerminalTransfer(value as ITerminalWindowTransferResult),
-		},
+		{ channel: NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, validate: validateTerminalWindowTransferResult, invoke: value => service.completeTerminalTransfer(value as ITerminalWindowTransferResult) },
 		{
 			channel: AGENT_HOST_EDITOR_STATE_CHANNEL,
-			validate: value => {
-				if (value !== undefined) throw new TypeError('Editor state reads accept no arguments');
-				return undefined;
-			},
+			validate: value => { if (value !== undefined) throw new TypeError('Editor state reads accept no arguments'); return undefined; },
 			invoke: () => service.getAgentHostEditorState(),
 		},
-		{
-			channel: AGENT_HOST_EDITOR_UPDATE_CHANNEL,
-			validate: validateAgentHostEditorUpdate,
-			invoke: update => service.updateAgentHostEditorState(update as AgentHostEditorUpdate),
-		},
-		{
-			channel: AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
-			validate: validateAgentHostEditorResource,
-			invoke: resource => service.claimAgentsWindowInvitation(URI.revive(resource as UriComponents)),
-		},
-		{
-			channel: AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL,
-			validate: validateAgentsWindowInvitationId,
-			invoke: id => service.markAgentsWindowInvitationShown(id as string),
-		},
-		{
-			channel: AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
-			validate: validateAgentsWindowInvitationId,
-			invoke: id => service.releaseAgentsWindowInvitation(id as string),
-		},
+		{ channel: AGENT_HOST_EDITOR_UPDATE_CHANNEL, validate: validateAgentHostEditorUpdate, invoke: update => service.updateAgentHostEditorState(update as AgentHostEditorUpdate) },
+		{ channel: AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, validate: validateAgentHostEditorResource, invoke: resource => service.claimAgentsWindowInvitation(URI.revive(resource as UriComponents)) },
+		{ channel: AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, validate: validateAgentsWindowInvitationId, invoke: id => service.markAgentsWindowInvitationShown(id as string) },
+		{ channel: AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, validate: validateAgentsWindowInvitationId, invoke: id => service.releaseAgentsWindowInvitation(id as string) },
 		{
 			channel: NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
 			validate: value => {
-				if (value !== undefined) {
-					throw new TypeError('Window title bar reads accept no arguments');
-				}
+				if (value !== undefined) { throw new TypeError('Window title bar reads accept no arguments'); }
 				return undefined;
 			},
 			invoke: () => service.getTitleBarStyle(),
@@ -165,9 +132,7 @@ export function nativeHostIpcRoutes(service: INativeHostMainService): readonly I
 		{
 			channel: NATIVE_HOST_IS_ADMIN_CHANNEL,
 			validate: value => {
-				if (value !== undefined) {
-					throw new TypeError('Desktop privilege reads accept no arguments');
-				}
+				if (value !== undefined) { throw new TypeError('Desktop privilege reads accept no arguments'); }
 				return undefined;
 			},
 			invoke: () => service.isAdmin(),
@@ -191,10 +156,7 @@ export function nativeHostIpcRoutes(service: INativeHostMainService): readonly I
 		{
 			channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 			validate: validateOpenWorkspace,
-			invoke: value => {
-				const request = value as ReturnType<typeof validateOpenWorkspace>;
-				return service.openWorkspace(request.root, request.forceNewWindow);
-			},
+			invoke: value => { const request = value as ReturnType<typeof validateOpenWorkspace>; return service.openWorkspace(request.root, request.forceNewWindow); },
 		},
 		{
 			channel: NATIVE_HOST_OPEN_WINDOW_CHANNEL,
@@ -260,15 +222,11 @@ export function windowAppearanceIpcRoutes(service: Pick<INativeHostMainService, 
 export function colorSchemeChannel(service: IThemeMainService): IServerChannel {
 	return {
 		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
-			if (command !== 'getOSColorScheme' || arg !== undefined) {
-				throw new TypeError('Invalid system color scheme read');
-			}
+			if (command !== 'getOSColorScheme' || arg !== undefined) { throw new TypeError('Invalid system color scheme read'); }
 			return service.getColorScheme() as T;
 		},
 		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-			if (event !== 'onDidChangeColorScheme' || arg !== undefined) {
-				throw new TypeError('Invalid system color scheme subscription');
-			}
+			if (event !== 'onDidChangeColorScheme' || arg !== undefined) { throw new TypeError('Invalid system color scheme subscription'); }
 			return service.onDidChangeColorScheme as Event<T>;
 		},
 	};
@@ -300,11 +258,9 @@ export function windowSplashIpcRoutes(service: IThemeMainService, scope: () => s
 /** Subscriptions are owned by the window IPC connection, including listener cleanup. */
 export function powerMonitorChannel(monitor: Pick<EventEmitter, 'on' | 'removeListener'>): IServerChannel {
 	return {
-		async call(): Promise<never> {
-			throw new TypeError('Power monitor accepts subscriptions only');
-		},
+		async call(): Promise<never> { throw new TypeError('Power monitor accepts subscriptions only'); },
 		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-			if (arg !== undefined || (event !== 'onDidSuspendOS' && event !== 'onDidResumeOS')) {
+			if (arg !== undefined || event !== 'onDidSuspendOS' && event !== 'onDidResumeOS') {
 				throw new TypeError('Invalid power monitor subscription');
 			}
 			return (listener, thisArgs, disposables) => {

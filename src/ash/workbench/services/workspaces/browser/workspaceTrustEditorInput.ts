@@ -10,10 +10,6 @@ export class WorkspaceTrustEditorInput extends Disposable implements IResourceEd
 	readonly resource = URI.parse('ash-workspace-trust:/workspaceTrustEditor');
 	readonly contentType = WorkspaceTrustEditorInput.ID;
 	readonly readOnly = true;
-	get label(): string {
-		return localize('workspaceTrust.editorTitle', 'Workspace Trust');
-	}
-	getIcon(): typeof Lxicon.lock {
-		return Lxicon.lock;
-	}
+	get label(): string { return localize('workspaceTrust.editorTitle', 'Workspace Trust'); }
+	getIcon(): typeof Lxicon.lock { return Lxicon.lock; }
 }

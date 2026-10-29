@@ -22,9 +22,9 @@ test('Activity Bar auto hide follows view moves and persists through reload', as
 
 	// Keep Explorer active while moving every other selector through the product menu.
 	const explorer = switcher().getByRole('tab', { name: 'Explorer', exact: true });
-	const otherIds = await switcher()
-		.getByRole('tab')
-		.evaluateAll(tabs => tabs.filter(tab => tab.getAttribute('aria-selected') !== 'true').map(tab => (tab as HTMLElement).dataset.actionId!));
+	const otherIds = await switcher().getByRole('tab').evaluateAll(tabs => tabs
+		.filter(tab => tab.getAttribute('aria-selected') !== 'true')
+		.map(tab => (tab as HTMLElement).dataset.actionId!));
 	expect(otherIds.length).toBeGreaterThan(0);
 	for (const id of otherIds) {
 		const tab = switcher().locator(`[data-action-id="${id}"]`);

@@ -27,22 +27,14 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	const dialogs: IDialogService = {
 		onWillShowDialog: Event.None,
 		onDidShowDialog: Event.None,
-		about: async () => {
-			throw new Error('Unexpected about dialog');
-		},
-		showMessage: async () => {},
-		info: async () => {},
-		warn: async () => {},
-		error: async () => {},
-		confirm: async () => {
-			throw new Error('Unexpected confirm');
-		},
-		prompt: async () => {
-			throw new Error('Unexpected prompt');
-		},
-		input: async () => {
-			throw new Error('Unexpected input');
-		},
+		about: async () => { throw new Error('Unexpected about dialog'); },
+		showMessage: async () => { },
+		info: async () => { },
+		warn: async () => { },
+		error: async () => { },
+		confirm: async () => { throw new Error('Unexpected confirm'); },
+		prompt: async () => { throw new Error('Unexpected prompt'); },
+		input: async () => { throw new Error('Unexpected input'); },
 	};
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
@@ -51,11 +43,8 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
-		openEditor: async (input, options) => {
-			opened = input;
-			openOptions = options;
-		},
-		focusActiveEditor: () => {},
+		openEditor: async (input, options) => { opened = input; openOptions = options; },
+		focusActiveEditor: () => { },
 	});
 	services.registerInstance(IDialogService, dialogs);
 	registerCodeEditorServices(services);
@@ -93,9 +82,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	for (let attempt = 0; attempt < 20; attempt += 1) {
-		if (predicate()) {
-			return;
-		}
+		if (predicate()) { return; }
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.fail('Timed out waiting for binary text preview');

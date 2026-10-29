@@ -37,10 +37,7 @@ function moveSelectedText(editor: ICodeEditor, source: string, isMovingLeft: boo
 	if (!selections) return;
 
 	editor.pushUndoStop();
-	editor.executeCommands(
-		source,
-		selections.map(selection => new MoveCaretCommand(selection, isMovingLeft)),
-	);
+	editor.executeCommands(source, selections.map(selection => new MoveCaretCommand(selection, isMovingLeft)));
 	editor.pushUndoStop();
 }
 

@@ -22,20 +22,13 @@ export class PolicyConfiguration extends Disposable {
 		return this.model;
 	}
 
-	constructor(
-		private readonly registry: IConfigurationRegistry,
-		private readonly policies: IPolicyService,
-		private readonly log: ILogService,
-		private readonly onError: (error: unknown) => void = error => log.error(getErrorMessage(error)),
-	) {
+	constructor(private readonly registry: IConfigurationRegistry, private readonly policies: IPolicyService, private readonly log: ILogService, private readonly onError: (error: unknown) => void = error => log.error(getErrorMessage(error))) {
 		super();
 		this.model = ConfigurationModel.createEmptyModel(log);
 		this._register(policies.onDidChange(() => this.refreshValues()));
-		this._register(
-			registry.onDidUpdateConfiguration(() => {
-				void this.initialize().catch(this.onError);
-			}),
-		);
+		this._register(registry.onDidUpdateConfiguration(() => {
+			void this.initialize().catch(this.onError);
+		}));
 	}
 
 	async initialize(): Promise<ConfigurationModel> {
@@ -45,25 +38,21 @@ export class PolicyConfiguration extends Disposable {
 			for (const setting of this.registry.getRegisteredConfigurations()) {
 				if (setting.policy) {
 					const type = typeof setting.defaultValue;
-					if (type === 'boolean' || type === 'number' || type === 'string')
-						definitions[setting.policy.name] = {
-							type,
-							...(setting.policy.managedSettings === undefined ? {} : { managedSettings: setting.policy.managedSettings }),
-							...(setting.policy.value === undefined ? {} : { value: setting.policy.value }),
-						};
+					if (type === 'boolean' || type === 'number' || type === 'string') definitions[setting.policy.name] = {
+						type,
+						...(setting.policy.managedSettings === undefined ? {} : { managedSettings: setting.policy.managedSettings }),
+						...(setting.policy.value === undefined ? {} : { value: setting.policy.value }),
+					};
 				}
 			}
-			try {
-				await this.policies.updatePolicyDefinitions(definitions);
-			} catch (error) {
-				this.onError(error);
-			}
+			try { await this.policies.updatePolicyDefinitions(definitions); }
+			catch (error) { this.onError(error); }
 			// A host source may be temporarily unavailable. Its next notification recovers
 			// the policy while configuration keeps the source's last accepted values.
 			// Read live values after registration: policy notifications may arrive during initialization.
 			this.refreshValues();
 		});
-		this.definitionsReady = operation.catch(() => {});
+		this.definitionsReady = operation.catch(() => { });
 		await operation;
 		return this.model;
 	}
@@ -77,7 +66,7 @@ export class PolicyConfiguration extends Disposable {
 			try {
 				const value = this.policies.getPolicyValue(setting.policy.name);
 				if (value === undefined) continue;
-				if (typeof value !== typeof setting.defaultValue || (typeof value === 'number' && !Number.isFinite(value))) {
+				if (typeof value !== typeof setting.defaultValue || typeof value === 'number' && !Number.isFinite(value)) {
 					throw new TypeError(localize('configuration.invalidPolicy', 'Administrator policy {0} has an invalid value.', setting.policy.name));
 				}
 				values[setting.key] = setting.parse(value);
@@ -90,19 +79,11 @@ export class PolicyConfiguration extends Disposable {
 					try {
 						values[setting.key] = setting.parse(previous);
 						names.set(setting.key, setting.policy.name);
-					} catch {
-						/* The replacement setting no longer accepts the old policy. */
-					}
+					} catch { /* The replacement setting no longer accepts the old policy. */ }
 				}
 			}
 		}
-		const model = new ConfigurationModel(
-			toValuesTree(values, message => this.log.error(message)),
-			Object.keys(values),
-			[],
-			undefined,
-			this.log,
-		);
+		const model = new ConfigurationModel(toValuesTree(values, message => this.log.error(message)), Object.keys(values), [], undefined, this.log);
 		this.policyNames = names;
 		if (!equals(this.model.toJSON(), model.toJSON())) {
 			this.model = model;

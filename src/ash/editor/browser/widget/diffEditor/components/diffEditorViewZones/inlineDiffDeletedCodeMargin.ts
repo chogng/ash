@@ -9,20 +9,14 @@ export class InlineDiffDeletedCodeMargin extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly markers: HTMLElement | undefined;
 
-	constructor(
-		document: Document,
-		private readonly decorationsWidth: number,
-		renderIndicators: boolean,
-		lineHeight: number,
-		displayLineCount: number,
-	) {
+	constructor(document: Document, private readonly decorationsWidth: number, renderIndicators: boolean, lineHeight: number, displayLineCount: number) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-diff-inline-original-margin stanza-diff-gutter-removed';
 		this.domNode.setAttribute('aria-hidden', 'true');
 		if (!renderIndicators) return;
 		// ViewZones controls the root's visibility; this child owns marker layout.
-		const markers = (this.markers = h(document, 'div'));
+		const markers = this.markers = h(document, 'div');
 		markers.className = 'ash-diff-inline-original-markers';
 		markers.style.gridAutoRows = `${lineHeight}px`;
 		this._register(appendRemoveOnDispose(this.domNode, markers));

@@ -17,15 +17,9 @@ test('Quick Input alignment commands reach the current Quick Input service', asy
 	const alignments: unknown[] = [];
 	services.registerInstance(IQuickInputService, {
 		...quickInputServiceTestControls,
-		createQuickPick() {
-			throw new Error('Unexpected picker');
-		},
-		async input() {
-			throw new Error('Unexpected prompt');
-		},
-		setAlignment: alignment => {
-			alignments.push(alignment);
-		},
+		createQuickPick() { throw new Error('Unexpected picker'); },
+		async input() { throw new Error('Unexpected prompt'); },
+		setAlignment: alignment => { alignments.push(alignment); },
 	});
 	using commands = new CommandService(services);
 	await commands.executeCommand('workbench.action.alignQuickInputCenter');
@@ -46,47 +40,23 @@ test('layout commands and menus follow configuration changes in their own window
 	const menus = new MenuService(commands, context);
 	const positions = () => menus.getMenuActions(MenuId.ActivityBarPositionMenu).flatMap(([, actions]) => actions);
 	const root = () => menus.getMenuActions(ActivityBarContextMenu).flatMap(([, actions]) => actions);
-	assert.deepEqual(
-		positions().map(action => [action.label, action.checked]),
-		[
-			['Default', true],
-			['Top', false],
-			['Bottom', false],
-			['Hidden', false],
-		],
-	);
-	await positions()
-		.find(action => action.label === 'Top')!
-		.run();
+	assert.deepEqual(positions().map(action => [action.label, action.checked]), [['Default', true], ['Top', false], ['Bottom', false], ['Hidden', false]]);
+	await positions().find(action => action.label === 'Top')!.run();
 	assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarLocation), ActivityBarPosition.TOP);
 	assert.equal(otherConfiguration.getValue(WorkbenchConfiguration.activityBarLocation), ActivityBarPosition.DEFAULT);
-	assert.equal(
-		root().some(action => action.label === 'Activity Bar Size'),
-		false,
-	);
+	assert.equal(root().some(action => action.label === 'Activity Bar Size'), false);
 	await commands.executeCommand('workbench.action.activityBarLocation.default');
 	await commands.executeCommand('workbench.action.activityBar.size.compact');
 	assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarCompact), true);
-	await root()
-		.find(action => action.label === 'Move Primary Side Bar Right')!
-		.run();
+	await root().find(action => action.label === 'Move Primary Side Bar Right')!.run();
 	assert.equal(configuration.getValue(WorkbenchConfiguration.sideBarLocation), 'right');
-	assert.equal(
-		root().some(action => action.label === 'Move Primary Side Bar Left'),
-		true,
-	);
+	assert.equal(root().some(action => action.label === 'Move Primary Side Bar Left'), true);
 	await commands.executeCommand('workbench.action.toggleSidebarPosition');
 	assert.equal(configuration.getValue(WorkbenchConfiguration.sideBarLocation), 'left');
 	await configuration.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.HIDDEN);
 	assert.equal(positions().find(action => action.label === 'Hidden')!.checked, true);
 	context.setContext('isSessionsWindow', true);
-	assert.equal(
-		menus
-			.getMenuActions(MenuId.CommandPalette)
-			.flatMap(([, actions]) => actions)
-			.some(action => action.id === 'workbench.action.activityBarLocation.top'),
-		false,
-	);
+	assert.equal(menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).some(action => action.id === 'workbench.action.activityBarLocation.top'), false);
 	contribution.dispose();
 	assert.equal(context.getValue('config.workbench.activityBar.location'), undefined);
 	assert.equal(otherContext.getValue('config.workbench.activityBar.location'), ActivityBarPosition.DEFAULT);

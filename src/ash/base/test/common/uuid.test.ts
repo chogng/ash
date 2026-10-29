@@ -12,7 +12,10 @@ test('createUuid returns canonical random UUIDs', () => {
 });
 
 test('parseUuid validates and canonicalizes external UUIDs', () => {
-	assert.equal(parseUuid('9B2C2FD4-9C5A-4E2F-AF10-16C2B97712DD'), '9b2c2fd4-9c5a-4e2f-af10-16c2b97712dd');
+	assert.equal(
+		parseUuid('9B2C2FD4-9C5A-4E2F-AF10-16C2B97712DD'),
+		'9b2c2fd4-9c5a-4e2f-af10-16c2b97712dd',
+	);
 	assert.throws(() => parseUuid('not-a-uuid'), TypeError);
 	assert.throws(() => parseUuid(null), TypeError);
 });

@@ -30,14 +30,7 @@ interface PersistedBreakpoint {
 }
 
 const LEGACY_KEY = 'memento/debug.workspace';
-const EMPTY_STATE: PersistedDebugState = Object.freeze({
-	version: 2,
-	breakpoints: [],
-	functionBreakpoints: [],
-	dataBreakpoints: [],
-	watchExpressions: [],
-	exceptionBreakpoints: {},
-});
+const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 2, breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [], exceptionBreakpoints: {} });
 interface WorkspaceRead {
 	readonly id: string;
 	state: PersistedDebugState;
@@ -65,50 +58,26 @@ export class DebugStorage extends Disposable {
 		@ILifecycleService lifecycle: ILifecycleService,
 	) {
 		super();
-		try {
+		try { this.current = this.openWorkspace(); } catch (error) { this.dispose(); throw error; }
+		this._register(workspace.onDidChangeWorkspace(() => {
+			if (this.current.id === workspace.getWorkspace().id) return;
+			const previous = this.current;
 			this.current = this.openWorkspace();
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				if (this.current.id === workspace.getWorkspace().id) return;
-				const previous = this.current;
-				this.current = this.openWorkspace();
-				if (previous.pending === 0) this.contexts.delete(previous);
-				this.changeEmitter.fire(this.current.state);
-			}),
-		);
-		this._register(
-			backend?.onConnectionState(state => {
-				if (state === 'ready') void this.reload().catch(error => this.report(error));
-			}) ?? Disposable.None,
-		);
-		this._register(
-			lifecycle.onWillShutdown(event => {
-				if ([...this.contexts].some(context => context.pending > 0))
-					event.join(
-						() => this.flush(),
-						localize('debug.workspaceSave', 'Save debug workspace definitions'),
-						() => [...this.contexts].every(context => context.pending === 0),
-					);
-			}),
-		);
+			if (previous.pending === 0) this.contexts.delete(previous);
+			this.changeEmitter.fire(this.current.state);
+		}));
+		this._register(backend?.onConnectionState(state => { if (state === 'ready') void this.reload().catch(error => this.report(error)); }) ?? Disposable.None);
+		this._register(lifecycle.onWillShutdown(event => {
+			if ([...this.contexts].some(context => context.pending > 0)) event.join(() => this.flush(), localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts].every(context => context.pending === 0));
+		}));
 		if (backend) {
-			const poll = setInterval(() => {
-				void this.reload().catch(error => this.report(error));
-			}, 1000);
+			const poll = setInterval(() => { void this.reload().catch(error => this.report(error)); }, 1000);
 			this._register(toDisposable(() => clearInterval(poll)));
 		}
 	}
 
-	get state(): PersistedDebugState {
-		return this.current.state;
-	}
-	whenReady(): Promise<void> {
-		return this.current.queue;
-	}
+	get state(): PersistedDebugState { return this.current.state; }
+	whenReady(): Promise<void> { return this.current.queue; }
 
 	storeState(state: PersistedDebugState, commands: readonly DebugWorkspaceEdit[] = []): void {
 		const current = this.current;
@@ -124,9 +93,7 @@ export class DebugStorage extends Disposable {
 			const result = await this.backend.editWorkspaceState(current.id, current.snapshot.revision, edits);
 			if (result.status === 'conflict') {
 				current.blocked = true;
-				throw new Error(
-					localize('debug.workspaceConflict', 'Debug workspace definitions changed in another window. Local edits were retained; reopen the workspace to load the saved definitions.'),
-				);
+				throw new Error(localize('debug.workspaceConflict', 'Debug workspace definitions changed in another window. Local edits were retained; reopen the workspace to load the saved definitions.'));
 			}
 			current.snapshot = result.snapshot;
 			current.pending--;
@@ -138,10 +105,7 @@ export class DebugStorage extends Disposable {
 				if (changed && !this.isDisposed && this.current === current) this.changeEmitter.fire(current.state);
 			}
 		});
-		void current.queue.catch(error => {
-			current.blocked = true;
-			this.report(error);
-		});
+		void current.queue.catch(error => { current.blocked = true; this.report(error); });
 	}
 
 	/** Poll a complete revisioned snapshot only while no local work is pending.
@@ -170,26 +134,14 @@ export class DebugStorage extends Disposable {
 		const id = this.workspace.getWorkspace().id;
 		const legacy = this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE);
 		const decoded: unknown = legacy === undefined ? undefined : JSON.parse(legacy);
-		const state =
-			decoded === undefined || (decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0) ? EMPTY_STATE : parsePersistedDebugState(decoded);
-		const current: WorkspaceRead = {
-			id,
-			state,
-			snapshot: undefined,
-			queue: Promise.resolve(),
-			edits: 0,
-			blocked: false,
-			pending: 0,
-		};
+		const state = decoded === undefined || decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0 ? EMPTY_STATE : parsePersistedDebugState(decoded);
+		const current: WorkspaceRead = { id, state, snapshot: undefined, queue: Promise.resolve(), edits: 0, blocked: false, pending: 0 };
 		// An explicitly unavailable host may display legacy values, but cannot
 		// migrate them or own pending writes to the backend document.
 		if (!this.backend) return current;
 		current.queue = Promise.resolve().then(async () => {
 			const result = await this.backend!.readWorkspaceState(id, legacy === undefined ? undefined : domainState(state));
-			if (result.status === 'conflict') {
-				current.blocked = true;
-				throw new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.'));
-			}
+			if (result.status === 'conflict') { current.blocked = true; throw new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.')); }
 			current.snapshot = result.snapshot;
 			// Cleanup belongs to the captured storage scope and exact source.
 			// A later workspace or externally changed Memento must remain intact.
@@ -201,99 +153,40 @@ export class DebugStorage extends Disposable {
 				if (!this.isDisposed && this.current === current) this.changeEmitter.fire(current.state);
 			}
 		});
-		void current.queue.catch(error => {
-			current.blocked = true;
-			this.report(error);
-		});
+		void current.queue.catch(error => { current.blocked = true; this.report(error); });
 		this.contexts.add(current);
 		return current;
 	}
 
-	private report(error: unknown): void {
-		this.log.error('debug.storage', localize('debug.workspaceStorageFailed', 'Debug workspace storage failed.'), error);
-	}
+	private report(error: unknown): void { this.log.error('debug.storage', localize('debug.workspaceStorageFailed', 'Debug workspace storage failed.'), error); }
 }
 
 function domainState(state: PersistedDebugState): DebugWorkspaceState {
-	const base = (point: IBaseBreakpoint) => ({
-		id: point.id,
-		enabled: point.enabled,
-		...breakpointExpressions(point),
-	});
+	const base = (point: IBaseBreakpoint) => ({ id: point.id, enabled: point.enabled, ...breakpointExpressions(point) });
 	return {
-		breakpoints: state.breakpoints.map(point => ({
-			id: point.id ?? `${point.resource}:${point.lineNumber}`,
-			enabled: point.enabled,
-			...breakpointExpressions(point),
-			resource: point.resource,
-			lineNumber: point.lineNumber,
-			...(point.columnNumber === undefined ? {} : { columnNumber: point.columnNumber }),
-		})),
+		breakpoints: state.breakpoints.map(point => ({ id: point.id ?? `${point.resource}:${point.lineNumber}`, enabled: point.enabled, ...breakpointExpressions(point), resource: point.resource, lineNumber: point.lineNumber, ...(point.columnNumber === undefined ? {} : { columnNumber: point.columnNumber }) })),
 		functionBreakpoints: state.functionBreakpoints.map(point => ({ ...base(point), name: point.name })),
-		dataBreakpoints: state.dataBreakpoints
-			.filter(point => point.canPersist)
-			.map(point => ({
-				...base(point),
-				dataId: point.dataId,
-				description: point.description,
-				adapterType: point.adapterType,
-				accessType: point.accessType,
-				accessTypes: point.accessTypes,
-			})),
+		dataBreakpoints: state.dataBreakpoints.filter(point => point.canPersist).map(point => ({ ...base(point), dataId: point.dataId, description: point.description, adapterType: point.adapterType, accessType: point.accessType, accessTypes: point.accessTypes })),
 		watchExpressions: state.watchExpressions,
 		exceptionBreakpoints: state.exceptionBreakpoints,
 	};
 }
 
 function fromDomain(state: DebugWorkspaceState): PersistedDebugState {
-	return {
-		version: 2,
-		...state,
-		functionBreakpoints: state.functionBreakpoints.map(point => ({ ...point, kind: 'function', verified: false })),
-		dataBreakpoints: state.dataBreakpoints.map(point => ({
-			...point,
-			kind: 'data',
-			canPersist: true,
-			verified: false,
-		})),
-	};
+	return { version: 2, ...state, functionBreakpoints: state.functionBreakpoints.map(point => ({ ...point, kind: 'function', verified: false })), dataBreakpoints: state.dataBreakpoints.map(point => ({ ...point, kind: 'data', canPersist: true, verified: false })) };
 }
 
 function changes(before: DebugWorkspaceState, after: DebugWorkspaceState): DebugWorkspaceEdit[] {
 	const edits: DebugWorkspaceEdit[] = [];
-	const removed = [...before.breakpoints, ...before.functionBreakpoints, ...before.dataBreakpoints]
-		.filter(point => ![...after.breakpoints, ...after.functionBreakpoints, ...after.dataBreakpoints].some(value => value.id === point.id))
-		.map(point => point.id);
+	const removed = [...before.breakpoints, ...before.functionBreakpoints, ...before.dataBreakpoints].filter(point => ![...after.breakpoints, ...after.functionBreakpoints, ...after.dataBreakpoints].some(value => value.id === point.id)).map(point => point.id);
 	if (removed.length) edits.push({ kind: 'remove', ids: removed });
 	const different = (left: unknown, right: unknown) => JSON.stringify(left) !== JSON.stringify(right);
-	for (const point of after.breakpoints)
-		if (
-			different(
-				before.breakpoints.find(value => value.id === point.id),
-				point,
-			)
-		)
-			edits.push({ kind: 'source', point });
-	for (const point of after.functionBreakpoints)
-		if (
-			different(
-				before.functionBreakpoints.find(value => value.id === point.id),
-				point,
-			)
-		)
-			edits.push({ kind: 'function', point });
-	for (const point of after.dataBreakpoints)
-		if (
-			different(
-				before.dataBreakpoints.find(value => value.id === point.id),
-				point,
-			)
-		)
-			edits.push({ kind: 'data', point });
+	for (const point of after.breakpoints) if (different(before.breakpoints.find(value => value.id === point.id), point)) edits.push({ kind: 'source', point });
+	for (const point of after.functionBreakpoints) if (different(before.functionBreakpoints.find(value => value.id === point.id), point)) edits.push({ kind: 'function', point });
+	for (const point of after.dataBreakpoints) if (different(before.dataBreakpoints.find(value => value.id === point.id), point)) edits.push({ kind: 'data', point });
 	for (const expression of before.watchExpressions) if (!after.watchExpressions.includes(expression)) edits.push({ kind: 'removeWatch', expression });
 	for (const expression of after.watchExpressions) if (!before.watchExpressions.includes(expression)) edits.push({ kind: 'addWatch', expression });
-	for (const [adapterType, filters] of Object.entries(after.exceptionBreakpoints))
-		if (different(before.exceptionBreakpoints[adapterType], filters)) edits.push({ kind: 'exceptions', adapterType, filters });
+	for (const [adapterType, filters] of Object.entries(after.exceptionBreakpoints)) if (different(before.exceptionBreakpoints[adapterType], filters)) edits.push({ kind: 'exceptions', adapterType, filters });
 	return edits;
 }
 
@@ -301,24 +194,13 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Debug workspace state must be an object');
 	const input = value as Record<string, unknown>;
 	if (input.version !== 1 && input.version !== 2) throw new TypeError('Debug workspace state version is unsupported');
-	if (
-		!Array.isArray(input.breakpoints) ||
-		!Array.isArray(input.watchExpressions) ||
-		!input.exceptionBreakpoints ||
-		typeof input.exceptionBreakpoints !== 'object' ||
-		Array.isArray(input.exceptionBreakpoints)
-	)
-		throw new TypeError('Debug workspace state is malformed');
+	if (!Array.isArray(input.breakpoints) || !Array.isArray(input.watchExpressions) || !input.exceptionBreakpoints || typeof input.exceptionBreakpoints !== 'object' || Array.isArray(input.exceptionBreakpoints)) throw new TypeError('Debug workspace state is malformed');
 	const breakpoints = Object.freeze(input.breakpoints.map((candidate, index) => parsePersistedBreakpoint(candidate, index)));
 	const watchExpressions = Object.freeze(input.watchExpressions.map((candidate, index) => normalizePersistedString(candidate, `watchExpressions[${index}]`, 32_768)));
-	const exceptionBreakpoints = Object.freeze(
-		Object.fromEntries(
-			Object.entries(input.exceptionBreakpoints as Record<string, unknown>).map(([type, filters]) => {
-				if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError('Debug exception breakpoint state is malformed');
-				return [type, Object.freeze(filters.map((filter, index) => normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256)))];
-			}),
-		),
-	);
+	const exceptionBreakpoints = Object.freeze(Object.fromEntries(Object.entries(input.exceptionBreakpoints as Record<string, unknown>).map(([type, filters]) => {
+		if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError('Debug exception breakpoint state is malformed');
+		return [type, Object.freeze(filters.map((filter, index) => normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256)))];
+	})));
 	// Version 1 only stored source breakpoints. Normalize both legacy shapes
 	// for one-way import; the current writer never emits a Memento.
 	let functionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
@@ -328,40 +210,20 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 		functionBreakpoints = Object.freeze(input.functionBreakpoints.map(parsePersistedFunctionBreakpoint));
 		dataBreakpoints = Object.freeze(input.dataBreakpoints.map(parsePersistedDataBreakpoint));
 	}
-	return Object.freeze({
-		version: 2,
-		breakpoints,
-		functionBreakpoints,
-		dataBreakpoints,
-		watchExpressions,
-		exceptionBreakpoints,
-	});
+	return Object.freeze({ version: 2, breakpoints, functionBreakpoints, dataBreakpoints, watchExpressions, exceptionBreakpoints });
 }
 
 function parsePersistedFunctionBreakpoint(value: unknown): IFunctionBreakpoint {
 	const point = parsePersistedBreakpointState(value);
-	if (point.input.logMessage !== undefined && typeof point.input.logMessage !== 'string') {
-		throw new TypeError('logMessage must be a string');
-	}
-	return Object.freeze({
-		...point.state,
-		kind: 'function',
-		name: normalizePersistedString(point.input.name, 'function breakpoint name', 32_768),
-		...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, 'logMessage') }),
-	});
+	if (point.input.logMessage !== undefined && typeof point.input.logMessage !== 'string') { throw new TypeError('logMessage must be a string'); }
+	return Object.freeze({ ...point.state, kind: 'function', name: normalizePersistedString(point.input.name, 'function breakpoint name', 32_768), ...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, 'logMessage') }) });
 }
 
 function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
 	const point = parsePersistedBreakpointState(value);
 	const input = point.input;
 	if (typeof input.description !== 'string') throw new TypeError('Data breakpoint description must be a string');
-	if (
-		input.canPersist !== true ||
-		!Array.isArray(input.accessTypes) ||
-		!input.accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite') ||
-		!input.accessTypes.includes(input.accessType)
-	)
-		throw new TypeError('Persistent data breakpoint is malformed');
+	if (input.canPersist !== true || !Array.isArray(input.accessTypes) || !input.accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite') || !input.accessTypes.includes(input.accessType)) throw new TypeError('Persistent data breakpoint is malformed');
 	return Object.freeze({
 		...point.state,
 		kind: 'data',
@@ -374,25 +236,17 @@ function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
 	});
 }
 
-function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint } {
+function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint; } {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Breakpoint state must be an object');
 	const input = value as Record<string, unknown>;
 	if (typeof input.enabled !== 'boolean') throw new TypeError('Breakpoint enabled state must be a boolean');
-	const expressions: { condition?: string; hitCondition?: string } = {};
+	const expressions: { condition?: string; hitCondition?: string; } = {};
 	for (const field of ['condition', 'hitCondition'] as const) {
 		if (input[field] === undefined) continue;
 		if (typeof input[field] !== 'string') throw new TypeError(`${field} must be a string`);
 		expressions[field] = normalizeBreakpointExpression(input[field], field);
 	}
-	return {
-		input,
-		state: {
-			id: normalizePersistedString(input.id, 'id', 32768),
-			enabled: input.enabled,
-			verified: false,
-			...expressions,
-		},
-	};
+	return { input, state: { id: normalizePersistedString(input.id, 'id', 32768), enabled: input.enabled, verified: false, ...expressions } };
 }
 
 function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreakpoint {
@@ -400,18 +254,15 @@ function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreak
 	const input = value as Record<string, unknown>;
 	const resource = URI.parse(normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384)).toString();
 	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== 'boolean') throw new TypeError(`breakpoints[${index}] is malformed`);
-	const expressions: { condition?: string; hitCondition?: string; logMessage?: string } = {};
+	const expressions: { condition?: string; hitCondition?: string; logMessage?: string; } = {};
 	for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
 		if (input[field] === undefined) continue;
 		if (typeof input[field] !== 'string') throw new TypeError(`breakpoints[${index}].${field} must be a string`);
 		expressions[field] = normalizeBreakpointExpression(input[field], field);
 	}
-	if (input.columnNumber !== undefined && (!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1))
-		throw new TypeError('Debug breakpoint column must be a positive integer');
+	if (input.columnNumber !== undefined && (!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1)) throw new TypeError('Debug breakpoint column must be a positive integer');
 	return Object.freeze({
-		resource,
-		lineNumber: input.lineNumber as number,
-		enabled: input.enabled,
+		resource, lineNumber: input.lineNumber as number, enabled: input.enabled,
 		...(input.id === undefined ? {} : { id: normalizePersistedString(input.id, 'breakpoint ID', 32768) }),
 		...(input.columnNumber === undefined ? {} : { columnNumber: input.columnNumber as number }),
 		...breakpointExpressions(expressions),

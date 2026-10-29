@@ -24,7 +24,7 @@ test('accessibility service projects screen-reader support and context state', (
 	assert.equal(contextKeys.getValue(CONTEXT_ACCESSIBILITY_MODE_ENABLED.key), false);
 
 	let changes = 0;
-	using subscription = service.onDidChangeScreenReaderOptimized(() => (changes += 1));
+	using subscription = service.onDidChangeScreenReaderOptimized(() => changes += 1);
 	service.setAccessibilitySupport(AccessibilitySupport.Enabled);
 	assert.equal(service.isScreenReaderOptimized(), true);
 	assert.equal(contextKeys.getValue(CONTEXT_ACCESSIBILITY_MODE_ENABLED.key), true);

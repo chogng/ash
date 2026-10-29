@@ -42,12 +42,7 @@ const hostChannel: WebWorkerChannel = { protocol: 'ash.worker.rpc.host', version
 
 /** A borrowed channel never owns termination of the physical worker. */
 function borrowPort(port: WebWorkerClientPort): WebWorkerClientPort {
-	return {
-		onMessage: port.onMessage,
-		onFailure: port.onFailure,
-		send: (message, transfer) => port.send(message, transfer),
-		...Disposable.None,
-	};
+	return { onMessage: port.onMessage, onFailure: port.onFailure, send: (message, transfer) => port.send(message, transfer), ...Disposable.None };
 }
 
 function createProxy<T>(channel: string, invoke: (channel: string, method: string, args: unknown[]) => Promise<unknown>): Proxied<T> {
@@ -61,8 +56,8 @@ function createProxy<T>(channel: string, invoke: (channel: string, method: strin
 }
 
 function invokeChannel(channels: Map<string, object>, message: Record<string, unknown>): unknown {
-	if (typeof message.channel !== 'string' || typeof message.method !== 'string' || !Array.isArray(message.args) || ['constructor', '__proto__', 'prototype'].includes(message.method))
-		throw new TypeError('Invalid Worker channel request');
+	if (typeof message.channel !== 'string' || typeof message.method !== 'string' || !Array.isArray(message.args)
+		|| ['constructor', '__proto__', 'prototype'].includes(message.method)) throw new TypeError('Invalid Worker channel request');
 	const target = channels.get(message.channel);
 	const method = target && (target as Record<string, unknown>)[message.method];
 	if (typeof method !== 'function') throw new ReferenceError(`Unknown Worker method '${message.channel}.${message.method}'`);
@@ -70,10 +65,7 @@ function invokeChannel(channels: Map<string, object>, message: Record<string, un
 }
 
 export class WebWorkerRemoteError extends Error {
-	constructor(
-		readonly remoteName: string,
-		message: string,
-	) {
+	constructor(readonly remoteName: string, message: string) {
 		super(message);
 		this.name = 'WebWorkerRemoteError';
 	}
@@ -97,38 +89,24 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 	private rpc: WebWorkerClient | undefined;
 	private rpcFailure: IDisposable | undefined;
 	private nextRpcRequest = 0;
-	public get proxy(): Proxied<T> {
-		return this.getChannel<T>('default');
-	}
+	public get proxy(): Proxied<T> { return this.getChannel<T>('default'); }
 
-	constructor(
-		private readonly port: WebWorkerClientPort,
-		private readonly channel: WebWorkerChannel = rpcChannel,
-	) {
+	constructor(private readonly port: WebWorkerClientPort, private readonly channel: WebWorkerChannel = rpcChannel) {
 		super();
 		this._register(port);
 		this._register(port.onMessage(value => this.receive(value)));
 		this._register(port.onFailure(error => this.invalidate(error)));
 		this._register(toDisposable(() => this.rejectPending(new ReferenceError('Worker client is disposed'))));
-		this._register(
-			toDisposable(() => {
-				this.channels.clear();
-				this.proxies.clear();
-			}),
-		);
+		this._register(toDisposable(() => { this.channels.clear(); this.proxies.clear(); }));
 	}
 
 	public setChannel<C extends object>(channel: string, handler: C): void {
 		this.ensureAvailable();
 		this.channels.set(channel, handler);
-		this.callbacks ??= this._register(
-			new WebWorkerServer(borrowPort(this.port), hostChannel, {
-				handleRequest: async message => invokeChannel(this.channels, message),
-				handleNotification: () => {
-					throw new TypeError('Unexpected Worker host notification');
-				},
-			}),
-		);
+		this.callbacks ??= this._register(new WebWorkerServer(borrowPort(this.port), hostChannel, {
+			handleRequest: async message => invokeChannel(this.channels, message),
+			handleNotification: () => { throw new TypeError('Unexpected Worker host notification'); },
+		}));
 	}
 
 	public getChannel<C extends object>(channel: string): Proxied<C> {
@@ -136,22 +114,14 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 		if (!this.proxies.has(channel)) {
 			// Legacy domain protocols keep their IDs and cancellation namespace.
 			// RPC calls use the same request machinery on a distinct channel.
-			const transport =
-				this.channel.protocol === rpcChannel.protocol || this.channel.protocol === hostChannel.protocol ? this : (this.rpc ??= this._register(new WebWorkerClient(borrowPort(this.port))));
+			const transport = this.channel.protocol === rpcChannel.protocol || this.channel.protocol === hostChannel.protocol
+				? this : this.rpc ??= this._register(new WebWorkerClient(borrowPort(this.port)));
 			if (transport !== this && !this.rpcFailure) {
 				this.rpcFailure = this._register(transport.onDidFail(error => this.invalidate(error)));
 			}
-			this.proxies.set(
-				channel,
-				createProxy<C>(channel, (name, method, args) =>
-					transport.request(
-						++transport.nextRpcRequest,
-						{ channel: name, method, args },
-						new AbortController().signal,
-						args.filter((value): value is ArrayBuffer => value instanceof ArrayBuffer),
-					),
-				),
-			);
+			this.proxies.set(channel, createProxy<C>(channel, (name, method, args) =>
+				transport.request(++transport.nextRpcRequest, { channel: name, method, args }, new AbortController().signal,
+					args.filter((value): value is ArrayBuffer => value instanceof ArrayBuffer))));
 		}
 		return this.proxies.get(channel) as Proxied<C>;
 	}
@@ -244,7 +214,8 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 			pending.removeAbort();
 			if (error) {
 				pending.reject(error);
-			} else {
+			}
+			else {
 				pending.resolve(value.result);
 			}
 		} catch (error) {
@@ -279,19 +250,14 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 
 	constructor(port: WebWorkerPort, factory: (server: IWebWorkerServer) => object);
 	constructor(port: WebWorkerPort, channel: WebWorkerChannel, handler: WebWorkerRequestHandler);
-	constructor(
-		private readonly port: WebWorkerPort,
-		channelOrFactory: WebWorkerChannel | ((server: IWebWorkerServer) => object),
-		handler?: WebWorkerRequestHandler,
-	) {
+	constructor(private readonly port: WebWorkerPort, channelOrFactory: WebWorkerChannel | ((server: IWebWorkerServer) => object), handler?: WebWorkerRequestHandler) {
+
 		super();
 		if (typeof channelOrFactory === 'function') {
 			this.channel = rpcChannel;
 			this.handler = {
 				handleRequest: async message => invokeChannel(this.channels, message),
-				handleNotification: () => {
-					throw new TypeError('Unexpected Worker RPC notification');
-				},
+				handleNotification: () => { throw new TypeError('Unexpected Worker RPC notification'); },
 			};
 		} else {
 			this.channel = channelOrFactory;
@@ -299,16 +265,14 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 		}
 		this._register(port);
 		this._register(port.onMessage(value => this.receive(value)));
-		this._register(
-			toDisposable(() => {
-				for (const controller of this.active.values()) {
-					controller.abort('serverDisposed');
-				}
-				this.active.clear();
-				this.channels.clear();
-				this.proxies.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const controller of this.active.values()) {
+				controller.abort('serverDisposed');
+			}
+			this.active.clear();
+			this.channels.clear();
+			this.proxies.clear();
+		}));
 		if (typeof channelOrFactory === 'function') {
 			try {
 				this.setChannel('default', channelOrFactory(this));
@@ -322,16 +286,7 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 	public setChannel<T extends object>(channel: string, handler: T): void {
 		this.assertNotDisposed();
 		if (this.channel.protocol !== rpcChannel.protocol) {
-			this.rpc ??= this._register(
-				new WebWorkerServer(
-					{
-						onMessage: this.port.onMessage,
-						send: (value, transfer) => this.port.send(value, transfer),
-						...Disposable.None,
-					},
-					() => ({}),
-				),
-			);
+			this.rpc ??= this._register(new WebWorkerServer({ onMessage: this.port.onMessage, send: (value, transfer) => this.port.send(value, transfer), ...Disposable.None }, () => ({})));
 			this.rpc.setChannel(channel, handler);
 		} else {
 			this.channels.set(channel, handler);
@@ -340,17 +295,7 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 
 	public getChannel<T extends object>(channel: string): Proxied<T> {
 		this.assertNotDisposed();
-		this.host ??= this._register(
-			new WebWorkerClient(
-				{
-					onMessage: this.port.onMessage,
-					onFailure: Event.None,
-					send: (value, transfer) => this.port.send(value, transfer),
-					...Disposable.None,
-				},
-				hostChannel,
-			),
-		);
+		this.host ??= this._register(new WebWorkerClient({ onMessage: this.port.onMessage, onFailure: Event.None, send: (value, transfer) => this.port.send(value, transfer), ...Disposable.None }, hostChannel));
 		if (!this.proxies.has(channel)) this.proxies.set(channel, this.host.getChannel<T>(channel));
 		return this.proxies.get(channel) as Proxied<T>;
 	}
@@ -402,12 +347,7 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 			return;
 		}
 		const error = toError(value);
-		this.port.send({
-			...this.channel,
-			kind: requestId === undefined ? 'notificationFailure' : 'failure',
-			requestId,
-			error: { name: error.name, message: error.message },
-		});
+		this.port.send({ ...this.channel, kind: requestId === undefined ? 'notificationFailure' : 'failure', requestId, error: { name: error.name, message: error.message } });
 	}
 }
 

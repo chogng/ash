@@ -37,31 +37,29 @@ export interface WorkspaceEdit {
 	readonly edits: readonly WorkspaceEditEntry[];
 }
 
-export type WorkspaceEditEntry =
-	| {
-			readonly resource: URI;
-			readonly textEdit: TextEdit & { readonly insertAsSnippet?: boolean; readonly keepWhitespace?: boolean };
-			readonly versionId?: number;
-	  }
-	| {
-			readonly oldResource?: URI;
-			readonly newResource?: URI;
-			readonly options?: {
-				readonly overwrite?: boolean;
-				readonly ignoreIfExists?: boolean;
-				readonly ignoreIfNotExists?: boolean;
-				readonly recursive?: boolean;
-			};
-	  };
+export type WorkspaceEditEntry = {
+	readonly resource: URI;
+	readonly textEdit: TextEdit & { readonly insertAsSnippet?: boolean; readonly keepWhitespace?: boolean; };
+	readonly versionId?: number;
+} | {
+	readonly oldResource?: URI;
+	readonly newResource?: URI;
+	readonly options?: {
+		readonly overwrite?: boolean;
+		readonly ignoreIfExists?: boolean;
+		readonly ignoreIfNotExists?: boolean;
+		readonly recursive?: boolean;
+	};
+};
 
-export type DropYieldTo = { readonly kind: HierarchicalKind } | { readonly mimeType: string };
+export type DropYieldTo = { readonly kind: HierarchicalKind; } | { readonly mimeType: string; };
 
 export interface DocumentPasteEdit {
 	readonly title: string;
 	readonly kind: HierarchicalKind;
 	readonly handledMimeType?: string;
 	readonly yieldTo?: readonly DropYieldTo[];
-	insertText: string | { readonly snippet: string };
+	insertText: string | { readonly snippet: string; };
 	additionalEdit?: WorkspaceEdit;
 }
 
@@ -86,13 +84,7 @@ export interface DocumentPasteEditProvider {
 	readonly pasteMimeTypes: readonly string[];
 	readonly providedPasteEditKinds: readonly HierarchicalKind[];
 	prepareDocumentPaste?(model: model.ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined>;
-	provideDocumentPasteEdits?(
-		model: model.ITextModel,
-		ranges: readonly IRange[],
-		dataTransfer: IReadonlyVSDataTransfer,
-		context: DocumentPasteContext,
-		token: CancellationToken,
-	): Promise<DocumentPasteEditsSession | undefined>;
+	provideDocumentPasteEdits?(model: model.ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, context: DocumentPasteContext, token: CancellationToken): Promise<DocumentPasteEditsSession | undefined>;
 	resolveDocumentPasteEdit?(edit: DocumentPasteEdit, token: CancellationToken): Promise<DocumentPasteEdit>;
 }
 
@@ -101,7 +93,7 @@ export interface DocumentDropEdit {
 	readonly kind: HierarchicalKind | undefined;
 	readonly handledMimeType?: string;
 	readonly yieldTo?: readonly DropYieldTo[];
-	insertText: string | { readonly snippet: string };
+	insertText: string | { readonly snippet: string; };
 	additionalEdit?: WorkspaceEdit;
 }
 
@@ -234,7 +226,9 @@ export interface IInplaceReplaceSupportResult {
 export abstract class TextEdit {
 	static asEditOperation(edit: TextEdit): ISingleEditOperation {
 		const range = Range.lift(edit.range);
-		return range.isEmpty() ? EditOperation.insert(range.getStartPosition(), edit.text) : EditOperation.replace(range, edit.text);
+		return range.isEmpty()
+			? EditOperation.insert(range.getStartPosition(), edit.text)
+			: EditOperation.replace(range, edit.text);
 	}
 
 	static isTextEdit(thing: unknown): thing is TextEdit {
@@ -313,8 +307,9 @@ export class ProviderId {
 	constructor(
 		public readonly extensionId: string | undefined,
 		public readonly extensionVersion: string | undefined,
-		public readonly providerId: string | undefined,
-	) {}
+		public readonly providerId: string | undefined
+	) {
+	}
 
 	toString(): string {
 		let result = '';
@@ -357,7 +352,7 @@ export class VersionedExtensionId {
 	constructor(
 		public readonly extensionId: string,
 		public readonly version: string,
-	) {}
+	) { }
 
 	toString(): string {
 		return `${this.extensionId}@${this.version}`;
@@ -374,9 +369,9 @@ export interface ILazyTokenizationSupport<TSupport> {
 }
 
 export class LazyTokenizationSupport<TSupport> extends Disposable implements ILazyTokenizationSupport<TSupport> {
-	private support: Promise<(TSupport & IDisposable) | null> | undefined;
+	private support: Promise<TSupport & IDisposable | null> | undefined;
 
-	constructor(private readonly createSupport: () => Promise<(TSupport & IDisposable) | null>) {
+	constructor(private readonly createSupport: () => Promise<TSupport & IDisposable | null>) {
 		super();
 	}
 
@@ -484,10 +479,7 @@ export interface LanguageTypeHierarchyProvider {
 	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 }
 
-export enum CodeActionTriggerType {
-	Invoke = 1,
-	Auto = 2,
-}
+export enum CodeActionTriggerType { Invoke = 1, Auto = 2 }
 
 export interface LanguageCodeAction {
 	readonly title: string;
@@ -514,10 +506,7 @@ export interface LanguageCodeActionList extends IDisposable {
 export interface LanguageCodeActionProvider {
 	/** Declared kinds supply configuration suggestions without requesting actions from a document. */
 	readonly providedCodeActionKinds?: readonly string[];
-	provideCodeActions(
-		request: LanguageCodeActionRequest,
-		signal: AbortSignal,
-	): readonly LanguageCodeAction[] | LanguageCodeActionList | Promise<readonly LanguageCodeAction[] | LanguageCodeActionList>;
+	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | LanguageCodeActionList | Promise<readonly LanguageCodeAction[] | LanguageCodeActionList>;
 	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
 }
 
@@ -541,60 +530,23 @@ export type LanguageSymbolKind = string | number;
 /** Semantic artwork shared by symbol navigation surfaces. */
 export namespace SymbolKinds {
 	const names = [
-		'file',
-		'module',
-		'namespace',
-		'package',
-		'class',
-		'method',
-		'property',
-		'field',
-		'constructor',
-		'enum',
-		'interface',
-		'function',
-		'variable',
-		'constant',
-		'string',
-		'number',
-		'boolean',
-		'array',
-		'object',
-		'key',
-		'null',
-		'enumMember',
-		'struct',
-		'event',
-		'operator',
-		'typeParameter',
+		'file', 'module', 'namespace', 'package', 'class', 'method', 'property', 'field', 'constructor',
+		'enum', 'interface', 'function', 'variable', 'constant', 'string', 'number', 'boolean', 'array',
+		'object', 'key', 'null', 'enumMember', 'struct', 'event', 'operator', 'typeParameter',
 	];
 
 	export function toIcon(kind: LanguageSymbolKind): ThemeIcon {
 		const name = typeof kind === 'number' ? names[kind] : kind;
 		switch (name) {
-			case 'file':
-				return Lxicon.file;
-			case 'module':
-			case 'namespace':
-			case 'package':
-				return Lxicon.folders;
-			case 'string':
-			case 'number':
-			case 'boolean':
-			case 'null':
-				return Lxicon.text;
-			case 'property':
-			case 'field':
-			case 'key':
-			case 'variable':
-			case 'constant':
-			case 'enumMember':
-				return Lxicon.tag;
-			default:
-				return Lxicon.code;
+			case 'file': return Lxicon.file;
+			case 'module': case 'namespace': case 'package': return Lxicon.folders;
+			case 'string': case 'number': case 'boolean': case 'null': return Lxicon.text;
+			case 'property': case 'field': case 'key': case 'variable': case 'constant': case 'enumMember': return Lxicon.tag;
+			default: return Lxicon.code;
 		}
 	}
 }
+
 
 export interface LanguageDocumentSymbol {
 	readonly name: string;
@@ -607,14 +559,9 @@ export interface LanguageDocumentSymbol {
 
 /** Builds containing scopes from flat parser symbols without retaining a text snapshot. */
 export function nestDocumentSymbols(values: readonly LanguageDocumentSymbol[]): readonly LanguageDocumentSymbol[] {
-	interface SymbolNode {
-		readonly symbol: LanguageDocumentSymbol;
-		readonly children: SymbolNode[];
-	}
-	const symbols = [...values].sort(
-		(a, b) =>
-			a.range.startLineNumber - b.range.startLineNumber || a.range.startColumn - b.range.startColumn || b.range.endLineNumber - a.range.endLineNumber || b.range.endColumn - a.range.endColumn,
-	);
+	interface SymbolNode { readonly symbol: LanguageDocumentSymbol; readonly children: SymbolNode[]; }
+	const symbols = [...values].sort((a, b) =>
+		a.range.startLineNumber - b.range.startLineNumber || a.range.startColumn - b.range.startColumn || b.range.endLineNumber - a.range.endLineNumber || b.range.endColumn - a.range.endColumn);
 	const roots: SymbolNode[] = [];
 	const stack: SymbolNode[] = [];
 	for (const symbol of symbols) {
@@ -623,7 +570,8 @@ export function nestDocumentSymbols(values: readonly LanguageDocumentSymbol[]): 
 		(stack.at(-1)?.children ?? roots).push(node);
 		stack.push(node);
 	}
-	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol => (children.length ? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol);
+	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol => children.length
+		? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol;
 	return Object.freeze(roots.map(freeze));
 }
 
@@ -683,7 +631,7 @@ export interface LanguageReferenceProvider {
 	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export type LanguageHoverContent = string | { readonly value: string; readonly language?: string };
+export type LanguageHoverContent = string | { readonly value: string; readonly language?: string; };
 
 export interface LanguageHover {
 	readonly range?: Range;
@@ -701,7 +649,7 @@ export interface LanguageHoverProvider {
 
 export type LanguageInlayHintKind = 'type' | 'parameter' | 'other';
 
-export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range }[];
+export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range; }[];
 
 export interface LanguageInlayHint {
 	readonly position: Position;
@@ -763,7 +711,9 @@ export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
 	readonly context: LanguageParameterHintsContext;
 }
 
-export type LanguageParameterHintsContext = ({ readonly kind: 'invoke' } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string } | { readonly kind: 'contentChange' }) & {
+export type LanguageParameterHintsContext = (
+	{ readonly kind: 'invoke'; } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string; } | { readonly kind: 'contentChange'; }
+) & {
 	readonly isRetrigger?: boolean;
 	readonly activeSignatureHelp?: LanguageParameterHints;
 };
@@ -821,18 +771,15 @@ export interface LanguageLinkProvider {
 
 /** Creates a request from the model's current snapshot and a caller-owned cancellation signal. */
 export function createLanguageFeatureRequest(model: TextModel, languageId: string, signal: AbortSignal): LanguageFeatureRequest {
-	return Object.freeze({
-		model,
-		snapshot: model.createVersionedSnapshot(),
-		languageId,
-		modelLanguageId: model.getLanguageId(),
-		signal,
-	});
+	return Object.freeze({ model, snapshot: model.createVersionedSnapshot(), languageId, modelLanguageId: model.getLanguageId(), signal });
 }
 
 /** Returns whether a provider result may still be applied to the request's model. */
 export function isLanguageFeatureRequestCurrent(request: LanguageFeatureRequest): boolean {
-	return !request.signal.aborted && !request.model.isDisposed() && request.model.version === request.snapshot.version && request.model.getLanguageId() === request.modelLanguageId;
+	return !request.signal.aborted
+		&& !request.model.isDisposed()
+		&& request.model.version === request.snapshot.version
+		&& request.model.getLanguageId() === request.modelLanguageId;
 }
 
 /** Text replacements for one exact resource snapshot. */
@@ -887,37 +834,16 @@ export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): Lan
 				if (!entry.resource || !Array.isArray(entry.edits)) throw new TypeError('Language document edit requires a resource and text edits');
 				if (entry.version !== undefined && (!Number.isSafeInteger(entry.version) || entry.version < 1)) throw new RangeError('Language document edit version must be a positive safe integer');
 				if (entry.expectedText !== undefined && typeof entry.expectedText !== 'string') throw new TypeError('Language document edit expected text must be text');
-				return Object.freeze({
-					kind: entry.kind,
-					resource: entry.resource,
-					...(entry.version !== undefined ? { version: entry.version } : {}),
-					...(entry.expectedText !== undefined ? { expectedText: entry.expectedText } : {}),
-					edits: Object.freeze([...entry.edits]),
-				});
+				return Object.freeze({ kind: entry.kind, resource: entry.resource, ...(entry.version !== undefined ? { version: entry.version } : {}), ...(entry.expectedText !== undefined ? { expectedText: entry.expectedText } : {}), edits: Object.freeze([...entry.edits]) });
 			case 'create':
 				if (entry.contents !== undefined && typeof entry.contents !== 'string') throw new TypeError('Workspace create contents must be text');
-				return Object.freeze({
-					kind: entry.kind,
-					resource: requireResource(entry.resource, 'create target'),
-					existing: existingBehavior(entry.existing),
-					...(entry.contents !== undefined ? { contents: entry.contents } : {}),
-				});
+				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, 'create target'), existing: existingBehavior(entry.existing), ...(entry.contents !== undefined ? { contents: entry.contents } : {}) });
 			case 'rename':
-				return Object.freeze({
-					kind: entry.kind,
-					source: requireResource(entry.source, 'rename source'),
-					target: requireResource(entry.target, 'rename target'),
-					existing: existingBehavior(entry.existing),
-				});
+				return Object.freeze({ kind: entry.kind, source: requireResource(entry.source, 'rename source'), target: requireResource(entry.target, 'rename target'), existing: existingBehavior(entry.existing) });
 			case 'delete':
 				if (entry.missing !== 'error' && entry.missing !== 'ignore') throw new TypeError('Language delete missing-target behavior is invalid');
 				if (entry.mode !== 'fileOrEmptyDirectory' && entry.mode !== 'recursive') throw new TypeError('Language delete mode is invalid');
-				return Object.freeze({
-					kind: entry.kind,
-					resource: requireResource(entry.resource, 'delete target'),
-					missing: entry.missing,
-					mode: entry.mode,
-				});
+				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, 'delete target'), missing: entry.missing, mode: entry.mode });
 			default:
 				throw new TypeError('Language workspace edit entry kind is invalid');
 		}
@@ -1058,9 +984,12 @@ export function languageCompletionProviderMatches(provider: LanguageCompletionPr
 	assertLanguageId(languageId);
 	assertLanguageCompletionContext(context);
 	return (
-		(provider.languageIds.includes('*') || provider.languageIds.includes(languageId)) &&
-		(context.kind !== LanguageCompletionTriggerKind.TriggerCharacter || provider.triggerCharacters.includes(context.triggerCharacter))
-	);
+		provider.languageIds.includes('*') ||
+		provider.languageIds.includes(languageId)
+	) && (
+			context.kind !== LanguageCompletionTriggerKind.TriggerCharacter ||
+			provider.triggerCharacters.includes(context.triggerCharacter)
+		);
 }
 
 const INVOKE_CONTEXT = Object.freeze({
@@ -1097,8 +1026,7 @@ export function normalizeCompletionProvider(provider: LanguageCompletionProvider
 	if (provider.resolveCompletionItem !== undefined && typeof provider.resolveCompletionItem !== 'function') {
 		throw new TypeError('Language completion provider resolveCompletionItem must be a function');
 	}
-	if (provider.executeCompletionCommand !== undefined && typeof provider.executeCompletionCommand !== 'function')
-		throw new TypeError('Language completion provider executeCompletionCommand must be a function');
+	if (provider.executeCompletionCommand !== undefined && typeof provider.executeCompletionCommand !== 'function') throw new TypeError('Language completion provider executeCompletionCommand must be a function');
 	return Object.freeze({
 		id: provider.id,
 		languageIds: Object.freeze(languageIds),
@@ -1132,13 +1060,19 @@ export function assertLanguageCompletionContext(context: LanguageCompletionConte
 		assertTriggerCharacter(context.triggerCharacter);
 		return;
 	}
-	if (context.kind !== LanguageCompletionTriggerKind.Invoke && context.kind !== LanguageCompletionTriggerKind.IncompleteRefresh) {
+	if (
+		context.kind !== LanguageCompletionTriggerKind.Invoke &&
+		context.kind !== LanguageCompletionTriggerKind.IncompleteRefresh
+	) {
 		throw new TypeError(`Unknown language completion trigger kind '${(context as LanguageCompletionContext).kind}'`);
 	}
 }
 
 export function assertLanguageProviderId(value: unknown, owner: string): asserts value is string {
-	if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
+	if (
+		typeof value !== 'string' ||
+		!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
+	) {
 		throw new TypeError(`${owner} must contain only letters, digits, dot, underscore, or hyphen`);
 	}
 }
@@ -1152,7 +1086,7 @@ function assertTriggerCharacter(value: unknown): asserts value is string {
 export interface SyntaxRequest {
 	readonly languageId: string;
 	/** Hypothetical lines, starting in the lexical state of the real document. */
-	readonly tokenize?: { readonly lineNumber: number; readonly lines: readonly string[] };
+	readonly tokenize?: { readonly lineNumber: number; readonly lines: readonly string[]; };
 }
 
 export interface SyntaxProviderRequest extends SyntaxRequest {
@@ -1355,13 +1289,12 @@ export function normalizeLanguageCompletionSnapshotResult(value: LanguageComplet
 /** Builds one reusable normalizer so all providers in a request share the same snapshot line index. */
 export function createLanguageCompletionSnapshotNormalizer(snapshot: TextSnapshot): LanguageCompletionResultNormalizer {
 	const lines = snapshot.getText().split('\n');
-	return value =>
-		normalizeLanguageCompletionResult(
-			value,
-			position => assertSnapshotPosition(lines, position),
-			(position, range) => assertSnapshotCompletionRange(lines, position, range),
-			range => assertSnapshotTextEditRange(lines, range),
-		);
+	return value => normalizeLanguageCompletionResult(
+		value,
+		position => assertSnapshotPosition(lines, position),
+		(position, range) => assertSnapshotCompletionRange(lines, position, range),
+		range => assertSnapshotTextEditRange(lines, range),
+	);
 }
 
 export function normalizeLanguageCompletionItemDetails(value: unknown): LanguageCompletionItemDetails {
@@ -1449,7 +1382,11 @@ export function normalizeLanguageCompletionResult(
 			throw new TypeError('Language completion item preselect must be a boolean');
 		}
 		const commitCharacters = normalizeCommitCharacters(item.commitCharacters);
-		const additionalTextEdits = normalizeAdditionalTextEdits(item.additionalTextEdits, item.range, validateAdditionalRange);
+		const additionalTextEdits = normalizeAdditionalTextEdits(
+			item.additionalTextEdits,
+			item.range,
+			validateAdditionalRange,
+		);
 		const command = normalizeCompletionCommand(item.command);
 		if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== 'boolean') {
 			throw new TypeError('Language completion item hasDeferredDetails must be a boolean');
@@ -1510,11 +1447,7 @@ function normalizeCompletionCommand(value: unknown): LanguageCompletionCommand |
 	assertIdentifier(command.id, 'Language completion command ID');
 	assertNonEmptyText(command.title, 'Language completion command title');
 	if (!Array.isArray(command.arguments)) throw new TypeError('Language completion command arguments must be an array');
-	return Object.freeze({
-		id: command.id,
-		title: command.title,
-		arguments: Object.freeze(structuredClone(command.arguments)),
-	});
+	return Object.freeze({ id: command.id, title: command.title, arguments: Object.freeze(structuredClone(command.arguments)) });
 }
 
 const EMPTY_DETAILS: LanguageCompletionItemDetails = Object.freeze({});
@@ -1525,7 +1458,10 @@ function assertSnapshotCompletionRange(lines: readonly string[], position: Posit
 	}
 	assertSnapshotPosition(lines, range.getStartPosition());
 	assertSnapshotPosition(lines, range.getEndPosition());
-	if (range.getStartPosition().lineNumber !== position.lineNumber || range.getEndPosition().lineNumber !== position.lineNumber) {
+	if (
+		range.getStartPosition().lineNumber !== position.lineNumber ||
+		range.getEndPosition().lineNumber !== position.lineNumber
+	) {
 		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
 	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
@@ -1545,7 +1481,12 @@ function assertSnapshotPosition(lines: readonly string[], position: Position): v
 	if (!(position instanceof Position)) {
 		throw new TypeError('Language completion position must be a Position');
 	}
-	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
+	if (
+		position.lineNumber < 1 ||
+		position.lineNumber > lines.length ||
+		position.column < 1 ||
+		position.column > lines[position.lineNumber - 1]!.length + 1
+	) {
 		throw new RangeError('Language completion position is outside its snapshot');
 	}
 }
@@ -1599,8 +1540,8 @@ function normalizeAdditionalTextEdits(value: unknown, primaryRange: Range, valid
 }
 
 function assertNonOverlappingCompletionEditRanges(primaryRange: Range, edits: readonly LanguageCompletionTextEdit[]): void {
-	const ranges = [primaryRange, ...edits.map(edit => edit.range)].sort(
-		(left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()) || Position.compare(left.getEndPosition(), right.getEndPosition()),
+	const ranges = [primaryRange, ...edits.map(edit => edit.range)].sort((left, right) =>
+		Position.compare(left.getStartPosition(), right.getStartPosition()) || Position.compare(left.getEndPosition(), right.getEndPosition())
 	);
 	for (let index = 1; index < ranges.length; index += 1) {
 		const previous = ranges[index - 1]!;

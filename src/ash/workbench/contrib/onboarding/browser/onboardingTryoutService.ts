@@ -15,7 +15,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		@IViewsService private readonly views: IViewsService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@INotificationService private readonly notifications: INotificationService,
-	) {}
+	) { }
 
 	public getTryouts(): readonly IOnboardingTryout[] {
 		return onboardingTryoutRegistry.getTryouts();
@@ -25,23 +25,19 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		const tryout = onboardingTryoutRegistry.get(id);
 		if (token.isCancellationRequested) return 'cancelled';
 		if (!tryout) return 'unavailable';
-		if (!(await this.isAvailable(id, token))) {
+		if (!await this.isAvailable(id, token)) {
 			if (token.isCancellationRequested) return 'cancelled';
 			if (tryout.setup) {
 				this.notifications.notify({
-					severity: Severity.Info,
-					message: tryout.unavailableMessage ?? localize('onboarding.tryoutUnavailable', 'This example is unavailable.'),
-					actions: {
-						primary: [
-							{
-								tooltip: '',
-								enabled: true,
-								id: `onboarding.setup.${id}`,
-								label: tryout.setup.label,
-								run: () => this.commands.executeCommand(tryout.setup!.commandId),
-							},
-						],
-					},
+					severity: Severity.Info, message: tryout.unavailableMessage ?? localize('onboarding.tryoutUnavailable', 'This example is unavailable.'), actions: {
+						primary: [{
+							tooltip: '',
+							enabled: true,
+							id: `onboarding.setup.${id}`,
+							label: tryout.setup.label,
+							run: () => this.commands.executeCommand(tryout.setup!.commandId),
+						}]
+					}
 				});
 			}
 			return 'unavailable';
@@ -50,18 +46,18 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		const presentation = tryout.presentation;
 		switch (presentation.kind) {
 			case 'command':
-				if (!CommandsRegistry.hasCommand(presentation.commandId) || !(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!CommandsRegistry.hasCommand(presentation.commandId) || !await this.isAvailable(id, token)) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
 				await this.commands.executeCommand(presentation.commandId, ...(presentation.arguments ?? []));
 				return 'completed';
 			case 'openView':
-				if (!(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!await this.isAvailable(id, token)) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
-				return (await this.views.focusView(presentation.viewId)) ? 'completed' : 'unavailable';
+				return await this.views.focusView(presentation.viewId) ? 'completed' : 'unavailable';
 			case 'guided': {
 				const scope = await presentation.prepare?.(token);
 				if (token.isCancellationRequested) return 'cancelled';
-				if (!(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!await this.isAvailable(id, token)) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
 				return this.onboarding.showSteps(presentation.steps, token, scope || undefined);
 			}
@@ -86,7 +82,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		const tryout = onboardingTryoutRegistry.get(id);
 		if (!tryout || token.isCancellationRequested) return false;
 		try {
-			return (await tryout.isAvailable?.(token)) ?? true;
+			return await tryout.isAvailable?.(token) ?? true;
 		} catch (error) {
 			console.error(`Unable to check onboarding tryout '${id}'`, error);
 			return false;

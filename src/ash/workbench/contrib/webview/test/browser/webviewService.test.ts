@@ -45,7 +45,8 @@ suite('Webview service', () => {
 		assert.deepEqual([...service.webviews], [second]);
 		assert.equal(service.activeWebview, second);
 		second.dispose();
-		assert.deepEqual({ views: [...service.webviews], active: service.activeWebview, changes }, { views: [], active: undefined, changes: [first, second, undefined] });
+		assert.deepEqual({ views: [...service.webviews], active: service.activeWebview, changes },
+			{ views: [], active: undefined, changes: [first, second, undefined] });
 	});
 
 	test('the preview requires the registered service and owns its container lifetime', () => {
@@ -54,10 +55,7 @@ suite('Webview service', () => {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
 		using instantiation = registerTestComponentServices(new InstantiationService(new ServiceCollection(descriptor)));
 		const service = instantiation.get(IWebviewService);
-		using preview = instantiation.createInstance(MarkdownPreview, document.body, {
-			title: 'Preview',
-			markdown: '# Preview',
-		});
+		using preview = instantiation.createInstance(MarkdownPreview, document.body, { title: 'Preview', markdown: '# Preview' });
 		assert.equal([...service.webviews].length, 1);
 		assert.equal(preview.element.isConnected, true);
 		preview.dispose();

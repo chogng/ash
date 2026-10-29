@@ -54,7 +54,7 @@ export class DiffEditorViewZones extends Disposable {
 	private modifiedZones: string[] = [];
 	private readonly inlineMargins = this._register(new DisposableStore());
 	private readonly inlineMarginObserver: ResizeObserver;
-	private inlineOriginalLines: { readonly version: number; readonly lines: InlineOriginalLine[] } | undefined;
+	private inlineOriginalLines: { readonly version: number; readonly lines: InlineOriginalLine[]; } | undefined;
 	private unwrappedZoneLayout: UnwrappedZoneLayout | undefined;
 
 	constructor(
@@ -71,44 +71,38 @@ export class DiffEditorViewZones extends Disposable {
 			this.updateInlineMargins(this.inlineOriginalLines?.lines.filter(line => resized.has(line.element)) ?? []);
 		});
 		this._register(toDisposable(() => this.inlineMarginObserver.disconnect()));
-		this._register(
-			enableCopySelection({
-				domNode: modifiedEditor.getDomNode(),
-				originalModel: model.original,
-				clipboardService,
-				getModelPositionAt: (element, offset) => {
-					const snapshot = this.inlineOriginalLines;
-					if (!snapshot || snapshot.version !== model.original.version) return undefined;
-					for (const line of snapshot.lines) {
-						const position = line.rendered?.getModelPositionAt(element, offset);
-						if (position) return new Position(line.lineNumber + position.lineNumber - 1, position.column);
-					}
-					return undefined;
-				},
-			}),
-		);
+		this._register(enableCopySelection({
+			domNode: modifiedEditor.getDomNode(),
+			originalModel: model.original,
+			clipboardService,
+			getModelPositionAt: (element, offset) => {
+				const snapshot = this.inlineOriginalLines;
+				if (!snapshot || snapshot.version !== model.original.version) return undefined;
+				for (const line of snapshot.lines) {
+					const position = line.rendered?.getModelPositionAt(element, offset);
+					if (position) return new Position(line.lineNumber + position.lineNumber - 1, position.column);
+				}
+				return undefined;
+			},
+		}));
 		this._register(model.original.onDidChangeTokens(event => this.renderInlineOriginalLines(event.ranges)));
 		if (model.original.tokenization.semanticTokens) {
 			this._register(model.original.tokenization.semanticTokens.onDidChange(() => this.renderInlineOriginalLines()));
 		}
-		this._register(
-			originalEditor.onDidChangeModelDecorations(() => {
-				// Token batches do not change decorations. Refresh this derived row data
-				// only when its editor owner publishes a decoration change.
-				for (const line of this.inlineOriginalLines?.lines ?? []) {
-					line.inlineDecorations = undefined;
-				}
-				this.renderInlineOriginalLines();
-			}),
-		);
+		this._register(originalEditor.onDidChangeModelDecorations(() => {
+			// Token batches do not change decorations. Refresh this derived row data
+			// only when its editor owner publishes a decoration change.
+			for (const line of this.inlineOriginalLines?.lines ?? []) {
+				line.inlineDecorations = undefined;
+			}
+			this.renderInlineOriginalLines();
+		}));
 		this._register(themeService.onDidColorThemeChange(() => this.renderInlineOriginalLines()));
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) {
-					this.renderInlineOriginalLines();
-				}
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) {
+				this.renderInlineOriginalLines();
+			}
+		}));
 		this._register(toDisposable(() => this.clear()));
 	}
 
@@ -117,9 +111,7 @@ export class DiffEditorViewZones extends Disposable {
 		this.unwrappedZoneLayout = undefined;
 		if (!wordWrap && !comparison) {
 			const layout: UnwrappedZoneLayout = {
-				rows,
-				inlineView,
-				renderIndicators,
+				rows, inlineView, renderIndicators,
 				originalVersion: this.model.original.version,
 				modifiedVersion: this.model.modified.version,
 				originalLineHeight: this.originalEditor.getOption(EditorOption.lineHeight),
@@ -131,19 +123,11 @@ export class DiffEditorViewZones extends Disposable {
 			this.unwrappedZoneLayout = layout;
 			// Without wrapping or a moved-block comparison, viewport size does not
 			// change alignment. Retain zone DOM, selection and copy mappings on resize.
-			if (
-				previous &&
-				previous.rows === layout.rows &&
-				previous.inlineView === layout.inlineView &&
-				previous.renderIndicators === layout.renderIndicators &&
-				previous.originalVersion === layout.originalVersion &&
-				previous.modifiedVersion === layout.modifiedVersion &&
-				previous.originalLineHeight === layout.originalLineHeight &&
-				previous.modifiedLineHeight === layout.modifiedLineHeight &&
-				previous.decorationsWidth === layout.decorationsWidth &&
-				previous.fontInfo === layout.fontInfo &&
-				previous.tabSize === layout.tabSize
-			) {
+			if (previous && previous.rows === layout.rows && previous.inlineView === layout.inlineView
+				&& previous.renderIndicators === layout.renderIndicators
+				&& previous.originalVersion === layout.originalVersion && previous.modifiedVersion === layout.modifiedVersion
+				&& previous.originalLineHeight === layout.originalLineHeight && previous.modifiedLineHeight === layout.modifiedLineHeight
+				&& previous.decorationsWidth === layout.decorationsWidth && previous.fontInfo === layout.fontInfo && previous.tabSize === layout.tabSize) {
 				return;
 			}
 		}
@@ -162,9 +146,7 @@ export class DiffEditorViewZones extends Disposable {
 				this.modifiedZones = [];
 				let precedingOriginalLine = 0;
 				let precedingModifiedLine = 0;
-				for (const [ordinal, row] of wordWrap || this.originalEditor.getOption(EditorOption.lineHeight) !== this.modifiedEditor.getOption(EditorOption.lineHeight)
-					? rows.entries()
-					: rows.alignmentEntries()) {
+				for (const [ordinal, row] of wordWrap || this.originalEditor.getOption(EditorOption.lineHeight) !== this.modifiedEditor.getOption(EditorOption.lineHeight) ? rows.entries() : rows.alignmentEntries()) {
 					const originalHeight = row.originalLineIndex === undefined ? 0 : this.lineHeightFor(this.originalEditor, row.originalLineIndex + 1, wordWrap);
 					const modifiedHeight = row.modifiedLineIndex === undefined ? 0 : this.lineHeightFor(this.modifiedEditor, row.modifiedLineIndex + 1, wordWrap);
 					if (row.originalLineIndex !== undefined) precedingOriginalLine = row.originalLineIndex + 1;
@@ -182,27 +164,20 @@ export class DiffEditorViewZones extends Disposable {
 						line.textContent = this.model.original.getLineContent(row.originalLineIndex + 1);
 						line.setAttribute('aria-label', localize('diffEditor.removedLine', 'Removed line {0}: {1}', row.originalLineIndex + 1, line.textContent));
 						// Deleted text has no modified-model line; its marker must share the zone's scroll and disposal lifecycle.
-						const margin = this.inlineMargins.add(
-							new InlineDiffDeletedCodeMargin(
-								line.ownerDocument,
-								layout.decorationsWidth,
-								renderIndicators,
-								originalLineHeight,
-								Math.max(1, Math.round(originalHeight / originalLineHeight)),
-							),
-						);
+						const margin = this.inlineMargins.add(new InlineDiffDeletedCodeMargin(
+							line.ownerDocument, layout.decorationsWidth, renderIndicators,
+							originalLineHeight, Math.max(1, Math.round(originalHeight / originalLineHeight)),
+						));
 						lines.push({ element: line, margin, lineNumber: row.originalLineIndex + 1 });
 						this.inlineMarginObserver.observe(line);
-						this.modifiedZones.push(
-							accessor.addZone({
-								afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
-								heightInPx: originalHeight,
-								ordinal,
-								domNode: line,
-								marginDomNode: margin.domNode,
-								isAccessible: true,
-							}),
-						);
+						this.modifiedZones.push(accessor.addZone({
+							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
+							heightInPx: originalHeight,
+							ordinal,
+							domNode: line,
+							marginDomNode: margin.domNode,
+							isAccessible: true,
+						}));
 					}
 					if (row.modifiedLineIndex !== undefined) precedingModifiedLine = row.modifiedLineIndex + 1;
 				}
@@ -240,14 +215,12 @@ export class DiffEditorViewZones extends Disposable {
 		}
 		if (comparison) {
 			// Balance trailing space from the last model line and the zones we are about to add.
-			const originalHeight =
-				this.originalEditor.getBottomForLineNumber(this.model.original.getLineCount()) +
-				this.originalEditor.getOption(EditorOption.padding).bottom +
-				original.reduce((height, zone) => height + zone.heightInPx, 0);
-			const modifiedHeight =
-				this.modifiedEditor.getBottomForLineNumber(this.model.modified.getLineCount()) +
-				this.modifiedEditor.getOption(EditorOption.padding).bottom +
-				modified.reduce((height, zone) => height + zone.heightInPx, 0);
+			const originalHeight = this.originalEditor.getBottomForLineNumber(this.model.original.getLineCount())
+				+ this.originalEditor.getOption(EditorOption.padding).bottom
+				+ original.reduce((height, zone) => height + zone.heightInPx, 0);
+			const modifiedHeight = this.modifiedEditor.getBottomForLineNumber(this.model.modified.getLineCount())
+				+ this.modifiedEditor.getOption(EditorOption.padding).bottom
+				+ modified.reduce((height, zone) => height + zone.heightInPx, 0);
 			this.appendViewZone(original, this.model.original.getLineCount(), modifiedHeight - originalHeight, rows.length);
 			this.appendViewZone(modified, this.model.modified.getLineCount(), originalHeight - modifiedHeight, rows.length);
 		}
@@ -276,7 +249,7 @@ export class DiffEditorViewZones extends Disposable {
 		});
 	}
 
-	private renderInlineOriginalLines(ranges?: readonly { fromLineNumber: number; toLineNumber: number }[]): void {
+	private renderInlineOriginalLines(ranges?: readonly { fromLineNumber: number; toLineNumber: number; }[]): void {
 		const snapshot = this.inlineOriginalLines;
 		// A text edit invalidates the old row bindings until the diff rebuilds its zones.
 		if (!snapshot || snapshot.version !== this.model.original.version) return;
@@ -292,30 +265,18 @@ export class DiffEditorViewZones extends Disposable {
 			if (ranges && !ranges.some(range => range.fromLineNumber <= lineNumber && lineNumber <= range.toLineNumber)) {
 				continue;
 			}
-			const inlineDecorations = (line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => {
+			const inlineDecorations = line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => {
 				// Deleted zones have no editor overlay. Project their diff ranges into
 				// the rendered source text while retaining other inline decorations.
-				const className = decoration.options.inlineClassName ?? (decoration.options.className === diffDeleteDecoration.className ? decoration.options.className : undefined);
+				const className = decoration.options.inlineClassName
+					?? (decoration.options.className === diffDeleteDecoration.className ? decoration.options.className : undefined);
 				return className ? [new InlineDecoration(decoration.range, className, InlineDecorationType.Regular)] : [];
-			}));
-			line.rendered = renderLines(
-				new LineSource(
-					[
-						{
-							lineNumber,
-							content: this.model.original.getLineContent(lineNumber),
-							tokens: this.model.original.tokenization.renderedTokens.getLineTokens(lineNumber - 1).map(token => ({
-								...token,
-								syntaxPresentation: resolveSemanticTokenPresentation(token, theme, semanticHighlighting),
-							})),
-						},
-					],
-					this.originalEditor._getViewModel()!.getVisualLineProjection(),
-				),
-				options,
-				inlineDecorations,
-				element,
-			);
+			});
+			line.rendered = renderLines(new LineSource([{
+				lineNumber,
+				content: this.model.original.getLineContent(lineNumber),
+				tokens: this.model.original.tokenization.renderedTokens.getLineTokens(lineNumber - 1).map(token => ({ ...token, syntaxPresentation: resolveSemanticTokenPresentation(token, theme, semanticHighlighting) })),
+			}], this.originalEditor._getViewModel()!.getVisualLineProjection()), options, inlineDecorations, element);
 			renderedLines.push(line);
 		}
 		this.updateInlineMargins(renderedLines);
@@ -325,7 +286,7 @@ export class DiffEditorViewZones extends Disposable {
 		const lineHeight = this.originalEditor.getOption(EditorOption.lineHeight);
 		// Count rendered rows before mutating margins, including zones that only
 		// become measurable after scrolling into view.
-		const updates: { margin: InlineDiffDeletedCodeMargin; count: number }[] = [];
+		const updates: { margin: InlineDiffDeletedCodeMargin; count: number; }[] = [];
 		for (const line of lines) {
 			let firstTop = Infinity;
 			let lastTop = -Infinity;

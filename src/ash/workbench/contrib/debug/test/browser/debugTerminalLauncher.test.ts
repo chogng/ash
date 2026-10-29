@@ -63,30 +63,9 @@ test('DAP runInTerminal creates an integrated PowerShell terminal with quoted ar
 	const writes: string[] = [];
 	const environments: unknown[] = [];
 	const terminals = {
-		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => {
-			environments.push(options.env);
-			return {
-				state: 'running',
-				processId: 1234,
-				onDidWriteData: Event.None,
-				onDidExit: Event.None,
-				sendText: async (value: string, shouldExecute: boolean) => {
-					writes.push(value + (shouldExecute ? '\r' : ''));
-				},
-			};
-		},
+		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => { environments.push(options.env); return { state: 'running', processId: 1234, onDidWriteData: Event.None, onDidExit: Event.None, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }; },
 	} as unknown as ITerminalService;
-	const response = await launchWithTerminalRequest(
-		terminals,
-		{
-			kind: 'integrated',
-			title: 'Debug app',
-			cwd: 'C:\\work tree',
-			args: ['C:\\bin\\app.exe', 'a b', "don't"],
-			env: { MODE: 'debug value', REMOVE_ME: null },
-		},
-		{ profiles: [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }] },
-	);
+	const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', title: 'Debug app', cwd: 'C:\\work tree', args: ['C:\\bin\\app.exe', 'a b', "don't"], env: { MODE: 'debug value', REMOVE_ME: null } }, { profiles: [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }] });
 
 	assert.equal(response.success, true);
 	assert.deepEqual(response.body, { shellProcessId: 1234 });
@@ -95,11 +74,7 @@ test('DAP runInTerminal creates an integrated PowerShell terminal with quoted ar
 });
 
 test('DAP runInTerminal rejects external terminals before acquiring a profile', async () => {
-	const terminals = {
-		getProfiles: async () => {
-			throw new Error('must not run');
-		},
-	} as unknown as ITerminalService;
+	const terminals = { getProfiles: async () => { throw new Error('must not run'); } } as unknown as ITerminalService;
 	const response = await launchWithTerminalRequest(terminals, { kind: 'external', args: ['app'] });
 	assert.equal(response.success, false);
 	assert.match(String(response.message), /External debug terminals are not supported/);
@@ -116,79 +91,30 @@ suite('DAP terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				setAutoReplies: async () => {},
-				sendSignal: async () => {},
-				resolveProfile: resolveTerminalProfile,
-				getConnectionState: async () => 'ready',
-				onConnectionState: Event.None,
-				getProcessInfo: async () => ({
-					ready: { pid: 42, cwd: '/workspace' },
-					cwd: '/workspace',
-					rows: 24,
-					cols: 80,
-				}),
-				getEnvironment: async () => ({}),
-				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
-				create: async () => ({
-					ready: { pid: 1234, cwd: '/workspace' },
-					terminalId: 'debug-process',
-					profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-					connectionPersistence: 'connectionOwned',
-				}),
-				read: async () => ({
-					terminalId: 'debug-process',
-					commandEventGap: false,
-					chunks: [],
-					nextSequence: 0,
-					commandEvents: [],
-					nextCommandSequence: 0,
-					exited: false,
-					exitCode: undefined,
-					outputGap: false,
-				}),
-				write: async () => {
-					calls.push('write');
-					void submitted.complete(undefined);
-					await acknowledgement.p;
-				},
-				resize: async () => {},
-				close: async () => {
-					calls.push('close');
-				},
+				setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
+				getConnectionState: async () => 'ready', onConnectionState: Event.None,
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
+				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
+				read: async () => ({ terminalId: 'debug-process', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
+				write: async () => { calls.push('write'); void submitted.complete(undefined); await acknowledgement.p; },
+				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(
-				new InstantiationService(
-					new ServiceCollection(
-						[IPathService, new SyncDescriptor(BrowserPathService)],
-						[IRendererHostService, createDisconnectedRendererApi()],
-						[IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
-						[ITerminalProcessService, processes],
-						[IWorkspaceContextService, workspace],
-					),
-				),
-			);
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
-			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes }).then(response => {
-				finished = true;
-				return response;
-			});
+			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes }).then(response => { finished = true; return response; });
 			await submitted.p;
 			assert.equal(finished, false);
 			if (outcome === 'acknowledge') void acknowledgement.complete(undefined);
 			else if (outcome === 'reject') void acknowledgement.error(new Error('debug input rejected'));
 			else await terminals.closeTerminal(terminals.activeInstance!);
 			const response = await pending;
-			assert.deepEqual(
-				{ success: response.success, calls, instances: terminals.instances.length },
-				{
-					success: outcome === 'acknowledge',
-					calls: outcome === 'acknowledge' ? ['write'] : ['write', 'close'],
-					instances: outcome === 'acknowledge' ? 1 : 0,
-				},
-			);
+			assert.deepEqual({ success: response.success, calls, instances: terminals.instances.length }, {
+				success: outcome === 'acknowledge', calls: outcome === 'acknowledge' ? ['write'] : ['write', 'close'], instances: outcome === 'acknowledge' ? 1 : 0,
+			});
 			if (outcome === 'reject') assert.equal(response.message, 'debug input rejected');
 			if (outcome === 'close') void acknowledgement.complete(undefined);
 		});
@@ -202,60 +128,28 @@ suite('DAP terminal availability', () => {
 			const calls: string[] = [];
 			const processes: ITerminalProcessService = {
 				operatingSystem: OperatingSystem.Linux,
-				setAutoReplies: async () => {},
-				sendSignal: async () => {},
-				resolveProfile: resolveTerminalProfile,
+				setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 				getConnectionState: async () => 'crashed',
 				onConnectionState: () => Disposable.None,
-				getProcessInfo: async () => ({
-					ready: { pid: 42, cwd: '/workspace' },
-					cwd: '/workspace',
-					rows: 24,
-					cols: 80,
-				}),
-				getEnvironment: async () => ({}),
-				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
-				create: async () => ({
-					ready: { pid: 1234, cwd: '/backend/workspace' },
-					terminalId: 'debug-process',
-					profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-					connectionPersistence: persistence,
-				}),
-				read: async () => {
-					throw new Error('Disconnected terminal must not poll');
-				},
-				write: async () => {
-					calls.push('write');
-				},
-				resize: async () => {},
-				close: async options => {
-					calls.push(`close:${options.terminalId}`);
-				},
+				getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
+				getEnvironment: async () => ({}), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
+				read: async () => { throw new Error('Disconnected terminal must not poll'); },
+				write: async () => { calls.push('write'); },
+				resize: async () => { },
+				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(
-				new InstantiationService(
-					new ServiceCollection(
-						[IPathService, new SyncDescriptor(BrowserPathService)],
-						[IRendererHostService, createDisconnectedRendererApi()],
-						[IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
-						[ITerminalProcessService, processes],
-						[IWorkspaceContextService, workspace],
-					),
-				),
-			);
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
-			assert.deepEqual(
-				{ success: response.success, message: response.message, calls, terminals: terminals.instances },
-				{
-					success: false,
-					message: persistence === 'reconnectable' ? '终端不可用，调试命令尚未执行。请重新启动调试。' : 'The terminal is unavailable. The debug command was not sent. Restart debugging.',
-					calls: ['close:debug-process'],
-					terminals: [],
-				},
-			);
+			assert.deepEqual({ success: response.success, message: response.message, calls, terminals: terminals.instances }, {
+				success: false,
+				message: persistence === 'reconnectable' ? '终端不可用，调试命令尚未执行。请重新启动调试。' : 'The terminal is unavailable. The debug command was not sent. Restart debugging.',
+				calls: ['close:debug-process'],
+				terminals: [],
+			});
 		});
 	}
 });
@@ -272,151 +166,46 @@ suite('DAP terminal launch policies through execution owners', () => {
 		const closes: string[] = [];
 		const disposed = new DeferredPromise<void>();
 		const processes: ITerminalProcessService = {
-			operatingSystem: os,
-			onConnectionState: connection.event,
-			getConnectionState: async () => 'ready',
-			getProcessInfo: async () => ({
-				ready: { pid: 42, cwd: '/workspace' },
-				cwd: '/workspace',
-				rows: 24,
-				cols: 80,
-			}),
+			operatingSystem: os, onConnectionState: connection.event, getConnectionState: async () => 'ready',
+			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home', SOURCE: 'execution value' }),
-			listProfiles: async () => [
-				{ profileId: 'bash', title: 'Bash', isDefault: true },
-				{ profileId: 'powershell', title: 'PowerShell', isDefault: false },
-			],
-			setAutoReplies: async () => {},
-			sendSignal: async () => {},
-			resolveProfile: resolveTerminalProfile,
+			listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }, { profileId: 'powershell', title: 'PowerShell', isDefault: false }],
+			setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 			create: async options => {
 				created.push(options);
-				return {
-					ready: { pid: 321, cwd: options.cwd ?? '/workspace' },
-					terminalId: 'debug-process',
-					profile: (await resolveTerminalProfile(options.profile)).profile,
-					connectionPersistence: 'connectionOwned',
-				};
+				return { ready: { pid: 321, cwd: options.cwd ?? '/workspace' }, terminalId: 'debug-process', profile: (await resolveTerminalProfile(options.profile)).profile, connectionPersistence: 'connectionOwned' };
 			},
-			read: async () => ({
-				terminalId: 'debug-process',
-				chunks: [],
-				nextSequence: 0,
-				commandEvents: [],
-				nextCommandSequence: 0,
-				commandEventGap: false,
-				outputGap: false,
-				exited: false,
-				exitCode: undefined,
-			}),
-			write: async options => {
-				writes.push(typeof options.data === 'string' ? options.data : new TextDecoder().decode(options.data));
-			},
-			resize: async () => {},
-			close: async options => {
-				closes.push(options.terminalId);
-			},
+			read: async () => ({ terminalId: 'debug-process', chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, outputGap: false, exited: false, exitCode: undefined }),
+			write: async options => { writes.push(typeof options.data === 'string' ? options.data : new TextDecoder().decode(options.data)); },
+			resize: async () => { }, close: async options => { closes.push(options.terminalId); },
 		};
-		const services = owner.add(
-			new InstantiationService(new ServiceCollection([IConfigurationService, configuration], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])),
-		);
+		const services = owner.add(new InstantiationService(new ServiceCollection([IConfigurationService, configuration], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 		registerTestTerminalCreationServices(services);
 		const terminals = owner.add(services.createInstance(TerminalService));
-		const disposalListener = owner.add(
-			terminals.onDidDisposeInstance(() => {
-				disposalListener.dispose();
-				void disposed.complete(undefined);
-			}),
-		);
+		const disposalListener = owner.add(terminals.onDidDisposeInstance(() => {
+			disposalListener.dispose();
+			void disposed.complete(undefined);
+		}));
 		return { processes, terminals, configuration, created, writes, closes, workspace, connection, disposed };
 	}
 
 	for (const { os, platform, path, args, command } of [
-		{
-			os: OperatingSystem.Linux,
-			platform: 'linux',
-			path: '/automation/bash',
-			args: ['-l'],
-			command: "'/tools/app' 'two words' 'don'\"'\"'t'\r",
-		},
-		{
-			os: OperatingSystem.Macintosh,
-			platform: 'osx',
-			path: '/automation/zsh',
-			args: ['-l'],
-			command: "'/tools/app' 'two words' 'don'\"'\"'t'\r",
-		},
-		{
-			os: OperatingSystem.Windows,
-			platform: 'windows',
-			path: 'C:\\tools\\pwsh.exe',
-			args: ['-NoLogo'],
-			command: "& '/tools/app' 'two words' 'don''t'\r",
-		},
-		{
-			os: OperatingSystem.Windows,
-			platform: 'windows',
-			path: 'C:\\tools\\pwsh.exe',
-			args: '-NoLogo -NoProfile',
-			command: "& '/tools/app' 'two words' 'don''t'\r",
-		},
+		{ os: OperatingSystem.Linux, platform: 'linux', path: '/automation/bash', args: ['-l'], command: "'/tools/app' 'two words' 'don'\"'\"'t'\r" },
+		{ os: OperatingSystem.Macintosh, platform: 'osx', path: '/automation/zsh', args: ['-l'], command: "'/tools/app' 'two words' 'don'\"'\"'t'\r" },
+		{ os: OperatingSystem.Windows, platform: 'windows', path: 'C:\\tools\\pwsh.exe', args: ['-NoLogo'], command: "& '/tools/app' 'two words' 'don''t'\r" },
+		{ os: OperatingSystem.Windows, platform: 'windows', path: 'C:\\tools\\pwsh.exe', args: '-NoLogo -NoProfile', command: "& '/tools/app' 'two words' 'don''t'\r" },
 	]) {
 		test(`automation profile on ${platform} with ${typeof args} arguments reaches PTY creation and preserves DAP literal environment`, async () => {
 			using owner = new DisposableStore();
 			const fixture = assemble(owner, os);
-			await fixture.configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, {
-				path,
-				args,
-				env: { MODE: 'profile', PROFILE: '${env:SOURCE}', REMOVED: 'profile' },
+			await fixture.configuration.updateValue(`terminal.integrated.automationProfile.${platform}`, { path, args, env: { MODE: 'profile', PROFILE: '${env:SOURCE}', REMOVED: 'profile' } });
+			await fixture.configuration.updateValue(`terminal.integrated.env.${platform}`, { MODE: 'global', GLOBAL: '${env:HOME}' });
+			const response = await launchWithTerminalRequest(fixture.terminals, { args: ['/tools/app', 'two words', "don't"], env: { mode: 'adapter', REMOVED: null, LITERAL: '${env:HOME}' } }, { terminalProcesses: fixture.processes, configuration: fixture.configuration, workspace: fixture.workspace });
+			assert.deepEqual({ success: response.success, body: response.body, profile: fixture.created[0].profile, env: fixture.created[0].env, writes: fixture.writes }, {
+				success: true, body: { shellProcessId: 321 }, profile: { type: 'custom', name: 'Automation shell', path: [path], args },
+				env: os === OperatingSystem.Windows ? { MODE: 'adapter', GLOBAL: '/execution/home', PROFILE: 'execution value', REMOVED: null, LITERAL: '${env:HOME}' } : { MODE: 'profile', GLOBAL: '/execution/home', PROFILE: 'execution value', REMOVED: null, mode: 'adapter', LITERAL: '${env:HOME}' },
+				writes: [command],
 			});
-			await fixture.configuration.updateValue(`terminal.integrated.env.${platform}`, {
-				MODE: 'global',
-				GLOBAL: '${env:HOME}',
-			});
-			const response = await launchWithTerminalRequest(
-				fixture.terminals,
-				{
-					args: ['/tools/app', 'two words', "don't"],
-					env: { mode: 'adapter', REMOVED: null, LITERAL: '${env:HOME}' },
-				},
-				{
-					terminalProcesses: fixture.processes,
-					configuration: fixture.configuration,
-					workspace: fixture.workspace,
-				},
-			);
-			assert.deepEqual(
-				{
-					success: response.success,
-					body: response.body,
-					profile: fixture.created[0].profile,
-					env: fixture.created[0].env,
-					writes: fixture.writes,
-				},
-				{
-					success: true,
-					body: { shellProcessId: 321 },
-					profile: { type: 'custom', name: 'Automation shell', path: [path], args },
-					env:
-						os === OperatingSystem.Windows
-							? {
-									MODE: 'adapter',
-									GLOBAL: '/execution/home',
-									PROFILE: 'execution value',
-									REMOVED: null,
-									LITERAL: '${env:HOME}',
-								}
-							: {
-									MODE: 'profile',
-									GLOBAL: '/execution/home',
-									PROFILE: 'execution value',
-									REMOVED: null,
-									mode: 'adapter',
-									LITERAL: '${env:HOME}',
-								},
-					writes: [command],
-				},
-			);
 			await fixture.terminals.closeTerminal(fixture.terminals.activeInstance!);
 		});
 	}
@@ -426,80 +215,29 @@ suite('DAP terminal launch policies through execution owners', () => {
 		initializeTestLocalization('zh-CN');
 		using owner = new DisposableStore();
 		const fixture = assemble(owner, OperatingSystem.Windows);
-		await fixture.configuration.updateValue('terminal.integrated.profiles.windows', {
-			'Build shell': { path: 'C:\\tools\\cmd.exe', args: ['/d'] },
-		});
+		await fixture.configuration.updateValue('terminal.integrated.profiles.windows', { 'Build shell': { path: 'C:\\tools\\cmd.exe', args: ['/d'] } });
 		await fixture.configuration.updateValue('terminal.integrated.defaultProfile.windows', 'Build shell');
-		const response = await launchWithTerminalRequest(
-			fixture.terminals,
-			{ cwd: 'C:\\workspace\\${workspaceFolder}\\literal directory', args: ['tool.exe', 'two words'] },
-			{
-				terminalProcesses: fixture.processes,
-				configuration: fixture.configuration,
-				workspace: fixture.workspace,
-			},
-		);
-		assert.deepEqual(
-			{
-				success: response.success,
-				title: fixture.terminals.activeInstance?.title,
-				profile: fixture.created[0].profile,
-				cwd: fixture.created[0].cwd,
-				writes: fixture.writes,
-			},
-			{
-				success: true,
-				title: '调试',
-				profile: { type: 'custom', name: 'Build shell', path: ['C:\\tools\\cmd.exe'], args: ['/d'] },
-				cwd: 'C:\\workspace\\${workspaceFolder}\\literal directory',
-				writes: ['cd /d "C:\\workspace\\${workspaceFolder}\\literal directory" && "tool.exe" "two words"\r'],
-			},
-		);
+		const response = await launchWithTerminalRequest(fixture.terminals, { cwd: 'C:\\workspace\\${workspaceFolder}\\literal directory', args: ['tool.exe', 'two words'] }, { terminalProcesses: fixture.processes, configuration: fixture.configuration, workspace: fixture.workspace });
+		assert.deepEqual({ success: response.success, title: fixture.terminals.activeInstance?.title, profile: fixture.created[0].profile, cwd: fixture.created[0].cwd, writes: fixture.writes }, {
+			success: true, title: '调试', profile: { type: 'custom', name: 'Build shell', path: ['C:\\tools\\cmd.exe'], args: ['/d'] }, cwd: 'C:\\workspace\\${workspaceFolder}\\literal directory', writes: ['cd /d "C:\\workspace\\${workspaceFolder}\\literal directory" && "tool.exe" "two words"\r'],
+		});
 		await fixture.terminals.closeTerminal(fixture.terminals.activeInstance!);
 	});
 
 	test('an empty automation profile uses the interactive default and retains raw shell interpretation', async () => {
 		using owner = new DisposableStore();
 		const fixture = assemble(owner);
-		const response = await launchWithTerminalRequest(
-			fixture.terminals,
-			{ args: ['echo', '$MODE', '&&', 'echo', 'done'], argsCanBeInterpretedByShell: true },
-			{
-				terminalProcesses: fixture.processes,
-				configuration: fixture.configuration,
-				workspace: fixture.workspace,
-			},
-		);
-		assert.deepEqual(
-			{ success: response.success, profile: fixture.created[0].profile, writes: fixture.writes },
-			{
-				success: true,
-				profile: { type: 'custom', name: 'Bash', path: ['/bin/bash'], args: [] },
-				writes: ['echo $MODE && echo done\r'],
-			},
-		);
+		const response = await launchWithTerminalRequest(fixture.terminals, { args: ['echo', '$MODE', '&&', 'echo', 'done'], argsCanBeInterpretedByShell: true }, { terminalProcesses: fixture.processes, configuration: fixture.configuration, workspace: fixture.workspace });
+		assert.deepEqual({ success: response.success, profile: fixture.created[0].profile, writes: fixture.writes }, { success: true, profile: { type: 'custom', name: 'Bash', path: ['/bin/bash'], args: [] }, writes: ['echo $MODE && echo done\r'] });
 		await fixture.terminals.closeTerminal(fixture.terminals.activeInstance!);
 	});
 
 	test('profile resolution failure answers DAP without creating a terminal or sending input', async () => {
 		using owner = new DisposableStore();
 		const fixture = assemble(owner);
-		fixture.processes.resolveProfile = async () => {
-			throw new Error('Executable unavailable');
-		};
-		const response = await launchWithTerminalRequest(
-			fixture.terminals,
-			{ args: ['tool'] },
-			{
-				terminalProcesses: fixture.processes,
-				configuration: fixture.configuration,
-				workspace: fixture.workspace,
-			},
-		);
-		assert.deepEqual(
-			{ success: response.success, message: response.message, created: fixture.created, writes: fixture.writes },
-			{ success: false, message: 'Executable unavailable', created: [], writes: [] },
-		);
+		fixture.processes.resolveProfile = async () => { throw new Error('Executable unavailable'); };
+		const response = await launchWithTerminalRequest(fixture.terminals, { args: ['tool'] }, { terminalProcesses: fixture.processes, configuration: fixture.configuration, workspace: fixture.workspace });
+		assert.deepEqual({ success: response.success, message: response.message, created: fixture.created, writes: fixture.writes }, { success: false, message: 'Executable unavailable', created: [], writes: [] });
 	});
 
 	for (const phase of ['resolution', 'creation'] as const) {
@@ -509,228 +247,106 @@ suite('DAP terminal launch policies through execution owners', () => {
 				const fixture = assemble(owner);
 				const entered = new DeferredPromise<void>();
 				const release = new DeferredPromise<void>();
-				if (phase === 'resolution')
-					fixture.processes.resolveProfile = async selection => {
-						await entered.complete(undefined);
-						await release.p;
-						return resolveTerminalProfile(selection);
-					};
+				if (phase === 'resolution') fixture.processes.resolveProfile = async selection => { await entered.complete(undefined); await release.p; return resolveTerminalProfile(selection); };
 				else {
 					const create = fixture.processes.create;
-					fixture.processes.create = async options => {
-						await entered.complete(undefined);
-						await release.p;
-						return create(options);
-					};
+					fixture.processes.create = async options => { await entered.complete(undefined); await release.p; return create(options); };
 				}
-				const operation = launchWithTerminalRequest(
-					fixture.terminals,
-					{ args: ['tool'] },
-					{
-						terminalProcesses: fixture.processes,
-						configuration: fixture.configuration,
-						workspace: fixture.workspace,
-						onReady: async (debug, session) => {
-							await entered.p;
-							if (invalidation === 'connection') fixture.connection.fire('crashed');
-							if (invalidation === 'workspace') fixture.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
-							if (invalidation === 'stop') await debug.stop(session);
-							await release.complete(undefined);
-						},
+				const operation = launchWithTerminalRequest(fixture.terminals, { args: ['tool'] }, {
+					terminalProcesses: fixture.processes, configuration: fixture.configuration, workspace: fixture.workspace,
+					onReady: async (debug, session) => {
+						await entered.p;
+						if (invalidation === 'connection') fixture.connection.fire('crashed');
+						if (invalidation === 'workspace') fixture.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+						if (invalidation === 'stop') await debug.stop(session);
+						await release.complete(undefined);
 					},
-				);
+				});
 				if (invalidation === 'stop') await assert.rejects(operation, isCancellationError);
 				else {
 					// Workspace retirement may close the adapter before it can receive
 					// a failure response; neither ordering may publish success or stdin.
-					const response = await operation.catch(error => {
-						assert.ok(isCancellationError(error));
-						return undefined;
-					});
+					const response = await operation.catch(error => { assert.ok(isCancellationError(error)); return undefined; });
 					if (response) assert.equal(response.success, false);
 				}
 				if (phase === 'creation') await fixture.disposed.p;
-				assert.deepEqual(
-					{ writes: fixture.writes, closes: fixture.closes, instances: fixture.terminals.instances.length },
-					{ writes: [], closes: phase === 'creation' ? ['debug-process'] : [], instances: 0 },
-				);
+				assert.deepEqual({ writes: fixture.writes, closes: fixture.closes, instances: fixture.terminals.instances.length }, { writes: [], closes: phase === 'creation' ? ['debug-process'] : [], instances: 0 });
 			});
 		}
 	}
 });
 
-async function launchWithTerminalRequest(
-	terminals: ITerminalService,
-	argumentsValue: unknown,
-	options: {
-		profiles?: readonly { profileId: string; title: string; isDefault: boolean }[];
-		terminalProcesses?: ITerminalProcessService;
-		configuration?: IConfigurationService;
-		workspace?: TestWorkspaceService;
-		activeResource?: URI;
-		adapterRoutes?: (string | undefined)[];
-		onReady?: (service: DebugService, session: IDebugSession) => Promise<void>;
-	} = {},
-): Promise<Record<string, unknown>> {
+async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { profiles?: readonly { profileId: string; title: string; isDefault: boolean; }[]; terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: TestWorkspaceService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
 	using resources = new DisposableStore();
 	const adapters = resources.add(new AdapterManager());
 	let resolveResponse!: (response: Record<string, unknown>) => void;
-	const response = new Promise<Record<string, unknown>>(resolve => {
-		resolveResponse = resolve;
-	});
-	const messages: Array<{ sequence: number; message: unknown }> = [];
+	const response = new Promise<Record<string, unknown>>(resolve => { resolveResponse = resolve; });
+	const messages: Array<{ sequence: number; message: unknown; }> = [];
 	const transportClosed = new DeferredPromise<void>();
-	const enqueue = (message: unknown): void => {
-		messages.push({ sequence: messages.length, message });
-	};
+	const enqueue = (message: unknown): void => { messages.push({ sequence: messages.length, message }); };
 	const processes = installDebugClientFixture({
-		onConnectionState: () => Event.None(() => {}),
+		onConnectionState: () => Event.None(() => { }),
 		getConnectionState: async () => 'ready',
-		start: async request => {
-			options.adapterRoutes?.push(request.dirId);
-			return 'adapter-process';
-		},
+		start: async request => { options.adapterRoutes?.push(request.dirId); return 'adapter-process'; },
 		send: async (_id, value) => {
 			const message = value as Record<string, unknown>;
-			if (message.type === 'response') {
-				resolveResponse(message);
-				return;
-			}
+			if (message.type === 'response') { resolveResponse(message); return; }
 			if (message.command === 'launch') {
 				enqueue({ seq: 100, type: 'event', event: 'initialized' });
 				enqueue({ seq: 101, type: 'request', command: 'runInTerminal', arguments: argumentsValue });
 			}
-			enqueue({
-				seq: 102,
-				type: 'response',
-				request_seq: message.seq,
-				command: message.command,
-				success: true,
-				body: {},
-			});
+			enqueue({ seq: 102, type: 'response', request_seq: message.seq, command: message.command, success: true, body: {} });
 		},
-		read: async (_id, afterSequence, maxMessages) => ({
-			messages: messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages),
-			nextSequence: messages.length,
-			outputGap: false,
-			stderr: '',
-			exited: false,
-			exitCode: null,
-			protocolError: null,
-		}),
-		close: async () => {
-			await transportClosed.complete(undefined);
-		},
+		read: async (_id, afterSequence, maxMessages) => ({ messages: messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: messages.length, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null }),
+		close: async () => { await transportClosed.complete(undefined); },
 	});
 	const browser = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => browser.window.close()));
-	const storage = resources.add(
-		new BrowserStorageService({
-			ownerWindow: browser.window as unknown as Window,
-			workspaceId: 'test',
-			backend: browser.window.localStorage,
-			flushInterval: 0,
-		}),
-	);
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	const workspace = options.workspace ?? resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
-	const unexpectedProcess = async (): Promise<never> => {
-		throw new Error('Fake terminal must not access a PTY');
-	};
+	const unexpectedProcess = async (): Promise<never> => { throw new Error('Fake terminal must not access a PTY'); };
 	const terminalProcesses: ITerminalProcessService = options.terminalProcesses ?? {
-		operatingSystem: OperatingSystem.Linux,
-		onConnectionState: Event.None,
-		getConnectionState: async () => 'ready',
+		operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None, getConnectionState: async () => 'ready',
 		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
-		getEnvironment: async () => ({}),
-		listProfiles: async () => options.profiles ?? [{ profileId: 'shell', title: 'Shell', isDefault: true }],
-		setAutoReplies: async () => {},
-		sendSignal: async () => {},
-		resolveProfile: resolveTerminalProfile,
-		create: unexpectedProcess,
-		write: unexpectedProcess,
-		resize: unexpectedProcess,
-		read: unexpectedProcess,
-		close: unexpectedProcess,
+		getEnvironment: async () => ({}), listProfiles: async () => options.profiles ?? [{ profileId: 'shell', title: 'Shell', isDefault: true }], setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
+		create: unexpectedProcess, write: unexpectedProcess, resize: unexpectedProcess, read: unexpectedProcess, close: unexpectedProcess,
 	};
 	const parentServices = workbenchInstantiationService(resources, storage);
-	const services = parentServices.createChild(
-		new ServiceCollection(
-			[IPathService, new SyncDescriptor(BrowserPathService)],
-			[IRendererHostService, createDisconnectedRendererApi()],
-			[IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
-			[IFileService, new SyncDescriptor(FileService)],
-			[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-			[ILabelService, new SyncDescriptor(LabelService)],
-			[ITerminalProcessService, terminalProcesses],
-			[IWorkspaceContextService, workspace],
-			[IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
-			[IStorageService, storage],
-			[IDebugAdapterProcessService, processes],
-			[ITerminalService, terminals],
-			[ITaskService, {} as ITaskService],
-			[IAdapterManager, adapters],
-			[ILogService, new NullLoggerService()],
-		),
-	);
+	const services = parentServices.createChild(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+		[IFileService, new SyncDescriptor(FileService)],
+		[IUriIdentityService, new SyncDescriptor(UriIdentityService)], [ILabelService, new SyncDescriptor(LabelService)],
+		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[IStorageService, storage],
+		[IDebugAdapterProcessService, processes],
+		[ITerminalService, terminals],
+		[ITaskService, {} as ITaskService],
+		[IAdapterManager, adapters],
+		[ILogService, new NullLoggerService()],
+	));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	registerTestExtensionService(resources, services);
-	if (!services.has(IEditorService))
-		services.registerInstance(IEditorService, {
-			...emptyEditorServiceState,
-			activeEditor: options.activeResource ? { resource: options.activeResource } : undefined,
-			openEditor: async () => {},
-			focusActiveEditor() {},
-		} as unknown as import('../../../../services/editor/common/editorService.js').IEditorService);
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, activeEditor: options.activeResource ? { resource: options.activeResource } : undefined, openEditor: async () => { }, focusActiveEditor() { } } as unknown as import('../../../../services/editor/common/editorService.js').IEditorService);
 	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-	services.registerInstance(ITerminalContributionService, {
-		terminalProfiles: [],
-		onDidChangeTerminalProfiles: Event.None,
-		...Disposable.None,
-	});
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
-	services.registerInstance(IEnvironmentVariableService, {
-		collections: new Map(),
-		mergedCollection: new MergedEnvironmentVariableCollection(new Map()),
-		onDidChangeCollections: Event.None,
-		refreshCollections: async () => {},
-		set: () => {},
-		delete: () => {},
-		registerCollectionProvider: () => Disposable.None,
-	});
+	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTerminalLifecycle, undefined));
 	services.registerSingleton(ITextFileService, () => createTestTextFileService(services.get(IFileService), services.get(IConfigurationService)));
 	using service = services.createInstance(DebugService);
-	const session = await service.startDebugging({
-		id: 'debug-terminal',
-		name: 'Terminal request',
-		type: 'example',
-		request: 'launch',
-		adapter: { program: 'adapter', arguments: [] },
-		arguments: { cwd: URI.file('/workspace').fsPath },
-	});
+	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });
 	try {
 		await options.onReady?.(service, session);
-		return await Promise.race([
-			response,
-			transportClosed.p.then(() => {
-				throw new CancellationError();
-			}),
-		]);
-	} finally {
-		await service.stop(session);
+		return await Promise.race([response, transportClosed.p.then(() => { throw new CancellationError(); })]);
 	}
+	finally { await service.stop(session); }
 }
 
 async function resolveTerminalProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
 	const profileId = selection.type === 'profile' ? selection.profileId : selection.type === 'custom' ? `custom:${selection.name}` : 'shell';
 	return {
-		profile: {
-			profileId,
-			title: selection.type === 'custom' ? selection.name : profileId,
-			isDefault: selection.type === 'default',
-		},
+		profile: { profileId, title: selection.type === 'custom' ? selection.name : profileId, isDefault: selection.type === 'default' },
 		executable: selection.type === 'custom' ? selection.path[0]! : /powershell|pwsh/.test(profileId) ? `/tools/${profileId}.exe` : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
 		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
@@ -738,27 +354,16 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 
 test('activity-selected debug roots bind the adapter and integrated terminal to the same directory', async () => {
 	using workspace = new TestWorkspaceService({
-		id: 'team',
-		configuration: URI.file('/team.ash-workspace'),
-		folders: [
+		id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [
 			{ id: 'one', name: 'one', uri: URI.file('/first'), index: 0 },
 			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
-		],
+		]
 	});
 	const adapterRoutes: (string | undefined)[] = [];
 	const created: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
 	const terminals = {
 		getProfiles: async () => [{ profileId: 'shell', title: 'shell', isDefault: true }],
-		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => {
-			created.push(options);
-			return {
-				state: 'running',
-				processId: 1234,
-				onDidWriteData: Event.None,
-				onDidExit: Event.None,
-				sendText: async () => {},
-			};
-		},
+		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => { created.push(options); return { state: 'running', processId: 1234, onDidWriteData: Event.None, onDidExit: Event.None, sendText: async () => { } }; },
 	} as unknown as ITerminalService;
 	const response = await launchWithTerminalRequest(terminals, { args: ['app'] }, { workspace, activeResource: URI.file('/second/main.rs'), adapterRoutes });
 	assert.equal(response.success, true);
@@ -766,4 +371,4 @@ test('activity-selected debug roots bind the adapter and integrated terminal to 
 	assert.equal(created[0]?.dirId, 'two');
 });
 
-class DebugTerminalLifecycle extends AbstractLifecycleService {}
+class DebugTerminalLifecycle extends AbstractLifecycleService { }

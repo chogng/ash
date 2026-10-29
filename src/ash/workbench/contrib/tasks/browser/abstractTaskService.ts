@@ -24,34 +24,12 @@ import { FileKind, FileNotFoundError, FileSystemProviderErrorCode, toFileSystemP
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { ITaskService } from '../common/taskService.js';
-import {
-	readTaskOutput,
-	type ITaskRun,
-	type ITaskDescription,
-	type TaskRunStatus,
-	type IWorkspaceTask,
-	type TaskProvider,
-	type TaskProviderRegistration,
-	type TaskProviderTask,
-	waitForTask,
-	RERUN_LAST_TASK_COMMAND_ID,
-	RUN_BUILD_TASK_COMMAND_ID,
-	RUN_TEST_TASK_COMMAND_ID,
-	RUN_TASK_COMMAND_ID,
-	TERMINATE_TASK_COMMAND_ID,
-} from '../common/tasks.js';
+import { readTaskOutput, type ITaskRun, type ITaskDescription, type TaskRunStatus, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask, RERUN_LAST_TASK_COMMAND_ID, RUN_BUILD_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, TERMINATE_TASK_COMMAND_ID } from '../common/tasks.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
-import {
-	cargoWorkspaceTasks,
-	parseShellExecution,
-	parseTaskEnvironment,
-	parseTaskRunOptions,
-	parseTaskPresentationOptions,
-	parsePackageTasks,
-	parseWorkspaceTasks,
-} from '../common/taskConfiguration.js';
+import { cargoWorkspaceTasks, parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions, parsePackageTasks, parseWorkspaceTasks } from '../common/taskConfiguration.js';
 import { match } from '../../../../base/common/glob.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+
 
 interface OwnedTaskProvider {
 	readonly owner: object;
@@ -76,14 +54,7 @@ interface TaskInstance {
 export abstract class AbstractTaskService extends Disposable implements ITaskService {
 	private readonly changeTasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
 	private taskSystem: TerminalTaskSystem | undefined;
-	private readonly retainedRuns = new Map<
-		string,
-		{
-			run: ITaskRun;
-			completedAt?: number;
-			dispatch?: { controller: AbortController; operation: Promise<ITaskRun> };
-		}
-	>();
+	private readonly retainedRuns = new Map<string, { run: ITaskRun; completedAt?: number; dispatch?: { controller: AbortController; operation: Promise<ITaskRun>; }; }>();
 	private latestRun: ITaskRun | undefined;
 	private readonly startEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
@@ -127,46 +98,36 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		super();
 		this.output = this._register(outputService.createChannel({ id: 'tasks', label: 'Tasks', kind: 'log', source: 'core' }));
 		resolver.contributeVariable('defaultBuildTask', () => this.resolveDefaultBuildTask());
-		this._register(
-			fileService.onDidChangeFiles(event => {
-				if ((this.loaded || this.activeRefresh !== undefined) && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				this.workspaceGeneration++;
-				for (const picker of this.buildVariablePickers) picker.dispose();
-				this.pendingRuns.clear();
-				for (const dispatch of this.dispatches) dispatch.abort();
-				this.taskSystem?.cancelAll();
-				this.retainedRuns.clear();
-				this.latestRun = undefined;
-				this.activeRefresh?.abort();
-				this.refreshGeneration += 1;
-				this.loaded = false;
-				this.setTasks(Object.freeze([]));
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				for (const picker of this.buildVariablePickers) picker.dispose();
-				for (const dispatch of this.dispatches) dispatch.abort();
-				this.dispatches.clear();
-				this.activeRefresh?.abort();
-				this.activeRefresh = undefined;
-				this.providers.clear();
-				this.retainedRuns.clear();
-				this.latestRun = undefined;
-			}),
-		);
+		this._register(fileService.onDidChangeFiles(event => {
+			if ((this.loaded || this.activeRefresh !== undefined) && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => {
+			this.workspaceGeneration++;
+			for (const picker of this.buildVariablePickers) picker.dispose();
+			this.pendingRuns.clear();
+			for (const dispatch of this.dispatches) dispatch.abort();
+			this.taskSystem?.cancelAll();
+			this.retainedRuns.clear();
+			this.latestRun = undefined;
+			this.activeRefresh?.abort();
+			this.refreshGeneration += 1;
+			this.loaded = false;
+			this.setTasks(Object.freeze([]));
+		}));
+		this._register(toDisposable(() => {
+			for (const picker of this.buildVariablePickers) picker.dispose();
+			for (const dispatch of this.dispatches) dispatch.abort();
+			this.dispatches.clear();
+			this.activeRefresh?.abort();
+			this.activeRefresh = undefined;
+			this.providers.clear();
+			this.retainedRuns.clear();
+			this.latestRun = undefined;
+		}));
 	}
 
-	get tasks(): readonly IWorkspaceTask[] {
-		return this.currentTasks;
-	}
-	get activeRuns(): readonly ITaskRun[] {
-		return this.runs.filter(run => run.status === 'running');
-	}
+	get tasks(): readonly IWorkspaceTask[] { return this.currentTasks; }
+	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
 	get lastRun(): ITaskRun | undefined {
 		if (this.latestRun && !this.getRun(this.latestRun.runId)) this.latestRun = undefined;
 		return this.latestRun;
@@ -179,23 +140,17 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const completed = [...this.retainedRuns].filter(([, entry]) => entry.completedAt !== undefined).sort(([, a], [, b]) => a.completedAt! - b.completedAt!);
 		let count = completed.length;
 		for (const [id, entry] of completed) {
-			if (Date.now() - entry.completedAt! > 3_600_000 || count > 100) {
-				this.retainedRuns.delete(id);
-				count--;
-			}
+			if (Date.now() - entry.completedAt! > 3_600_000 || count > 100) { this.retainedRuns.delete(id); count--; }
 		}
 	}
-	getRun(runId: string): ITaskRun | undefined {
-		return this.runs.find(run => run.runId === runId);
-	}
+	getRun(runId: string): ITaskRun | undefined { return this.runs.find(run => run.runId === runId); }
 
 	start(task: IWorkspaceTask, signal: AbortSignal, expectedRevision: string): ITaskRun {
 		this.assertNotDisposed();
 		if (signal.aborted) throw new CancellationError();
 		const existing = this.activeRuns.filter(run => run.task.id === task.id);
 		if (existing.length >= (task.runOptions?.instanceLimit ?? 1) && ['silent', 'warn'].includes(task.runOptions?.instancePolicy ?? 'prompt')) {
-			if (task.runOptions?.instancePolicy === 'warn')
-				this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
+			if (task.runOptions?.instancePolicy === 'warn') this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
 			return existing[0]!;
 		}
 		if (this.activeRuns.length >= 32) throw new Error(localize('tasks.agentRunLimit', 'This window already has 32 running tasks. Wait for a task to finish before starting another.'));
@@ -210,36 +165,18 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		let preparationError = '';
 		let status: TaskRunStatus = 'running';
 		const run: ITaskRun = {
-			runId: generateUuid(),
-			task,
-			get terminalId() {
-				return current?.terminalId ?? '';
-			},
-			get processId() {
-				return current?.processId;
-			},
-			get processCompletion() {
-				return current?.processCompletion;
-			},
-			get hasBackgroundMatcher() {
-				return current?.hasBackgroundMatcher;
-			},
+			runId: generateUuid(), task,
+			get terminalId() { return current?.terminalId ?? ''; },
+			get processId() { return current?.processId; },
+			get processCompletion() { return current?.processCompletion; },
+			get hasBackgroundMatcher() { return current?.hasBackgroundMatcher; },
 			onDidBecomeReady: readyEmitter.event,
-			get status() {
-				return current?.status ?? status;
-			},
-			get exitCode() {
-				return current?.exitCode;
-			},
-			get isReady() {
-				return current?.isReady;
-			},
-			get hasErrors() {
-				return current?.hasErrors;
-			},
-			onDidChangeStatus: emitter.event,
-			completion: completion.p,
-			readOutput: (cursor, limit) => (current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit)),
+			get status() { return current?.status ?? status; },
+			get exitCode() { return current?.exitCode; },
+			get isReady() { return current?.isReady; },
+			get hasErrors() { return current?.hasErrors; },
+			onDidChangeStatus: emitter.event, completion: completion.p,
+			readOutput: (cursor, limit) => current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit),
 		};
 		const bindRun = (value: ITaskRun): void => {
 			if (current === value) return;
@@ -260,38 +197,21 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		this.retainedRuns.set(run.runId, { run, dispatch: { controller, operation } });
 		this.latestRun = run;
 		this.stateEmitter.fire(run);
-		void operation
-			.then(
-				async value => {
-					// Joining a reserved instance returns its producer without publishing a start.
-					bindRun(value);
-					await completion.complete(await value.completion);
-				},
-				error => {
-					const retained = this.retainedRuns.get(run.runId);
-					if (retained) {
-						retained.completedAt = Date.now();
-						this.latestRun = run;
-					}
-					this.pruneRuns();
-					const message = new TextDecoder().decode(new TextEncoder().encode(getErrorMessage(error)));
-					preparationError = readTaskOutput(message, 0, 0, 65_536).text;
-					status = controller.signal.aborted ? 'canceled' : 'failed';
-					emitter.fire(status);
-					this.stateEmitter.fire(run);
-					void completion.error(error);
-				},
-			)
-			.catch(error => {
-				void completion.error(error);
-			})
-			.finally(() => {
-				signal.removeEventListener('abort', abort);
-				statusListener?.dispose();
-				readyListener?.dispose();
-				readyEmitter.dispose();
-				emitter.dispose();
-			});
+		void operation.then(async value => {
+			// Joining a reserved instance returns its producer without publishing a start.
+			bindRun(value);
+			await completion.complete(await value.completion);
+		}, error => {
+			const retained = this.retainedRuns.get(run.runId);
+			if (retained) { retained.completedAt = Date.now(); this.latestRun = run; }
+			this.pruneRuns();
+			const message = new TextDecoder().decode(new TextEncoder().encode(getErrorMessage(error)));
+			preparationError = readTaskOutput(message, 0, 0, 65_536).text;
+			status = controller.signal.aborted ? 'canceled' : 'failed';
+			emitter.fire(status);
+			this.stateEmitter.fire(run);
+			void completion.error(error);
+		}).catch(error => { void completion.error(error); }).finally(() => { signal.removeEventListener('abort', abort); statusListener?.dispose(); readyListener?.dispose(); readyEmitter.dispose(); emitter.dispose(); });
 		return run;
 	}
 
@@ -306,7 +226,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			this.resolver.resolveWithEnvironment({}, rootFolder!, '${workspaceFolderBasename}'),
 		]);
 		const recipe: IWorkspaceTask[] = [];
-		const commands: { command: string; cwd: string }[] = [];
+		const commands: { command: string; cwd: string; }[] = [];
 		const visiting = new Set<string>();
 		const visited = new Set<string>();
 		const visit = (candidate: IWorkspaceTask): void => {
@@ -314,19 +234,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			if (visited.has(candidate.id)) return;
 			const folder = this.workspace.getWorkspace().folders.find(folder => candidate.dirId === folder.id);
 			if (!folder || folder.uri.scheme !== 'file') throw new Error(localize('tasks.agentLocalTaskRequired', 'Agent task execution requires a task in a local workspace folder.'));
-			const configuration = JSON.stringify({
-				command: candidate.command,
-				execution: candidate.execution,
-				cwd: candidate.cwd,
-				env: candidate.environment,
-				matchers: candidate.problemMatchers,
-			});
-			if (
-				candidate.providerId ||
-				candidate.execution?.type === 'custom' ||
-				candidate.unsupportedFeatures?.length ||
-				[...configuration.matchAll(/\$\{([^}]+)\}/g)].some(match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!))
-			) {
+			const configuration = JSON.stringify({ command: candidate.command, execution: candidate.execution, cwd: candidate.cwd, env: candidate.environment, matchers: candidate.problemMatchers });
+			if (candidate.providerId || candidate.execution?.type === 'custom' || candidate.unsupportedFeatures?.length || [...configuration.matchAll(/\$\{([^}]+)\}/g)].some(match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!))) {
 				throw new Error(localize('tasks.agentStaticTaskRequired', "Task '{0}' needs an extension or interactive variables. Use the Run Task command to run it.", candidate.label));
 			}
 			const resolve = (value: string): string => value.replaceAll('${workspaceFolder}', rootPath).replaceAll('${workspaceFolderBasename}', folderBasename);
@@ -337,21 +246,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			recipe.push(candidate);
 			if (candidate.command) {
 				const cwd = resolve(candidate.cwd ?? rootPath);
-				commands.push({
-					command: resolve(candidate.command),
-					cwd: rules.normalize(rules.isAbsolute(cwd) ? cwd : rootPath + rules.sep + cwd),
-				});
+				commands.push({ command: resolve(candidate.command), cwd: rules.normalize(rules.isAbsolute(cwd) ? cwd : rootPath + rules.sep + cwd) });
 			}
 		};
 		visit(current);
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)!;
-		const bytes = new TextEncoder().encode(
-			JSON.stringify({
-				directory: folder.uri.toString(),
-				recipe,
-				terminal: this.configuration.getValue('terminal'),
-			}),
-		);
+		const bytes = new TextEncoder().encode(JSON.stringify({ directory: folder.uri.toString(), recipe, terminal: this.configuration.getValue('terminal') }));
 		const digest = await crypto.subtle.digest('SHA-256', bytes);
 		const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 		return { taskId: current.id, label: current.label, directory: rootPath, revision, commands };
@@ -385,23 +285,17 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			// to this Task owner and must settle on workspace retirement or disposal.
 			resources.add(toDisposable(() => finish()));
 			try {
-				const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { task: IWorkspaceTask }>());
+				const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { task: IWorkspaceTask; }>());
 				picker.placeholder = picker.ariaLabel = localize('tasks.selectBuildTaskLabel', 'Select a build task');
 				const update = (catalog: readonly IWorkspaceTask[]): void => {
-					picker.items = candidates(catalog).map(task => ({
-						task,
-						label: task.label,
-						description: task.source,
-					}));
+					picker.items = candidates(catalog).map(task => ({ task, label: task.label, description: task.source }));
 				};
 				resources.add(this.onDidChangeTasks(update));
-				resources.add(
-					picker.onDidAccept(() => {
-						const item = picker.selectedItems[0];
-						if (!item) return;
-						return finish(item.task.label);
-					}),
-				);
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					return finish(item.task.label);
+				}));
 				resources.add(picker.onDidHide(() => finish()));
 				update(this.currentTasks);
 				picker.show();
@@ -422,26 +316,18 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			// Discovery starts before UI Parts are registered. Execution is the first
 			// operation that needs the view owner, while subscriptions stay stable.
 			const system = this._register(this.createTerminalTaskSystem(this.output));
-			this._register(
-				system.onDidStartTask(run => {
-					if (!this.retainedRuns.has(run.runId))
-						this.retainedRuns.set(run.runId, {
-							run,
-							completedAt: run.status === 'running' ? undefined : Date.now(),
-						});
-					this.latestRun = this.retainedRuns.get(run.runId)!.run;
-					this.pruneRuns();
-					this.startEmitter.fire(this.latestRun);
-				}),
-			);
-			this._register(
-				system.onDidStateChange(run => {
-					const retained = this.retainedRuns.get(run.runId);
-					if (retained && run.status !== 'running' && retained.completedAt === undefined) retained.completedAt = Date.now();
-					this.pruneRuns();
-					this.stateEmitter.fire(retained?.run ?? run);
-				}),
-			);
+			this._register(system.onDidStartTask(run => {
+				if (!this.retainedRuns.has(run.runId)) this.retainedRuns.set(run.runId, { run, completedAt: run.status === 'running' ? undefined : Date.now() });
+				this.latestRun = this.retainedRuns.get(run.runId)!.run;
+				this.pruneRuns();
+				this.startEmitter.fire(this.latestRun);
+			}));
+			this._register(system.onDidStateChange(run => {
+				const retained = this.retainedRuns.get(run.runId);
+				if (retained && run.status !== 'running' && retained.completedAt === undefined) retained.completedAt = Date.now();
+				this.pruneRuns();
+				this.stateEmitter.fire(retained?.run ?? run);
+			}));
 			this.taskSystem = system;
 		}
 		return this.taskSystem;
@@ -497,27 +383,20 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const multiRoot = folders.length > 1;
 		try {
 			this.activatingProviders = controller;
-			try {
-				await this.extensions.activateByEvent('onTaskType', controller.signal);
-			} finally {
-				if (this.activatingProviders === controller) this.activatingProviders = undefined;
-			}
+			try { await this.extensions.activateByEvent('onTaskType', controller.signal); }
+			finally { if (this.activatingProviders === controller) this.activatingProviders = undefined; }
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
 			this.log('debug', 'discovery', `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
 			const [folderGroups, providerGroups] = await Promise.all([
-				Promise.all(
-					folders.map(async folder => {
-						const tasks = await this.discoverWorkspaceTasks(folder.uri);
-						return tasks.map(task =>
-							Object.freeze({
-								...task,
-								id: multiRoot ? `${folder.id}:${task.id}` : task.id,
-								dirId: folder.id,
-							}),
-						);
-					}),
-				),
+				Promise.all(folders.map(async folder => {
+					const tasks = await this.discoverWorkspaceTasks(folder.uri);
+					return tasks.map(task => Object.freeze({
+						...task,
+						id: multiRoot ? `${folder.id}:${task.id}` : task.id,
+						dirId: folder.id,
+					}));
+				})),
 				Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal))),
 			]);
 			const discovered = folderGroups.flat();
@@ -541,7 +420,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	async rerun(terminalInstanceId: string): Promise<ITaskRun | undefined> {
-		const previous = this.lastRun?.terminalId === terminalInstanceId ? this.lastRun : this.activeRuns.find(run => run.terminalId === terminalInstanceId);
+		const previous = this.lastRun?.terminalId === terminalInstanceId ? this.lastRun
+			: this.activeRuns.find(run => run.terminalId === terminalInstanceId);
 		if (!previous) return undefined;
 		const authority = this.providedRuns.get(previous);
 		const run = await this.dispatch(previous.task, authority, authority !== undefined, previous);
@@ -559,34 +439,22 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		return run;
 	}
 
-	private async dispatch(
-		task: IWorkspaceTask,
-		signal?: AbortSignal,
-		provided = false,
-		previous?: ITaskRun,
-		expectedRevision?: string,
-		runId?: string,
-		onStarted?: (run: ITaskRun) => void,
-	): Promise<ITaskRun> {
+	private async dispatch(task: IWorkspaceTask, signal?: AbortSignal, provided = false, previous?: ITaskRun, expectedRevision?: string, runId?: string, onStarted?: (run: ITaskRun) => void): Promise<ITaskRun> {
 		// Read the current configuration at dispatch, including changes a file watcher has not delivered yet.
 		const workspaceGeneration = this.workspaceGeneration;
 		// Plugin notifications may arrive after the mutation response. Refresh the
 		// contribution owner before validating matchers or invoking providers.
 		const contributions = this.extensions.reload();
 		await (signal ? raceCancellationError(contributions, signal) : contributions);
-		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
+		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		const refresh = this.refresh();
 		const tasks = await (signal ? raceCancellationError(refresh, signal) : refresh);
-		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
+		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		const generation = this.catalogGeneration;
 		const terminalConfiguration = JSON.stringify(this.configuration.getValue('terminal'));
-		const currentTask = provided
-			? task
-			: previous || expectedRevision !== undefined
-				? resolveKnownTask(tasks.find(candidate => candidate.id === task.id) ?? task, tasks)
-				: resolveKnownTask(task, tasks);
+		const currentTask = provided ? task : previous || expectedRevision !== undefined
+			? resolveKnownTask(tasks.find(candidate => candidate.id === task.id) ?? task, tasks)
+			: resolveKnownTask(task, tasks);
 		const controller = new AbortController();
 		const abort = (): void => controller.abort();
 		signal?.addEventListener('abort', abort, { once: true });
@@ -596,15 +464,15 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const pending = new Map<string, Promise<ITaskRun>>();
 		const graph = new Map<string, readonly IWorkspaceTask[]>();
 		const resolvedTasks = new Map<string, IWorkspaceTask>();
-		const previousRuns = new Map(previous ? [previous, ...(this.dependencyRuns.get(previous) ?? [])].map(run => [run.task.id, run] as const) : []);
+		const previousRuns = new Map(previous
+			? [previous, ...(this.dependencyRuns.get(previous) ?? [])].map(run => [run.task.id, run] as const)
+			: []);
 		const visiting = new Set<string>();
 		const assertCurrent = (): void => {
 			if (signal?.aborted) throw new CancellationError();
-			if (expectedRevision !== undefined && JSON.stringify(this.configuration.getValue('terminal')) !== terminalConfiguration)
-				throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
+			if (expectedRevision !== undefined && JSON.stringify(this.configuration.getValue('terminal')) !== terminalConfiguration) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
 			if (controller.signal.aborted && controller.signal.reason instanceof CancellationError) throw controller.signal.reason;
-			if (controller.signal.aborted || generation !== this.catalogGeneration || workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
-				throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
+			if (controller.signal.aborted || generation !== this.catalogGeneration || workspaceGeneration !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		};
 		const validate = async (candidate: IWorkspaceTask): Promise<void> => {
 			if (visiting.has(candidate.id)) throw new Error(localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label));
@@ -619,27 +487,18 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 						const provided = projectProviderTask(providers[0]!.id, value);
 						// A definition-only extension Task can explicitly select a group
 						// without carrying a tasks.json presence flag or a default flag.
-						const preserveGroup =
-							candidate.configuration?.groupIsConfigured === true || candidate.groupIsDefault !== undefined || (candidate.configuration === undefined && candidate.group !== 'other');
+						const preserveGroup = candidate.configuration?.groupIsConfigured === true || candidate.groupIsDefault !== undefined
+							|| candidate.configuration === undefined && candidate.group !== 'other';
 						candidate = Object.freeze({
-							...candidate,
-							...provided,
-							id: candidate.id,
-							label: candidate.label,
-							dirId: candidate.dirId,
-							source: candidate.source,
-							scope: candidate.scope ?? provided.scope,
-							extensionSource: candidate.extensionSource ?? provided.extensionSource,
+							...candidate, ...provided,
+							id: candidate.id, label: candidate.label, dirId: candidate.dirId, source: candidate.source,
+							scope: candidate.scope ?? provided.scope, extensionSource: candidate.extensionSource ?? provided.extensionSource,
 							group: preserveGroup ? candidate.group : provided.group,
 							groupIsDefault: preserveGroup ? candidate.groupIsDefault : provided.groupIsDefault,
-							definition: candidate.definition,
-							configuration: candidate.configuration,
-							cwd: candidate.cwd ?? provided.cwd,
-							runOptions: candidate.runOptions ?? provided.runOptions,
-							presentation:
-								candidate.presentation === undefined && provided.presentation === undefined ? undefined : Object.freeze({ ...provided.presentation, ...candidate.presentation }),
-							isBackground: candidate.isBackground ?? provided.isBackground,
-							problemMatchers: candidate.problemMatchers ?? provided.problemMatchers,
+							definition: candidate.definition, configuration: candidate.configuration,
+							cwd: candidate.cwd ?? provided.cwd, runOptions: candidate.runOptions ?? provided.runOptions,
+							presentation: candidate.presentation === undefined && provided.presentation === undefined ? undefined : Object.freeze({ ...provided.presentation, ...candidate.presentation }),
+							isBackground: candidate.isBackground ?? provided.isBackground, problemMatchers: candidate.problemMatchers ?? provided.problemMatchers,
 							unsupportedFeatures: candidate.unsupportedFeatures.filter(feature => feature !== `type:${candidate.definition!.type}`),
 							environment: Object.freeze({ ...provided.environment, ...candidate.environment }),
 						});
@@ -647,14 +506,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 				}
 			}
 			if (candidate.unsupportedFeatures?.length) {
-				throw new Error(
-					localize(
-						'tasks.unsupportedExecution',
-						"Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.",
-						candidate.label,
-						candidate.unsupportedFeatures.join(', '),
-					),
-				);
+				throw new Error(localize('tasks.unsupportedExecution', "Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.", candidate.label, candidate.unsupportedFeatures.join(', ')));
 			}
 			this.getTaskSystem().validate(candidate);
 			visiting.add(candidate.id);
@@ -675,28 +527,24 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			const admitted = new DeferredPromise<void>();
 			const decision = preceding.then(() => admitted.p);
 			this.capacityDecisions.set(candidate.id, decision);
-			const admission = (async (): Promise<{ operation: Promise<ITaskRun> }> => {
+			const admission = (async (): Promise<{ operation: Promise<ITaskRun>; }> => {
 				try {
 					await raceCancellationError(preceding, controller.signal);
 					assertCurrent();
 					while (true) {
 						const instances = this.taskInstances(candidate.id);
 						if (instances.length < (candidate.runOptions?.instanceLimit ?? 1)) break;
-						const policy = candidate.id === currentTask.id ? (candidate.runOptions?.instancePolicy ?? 'prompt') : 'silent';
+						const policy = candidate.id === currentTask.id ? candidate.runOptions?.instancePolicy ?? 'prompt' : 'silent';
 						if (policy === 'silent' || policy === 'warn') {
-							if (expectedRevision !== undefined && candidate.id === currentTask.id)
-								throw new Error(localize('tasks.agentAlreadyRunning', "Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.", candidate.label));
-							if (policy === 'warn')
-								this.notifications.warn(
-									localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1),
-								);
+							if (expectedRevision !== undefined && candidate.id === currentTask.id) throw new Error(localize('tasks.agentAlreadyRunning', "Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.", candidate.label));
+							if (policy === 'warn') this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1));
 							// Joining another graph never transfers cancellation or rollback ownership.
 							const instance = instances.find(value => value.run?.status === 'running') ?? instances[0]!;
-							return {
-								operation: instance.run ? Promise.resolve(instance.run) : raceCancellationError(instance.reservation!.operation, controller.signal),
-							};
+							return { operation: instance.run ? Promise.resolve(instance.run) : raceCancellationError(instance.reservation!.operation, controller.signal) };
 						}
-						const selected = policy === 'prompt' ? await this.selectInstance(candidate, instances, controller.signal) : policy === 'terminateNewest' ? instances.at(-1)! : instances[0]!;
+						const selected = policy === 'prompt'
+							? await this.selectInstance(candidate, instances, controller.signal)
+							: policy === 'terminateNewest' ? instances.at(-1)! : instances[0]!;
 						assertCurrent();
 						if (!selected) continue;
 						// The selected instance may have completed while its picker was open.
@@ -713,8 +561,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 							const run = await execute(dependency);
 							const status = await waitForTask(run, controller.signal);
 							assertCurrent();
-							if (status !== 'succeeded' || run.hasErrors)
-								throw new Error(localize('tasks.dependencyFailed', "Dependency '{0}' of task '{1}' failed.", dependency.label, candidate.label));
+							if (status !== 'succeeded' || run.hasErrors) throw new Error(localize('tasks.dependencyFailed', "Dependency '{0}' of task '{1}' failed.", dependency.label, candidate.label));
 						};
 						const dependencies = graph.get(candidate.id)!;
 						if (candidate.dependsOrder === 'sequence') {
@@ -725,44 +572,21 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 						assertCurrent();
 						const folder = this.workspace.getWorkspace().folders.find(folder => candidate.dirId === undefined || folder.id === candidate.dirId);
 						if (!folder) throw new Error(`Task '${candidate.label}' has no available workspace folder`);
-						const run = await this.getTaskSystem().run(
-							candidate,
-							folder,
-							assertCurrent,
-							controller.signal,
-							previousRuns.get(candidate.id),
-							run => {
-								reservation.run = run;
-								if (candidate.id === currentTask.id) onStarted?.(run);
-								this.runOrder.set(run, reservation.order);
-							},
-							candidate.id === currentTask.id ? runId : undefined,
-						);
+						const run = await this.getTaskSystem().run(candidate, folder, assertCurrent, controller.signal, previousRuns.get(candidate.id), run => {
+							reservation.run = run;
+							if (candidate.id === currentTask.id) onStarted?.(run);
+							this.runOrder.set(run, reservation.order);
+						}, candidate.id === currentTask.id ? runId : undefined);
 						started.push(run);
-						if (candidate.id === currentTask.id)
-							this.dependencyRuns.set(
-								run,
-								started.filter(value => value !== run),
-							);
+						if (candidate.id === currentTask.id) this.dependencyRuns.set(run, started.filter(value => value !== run));
 						return run;
 					})();
-					const completion = operation
-						.then(run => run.completion)
-						.then(
-							() => undefined,
-							() => undefined,
-						)
-						.finally(() => {
-							reservations.delete(reservation);
-							if (reservations.size === 0 && this.pendingRuns.get(candidate.id) === reservations) this.pendingRuns.delete(candidate.id);
-						});
+					const completion = operation.then(run => run.completion).then(() => undefined, () => undefined).finally(() => {
+						reservations.delete(reservation);
+						if (reservations.size === 0 && this.pendingRuns.get(candidate.id) === reservations) this.pendingRuns.delete(candidate.id);
+					});
 					// Dependency awaits yield before execution publishes a run.
-					reservation = {
-						operation,
-						completion,
-						cancel: () => controller.abort(new CancellationError()),
-						order: this.nextInstanceOrder++,
-					};
+					reservation = { operation, completion, cancel: () => controller.abort(new CancellationError()), order: this.nextInstanceOrder++ };
 					reservations.add(reservation);
 					this.pendingRuns.set(candidate.id, reservations);
 					return { operation };
@@ -776,16 +600,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			return operation;
 		};
 		try {
-			if (expectedRevision !== undefined && (await this.describe(currentTask)).revision !== expectedRevision)
-				throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
+			if (expectedRevision !== undefined && (await this.describe(currentTask)).revision !== expectedRevision) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
 			assertCurrent();
 			await validate(currentTask);
 			const run = await execute(currentTask);
-			if (!this.dependencyRuns.has(run))
-				this.dependencyRuns.set(
-					run,
-					started.filter(value => value !== run),
-				);
+			if (!this.dependencyRuns.has(run)) this.dependencyRuns.set(run, started.filter(value => value !== run));
 			return run;
 		} catch (error) {
 			controller.abort();
@@ -801,11 +620,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private taskInstances(taskId: string): TaskInstance[] {
-		const instances: TaskInstance[] = [...(this.pendingRuns.get(taskId) ?? [])].map(reservation => ({
-			reservation,
-			run: reservation.run,
-			order: reservation.order,
-		}));
+		const instances: TaskInstance[] = [...(this.pendingRuns.get(taskId) ?? [])].map(reservation => ({ reservation, run: reservation.run, order: reservation.order }));
 		for (const run of this.taskSystem?.activeRuns ?? []) {
 			if (run.task.id === taskId && !instances.some(instance => instance.run === run)) instances.push({ run, reservation: undefined, order: this.runOrder.get(run)! });
 		}
@@ -815,7 +630,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	private selectInstance(task: IWorkspaceTask, instances: readonly TaskInstance[], signal: AbortSignal): Promise<TaskInstance | null> {
 		return new Promise((resolve, reject) => {
 			const resources = new DisposableStore();
-			const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { instance: TaskInstance }>());
+			const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { instance: TaskInstance; }>());
 			let settled = false;
 			const finish = (instance?: TaskInstance | null): void => {
 				if (settled) return;
@@ -827,17 +642,14 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			};
 			picker.ariaLabel = picker.placeholder = localize('tasks.selectInstanceToTerminate', "Task '{0}' is at its instance limit. Select an instance to terminate and restart.", task.label);
 			picker.items = instances.map((instance, index) => ({
-				instance,
-				label: localize('tasks.runningInstance', '{0} — instance {1}', task.label, index + 1),
+				instance, label: localize('tasks.runningInstance', '{0} — instance {1}', task.label, index + 1),
 				description: instance.run?.terminalId ?? localize('tasks.preparingInstance', 'Preparing'),
 			}));
-			resources.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					return finish(item.instance);
-				}),
-			);
+			resources.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.instance);
+			}));
 			resources.add(picker.onDidHide(() => finish()));
 			resources.add(this.onDidChangeTasks(() => finish(null)));
 			const cancel = (): void => finish();
@@ -848,13 +660,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			resources.add(toDisposable(() => released.abort()));
 			for (const instance of instances) {
 				const completion = instance.reservation?.completion ?? instance.run?.completion;
-				if (completion)
-					void raceCancellationError<void | number | undefined>(completion, released.signal).then(
-						() => finish(null),
-						() => {
-							if (!released.signal.aborted) finish(null);
-						},
-					);
+				if (completion) void raceCancellationError<void | number | undefined>(completion, released.signal).then(() => finish(null), () => { if (!released.signal.aborted) finish(null); });
 			}
 			if (signal.aborted) finish();
 			else picker.show();
@@ -866,25 +672,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		if (scheduled) {
 			scheduled.controller.abort();
 			const actual = await scheduled.operation.catch(() => undefined);
-			if (actual) {
-				await this.taskSystem?.terminate(actual);
-				await Promise.all(
-					(this.dependencyRuns.get(actual) ?? []).map(async dependency => {
-						await this.taskSystem?.terminate(dependency);
-						await dependency.completion;
-					}),
-				);
-				await actual.completion;
-			}
+			if (actual) { await this.taskSystem?.terminate(actual); await Promise.all((this.dependencyRuns.get(actual) ?? []).map(async dependency => { await this.taskSystem?.terminate(dependency); await dependency.completion; })); await actual.completion; }
 			return;
 		}
 		await this.taskSystem?.terminate(run);
-		await Promise.all(
-			(this.dependencyRuns.get(run) ?? []).map(async dependency => {
-				await this.taskSystem?.terminate(dependency);
-				await dependency.completion;
-			}),
-		);
+		await Promise.all((this.dependencyRuns.get(run) ?? []).map(async dependency => { await this.taskSystem?.terminate(dependency); await dependency.completion; }));
 		await run.completion;
 	}
 
@@ -903,7 +695,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const ids = new Set<string>();
 		for (const provider of normalized) {
 			const existing = this.providers.get(provider.id);
-			if (ids.has(provider.id) || (existing && existing.owner !== owner)) throw new Error(`Task provider '${provider.id}' is already registered`);
+			if (ids.has(provider.id) || existing && existing.owner !== owner) throw new Error(`Task provider '${provider.id}' is already registered`);
 			ids.add(provider.id);
 		}
 		const changed = new Set(this.deleteProviderOwner(owner));
@@ -931,15 +723,10 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			if (providerId && changedProviders.has(providerId) && run.task.execution?.type === 'custom') void this.terminate(run).catch(error => this.reportError(error));
 		}
 		const refresh = this.loaded || this.activeRefresh !== undefined;
-		if (this.loaded)
-			this.setTasks(
-				Object.freeze(
-					this.currentTasks.filter(task => {
-						const providerId = taskProviderId(task);
-						return providerId === undefined || !changedProviders.has(providerId);
-					}),
-				),
-			);
+		if (this.loaded) this.setTasks(Object.freeze(this.currentTasks.filter(task => {
+			const providerId = taskProviderId(task);
+			return providerId === undefined || !changedProviders.has(providerId);
+		})));
 		// Registrations produced by this discovery's activation belong to its next
 		// provider snapshot. Existing dispatches were already revoked above.
 		if (this.activeRefresh && this.activeRefresh === this.activatingProviders) return;
@@ -950,9 +737,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 
 	private async provideTasks(provider: TaskProvider, signal: AbortSignal): Promise<readonly IWorkspaceTask[]> {
 		let contributions: readonly TaskProviderTask[];
-		try {
-			contributions = await raceCancellationError(Promise.resolve(provider.provideTasks(signal)), signal);
-		} catch (error) {
+		try { contributions = await raceCancellationError(Promise.resolve(provider.provideTasks(signal)), signal); }
+		catch (error) {
 			if (signal.aborted) return Object.freeze([]);
 			this.log('error', 'provider', `Task provider '${provider.id}' failed: ${errorMessage(error)}`);
 			throw error;
@@ -960,19 +746,18 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		if (signal.aborted) return Object.freeze([]);
 		if (!Array.isArray(contributions)) throw new TypeError(`Task provider '${provider.id}' must return an array`);
 		const ids = new Set<string>();
-		return Object.freeze(
-			contributions.map(contribution => {
-				const provided = projectProviderTask(provider.id, contribution);
-				const scope = provided.scope;
-				const folder = URI.isUri(scope) ? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === scope.toString()) : undefined;
-				if (URI.isUri(scope) && !folder) throw new Error('Extension task scope is outside the current workspace');
-				const task = folder ? Object.freeze({ ...provided, dirId: folder.id }) : provided;
-				if (ids.has(task.id)) throw new Error(`Task provider '${provider.id}' returned duplicate task '${contribution.id}'`);
-				ids.add(task.id);
-				return task;
-			}),
-		);
+		return Object.freeze(contributions.map(contribution => {
+			const provided = projectProviderTask(provider.id, contribution);
+			const scope = provided.scope;
+			const folder = URI.isUri(scope) ? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === scope.toString()) : undefined;
+			if (URI.isUri(scope) && !folder) throw new Error('Extension task scope is outside the current workspace');
+			const task = folder ? Object.freeze({ ...provided, dirId: folder.id }) : provided;
+			if (ids.has(task.id)) throw new Error(`Task provider '${provider.id}' returned duplicate task '${contribution.id}'`);
+			ids.add(task.id);
+			return task;
+		}));
 	}
+
 
 	private log(severity: OutputEntrySeverity, category: string, text: string): void {
 		this.output.appendLine({ severity, category, text });
@@ -1004,16 +789,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private async exists(resource: URI): Promise<boolean> {
-		try {
-			return (await this.fileService.stat(resource)).kind === FileKind.File;
-		} catch (error) {
-			if (error instanceof FileNotFoundError) return false;
-			throw error;
-		}
+		try { return (await this.fileService.stat(resource)).kind === FileKind.File; }
+		catch (error) { if (error instanceof FileNotFoundError) return false; throw error; }
 	}
 
 	private async readOptional(resource: URI): Promise<string | undefined> {
-		if (!(await this.exists(resource))) return undefined;
+		if (!await this.exists(resource)) return undefined;
 		// Task configuration is UTF-8 text; provider text reads keep Session routing on one request.
 		return (await this.fileService.readFile(resource, 'utf8')).content;
 	}
@@ -1023,11 +804,8 @@ function taskProviderId(task: IWorkspaceTask): string | undefined {
 	if (task.source !== 'extension' || !task.id.startsWith('extension:')) return undefined;
 	const encoded = task.id.slice('extension:'.length).split(':', 1)[0];
 	if (!encoded) return undefined;
-	try {
-		return decodeURIComponent(encoded);
-	} catch {
-		return undefined;
-	}
+	try { return decodeURIComponent(encoded); }
+	catch { return undefined; }
 }
 
 function childResource(root: URI, relativePath: string): URI {
@@ -1059,14 +837,9 @@ function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
 	if (typeof provider.provideTasks !== 'function') throw new TypeError(`Task provider '${id}' must implement provideTasks`);
 	const type = provider.type === undefined ? undefined : normalizeText(provider.type, 'Task provider type', 256);
 	return Object.freeze({
-		id,
-		type,
+		id, type,
 		provideTasks: (signal: AbortSignal) => provider.provideTasks.call(provider, signal),
-		...(provider.resolveTask === undefined
-			? {}
-			: {
-					resolveTask: (task: IWorkspaceTask, signal: AbortSignal) => provider.resolveTask!.call(provider, task, signal),
-				}),
+		...(provider.resolveTask === undefined ? {} : { resolveTask: (task: IWorkspaceTask, signal: AbortSignal) => provider.resolveTask!.call(provider, task, signal) }),
 	});
 }
 
@@ -1077,8 +850,7 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	const execution = contribution.execution;
 	if (execution?.type === 'process') {
 		normalizeText(execution.program, 'Task process', 32768, false);
-		if (!Array.isArray(execution.args) || execution.args.length > 1024 || execution.args.some(argument => typeof argument !== 'string' || argument.length > 32768 || argument.includes('\0')))
-			throw new TypeError('Invalid task process arguments');
+		if (!Array.isArray(execution.args) || execution.args.length > 1024 || execution.args.some(argument => typeof argument !== 'string' || argument.length > 32768 || argument.includes('\0'))) throw new TypeError('Invalid task process arguments');
 	} else if (execution?.type === 'shell') {
 		parseShellExecution(execution);
 	} else if (execution?.type === 'custom') {
@@ -1086,29 +858,16 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	} else if (execution !== undefined) {
 		throw new TypeError('Unknown task execution type');
 	}
-	const shellCommand = execution?.type === 'shell' ? (execution.commandLine ?? (typeof execution.command === 'string' ? execution.command : execution.command.value)) : undefined;
+	const shellCommand = execution?.type === 'shell' ? execution.commandLine ?? (typeof execution.command === 'string' ? execution.command : execution.command.value) : undefined;
 	const unresolved = contribution.command === undefined && execution === undefined && contribution.definition !== undefined;
-	const command = normalizeText(
-		contribution.command ?? (execution?.type === 'process' ? execution.program : (shellCommand ?? (execution?.type === 'custom' || unresolved ? label : ''))),
-		`Task provider '${providerId}' task command`,
-		32768,
-		false,
-	);
+	const command = normalizeText(contribution.command ?? (execution?.type === 'process' ? execution.program : shellCommand ?? (execution?.type === 'custom' || unresolved ? label : '')), `Task provider '${providerId}' task command`, 32768, false);
 	if (!(['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const).includes(contribution.group)) throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
 	if (contribution.groupIsDefault !== undefined && typeof contribution.groupIsDefault !== 'boolean') throw new TypeError('Task groupIsDefault must be a boolean');
 	const environment = contribution.environment === undefined ? undefined : parseTaskEnvironment(contribution.environment);
 	const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Task provider '${providerId}' task detail`, 4096, false);
-	const normalizedExecution =
-		execution?.type === 'shell'
-			? parseShellExecution(execution)
-			: execution?.type === 'process'
-				? Object.freeze({ ...execution, args: Object.freeze([...execution.args]) })
-				: execution === undefined
-					? undefined
-					: Object.freeze({ ...execution });
+	const normalizedExecution = execution?.type === 'shell' ? parseShellExecution(execution) : execution?.type === 'process' ? Object.freeze({ ...execution, args: Object.freeze([...execution.args]) }) : execution === undefined ? undefined : Object.freeze({ ...execution });
 	const cwd = contribution.cwd === undefined ? undefined : normalizeText(contribution.cwd, 'Task cwd', 32768, false);
-	if (contribution.definition !== undefined && (!contribution.definition || typeof contribution.definition !== 'object' || typeof contribution.definition.type !== 'string'))
-		throw new TypeError('Task definition requires a type');
+	if (contribution.definition !== undefined && (!contribution.definition || typeof contribution.definition !== 'object' || typeof contribution.definition.type !== 'string')) throw new TypeError('Task definition requires a type');
 	if (contribution.isBackground !== undefined && typeof contribution.isBackground !== 'boolean') throw new TypeError('Task isBackground must be a boolean');
 	if (contribution.problemMatchers !== undefined && !Array.isArray(contribution.problemMatchers)) throw new TypeError('Task problemMatchers must be an array');
 	const scope = contribution.scope;
@@ -1116,25 +875,14 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	const extensionSource = contribution.source === undefined ? undefined : normalizeText(contribution.source, 'Task source', 256, false);
 	const unsupportedFeatures = scope === 1 ? ['scope:global'] : unresolved ? [`type:${contribution.definition!.type}`] : undefined;
 	return Object.freeze({
-		scope,
-		extensionSource,
-		...(unsupportedFeatures ? { unsupportedFeatures } : {}),
-		id: `extension:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`,
-		providerId,
-		label,
-		command,
-		source: 'extension',
-		group: contribution.group,
-		groupIsDefault: contribution.groupIsDefault,
+		scope, extensionSource, ...(unsupportedFeatures ? { unsupportedFeatures } : {}),
+		id: `extension:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`, providerId,
+		label, command, source: 'extension', group: contribution.group, groupIsDefault: contribution.groupIsDefault,
 		runOptions: contribution.runOptions === undefined ? undefined : parseTaskRunOptions(contribution.runOptions),
 		presentation: contribution.presentation === undefined ? undefined : parseTaskPresentationOptions(contribution.presentation),
-		execution: normalizedExecution,
-		definition: contribution.definition,
-		cwd,
-		isBackground: contribution.isBackground,
+		execution: normalizedExecution, definition: contribution.definition, cwd, isBackground: contribution.isBackground,
 		problemMatchers: contribution.problemMatchers === undefined ? undefined : Object.freeze([...contribution.problemMatchers]),
-		...(environment === undefined ? {} : { environment }),
-		...(detail === undefined ? {} : { detail }),
+		...(environment === undefined ? {} : { environment }), ...(detail === undefined ? {} : { detail }),
 	});
 }
 
@@ -1161,6 +909,8 @@ function errorMessage(error: unknown): string {
 	return getErrorMessage(error).slice(0, 4096);
 }
 
+
+
 function taskDependencies(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
 	return (task.dependsOn ?? []).map(reference => {
 		const matches = tasks.filter(value => (value.id === reference || value.label === reference) && (value.dirId === task.dirId || value.dirId === undefined));
@@ -1169,73 +919,48 @@ function taskDependencies(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]
 	});
 }
 
+
+
+
 interface TaskRunQuickPickItem extends IQuickPickItem {
 	readonly run: ITaskRun;
 }
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: {
-		id: RUN_TASK_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.manageRunTask' }, 'Run Task...'),
-	},
+	command: { id: RUN_TASK_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.manageRunTask' }, 'Run Task...') },
 	group: '2_configuration',
-	order: 6,
-	when: AppServerAvailableContext.isEqualTo(true),
+	order: 6, when: AppServerAvailableContext.isEqualTo(true),
 });
 
-registerAction2(
-	class RunTaskAction extends Action2 {
-		constructor() {
-			super({
-				id: RUN_TASK_COMMAND_ID,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, 'Run Task'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-				menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 1 },
-				keybinding: {
-					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('t', { primaryKey: true })),
-				},
-			});
-		}
+registerAction2(class RunTaskAction extends Action2 {
+	constructor() {
+		super({
+			id: RUN_TASK_COMMAND_ID,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, 'Run Task'),
+			f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 1 },
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('t', { primaryKey: true })) },
+		});
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			runTaskCommand(accessor);
-		}
-	},
-);
+	override run(accessor: ServicesAccessor): void {
+		runTaskCommand(accessor);
+	}
+});
 
-registerAction2(
-	class RunBuildTaskAction extends Action2 {
-		constructor() {
-			super({
-				id: RUN_BUILD_TASK_COMMAND_ID,
-				title: localize2('command.RunBuildTaskAction', 'Run Build Task'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-				keybinding: { primary: Keybinding.single(logicalKey('b', { primaryKey: true, shiftKey: true })) },
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			runTaskCommand(accessor, 'build');
-		}
-	},
-);
+registerAction2(class RunBuildTaskAction extends Action2 {
+	constructor() {
+		super({ id: RUN_BUILD_TASK_COMMAND_ID, title: localize2('command.RunBuildTaskAction', 'Run Build Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey('b', { primaryKey: true, shiftKey: true })) } });
+	}
+	override run(accessor: ServicesAccessor): void { runTaskCommand(accessor, 'build'); }
+});
 
-registerAction2(
-	class RunTestTaskAction extends Action2 {
-		constructor() {
-			super({
-				id: RUN_TEST_TASK_COMMAND_ID,
-				title: localize2('command.RunTestTaskAction', 'Run Test Task'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			runTaskCommand(accessor, 'test');
-		}
-	},
-);
+registerAction2(class RunTestTaskAction extends Action2 {
+	constructor() {
+		super({ id: RUN_TEST_TASK_COMMAND_ID, title: localize2('command.RunTestTaskAction', 'Run Test Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
+	}
+	override run(accessor: ServicesAccessor): void { runTaskCommand(accessor, 'test'); }
+});
 
 function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): void {
 	// Capture dependencies before the command accessor's synchronous lifetime ends.
@@ -1246,7 +971,7 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 	const notifications = accessor.get(INotificationService);
 	const editors = group ? accessor.get(IEditorService) : undefined;
 	const workspace = group ? accessor.get(IWorkspaceContextService) : undefined;
-	const candidates = (catalog: readonly IWorkspaceTask[]): { tasks: readonly IWorkspaceTask[]; isDefault: boolean } => {
+	const candidates = (catalog: readonly IWorkspaceTask[]): { tasks: readonly IWorkspaceTask[]; isDefault: boolean; } => {
 		if (!group) return { tasks: catalog, isDefault: false };
 		const grouped = catalog.filter(task => task.group === group);
 		const resource = editors!.activeEditor?.resource;
@@ -1260,177 +985,123 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 		return { tasks: defaults.length ? defaults : grouped, isDefault: defaults.length > 0 };
 	};
 	const run = (task: IWorkspaceTask): Promise<unknown> => tasks.run(task);
-	void tasks
-		.refresh()
-		.then(() => {
-			const selection = candidates(tasks.tasks);
-			const available = selection.tasks;
-			if (selection.isDefault && available.length === 1) return run(available[0]!);
-			if (available.length === 0) {
-				if (group) notifications.info(group === 'build' ? localize('tasks.noBuildTask', 'No build task is available.') : localize('tasks.noTestTask', 'No test task is available.'));
-				return commands.executeCommand('workbench.action.tasks.configureTaskRunner');
-			}
-			const picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => candidates(catalog).tasks);
-			const placeholder =
-				group === 'build'
-					? localize('tasks.selectBuildTask', 'Select the build task to run')
-					: group === 'test'
-						? localize('tasks.selectTestTask', 'Select the test task to run')
-						: localize('tasks.selectTask', 'Select a task to run');
-			return picker
-				.show(placeholder)
-				.then(task => (task ? run(task) : undefined))
-				.finally(() => picker.dispose());
-		})
-		.catch(error => reportTaskError(notifications, error));
+	void tasks.refresh().then(() => {
+		const selection = candidates(tasks.tasks);
+		const available = selection.tasks;
+		if (selection.isDefault && available.length === 1) return run(available[0]!);
+		if (available.length === 0) {
+			if (group) notifications.info(group === 'build' ? localize('tasks.noBuildTask', 'No build task is available.') : localize('tasks.noTestTask', 'No test task is available.'));
+			return commands.executeCommand('workbench.action.tasks.configureTaskRunner');
+		}
+		const picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => candidates(catalog).tasks);
+		const placeholder = group === 'build' ? localize('tasks.selectBuildTask', 'Select the build task to run') : group === 'test' ? localize('tasks.selectTestTask', 'Select the test task to run') : localize('tasks.selectTask', 'Select a task to run');
+		return picker.show(placeholder).then(task => task ? run(task) : undefined).finally(() => picker.dispose());
+	}).catch(error => reportTaskError(notifications, error));
 }
 
-registerAction2(
-	class RerunLastTaskAction extends Action2 {
-		constructor() {
-			super({
-				id: RERUN_LAST_TASK_COMMAND_ID,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, 'Rerun Last Task'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-				menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 2 },
-			});
-		}
+registerAction2(class RerunLastTaskAction extends Action2 {
+	constructor() {
+		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, 'Rerun Last Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 2 } });
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			const tasks = accessor.get(ITaskService);
-			const notifications = accessor.get(INotificationService);
-			const last = tasks.lastRun;
-			if (!last) return;
-			void tasks.rerun(last.terminalId).catch(error => reportTaskError(notifications, error));
-		}
-	},
-);
+	override run(accessor: ServicesAccessor): void {
+		const tasks = accessor.get(ITaskService);
+		const notifications = accessor.get(INotificationService);
+		const last = tasks.lastRun;
+		if (!last) return;
+		void tasks.rerun(last.terminalId).catch(error => reportTaskError(notifications, error));
+	}
+});
 
-registerAction2(
-	class TerminateTaskAction extends Action2 {
-		constructor() {
-			super({
-				id: TERMINATE_TASK_COMMAND_ID,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, 'Terminate Task'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-				menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 3 },
-			});
-		}
+registerAction2(class TerminateTaskAction extends Action2 {
+	constructor() {
+		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, 'Terminate Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 3 } });
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			const tasks = accessor.get(ITaskService);
-			const notifications = accessor.get(INotificationService);
-			if (tasks.activeRuns.length === 0) return;
-			if (tasks.activeRuns.length === 1) {
-				void tasks.terminate(tasks.activeRuns[0]!).catch(error => reportTaskError(notifications, error));
-				return;
-			}
-			const picker = accessor.get(IQuickInputService).createQuickPick<TaskRunQuickPickItem>();
-			const disposables = new DisposableStore();
-			disposables.add(picker);
-			picker.ariaLabel = picker.placeholder = localize('tasks.selectTerminateTask', 'Select a running task to terminate');
-			picker.items = tasks.activeRuns.map(run => ({
-				run,
-				label: run.task.label,
-				description: run.task.source,
-				detail: run.task.command,
-			}));
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					picker.hide();
-					void tasks.terminate(item.run).catch(error => reportTaskError(notifications, error));
-				}),
-			);
-			disposables.add(picker.onDidHide(() => disposables.dispose()));
-			picker.show();
+	override run(accessor: ServicesAccessor): void {
+		const tasks = accessor.get(ITaskService);
+		const notifications = accessor.get(INotificationService);
+		if (tasks.activeRuns.length === 0) return;
+		if (tasks.activeRuns.length === 1) {
+			void tasks.terminate(tasks.activeRuns[0]!).catch(error => reportTaskError(notifications, error));
+			return;
 		}
-	},
-);
+		const picker = accessor.get(IQuickInputService).createQuickPick<TaskRunQuickPickItem>();
+		const disposables = new DisposableStore();
+		disposables.add(picker);
+		picker.ariaLabel = picker.placeholder = localize('tasks.selectTerminateTask', 'Select a running task to terminate');
+		picker.items = tasks.activeRuns.map(run => ({ run, label: run.task.label, description: run.task.source, detail: run.task.command }));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
+			picker.hide(); void tasks.terminate(item.run).catch(error => reportTaskError(notifications, error));
+		}));
+		disposables.add(picker.onDidHide(() => disposables.dispose()));
+		picker.show();
+	}
+});
 
 function reportTaskError(notifications: INotificationService, error: unknown): void {
 	if (isCancellationError(error)) return;
 	notifications.error(getErrorMessage(error));
 }
 
-registerAction2(
-	class ConfigureTasksAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.tasks.configureTaskRunner',
-				title: localize2('tasks.configure', 'Configure Tasks...'),
-				f1: true,
-				precondition: AppServerAvailableContext.isEqualTo(true),
-			});
-		}
+registerAction2(class ConfigureTasksAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.tasks.configureTaskRunner', title: localize2('tasks.configure', 'Configure Tasks...'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
+	}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const workspace = accessor.get(IWorkspaceContextService);
-			const commands = accessor.get(ICommandService);
-			const files = accessor.get(IFileService);
-			const editors = accessor.get(IEditorService);
-			const notifications = accessor.get(INotificationService);
-			const tasks = accessor.get(ITaskService);
-			const instantiation = accessor.get(IInstantiationService);
-			const quickInput = accessor.get(IQuickInputService);
-			const folders = workspace.getWorkspace().folders;
-			if (folders.length === 0) {
-				notifications.info(localize('tasks.configure.openFolder', 'Open a folder to configure tasks.'));
-				return;
-			}
-			await tasks.refresh();
-			let selectedTask: IWorkspaceTask | null | undefined;
-			if (tasks.tasks.length) {
-				using picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => catalog);
-				selectedTask = await picker.show(localize('tasks.configure.selectTask', 'Select a task to configure'), {
-					label: localize('tasks.configure.createFile', 'Create tasks.json file from template'),
-					task: null,
-				});
-				if (selectedTask === undefined) return;
-			}
-			const taskFolder = selectedTask?.dirId && folders.find(folder => folder.id === selectedTask!.dirId);
-			const folder =
-				taskFolder ||
-				(folders.length === 1
-					? folders[0]
-					: await commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
-							{
-								placeHolder: localize('tasks.configure.selectFolder', 'Select a workspace folder to configure tasks.'),
-							},
-						]));
-			if (!folder || !workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
-			const resource = URI.joinPath(folder.uri, '.vscode', 'tasks.json');
-			try {
-				await files.stat(resource);
-			} catch (error) {
-				if (!(error instanceof FileNotFoundError) && toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
-				let content: string;
-				if (selectedTask) {
-					const definition =
-						selectedTask.configuration?.task ??
-						(selectedTask.definition ? { ...selectedTask.definition, label: selectedTask.label } : { label: selectedTask.label, type: 'shell', command: selectedTask.command });
-					content = JSON.stringify({ version: '2.0.0', tasks: [definition] }, null, '\t') + '\n';
-				} else {
-					const template = await selectTaskTemplate(quickInput);
-					if (!template) return;
-					content = template.content;
-				}
-				if (!workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
-				await files.createDirectory(URI.joinPath(folder.uri, '.vscode'));
-				try {
-					// Conditional creation preserves a file written while folder selection or I/O was pending.
-					await files.writeFile({ resource, content }, { create: true, overwrite: false });
-				} catch (error) {
-					if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
-				}
-			}
-			await editors.openEditor({ resource }, { pinned: true, ignoreError: true });
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const workspace = accessor.get(IWorkspaceContextService);
+		const commands = accessor.get(ICommandService);
+		const files = accessor.get(IFileService);
+		const editors = accessor.get(IEditorService);
+		const notifications = accessor.get(INotificationService);
+		const tasks = accessor.get(ITaskService);
+		const instantiation = accessor.get(IInstantiationService);
+		const quickInput = accessor.get(IQuickInputService);
+		const folders = workspace.getWorkspace().folders;
+		if (folders.length === 0) {
+			notifications.info(localize('tasks.configure.openFolder', 'Open a folder to configure tasks.'));
+			return;
 		}
-	},
-);
+		await tasks.refresh();
+		let selectedTask: IWorkspaceTask | null | undefined;
+		if (tasks.tasks.length) {
+			using picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => catalog);
+			selectedTask = await picker.show(localize('tasks.configure.selectTask', 'Select a task to configure'), { label: localize('tasks.configure.createFile', 'Create tasks.json file from template'), task: null });
+			if (selectedTask === undefined) return;
+		}
+		const taskFolder = selectedTask?.dirId && folders.find(folder => folder.id === selectedTask!.dirId);
+		const folder = taskFolder || (folders.length === 1 ? folders[0] : await commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('tasks.configure.selectFolder', 'Select a workspace folder to configure tasks.') }]));
+		if (!folder || !workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
+		const resource = URI.joinPath(folder.uri, '.vscode', 'tasks.json');
+		try {
+			await files.stat(resource);
+		} catch (error) {
+			if (!(error instanceof FileNotFoundError) && toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+			let content: string;
+			if (selectedTask) {
+				const definition = selectedTask.configuration?.task ?? (selectedTask.definition ? { ...selectedTask.definition, label: selectedTask.label } : { label: selectedTask.label, type: 'shell', command: selectedTask.command });
+				content = JSON.stringify({ version: '2.0.0', tasks: [definition] }, null, '\t') + '\n';
+			} else {
+				const template = await selectTaskTemplate(quickInput);
+				if (!template) return;
+				content = template.content;
+			}
+			if (!workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
+			await files.createDirectory(URI.joinPath(folder.uri, '.vscode'));
+			try {
+				// Conditional creation preserves a file written while folder selection or I/O was pending.
+				await files.writeFile({ resource, content }, { create: true, overwrite: false });
+			} catch (error) {
+				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
+			}
+		}
+		await editors.openEditor({ resource }, { pinned: true, ignoreError: true });
+	}
+});
+
 
 async function selectTaskTemplate(quickInput: IQuickInputService): Promise<ITaskEntry | undefined> {
 	using lifetime = new DisposableStore();
@@ -1440,12 +1111,7 @@ async function selectTaskTemplate(quickInput: IQuickInputService): Promise<ITask
 	// Await inside the using scope so the picker survives asynchronous user input.
 	return await new Promise(resolve => {
 		let selected: ITaskEntry | undefined;
-		lifetime.add(
-			picker.onDidAccept(() => {
-				selected = picker.selectedItems[0];
-				if (selected) picker.hide();
-			}),
-		);
+		lifetime.add(picker.onDidAccept(() => { selected = picker.selectedItems[0]; if (selected) picker.hide(); }));
 		lifetime.add(picker.onDidHide(() => resolve(selected)));
 		picker.show();
 	});

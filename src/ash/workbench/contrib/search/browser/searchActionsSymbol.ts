@@ -5,22 +5,18 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { localize2 } from '../../../../nls.js';
 import { SymbolsQuickAccessProvider } from './symbolsQuickAccess.js';
 
-registerAction2(
-	class ShowAllSymbolsAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.showAllSymbols',
-				get title() {
-					return localize2('quickAccess.goToWorkspaceSymbol', 'Go to Symbol in Workspace');
-				},
-				f1: true,
-				menu: { id: MenuId.MenubarGoMenu, group: '2_navigation', order: 2 },
-				keybinding: { primary: Keybinding.single(logicalKey('t', { primaryKey: true })) },
-			});
-		}
+registerAction2(class ShowAllSymbolsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.showAllSymbols',
+			get title() { return localize2('quickAccess.goToWorkspaceSymbol', 'Go to Symbol in Workspace'); },
+			f1: true,
+			menu: { id: MenuId.MenubarGoMenu, group: '2_navigation', order: 2 },
+			keybinding: { primary: Keybinding.single(logicalKey('t', { primaryKey: true })) },
+		});
+	}
 
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IQuickInputService).quickAccess.show(SymbolsQuickAccessProvider.PREFIX);
-		}
-	},
-);
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IQuickInputService).quickAccess.show(SymbolsQuickAccessProvider.PREFIX);
+	}
+});

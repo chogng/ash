@@ -19,7 +19,12 @@ import {
 } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { FallbackKeyboardMapper } from '../common/fallbackKeyboardMapper.js';
 import { CachedKeyboardMapper } from '../common/keyboardMapper.js';
-import { copyKeyboardMapping, createKeyboardMappingFromLabels, getKeyboardMappingValue, observeKeyboardMapping } from '../common/keyboardMapping.js';
+import {
+	copyKeyboardMapping,
+	createKeyboardMappingFromLabels,
+	getKeyboardMappingValue,
+	observeKeyboardMapping,
+} from '../common/keyboardMapping.js';
 import { MacLinuxKeyboardMapper } from '../common/macLinuxKeyboardMapper.js';
 import { WindowsKeyboardMapper } from '../common/windowsKeyboardMapper.js';
 import { findMatchingBuiltinLayout, loadBuiltinKeyboardLayouts } from './builtinKeyboardLayouts.js';
@@ -34,7 +39,9 @@ interface NavigatorKeyboardLike {
 	removeEventListener?(type: 'layoutchange', listener: () => void): void;
 }
 
-type NavigatorWithKeyboard = Navigator & { readonly keyboard?: NavigatorKeyboardLike };
+type NavigatorWithKeyboard = Navigator & {
+	readonly keyboard?: NavigatorKeyboardLike;
+};
 
 export interface BrowserKeyboardLayoutServiceOptions {
 	readonly navigator: Navigator;
@@ -92,11 +99,9 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		this.mapping = options.layout?.mapping;
 		this.layout = options.layout?.layout ?? this.fallbackLayout();
 		this.mapper = this.createMapper();
-		this._register(
-			toDisposable(() => {
-				this.mapping = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.mapping = undefined;
+		}));
 		this.listenForLayoutChanges();
 		this.listenForProvidedLayoutChanges();
 		this.listenForConfigurationChanges();
@@ -117,8 +122,8 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			...(this.configuredLayout ? [this.configuredLayout.layout] : []),
 			...(this.nativeLayout ? [this.nativeLayout.layout] : []),
 			...(this.userLayout ? [this.userLayout.layout] : []),
-			...this.builtinLayouts.map(definition => definition.layout),
-			...this.additionalLayouts.map(definition => definition.layout),
+			...this.builtinLayouts.map((definition) => definition.layout),
+			...this.additionalLayouts.map((definition) => definition.layout),
 		];
 		const unique = new Map<string, IKeyboardLayoutInfo>();
 		for (const layout of layouts) {
@@ -150,7 +155,11 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			return;
 		}
 		const entry = this.mapping[event.code];
-		const expected = getKeyboardMappingValue(entry, { ...event, altGraphKey: event.altGraphKey }, this.configuration.mapAltGrToCtrlAlt);
+		const expected = getKeyboardMappingValue(
+			entry,
+			{ ...event, altGraphKey: event.altGraphKey },
+			this.configuration.mapAltGrToCtrlAlt,
+		);
 		const isDeadKey = event.key === 'Dead';
 		if (isDeadKey || (!expected && (event.shiftKey || event.altGraphKey))) {
 			this.acceptObservedMapping(event);
@@ -203,14 +212,19 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	private async readProvidedLayout(): Promise<void> {
-		const [nativeLayout, userLayout] = await Promise.all([this.readLayoutProvider(this.layoutProvider), this.readLayoutProvider(this.userLayoutProvider)]);
+		const [nativeLayout, userLayout] = await Promise.all([
+			this.readLayoutProvider(this.layoutProvider),
+			this.readLayoutProvider(this.userLayoutProvider),
+		]);
 		if (!this.isDisposed) {
 			this.nativeLayout = nativeLayout;
 			this.userLayout = userLayout;
 		}
 	}
 
-	private async readLayoutProvider(provider: IKeyboardLayoutProvider | undefined): Promise<IKeyboardLayoutDefinition | undefined> {
+	private async readLayoutProvider(
+		provider: IKeyboardLayoutProvider | undefined,
+	): Promise<IKeyboardLayoutDefinition | undefined> {
 		if (!provider) {
 			return undefined;
 		}
@@ -247,11 +261,9 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			if (!provider) {
 				continue;
 			}
-			this._register(
-				provider.onDidChangeKeyboardLayout(() => {
-					void this.refreshKeyboardLayout();
-				}),
-			);
+			this._register(provider.onDidChangeKeyboardLayout(() => {
+				void this.refreshKeyboardLayout();
+			}));
 		}
 	}
 
@@ -259,25 +271,25 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		if (!this.configurationService) {
 			return;
 		}
-		this._register(
-			this.configurationService.onDidChangeConfiguration(event => {
-				const mapperChanged = event.affectsConfiguration(KeyboardConfiguration.dispatch) || event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
-				if (mapperChanged) {
-					this.configuration = Object.freeze({
-						dispatch: this.dispatchOverride ?? this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
-						mapAltGrToCtrlAlt: this.mapAltGrOverride ?? this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
-					});
-					this.mapper = this.createMapper();
-					this._onDidChangeKeyboardLayout.fire();
+		this._register(this.configurationService.onDidChangeConfiguration((event) => {
+			const mapperChanged = event.affectsConfiguration(KeyboardConfiguration.dispatch) ||
+				event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
+			if (mapperChanged) {
+				this.configuration = Object.freeze({
+					dispatch: this.dispatchOverride ?? this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
+					mapAltGrToCtrlAlt: this.mapAltGrOverride ??
+						this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
+				});
+				this.mapper = this.createMapper();
+				this._onDidChangeKeyboardLayout.fire();
+			}
+			if (event.affectsConfiguration(KeyboardConfiguration.layout)) {
+				if (!this.selectConfiguredLayout()) {
+					this.installFallback();
+					void this.refreshKeyboardLayout();
 				}
-				if (event.affectsConfiguration(KeyboardConfiguration.layout)) {
-					if (!this.selectConfiguredLayout()) {
-						this.installFallback();
-						void this.refreshKeyboardLayout();
-					}
-				}
-			}),
-		);
+			}
+		}));
 	}
 
 	private async readKeyboardLayout(): Promise<void> {
@@ -365,7 +377,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			...this.builtinLayouts,
 			...this.additionalLayouts,
 		];
-		const selected = definitions.find(definition => definition.layout.id === requested);
+		const selected = definitions.find((definition) => definition.layout.id === requested);
 		if (!selected) {
 			return false;
 		}
@@ -382,10 +394,9 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		if (!this.mapping || Object.keys(this.mapping).length === 0) {
 			return new CachedKeyboardMapper(new FallbackKeyboardMapper(this.configuration, this.operatingSystem));
 		}
-		const mapper =
-			this.operatingSystem === OperatingSystem.Windows
-				? new WindowsKeyboardMapper(this.mapping, this.configuration)
-				: new MacLinuxKeyboardMapper(this.mapping, this.configuration, this.operatingSystem);
+		const mapper = this.operatingSystem === OperatingSystem.Windows
+			? new WindowsKeyboardMapper(this.mapping, this.configuration)
+			: new MacLinuxKeyboardMapper(this.mapping, this.configuration, this.operatingSystem);
 		return new CachedKeyboardMapper(mapper);
 	}
 
@@ -400,7 +411,10 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 }
 
-function preserveObservedStates(nextMapping: IKeyboardMapping, previousMapping: IKeyboardMapping | undefined): IKeyboardMapping {
+function preserveObservedStates(
+	nextMapping: IKeyboardMapping,
+	previousMapping: IKeyboardMapping | undefined,
+): IKeyboardMapping {
 	if (!previousMapping) {
 		return nextMapping;
 	}

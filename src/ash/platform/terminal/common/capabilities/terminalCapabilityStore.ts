@@ -16,9 +16,7 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 	readonly onDidRemoveCwdDetectionCapability = Event.map(this.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection), () => undefined);
 
 	get items(): IterableIterator<TerminalCapability> {
-		return Object.keys(this.implementations)
-			.map(id => Number(id) as TerminalCapability)
-			.values();
+		return Object.keys(this.implementations).map(id => Number(id) as TerminalCapability).values();
 	}
 
 	protected registerCapability<T extends TerminalCapability>(id: T, capability: ITerminalCapabilityImplMap[T]): void {
@@ -34,9 +32,7 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 		this.removed.fire({ id, capability } as AnyTerminalCapabilityChangeEvent);
 	}
 
-	has(id: TerminalCapability): boolean {
-		return this.get(id) !== undefined;
-	}
+	has(id: TerminalCapability): boolean { return this.get(id) !== undefined; }
 
 	get<T extends TerminalCapability>(id: T): ITerminalCapabilityImplMap[T] | undefined {
 		return this.implementations[id];
@@ -51,14 +47,9 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 	}
 
 	private capabilityEvent<T extends TerminalCapability>(event: Event<AnyTerminalCapabilityChangeEvent>, type: T): Event<ITerminalCapabilityImplMap[T]> {
-		return (listener, thisArgs, disposables) =>
-			event(
-				change => {
-					if (change.id === type) listener.call(thisArgs, change.capability as ITerminalCapabilityImplMap[T]);
-				},
-				undefined,
-				disposables,
-			);
+		return (listener, thisArgs, disposables) => event(change => {
+			if (change.id === type) listener.call(thisArgs, change.capability as ITerminalCapabilityImplMap[T]);
+		}, undefined, disposables);
 	}
 
 	protected override disposeCore(): void {
@@ -72,14 +63,12 @@ export class TerminalCapabilityStore extends AbstractTerminalCapabilityStore {
 		this.registerCapability(id, capability);
 	}
 
-	remove(id: TerminalCapability): void {
-		this.unregisterCapability(id);
-	}
+	remove(id: TerminalCapability): void { this.unregisterCapability(id); }
 }
 
 /** Combines process and screen capabilities, with earlier stores taking precedence. */
 export class TerminalCapabilityStoreMultiplexer extends AbstractTerminalCapabilityStore {
-	private readonly sources = new Map<ITerminalCapabilityStore, { lifetime: DisposableStore; leases: number }>();
+	private readonly sources = new Map<ITerminalCapabilityStore, { lifetime: DisposableStore; leases: number; }>();
 
 	add(store: ITerminalCapabilityStore): IDisposable {
 		this.assertNotDisposed();

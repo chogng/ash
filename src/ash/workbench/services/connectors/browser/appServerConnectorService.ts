@@ -9,10 +9,7 @@ export class AppServerConnectorService extends Disposable implements IConnectorS
 	private readonly _onDidChange = this._register(new Emitter<number>());
 	readonly onDidChange = this._onDidChange.event;
 
-	constructor(
-		private readonly api: IConnectorApi,
-		events: IServerEventApi,
-	) {
+	constructor(private readonly api: IConnectorApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === 'connector/changed') this._onDidChange.fire(event.params.generation);
@@ -25,7 +22,7 @@ export class AppServerConnectorService extends Disposable implements IConnectorS
 		return { generation: result.generation, connectors: result.connectors.map(connectorView) };
 	}
 
-	async connectApiToken(connector: ConnectorView, catalogGeneration: number, input: { readonly accountId: string; readonly accountDisplayName: string; readonly token: string }): Promise<void> {
+	async connectApiToken(connector: ConnectorView, catalogGeneration: number, input: { readonly accountId: string; readonly accountDisplayName: string; readonly token: string; }): Promise<void> {
 		await this.api.connectApiToken({
 			commandId: `desktop-connector-connect-${crypto.randomUUID()}`,
 			expectedGeneration: catalogGeneration,
@@ -89,15 +86,10 @@ function connectorView(connector: ConnectorDto): ConnectorView {
 
 function connectorState(state: ConnectorConnectionStateDto): ConnectorState {
 	switch (state.status) {
-		case 'disconnected':
-			return { status: 'disconnected' };
-		case 'connecting':
-			return { status: 'connecting' };
-		case 'connected':
-			return { status: 'connected', account: { ...state.account } };
-		case 'unavailable':
-			return { status: 'unavailable', reason: state.reason };
-		case 'reauthorizationRequired':
-			return { status: 'reauthorizationRequired', account: { ...state.account } };
+		case 'disconnected': return { status: 'disconnected' };
+		case 'connecting': return { status: 'connecting' };
+		case 'connected': return { status: 'connected', account: { ...state.account } };
+		case 'unavailable': return { status: 'unavailable', reason: state.reason };
+		case 'reauthorizationRequired': return { status: 'reauthorizationRequired', account: { ...state.account } };
 	}
 }

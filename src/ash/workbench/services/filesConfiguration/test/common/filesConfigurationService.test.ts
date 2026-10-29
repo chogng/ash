@@ -29,21 +29,12 @@ suite('Configured file policies', () => {
 		await configuration.updateValue('files.readonlyInclude', { 'generated/**': true });
 		await configuration.updateValue('files.readonlyExclude', { 'generated/keep.ts': true });
 		const writable = URI.file('/root/generated/keep.ts');
-		assert.deepEqual(
-			[
-				!!policy.isReadonly(URI.file('/root/generated/main.ts')),
-				policy.isReadonly(writable),
-				policy.isReadonly(writable, {
-					resource: writable,
-					kind: FileKind.File,
-					sizeBytes: 1,
-					readonly: true,
-					modifiedAtMillis: 0,
-				}),
-				changes,
-			],
-			[true, false, true, 2],
-		);
+		assert.deepEqual([
+			!!policy.isReadonly(URI.file('/root/generated/main.ts')),
+			policy.isReadonly(writable),
+			policy.isReadonly(writable, { resource: writable, kind: FileKind.File, sizeBytes: 1, readonly: true, modifiedAtMillis: 0 }),
+			changes,
+		], [true, false, true, 2]);
 	});
 
 	test('rejects malformed persisted rules before notifying consumers', async () => {
@@ -59,14 +50,7 @@ suite('Configured file policies', () => {
 		using policy = new FilesConfigurationService(configuration, workspace);
 		const resource = URI.file('/root/main.ts');
 		let writes = 0;
-		const files = {
-			onDidChangeFiles: Event.None,
-			readFile: async () => undefined,
-			writeFile: async () => {
-				writes++;
-				return { revision: 'saved' };
-			},
-		} as unknown as IFileService;
+		const files = { onDidChangeFiles: Event.None, readFile: async () => undefined, writeFile: async () => { writes++; return { revision: 'saved' }; } } as unknown as IFileService;
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(TextFileService), /Unknown service: fileService/);
 		services.registerInstance(IFileService, files);

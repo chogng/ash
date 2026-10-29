@@ -22,9 +22,7 @@ export class NativeImageEditorService extends ImageEditorService {
 		const root = document.querySelector('.ash-workbench');
 		const colorScheme = root?.getAttribute('data-color-scheme');
 		const request: ImageViewRequest = {
-			id,
-			title: resolved.displayName,
-			html: resolved.view.html,
+			id, title: resolved.displayName, html: resolved.view.html,
 			source: options?.code ? 'content' : 'screen',
 			input: {
 				defaultAction: options?.defaultAction ?? 'attach',
@@ -35,11 +33,11 @@ export class NativeImageEditorService extends ImageEditorService {
 			} as unknown as Readonly<Record<string, JsonValue>>,
 		};
 		const cancellation = addDisposableListener(signal, 'abort', () => {
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => {});
+			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
 		});
 		const lifetime = toDisposable(() => {
 			cancellation.dispose();
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => {});
+			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
 		});
 		this.desktopCaptureLifetime.value = lifetime;
 		try {
@@ -48,9 +46,14 @@ export class NativeImageEditorService extends ImageEditorService {
 			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(result)));
 		} catch (error) {
 			const message = String(error);
-			if (message.includes('ScreenshotUnavailable')) throw new Error(localize('screenshot.unavailable', 'Screen capture is unavailable. Try again.'));
-			if (message.includes('ScreenshotTooLarge')) throw new Error(localize('chat.screenshot.tooLarge', 'The screenshot is too large to preview.'));
-			if (message.includes('ImageViewUnavailable')) throw new Error(localize('screenshot.overlayUnavailable', 'The screen capture window could not be opened.'));
+			if (message.includes('ScreenshotUnavailable'))
+				throw new Error(localize('screenshot.unavailable', 'Screen capture is unavailable. Try again.'));
+			if (message.includes('ScreenshotTooLarge'))
+				throw new Error(localize('chat.screenshot.tooLarge', 'The screenshot is too large to preview.'));
+			if (message.includes('ImageViewUnavailable'))
+				throw new Error(
+					localize('screenshot.overlayUnavailable', 'The screen capture window could not be opened.')
+				);
 			throw error;
 		} finally {
 			if (this.desktopCaptureLifetime.value === lifetime) this.desktopCaptureLifetime.clear();

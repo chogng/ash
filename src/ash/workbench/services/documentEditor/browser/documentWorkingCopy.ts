@@ -54,16 +54,14 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this.savedContent = this.initialContent;
 		this.revision = options.initialRevision;
 		this._register(options.model.onDidChangeBlocks(() => this.refreshDirty()));
-		this._register(
-			options.textFiles.onDidChangeFiles(event => {
-				if (this.resource.scheme === 'untitled' || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
-				if (this.isDirty) {
-					this.setExternalChange(true);
-					return;
-				}
-				void this.reloadCleanDocument();
-			}),
-		);
+		this._register(options.textFiles.onDidChangeFiles(event => {
+			if (this.resource.scheme === 'untitled' || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
+			if (this.isDirty) {
+				this.setExternalChange(true);
+				return;
+			}
+			void this.reloadCleanDocument();
+		}));
 		this._register(options.workingCopyService.register(this));
 	}
 
@@ -114,14 +112,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		const serialized = this.options.codec.serialize(this.options.model.document);
 		let saved;
 		try {
-			saved = await this.options.textFiles.save(
-				{
-					resource: this.resource,
-					text: serialized,
-					...(this.revision === undefined ? {} : { expectedRevision: this.revision }),
-				},
-				signal,
-			);
+			saved = await this.options.textFiles.save({ resource: this.resource, text: serialized, ...(this.revision === undefined ? {} : { expectedRevision: this.revision }) }, signal);
 		} catch (error) {
 			if (error instanceof TextFileSaveConflictError) this.setExternalChange(true);
 			throw error;

@@ -56,7 +56,7 @@ export interface IDialogOptions {
 	readonly renderBody?: (container: HTMLElement) => void;
 	readonly renderFooter?: (container: HTMLElement) => void;
 	readonly icon?: ThemeIcon;
-	readonly buttonOptions?: Array<undefined | { styleButton?: (button: Button) => void }>;
+	readonly buttonOptions?: Array<undefined | { styleButton?: (button: Button) => void; }>;
 	readonly disableCloseAction?: boolean;
 	readonly disableCloseButton?: boolean;
 	readonly disableDefaultAction?: boolean;
@@ -87,12 +87,7 @@ export class Dialog extends Disposable {
 	private visible = false;
 	private focusToReturn: HTMLElement | undefined;
 
-	constructor(
-		container: HTMLElement,
-		message: string,
-		buttons: string[] | undefined,
-		private readonly options: IDialogOptions,
-	) {
+	constructor(container: HTMLElement, message: string, buttons: string[] | undefined, private readonly options: IDialogOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'dialog');
@@ -113,14 +108,10 @@ export class Dialog extends Disposable {
 		element.tabIndex = -1;
 		element.setAttribute('aria-modal', 'true');
 		const header = h(ownerDocument, 'header', { className: 'ash-dialog-header' });
-		if (options.icon || (options.type && options.type !== 'none')) {
-			const icon = h(ownerDocument, 'span', {
-				className: 'ash-dialog-icon',
-				attributes: { 'aria-hidden': 'true' },
-			});
+		if (options.icon || options.type && options.type !== 'none') {
+			const icon = h(ownerDocument, 'span', { className: 'ash-dialog-icon', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(options.icon ?? (options.type === 'error' ? Lxicon.dialogError : options.type === 'warning' ? Lxicon.dialogWarning : Lxicon.dialogInfo), icon);
-			const color =
-				options.type === 'error' ? options.dialogStyles.errorIconForeground : options.type === 'warning' ? options.dialogStyles.warningIconForeground : options.dialogStyles.infoIconForeground;
+			const color = options.type === 'error' ? options.dialogStyles.errorIconForeground : options.type === 'warning' ? options.dialogStyles.warningIconForeground : options.dialogStyles.infoIconForeground;
 			if (color) icon.style.color = color;
 			header.append(icon);
 		}
@@ -131,27 +122,16 @@ export class Dialog extends Disposable {
 		header.append(this.headingDomNode);
 		if (!options.disableCloseAction && !options.disableCloseButton) {
 			const label = localize('dialogClose', 'Close Dialog');
-			const close = this._register(
-				new ActionBar(header, {
-					ariaLabel: label,
-					actions: [
-						{
-							id: 'dialog.close',
-							label,
-							tooltip: label,
-							icon: Lxicon.dialogClose,
-							enabled: true,
-							run: () => this.finish(options.cancelId ?? 0),
-						},
-					],
-					actionViewItemProvider: (action, actionOptions) =>
-						new LabelActionViewItem(action, {
-							...actionOptions,
-							label: '',
-							ariaLabel: action.label,
-						}),
+			const close = this._register(new ActionBar(header, {
+				ariaLabel: label,
+				actions: [{
+					id: 'dialog.close', label, tooltip: label, icon: Lxicon.dialogClose, enabled: true,
+					run: () => this.finish(options.cancelId ?? 0),
+				}],
+				actionViewItemProvider: (action, actionOptions) => new LabelActionViewItem(action, {
+					...actionOptions, label: '', ariaLabel: action.label,
 				}),
-			);
+			}));
 			close.element.classList.add('ash-dialog-close');
 		}
 		const body = h(ownerDocument, 'div', { className: 'ash-dialog-body' });
@@ -177,27 +157,23 @@ export class Dialog extends Disposable {
 			const inputContainer = h(ownerDocument, 'div', { className: 'ash-dialog-inputs' });
 			body.append(inputContainer);
 			for (const [index, inputOptions] of options.inputs.entries()) {
-				const input = this._register(
-					new InputBox(inputContainer, {
-						inputBoxStyles: options.inputBoxStyles,
-						type: inputOptions.type,
-						placeholder: inputOptions.placeholder,
-						presentation: 'field',
-						ariaLabel: inputOptions.placeholder ?? localize('dialog.inputNumber', '{0}, field {1}', message, index + 1),
-					}),
-				);
+				const input = this._register(new InputBox(inputContainer, {
+					inputBoxStyles: options.inputBoxStyles,
+					type: inputOptions.type,
+					placeholder: inputOptions.placeholder,
+					presentation: 'field',
+					ariaLabel: inputOptions.placeholder ?? localize('dialog.inputNumber', '{0}, field {1}', message, index + 1),
+				}));
 				input.value = inputOptions.value ?? '';
 				this.inputs.push(input);
 			}
 		}
 		if (options.checkboxLabel) {
-			this.checkbox = this._register(
-				new Checkbox(body, {
-					...options.checkboxStyles,
-					label: options.checkboxLabel,
-					checked: options.checkboxChecked,
-				}),
-			);
+			this.checkbox = this._register(new Checkbox(body, {
+				...options.checkboxStyles,
+				label: options.checkboxLabel,
+				checked: options.checkboxChecked,
+			}));
 		}
 		if (options.renderFooter) {
 			const footer = h(ownerDocument, 'footer', { className: 'ash-dialog-footer' });
@@ -208,14 +184,12 @@ export class Dialog extends Disposable {
 		if (labels.length) {
 			const actions = h(ownerDocument, 'footer', { className: 'ash-dialog-actions' });
 			for (const [index, label] of labels.entries()) {
-				const button = this._register(
-					new Button(actions, {
-						...options.buttonStyles,
-						label,
-						presentation: index === 0 ? 'primary' : 'secondary',
-						onClick: () => this.finish(index),
-					}),
-				);
+				const button = this._register(new Button(actions, {
+					...options.buttonStyles,
+					label,
+					presentation: index === 0 ? 'primary' : 'secondary',
+					onClick: () => this.finish(index),
+				}));
 				this.buttons.push(button);
 				options.buttonOptions?.[index]?.styleButton?.(button);
 			}
@@ -230,64 +204,57 @@ export class Dialog extends Disposable {
 		}
 		element.append(header, body);
 		container.append(element);
-		this._register(
-			addDisposableListener(element, 'keydown', event => {
-				options.keyEventProcessor?.(new StandardKeyboardEvent(event));
-				if (event.defaultPrevented || event.isComposing) return;
-				if (event.key === 'Escape') {
-					// Native search fields consume Escape before the dialog's cancel event.
-					event.preventDefault();
-					event.stopPropagation();
-					if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
-					return;
-				}
-				if (isMacintosh && event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
-					event.preventDefault();
-					event.stopPropagation();
-					const secondary = this.buttons[1];
-					if (options.cancelId !== 1 && secondary && isTabbable(secondary.domNode)) this.finish(1);
-					return;
-				}
-				if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-					const focused = getActiveElement(ownerDocument);
-					if (!this.buttons.some(button => button.domNode.contains(focused))) return;
-					// CSS and RTL can change the visual order without changing result indices.
-					const available = this.buttons
-						.filter(button => isTabbable(button.domNode))
-						.map(button => ({ button, left: button.domNode.getBoundingClientRect().left }))
-						.sort((left, right) => left.left - right.left);
-					const index = available.findIndex(({ button }) => button.domNode.contains(focused));
-					if (index >= 0) {
-						const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + available.length) % available.length;
-						event.preventDefault();
-						available[next].button.focus();
-					}
-					return;
-				}
-				if (event.key !== 'Enter' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || options.disableDefaultAction) return;
-				const target = event.target;
-				if (isHTMLElement(target) && target.closest('button, textarea, select, [contenteditable], [role=combobox]')) return;
-				const primary = this.buttons[0];
-				if (primary?.enabled) {
-					event.preventDefault();
-					this.finish(0);
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(element, 'cancel', event => {
+		this._register(addDisposableListener(element, 'keydown', event => {
+			options.keyEventProcessor?.(new StandardKeyboardEvent(event));
+			if (event.defaultPrevented || event.isComposing) return;
+			if (event.key === 'Escape') {
+				// Native search fields consume Escape before the dialog's cancel event.
 				event.preventDefault();
+				event.stopPropagation();
 				if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
-			}),
-		);
+				return;
+			}
+			if (isMacintosh && event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
+				event.preventDefault();
+				event.stopPropagation();
+				const secondary = this.buttons[1];
+				if (options.cancelId !== 1 && secondary && isTabbable(secondary.domNode)) this.finish(1);
+				return;
+			}
+			if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+				const focused = getActiveElement(ownerDocument);
+				if (!this.buttons.some(button => button.domNode.contains(focused))) return;
+				// CSS and RTL can change the visual order without changing result indices.
+				const available = this.buttons.filter(button => isTabbable(button.domNode))
+					.map(button => ({ button, left: button.domNode.getBoundingClientRect().left }))
+					.sort((left, right) => left.left - right.left);
+				const index = available.findIndex(({ button }) => button.domNode.contains(focused));
+				if (index >= 0) {
+					const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + available.length) % available.length;
+					event.preventDefault();
+					available[next].button.focus();
+				}
+				return;
+			}
+			if (event.key !== 'Enter' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || options.disableDefaultAction) return;
+			const target = event.target;
+			if (isHTMLElement(target) && (target.closest('button, textarea, select, [contenteditable], [role=combobox]'))) return;
+			const primary = this.buttons[0];
+			if (primary?.enabled) {
+				event.preventDefault();
+				this.finish(0);
+			}
+		}));
+		this._register(addDisposableListener(element, 'cancel', event => {
+			event.preventDefault();
+			if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
+		}));
 		this._register(addDisposableListener(element, 'close', () => this.finish(options.cancelId ?? 0)));
 		this._register(trapTabFocus(element));
-		this._register(
-			toDisposable(() => {
-				this.finish(options.cancelId ?? 0);
-				element.remove();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.finish(options.cancelId ?? 0);
+			element.remove();
+		}));
 	}
 
 	public updateMessage(message: string): void {
@@ -301,9 +268,7 @@ export class Dialog extends Disposable {
 		this.shown = true;
 		const activeElement = getActiveElement(this.element.ownerDocument);
 		if (isHTMLElement(activeElement)) this.focusToReturn = activeElement;
-		const result = new Promise<IDialogResult>(resolve => {
-			this.resolve = resolve;
-		});
+		const result = new Promise<IDialogResult>(resolve => { this.resolve = resolve; });
 		try {
 			this.element.showModal();
 			this.visible = true;
@@ -313,7 +278,9 @@ export class Dialog extends Disposable {
 				input.focus();
 				input.select();
 			} else {
-				const custom = this.customBodyRoots.map(root => (isTabbable(root) ? root : getTabbableElements(root)[0])).find(target => target !== undefined);
+				const custom = this.customBodyRoots
+					.map(root => isTabbable(root) ? root : getTabbableElements(root)[0])
+					.find(target => target !== undefined);
 				const action = this.buttons.find(button => isTabbable(button.domNode));
 				if (custom) custom.focus();
 				else if (action) action.focus();

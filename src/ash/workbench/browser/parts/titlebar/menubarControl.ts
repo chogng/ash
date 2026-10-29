@@ -24,10 +24,7 @@ interface MenubarOptions {
 }
 
 class ApplicationMenuActionViewItem extends ButtonActionViewItem {
-	constructor(
-		action: IAction,
-		private readonly handleKeyDown: (event: KeyboardEvent) => void,
-	) {
+	constructor(action: IAction, private readonly handleKeyDown: (event: KeyboardEvent) => void) {
 		super(action, { buttonStyles: defaultButtonStyles });
 	}
 
@@ -39,9 +36,7 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 		this._register(addDisposableListener(this.button.domNode, 'keydown', this.handleKeyDown));
 	}
 
-	public get anchor(): HTMLElement {
-		return this.button.domNode;
-	}
+	public get anchor(): HTMLElement { return this.button.domNode; }
 
 	public setLabel(label: string): void {
 		this.button.label = label;
@@ -60,7 +55,8 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
  * Hosts select the application menu tree and titlebar actions independently.
  * Desktop hosts can omit the button when the system menu bar presents the menu tree.
  */
-export class BrowserMenubarControl extends Disposable implements IMenubarControl {
+export class BrowserMenubarControl extends Disposable
+	implements IMenubarControl {
 	private readonly menu: IMenu;
 	private readonly toolbar: MenuWorkbenchToolBar;
 	private readonly contextMenuService: IContextMenuService;
@@ -79,60 +75,46 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 	) {
 		super();
 		this.contextMenuService = contextMenuService;
-		const applicationMenuLabel = () =>
-			localizationService
-				? localize(localizationService, { bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu')
-				: resolveNls({ bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu');
+		const applicationMenuLabel = () => localizationService
+			? localize(localizationService, { bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu')
+			: resolveNls({ bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu');
 		this.menu = this._register(menuService.createMenu(options.applicationMenuId ?? MenuId.MenubarMainMenu));
 		const action: IAction = {
 			id: 'ash.applicationMenu',
-			get label() {
-				return applicationMenuLabel();
-			},
-			get tooltip() {
-				return applicationMenuLabel();
-			},
+			get label() { return applicationMenuLabel(); },
+			get tooltip() { return applicationMenuLabel(); },
 			icon: Lxicon.menu,
 			enabled: true,
 			run: () => this.toggleMenu(),
 		};
-		const leftActionsLabel = () =>
-			localizationService
-				? localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions')
-				: resolveNls({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions');
-		this.toolbar = this._register(
-			new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
-				contextKeyService,
-				ariaLabel: leftActionsLabel(),
-				presentation: 'inherit-foreground',
-				// Layout actions expose their pressed state without a persistent titlebar fill.
-				highlightToggledItems: false,
-				leadingActions: options.presentation === 'actions-only' ? [] : [action],
-				actionViewItemProvider: candidate => {
-					if (candidate !== action) return undefined;
-					const item = new ApplicationMenuActionViewItem(action, event => this.handleMenuKeyDown(event));
-					this.menuItem = item;
-					return item;
-				},
-			}),
-		);
+		const leftActionsLabel = () => localizationService
+			? localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions')
+			: resolveNls({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions');
+		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
+			contextKeyService,
+			ariaLabel: leftActionsLabel(),
+			presentation: 'inherit-foreground',
+			// Layout actions expose their pressed state without a persistent titlebar fill.
+			highlightToggledItems: false,
+			leadingActions: options.presentation === 'actions-only' ? [] : [action],
+			actionViewItemProvider: (candidate) => {
+				if (candidate !== action) return undefined;
+				const item = new ApplicationMenuActionViewItem(action, (event) => this.handleMenuKeyDown(event));
+				this.menuItem = item;
+				return item;
+			},
+		}));
 		this.domNode = this.toolbar.element;
 		this.domNode.classList.add('ash-menubar', 'ash-titlebar-left-actions');
-		this._register(
-			this.toolbar.onDidChangeMenuItems(() => {
-				if (this.active) this.contextMenuService.hideContextMenu();
-			}),
-		);
-		this._register(
-			this.menu.onDidChange(() => {
-				if (this.active) this.contextMenuService.hideContextMenu();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				if (this.active) this.contextMenuService.hideContextMenu();
-			}),
-		);
+		this._register(this.toolbar.onDidChangeMenuItems(() => {
+			if (this.active) this.contextMenuService.hideContextMenu();
+		}));
+		this._register(this.menu.onDidChange(() => {
+			if (this.active) this.contextMenuService.hideContextMenu();
+		}));
+		this._register(toDisposable(() => {
+			if (this.active) this.contextMenuService.hideContextMenu();
+		}));
 	}
 
 	public setTrailingActions(actions: readonly IAction[]): void {
@@ -167,10 +149,11 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 	}
 
 	private showMenu(): void {
-		const actions = this.menu
-			.getActions()
+		const actions = this.menu.getActions()
 			.flatMap(([, groupActions]) => groupActions)
-			.filter((action): action is SubmenuAction => action instanceof SubmenuAction);
+			.filter((action): action is SubmenuAction =>
+				action instanceof SubmenuAction
+			);
 		if (actions.length === 0) return;
 
 		this.active = true;

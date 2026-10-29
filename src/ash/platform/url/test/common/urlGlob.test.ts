@@ -46,9 +46,6 @@ suite('URL opener patterns', () => {
 	}
 	test('long paths do not require recursive matching', () => {
 		const url = `https://example.test/docs/${'x'.repeat(16_384)}/end`;
-		assert.deepEqual(
-			['example.test/docs/*/end', 'example.test/docs/*/absent'].map(pattern => testUrlMatchesGlob(url, pattern)),
-			[true, false],
-		);
+		assert.deepEqual(['example.test/docs/*/end', 'example.test/docs/*/absent'].map(pattern => testUrlMatchesGlob(url, pattern)), [true, false]);
 	});
 });

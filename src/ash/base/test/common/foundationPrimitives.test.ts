@@ -11,29 +11,14 @@ import { StopWatch } from '../../common/stopwatch.js';
 
 test('array helpers preserve search, grouping, and queue boundaries', () => {
 	const values = [1, 3, 5, 7];
-	assert.equal(
-		binarySearch2(values.length, index => numberComparator(values[index]!, 5)),
-		2,
-	);
-	assert.equal(
-		binarySearch2(values.length, index => numberComparator(values[index]!, 4)),
-		-3,
-	);
+	assert.equal(binarySearch2(values.length, index => numberComparator(values[index]!, 5)), 2);
+	assert.equal(binarySearch2(values.length, index => numberComparator(values[index]!, 4)), -3);
 	assert.deepEqual([...groupAdjacentBy([1, 3, 2, 4, 7], (left, right) => left % 2 === right % 2)], [[1, 3], [2, 4], [7]]);
-	assert.equal(
-		sumBy(values, value => value),
-		16,
-	);
+	assert.equal(sumBy(values, value => value), 16);
 
 	const queue = new ArrayQueue(values);
-	assert.deepEqual(
-		queue.takeWhile(value => value < 5),
-		[1, 3],
-	);
-	assert.deepEqual(
-		queue.takeFromEndWhile(value => value > 5),
-		[7],
-	);
+	assert.deepEqual(queue.takeWhile(value => value < 5), [1, 3]);
+	assert.deepEqual(queue.takeFromEndWhile(value => value > 5), [7]);
 	assert.equal(queue.peek(), 5);
 	assert.equal(queue.removeLast(), 5);
 	assert.equal(queue.dequeue(), undefined);
@@ -60,15 +45,10 @@ test('safe Intl factories are lazy and normalize invalid locale input', () => {
 test('single-call functions retain their first result and always notify once', () => {
 	let calls = 0;
 	let notifications = 0;
-	const once = createSingleCallFunction(
-		(value: number) => {
-			calls += 1;
-			return 4 + value;
-		},
-		() => {
-			notifications += 1;
-		},
-	);
+	const once = createSingleCallFunction((value: number) => {
+		calls += 1;
+		return 4 + value;
+	}, () => { notifications += 1; });
 	assert.equal(once(3), 7);
 	assert.equal(once(9), 7);
 	assert.equal(calls, 1);

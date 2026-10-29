@@ -6,6 +6,7 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
+
 test.describe('SCM welcome', () => {
 	test.use({ openWorkspace: false });
 
@@ -52,12 +53,7 @@ test.describe('SCM welcome', () => {
 				element.append(probe);
 				const actual = getComputedStyle(element);
 				const expected = getComputedStyle(probe);
-				const result = {
-					background: actual.backgroundColor,
-					expectedBackground: expected.backgroundColor,
-					outline: actual.outlineColor,
-					expectedOutline: expected.color,
-				};
+				const result = { background: actual.backgroundColor, expectedBackground: expected.backgroundColor, outline: actual.outlineColor, expectedOutline: expected.color };
 				probe.remove();
 				return result;
 			});
@@ -92,14 +88,7 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 	const branch = page.getByRole('dialog', { name: 'Initial branch name', exact: true }).getByRole('textbox', { name: 'Initial branch name', exact: true });
 	await branch.fill('welcome-main');
 	await branch.press('Enter');
-	await expect
-		.poll(() =>
-			run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory }).then(
-				result => result.stdout.trim(),
-				() => undefined,
-			),
-		)
-		.toBe('welcome-main');
+	await expect.poll(() => run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory }).then(result => result.stdout.trim(), () => undefined)).toBe('welcome-main');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe(originalContent);
 	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeHidden();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeVisible();
@@ -111,51 +100,48 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 test.describe('SCM commit input', () => {
 	test.use({ gitRepository: true });
 
-	test(
-		'SCM commit input localizes scope and draft help after restarting in Chinese',
-		{ tag: ['@browser-app-server', '@electron-app-server'] },
-		async ({ testWorkspace, workbench, restartWorkbench }) => {
-			const cwd = testWorkspace.directory;
-			const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
-			await writeFile(testWorkspace.file, 'const value = 2;\n');
-			await writeFile(join(cwd, 'new.ts'), 'untracked file\n');
-			const head = await git('rev-parse', 'HEAD');
-			const index = await git('ls-files', '--stage');
-			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-			const languages = workbench.page.locator('.ash-quick-pick');
-			await languages.getByRole('combobox').fill('简体中文');
-			await languages.getByRole('combobox').press('Enter');
-			({ workbench } = await restartWorkbench());
-			await workbench.git.open();
-			const page = workbench.page;
-			const input = page.locator('.ash-scm-input');
-			const editor = input.getByRole('textbox', { name: /^提交信息/u });
-			await editor.focus();
-			await page.keyboard.insertText('中文提交草稿');
-			await editor.press('Alt+F1');
-			const help = page.getByRole('dialog').getByRole('textbox');
-			await expect(help).toHaveValue(/为当前源代码管理提供程序输入消息。Enter 插入新行/u);
-			await expect(help).toHaveValue(/每个仓库保留各自的草稿/u);
-			await expect(help).toHaveValue(/Escape 关闭帮助并返回消息输入框/u);
-			await page.keyboard.press('Escape');
-			await expect(editor).toBeFocused();
-			await workbench.quickaccess.runCommand('git.commitAllSigned');
-			const scope = page.locator('.ash-quick-pick');
-			await expect(scope.getByRole('option', { name: /^仅已跟踪的更改/u })).toBeVisible();
-			await expect(scope.getByRole('option', { name: /^已跟踪和未跟踪的更改/u })).toBeVisible();
-			await page.keyboard.press('Escape');
-			expect(await git('rev-parse', 'HEAD')).toBe(head);
-			expect(await git('ls-files', '--stage')).toBe(index);
-			await expect(input.locator('.view-lines')).toContainText('中文提交草稿');
-			await workbench.quickaccess.runCommand('git.commitAllSigned');
-			await scope.getByRole('option', { name: /^仅已跟踪的更改/u }).click();
-			await expect.poll(() => git('log', '-1', '--format=%s')).toBe('中文提交草稿');
-			expect(await git('show', 'HEAD:main.ts')).toBe('const value = 2;');
-			expect(await git('log', '-1', '--format=%B')).toContain('Signed-off-by:');
-			expect(await git('ls-files', 'new.ts')).toBe('');
-			await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
-		},
-	);
+
+	test('SCM commit input localizes scope and draft help after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await writeFile(join(cwd, 'new.ts'), 'untracked file\n');
+		const head = await git('rev-parse', 'HEAD');
+		const index = await git('ls-files', '--stage');
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const languages = workbench.page.locator('.ash-quick-pick');
+		await languages.getByRole('combobox').fill('简体中文');
+		await languages.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		await workbench.git.open();
+		const page = workbench.page;
+		const input = page.locator('.ash-scm-input');
+		const editor = input.getByRole('textbox', { name: /^提交信息/u });
+		await editor.focus();
+		await page.keyboard.insertText('中文提交草稿');
+		await editor.press('Alt+F1');
+		const help = page.getByRole('dialog').getByRole('textbox');
+		await expect(help).toHaveValue(/为当前源代码管理提供程序输入消息。Enter 插入新行/u);
+		await expect(help).toHaveValue(/每个仓库保留各自的草稿/u);
+		await expect(help).toHaveValue(/Escape 关闭帮助并返回消息输入框/u);
+		await page.keyboard.press('Escape');
+		await expect(editor).toBeFocused();
+		await workbench.quickaccess.runCommand('git.commitAllSigned');
+		const scope = page.locator('.ash-quick-pick');
+		await expect(scope.getByRole('option', { name: /^仅已跟踪的更改/u })).toBeVisible();
+		await expect(scope.getByRole('option', { name: /^已跟踪和未跟踪的更改/u })).toBeVisible();
+		await page.keyboard.press('Escape');
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		expect(await git('ls-files', '--stage')).toBe(index);
+		await expect(input.locator('.view-lines')).toContainText('中文提交草稿');
+		await workbench.quickaccess.runCommand('git.commitAllSigned');
+		await scope.getByRole('option', { name: /^仅已跟踪的更改/u }).click();
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('中文提交草稿');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 2;');
+		expect(await git('log', '-1', '--format=%B')).toContain('Signed-off-by:');
+		expect(await git('ls-files', 'new.ts')).toBe('');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+	});
 
 	test('SCM commits the edited message with Ctrl+Enter and clears the draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');

@@ -12,10 +12,7 @@ import { resolveDesignLayout } from './layout.js';
 /** Owns committed edits. A pointer gesture commits once, so undo restores the whole gesture. */
 export class DesignModel extends Disposable {
 	private document: DesignDocument;
-	constructor(
-		mode: CreatorMode = CreatorMode.Design,
-		public readonly measureText?: DesignTextMeasurer,
-	) {
+	constructor(mode: CreatorMode = CreatorMode.Design, public readonly measureText?: DesignTextMeasurer) {
 		super();
 		this.document = documentFromShapes([], { documentId: generateUuid(), artifactId: generateUuid(), mode });
 	}
@@ -28,29 +25,17 @@ export class DesignModel extends Disposable {
 	/** Replacement resets per-view selection; edits retain surviving object IDs. */
 	public readonly onDidChange = this.changeEmitter.event;
 
-	public get value(): DesignDocument {
-		return this.document;
-	}
-	public get version(): string {
-		return `${this.document.documentId}:${this.modelEpoch}:${this.editRevision}`;
-	}
-	public get canUndo(): boolean {
-		return this.undoStack.length > 0;
-	}
-	public get canRedo(): boolean {
-		return this.redoStack.length > 0;
-	}
+	public get value(): DesignDocument { return this.document; }
+	public get version(): string { return `${this.document.documentId}:${this.modelEpoch}:${this.editRevision}`; }
+	public get canUndo(): boolean { return this.undoStack.length > 0; }
+	public get canRedo(): boolean { return this.redoStack.length > 0; }
 
 	/** Save As changes identity across history so undo cannot return to the source document. */
 	public changeIdentity(documentId: string): void {
 		const change = (document: DesignDocument): DesignDocument => documentFromShapes(document.shapes, { ...document, documentId }, document.assets);
 		this.document = change(this.document);
-		for (let index = 0; index < this.undoStack.length; index++) {
-			this.undoStack[index] = change(this.undoStack[index]);
-		}
-		for (let index = 0; index < this.redoStack.length; index++) {
-			this.redoStack[index] = change(this.redoStack[index]);
-		}
+		for (let index = 0; index < this.undoStack.length; index++) { this.undoStack[index] = change(this.undoStack[index]); }
+		for (let index = 0; index < this.redoStack.length; index++) { this.redoStack[index] = change(this.redoStack[index]); }
 		this.modelEpoch = generateUuid();
 		this.editRevision = 0;
 		this.changeEmitter.fire('edit');
@@ -76,14 +61,9 @@ export class DesignModel extends Disposable {
 	public refreshTextLayout(): void {
 		const refresh = (document: DesignDocument): DesignDocument => documentFromShapes(resolveDesignLayout(document.shapes, document.shapes, this.measureText), document, document.assets);
 		this.document = refresh(this.document);
-		for (let index = 0; index < this.undoStack.length; index++) {
-			this.undoStack[index] = refresh(this.undoStack[index]);
-		}
-		for (let index = 0; index < this.redoStack.length; index++) {
-			this.redoStack[index] = refresh(this.redoStack[index]);
-		}
-		this.editRevision++;
-		this.changeEmitter.fire('edit');
+		for (let index = 0; index < this.undoStack.length; index++) { this.undoStack[index] = refresh(this.undoStack[index]); }
+		for (let index = 0; index < this.redoStack.length; index++) { this.redoStack[index] = refresh(this.redoStack[index]); }
+		this.editRevision++; this.changeEmitter.fire('edit');
 	}
 
 	public undo(): void {
@@ -108,29 +88,14 @@ export class DesignModel extends Disposable {
 		}
 	}
 
-	public applyEdit(
-		shapes: readonly DesignShape[],
-		assets: readonly DesignAsset[] = this.document.assets,
-		resources: DesignResources | undefined = this.document.resources,
-		undoGroup?: object,
-	): void {
+	public applyEdit(shapes: readonly DesignShape[], assets: readonly DesignAsset[] = this.document.assets, resources: DesignResources | undefined = this.document.resources, undoGroup?: object): void {
 		const edits = recordDesignResourceEdits(shapes, this.document.shapes);
 		const source = resolveDesignResources(recordDesignOverrides(edits, this.document.shapes), resources);
 		const layout = resolveDesignLayout(source, this.document.shapes, this.measureText);
 		const components = resolveDesignResources(resolveDesignComponents(layout, resolveDesignResources(getDesignLibraryShapes(resources), resources), this.measureText), resources);
 		// Removing a wire target is derived cleanup, not an explicit instance override.
 		const resolved = reconcilePrototypeLinks(resolveDesignLayout(components, components, this.measureText), this.document.shapes);
-		const next = documentFromShapes(
-			resolved,
-			{
-				documentId: this.document.documentId,
-				artifactId: this.document.artifactId,
-				mode: this.document.mode,
-				...(this.document.background === undefined ? {} : { background: this.document.background }),
-				...(resources ? { resources } : {}),
-			},
-			assets,
-		);
+		const next = documentFromShapes(resolved, { documentId: this.document.documentId, artifactId: this.document.artifactId, mode: this.document.mode, ...(this.document.background === undefined ? {} : { background: this.document.background }), ...(resources ? { resources } : {}) }, assets);
 		this.commit(next, undoGroup);
 	}
 
@@ -142,9 +107,7 @@ export class DesignModel extends Disposable {
 		if (serializeDesignDocument(next) === serializeDesignDocument(this.document)) {
 			return;
 		}
-		if (!undoGroup || undoGroup !== this.undoGroup) {
-			this.undoStack.push(this.document);
-		}
+		if (!undoGroup || undoGroup !== this.undoGroup) { this.undoStack.push(this.document); }
 		this.undoGroup = undoGroup;
 		this.redoStack.length = 0;
 		this.document = next;

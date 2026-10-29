@@ -26,9 +26,7 @@ export class GPUProcessMainService extends Disposable implements IGPUProcessMain
 	public readonly onDidUpdateFeatureStatus = this.statusChanges.event;
 	public readonly onDidExitProcess = this.processExits.event;
 
-	public get featureStatus(): GPUFeatureStatus | undefined {
-		return this.status;
-	}
+	public get featureStatus(): GPUFeatureStatus | undefined { return this.status; }
 
 	constructor(application: App) {
 		super();
@@ -45,16 +43,13 @@ export class GPUProcessMainService extends Disposable implements IGPUProcessMain
 		};
 		application.on('gpu-info-update', readStatus);
 		application.on('child-process-gone', onExit);
-		this._register(
-			toDisposable(() => {
-				application.removeListener('gpu-info-update', readStatus);
-				application.removeListener('child-process-gone', onExit);
-			}),
-		);
+		this._register(toDisposable(() => {
+			application.removeListener('gpu-info-update', readStatus);
+			application.removeListener('child-process-gone', onExit);
+		}));
 		// A late-created service must also work after the first GPU update.
-		try {
-			readStatus();
-		} catch (error) {
+		try { readStatus(); }
+		catch (error) {
 			this.dispose();
 			throw error;
 		}

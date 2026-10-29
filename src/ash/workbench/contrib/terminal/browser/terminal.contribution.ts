@@ -56,6 +56,7 @@ registerWorkbenchServiceContribution({
 	install: context => context.register(context.container.createInstance(TerminalProfileService)),
 });
 
+
 export { TERMINAL_VIEW_ID } from '../common/terminal.js';
 
 registerTerminalActions();
@@ -72,17 +73,15 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		order: 3,
 		isDefault: true,
 	});
-	registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [
-		{
-			id: TERMINAL_VIEW_ID,
-			title: 'Terminal',
-			localizationKey: { bundle: 'ash.views', key: 'terminal' },
-			order: 1,
-			canToggleVisibility: false,
-			canMoveView: true,
-			ctorDescriptor: new SyncDescriptor(TerminalViewPane),
-		},
-	]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [{
+		id: TERMINAL_VIEW_ID,
+		title: 'Terminal',
+		localizationKey: { bundle: 'ash.views', key: 'terminal' },
+		order: 1,
+		canToggleVisibility: false,
+		canMoveView: true,
+		ctorDescriptor: new SyncDescriptor(TerminalViewPane),
+	}]);
 }
 
 registerSingleton(ITerminalEditorService, TerminalEditorService, InstantiationType.Delayed);
@@ -90,7 +89,7 @@ EditorInputSerializers.registerStatic(new TerminalInputSerializer());
 registerEditorPane({
 	id: TerminalEditorInput.ID,
 	name: terminalStrings.terminal,
-	canOpen: input => (input instanceof TerminalEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => input instanceof TerminalEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Terminal editor requires the window service container');
 		return options.instantiationService.createInstance(TerminalEditor);

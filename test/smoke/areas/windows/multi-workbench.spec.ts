@@ -19,176 +19,82 @@ test.afterAll(async () => {
 	for (const workspace of workspacesToDispose) await disposeTestWorkspace(workspace);
 });
 
-focusTest(
-	'a second instance opens an independent Workbench and reuses an existing Workspace window',
-	{ tag: ['@electron-ui', '@electron-app-server'] },
-	async ({ application, target, testWorkspace, workbench }) => {
-		if (target.kind !== 'electron' || !('windows' in application)) return;
+focusTest('a second instance opens an independent Workbench and reuses an existing Workspace window', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	if (target.kind !== 'electron' || !('windows' in application)) return;
 
-		const secondWorkspace = await createTestWorkspace();
-		workspacesToDispose.push(secondWorkspace);
-		let secondPage: Page | undefined;
-		try {
-			const secondPagePromise = application.waitForEvent('window');
-			await emitSecondInstance(application, secondWorkspace.directory);
-			secondPage = await secondPagePromise;
-			if (target.appServerMode === 'required') {
-				await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
-			}
-			const secondWorkbench = new Workbench(secondPage);
-			await secondWorkbench.waitForReady();
-
-			await expect.poll(() => application.windows().length).toBe(2);
-			expect(await canonicalWorkspacePath(workbench.page)).toBe(await realpath(testWorkspace.directory));
-			expect(await canonicalWorkspacePath(secondPage)).toBe(await realpath(secondWorkspace.directory));
-			const firstSidebar = workbench.page.getByRole('region', { name: 'Primary sidebar', exact: true });
-			const firstSidebarWasVisible = await firstSidebar.isVisible();
-			await installMainChannelTestClient(workbench.page);
-			await installMainChannelTestClient(secondPage);
-			const identity = { scope: StorageScope.APPLICATION, id: 'application' };
-			const key = 'storage.lifecycle.shared';
-			await workbench.page.evaluate(
-				({ identity, key, target }) =>
-					globalThis.ashTestMainProcess.call('storage', 'updateItems', {
-						identity,
-						key,
-						entry: { value: 'first window', target },
-					}),
-				{ identity, key, target: StorageTarget.MACHINE },
-			);
-			expect(
-				await secondPage.evaluate(
-					async ({ identity, key }) =>
-						(
-							await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', {
-								identity,
-							})
-						).entries[key],
-					{ identity, key },
-				),
-			).toEqual({ value: 'first window', target: StorageTarget.MACHINE });
-			await secondPage.evaluate(
-				({ identity, key, target }) =>
-					globalThis.ashTestMainProcess.call('storage', 'updateItems', {
-						identity,
-						key,
-						entry: { value: 'second window', target },
-					}),
-				{ identity, key, target: StorageTarget.MACHINE },
-			);
-			expect(
-				await workbench.page.evaluate(
-					async ({ identity, key }) =>
-						(
-							await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', {
-								identity,
-							})
-						).entries[key],
-					{ identity, key },
-				),
-			).toEqual({ value: 'second window', target: StorageTarget.MACHINE });
-			await secondPage.bringToFront();
-			const sidebar = secondPage.getByRole('region', { name: 'Primary sidebar', exact: true });
-			const sidebarWasVisible = await sidebar.isVisible();
-			await secondWorkbench.quickaccess.runCommand('workbench.action.toggleSideBar');
-			await expect(sidebar).toBeVisible({ visible: !sidebarWasVisible });
-			await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
-			const workspaceId = await secondPage.evaluate(async () => {
-				const bridge = (
-					globalThis as unknown as {
-						ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string }> } };
-					}
-				).ash;
-				return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
-			});
-			const firstWorkspaceId = await workbench.page.evaluate(async () => {
-				const bridge = (
-					globalThis as unknown as {
-						ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string }> } };
-					}
-				).ash;
-				return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
-			});
-			const workspaceIdentity = { scope: StorageScope.WORKSPACE, id: workspaceId };
-			await secondPage.evaluate(
-				({ identity, key, target }) =>
-					globalThis.ashTestMainProcess.call('storage', 'updateItems', {
-						identity,
-						key,
-						entry: { value: 'second workspace', target },
-					}),
-				{ identity: workspaceIdentity, key, target: StorageTarget.MACHINE },
-			);
-			expect(
-				await workbench.page.evaluate(
-					async ({ identity, key }) =>
-						(
-							await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', {
-								identity,
-							})
-						).entries[key],
-					{ identity: { scope: StorageScope.WORKSPACE, id: firstWorkspaceId }, key },
-				),
-			).toBeUndefined();
-
-			await workbench.page.evaluate(() => {
-				document.title = 'multi-workbench:first';
-			});
-			await secondPage.evaluate(() => {
-				document.title = 'multi-workbench:second';
-			});
-			await emitSecondInstance(application, testWorkspace.directory);
-
-			await expect.poll(() => application.windows().length).toBe(2);
-			await expect.poll(() => focusedWindowTitle(application)).toBe('multi-workbench:first');
-
-			const closed = secondPage.waitForEvent('close');
-			const closingWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'multi-workbench:second')!.id);
-			await expect
-				.poll(() => readWindowLogs(application, closingWindowId))
-				.toContainEqual(
-					expect.objectContaining({
-						source: `window-${closingWindowId}`,
-						category: 'lifecycle',
-						message: 'Workbench restored',
-					}),
-				);
-			await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)!.close(), closingWindowId);
-			await closed;
-			secondPage = undefined;
-			await expect.poll(() => application.windows().length).toBe(1);
-			await expect(workbench.element).toBeVisible();
-			const userData = await application.evaluate(({ app }) => app.getPath('userData'));
-			const durableState = JSON.parse(await readFile(join(userData, 'workbench-state.json'), 'utf8')) as {
-				storages: { identity: { id: string; scope: string }; entries: Record<string, { value: string }> }[];
-			};
-			expect(durableState.storages.find(scope => scope.identity.scope === 'workspace' && scope.identity.id === workspaceId)?.entries['workbench.layout.sidebar.visible']?.value).toBe(
-				String(!sidebarWasVisible),
-			);
-			const reopening = application.waitForEvent('window');
-			await emitSecondInstance(application, secondWorkspace.directory);
-			secondPage = await reopening;
-			await new Workbench(secondPage).waitForReady();
-			await expect(secondPage.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible({
-				visible: !sidebarWasVisible,
-			});
-			await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
-			expect(
-				await secondPage.evaluate(
-					async ({ identity, key }) =>
-						(
-							await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', {
-								identity,
-							})
-						).entries[key],
-					{ identity: workspaceIdentity, key },
-				),
-			).toEqual({ value: 'second workspace', target: StorageTarget.MACHINE });
-		} finally {
-			if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
+	const secondWorkspace = await createTestWorkspace();
+	workspacesToDispose.push(secondWorkspace);
+	let secondPage: Page | undefined;
+	try {
+		const secondPagePromise = application.waitForEvent('window');
+		await emitSecondInstance(application, secondWorkspace.directory);
+		secondPage = await secondPagePromise;
+		if (target.appServerMode === 'required') {
+			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
 		}
-	},
-);
+		const secondWorkbench = new Workbench(secondPage);
+		await secondWorkbench.waitForReady();
+
+		await expect.poll(() => application.windows().length).toBe(2);
+		expect(await canonicalWorkspacePath(workbench.page)).toBe(await realpath(testWorkspace.directory));
+		expect(await canonicalWorkspacePath(secondPage)).toBe(await realpath(secondWorkspace.directory));
+		const firstSidebar = workbench.page.getByRole('region', { name: 'Primary sidebar', exact: true });
+		const firstSidebarWasVisible = await firstSidebar.isVisible();
+		await installMainChannelTestClient(workbench.page);
+		await installMainChannelTestClient(secondPage);
+		const identity = { scope: StorageScope.APPLICATION, id: 'application' };
+		const key = 'storage.lifecycle.shared';
+		await workbench.page.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'first window', target } }), { identity, key, target: StorageTarget.MACHINE });
+		expect(await secondPage.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity, key })).toEqual({ value: 'first window', target: StorageTarget.MACHINE });
+		await secondPage.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'second window', target } }), { identity, key, target: StorageTarget.MACHINE });
+		expect(await workbench.page.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity, key })).toEqual({ value: 'second window', target: StorageTarget.MACHINE });
+		await secondPage.bringToFront();
+		const sidebar = secondPage.getByRole('region', { name: 'Primary sidebar', exact: true });
+		const sidebarWasVisible = await sidebar.isVisible();
+		await secondWorkbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+		await expect(sidebar).toBeVisible({ visible: !sidebarWasVisible });
+		await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
+		const workspaceId = await secondPage.evaluate(async () => {
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
+			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
+		});
+		const firstWorkspaceId = await workbench.page.evaluate(async () => {
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
+			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
+		});
+		const workspaceIdentity = { scope: StorageScope.WORKSPACE, id: workspaceId };
+		await secondPage.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'second workspace', target } }), { identity: workspaceIdentity, key, target: StorageTarget.MACHINE });
+		expect(await workbench.page.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity: { scope: StorageScope.WORKSPACE, id: firstWorkspaceId }, key })).toBeUndefined();
+
+		await workbench.page.evaluate(() => { document.title = 'multi-workbench:first'; });
+		await secondPage.evaluate(() => { document.title = 'multi-workbench:second'; });
+		await emitSecondInstance(application, testWorkspace.directory);
+
+		await expect.poll(() => application.windows().length).toBe(2);
+		await expect.poll(() => focusedWindowTitle(application)).toBe('multi-workbench:first');
+
+		const closed = secondPage.waitForEvent('close');
+		const closingWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'multi-workbench:second')!.id);
+		await expect.poll(() => readWindowLogs(application, closingWindowId)).toContainEqual(expect.objectContaining({ source: `window-${closingWindowId}`, category: 'lifecycle', message: 'Workbench restored' }));
+		await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)!.close(), closingWindowId);
+		await closed;
+		secondPage = undefined;
+		await expect.poll(() => application.windows().length).toBe(1);
+		await expect(workbench.element).toBeVisible();
+		const userData = await application.evaluate(({ app }) => app.getPath('userData'));
+		const durableState = JSON.parse(await readFile(join(userData, 'workbench-state.json'), 'utf8')) as { storages: { identity: { id: string; scope: string; }; entries: Record<string, { value: string; }>; }[]; };
+		expect(durableState.storages.find(scope => scope.identity.scope === 'workspace' && scope.identity.id === workspaceId)?.entries['workbench.layout.sidebar.visible']?.value).toBe(String(!sidebarWasVisible));
+		const reopening = application.waitForEvent('window');
+		await emitSecondInstance(application, secondWorkspace.directory);
+		secondPage = await reopening;
+		await new Workbench(secondPage).waitForReady();
+		await expect(secondPage.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible({ visible: !sidebarWasVisible });
+		await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
+		expect(await secondPage.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity: workspaceIdentity, key })).toEqual({ value: 'second workspace', target: StorageTarget.MACHINE });
+	} finally {
+		if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
+	}
+});
 
 focusTest('Open in Agents reuses one window across Workbench workspaces', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
@@ -210,47 +116,27 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		const agentsPage = await agentsPagePromise;
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
 		const initialConnection = await agentsPage.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:remote:connection');
 		});
 		const agentsWindow = await application.browserWindow(agentsPage);
 		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
 		// Renderer restoration and the OS focus transition complete independently.
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
-		await expect
-			.poll(() => readWindowLogs(application, agentsWindowId!))
-			.toContainEqual(
-				expect.objectContaining({
-					source: `window-${agentsWindowId}`,
-					category: 'lifecycle',
-					message: 'Agents restored',
-				}),
-			);
+		await expect.poll(() => readWindowLogs(application, agentsWindowId!)).toContainEqual(expect.objectContaining({ source: `window-${agentsWindowId}`, category: 'lifecycle', message: 'Agents restored' }));
 		await secondPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:native-host:open-agents-window');
 		});
 
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
-		await expect
-			.poll(() =>
-				application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html')).length),
-			)
-			.toBe(1);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html')).length)).toBe(1);
 		await expect.poll(() => application.windows().length).toBe(3);
 		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
 		if (target.appServerMode === 'required') {
 			const reusedConnection = await agentsPage.evaluate(async () => {
-				const ipc = (
-					globalThis as unknown as {
-						ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } };
-					}
-				).ash.ipcRenderer;
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:remote:connection');
 			});
 			expect(reusedConnection.generation).toBe(initialConnection.generation);
@@ -274,15 +160,8 @@ test('dirty editor content survives an immediate Electron window close', { tag: 
 		await secondWorkbench.waitForReady();
 		await secondPage.bringToFront();
 		const windowId = await secondPage.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
-			const windows = (await ipc.invoke('ash:window:operation', { kind: 'list' })) as readonly {
-				id: number;
-				focused: boolean;
-			}[];
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const windows = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { id: number; focused: boolean; }[];
 			const focused = windows.find(window => window.focused);
 			if (!focused) throw new Error('Second Workbench is not focused');
 			return focused.id;
@@ -297,9 +176,7 @@ test('dirty editor content survives an immediate Electron window close', { tag: 
 		await input.press('ControlOrMeta+A');
 		await input.type('preserved by close handshake');
 		const closed = secondPage.waitForEvent('close');
-		await application.evaluate(({ BrowserWindow }, id) => {
-			BrowserWindow.fromId(id)?.close();
-		}, windowId);
+		await application.evaluate(({ BrowserWindow }, id) => { BrowserWindow.fromId(id)?.close(); }, windowId);
 		await closed;
 		secondPage = undefined;
 		const reopened = application.waitForEvent('window');
@@ -320,7 +197,7 @@ async function emitSecondInstance(application: ElectronApplication, workspaceDir
 
 async function canonicalWorkspacePath(page: Page): Promise<string> {
 	const value = await page.evaluate(async () => {
-		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown> } } }).ash?.ipcRenderer;
+		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown>; }; }; }).ash?.ipcRenderer;
 		if (!bridge) throw new Error('Ash renderer IPC bridge is unavailable');
 		return bridge.invoke('ash:workspace:context:read');
 	});
@@ -336,17 +213,9 @@ async function focusedWindowTitle(application: ElectronApplication): Promise<str
 async function readWindowLogs(application: ElectronApplication, windowId: number): Promise<readonly unknown[]> {
 	const root = await application.evaluate(({ app }) => app.getPath('logs'));
 	const session = (await readdir(root)).find(name => /^\d{8}T\d{9}-[\da-f-]{36}$/.test(name));
-	if (!session) {
-		return [];
-	}
+	if (!session) { return []; }
 	const directory = join(root, session);
 	const file = `window-${windowId}.log`;
-	if (!(await readdir(directory)).includes(file)) {
-		return [];
-	}
-	return (await readFile(join(directory, file), 'utf8'))
-		.trim()
-		.split('\n')
-		.filter(Boolean)
-		.map(line => JSON.parse(line));
+	if (!(await readdir(directory)).includes(file)) { return []; }
+	return (await readFile(join(directory, file), 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 }

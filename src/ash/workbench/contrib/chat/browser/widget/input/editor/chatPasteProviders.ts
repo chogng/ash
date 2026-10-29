@@ -21,7 +21,12 @@ import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../.
 import { ILanguageFeaturesService } from '../../../../../../../editor/common/services/languageFeatures.js';
 import { EndOfLinePreference, type ITextModel } from '../../../../../../../editor/common/model.js';
 import { Range, type IRange } from '../../../../../../../editor/common/core/range.js';
-import type { DocumentPasteContext, DocumentPasteEdit, DocumentPasteEditProvider, DocumentPasteEditsSession } from '../../../../../../../editor/common/languages.js';
+import type {
+	DocumentPasteContext,
+	DocumentPasteEdit,
+	DocumentPasteEditProvider,
+	DocumentPasteEditsSession,
+} from '../../../../../../../editor/common/languages.js';
 import { CopyPasteController } from '../../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { getPathForFile } from '../../../../../../../platform/dnd/browser/dnd.js';
 
@@ -30,7 +35,7 @@ const copiedEditorMime = 'application/vnd.code.additional-editor-data';
 
 type PromptSnapshot = NonNullable<IOpenAgentsWindowOptions['draft']>;
 type CopiedReference = PromptSnapshot['contexts'][number] & {
-	readonly reference: { readonly start: number; readonly end: number };
+	readonly reference: { readonly start: number; readonly end: number; };
 };
 const pastePlan = Symbol('chat-reference-paste');
 const maxClipboardLength = 32 * 1024 * 1024;
@@ -47,7 +52,7 @@ interface ReferencePastePlan {
 	readonly resources: DisposableStore;
 }
 
-type ReferencePasteEdit = DocumentPasteEdit & { readonly [pastePlan]: ReferencePastePlan };
+type ReferencePasteEdit = DocumentPasteEdit & { readonly [pastePlan]: ReferencePastePlan; };
 
 /** Registers snapshot transfer for this composer; committed references stay with its original model. */
 export class ChatPasteProvidersFeature extends Disposable {
@@ -61,24 +66,14 @@ export class ChatPasteProvidersFeature extends Disposable {
 		super();
 		const model = input.getModel!();
 		const provider = instantiation.createInstance(CopyAttachmentsProvider, input, currentLifecycle, supportsImages);
-		this._register(
-			features.documentPasteEditProvider.register(
-				{
-					scheme: model.uri.scheme,
-					hasAccessToAllModels: true,
-				},
-				provider,
-			),
-		);
-		this._register(
-			features.documentPasteEditProvider.register(
-				{
-					scheme: model.uri.scheme,
-					hasAccessToAllModels: true,
-				},
-				instantiation.createInstance(PasteTextProvider, input, currentLifecycle),
-			),
-		);
+		this._register(features.documentPasteEditProvider.register({
+			scheme: model.uri.scheme,
+			hasAccessToAllModels: true,
+		}, provider));
+		this._register(features.documentPasteEditProvider.register({
+			scheme: model.uri.scheme,
+			hasAccessToAllModels: true,
+		}, instantiation.createInstance(PasteTextProvider, input, currentLifecycle)));
 	}
 }
 
@@ -93,16 +88,21 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 		private readonly currentLifecycle: () => AbortSignal,
 		private readonly supportsImages: () => boolean,
 		@IChatPasteTargetService private readonly targets: IChatPasteTargetService,
-	) {}
+	) { }
 
-	async prepareDocumentPaste(model: ITextModel, ranges: readonly IRange[], transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined> {
+	async prepareDocumentPaste(
+		model: ITextModel,
+		ranges: readonly IRange[],
+		transfer: IReadonlyVSDataTransfer,
+		token: CancellationToken,
+	): Promise<IReadonlyVSDataTransfer | undefined> {
 		const target = model === this.input.getModel?.() ? this.targets.getTarget(model.uri) : undefined;
 		const textValue = transfer.get(Mimes.text)?.value;
 		if (!target || token.isCancellationRequested || typeof textValue !== 'string') return undefined;
 		const text = textValue.replace(/\r\n|\r/g, '\n');
 		const selected: {
 			readonly attachment: ChatContextAttachment;
-			readonly reference: { readonly start: number; readonly end: number };
+			readonly reference: { readonly start: number; readonly end: number; };
 		}[] = [];
 		let copiedOffset = 0;
 		// Capture identities and source coordinates before an asynchronous read or the cut itself.
@@ -121,27 +121,22 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 				const relativeStart = model.getValueInRange(prefix, EndOfLinePreference.LF).length;
 				selected.push({
 					attachment,
-					reference: {
-						start: copiedOffset + relativeStart,
-						end: copiedOffset + relativeStart + attachment.name.length,
-					},
+					reference: { start: copiedOffset + relativeStart, end: copiedOffset + relativeStart + attachment.name.length },
 				});
 			}
 			copiedOffset += segment.length + 1;
 		}
 		if (selected.length === 0 || selected.length > 1000) return undefined;
 		try {
-			const contexts = await Promise.all(
-				selected.map(async ({ attachment, reference }) => ({
-					id: attachment.id,
-					kind: attachment.kind,
-					name: attachment.name,
-					reference,
-					...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-					...(attachment.terminalSnapshot ? { terminalSnapshot: { ...attachment.terminalSnapshot } } : {}),
-					content: (await attachment.resolve()).content,
-				})),
-			);
+			const contexts = await Promise.all(selected.map(async ({ attachment, reference }) => ({
+				id: attachment.id,
+				kind: attachment.kind,
+				name: attachment.name,
+				reference,
+				...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+				...(attachment.terminalSnapshot ? { terminalSnapshot: { ...attachment.terminalSnapshot } } : {}),
+				content: (await attachment.resolve()).content,
+			})));
 			const raw = JSON.stringify({ version: 1, draft: { mode: 'agent', text, contexts } });
 			if (token.isCancellationRequested || raw.length > maxClipboardLength) return undefined;
 			const result = new VSDataTransfer();
@@ -172,7 +167,10 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 			title: localize('pastedChatAttachments', 'Insert Prompt & Attachments'),
 			mime: CHAT_ATTACHMENT_MIME_TYPE,
 			readSnapshot: async () => {
-				const [raw, text] = await Promise.all([transfer.get(CHAT_ATTACHMENT_MIME_TYPE)?.asString(), transfer.get(Mimes.text)?.asString()]);
+				const [raw, text] = await Promise.all([
+					transfer.get(CHAT_ATTACHMENT_MIME_TYPE)?.asString(),
+					transfer.get(Mimes.text)?.asString(),
+				]);
 				return parseCopiedPrompt(raw, text);
 			},
 		});
@@ -189,9 +187,14 @@ export class CopyTextProvider implements DocumentPasteEditProvider {
 	readonly copyMimeTypes = [copiedEditorMime];
 	readonly pasteMimeTypes = [];
 
-	constructor(@IOutputService private readonly output: IOutputService) {}
+	constructor(@IOutputService private readonly output: IOutputService) { }
 
-	async prepareDocumentPaste(model: ITextModel, ranges: readonly IRange[], transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined> {
+	async prepareDocumentPaste(
+		model: ITextModel,
+		ranges: readonly IRange[],
+		transfer: IReadonlyVSDataTransfer,
+		token: CancellationToken,
+	): Promise<IReadonlyVSDataTransfer | undefined> {
 		if (token.isCancellationRequested || model.getLanguageId() === 'ash-chat-input' || model.uri.scheme === 'inmemory' || ranges.length !== 1) return undefined;
 		const text = transfer.get(Mimes.text)?.value;
 		if (typeof text !== 'string' || !text.trim() || text.length > maxClipboardLength) return undefined;
@@ -200,24 +203,14 @@ export class CopyTextProvider implements DocumentPasteEditProvider {
 		const selectedText = model.getValueInRange(range, EndOfLinePreference.LF);
 		const copiedText = text.replace(/\r\n|\r/g, '\n');
 		if (copiedText !== selectedText) return undefined;
-		const label =
-			model.uri.scheme === 'output'
-				? this.output.getChannel(model.uri.path.slice(1))?.label
-				: model.getLanguageId() === 'debug-repl'
-					? localize('chat.context.debugConsole', 'Debug Console')
-					: basename(model.uri);
+		const label = model.uri.scheme === 'output'
+			? this.output.getChannel(model.uri.path.slice(1))?.label
+			: model.getLanguageId() === 'debug-repl' ? localize('chat.context.debugConsole', 'Debug Console') : basename(model.uri);
 		if (!label) return undefined;
 		const data = new VSDataTransfer();
-		data.append(
-			copiedEditorMime,
-			createStringDataTransferItem(
-				JSON.stringify({
-					uri: model.uri.toJSON(),
-					range,
-					sourceName: label.replace(/\s/gu, ' '),
-				}),
-			),
-		);
+		data.append(copiedEditorMime, createStringDataTransferItem(JSON.stringify({
+			uri: model.uri.toJSON(), range, sourceName: label.replace(/\s/gu, ' '),
+		})));
 		return data;
 	}
 }
@@ -233,7 +226,7 @@ export class PasteTextProvider implements DocumentPasteEditProvider {
 		private readonly input: IChatInputEditor,
 		private readonly currentLifecycle: () => AbortSignal,
 		@IChatPasteTargetService private readonly targets: IChatPasteTargetService,
-	) {}
+	) { }
 
 	async provideDocumentPasteEdits(
 		model: ITextModel,
@@ -255,7 +248,10 @@ export class PasteTextProvider implements DocumentPasteEditProvider {
 			mime: copiedEditorMime,
 			yieldTo: [{ kind: new HierarchicalKind('text.plain') }],
 			readSnapshot: async () => {
-				const [raw, text] = await Promise.all([transfer.get(copiedEditorMime)?.asString(), transfer.get(Mimes.text)?.asString()]);
+				const [raw, text] = await Promise.all([
+					transfer.get(copiedEditorMime)?.asString(),
+					transfer.get(Mimes.text)?.asString(),
+				]);
 				return parseCopiedCode(raw, text);
 			},
 		});
@@ -289,13 +285,8 @@ async function createReferencePasteSession(request: ReferencePasteRequest): Prom
 	resources.add(addDisposableListener(lifecycle, 'abort', () => CopyPasteController.get(input.codeEditor!)?.clearWidgets()));
 	try {
 		const snapshot = await request.readSnapshot();
-		if (
-			token.isCancellationRequested ||
-			lifecycle.aborted ||
-			targets.getTarget(model.uri) !== target ||
-			!snapshot ||
-			(snapshot.contexts.some(context => context.kind === 'image') && !supportsImages())
-		) {
+		if (token.isCancellationRequested || lifecycle.aborted || targets.getTarget(model.uri) !== target
+			|| !snapshot || snapshot.contexts.some(context => context.kind === 'image') && !supportsImages()) {
 			resources.dispose();
 			return undefined;
 		}
@@ -324,30 +315,28 @@ async function createReferencePasteSession(request: ReferencePasteRequest): Prom
 	}
 }
 
-async function resolveReferencePasteEdit(edit: DocumentPasteEdit, token: CancellationToken, targets: IChatPasteTargetService, supportsImages: () => boolean): Promise<DocumentPasteEdit> {
+async function resolveReferencePasteEdit(
+	edit: DocumentPasteEdit,
+	token: CancellationToken,
+	targets: IChatPasteTargetService,
+	supportsImages: () => boolean,
+): Promise<DocumentPasteEdit> {
 	const plan = (edit as Partial<ReferencePasteEdit>)[pastePlan];
 	if (!plan) return edit;
 	const { model, target, resources } = plan;
-	if (
-		token.isCancellationRequested ||
-		plan.lifecycle.aborted ||
-		resources.isDisposed ||
-		targets.getTarget(model.uri) !== target ||
-		model.getValue() !== plan.beforeText ||
-		model.getAlternativeVersionId() !== plan.beforeVersion
-	) {
+	if (token.isCancellationRequested || plan.lifecycle.aborted || resources.isDisposed
+		|| targets.getTarget(model.uri) !== target
+		|| model.getValue() !== plan.beforeText || model.getAlternativeVersionId() !== plan.beforeVersion) {
 		throw new CancellationError();
 	}
 	if (plan.references.some(reference => reference.kind === 'image') && !supportsImages()) {
 		throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 	}
 	const text = plan.text.replace(/\n/g, model.getEOL());
-	const operations = plan.ranges
-		.map(range => ({
-			start: model.getOffsetAt(Range.getStartPosition(range)),
-			end: model.getOffsetAt(Range.getEndPosition(range)),
-		}))
-		.sort((a, b) => a.start - b.start);
+	const operations = plan.ranges.map(range => ({
+		start: model.getOffsetAt(Range.getStartPosition(range)),
+		end: model.getOffsetAt(Range.getEndPosition(range)),
+	})).sort((a, b) => a.start - b.start);
 	let expected = plan.beforeText;
 	for (const operation of [...operations].reverse()) {
 		expected = expected.slice(0, operation.start) + text + expected.slice(operation.end);
@@ -357,7 +346,8 @@ async function resolveReferencePasteEdit(edit: DocumentPasteEdit, token: Cancell
 	// reference model records these entries on the inserted text's alternative version.
 	const binding = model.onDidChangeContent(() => {
 		binding.dispose();
-		if (resources.isDisposed || plan.lifecycle.aborted || model.getVersionId() !== version + 1 || model.getValue() !== expected || targets.getTarget(model.uri) !== target) return;
+		if (resources.isDisposed || plan.lifecycle.aborted || model.getVersionId() !== version + 1
+			|| model.getValue() !== expected || targets.getTarget(model.uri) !== target) return;
 		let precedingDelta = 0;
 		for (const operation of operations) {
 			const insertionStart = operation.start + precedingDelta;
@@ -371,11 +361,7 @@ async function resolveReferencePasteEdit(edit: DocumentPasteEdit, token: Cancell
 					...(reference.resource ? { resource: URI.parse(reference.resource) } : {}),
 					...(reference.terminalSnapshot ? { terminalSnapshot: reference.terminalSnapshot } : {}),
 					reference: { start, end: start + reference.name.length },
-					resolve: async () => ({
-						name: reference.name,
-						content: reference.content,
-						...(kind ? { kind } : {}),
-					}),
+					resolve: async () => ({ name: reference.name, content: reference.content, ...(kind ? { kind } : {}) }),
 				});
 			}
 			precedingDelta += text.length - (operation.end - operation.start);
@@ -401,24 +387,20 @@ function parseCopiedCode(raw: string | undefined, clipboardText: string | undefi
 		const label = data.sourceName === undefined ? basename(source) : data.sourceName;
 		if (typeof label !== 'string' || !label.trim() || label.length > 1024 || /[\r\n\0]/u.test(label)) return undefined;
 		const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
-		const name =
-			selection.startLineNumber === lastLine
-				? localize('chat.context.selectionLine', '{0} ({1})', label, selection.startLineNumber)
-				: localize('chat.context.selectionLines', '{0} ({1}-{2})', label, selection.startLineNumber, lastLine);
+		const name = selection.startLineNumber === lastLine
+			? localize('chat.context.selectionLine', '{0} ({1})', label, selection.startLineNumber)
+			: localize('chat.context.selectionLines', '{0} ({1}-{2})', label, selection.startLineNumber, lastLine);
 		const resource = withSelection(source, selection).toString();
 		return {
-			mode: 'agent',
-			text: name,
-			contexts: [
-				{
-					id: createUuid(),
-					kind: 'codeSelection',
-					name,
-					resource,
-					reference: { start: 0, end: name.length },
-					content: `Source: ${resource}\n\n${clipboardText}`,
-				},
-			],
+			mode: 'agent', text: name,
+			contexts: [{
+				id: createUuid(),
+				kind: 'codeSelection',
+				name,
+				resource,
+				reference: { start: 0, end: name.length },
+				content: `Source: ${resource}\n\n${clipboardText}`,
+			}],
 		};
 	} catch {
 		return undefined;
@@ -456,41 +438,30 @@ export async function createChatFileAttachments(
 	const batch = new AbortController();
 	signal = AbortSignal.any([signal, batch.signal]);
 	try {
-		const prepared = await Promise.all(
-			files.map(async file => {
+		const prepared = await Promise.all(files.map(async file => {
+			if (signal.aborted) throw new CancellationError();
+			const path = getPathForFile(file);
+			const source = path ? { resource: URI.file(path) } : {};
+			// Native file transfers can omit MIME or supply only a generic binary type.
+			const mimeType = !file.type || file.type === Mimes.binary ? getMediaMime(file.name) : file.type;
+			const image = /^image\/(png|jpeg|gif|webp)$/u.test(mimeType ?? '');
+			if (image && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+			// Bound image allocation before reading; image processing also bounds the encoded result.
+			if (image && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
+			const bytes = await readFile(file, signal);
+			if (!bytes.length) throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
+			if (image) {
+				const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType, ...source }], signal);
 				if (signal.aborted) throw new CancellationError();
-				const path = getPathForFile(file);
-				const source = path ? { resource: URI.file(path) } : {};
-				// Native file transfers can omit MIME or supply only a generic binary type.
-				const mimeType = !file.type || file.type === Mimes.binary ? getMediaMime(file.name) : file.type;
-				const image = /^image\/(png|jpeg|gif|webp)$/u.test(mimeType ?? '');
-				if (image && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-				// Bound image allocation before reading; image processing also bounds the encoded result.
-				if (image && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
-				const bytes = await readFile(file, signal);
-				if (!bytes.length) throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
-				if (image) {
-					const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType, ...source }], signal);
-					if (signal.aborted) throw new CancellationError();
-					if (!supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-					return attachment!;
-				}
-				let content: string;
-				try {
-					content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-				} catch {
-					throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name));
-				}
-				if (content.includes('\0') || !content.trim()) throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
-				return {
-					id: createUuid(),
-					kind: 'file',
-					name: file.name,
-					...source,
-					resolve: async () => ({ name: file.name, content }),
-				};
-			}),
-		);
+				if (!supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+				return attachment!;
+			}
+			let content: string;
+			try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+			catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
+			if (content.includes('\0') || !content.trim()) throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
+			return { id: createUuid(), kind: 'file', name: file.name, ...source, resolve: async () => ({ name: file.name, content }) };
+		}));
 		// A text read can outlive image decoding; apply the current policy to the complete batch.
 		if (signal.aborted) throw new CancellationError();
 		if (prepared.some(attachment => attachment.kind === 'image') && !supportsImages()) {
@@ -505,25 +476,17 @@ export async function createChatFileAttachments(
 
 function readFile(file: File, signal: AbortSignal): Promise<Uint8Array> {
 	return new Promise((resolve, reject) => {
-		if (signal.aborted) {
-			reject(new CancellationError());
-			return;
-		}
+		if (signal.aborted) { reject(new CancellationError()); return; }
 		const reader = new FileReader();
 		const resources = new DisposableStore();
 		const finish = (bytes?: Uint8Array, error?: unknown): void => {
 			resources.dispose();
-			if (bytes) resolve(bytes);
-			else reject(error);
+			if (bytes) resolve(bytes); else reject(error);
 		};
 		resources.add(addDisposableListener(reader, 'load', () => finish(new Uint8Array(reader.result as ArrayBuffer))));
 		resources.add(addDisposableListener(reader, 'error', () => finish(undefined, reader.error)));
 		resources.add(addDisposableListener(reader, 'abort', () => finish(undefined, new CancellationError())));
 		resources.add(addDisposableListener(signal, 'abort', () => reader.abort()));
-		try {
-			reader.readAsArrayBuffer(file);
-		} catch (error) {
-			finish(undefined, error);
-		}
+		try { reader.readAsArrayBuffer(file); } catch (error) { finish(undefined, error); }
 	});
 }

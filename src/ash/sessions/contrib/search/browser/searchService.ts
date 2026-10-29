@@ -32,9 +32,7 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 		@IAutomationService private readonly automations: IAutomationService,
 		@IAutomationDialogService private readonly automationDialogs: IAutomationDialogService,
 		@ICommandService private readonly commands: ICommandService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	/** Contributions retain their own catalogues; Search reads them only while its model is alive. */
 	registerSource(results: IObservable<readonly SearchResult[]>): IDisposable {
@@ -43,50 +41,30 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 	}
 
 	async show(): Promise<void> {
-		if (this.active.value) {
-			this.focus();
-			return;
-		}
+		if (this.active.value) { this.focus(); return; }
 		const dialog = this.instantiation.createInstance(SessionsSearchDialog, this.layout.activeContainer, this.sourceResults);
 		this.active.value = dialog;
 		let target;
-		try {
-			target = await dialog.show();
-		} finally {
-			this.active.clear();
-		}
+		try { target = await dialog.show(); }
+		finally { this.active.clear(); }
 		// Close the modal and release its model before handing focus to a domain page.
 		switch (target?.kind) {
-			case 'contributed':
-				await target.open();
-				break;
-			case 'draft':
-				this.sessions.openUntitledSession(target.id);
-				break;
-			case 'session':
-				this.sessions.openSession(target.sessionId, target.threadId);
-				break;
+			case 'contributed': await target.open(); break;
+			case 'draft': this.sessions.openUntitledSession(target.id); break;
+			case 'session': this.sessions.openSession(target.sessionId, target.threadId); break;
 			case 'project':
 				await this.projects.openProject(target.id);
 				await this.commands.executeCommand('sessions.open.projects');
 				break;
 			case 'automation': {
 				const plan = this.automations.getAutomation(target.id);
-				if (plan) {
-					await this.automationDialogs.showAutomationDialog({ existing: plan });
-				}
+				if (plan) { await this.automationDialogs.showAutomationDialog({ existing: plan }); }
 				break;
 			}
-			case 'newSession':
-				await this.commands.executeCommand('sessions.newSession');
-				break;
-			case 'projects':
-				await this.commands.executeCommand('sessions.open.projects');
-				break;
+			case 'newSession': await this.commands.executeCommand('sessions.newSession'); break;
+			case 'projects': await this.commands.executeCommand('sessions.open.projects'); break;
 		}
 	}
 
-	focus(): void {
-		this.active.value?.focus();
-	}
+	focus(): void { this.active.value?.focus(); }
 }

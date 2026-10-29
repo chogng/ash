@@ -29,6 +29,7 @@ registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', Workbe
 // Cleanup uses CodeEditorService, whose EditorParts dependency is registered after BlockStartup.
 registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
+
 registerEditorPane({
 	id: CODE_EDITOR_ID,
 	name: localize('workbench.textEditor', 'Text Editor'),
@@ -62,9 +63,7 @@ registerEditorPane({
 				highlightActiveBracketPair: configuration?.getValue(CodeEditorConfiguration.highlightActiveBracketPairGuide),
 				highlightActiveIndentation: configuration?.getValue(CodeEditorConfiguration.highlightActiveIndentationGuide),
 			},
-			bracketPairColorization: {
-				enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false,
-			},
+			bracketPairColorization: { enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false },
 			matchBrackets: configuration?.getValue(CodeEditorConfiguration.matchBrackets),
 			stickyScroll: { enabled: configuration?.getValue(CodeEditorConfiguration.stickyScroll) !== false },
 			indentation: {
@@ -75,9 +74,7 @@ registerEditorPane({
 			suggestions: configuration?.getValue(CodeEditorConfiguration.suggestions),
 			inlineCompletions: configuration?.getValue(CodeEditorConfiguration.inlineCompletions),
 			parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
-			inlayHints: {
-				enabled: configuration?.getValue(CodeEditorConfiguration.inlayHints) === false ? 'off' : 'on',
-			},
+			inlayHints: { enabled: configuration?.getValue(CodeEditorConfiguration.inlayHints) === false ? 'off' : 'on' },
 			codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
 			colorDecorators: configuration?.getValue(CodeEditorConfiguration.colorDecorators),
 			colorDecoratorsActivatedOn: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsActivatedOn),
@@ -85,11 +82,7 @@ registerEditorPane({
 			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
 			onSave: options.onSave,
-			onSaveError: saveErrorHandler
-				? async (error, resource) => {
-						await saveErrorHandler.onSaveError(error, resource);
-					}
-				: undefined,
+			onSaveError: saveErrorHandler ? async (error, resource) => { await saveErrorHandler.onSaveError(error, resource); } : undefined,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 		} satisfies EditorPaneOptions);

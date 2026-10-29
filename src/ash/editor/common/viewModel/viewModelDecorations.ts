@@ -9,6 +9,7 @@ import { ICoordinatesConverter } from '../coordinatesConverter.js';
 import { EditorOption, filterFontDecorations, filterValidationDecorations } from '../config/editorOptions.js';
 
 export class ViewModelDecorations extends Disposable {
+
 	private readonly editorId: number;
 	private readonly configuration: IEditorConfiguration;
 	private readonly _linesCollection: IViewModelLines;
@@ -25,14 +26,7 @@ export class ViewModelDecorations extends Disposable {
 		this._linesCollection = linesCollection;
 		const context: IInlineModelDecorationsComputerContext = {
 			getModelDecorations: (viewRange: Range, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean) => {
-				const decorations = this._linesCollection.getDecorationsInRange(
-					viewRange,
-					this.editorId,
-					filterValidationDecorations(this.configuration.options),
-					filterFontDecorations(this.configuration.options),
-					onlyMinimapDecorations,
-					onlyMarginDecorations,
-				);
+				const decorations = this._linesCollection.getDecorationsInRange(viewRange, this.editorId, filterValidationDecorations(this.configuration.options), filterFontDecorations(this.configuration.options), onlyMinimapDecorations, onlyMarginDecorations);
 				return this.configuration.options.get(EditorOption.bracketPairColorization).enabled
 					? decorations
 					: decorations.filter(decoration => decoration.options.description !== 'BracketPairColorization');
@@ -42,18 +36,14 @@ export class ViewModelDecorations extends Disposable {
 		this._cachedModelDecorationsResolver = null;
 		this._cachedModelDecorationsResolverViewRange = null;
 		this._register(toDisposable(() => this.reset()));
-		this._register(
-			configuration.onDidChangeFast(event => {
-				if (
-					event.hasChanged(EditorOption.bracketPairColorization) ||
-					event.hasChanged(EditorOption.readOnly) ||
-					event.hasChanged(EditorOption.renderValidationDecorations) ||
-					event.hasChanged(EditorOption.effectiveAllowVariableFonts)
-				) {
-					this.reset();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeFast(event => {
+			if (event.hasChanged(EditorOption.bracketPairColorization)
+				|| event.hasChanged(EditorOption.readOnly)
+				|| event.hasChanged(EditorOption.renderValidationDecorations)
+				|| event.hasChanged(EditorOption.effectiveAllowVariableFonts)) {
+				this.reset();
+			}
+		}));
 	}
 
 	private _clearCachedModelDecorationsResolver(): void {
@@ -82,8 +72,8 @@ export class ViewModelDecorations extends Disposable {
 	}
 
 	public getDecorationsViewportData(viewRange: Range): IViewDecorationsCollection {
-		let cacheIsValid = this._cachedModelDecorationsResolver !== null;
-		cacheIsValid = cacheIsValid && viewRange.equalsRange(this._cachedModelDecorationsResolverViewRange);
+		let cacheIsValid = (this._cachedModelDecorationsResolver !== null);
+		cacheIsValid = cacheIsValid && (viewRange.equalsRange(this._cachedModelDecorationsResolverViewRange));
 		if (!cacheIsValid) {
 			this._cachedModelDecorationsResolver = this._inlineDecorationsComputer.getDecorations(viewRange, false, false);
 			this._cachedModelDecorationsResolverViewRange = viewRange;

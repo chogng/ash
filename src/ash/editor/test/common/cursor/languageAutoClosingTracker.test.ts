@@ -21,11 +21,11 @@ test('Auto-closing trust follows external edits and rejects a changed closer', (
 	using selections = createTestCursorsController(model, [caret(1)], {}, configurations);
 	typeText(selections, '(');
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'pre' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'pre' }]);
 	assert.deepEqual(selections.getSelections()[0]!, caret(5));
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 5 + 1), ')'), true);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (5) + 1), ')'), true);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 5 + 1), new Position(0 + 1, 6 + 1)), text: ']' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (6) + 1)), text: ']' }]);
 	assert.equal(canOvertype(model, selections, selections.getSelections()[0]!.getPosition(), ')'), false);
 });
 
@@ -35,11 +35,11 @@ test('Leaving an auto-closed pair invalidates its trust permanently', () => {
 	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 	typeText(selections, '(');
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 1 + 1), ')'), true);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ')'), true);
 
 	selections.setSelections([caret(0)]);
 	selections.setSelections([caret(1)]);
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 1 + 1), ')'), false);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ')'), false);
 });
 
 test('User-authored pairs cannot be overtyped or pair-deleted', () => {
@@ -63,12 +63,12 @@ test('Multi-selection auto-closing entries retain independent ownership', () => 
 	using selections = createTestCursorsController(model, primaryFirst([caret(1), caret(3)], 0), {}, configurations);
 	typeText(selections, '(');
 	assert.equal(model.getText(), 'a() b()');
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 2 + 1), ')'), true);
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 6 + 1), ')'), true);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (2) + 1), ')'), true);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (6) + 1), ')'), true);
 
 	selections.setSelections([caret(2)]);
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 2 + 1), ')'), true);
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 6 + 1), ')'), false);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (2) + 1), ')'), true);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (6) + 1), ')'), false);
 });
 
 test('Undo removes provenance and redo does not invent it again', () => {
@@ -82,7 +82,7 @@ test('Undo removes provenance and redo does not invent it again', () => {
 	assert.equal(model.getText(), '');
 	selections.context.model.redo();
 	assert.equal(model.getText(), '()');
-	assert.equal(canOvertype(model, selections, new Position(0 + 1, 1 + 1), ')'), false);
+	assert.equal(canOvertype(model, selections, new Position((0) + 1, (1) + 1), ')'), false);
 	executeBackspace(model, selections, configurations);
 	assert.equal(model.getText(), ')');
 });
@@ -119,7 +119,7 @@ function canOvertype(model: TextModel, selections: CursorsController, position: 
 }
 
 function caret(columnIndex: number): Selection {
-	return Selection.fromPositions(new Position(0 + 1, columnIndex + 1));
+	return Selection.fromPositions(new Position((0) + 1, (columnIndex) + 1));
 }
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

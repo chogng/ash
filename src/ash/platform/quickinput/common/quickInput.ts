@@ -3,7 +3,9 @@ import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import type { IQuickAccessController } from './quickAccess.js';
-import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import {
+	createServiceIdentifier,
+} from '../../instantiation/common/instantiation.js';
 
 /** Presentation shared by searchable Quick Pick providers. */
 export interface IQuickPickItem {
@@ -43,7 +45,7 @@ export interface IQuickInputSelection {
 
 /** Optional search navigation; selection and search state remain with the caller. */
 export interface IQuickInputNavigation {
-	readonly items: readonly { readonly id: string; readonly label: string }[];
+	readonly items: readonly { readonly id: string; readonly label: string; }[];
 	readonly selectedId: string | undefined;
 	readonly onSelect: (id: string) => void;
 }
@@ -77,7 +79,8 @@ export interface IQuickPickDidAcceptEvent {
 }
 
 /** A short-lived searchable selection UI hosted by the current window. */
-export interface IQuickPick<TItem extends IQuickPickItem> extends IQuickInput {
+export interface IQuickPick<TItem extends IQuickPickItem>
+	extends IQuickInput {
 	readonly type: QuickInputType.QuickPick;
 	navigation?: IQuickInputNavigation;
 	readonly onDidAccept: Event<IQuickPickDidAcceptEvent>;
@@ -85,7 +88,7 @@ export interface IQuickPick<TItem extends IQuickPickItem> extends IQuickInput {
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
-	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton }>;
+	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>;
 
 	items: readonly (TItem | IQuickPickSeparator)[];
 	/** Disable search sorting when the provider owns item order and grouping. */
@@ -129,7 +132,7 @@ export interface IQuickInputService {
 	focus(): void;
 	toggle(): void;
 	/** Presets or host-relative fractions (top edge and horizontal center). */
-	setAlignment(alignment: 'top' | 'center' | { top: number; left: number }): void;
+	setAlignment(alignment: 'top' | 'center' | { top: number; left: number; }): void;
 	navigate(next: boolean): void;
 	accept(keyMods?: IKeyMods): Promise<void>;
 	cancel(): Promise<void>;
@@ -137,4 +140,5 @@ export interface IQuickInputService {
 	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined>;
 }
 
-export const IQuickInputService = createServiceIdentifier<IQuickInputService>('quickInputService');
+export const IQuickInputService =
+	createServiceIdentifier<IQuickInputService>('quickInputService');

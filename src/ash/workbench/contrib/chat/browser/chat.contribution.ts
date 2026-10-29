@@ -35,17 +35,13 @@ registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockR
 
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
-registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor =>
-	accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution),
-);
+registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
 registerChatOpenAgentDebugPanelAction();
 registerAction2(ExportAgentHostDebugLogsAction);
 registerChatCopyActions();
 registerWorkbenchContribution('workbench.contrib.chatSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSessionLinkOpener));
-registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, accessor =>
-	registerChatContextActions(accessor.get(IImageEditorService), accessor.get(ICommandService)),
-);
+registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, accessor => registerChatContextActions(accessor.get(IImageEditorService), accessor.get(ICommandService)));
 registerChatCodeBlockActions();
 registerSkillActions();
 registerHookActions();
@@ -54,8 +50,5 @@ registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
-	return ChatInputEditors.register({
-		id: 'stanza',
-		create: options => instantiationService.createInstance(ChatInputEditor, options),
-	});
+	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });
 });

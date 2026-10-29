@@ -9,7 +9,7 @@ import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeSticki
 
 test('TextDecorationCollection keeps opaque metadata beside standard model options', () => {
 	using model = new TextModel('abcd\nefgh\nij');
-	using collection = new TextDecorationCollection<{ readonly kind: 'match' | 'error' }>(model);
+	using collection = new TextDecorationCollection<{ readonly kind: 'match' | 'error'; }>(model);
 	const match = collection.add({
 		range: new Range(1, 2, 2, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -29,22 +29,10 @@ test('TextDecorationCollection keeps opaque metadata beside standard model optio
 		metadata: { kind: 'error' },
 	});
 
-	assert.deepEqual(
-		collection.decorations.map(decoration => [decoration.id, decoration.metadata.kind]),
-		[
-			[match, 'match'],
-			[error, 'error'],
-		],
-	);
-	assert.deepEqual(
-		model.getAllDecorations().map(decoration => decoration.options.className),
-		['findMatch', 'squiggly-error'],
-	);
+	assert.deepEqual(collection.decorations.map(decoration => [decoration.id, decoration.metadata.kind]), [[match, 'match'], [error, 'error']]);
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.className), ['findMatch', 'squiggly-error']);
 	collection.delete(error);
-	assert.deepEqual(
-		model.getAllDecorations().map(decoration => decoration.options.className),
-		['findMatch'],
-	);
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.className), ['findMatch']);
 });
 
 test('TextDecorationCollection updates empty-range presentation through model options', () => {

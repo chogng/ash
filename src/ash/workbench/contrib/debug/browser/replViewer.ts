@@ -24,20 +24,20 @@ interface ReplTreeElement {
 
 /** Reads immutable log snapshots and inspection results; the tree owns loaded children. */
 export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeElement> {
-	private readonly identities = new Map<string, { key: string; element: ReplTreeElement }>();
-	constructor(
-		private readonly entries: () => readonly DebugConsoleEntry[],
+	private readonly identities = new Map<string, { key: string; element: ReplTreeElement; }>();
+	constructor(private readonly entries: () => readonly DebugConsoleEntry[],
 		private readonly visible: (entry: DebugConsoleEntry) => boolean,
 		@IDebugService private readonly debugService: IDebugService,
-	) {}
+	) { }
 
 	hasChildren(element: IReplModel | ReplTreeElement): boolean {
 		if (!('entry' in element)) return true;
-		return (element.kind === 'entry' && (element.entry.kind === 'group' || element.entry.data !== null)) || (element.reference > 0 && element.depth < 16);
+		return element.kind === 'entry' && (element.entry.kind === 'group' || element.entry.data !== null)
+			|| element.reference > 0 && element.depth < 16;
 	}
 
 	async getChildren(element: IReplModel | ReplTreeElement): Promise<ReplTreeElement[]> {
-		if (!('entry' in element) || (element.kind === 'entry' && element.entry.kind === 'group')) {
+		if (!('entry' in element) || element.kind === 'entry' && element.entry.kind === 'group') {
 			const entries = this.entries();
 			if (!('entry' in element)) {
 				const retained = new Set(entries.map(entry => `${entry.sessionId}:${entry.id}`));
@@ -48,8 +48,7 @@ export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeE
 			for (const entry of entries.filter(entry => entry.parentId === parentId)) {
 				const previous = lines.at(-1)?.at(-1);
 				const plain = (value: DebugConsoleEntry) => value.kind === 'output' && !value.source && !value.variablesReference && value.data === null;
-				if (previous && plain(previous) && plain(entry) && previous.sessionId === entry.sessionId && previous.category === entry.category && !previous.output.endsWith('\n'))
-					lines.at(-1)!.push(entry);
+				if (previous && plain(previous) && plain(entry) && previous.sessionId === entry.sessionId && previous.category === entry.category && !previous.output.endsWith('\n')) lines.at(-1)!.push(entry);
 				else lines.push([entry]);
 			}
 			return lines.map(entries => {
@@ -59,33 +58,15 @@ export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeE
 				const key = JSON.stringify([entries, visible]);
 				const existing = this.identities.get(id);
 				if (existing?.key === key) return existing.element;
-				const text = entries
-					.filter((_, index) => visible[index])
-					.map(entry => entry.output || (entry.kind === 'group' || entry.variablesReference || entry.data !== null ? localize('debug.repl.object', 'Object') : ''))
-					.join('');
-				const element: ReplTreeElement = {
-					id,
-					entry,
-					entries,
-					visible,
-					text,
-					kind: 'entry',
-					reference: entry.variablesReference ?? 0,
-					depth: 0,
-				};
+				const text = entries.filter((_, index) => visible[index]).map(entry => entry.output || (entry.kind === 'group' || entry.variablesReference || entry.data !== null ? localize('debug.repl.object', 'Object') : '')).join('');
+				const element: ReplTreeElement = { id, entry, entries, visible, text, kind: 'entry', reference: entry.variablesReference ?? 0, depth: 0 };
 				this.identities.set(id, { key, element });
 				return element;
 			});
 		}
 		const children: ReplTreeElement[] = [];
 		if (element.kind === 'entry' && element.entry.data !== null) {
-			children.push({
-				...element,
-				id: `${element.id}/data`,
-				kind: 'data',
-				text: JSON.stringify(element.entry.data, null, 2),
-				reference: 0,
-			});
+			children.push({ ...element, id: `${element.id}/data`, kind: 'data', text: JSON.stringify(element.entry.data, null, 2), reference: 0 });
 		}
 		if (!element.reference || element.depth >= 16) return children;
 
@@ -98,42 +79,24 @@ export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeE
 				if (!children.length) return [];
 				throw new Error(localize('debug.repl.sessionEnded', 'The debug session has ended.'));
 			}
-			return [
-				...children,
-				...values.map((value, index) => ({
-					id: `${element.id}/${index}:${encodeURIComponent(value.name)}`,
-					entry: element.entry,
-					entries: element.entries,
-					visible: element.visible,
-					kind: 'variable' as const,
-					text: `${value.name}: ${value.value}`,
-					reference: value.variablesReference,
-					depth: element.depth + 1,
-				})),
-			];
+			return [...children, ...values.map((value, index) => ({
+				id: `${element.id}/${index}:${encodeURIComponent(value.name)}`, entry: element.entry, entries: element.entries, visible: element.visible,
+				kind: 'variable' as const, text: `${value.name}: ${value.value}`,
+				reference: value.variablesReference, depth: element.depth + 1,
+			}))];
 		} catch (error) {
 			if (!children.length) throw error;
 			// Retained JSON is independent of the live inspection reference. Keep it
 			// readable and expose the failed dynamic read as a separate, terminal row.
-			return [
-				...children,
-				{
-					...element,
-					id: `${element.id}/error`,
-					kind: 'data',
-					text: error instanceof Error ? error.message : String(error),
-					reference: 0,
-				},
-			];
+			return [...children, { ...element, id: `${element.id}/error`, kind: 'data', text: error instanceof Error ? error.message : String(error), reference: 0 }];
 		}
+
 	}
 }
 
 /** Accessibility text for Rust-owned output and lazily inspected tree children. */
 export class ReplAccessibilityProvider {
-	getWidgetAriaLabel(): string {
-		return localize('debug.repl.output', 'Debug Console output');
-	}
+	getWidgetAriaLabel(): string { return localize('debug.repl.output', 'Debug Console output'); }
 	getAriaLabel(element: ReplTreeElement): string {
 		return removeAnsiEscapeCodes(element.text) + (element.kind === 'entry' && element.entry.source ? sourceLabel(element.entry) : '');
 	}
@@ -143,10 +106,9 @@ export class ReplAccessibilityProvider {
 export class ReplOutputElementRenderer extends Disposable implements IListRenderer<ReplTreeElement, ReturnType<ReplOutputElementRenderer['renderTemplate']>> {
 	readonly templateId = 'replOutput';
 	private readonly accessibility = new ReplAccessibilityProvider();
-	private readonly templates = new Map<HTMLElement, { element: HTMLElement; disposables: DisposableStore }>();
+	private readonly templates = new Map<HTMLElement, { element: HTMLElement; disposables: DisposableStore; }>();
 	private readonly links: LinkDetector;
-	constructor(
-		private readonly source: (entry: DebugConsoleEntry) => Promise<void>,
+	constructor(private readonly source: (entry: DebugConsoleEntry) => Promise<void>,
 		private readonly folder: (entry: DebugConsoleEntry) => IWorkspaceFolder | undefined,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -175,12 +137,7 @@ export class ReplOutputElementRenderer extends Disposable implements IListRender
 			chunk.dataset.entryId = String(node.entry.id);
 			chunk.dataset.category = node.entry.category;
 			// Linkify the displayed line once, including URLs split across DAP output chunks.
-			chunk.append(
-				handleANSIOutput(node.text, this.links, this.folder(node.entry), undefined, {
-					type: DebugLinkHoverBehavior.Rich,
-					store: template.disposables,
-				}),
-			);
+			chunk.append(handleANSIOutput(node.text, this.links, this.folder(node.entry), undefined, { type: DebugLinkHoverBehavior.Rich, store: template.disposables }));
 			row.append(chunk);
 		} else row.append(this.links.linkify(node.text, { type: DebugLinkHoverBehavior.Rich, store: template.disposables }, true, this.folder(node.entry)));
 		if (node.kind !== 'entry' || !node.entry.source) return;
@@ -188,18 +145,14 @@ export class ReplOutputElementRenderer extends Disposable implements IListRender
 		link.type = 'button';
 		link.className = 'ash-repl-source';
 		link.textContent = sourceLabel(node.entry);
-		template.disposables.add(
-			addDisposableListener(link, 'click', event => {
-				event.stopPropagation();
-				void this.source(node.entry);
-			}),
-		);
-		template.disposables.add(
-			addDisposableListener(link, 'keydown', event => {
-				// Let the button's default activation run without the tree consuming Enter or Space.
-				if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-			}),
-		);
+		template.disposables.add(addDisposableListener(link, 'click', event => {
+			event.stopPropagation();
+			void this.source(node.entry);
+		}));
+		template.disposables.add(addDisposableListener(link, 'keydown', event => {
+			// Let the button's default activation run without the tree consuming Enter or Space.
+			if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+		}));
 		row.append(link);
 	}
 
@@ -216,6 +169,6 @@ export class ReplOutputElementRenderer extends Disposable implements IListRender
 }
 
 function sourceLabel(entry: DebugConsoleEntry): string {
-	const source = entry.source as { readonly name?: string; readonly path?: string };
+	const source = entry.source as { readonly name?: string; readonly path?: string; };
 	return localize('debug.repl.sourceLabel', '{0}:{1}', source.name ?? source.path ?? localize('debug.repl.source', 'Source'), entry.line ?? 1);
 }

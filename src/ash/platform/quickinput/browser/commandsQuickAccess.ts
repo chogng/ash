@@ -15,18 +15,14 @@ export class CommandsHistory extends Disposable {
 	) {
 		super();
 		this.entries = this.readEntries();
-		this._register(
-			storageService.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key === CommandsHistory.storageKey) {
-					this.entries = this.readEntries();
-				}
-			}),
-		);
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('workbench.commandPalette.history')) this.saveEntries();
-			}),
-		);
+		this._register(storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === CommandsHistory.storageKey) {
+				this.entries = this.readEntries();
+			}
+		}));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('workbench.commandPalette.history')) this.saveEntries();
+		}));
 	}
 
 	public peek(commandId: string): number | undefined {

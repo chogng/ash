@@ -108,56 +108,42 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.contentElement.append(this.scrollContent);
 		const sorter = instantiationService.createInstance(FileSorter);
 		const dataSource = this._register(instantiationService.createInstance(ExplorerDataSource, sorter));
-		this.tree = this._register(
-			new WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollContent, dataSource, {
-				ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
-				multipleSelectionSupport: true,
-				dnd: this._register(
-					instantiationService.createInstance(
-						FileDragAndDrop,
-						(error: unknown) => {
-							if (this.isDisposed) return;
-							this.error = error instanceof Error ? error.message : String(error);
-							this.render();
-						},
-						(items: readonly ExplorerItem[]) => {
-							const focused = this.tree.focus;
-							const segment = focused && this.tree.getCompressedTreeNode(focused)?.elements[this.compressedFocusIndex];
-							return items.map(item => (item === focused && segment ? segment : item));
-						},
-					),
-				),
-				scrolling: 'managed',
-				configurationService,
-				getHeight: () => 22,
-				findMode: 'filter',
-				compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
-				// Keep workspace roots and their immediate children out of eager compact-chain resolution.
-				isIncompressible: item =>
-					item.kind !== FileKind.Directory ||
-					workspaceContextService
-						.getWorkspace()
-						.folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) || extUriBiasedIgnorePathCase.isEqual(folder.uri, dirname(item.resource))),
-				collapseByDefault: item => item.kind !== FileKind.File,
-				expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === 'doubleClick',
-				identityProvider: { getId: node => node.resource.toString() },
-				keyboardNavigationLabelProvider: {
-					getKeyboardNavigationLabel: item => item.name,
-					getCompressedNodeKeyboardNavigationLabel: elements => elements.map(item => item.name).join('/'),
-				},
-				openOnSingleClick: true,
-				reuseRows: true,
-				onDidRemoveRow: row => renderer.disposeRow(row),
-				renderCompressedElements: items => renderer.renderCompressedElements(items),
-				renderTwistie: (_item, state, twistie) => {
-					if (state.loading) {
-						const loading = h(twistie.ownerDocument, 'span');
-						loading.className = 'ash-explorer-tree-loading';
-						twistie.append(loading);
-					} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
-				},
-			}),
-		);
+		this.tree = this._register(new WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollContent, dataSource, {
+			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
+			multipleSelectionSupport: true,
+			dnd: this._register(instantiationService.createInstance(FileDragAndDrop, (error: unknown) => {
+				if (this.isDisposed) return;
+				this.error = error instanceof Error ? error.message : String(error);
+				this.render();
+			}, (items: readonly ExplorerItem[]) => {
+				const focused = this.tree.focus;
+				const segment = focused && this.tree.getCompressedTreeNode(focused)?.elements[this.compressedFocusIndex];
+				return items.map(item => item === focused && segment ? segment : item);
+			})),
+			scrolling: 'managed',
+			configurationService,
+			getHeight: () => 22,
+			findMode: 'filter',
+			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
+			// Keep workspace roots and their immediate children out of eager compact-chain resolution.
+			isIncompressible: item => item.kind !== FileKind.Directory || workspaceContextService.getWorkspace().folders.some(folder =>
+				extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) || extUriBiasedIgnorePathCase.isEqual(folder.uri, dirname(item.resource))),
+			collapseByDefault: item => item.kind !== FileKind.File,
+			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === 'doubleClick',
+			identityProvider: { getId: (node) => node.resource.toString() },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name, getCompressedNodeKeyboardNavigationLabel: elements => elements.map(item => item.name).join('/') },
+			openOnSingleClick: true,
+			reuseRows: true,
+			onDidRemoveRow: row => renderer.disposeRow(row),
+			renderCompressedElements: items => renderer.renderCompressedElements(items),
+			renderTwistie: (_item, state, twistie) => {
+				if (state.loading) {
+					const loading = h(twistie.ownerDocument, 'span');
+					loading.className = 'ash-explorer-tree-loading';
+					twistie.append(loading);
+				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
+			},
+		}));
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Without folder icons, a file icon occupies the same column as a folder arrow.
@@ -167,9 +153,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					if (item.kind !== FileKind.Directory && item.children?.length) {
 						return 'ash-tree-twistie-with-icon-gap';
 					}
-					const hideTwistie = theme.hidesExplorerArrows || (theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory);
+					const hideTwistie = theme.hidesExplorerArrows || theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory;
 					return hideTwistie ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap';
-				},
+				}
 			});
 		};
 		updateTwistieLayout();
@@ -178,12 +164,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
 		this.scopedContext.setContext('view', options.id);
 		this.titleMenu = this._register(menuService.createMenu(MenuId.for('ViewTitle'), this.scopedContext));
-		this._register(
-			this.titleMenu.onDidChange(() => {
-				this.renderHeaderActions();
-				this.updateTitleArea();
-			}),
-		);
+		this._register(this.titleMenu.onDidChange(() => {
+			this.renderHeaderActions();
+			this.updateTitleArea();
+		}));
 		this.headerActionsElement.setAttribute('aria-label', localize('files.explorerActions', 'Explorer Actions'));
 		this.renderHeaderActions();
 		ExplorerFocusedContext.bindTo(this.scopedContext).set(true);
@@ -194,58 +178,40 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.contextCanModify = this.scopedContext.createKey<boolean>('ashExplorerCanModify', false);
 		this.contextCanCreate = this.scopedContext.createKey<boolean>('ashExplorerCanCreate', false);
 		this.hasCutFiles = this.scopedContext.createKey<boolean>('ashExplorerHasCutFiles', explorerService.getToCopy().cut);
-		this._register(
-			explorerService.onDidChangeClipboard(() => {
-				const clipboard = explorerService.getToCopy();
-				this.hasCutFiles.set(clipboard.cut);
-				if (clipboard.items.length)
-					status(
-						clipboard.cut
-							? localize('accessibility.explorerCut', '{0} items ready to move.', clipboard.items.length)
-							: localize('accessibility.explorerCopy', '{0} items ready to copy.', clipboard.items.length),
-					);
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeFocus(({ elements, browserEvent }) => {
-				if (browserEvent) this.selectionCancellation.value?.cancel();
-				this.compressedFocusIndex = Math.max(0, elements.length - 1);
+		this._register(explorerService.onDidChangeClipboard(() => {
+			const clipboard = explorerService.getToCopy();
+			this.hasCutFiles.set(clipboard.cut);
+			if (clipboard.items.length) status(clipboard.cut
+				? localize('accessibility.explorerCut', '{0} items ready to move.', clipboard.items.length)
+				: localize('accessibility.explorerCopy', '{0} items ready to copy.', clipboard.items.length));
+		}));
+		this._register(this.tree.onDidChangeFocus(({ elements, browserEvent }) => {
+			if (browserEvent) this.selectionCancellation.value?.cancel();
+			this.compressedFocusIndex = Math.max(0, elements.length - 1);
+			this.updateCompressedFocus();
+		}));
+		this._register(this.tree.onPointer(event => {
+			const segment = event.browserEvent.target instanceof Element ? event.browserEvent.target.closest<HTMLElement>('[data-explorer-segment]') : null;
+			if (segment) {
+				this.compressedFocusIndex = Number(segment.dataset.explorerSegment);
 				this.updateCompressedFocus();
-			}),
-		);
-		this._register(
-			this.tree.onPointer(event => {
-				const segment = event.browserEvent.target instanceof Element ? event.browserEvent.target.closest<HTMLElement>('[data-explorer-segment]') : null;
-				if (segment) {
-					this.compressedFocusIndex = Number(segment.dataset.explorerSegment);
-					this.updateCompressedFocus();
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(({ browserEvent }) => {
-				if (browserEvent) this.selectionCancellation.value?.cancel();
-				this.updateExplorerContextKeys(this.getContext()[0]);
-			}),
-		);
-		this._register(
-			addDisposableListener(
-				this.tree.domNode,
-				'keydown',
-				event => {
-					if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !this.tree.focus) return;
-					const items = this.tree.getCompressedTreeNode(this.tree.focus)?.elements ?? [];
-					const direction = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
-					const index = this.compressedFocusIndex + direction;
-					if (!direction || items.length < 2 || index < 0 || index >= items.length) return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					this.compressedFocusIndex = index;
-					this.updateCompressedFocus();
-				},
-				true,
-			),
-		);
+			}
+		}));
+		this._register(this.tree.onDidChangeSelection(({ browserEvent }) => {
+			if (browserEvent) this.selectionCancellation.value?.cancel();
+			this.updateExplorerContextKeys(this.getContext()[0]);
+		}));
+		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
+			if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !this.tree.focus) return;
+			const items = this.tree.getCompressedTreeNode(this.tree.focus)?.elements ?? [];
+			const direction = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+			const index = this.compressedFocusIndex + direction;
+			if (!direction || items.length < 2 || index < 0 || index >= items.length) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.compressedFocusIndex = index;
+			this.updateCompressedFocus();
+		}, true));
 		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
 		let pendingKeyboardPaste: ReturnType<typeof setTimeout> | undefined;
 		let pendingMovePaste = false;
@@ -256,127 +222,89 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				this.render();
 			});
 		};
-		this._register(
-			addDisposableListener(this.tree.domNode, 'paste', event => {
+		this._register(addDisposableListener(this.tree.domNode, 'paste', event => {
+			clearTimeout(pendingKeyboardPaste);
+			pendingKeyboardPaste = undefined;
+			event.preventDefault();
+			paste(event.clipboardData?.files, pendingMovePaste);
+			pendingMovePaste = false;
+		}));
+		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
+			const moveRequested = isMacintosh && event.metaKey && event.altKey && !event.ctrlKey;
+			if (event.key.toLowerCase() === 'v' && !event.shiftKey && (moveRequested || ((event.ctrlKey || event.metaKey) && !event.altKey))) {
 				clearTimeout(pendingKeyboardPaste);
-				pendingKeyboardPaste = undefined;
-				event.preventDefault();
-				paste(event.clipboardData?.files, pendingMovePaste);
-				pendingMovePaste = false;
-			}),
-		);
-		this._register(
-			addDisposableListener(this.tree.domNode, 'keydown', event => {
-				const moveRequested = isMacintosh && event.metaKey && event.altKey && !event.ctrlKey;
-				if (event.key.toLowerCase() === 'v' && !event.shiftKey && (moveRequested || ((event.ctrlKey || event.metaKey) && !event.altKey))) {
-					clearTimeout(pendingKeyboardPaste);
-					pendingMovePaste = moveRequested;
-					// Finder keeps copied files on the clipboard; this shortcut supplies the move intent.
-					if (moveRequested) event.preventDefault();
-					// A browser paste event carries files from the system file manager. If it arrives,
-					// it owns this shortcut; otherwise the command reads Ash resources from the clipboard.
-					pendingKeyboardPaste = setTimeout(() => {
-						pendingKeyboardPaste = undefined;
-						paste(undefined, pendingMovePaste);
-						pendingMovePaste = false;
-					}, 0);
-				}
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
-			}),
-		);
+				pendingMovePaste = moveRequested;
+				// Finder keeps copied files on the clipboard; this shortcut supplies the move intent.
+				if (moveRequested) event.preventDefault();
+				// A browser paste event carries files from the system file manager. If it arrives,
+				// it owns this shortcut; otherwise the command reads Ash resources from the clipboard.
+				pendingKeyboardPaste = setTimeout(() => {
+					pendingKeyboardPaste = undefined;
+					paste(undefined, pendingMovePaste);
+					pendingMovePaste = false;
+				}, 0);
+			}
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
+		}));
 		const updateAriaLabel = () => {
 			const label = localize('accessibility.explorerTreeLabel', 'Workspace files');
 			const hint = accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer);
 			this.tree.element.setAttribute('aria-label', hint ? `${label}. ${hint}` : label);
 		};
 		updateAriaLabel();
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) updateAriaLabel();
-				if (event.affectsConfiguration('explorer.compactFolders'))
-					this.tree.updateOptions({
-						compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
-					});
-				if (
-					event.affectsConfiguration('explorer.compactFolders') ||
-					event.affectsConfiguration('files.exclude') ||
-					event.affectsConfiguration('explorer.sortOrder') ||
-					event.affectsConfiguration('explorer.sortOrderLexicographicOptions') ||
-					event.affectsConfiguration('explorer.sortOrderReverse') ||
-					event.affectsConfiguration('explorer.decorations') ||
-					event.affectsConfiguration(ExplorerFileNestingSettingId.Enabled) ||
-					event.affectsConfiguration(ExplorerFileNestingSettingId.Patterns)
-				) {
-					const roots = this.root?.children ?? (this.root ? [this.root] : []);
-					for (const root of roots) void this.refreshRoot(root);
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidError(({ element, error }) => {
-				this.treeError = true;
-				this.treeErrorElement = element;
-				this.error = error instanceof Error ? error.message : 'Unable to read workspace files.';
-				this.render();
-			}),
-		);
-		this._register(
-			this.tree.onDidOpen(event => {
-				if (event.element.kind === FileKind.File) void this.openFile(event);
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeLoadState(({ element, loading, error }) => {
-				if (loading) {
-					const operation = this.getProgressIndicator().show(true, 150);
-					this.loadingProgress.set(
-						element,
-						toDisposable(() => operation.done()),
-					);
-				} else this.loadingProgress.deleteAndDispose(element);
-				if (!loading) {
-					const retriedFailedElement =
-						element === undefined
-							? this.treeErrorElement === undefined
-							: this.treeErrorElement !== undefined && extUriBiasedIgnorePathCase.isEqual(element.resource, this.treeErrorElement.resource);
-					if (error === undefined && this.treeError && retriedFailedElement) {
-						this.treeError = false;
-						this.treeErrorElement = undefined;
-						this.error = undefined;
-						this.render();
-					}
-					this.loadVisibleFileNests();
-				}
-			}),
-		);
-		this._register(
-			explorerFileContribRegistry.onDidRegisterDescriptor(() => {
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) updateAriaLabel();
+			if (event.affectsConfiguration('explorer.compactFolders')) this.tree.updateOptions({ compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders') });
+			if (event.affectsConfiguration('explorer.compactFolders') || event.affectsConfiguration('files.exclude') || event.affectsConfiguration('explorer.sortOrder') || event.affectsConfiguration('explorer.sortOrderLexicographicOptions') || event.affectsConfiguration('explorer.sortOrderReverse') || event.affectsConfiguration('explorer.decorations') || event.affectsConfiguration(ExplorerFileNestingSettingId.Enabled) || event.affectsConfiguration(ExplorerFileNestingSettingId.Patterns)) {
 				const roots = this.root?.children ?? (this.root ? [this.root] : []);
 				for (const root of roots) void this.refreshRoot(root);
-			}),
-		);
-		this._register(
-			explorerService.onDidChangeRoot(() => {
-				this.initialization = this.initialize();
-			}),
-		);
-		this._register(
-			explorerService.onDidChangeResources(resources => {
-				const generation = this.workspaceGeneration;
-				this.fileChangeProcessing = this.fileChangeProcessing
-					.then(async () => {
-						await this.initialization;
-						if (this.isDisposed || generation !== this.workspaceGeneration) return;
-						await this.refreshChangedResources(resources, generation);
-					})
-					.catch(error => {
-						if (!this.isDisposed && generation === this.workspaceGeneration) console.error('Could not process Explorer file changes', error);
-					});
-			}),
-		);
+			}
+		}));
+		this._register(this.tree.onDidError(({ element, error }) => {
+			this.treeError = true;
+			this.treeErrorElement = element;
+			this.error = error instanceof Error ? error.message : 'Unable to read workspace files.';
+			this.render();
+		}));
+		this._register(this.tree.onDidOpen((event) => {
+			if (event.element.kind === FileKind.File) void this.openFile(event);
+		}));
+		this._register(this.tree.onDidChangeLoadState(({ element, loading, error }) => {
+			if (loading) {
+				const operation = this.getProgressIndicator().show(true, 150);
+				this.loadingProgress.set(element, toDisposable(() => operation.done()));
+			} else this.loadingProgress.deleteAndDispose(element);
+			if (!loading) {
+				const retriedFailedElement = element === undefined
+					? this.treeErrorElement === undefined
+					: this.treeErrorElement !== undefined && extUriBiasedIgnorePathCase.isEqual(element.resource, this.treeErrorElement.resource);
+				if (error === undefined && this.treeError && retriedFailedElement) {
+					this.treeError = false;
+					this.treeErrorElement = undefined;
+					this.error = undefined;
+					this.render();
+				}
+				this.loadVisibleFileNests();
+			}
+		}));
+		this._register(explorerFileContribRegistry.onDidRegisterDescriptor(() => {
+			const roots = this.root?.children ?? (this.root ? [this.root] : []);
+			for (const root of roots) void this.refreshRoot(root);
+		}));
+		this._register(explorerService.onDidChangeRoot(() => { this.initialization = this.initialize(); }));
+		this._register(explorerService.onDidChangeResources(resources => {
+			const generation = this.workspaceGeneration;
+			this.fileChangeProcessing = this.fileChangeProcessing.then(async () => {
+				await this.initialization;
+				if (this.isDisposed || generation !== this.workspaceGeneration) return;
+				await this.refreshChangedResources(resources, generation);
+			}).catch(error => {
+				if (!this.isDisposed && generation === this.workspaceGeneration) console.error('Could not process Explorer file changes', error);
+			});
+		}));
 		this.render();
 		this.initialization = this.initialize();
-		const revealActiveEditor = (options: { readonly revealSelectedResource?: boolean } = {}): void => {
+		const revealActiveEditor = (options: { readonly revealSelectedResource?: boolean; } = {}): void => {
 			const token = this.startSelection();
 			if (!this.isBodyVisible()) return;
 			const resource = editorService.activeEditor?.resource;
@@ -386,18 +314,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			});
 		};
 		this._register(editorService.onDidActiveEditorChange(() => revealActiveEditor()));
-		this._register(
-			this.onDidChangeBodyVisibility(visible => {
-				// Hidden trees have no usable viewport for revealing the active file.
-				if (visible) revealActiveEditor({ revealSelectedResource: true });
-				else this.selectionCancellation.value?.cancel();
-			}),
-		);
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('explorer.autoReveal') || event.affectsConfiguration('explorer.autoRevealExclude')) revealActiveEditor();
-			}),
-		);
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			// Hidden trees have no usable viewport for revealing the active file.
+			if (visible) revealActiveEditor({ revealSelectedResource: true });
+			else this.selectionCancellation.value?.cancel();
+		}));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('explorer.autoReveal') || event.affectsConfiguration('explorer.autoRevealExclude')) revealActiveEditor();
+		}));
 		revealActiveEditor();
 		this._register(toDisposable(() => this.saveTreeState()));
 	}
@@ -409,28 +333,16 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		return source.token;
 	}
 
-	private async autoReveal(resource: URI, token: CancellationToken, options: { readonly revealSelectedResource?: boolean } = {}): Promise<void> {
+	private async autoReveal(resource: URI, token: CancellationToken, options: { readonly revealSelectedResource?: boolean; } = {}): Promise<void> {
 		await this.initialization;
 		if (this.isDisposed || token.isCancellationRequested) return;
 		if (!options.revealSelectedResource) {
-			if (
-				this.tree.focus &&
-				extUriBiasedIgnorePathCase.isEqual(this.tree.focus.resource, resource) &&
-				this.tree.selection.length === 1 &&
-				extUriBiasedIgnorePathCase.isEqual(this.tree.selection[0]!.resource, resource)
-			)
-				return;
+			if (this.tree.focus && extUriBiasedIgnorePathCase.isEqual(this.tree.focus.resource, resource) && this.tree.selection.length === 1 && extUriBiasedIgnorePathCase.isEqual(this.tree.selection[0]!.resource, resource)) return;
 			// A delayed preview activation must not undo subsequent keyboard name navigation.
 			if (this.hasFocus() && this.tree.selection.some(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource))) return;
 		}
 		let needsSiblings = false;
-		if (
-			!this.explorerService.shouldAutoReveal(resource, () => {
-				needsSiblings = true;
-				return false;
-			})
-		)
-			return;
+		if (!this.explorerService.shouldAutoReveal(resource, () => { needsSiblings = true; return false; })) return;
 		if (needsSiblings) {
 			const siblings = await this.resolveSiblings(resource, token);
 			if (this.isDisposed || token.isCancellationRequested || !this.explorerService.shouldAutoReveal(resource, name => hasSibling(siblings, name))) return;
@@ -477,11 +389,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		// Only load ancestors of the requested file; nested file groups may contain sibling paths.
 		while (!this.isDisposed && generation === this.workspaceGeneration && !token.isCancellationRequested) {
 			const visibleItems = this.tree.getVisibleElements();
-			const item =
-				visibleItems
-					.flatMap(candidate => this.tree.getCompressedTreeNode(candidate)?.elements ?? [candidate])
-					.find(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.resource, resource)) ??
-				visibleItems.find(candidate => !expanded.has(extUriBiasedIgnorePathCase.getComparisonKey(candidate.resource)) && containsResource(candidate, resource));
+			const item = visibleItems.flatMap(candidate => this.tree.getCompressedTreeNode(candidate)?.elements ?? [candidate]).find(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.resource, resource)) ?? visibleItems.find(candidate =>
+				!expanded.has(extUriBiasedIgnorePathCase.getComparisonKey(candidate.resource)) && containsResource(candidate, resource));
 			if (!item) {
 				if (!closestDirectory || refreshedMissingResource) return;
 				// A newly created file can be selected before its watcher notification reaches the tree.
@@ -505,7 +414,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	public getContext(): readonly ExplorerItem[] {
 		const focus = this.tree.focus;
 		const segment = focus && this.tree.getCompressedTreeNode(focus)?.elements[this.compressedFocusIndex];
-		return this.tree.selection.map(item => (item === focus && segment ? segment : item));
+		return this.tree.selection.map(item => item === focus && segment ? segment : item);
 	}
 
 	public collapseAll(): void {
@@ -515,30 +424,22 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	public async refresh(recursive: boolean, item?: ExplorerItem): Promise<void> {
 		await this.initialization;
 		await this.fileChangeProcessing;
-		if (this.isDisposed) {
-			return;
-		}
+		if (this.isDisposed) { return; }
 		const generation = this.workspaceGeneration;
-		const roots = item ? [item] : (this.root?.children ?? (this.root ? [this.root] : []));
+		const roots = item ? [item] : this.root?.children ?? (this.root ? [this.root] : []);
 		for (const root of roots) {
-			if (this.isDisposed || generation !== this.workspaceGeneration) {
-				return;
-			}
+			if (this.isDisposed || generation !== this.workspaceGeneration) { return; }
 			await this.refreshItem(root, recursive);
 		}
 	}
 
 	public override getActions(): readonly IAction[] {
-		if (this.partTitleProjection?.actions) {
-			return [];
-		}
+		if (this.partTitleProjection?.actions) { return []; }
 		return getActionBarActions(this.titleMenu.getActions(), 'navigation').primary;
 	}
 
 	public override getSecondaryActions(): readonly IAction[] {
-		if (this.partTitleProjection?.actions) {
-			return [];
-		}
+		if (this.partTitleProjection?.actions) { return []; }
 		return getActionBarActions(this.titleMenu.getActions(), 'navigation').secondary;
 	}
 
@@ -564,9 +465,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	public getAccessibleContent(): string {
 		const heading = localize('accessibility.explorerVisibleFiles', 'Visible workspace files');
 		const operations = localize('accessibility.explorerFileOperations', 'Select files or folders, then use Ctrl or Command plus X to cut, C to copy, or V to paste. Press Escape to cancel a cut.');
-		const files = this.tree
-			.getVisibleElements()
-			.map(item => `${item.kind === FileKind.Directory ? localize('accessibility.explorerFolder', 'Folder') : localize('accessibility.explorerFile', 'File')}: ${item.name}`);
+		const files = this.tree.getVisibleElements().map(item =>
+			`${item.kind === FileKind.Directory ? localize('accessibility.explorerFolder', 'Folder') : localize('accessibility.explorerFile', 'File')}: ${item.name}`);
 		return [heading, operations, this.root?.name ?? '', ...files].filter(Boolean).join('\n');
 	}
 
@@ -595,16 +495,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		if (!focus) return;
 		const items = this.tree.getCompressedTreeNode(focus)?.elements ?? [focus];
 		this.compressedFocusIndex = Math.min(this.compressedFocusIndex, items.length - 1);
-		const row = [...this.tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(
-			row => row.querySelector<HTMLElement>('.ash-explorer-row-content')?.dataset.resource === focus.resource.toString(),
-		);
+		const row = [...this.tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => row.querySelector<HTMLElement>('.ash-explorer-row-content')?.dataset.resource === focus.resource.toString());
 		const segment = row?.querySelector<HTMLElement>(`[data-explorer-segment="${this.compressedFocusIndex}"]`);
 		segment?.classList.add('ash-explorer-active-segment');
-		if (row && items.length > 1)
-			row.setAttribute(
-				'aria-label',
-				localize('accessibility.explorerFolderSegment', '{0}, folder {1} of {2}', items[this.compressedFocusIndex]!.name, this.compressedFocusIndex + 1, items.length),
-			);
+		if (row && items.length > 1) row.setAttribute('aria-label', localize('accessibility.explorerFolderSegment', '{0}, folder {1} of {2}', items[this.compressedFocusIndex]!.name, this.compressedFocusIndex + 1, items.length));
 		this.updateExplorerContextKeys(this.getContext()[0]);
 	}
 
@@ -612,7 +506,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		event.preventDefault();
 		event.stopPropagation();
 		const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.ash-tree-row') : null;
-		let item = event instanceof MouseEvent ? this.findRenderedItem(row?.querySelector<HTMLElement>('.ash-explorer-row-content')?.dataset.resource) : this.tree.focus;
+		let item = event instanceof MouseEvent
+			? this.findRenderedItem(row?.querySelector<HTMLElement>('.ash-explorer-row-content')?.dataset.resource)
+			: this.tree.focus;
 		if (item) {
 			const segment = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-explorer-segment]') : null;
 			const items = this.tree.getCompressedTreeNode(item)?.elements ?? [item];
@@ -624,35 +520,30 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			item = items[index] ?? item;
 		}
 		this.updateExplorerContextKeys(item);
-		const anchor =
-			event instanceof MouseEvent
-				? {
-						x: event.clientX,
-						y: event.clientY,
-						targetWindow: this.element.ownerDocument.defaultView ?? undefined,
-					}
-				: (row ?? this.tree.element);
+		const anchor = event instanceof MouseEvent
+			? { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView ?? undefined }
+			: row ?? this.tree.element;
 		this.contextMenuService.showContextMenu({
 			menuId: MenuId.ExplorerContext,
 			contextKeyService: this.scopedContext,
 			menuActionOptions: { arg: item?.resource, shouldForwardArgs: true },
-			getActionsContext: () => (item ? this.getContext().map(selected => selected.resource) : []),
+			getActionsContext: () => item ? this.getContext().map(selected => selected.resource) : [],
 			getAnchor: () => anchor,
-			onHide: didCancel => {
-				if (didCancel) this.tree.domFocus();
-			},
+			onHide: didCancel => { if (didCancel) this.tree.domFocus(); },
 		});
 	}
 
 	private updateExplorerContextKeys(item: ExplorerItem | undefined): void {
 		const folder = item && this.workspaceContextService.getWorkspaceFolder(item.resource);
-		const isRoot = item ? item.resource.scheme === 'ash-workspace' || (!!folder && extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
+		const isRoot = item ? item.resource.scheme === 'ash-workspace' || !!folder && extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) : false;
 		this.hasContextResource.set(!!item);
 		this.contextIsFile.set(item?.kind === FileKind.File);
 		this.contextIsRoot.set(isRoot);
 		this.contextIsFolder.set(item?.kind === FileKind.Directory);
 		this.contextCanModify.set(!!item && !isRoot);
-		this.contextCanCreate.set(item ? item.kind === FileKind.Directory && item.resource.scheme !== 'ash-workspace' : this.workspaceContextService.getWorkspace().folders.length > 0);
+		this.contextCanCreate.set(item
+			? item.kind === FileKind.Directory && item.resource.scheme !== 'ash-workspace'
+			: this.workspaceContextService.getWorkspace().folders.length > 0);
 		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
 	}
 
@@ -676,14 +567,16 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		try {
 			// Workspace folders are validated at the host boundary; the first directory read reports an invalid root.
 			this.root = this.explorerService.getRoot();
-			this.setTitle(workspace.folders.length === 1 ? this.root!.name : (workspace.name ?? 'Explorer'));
+			this.setTitle(workspace.folders.length === 1 ? this.root!.name : workspace.name ?? 'Explorer');
 			await this.tree.setInput(this.root, this.readTreeState());
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.viewStateWorkspaceId = workspace.id;
 			this.render();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
-			this.error = error instanceof Error ? error.message : 'Unable to load workspace files.';
+			this.error = error instanceof Error
+				? error.message
+				: 'Unable to load workspace files.';
 			this.render();
 		}
 	}
@@ -704,9 +597,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			}
 			if (value.scrollTop !== undefined && (typeof value.scrollTop !== 'number' || !Number.isFinite(value.scrollTop) || value.scrollTop < 0)) return undefined;
 			return value as IAsyncDataTreeViewState;
-		} catch {
-			return undefined;
-		}
+		} catch { return undefined; }
 	}
 
 	private async refreshChangedResources(resources: readonly URI[] | undefined, generation: number): Promise<void> {
@@ -720,7 +611,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				continue;
 			}
 			const items = new Map([root, ...this.tree.getVisibleElements()].map(item => [extUriBiasedIgnorePathCase.getComparisonKey(item.resource), item] as const));
-			const targets = new Map<string, { item: ExplorerItem; recursive: boolean }>();
+			const targets = new Map<string, { item: ExplorerItem; recursive: boolean; }>();
 			for (const resource of changed) {
 				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource);
 				const item = items.get(key);
@@ -809,11 +700,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private async openFile(event: ResourceOpenEvent<ExplorerItem>): Promise<void> {
 		const node = event.element;
 		try {
-			await this.editorService.openEditor(
-				new FileEditorInput(node.resource, { label: node.name }),
-				{ ...event.editorOptions, source: EditorOpenSource.USER },
-				event.sideBySide ? 'sideGroup' : 'activeGroup',
-			);
+			await this.editorService.openEditor(new FileEditorInput(node.resource, { label: node.name }), { ...event.editorOptions, source: EditorOpenSource.USER }, event.sideBySide ? 'sideGroup' : 'activeGroup');
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
 		}
@@ -845,16 +732,15 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		// Keep the tree mounted across status updates so focus and scroll state survive refreshes.
 		if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
 	}
+
 }
 
 function hasSibling(items: readonly ExplorerItem[], name: string): boolean {
-	return items.some(item => item.name === name || (item.kind === FileKind.File && hasSibling(item.children ?? [], name)));
+	return items.some(item => item.name === name || item.kind === FileKind.File && hasSibling(item.children ?? [], name));
 }
 
 function containsResource(item: ExplorerItem, resource: URI): boolean {
-	return (
-		extUriBiasedIgnorePathCase.isEqual(item.resource, resource) ||
-		(item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ||
-		item.children?.some(child => containsResource(child, resource)) === true
-	);
+	return extUriBiasedIgnorePathCase.isEqual(item.resource, resource)
+		|| item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)
+		|| item.children?.some(child => containsResource(child, resource)) === true;
 }

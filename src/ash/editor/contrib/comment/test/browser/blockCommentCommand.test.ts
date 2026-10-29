@@ -14,6 +14,7 @@ const { createTestCodeEditor } = await import('../../../../test/browser/testCode
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 await import('../../browser/comment.js');
 
+
 test('Block Comment runs through the canonical editor action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

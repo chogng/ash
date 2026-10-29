@@ -27,15 +27,7 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 
 test('folding budgets normalize standalone inputs and expose the supported setting bounds', () => {
 	const option = EditorOptions.foldingMaximumRegions;
-	for (const [input, expected] of [
-		[1, 10],
-		[10, 10],
-		[20.9, 20],
-		['30', 30],
-		[65001, 65000],
-		[undefined, 5000],
-		[NaN, 5000],
-	] as const) {
+	for (const [input, expected] of [[1, 10], [10, 10], [20.9, 20], ['30', 30], [65001, 65000], [undefined, 5000], [NaN, 5000]] as const) {
 		assert.equal(option.validate(input), expected);
 	}
 	const schema = editorConfiguration.properties!['editor.foldingMaximumRegions'];
@@ -99,19 +91,10 @@ test('common editor options normalize shared editor settings', () => {
 });
 
 test('common editor options preserve VS Code internal enum and nested option contracts', () => {
-	assert.deepEqual(
-		['none', 'keep', 'brackets', 'advanced', 'full', undefined, 'invalid', 0].map(value => EditorOptions.autoIndent.validate(value)),
-		[
-			EditorAutoIndentStrategy.None,
-			EditorAutoIndentStrategy.Keep,
-			EditorAutoIndentStrategy.Brackets,
-			EditorAutoIndentStrategy.Advanced,
-			EditorAutoIndentStrategy.Full,
-			EditorAutoIndentStrategy.Full,
-			EditorAutoIndentStrategy.Full,
-			EditorAutoIndentStrategy.Full,
-		],
-	);
+	assert.deepEqual(['none', 'keep', 'brackets', 'advanced', 'full', undefined, 'invalid', 0].map(value => EditorOptions.autoIndent.validate(value)), [
+		EditorAutoIndentStrategy.None, EditorAutoIndentStrategy.Keep, EditorAutoIndentStrategy.Brackets, EditorAutoIndentStrategy.Advanced,
+		EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full,
+	]);
 	assert.equal(EditorOptions.accessibilitySupport.validate('auto'), AccessibilitySupport.Unknown);
 	assert.equal(EditorOptions.accessibilitySupport.validate('on'), AccessibilitySupport.Enabled);
 	assert.equal(EditorOptions.cursorStyle.validate('block'), TextEditorCursorStyle.Block);
@@ -181,18 +164,15 @@ test('common font settings produce a zoom-aware bare font descriptor', () => {
 	const subscription = EditorZoom.onDidChangeZoomLevel(() => undefined);
 	try {
 		EditorZoom.setZoomLevel(2);
-		const fontInfo = createBareFontInfoFromRawSettings(
-			{
-				fontFamily: 'Stanza Mono',
-				fontWeight: 700,
-				fontSize: 14,
-				fontLigatures: true,
-				fontVariations: true,
-				lineHeight: 0,
-				letterSpacing: 1,
-			},
-			2,
-		);
+		const fontInfo = createBareFontInfoFromRawSettings({
+			fontFamily: 'Stanza Mono',
+			fontWeight: 700,
+			fontSize: 14,
+			fontLigatures: true,
+			fontVariations: true,
+			lineHeight: 0,
+			letterSpacing: 1,
+		}, 2);
 
 		assert.equal(fontInfo.fontSize, 16.8);
 		assert.equal(fontInfo.lineHeight, isMacintosh ? 25 : 23);

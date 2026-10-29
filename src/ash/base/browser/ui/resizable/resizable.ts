@@ -14,7 +14,7 @@ export interface IResizable {
 
 /** Connects a container dimension event to a generic resizable control. */
 export function bindResizableLayout(event: Event<IDimension>, resizable: IResizable): IDisposable {
-	return event(dimension => resizable.layout(dimension));
+	return event((dimension) => resizable.layout(dimension));
 }
 
 export interface IResizeEvent {
@@ -135,48 +135,47 @@ export class ResizableHTMLElement extends Disposable {
 	}
 
 	private connectSash(sash: Sash, edge: 'north' | 'east' | 'south' | 'west'): void {
-		this._register(
-			sash.onDidStart(() => {
-				if (this.resizeStart !== undefined) return;
-				this._onDidWillResize.fire();
-				this.resizeStart = this._size;
-				this.deltaX = 0;
-				this.deltaY = 0;
-			}),
-		);
-		this._register(
-			sash.onDidChange(event => {
-				if (this.resizeStart === undefined) return;
-				if (edge === 'east') this.deltaX = event.delta;
-				if (edge === 'west') this.deltaX = -event.delta;
-				if (edge === 'south') this.deltaY = event.delta;
-				if (edge === 'north') this.deltaY = -event.delta;
-				this.layout(this.resizeStart.height + this.deltaY, this.resizeStart.width + this.deltaX);
-				this._onDidResize.fire({
-					dimension: this._size,
-					done: false,
-					[edge]: true,
-				});
-			}),
-		);
-		this._register(
-			sash.onDidReset(() => {
-				if (this.preferredSize === undefined) return;
-				const height = edge === 'north' || edge === 'south' ? this.preferredSize.height : this.size.height;
-				const width = edge === 'east' || edge === 'west' ? this.preferredSize.width : this.size.width;
-				this.layout(height, width);
-				this._onDidResize.fire({ dimension: this._size, done: true });
-			}),
-		);
-		this._register(
-			sash.onDidEnd(() => {
-				if (this.resizeStart === undefined) return;
-				this.resizeStart = undefined;
-				this.deltaX = 0;
-				this.deltaY = 0;
-				this._onDidResize.fire({ dimension: this._size, done: true });
-			}),
-		);
+		this._register(sash.onDidStart(() => {
+			if (this.resizeStart !== undefined) return;
+			this._onDidWillResize.fire();
+			this.resizeStart = this._size;
+			this.deltaX = 0;
+			this.deltaY = 0;
+		}));
+		this._register(sash.onDidChange((event) => {
+			if (this.resizeStart === undefined) return;
+			if (edge === 'east') this.deltaX = event.delta;
+			if (edge === 'west') this.deltaX = -event.delta;
+			if (edge === 'south') this.deltaY = event.delta;
+			if (edge === 'north') this.deltaY = -event.delta;
+			this.layout(
+				this.resizeStart.height + this.deltaY,
+				this.resizeStart.width + this.deltaX,
+			);
+			this._onDidResize.fire({
+				dimension: this._size,
+				done: false,
+				[edge]: true,
+			});
+		}));
+		this._register(sash.onDidReset(() => {
+			if (this.preferredSize === undefined) return;
+			const height = edge === 'north' || edge === 'south'
+				? this.preferredSize.height
+				: this.size.height;
+			const width = edge === 'east' || edge === 'west'
+				? this.preferredSize.width
+				: this.size.width;
+			this.layout(height, width);
+			this._onDidResize.fire({ dimension: this._size, done: true });
+		}));
+		this._register(sash.onDidEnd(() => {
+			if (this.resizeStart === undefined) return;
+			this.resizeStart = undefined;
+			this.deltaX = 0;
+			this.deltaY = 0;
+			this._onDidResize.fire({ dimension: this._size, done: true });
+		}));
 	}
 
 	private setSashEnabled(sash: Sash, enabled: boolean): void {
@@ -204,7 +203,7 @@ export class Resizable extends Disposable {
 		this.element.style.overflow = 'auto';
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
-		this._register(observeElementSize(this.element, size => onResize?.(size)));
+		this._register(observeElementSize(this.element, (size) => onResize?.(size)));
 	}
 }
 

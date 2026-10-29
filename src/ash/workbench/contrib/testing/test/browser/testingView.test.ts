@@ -5,49 +5,12 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('testing browser component', () => {
 	const browserTests = useBrowserTests();
 	for (const scenario of [
-		{
-			name: 'Windows relative',
-			rootUri: 'file:///C:/work',
-			os: 'windows',
-			failure: 'src\\lib.rs',
-			expected: 'file:///C:/work/src/lib.rs',
-		},
-		{
-			name: 'Windows verbatim absolute',
-			rootUri: 'file:///C:/work',
-			os: 'windows',
-			failure: '\\\\?\\D:\\other\\lib.rs',
-			expected: 'file:///D:/other/lib.rs',
-		},
-		{
-			name: 'Windows UNC absolute',
-			rootUri: 'file:///C:/work',
-			os: 'windows',
-			failure: '\\\\build\\share\\lib.rs',
-			expected: 'file://build/share/lib.rs',
-		},
-		{
-			name: 'Windows remote from Mac',
-			remote: 'windows',
-			root: 'C:/work',
-			failure: 'D:\\other\\lib.rs',
-			expected: 'ash-remote://ssh+windows/D%3A/other/lib.rs',
-		},
-		{
-			name: 'UNC remote from Mac',
-			remote: 'windows',
-			root: '//build/share/work',
-			failure: '..\\lib.rs',
-			expected: 'ash-remote://ssh+windows//build/share/lib.rs',
-		},
-		{
-			name: 'POSIX remote from Windows',
-			remote: 'linux',
-			root: '/work',
-			os: 'windows',
-			failure: 'part\\name #1.rs ',
-			expected: 'ash-remote://ssh+linux/work/part%5Cname%20%231.rs%20',
-		},
+		{ name: 'Windows relative', rootUri: 'file:///C:/work', os: 'windows', failure: 'src\\lib.rs', expected: 'file:///C:/work/src/lib.rs' },
+		{ name: 'Windows verbatim absolute', rootUri: 'file:///C:/work', os: 'windows', failure: '\\\\?\\D:\\other\\lib.rs', expected: 'file:///D:/other/lib.rs' },
+		{ name: 'Windows UNC absolute', rootUri: 'file:///C:/work', os: 'windows', failure: '\\\\build\\share\\lib.rs', expected: 'file://build/share/lib.rs' },
+		{ name: 'Windows remote from Mac', remote: 'windows', root: 'C:/work', failure: 'D:\\other\\lib.rs', expected: 'ash-remote://ssh+windows/D%3A/other/lib.rs' },
+		{ name: 'UNC remote from Mac', remote: 'windows', root: '//build/share/work', failure: '..\\lib.rs', expected: 'ash-remote://ssh+windows//build/share/lib.rs' },
+		{ name: 'POSIX remote from Windows', remote: 'linux', root: '/work', os: 'windows', failure: 'part\\name #1.rs ', expected: 'ash-remote://ssh+linux/work/part%5Cname%20%231.rs%20' },
 	]) {
 		test(`failure navigation preserves ${scenario.name} resource ownership`, async function () {
 			const { page } = browserTests;
@@ -56,19 +19,14 @@ suite('testing browser component', () => {
 			await page.goto('/testing.html?' + query);
 			const tree = page.getByRole('tree', { name: 'Tests' });
 			await expect(tree).toContainText('checks::fails');
-			await tree
-				.getByRole('treeitem')
-				.filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) })
-				.click();
+			await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) }).click();
 			await page.getByRole('button', { name: 'Run Selected', exact: true }).click();
 			await expect(page.getByRole('status')).toContainText('1 failed');
 			const openedBefore = await page.evaluate(() => window.ashTestingIntegration.opened.length);
 			const open = page.getByRole('button', { name: 'Open Failure Location', exact: true });
 			await open.focus();
 			await open.press('Enter');
-			await expect
-				.poll(() => page.evaluate(before => window.ashTestingIntegration.opened.slice(before).map(({ uri, line }) => ({ uri, line })), openedBefore))
-				.toEqual([{ uri: scenario.expected, line: 4 }]);
+			await expect.poll(() => page.evaluate(before => window.ashTestingIntegration.opened.slice(before).map(({ uri, line }) => ({ uri, line })), openedBefore)).toEqual([{ uri: scenario.expected, line: 4 }]);
 		});
 	}
 
@@ -110,20 +68,13 @@ suite('testing browser component', () => {
 		await page.goto('/testing.html');
 		const tree = page.getByRole('tree', { name: 'Tests' });
 		await expect(tree).toContainText('checks::passes');
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) }).click();
 		await page.getByRole('button', { name: 'Run Selected', exact: true }).click();
 		await expect(page.getByRole('status')).toContainText('1 failed');
 		expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([['fixture:lib:fixture:checks::fails']]);
 		await expect(page.getByRole('region', { name: 'Test result' })).toContainText('fixture failure');
 		await page.getByRole('button', { name: 'Open Failure Location', exact: true }).click();
-		expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({
-			path: '/workspace/src/lib.rs',
-			line: 4,
-			uri: 'file:///workspace/src/lib.rs',
-		});
+		expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({ path: '/workspace/src/lib.rs', line: 4, uri: 'file:///workspace/src/lib.rs' });
 		await page.getByRole('button', { name: 'Rerun Failed', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.runs().length)).toBe(2);
 		await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
@@ -173,10 +124,7 @@ suite('testing browser component', () => {
 
 		await page.goto('/testing.html');
 		await expect(page.locator('.ash-testing-gutter')).toHaveCount(2);
-		await page
-			.locator('.ash-testing-gutter')
-			.first()
-			.click({ modifiers: ['Alt'] });
+		await page.locator('.ash-testing-gutter').first().click({ modifiers: ['Alt'] });
 		await expect(page.getByRole('status')).toHaveText('Debugging test…');
 		expect((await page.evaluate(() => window.ashTestingIntegration.debugLaunches()))[0]?.arguments.args).toEqual(['--exact', 'checks::passes']);
 		expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([]);
@@ -184,17 +132,11 @@ suite('testing browser component', () => {
 		await page.evaluate(() => window.ashTestingIntegration.addCases());
 		const tree = page.getByRole('tree', { name: 'Tests' });
 		await expect(tree).toContainText('Tests without a source location');
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) }).click();
 		await page.getByRole('button', { name: 'Debug Selected Test', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.debugLaunches().length)).toBe(2);
 		await page.getByRole('button', { name: 'Cancel Tests', exact: true }).click();
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row', { hasText: 'src/lib.rs - docs' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'src/lib.rs - docs' }) }).click();
 		await expect(page.getByRole('button', { name: 'Debug Selected Test', exact: true })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'Run Selected', exact: true })).toBeEnabled();
 	});
@@ -208,10 +150,7 @@ suite('testing browser component', () => {
 		const tree = page.getByRole('tree', { name: '测试', exact: true });
 		await expect(tree).toContainText('没有源码位置的测试');
 		await expect(tree).toContainText('文档测试');
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) }).click();
 		await page.getByRole('button', { name: '调试所选测试', exact: true }).click();
 		await expect(page.getByRole('status')).toHaveText('正在调试测试…');
 		await page.getByRole('button', { name: '取消测试', exact: true }).click();

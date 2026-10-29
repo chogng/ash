@@ -32,12 +32,8 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly activeTitle: HTMLSpanElement;
 
 	// The leading stroke occupies one pixel outside the hosted pane's content width.
-	override get minimumWidth(): number {
-		return Math.max(170, super.minimumWidth + 1);
-	}
-	override get maximumWidth(): number {
-		return Number.POSITIVE_INFINITY;
-	}
+	override get minimumWidth(): number { return Math.max(170, super.minimumWidth + 1); }
+	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
 		return active ? Math.max(this.getComposite(active)!.getOptimalWidth(), 300) : undefined;
@@ -57,30 +53,20 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IHoverService hoverService: IHoverService,
 	) {
-		super(
-			container,
-			{
-				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-				viewDescriptorService,
-				contextKeyService,
-				localizationService,
-				id: 'auxiliarybar',
-				location: ViewContainerLocation.AuxiliaryBar,
-				ariaLabel: 'Auxiliary sidebar',
-				ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
-				viewsAriaLabel: 'Auxiliary sidebar views',
-				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
-				compositeBarContextMenuProvider: contextMenuService,
-				titleActions: {
-					menuService,
-					contextMenuProvider: contextMenuService,
-					menuId: MenuId.AuxiliaryBarTitle,
-				},
-			},
-			themeService,
-			storageService,
-			activityService,
-		);
+		super(container, {
+			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+			viewDescriptorService,
+			contextKeyService,
+			localizationService,
+			id: 'auxiliarybar',
+			location: ViewContainerLocation.AuxiliaryBar,
+			ariaLabel: 'Auxiliary sidebar',
+			ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
+			viewsAriaLabel: 'Auxiliary sidebar views',
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
+			compositeBarContextMenuProvider: contextMenuService,
+			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.AuxiliaryBarTitle },
+		}, themeService, storageService, activityService);
 		this.contentDomNode.classList.add('ash-auxiliarybar-content');
 		this.selectorHost = h(container.ownerDocument, 'div');
 		this.selectorHost.className = 'ash-auxiliarybar-view-selector';
@@ -101,28 +87,22 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			});
 		};
 		this._register(addDisposableListener(this.compositeBar.domNode, 'contextmenu', showSelectorMenu));
-		this._register(
-			addDisposableListener(this.compositeBar.domNode, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
-					showSelectorMenu(event);
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.compositeBar.domNode, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+				showSelectorMenu(event);
+			}
+		}));
 		this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, ViewContainerLocation.AuxiliaryBar));
-		this._register(
-			this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
-				if (before > 1 !== after > 1) {
-					this.updateContainerSelector();
-				}
-			}),
-		);
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation) || event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
-					this.updateContainerSelector();
-				}
-			}),
-		);
+		this._register(this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
+			if ((before > 1) !== (after > 1)) {
+				this.updateContainerSelector();
+			}
+		}));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation) || event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
+				this.updateContainerSelector();
+			}
+		}));
 		this.updateContainerSelector();
 	}
 
@@ -138,12 +118,13 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 	}
 
 	protected override setTitleProjection(projection: PartTitleProjection | undefined): void {
-		const focused = this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement) ? (this.domNode.ownerDocument.activeElement as HTMLElement) : undefined;
+		const focused = this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement)
+			? this.domNode.ownerDocument.activeElement as HTMLElement : undefined;
 		const position = this.configurationService.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		const separateRow = position === ActivityBarPosition.TOP || position === ActivityBarPosition.BOTTOM;
-		const visible =
-			position !== ActivityBarPosition.HIDDEN &&
-			!(separateRow && this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) && this.visibleViewContainersTracker.visibleCount <= 1);
+		const visible = position !== ActivityBarPosition.HIDDEN && !(separateRow
+			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
+			&& this.visibleViewContainersTracker.visibleCount <= 1);
 		const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 		this.activeTitle.textContent = active?.getTitle() ?? '';
 		// Custom view headers and the container selector share this Part-owned title slot.

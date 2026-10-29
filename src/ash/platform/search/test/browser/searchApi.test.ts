@@ -7,10 +7,8 @@ import { createAppServerContentSearchConfigurationApi, createDisconnectedContent
 test('content search configuration saves only the selected backend at the read revision', async () => {
 	const writes: ConfigUpdateParams[] = [];
 	const connection = {
-		async request(definition: { method: string }, params: ConfigUpdateParams): Promise<unknown> {
-			if (definition.method === 'config/read') {
-				return { revision: 7, grepBackend: 'tgrep' };
-			}
+		async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {
+			if (definition.method === 'config/read') { return { revision: 7, grepBackend: 'tgrep' }; }
 			assert.equal(definition.method, 'config/update');
 			writes.push(params);
 			return {};
@@ -21,26 +19,15 @@ test('content search configuration saves only the selected backend at the read r
 	assert.deepEqual(snapshot, { revision: 7, engine: 'tgrep' });
 	await api.configure('ripgrep', snapshot.revision);
 	await api.configure('tgrep', snapshot.revision);
-	assert.deepEqual(
-		writes.map(({ commandId, ...write }) => {
-			assert.ok(commandId);
-			return write;
-		}),
-		[
-			{ expectedRevision: 7, grepBackend: 'ripgrep' },
-			{ expectedRevision: 7, grepBackend: 'tgrep' },
-		],
-	);
+	assert.deepEqual(writes.map(({ commandId, ...write }) => { assert.ok(commandId); return write; }), [
+		{ expectedRevision: 7, grepBackend: 'ripgrep' }, { expectedRevision: 7, grepBackend: 'tgrep' },
+	]);
 	assert.equal(new Set(writes.map(write => write.commandId)).size, 2);
 });
 
 test('content search configuration propagates stale revision failures', async () => {
 	const failure = new Error('Configuration revision conflict');
-	const connection = {
-		request: async () => {
-			throw failure;
-		},
-	} as unknown as AppServerProtocolClient;
+	const connection = { request: async () => { throw failure; } } as unknown as AppServerProtocolClient;
 	const api = createAppServerContentSearchConfigurationApi(connection);
 	await assert.rejects(api.configure('ripgrep', 2), error => error === failure);
 });

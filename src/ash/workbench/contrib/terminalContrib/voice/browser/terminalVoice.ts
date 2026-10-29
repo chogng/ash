@@ -26,11 +26,9 @@ export class TerminalVoiceContribution extends Disposable implements ITerminalCo
 		this._register(context.instance.onDidChangeState(() => this.setState('unavailable')));
 		this._register(context.instance.onDidExit(() => this.setState('unavailable')));
 		// A killed CLI cannot emit its clear sequence. Shell completion retires its capability too.
-		this._register(
-			context.instance.onDidChangeCommandStatus(event => {
-				if (event.status !== 'running') this.setState('unavailable');
-			}),
-		);
+		this._register(context.instance.onDidChangeCommandStatus(event => {
+			if (event.status !== 'running') this.setState('unavailable');
+		}));
 	}
 
 	get state(): TerminalDictationState {

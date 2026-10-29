@@ -18,7 +18,7 @@ suite('Chat context budget', () => {
 	setup(() => {
 		environment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
 		// jsdom does not implement scrolling used when context views restore focus.
-		environment.window.HTMLElement.prototype.scrollTo = () => {};
+		environment.window.HTMLElement.prototype.scrollTo = () => { };
 		installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent']);
 		initializeTestLocalization('en');
 		contextViews = new BrowserContextViewService(environment.window.document.body);
@@ -39,9 +39,7 @@ suite('Chat context budget', () => {
 	});
 
 	const usage = (): ChatContextUsage => ({
-		estimatedTokens: 450_000,
-		contextWindow: 475_000,
-		autoCompactAt: 450_000,
+		estimatedTokens: 450_000, contextWindow: 475_000, autoCompactAt: 450_000,
 		categories: [{ category: 'conversation', tokens: 450_000 }],
 	});
 

@@ -3,12 +3,7 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationPropertySchema,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { localize } from '../../../nls.js';
 
@@ -318,7 +313,10 @@ const properties: Record<string, JsonSchema> = {
 		default: null,
 		items: {
 			type: 'array',
-			items: [{ type: 'string' }, { type: 'string' }],
+			items: [
+				{ type: 'string' },
+				{ type: 'string' },
+			],
 		},
 	},
 	'editor.language.colorizedBracketPairs': {
@@ -326,7 +324,10 @@ const properties: Record<string, JsonSchema> = {
 		default: null,
 		items: {
 			type: 'array',
-			items: [{ type: 'string' }, { type: 'string' }],
+			items: [
+				{ type: 'string' },
+				{ type: 'string' },
+			],
 		},
 	},
 	'editor.fontFamily': { type: 'string', default: EDITOR_FONT_DEFAULTS.fontFamily },
@@ -342,11 +343,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.wordWrapColumn': { type: 'number', default: 80, minimum: 1 },
 	'editor.wrappingStrategy': { type: 'string', enum: ['simple', 'advanced'], default: 'simple' },
 	'editor.wrappingIndent': { type: 'string', enum: ['none', 'same', 'indent', 'deepIndent'], default: 'same' },
-	'editor.renderWhitespace': {
-		type: 'string',
-		enum: ['none', 'boundary', 'selection', 'trailing', 'all'],
-		default: 'selection',
-	},
+	'editor.renderWhitespace': { type: 'string', enum: ['none', 'boundary', 'selection', 'trailing', 'all'], default: 'selection' },
 	'editor.renderControlCharacters': { type: 'boolean', default: true },
 	'editor.renderLineHighlight': { type: 'string', enum: ['none', 'gutter', 'line', 'all'], default: 'line' },
 	'editor.renderLineHighlightOnlyWhenFocus': { type: 'boolean', default: false },
@@ -356,17 +353,9 @@ const properties: Record<string, JsonSchema> = {
 	'editor.automaticLayout': { type: 'boolean', default: false },
 	'editor.mouseWheelZoom': { type: 'boolean', default: false },
 	'editor.mouseStyle': { type: 'string', enum: ['text', 'default', 'copy'], default: 'text' },
-	'editor.cursorBlinking': {
-		type: 'string',
-		enum: ['blink', 'smooth', 'phase', 'expand', 'solid'],
-		default: 'blink',
-	},
+	'editor.cursorBlinking': { type: 'string', enum: ['blink', 'smooth', 'phase', 'expand', 'solid'], default: 'blink' },
 	'editor.cursorSmoothCaretAnimation': { type: 'string', enum: ['off', 'explicit', 'on'], default: 'off' },
-	'editor.cursorStyle': {
-		type: 'string',
-		enum: ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'],
-		default: 'line',
-	},
+	'editor.cursorStyle': { type: 'string', enum: ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'], default: 'line' },
 	'editor.cursorWidth': { type: 'number', default: 0, minimum: 0 },
 	'editor.cursorSurroundingLines': { type: 'number', default: 0, minimum: 0 },
 	'editor.cursorSurroundingLinesStyle': { type: 'string', enum: ['default', 'all'], default: 'default' },
@@ -382,11 +371,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.copyWithSyntaxHighlighting': { type: 'boolean', default: true },
 	'editor.links': { type: 'boolean', default: true },
 	'editor.colorDecorators': { type: 'boolean', default: true },
-	'editor.colorDecoratorsActivatedOn': {
-		type: 'string',
-		enum: ['clickAndHover', 'click', 'hover'],
-		default: 'clickAndHover',
-	},
+	'editor.colorDecoratorsActivatedOn': { type: 'string', enum: ['clickAndHover', 'click', 'hover'], default: 'clickAndHover' },
 	'editor.colorDecoratorsLimit': { type: 'number', default: 500, minimum: 0 },
 	'editor.columnSelection': { type: 'boolean', default: false },
 	'editor.multiCursorModifier': { type: 'string', enum: ['ctrlCmd', 'alt'], default: 'alt' },
@@ -397,33 +382,17 @@ const properties: Record<string, JsonSchema> = {
 	'editor.tabFocusMode': { type: 'boolean', default: false },
 	'editor.find.cursorMoveOnType': { type: 'boolean', default: true },
 	'editor.find.findOnType': { type: 'boolean', default: true },
-	'editor.find.seedSearchStringFromSelection': {
-		type: 'string',
-		enum: ['never', 'always', 'selection'],
-		default: 'always',
-	},
+	'editor.find.seedSearchStringFromSelection': { type: 'string', enum: ['never', 'always', 'selection'], default: 'always' },
 	'editor.find.autoFindInSelection': { type: 'string', enum: ['never', 'always', 'multiline'], default: 'never' },
 	'editor.find.loop': { type: 'boolean', default: true },
 	'editor.find.closeOnResult': { type: 'boolean', default: false },
 	'editor.find.history': { type: 'string', enum: ['never', 'workspace'], default: 'workspace' },
 	'editor.find.replaceHistory': { type: 'string', enum: ['never', 'workspace'], default: 'workspace' },
-	'editor.autoClosingBrackets': {
-		type: 'string',
-		enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'],
-		default: 'languageDefined',
-	},
-	'editor.autoClosingQuotes': {
-		type: 'string',
-		enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'],
-		default: 'languageDefined',
-	},
+	'editor.autoClosingBrackets': { type: 'string', enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'], default: 'languageDefined' },
+	'editor.autoClosingQuotes': { type: 'string', enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'], default: 'languageDefined' },
 	'editor.autoClosingDelete': { type: 'string', enum: ['always', 'auto', 'never'], default: 'auto' },
 	'editor.autoClosingOvertype': { type: 'string', enum: ['always', 'auto', 'never'], default: 'auto' },
-	'editor.autoSurround': {
-		type: 'string',
-		enum: ['languageDefined', 'quotes', 'brackets', 'never'],
-		default: 'languageDefined',
-	},
+	'editor.autoSurround': { type: 'string', enum: ['languageDefined', 'quotes', 'brackets', 'never'], default: 'languageDefined' },
 	'editor.autoIndent': { type: 'string', enum: ['none', 'keep', 'brackets', 'advanced', 'full'], default: 'full' },
 	'editor.autoIndentOnPaste': { type: 'boolean', default: false },
 	'editor.formatOnType': { type: 'boolean', default: false },
@@ -441,11 +410,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.acceptSuggestionOnEnter': { type: 'string', enum: ['on', 'smart', 'off'], default: 'on' },
 	'editor.acceptSuggestionOnCommitCharacter': { type: 'boolean', default: true },
 	'editor.snippetSuggestions': { type: 'string', enum: ['top', 'bottom', 'inline', 'none'], default: 'inline' },
-	'editor.suggestSelection': {
-		type: 'string',
-		enum: ['first', 'recentlyUsed', 'recentlyUsedByPrefix'],
-		default: 'first',
-	},
+	'editor.suggestSelection': { type: 'string', enum: ['first', 'recentlyUsed', 'recentlyUsedByPrefix'], default: 'first' },
 	'editor.suggestFontSize': { type: 'number', default: 0, minimum: 0 },
 	'editor.suggestLineHeight': { type: 'number', default: 0, minimum: 0 },
 	'editor.tabCompletion': { type: 'string', enum: ['on', 'off', 'onlySnippets'], default: 'off' },
@@ -471,10 +436,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.minimap.autohide': { type: 'string', enum: ['none', 'mouseover', 'scroll'], default: 'none' },
 	'editor.minimap.showRegionSectionHeaders': { type: 'boolean', default: true },
 	'editor.minimap.showMarkSectionHeaders': { type: 'boolean', default: true },
-	'editor.minimap.markSectionHeaderRegex': {
-		type: 'string',
-		default: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$',
-	},
+	'editor.minimap.markSectionHeaderRegex': { type: 'string', default: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$' },
 	'editor.minimap.sectionHeaderFontSize': { type: 'number', default: 9, minimum: 4, maximum: 32 },
 	'editor.minimap.sectionHeaderLetterSpacing': { type: 'number', default: 1, minimum: 0, maximum: 5 },
 	'editor.scrollbar.vertical': { type: 'string', enum: ['auto', 'visible', 'hidden'], default: 'auto' },
@@ -483,90 +445,36 @@ const properties: Record<string, JsonSchema> = {
 	'editor.scrollbar.horizontalScrollbarSize': { type: 'number', default: 14, minimum: 0 },
 	'editor.stickyScroll.enabled': { type: 'boolean', default: true },
 	'editor.stickyScroll.maxLineCount': { type: 'number', default: 5, minimum: 1 },
-	'editor.bracketPairColorization.enabled': {
-		type: 'boolean',
-		default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled,
-	},
-	'editor.bracketPairColorization.independentColorPoolPerBracketType': {
-		type: 'boolean',
-		default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType,
-	},
+	'editor.bracketPairColorization.enabled': { type: 'boolean', default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled },
+	'editor.bracketPairColorization.independentColorPoolPerBracketType': { type: 'boolean', default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType },
 	'editor.unicodeHighlight.invisibleCharacters': { type: 'boolean', default: true },
 	'editor.unicodeHighlight.ambiguousCharacters': { type: 'boolean', default: true },
 	'editor.unicodeHighlight.includeComments': { type: 'boolean', default: false },
 	'editor.inlineSuggest.enabled': { type: 'boolean', default: true },
 	'editor.parameterHints.enabled': { type: 'boolean', default: true },
 	'editor.inlayHints.enabled': { type: 'boolean', default: true },
-	'diffEditor.maxComputationTime': {
-		type: 'number',
-		default: diffEditorDefaultOptions.maxComputationTime,
-		minimum: 0,
-	},
+	'diffEditor.maxComputationTime': { type: 'number', default: diffEditorDefaultOptions.maxComputationTime, minimum: 0 },
 	'diffEditor.maxFileSize': { type: 'number', default: diffEditorDefaultOptions.maxFileSize, minimum: 0 },
 	'diffEditor.renderSideBySide': { type: 'boolean', default: diffEditorDefaultOptions.renderSideBySide },
-	'diffEditor.enableSplitViewResizing': {
-		type: 'boolean',
-		default: diffEditorDefaultOptions.enableSplitViewResizing,
-	},
-	'diffEditor.splitViewDefaultRatio': {
-		type: 'number',
-		default: diffEditorDefaultOptions.splitViewDefaultRatio,
-		minimum: 0.1,
-		maximum: 0.9,
-	},
-	'diffEditor.renderSideBySideInlineBreakpoint': {
-		type: 'number',
-		default: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint,
-		minimum: 0,
-	},
-	'diffEditor.useInlineViewWhenSpaceIsLimited': {
-		type: 'boolean',
-		default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited,
-	},
+	'diffEditor.enableSplitViewResizing': { type: 'boolean', default: diffEditorDefaultOptions.enableSplitViewResizing },
+	'diffEditor.splitViewDefaultRatio': { type: 'number', default: diffEditorDefaultOptions.splitViewDefaultRatio, minimum: 0.1, maximum: 0.9 },
+	'diffEditor.renderSideBySideInlineBreakpoint': { type: 'number', default: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint, minimum: 0 },
+	'diffEditor.useInlineViewWhenSpaceIsLimited': { type: 'boolean', default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited },
 	'diffEditor.renderMarginRevertIcon': { type: 'boolean', default: diffEditorDefaultOptions.renderMarginRevertIcon },
 	'diffEditor.renderGutterMenu': { type: 'boolean', default: diffEditorDefaultOptions.renderGutterMenu },
 	'diffEditor.renderOverviewRuler': { type: 'boolean', default: diffEditorDefaultOptions.renderOverviewRuler },
 	'diffEditor.ignoreTrimWhitespace': { type: 'boolean', default: diffEditorDefaultOptions.ignoreTrimWhitespace },
 	'diffEditor.renderIndicators': { type: 'boolean', default: diffEditorDefaultOptions.renderIndicators },
 	'diffEditor.codeLens': { type: 'boolean', default: diffEditorDefaultOptions.diffCodeLens },
-	'diffEditor.wordWrap': {
-		type: 'string',
-		enum: ['off', 'on', 'inherit'],
-		default: diffEditorDefaultOptions.diffWordWrap,
-	},
-	'diffEditor.diffAlgorithm': {
-		type: 'string',
-		enum: ['legacy', 'advanced', 'advanced-external', 'advanced-wasm'],
-		default: diffEditorDefaultOptions.diffAlgorithm,
-	},
-	'diffEditor.hideUnchangedRegions.enabled': {
-		type: 'boolean',
-		default: diffEditorDefaultOptions.hideUnchangedRegions.enabled,
-	},
-	'diffEditor.hideUnchangedRegions.revealLineCount': {
-		type: 'integer',
-		default: diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount,
-		minimum: 1,
-	},
-	'diffEditor.hideUnchangedRegions.minimumLineCount': {
-		type: 'integer',
-		default: diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount,
-		minimum: 1,
-	},
-	'diffEditor.hideUnchangedRegions.contextLineCount': {
-		type: 'integer',
-		default: diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount,
-		minimum: 1,
-	},
+	'diffEditor.wordWrap': { type: 'string', enum: ['off', 'on', 'inherit'], default: diffEditorDefaultOptions.diffWordWrap },
+	'diffEditor.diffAlgorithm': { type: 'string', enum: ['legacy', 'advanced', 'advanced-external', 'advanced-wasm'], default: diffEditorDefaultOptions.diffAlgorithm },
+	'diffEditor.hideUnchangedRegions.enabled': { type: 'boolean', default: diffEditorDefaultOptions.hideUnchangedRegions.enabled },
+	'diffEditor.hideUnchangedRegions.revealLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount, minimum: 1 },
+	'diffEditor.hideUnchangedRegions.minimumLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount, minimum: 1 },
+	'diffEditor.hideUnchangedRegions.contextLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount, minimum: 1 },
 	'diffEditor.experimental.showMoves': { type: 'boolean', default: diffEditorDefaultOptions.experimental.showMoves },
-	'diffEditor.experimental.showEmptyDecorations': {
-		type: 'boolean',
-		default: diffEditorDefaultOptions.experimental.showEmptyDecorations,
-	},
-	'diffEditor.experimental.useTrueInlineView': {
-		type: 'boolean',
-		default: diffEditorDefaultOptions.experimental.useTrueInlineView,
-	},
+	'diffEditor.experimental.showEmptyDecorations': { type: 'boolean', default: diffEditorDefaultOptions.experimental.showEmptyDecorations },
+	'diffEditor.experimental.useTrueInlineView': { type: 'boolean', default: diffEditorDefaultOptions.experimental.useTrueInlineView },
 };
 
 /** JSON schema for the editor settings namespace. */
@@ -633,8 +541,14 @@ export async function registerEditorFontConfigurations(getFontSnippets: () => Pr
 	cachedEditorConfigurationKeys = undefined;
 }
 
-function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema }): schema is IConfigurationPropertySchema {
-	return typeof schema === 'object' && (schema.type !== undefined || schema.anyOf !== undefined || schema.allOf !== undefined || schema.oneOf !== undefined || schema.enum !== undefined);
+function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; }): schema is IConfigurationPropertySchema {
+	return typeof schema === 'object' && (
+		schema.type !== undefined ||
+		schema.anyOf !== undefined ||
+		schema.allOf !== undefined ||
+		schema.oneOf !== undefined ||
+		schema.enum !== undefined
+	);
 }
 
 function schemaForDefault(value: unknown): JsonSchema {
@@ -647,48 +561,19 @@ function schemaForDefault(value: unknown): JsonSchema {
 }
 
 for (const [key, defaultValue, title, description] of [
-	[
-		'diffEditor.renderIndicators',
-		diffEditorDefaultOptions.renderIndicators,
-		() => localize('diffEditor.indicators.title', 'Diff indicators'),
-		() => localize('diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.'),
-	],
-	[
-		'diffEditor.renderMarginRevertIcon',
-		diffEditorDefaultOptions.renderMarginRevertIcon,
-		() => localize('diffEditor.revertIcon.title', 'Revert change buttons'),
-		() => localize('diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.'),
-	],
-	[
-		'diffEditor.renderGutterMenu',
-		diffEditorDefaultOptions.renderGutterMenu,
-		() => localize('diffEditor.gutterMenu.title', 'Change actions'),
-		() => localize('diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.'),
-	],
-	[
-		'diffEditor.renderOverviewRuler',
-		diffEditorDefaultOptions.renderOverviewRuler,
-		() => localize('diffEditor.overviewRuler.title', 'Diff overview ruler'),
-		() => localize('diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.'),
-	],
-	[
-		'diffEditor.experimental.showMoves',
-		diffEditorDefaultOptions.experimental.showMoves,
-		() => localize('diffEditor.showMoves.title', 'Show moved code'),
-		() => localize('diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.'),
-	],
+	['diffEditor.renderIndicators', diffEditorDefaultOptions.renderIndicators, () => localize('diffEditor.indicators.title', 'Diff indicators'), () => localize('diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.')],
+	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, () => localize('diffEditor.revertIcon.title', 'Revert change buttons'), () => localize('diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.')],
+	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, () => localize('diffEditor.gutterMenu.title', 'Change actions'), () => localize('diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.')],
+	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, () => localize('diffEditor.overviewRuler.title', 'Diff overview ruler'), () => localize('diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.')],
+	['diffEditor.experimental.showMoves', diffEditorDefaultOptions.experimental.showMoves, () => localize('diffEditor.showMoves.title', 'Show moved code'), () => localize('diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.')],
 ] as const) {
 	configurationRegistry.registerConfiguration({
 		key,
 		defaultValue,
 		parse: value => modelBoolean(value, key),
 		setting: {
-			get title() {
-				return title();
-			},
-			get description() {
-				return description();
-			},
+			get title() { return title(); },
+			get description() { return description(); },
 			valueType: 'boolean',
 		},
 	});
@@ -697,11 +582,7 @@ for (const [key, defaultValue, title, description] of [
 // Schema entries alone do not participate in effective configuration values.
 // Keep optional performance measurements disabled until explicitly requested.
 for (const key of ['editor.experimental.treeSitterTelemetry']) {
-	configurationRegistry.registerConfiguration<boolean>({
-		key,
-		defaultValue: false,
-		parse: value => modelBoolean(value, key),
-	});
+	configurationRegistry.registerConfiguration<boolean>({ key, defaultValue: false, parse: value => modelBoolean(value, key) });
 }
 
 // The schema owner also registers the model settings consumed by editor services.
@@ -716,15 +597,9 @@ configurationRegistry.registerConfiguration<number>({
 		return value as number;
 	},
 	setting: {
-		valueType: 'number',
-		minimum: 10,
-		maximum: 65000,
-		get title() {
-			return localize('limitIndicator.foldingTitle', 'Maximum folding regions');
-		},
-		get description() {
-			return localize('limitIndicator.foldingDescription', 'Limit the number of folding regions available in each editor.');
-		},
+		valueType: 'number', minimum: 10, maximum: 65000,
+		get title() { return localize('limitIndicator.foldingTitle', 'Maximum folding regions'); },
+		get description() { return localize('limitIndicator.foldingDescription', 'Limit the number of folding regions available in each editor.'); },
 	},
 });
 
@@ -735,12 +610,8 @@ configurationRegistry.registerConfiguration<boolean>({
 	parse: value => modelBoolean(value, 'editor.formatOnType'),
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('editor.formatOnType.title', 'Format on type');
-		},
-		get description() {
-			return localize('editor.formatOnType.description', 'Format the current line after typing a character supported by the language formatter.');
-		},
+		get title() { return localize('editor.formatOnType.title', 'Format on type'); },
+		get description() { return localize('editor.formatOnType.description', 'Format the current line after typing a character supported by the language formatter.'); },
 	},
 });
 
@@ -880,18 +751,12 @@ configurationRegistry.registerConfiguration({
 	key: 'editor.tabSize',
 	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,
 	parse: value => modelInteger(value, 'editor.tabSize'),
-	setting: {
-		title: 'Tab size',
-		description: 'Set the number of columns represented by one tab.',
-		valueType: 'number',
-		minimum: 1,
-		maximum: 100,
-	},
+	setting: { title: 'Tab size', description: 'Set the number of columns represented by one tab.', valueType: 'number', minimum: 1, maximum: 100 },
 });
 configurationRegistry.registerConfiguration<number | 'tabSize'>({
 	key: 'editor.indentSize',
 	defaultValue: 'tabSize',
-	parse: value => (value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize')),
+	parse: value => value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize'),
 });
 for (const [key, defaultValue] of [
 	['editor.insertSpaces', EDITOR_MODEL_DEFAULTS.insertSpaces],

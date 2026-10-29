@@ -20,36 +20,21 @@ export class TerminalLogService extends Disposable implements ITerminalLogServic
 		this.onDidDispose = this.logger.onDidDispose;
 	}
 
-	registerSink(sink: ILogSink, replay = false) {
-		return this.logger.registerSink(sink, replay);
-	}
+	registerSink(sink: ILogSink, replay = false) { return this.logger.registerSink(sink, replay); }
 
-	getLevel(): LogLevel {
-		return this.logger.getLevel();
-	}
-	setLevel(level: LogLevel): void {
-		this.logger.setLevel(level);
-	}
-	flush(): Promise<void> {
-		return this.logger.flush();
-	}
+	getLevel(): LogLevel { return this.logger.getLevel(); }
+	setLevel(level: LogLevel): void { this.logger.setLevel(level); }
+	flush(): Promise<void> { return this.logger.flush(); }
 
-	trace(message: string, ...args: unknown[]): void {
-		this.logger.trace(this.message(message), ...args);
-	}
-	debug(message: string, ...args: unknown[]): void {
-		this.logger.debug(this.message(message), ...args);
-	}
-	info(message: string, ...args: unknown[]): void {
-		this.logger.info(this.message(message), ...args);
-	}
-	warn(message: string, ...args: unknown[]): void {
-		this.logger.warn(this.message(message), ...args);
-	}
+	trace(message: string, ...args: unknown[]): void { this.logger.trace(this.message(message), ...args); }
+	debug(message: string, ...args: unknown[]): void { this.logger.debug(this.message(message), ...args); }
+	info(message: string, ...args: unknown[]): void { this.logger.info(this.message(message), ...args); }
+	warn(message: string, ...args: unknown[]): void { this.logger.warn(this.message(message), ...args); }
 	error(message: string | Error, ...args: unknown[]): void {
 		if (message instanceof Error) {
 			this.logger.error(this.message(message.message), message, ...args);
-		} else {
+		}
+		else {
 			this.logger.error(this.message(message), ...args);
 		}
 	}

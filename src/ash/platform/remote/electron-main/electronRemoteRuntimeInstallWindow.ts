@@ -31,13 +31,11 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 	constructor(private readonly options: ElectronRemoteRuntimeInstallWindowOptions) {
 		super();
 		this._register(options.progress.onDidChange(state => this.sync(state)));
-		this._register(
-			toDisposable(() => {
-				const window = this.window;
-				this.window = undefined;
-				if (window && !window.isDestroyed()) window.destroy();
-			}),
-		);
+		this._register(toDisposable(() => {
+			const window = this.window;
+			this.window = undefined;
+			if (window && !window.isDestroyed()) window.destroy();
+		}));
 	}
 
 	private sync(state: RemoteRuntimeInstallProgressState | undefined): void {
@@ -85,15 +83,13 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 			if (!window.isDestroyed() && this.options.progress.getState()) window.show();
 		});
 		const windowResources = this._register(new DisposableStore());
-		windowResources.add(
-			this.options.trustedIpcRouter.register(
-				{
-					webContents: window.webContents,
-					allowedEntryUrls: new Set([normalizeEntryUrl(this.options.rendererEntry.url)]),
-				},
-				remoteRuntimeInstallProgressIpcRoutes(this.options.progress),
-			),
-		);
+		windowResources.add(this.options.trustedIpcRouter.register(
+			{
+				webContents: window.webContents,
+				allowedEntryUrls: new Set([normalizeEntryUrl(this.options.rendererEntry.url)]),
+			},
+			remoteRuntimeInstallProgressIpcRoutes(this.options.progress),
+		));
 		window.once('closed', () => {
 			windowResources.dispose();
 			if (this.window === window) this.window = undefined;

@@ -39,18 +39,10 @@ test('Quick Diff resolves registered window services and rejects a missing diff 
 	const quickDiffService = services.get(IQuickDiffService);
 	let requests = 0;
 	using registration = quickDiffService.addProvider({
-		id: 'test',
-		label: 'Index',
+		id: 'test', label: 'Index',
 		async provideOriginalResource(resource) {
 			requests++;
-			return {
-				providerId: 'test',
-				providerLabel: 'Index',
-				label: 'Index',
-				originalResource: resource,
-				revision: 1,
-				text: 'before',
-			};
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'before' };
 		},
 	});
 	using model = new TextModel('after', { resource: URI.file('/workspace/registered.ts') });
@@ -74,23 +66,15 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	await configuration.updateValue('scm.diffDecorations', 'all');
 
 	using editor = createTestCodeEditor({ container: document.createElement('main'), model, contributions: [] });
-	using otherEditor = createTestCodeEditor({
-		container: document.createElement('main'),
-		model,
-		contributions: [],
-		inDiffEditor: true,
-	});
+	using otherEditor = createTestCodeEditor({ container: document.createElement('main'), model, contributions: [], inDiffEditor: true });
 	using source = new QuickDiffDecorator(editor, secondReference, configuration);
 	await waitFor(() => model.getAllDecorations().length === 2);
 	const decorations = model.getAllDecorations();
 
-	assert.deepEqual(
-		decorations.map(decoration => [decoration.options.linesDecorationsClassName, decoration.range.getStartPosition().lineNumber]),
-		[
-			['ash-quick-diff-gutter ash-quick-diff-modified', 2],
-			['ash-quick-diff-gutter ash-quick-diff-deleted', 3],
-		],
-	);
+	assert.deepEqual(decorations.map(decoration => [decoration.options.linesDecorationsClassName, decoration.range.getStartPosition().lineNumber]), [
+		['ash-quick-diff-gutter ash-quick-diff-modified', 2],
+		['ash-quick-diff-gutter ash-quick-diff-deleted', 3],
+	]);
 	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
 	assert.equal(editor.getLineDecorations(2)?.length, 1);
 	assert.deepEqual(otherEditor.getLineDecorations(2), [], 'Git decorations do not leak into another editor sharing the working copy');
@@ -114,18 +98,10 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 	using quickDiffService = new QuickDiffService();
 	let baselineRequests = 0;
 	using providerRegistration = quickDiffService.addProvider({
-		id: 'test',
-		label: 'Index',
+		id: 'test', label: 'Index',
 		async provideOriginalResource(resource) {
 			baselineRequests++;
-			return {
-				providerId: 'test',
-				providerLabel: 'Index',
-				label: 'Index',
-				originalResource: resource,
-				revision: 1,
-				text: 'word',
-			};
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'word' };
 		},
 	});
 	using configuration = new InMemoryConfigurationService();
@@ -135,15 +111,11 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 	await waitFor(() => reference.object.state.changes.length === 1);
 	await configuration.updateValue('scm.diffDecorationsIgnoreTrimWhitespace', 'inherit');
 	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, {
-		overrideIdentifier: 'typescript',
-	});
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	assert.equal(reference.object.state.changes.length, 0);
 	model.setLanguage('typescript');
 	await waitFor(() => reference.object.state.changes.length === 1);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, {
-		overrideIdentifier: 'typescript',
-	});
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, { overrideIdentifier: 'typescript' });
 	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
 	assert.equal(reference.object.state.changes.length, 0);
@@ -155,36 +127,24 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 test('Quick Diff passes its standard one-second computation limit to the diff provider', async () => {
 	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider({
-		id: 'test',
-		label: 'Index',
+		id: 'test', label: 'Index',
 		async provideOriginalResource(resource) {
-			return {
-				providerId: 'test',
-				providerLabel: 'Index',
-				label: 'Index',
-				originalResource: resource,
-				revision: 1,
-				text: 'before',
-			};
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'before' };
 		},
 	});
 	using configuration = new InMemoryConfigurationService();
 	const limits: number[] = [];
-	using modelService = new QuickDiffModelService(
-		quickDiffService,
-		{
-			createComputationService: () => ({
-				onDidChange: Event.None,
-				async computeDiff(_original: ITextModel, _modified: ITextModel, options: IDocumentDiffProviderOptions, _token: CancellationToken) {
-					limits.push(options.maxComputationTimeMs);
-					return { identical: false, quitEarly: false, changes: [], moves: [] };
-				},
-				dispose() {},
-				[Symbol.dispose]() {},
-			}),
-		},
-		configuration,
-	);
+	using modelService = new QuickDiffModelService(quickDiffService, {
+		createComputationService: () => ({
+			onDidChange: Event.None,
+			async computeDiff(_original: ITextModel, _modified: ITextModel, options: IDocumentDiffProviderOptions, _token: CancellationToken) {
+				limits.push(options.maxComputationTimeMs);
+				return { identical: false, quitEarly: false, changes: [], moves: [] };
+			},
+			dispose() { },
+			[Symbol.dispose]() { },
+		}),
+	}, configuration);
 	using model = new TextModel('after', { resource: URI.file('/workspace/limit.ts') });
 	using reference = modelService.createModelReference(URI.file('/workspace/limit.ts'), model);
 	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready');
@@ -195,13 +155,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const globals = new Map<string, PropertyDescriptor | undefined>();
-	for (const [name, value] of Object.entries({
-		window: dom.window,
-		document: dom.window.document,
-		Node: dom.window.Node,
-		Element: dom.window.Element,
-		HTMLElement: dom.window.HTMLElement,
-	})) {
+	for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document, Node: dom.window.Node, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement })) {
 		globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
@@ -219,25 +173,17 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		using controllers = new QuickDiffEditorControllerService();
 		await configuration.updateValue('scm.diffDecorations', 'all');
 		using services = new InstantiationService();
-		using codeEditors = new (class extends AbstractCodeEditorService {
-			getActiveCodeEditor() {
-				return this.getFocusedCodeEditor();
-			}
-		})();
+		using codeEditors = new class extends AbstractCodeEditorService { getActiveCodeEditor() { return this.getFocusedCodeEditor(); } }();
 		services.registerInstance(ICodeEditorService, codeEditors);
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IQuickDiffModelService, modelService);
 		services.registerInstance(IQuickDiffEditorControllerService, controllers);
 		using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 		const errors: unknown[] = [];
-		const onContributionError = (error: unknown): void => {
-			errors.push(error);
-		};
+		const onContributionError = (error: unknown): void => { errors.push(error); };
 		using editor = createTestCodeEditor({
-			container: dom.window.document.querySelector('main')!,
-			model,
-			instantiationService: services,
-			onContributionError,
+			container: dom.window.document.querySelector('main')!, model,
+			instantiationService: services, onContributionError,
 		});
 		assert.deepEqual(fixture.requests, [], 'deferred construction must not fetch during attach');
 		await waitFor(() => errors.length > 0 || model.getAllDecorations().some(decoration => decoration.options.linesDecorationsClassName?.includes('ash-quick-diff-gutter')));
@@ -245,11 +191,8 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		const controller = editor.getContribution('workbench.contrib.quickDiffEditorController');
 		assert.ok(controller instanceof QuickDiffEditorController);
 		using diffEditor = createTestCodeEditor({
-			container: dom.window.document.createElement('main'),
-			model,
-			inDiffEditor: true,
-			instantiationService: services,
-			onContributionError,
+			container: dom.window.document.createElement('main'), model, inDiffEditor: true,
+			instantiationService: services, onContributionError,
 		});
 		assert.equal(diffEditor.getContribution('workbench.contrib.quickDiffEditorController'), null);
 		assert.deepEqual(diffEditor.getLineDecorations(2), [], 'registered Quick Diff skips diff editor internals even with a shared working copy');
@@ -292,22 +235,11 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 function baselineFixture() {
 	const requests: string[] = [];
 	return {
-		requests,
-		provider: {
-			id: 'test.baseline',
-			label: 'Index',
-			async provideOriginalResource(resource: URI) {
+		requests, provider: {
+			id: 'test.baseline', label: 'Index', async provideOriginalResource(resource: URI) {
 				requests.push(resource.toString());
-				return {
-					providerId: 'test.baseline',
-					providerLabel: 'Index',
-					label: 'Index',
-					originalResource: resource,
-					revision: 7,
-					text: 'same\nold\nremoved\nlast',
-				};
-			},
-		},
-		dispose() {},
+				return { providerId: 'test.baseline', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 7, text: 'same\nold\nremoved\nlast' };
+			}
+		}, dispose() { }
 	};
 }

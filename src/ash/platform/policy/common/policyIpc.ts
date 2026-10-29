@@ -21,12 +21,8 @@ export class PolicyChannel implements IServerChannel {
 		if (event !== 'onDidChange') throw new Error('Unknown policy event');
 		return this.changed as Event<T>;
 	}
-	dispose(): void {
-		this.lifetime.dispose();
-	}
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	dispose(): void { this.lifetime.dispose(); }
+	[Symbol.dispose](): void { this.dispose(); }
 }
 
 /** The window caches immutable source snapshots, never system policy persistence. */
@@ -35,22 +31,20 @@ export class PolicyChannelClient extends AbstractPolicyService {
 	private readonly notified = new Map<string, number>();
 	constructor(private readonly channel: IChannel) {
 		super();
-		this._register(
-			channel.listen<unknown>('onDidChange')(candidate => {
-				if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) || Object.keys(candidate).length > 4096) throw new TypeError('Invalid policy notification');
-				const next = { ...this.policyValues };
-				for (const [name, value] of Object.entries(candidate)) {
-					if (value === null) delete next[name];
-					else if (Object.hasOwn(this.policyDefinitions, name)) Object.defineProperty(next, name, { value, enumerable: true, configurable: true });
-				}
-				const values = validatePolicyValues(next, this.policyDefinitions);
-				this.generation++;
-				for (const name of Object.keys(candidate)) {
-					if (Object.hasOwn(this.policyDefinitions, name)) this.notified.set(name, this.generation);
-				}
-				this.accept(values);
-			}),
-		);
+		this._register(channel.listen<unknown>('onDidChange')(candidate => {
+			if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) || Object.keys(candidate).length > 4096) throw new TypeError('Invalid policy notification');
+			const next = { ...this.policyValues };
+			for (const [name, value] of Object.entries(candidate)) {
+				if (value === null) delete next[name];
+				else if (Object.hasOwn(this.policyDefinitions, name)) Object.defineProperty(next, name, { value, enumerable: true, configurable: true });
+			}
+			const values = validatePolicyValues(next, this.policyDefinitions);
+			this.generation++;
+			for (const name of Object.keys(candidate)) {
+				if (Object.hasOwn(this.policyDefinitions, name)) this.notified.set(name, this.generation);
+			}
+			this.accept(values);
+		}));
 	}
 	protected async refresh(): Promise<void> {
 		const generation = this.generation;

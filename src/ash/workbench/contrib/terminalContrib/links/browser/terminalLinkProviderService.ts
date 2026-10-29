@@ -10,9 +10,7 @@ export class TerminalLinkProviderService extends Disposable implements ITerminal
 	private readonly removed = this._register(new Emitter<ITerminalExternalLinkProvider>());
 	readonly onDidAddLinkProvider = this.added.event;
 	readonly onDidRemoveLinkProvider = this.removed.event;
-	get linkProviders(): ReadonlySet<ITerminalExternalLinkProvider> {
-		return this.providers;
-	}
+	get linkProviders(): ReadonlySet<ITerminalExternalLinkProvider> { return this.providers; }
 
 	registerLinkProvider(provider: ITerminalExternalLinkProvider): IDisposable {
 		if (this.isDisposed) throw new CancellationError();

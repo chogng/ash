@@ -1,6 +1,16 @@
 import { type Event, Emitter } from '../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import { autorun, constObservable, derived, isObservable, transaction, type IObservable, type IReader, type ISettableObservable, type ITransaction } from '../../base/common/observable.js';
+import {
+	autorun,
+	constObservable,
+	derived,
+	isObservable,
+	transaction,
+	type IObservable,
+	type IReader,
+	type ISettableObservable,
+	type ITransaction,
+} from '../../base/common/observable.js';
 import { type IPosition, Position } from '../common/core/position.js';
 import { Point } from '../common/core/2d/point.js';
 import { LineRange } from '../common/core/ranges/lineRange.js';
@@ -81,11 +91,9 @@ export class ObservableCodeEditor extends Disposable {
 	private constructor(editor: ICodeEditor) {
 		super();
 		this.editor = editor;
-		this._register(
-			toDisposable(() => {
-				if (ObservableCodeEditor._map.get(editor) === this) ObservableCodeEditor._map.delete(editor);
-			}),
-		);
+		this._register(toDisposable(() => {
+			if (ObservableCodeEditor._map.get(editor) === this) ObservableCodeEditor._map.delete(editor);
+		}));
 
 		const model = editor.getModel();
 		this.modelState = this._register(new ObservableState(model));
@@ -102,7 +110,9 @@ export class ObservableCodeEditor extends Disposable {
 		this.isReadonly = constObservable(editor.getOption(EditorOption.readOnly));
 		this.versionId = this.versionState;
 		this.selections = this.selectionsState;
-		this.positions = derived(reader => Object.freeze(this.selections.read(reader)?.map(selection => selection.getSelectionStart()) ?? null));
+		this.positions = derived(reader => Object.freeze(
+			this.selections.read(reader)?.map(selection => selection.getSelectionStart()) ?? null,
+		));
 		this.isFocused = this.focusState;
 		this.isTextFocused = this.textFocusState;
 		this.inComposition = this.compositionState;
@@ -111,16 +121,14 @@ export class ObservableCodeEditor extends Disposable {
 			this.versionId.read(reader);
 			return this.model.read(reader)?.getValue() ?? '';
 		});
-		this.value = this._register(
-			new SettableDerivedObservable(valueSource, (value, suppliedTransaction) => {
-				const update = (): void => {
-					const currentModel = this.modelState.get();
-					if (currentModel && currentModel.getValue() !== value) currentModel.setValue(value);
-				};
-				if (suppliedTransaction && suppliedTransaction === this.currentTransaction) update();
-				else this.runInTransaction(() => update());
-			}),
-		);
+		this.value = this._register(new SettableDerivedObservable(valueSource, (value, suppliedTransaction) => {
+			const update = (): void => {
+				const currentModel = this.modelState.get();
+				if (currentModel && currentModel.getValue() !== value) currentModel.setValue(value);
+			};
+			if (suppliedTransaction && suppliedTransaction === this.currentTransaction) update();
+			else this.runInTransaction(() => update());
+		}));
 		this.valueIsEmpty = derived(reader => {
 			this.versionId.read(reader);
 			return (this.model.read(reader)?.getValueLength() ?? 0) === 0;
@@ -160,34 +168,20 @@ export class ObservableCodeEditor extends Disposable {
 		this.openedPeekWidgets = this._register(new ObservableState(0));
 
 		this._register(editor.onDidChangeModelContent(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
-		this._register(
-			editor.onDidChangeModel(() => {
-				this.runInTransaction(transaction => this.synchronizeState(transaction, true));
-			}),
-		);
+		this._register(editor.onDidChangeModel(() => {
+			this.runInTransaction(transaction => this.synchronizeState(transaction, true));
+		}));
 		this._register(editor.onDidChangeCursorSelection(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
-		this._register(
-			editor.onDidLayoutChange(layout =>
-				this.runInTransaction(transaction => {
-					this.layoutState.set(layout, transaction);
-				}),
-			),
-		);
-		this._register(
-			editor.onDidType(text =>
-				this.runInTransaction(transaction => {
-					this.synchronizeState(transaction);
-					this.typeChannel.emit(text, transaction);
-				}),
-			),
-		);
-		this._register(
-			editor.onDidPaste(event =>
-				this.runInTransaction(transaction => {
-					this.pasteChannel.emit(event, transaction);
-				}),
-			),
-		);
+		this._register(editor.onDidLayoutChange(layout => this.runInTransaction(transaction => {
+			this.layoutState.set(layout, transaction);
+		})));
+		this._register(editor.onDidType(text => this.runInTransaction(transaction => {
+			this.synchronizeState(transaction);
+			this.typeChannel.emit(text, transaction);
+		})));
+		this._register(editor.onDidPaste(event => this.runInTransaction(transaction => {
+			this.pasteChannel.emit(event, transaction);
+		})));
 		this._register(editor.onDidCompositionStart(() => this.runInTransaction(transaction => this.compositionState.set(true, transaction))));
 		this._register(editor.onDidCompositionEnd(() => this.runInTransaction(transaction => this.compositionState.set(false, transaction))));
 		this._register(editor.onDidFocusEditorText(() => this.refreshTextFocusState()));
@@ -222,12 +216,10 @@ export class ObservableCodeEditor extends Disposable {
 	public setDecorations(decorations: IObservable<IModelDeltaDecoration[]>): IDisposable {
 		const store = new DisposableStore();
 		const collection = this.editor.createDecorationsCollection();
-		store.add(
-			autorun(reader => {
-				this.model.read(reader);
-				collection.set(decorations.read(reader));
-			}),
-		);
+		store.add(autorun(reader => {
+			this.model.read(reader);
+			collection.set(decorations.read(reader));
+		}));
 		store.add(toDisposable(() => collection.clear()));
 		return store;
 	}
@@ -523,7 +515,9 @@ class SettableDerivedObservable<T> extends Disposable implements ISettableObserv
 }
 
 function readValue<T>(value: T | IObservable<T>, reader: IReader): T {
-	return isObservable(value) ? (value as IObservable<T>).read(reader) : value;
+	return isObservable(value)
+		? (value as IObservable<T>).read(reader)
+		: value;
 }
 
 function validateLineNumber(model: ITextModel, lineNumber: number): void {

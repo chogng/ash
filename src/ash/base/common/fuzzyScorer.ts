@@ -104,10 +104,8 @@ function* foldCharacters(source: string, lowercase: string): IterableIterator<Fo
 	let index = 0;
 	let previous = '';
 	for (const original of source) {
-		const boundary =
-			offset === 0 ||
-			/[\s._:/\\'"-]/.test(previous) ||
-			(previous.toLowerCase() === previous && previous.toUpperCase() !== previous && original.toUpperCase() === original && original.toLowerCase() !== original);
+		const boundary = offset === 0 || /[\s._:/\\'"-]/.test(previous)
+			|| (previous.toLowerCase() === previous && previous.toUpperCase() !== previous && original.toUpperCase() === original && original.toLowerCase() !== original);
 		let first = true;
 		for (const _character of original.toLowerCase()) {
 			yield { value: folded.next().value!, original, offset, index: index++, boundary: first && boundary };
@@ -119,7 +117,8 @@ function* foldCharacters(source: string, lowercase: string): IterableIterator<Fo
 }
 
 function equalCharacters(left: FoldedCharacter, right: FoldedCharacter): boolean {
-	return left.value === right.value || ((left.value === '/' || left.value === '\\') && (right.value === '/' || right.value === '\\'));
+	return left.value === right.value
+		|| ((left.value === '/' || left.value === '\\') && (right.value === '/' || right.value === '\\'));
 }
 
 function characterScore(character: FoldedCharacter, expected: FoldedCharacter): number {

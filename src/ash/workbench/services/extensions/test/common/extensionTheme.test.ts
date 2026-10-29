@@ -13,18 +13,11 @@ import { ExtensionColorThemeService } from '../../browser/extensionColorThemeSer
 
 test('compiles a stable selectable Workbench theme from supported extension colors', () => {
 	const id = extensionWorkbenchThemeId('vscode.theme-defaults', 'Visual Studio Dark', 0);
-	const definition = parseExtensionTheme(
-		{
-			name: 'Dark (Visual Studio)',
-			colors: { 'editor.background': '#1E1E1E', 'unsupported.color': '#ffffff' },
-			semanticTokenColors: {},
-		},
-		id,
-		'vscode.theme-defaults',
-		'%darkColorThemeLabel%',
-		'vs-dark',
-		'theme test',
-	);
+	const definition = parseExtensionTheme({
+		name: 'Dark (Visual Studio)',
+		colors: { 'editor.background': '#1E1E1E', 'unsupported.color': '#ffffff' },
+		semanticTokenColors: {},
+	}, id, 'vscode.theme-defaults', '%darkColorThemeLabel%', 'vs-dark', 'theme test');
 
 	const theme = createExtensionWorkbenchColorTheme(definition);
 
@@ -42,29 +35,15 @@ test('rejects selectable extension themes without a supported UI scheme', () => 
 test('loads extension publisher metadata and direct token styles through package-relative includes', async () => {
 	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
 	const files: Record<string, unknown> = {
-		'themes/theme.json': {
-			include: './base.json',
-			author: 'Publisher',
-			maintainers: ['Publisher'],
-			semanticClass: 'dark',
-			dracula: {},
-			colors: { 'editor.background': '#282a36' },
-		},
+		'themes/theme.json': { include: './base.json', author: 'Publisher', maintainers: ['Publisher'], semanticClass: 'dark', dracula: {}, colors: { 'editor.background': '#282a36' } },
 		'themes/base.json': {
 			semanticTokenColors: { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } },
 		},
 	};
-	const definition = await loadExtensionTheme(
-		async path => new TextEncoder().encode(JSON.stringify(files[path])),
-		'ash.sample-theme',
-		{ id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' },
-		0,
-	);
+	const definition = await loadExtensionTheme(async path => new TextEncoder().encode(JSON.stringify(files[path])),
+		'ash.sample-theme', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
 	assert.equal(createExtensionWorkbenchColorTheme(definition).getColorCss(editorBackground), '#282a36');
-	assert.deepEqual(definition.semanticTokenColors, {
-		comment: { foreground: '#6272a4', fontStyle: '' },
-		variable: { fontStyle: '' },
-	});
+	assert.deepEqual(definition.semanticTokenColors, { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } });
 });
 
 test('rejects invalid token colors and font styles before a theme becomes active', () => {
@@ -79,36 +58,17 @@ test('rejects invalid token colors and font styles before a theme becomes active
 });
 
 test('dedicated renderer loads extension themes and retains the last valid registration after a failed reload', async () => {
-	const manifestJson = JSON.stringify({
-		name: 'example',
-		publisher: 'ash',
-		version: '1.0.0',
-		contributes: {
-			themes: [{ id: 'Example', label: 'Example', uiTheme: 'vs-dark', path: './themes/example.json' }],
-		},
-	});
+	const manifestJson = JSON.stringify({ name: 'example', publisher: 'ash', version: '1.0.0', contributes: { themes: [{ id: 'Example', label: 'Example', uiTheme: 'vs-dark', path: './themes/example.json' }] } });
 	let generation = 1;
 	let installed = true;
 	let themeDocument = JSON.stringify({ colors: { 'editor.background': '#123456' } });
 	const api: IExtensionApi = {
 		list: async () => ({
-			generation,
-			diagnostics: [],
-			extensions: installed
-				? [
-						{
-							id: 'ash.example',
-							name: 'example',
-							publisher: 'ash',
-							version: '1.0.0',
-							displayName: 'Example',
-							sourceKind: 'user',
-							manifestJson,
-							manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-							packageSha256: `sha256:${'a'.repeat(64)}`,
-						},
-					]
-				: [],
+			generation, diagnostics: [], extensions: installed ? [{
+				id: 'ash.example', name: 'example', publisher: 'ash', version: '1.0.0', displayName: 'Example', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
+				packageSha256: `sha256:${'a'.repeat(64)}`,
+			}] : []
 		}),
 		resources: new ExtensionResourceLoaderService(async ({ generation: requestedGeneration, path }) => {
 			assert.equal(requestedGeneration, generation);
@@ -117,16 +77,7 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 		}),
 	};
 	let listener: Parameters<IServerEventApi['subscribe']>[0] | undefined;
-	const events: IServerEventApi = {
-		subscribe: callback => {
-			listener = callback;
-			return {
-				dispose: () => {
-					listener = undefined;
-				},
-			};
-		},
-	};
+	const events: IServerEventApi = { subscribe: callback => { listener = callback; return { dispose: () => { listener = undefined; } }; } };
 	const themeId = 'extension-ash-example-example';
 	{
 		using service = new ExtensionColorThemeService(api, events);
@@ -139,10 +90,7 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 		generation++;
 		themeDocument = JSON.stringify({ colors: { 'editor.background': '#654321' } });
 		const changed = new Promise<void>(resolve => {
-			const subscription = WorkbenchThemesRegistry.onDidChange(() => {
-				subscription.dispose();
-				resolve();
-			});
+			const subscription = WorkbenchThemesRegistry.onDidChange(() => { subscription.dispose(); resolve(); });
 		});
 		listener?.({ method: 'plugin/changed', params: { revision: generation, activationGeneration: generation } });
 		await changed;
@@ -150,10 +98,7 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 		generation++;
 		installed = false;
 		const removed = new Promise<void>(resolve => {
-			const subscription = WorkbenchThemesRegistry.onDidChange(() => {
-				subscription.dispose();
-				resolve();
-			});
+			const subscription = WorkbenchThemesRegistry.onDidChange(() => { subscription.dispose(); resolve(); });
 		});
 		listener?.({ method: 'extensions/changed', params: { instanceId: 'manager', generation } });
 		await removed;
@@ -164,40 +109,14 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 });
 
 test('the renderer loads a portable Extensions theme and rejects invalid declarations before replacing it', async () => {
-	const portable = {
-		schemaVersion: 1,
-		themes: [{ id: 'portable', displayName: 'Portable', appearance: 'dark', path: 'themes/portable.json' }],
-	};
+	const portable = { schemaVersion: 1, themes: [{ id: 'portable', displayName: 'Portable', appearance: 'dark', path: 'themes/portable.json' }] };
 	let contents: unknown = portable;
 	let generation = 1;
-	const descriptor = {
-		id: 'registry.example',
-		name: 'example',
-		publisher: 'registry',
-		version: '1.0.0',
-		displayName: 'Example',
-		sourceKind: 'registry' as const,
-		packageSha256: `sha256:${'a'.repeat(64)}`,
-	};
+	const descriptor = { id: 'registry.example', name: 'example', publisher: 'registry', version: '1.0.0', displayName: 'Example', sourceKind: 'registry' as const, packageSha256: `sha256:${'a'.repeat(64)}` };
 	const api: IExtensionApi = {
 		list: async () => {
-			const manifestJson = JSON.stringify({
-				...(contents as object),
-				name: descriptor.name,
-				publisher: descriptor.publisher,
-				version: descriptor.version,
-			});
-			return {
-				generation,
-				diagnostics: [],
-				extensions: [
-					{
-						...descriptor,
-						manifestJson,
-						manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-					},
-				],
-			};
+			const manifestJson = JSON.stringify({ ...contents as object, name: descriptor.name, publisher: descriptor.publisher, version: descriptor.version });
+			return { generation, diagnostics: [], extensions: [{ ...descriptor, manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}` }] };
 		},
 		resources: new ExtensionResourceLoaderService(async request => {
 			assert.equal(request.path, 'themes/portable.json');
@@ -206,7 +125,7 @@ test('the renderer loads a portable Extensions theme and rejects invalid declara
 	};
 	const themeId = 'extension-registry-example-portable';
 	{
-		using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() {} }) });
+		using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
 		await service.start();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#123456');
 		for (const invalid of [
@@ -232,17 +151,9 @@ test('the renderer loads a portable Extensions theme and rejects invalid declara
 
 test('independent themes load concurrently with includes and publish once in manifest order', async () => {
 	const manifestJson = JSON.stringify({
-		name: 'parallel-theme',
-		publisher: 'ash',
-		version: '1.0.0',
-		contributes: {
-			themes: Array.from({ length: 12 }, (_, index) => ({
-				id: `theme-${index}`,
-				label: `Theme ${index}`,
-				uiTheme: 'vs-dark',
-				path: `themes/${index}.json`,
-			})),
-		},
+		name: 'parallel-theme', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: Array.from({ length: 12 }, (_, index) => ({ id: `theme-${index}`, label: `Theme ${index}`, uiTheme: 'vs-dark', path: `themes/${index}.json` })),
+		}
 	});
 	const firstBatch = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -251,21 +162,10 @@ test('independent themes load concurrently with includes and publish once in man
 	const reads: string[] = [];
 	const api: IExtensionApi = {
 		list: async () => ({
-			generation: 1,
-			diagnostics: [],
-			extensions: [
-				{
-					id: 'ash.parallel-theme',
-					name: 'parallel-theme',
-					publisher: 'ash',
-					version: '1.0.0',
-					displayName: 'Parallel themes',
-					sourceKind: 'user',
-					manifestJson,
-					manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-					packageSha256: `sha256:${'a'.repeat(64)}`,
-				},
-			],
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.parallel-theme', name: 'parallel-theme', publisher: 'ash', version: '1.0.0', displayName: 'Parallel themes', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}]
 		}),
 		resources: new ExtensionResourceLoaderService(async ({ path }) => {
 			reads.push(path);
@@ -273,14 +173,13 @@ test('independent themes load concurrently with includes and publish once in man
 			if (active === 8) void firstBatch.complete();
 			try {
 				await release.p;
-				return new TextEncoder().encode(JSON.stringify(path === 'themes/base.json' ? { colors: { 'editor.background': '#123456' } } : { include: './base.json' }));
-			} finally {
-				active--;
-			}
+				return new TextEncoder().encode(JSON.stringify(path === 'themes/base.json'
+					? { colors: { 'editor.background': '#123456' } } : { include: './base.json' }));
+			} finally { active--; }
 		}),
 	};
 	const ids = Array.from({ length: 12 }, (_, index) => `extension-ash-parallel-theme-theme-${index}`);
-	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() {} }) });
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
 	const loading = service.start();
 	await firstBatch.p;
 	assert.equal(reads.length, 8);
@@ -289,48 +188,25 @@ test('independent themes load concurrently with includes and publish once in man
 	await loading;
 	assert.equal(peak, 8);
 	assert.equal(reads.filter(path => path === 'themes/base.json').length, 1);
-	assert.deepEqual(
-		WorkbenchThemesRegistry.getColorThemes()
-			.filter(theme => ids.includes(theme.id))
-			.map(theme => [theme.id, theme.getColorCss(editorBackground)]),
-		ids.map(id => [id, '#123456']),
-	);
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => ids.includes(theme.id)).map(theme => [theme.id, theme.getColorCss(editorBackground)]),
+		ids.map(id => [id, '#123456']));
 });
 
 test('disposing during theme reads drains admitted tasks without reading their includes or publishing', async () => {
 	const manifestJson = JSON.stringify({
-		name: 'disposed-theme',
-		publisher: 'ash',
-		version: '1.0.0',
-		contributes: {
-			themes: Array.from({ length: 12 }, (_, index) => ({
-				id: `theme-${index}`,
-				label: `Theme ${index}`,
-				uiTheme: 'vs-dark',
-				path: `themes/${index}.json`,
-			})),
-		},
+		name: 'disposed-theme', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: Array.from({ length: 12 }, (_, index) => ({ id: `theme-${index}`, label: `Theme ${index}`, uiTheme: 'vs-dark', path: `themes/${index}.json` })),
+		}
 	});
 	const firstBatch = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
 	const reads: string[] = [];
 	const api: IExtensionApi = {
 		list: async () => ({
-			generation: 1,
-			diagnostics: [],
-			extensions: [
-				{
-					id: 'ash.disposed-theme',
-					name: 'disposed-theme',
-					publisher: 'ash',
-					version: '1.0.0',
-					displayName: 'Disposed themes',
-					sourceKind: 'user',
-					manifestJson,
-					manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-					packageSha256: `sha256:${'a'.repeat(64)}`,
-				},
-			],
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.disposed-theme', name: 'disposed-theme', publisher: 'ash', version: '1.0.0', displayName: 'Disposed themes', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}]
 		}),
 		resources: new ExtensionResourceLoaderService(async ({ path }) => {
 			reads.push(path);
@@ -339,16 +215,13 @@ test('disposing during theme reads drains admitted tasks without reading their i
 			return new TextEncoder().encode('{"include":"./base.json"}');
 		}),
 	};
-	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() {} }) });
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
 	const loading = service.start();
 	await firstBatch.p;
 	service.dispose();
 	await release.complete();
 	await loading;
-	assert.deepEqual(
-		reads,
-		Array.from({ length: 8 }, (_, index) => `themes/${index}.json`),
-	);
+	assert.deepEqual(reads, Array.from({ length: 8 }, (_, index) => `themes/${index}.json`));
 	assert.equal(WorkbenchThemesRegistry.getColorTheme('extension-ash-disposed-theme-theme-0'), undefined);
 });
 
@@ -360,8 +233,6 @@ test('theme includes retain the aggregate document budget after individual resou
 		'themes/base.json': JSON.stringify({ colors: colors('base') }),
 	};
 	assert.ok(Object.values(files).every(source => source.length < 1_048_576));
-	await assert.rejects(
-		loadExtensionTheme(async path => new TextEncoder().encode(files[path]), 'ash.bounded-theme', { id: 'bounded', label: 'Bounded', uiTheme: 'vs-dark', path: 'themes/child.json' }, 0),
-		/1 MiB/,
-	);
+	await assert.rejects(loadExtensionTheme(async path => new TextEncoder().encode(files[path]),
+		'ash.bounded-theme', { id: 'bounded', label: 'Bounded', uiTheme: 'vs-dark', path: 'themes/child.json' }, 0), /1 MiB/);
 });

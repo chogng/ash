@@ -3,23 +3,11 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import {
-	FileKind,
-	FileNotFoundError,
-	FileOperationNotSupportedError,
-	FileRevisionConflictError,
-	FileSystemProviderCapabilities,
-	IFileService,
-	type FileDeleteMode,
-	type FileExistingTargetBehavior,
-	type FileMissingTargetBehavior,
-	type IFileBytes,
-	type IFileChangeEvent,
-	type IFileEntry,
-	type IFileStat,
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	type IWatchOptions,
+	FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError,
+	FileSystemProviderCapabilities, IFileService,
+	type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior,
+	type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat,
+	type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions,
 } from '../../../../platform/files/common/files.js';
 import { ITrustedDomainService } from '../common/trustedDomainService.js';
 import { TRUSTED_DOMAINS_URI } from './trustedDomains.js';
@@ -98,12 +86,6 @@ export class TrustedDomainsFileSystemProvider extends Disposable implements IFil
 	}
 
 	private fileStat(sizeBytes: number): IFileStat {
-		return {
-			resource: TRUSTED_DOMAINS_URI,
-			kind: FileKind.File,
-			sizeBytes,
-			readonly: false,
-			modifiedAtMillis: undefined,
-		};
+		return { resource: TRUSTED_DOMAINS_URI, kind: FileKind.File, sizeBytes, readonly: false, modifiedAtMillis: undefined };
 	}
 }

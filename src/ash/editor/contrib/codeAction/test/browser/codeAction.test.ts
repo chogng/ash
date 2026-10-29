@@ -20,10 +20,7 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
-for (const [command, kind] of [
-	['editor.action.refactor', 'refactor.extract'],
-	['editor.action.sourceAction', 'source.organizeImports'],
-] as const) {
+for (const [command, kind] of [['editor.action.refactor', 'refactor.extract'], ['editor.action.sourceAction', 'source.organizeImports']] as const) {
 	for (const matching of [true, false]) {
 		test(`${command} honors kind, preferred and apply arguments${matching ? '' : ' without crossing action families'}`, async () => {
 			const dom = new JSDOM('<body><main></main></body>');
@@ -33,35 +30,18 @@ for (const [command, kind] of [
 			using features = new LanguageFeaturesService();
 			using provider = features.codeActionProvider.register('typescript', {
 				providedCodeActionKinds: [kind],
-				provideCodeActions: () =>
-					[false, true].map(isPreferred => ({
-						title: isPreferred ? 'Preferred' : 'Other',
-						kind,
-						isPreferred,
-						edit: {
-							entries: [
-								{
-									kind: 'textDocument' as const,
-									resource: model.uri,
-									edits: [{ range: new Range(1, 1, 1, 7), text: isPreferred ? 'preferred' : 'other' }],
-								},
-							],
-						},
-					})),
+				provideCodeActions: () => [false, true].map(isPreferred => ({
+					title: isPreferred ? 'Preferred' : 'Other', kind, isPreferred,
+					edit: { entries: [{ kind: 'textDocument' as const, resource: model.uri, edits: [{ range: new Range(1, 1, 1, 7), text: isPreferred ? 'preferred' : 'other' }] }] },
+				})),
 			});
 			using editor = createTestCodeEditor({
-				container: dom.window.document.querySelector<HTMLElement>('main')!,
-				model,
-				languageFeaturesService: features,
-				dimension: { width: 320, height: 80 },
+				container: dom.window.document.querySelector<HTMLElement>('main')!, model,
+				languageFeaturesService: features, dimension: { width: 320, height: 80 },
 			});
-			await editor.invokeWithinContext(accessor =>
-				accessor.get(ICommandService).executeCommand(command, {
-					kind: matching ? kind : 'quickfix',
-					preferred: true,
-					apply: 'first',
-				}),
-			);
+			await editor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand(command, {
+				kind: matching ? kind : 'quickfix', preferred: true, apply: 'first',
+			}));
 			assert.equal(model.getText(), matching ? 'preferred' : 'before');
 			if (matching) {
 				model.undo();
@@ -70,6 +50,8 @@ for (const [command, kind] of [
 		});
 	}
 }
+
+
 
 test('CodeActionController resolves an action with its original provider before applying it', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -83,29 +65,18 @@ test('CodeActionController resolves an action with its original provider before 
 		provideCodeActions: () => [originalAction],
 		resolveCodeAction: action => {
 			assert.equal(action, originalAction);
-			return {
-				...action,
-				edit: {
-					entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] }],
-				},
-			};
+			return { ...action, edit: { entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] }] } };
 		},
 	});
 	using unrelated = providers.register('typescript', {
 		provideCodeActions: () => [],
-		resolveCodeAction: () => {
-			throw new Error('Unrelated provider must not resolve this action');
-		},
+		resolveCodeAction: () => { throw new Error('Unrelated provider must not resolve this action'); },
 	});
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
 	using editor = createTestCodeEditor({
-		container,
-		model,
-		ariaLabel: 'test.ts',
-		languageFeaturesService: features,
-		dimension: { width: 320, height: 80 },
-		onLanguageError: error => errors.push(error),
+		container, model, ariaLabel: 'test.ts',
+		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 12)));
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
@@ -133,19 +104,13 @@ test('Code actions without a resolver never use another provider resolver', asyn
 	using owner = providers.register('typescript', { provideCodeActions: () => [{ title: 'Unresolved action' }] });
 	using unrelated = providers.register('typescript', {
 		provideCodeActions: () => [],
-		resolveCodeAction: () => {
-			throw new Error('Unrelated resolver called');
-		},
+		resolveCodeAction: () => { throw new Error('Unrelated resolver called'); },
 	});
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
 	using editor = createTestCodeEditor({
-		container,
-		model,
-		ariaLabel: 'test.ts',
-		languageFeaturesService: features,
-		dimension: { width: 320, height: 80 },
-		onLanguageError: error => errors.push(error),
+		container, model, ariaLabel: 'test.ts',
+		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
@@ -167,56 +132,25 @@ for (const outcome of ['complete', 'canceled', 'error'] as const) {
 		using model = new TextModel('value', { languageId: 'typescript' });
 		using features = new LanguageFeaturesService();
 		using provider = features.codeActionProvider.register('typescript', {
-			provideCodeActions: () => [
-				{
-					title: 'Workspace edit',
-					edit: {
-						entries: [
-							{
-								kind: 'textDocument',
-								resource: model.uri,
-								edits: [{ range: model.getFullModelRange(), text: 'result' }],
-							},
-						],
-					},
-				},
-			],
+			provideCodeActions: () => [{
+				title: 'Workspace edit',
+				edit: { entries: [{ kind: 'textDocument', resource: model.uri, edits: [{ range: model.getFullModelRange(), text: 'result' }] }] },
+			}],
 		});
 		let release!: () => void;
-		const pending = new Promise<void>(resolve => {
-			release = resolve;
-		});
+		const pending = new Promise<void>(resolve => { release = resolve; });
 		const errors: unknown[] = [];
 		let calls = 0;
 		const container = dom.window.document.querySelector<HTMLElement>('main')!;
 		using services = new InstantiationService();
 		const cues: string[] = [];
-		services.registerInstance(IAccessibilitySignalService, {
-			playSignal: async signal => {
-				cues.push(signal.settingsKey);
-			},
-			playSignalLoop: () => {
-				throw new Error('Unexpected loop');
-			},
-		});
+		services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
 		using editor = createTestCodeEditor({
 			instantiationService: services,
-			container,
-			model,
-			ariaLabel: 'test.ts',
-			languageFeaturesService: features,
-			dimension: { width: 320, height: 80 },
-			onLanguageError: error => errors.push(error),
+			container, model, ariaLabel: 'test.ts',
+			languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 			onApplyWorkspaceEdit: async (_edit, options) => {
-				assert.deepEqual(
-					{
-						autoSave: options?.respectAutoSaveConfig,
-						preview: options?.showPreview,
-						label: options?.label,
-						source: options?.reason?.metadata.source,
-					},
-					{ autoSave: true, preview: false, label: 'Workspace edit', source: 'codeAction' },
-				);
+				assert.deepEqual({ autoSave: options?.respectAutoSaveConfig, preview: options?.showPreview, label: options?.label, source: options?.reason?.metadata.source }, { autoSave: true, preview: false, label: 'Workspace edit', source: 'codeAction' });
 				calls++;
 				await pending;
 				if (outcome === 'error') throw new Error('Workspace edit failed after dispatch');
@@ -241,15 +175,8 @@ for (const outcome of ['complete', 'canceled', 'error'] as const) {
 			release();
 			await flushPromises();
 			assert.equal(dom.window.document.querySelector('.ash-action-widget'), replacement);
-			assert.deepEqual(
-				errors.map(error => (error as Error).message),
-				outcome === 'error' ? ['Workspace edit failed after dispatch'] : [],
-			);
-			assert.deepEqual(cues, [
-				'accessibility.signals.codeActionTriggered',
-				'accessibility.signals.codeActionTriggered',
-				...(outcome === 'complete' ? ['accessibility.signals.codeActionApplied'] : []),
-			]);
+			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'error' ? ['Workspace edit failed after dispatch'] : []);
+			assert.deepEqual(cues, ['accessibility.signals.codeActionTriggered', 'accessibility.signals.codeActionTriggered', ...(outcome === 'complete' ? ['accessibility.signals.codeActionApplied'] : [])]);
 		} finally {
 			release();
 			dom.window.close();
@@ -266,28 +193,19 @@ test('a failing code action provider does not prevent another provider from retu
 		provideCodeActions: () => [{ title: 'Healthy action' }],
 	});
 	using broken = features.codeActionProvider.register('typescript', {
-		provideCodeActions: () => {
-			throw new Error('Provider failed');
-		},
+		provideCodeActions: () => { throw new Error('Provider failed'); },
 	});
 	const errors: unknown[] = [];
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using editor = createTestCodeEditor({
-		container,
-		model,
-		ariaLabel: 'test.ts',
-		languageFeaturesService: features,
-		dimension: { width: 320, height: 80 },
-		onLanguageError: error => errors.push(error),
+		container, model, ariaLabel: 'test.ts',
+		languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
 	assert.equal(dom.window.document.querySelector('.ash-action-widget button')?.textContent, 'Healthy action');
-	assert.deepEqual(
-		errors.map(error => (error as Error).message),
-		['Provider failed'],
-	);
+	assert.deepEqual(errors.map(error => (error as Error).message), ['Provider failed']);
 	dom.window.close();
 });
 
@@ -308,26 +226,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			using features = new LanguageFeaturesService();
 			let released = 0;
 			using provider = features.codeActionProvider.register('typescript', {
-				provideCodeActions: () => ({
-					actions: [
-						{
-							title: 'Replace value',
-							kind: 'refactor.rewrite',
-							isAI: true,
-							edit: {
-								entries: [
-									{
-										kind: 'textDocument',
-										resource: model.uri,
-										version: model.getVersionId(),
-										edits: [{ range: model.getFullModelRange(), text: 'result' }],
-									},
-								],
-							},
-						},
-					],
-					...toDisposable(() => released++),
-				}),
+				provideCodeActions: () => ({ actions: [{ title: 'Replace value', kind: 'refactor.rewrite', isAI: true, edit: { entries: [{ kind: 'textDocument', resource: model.uri, version: model.getVersionId(), edits: [{ range: model.getFullModelRange(), text: 'result' }] }] } }], ...toDisposable(() => released++) }),
 			});
 			const bulkEdits = fixture.service;
 			if (outcome === 'commit error') {
@@ -337,35 +236,18 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			let previewSignal: AbortSignal | undefined;
 			using handler = bulkEdits.setPreviewHandler((edits, options) => {
 				previewSignal = options!.token;
-				return new Promise(resolve => {
-					finish = accepted => resolve(accepted ? edits : []);
-				});
+				return new Promise(resolve => { finish = accepted => resolve(accepted ? edits : []); });
 			});
 			using services = new InstantiationService();
 			services.registerInstance(IBulkEditService, bulkEdits);
 			const errors: unknown[] = [];
-			using editor = createTestCodeEditor({
-				container: dom.window.document.querySelector<HTMLElement>('main')!,
-				model,
-				ariaLabel: 'test.ts',
-				languageFeaturesService: features,
-				instantiationService: services,
-				dimension: { width: 320, height: 80 },
-				onLanguageError: error => errors.push(error),
-			});
+			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, ariaLabel: 'test.ts', languageFeaturesService: features, instantiationService: services, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error) });
 			const input = dom.window.document.querySelector<HTMLElement>('.stanza-editor-input')!;
 			input.focus();
 			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
 			const action = dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
-			action.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', {
-					bubbles: true,
-					cancelable: true,
-					key: 'Enter',
-					ctrlKey: true,
-				}),
-			);
+			action.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', ctrlKey: true }));
 			await flushPromises();
 			assert.deepEqual(fixture.store.saved, []);
 			assert.equal(previewSignal?.aborted, false);
@@ -380,10 +262,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			assert.equal(fixture.store.saved.length, outcome === 'accept' || outcome === 'commit error' ? 1 : 0);
 			assert.equal(previewSignal!.aborted, true);
 			assert.equal(released, 1);
-			assert.deepEqual(
-				errors.map(error => (error as Error).message),
-				outcome === 'commit error' ? ['Approved edit failed after retiring its request'] : [],
-			);
+			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'commit error' ? ['Approved edit failed after retiring its request'] : []);
 		} finally {
 			dom.window.close();
 		}

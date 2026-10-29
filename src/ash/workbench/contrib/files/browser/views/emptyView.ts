@@ -1,6 +1,9 @@
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
+import {
+	ViewPane,
+	type IViewPaneOptions,
+} from '../../../../browser/parts/views/viewPane.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { OpenFolderWorkspaceSupportContext, BrowserLocalFolderSupportContext } from '../../../../common/contextkeys.js';
@@ -32,23 +35,27 @@ export class EmptyView extends ViewPane {
 		const message = h(container.ownerDocument, 'p');
 		message.className = 'ash-empty-explorer-message';
 		message.textContent = 'Open a folder to explore its files.';
-		this.openButton = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: 'Open Folder',
-				enabled: this.canOpenFolder,
-				title: this.canOpenFolder ? 'Open Folder' : 'Opening folders is unavailable in this host',
-				onClick: () => {
-					void this.openFolder();
-				},
-			}),
-		);
+		this.openButton = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: 'Open Folder',
+			enabled: this.canOpenFolder,
+			title: this.canOpenFolder
+				? 'Open Folder'
+				: 'Opening folders is unavailable in this host',
+			onClick: () => {
+				void this.openFolder();
+			},
+		}));
 		this.openButton.toggleClassName('ash-empty-explorer-open-folder', true);
 		this.statusElement = h(container.ownerDocument, 'p');
 		this.statusElement.className = 'ash-empty-explorer-status';
 		this.statusElement.setAttribute('role', 'status');
 		this.statusElement.setAttribute('aria-live', 'polite');
-		this.contentElement.append(message, this.openButton.domNode, this.statusElement);
+		this.contentElement.append(
+			message,
+			this.openButton.domNode,
+			this.statusElement,
+		);
 	}
 
 	private get canOpenFolder(): boolean {
@@ -63,10 +70,13 @@ export class EmptyView extends ViewPane {
 			await this.fileDialogs.pickFolderAndOpen();
 		} catch (error) {
 			if (this.isDisposed) return;
-			this.statusElement.textContent = error instanceof Error ? error.message : 'Unable to open a folder.';
+			this.statusElement.textContent = error instanceof Error
+				? error.message
+				: 'Unable to open a folder.';
 		} finally {
 			if (!this.isDisposed) {
-				this.openButton.enabled = this.canOpenFolder;
+				this.openButton.enabled =
+					this.canOpenFolder;
 			}
 		}
 	}

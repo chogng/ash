@@ -31,12 +31,7 @@ suite('chatEditing browser component', () => {
 			await page.keyboard.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual(['restored']);
 			const request = await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests[0]);
-			expect(request).toMatchObject({
-				sessionId: 'session',
-				threadId: 'source',
-				itemId: 'message',
-				boundary: 'before',
-			});
+			expect(request).toMatchObject({ sessionId: 'session', threadId: 'source', itemId: 'message', boundary: 'before' });
 			await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot().texts)).toEqual(['first change', 'second change']);
 		});
 		test(`pending reviews survive a window reload and decisions remain scoped (${locale})`, async function () {
@@ -83,23 +78,17 @@ suite('chatEditing browser component', () => {
 			const picker = page.getByRole('combobox');
 			await picker.fill('second-chat');
 			await page.keyboard.press('Enter');
-			await expect(page.getByRole('status', { name: 'Review error' })).toHaveText(
-				locale === 'en' ? 'These changes include edits from other chats. Review the shared file or change set separately.' : '这些更改包含其他对话的编辑。请单独审阅共享文件或更改集。',
-			);
+			await expect(page.getByRole('status', { name: 'Review error' })).toHaveText(locale === 'en'
+				? 'These changes include edits from other chats. Review the shared file or change set separately.'
+				: '这些更改包含其他对话的编辑。请单独审阅共享文件或更改集。');
 			await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.snapshot().entries.length)).toBe(2);
 			await page.getByRole('button', { name: 'Review changes' }).click();
 			await picker.fill('first-chat');
 			await page.keyboard.press('Enter');
 			await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['first.txt']);
 			await expect(page.locator('.ash-quick-pick-row-detail')).toContainText(locale === 'en' ? 'Shared changes from 2 chats' : '来自 2 个对话的共享更改');
-			const accept = page.getByRole('button', {
-				name: locale === 'en' ? 'Accept changes from 2 chats' : '接受来自 2 个对话的更改',
-				exact: true,
-			});
-			const reject = page.getByRole('button', {
-				name: locale === 'en' ? 'Reject changes from 2 chats' : '拒绝来自 2 个对话的更改',
-				exact: true,
-			});
+			const accept = page.getByRole('button', { name: locale === 'en' ? 'Accept changes from 2 chats' : '接受来自 2 个对话的更改', exact: true });
+			const reject = page.getByRole('button', { name: locale === 'en' ? 'Reject changes from 2 chats' : '拒绝来自 2 个对话的更改', exact: true });
 			await page.keyboard.press('Tab');
 			await expect(accept).toBeFocused();
 			await page.keyboard.press('ArrowRight');
@@ -119,10 +108,7 @@ suite('chatEditing browser component', () => {
 		await page.getByRole('combobox').fill('After');
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests.length)).toBe(1);
-		await page.evaluate(() => {
-			window.ashChatEditingIntegration.switchChat();
-			window.ashChatEditingIntegration.finishRestore();
-		});
+		await page.evaluate(() => { window.ashChatEditingIntegration.switchChat(); window.ashChatEditingIntegration.finishRestore(); });
 		await expect(page.locator('.ash-aria-status').filter({ hasText: 'Checkpoint restored in a new chat.' })).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
 	});
@@ -140,15 +126,12 @@ suite('chatEditing browser component', () => {
 			await expect(undo).toBeFocused();
 			await page.getByRole('button', { name: 'Redo last request', exact: true }).focus();
 			await page.keyboard.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashChatEditingIntegration.historyState()))
-				.toEqual({
-					requests: [
-						{ sessionId: 'session', threadId: 'source', expectedSequence: 17, direction: 'undo' },
-						{ sessionId: 'session', threadId: 'source', expectedSequence: 18, direction: 'redo' },
-					],
-					opened: [],
-				});
+			await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({
+				requests: [
+					{ sessionId: 'session', threadId: 'source', expectedSequence: 17, direction: 'undo' },
+					{ sessionId: 'session', threadId: 'source', expectedSequence: 18, direction: 'redo' },
+				], opened: [],
+			});
 		});
 		test(`history protects dirty working copies and explains backend conflicts (${locale})`, async function () {
 			const { page } = browserTests;
@@ -183,16 +166,11 @@ suite('chatEditing browser component', () => {
 		await page.goto('/chatEditing.html?historySlow');
 		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
 		await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
-		await page.evaluate(() => {
-			window.ashChatEditingIntegration.switchChat();
-			window.ashChatEditingIntegration.finishRestore();
-		});
+		await page.evaluate(() => { window.ashChatEditingIntegration.switchChat(); window.ashChatEditingIntegration.finishRestore(); });
 		await expect(page.locator('.ash-aria-status').filter({ hasText: 'were undone' })).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({
-			requests: [],
-			opened: [],
-		});
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({ requests: [], opened: [] });
 	});
+
 
 	test('checkpoint selection cannot restore the source after switching to another chat', async function () {
 		const { page } = browserTests;
@@ -204,10 +182,7 @@ suite('chatEditing browser component', () => {
 		await page.evaluate(() => window.ashChatEditingIntegration.switchChat());
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('combobox')).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({
-			requests: [],
-			opened: [],
-		});
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -231,10 +206,7 @@ suite('chatEditing browser component', () => {
 			await page.getByRole('button', { name: 'Review changes' }).click();
 			await page.getByRole('combobox').fill('first-chat');
 			await page.keyboard.press('Enter');
-			const retry = page.getByRole('button', {
-				name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改',
-				exact: true,
-			});
+			const retry = page.getByRole('button', { name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改', exact: true });
 			await expect(retry).toBeVisible();
 			await expect(page.locator('.ash-quick-pick-row-detail')).toContainText(locale === 'en' ? 'Rejected changes have not been saved.' : '已撤销的更改尚未保存。');
 			await page.keyboard.press('Tab');
@@ -257,26 +229,15 @@ suite('chatEditing browser component', () => {
 			const container = page.locator('#review-editor');
 			const editor = container.locator('.stanza-editor');
 			const overlay = editor.locator('.ash-chat-editing-overlay');
-			const accept = overlay.getByRole('button', {
-				name: locale === 'en' ? 'Accept file changes' : '接受文件修改',
-				exact: true,
-			});
-			const reject = overlay.getByRole('button', {
-				name: locale === 'en' ? 'Reject file changes' : '拒绝文件修改',
-				exact: true,
-			});
+			const accept = overlay.getByRole('button', { name: locale === 'en' ? 'Accept file changes' : '接受文件修改', exact: true });
+			const reject = overlay.getByRole('button', { name: locale === 'en' ? 'Reject file changes' : '拒绝文件修改', exact: true });
 			await expect(overlay).toBeVisible();
 			await reject.click();
 			await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.reviewState()[0])).toEqual({ resource: '/workspace/first.txt', pendingSave: true, hunks: 0 });
-			const retry = overlay.getByRole('button', {
-				name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改',
-				exact: true,
-			});
+			const retry = overlay.getByRole('button', { name: locale === 'en' ? 'Retry saving reviewed changes' : '重试保存已审阅的更改', exact: true });
 			await expect(retry).toBeEnabled();
 			for (const width of [240, 180, 360]) {
-				await container.evaluate((element, width) => {
-					element.style.width = `${width}px`;
-				}, width);
+				await container.evaluate((element, width) => { element.style.width = `${width}px`; }, width);
 				await expect(async () => {
 					const root = await editor.boundingBox();
 					if (!root) throw new Error('Missing editor bounds');
@@ -287,14 +248,9 @@ suite('chatEditing browser component', () => {
 						expect(bounds.x + bounds.width).toBeLessThanOrEqual(root.x + root.width);
 					}
 				}).toPass();
-				await testInfo.attach(`review-${width}px`, {
-					body: await container.screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(`review-${width}px`, { body: await container.screenshot(), contentType: 'image/png' });
 			}
-			await container.evaluate(element => {
-				element.style.width = '240px';
-			});
+			await container.evaluate(element => { element.style.width = '240px'; });
 			await page.evaluate(() => window.ashChatEditingIntegration.setSaveFailure(false));
 			await accept.click();
 			await expect(overlay).toBeHidden();

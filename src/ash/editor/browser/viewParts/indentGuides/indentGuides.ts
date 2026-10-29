@@ -29,10 +29,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly readTextLeft: () => number;
 	private readonly textMeasurer: TextMeasurer;
-	constructor(
-		private readonly context: ViewContext,
-		options: IndentGuidesOptions,
-	) {
+	constructor(private readonly context: ViewContext, options: IndentGuidesOptions) {
 		super();
 		this.context.addEventHandler(this);
 		this.guides = this.context.configuration.options.get(EditorOption.guides);
@@ -62,33 +59,15 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		return true;
 	}
 
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
-		return true;
-	}
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
-		return true;
-	}
-	public override onLineMappingChanged(_event: viewEvents.ViewLineMappingChangedEvent): boolean {
-		return true;
-	}
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
-		return true;
-	}
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
-		return true;
-	}
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
-		return true;
-	}
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		return event.scrollTopChanged;
-	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
-		return true;
-	}
-	public override onLanguageConfigurationChanged(_event: viewEvents.ViewLanguageConfigurationEvent): boolean {
-		return true;
-	}
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLineMappingChanged(_event: viewEvents.ViewLineMappingChangedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onLanguageConfigurationChanged(_event: viewEvents.ViewLanguageConfigurationEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
 		const bracketGuides = this.resolveBracketGuides(context);
@@ -98,10 +77,9 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 			this._renderResult = [];
 			return;
 		}
-		const activeIndentation =
-			this.guides.indentation && this.guides.highlightActiveIndentation !== false
-				? this.viewModel.getActiveIndentGuide(this.viewModel.getPrimaryCursorState().viewState.position.lineNumber, startLineNumber, endLineNumber)
-				: undefined;
+		const activeIndentation = this.guides.indentation && this.guides.highlightActiveIndentation !== false
+			? this.viewModel.getActiveIndentGuide(this.viewModel.getPrimaryCursorState().viewState.position.lineNumber, startLineNumber, endLineNumber)
+			: undefined;
 		const { indentSize } = this.viewModel.model.getOptions();
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
@@ -168,7 +146,14 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		);
 	}
 
-	private appendBracketGuide(row: HTMLElement, visualLine: EditorVisualLine, lineHeight: number, guide: IndentGuide, textLeft: number, measureLineWidth: (text: string) => number): boolean {
+	private appendBracketGuide(
+		row: HTMLElement,
+		visualLine: EditorVisualLine,
+		lineHeight: number,
+		guide: IndentGuide,
+		textLeft: number,
+		measureLineWidth: (text: string) => number,
+	): boolean {
 		if (guide.visibleColumn < 1) {
 			return false;
 		}

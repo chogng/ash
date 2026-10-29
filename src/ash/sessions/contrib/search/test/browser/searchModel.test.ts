@@ -12,38 +12,21 @@ import { SessionsSearchModel, type SearchResult } from '../../browser/searchMode
 
 function fixture() {
 	const session: ISession = {
-		sessionId: 'alpha',
-		title: 'Alpha review',
-		providerLabel: 'Host A',
-		status: 'active',
-		nextApprovalMode: 'manual',
-		agentTree: [],
+		sessionId: 'alpha', title: 'Alpha review', providerLabel: 'Host A', status: 'active', nextApprovalMode: 'manual', agentTree: [],
 		chats: [
 			{ threadId: 'root', status: 'active', origin: { type: 'root' } },
 			{ threadId: 'archived', status: 'archived', origin: { type: 'root' } },
 		],
 	};
-	const sessions = {
-		onDidChange: Event.None,
-		sessions: [session, { ...session, sessionId: 'old', status: 'archived' }],
-		untitledSessions: [],
-		state: 'ready',
-	} as unknown as ISessionsManagementService;
+	const sessions = { onDidChange: Event.None, sessions: [session, { ...session, sessionId: 'old', status: 'archived' }], untitledSessions: [], state: 'ready' } as unknown as ISessionsManagementService;
 	const projectState = observableValue<ProjectsState>('projects', {
 		projects: [{ id: 'beta', revision: 1, name: 'Beta project', archived: false, sessionCount: 0 }],
-		query: 'Unrelated page filter',
-		sortOrder: 'updated',
-		loading: false,
-		busy: false,
-		selectedId: undefined,
-		selected: undefined,
-		message: undefined,
+		query: 'Unrelated page filter', sortOrder: 'updated', loading: false, busy: false, selectedId: undefined, selected: undefined, message: undefined,
 	});
-	const projects = { state: projectState, reload: async () => {} } as unknown as IProjectsService;
+	const projects = { state: projectState, reload: async () => { } } as unknown as IProjectsService;
 	const automations = {
 		automations: observableValue<readonly IAutomationDescriptor[]>('plans', []),
-		catalogueState: observableValue<AutomationCatalogueState>('planState', 'ready'),
-		refresh: async () => {},
+		catalogueState: observableValue<AutomationCatalogueState>('planState', 'ready'), refresh: async () => { },
 	} as unknown as IAutomationService;
 	const results = observableValue<readonly SearchResult[]>('contributed', []);
 	return { sessions, projects, projectState, automations, results };
@@ -56,10 +39,7 @@ suite('Sessions search model', () => {
 		using second = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		first.setQuery('beta');
 		first.setCategory('projects');
-		assert.deepEqual(
-			first.state.get().results.map(result => result.target),
-			[{ kind: 'project', id: 'beta' }],
-		);
+		assert.deepEqual(first.state.get().results.map(result => result.target), [{ kind: 'project', id: 'beta' }]);
 		assert.equal(second.state.get().query, '');
 		assert.equal(second.state.get().category, 'all');
 		assert.equal(source.projectState.get().query, 'Unrelated page filter');
@@ -70,27 +50,15 @@ suite('Sessions search model', () => {
 		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		model.setCategory('sessions');
 		model.setQuery('alpha host a');
-		assert.deepEqual(
-			model.state.get().results.map(result => result.target),
-			[{ kind: 'session', sessionId: 'alpha', threadId: 'root' }],
-		);
+		assert.deepEqual(model.state.get().results.map(result => result.target), [{ kind: 'session', sessionId: 'alpha', threadId: 'root' }]);
 	});
 
 	test('contributed conversations match their project in All and Sessions and follow their source', async () => {
 		const source = fixture();
 		let opened = false;
 		const result: SearchResult = {
-			id: 'chatgpt:one',
-			category: 'sessions',
-			title: 'Design review',
-			description: 'ChatGPT · Website project',
-			icon: Lxicon.openai,
-			target: {
-				kind: 'contributed',
-				open: async () => {
-					opened = true;
-				},
-			},
+			id: 'chatgpt:one', category: 'sessions', title: 'Design review', description: 'ChatGPT · Website project',
+			icon: Lxicon.openai, target: { kind: 'contributed', open: async () => { opened = true; } },
 		};
 		source.results.set([result]);
 		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
@@ -103,9 +71,7 @@ suite('Sessions search model', () => {
 		model.setCategory('sessions');
 		const target = model.state.get().results[0]!.target;
 		assert.equal(target.kind, 'contributed');
-		if (target.kind === 'contributed') {
-			await target.open();
-		}
+		if (target.kind === 'contributed') { await target.open(); }
 		assert.equal(opened, true);
 		source.results.set([]);
 		assert.deepEqual(model.state.get().results, []);
@@ -115,10 +81,7 @@ suite('Sessions search model', () => {
 		const source = fixture();
 		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		model.setCategory('projects');
-		assert.deepEqual(
-			model.state.get().results.map(result => result.title),
-			['Beta project'],
-		);
+		assert.deepEqual(model.state.get().results.map(result => result.title), ['Beta project']);
 		source.projectState.set({ ...source.projectState.get(), projects: [] });
 		assert.deepEqual(model.state.get().results, []);
 	});

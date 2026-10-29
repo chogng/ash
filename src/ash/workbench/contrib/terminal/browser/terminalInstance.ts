@@ -69,9 +69,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private hostTarget: TerminalLocation | undefined = TerminalLocation.Panel;
 	private readonly targetChanged = this._register(new Emitter<TerminalLocation | undefined>());
 	readonly onDidChangeTarget = this.targetChanged.event;
-	get target(): TerminalLocation | undefined {
-		return this.hostTarget;
-	}
+	get target(): TerminalLocation | undefined { return this.hostTarget; }
 	set target(value: TerminalLocation | undefined) {
 		if (this.hostTarget === value) return;
 		this.hostTarget = value;
@@ -87,33 +85,27 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private screenInitialization: Promise<XtermTerminal | undefined> | undefined;
 	private readonly startupReset = this._register(new MutableDisposable<DisposableStore>());
 	private readonly contributions = this._register(new DisposableMap<string, ITerminalContribution>());
-	private pendingExit: { readonly code: number | undefined } | undefined;
+	private pendingExit: { readonly code: number | undefined; } | undefined;
 	private readonly customLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private customProcess: ITerminalChildProcess | undefined;
 	private readonly onClosed: (() => void) | undefined;
-	private readonly _onDidWriteData = this._register(
-		new Emitter<IProcessDataEvent>({
-			onDidAddFirstListener: () =>
-				queueMicrotask(() => {
-					while (!this.isDisposed && this._onDidWriteData.hasListeners() && this.pendingOutput.length > 0) {
-						this._onDidWriteData.fire(this.pendingOutput.shift()!);
-					}
-				}),
+	private readonly _onDidWriteData = this._register(new Emitter<IProcessDataEvent>({
+		onDidAddFirstListener: () => queueMicrotask(() => {
+			while (!this.isDisposed && this._onDidWriteData.hasListeners() && this.pendingOutput.length > 0) {
+				this._onDidWriteData.fire(this.pendingOutput.shift()!);
+			}
 		}),
-	);
+	}));
 	private readonly _onDidChangeCommandStatus = this._register(new Emitter<ITerminalCommandStatusEvent>());
-	private readonly _onDidExit = this._register(
-		new Emitter<number | undefined>({
-			onDidAddFirstListener: () =>
-				queueMicrotask(() => {
-					if (!this.isDisposed && this._onDidExit.hasListeners() && this.pendingExit) {
-						const { code } = this.pendingExit;
-						this.pendingExit = undefined;
-						this._onDidExit.fire(code);
-					}
-				}),
+	private readonly _onDidExit = this._register(new Emitter<number | undefined>({
+		onDidAddFirstListener: () => queueMicrotask(() => {
+			if (!this.isDisposed && this._onDidExit.hasListeners() && this.pendingExit) {
+				const { code } = this.pendingExit;
+				this.pendingExit = undefined;
+				this._onDidExit.fire(code);
+			}
 		}),
-	);
+	}));
 	private readonly _onDidChangeState = this._register(new Emitter<TerminalInstanceState>());
 	private _state: TerminalInstanceState = 'running';
 	private _exitCode: number | undefined;
@@ -147,10 +139,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch:
-			| (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> &
-					Pick<IShellLaunchConfig, 'type' | 'executable' | 'args' | 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>)
-			| undefined,
+		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'type' | 'executable' | 'args' | 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -168,10 +157,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (launch) {
 			const { environmentVariableCollections, environmentVariableCollectionsPersistable, ...processLaunch } = launch;
 			this.launch = processLaunch;
-			this.captureEnvironmentVariableCollections(
-				environmentVariableCollections ?? restored?.environmentVariableCollections,
-				environmentVariableCollectionsPersistable ?? restored?.environmentVariableCollections !== undefined,
-			);
+			this.captureEnvironmentVariableCollections(environmentVariableCollections ?? restored?.environmentVariableCollections, environmentVariableCollectionsPersistable ?? (restored?.environmentVariableCollections !== undefined));
 		}
 		this.shellProcessManager = child;
 		try {
@@ -219,9 +205,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		super.disposeCore();
 	}
 
-	get revivalLaunch(): ITerminalSerializedState['launch'] {
-		return this._revivalLaunch;
-	}
+	get revivalLaunch(): ITerminalSerializedState['launch'] { return this._revivalLaunch; }
 
 	get state(): TerminalInstanceState {
 		return this._state;
@@ -239,28 +223,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.processReady.pid;
 	}
 
-	get extEnvironmentVariableCollection(): MergedEnvironmentVariableCollection | undefined {
-		return this.environmentVariableCollection;
-	}
+	get extEnvironmentVariableCollection(): MergedEnvironmentVariableCollection | undefined { return this.environmentVariableCollection; }
 
 	private environmentVariableCollectionsPersistable = false;
 
 	private captureEnvironmentVariableCollections(value: IShellLaunchConfig['environmentVariableCollections'], persistable = false): void {
 		this.environmentVariableCollectionsPersistable = value?.length === 0 || persistable;
-		this.environmentVariableCollection =
-			value &&
-			new MergedEnvironmentVariableCollection(
-				new Map(
-					value.map(([extension, map, descriptions]) => [
-						extension,
-						{
-							map: new Map(map),
-							descriptionMap: new Map(descriptions ?? []),
-						},
-					]),
-				),
-				this.processes.operatingSystem !== OperatingSystem.Windows,
-			);
+		this.environmentVariableCollection = value && new MergedEnvironmentVariableCollection(new Map(value.map(([extension, map, descriptions]) => [extension, {
+			map: new Map(map), descriptionMap: new Map(descriptions ?? []),
+		}])), this.processes.operatingSystem !== OperatingSystem.Windows);
 	}
 
 	/** A fresh view of the immutable launch snapshot; split callers cannot mutate relaunch data. */
@@ -281,23 +252,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		});
 	}
 
-	public get instanceId(): number {
-		return this.instanceNumber;
-	}
+	public get instanceId(): number { return this.instanceNumber; }
 
-	public get cwd(): string | undefined {
-		return this.shellProcessManager?.cwd;
-	}
-	public get shellIntegration() {
-		return this.shellProcessManager?.shellIntegration;
-	}
-	public get shellType() {
-		return this.processReady.shellType;
-	}
+	public get cwd(): string | undefined { return this.shellProcessManager?.cwd; }
+	public get shellIntegration() { return this.shellProcessManager?.shellIntegration; }
+	public get shellType() { return this.processReady.shellType; }
 	/** Actual argv is display-only; split/relaunch must use the original profile arguments. */
-	public get injectedArgs() {
-		return this.processReady.launch?.args;
-	}
+	public get injectedArgs() { return this.processReady.launch?.args; }
 
 	public get initialCwd(): string {
 		return this.processReady.cwd;
@@ -311,9 +272,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this._title;
 	}
 
-	public get customTitle(): string | undefined {
-		return this._customTitle;
-	}
+	public get customTitle(): string | undefined { return this._customTitle; }
 
 	setTitle(title: string): void {
 		this._title = title;
@@ -372,43 +331,31 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const lifetime = new DisposableStore();
 		this.customLifetime.value = lifetime;
 		lifetime.add(process);
-		lifetime.add(
-			process.onProcessData(data => {
-				if (this.closed || this.isDisposed) return;
-				const event: IProcessDataEvent = typeof data === 'string' ? { data, trackCommit: false } : data;
-				this.writeScreenData(event.data);
-				// The PTY can write inside open(), before the view owns its xterm widget.
-				if (!this._onDidWriteData.hasListeners() || this.pendingOutput.length > 0) {
-					this.pendingOutput.push(event);
-				} else {
-					this._onDidWriteData.fire(event);
-				}
-			}),
-		);
-		lifetime.add(
-			process.onProcessReady(ready => {
-				this.processReady = ready;
-			}),
-		);
-		lifetime.add(
-			process.onDidChangeProperty(property => {
-				if (property.type === ProcessPropertyType.Title) {
-					this._title = property.value;
-					custom.onTitleChanged();
-				}
-			}),
-		);
+		lifetime.add(process.onProcessData(data => {
+			if (this.closed || this.isDisposed) return;
+			const event: IProcessDataEvent = typeof data === 'string' ? { data, trackCommit: false } : data;
+			this.writeScreenData(event.data);
+			// The PTY can write inside open(), before the view owns its xterm widget.
+			if (!this._onDidWriteData.hasListeners() || this.pendingOutput.length > 0) {
+				this.pendingOutput.push(event);
+			} else {
+				this._onDidWriteData.fire(event);
+			}
+		}));
+		lifetime.add(process.onProcessReady(ready => { this.processReady = ready; }));
+		lifetime.add(process.onDidChangeProperty(property => {
+			if (property.type === ProcessPropertyType.Title) {
+				this._title = property.value;
+				custom.onTitleChanged();
+			}
+		}));
 		lifetime.add(process.onProcessExit(code => this.handleProcessExit(code)));
 	}
 
-	public get xterm(): XtermTerminal | undefined {
-		return this.screen;
-	}
-	public get xtermReadyPromise(): Promise<XtermTerminal | undefined> {
-		return this.screenInitialization ?? Promise.resolve(undefined);
-	}
+	public get xterm(): XtermTerminal | undefined { return this.screen; }
+	public get xtermReadyPromise(): Promise<XtermTerminal | undefined> { return this.screenInitialization ?? Promise.resolve(undefined); }
 	public getContribution<T extends ITerminalContribution>(id: string): T | null {
-		return (this.contributions.get(id) as T | undefined) ?? null;
+		return this.contributions.get(id) as T | undefined ?? null;
 	}
 
 	public attachToElement(container: HTMLElement): void {
@@ -419,16 +366,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
-		this._register(
-			screen.onDidOpen(() => {
-				// ConPTY repaints in viewport coordinates after a resize. Configure its
-				// blank-row expansion and cursor-line reflow even without shell integration;
-				// otherwise a wrapped prompt's repaint can overwrite retained output.
-				const windowsPty = !this.custom && this.processes.operatingSystem === OperatingSystem.Windows;
-				screen.raw.options.windowsPty = windowsPty ? { backend: 'conpty' } : undefined;
-				screen.raw.options.reflowCursorLine = windowsPty;
-			}),
-		);
+		this._register(screen.onDidOpen(() => {
+			// ConPTY repaints in viewport coordinates after a resize. Configure its
+			// blank-row expansion and cursor-line reflow even without shell integration;
+			// otherwise a wrapped prompt's repaint can overwrite retained output.
+			const windowsPty = !this.custom && this.processes.operatingSystem === OperatingSystem.Windows;
+			screen.raw.options.windowsPty = windowsPty ? { backend: 'conpty' } : undefined;
+			screen.raw.options.reflowCursorLine = windowsPty;
+		}));
 		// Establish the instance scope before any contribution creates a nested
 		// scope. Keyboard routing must not depend on contribution registration order.
 		const scope = this._register(this.contextKeys.createScoped(screen.element));
@@ -436,53 +381,41 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const focused = TerminalContextKeys.focus.bindTo(scope);
 		const alternate = TerminalContextKeys.altBufferActive.bindTo(scope);
 		const editorDrag = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
-		const acceptsDrop = (event: DragEvent): boolean =>
-			!this.isReadOnly &&
-			this.state === 'running' &&
-			(editorDrag.hasData(DraggedEditorIdentifier.prototype) || containsDragType(event, 'text/uri-list') || containsDragType(event, DataTransfers.FILES));
-		this._register(
-			addDisposableListener(screen.element, 'dragover', event => {
-				if (!acceptsDrop(event)) return;
-				event.preventDefault();
-				event.stopPropagation();
-				if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-			}),
-		);
-		this._register(
-			addDisposableListener(screen.element, 'drop', event => {
-				if (!acceptsDrop(event) || !event.dataTransfer) return;
-				event.preventDefault();
-				event.stopPropagation();
-				// Read the transfer during the event. Browser File contents are never uploaded
-				// or interpreted as a path on the execution host.
-				const dragged = editorDrag.getData(DraggedEditorIdentifier.prototype)?.[0]?.input.resource;
-				const uri = UriList.parse(event.dataTransfer.getData('text/uri-list'))[0];
-				const file = event.dataTransfer.files[0];
-				const localPath = file && getPathForFile(file);
-				try {
-					const resource = dragged ?? (uri ? URI.parse(uri, true) : localPath ? URI.file(localPath) : undefined);
-					if (!resource) throw new Error(localize('terminal.path.dropUnavailable', 'This dropped file has no path on the terminal execution host.'));
-					void this.sendPath(resource, false).then(() => screen.focus(), onUnexpectedError);
-				} catch (error) {
-					onUnexpectedError(error);
-				}
-			}),
-		);
+		const acceptsDrop = (event: DragEvent): boolean => !this.isReadOnly && this.state === 'running'
+			&& (editorDrag.hasData(DraggedEditorIdentifier.prototype) || containsDragType(event, 'text/uri-list') || containsDragType(event, DataTransfers.FILES));
+		this._register(addDisposableListener(screen.element, 'dragover', event => {
+			if (!acceptsDrop(event)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+		}));
+		this._register(addDisposableListener(screen.element, 'drop', event => {
+			if (!acceptsDrop(event) || !event.dataTransfer) return;
+			event.preventDefault();
+			event.stopPropagation();
+			// Read the transfer during the event. Browser File contents are never uploaded
+			// or interpreted as a path on the execution host.
+			const dragged = editorDrag.getData(DraggedEditorIdentifier.prototype)?.[0]?.input.resource;
+			const uri = UriList.parse(event.dataTransfer.getData('text/uri-list'))[0];
+			const file = event.dataTransfer.files[0];
+			const localPath = file && getPathForFile(file);
+			try {
+				const resource = dragged ?? (uri ? URI.parse(uri, true) : localPath ? URI.file(localPath) : undefined);
+				if (!resource) throw new Error(localize('terminal.path.dropUnavailable', 'This dropped file has no path on the terminal execution host.'));
+				void this.sendPath(resource, false).then(() => screen.focus(), onUnexpectedError);
+			} catch (error) { onUnexpectedError(error); }
+		}));
 		this._register(this.capabilities.add(screen.capabilities));
 		this._register(screen.shellIntegration.onDidChangeSeenSequences(() => this.refreshCapabilities()));
 		const promptInputListener = this._register(new MutableDisposable());
-		this._register(
-			this.capabilities.onDidAddCommandDetectionCapability(capability => {
-				promptInputListener.value = capability.promptInputModel.onDidChangeInput(() => this.refreshCapabilities());
-				this.refreshCapabilities();
-			}),
-		);
-		this._register(
-			this.capabilities.onDidRemoveCommandDetectionCapability(() => {
-				promptInputListener.clear();
-				this.refreshCapabilities();
-			}),
-		);
+		this._register(this.capabilities.onDidAddCommandDetectionCapability(capability => {
+			promptInputListener.value = capability.promptInputModel.onDidChangeInput(() => this.refreshCapabilities());
+			this.refreshCapabilities();
+		}));
+		this._register(this.capabilities.onDidRemoveCommandDetectionCapability(() => {
+			promptInputListener.clear();
+			this.refreshCapabilities();
+		}));
 		const recorder = this.screenRecorder!;
 		const replay = recorder.generateReplayEventSync();
 		this.screenRecorder = undefined;
@@ -491,10 +424,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const restored = this.restored;
 		this.screenInitialization = screen.initialize(restored).then(async () => {
-			if (this.isDisposed || screen.isDisposed) {
-				return undefined;
-			}
-			if (restored && this.processes.operatingSystem === OperatingSystem.Windows && restored.process.terminalId !== this.shellProcessManager?.creation.terminalId) {
+			if (this.isDisposed || screen.isDisposed) { return undefined; }
+			if (restored && this.processes.operatingSystem === OperatingSystem.Windows
+				&& restored.process.terminalId !== this.shellProcessManager?.creation.terminalId) {
 				// A new ConPTY owns viewport coordinates starting at row one. Move
 				// the saved screen into scrollback before its first absolute repaint.
 				screen.raw.write('\r\n'.repeat(screen.raw.rows));
@@ -526,9 +458,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				}
 			});
 			this._register(toDisposable(() => completedInput.dispose()));
-			const binary = screen.raw.onBinary(data => {
-				void this.processBinary(data).catch(onUnexpectedError);
-			});
+			const binary = screen.raw.onBinary(data => { void this.processBinary(data).catch(onUnexpectedError); });
 			this._register(toDisposable(() => binary.dispose()));
 			const contributionsReady = (): void => {
 				const textarea = screen.raw.textarea!;
@@ -539,9 +469,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				alternate.set(screen.raw.buffer.active.type === 'alternate');
 				const bufferChanged = screen.raw.buffer.onBufferChange(buffer => alternate.set(buffer.type === 'alternate'));
 				this._register(toDisposable(() => bufferChanged.dispose()));
-				for (const [, contribution] of this.contributions) {
-					contribution.xtermReady?.(screen);
-				}
+				for (const [, contribution] of this.contributions) { contribution.xtermReady?.(screen); }
 			};
 			// Recovery needs the parsed buffer before its view is revealed. Features
 			// that bind the textarea become ready only after the renderer opens there.
@@ -551,9 +479,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		});
 		// Loading can start in a background instance without a View awaiting it.
 		void this.screenInitialization.catch(error => {
-			if (!isCancellationError(error) && !this.closed) {
-				this.handleProcessError(error);
-			}
+			if (!isCancellationError(error) && !this.closed) { this.handleProcessError(error); }
 		});
 	}
 
@@ -563,20 +489,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	public async sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void> {
-		if (this.isReadOnly || this.closed || this._state !== 'running') {
-			throw new CancellationError();
-		}
+		if (this.isReadOnly || this.closed || this._state !== 'running') { throw new CancellationError(); }
 		this.startupReset.clear();
 		if (bracketedPasteMode && this.screen) {
 			const screen = await this.xtermReadyPromise;
-			if (!this.closed && !this.isDisposed && screen?.raw.modes.bracketedPasteMode) {
-				text = `${TerminalEscapeSequences.BracketedPasteStart}${text}${TerminalEscapeSequences.BracketedPasteEnd}`;
-			}
+			if (!this.closed && !this.isDisposed && screen?.raw.modes.bracketedPasteMode) { text = `${TerminalEscapeSequences.BracketedPasteStart}${text}${TerminalEscapeSequences.BracketedPasteEnd}`; }
 		}
 		text = text.replace(/\r?\n/g, '\r');
-		if (shouldExecute && !text.endsWith('\r')) {
-			text += '\r';
-		}
+		if (shouldExecute && !text.endsWith('\r')) { text += '\r'; }
 		await this.sendRawInput(text);
 	}
 
@@ -584,16 +504,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const process = this.shellProcessManager;
 		const generation = this.pollGeneration;
 		let retired = false;
-		using stateListener = this.onDidChangeState(() => {
-			retired = true;
-		});
+		using stateListener = this.onDidChangeState(() => { retired = true; });
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.dirId);
 		if (!process || !folder || this.isReadOnly || this.closed || this._state !== 'running') throw new CancellationError();
 		const shell = this.processReady.shellType;
-		if (
-			(shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh && shell !== GeneralShellType.PowerShell) ||
-			(shell !== GeneralShellType.PowerShell && this.processes.operatingSystem === OperatingSystem.Windows)
-		) {
+		if (shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh && shell !== GeneralShellType.PowerShell
+			|| shell !== GeneralShellType.PowerShell && this.processes.operatingSystem === OperatingSystem.Windows) {
 			throw new Error(localize('terminal.path.unsupportedShell', 'This terminal does not have a supported, confirmed shell for sending paths.'));
 		}
 		let path: string | undefined;
@@ -606,19 +522,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			path = await this.paths.getHostPath(originalPath);
 		}
 		const rules = await this.paths.getPath(folder.uri);
-		if (!path || !rules?.isAbsolute(path) || /[\x00-\x1f\x7f]/.test(path))
-			throw new Error(localize('terminal.path.invalid', 'Only absolute host paths without control characters can be sent to the terminal.'));
+		if (!path || !rules?.isAbsolute(path) || /[\x00-\x1f\x7f]/.test(path)) throw new Error(localize('terminal.path.invalid', 'Only absolute host paths without control characters can be sent to the terminal.'));
 		// URI conversion can yield; never insert into a relaunched process or a replaced root.
-		if (
-			retired ||
-			this.shellProcessManager !== process ||
-			this.pollGeneration !== generation ||
-			this.workspace
-				.getWorkspace()
-				.folders.find(candidate => candidate.id === this.dirId)
-				?.uri.toString() !== folder.uri.toString()
-		)
-			throw new CancellationError();
+		if (retired || this.shellProcessManager !== process || this.pollGeneration !== generation
+			|| this.workspace.getWorkspace().folders.find(candidate => candidate.id === this.dirId)?.uri.toString() !== folder.uri.toString()) throw new CancellationError();
 		const quoted = escapeNonWindowsPath(path, shell);
 		await this.sendText(shell === GeneralShellType.PowerShell && shouldExecute ? `& ${quoted}` : quoted, shouldExecute);
 	}
@@ -691,24 +598,19 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	private writeScreenData(data: string, shellIntegration?: TerminalShellIntegrationEvent): void {
 		if (this.screen) {
-			void this.screenInitialization
-				?.then(screen => {
-					if (!screen) return;
-					screen.write(data, () => {
-						if (shellIntegration && !screen.isDisposed) screen.handleShellIntegration(shellIntegration);
-					});
-				})
-				.catch(onUnexpectedError);
+			void this.screenInitialization?.then(screen => {
+				if (!screen) return;
+				screen.write(data, () => {
+					if (shellIntegration && !screen.isDisposed) screen.handleShellIntegration(shellIntegration);
+				});
+			}).catch(onUnexpectedError);
 			return;
 		}
 		this.screenRecorder?.handleData(data, shellIntegration);
 	}
 
 	private createScreenRecorder(): TerminalRecorder {
-		return new TerminalRecorder(this.dimensions.cols, this.dimensions.rows, {
-			maxBytes: 1024 * 1024,
-			maxChunks: 4096,
-		});
+		return new TerminalRecorder(this.dimensions.cols, this.dimensions.rows, { maxBytes: 1024 * 1024, maxChunks: 4096 });
 	}
 
 	private writeInitialText(): void {
@@ -716,24 +618,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.launch?.type === 'Task') {
 			// These are screen boundaries for the launched task, never bytes parsed
 			// from its output or entries in the backend's Shell command history.
-			this.writeScreenData('', {
-				type: 'processReady',
-				isWindowsPty: !this.custom && this.processes.operatingSystem === OperatingSystem.Windows,
-			});
+			this.writeScreenData('', { type: 'processReady', isWindowsPty: !this.custom && this.processes.operatingSystem === OperatingSystem.Windows });
 			if (text.startsWith('\r\n')) {
 				this.writeScreenData('\r\n');
 				text = text.slice(2);
 			}
 			this.writeScreenData('', { type: 'commandStart' });
 			this.writeScreenData(text);
-			this.writeScreenData('', {
-				type: 'commandExecuted',
-				commandId: generateUuid(),
-				command: undefined,
-				isTrusted: false,
-				cwd: this.launch.cwd,
-				timestampMillis: Date.now(),
-			});
+			this.writeScreenData('', { type: 'commandExecuted', commandId: generateUuid(), command: undefined, isTrusted: false, cwd: this.launch.cwd, timestampMillis: Date.now() });
 		} else if (text) {
 			this.writeScreenData(text);
 		}
@@ -798,24 +690,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			executable: typeof shell.executable === 'string' ? shell.executable : shell.executable && Object.freeze([...shell.executable]),
 			args: shell.args && (typeof shell.args === 'string' ? shell.args : Object.freeze([...shell.args])),
 			env: shell.env && Object.freeze({ ...shell.env }),
-			execution:
-				shell.execution?.type === 'process'
-					? Object.freeze({
-							...shell.execution,
-							args: typeof shell.execution.args === 'string' ? shell.execution.args : Object.freeze([...shell.execution.args]),
-						})
-					: shell.execution,
+			execution: shell.execution?.type === 'process' ? Object.freeze({ ...shell.execution, args: (typeof shell.execution.args === 'string' ? shell.execution.args : Object.freeze([...shell.execution.args])) }) : shell.execution,
 		};
-		this.relaunchTask = this.performRelaunch(this.dimensions, replacement).finally(() => {
-			this.relaunchTask = undefined;
-		});
+		this.relaunchTask = this.performRelaunch(this.dimensions, replacement).finally(() => { this.relaunchTask = undefined; });
 		return this.relaunchTask;
 	}
 
 	async serializeState(): Promise<ITerminalSerializedState> {
 		const child = this.shellProcessManager;
-		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable')
-			throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
+		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable') throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
 		const checkpoint = await child.serializeState();
 		if (!this.screen && typeof document !== 'undefined') this.attachToElement(document.createElement('div'));
 		const screen = await this.xtermReadyPromise;
@@ -823,26 +706,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.frozen = true;
 		screen.raw.options.disableStdin = true;
 		const vt = await screen.getRangeAsVT();
-		const cwd = child.cwd ?? (await child.getCwd().catch(() => this.initialCwd));
+		const cwd = child.cwd ?? await child.getCwd().catch(() => this.initialCwd);
 		if (this.closed) throw new CancellationError();
 		return {
-			instanceId: this.instanceId,
-			resource: this.resource.toString(),
-			dirId: this.dirId,
-			processDirId: this.processWorkspaceFolderId,
-			environmentVariableCollections:
-				this.environmentVariableCollectionsPersistable && this.environmentVariableCollection
-					? serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections)
-					: undefined,
-			process: child.creation,
-			title: this.title,
-			customTitle: this.customTitle,
-			target: this.target ?? TerminalLocation.Panel,
-			cols: screen.raw.cols,
-			rows: screen.raw.rows,
-			...checkpoint,
-			vt,
-			cwd,
+			instanceId: this.instanceId, resource: this.resource.toString(), dirId: this.dirId, processDirId: this.processWorkspaceFolderId,
+			environmentVariableCollections: this.environmentVariableCollectionsPersistable && this.environmentVariableCollection ? serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections) : undefined,
+			process: child.creation, title: this.title, customTitle: this.customTitle, target: this.target ?? TerminalLocation.Panel,
+			cols: screen.raw.cols, rows: screen.raw.rows, ...checkpoint, vt, cwd,
 			launch: this.launch?.execution ? undefined : this._revivalLaunch,
 		};
 	}
@@ -850,7 +720,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	async refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]> {
 		if (property === ProcessPropertyType.Title) return this.title as IProcessPropertyMap[T];
 		if (this._state === 'exited' || this.closed) return false as IProcessPropertyMap[T];
-		return this.shellProcessManager ? this.shellProcessManager.refreshProperty(property) : (true as IProcessPropertyMap[T]);
+		return this.shellProcessManager ? this.shellProcessManager.refreshProperty(property) : true as IProcessPropertyMap[T];
 	}
 
 	public close(): Promise<void> {
@@ -863,7 +733,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.closeTask = this.releaseProcess().finally(() => this.dispose());
 		// IDisposable starts release without an async error channel. close() retains
 		// the original promise, so explicit callers can await and observe failures.
-		void this.closeTask.catch(() => {});
+		void this.closeTask.catch(() => { });
 		return this.closeTask;
 	}
 
@@ -885,9 +755,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private closeProcess(): Promise<void> {
 		if (this.custom) {
 			const process = this.customProcess;
-			return (this.processCloseTask ??= Promise.resolve().then(() => process?.shutdown(true)));
+			return this.processCloseTask ??= Promise.resolve().then(() => process?.shutdown(true));
 		}
-		return (this.processCloseTask ??= this.shellProcessManager!.close());
+		return this.processCloseTask ??= this.shellProcessManager!.close();
 	}
 
 	loseConnection(): void {
@@ -932,14 +802,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this._state === 'running') this.setState('disconnected');
 		if (replacement) {
 			// Old reads must stop before release yields; the retained screen belongs to the new process next.
-			try {
-				await this.closeProcess();
-			} catch (error) {
-				this.handleProcessError(error);
-				throw error;
-			}
+			try { await this.closeProcess(); }
+			catch (error) { this.handleProcessError(error); throw error; }
 		} else {
-			await this.closeProcess().catch(() => {});
+			await this.closeProcess().catch(() => { });
 		}
 		if (this.closed) {
 			throw new CancellationError();
@@ -954,38 +820,21 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				this.shellProcessManager = undefined;
 				this.customProcess = undefined;
 				this.pendingExit = undefined;
-				this.custom = replacement.customPtyImplementation
-					? {
-							create: replacement.customPtyImplementation,
-							instanceNumber: this.instanceNumber,
-							dimensions,
-							onTitleChanged: this.onTitleChanged,
-						}
-					: undefined;
+				this.custom = replacement.customPtyImplementation ? {
+					create: replacement.customPtyImplementation, instanceNumber: this.instanceNumber,
+					dimensions, onTitleChanged: this.onTitleChanged,
+				} : undefined;
 				this.launch = Object.freeze({
 					type: replacement.type,
-					profile: replacement.executable
-						? Object.freeze({
-								type: 'custom' as const,
-								name: replacement.name ?? this._profile.title,
-								path: Object.freeze(typeof replacement.executable === 'string' ? [replacement.executable] : [...replacement.executable]),
-								args: typeof replacement.args === 'string' ? replacement.args : Object.freeze([...(replacement.args ?? [])]),
-							})
-						: { type: 'default' as const },
+					profile: replacement.executable ? Object.freeze({
+						type: 'custom' as const, name: replacement.name ?? this._profile.title,
+						path: Object.freeze(typeof replacement.executable === 'string' ? [replacement.executable] : [...replacement.executable]),
+						args: typeof replacement.args === 'string' ? replacement.args : Object.freeze([...(replacement.args ?? [])]),
+					}) : { type: 'default' as const },
 					...(replacement.env === undefined ? {} : { env: Object.freeze({ ...replacement.env }) }),
 					...(replacement.strictEnv === undefined ? {} : { strictEnv: replacement.strictEnv }),
 					...(replacement.cwd === undefined ? {} : { cwd: replacement.cwd }),
-					...(replacement.execution === undefined
-						? {}
-						: {
-								execution:
-									replacement.execution.type === 'process'
-										? Object.freeze({
-												...replacement.execution,
-												args: typeof replacement.execution.args === 'string' ? replacement.execution.args : Object.freeze([...replacement.execution.args]),
-											})
-										: Object.freeze({ ...replacement.execution }),
-							}),
+					...(replacement.execution === undefined ? {} : { execution: replacement.execution.type === 'process' ? Object.freeze({ ...replacement.execution, args: (typeof replacement.execution.args === 'string' ? replacement.execution.args : Object.freeze([...replacement.execution.args])) }) : Object.freeze({ ...replacement.execution }) }),
 				});
 				this._customTitle = replacement.name;
 				this.initialText = replacement.initialText;
@@ -1007,21 +856,18 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				return;
 			}
 			const autoReplies = getTerminalAutoReplyRules(this.configuration);
-			const child = await this.backend.createProcess(
-				{
-					...(autoReplies.length ? { autoReplies } : {}),
-					...processWorkspaceFolder(this.processWorkspaceFolderId),
-					// Launch presentation metadata must never become process request fields.
-					...(this.launch?.env === undefined ? {} : { env: this.launch.env }),
-					...(this.launch?.strictEnv === undefined ? {} : { strictEnv: this.launch.strictEnv }),
-					...(this.launch?.cwd === undefined ? {} : { cwd: this.launch.cwd }),
-					...(this.launch?.execution === undefined ? {} : { execution: this.launch.execution }),
-					rows: dimensions.rows,
-					cols: dimensions.cols,
-					profile: this.launch?.profile ?? { type: 'profile', profileId: this._profile.profileId },
-				},
-				this.instanceNumber,
-			);
+			const child = await this.backend.createProcess({
+				...(autoReplies.length ? { autoReplies } : {}),
+				...processWorkspaceFolder(this.processWorkspaceFolderId),
+				// Launch presentation metadata must never become process request fields.
+				...(this.launch?.env === undefined ? {} : { env: this.launch.env }),
+				...(this.launch?.strictEnv === undefined ? {} : { strictEnv: this.launch.strictEnv }),
+				...(this.launch?.cwd === undefined ? {} : { cwd: this.launch.cwd }),
+				...(this.launch?.execution === undefined ? {} : { execution: this.launch.execution }),
+				rows: dimensions.rows,
+				cols: dimensions.cols,
+				profile: this.launch?.profile ?? { type: 'profile', profileId: this._profile.profileId },
+			}, this.instanceNumber);
 			const created = child.creation;
 			if (this.closed) {
 				await child.close();
@@ -1031,11 +877,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.processReady = created.ready;
 			this.connectionPersistence = created.connectionPersistence;
 			this.processCloseTask = undefined;
-			this._profile = {
-				...created.profile,
-				icon: replacement?.icon ?? this._profile.icon,
-				color: replacement?.color ?? this._profile.color,
-			};
+			this._profile = { ...created.profile, icon: replacement?.icon ?? this._profile.icon, color: replacement?.color ?? this._profile.color };
 			this.shellLifetime.clear();
 			this.shellProcessManager = child;
 			this.createShellProcessManager();
@@ -1056,33 +898,20 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const manager = this.shellProcessManager!;
 		const cwdQuery = lifetime.add(new NaiveCwdDetectionCapability(manager));
 		this.processCapabilities.add(TerminalCapability.NaiveCwdDetection, cwdQuery);
-		lifetime.add(
-			toDisposable(() => {
-				if (this.processCapabilities.get(TerminalCapability.NaiveCwdDetection) === cwdQuery) this.processCapabilities.remove(TerminalCapability.NaiveCwdDetection);
-			}),
-		);
+		lifetime.add(toDisposable(() => {
+			if (this.processCapabilities.get(TerminalCapability.NaiveCwdDetection) === cwdQuery) this.processCapabilities.remove(TerminalCapability.NaiveCwdDetection);
+		}));
 		// The backend owns the child. This instance holds a release lease, not a second disposable owner.
-		lifetime.add(
-			toDisposable(() => {
-				void manager.close().catch(() => {});
-			}),
-		);
-		lifetime.add(
-			manager.onProcessReady(ready => {
-				this.processReady = ready;
-				this.refreshCapabilities();
-			}),
-		);
+		lifetime.add(toDisposable(() => { void manager.close().catch(() => { }); }));
+		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; this.refreshCapabilities(); }));
 		lifetime.add(toDisposable(() => this.statusList.remove(TerminalStatus.ShellIntegrationInfo)));
 		lifetime.add(manager.onProcessError(error => this.handleProcessError(error)));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
-		lifetime.add(
-			manager.onPtyReconnect(() => {
-				this.setState('running');
-			}),
-		);
+		lifetime.add(manager.onPtyReconnect(() => {
+			this.setState('running');
+		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
 		this.refreshCapabilities();
 	}
@@ -1090,8 +919,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private handleProcessError(error: unknown): void {
 		if (this.closed || this.isDisposed) return;
 		this.statusList.add({
-			id: 'process-error',
-			severity: Severity.Error,
+			id: 'process-error', severity: Severity.Error,
 			tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
 		});
 		this.setState('error');
@@ -1148,12 +976,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		// Reads can repeat the same metadata snapshot. Publish only display changes,
 		// so unchanged command history never rebuilds an open information card.
 		if (previous?.tooltip !== tooltip || previous.detailedTooltip !== detailedTooltip) {
-			this.statusList.add({
-				id: TerminalStatus.ShellIntegrationInfo,
-				severity: Severity.Info,
-				tooltip,
-				detailedTooltip,
-			});
+			this.statusList.add({ id: TerminalStatus.ShellIntegrationInfo, severity: Severity.Info, tooltip, detailedTooltip });
 		}
 	}
 
@@ -1191,6 +1014,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 }
 
-function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string; } {
 	return dirId === undefined ? {} : { dirId };
 }

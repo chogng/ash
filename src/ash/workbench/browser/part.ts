@@ -29,7 +29,8 @@ export abstract class Part extends Component {
 	protected readonly contentDomNode: HTMLDivElement;
 	private readonly _onDidChangeConstraints = this._register(new Emitter<void>());
 
-	readonly onDidChangeConstraints: Event<void> = this._onDidChangeConstraints.event;
+	readonly onDidChangeConstraints: Event<void> =
+		this._onDidChangeConstraints.event;
 
 	protected constructor(
 		container: HTMLElement,
@@ -53,26 +54,16 @@ export abstract class Part extends Component {
 		container.append(domNode);
 	}
 
-	get minimumWidth(): number {
-		return 0;
-	}
-	get maximumWidth(): number {
-		return Number.POSITIVE_INFINITY;
-	}
-	get minimumHeight(): number {
-		return 0;
-	}
-	get maximumHeight(): number {
-		return Number.POSITIVE_INFINITY;
-	}
-	get preferredWidth(): number | undefined {
-		return undefined;
-	}
+	get minimumWidth(): number { return 0; }
+	get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
+	get minimumHeight(): number { return 0; }
+	get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
+	get preferredWidth(): number | undefined { return undefined; }
 
-	layout(_dimension: IDimension): void {}
+	layout(_dimension: IDimension): void { }
 
 	/** Grid owns these separators; subclasses may attach presentation for the current boundaries. */
-	setBoundarySashes(_sashes: IBoundarySashes): void {}
+	setBoundarySashes(_sashes: IBoundarySashes): void { }
 
 	/** Converts Grid border-box dimensions without measuring DOM after Grid writes. */
 	protected layoutContents(width: number, height: number): ILayoutContentResult {

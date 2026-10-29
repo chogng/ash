@@ -2,13 +2,7 @@ import { generateUuid } from 'ash:editor/base/common/uuid.js';
 import { containsDocumentNode, createDocumentNode, findDocumentNode, type DocumentNode } from '../model/document.js';
 import type { DocumentSelection } from '../core/documentSelection.js';
 import type { DocumentSchema } from '../model/documentSchema.js';
-import {
-	documentParagraphFormatKeys,
-	getDocumentParagraphStyles,
-	resolveDocumentParagraphAttributes,
-	type DocumentParagraphStyle,
-	type DocumentParagraphAttributes,
-} from '../model/documentParagraph.js';
+import { documentParagraphFormatKeys, getDocumentParagraphStyles, resolveDocumentParagraphAttributes, type DocumentParagraphStyle, type DocumentParagraphAttributes } from '../model/documentParagraph.js';
 import { DocumentTransaction } from '../model/documentTransaction.js';
 import type { DocumentCommand } from './documentCommands.js';
 
@@ -70,10 +64,7 @@ export function createSetParagraphStyleCommand(schema: DocumentSchema, document:
 		const parent = findDocumentNode(document, node.id)?.parent;
 		if (!parent) return undefined;
 		try {
-			const proposedParent = createDocumentNode({
-				...parent,
-				content: parent.content.map(child => (child.id === node.id ? createDocumentNode({ ...node, type, attrs }) : child)),
-			});
+			const proposedParent = createDocumentNode({ ...parent, content: parent.content.map(child => child.id === node.id ? createDocumentNode({ ...node, type, attrs }) : child) });
 			if (parent.type === schema.topNodeType) schema.validate(proposedParent);
 			else schema.validateFragment(proposedParent);
 		} catch {
@@ -86,13 +77,7 @@ export function createSetParagraphStyleCommand(schema: DocumentSchema, document:
 }
 
 /** Applies a reference while preserving local paragraph and character overrides. */
-export function createApplyParagraphStyleCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: string,
-	selection: DocumentSelection | undefined,
-	styleId: string,
-): DocumentCommand | undefined {
+export function createApplyParagraphStyleCommand(schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined, styleId: string): DocumentCommand | undefined {
 	const style = getDocumentParagraphStyles(document).find(style => style.id === styleId);
 	if (!style) return undefined;
 	const structural = createSetParagraphStyleCommand(schema, document, blockId, selection, style.level);
@@ -103,11 +88,7 @@ export function createApplyParagraphStyleCommand(
 	let transaction = structural?.transaction ?? new DocumentTransaction();
 	for (const node of paragraphs) {
 		const { level: _level, ...attrs } = node.attrs;
-		transaction = transaction.setNodeType(node.id, style.level ? 'heading' : 'paragraph', {
-			...attrs,
-			styleId,
-			...(style.level ? { level: style.level } : {}),
-		});
+		transaction = transaction.setNodeType(node.id, style.level ? 'heading' : 'paragraph', { ...attrs, styleId, ...(style.level ? { level: style.level } : {}) });
 	}
 	return { transaction, focus: { blockId: paragraphs[0]!.id } };
 }
@@ -115,7 +96,7 @@ export function createApplyParagraphStyleCommand(
 export function createClearParagraphOverridesCommand(document: DocumentNode, blockId: string, selection: DocumentSelection | undefined): DocumentCommand | undefined {
 	let transaction = new DocumentTransaction();
 	for (const node of getSelectedDocumentParagraphs(document, blockId, selection)) {
-		const attrs = Object.fromEntries(Object.entries(node.attrs).filter(([key]) => !documentParagraphFormatKeys.includes(key as (typeof documentParagraphFormatKeys)[number])));
+		const attrs = Object.fromEntries(Object.entries(node.attrs).filter(([key]) => !documentParagraphFormatKeys.includes(key as typeof documentParagraphFormatKeys[number])));
 		if (Object.keys(attrs).length !== Object.keys(node.attrs).length) transaction = transaction.setNodeAttributes(node.id, attrs);
 	}
 	return transaction.steps.length ? { transaction, focus: { blockId } } : undefined;
@@ -130,20 +111,15 @@ export function createDefineParagraphStyleCommand(document: DocumentNode, blockI
 	const id = styleId ?? generateUuid();
 	const resolved = resolveDocumentParagraphAttributes(document, node);
 	const style: DocumentParagraphStyle = {
-		id,
-		name: name.trim(),
-		level: node.type === 'heading' ? Number(node.attrs.level) : 0,
+		id, name: name.trim(), level: node.type === 'heading' ? Number(node.attrs.level) : 0,
 		attrs: Object.fromEntries(documentParagraphFormatKeys.filter(key => resolved[key] !== undefined).map(key => [key, resolved[key]])),
 	};
 	const previous = styles.find(style => style.id === id);
 	// Updating a style retains its structural role; change that role by applying a built-in style first.
 	if (previous && previous.level !== style.level) return undefined;
-	const definitions = previous ? styles.map(candidate => (candidate.id === id ? style : candidate)) : [...styles, style];
-	let transaction = new DocumentTransaction().setNodeAttributes(document.id, {
-		...document.attrs,
-		paragraphStyles: JSON.stringify(definitions),
-	});
-	const attrs = Object.fromEntries(Object.entries(node.attrs).filter(([key]) => !documentParagraphFormatKeys.includes(key as (typeof documentParagraphFormatKeys)[number])));
+	const definitions = previous ? styles.map(candidate => candidate.id === id ? style : candidate) : [...styles, style];
+	let transaction = new DocumentTransaction().setNodeAttributes(document.id, { ...document.attrs, paragraphStyles: JSON.stringify(definitions) });
+	const attrs = Object.fromEntries(Object.entries(node.attrs).filter(([key]) => !documentParagraphFormatKeys.includes(key as typeof documentParagraphFormatKeys[number])));
 	transaction = transaction.setNodeAttributes(node.id, { ...attrs, styleId: id });
 	return { transaction, focus: { blockId } };
 }
@@ -152,10 +128,7 @@ export function createDefineParagraphStyleCommand(document: DocumentNode, blockI
 export function createDeleteParagraphStyleCommand(document: DocumentNode, blockId: string, styleId: string): DocumentCommand | undefined {
 	const styles = getDocumentParagraphStyles(document);
 	if (!styles.some(style => style.id === styleId)) return undefined;
-	let transaction = new DocumentTransaction().setNodeAttributes(document.id, {
-		...document.attrs,
-		paragraphStyles: JSON.stringify(styles.filter(style => style.id !== styleId)),
-	});
+	let transaction = new DocumentTransaction().setNodeAttributes(document.id, { ...document.attrs, paragraphStyles: JSON.stringify(styles.filter(style => style.id !== styleId)) });
 	const visit = (node: DocumentNode): void => {
 		if ((node.type === 'paragraph' || node.type === 'heading') && node.attrs.styleId === styleId) {
 			const { styleId: _styleId, ...attrs } = resolveDocumentParagraphAttributes(document, node);
@@ -177,11 +150,8 @@ export function getDocumentList(document: DocumentNode, blockId: string): Docume
 	return undefined;
 }
 
-export function createSetListNumberingCommand(document: DocumentNode, blockId: string, attrs: { readonly order?: number; readonly numbering?: string }): DocumentCommand | undefined {
+export function createSetListNumberingCommand(document: DocumentNode, blockId: string, attrs: { readonly order?: number; readonly numbering?: string; }): DocumentCommand | undefined {
 	const list = getDocumentList(document, blockId);
 	if (list?.type !== 'orderedList') return undefined;
-	return {
-		transaction: new DocumentTransaction().setNodeAttributes(list.id, { ...list.attrs, ...attrs }),
-		focus: { blockId },
-	};
+	return { transaction: new DocumentTransaction().setNodeAttributes(list.id, { ...list.attrs, ...attrs }), focus: { blockId } };
 }

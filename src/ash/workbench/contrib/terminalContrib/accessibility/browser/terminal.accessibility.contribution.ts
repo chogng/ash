@@ -21,9 +21,7 @@ export class TerminalAccessibleViewContribution extends Disposable implements IT
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	public xtermReady(screen: IXtermTerminal): void {
 		if (this.context.instance.capabilities) {
@@ -34,11 +32,9 @@ export class TerminalAccessibleViewContribution extends Disposable implements IT
 			screen.raw.textarea?.setAttribute('aria-label', [localize('terminal.accessibility.input', 'Terminal input'), hint].filter(Boolean).join('. '));
 		};
 		updateLabel();
-		this._register(
-			this.configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateLabel();
-			}),
-		);
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateLabel();
+		}));
 	}
 }
 
@@ -50,20 +46,14 @@ function focusedInstance(accessor: ServicesAccessor): ITerminalInstance | undefi
 
 registerTerminalContribution(TerminalAccessibleViewContribution.ID, TerminalAccessibleViewContribution);
 AccessibleViewRegistry.register({
-	name: 'terminal',
-	type: AccessibleViewType.Help,
-	priority: 90,
-	when: TerminalContextKeys.focus.isEqualTo(true),
+	name: 'terminal', type: AccessibleViewType.Help, priority: 90, when: TerminalContextKeys.focus.isEqualTo(true),
 	getProvider: accessor => {
 		const instance = focusedInstance(accessor);
 		return instance ? new TerminalAccessibilityHelpProvider(instance, accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled)) : undefined;
 	},
 });
 AccessibleViewRegistry.register({
-	name: 'terminal',
-	type: AccessibleViewType.View,
-	priority: 90,
-	when: TerminalContextKeys.focus.isEqualTo(true),
+	name: 'terminal', type: AccessibleViewType.View, priority: 90, when: TerminalContextKeys.focus.isEqualTo(true),
 	getProvider: accessor => {
 		const instance = focusedInstance(accessor);
 		return instance?.xterm ? new TerminalAccessibleBufferProvider(instance, instance.xterm) : undefined;

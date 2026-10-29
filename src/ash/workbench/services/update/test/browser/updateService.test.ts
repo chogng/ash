@@ -9,25 +9,10 @@ import { IBrowserWorkbenchEnvironmentService } from '../../../environment/browse
 import { IHostService } from '../../../host/browser/host.js';
 import { BrowserUpdateService, type IUpdateProvider, type IUpdate } from '../../browser/updateService.js';
 
-function createServices(provider?: IUpdateProvider, restart = async (): Promise<void> => {}): InstantiationService {
+function createServices(provider?: IUpdateProvider, restart = async (): Promise<void> => { }): InstantiationService {
 	const services = new InstantiationService();
-	services.registerInstance(IBrowserWorkbenchEnvironmentService, {
-		argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }),
-		webviewExternalEndpoint: 'https://{{uuid}}.example.test',
-		options: { updateProvider: provider },
-	});
-	services.registerInstance(IHostService, {
-		reload: async () => {
-			throw new Error('Unexpected reload in this fixture');
-		},
-		hasFocus: true,
-		onDidChangeFocus: Event.None,
-		restart,
-		async openWindow() {},
-		async getScreenshot() {
-			return undefined;
-		},
-	});
+	services.registerInstance(IBrowserWorkbenchEnvironmentService, { argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: 'https://{{uuid}}.example.test', options: { updateProvider: provider } });
+	services.registerInstance(IHostService, { reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, async getScreenshot() { return undefined; } });
 	return services;
 }
 
@@ -35,19 +20,7 @@ test('Web update startup and manual checks share the provider request and reload
 	let finish!: (value: IUpdate | null) => void;
 	let checks = 0;
 	let reloads = 0;
-	using services = createServices(
-		{
-			checkForUpdate() {
-				checks++;
-				return new Promise(resolve => {
-					finish = resolve;
-				});
-			},
-		},
-		async () => {
-			reloads++;
-		},
-	);
+	using services = createServices({ checkForUpdate() { checks++; return new Promise(resolve => { finish = resolve; }); } }, async () => { reloads++; });
 	using update = services.createInstance(BrowserUpdateService);
 	const automatic = update.checkAutomatically();
 	const manual = update.checkForUpdates();
@@ -63,12 +36,7 @@ test('Web update startup and manual checks share the provider request and reload
 
 test('Web update checks recover from failures and validate embedder results', async () => {
 	let response: unknown = new Error('disconnected');
-	using services = createServices({
-		async checkForUpdate() {
-			if (response instanceof Error) throw response;
-			return response as IUpdate | null;
-		},
-	});
+	using services = createServices({ async checkForUpdate() { if (response instanceof Error) throw response; return response as IUpdate | null; } });
 	using update = services.createInstance(BrowserUpdateService);
 	await assert.rejects(update.checkForUpdates(), /disconnected/);
 	for (response of [undefined, {}, { version: '' }, { version: '  ' }, { version: 2 }]) {
@@ -87,12 +55,7 @@ test('Web updates without a provider stay quiet and late checks cannot revive a 
 	assert.equal(await update.checkAutomatically(), undefined);
 	await assert.rejects(update.checkForUpdates(), /no update provider/);
 	let finish!: (value: IUpdate | null) => void;
-	using pendingServices = createServices({
-		checkForUpdate: () =>
-			new Promise(resolve => {
-				finish = resolve;
-			}),
-	});
+	using pendingServices = createServices({ checkForUpdate: () => new Promise(resolve => { finish = resolve; }) });
 	const pending = pendingServices.createInstance(BrowserUpdateService);
 	const checking = pending.checkForUpdates();
 	await Promise.resolve();
@@ -105,10 +68,6 @@ test('Web updates without a provider stay quiet and late checks cannot revive a 
 test('Web update creation requires the registered environment and lifecycle host', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(BrowserUpdateService), /Unknown service/);
-	services.registerInstance(IBrowserWorkbenchEnvironmentService, {
-		argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }),
-		webviewExternalEndpoint: '',
-		options: {},
-	});
+	services.registerInstance(IBrowserWorkbenchEnvironmentService, { argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: '', options: {} });
 	assert.throws(() => services.createInstance(BrowserUpdateService), /Unknown service: hostService/);
 });

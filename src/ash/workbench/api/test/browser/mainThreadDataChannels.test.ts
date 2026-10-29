@@ -15,41 +15,22 @@ import { DataChannelService, LinkPresentationService } from '../../../services/d
 import { MainThreadDataChannels } from '../../browser/mainThreadDataChannels.js';
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
-	public registerClientHandler(): { dispose(): void } {
-		throw new Error('Client calls are outside this fixture');
-	}
+	public registerClientHandler(): { dispose(): void; } { throw new Error('Client calls are outside this fixture'); }
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	public current = snapshot(1, 1);
 	public state: AppServerConnectionState = 'ready';
 	public readonly requests: ExtensionHostInvocationRequest[] = [];
 	public readonly signals: AbortSignal[] = [];
-	public invokeResult: (request: ExtensionHostInvocationRequest) => Promise<JsonValue> = async request =>
-		request.operation === 'provideLinkPresentation' ? { kind: 'issue', title: 'Issue one', status: { kind: 'open', label: 'Open' } } : null;
-	public start(): Promise<ExtensionHostFleetSnapshot> {
-		throw new Error('Startup is outside this fixture');
-	}
-	public isAvailable(): Promise<boolean> {
-		return Promise.resolve(true);
-	}
-	public list(): Promise<ExtensionHostFleetSnapshot> {
-		return Promise.resolve(this.current);
-	}
-	public reconcile(): Promise<ExtensionHostFleetSnapshot> {
-		return this.list();
-	}
-	public activateByEvent(): Promise<ExtensionHostFleetSnapshot> {
-		throw new Error('Activation is outside this fixture');
-	}
-	public getConnectionState(): Promise<AppServerConnectionState> {
-		return Promise.resolve(this.state);
-	}
-	public onDidChange(listener: (generation: number) => void) {
-		return this.changes.event(listener);
-	}
-	public onConnectionState(listener: (state: AppServerConnectionState) => void) {
-		return this.connection.event(listener);
-	}
+	public invokeResult: (request: ExtensionHostInvocationRequest) => Promise<JsonValue> = async request => request.operation === 'provideLinkPresentation' ? { kind: 'issue', title: 'Issue one', status: { kind: 'open', label: 'Open' } } : null;
+	public start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Startup is outside this fixture'); }
+	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
+	public list(): Promise<ExtensionHostFleetSnapshot> { return Promise.resolve(this.current); }
+	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }
+	public activateByEvent(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Activation is outside this fixture'); }
+	public getConnectionState(): Promise<AppServerConnectionState> { return Promise.resolve(this.state); }
+	public onDidChange(listener: (generation: number) => void) { return this.changes.event(listener); }
+	public onConnectionState(listener: (state: AppServerConnectionState) => void) { return this.connection.event(listener); }
 	public invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue> {
 		this.requests.push(request);
 		this.signals.push(signal);
@@ -67,30 +48,14 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 
 function snapshot(generation: number, incarnation: number): ExtensionHostFleetSnapshot {
 	return normalizeExtensionHostSnapshot({
-		generation,
-		extensions: [
-			{
-				id: 'acme.links',
-				version: '1',
-				packageDigest: `sha256:${'a'.repeat(64)}`,
-				runtimeApiVersion: 1,
-				activationGeneration: 1,
-				incarnation,
-				lifecycle: 'ready',
-				failure: null,
-				stderr: '',
-				outputEvents: [],
-				registrations: [
-					{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
-					{
-						kind: 'linkPresentationProvider',
-						registrationId: 'issues',
-						uriPattern: '^https://example\\.com/issues/',
-						presentationKind: 'issue',
-					},
-				],
-			},
-		],
+		generation, extensions: [{
+			id: 'acme.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+			activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
+			registrations: [
+				{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
+				{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
+			],
+		}]
 	});
 }
 
@@ -106,9 +71,7 @@ function servicesFor(api: ExtensionHost): InstantiationService {
 
 async function until(condition: () => boolean): Promise<void> {
 	for (let attempt = 0; attempt < 100; attempt++) {
-		if (condition()) {
-			return;
-		}
+		if (condition()) { return; }
 		await new Promise(resolve => setTimeout(resolve, 5));
 	}
 	assert.fail('Expected extension state was not reached');
@@ -119,7 +82,7 @@ test('channel delivery is ordered and survives unrelated fleet changes', async (
 	using services = servicesFor(api);
 	using bridge = services.createInstance(MainThreadDataChannels, 1_000);
 	const first = new DeferredPromise<JsonValue>();
-	api.invokeResult = request => (api.requests.length === 1 ? first.p : Promise.resolve(null));
+	api.invokeResult = request => api.requests.length === 1 ? first.p : Promise.resolve(null);
 	await bridge.start();
 	const channels = services.get(IDataChannelService);
 	channels.getDataChannel('other').sendData('ignored');
@@ -132,29 +95,17 @@ test('channel delivery is ordered and survives unrelated fleet changes', async (
 	assert.equal(api.requests.length, 1);
 	await first.complete(null);
 	await until(() => api.requests.length === 2);
-	assert.deepEqual(
-		api.requests.map(request => ({
-			operation: request.operation,
-			payload: { ...(request.payload as Record<string, JsonValue>) },
-			incarnation: request.incarnation,
-		})),
-		[
-			{ operation: 'receiveData', payload: { data: 1 }, incarnation: 1 },
-			{ operation: 'receiveData', payload: { data: 2 }, incarnation: 1 },
-		],
-	);
+	assert.deepEqual(api.requests.map(request => ({ operation: request.operation, payload: { ...request.payload as Record<string, JsonValue> }, incarnation: request.incarnation })), [
+		{ operation: 'receiveData', payload: { data: 1 }, incarnation: 1 },
+		{ operation: 'receiveData', payload: { data: 2 }, incarnation: 1 },
+	]);
 });
 
 test('link registration listeners observe the complete extension snapshot', async () => {
 	using api = new ExtensionHost();
 	const next = JSON.parse(JSON.stringify(api.current));
 	next.extensions[0].failure = null;
-	next.extensions[0].registrations.push({
-		kind: 'linkPresentationProvider',
-		registrationId: 'pulls',
-		uriPattern: '^https://example\\.com/pulls/',
-		presentationKind: 'pullRequest',
-	});
+	next.extensions[0].registrations.push({ kind: 'linkPresentationProvider', registrationId: 'pulls', uriPattern: '^https://example\\.com/pulls/', presentationKind: 'pullRequest' });
 	api.current = normalizeExtensionHostSnapshot(next);
 	using services = servicesFor(api);
 	const links = services.get(ILinkPresentationService);
@@ -201,17 +152,12 @@ test('channel subscriptions bound pending delivery and abort it when their conne
 	api.invokeResult = () => pending.p;
 	await bridge.start();
 	const channel = services.get(IDataChannelService).getDataChannel('editTelemetry');
-	for (let value = 0; value < 100; value++) {
-		channel.sendData(value);
-	}
+	for (let value = 0; value < 100; value++) { channel.sendData(value); }
 	assert.equal(api.requests.length, 1);
 	api.invokeResult = async () => null;
 	await pending.complete(null);
 	await until(() => api.requests.length === 33);
-	assert.deepEqual(
-		api.requests.map(request => (request.payload as { data: JsonValue }).data),
-		Array.from({ length: 33 }, (_, index) => index),
-	);
+	assert.deepEqual(api.requests.map(request => (request.payload as { data: JsonValue; }).data), Array.from({ length: 33 }, (_, index) => index));
 	api.connect('stopped');
 	assert.ok(api.signals.every(signal => signal.aborted));
 	channel.sendData('after close');

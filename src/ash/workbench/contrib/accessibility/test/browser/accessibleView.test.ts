@@ -11,13 +11,7 @@ import { FallbackKeyboardMapper } from '../../../../services/keybinding/common/f
 import { parseKeybinding } from '../../../../../base/common/keybindingParser.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -70,29 +64,18 @@ test('Explorer accessibility hint follows the verbosity setting', async () => {
 
 test('help resolves repeated and unassigned shortcuts using the current keyboard layout', () => {
 	using fixture = new AccessibleViewFixture();
-	const result = resolveContentAndKeybindingItems(
-		fixture.keybindings,
-		'Open <keybinding:editor.action.accessibilityHelp> twice <keybinding:editor.action.accessibilityHelp> and <keybinding:test.missing>.',
-	);
-	assert.deepEqual(
-		{
-			text: result?.content.value,
-			assigned: result?.configuredKeybindingItems,
-			unassigned: result?.configureKeybindingItems,
-			trusted: result?.content.isTrusted,
-		},
-		{
-			text: 'Open Alt+F1 twice Alt+F1 and No keyboard shortcut assigned for test.missing.',
-			assigned: [
-				{
-					id: AccessibilityCommandId.OpenAccessibilityHelp,
-					label: AccessibilityCommandId.OpenAccessibilityHelp,
-				},
-			],
-			unassigned: [{ id: 'test.missing', label: 'test.missing' }],
-			trusted: false,
-		},
-	);
+	const result = resolveContentAndKeybindingItems(fixture.keybindings, 'Open <keybinding:editor.action.accessibilityHelp> twice <keybinding:editor.action.accessibilityHelp> and <keybinding:test.missing>.');
+	assert.deepEqual({
+		text: result?.content.value,
+		assigned: result?.configuredKeybindingItems,
+		unassigned: result?.configureKeybindingItems,
+		trusted: result?.content.isTrusted,
+	}, {
+		text: 'Open Alt+F1 twice Alt+F1 and No keyboard shortcut assigned for test.missing.',
+		assigned: [{ id: AccessibilityCommandId.OpenAccessibilityHelp, label: AccessibilityCommandId.OpenAccessibilityHelp }],
+		unassigned: [{ id: 'test.missing', label: 'test.missing' }],
+		trusted: false,
+	});
 	assert.equal(resolveContentAndKeybindingItems(fixture.keybindings, ''), undefined);
 });
 
@@ -119,18 +102,10 @@ test('opening help publishes its state, disables only the active hint and releas
 		name: 'test.accessibility.lifecycle',
 		priority: 1000,
 		getProvider: () => {
-			const provider = new AccessibleContentProvider(
-				AccessibleViewProviderId.Explorer,
-				{ type: AccessibleViewType.Help },
-				() => {
-					reads++;
-					return '<keybinding:editor.action.accessibilityHelp>';
-				},
-				() => {
-					closed++;
-				},
-				AccessibilityVerbositySettingId.Explorer,
-			);
+			const provider = new AccessibleContentProvider(AccessibleViewProviderId.Explorer, { type: AccessibleViewType.Help }, () => {
+				reads++;
+				return '<keybinding:editor.action.accessibilityHelp>';
+			}, () => { closed++; }, AccessibilityVerbositySettingId.Explorer);
 			provider.onDidChangeContent = changed.event;
 			return provider;
 		},
@@ -168,20 +143,9 @@ test('a failed dialog open releases the provider and resets command state', () =
 		type: AccessibleViewType.View,
 		name: 'test.accessibility.failedOpen',
 		priority: 1000,
-		getProvider: () =>
-			new AccessibleContentProvider(
-				AccessibleViewProviderId.Explorer,
-				{ type: AccessibleViewType.View },
-				() => 'content',
-				() => {
-					closed++;
-				},
-				AccessibilityVerbositySettingId.Explorer,
-			),
+		getProvider: () => new AccessibleContentProvider(AccessibleViewProviderId.Explorer, { type: AccessibleViewType.View }, () => 'content', () => { closed++; }, AccessibilityVerbositySettingId.Explorer),
 	});
-	fixture.browser.window.HTMLDialogElement.prototype.showModal = () => {
-		throw new Error('Cannot show modal');
-	};
+	fixture.browser.window.HTMLDialogElement.prototype.showModal = () => { throw new Error('Cannot show modal'); };
 	assert.throws(() => fixture.accessibleView.show(AccessibleViewType.View), /Cannot show modal/u);
 	assert.equal(closed, 1);
 	assert.equal(fixture.contextKeys.getValue('accessibleViewIsShown'), false);
@@ -199,18 +163,11 @@ test('screen reader commands update policy, status and notification choices thro
 	await entry.entry.run!();
 	const notification = fixture.notifications.model.getNotifications()[0]!;
 	await notification.actions!.primary!.find(action => action.id === 'accessibility.screenReader.off')!.run();
-	assert.deepEqual(
-		{
-			optimized: fixture.accessibility.isScreenReaderOptimized(),
-			entries: fixture.statusbar.getEntries(StatusbarAlignment.Right),
-			notifications: fixture.notifications.model.getNotifications(),
-		},
-		{
-			optimized: false,
-			entries: [],
-			notifications: [],
-		},
-	);
+	assert.deepEqual({ optimized: fixture.accessibility.isScreenReaderOptimized(), entries: fixture.statusbar.getEntries(StatusbarAlignment.Right), notifications: fixture.notifications.model.getNotifications() }, {
+		optimized: false,
+		entries: [],
+		notifications: [],
+	});
 });
 
 test('automatic detection prompts once and releases the prompt and status when the window closes', () => {
@@ -245,10 +202,8 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 		hasWidgetFocus: () => false,
 		onDidFocusEditorText: focused.event,
 		onDidFocusEditorWidget: Event.None,
-		getOption: (option: EditorOption) => (option === EditorOption.readOnly ? readOnly : option === EditorOption.tabFocusMode),
-		focus: () => {
-			restored++;
-		},
+		getOption: (option: EditorOption) => option === EditorOption.readOnly ? readOnly : option === EditorOption.tabFocusMode,
+		focus: () => { restored++; },
 	} as unknown as ICodeEditor;
 	fixture.codeEditors.addCodeEditor(editor);
 	using contribution = fixture.services.createInstance(EditorAccessibilityHelpContribution);
@@ -283,12 +238,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 test('notification content remains live through nested help and the reading position survives updates', async () => {
 	using fixture = new AccessibleViewFixture();
 	let returned = 0;
-	fixture.services.registerInstance(INotificationsCenter, {
-		model: fixture.notifications.model,
-		show: () => {
-			returned++;
-		},
-	} as INotificationsCenter);
+	fixture.services.registerInstance(INotificationsCenter, { model: fixture.notifications.model, show: () => { returned++; } } as INotificationsCenter);
 	fixture.contextKeys.setContext('notificationsFocus', true);
 	fixture.notifications.info('First notification');
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibleView);
@@ -323,12 +273,7 @@ test('dimming configuration validates the supported opacity range at the setting
 test('closing the parent content view releases nested help and its keybinding listener', async () => {
 	using fixture = new AccessibleViewFixture();
 	let returned = 0;
-	fixture.services.registerInstance(INotificationsCenter, {
-		model: fixture.notifications.model,
-		show: () => {
-			returned++;
-		},
-	} as INotificationsCenter);
+	fixture.services.registerInstance(INotificationsCenter, { model: fixture.notifications.model, show: () => { returned++; } } as INotificationsCenter);
 	fixture.contextKeys.createKey<boolean>('notificationsFocus', false).set(true);
 	fixture.notifications.info('Keep reading');
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibleView);
@@ -400,30 +345,20 @@ class AccessibleViewFixture extends Disposable {
 		this._register(toDisposable(() => this.browser.window.close()));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement']));
 		this.browser.window.HTMLElement.prototype.scrollTo = function (options?: ScrollToOptions | number, y?: number): void {
-			this.scrollLeft = typeof options === 'number' ? options : (options?.left ?? this.scrollLeft);
-			this.scrollTop = typeof options === 'number' ? (y ?? this.scrollTop) : (options?.top ?? this.scrollTop);
+			this.scrollLeft = typeof options === 'number' ? options : options?.left ?? this.scrollLeft;
+			this.scrollTop = typeof options === 'number' ? y ?? this.scrollTop : options?.top ?? this.scrollTop;
 		};
-		this.browser.window.HTMLDialogElement.prototype.showModal = function (): void {
-			this.setAttribute('open', '');
-		};
+		this.browser.window.HTMLDialogElement.prototype.showModal = function (): void { this.setAttribute('open', ''); };
 		this.browser.window.HTMLDialogElement.prototype.close = function (): void {
 			this.removeAttribute('open');
 			this.dispatchEvent(new fixtureEvent('close'));
 		};
 		const fixtureEvent = this.browser.window.Event;
-		this.services.registerInstance(ILayoutService, {
-			mainContainer: this.browser.window.document.body,
-		} as ILayoutService);
+		this.services.registerInstance(ILayoutService, { mainContainer: this.browser.window.document.body } as ILayoutService);
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(IKeybindingService, this.keybindings);
-		this.accessibility = this._register(
-			new AccessibilityService({
-				root: this.browser.window.document.body,
-				contextKeyService: this.contextKeys,
-				configurationService: this.configuration,
-			}),
-		);
+		this.accessibility = this._register(new AccessibilityService({ root: this.browser.window.document.body, contextKeyService: this.contextKeys, configurationService: this.configuration }));
 		this.services.registerInstance(IAccessibilityService, this.accessibility);
 		this.services.registerInstance(ICodeEditorService, this.codeEditors);
 		this.services.registerInstance(IStatusbarService, this.statusbar);

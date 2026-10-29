@@ -33,7 +33,9 @@ suite('files browser component', () => {
 				{ type: 'modified', relativePathComponents: ['ignored.tmp'] },
 			]);
 		});
-		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([['src/created.ts', 'removed.ts', 'new.ts', 'old.ts'].map(path => `${root}/${path}`)]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([
+			['src/created.ts', 'removed.ts', 'new.ts', 'old.ts'].map(path => `${root}/${path}`),
+		]);
 		expect(await page.evaluate(() => window.ashFilesIntegration.observations[0]?.disconnected)).toBe(0);
 		expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(2);
 		await page.evaluate(() => window.ashFilesIntegration.emitObservation(0, [{ type: 'unknown', relativePathComponents: [] }]));
@@ -58,11 +60,7 @@ suite('files browser component', () => {
 
 		await page.goto('/files.html');
 		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
-		expect(await page.evaluate(() => window.ashFilesIntegration.offlineExtensionFolders())).toEqual([
-			'ash-userdata:/offline-project',
-			'file:///disconnected-workspace',
-			'unregistered:///workspace',
-		]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.offlineExtensionFolders())).toEqual(['ash-userdata:/offline-project', 'file:///disconnected-workspace', 'unregistered:///workspace']);
 	});
 
 	test('comparison groups update their accessible names and release source listeners before reload', async function () {
@@ -92,12 +90,7 @@ suite('files browser component', () => {
 		await page.goto('/files.html');
 		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 		await page.evaluate(() => window.ashFilesIntegration.showTextGroups());
-		expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({
-			disposed: false,
-			resolutions: 2,
-			values: ['Provider content', 'Provider content'],
-			sameModel: true,
-		});
+		expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 2, values: ['Provider content', 'Provider content'], sameModel: true });
 		await expect(page.getByRole('tab', { name: 'Provider text', exact: true })).toHaveCount(2);
 		const controls = page.locator('#text-groups .stanza-editor-input');
 		await controls.last().focus();
@@ -111,13 +104,9 @@ suite('files browser component', () => {
 		await expect(page.getByRole('tab')).toHaveCount(0);
 		await page.evaluate(() => window.ashFilesIntegration.reopenText());
 		await expect(page.locator('#text-groups .view-lines')).toContainText('Provider content');
-		expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({
-			disposed: false,
-			resolutions: 3,
-			values: ['Provider content'],
-			sameModel: true,
-		});
+		expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 3, values: ['Provider content'], sameModel: true });
 	});
+
 
 	test('async file tree separates focus from reveal and restores unloaded expansion', async function () {
 		const { page } = browserTests;

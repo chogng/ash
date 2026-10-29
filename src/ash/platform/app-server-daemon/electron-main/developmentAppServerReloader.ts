@@ -42,13 +42,9 @@ export class DevelopmentAppServerReloader extends Disposable {
 	constructor(private readonly options: DevelopmentAppServerReloaderOptions) {
 		super();
 		this.readGeneration = options.readGeneration ?? readDevelopmentAppServerGeneration;
-		this.log = options.log ?? ((message, error) => (error === undefined ? console.info(message) : console.error(message, error)));
+		this.log = options.log ?? ((message, error) => error === undefined ? console.info(message) : console.error(message, error));
 		this._register((options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule()));
-		this._register(
-			toDisposable(() => {
-				if (this.timeout) clearTimeout(this.timeout);
-			}),
-		);
+		this._register(toDisposable(() => { if (this.timeout) clearTimeout(this.timeout); }));
 	}
 
 	registerConnection(launcher: AppServerDaemonLauncher, supervisor: DevelopmentConnection): IDisposable {
@@ -57,23 +53,15 @@ export class DevelopmentAppServerReloader extends Disposable {
 		const resources = new DisposableStore();
 		this.registrations.set(supervisor, resources);
 		this.connections.add(connection);
-		resources.add(
-			toDisposable(() => {
-				this.connections.delete(connection);
-			}),
-		);
-		resources.add(
-			launcher.setDevelopmentStartupBarrier(async () => {
-				await this.restartBarrier;
-				await this.ensureSelectedRuntime(launcher);
-				launcher.selectDevelopmentRuntime(this.selectedRuntime.value!);
-			}),
-		);
-		resources.add(
-			supervisor.onStateChange(() => {
-				if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
-			}),
-		);
+		resources.add(toDisposable(() => { this.connections.delete(connection); }));
+		resources.add(launcher.setDevelopmentStartupBarrier(async () => {
+			await this.restartBarrier;
+			await this.ensureSelectedRuntime(launcher);
+			launcher.selectDevelopmentRuntime(this.selectedRuntime.value!);
+		}));
+		resources.add(supervisor.onStateChange(() => {
+			if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
+		}));
 		return toDisposable(() => {
 			// Workspace switches reuse the relay; an older scope must not unregister its replacement.
 			if (this.registrations.get(supervisor) !== resources) return;
@@ -94,10 +82,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 		const lease = await (this.options.acquireGeneration?.(carrier.launcher) ?? carrier.launcher.acquireDevelopmentRuntime());
 		// Pointer reads and lease acquisition can finish out of order while another
 		// build is published. Only the newest reload may choose a pending runtime.
-		if (this.isDisposed || revision !== this.reloadRevision || lease.runtime === this.selectedRuntime.value?.runtime) {
-			lease.dispose();
-			return;
-		}
+		if (this.isDisposed || revision !== this.reloadRevision || lease.runtime === this.selectedRuntime.value?.runtime) { lease.dispose(); return; }
 		this.pendingRuntime.value = lease;
 		await this.ensureDrain();
 	}
@@ -107,18 +92,11 @@ export class DevelopmentAppServerReloader extends Disposable {
 		if (!this.selectionPromise) {
 			this.selectionPromise = (async () => {
 				const lease = await (this.options.acquireGeneration?.(launcher) ?? launcher.acquireDevelopmentRuntime());
-				if (this.isDisposed) {
-					lease.dispose();
-					this.assertNotDisposed();
-				}
+				if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
 				this.selectedRuntime.value = lease;
 			})();
 		}
-		try {
-			await this.selectionPromise;
-		} finally {
-			this.selectionPromise = undefined;
-		}
+		try { await this.selectionPromise; } finally { this.selectionPromise = undefined; }
 		this.assertNotDisposed();
 	}
 
@@ -150,9 +128,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 			// New windows wait until the profile daemon has adopted this generation. Release the
 			// barrier before reconnecting existing windows, whose launcher validation also awaits it.
 			let release!: () => void;
-			this.restartBarrier = new Promise<void>(resolvePromise => {
-				release = resolvePromise;
-			});
+			this.restartBarrier = new Promise<void>(resolvePromise => { release = resolvePromise; });
 			try {
 				await Promise.all(running.map(({ supervisor }) => supervisor.stop()));
 				if (this.isDisposed) return;
@@ -177,10 +153,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 		// re-enter the drain while the first connection is stopping.
 		const drain = Promise.resolve().then(() => this.drain());
 		this.drainPromise = drain;
-		void drain.then(
-			() => this.completeDrain(drain),
-			() => this.completeDrain(drain),
-		);
+		void drain.then(() => this.completeDrain(drain), () => this.completeDrain(drain));
 		return drain;
 	}
 
@@ -216,8 +189,7 @@ function parseDevelopmentAppServerGeneration(generationFile: string, contents: s
 	const value: unknown = JSON.parse(contents);
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Development runtime generation is invalid');
 	const record = value as Record<string, unknown>;
-	if (Object.keys(record).sort().join(',') !== 'runtime,version' || record.version !== 3 || typeof record.runtime !== 'string' || !/^generations\/[a-f0-9]{64}$/u.test(record.runtime))
-		throw new Error('Development runtime generation is invalid');
+	if (Object.keys(record).sort().join(',') !== 'runtime,version' || record.version !== 3 || typeof record.runtime !== 'string' || !/^generations\/[a-f0-9]{64}$/u.test(record.runtime)) throw new Error('Development runtime generation is invalid');
 	const runtime = resolve(dirname(generationFile), record.runtime);
 	// This read is only a change notification. Rust validates the files while
 	// holding publish.lock and returns a lease before they can be used.
@@ -225,12 +197,7 @@ function parseDevelopmentAppServerGeneration(generationFile: string, contents: s
 }
 
 async function restartManagedDaemon(launcher: AppServerDaemonLauncher): Promise<void> {
-	await execFileAsync(launcher.executable, ['restart'], {
-		env: { ...launcher.environment },
-		maxBuffer: 1_048_576,
-		timeout: 40_000,
-		windowsHide: true,
-	});
+	await execFileAsync(launcher.executable, ['restart'], { env: { ...launcher.environment }, maxBuffer: 1_048_576, timeout: 40_000, windowsHide: true });
 }
 
 function watchGenerationFile(generationFile: string, listener: () => void): IDisposable {

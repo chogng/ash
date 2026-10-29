@@ -11,7 +11,7 @@ const ARTIFACT_KEYS = new Set(['archivePath', 'version', 'target', 'archiveSize'
 export interface RemoteRuntimeFetcherOptions {
 	readonly remoteExecutable: string;
 	readonly environment: NodeJS.ProcessEnv;
-	readonly source: Extract<RemoteRuntimeCatalogSource, { readonly kind: 'network' }>;
+	readonly source: Extract<RemoteRuntimeCatalogSource, { readonly kind: 'network'; }>;
 	readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
 	readonly runCommand?: RunRemoteCommand;
 }
@@ -26,23 +26,12 @@ export class RemoteRuntimeFetcher {
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
-	async fetch(
-		target: string,
-		request: {
-			readonly signal?: AbortSignal;
-			readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
-		} = {},
-	): Promise<TrustedRemoteRuntimeArtifact> {
-		const args = [
-			'fetch-runtime',
-			'--catalog-url',
-			this.options.source.catalogUrl,
-			'--catalog-sha256',
-			this.options.source.expectedSha256,
-			'--target',
-			target,
-			'--cache-root',
-			this.options.source.cacheRoot,
+	async fetch(target: string, request: { readonly signal?: AbortSignal; readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void; } = {}): Promise<TrustedRemoteRuntimeArtifact> {
+		const args = ['fetch-runtime',
+			'--catalog-url', this.options.source.catalogUrl,
+			'--catalog-sha256', this.options.source.expectedSha256,
+			'--target', target,
+			'--cache-root', this.options.source.cacheRoot,
 		];
 		const reportProgress = request.onProgress ?? this.options.onProgress;
 		const decoder = reportProgress === undefined ? undefined : new RemoteRuntimeDownloadProgressDecoder(reportProgress);
@@ -61,7 +50,7 @@ export class RemoteRuntimeFetcher {
 class RemoteRuntimeDownloadProgressDecoder {
 	private buffered = '';
 
-	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) {}
+	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) { }
 
 	accept(chunk: string): void {
 		this.buffered += chunk;
@@ -89,15 +78,8 @@ class RemoteRuntimeDownloadProgressDecoder {
 				this.report(Object.freeze({ phase: 'downloadingCatalog' }));
 				return;
 			case 'downloadingArtifact':
-				if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes)
-					throw new Error('Remote runtime fetcher returned invalid download progress');
-				this.report(
-					Object.freeze({
-						phase: 'downloadingArtifact',
-						transferredBytes: value.transferredBytes,
-						totalBytes: value.totalBytes,
-					}),
-				);
+				if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes) throw new Error('Remote runtime fetcher returned invalid download progress');
+				this.report(Object.freeze({ phase: 'downloadingArtifact', transferredBytes: value.transferredBytes, totalBytes: value.totalBytes }));
 				return;
 			case 'validatingArtifact':
 				this.report(Object.freeze({ phase: 'validatingDownload' }));
@@ -120,15 +102,7 @@ function parseArtifact(text: string, target: string): TrustedRemoteRuntimeArtifa
 		throw new Error('Remote runtime fetcher did not return valid artifact JSON', { cause: error });
 	}
 	if (!isRecord(value) || !hasExactKeys(value, ARTIFACT_KEYS)) throw new Error('Remote runtime fetcher returned an invalid artifact record');
-	if (
-		typeof value.archivePath !== 'string' ||
-		typeof value.version !== 'string' ||
-		typeof value.target !== 'string' ||
-		typeof value.archiveSize !== 'number' ||
-		typeof value.unpackedSize !== 'number' ||
-		typeof value.sha256 !== 'string'
-	)
-		throw new Error('Remote runtime fetcher returned invalid artifact field types');
+	if (typeof value.archivePath !== 'string' || typeof value.version !== 'string' || typeof value.target !== 'string' || typeof value.archiveSize !== 'number' || typeof value.unpackedSize !== 'number' || typeof value.sha256 !== 'string') throw new Error('Remote runtime fetcher returned invalid artifact field types');
 	const artifact: TrustedRemoteRuntimeArtifact = {
 		archivePath: value.archivePath,
 		version: value.version,

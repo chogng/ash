@@ -18,12 +18,7 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 	private readonly regexButton: HTMLButtonElement;
 	private readonly hideSoon = this._register(new RunOnceScheduler(() => this.hide(), 2000));
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		private readonly state: FindReplaceState,
-		keybindingService: IKeybindingService,
-		hoverService: IHoverService,
-	) {
+	constructor(private readonly editor: ICodeEditor, private readonly state: FindReplaceState, keybindingService: IKeybindingService, hoverService: IHoverService) {
 		super();
 		const ownerDocument = editor.getContainerDomNode().ownerDocument;
 		this.root = h(ownerDocument, 'div');
@@ -41,13 +36,11 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		].map(({ button, command }) => ({
 			button,
 			command,
-			hover: this._register(
-				hoverService.setupHover({
-					target: button,
-					content: button.getAttribute('aria-label')!,
-					groupId: 'find-options-widget',
-				}),
-			),
+			hover: this._register(hoverService.setupHover({
+				target: button,
+				content: button.getAttribute('aria-label')!,
+				groupId: 'find-options-widget',
+			})),
 		}));
 		const updateHoverLabels = (): void => {
 			for (const { button, command, hover } of buttonHovers) {
@@ -61,30 +54,22 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		this.checked(this.caseButton, state.matchCase);
 		this.checked(this.wordButton, state.wholeWord);
 		this.checked(this.regexButton, state.isRegex);
-		this._register(
-			state.onFindReplaceStateChange(event => {
-				this.checked(this.caseButton, state.matchCase);
-				this.checked(this.wordButton, state.wholeWord);
-				this.checked(this.regexButton, state.isRegex);
-				if (event.isRevealed && state.isRevealed) this.hide();
-				else if (!state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex)) this.highlightFindOptions();
-			}),
-		);
+		this._register(state.onFindReplaceStateChange(event => {
+			this.checked(this.caseButton, state.matchCase);
+			this.checked(this.wordButton, state.wholeWord);
+			this.checked(this.regexButton, state.isRegex);
+			if (event.isRevealed && state.isRevealed) this.hide();
+			else if (!state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex)) this.highlightFindOptions();
+		}));
 		this._register(addDisposableListener(this.root, 'mouseenter', () => this.hideSoon.cancel()));
 		this._register(addDisposableListener(this.root, 'mouseleave', () => this.hideSoon.schedule()));
 		editor.addOverlayWidget(this);
 		this._register(toDisposable(() => editor.removeOverlayWidget(this)));
 	}
 
-	public getId(): string {
-		return `${this.editor.getId()}.findOptionsWidget`;
-	}
-	public getDomNode(): HTMLElement {
-		return this.root;
-	}
-	public getPosition(): IOverlayWidgetPosition {
-		return { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER };
-	}
+	public getId(): string { return `${this.editor.getId()}.findOptionsWidget`; }
+	public getDomNode(): HTMLElement { return this.root; }
+	public getPosition(): IOverlayWidgetPosition { return { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER }; }
 	public highlightFindOptions(): void {
 		if (this.state.isRevealed) return;
 		this.root.hidden = false;
@@ -92,9 +77,7 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		this.editor.layoutOverlayWidget(this);
 	}
 
-	private hide(): void {
-		this.root.hidden = true;
-	}
+	private hide(): void { this.root.hidden = true; }
 	private button(ownerDocument: Document, label: string, text: string, onClick: () => void): HTMLButtonElement {
 		const button = h(ownerDocument, 'button');
 		button.type = 'button';

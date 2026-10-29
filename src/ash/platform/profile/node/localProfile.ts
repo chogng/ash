@@ -21,7 +21,7 @@ export async function migrateLegacyLocalProfile(options: LegacyLocalProfileMigra
 	await mkdir(options.profileRoot, { recursive: true });
 	const settingsPath = join(options.profileRoot, 'settings.json');
 	await copyFileIfMissing(join(options.legacyUserDataRoot, 'settings.json'), settingsPath);
-	if (!(await pathExists(settingsPath))) {
+	if (!await pathExists(settingsPath)) {
 		await copyFileIfMissing(join(options.legacyUserDataRoot, 'configuration.json'), join(options.profileRoot, 'configuration.json'));
 	}
 	const conflict = await migrateLegacyConfiguration(options.profileRoot);
@@ -89,7 +89,7 @@ async function copyFileIfMissing(source: string, destination: string): Promise<v
 }
 
 async function copyDirectoryIfMissing(source: string, destination: string): Promise<void> {
-	if ((await pathExists(destination)) || !(await pathExists(source))) return;
+	if (await pathExists(destination) || !await pathExists(source)) return;
 	await cp(source, destination, { recursive: true, force: false, errorOnExist: true });
 }
 

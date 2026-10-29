@@ -8,22 +8,19 @@ test('ActionRunner forwards context and reports action failures', async () => {
 	const context = { resource: 'test.txt' };
 	const failure = new Error('failed');
 	const events: IRunEvent[] = [];
-	runner.onWillRun(event => events.push(event));
-	runner.onDidRun(event => events.push(event));
+	runner.onWillRun((event) => events.push(event));
+	runner.onDidRun((event) => events.push(event));
 
-	await runner.run(
-		{
-			id: 'test.action',
-			label: 'Test',
-			tooltip: 'Test',
-			enabled: true,
-			run(receivedContext) {
-				assert.equal(receivedContext, context);
-				throw failure;
-			},
+	await runner.run({
+		id: 'test.action',
+		label: 'Test',
+		tooltip: 'Test',
+		enabled: true,
+		run(receivedContext) {
+			assert.equal(receivedContext, context);
+			throw failure;
 		},
-		context,
-	);
+	}, context);
 
 	assert.equal(events.length, 2);
 	assert.equal(events[0]?.context, context);
@@ -39,43 +36,26 @@ test('ActionRunner delegates execution to its protected hook inside the existing
 		}
 	}
 	using runner = new CustomRunner();
-	const action: IAction = {
-		id: 'custom',
-		label: 'Custom',
-		tooltip: '',
-		enabled: true,
-		run() {
-			throw new Error('The hook owns execution');
-		},
-	};
+	const action: IAction = { id: 'custom', label: 'Custom', tooltip: '', enabled: true, run() { throw new Error('The hook owns execution'); } };
 	runner.onWillRun(event => calls.push(['will', event]));
 	runner.onDidRun(event => calls.push(['did', event]));
 	await runner.run(action, context);
 	assert.deepEqual(calls, [
-		['will', { action, context }],
-		[action, context],
-		['did', { action, context, error: undefined }],
+		['will', { action, context }], [action, context], ['did', { action, context, error: undefined }],
 	]);
 });
 
 test('ActionRunner waits for asynchronous completion and preserves the action receiver', async () => {
 	using runner = new ActionRunner();
 	let complete!: () => void;
-	const completion = new Promise<void>(resolve => {
-		complete = resolve;
-	});
+	const completion = new Promise<void>(resolve => { complete = resolve; });
 	let entered!: () => void;
-	const started = new Promise<void>(resolve => {
-		entered = resolve;
-	});
+	const started = new Promise<void>(resolve => { entered = resolve; });
 	const order: string[] = [];
 	const context = { value: 7 };
 	let count = 0;
 	const action: IAction = {
-		id: 'async',
-		label: 'Async',
-		tooltip: '',
-		enabled: true,
+		id: 'async', label: 'Async', tooltip: '', enabled: true,
 		async run(receivedContext) {
 			assert.equal(this, action);
 			assert.equal(receivedContext, context);
@@ -87,10 +67,7 @@ test('ActionRunner waits for asynchronous completion and preserves the action re
 		},
 	};
 	runner.onWillRun(() => order.push('will'));
-	runner.onDidRun(event => {
-		assert.equal(event.error, undefined);
-		order.push('did');
-	});
+	runner.onDidRun(event => { assert.equal(event.error, undefined); order.push('did'); });
 	const pending = runner.run(action, context);
 	await started;
 	assert.deepEqual(order, ['will', 'run']);
@@ -106,14 +83,8 @@ for (const failure of [new Error('sync failure'), 'primitive failure', undefined
 			const events: IRunEvent[] = [];
 			runner.onDidRun(event => events.push(event));
 			const action: IAction = {
-				id: 'failure',
-				label: 'Failure',
-				tooltip: '',
-				enabled: true,
-				run() {
-					if (asynchronous) return Promise.reject(failure);
-					throw failure;
-				},
+				id: 'failure', label: 'Failure', tooltip: '', enabled: true,
+				run() { if (asynchronous) return Promise.reject(failure); throw failure; },
 			};
 			await runner.run(action);
 			assert.deepEqual(events, [{ action, context: undefined, error: failure }]);
@@ -126,22 +97,11 @@ test('ActionRunner retains existing disabled-action and disposed-run behavior', 
 	let calls = 0;
 	let events = 0;
 	runner.onDidRun(() => events++);
-	const action: IAction = {
-		id: 'disabled',
-		label: 'Disabled',
-		tooltip: '',
-		enabled: false,
-		run() {
-			calls++;
-			return 42;
-		},
-	};
+	const action: IAction = { id: 'disabled', label: 'Disabled', tooltip: '', enabled: false, run() { calls++; return 42; } };
 	try {
 		await runner.run(action);
 		runner.dispose();
 		await runner.run(action);
 		assert.deepEqual({ calls, events }, { calls: 2, events: 1 });
-	} finally {
-		runner.dispose();
-	}
+	} finally { runner.dispose(); }
 });

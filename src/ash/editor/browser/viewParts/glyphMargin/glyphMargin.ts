@@ -35,7 +35,7 @@ export class LineDecorationToRender {
 		public readonly zIndex: number,
 		public readonly tooltip: string | null,
 		public readonly icon?: Icon,
-	) {}
+	) { }
 }
 
 export class VisibleLineDecorationsToRender {
@@ -58,7 +58,9 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 		}
 		if (decorations.length === 0) return output;
 
-		decorations.sort((left, right) => left.className.localeCompare(right.className) || left.startLineNumber - right.startLineNumber || left.endLineNumber - right.endLineNumber);
+		decorations.sort((left, right) => left.className.localeCompare(right.className)
+			|| left.startLineNumber - right.startLineNumber
+			|| left.endLineNumber - right.endLineNumber);
 		let previousClassName: string | null = null;
 		let previousEndLineIndex = 0;
 		for (const decoration of decorations) {
@@ -127,27 +129,13 @@ export class GlyphMarginWidgets extends ViewPart {
 		this.glyphMarginDecorationLaneCount = layoutInfo.glyphMarginDecorationLaneCount;
 		return true;
 	}
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
-		return true;
-	}
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
-		return true;
-	}
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
-		return true;
-	}
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
-		return true;
-	}
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
-		return true;
-	}
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		return event.scrollTopChanged;
-	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
-		return true;
-	}
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public addWidget(widget: IGlyphMarginWidget): void {
 		const id = widget.getId();
@@ -202,14 +190,7 @@ export class GlyphMarginWidgets extends ViewPart {
 			for (let lineNumber = start; lineNumber <= end; lineNumber += 1) {
 				const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, 1));
 				const laneIndex = this._context.viewModel.glyphLanes.getLanesAtLine(modelPosition.lineNumber).indexOf(lane);
-				candidates.push({
-					kind: 'decoration',
-					lineNumber,
-					laneIndex,
-					lane,
-					zIndex: decoration.options.zIndex ?? 0,
-					className,
-				});
+				candidates.push({ kind: 'decoration', lineNumber, laneIndex, lane, zIndex: decoration.options.zIndex ?? 0, className });
 			}
 		}
 		candidates.sort(comparePreparedGlyphCandidates);
@@ -280,6 +261,7 @@ export class GlyphMarginWidgets extends ViewPart {
 		data.domNode.removeAttribute('widgetId');
 		this.widgets.delete(id);
 	}
+
 }
 
 export interface IWidgetData {
@@ -295,13 +277,7 @@ export interface IRenderInfo {
 }
 
 type PreparedGlyphCandidate =
-	| {
-			readonly kind: 'widget';
-			readonly lineNumber: number;
-			readonly laneIndex: number;
-			readonly zIndex: number;
-			readonly data: IWidgetData;
-	  }
+	| { readonly kind: 'widget'; readonly lineNumber: number; readonly laneIndex: number; readonly zIndex: number; readonly data: IWidgetData; }
 	| PreparedModelDecoration;
 
 interface PreparedModelDecoration {
@@ -314,5 +290,8 @@ interface PreparedModelDecoration {
 }
 
 function comparePreparedGlyphCandidates(left: PreparedGlyphCandidate, right: PreparedGlyphCandidate): number {
-	return left.lineNumber - right.lineNumber || left.laneIndex - right.laneIndex || right.zIndex - left.zIndex || (left.kind === right.kind ? 0 : left.kind === 'widget' ? -1 : 1);
+	return left.lineNumber - right.lineNumber
+		|| left.laneIndex - right.laneIndex
+		|| right.zIndex - left.zIndex
+		|| (left.kind === right.kind ? 0 : left.kind === 'widget' ? -1 : 1);
 }

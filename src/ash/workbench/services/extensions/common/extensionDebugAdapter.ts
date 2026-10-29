@@ -21,19 +21,13 @@ export class ExtensionDebugAdapterRegistry extends Disposable implements Extensi
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.definitionsValue = Object.freeze([]);
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.definitionsValue = Object.freeze([]);
+		}));
 	}
 
-	get definitions(): readonly ExtensionDebugAdapterDefinition[] {
-		return this.definitionsValue;
-	}
-	get(type: string): ExtensionDebugAdapterDefinition | undefined {
-		return this.isDisposed ? undefined : this.definitionsValue.find(definition => definition.type === type);
-	}
+	get definitions(): readonly ExtensionDebugAdapterDefinition[] { return this.definitionsValue; }
+	get(type: string): ExtensionDebugAdapterDefinition | undefined { return this.isDisposed ? undefined : this.definitionsValue.find(definition => definition.type === type); }
 
 	replace(definitions: readonly ExtensionDebugAdapterDefinition[]): void {
 		this.assertNotDisposed();
@@ -42,6 +36,7 @@ export class ExtensionDebugAdapterRegistry extends Disposable implements Extensi
 		this.definitionsValue = next;
 		this.changeEmitter.fire(next);
 	}
+
 }
 
 /** Validates one complete extension generation without mutating the live registry. */
@@ -50,14 +45,10 @@ export function validateExtensionDebugAdapterDefinitions(definitions: readonly E
 	for (const definition of definitions) {
 		const previous = byType.get(definition.type);
 		if (previous) throw new Error(`Debug adapter type '${definition.type}' is contributed by both '${previous.extensionId}' and '${definition.extensionId}'`);
-		byType.set(
-			definition.type,
-			Object.freeze({
-				...definition,
-				arguments: Object.freeze([...definition.arguments]),
-				...(definition.variables === undefined ? {} : { variables: Object.freeze({ ...definition.variables }) }),
-			}),
-		);
+		byType.set(definition.type, Object.freeze({
+			...definition, arguments: Object.freeze([...definition.arguments]),
+			...(definition.variables === undefined ? {} : { variables: Object.freeze({ ...definition.variables }) }),
+		}));
 	}
 	return Object.freeze([...byType.values()].sort((left, right) => left.type.localeCompare(right.type)));
 }

@@ -22,17 +22,8 @@ export interface DocumentParagraphAttributes {
 
 /** Existing continuous-document defaults; absent attributes keep old documents visually compatible. */
 export const defaultDocumentParagraphAttributes: Required<Omit<DocumentParagraphAttributes, 'fontFamily' | 'fontSize'>> = Object.freeze({
-	pageBreakBefore: false,
-	keepWithNext: false,
-	keepTogether: false,
-	widowControl: true,
-	textAlign: 'start',
-	lineSpacing: 1.6,
-	spaceBefore: 0,
-	spaceAfter: 9,
-	indentStart: 0,
-	indentEnd: 0,
-	firstLineIndent: 0,
+	pageBreakBefore: false, keepWithNext: false, keepTogether: false, widowControl: true,
+	textAlign: 'start', lineSpacing: 1.6, spaceBefore: 0, spaceAfter: 9, indentStart: 0, indentEnd: 0, firstLineIndent: 0,
 });
 
 /** Schema validation covers files, clipboard fragments, remote transactions and local commands alike. */
@@ -44,13 +35,8 @@ export function validateDocumentParagraphAttributes(attrs: DocumentAttributes): 
 	if (attrs.styleId !== undefined && (typeof attrs.styleId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(attrs.styleId))) throw new TypeError('Invalid paragraph style reference');
 	if (attrs.fontFamily !== undefined && !['sans', 'serif', 'monospace'].includes(String(attrs.fontFamily))) throw new TypeError('Invalid paragraph font family');
 	for (const [key, min, max] of [
-		['lineSpacing', 1, 3],
-		['spaceBefore', 0, 144],
-		['spaceAfter', 0, 144],
-		['indentStart', 0, 720],
-		['indentEnd', 0, 720],
-		['firstLineIndent', -144, 144],
-		['fontSize', 8, 72],
+		['lineSpacing', 1, 3], ['spaceBefore', 0, 144], ['spaceAfter', 0, 144],
+		['indentStart', 0, 720], ['indentEnd', 0, 720], ['firstLineIndent', -144, 144], ['fontSize', 8, 72],
 	] as const) {
 		const value = attrs[key];
 		if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max)) {
@@ -67,21 +53,7 @@ export interface DocumentParagraphStyle {
 	readonly attrs: DocumentParagraphAttributes;
 }
 
-export const documentParagraphFormatKeys = [
-	'pageBreakBefore',
-	'keepWithNext',
-	'keepTogether',
-	'widowControl',
-	'textAlign',
-	'lineSpacing',
-	'spaceBefore',
-	'spaceAfter',
-	'indentStart',
-	'indentEnd',
-	'firstLineIndent',
-	'fontFamily',
-	'fontSize',
-] as const;
+export const documentParagraphFormatKeys = ['pageBreakBefore', 'keepWithNext', 'keepTogether', 'widowControl', 'textAlign', 'lineSpacing', 'spaceBefore', 'spaceAfter', 'indentStart', 'indentEnd', 'firstLineIndent', 'fontFamily', 'fontSize'] as const;
 
 /** The scalar JSON attribute keeps the existing document/transaction wire format compatible. */
 export function getDocumentParagraphStyles(document: DocumentNode): readonly DocumentParagraphStyle[] {
@@ -101,17 +73,10 @@ export function validateDocumentParagraphStyles(document: DocumentNode): void {
 	if (!Array.isArray(styles) || styles.length > 100) throw new TypeError('At most 100 paragraph styles are supported');
 	const ids = new Set<string>();
 	for (const style of styles) {
-		if (!style || typeof style !== 'object' || typeof style.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(style.id) || ids.has(style.id))
-			throw new TypeError('Invalid or duplicate paragraph style identity');
+		if (!style || typeof style !== 'object' || typeof style.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(style.id) || ids.has(style.id)) throw new TypeError('Invalid or duplicate paragraph style identity');
 		if (typeof style.name !== 'string' || !style.name.trim() || style.name.length > 80) throw new TypeError('Invalid paragraph style name');
 		if (!Number.isInteger(style.level) || style.level < 0 || style.level > 6) throw new TypeError('Invalid paragraph style heading level');
-		if (
-			!style.attrs ||
-			typeof style.attrs !== 'object' ||
-			Array.isArray(style.attrs) ||
-			Object.keys(style.attrs).some(key => !documentParagraphFormatKeys.includes(key as (typeof documentParagraphFormatKeys)[number]))
-		)
-			throw new TypeError('Invalid paragraph style formatting');
+		if (!style.attrs || typeof style.attrs !== 'object' || Array.isArray(style.attrs) || Object.keys(style.attrs).some(key => !documentParagraphFormatKeys.includes(key as typeof documentParagraphFormatKeys[number]))) throw new TypeError('Invalid paragraph style formatting');
 		validateDocumentParagraphAttributes(style.attrs);
 		ids.add(style.id);
 	}
@@ -120,8 +85,7 @@ export function validateDocumentParagraphStyles(document: DocumentNode): void {
 			const id = node.attrs.styleId;
 			if (id !== undefined) {
 				const style = styles.find(style => style.id === id);
-				if (!style || (style.level === 0 ? node.type !== 'paragraph' : node.type !== 'heading' || node.attrs.level !== style.level))
-					throw new TypeError('Paragraph style reference does not match its definition');
+				if (!style || (style.level === 0 ? node.type !== 'paragraph' : node.type !== 'heading' || node.attrs.level !== style.level)) throw new TypeError('Paragraph style reference does not match its definition');
 			}
 		}
 		for (const child of node.content) visit(child);

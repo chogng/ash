@@ -118,19 +118,7 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 		}
 		workspaceArgs.push('--folder', paths.pop()!);
 	}
-	return {
-		...(log.length ? { log } : {}),
-		...(verbose ? { verbose } : {}),
-		...(useInMemorySecretStorage ? { useInMemorySecretStorage } : {}),
-		paths,
-		urls,
-		workspace: parseWorkspaceLaunchArguments(workspaceArgs),
-		newWindow,
-		reuseWindow,
-		goto,
-		wait,
-		waitMarkerFilePath,
-	};
+	return { ...(log.length ? { log } : {}), ...(verbose ? { verbose } : {}), ...(useInMemorySecretStorage ? { useInMemorySecretStorage } : {}), paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
 }
 
 /** Parses one project target from desktop launch arguments. */

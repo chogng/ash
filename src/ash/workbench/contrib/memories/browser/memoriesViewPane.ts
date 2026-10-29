@@ -39,9 +39,7 @@ export class MemoriesViewPane extends ViewPane {
 	private contextId = '';
 	private mutationId = generateUuid();
 
-	constructor(
-		container: HTMLElement,
-		options: IViewPaneOptions,
+	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -55,13 +53,7 @@ export class MemoriesViewPane extends ViewPane {
 		const focus = contextKeys.createKey<boolean>(MemoriesViewPane.FocusContext, false);
 		this._register(toDisposable(() => focus.reset()));
 		this._register(addDisposableListener(this.contentElement, 'focusin', () => focus.set(true)));
-		this._register(
-			addDisposableListener<FocusEvent>(this.contentElement, 'focusout', event => {
-				if (!this.contentElement.contains(event.relatedTarget as Node | null)) {
-					focus.reset();
-				}
-			}),
-		);
+		this._register(addDisposableListener<FocusEvent>(this.contentElement, 'focusout', event => { if (!this.contentElement.contains(event.relatedTarget as Node | null)) { focus.reset(); } }));
 		this.context = h(document, 'select');
 		this.field('Conversation context', this.context);
 		this.scope = h(document, 'select');
@@ -71,16 +63,9 @@ export class MemoriesViewPane extends ViewPane {
 		this.search = this.input('Search memories', 'search');
 		const toolbar = h(document, 'div');
 		toolbar.className = 'memories-actions';
-		toolbar.append(
-			this.button('Search', () => this.loadList()),
-			this.button('New memory', () => this.newMemory()),
-			this.button('Refresh', () => this.refresh()),
-		);
+		toolbar.append(this.button('Search', () => this.loadList()), this.button('New memory', () => this.newMemory()), this.button('Refresh', () => this.refresh()));
 		this.next = this.button('Next page', () => this.loadList(this.cursor));
-		toolbar.append(
-			this.next,
-			this.button('Help', () => this.showHelp()),
-		);
+		toolbar.append(this.next, this.button('Help', () => this.showHelp()));
 		this.contentElement.append(toolbar);
 		this.status = h(document, 'div');
 		this.status.setAttribute('role', 'status');
@@ -102,105 +87,43 @@ export class MemoriesViewPane extends ViewPane {
 		this.contentElement.append(actions);
 		this.reference = this.input('Memory reference');
 		this.contentElement.append(this.button('Open reference', () => this.openReference(this.reference.value)));
-		this._register(
-			addDisposableListener(this.context, 'change', () => {
-				void this.perform(async () => {
-					if (!(await this.discardDraft())) {
-						this.context.value = this.contextId;
-						return;
-					}
-					this.contextId = this.context.value;
-					this.policy = undefined;
-					await this.newMemory();
-					await this.refresh();
-				});
-			}),
-		);
-		this._register(
-			addDisposableListener(this.scope, 'change', () => {
-				void this.perform(() => this.selectScope());
-			}),
-		);
-		this._register(
-			addDisposableListener(this.list, 'change', () => {
-				void this.perform(() => this.selectMemory());
-			}),
-		);
-		this._register(
-			addDisposableListener(this.reading, 'change', () => {
-				void this.perform(() => this.changePolicy());
-			}),
-		);
-		this._register(
-			addDisposableListener(this.saving, 'change', () => {
-				void this.perform(() => this.changePolicy());
-			}),
-		);
-		this._register(
-			addDisposableListener(this.titleInput, 'input', () => {
-				this.dirty = true;
-			}),
-		);
-		this._register(
-			addDisposableListener(this.body, 'input', () => {
-				this.dirty = true;
-			}),
-		);
-		this._register(
-			addDisposableListener(this.contentElement, 'keydown', event => {
-				if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-					event.preventDefault();
-					void this.perform(() => this.saveMemory());
-				}
-				if (event.key === 'Enter' && event.target === this.search) {
-					event.preventDefault();
-					void this.perform(() => this.loadList());
-				}
-			}),
-		);
-		this._register(
-			memories.onDidChange(() => {
-				if (this.working) {
-					return;
-				}
-				this.status.textContent = localize('memories.changed', 'Memories changed. Refresh to load the latest version; your draft is kept.');
-			}),
-		);
+		this._register(addDisposableListener(this.context, 'change', () => { void this.perform(async () => { if (!await this.discardDraft()) { this.context.value = this.contextId; return; } this.contextId = this.context.value; this.policy = undefined; await this.newMemory(); await this.refresh(); }); }));
+		this._register(addDisposableListener(this.scope, 'change', () => { void this.perform(() => this.selectScope()); }));
+		this._register(addDisposableListener(this.list, 'change', () => { void this.perform(() => this.selectMemory()); }));
+		this._register(addDisposableListener(this.reading, 'change', () => { void this.perform(() => this.changePolicy()); }));
+		this._register(addDisposableListener(this.saving, 'change', () => { void this.perform(() => this.changePolicy()); }));
+		this._register(addDisposableListener(this.titleInput, 'input', () => { this.dirty = true; }));
+		this._register(addDisposableListener(this.body, 'input', () => { this.dirty = true; }));
+		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
+			if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); void this.perform(() => this.saveMemory()); }
+			if (event.key === 'Enter' && event.target === this.search) { event.preventDefault(); void this.perform(() => this.loadList()); }
+		}));
+		this._register(memories.onDidChange(() => { if (this.working) { return; } this.status.textContent = localize('memories.changed', 'Memories changed. Refresh to load the latest version; your draft is kept.'); }));
 		this.refreshContexts();
 		this.applyEnabled();
 	}
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		if (visible && !this.policy) {
-			void this.perform(() => this.refresh());
-		}
+		if (visible && !this.policy) { void this.perform(() => this.refresh()); }
 	}
 	public override focus(): void {
 		this.scope.focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.memories')) {
 			this.status.textContent = localize('memories.hint', 'Memories. Use Tab to navigate, Ctrl or Command+S to save, and Alt+F1 for help.');
 		}
-		if (!this.policy) {
-			void this.perform(() => this.refresh());
-		}
+		if (!this.policy) { void this.perform(() => this.refresh()); }
 	}
 
-	public saveDraft(): Promise<void> {
-		return this.perform(() => this.saveMemory());
-	}
+	public saveDraft(): Promise<void> { return this.perform(() => this.saveMemory()); }
 
 	public async openReference(reference: string): Promise<void> {
-		if (!(await this.discardDraft())) {
-			return;
-		}
+		if (!await this.discardDraft()) { return; }
 		const generation = ++this.readGeneration;
 		const loading = this.memories.readReference(reference);
 		void this.getProgressIndicator().showWhile(loading, 150);
 		const result = await loading;
-		if (this.isDisposed || generation !== this.readGeneration) {
-			return;
-		}
+		if (this.isDisposed || generation !== this.readGeneration) { return; }
 		this.selected = undefined;
 		this.showingReference = true;
 		this.titleInput.value = result.title;
@@ -226,9 +149,7 @@ export class MemoriesViewPane extends ViewPane {
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
 		const scopes = await this.memories.scopes(this.context.value || undefined);
-		if (this.isDisposed || generation !== this.generation) {
-			return;
-		}
+		if (this.isDisposed || generation !== this.generation) { return; }
 		const current = this.policy && JSON.stringify(this.policy.scope);
 		this.scopes = scopes;
 		this.scope.replaceChildren(...scopes.map((entry, index) => this.option(entry.label, String(index))));
@@ -239,16 +160,11 @@ export class MemoriesViewPane extends ViewPane {
 		await this.loadList();
 		if (this.selected && !this.dirty) {
 			const entry = this.entries.find(entry => entry.id === this.selected?.id);
-			if (entry) {
-				this.showMemory(await this.memories.read(entry));
-			}
+			if (entry) { this.showMemory(await this.memories.read(entry)); }
 		}
 	}
 	private async selectScope(): Promise<void> {
-		if (!(await this.discardDraft())) {
-			this.scope.value = String(this.scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope)));
-			return;
-		}
+		if (!await this.discardDraft()) { this.scope.value = String(this.scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope))); return; }
 		this.policy = this.scopes[Number(this.scope.value)]?.policy;
 		this.renderPolicy();
 		await this.newMemory();
@@ -261,14 +177,10 @@ export class MemoriesViewPane extends ViewPane {
 		this.saving.disabled = !this.policy;
 	}
 	private async loadList(cursor?: string): Promise<void> {
-		if (!this.policy) {
-			return;
-		}
+		if (!this.policy) { return; }
 		const generation = ++this.generation;
 		const page = await this.memories.list(this.policy.scope, this.search.value, cursor);
-		if (this.isDisposed || generation !== this.generation) {
-			return;
-		}
+		if (this.isDisposed || generation !== this.generation) { return; }
 		this.entries = page.memories;
 		this.cursor = page.cursor;
 		this.next.disabled = !page.cursor;
@@ -278,15 +190,10 @@ export class MemoriesViewPane extends ViewPane {
 	}
 	private async selectMemory(): Promise<void> {
 		const entry = this.entries.find(entry => entry.id === this.list.value);
-		if (!entry || !(await this.discardDraft())) {
-			this.list.value = this.selected?.id ?? '';
-			return;
-		}
+		if (!entry || !await this.discardDraft()) { this.list.value = this.selected?.id ?? ''; return; }
 		const generation = ++this.readGeneration;
 		const memory = await this.memories.read(entry);
-		if (this.isDisposed || generation !== this.readGeneration) {
-			return;
-		}
+		if (this.isDisposed || generation !== this.readGeneration) { return; }
 		this.showMemory(memory);
 	}
 	private showMemory(memory: Memory): void {
@@ -303,9 +210,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.status.textContent = localize('memories.source', 'Saved by {0}, revision {1}. Editing makes this a user-owned memory.', memory.source, memory.revision);
 	}
 	private async newMemory(): Promise<void> {
-		if (!(await this.discardDraft())) {
-			return;
-		}
+		if (!await this.discardDraft()) { return; }
 		this.readGeneration++;
 		this.mutationId = generateUuid();
 		this.selected = undefined;
@@ -320,97 +225,46 @@ export class MemoriesViewPane extends ViewPane {
 		this.titleInput.focus();
 	}
 	private async saveMemory(): Promise<void> {
-		if (!this.policy || this.showingReference) {
-			return;
-		}
+		if (!this.policy || this.showingReference) { return; }
 		if (!this.titleInput.value.trim() || !this.body.value.trim() || new TextEncoder().encode(this.body.value).length > 16384) {
 			throw new Error('Enter a title and content of at most 16 KiB.');
 		}
 		const result = this.selected
 			? await this.memories.update(this.selected, this.titleInput.value, this.body.value, this.mutationId)
 			: await this.memories.add(this.policy.scope, this.titleInput.value, this.body.value, this.mutationId);
-		if (this.isDisposed) {
-			return;
-		}
+		if (this.isDisposed) { return; }
 		this.showMemory(result);
 		await this.loadList();
 		this.status.textContent = localize('memories.saved', 'Memory saved.');
 	}
 	private async deleteMemory(): Promise<void> {
-		if (
-			!this.selected ||
-			!(
-				await this.dialogs.confirm({
-					title: 'Delete memory',
-					message: `Delete “${this.selected.title}”?`,
-					detail: 'This removes the saved memory. Existing conversation history is retained.',
-					primaryButton: 'Delete',
-				})
-			).confirmed
-		) {
-			return;
-		}
+		if (!this.selected || !(await this.dialogs.confirm({ title: 'Delete memory', message: `Delete “${this.selected.title}”?`, detail: 'This removes the saved memory. Existing conversation history is retained.', primaryButton: 'Delete' })).confirmed) { return; }
 		await this.memories.delete(this.selected, this.mutationId);
 		this.dirty = false;
 		await this.newMemory();
 		await this.loadList();
 	}
 	private async changePolicy(): Promise<void> {
-		if (!this.policy) {
-			return;
-		}
-		try {
-			this.policy = await this.memories.setPolicy(this.policy, this.reading.checked, this.saving.checked);
-		} finally {
-			if (!this.isDisposed) {
-				this.renderPolicy();
-			}
-		}
+		if (!this.policy) { return; }
+		try { this.policy = await this.memories.setPolicy(this.policy, this.reading.checked, this.saving.checked); }
+		finally { if (!this.isDisposed) { this.renderPolicy(); } }
 	}
 	private async discardDraft(): Promise<boolean> {
-		if (!this.dirty) {
-			return true;
-		}
-		const discard = await this.dialogs.confirm({
-			message: 'Discard unsaved memory changes?',
-			primaryButton: 'Discard changes',
-		});
-		if (discard.confirmed) {
-			this.dirty = false;
-		}
+		if (!this.dirty) { return true; }
+		const discard = await this.dialogs.confirm({ message: 'Discard unsaved memory changes?', primaryButton: 'Discard changes' });
+		if (discard.confirmed) { this.dirty = false; }
 		return discard.confirmed;
 	}
 	private async perform(operation: () => Promise<void>): Promise<void> {
-		if (this.working || this.isDisposed) {
-			return;
-		}
+		if (this.working || this.isDisposed) { return; }
 		const previousFocus = this.element.ownerDocument.activeElement;
 		this.working = true;
 		this.applyEnabled();
 		this.contentElement.setAttribute('aria-busy', 'true');
 		const progress = this.getProgressIndicator().show(true, 150);
-		try {
-			await operation();
-		} catch (error) {
-			if (!this.isDisposed) {
-				this.status.textContent = error instanceof Error ? error.message : String(error);
-			}
-		} finally {
-			progress.done();
-			this.working = false;
-			this.contentElement.removeAttribute('aria-busy');
-			if (!this.isDisposed) {
-				this.applyEnabled();
-				if (
-					previousFocus instanceof HTMLElement &&
-					previousFocus.isConnected &&
-					this.contentElement.contains(previousFocus) &&
-					!this.contentElement.contains(this.element.ownerDocument.activeElement)
-				) {
-					previousFocus.focus();
-				}
-			}
-		}
+		try { await operation(); }
+		catch (error) { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } }
+		finally { progress.done(); this.working = false; this.contentElement.removeAttribute('aria-busy'); if (!this.isDisposed) { this.applyEnabled(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected && this.contentElement.contains(previousFocus) && !this.contentElement.contains(this.element.ownerDocument.activeElement)) { previousFocus.focus(); } } }
 	}
 	private async showHelp(): Promise<void> {
 		this.accessibleView.show(AccessibleViewType.Help);
@@ -420,9 +274,7 @@ export class MemoriesViewPane extends ViewPane {
 			if (control instanceof HTMLTextAreaElement || (control instanceof HTMLInputElement && control.type !== 'checkbox')) {
 				control.disabled = false;
 				control.readOnly = this.working || (this.showingReference && (control === this.body || control === this.titleInput));
-			} else {
-				control.disabled = this.working;
-			}
+			} else { control.disabled = this.working; }
 		}
 		this.save.disabled = this.working || !this.policy || this.showingReference;
 		this.remove.disabled = this.working || !this.selected || this.showingReference;
@@ -431,10 +283,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.saving.disabled = this.working || !this.policy;
 	}
 	private option(label: string, value: string): HTMLOptionElement {
-		const option = h(this.element.ownerDocument, 'option');
-		option.textContent = label;
-		option.value = value;
-		return option;
+		const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;
 	}
 	private field(text: string, control: HTMLElement): void {
 		const label = h(this.element.ownerDocument, 'label');
@@ -455,11 +304,7 @@ export class MemoriesViewPane extends ViewPane {
 		const button = h(this.element.ownerDocument, 'button');
 		button.type = 'button';
 		button.textContent = label;
-		this._register(
-			addDisposableListener(button, 'click', () => {
-				void this.perform(action);
-			}),
-		);
+		this._register(addDisposableListener(button, 'click', () => { void this.perform(action); }));
 		return button;
 	}
 }

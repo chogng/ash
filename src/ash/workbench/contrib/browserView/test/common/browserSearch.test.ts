@@ -9,20 +9,13 @@ import { ConfigurationTarget } from '../../../../../platform/configuration/commo
 
 suite('Browser address intent', () => {
 	test('addresses and search terms take distinct paths without granting access', () => {
-		assert.deepEqual(
-			['', '  ', 'about:blank', 'https://example.test/a b', 'localhost:5173', '127.0.0.1/path', '[::1]:8080', 'example.com', 'find words', 'user@host', 'intranet'].map(
-				resolveAddressBarInputType,
-			),
-			['empty', 'empty', 'url', 'url', 'url', 'url', 'url', 'url', 'query', 'unknown', 'unknown'],
-		);
+		assert.deepEqual(['', '  ', 'about:blank', 'https://example.test/a b', 'localhost:5173', '127.0.0.1/path', '[::1]:8080', 'example.com', 'find words', 'user@host', 'intranet'].map(resolveAddressBarInputType),
+			['empty', 'empty', 'url', 'url', 'url', 'url', 'url', 'url', 'query', 'unknown', 'unknown']);
 	});
 	test('the production resolver respects disabled search and configured engines', async () => {
 		using configuration = new InMemoryConfigurationService(Registry.as<IConfigurationRegistry>(Extensions.Configuration));
 		const search = new BrowserSearchFeatures(configuration);
-		assert.deepEqual(
-			['', 'example.com/path', 'localhost:5173/a', 'two words', 'intranet'].map(value => search.resolve(value)),
-			[undefined, 'https://example.com/path', 'http://localhost:5173/a', 'two words', 'https://intranet'],
-		);
+		assert.deepEqual(['', 'example.com/path', 'localhost:5173/a', 'two words', 'intranet'].map(value => search.resolve(value)), [undefined, 'https://example.com/path', 'http://localhost:5173/a', 'two words', 'https://intranet']);
 		await configuration.updateValue(BrowserSearchEngineSettingId, BrowserSearchEngineId.DuckDuckGo, ConfigurationTarget.MEMORY);
 		assert.equal(search.resolve('intranet', true), 'https://intranet');
 		assert.equal(search.resolve('intranet'), 'https://duckduckgo.com/?q=intranet');

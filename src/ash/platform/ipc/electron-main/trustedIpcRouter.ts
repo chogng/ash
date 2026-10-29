@@ -1,8 +1,12 @@
 import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 export interface IpcMainInvokeEventLike {
-	readonly sender: { readonly mainFrame: unknown };
-	readonly senderFrame: { readonly url: string } | null;
+	readonly sender: {
+		readonly mainFrame: unknown;
+	};
+	readonly senderFrame: {
+		readonly url: string;
+	} | null;
 }
 
 export interface IpcMainLike {
@@ -17,7 +21,9 @@ export interface IpcRoute<P, R> {
 }
 
 export interface TrustedIpcTarget {
-	readonly webContents: { readonly mainFrame: unknown };
+	readonly webContents: {
+		readonly mainFrame: unknown;
+	};
 	readonly allowedEntryUrls: ReadonlySet<string>;
 }
 
@@ -59,7 +65,9 @@ export class TrustedIpcRouter extends AbstractDisposable {
 					registrations = new Set();
 					this.routesByChannel.set(route.channel, registrations);
 					try {
-						this.ipcMain.handle(route.channel, (event, rawParams) => this.invoke(route.channel, event, rawParams));
+						this.ipcMain.handle(route.channel, (event, rawParams) =>
+							this.invoke(route.channel, event, rawParams)
+						);
 					} catch (error) {
 						this.routesByChannel.delete(route.channel);
 						throw error;
@@ -89,7 +97,9 @@ export class TrustedIpcRouter extends AbstractDisposable {
 		if (!registrations) {
 			throw new Error(`IPC route is not registered: ${channel}`);
 		}
-		const registration = [...registrations].find(({ target }) => target.webContents === event.sender);
+		const registration = [...registrations].find(({ target }) =>
+			target.webContents === event.sender
+		);
 		if (!registration) {
 			throw new Error('Untrusted renderer IPC sender');
 		}

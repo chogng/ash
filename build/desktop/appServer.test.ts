@@ -24,15 +24,12 @@ function mockProtocolDirectories(t: TestContext, directories = () => protocolDir
 function mockSourceChanges(t: TestContext) {
 	const listeners = new Map<string, (event: string, file: string) => void>();
 	let revision = 0;
-	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision }) as fs.Stats);
+	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision } as fs.Stats));
 	t.mock.method(fs, 'watch', (...args: unknown[]) => {
 		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
-		return Object.assign(new EventEmitter(), { close() {} });
+		return Object.assign(new EventEmitter(), { close() { } });
 	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	return (file: string, workspaceManifest = false, sourceRoot = 'crates') => {
 		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, sourceRoot);
 		const watched = workspaceManifest && process.platform === 'darwin' ? join(repositoryRoot, file) : directory;
@@ -57,12 +54,9 @@ function liveChild(reply: (id: number) => object): ChildProcess {
 for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const) {
 	for (const succeeds of [true, false]) {
 		test(`${javascriptRuntime} startup ${succeeds ? 'waits for preparation before selecting the runtime' : 'rejects failed preparation without selecting an old runtime'}`, async t => {
-			const commands: { command: string; args: string[] }[] = [];
-			t.after(() => {
-				t.mock.restoreAll();
-				syncBuiltinESMExports();
-			});
-			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: { stdio: unknown }) => {
+			const commands: { command: string; args: string[]; }[] = [];
+			t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: { stdio: unknown; }) => {
 				assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
 				commands.push({ command, args: [...args] });
 				const child = new ChildProcess();
@@ -84,13 +78,8 @@ test('cancelled preparation never starts a builder or selects a runtime', async 
 	const cancellation = new AbortController();
 	const reason = new Error('startup cancelled');
 	cancellation.abort(reason);
-	const spawn = t.mock.method(childProcess, 'spawn', () => {
-		throw new Error('Cancelled preparation spawned a builder');
-	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	const spawn = t.mock.method(childProcess, 'spawn', () => { throw new Error('Cancelled preparation spawned a builder'); });
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	syncBuiltinESMExports();
 	await assert.rejects(prepareAppServer('host-provided-node', cancellation.signal), error => error === reason);
 	assert.equal(spawn.mock.callCount(), 0);
@@ -125,24 +114,19 @@ for (const [source, javascriptRuntime, expected] of [
 		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 			commands.push(args[1]!);
 			assert.equal(args.includes('--serve'), args[1] === 'build/desktop/live.py');
-			if (args[1] === 'build/desktop/live.py')
-				return liveChild(() => {
-					setImmediate(() => completed.resolve());
-					return { result: { kind: 'function' } };
-				});
+			if (args[1] === 'build/desktop/live.py') return liveChild(() => {
+				setImmediate(() => completed.resolve());
+				return { result: { kind: 'function' } };
+			});
 			const child = new ChildProcess();
 			setImmediate(() => child.emit('close', 0, null));
 			return child;
 		});
 		syncBuiltinESMExports();
 		const stop = await watchAppServer({
-			skipInitial: true,
-			javascriptRuntime,
+			skipInitial: true, javascriptRuntime,
 			environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-			onDidBuild: async () => {
-				reloads++;
-				completed.resolve();
-			},
+			onDidBuild: async () => { reloads++; completed.resolve(); }
 		});
 		t.after(stop);
 		save(source);
@@ -174,9 +158,7 @@ test('a failed live compilation retains the host and retries the next save', asy
 	const stop = await watchAppServer({
 		skipInitial: true,
 		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-		onDidBuild: async () => {
-			reloads++;
-		},
+		onDidBuild: async () => { reloads++; }
 	});
 	t.after(stop);
 	save('app-server-diff/src/lib.rs');
@@ -199,16 +181,13 @@ test('live edits retry an outstanding full build before enabling module updates'
 		assert.equal(args[1], 'build/desktop/develop.py');
 		const succeeds = ++builds === 2;
 		const child = new ChildProcess();
-		setImmediate(() => {
-			child.emit('close', succeeds ? 0 : 1, null);
-			if (succeeds) completed.resolve();
-		});
+		setImmediate(() => { child.emit('close', succeeds ? 0 : 1, null); if (succeeds) completed.resolve(); });
 		return child;
 	});
 	syncBuiltinESMExports();
 	const stop = await watchAppServer({
 		skipInitial: true,
-		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
+		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') }
 	});
 	t.after(stop);
 	save('app-server/src/server/operations.rs');
@@ -233,9 +212,7 @@ test('a dependency save retires the live session before rebuilding the backend',
 				setImmediate(() => served.resolve());
 				return { result: { kind: 'function' } };
 			});
-			session.once('close', () => {
-				retired = true;
-			});
+			session.once('close', () => { retired = true; });
 			return session;
 		}
 		assert.equal(retired, true, 'the semantic database must be retired first');
@@ -244,11 +221,7 @@ test('a dependency save retires the live session before rebuilding the backend',
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({
-		skipInitial: true,
-		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-		onDidBuild: async () => rebuilt.resolve(),
-	});
+	const stop = await watchAppServer({ skipInitial: true, environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') }, onDidBuild: async () => rebuilt.resolve() });
 	t.after(stop);
 	save('app-server-diff/src/lib.rs');
 	await served.promise;
@@ -277,10 +250,7 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({
-		skipInitial: true,
-		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-	});
+	const stop = await watchAppServer({ skipInitial: true, environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') } });
 	t.after(stop);
 	save('diff/src/lib.rs');
 	t.mock.timers.tick(250);
@@ -307,7 +277,7 @@ test('Windows access notifications do not rebuild, while a write with preserved 
 	mockProtocolDirectories(t);
 	const save = mockSourceChanges(t);
 	let changeTime = 1;
-	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime }) as fs.Stats);
+	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime } as fs.Stats));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1]!);
 		const child = new ChildProcess();
@@ -357,16 +327,9 @@ test('macOS backend watching does not subscribe to the repository or its build c
 	let closed = 0;
 	t.mock.method(fs, 'watch', (file: string) => {
 		paths.push(file);
-		return Object.assign(new EventEmitter(), {
-			close() {
-				closed++;
-			},
-		});
+		return Object.assign(new EventEmitter(), { close() { closed++; } });
 	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	syncBuiltinESMExports();
 	const stop = await watchAppServer({ skipInitial: true });
 	t.after(stop);
@@ -381,30 +344,23 @@ test('a failed subscription closes previously registered source watches', async 
 	let closed = 0;
 	t.mock.method(fs, 'watch', () => {
 		if (++opened === 3) throw failure;
-		return Object.assign(new EventEmitter(), {
-			close() {
-				closed++;
-			},
-		});
+		return Object.assign(new EventEmitter(), { close() { closed++; } });
 	});
-	t.after(() => {
-		t.mock.restoreAll();
-		syncBuiltinESMExports();
-	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	syncBuiltinESMExports();
 	await assert.rejects(watchAppServer({ skipInitial: true }), error => error === failure);
 	assert.equal(closed, 2);
 });
 
-test('watcher stops before the backend build when protocol generation fails', async t => {
-	const commands: { command: string; args: string[] }[] = [];
+test('watcher stops before the backend build when protocol generation fails', async (t) => {
+	const commands: { command: string; args: string[]; }[] = [];
 	const failure = Promise.withResolvers<string>();
 	t.after(() => {
 		t.mock.restoreAll();
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push({ command: _command, args: [...args] });
@@ -419,7 +375,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 	assert.deepEqual(commands, [pythonCommand(['-B', 'build/protocol/generate.py'])]);
 });
 
-test('watcher invokes the Python backend builder after protocol generation', async t => {
+test('watcher invokes the Python backend builder after protocol generation', async (t) => {
 	const commands: string[] = [];
 	const failure = Promise.withResolvers<string>();
 	t.after(() => {
@@ -427,7 +383,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1] ?? '');
@@ -447,12 +403,9 @@ for (const succeeds of [true, false]) {
 		const commands: string[][] = [];
 		const completed = Promise.withResolvers<void>();
 		let reloads = 0;
-		t.after(() => {
-			t.mock.restoreAll();
-			syncBuiltinESMExports();
-		});
+		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 		mockProtocolDirectories(t);
-		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
+		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 		t.mock.method(console, 'error', (message: string) => {
 			assert.match(message, /backend build exited with status 1/);
 			completed.resolve();
@@ -464,22 +417,13 @@ for (const succeeds of [true, false]) {
 			return child;
 		});
 		syncBuiltinESMExports();
-		const stop = await watchAppServer({
-			javascriptRuntime: 'packaged-node',
-			onDidBuild: async () => {
-				reloads++;
-				completed.resolve();
-			},
-		});
+		const stop = await watchAppServer({ javascriptRuntime: 'packaged-node', onDidBuild: async () => { reloads++; completed.resolve(); } });
 		t.after(stop);
 		await completed.promise;
-		assert.deepEqual(
-			{ commands, reloads },
-			{
-				commands: [pythonCommand(['-B', 'build/protocol/generate.py']).args, pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args],
-				reloads: succeeds ? 1 : 0,
-			},
-		);
+		assert.deepEqual({ commands, reloads }, {
+			commands: [pythonCommand(['-B', 'build/protocol/generate.py']).args, pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args],
+			reloads: succeeds ? 1 : 0,
+		});
 	});
 }
 
@@ -496,15 +440,13 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 			return child;
 		});
 		syncBuiltinESMExports();
-		const stop = await watchAppServer({
-			skipInitial: true,
-			javascriptRuntime,
-			onDidBuild: async () => completed.resolve(),
-		});
+		const stop = await watchAppServer({ skipInitial: true, javascriptRuntime, onDidBuild: async () => completed.resolve() });
 		t.after(stop);
 		save('app-server/src/server/operations.rs');
 		await completed.promise;
-		const expected = javascriptRuntime === 'packaged-node' ? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node'] : ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		const expected = javascriptRuntime === 'packaged-node'
+			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 		assert.deepEqual(commands, [pythonCommand(expected).args]);
 	});
 }
@@ -563,12 +505,7 @@ test('a protocol save during an active backend build exports before the next bui
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({
-		skipInitial: true,
-		onDidBuild: async () => {
-			if (++builds === 2) completed.resolve();
-		},
-	});
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => { if (++builds === 2) completed.resolve(); } });
 	t.after(stop);
 	save('app-server/src/server/operations.rs');
 	const backend = await firstBuild.promise;

@@ -22,11 +22,10 @@ export interface IWorkbenchFileIconTheme extends IFileIconTheme {
 }
 
 /** Font or dedicated-artwork replacements for registered product icon IDs. Unspecified IDs retain their built-in definitions. */
-export interface IWorkbenchProductIconTheme extends IProductIconTheme {}
+export interface IWorkbenchProductIconTheme extends IProductIconTheme { }
 
-export interface IColorCustomizations {
-	[colorOrThemeScope: string]: string | Readonly<Record<string, string>>;
-}
+
+export interface IColorCustomizations { [colorOrThemeScope: string]: string | Readonly<Record<string, string>>; }
 
 /** The product entry point committing a color theme selection. */
 export type ColorThemeChangeSource = 'themePicker' | 'themeEditor';
@@ -37,6 +36,6 @@ export interface IWorkbenchThemeService extends IThemeService {
 	/** Keeps the applied version of a theme across source saves until explicit selection. */
 	deferColorThemeApplication(themeId: string): void;
 	/** A window-shared, temporary theme; disposing restores the configured selection. */
-	previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void };
+	previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; };
 }
 export const IWorkbenchThemeService = createServiceIdentifier<IWorkbenchThemeService>('workbenchThemeService');

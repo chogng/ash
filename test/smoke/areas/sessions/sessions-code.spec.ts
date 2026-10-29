@@ -13,101 +13,87 @@ import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/
 // Native application menus follow OS focus on macOS.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 
-test(
-	'Code Sessions consumes the shared JSON extension for settings completion, hover, formatting and diagnostics',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, workbench }) => {
-		const page = await workbench.openAgentsWindow(target.kind);
-		await installMainChannelTestClient(page);
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const commands = new QuickAccess(page);
-		await commands.runCommand('workbench.action.openSettingsJson');
-		const content = page.locator('[data-part="editor"] .ash-editor-group:visible > .ash-editor-group-content');
-		const editor = new Editor(content);
-		const replace = async (text: string): Promise<void> => {
-			await editor.input.press('ControlOrMeta+A');
-			await editor.input.evaluate((element, text) => {
-				const clipboardData = new DataTransfer();
-				clipboardData.setData('text/plain', text);
-				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-			}, text);
-		};
-		await replace('{\n// shared JSON extension\n/* 💡 */ "editor.fo",\n}');
-		await editor.input.press('ControlOrMeta+Home');
-		await editor.input.press('ArrowDown');
-		await editor.input.press('ArrowDown');
-		await editor.input.press('End');
-		await editor.input.press('ArrowLeft');
-		await editor.input.press('ArrowLeft');
-		await editor.input.press(process.platform === 'darwin' ? 'Control+Space' : 'ControlOrMeta+Space');
-		await content
-			.locator('.stanza-editor-completion-option')
-			.filter({
-				has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }),
-			})
-			.click();
-		await commands.runCommand('editor.action.formatDocument');
-		await editor.input.press('ControlOrMeta+S');
-		await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
-		expect((await readUserSettings(page)).content).toContain('// shared JSON extension');
-		expect((await readUserSettings(page)).content).toContain('/* 💡 */');
-		await replace('{ "editor.fontSize": "invalid" }');
-		await expect(editor.element.locator('.squiggly-warning')).not.toHaveCount(0);
-		await replace('{// shared JSON extension\n"editor.fontSize":19,}');
-		await expect(editor.element.locator('.squiggly-warning, .squiggly-error')).toHaveCount(0);
-		await editor.input.press('ControlOrMeta+S');
-		await expect.poll(async () => (await readUserSettings(page)).content).toContain('"editor.fontSize":19');
-		await editor.element.getByText('"editor.fontSize"', { exact: true }).hover();
-		await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Set the editor text size in pixels');
-	},
-);
+test('Code Sessions consumes the shared JSON extension for settings completion, hover, formatting and diagnostics', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await installMainChannelTestClient(page);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.openSettingsJson');
+	const content = page.locator('[data-part="editor"] .ash-editor-group:visible > .ash-editor-group-content');
+	const editor = new Editor(content);
+	const replace = async (text: string): Promise<void> => {
+		await editor.input.press('ControlOrMeta+A');
+		await editor.input.evaluate((element, text) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', text);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, text);
+	};
+	await replace('{\n// shared JSON extension\n/* 💡 */ "editor.fo",\n}');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('End');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press(process.platform === 'darwin' ? 'Control+Space' : 'ControlOrMeta+Space');
+	await content.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }) }).click();
+	await commands.runCommand('editor.action.formatDocument');
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
+	expect((await readUserSettings(page)).content).toContain('// shared JSON extension');
+	expect((await readUserSettings(page)).content).toContain('/* 💡 */');
+	await replace('{ "editor.fontSize": "invalid" }');
+	await expect(editor.element.locator('.squiggly-warning')).not.toHaveCount(0);
+	await replace('{// shared JSON extension\n"editor.fontSize":19,}');
+	await expect(editor.element.locator('.squiggly-warning, .squiggly-error')).toHaveCount(0);
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toContain('"editor.fontSize":19');
+	await editor.element.getByText('"editor.fontSize"', { exact: true }).hover();
+	await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Set the editor text size in pixels');
+});
 
 for (const locale of ['en', 'zh-CN']) {
-	test(
-		`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`,
-		{ tag: ['@electron-ui', '@electron-app-server'] },
-		async ({ target, workbench, restartWorkbench }) => {
-			if (locale === 'zh-CN') {
-				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
-				await language.fill('简体中文');
-				await language.press('Enter');
-				({ workbench } = await restartWorkbench());
-			}
-			const copy =
-				locale === 'zh-CN'
-					? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
-					: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
-			const page = await workbench.openAgentsWindow(target.kind);
-			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
-			await installMainChannelTestClient(page);
-			const commands = new QuickAccess(page);
-			const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
-			const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
-			await commands.runCommand('workbench.action.browser.open');
-			await expect(tabs).toHaveCount(1);
-			await commands.runCommand('workbench.action.browser.quickOpen');
-			const picker = page.getByRole('dialog', { name: copy.tabs, exact: true });
-			const search = picker.getByRole('combobox');
-			await search.fill(copy.newTab);
-			await search.press('Enter');
-			await expect(tabs).toHaveCount(2);
-			const ids = (await readPages()).map(view => view.id).sort();
-			expect(ids).toHaveLength(2);
-			await page.reload();
-			await expect(tabs).toHaveCount(2);
-			expect((await readPages()).map(view => view.id).sort()).toEqual(ids);
-			await commands.runCommand('workbench.action.browser.quickOpen');
-			await search.fill('about:blank');
-			await expect(picker.getByRole('option')).toHaveCount(3);
-			await search.press('Enter');
-			await expect(picker).toBeHidden();
-			await tabs.last().press('Delete');
-			await expect.poll(async () => (await readPages()).length).toBe(1);
-			await tabs.press('Delete');
-			await expect.poll(async () => (await readPages()).length).toBe(0);
-		},
-	);
+	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const copy = locale === 'zh-CN'
+			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
+			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
+		await installMainChannelTestClient(page);
+		const commands = new QuickAccess(page);
+		const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
+		const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+		await commands.runCommand('workbench.action.browser.open');
+		await expect(tabs).toHaveCount(1);
+		await commands.runCommand('workbench.action.browser.quickOpen');
+		const picker = page.getByRole('dialog', { name: copy.tabs, exact: true });
+		const search = picker.getByRole('combobox');
+		await search.fill(copy.newTab);
+		await search.press('Enter');
+		await expect(tabs).toHaveCount(2);
+		const ids = (await readPages()).map(view => view.id).sort();
+		expect(ids).toHaveLength(2);
+		await page.reload();
+		await expect(tabs).toHaveCount(2);
+		expect((await readPages()).map(view => view.id).sort()).toEqual(ids);
+		await commands.runCommand('workbench.action.browser.quickOpen');
+		await search.fill('about:blank');
+		await expect(picker.getByRole('option')).toHaveCount(3);
+		await search.press('Enter');
+		await expect(picker).toBeHidden();
+		await tabs.last().press('Delete');
+		await expect.poll(async () => (await readPages()).length).toBe(1);
+		await tabs.press('Delete');
+		await expect.poll(async () => (await readPages()).length).toBe(0);
+	});
 }
 
 test('Code Sessions runs Quick Diff commands through its editor services', async ({ target, workbench }) => {
@@ -261,11 +247,7 @@ focusTest('Code connects layout commands to View, Add tab and the panel shortcut
 	await expect(content).toBeHidden();
 	const commands = new QuickAccess(page);
 	await commands.open('>ash.sessions.hideEditor');
-	await expect(
-		commands.items.filter({
-			has: page.locator('.ash-quick-pick-row-description').getByText('ash.sessions.hideEditor', { exact: true }),
-		}),
-	).toHaveCount(0);
+	await expect(commands.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('ash.sessions.hideEditor', { exact: true }) })).toHaveCount(0);
 	await commands.close();
 	await commands.runCommand('ash.sessions.showEditor');
 	await expect(content).toBeVisible();
@@ -429,51 +411,36 @@ browserTest('Browser Sessions production embedder owns its container and release
 	page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
 	await page.goto('/browser/sessions/sessions.html');
 	await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
-	const moduleUrl = await page.evaluate(() => performance.getEntriesByType('resource').find(entry => /\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name))?.name);
+	const moduleUrl = await page.evaluate(() => performance.getEntriesByType('resource').find(entry =>
+		/\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name),
+	)?.name);
 	expect(moduleUrl).toBeTruthy();
 	// Production extracts imported CSS into entry stylesheets; the embedder must load them too.
 	const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => `<link rel="stylesheet" href="${(link as HTMLLinkElement).href}">`).join(''));
-	await page.route('**/browser/sessions/embedder.html', route =>
-		route.fulfill({
-			contentType: 'text/html',
-			body: `<!doctype html><html><head>${stylesheets}<style>body { margin: 0; } #sessions-host { position: fixed; inset: 0; }</style></head><body><main id="app">Host content</main><section id="sessions-host"></section></body></html>`,
-		}),
-	);
+	await page.route('**/browser/sessions/embedder.html', route => route.fulfill({
+		contentType: 'text/html',
+		body: `<!doctype html><html><head>${stylesheets}<style>body { margin: 0; } #sessions-host { position: fixed; inset: 0; }</style></head><body><main id="app">Host content</main><section id="sessions-host"></section></body></html>`,
+	}));
 	await page.goto('/browser/sessions/embedder.html');
 	const mount = async (closeDuringStartup: boolean): Promise<void> => {
-		await page.evaluate(
-			async ({ moduleUrl, closeDuringStartup }) => {
-				const { create } = await import(moduleUrl!);
-				const container = document.getElementById('sessions-host')!;
-				const lifetime = create(container, {
-					id: 'code-sessions',
-					label: 'Code Sessions',
-					titlebarActionId: 'ash.code.open-sessions',
-					workbenchRelativePath: '../workbench/workbench.html',
+		await page.evaluate(async ({ moduleUrl, closeDuringStartup }) => {
+			const { create } = await import(moduleUrl!);
+			const container = document.getElementById('sessions-host')!;
+			const lifetime = create(container, {
+				id: 'code-sessions', label: 'Code Sessions', titlebarActionId: 'ash.code.open-sessions', workbenchRelativePath: '../workbench/workbench.html',
+			});
+			if (closeDuringStartup) {
+				const observer = new MutationObserver(() => {
+					if (!container.querySelector('.ash-sessions-window')) { return; }
+					container.dataset.mounted = 'true';
+					observer.disconnect();
 				});
-				if (closeDuringStartup) {
-					const observer = new MutationObserver(() => {
-						if (!container.querySelector('.ash-sessions-window')) {
-							return;
-						}
-						container.dataset.mounted = 'true';
-						observer.disconnect();
-					});
-					observer.observe(container, { childList: true });
-					lifetime.dispose();
-				} else {
-					document.addEventListener(
-						'close-sessions',
-						() => {
-							lifetime.dispose();
-							lifetime.dispose();
-						},
-						{ once: true },
-					);
-				}
-			},
-			{ moduleUrl, closeDuringStartup },
-		);
+				observer.observe(container, { childList: true });
+				lifetime.dispose();
+			} else {
+				document.addEventListener('close-sessions', () => { lifetime.dispose(); lifetime.dispose(); }, { once: true });
+			}
+		}, { moduleUrl, closeDuringStartup });
 	};
 	await mount(false);
 	const container = page.locator('#sessions-host');
@@ -512,10 +479,8 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	// This empty, disconnected embedder uses the host's bootstrap palette.
 	// Installed extension themes are covered by the connected theme scenarios.
 	for (const [scheme, colorScheme, forcedColors] of [
-		['light', 'light', 'none'],
-		['dark', 'dark', 'none'],
-		['hcDark', 'dark', 'active'],
-		['hcLight', 'light', 'active'],
+		['light', 'light', 'none'], ['dark', 'dark', 'none'],
+		['hcDark', 'dark', 'active'], ['hcLight', 'light', 'active'],
 	] as const) {
 		await page.emulateMedia({ colorScheme, forcedColors });
 		await page.goto('/browser/workbench/workbench.html');

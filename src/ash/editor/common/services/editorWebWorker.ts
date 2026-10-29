@@ -19,18 +19,7 @@ import { getWordAtText } from '../core/wordHelper.js';
 import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind, computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';
 import { URI } from '../../../base/common/uri.js';
-import {
-	EDITOR_WORKER_TEXTUAL_SUGGEST_LANE,
-	EDITOR_WORKER_MINIMAL_EDITS_LANE,
-	EDITOR_WORKER_NAVIGATE_VALUE_LANE,
-	EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE,
-	type EditorWorkerImplementation,
-	type EditorWorkerLane,
-	type EditorWorkerMinimalEditsRequest,
-	type EditorWorkerNavigateValueRequest,
-	type EditorWorkerRequest,
-	type EditorWorkerResult,
-} from './editorWorker.js';
+import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementation, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorker.js';
 
 const MINIMAL_EDIT_LIMIT = 100_000;
 
@@ -47,11 +36,7 @@ export class EditorWorker extends AbstractDisposable implements EditorWorkerImpl
 				const result = await this.wordProvider.provideCompletions({ ...payload, requestId: request.requestId, snapshot: request.snapshot }, signal);
 				return {
 					position: payload.position,
-					items: (result?.items ?? []).map(item => ({
-						...item,
-						providerId: this.wordProvider.id,
-						hasDeferredDetails: false,
-					})),
+					items: (result?.items ?? []).map(item => ({ ...item, providerId: this.wordProvider.id, hasDeferredDetails: false })),
 					isIncomplete: result?.isIncomplete ?? false,
 				};
 			}
@@ -64,7 +49,7 @@ export class EditorWorker extends AbstractDisposable implements EditorWorkerImpl
 		}
 	}
 
-	protected disposeCore(): void {}
+	protected disposeCore(): void { }
 }
 
 function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMinimalEditsRequest, signal: AbortSignal): readonly languages.TextEdit[] {
@@ -96,17 +81,12 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 }
 
 function mergeAdjacentEdits(edits: readonly languages.TextEdit[]): readonly languages.TextEdit[] {
-	const sorted = edits
-		.map(edit => Object.freeze({ range: Range.lift(edit.range), text: edit.text }))
-		.sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
-	const result: { readonly range: Range; readonly text: string }[] = [];
+	const sorted = edits.map(edit => Object.freeze({ range: Range.lift(edit.range), text: edit.text })).sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
+	const result: { readonly range: Range; readonly text: string; }[] = [];
 	for (const edit of sorted) {
 		const previous = result.at(-1);
 		if (previous && previous.range.getEndPosition().equals(edit.range.getStartPosition())) {
-			result[result.length - 1] = Object.freeze({
-				range: previous.range.plusRange(edit.range),
-				text: previous.text + edit.text,
-			});
+			result[result.length - 1] = Object.freeze({ range: previous.range.plusRange(edit.range), text: previous.text + edit.text });
 			continue;
 		}
 		if (previous && Position.isBefore(edit.range.getStartPosition(), previous.range.getEndPosition())) throw new RangeError('Editor worker edits must not overlap');
@@ -118,15 +98,17 @@ function mergeAdjacentEdits(edits: readonly languages.TextEdit[]): readonly lang
 function navigateValueSet(snapshot: TextSnapshot, request: EditorWorkerNavigateValueRequest): EditorWorkerResult {
 	const document = new StringText(snapshot.getText());
 	const range = validateRange(document, request.range);
-	const selectionRange =
-		range.isEmpty() && range.getEndPosition().column <= document.getLineLength(range.getEndPosition().lineNumber)
-			? Range.fromPositions(range.getStartPosition(), new Position(range.endLineNumber, range.endColumn + 1))
-			: range;
+	const selectionRange = range.isEmpty() && range.getEndPosition().column <= document.getLineLength(range.getEndPosition().lineNumber)
+		? Range.fromPositions(range.getStartPosition(), new Position(range.endLineNumber, range.endColumn + 1))
+		: range;
 	const selectionText = document.getValueOfRange(selectionRange);
 	const line = document.getLineAt(range.getStartPosition().lineNumber);
-	const word =
-		getWordAtText(range.getStartPosition().column, request.wordDefinition, line, 0) ?? (range.startColumn > 1 ? getWordAtText(range.startColumn - 1, request.wordDefinition, line, 0) : undefined);
-	const wordRange = word ? Range.fromPositions(new Position(range.startLineNumber, word.startColumn), new Position(range.startLineNumber, word.endColumn)) : undefined;
+	const word = getWordAtText(range.getStartPosition().column, request.wordDefinition, line, 0)
+		?? (range.startColumn > 1 ? getWordAtText(range.startColumn - 1, request.wordDefinition, line, 0) : undefined);
+	const wordRange = word ? Range.fromPositions(
+		new Position(range.startLineNumber, word.startColumn),
+		new Position(range.startLineNumber, word.endColumn),
+	) : undefined;
 	if (range.isEmpty() && wordRange) {
 		return BasicInplaceReplace.INSTANCE.navigateValueSet(wordRange, word!.word, selectionRange, selectionText, request.up) ?? undefined;
 	}
@@ -166,7 +148,11 @@ export function createLanguageWordCompletionProvider(options: LanguageWordComple
 			if (triggerLine === undefined || columnIndex < 0 || columnIndex > triggerLine.length) {
 				throw new RangeError('Word completion position is outside its snapshot');
 			}
-			const active = getTextWordSegments(triggerLine).find(segment => segment.wordLike && columnIndex > segment.start && columnIndex <= segment.end);
+			const active = getTextWordSegments(triggerLine).find(segment => (
+				segment.wordLike &&
+				columnIndex > segment.start &&
+				columnIndex <= segment.end
+			));
 			if (!active) return undefined;
 			const prefix = triggerLine.slice(active.start, columnIndex);
 			if (prefix.length === 0) return undefined;
@@ -182,20 +168,19 @@ export function createLanguageWordCompletionProvider(options: LanguageWordComple
 			}
 			const candidates = [...words].sort().slice(0, maximumItems);
 			if (candidates.length === 0) return undefined;
-			const range = Range.fromPositions(new Position(request.position.lineNumber, active.start + 1), new Position(request.position.lineNumber, active.end + 1));
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, active.start + 1),
+				new Position(request.position.lineNumber, active.end + 1),
+			);
 			return Object.freeze({
-				items: Object.freeze(
-					candidates.map(word =>
-						Object.freeze({
-							id: wordIdentity(word),
-							label: word,
-							kind: languages.LanguageCompletionItemKind.Text,
-							range,
-							insertText: word,
-							sortText: word,
-						}),
-					),
-				),
+				items: Object.freeze(candidates.map(word => Object.freeze({
+					id: wordIdentity(word),
+					label: word,
+					kind: languages.LanguageCompletionItemKind.Text,
+					range,
+					insertText: word,
+					sortText: word,
+				}))),
 				isIncomplete: words.size > maximumItems,
 			});
 		},
@@ -209,20 +194,13 @@ function wordIdentity(word: string): string {
 /** Provider host shared by in-process and Worker transports. */
 export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWorkerDocumentSynchronizationObserver {
 	private disposed = false;
-	private tokenizationCache:
-		| {
-				readonly support: languages.ITokenizationSupport;
-				readonly languageId: string;
-				readonly initialState: languages.IState;
-				readonly states: TokenizationStateStore<languages.IState>;
-				readonly lines: readonly {
-					text: string;
-					hasEOL: boolean;
-					tokens: readonly languages.Token[] | Uint32Array;
-					rawTokens?: readonly languages.Token[];
-				}[];
-		  }
-		| undefined;
+	private tokenizationCache: {
+		readonly support: languages.ITokenizationSupport;
+		readonly languageId: string;
+		readonly initialState: languages.IState;
+		readonly states: TokenizationStateStore<languages.IState>;
+		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[]; }[];
+	} | undefined;
 
 	constructor(
 		private readonly registry: SyntaxProviderRegistry,
@@ -246,10 +224,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 			});
 		}
 		if (request.lane === languages.SYNTAX_TOKENIZE_LANE) {
-			return Object.freeze({
-				lane: languages.SYNTAX_TOKENIZE_LANE,
-				value: await this.runTokenization(request, signal),
-			});
+			return Object.freeze({ lane: languages.SYNTAX_TOKENIZE_LANE, value: await this.runTokenization(request, signal) });
 		}
 		if (request.lane === languages.SYNTAX_DIAGNOSTIC_LANE) {
 			return Object.freeze({
@@ -302,18 +277,16 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 
 	private async getTokenizationSupport(languageId: string): Promise<languages.ITokenizationSupport | null> {
 		if (this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)) return null;
-		return languages.TokenizationRegistry.get(languageId) ?? (languages.TokenizationRegistry.isResolved(languageId) ? null : await languages.TokenizationRegistry.getOrCreate(languageId));
+		return languages.TokenizationRegistry.get(languageId) ?? (languages.TokenizationRegistry.isResolved(languageId)
+			? null : await languages.TokenizationRegistry.getOrCreate(languageId));
 	}
 
 	private tokenizeDocument(support: languages.ITokenizationSupport, request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): LanguageTokenResult {
 		const tokens: LanguageToken[] = [];
-		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId ? this.tokenizationCache : undefined;
-		const next: {
-			text: string;
-			hasEOL: boolean;
-			tokens: readonly languages.Token[] | Uint32Array;
-			rawTokens?: readonly languages.Token[];
-		}[] = [];
+		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
+			? this.tokenizationCache
+			: undefined;
+		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[]; }[] = [];
 		const states = new TokenizationStateStore<languages.IState>();
 		let state = support.getInitialState();
 		const initialState = state.clone();
@@ -325,12 +298,9 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 			const previous = cached?.lines[index];
 			const previousStartState = index === 0 ? cached?.initialState : cached?.states.getEndState(index);
 			const previousEndState = cached?.states.getEndState(index + 1);
-			const result =
-				previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
-					? { tokens: previous.tokens, rawTokens: previous.rawTokens, endState: previousEndState }
-					: support.tokenizeEncoded
-						? support.tokenizeEncoded(line, hasEOL, state.clone())
-						: support.tokenize(line, hasEOL, state.clone());
+			const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
+				? { tokens: previous.tokens, rawTokens: previous.rawTokens, endState: previousEndState }
+				: support.tokenizeEncoded ? support.tokenizeEncoded(line, hasEOL, state.clone()) : support.tokenize(line, hasEOL, state.clone());
 			const rawTokens = 'rawTokens' in result ? result.rawTokens : undefined;
 			next.push({ text: line, hasEOL, tokens: result.tokens, rawTokens });
 			states.setEndState(index + 1, result.endState.clone());
@@ -341,6 +311,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
 		return normalized;
 	}
+
 
 	private async runTokenization(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<LanguageTokenResult | null> {
 		const proposed = request.payload.tokenize;
@@ -360,13 +331,11 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 				for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
 					const token = result.tokens[tokenIndex]!;
 					const end = result.tokens[tokenIndex + 1]?.offset ?? line.length;
-					if (end > token.offset)
-						tokens.push({
-							range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
-							tokenType: token.type === '' ? 'other' : token.type,
-							modifiers: [],
-							languageId: token.language,
-						});
+					if (end > token.offset) tokens.push({
+						range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
+						tokenType: token.type === '' ? 'other' : token.type,
+						modifiers: [], languageId: token.language,
+					});
 				}
 			}
 			return { tokens };
@@ -451,7 +420,12 @@ function reportProviderError(providerId: string, operation: languages.SyntaxProv
 }
 
 export const editorWorkerWireCodec: WorkerTextModelCodec<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult> = Object.freeze({
-	lanes: Object.freeze([EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE] as const),
+	lanes: Object.freeze([
+		EDITOR_WORKER_TEXTUAL_SUGGEST_LANE,
+		EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE,
+		EDITOR_WORKER_MINIMAL_EDITS_LANE,
+		EDITOR_WORKER_NAVIGATE_VALUE_LANE,
+	] as const),
 	encodePayload(lane: EditorWorkerLane, payload: EditorWorkerRequest): unknown {
 		switch (lane) {
 			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
@@ -459,18 +433,13 @@ export const editorWorkerWireCodec: WorkerTextModelCodec<EditorWorkerLane, Edito
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
 				return Object.freeze({});
 			case EDITOR_WORKER_MINIMAL_EDITS_LANE:
-				return Object.freeze({
-					edits: Object.freeze((payload as EditorWorkerMinimalEditsRequest).edits.map(encodeEdit)),
-				});
+				return Object.freeze({ edits: Object.freeze((payload as EditorWorkerMinimalEditsRequest).edits.map(encodeEdit)) });
 			case EDITOR_WORKER_NAVIGATE_VALUE_LANE: {
 				const request = payload as EditorWorkerNavigateValueRequest;
 				return Object.freeze({
 					range: encodeRange(request.range),
 					up: request.up,
-					wordDefinition: Object.freeze({
-						source: request.wordDefinition.source,
-						flags: request.wordDefinition.flags,
-					}),
+					wordDefinition: Object.freeze({ source: request.wordDefinition.source, flags: request.wordDefinition.flags }),
 				});
 			}
 		}
@@ -490,11 +459,7 @@ export const editorWorkerWireCodec: WorkerTextModelCodec<EditorWorkerLane, Edito
 				assertRecord(value.wordDefinition, 'Editor worker word definition');
 				const source = decodeString(value.wordDefinition.source, 'Editor worker word definition source');
 				const flags = decodeString(value.wordDefinition.flags, 'Editor worker word definition flags');
-				return Object.freeze({
-					range: decodeRange(value.range, snapshot),
-					up: value.up,
-					wordDefinition: new RegExp(source, flags),
-				});
+				return Object.freeze({ range: decodeRange(value.range, snapshot), up: value.up, wordDefinition: new RegExp(source, flags) });
 			}
 		}
 	},
@@ -503,15 +468,11 @@ export const editorWorkerWireCodec: WorkerTextModelCodec<EditorWorkerLane, Edito
 			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
 				return languageCompletionWireCodec.encodeResult('completion', result as languages.LanguageCompletionResult, snapshot, undefined);
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
-				return Object.freeze(
-					(result as readonly UnicodeHighlight[]).map(highlight =>
-						Object.freeze({
-							range: encodeRange(highlight.range),
-							kind: highlight.kind,
-							character: highlight.character,
-						}),
-					),
-				);
+				return Object.freeze((result as readonly UnicodeHighlight[]).map(highlight => Object.freeze({
+					range: encodeRange(highlight.range),
+					kind: highlight.kind,
+					character: highlight.character,
+				})));
 			case EDITOR_WORKER_MINIMAL_EDITS_LANE:
 				return Object.freeze((result as readonly languages.TextEdit[]).map(encodeEdit));
 			case EDITOR_WORKER_NAVIGATE_VALUE_LANE: {
@@ -533,20 +494,13 @@ export const editorWorkerWireCodec: WorkerTextModelCodec<EditorWorkerLane, Edito
 			case EDITOR_WORKER_NAVIGATE_VALUE_LANE:
 				if (value === null) return undefined;
 				assertRecord(value, 'Editor worker navigation result');
-				return Object.freeze({
-					range: decodeRange(value.range, snapshot),
-					value: decodeString(value.value, 'Editor worker navigation value'),
-				});
+				return Object.freeze({ range: decodeRange(value.range, snapshot), value: decodeString(value.value, 'Editor worker navigation value') });
 		}
 	},
 });
 
 function encodeEdit(edit: languages.TextEdit): unknown {
-	return Object.freeze({
-		range: encodeRange(edit.range),
-		text: edit.text,
-		...(edit.eol === undefined ? {} : { eol: edit.eol }),
-	});
+	return Object.freeze({ range: encodeRange(edit.range), text: edit.text, ...(edit.eol === undefined ? {} : { eol: edit.eol }) });
 }
 
 function decodeEdit(value: unknown, snapshot: TextSnapshot): languages.TextEdit {
@@ -554,11 +508,7 @@ function decodeEdit(value: unknown, snapshot: TextSnapshot): languages.TextEdit 
 	if (value.eol !== undefined && value.eol !== 0 && value.eol !== 1) {
 		throw new TypeError('Editor worker edit EOL must be LF or CRLF');
 	}
-	return Object.freeze({
-		range: decodeRange(value.range, snapshot),
-		text: decodeString(value.text, 'Editor worker edit text'),
-		...(value.eol === undefined ? {} : { eol: value.eol }),
-	});
+	return Object.freeze({ range: decodeRange(value.range, snapshot), text: decodeString(value.text, 'Editor worker edit text'), ...(value.eol === undefined ? {} : { eol: value.eol }) });
 }
 
 function encodeRange(range: IRange): unknown {
@@ -584,7 +534,7 @@ function decodeRange(value: unknown, snapshot: TextSnapshot): Range {
 
 function decodePosition(value: unknown, owner: string): Position {
 	assertRecord(value, owner);
-	return new Position(decodebase(value.lineIndex, `${owner} line index`) + 1, decodebase(value.columnIndex, `${owner} column index`) + 1);
+	return new Position((decodebase(value.lineIndex, `${owner} line index`)) + 1, (decodebase(value.columnIndex, `${owner} column index`)) + 1);
 }
 
 function decodeUnicodeHighlight(value: unknown, snapshot: TextSnapshot): UnicodeHighlight {
@@ -670,14 +620,11 @@ function decodeCompletionResult(value: unknown, snapshot: TextSnapshot): languag
 	if (typeof value.isIncomplete !== 'boolean') {
 		throw new TypeError('Completion wire isIncomplete must be a boolean');
 	}
-	return languages.normalizeLanguageCompletionSnapshotResult(
-		{
-			position: decodePosition(value.position, 'Completion wire result position'),
-			items: value.items.map(decodeItem),
-			isIncomplete: value.isIncomplete,
-		},
-		snapshot,
-	);
+	return languages.normalizeLanguageCompletionSnapshotResult({
+		position: decodePosition(value.position, 'Completion wire result position'),
+		items: value.items.map(decodeItem),
+		isIncomplete: value.isIncomplete,
+	}, snapshot);
 }
 
 function encodeItem(item: languages.LanguageCompletionItem): unknown {
@@ -698,19 +645,12 @@ function encodeItem(item: languages.LanguageCompletionItem): unknown {
 		...(item.sortText === undefined ? {} : { sortText: item.sortText }),
 		...(item.preselect === undefined ? {} : { preselect: item.preselect }),
 		...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
-		...(item.additionalTextEdits === undefined
-			? {}
-			: {
-					additionalTextEdits: item.additionalTextEdits.map(edit =>
-						Object.freeze({
-							range: Object.freeze({
-								start: encodePosition(edit.range.getStartPosition()),
-								end: encodePosition(edit.range.getEndPosition()),
-							}),
-							text: edit.text,
-						}),
-					),
-				}),
+		...(item.additionalTextEdits === undefined ? {} : {
+			additionalTextEdits: item.additionalTextEdits.map(edit => Object.freeze({
+				range: Object.freeze({ start: encodePosition(edit.range.getStartPosition()), end: encodePosition(edit.range.getEndPosition()) }),
+				text: edit.text,
+			}))
+		}),
 		...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
 	});
 }
@@ -736,13 +676,12 @@ function decodeItem(value: unknown): languages.LanguageCompletionItem {
 		id: decodeString(value.id, 'Completion wire item ID'),
 		label: decodeString(value.label, 'Completion wire item label'),
 		kind: decodeString(value.kind, 'Completion wire item kind') as languages.LanguageCompletionItem['kind'],
-		range: Range.fromPositions(decodePosition(range.start, 'Completion wire item range start'), decodePosition(range.end, 'Completion wire item range end')),
+		range: Range.fromPositions(
+			decodePosition(range.start, 'Completion wire item range start'),
+			decodePosition(range.end, 'Completion wire item range end'),
+		),
 		insertText: decodeString(value.insertText, 'Completion wire item insertion text'),
-		...(value.insertTextFormat === undefined
-			? {}
-			: {
-					insertTextFormat: decodeString(value.insertTextFormat, 'Completion wire item insert text format') as languages.LanguageCompletionItem['insertTextFormat'],
-				}),
+		...(value.insertTextFormat === undefined ? {} : { insertTextFormat: decodeString(value.insertTextFormat, 'Completion wire item insert text format') as languages.LanguageCompletionItem['insertTextFormat'] }),
 		...(detail === undefined ? {} : { detail }),
 		...(documentation === undefined ? {} : { documentation }),
 		...(filterText === undefined ? {} : { filterText }),
@@ -760,7 +699,7 @@ function decodeOptionalCommitCharacters(value: unknown): readonly string[] | und
 	return value.map(character => decodeString(character, 'Completion wire item commit character'));
 }
 
-function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string }[] | undefined {
+function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string; }[] | undefined {
 	if (value === undefined) return undefined;
 	if (!Array.isArray(value)) throw new TypeError('Completion wire item additional text edits must be an array');
 	return value.map(edit => {
@@ -791,7 +730,9 @@ function decodeContext(value: unknown): languages.LanguageCompletionContext {
 		return languages.createLanguageCompletionIncompleteRefreshContext();
 	}
 	if (value.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter) {
-		return languages.createLanguageCompletionTriggerCharacterContext(decodeString(value.triggerCharacter, 'Completion wire trigger character'));
+		return languages.createLanguageCompletionTriggerCharacterContext(
+			decodeString(value.triggerCharacter, 'Completion wire trigger character'),
+		);
 	}
 	throw new TypeError(`Unknown completion wire trigger kind '${String(value.kind)}'`);
 }
@@ -828,9 +769,7 @@ export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: la
 	if (options.workerFactory && options.onProviderError) {
 		throw new TypeError('A custom syntax worker owns its provider error policy');
 	}
-	const worker = options.workerFactory
-		? new SyntaxProviderOverlayWorker(registry, options.workerFactory(), languageIdCodec)
-		: new SyntaxProviderWorker(registry, options.onProviderError, languageIdCodec);
+	const worker = options.workerFactory ? new SyntaxProviderOverlayWorker(registry, options.workerFactory(), languageIdCodec) : new SyntaxProviderWorker(registry, options.onProviderError, languageIdCodec);
 	return options.workerDecorator ? options.workerDecorator(worker) : worker;
 }
 
@@ -838,22 +777,15 @@ export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: la
 class SyntaxProviderOverlayWorker implements languages.SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
 	private readonly providers: SyntaxProviderWorker;
 
-	constructor(
-		private readonly registry: SyntaxProviderRegistry,
-		private readonly fallback: languages.SyntaxWorker,
-		languageIdCodec?: languages.ILanguageIdCodec,
-	) {
+	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: languages.SyntaxWorker, languageIdCodec?: languages.ILanguageIdCodec) {
 		this.providers = new SyntaxProviderWorker(registry, undefined, languageIdCodec);
 	}
 
 	run(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<languages.SyntaxResult> {
 		const languageId = request.payload.languageId;
-		const preferred =
-			request.lane !== languages.SYNTAX_DIAGNOSTIC_LANE
-				? languages.TokenizationRegistry.get(languageId) !== null ||
-					!languages.TokenizationRegistry.isResolved(languageId) ||
-					this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)
-				: this.registry.getDiagnosticProviders(languageId).some(provider => provider.diagnosticPriority > 0);
+		const preferred = request.lane !== languages.SYNTAX_DIAGNOSTIC_LANE
+			? languages.TokenizationRegistry.get(languageId) !== null || !languages.TokenizationRegistry.isResolved(languageId) || this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)
+			: this.registry.getDiagnosticProviders(languageId).some(provider => provider.diagnosticPriority > 0);
 		return preferred ? this.providers.run(request, signal) : this.fallback.run(request, signal);
 	}
 

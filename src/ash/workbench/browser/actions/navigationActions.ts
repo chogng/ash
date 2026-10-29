@@ -10,33 +10,16 @@ import { IWorkbenchLayoutService, type WorkbenchPartId } from '../../services/la
 import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 
 const navigationParts = ['editor', 'panel', 'auxiliarybar', 'sidebar', 'agentSidebar'] as const;
-const groupDirections = {
-	[Direction.Up]: GroupDirection.UP,
-	[Direction.Down]: GroupDirection.DOWN,
-	[Direction.Left]: GroupDirection.LEFT,
-	[Direction.Right]: GroupDirection.RIGHT,
-};
-const oppositeDirections = {
-	[Direction.Up]: GroupDirection.DOWN,
-	[Direction.Down]: GroupDirection.UP,
-	[Direction.Left]: GroupDirection.RIGHT,
-	[Direction.Right]: GroupDirection.LEFT,
-};
-const paneLocations = {
-	sidebar: ViewContainerLocation.Sidebar,
-	panel: ViewContainerLocation.Panel,
-	auxiliarybar: ViewContainerLocation.AuxiliaryBar,
-	agentSidebar: ViewContainerLocation.AgentSidebar,
-};
+const groupDirections = { [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN, [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT };
+const oppositeDirections = { [Direction.Up]: GroupDirection.DOWN, [Direction.Down]: GroupDirection.UP, [Direction.Left]: GroupDirection.RIGHT, [Direction.Right]: GroupDirection.LEFT };
+const paneLocations = { sidebar: ViewContainerLocation.Sidebar, panel: ViewContainerLocation.Panel, auxiliarybar: ViewContainerLocation.AuxiliaryBar, agentSidebar: ViewContainerLocation.AgentSidebar };
 
 async function focusPart(accessor: ServicesAccessor, part: WorkbenchPartId): Promise<IComposite | undefined> {
 	if (part === 'editor') {
 		accessor.get(IEditorGroupsService).activeGroup.focus();
 		return undefined;
 	}
-	if (part !== 'sidebar' && part !== 'panel' && part !== 'auxiliarybar' && part !== 'agentSidebar') {
-		return undefined;
-	}
+	if (part !== 'sidebar' && part !== 'panel' && part !== 'auxiliarybar' && part !== 'agentSidebar') { return undefined; }
 	const panes = accessor.get(IPaneCompositePartService);
 	const location = paneLocations[part];
 	const active = panes.getActivePaneComposite(location);
@@ -49,19 +32,12 @@ async function focusPart(accessor: ServicesAccessor, part: WorkbenchPartId): Pro
 
 /** Editor splits are visited before crossing the Workbench region boundary. */
 class BaseNavigationAction extends Action2 {
-	constructor(
-		options: IAction2Options,
-		private readonly direction: Direction,
-	) {
-		super(options);
-	}
+	constructor(options: IAction2Options, private readonly direction: Direction) { super(options); }
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const layout = accessor.get(IWorkbenchLayoutService);
 		const source = navigationParts.find(part => layout.hasFocus(part));
-		if (!source) {
-			return;
-		}
+		if (!source) { return; }
 		const groups = accessor.get(IEditorGroupsService);
 		if (source === 'editor') {
 			const next = groups.findGroup({ direction: groupDirections[this.direction] });
@@ -71,9 +47,7 @@ class BaseNavigationAction extends Action2 {
 			}
 		}
 		const target = layout.getVisibleNeighborPart(source, this.direction);
-		if (!target) {
-			return;
-		}
+		if (!target) { return; }
 		if (target === 'editor') {
 			// Enter at the facing edge while retaining the active group's row or column.
 			let group = groups.activeGroup;
@@ -95,63 +69,32 @@ for (const [id, title, direction] of [
 	['workbench.action.navigateUp', localize2('navigateUp', 'Navigate to the View Above'), Direction.Up],
 	['workbench.action.navigateDown', localize2('navigateDown', 'Navigate to the View Below'), Direction.Down],
 ] as const) {
-	registerAction2(
-		class extends BaseNavigationAction {
-			constructor() {
-				super({ id, title, f1: true }, direction);
-			}
-		},
-	);
+	registerAction2(class extends BaseNavigationAction {
+		constructor() { super({ id, title, f1: true }, direction); }
+	});
 }
 
 class BaseFocusAction extends Action2 {
-	constructor(
-		options: IAction2Options,
-		private readonly step: -1 | 1,
-	) {
-		super(options);
-	}
+	constructor(options: IAction2Options, private readonly step: -1 | 1) { super(options); }
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const layout = accessor.get(IWorkbenchLayoutService);
 		const visible = navigationParts.filter(part => layout.isPartVisible(part));
-		if (visible.length === 0) {
-			return;
-		}
+		if (visible.length === 0) { return; }
 		const current = visible.findIndex(part => layout.hasFocus(part));
 		const index = current < 0 ? 0 : (current + this.step + visible.length) % visible.length;
 		await focusPart(accessor, visible[index]!);
 	}
 }
 
-registerAction2(
-	class extends BaseFocusAction {
-		constructor() {
-			super(
-				{
-					id: 'workbench.action.focusNextPart',
-					title: localize2('focusNextPart', 'Focus Next Part'),
-					f1: true,
-					keybinding: { primary: Keybinding.single(logicalKey('F6')) },
-				},
-				1,
-			);
-		}
-	},
-);
+registerAction2(class extends BaseFocusAction {
+	constructor() {
+		super({ id: 'workbench.action.focusNextPart', title: localize2('focusNextPart', 'Focus Next Part'), f1: true, keybinding: { primary: Keybinding.single(logicalKey('F6')) } }, 1);
+	}
+});
 
-registerAction2(
-	class extends BaseFocusAction {
-		constructor() {
-			super(
-				{
-					id: 'workbench.action.focusPreviousPart',
-					title: localize2('focusPreviousPart', 'Focus Previous Part'),
-					f1: true,
-					keybinding: { primary: Keybinding.single(logicalKey('F6', { shiftKey: true })) },
-				},
-				-1,
-			);
-		}
-	},
-);
+registerAction2(class extends BaseFocusAction {
+	constructor() {
+		super({ id: 'workbench.action.focusPreviousPart', title: localize2('focusPreviousPart', 'Focus Previous Part'), f1: true, keybinding: { primary: Keybinding.single(logicalKey('F6', { shiftKey: true })) } }, -1);
+	}
+});

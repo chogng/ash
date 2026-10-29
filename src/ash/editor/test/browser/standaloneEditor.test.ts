@@ -56,19 +56,15 @@ let createdWorkerCount = 0;
 let terminatedWorkerCount = 0;
 class TestWorker extends browserEnvironment.window.EventTarget {
 	private readonly incoming = new Emitter<unknown>();
-	private readonly server = new WorkerTextModelSyncServer(
-		{
-			onMessage: this.incoming.event,
-			send: message => {
-				const data = structuredClone(message);
-				queueMicrotask(() => this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })));
-			},
-			dispose() {},
-			[Symbol.dispose]() {},
+	private readonly server = new WorkerTextModelSyncServer({
+		onMessage: this.incoming.event,
+		send: message => {
+			const data = structuredClone(message);
+			queueMicrotask(() => this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })));
 		},
-		editorWorkerWireCodec,
-		new EditorWorker(),
-	);
+		dispose() { },
+		[Symbol.dispose]() { },
+	}, editorWorkerWireCodec, new EditorWorker());
 	constructor() {
 		super();
 		createdWorkerCount += 1;
@@ -84,11 +80,13 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 	}
 }
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
-const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent'], { ResizeObserver: TestResizeObserver, Worker: TestWorker });
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent',
+], { ResizeObserver: TestResizeObserver, Worker: TestWorker });
 
 const stanza = await import('../../editor.main.js');
 
@@ -100,10 +98,7 @@ suiteTeardown(() => {
 test('standalone service collection honors explicit first-scope overrides', () => {
 	const languageConfigurations = new TestLanguageConfigurationService();
 	const languages = new LanguageFeaturesService();
-	const services = new StandaloneServiceCollection({
-		languageConfigurationService: languageConfigurations,
-		languageFeaturesService: languages,
-	});
+	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme().id, lightColorTheme.id);
 	assert.ok(services.get(ILogService) instanceof NullLoggerService);
@@ -122,9 +117,7 @@ test('standalone language identity and editing rules require host registration',
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments, null);
 
 	using language = services.languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
-	using configuration = services.languageConfigurationService.register('typescript', {
-		comments: { lineComment: '//' },
-	});
+	using configuration = services.languageConfigurationService.register('typescript', { comments: { lineComment: '//' } });
 	assert.equal(model.getLanguageId(), 'typescript');
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
 
@@ -178,7 +171,10 @@ test('standalone initialization defers callbacks and releases registrations acro
 test('standalone language activation is once per language and exposes independent descriptions', () => {
 	const calls: string[] = [];
 	using resources = new DisposableStore();
-	resources.add(stanza.languages.registerLanguages([{ description: { id: 'activate-first', extensions: ['.first'] } }, { description: { id: 'activate-second' } }]));
+	resources.add(stanza.languages.registerLanguages([
+		{ description: { id: 'activate-first', extensions: ['.first'] } },
+		{ description: { id: 'activate-second' } },
+	]));
 	resources.add(stanza.languages.onLanguageEncountered('activate-first', () => calls.push('basic')));
 	resources.add(stanza.languages.onLanguage('activate-first', () => calls.push('rich')));
 	resources.add(stanza.languages.onLanguage('activate-second', () => calls.push('changed')));
@@ -200,72 +196,41 @@ test('standalone token providers normalize offsets without modifying provider to
 		{ startIndex: 5, scopes: 'entity' },
 		{ startIndex: 3, scopes: 'string' },
 	];
-	const state = {
-		clone() {
-			return this;
-		},
-		equals(other: unknown) {
-			return other === this;
-		},
-	};
+	const state = { clone() { return this; }, equals(other: unknown) { return other === this; } };
 	using registration = stanza.languages.setTokensProvider('plaintext', {
 		getInitialState: () => state,
 		tokenize: () => ({ tokens: input, endState: state }),
 	});
 	const support = TokenizationRegistry.get('plaintext')!;
 	const tokens = support.tokenize('alpha beta', false, state).tokens;
-	assert.deepEqual(
-		tokens.map(token => [token.offset, token.type, token.language]),
-		[
-			[0, 'keyword', 'plaintext'],
-			[5, 'entity', 'plaintext'],
-			[5, 'string', 'plaintext'],
-		],
-	);
+	assert.deepEqual(tokens.map(token => [token.offset, token.type, token.language]), [
+		[0, 'keyword', 'plaintext'], [5, 'entity', 'plaintext'], [5, 'string', 'plaintext'],
+	]);
 	const encoded = support.tokenizeEncoded!('alpha beta', false, state).tokens;
 	assert.deepEqual([encoded[0], encoded[2], encoded[4]], [0, 5, 5]);
-	assert.deepEqual(
-		input.map(token => token.startIndex),
-		[7, 5, 3],
-	);
+	assert.deepEqual(input.map(token => token.startIndex), [7, 5, 3]);
 });
 
 test('standalone Monarch registrations own lazy tokenizer creation, replacement and disposal', async () => {
 	using language = stanza.languages.registerLanguages([{ description: { id: 'monarch-registration' } }]);
 	const definition: IMonarchLanguage = { tokenizer: { root: [[/\w+/, 'identifier']] } };
 	let resolve!: (value: IMonarchLanguage) => void;
-	const removed = stanza.languages.setMonarchTokensProvider(
-		'monarch-registration',
-		new Promise(done => {
-			resolve = done;
-		}),
-	);
+	const removed = stanza.languages.setMonarchTokensProvider('monarch-registration', new Promise(done => { resolve = done; }));
 	const pending = TokenizationRegistry.getOrCreate('monarch-registration');
 	removed.dispose();
 	resolve(definition);
 	assert.equal(await pending, null);
 	let calls = 0;
 	using lazy = stanza.languages.registerTokensProviderFactory('monarch-registration', {
-		create: async () => {
-			calls++;
-			return definition;
-		},
+		create: async () => { calls++; return definition; },
 	});
 	const tokenizer = (await TokenizationRegistry.getOrCreate('monarch-registration'))!;
 	assert.equal(await TokenizationRegistry.getOrCreate('monarch-registration'), tokenizer);
 	assert.equal(calls, 1);
 	assert.equal(tokenizer.tokenize('word', false, tokenizer.getInitialState()).tokens[0]!.type, 'identifier.monarch-registration');
-	assert.throws(
-		() =>
-			stanza.languages.setMonarchTokensProvider('monarch-registration', {
-				tokenizer: { root: [{ include: '@missing' }] },
-			}),
-		/Unknown tokenizer state/,
-	);
+	assert.throws(() => stanza.languages.setMonarchTokensProvider('monarch-registration', { tokenizer: { root: [{ include: '@missing' }] } }), /Unknown tokenizer state/);
 	assert.equal(TokenizationRegistry.get('monarch-registration'), tokenizer);
-	using replacement = stanza.languages.setMonarchTokensProvider('monarch-registration', {
-		tokenizer: { root: [[/\w+/, 'string']] },
-	});
+	using replacement = stanza.languages.setMonarchTokensProvider('monarch-registration', { tokenizer: { root: [[/\w+/, 'string']] } });
 	lazy.dispose();
 	assert.throws(() => tokenizer.tokenize('word', false, tokenizer.getInitialState()), /disposed/i);
 	const current = TokenizationRegistry.get('monarch-registration')!;
@@ -277,22 +242,8 @@ test('standalone Monarch registrations own lazy tokenizer creation, replacement 
 test('standalone colorization escapes markup, expands tabs and creates no model or worker', async () => {
 	using resources = new DisposableStore();
 	resources.add(stanza.languages.registerLanguages([{ description: { id: 'colorize-test', mimetypes: ['text/colorize-test'] } }]));
-	resources.add(
-		stanza.languages.setMonarchTokensProvider('colorize-test', {
-			tokenizer: {
-				root: [
-					[/word/, 'keyword'],
-					[/./, ''],
-				],
-			},
-		}),
-	);
-	stanza.editor.defineTheme('colorize-theme', {
-		base: 'vs',
-		inherit: true,
-		rules: [{ token: 'keyword', foreground: '123456', fontStyle: 'bold' }],
-		colors: {},
-	});
+	resources.add(stanza.languages.setMonarchTokensProvider('colorize-test', { tokenizer: { root: [[/word/, 'keyword'], [/./, '']] } }));
+	stanza.editor.defineTheme('colorize-theme', { base: 'vs', inherit: true, rules: [{ token: 'keyword', foreground: '123456', fontStyle: 'bold' }], colors: {} });
 	stanza.editor.setTheme('colorize-theme');
 	const models = stanza.editor.getModels().length;
 	const workers = createdWorkerCount;
@@ -316,44 +267,20 @@ test('standalone colorization escapes markup, expands tabs and creates no model 
 
 test('standalone Markdown service highlights an alias in the output document without creating models or workers', async () => {
 	using resources = new DisposableStore();
-	resources.add(
-		StandaloneServices.get(ILanguageService).registerLanguage({
-			id: 'markdown-highlight',
-			aliases: ['MarkdownTest'],
-		}),
-	);
-	resources.add(
-		stanza.languages.setMonarchTokensProvider('markdown-highlight', {
-			tokenizer: {
-				root: [
-					[/word/, 'keyword'],
-					[/./, ''],
-				],
-			},
-		}),
-	);
-	stanza.editor.defineTheme('markdown-highlight-theme', {
-		base: 'vs',
-		inherit: true,
-		rules: [{ token: 'keyword', foreground: '123456' }],
-		colors: {},
-	});
+	resources.add(StandaloneServices.get(ILanguageService).registerLanguage({ id: 'markdown-highlight', aliases: ['MarkdownTest'] }));
+	resources.add(stanza.languages.setMonarchTokensProvider('markdown-highlight', { tokenizer: { root: [[/word/, 'keyword'], [/./, '']] } }));
+	stanza.editor.defineTheme('markdown-highlight-theme', { base: 'vs', inherit: true, rules: [{ token: 'keyword', foreground: '123456' }], colors: {} });
 	stanza.editor.setTheme('markdown-highlight-theme');
 	const models = stanza.editor.getModels().length;
 	const workers = createdWorkerCount;
 	const dom = createTestDom('<!doctype html><body></body>');
 	try {
 		let resolveCompleted!: () => void;
-		const completed = new Promise<void>(resolve => {
-			resolveCompleted = resolve;
+		const completed = new Promise<void>(resolve => { resolveCompleted = resolve; });
+		using result = StandaloneServices.get(IMarkdownRendererService).render({ value: '```MarkdownTest\nword <img>\n```' }, {
+			ownerDocument: dom.window.document,
+			asyncRenderCallback: resolveCompleted,
 		});
-		using result = StandaloneServices.get(IMarkdownRendererService).render(
-			{ value: '```MarkdownTest\nword <img>\n```' },
-			{
-				ownerDocument: dom.window.document,
-				asyncRenderCallback: resolveCompleted,
-			},
-		);
 		await completed;
 		const code = result.element.querySelector('pre > code')!;
 		assert.equal(code.ownerDocument, dom.window.document);
@@ -405,22 +332,9 @@ test('standalone editors can start without allocating a model or worker and atta
 	using editor = stanza.editor.create(container, { model: null, value: 'ignored', language: 'typescript' });
 	const id = editor.getId();
 	assert.equal(typeof id, 'string');
-	assert.deepEqual(
-		{
-			model: editor.getModel(),
-			value: editor.getValue(),
-			state: editor.saveViewState(),
-			createdModels,
-			workers: createdWorkerCount - workers,
-		},
-		{
-			model: null,
-			value: '',
-			state: null,
-			createdModels: [],
-			workers: 0,
-		},
-	);
+	assert.deepEqual({ model: editor.getModel(), value: editor.getValue(), state: editor.saveViewState(), createdModels, workers: createdWorkerCount - workers }, {
+		model: null, value: '', state: null, createdModels: [], workers: 0,
+	});
 	assert.deepEqual(stanza.editor.getModels(), models);
 	assert.ok(stanza.editor.getEditors().includes(editor));
 	editor.layout({ width: 500, height: 200 });
@@ -497,18 +411,14 @@ test('standalone on-type providers retain triggers, model arguments, and registr
 test('standalone languages API replaces one language generation without stale registrations', () => {
 	const changes: string[] = [];
 	using listener = stanza.languages.onDidChangeLanguages(event => changes.push(event.languageId));
-	using descriptions = stanza.languages.registerLanguages([
-		{
-			description: { id: 'stanza-generation-a', extensions: ['.generation-a'] },
-		},
-	]);
+	using descriptions = stanza.languages.registerLanguages([{
+		description: { id: 'stanza-generation-a', extensions: ['.generation-a'] },
+	}]);
 
 	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), 'stanza-generation-a');
-	descriptions.replace([
-		{
-			description: { id: 'stanza-generation-b', extensions: ['.generation-b'] },
-		},
-	]);
+	descriptions.replace([{
+		description: { id: 'stanza-generation-b', extensions: ['.generation-b'] },
+	}]);
 	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), undefined);
 	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-b') }), 'stanza-generation-b');
 	assert.deepEqual(changes, ['stanza-generation-a', 'stanza-generation-a', 'stanza-generation-b']);
@@ -517,13 +427,9 @@ test('standalone languages API replaces one language generation without stale re
 test('standalone language events preserve listener context and dispose with the supplied store', () => {
 	using listeners = new DisposableStore();
 	const context = { calls: 0 };
-	stanza.languages.onDidChangeLanguages(
-		function (this: typeof context) {
-			this.calls += 1;
-		},
-		context,
-		listeners,
-	);
+	stanza.languages.onDidChangeLanguages(function (this: typeof context) {
+		this.calls += 1;
+	}, context, listeners);
 	using registration = stanza.languages.registerLanguages([{ description: { id: 'listener-context' } }]);
 	assert.equal(context.calls, 1);
 	listeners.dispose();
@@ -549,9 +455,7 @@ test('standalone languages API replaces provider batches atomically', () => {
 
 test('standalone languages API feeds the shared editor registries', async () => {
 	stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
-	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', {
-		comments: { lineComment: '//' },
-	});
+	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
 	using provider = stanza.languages.registerHoverProvider('stanza-public-test', {
 		provideHover: () => ({ contents: ['Public hover'] }),
 	});
@@ -562,16 +466,7 @@ test('standalone languages API feeds the shared editor registries', async () => 
 	assert.equal(model instanceof stanza.TextModel, true);
 	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
 	const signal = new AbortController().signal;
-	assert.deepEqual(
-		await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover(
-			{
-				...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-				position: new stanza.Position(1, 2),
-			},
-			signal,
-		),
-		{ contents: ['Public hover'] },
-	);
+	assert.deepEqual(await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new stanza.Position(1, 2) }, signal), { contents: ['Public hover'] });
 });
 
 test('standalone completion providers execute in a live editor', async () => {
@@ -585,16 +480,14 @@ test('standalone completion providers execute in a live editor', async () => {
 			requests += 1;
 			assert.equal(request.context.kind, stanza.languages.LanguageCompletionTriggerKind.Invoke);
 			return {
-				items: [
-					{
-						id: 'standalone-result',
-						label: 'standaloneResult',
-						kind: stanza.languages.LanguageCompletionItemKind.Text,
-						range: stanza.Range.fromPositions(request.position),
-						insertText: 'standaloneResult',
-						insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
-					},
-				],
+				items: [{
+					id: 'standalone-result',
+					label: 'standaloneResult',
+					kind: stanza.languages.LanguageCompletionItemKind.Text,
+					range: stanza.Range.fromPositions(request.position),
+					insertText: 'standaloneResult',
+					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
+				}],
 				isIncomplete: false,
 			};
 		},
@@ -614,7 +507,10 @@ test('standalone completion providers execute in a live editor', async () => {
 });
 
 test('standalone API registers URI and language identity with model lifecycle events', () => {
-	using descriptions = stanza.languages.registerLanguages([{ description: { id: 'typescript', extensions: ['.ts'] } }, { description: { id: 'javascript', extensions: ['.js'] } }]);
+	using descriptions = stanza.languages.registerLanguages([
+		{ description: { id: 'typescript', extensions: ['.ts'] } },
+		{ description: { id: 'javascript', extensions: ['.js'] } },
+	]);
 	const resource = URI.parse('inmemory://stanza/registry.ts');
 	const created: string[] = [];
 	const disposed: string[] = [];
@@ -641,9 +537,21 @@ test('standalone createModel infers language from URI or first line unless langu
 		{ description: { id: 'stanza-uri-inferred', extensions: ['.stanza-inferred'] } },
 		{ description: { id: 'stanza-first-line-inferred', firstLine: '^#!.*\\bstanza-inferred\\b' } },
 	]);
-	using uriModel = stanza.editor.createModel('plain content', undefined, URI.parse('inmemory://stanza/model.stanza-inferred'));
-	using firstLineModel = stanza.editor.createModel('#!/usr/bin/env stanza-inferred\nplain content', undefined, URI.parse('inmemory://stanza/script'));
-	using explicitModel = stanza.editor.createModel('#!/usr/bin/env stanza-inferred', 'plaintext', URI.parse('inmemory://stanza/explicit.stanza-inferred'));
+	using uriModel = stanza.editor.createModel(
+		'plain content',
+		undefined,
+		URI.parse('inmemory://stanza/model.stanza-inferred'),
+	);
+	using firstLineModel = stanza.editor.createModel(
+		'#!/usr/bin/env stanza-inferred\nplain content',
+		undefined,
+		URI.parse('inmemory://stanza/script'),
+	);
+	using explicitModel = stanza.editor.createModel(
+		'#!/usr/bin/env stanza-inferred',
+		'plaintext',
+		URI.parse('inmemory://stanza/explicit.stanza-inferred'),
+	);
 
 	assert.equal(uriModel.getLanguageId(), 'stanza-uri-inferred');
 	assert.equal(firstLineModel.getLanguageId(), 'stanza-first-line-inferred');
@@ -747,28 +655,24 @@ test('standalone creation event exposes an assembled editor and caller-owned mod
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = stanza.editor.createModel('caller text', 'plaintext', URI.parse('inmemory://stanza/event-ready.txt'));
 	const observations: unknown[] = [];
-	using listener = stanza.editor.onDidCreateEditor(editor =>
-		observations.push({
-			model: editor.getModel(),
-			registered: stanza.editor.getEditors().includes(editor),
-			mounted: container.contains(editor.getDomNode()),
-			placeholder: editor.getContribution('editor.contrib.placeholderText') !== null,
-			find: editor.getContribution('editor.contrib.findController') !== null,
-			theme: container.getAttribute('data-color-theme'),
-		}),
-	);
+	using listener = stanza.editor.onDidCreateEditor(editor => observations.push({
+		model: editor.getModel(),
+		registered: stanza.editor.getEditors().includes(editor),
+		mounted: container.contains(editor.getDomNode()),
+		placeholder: editor.getContribution('editor.contrib.placeholderText') !== null,
+		find: editor.getContribution('editor.contrib.findController') !== null,
+		theme: container.getAttribute('data-color-theme'),
+	}));
 	const editor = stanza.editor.create(container, { model, placeholder: 'Start typing' });
 
-	assert.deepEqual(observations, [
-		{
-			model,
-			registered: true,
-			mounted: true,
-			placeholder: true,
-			find: true,
-			theme: 'ash-light',
-		},
-	]);
+	assert.deepEqual(observations, [{
+		model,
+		registered: true,
+		mounted: true,
+		placeholder: true,
+		find: true,
+		theme: 'ash-light',
+	}]);
 	editor.dispose();
 	assert.equal(model.isDisposed(), false);
 	assert.equal(container.querySelector('.stanza-editor'), null);
@@ -805,23 +709,12 @@ test('standalone editor releases its eager contribution with the editor', () => 
 	let created = 0;
 	let disposed = 0;
 	class TrackingContribution extends AbstractDisposable {
-		constructor() {
-			super();
-			created += 1;
-		}
-		protected override disposeCore(): void {
-			disposed += 1;
-		}
+		constructor() { super(); created += 1; }
+		protected override disposeCore(): void { disposed += 1; }
 	}
 	const editor = stanza.editor.create(container, {
 		value: 'tracked',
-		contributions: [
-			{
-				id: 'editor.contrib.standaloneLifecycleTest',
-				ctor: TrackingContribution,
-				instantiation: EditorContributionInstantiation.Eager,
-			},
-		],
+		contributions: [{ id: 'editor.contrib.standaloneLifecycleTest', ctor: TrackingContribution, instantiation: EditorContributionInstantiation.Eager }],
 	});
 
 	assert.equal(created, 1);
@@ -865,27 +758,28 @@ test('standalone editor releases an implicit model on switch and retains caller-
 		const modelEvents: string[] = [];
 		using listener = editor.onDidChangeModel(event => modelEvents.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
 		editor.setModel(caller);
-		assert.deepEqual(
-			{
-				ownedDisposed: owned.isDisposed(),
-				ownedRegistered: stanza.editor.getModel(ownedResource) !== null,
-				currentModel: editor.getModel(),
-				rootRetained: editor.getDomNode() === root,
-				registeredEditors: stanza.editor.getEditors().filter(candidate => candidate === editor).length,
-			},
-			{
-				ownedDisposed: true,
-				ownedRegistered: false,
-				currentModel: caller,
-				rootRetained: true,
-				registeredEditors: 1,
-			},
-		);
+		assert.deepEqual({
+			ownedDisposed: owned.isDisposed(),
+			ownedRegistered: stanza.editor.getModel(ownedResource) !== null,
+			currentModel: editor.getModel(),
+			rootRetained: editor.getDomNode() === root,
+			registeredEditors: stanza.editor.getEditors().filter(candidate => candidate === editor).length,
+		}, {
+			ownedDisposed: true,
+			ownedRegistered: false,
+			currentModel: caller,
+			rootRetained: true,
+			registeredEditors: 1,
+		});
 		editor.setModel(null);
 		assert.equal(editor.getModel(), null);
 		assert.equal(caller.isDisposed(), false);
 		editor.setModel(caller);
-		assert.deepEqual(modelEvents, [`${ownedResource}->${caller.uri}`, `${caller.uri}->undefined`, `undefined->${caller.uri}`]);
+		assert.deepEqual(modelEvents, [
+			`${ownedResource}->${caller.uri}`,
+			`${caller.uri}->undefined`,
+			`undefined->${caller.uri}`,
+		]);
 	} finally {
 		editor.dispose();
 		assert.equal(createdWorkerCount, terminatedWorkerCount);
@@ -919,29 +813,22 @@ test('standalone editors keep caller-owned models and selections isolated when o
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const firstModel = stanza.editor.createModel('shared', 'plaintext', URI.parse('inmemory://stanza/switch-shared.txt'));
 	const secondModel = stanza.editor.createModel('other', 'plaintext', URI.parse('inmemory://stanza/switch-other.txt'));
-	const switching = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {
-		model: firstModel,
-	});
-	const staying = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('aside')!, {
-		model: firstModel,
-	});
+	const switching = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model: firstModel });
+	const staying = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('aside')!, { model: firstModel });
 	try {
 		switching.setModel(secondModel);
 		firstModel.setValue('still shared');
-		assert.deepEqual(
-			{
-				switchingValue: switching.getValue(),
-				stayingValue: staying.getValue(),
-				firstDisposed: firstModel.isDisposed(),
-				secondDisposed: secondModel.isDisposed(),
-			},
-			{
-				switchingValue: 'other',
-				stayingValue: 'still shared',
-				firstDisposed: false,
-				secondDisposed: false,
-			},
-		);
+		assert.deepEqual({
+			switchingValue: switching.getValue(),
+			stayingValue: staying.getValue(),
+			firstDisposed: firstModel.isDisposed(),
+			secondDisposed: secondModel.isDisposed(),
+		}, {
+			switchingValue: 'other',
+			stayingValue: 'still shared',
+			firstDisposed: false,
+			secondDisposed: false,
+		});
 		switching.setValue('changed other');
 		assert.equal(staying.getValue(), 'still shared');
 		switching.setPosition(new stanza.Position(1, 5));
@@ -965,14 +852,7 @@ test('standalone editor rejects unregistered models and conflicting model option
 	model.dispose();
 
 	const registered = stanza.editor.createModel('registered', 'plaintext', URI.parse('inmemory://stanza/conflict.txt'));
-	assert.throws(
-		() =>
-			stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {
-				model: registered,
-				value: 'conflict',
-			}),
-		/cannot be combined/,
-	);
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model: registered, value: 'conflict' }), /cannot be combined/);
 	registered.dispose();
 	const lateConfigurations = new TestLanguageConfigurationService();
 	const lateOverride = new LanguageFeaturesService();
@@ -994,9 +874,7 @@ suite('standalone browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA;');
 			await page.keyboard.press('ControlOrMeta+z');
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
-		} finally {
-			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-		}
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
 	});
 
 	test('product format on type handles Enter through the public typing event', async function () {
@@ -1009,9 +887,7 @@ suite('standalone browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA\n');
 			await page.keyboard.press('ControlOrMeta+z');
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
-		} finally {
-			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-		}
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
 	});
 
 	for (const locale of ['en', 'zh-CN'] as const) {
@@ -1041,9 +917,7 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'));
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('SECOND');
 				await expect(picker).toHaveCount(0);
-			} finally {
-				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-			}
+			} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
 		});
 	}
 
@@ -1129,10 +1003,7 @@ suite('standalone browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('gamma beta alpha');
 		await input.press('ControlOrMeta+z');
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
-		for (const [command, value] of [
-			['Format Document', 'formatted'],
-			['Format Selection', 'selection beta alpha'],
-		]) {
+		for (const [command, value] of [['Format Document', 'formatted'], ['Format Selection', 'selection beta alpha']]) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 			await input.press('Shift+F10');
 			await page.getByRole('menuitem', { name: command, exact: true }).click();
@@ -1185,10 +1056,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
-		for (const [command, kind] of [
-			['Refactor...', 'refactor.extract'],
-			['Source Action...', 'source.organizeImports'],
-		]) {
+		for (const [command, kind] of [['Refactor...', 'refactor.extract'], ['Source Action...', 'source.organizeImports']]) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 			await input.press('Shift+F10');
 			await page.getByRole('menuitem', { name: command, exact: true }).click();
@@ -1208,10 +1076,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		const input = page.locator('#caller .stanza-editor-input[aria-label="caller.txt"]');
-		for (const [command, expansion, child] of [
-			['Peek Call Hierarchy', 'Callers for alpha', 'caller'],
-			['Peek Type Hierarchy', 'Supertypes for alpha', 'base'],
-		]) {
+		for (const [command, expansion, child] of [['Peek Call Hierarchy', 'Callers for alpha', 'caller'], ['Peek Type Hierarchy', 'Supertypes for alpha', 'base']]) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 			await input.press('Shift+F10');
 			await page.getByRole('menuitem', { name: 'Peek', exact: true }).click();
@@ -1264,13 +1129,11 @@ suite('standalone browser component', () => {
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
 			await expect.poll(() => renderedLines.allTextContents()).toEqual(lines);
-			const widths = await renderedLines.evaluateAll(elements =>
-				elements.map(element => {
-					const range = document.createRange();
-					range.selectNodeContents(element);
-					return range.getBoundingClientRect().width;
-				}),
-			);
+			const widths = await renderedLines.evaluateAll(elements => elements.map(element => {
+				const range = document.createRange();
+				range.selectNodeContents(element);
+				return range.getBoundingClientRect().width;
+			}));
 			expect(widths[0]).toBeGreaterThan(0);
 			for (const width of widths) {
 				expect(Math.abs(width - widths[0]!)).toBeLessThan(1);
@@ -1685,21 +1548,12 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareStandaloneCommands());
 		await page.locator('#caller .stanza-editor-input').focus();
 		await page.keyboard.press('F8');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({
-			calls: ['key'],
-			registered: true,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key'], registered: true });
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneCommand('payload'))).toBe('payload');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({
-			calls: ['key', 'alias:payload'],
-			registered: true,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key', 'alias:payload'], registered: true });
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseStandaloneCommands());
 		await page.keyboard.press('F8');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({
-			calls: ['key', 'alias:payload'],
-			registered: false,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({ calls: ['key', 'alias:payload'], registered: false });
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -1731,10 +1585,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareStandaloneAction());
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).toEqual({
-			calls: [],
-			available: true,
-			menu: true,
-			registered: true,
+			calls: [], available: true, menu: true, registered: true,
 		});
 		await page.locator('#caller .stanza-editor-input').focus();
 		await page.keyboard.press('F6');
@@ -1749,13 +1600,12 @@ suite('standalone browser component', () => {
 		await picker.getByRole('combobox').fill('Standalone test action');
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Standalone test action');
 		await page.keyboard.press('Enter');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual(['caller:key', 'caller:direct', 'caller:command', 'caller:key']);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual([
+			'caller:key', 'caller:direct', 'caller:command', 'caller:key',
+		]);
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseStandaloneAction());
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).toEqual({
-			calls: ['caller:key', 'caller:direct', 'caller:command', 'caller:key'],
-			available: false,
-			menu: false,
-			registered: false,
+			calls: ['caller:key', 'caller:direct', 'caller:command', 'caller:key'], available: false, menu: false, registered: false,
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -1795,17 +1645,14 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.type(' attached');
 		await expect(page.locator('#caller .view-line')).toContainText(['caller attached']);
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.detachEmptyEditor())).toEqual({
-			value: 'caller attached',
-			modelDisposed: false,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.detachEmptyEditor())).toEqual({ value: 'caller attached', modelDisposed: false });
 		await expect(page.locator('#empty .stanza-editor-input')).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		await expect(page.locator('#empty')).toHaveCount(0);
 		expect(errors).toEqual([]);
 	});
 
-	async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number }> {
+	async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number; }> {
 		const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
 		await expect(text).toHaveText('  function inner() {');
 		return text.evaluate(element => {
@@ -1890,10 +1737,7 @@ suite('standalone browser component', () => {
 					await page.evaluate(kind => window.ashStandaloneIntegration.prepareContributionRequests(kind), kind);
 					if (initiallyOff) {
 						expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
-						await page.evaluate(
-							kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }),
-							kind,
-						);
+						await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }), kind);
 					}
 					if (kind === 'highlights' && !initiallyOff) await page.keyboard.press('ArrowRight');
 					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
@@ -1902,20 +1746,13 @@ suite('standalone browser component', () => {
 					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
 					expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
 					await page.keyboard.press('ArrowRight');
-					await page.evaluate(
-						kind =>
-							window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true, colorDecoratorsLimit: 1 } : { occurrencesHighlight: 'singleFile' }),
-						kind,
-					);
+					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true, colorDecoratorsLimit: 1 } : { occurrencesHighlight: 'singleFile' }), kind);
 					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
 					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
 					expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted).toBe(true);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
 					expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
-					await page.evaluate(
-						kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }),
-						kind,
-					);
+					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }), kind);
 					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(3);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(2));
 					await expect.poll(() => page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(kind === 'colors' ? 1 : 2);
@@ -1972,12 +1809,7 @@ suite('standalone browser component', () => {
 				const button = await buttons.first().elementHandle();
 				await buttons.first().focus();
 				await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590));
-				expect(
-					await button!.evaluate(element => ({
-						connected: element.isConnected,
-						focused: document.activeElement === element,
-					})),
-				).toEqual({ connected: true, focused: true });
+				expect(await button!.evaluate(element => ({ connected: element.isConnected, focused: document.activeElement === element }))).toEqual({ connected: true, focused: true });
 				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { maxLineCount: 1 } }));
 				await expect(buttons).toHaveCount(1);
 				await expect(buttons.first()).toHaveText('function outer() {');
@@ -1985,11 +1817,7 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: false } }));
 				await expect(buttons).toHaveCount(0);
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.updateContributionOptions({
-						stickyScroll: { enabled: true, maxLineCount: 5 },
-					}),
-				);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: true, maxLineCount: 5 } }));
 				await expect(buttons).toHaveCount(2);
 			});
 		}
@@ -2037,11 +1865,7 @@ suite('standalone browser component', () => {
 			await expect.poll(() => buttons.first().evaluate(element => element.getBoundingClientRect().height)).toBe(28);
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200, 80));
 			await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '-80px');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.updateContributionOptions({
-					stickyScroll: { scrollWithEditor: false },
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { scrollWithEditor: false } }));
 			await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '0px');
 			for (const theme of ['ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
@@ -2049,11 +1873,7 @@ suite('standalone browser component', () => {
 				await expect(buttons.last()).toBeFocused();
 				const focus = await buttons.last().evaluate(element => {
 					const style = getComputedStyle(element);
-					return {
-						width: style.outlineWidth,
-						color: style.outlineColor,
-						token: style.getPropertyValue('--ash-focusBorder').trim(),
-					};
+					return { width: style.outlineWidth, color: style.outlineColor, token: style.getPropertyValue('--ash-focusBorder').trim() };
 				});
 				expect(focus.width).toBe('1px');
 				expect(focus.token).not.toBe('');
@@ -2205,12 +2025,10 @@ suite('standalone browser component', () => {
 			const folds = page.locator('#caller .stanza-editor-sticky-scroll-folding');
 			await expect(folds).toHaveCount(2);
 			await expect(folds.last().locator('.ash-icon')).toHaveCount(1);
-			expect(
-				await folds.last().evaluate(element => {
-					const icon = element.querySelector('.ash-icon');
-					return icon !== null && getComputedStyle(icon, '::before').color === getComputedStyle(element).color;
-				}),
-			).toBe(true);
+			expect(await folds.last().evaluate(element => {
+				const icon = element.querySelector('.ash-icon');
+				return icon !== null && getComputedStyle(icon, '::before').color === getComputedStyle(element).color;
+			})).toBe(true);
 			const expandedIcon = await folds.last().locator('.ash-icon').getAttribute('data-ash-icon-id');
 			await folds.last().click();
 			await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
@@ -2358,10 +2176,7 @@ suite('standalone browser component', () => {
 			});
 			const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
 			await expect(text).toHaveText('  function inner() {');
-			await text
-				.locator('span')
-				.first()
-				.click({ modifiers: ['ControlOrMeta'] });
+			await text.locator('span').first().click({ modifiers: ['ControlOrMeta'] });
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().filter(request => !request.aborted).length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('model'));
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(request => request.aborted)).toBe(true);
@@ -2396,11 +2211,7 @@ suite('standalone browser component', () => {
 			await expect(toggle).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).toHaveCount(0);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).toEqual({
-				callerEnabled: false,
-				ownedEnabled: true,
-				inChordMode: false,
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).toEqual({ callerEnabled: false, ownedEnabled: true, inChordMode: false });
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 		});
 
@@ -2408,9 +2219,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			const notificationErrors: string[] = [];
-			page.on('console', message => {
-				if (message.type() === 'error') notificationErrors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') notificationErrors.push(message.text()); });
 			await page.goto('/standalone.html');
 			await page.evaluate(() => {
 				window.ashStandaloneIntegration.prepareStickyHeaders();
@@ -2424,11 +2233,7 @@ suite('standalone browser component', () => {
 				await expect(menu).toBeVisible();
 				const colors = await menu.evaluate(element => {
 					const style = getComputedStyle(element.parentElement!);
-					return {
-						background: style.backgroundColor,
-						token: style.getPropertyValue('--ash-editor-background').trim(),
-						position: style.position,
-					};
+					return { background: style.backgroundColor, token: style.getPropertyValue('--ash-editor-background').trim(), position: style.position };
 				});
 				expect(colors.token).not.toBe('');
 				expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
@@ -2617,12 +2422,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.registerBundledThemes());
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.finishInlayRequest(0, 'parameter:', {
-					paddingLeft: true,
-					paddingRight: true,
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'parameter:', { paddingLeft: true, paddingRight: true }));
 			const hint = page.locator('#caller .stanza-editor-inlay-hint');
 			await expect(hint).toBeVisible();
 			const geometry = await page.evaluate(() => {
@@ -2636,13 +2436,7 @@ suite('standalone browser component', () => {
 					const range = document.createRange();
 					range.setStart(node, offset);
 					range.setEnd(node, offset + 5);
-					return {
-						hintRight: hint.getBoundingClientRect().right,
-						valueLeft: range.getBoundingClientRect().left,
-						top: range.getBoundingClientRect().top,
-						height: range.getBoundingClientRect().height,
-						label: hint.textContent,
-					};
+					return { hintRight: hint.getBoundingClientRect().right, valueLeft: range.getBoundingClientRect().left, top: range.getBoundingClientRect().top, height: range.getBoundingClientRect().height, label: hint.textContent };
 				}
 				throw new Error('Missing original value after inlay rendering');
 			});
@@ -2652,10 +2446,7 @@ suite('standalone browser component', () => {
 			for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light'] as const) {
 				await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 				await expect(hint).toBeVisible();
-				await testInfo.attach(theme, {
-					body: await page.locator('#caller').screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(theme, { body: await page.locator('#caller').screenshot(), contentType: 'image/png' });
 			}
 			await page.mouse.click(geometry.valueLeft + 1, geometry.top + geometry.height / 2);
 			await page.keyboard.type('x');
@@ -2705,17 +2496,9 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
 			const editorState = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests()))
-				.toEqual([
-					{
-						text: 'call(value)',
-						languageId: 'plaintext',
-						resource: 'inmemory://stanza/caller.txt',
-						range: '[1,1 -> 1,12]',
-						aborted: false,
-					},
-				]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toEqual([{
+				text: 'call(value)', languageId: 'plaintext', resource: 'inmemory://stanza/caller.txt', range: '[1,1 -> 1,12]', aborted: false,
+			}]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
 			const hint = page.locator('#caller .stanza-editor-inlay-hint');
 			await expect(hint).toHaveText('value:');
@@ -2744,13 +2527,9 @@ suite('standalone browser component', () => {
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => request.text))).toEqual(['call(value)', 'bacall(value)']);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('language'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => [request.languageId, request.aborted])))
-				.toEqual([
-					['plaintext', false],
-					['plaintext', true],
-					['typescript', false],
-				]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => [request.languageId, request.aborted]))).toEqual([
+				['plaintext', false], ['plaintext', true], ['typescript', false],
+			]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(2, 'current:'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('current:');
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(1, 'stale:'));
@@ -2762,9 +2541,7 @@ suite('standalone browser component', () => {
 
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
-			page.on('console', message => {
-				if (message.type() === 'error') errors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
@@ -2830,9 +2607,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			const errors: string[] = [];
-			page.on('console', message => {
-				if (message.type() === 'error') errors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 			await page.goto('/standalone.html');
 			await page.evaluate(() => {
 				window.ashStandaloneIntegration.prepareInlayRequests();
@@ -3045,9 +2820,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('{([])}', [1]));
 		const colors = page.locator('#caller .view-line [class*="stanza-editor-bracket-level-"]');
 		await expect(colors).toHaveCount(6);
-		expect(await colors.evaluateAll(elements => elements.map(element => [...element.classList].find(value => value.startsWith('stanza-editor-bracket-level-'))))).toEqual(
-			[1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`),
-		);
+		expect(await colors.evaluateAll(elements => elements.map(element => [...element.classList].find(value => value.startsWith('stanza-editor-bracket-level-'))))).toEqual([1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`));
 		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(false, false));
 		await expect(colors).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(true, true));
@@ -3080,10 +2853,7 @@ suite('standalone browser component', () => {
 		await expect(guides).toHaveCount(2);
 		await expect(guides.last()).toHaveClass(/active/);
 		await expect(page.locator('#caller .stanza-editor-symbol-icon')).toHaveCount(0);
-		const positions = (line: number) =>
-			row(line)
-				.locator('.stanza-editor-indent-guide')
-				.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
+		const positions = (line: number) => row(line).locator('.stanza-editor-indent-guide').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
 		expect(await positions(2)).toEqual(await positions(1));
 		expect(await positions(2)).toEqual(await positions(3));
 		for (const [scheme, inactive, active] of [
@@ -3098,12 +2868,9 @@ suite('standalone browser component', () => {
 			await expect(guides.first()).toHaveCSS('border-left-width', '1px');
 			await expect(guides.last()).toHaveCSS('border-left-width', '1px');
 		}
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.setGuideTheme('Dark', {
-				'editorIndentGuide.background1': '#123456',
-				'editorIndentGuide.activeBackground1': '#abcdef',
-			}),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
+			'editorIndentGuide.background1': '#123456', 'editorIndentGuide.activeBackground1': '#abcdef',
+		}));
 		await expect(guides.first()).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
 		await expect(guides.last()).toHaveCSS('border-left-color', 'rgb(171, 205, 239)');
 		await expect(guides.last()).toHaveCSS('pointer-events', 'none');
@@ -3135,22 +2902,15 @@ suite('standalone browser component', () => {
 		await expect(levelTwo.first()).toHaveClass(/active/);
 		await expect(levelOne.first()).toHaveCSS('border-left-width', '1px');
 		await expect(levelTwo.first()).toHaveCSS('border-left-width', '1px');
-		expect(
-			await levelOne.evaluateAll(elements =>
-				elements.map(element => ({
-					height: element.getBoundingClientRect().height,
-					top: (element as HTMLElement).style.top,
-				})),
-			),
-		).toEqual([{ height: 10, top: '10px' }, ...Array(4).fill({ height: 20, top: '0px' }), { height: 10, top: '0px' }]);
+		expect(await levelOne.evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, top: (element as HTMLElement).style.top })))).toEqual([
+			{ height: 10, top: '10px' }, ...Array(4).fill({ height: 20, top: '0px' }), { height: 10, top: '0px' },
+		]);
 		const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal.stanza-editor-guide-level-2');
 		await expect(horizontal).toHaveCSS('border-top-width', '1px');
 		expect((await horizontal.boundingBox())!.width).toBeGreaterThan(0);
 		for (const [scheme, color] of [
-			['Dark', 'rgb(198, 120, 221)'],
-			['Light', 'rgb(136, 65, 160)'],
-			['HighContrastDark', 'rgb(255, 112, 232)'],
-			['HighContrastLight', 'rgb(136, 65, 160)'],
+			['Dark', 'rgb(198, 120, 221)'], ['Light', 'rgb(136, 65, 160)'],
+			['HighContrastDark', 'rgb(255, 112, 232)'], ['HighContrastLight', 'rgb(136, 65, 160)'],
 		] as const) {
 			await page.evaluate(scheme => window.ashStandaloneIntegration.setGuideTheme(scheme), scheme);
 			await expect(levelTwo.first()).toHaveCSS('border-left-color', color);
@@ -3159,19 +2919,12 @@ suite('standalone browser component', () => {
 			await expect(levelTwo.first()).toHaveCSS('border-left-width', '1px');
 			await expect(horizontal).toHaveCSS('border-top-width', '1px');
 		}
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.setGuideTheme('Dark', {
-				'editorBracketPairGuide.background1': '#123456',
-				'editorBracketPairGuide.activeBackground2': '#abcdef',
-			}),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
+			'editorBracketPairGuide.background1': '#123456', 'editorBracketPairGuide.activeBackground2': '#abcdef',
+		}));
 		await expect(levelOne.first()).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
 		await expect(levelTwo.first()).toHaveCSS('border-left-color', 'rgb(171, 205, 239)');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.configureGuides({
-				guides: { bracketPairs: 'active', bracketPairsHorizontal: false },
-			}),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ guides: { bracketPairs: 'active', bracketPairsHorizontal: false } }));
 		await expect(levelOne).toHaveCount(0);
 		await expect(levelTwo).toHaveCount(3);
 		await expect(horizontal).toHaveCount(0);
@@ -3193,12 +2946,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.prepareGuides(`    ${'word '.repeat(100)}`);
-			window.ashStandaloneIntegration.configureGuides({
-				wordWrap: 'wordWrapColumn',
-				wordWrapColumn: 24,
-				wrappingIndent: 'same',
-				guides: { bracketPairs: false },
-			});
+			window.ashStandaloneIntegration.configureGuides({ wordWrap: 'wordWrapColumn', wordWrapColumn: 24, wrappingIndent: 'same', guides: { bracketPairs: false } });
 		});
 		const rows = page.locator('#caller .view-line');
 		await expect.poll(() => rows.count()).toBeGreaterThan(1);
@@ -3229,20 +2977,15 @@ suite('standalone browser component', () => {
 		expect(columns).toEqual([columns[0], columns[0], columns[0]]);
 		const text = (await page.locator('#caller .view-line').nth(1).locator('.stanza-editor-line-text').boundingBox())!;
 		expect(columns[1]).toBeCloseTo(text.x);
-		const indent = await page
-			.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')
-			.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
+		const indent = await page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
 		expect(indent).not.toContain(columns[1]);
 	});
 
 	suite('scroll geometry separation', () => {
 		async function readAfterFrames(page: Page): Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>> {
-			return page.evaluate(
-				() =>
-					new Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>>(resolve => {
-						requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.ashStandaloneIntegration.readScrollGeometry())));
-					}),
-			);
+			return page.evaluate(() => new Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>>(resolve => {
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.ashStandaloneIntegration.readScrollGeometry())));
+			}));
 		}
 
 		for (const mode of ['scroll', 'reveal'] as const) {
@@ -3256,28 +2999,8 @@ suite('standalone browser component', () => {
 					const before = await readAfterFrames(page);
 					const immediate = await page.evaluate(mode => window.ashStandaloneIntegration.appendAndReveal(mode), mode);
 					const settled = await readAfterFrames(page);
-					await testInfo.attach('scroll-geometry.json', {
-						body: JSON.stringify(
-							{
-								before,
-								immediate,
-								settled,
-								events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()),
-							},
-							null,
-							2,
-						),
-						contentType: 'application/json',
-					});
-					expect(settled).toEqual({
-						...before,
-						version: immediate.version,
-						lineCount: 20,
-						logicalTop: 234,
-						domTop: 234,
-						domHeight: 360,
-						contentHeight: 360,
-					});
+					await testInfo.attach('scroll-geometry.json', { body: JSON.stringify({ before, immediate, settled, events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()) }, null, 2), contentType: 'application/json' });
+					expect(settled).toEqual({ ...before, version: immediate.version, lineCount: 20, logicalTop: 234, domTop: 234, domHeight: 360, contentHeight: 360 });
 					expect(immediate.version).toBeGreaterThan(before.version);
 					await expect(page.locator('#caller .view-line').filter({ hasText: /^row-20$/ })).toBeVisible();
 				} finally {
@@ -3297,13 +3020,7 @@ suite('standalone browser component', () => {
 					await readAfterFrames(page);
 					await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(234));
 					const before = await readAfterFrames(page);
-					expect(before).toMatchObject({
-						logicalTop: 234,
-						domTop: 234,
-						focus: 'editor',
-						caretLine: 1,
-						lineCount: 20,
-					});
+					expect(before).toMatchObject({ logicalTop: 234, domTop: 234, focus: 'editor', caretLine: 1, lineCount: 20 });
 					await page.evaluate(() => window.ashStandaloneIntegration.openScrollGeometryPicker());
 					const input = page.locator('.ash-quick-pick-input input');
 					await expect(input).toBeFocused();
@@ -3311,26 +3028,11 @@ suite('standalone browser component', () => {
 					if (close === 'Escape') {
 						await input.press('Escape');
 					} else {
-						await page
-							.getByRole('option')
-							.filter({ has: page.getByText('Keep editor position', { exact: true }) })
-							.click();
+						await page.getByRole('option').filter({ has: page.getByText('Keep editor position', { exact: true }) }).click();
 					}
 					await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
 					const settled = await readAfterFrames(page);
-					await testInfo.attach('scroll-geometry.json', {
-						body: JSON.stringify(
-							{
-								before,
-								open,
-								settled,
-								events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()),
-							},
-							null,
-							2,
-						),
-						contentType: 'application/json',
-					});
+					await testInfo.attach('scroll-geometry.json', { body: JSON.stringify({ before, open, settled, events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()) }, null, 2), contentType: 'application/json' });
 					expect(open).toEqual({ ...before, focus: 'picker' });
 					expect(settled).toEqual({ ...before, commandExecutions: close === 'command' ? 1 : 0 });
 				} finally {
@@ -3346,10 +3048,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.prepareGuides(['{', '    child', '}', ...Array(50).fill('tail')].join('\n'));
-			window.ashStandaloneIntegration.configureGuides({
-				showFoldingControls: 'always',
-				scrollBeyondLastLine: false,
-			});
+			window.ashStandaloneIntegration.configureGuides({ showFoldingControls: 'always', scrollBeyondLastLine: false });
 		});
 		const guides = page.locator('#caller .stanza-editor-bracket-guide');
 		await expect(guides).toHaveCount(3);
@@ -3373,17 +3072,11 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineJoin());
 		const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.joinLines'));
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-			value: '😀 one two\r\nkeep\r\n三 four',
-			selections: ['[3,2 -> 3,2]', '[1,7 -> 1,7]'],
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '😀 one two\r\nkeep\r\n三 four', selections: ['[3,2 -> 3,2]', '[1,7 -> 1,7]'] });
 		await page.keyboard.press('ControlOrMeta+z');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.deleteLines'));
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-			value: '  two\r\nkeep\r\n  four',
-			selections: ['[3,1 -> 3,1]', '[1,1 -> 1,1]'],
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '  two\r\nkeep\r\n  four', selections: ['[3,1 -> 3,1]', '[1,1 -> 1,1]'] });
 		await page.keyboard.press('ControlOrMeta+z');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
 	});
@@ -3398,10 +3091,7 @@ suite('standalone browser component', () => {
 			else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('one two');
 			await page.keyboard.press('ControlOrMeta+z');
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-				value: '(one) [two]',
-				selections: ['[1,1 -> 1,1]', '[1,7 -> 1,7]'],
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '(one) [two]', selections: ['[1,1 -> 1,1]', '[1,7 -> 1,7]'] });
 		});
 	}
 
@@ -3413,15 +3103,9 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(value) keep', [1, [13, 9]]));
 			if (entry === 'shortcut') await page.keyboard.press('ControlOrMeta+Alt+Backspace');
 			else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-				value: 'value keep',
-				selections: ['[1,1 -> 1,1]', '[1,11 -> 1,7]'],
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'value keep', selections: ['[1,1 -> 1,1]', '[1,11 -> 1,7]'] });
 			await page.keyboard.press('ControlOrMeta+z');
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-				value: '(value) keep',
-				selections: ['[1,1 -> 1,1]', '[1,13 -> 1,9]'],
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '(value) keep', selections: ['[1,1 -> 1,1]', '[1,13 -> 1,9]'] });
 		});
 	}
 
@@ -3486,14 +3170,7 @@ suite('standalone browser component', () => {
 				const { page } = browserTests;
 
 				await page.goto('/standalone.html');
-				await page.evaluate(
-					mode =>
-						window.ashStandaloneIntegration.prepareLineComment({
-							readOnly: mode === 'readonly',
-							languageId: mode === 'unsupported' ? 'plaintext' : 'typescript',
-						}),
-					mode,
-				);
+				await page.evaluate(mode => window.ashStandaloneIntegration.prepareLineComment({ readOnly: mode === 'readonly', languageId: mode === 'unsupported' ? 'plaintext' : 'typescript' }), mode);
 				const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 				await page.keyboard.press(kind === 'line' ? 'ControlOrMeta+/' : 'Alt+Shift+a');
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
@@ -3539,10 +3216,7 @@ suite('standalone browser component', () => {
 		] as const) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareMoveSelectedText());
 			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.moveCarret${direction}Action`);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-				value,
-				selections: [selection],
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value, selections: [selection] });
 			await page.keyboard.press('ControlOrMeta+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('012345');
 		}
@@ -3554,10 +3228,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareFinalNewLine());
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertFinalNewLine'));
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-			value: 'alpha\n',
-			selections: ['[1,2 -> 1,4]'],
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'alpha\n', selections: ['[1,2 -> 1,4]'] });
 		await page.keyboard.press('ControlOrMeta+z');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
 	});
@@ -3571,10 +3242,7 @@ suite('standalone browser component', () => {
 			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
 			const delta = direction === 'Down' ? 1 : 0;
-			const copied = {
-				value: 'head\ntail\ntail\n\n',
-				selections: [`[${4 + delta},1 -> ${4 + delta},1]`, `[${2 + delta},3 -> ${2 + delta},1]`],
-			};
+			const copied = { value: 'head\ntail\ntail\n\n', selections: [`[${4 + delta},1 -> ${4 + delta},1]`, `[${2 + delta},3 -> ${2 + delta},1]`] };
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(copied);
 			await page.keyboard.press('ControlOrMeta+z');
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
@@ -3595,10 +3263,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
 			const copied = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 			const delta = direction === 'Down' ? 1 : 0;
-			expect(copied).toEqual({
-				value: 'aXlpha\naXlpha\nbeta\ngXma\ngXma',
-				selections: [`[${4 + delta},3 -> ${4 + delta},3]`, `[${1 + delta},3 -> ${1 + delta},3]`],
-			});
+			expect(copied).toEqual({ value: 'aXlpha\naXlpha\nbeta\ngXma\ngXma', selections: [`[${4 + delta},3 -> ${4 + delta},3]`, `[${1 + delta},3 -> ${1 + delta},3]`] });
 			await page.keyboard.type('!');
 			await page.keyboard.press('ControlOrMeta+z');
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(copied);
@@ -3642,12 +3307,7 @@ suite('standalone browser component', () => {
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		const selected = await page.evaluate(() => window.ashStandaloneIntegration.selectRange());
-		expect(selected).toEqual({
-			value: 'first\nsecond',
-			version: before.version,
-			selection: '[1,2 -> 2,4]',
-			focused: true,
-		});
+		expect(selected).toEqual({ value: 'first\nsecond', version: before.version, selection: '[1,2 -> 2,4]', focused: true });
 		await expect(page.locator('#caller .stanza-editor-selection')).toHaveCount(2);
 		await expect(input).toBeFocused();
 		await page.keyboard.type('X');
@@ -3674,38 +3334,16 @@ suite('standalone browser component', () => {
 		}));
 		expect(initial).toEqual({
 			events: [
-				{
-					model: 'inmemory://stanza/caller.txt',
-					registered: true,
-					mounted: true,
-					placeholder: true,
-					theme: 'ash-light',
-				},
-				{
-					model: 'inmemory://stanza/owned.txt',
-					registered: true,
-					mounted: true,
-					placeholder: true,
-					theme: 'ash-light',
-				},
+				{ model: 'inmemory://stanza/caller.txt', registered: true, mounted: true, placeholder: true, theme: 'ash-light' },
+				{ model: 'inmemory://stanza/owned.txt', registered: true, mounted: true, placeholder: true, theme: 'ash-light' },
 			],
 			caller: {
-				value: 'caller',
-				disposed: false,
-				registered: true,
-				modelRegistered: true,
-				mounted: true,
-				placeholder: true,
-				theme: 'ash-light',
+				value: 'caller', disposed: false, registered: true, modelRegistered: true,
+				mounted: true, placeholder: true, theme: 'ash-light',
 			},
 			owned: {
-				value: 'owned',
-				disposed: false,
-				registered: true,
-				modelRegistered: true,
-				mounted: true,
-				placeholder: true,
-				theme: 'ash-light',
+				value: 'owned', disposed: false, registered: true, modelRegistered: true,
+				mounted: true, placeholder: true, theme: 'ash-light',
 			},
 		});
 
@@ -3721,24 +3359,14 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseCaller());
 		await expect(page.locator('#caller .stanza-editor')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).toEqual({
-			value: 'changed after editor disposal',
-			disposed: false,
-			registered: false,
-			modelRegistered: true,
-			mounted: false,
-			placeholder: false,
-			theme: null,
+			value: 'changed after editor disposal', disposed: false, registered: false, modelRegistered: true,
+			mounted: false, placeholder: false, theme: null,
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseOwned());
 		await expect(page.locator('#owned .stanza-editor')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('owned'))).toEqual({
-			value: null,
-			disposed: true,
-			registered: false,
-			modelRegistered: false,
-			mounted: false,
-			placeholder: false,
-			theme: null,
+			value: null, disposed: true, registered: false, modelRegistered: false,
+			mounted: false, placeholder: false, theme: null,
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
@@ -3853,11 +3481,7 @@ suite('standalone browser component', () => {
 			caller: edited.callerFocused,
 			owned: edited.ownedFocused,
 			activeInput: edited.activeInput,
-		}).toEqual({
-			caller: true,
-			owned: false,
-			activeInput: 'caller',
-		});
+		}).toEqual({ caller: true, owned: false, activeInput: 'caller' });
 
 		await page.keyboard.press('ControlOrMeta+z');
 		const undone = await page.evaluate(() => window.ashStandaloneIntegration.readSelectionUndo());
@@ -3888,11 +3512,7 @@ suite('standalone browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/standalone.html');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.runEmptyWordPattern())).toEqual({
-			word: 'foo',
-			startColumn: 4,
-			endColumn: 7,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runEmptyWordPattern())).toEqual({ word: 'foo', startColumn: 4, endColumn: 7 });
 	});
 
 	for (const kind of ['codeAction', 'rename', 'parameterHints', 'queuedParameterHints'] as const) {
@@ -3929,37 +3549,20 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 				// The trigger action returns when its provider finishes; dispatch without waiting for it.
-				await page.evaluate(global => {
-					void window.ashStandaloneIntegration.runParameterHintCommand('editor.action.triggerParameterHints', global);
-				}, global);
+				await page.evaluate(global => { void window.ashStandaloneIntegration.runParameterHintCommand('editor.action.triggerParameterHints', global); }, global);
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
-				await page.evaluate(
-					signatures =>
-						window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
-							signatures,
-							activeSignature: 1,
-						}),
-					signatures,
-				);
+				await page.evaluate(signatures => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', { signatures, activeSignature: 1 }), signatures);
 				const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
 				const active = dialog.locator('.stanza-editor-parameter-hints-signature.active');
 				await expect(active).toHaveText('call(other)');
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({
-					supported: true,
-					visible: true,
-					multiple: true,
-				});
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: true, multiple: true });
 				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint', global), global);
 				await expect(active).toHaveText('call(last)');
 				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showPrevParameterHint', global), global);
 				await expect(active).toHaveText('call(other)');
 				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', global), global);
 				await expect(dialog).toBeHidden();
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({
-					supported: true,
-					visible: false,
-					multiple: false,
-				});
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: false, multiple: false });
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 				await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 			});
@@ -3980,10 +3583,7 @@ suite('standalone browser component', () => {
 					const active = dialog.locator('.stanza-editor-parameter-hints-signature.active');
 					await expect(dialog).toHaveAttribute('aria-description', /Up and Down/);
 					for (const [key, label] of [
-						['ArrowDown', 'call(other)'],
-						['ArrowDown', 'call(last)'],
-						['ArrowDown', 'call(value)'],
-						['ArrowUp', 'call(last)'],
+						['ArrowDown', 'call(other)'], ['ArrowDown', 'call(last)'], ['ArrowDown', 'call(value)'], ['ArrowUp', 'call(last)'],
 					]) {
 						await page.keyboard.press(`${modifier}${key}`);
 						await expect(active).toHaveText(label!);
@@ -4009,23 +3609,14 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(true, false));
 				await page.keyboard.press('ControlOrMeta+Shift+Space');
-				await page.evaluate(
-					({ signatures, direction }) =>
-						window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
-							signatures,
-							activeSignature: direction === 'next' ? 2 : 0,
-						}),
-					{ signatures, direction },
-				);
+				await page.evaluate(({ signatures, direction }) => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+					signatures, activeSignature: direction === 'next' ? 2 : 0,
+				}), { signatures, direction });
 				const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 				await page.keyboard.press(direction === 'next' ? 'ArrowDown' : 'ArrowUp');
 				await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({
-					supported: true,
-					visible: false,
-					multiple: false,
-				});
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: false, multiple: false });
 			});
 		}
 
@@ -4061,9 +3652,7 @@ suite('standalone browser component', () => {
 				const { page } = browserTests;
 
 				const errors: string[] = [];
-				page.on('console', message => {
-					if (message.type() === 'error') errors.push(message.text());
-				});
+				page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 				await page.keyboard.press('ControlOrMeta+Shift+Space');
@@ -4095,9 +3684,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			const errors: string[] = [];
-			page.on('console', message => {
-				if (message.type() === 'error') errors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
@@ -4123,11 +3710,7 @@ suite('standalone browser component', () => {
 			await expect(dialog).toBeVisible();
 			await expect(dialog.locator('.stanza-editor-parameter-hints-signature.active')).toHaveText('call(value): plaintext');
 			await expect(dialog.locator('strong')).toHaveText('value');
-			const position = await dialog.evaluate(element => ({
-				left: parseFloat((element as HTMLElement).style.left),
-				top: parseFloat((element as HTMLElement).style.top),
-				live: element.getAttribute('aria-live'),
-			}));
+			const position = await dialog.evaluate(element => ({ left: parseFloat((element as HTMLElement).style.left), top: parseFloat((element as HTMLElement).style.top), live: element.getAttribute('aria-live') }));
 			expect(position.left).toBeGreaterThan(8);
 			expect(position.top).toBeGreaterThan(8);
 			expect(position.live).toBe('polite');
@@ -4140,24 +3723,12 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
-					signatures: [
-						{
-							label: 'call(value)',
-							documentation: 'Adds a value',
-							parameters: [{ label: 'value', documentation: 'Value to add' }],
-							activeParameter: 0,
-						},
-						{
-							label: 'call(other)',
-							documentation: 'Uses another argument',
-							parameters: [{ label: 'other', documentation: 'Other argument' }],
-							activeParameter: 0,
-						},
-					],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+				signatures: [
+					{ label: 'call(value)', documentation: 'Adds a value', parameters: [{ label: 'value', documentation: 'Value to add' }], activeParameter: 0 },
+					{ label: 'call(other)', documentation: 'Uses another argument', parameters: [{ label: 'other', documentation: 'Other argument' }], activeParameter: 0 },
+				],
+			}));
 			const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
 			const documentation = dialog.locator('.stanza-editor-parameter-hints-documentation');
 			await expect(documentation).toHaveCount(1);
@@ -4168,14 +3739,12 @@ suite('standalone browser component', () => {
 			await expect(documentation).toHaveCount(1);
 			await expect(documentation.locator('div')).toHaveText(['Uses another argument', 'Other argument']);
 			await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
-			expect(
-				await documentation.evaluate(element => ({
-					border: getComputedStyle(element).borderTopWidth,
-					fontSize: getComputedStyle(element).fontSize,
-					whiteSpace: getComputedStyle(element).whiteSpace,
-					shadow: getComputedStyle(element.closest('.stanza-editor-parameter-hints')!).boxShadow,
-				})),
-			).toEqual({ border: '1px', fontSize: '11px', whiteSpace: 'pre-wrap', shadow: 'none' });
+			expect(await documentation.evaluate(element => ({
+				border: getComputedStyle(element).borderTopWidth,
+				fontSize: getComputedStyle(element).fontSize,
+				whiteSpace: getComputedStyle(element).whiteSpace,
+				shadow: getComputedStyle(element.closest('.stanza-editor-parameter-hints')!).boxShadow,
+			}))).toEqual({ border: '1px', fontSize: '11px', whiteSpace: 'pre-wrap', shadow: 'none' });
 			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		});
 
@@ -4185,17 +3754,9 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.evaluate(() => window.ashStandaloneIntegration.queueParameterHints('type'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))
-				.toEqual([
-					{
-						text: 'call(a,)',
-						languageId: 'plaintext',
-						position: '(1,8)',
-						context: { kind: 'triggerCharacter', triggerCharacter: ',', isRetrigger: false },
-						aborted: false,
-					},
-				]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([{
+				text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',', isRetrigger: false }, aborted: false,
+			}]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 		});
@@ -4207,14 +3768,12 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.type('(');
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
-					signatures: [
-						{ label: 'call(value)', parameters: [{ label: 'value' }] },
-						{ label: 'call(other)', parameters: [{ label: 'other' }] },
-					],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+				signatures: [
+					{ label: 'call(value)', parameters: [{ label: 'value' }] },
+					{ label: 'call(other)', parameters: [{ label: 'other' }] },
+				],
+			}));
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 			await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint'));
 
@@ -4227,10 +3786,7 @@ suite('standalone browser component', () => {
 			expect(requests[2]!.context).toMatchObject({
 				kind: 'contentChange',
 				isRetrigger: true,
-				activeSignatureHelp: {
-					activeSignature: 1,
-					signatures: [{ label: 'call(value)' }, { label: 'call(other)' }],
-				},
+				activeSignatureHelp: { activeSignature: 1, signatures: [{ label: 'call(value)' }, { label: 'call(other)' }] },
 			});
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(2, 'hints'));
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
@@ -4375,17 +3931,10 @@ suite('standalone browser component', () => {
 			await input.fill('result');
 			await input.press('Enter');
 			await input.press('Enter');
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests())).toEqual([
-				{
-					phase: 'edit',
-					languageId: 'plaintext',
-					version: before.version,
-					position: '(1,3)',
-					newName: 'result',
-					sameSnapshot: true,
-					aborted: false,
-				},
-			]);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests())).toEqual([{
+				phase: 'edit', languageId: 'plaintext', version: before.version, position: '(1,3)',
+				newName: 'result', sameSnapshot: true, aborted: false,
+			}]);
 			await expect(page.locator('#caller .stanza-editor-rename')).toHaveAttribute('aria-busy', 'true');
 			await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
@@ -4400,9 +3949,7 @@ suite('standalone browser component', () => {
 				const { page } = browserTests;
 
 				const errors: string[] = [];
-				page.on('console', message => {
-					if (message.type() === 'error') errors.push(message.text());
-				});
+				page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 				await page.goto('/standalone.html');
 				await page.evaluate(phase => window.ashStandaloneIntegration.prepareRenameRequests(phase), phase);
 				await page.keyboard.press('F2');
@@ -4456,9 +4003,7 @@ suite('standalone browser component', () => {
 				const { page } = browserTests;
 
 				const errors: string[] = [];
-				page.on('console', message => {
-					if (message.type() === 'error') errors.push(message.text());
-				});
+				page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareRenameRequests('edit'));
 				await page.keyboard.press('F2');
@@ -4554,17 +4099,15 @@ suite('standalone browser component', () => {
 				} else {
 					await action.press(activation);
 				}
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests())).toEqual([
-					{
-						phase: 'resolve',
-						languageId: 'plaintext',
-						version,
-						range: '[1,1 -> 1,6]',
-						original: true,
-						sameContext: true,
-						aborted: false,
-					},
-				]);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests())).toEqual([{
+					phase: 'resolve',
+					languageId: 'plaintext',
+					version,
+					range: '[1,1 -> 1,6]',
+					original: true,
+					sameContext: true,
+					aborted: false,
+				}]);
 				await expect(page.locator('.ash-action-widget')).toHaveAttribute('aria-busy', 'true');
 				await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
@@ -4593,9 +4136,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			const errors: string[] = [];
-			page.on('console', message => {
-				if (message.type() === 'error') errors.push(message.text());
-			});
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
 			await page.keyboard.press('ControlOrMeta+.');
@@ -4618,9 +4159,7 @@ suite('standalone browser component', () => {
 				const { page } = browserTests;
 
 				const errors: string[] = [];
-				page.on('console', message => {
-					if (message.type() === 'error') errors.push(message.text());
-				});
+				page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
 				await page.keyboard.press('ControlOrMeta+.');
@@ -4754,10 +4293,7 @@ suite('standalone browser component', () => {
 				const menu = button.closest('.ash-action-widget')!;
 				const bounds = shell.getBoundingClientRect();
 				return {
-					left: bounds.left,
-					top: bounds.top,
-					right: bounds.right,
-					bottom: bounds.bottom,
+					left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom,
 					background: getComputedStyle(menu).backgroundColor,
 					border: getComputedStyle(menu).borderTopStyle,
 					outline: getComputedStyle(button).outlineStyle,
@@ -4898,24 +4434,9 @@ suite('standalone browser component', () => {
 	});
 
 	for (const { placement, snippet, initial, expanded } of [
-		{
-			placement: 'interleaved',
-			snippet: '${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0',
-			initial: 'cona => A a',
-			expanded: 'conlong => LONG long',
-		},
-		{
-			placement: 'forward',
-			snippet: '${1/(.*)/${1:/upcase}/} ${1|a,long|}-$1$0',
-			initial: 'conA a-a',
-			expanded: 'conLONG long-long',
-		},
-		{
-			placement: 'nested forward mirror',
-			snippet: '${2:$1-${1|a,long|}} => ${1/(.*)/${1:/upcase}/}$0',
-			initial: 'cona-a => A',
-			expanded: 'conlong-long => LONG',
-		},
+		{ placement: 'interleaved', snippet: '${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0', initial: 'cona => A a', expanded: 'conlong => LONG long' },
+		{ placement: 'forward', snippet: '${1/(.*)/${1:/upcase}/} ${1|a,long|}-$1$0', initial: 'conA a-a', expanded: 'conLONG long-long' },
+		{ placement: 'nested forward mirror', snippet: '${2:$1-${1|a,long|}} => ${1/(.*)/${1:/upcase}/}$0', initial: 'cona-a => A', expanded: 'conlong-long => LONG' },
 	]) {
 		test(`snippet choices keep ${placement} transforms and mirrors together through undo and redo`, async function () {
 			const { page } = browserTests;
@@ -4963,20 +4484,14 @@ suite('standalone browser component', () => {
 		await expect(options).toHaveCount(2);
 		for (const option of await options.all()) expect((await option.boundingBox())!.height).toBe(22);
 		await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({
-			lineNumber: 1,
-			column: 4,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
 
 		await page.keyboard.press('ArrowDown');
 		await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
 		const optionId = await options.nth(1).getAttribute('id');
 		expect(optionId).toBeTruthy();
 		await expect(input).toHaveAttribute('aria-activedescendant', optionId!);
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({
-			lineNumber: 1,
-			column: 4,
-		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('conconsole');
 		await page.evaluate(() => {
@@ -5028,12 +4543,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ArrowRight');
 		await page.keyboard.type('X');
 		const typed = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
-		expect({
-			value: typed.value,
-			version: typed.version,
-			selection: typed.selection,
-			focused: typed.focused,
-		}).toEqual({
+		expect({ value: typed.value, version: typed.version, selection: typed.selection, focused: typed.focused }).toEqual({
 			value: 'firXst\nsecond',
 			version: undone.version + 1,
 			selection: '[1,5 -> 1,5]',
@@ -5056,10 +4566,7 @@ suite('standalone browser component', () => {
 		const character = await page.evaluate(() => {
 			const spans = [...document.querySelectorAll('#caller .view-line > span > span')];
 			const box = spans[0]?.getBoundingClientRect();
-			return {
-				text: spans.map(span => span.textContent).join(''),
-				box: box && { x: box.x, y: box.y, width: box.width, height: box.height },
-			};
+			return { text: spans.map(span => span.textContent).join(''), box: box && { x: box.x, y: box.y, width: box.width, height: box.height } };
 		});
 		expect(character.text.startsWith('alpha beta')).toBe(true);
 		expect(character.box).toBeTruthy();
@@ -5086,19 +4593,13 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
 		const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
 		await expect(page.locator('#caller .view-line > span')).toHaveText(['alpha beta', 'second line']);
-		const lines = await page.evaluate(() =>
-			[...document.querySelectorAll('#caller .view-line > span > span')].map((span, index) => {
-				const box = span.getBoundingClientRect();
-				const range = document.createRange();
-				range.setStart(span.firstChild!, index === 0 ? 3 : 8);
-				range.collapse(true);
-				return {
-					text: span.textContent,
-					x: range.getBoundingClientRect().left - 0.25,
-					y: box.y + box.height / 2,
-				};
-			}),
-		);
+		const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map((span, index) => {
+			const box = span.getBoundingClientRect();
+			const range = document.createRange();
+			range.setStart(span.firstChild!, index === 0 ? 3 : 8);
+			range.collapse(true);
+			return { text: span.textContent, x: range.getBoundingClientRect().left - 0.25, y: box.y + box.height / 2 };
+		}));
 		expect(lines.map(line => line.text)).toEqual(['alpha beta', 'second line']);
 		await page.mouse.move(lines[0]!.x, lines[0]!.y);
 		await page.mouse.down();
@@ -5106,13 +4607,7 @@ suite('standalone browser component', () => {
 		await page.mouse.up();
 		const selected = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
 		expect(selected.selection).toBe('[1,4 -> 2,9]');
-		expect({
-			value: selected.value,
-			version: selected.version,
-			ownedSelection: selected.ownedSelection,
-			focused: selected.focused,
-			mouseUpEvents: selected.mouseUpEvents,
-		}).toEqual({
+		expect({ value: selected.value, version: selected.version, ownedSelection: selected.ownedSelection, focused: selected.focused, mouseUpEvents: selected.mouseUpEvents }).toEqual({
 			value: before.value,
 			version: before.version,
 			ownedSelection: before.ownedSelection,
@@ -5121,10 +4616,7 @@ suite('standalone browser component', () => {
 		});
 		await page.mouse.move(lines[0]!.x, lines[0]!.y);
 		const released = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
-		expect({ selection: released.selection, mouseUpEvents: released.mouseUpEvents }).toEqual({
-			selection: selected.selection,
-			mouseUpEvents: 1,
-		});
+		expect({ selection: released.selection, mouseUpEvents: released.mouseUpEvents }).toEqual({ selection: selected.selection, mouseUpEvents: 1 });
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -5138,12 +4630,10 @@ suite('standalone browser component', () => {
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareMultiCursor());
 		await expect(page.locator('#caller .view-line > span')).toHaveText(['abcd', 'efgh']);
-		const lines = await page.evaluate(() =>
-			[...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
-				const box = span.getBoundingClientRect();
-				return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
-			}),
-		);
+		const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
+			const box = span.getBoundingClientRect();
+			return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
+		}));
 		expect(lines.map(line => line.text)).toEqual(['abcd', 'efgh']);
 		const first = { x: lines[0]!.x + lines[0]!.width * 0.4, y: lines[0]!.y + lines[0]!.height / 2 };
 		const second = { x: lines[1]!.x + lines[1]!.width * 0.4, y: lines[1]!.y + lines[1]!.height / 2 };
@@ -5216,12 +4706,7 @@ suite('standalone browser component', () => {
 
 		const short = await page.evaluate(() => window.ashStandaloneIntegration.editWrappedText('short'));
 		const lineHeight = await rows.first().evaluate(element => element.getBoundingClientRect().height);
-		expect(short).toEqual({
-			value: 'short',
-			version: initial.version + 1,
-			modelLineCount: 1,
-			contentHeight: lineHeight,
-		});
+		expect(short).toEqual({ value: 'short', version: initial.version + 1, modelLineCount: 1, contentHeight: lineHeight });
 		expect(short.contentHeight).toBeLessThan(80);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.first()).toContainText('short');
@@ -5236,10 +4721,7 @@ suite('standalone browser component', () => {
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
 		const state = await page.evaluate(() => window.ashStandaloneIntegration.prepareProportionalWrap());
-		expect({ value: state.value, modelLineCount: state.modelLineCount }).toEqual({
-			value: 'abc defgh',
-			modelLineCount: 1,
-		});
+		expect({ value: state.value, modelLineCount: state.modelLineCount }).toEqual({ value: 'abc defgh', modelLineCount: 1 });
 		const rows = page.locator('#caller .view-line');
 		await expect(rows).toHaveCount(2);
 		expect(await rows.allTextContents()).toEqual(['abc ', 'defgh']);
@@ -5340,13 +4822,7 @@ suite('standalone browser component', () => {
 			try {
 				const value = window.ashStandaloneIntegration.editVisibleRow(lineIndex);
 				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-				return {
-					value,
-					sameNode: document.querySelector(selector) === row,
-					connected: row.isConnected,
-					removed,
-					text: row.textContent,
-				};
+				return { value, sameNode: document.querySelector(selector) === row, connected: row.isConnected, removed, text: row.textContent };
 			} finally {
 				observer.disconnect();
 			}
@@ -5362,10 +4838,7 @@ suite('standalone browser component', () => {
 		const released = await page.evaluate(() => {
 			const rows = [...document.querySelectorAll('#caller .view-line')];
 			window.ashStandaloneIntegration.dispose();
-			return {
-				detached: rows.every(row => !row.isConnected),
-				roots: document.querySelectorAll('#caller .view-lines').length,
-			};
+			return { detached: rows.every(row => !row.isConnected), roots: document.querySelectorAll('#caller .view-lines').length };
 		});
 		expect(released).toEqual({ detached: true, roots: 0 });
 		expect(errors).toEqual([]);
@@ -5382,26 +4855,25 @@ suite('standalone browser component', () => {
 		await page.locator('#caller .stanza-editor-input').focus();
 		await expect(page.locator('#caller .view-line[data-logical-line-index="1"] > span')).toHaveText('next');
 		await expect(page.locator('#caller .ash-gutter-probe')).toHaveCount(1);
-		const readGeometry = async () =>
-			page.evaluate(() => {
-				const firstRows = [...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]')];
-				const secondRow = document.querySelector<HTMLElement>('#caller .view-line[data-logical-line-index="1"]');
-				const caret = document.querySelector<HTMLElement>('#caller .stanza-editor-caret.primary');
-				const glyphs = [...document.querySelectorAll<HTMLElement>('#caller .ash-gutter-probe')];
-				const numberRows = [...document.querySelectorAll<HTMLElement>('#caller .margin-view-overlays .view-overlay-line')];
-				if (!firstRows.length || !secondRow || !caret) {
-					throw new Error(`Cursor and gutter rows are unavailable: first=${firstRows.length}, second=${Boolean(secondRow)}, caret=${Boolean(caret)}`);
-				}
-				return {
-					wrappedRows: firstRows.length,
-					firstTop: firstRows[0]!.getBoundingClientRect().top,
-					lastTop: firstRows.at(-1)!.getBoundingClientRect().top,
-					secondTop: secondRow.getBoundingClientRect().top,
-					caretTop: caret.getBoundingClientRect().top,
-					glyphTops: glyphs.map(glyph => glyph.getBoundingClientRect().top),
-					numbers: numberRows.map(row => row.querySelector('.line-numbers')?.textContent ?? ''),
-				};
-			});
+		const readGeometry = async () => page.evaluate(() => {
+			const firstRows = [...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]')];
+			const secondRow = document.querySelector<HTMLElement>('#caller .view-line[data-logical-line-index="1"]');
+			const caret = document.querySelector<HTMLElement>('#caller .stanza-editor-caret.primary');
+			const glyphs = [...document.querySelectorAll<HTMLElement>('#caller .ash-gutter-probe')];
+			const numberRows = [...document.querySelectorAll<HTMLElement>('#caller .margin-view-overlays .view-overlay-line')];
+			if (!firstRows.length || !secondRow || !caret) {
+				throw new Error(`Cursor and gutter rows are unavailable: first=${firstRows.length}, second=${Boolean(secondRow)}, caret=${Boolean(caret)}`);
+			}
+			return {
+				wrappedRows: firstRows.length,
+				firstTop: firstRows[0]!.getBoundingClientRect().top,
+				lastTop: firstRows.at(-1)!.getBoundingClientRect().top,
+				secondTop: secondRow.getBoundingClientRect().top,
+				caretTop: caret.getBoundingClientRect().top,
+				glyphTops: glyphs.map(glyph => glyph.getBoundingClientRect().top),
+				numbers: numberRows.map(row => row.querySelector('.line-numbers')?.textContent ?? ''),
+			};
+		});
 		const wrapped = await readGeometry();
 		expect(wrapped.wrappedRows).toBeGreaterThan(1);
 		expect(wrapped.numbers[0]).toBe('1');
@@ -5411,12 +4883,10 @@ suite('standalone browser component', () => {
 		expect(wrapped.caretTop).toBe(wrapped.lastTop);
 
 		await page.evaluate(() => window.ashStandaloneIntegration.moveGutterCaret(2, 1));
-		await expect
-			.poll(async () => {
-				const geometry = await readGeometry();
-				return geometry.caretTop - geometry.secondTop;
-			})
-			.toBe(0);
+		await expect.poll(async () => {
+			const geometry = await readGeometry();
+			return geometry.caretTop - geometry.secondTop;
+		}).toBe(0);
 		const moved = await readGeometry();
 		expect(moved.caretTop).toBe(moved.secondTop);
 		expect(moved.glyphTops).toEqual([moved.firstTop]);
@@ -5427,12 +4897,10 @@ suite('standalone browser component', () => {
 		const editedVersion = await page.evaluate(() => window.ashStandaloneIntegration.shortenGutterLine());
 		expect(editedVersion).toBe(initial.version + 1);
 		await expect(page.locator('#caller .view-line > span')).toHaveText(['short', 'next']);
-		await expect
-			.poll(async () => {
-				const geometry = await readGeometry();
-				return geometry.caretTop - geometry.secondTop;
-			})
-			.toBe(0);
+		await expect.poll(async () => {
+			const geometry = await readGeometry();
+			return geometry.caretTop - geometry.secondTop;
+		}).toBe(0);
 		const shortened = await readGeometry();
 		expect(shortened.secondTop).toBeLessThan(moved.secondTop);
 		expect(shortened.caretTop).toBe(shortened.secondTop);
@@ -5513,18 +4981,12 @@ suite('standalone browser component', () => {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.checkContracts())).toEqual({
-			wrapping: 'on',
-			wrapped: true,
-			animated: true,
-			settled: true,
-			top: 600,
-			interrupted: true,
-			detached: true,
-			eventTexts: ['X'],
+			wrapping: 'on', wrapped: true, animated: true, settled: true, top: 600, interrupted: true, detached: true, eventTexts: ['X'],
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
+
 
 	test('standalone marker decorations appear and clear through the shared marker service', async function () {
 		const { page } = browserTests;
@@ -5546,7 +5008,12 @@ suite('standalone browser component', () => {
 			first: ['caller'],
 			second: ['owned'],
 			afterClear: ['owned'],
-			events: [['inmemory://stanza/caller.txt'], ['inmemory://stanza/owned.txt'], ['inmemory://stanza/caller.txt'], ['inmemory://stanza/owned.txt']],
+			events: [
+				['inmemory://stanza/caller.txt'],
+				['inmemory://stanza/owned.txt'],
+				['inmemory://stanza/caller.txt'],
+				['inmemory://stanza/owned.txt'],
+			],
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -5604,10 +5071,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.prepareCodeActionPreview();
 			});
 			await page.locator('#action-preview-editor .stanza-editor-input').press('F2');
-			const name = page.getByRole('textbox', {
-				name: outcome === 'cancel' ? '新的符号名称' : 'New symbol name',
-				exact: true,
-			});
+			const name = page.getByRole('textbox', { name: outcome === 'cancel' ? '新的符号名称' : 'New symbol name', exact: true });
 			await name.fill('renamed');
 			await name.press('ControlOrMeta+Enter');
 			const apply = page.locator('#action-preview-pane').getByRole('button', { name: outcome === 'cancel' ? '应用所选修改' : 'Apply selected', exact: true });
@@ -5655,10 +5119,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
-		for (const [multiCursorModifier, trigger] of [
-			['alt', 'ControlOrMeta'],
-			['ctrlCmd', 'Alt'],
-		] as const) {
+		for (const [multiCursorModifier, trigger] of [['alt', 'ControlOrMeta'], ['ctrlCmd', 'Alt']] as const) {
 			await page.evaluate(modifier => {
 				window.ashStandaloneIntegration.prepareEditorContextMenu(true);
 				window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: modifier });
@@ -5758,19 +5219,15 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#ff0000'));
-		await expect
-			.poll(async () => {
-				const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
-				return red > green && red > blue && green === blue;
-			})
-			.toBe(true);
+		await expect.poll(async () => {
+			const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
+			return red > green && red > blue && green === blue;
+		}).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#0000ff'));
-		await expect
-			.poll(async () => {
-				const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
-				return blue > red && blue > green && red === green;
-			})
-			.toBe(true);
+		await expect.poll(async () => {
+			const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
+			return blue > red && blue > green && red === green;
+		}).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -5794,13 +5251,11 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(40));
 		await expect(zone).toBeVisible();
 		await expect(zone).toHaveAttribute('data-top', '20');
-		await expect
-			.poll(async () => {
-				const bounds = await zone.boundingBox();
-				const root = await page.locator('#caller .stanza-editor').boundingBox();
-				return bounds && root ? Math.round(bounds.y - root.y) : null;
-			})
-			.toBe(20);
+		await expect.poll(async () => {
+			const bounds = await zone.boundingBox();
+			const root = await page.locator('#caller .stanza-editor').boundingBox();
+			return bounds && root ? Math.round(bounds.y - root.y) : null;
+		}).toBe(20);
 		await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
 		await page.locator('#caller .ash-icon-folding-collapsed').first().click();
 		await expect(zone).toHaveCSS('top', '80px');
@@ -5811,6 +5266,7 @@ suite('standalone browser component', () => {
 		await node!.dispose();
 		expect(errors).toEqual([]);
 	});
+
 
 	test('folding hides view zones and restores their layout callbacks after scrolling and unfolding', async function () {
 		const { page } = browserTests;
@@ -5844,6 +5300,7 @@ suite('standalone browser component', () => {
 		await node!.dispose();
 		expect(errors).toEqual([]);
 	});
+
 
 	for (const showInHiddenAreas of [false, true]) {
 		test(`decorations and view zones retain geometry through rewrapping, folding and scrolling with hidden zones ${showInHiddenAreas}`, async function () {
@@ -5972,19 +5429,13 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareInPlaceReplace());
 		await page.keyboard.press('Control+Shift+.');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy()))
-			.toEqual({
-				value: 'flag false',
-				selections: ['[1,6 -> 1,11]'],
-			});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
+			value: 'flag false', selections: ['[1,6 -> 1,11]'],
+		});
 		await page.keyboard.press('Control+Shift+,');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy()))
-			.toEqual({
-				value: 'flag true',
-				selections: ['[1,6 -> 1,10]'],
-			});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
+			value: 'flag true', selections: ['[1,6 -> 1,10]'],
+		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -6114,10 +5565,8 @@ suite('standalone browser component', () => {
 			[false, 'auto', false],
 			[false, 'on', true],
 		] as const) {
-			expect(await page.evaluate(([host, option]) => window.ashStandaloneIntegration.configureAccessibility(host, option), [host, option] as const)).toEqual({
-				support: enabled ? 2 : 1,
-				indent: enabled ? 0 : 2,
-			});
+			expect(await page.evaluate(([host, option]) => window.ashStandaloneIntegration.configureAccessibility(host, option), [host, option] as const))
+				.toEqual({ support: enabled ? 2 : 1, indent: enabled ? 0 : 2 });
 			await expect(mirror).toHaveAttribute('aria-hidden', enabled ? 'false' : 'true');
 			await expect(input).toBeFocused();
 		}
@@ -6125,12 +5574,7 @@ suite('standalone browser component', () => {
 		expect(errors).toEqual([]);
 	});
 
-	for (const [original, formatted] of [
-		['😀 hello', '😀 Hello'],
-		['a😀z', 'a😁z'],
-		['a😀z', 'a🨀z'],
-		['first\n😀 hello', 'first\n😀 Hello'],
-	]) {
+	for (const [original, formatted] of [['😀 hello', '😀 Hello'], ['a😀z', 'a😁z'], ['a😀z', 'a🨀z'], ['first\n😀 hello', 'first\n😀 Hello']]) {
 		test(`formatting preserves UTF-16 characters: ${JSON.stringify(original)} to ${JSON.stringify(formatted)}`, async function () {
 			const { page } = browserTests;
 
@@ -6177,9 +5621,7 @@ suite('standalone browser component', () => {
 			if (cancel === 'escape') {
 				await page.keyboard.press('Escape');
 			} else {
-				await page.evaluate(() => {
-					void window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument');
-				});
+				await page.evaluate(() => { void window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'); });
 			}
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting())).toEqual({ aborted: cancel === 'escape' ? [true] : [true, false], value: 'alpha' });
 			await page.evaluate(() => window.ashStandaloneIntegration.finishDeferredFormatting());
@@ -6241,6 +5683,7 @@ suite('standalone browser component', () => {
 			});
 		});
 	}
+
 
 	test('inline suggestions respect automatic enablement and cancel disabled requests', async function () {
 		const { page } = browserTests;
@@ -6323,9 +5766,7 @@ suite('standalone browser component', () => {
 				await search.press('Escape');
 				await expect(current).toHaveCount(0);
 				await expect(ordinary).toHaveCount(overlap ? 2 : 0);
-			} finally {
-				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-			}
+			} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
 		});
 	}
 
@@ -6349,9 +5790,7 @@ suite('standalone browser component', () => {
 				await expect(highlight).toHaveCSS('outline-width', '1px');
 				await expect(highlight).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
 			}
-		} finally {
-			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-		}
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
 	});
 
 	test('standard contribution commands operate the existing find, fold and goto widgets', async function () {
@@ -6473,10 +5912,7 @@ suite('standalone browser component', () => {
 		await page.clock.runFor(50);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).toEqual({
-			requests: [
-				{ kind: 'automatic', text: 'a', languageId: 'plaintext', aborted: true },
-				{ kind: 'automatic', text: 'ab', languageId: 'plaintext', aborted: false },
-			],
+			requests: [{ kind: 'automatic', text: 'a', languageId: 'plaintext', aborted: true }, { kind: 'automatic', text: 'ab', languageId: 'plaintext', aborted: false }],
 			delay: 50,
 			shared: true,
 		});
@@ -6516,6 +5952,7 @@ suite('standalone browser component', () => {
 		}
 	}
 
+
 	test('standalone without a grammar keeps plain text and no invented diagnostics while word suggestions work', async function () {
 		const { page } = browserTests;
 
@@ -6523,13 +5960,11 @@ suite('standalone browser component', () => {
 		page.on('worker', worker => workers.push(worker.url()));
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageWorkers());
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageWorkers()))
-			.toEqual({
-				tokens: [],
-				diagnostics: [],
-				current: true,
-			});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageWorkers())).toEqual({
+			tokens: [],
+			diagnostics: [],
+			current: true,
+		});
 		await page.keyboard.press('Control+Space');
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toContainText(['alpha', 'alphabet']);
@@ -6538,88 +5973,16 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
+
 	for (const scenario of [
-		{
-			name: 'nested',
-			value: 'let x = ; tail',
-			insertText: 'call({x: [1',
-			column: 9,
-			tokenType: 'other',
-			completeBracketPairs: true,
-			repaired: 'call({x: [1]})',
-			result: 'let x = call({x: [1]}); tail',
-		},
-		{
-			name: 'unexpected closing',
-			value: 'let x = ; tail',
-			insertText: 'value)]',
-			column: 9,
-			tokenType: 'other',
-			completeBracketPairs: true,
-			repaired: 'value',
-			result: 'let x = value; tail',
-		},
-		{
-			name: 'string',
-			value: 'let x = "',
-			insertText: '[)',
-			column: 10,
-			tokenType: 'string',
-			completeBracketPairs: true,
-			repaired: '[)',
-			result: 'let x = "[)',
-		},
-		{
-			name: 'comment',
-			value: '// ',
-			insertText: '[)',
-			column: 4,
-			tokenType: 'comment',
-			completeBracketPairs: true,
-			repaired: '[)',
-			result: '// [)',
-		},
-		{
-			name: 'multiline',
-			value: 'let x = ;',
-			insertText: 'call(\n[1',
-			column: 9,
-			tokenType: 'other',
-			completeBracketPairs: true,
-			repaired: 'call(\n[1])',
-			result: 'let x = call(\n[1]);',
-		},
-		{
-			name: 'explicit replacement',
-			value: 'let x = old; tail',
-			insertText: 'call(',
-			column: 9,
-			tokenType: 'other',
-			completeBracketPairs: true,
-			replaceLength: 3,
-			repaired: 'call()',
-			result: 'let x = call(); tail',
-		},
-		{
-			name: 'unavailable lexer',
-			value: 'let x = ',
-			insertText: 'call(',
-			column: 9,
-			tokenType: 'unavailable',
-			completeBracketPairs: true,
-			repaired: 'call(',
-			result: 'let x = call(',
-		},
-		{
-			name: 'provider opt out',
-			value: 'let x = ',
-			insertText: 'call(',
-			column: 9,
-			tokenType: 'other',
-			completeBracketPairs: false,
-			repaired: 'call(',
-			result: 'let x = call(',
-		},
+		{ name: 'nested', value: 'let x = ; tail', insertText: 'call({x: [1', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'call({x: [1]})', result: 'let x = call({x: [1]}); tail' },
+		{ name: 'unexpected closing', value: 'let x = ; tail', insertText: 'value)]', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'value', result: 'let x = value; tail' },
+		{ name: 'string', value: 'let x = "', insertText: '[)', column: 10, tokenType: 'string', completeBracketPairs: true, repaired: '[)', result: 'let x = "[)' },
+		{ name: 'comment', value: '// ', insertText: '[)', column: 4, tokenType: 'comment', completeBracketPairs: true, repaired: '[)', result: '// [)' },
+		{ name: 'multiline', value: 'let x = ;', insertText: 'call(\n[1', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'call(\n[1])', result: 'let x = call(\n[1]);' },
+		{ name: 'explicit replacement', value: 'let x = old; tail', insertText: 'call(', column: 9, tokenType: 'other', completeBracketPairs: true, replaceLength: 3, repaired: 'call()', result: 'let x = call(); tail' },
+		{ name: 'unavailable lexer', value: 'let x = ', insertText: 'call(', column: 9, tokenType: 'unavailable', completeBracketPairs: true, repaired: 'call(', result: 'let x = call(' },
+		{ name: 'provider opt out', value: 'let x = ', insertText: 'call(', column: 9, tokenType: 'other', completeBracketPairs: false, repaired: 'call(', result: 'let x = call(' },
 	] as const) {
 		test(`inline completion bracket repair ${scenario.name} preserves suffix and accepts with one undo`, async function () {
 			const { page } = browserTests;
@@ -6627,18 +5990,7 @@ suite('standalone browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/standalone.html');
-			await page.evaluate(
-				scenario =>
-					window.ashStandaloneIntegration.prepareBracketCompletion(
-						scenario.value,
-						scenario.insertText,
-						scenario.column,
-						scenario.tokenType,
-						scenario.completeBracketPairs,
-						'replaceLength' in scenario ? scenario.replaceLength : 0,
-					),
-				scenario,
-			);
+			await page.evaluate(scenario => window.ashStandaloneIntegration.prepareBracketCompletion(scenario.value, scenario.insertText, scenario.column, scenario.tokenType, scenario.completeBracketPairs, 'replaceLength' in scenario ? scenario.replaceLength : 0), scenario);
 			await page.keyboard.press('Control+Alt+Space');
 			const ghost = page.locator('#caller .stanza-editor-inline-completion');
 			await expect(ghost).toBeVisible();
@@ -6665,9 +6017,7 @@ suite('standalone browser component', () => {
 		const picker = page.locator('.stanza-editor-color-picker').first();
 		await expect(picker).toBeVisible();
 		await expect(picker.locator('.stanza-editor-color-picker-presentation option')).toHaveCount(3);
-		await picker.evaluate(element => {
-			element.dataset.retained = 'true';
-		});
+		await picker.evaluate(element => { element.dataset.retained = 'true'; });
 		const hue = picker.getByRole('slider', { name: 'Hue', exact: true });
 		await hue.focus();
 		await hue.evaluate(element => {
@@ -6716,15 +6066,9 @@ suite('standalone browser component', () => {
 		await expect(area).toHaveAttribute('aria-valuetext', 'Saturation 99%, brightness 100%');
 		await picker.getByRole('button', { name: 'Restore original color' }).click();
 		await expect(area).toHaveAttribute('aria-valuetext', 'Saturation 100%, brightness 100%');
-		await area.evaluate(element =>
-			element.addEventListener(
-				'gotpointercapture',
-				event => {
-					(element as HTMLElement).dataset.pointerId = String((event as PointerEvent).pointerId);
-				},
-				{ once: true },
-			),
-		);
+		await area.evaluate(element => element.addEventListener('gotpointercapture', event => {
+			(element as HTMLElement).dataset.pointerId = String((event as PointerEvent).pointerId);
+		}, { once: true }));
 		await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(bounds!.x + bounds!.width / 2 + 1, bounds!.y + bounds!.height / 2);
@@ -6779,11 +6123,7 @@ suite('standalone browser component', () => {
 				const probe = document.createElement('span');
 				probe.style.color = 'var(--ash-editor-widgetBackground)';
 				element.append(probe);
-				try {
-					return getComputedStyle(probe).color;
-				} finally {
-					probe.remove();
-				}
+				try { return getComputedStyle(probe).color; } finally { probe.remove(); }
 			});
 			await expect(picker).toHaveCSS('background-color', background);
 			await expect(picker).toHaveCSS('font-size', '12px');
@@ -6803,12 +6143,7 @@ suite('standalone browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/standalone.html');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.prepareClipboard('one two', [
-				[1, 1, 1, 4],
-				[1, 5, 1, 8],
-			]),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('one two', [[1, 1, 1, 4], [1, 5, 1, 8]]));
 		await page.locator('#caller .stanza-editor-input').focus();
 		await page.keyboard.press('ControlOrMeta+Shift+c');
 		const picker = page.locator('.stanza-editor-color-picker').first();
@@ -6916,31 +6251,13 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
 		const colors = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeDocumentColorProvider'));
-		expect(colors).toEqual([
-			{
-				range: { startLineNumber: 1, startColumn: 15, endLineNumber: 1, endColumn: 24 },
-				color: [1, 0, 0, 128 / 255],
-			},
-		]);
-		const formats = (await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24]))) as {
-			label: string;
-			textEdit: { text: string };
-		}[];
-		expect(formats.map(format => [format.label, format.textEdit.text])).toEqual([
-			['rgb(0, 255, 0)', 'rgb(0, 255, 0)'],
-			['hsl(120, 100%, 50%)', 'hsl(120, 100%, 50%)'],
-			['#00ff00', '#00ff00'],
-		]);
-		expect(
-			await page.evaluate(async () => {
-				try {
-					await window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [2, 0, 0, 1], [1, 15, 1, 24]);
-					return '';
-				} catch (error) {
-					return (error as Error).message;
-				}
-			}),
-		).toContain('four color components');
+		expect(colors).toEqual([{ range: { startLineNumber: 1, startColumn: 15, endLineNumber: 1, endColumn: 24 }, color: [1, 0, 0, 128 / 255] }]);
+		const formats = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24])) as { label: string; textEdit: { text: string; }; }[];
+		expect(formats.map(format => [format.label, format.textEdit.text])).toEqual([['rgb(0, 255, 0)', 'rgb(0, 255, 0)'], ['hsl(120, 100%, 50%)', 'hsl(120, 100%, 50%)'], ['#00ff00', '#00ff00']]);
+		expect(await page.evaluate(async () => {
+			try { await window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [2, 0, 0, 1], [1, 15, 1, 24]); return ''; }
+			catch (error) { return (error as Error).message; }
+		})).toContain('four color components');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -6988,12 +6305,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 		const hover = page.locator('.stanza-editor-hover').first();
 		await expect(hover).toBeHidden();
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({
-				hover: { enabled: 'onKeyboardModifier', delay: 0 },
-				multiCursorModifier: 'ctrlCmd',
-			}),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'onKeyboardModifier', delay: 0 }, multiCursorModifier: 'ctrlCmd' }));
 		await page.clock.runFor(1);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(1);
 		await page.keyboard.down('Alt');
@@ -7074,14 +6386,8 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(text => {
-				window.ashStandaloneIntegration.prepareClipboard(text, [
-					[1, 1, 1, 1],
-					[5, 1, 5, 1],
-				]);
-				window.ashStandaloneIntegration.updateContributionOptions({
-					foldingStrategy: 'indentation',
-					readOnly: true,
-				});
+				window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1], [5, 1, 5, 1]]);
+				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation', readOnly: true });
 			}, text);
 			const lines = page.locator('#caller .view-line');
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldRecursively'));
@@ -7139,10 +6445,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			const value = 'one\ntwo\nthree\nfour\nfive\nsix\nseven';
 			await page.evaluate(value => {
-				window.ashStandaloneIntegration.prepareClipboard(value, [
-					[1, 1, 4, 1],
-					[5, 1, 6, 4],
-				]);
+				window.ashStandaloneIntegration.prepareClipboard(value, [[1, 1, 4, 1], [5, 1, 6, 4]]);
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			}, value);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.createFoldingRangeFromSelection'));
@@ -7158,11 +6461,7 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(text => {
-				window.ashStandaloneIntegration.prepareClipboard(text, [
-					[2, 1, 2, 1],
-					[3, 1, 3, 1],
-					[6, 1, 6, 1],
-				]);
+				window.ashStandaloneIntegration.prepareClipboard(text, [[2, 1, 2, 1], [3, 1, 3, 1], [6, 1, 6, 1]]);
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			}, text);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
@@ -7188,30 +6487,15 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 1, selectionLines: [4] }));
 			await expect(lines).toHaveCount(8);
 			await expect(page.locator('#caller .view-line[data-logical-line-index="6"]')).toHaveCount(0);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', {
-					levels: 2,
-					direction: 'up',
-					selectionLines: [6],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 2, direction: 'up', selectionLines: [6] }));
 			await expect(lines).toHaveCount(9);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', {
-					levels: 2,
-					direction: 'up',
-					selectionLines: [2],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, direction: 'up', selectionLines: [2] }));
 			await expect(lines).toHaveCount(6);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [0] }));
 			await expect(lines).toHaveCount(8);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [1] }));
 			await expect(lines).toHaveCount(9);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
-				value: text,
-				selections: ['[1,1 -> 1,1]'],
-			});
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: text, selections: ['[1,1 -> 1,1]'] });
 			await expect(input).toBeFocused();
 		});
 
@@ -7226,23 +6510,13 @@ suite('standalone browser component', () => {
 			const lines = page.locator('#caller .view-line');
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 0, selectionLines: [1, 2, 1] }));
 			await expect(lines).toHaveCount(8);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', {
-					direction: 'down',
-					selectionLines: [1],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { direction: 'down', selectionLines: [1] }));
 			await expect(lines).toHaveCount(8);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [1] }));
 			await expect(lines).toHaveCount(6);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 0, selectionLines: [0] }));
 			await expect(lines).toHaveCount(8);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', {
-					levels: 3,
-					selectionLines: [-1, 99, 8],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 3, selectionLines: [-1, 99, 8] }));
 			await expect(lines).toHaveCount(8);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[5,1 -> 5,1]']);
 		});
@@ -7254,10 +6528,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(text => {
 				window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
-				window.ashStandaloneIntegration.prepareFoldingKeybinding('editor.fold', {
-					levels: 2,
-					selectionLines: [4],
-				});
+				window.ashStandaloneIntegration.prepareFoldingKeybinding('editor.fold', { levels: 2, selectionLines: [4] });
 			}, text);
 			const input = page.locator('#caller .stanza-editor-input');
 			await input.focus();
@@ -7295,13 +6566,7 @@ suite('standalone browser component', () => {
 			const lines = page.locator('#caller .view-line');
 			await expect(lines).toHaveCount(9);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [] }));
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', {
-					levels: 10,
-					direction: 'up',
-					selectionLines: [],
-				}),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 10, direction: 'up', selectionLines: [] }));
 			await expect(lines).toHaveCount(9);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [] }));
 			await expect(lines).toHaveCount(3);
@@ -7372,10 +6637,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.updateContributionOptions({
-				foldingStrategy: 'indentation',
-				showFoldingControls: 'always',
-			});
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation', showFoldingControls: 'always' });
 			window.ashStandaloneIntegration.prepareContributionRequests('folding');
 		});
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
@@ -7402,7 +6664,8 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 12 }));
 		await expect(controls).toHaveCount(12);
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\n' + Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'));
+			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\n'
+				+ Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'));
 			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 11 });
 		});
 		await expect(controls).toHaveCount(11);
@@ -7458,12 +6721,7 @@ suite('standalone browser component', () => {
 	}
 
 	for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
-		const shortcut = {
-			definition: 'F12',
-			call: 'Alt+Shift+h',
-			type: 'Alt+Shift+t',
-			symbols: 'ControlOrMeta+Shift+o',
-		}[kind];
+		const shortcut = { definition: 'F12', call: 'Alt+Shift+h', type: 'Alt+Shift+t', symbols: 'ControlOrMeta+Shift+o' }[kind];
 		for (const reason of ['text', 'selection', 'language', 'provider', 'model', 'dispose', 'blur'] as const) {
 			test(`${kind} provider cancels on ${reason} without applying late results`, async function () {
 				const { page } = browserTests;
@@ -7572,12 +6830,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 		await page.keyboard.type(':');
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[1]!.context).toMatchObject({
-			kind: 'triggerCharacter',
-			triggerCharacter: ':',
-			isRetrigger: true,
-			activeSignatureHelp: { signatures: [{ label: 'call(value): plaintext' }] },
-		});
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[1]!.context).toMatchObject({ kind: 'triggerCharacter', triggerCharacter: ':', isRetrigger: true, activeSignatureHelp: { signatures: [{ label: 'call(value): plaintext' }] } });
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -7594,6 +6847,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
+
 	for (const kind of ['rename', 'quickFix'] as const) {
 		test(`${kind} public action uses its editor and tracks writable provider availability`, async function () {
 			const { page } = browserTests;
@@ -7607,11 +6861,9 @@ suite('standalone browser component', () => {
 			}, kind);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(true);
 			await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
-			await expect
-				.poll(() =>
-					page.evaluate(kind => (kind === 'rename' ? window.ashStandaloneIntegration.readRenameRequests().length : window.ashStandaloneIntegration.readCodeActionRequests().length), kind),
-				)
-				.toBe(1);
+			await expect.poll(() => page.evaluate(kind => kind === 'rename'
+				? window.ashStandaloneIntegration.readRenameRequests().length
+				: window.ashStandaloneIntegration.readCodeActionRequests().length, kind)).toBe(1);
 			if (kind === 'rename') {
 				await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
 				await expect(page.locator('#caller .stanza-editor-rename-input')).toBeFocused();
@@ -7627,9 +6879,9 @@ suite('standalone browser component', () => {
 			}, kind);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(false);
 			await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
-			expect(
-				await page.evaluate(kind => (kind === 'rename' ? window.ashStandaloneIntegration.readRenameRequests().length : window.ashStandaloneIntegration.readCodeActionRequests().length), kind),
-			).toBe(1);
+			expect(await page.evaluate(kind => kind === 'rename'
+				? window.ashStandaloneIntegration.readRenameRequests().length
+				: window.ashStandaloneIntegration.readCodeActionRequests().length, kind)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
 	}
@@ -7641,28 +6893,12 @@ suite('standalone browser component', () => {
 		const minimap = page.locator('#caller .minimap');
 		await expect(minimap).toBeVisible();
 		await page.locator('#caller .ash-scrollbar-track-vertical').evaluate(track => {
-			track.dispatchEvent(
-				new MouseEvent('contextmenu', {
-					bubbles: true,
-					cancelable: true,
-					button: 2,
-					clientX: 390,
-					clientY: 20,
-				}),
-			);
+			track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
 		});
 		await page.getByRole('menuitemcheckbox', { name: 'Minimap' }).click();
 		await expect(minimap).toBeHidden();
 		await page.locator('#caller .ash-scrollbar-track-vertical').evaluate(track => {
-			track.dispatchEvent(
-				new MouseEvent('contextmenu', {
-					bubbles: true,
-					cancelable: true,
-					button: 2,
-					clientX: 390,
-					clientY: 20,
-				}),
-			);
+			track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 390, clientY: 20 }));
 		});
 		await expect(page.getByRole('menuitem', { name: 'Vertical Size' })).toBeDisabled();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -7786,26 +7022,18 @@ suite('standalone browser component', () => {
 			await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 			const style = await pane.locator('.ash-bulk-edit-entry').evaluate(element => {
 				const computed = getComputedStyle(element);
-				return {
-					border: computed.borderStyle,
-					width: computed.borderWidth,
-					color: computed.borderColor,
-					contrast: computed.getPropertyValue('--ash-contrastBorder'),
-				};
+				return { border: computed.borderStyle, width: computed.borderWidth, color: computed.borderColor, contrast: computed.getPropertyValue('--ash-contrastBorder') };
 			});
 			expect(style.border).toBe('solid');
 			expect(parseFloat(style.width)).toBeGreaterThan(0);
-			if (theme.startsWith('hc-'))
-				expect(style.color).toBe(
-					await pane.evaluate((element, contrast) => {
-						const probe = document.createElement('span');
-						probe.style.color = contrast;
-						element.append(probe);
-						const color = getComputedStyle(probe).color;
-						probe.remove();
-						return color;
-					}, style.contrast),
-				);
+			if (theme.startsWith('hc-')) expect(style.color).toBe(await pane.evaluate((element, contrast) => {
+				const probe = document.createElement('span');
+				probe.style.color = contrast;
+				element.append(probe);
+				const color = getComputedStyle(probe).color;
+				probe.remove();
+				return color;
+			}, style.contrast));
 		}
 		await pane.getByRole('button', { name: 'Group by type' }).click();
 		await expect(pane.locator('.ash-bulk-edit-group-label')).toHaveText('Text changes');
@@ -7862,7 +7090,7 @@ suite('standalone browser component', () => {
 		await expect(all).toHaveAttribute('aria-selected', 'true');
 		await page.keyboard.press('Enter');
 		await expect(quickFix).toHaveAttribute('aria-selected', 'true');
-		await expect(root.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', (await quickFix.getAttribute('id')) as string);
+		await expect(root.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await quickFix.getAttribute('id') as string);
 		await expect(root.locator('.ash-action-widget-header')).toHaveCount(0);
 		await page.keyboard.press('ArrowDown');
 		await expect(root.getByRole('menuitem', { name: 'First action', exact: true })).toBeFocused();
@@ -7899,35 +7127,25 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ArrowLeft');
 		await page.keyboard.press('ArrowLeft');
 		await expect(editor.element.locator('.cdr.word-highlight-text')).toHaveCount(2);
-		await expect
-			.poll(() =>
-				editor.element.evaluate(root => {
-					return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(highlight => {
-						const lineIndex = highlight.parentElement!.dataset.lineIndex;
-						const text = root.querySelector(`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`)!;
-						const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
-						let symbol: DOMRect | undefined;
-						for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-							const start = node.textContent!.indexOf('UserAllowlist');
-							if (start < 0) continue;
-							const range = document.createRange();
-							range.setStart(node, start);
-							range.setEnd(node, start + 'UserAllowlist'.length);
-							symbol = range.getBoundingClientRect();
-							break;
-						}
-						const background = highlight.getBoundingClientRect();
-						return {
-							lineIndex,
-							aligned: symbol !== undefined && Math.abs(background.left - symbol.left) < 1 && Math.abs(background.right - symbol.right) < 1,
-						};
-					});
-				}),
-			)
-			.toEqual([
-				{ lineIndex: '0', aligned: true },
-				{ lineIndex: '1', aligned: true },
-			]);
+		await expect.poll(() => editor.element.evaluate(root => {
+			return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(highlight => {
+				const lineIndex = highlight.parentElement!.dataset.lineIndex;
+				const text = root.querySelector(`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`)!;
+				const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+				let symbol: DOMRect | undefined;
+				for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+					const start = node.textContent!.indexOf('UserAllowlist');
+					if (start < 0) continue;
+					const range = document.createRange();
+					range.setStart(node, start);
+					range.setEnd(node, start + 'UserAllowlist'.length);
+					symbol = range.getBoundingClientRect();
+					break;
+				}
+				const background = highlight.getBoundingClientRect();
+				return { lineIndex, aligned: symbol !== undefined && Math.abs(background.left - symbol.left) < 1 && Math.abs(background.right - symbol.right) < 1 };
+			});
+		})).toEqual([{ lineIndex: '0', aligned: true }, { lineIndex: '1', aligned: true }]);
 	});
 
 	test('minimap reflects equal-length text edits in the isolated editor', async function () {
@@ -7944,11 +7162,10 @@ suite('standalone browser component', () => {
 		const minimap = editor.element.locator('.minimap');
 		await expect(minimap).toHaveCSS('overflow', 'hidden');
 		await expect(minimap).toHaveCSS('background-color', await editor.element.evaluate(element => getComputedStyle(element).backgroundColor));
-		const readPixels = () =>
-			canvas.evaluate(element => {
-				const canvas = element as HTMLCanvasElement;
-				return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
-			});
+		const readPixels = () => canvas.evaluate(element => {
+			const canvas = element as HTMLCanvasElement;
+			return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
+		});
 		await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
 		const original = await readPixels();
 		await page.keyboard.press('ControlOrMeta+Home');
@@ -7971,22 +7188,14 @@ suite('standalone browser component', () => {
 		await editor.waitForEditorFocus();
 		const minimap = editor.element.locator('.minimap');
 		const scrollable = editor.element.locator(':scope > .ash-smooth-scrollable');
-		const readShadow = () =>
-			minimap.evaluate(element => {
-				const style = getComputedStyle(element, '::after');
-				return {
-					content: style.content,
-					shadow: style.boxShadow,
-					pointerEvents: style.pointerEvents,
-					left: style.left,
-				};
-			});
+		const readShadow = () => minimap.evaluate(element => {
+			const style = getComputedStyle(element, '::after');
+			return { content: style.content, shadow: style.boxShadow, pointerEvents: style.pointerEvents, left: style.left };
+		});
 		await page.keyboard.insertText('short line');
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
 		await page.keyboard.insertText(' long text'.repeat(100));
-		await scrollable.evaluate(element => {
-			element.scrollLeft = 0;
-		});
+		await scrollable.evaluate(element => { element.scrollLeft = 0; });
 		await expect.poll(() => scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0)).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 		expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '-6px' });
@@ -8000,14 +7209,10 @@ suite('standalone browser component', () => {
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
 		await page.emulateMedia({ forcedColors: 'none' });
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
-		await scrollable.evaluate(element => {
-			element.scrollLeft = element.scrollWidth;
-		});
+		await scrollable.evaluate(element => { element.scrollLeft = element.scrollWidth; });
 		await expect.poll(() => scrollable.evaluate(element => element.scrollLeft + element.clientWidth >= element.scrollWidth)).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
-		await scrollable.evaluate(element => {
-			element.scrollLeft = 0;
-		});
+		await scrollable.evaluate(element => { element.scrollLeft = 0; });
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 	});
 
@@ -8017,9 +7222,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.waitForFunction(() => !!window.ashStandaloneIntegration);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
-		await page.locator('#caller').evaluate(element => {
-			element.style.height = '400px';
-		});
+		await page.locator('#caller').evaluate(element => { element.style.height = '400px'; });
 		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(640, 400));
 		const editor = new Editor(page.locator('#caller'));
 		await editor.waitForEditorFocus();
@@ -8053,12 +7256,10 @@ suite('standalone browser component', () => {
 			await expect(line).toHaveText(`${text.slice(0, offset)}!${text.slice(offset)}`);
 			await page.keyboard.press('Backspace');
 			await expect(editor.input).toBeFocused();
-			await expect
-				.poll(async () => {
-					const caret = await editor.element.locator('.stanza-editor-caret.primary').boundingBox();
-					return caret ? Math.abs(caret.x - point.x) : Number.POSITIVE_INFINITY;
-				})
-				.toBeLessThan(3);
+			await expect.poll(async () => {
+				const caret = await editor.element.locator('.stanza-editor-caret.primary').boundingBox();
+				return caret ? Math.abs(caret.x - point.x) : Number.POSITIVE_INFINITY;
+			}).toBeLessThan(3);
 			await expect(line).toHaveText(text);
 		}
 	});
@@ -8079,53 +7280,45 @@ suite('standalone browser component', () => {
 		const before = (await line.boundingBox())!.x;
 		await page.mouse.wheel(60, 0);
 		await expect.poll(async () => (await line.boundingBox())!.x).toBeLessThan(before - 40);
-		const points = await line.evaluate(element =>
-			[16, 26].map(offset => {
-				const node = element.firstChild!.firstChild!;
-				const range = document.createRange();
-				range.setStart(node, offset);
-				range.collapse(true);
-				const bounds = range.getBoundingClientRect();
-				const row = element.closest('.view-line')!.getBoundingClientRect();
-				return { x: bounds.left - 0.25, y: bounds.top + bounds.height / 2, top: row.top, height: row.height };
-			}),
-		);
+		const points = await line.evaluate(element => [16, 26].map(offset => {
+			const node = element.firstChild!.firstChild!;
+			const range = document.createRange();
+			range.setStart(node, offset);
+			range.collapse(true);
+			const bounds = range.getBoundingClientRect();
+			const row = element.closest('.view-line')!.getBoundingClientRect();
+			return { x: bounds.left - 0.25, y: bounds.top + bounds.height / 2, top: row.top, height: row.height };
+		}));
 		await page.mouse.move(points[0]!.x, points[0]!.y);
 		await page.mouse.down();
 		await page.mouse.move(points[1]!.x, points[1]!.y, { steps: 8 });
 		await page.mouse.up();
-		await expect
-			.poll(async () => {
-				const selection = await editor.element.locator('.stanza-editor-selection').boundingBox();
-				const caret = await editor.element.locator('.stanza-editor-caret.primary').boundingBox();
-				if (!selection || !caret) return Number.POSITIVE_INFINITY;
-				return Math.max(
-					Math.abs(selection.x - points[0]!.x),
-					Math.abs(selection.width - (points[1]!.x - points[0]!.x)),
-					Math.abs(selection.y - points[0]!.top),
-					Math.abs(selection.height - points[0]!.height),
-					Math.abs(caret.x - points[1]!.x),
-					Math.abs(caret.y - points[1]!.top),
-				);
-			})
-			.toBeLessThan(2);
-		await expect
-			.poll(() =>
-				editor.element.locator('.stanza-editor-selection').evaluate(element => {
-					const rect = element.getBoundingClientRect();
-					const pointerEvents = (element as HTMLElement).style.pointerEvents;
-					// Test browser paint order even though the selection background ignores pointer input.
-					(element as HTMLElement).style.pointerEvents = 'auto';
-					try {
-						const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-						const textIndex = stack.findIndex(node => node.closest('.view-lines'));
-						return textIndex >= 0 && stack.indexOf(element) > textIndex;
-					} finally {
-						(element as HTMLElement).style.pointerEvents = pointerEvents;
-					}
-				}),
-			)
-			.toBe(true);
+		await expect.poll(async () => {
+			const selection = await editor.element.locator('.stanza-editor-selection').boundingBox();
+			const caret = await editor.element.locator('.stanza-editor-caret.primary').boundingBox();
+			if (!selection || !caret) return Number.POSITIVE_INFINITY;
+			return Math.max(
+				Math.abs(selection.x - points[0]!.x),
+				Math.abs(selection.width - (points[1]!.x - points[0]!.x)),
+				Math.abs(selection.y - points[0]!.top),
+				Math.abs(selection.height - points[0]!.height),
+				Math.abs(caret.x - points[1]!.x),
+				Math.abs(caret.y - points[1]!.top),
+			);
+		}).toBeLessThan(2);
+		await expect.poll(() => editor.element.locator('.stanza-editor-selection').evaluate(element => {
+			const rect = element.getBoundingClientRect();
+			const pointerEvents = (element as HTMLElement).style.pointerEvents;
+			// Test browser paint order even though the selection background ignores pointer input.
+			(element as HTMLElement).style.pointerEvents = 'auto';
+			try {
+				const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+				const textIndex = stack.findIndex(node => node.closest('.view-lines'));
+				return textIndex >= 0 && stack.indexOf(element) > textIndex;
+			} finally {
+				(element as HTMLElement).style.pointerEvents = pointerEvents;
+			}
+		})).toBe(true);
 		await page.keyboard.insertText('!');
 		await expect(line).toHaveText('mode switcher > !');
 	});
@@ -8147,12 +7340,7 @@ suite('standalone browser component', () => {
 			range.setStart(node, 0);
 			range.setEnd(node, 1);
 			const rect = range.getBoundingClientRect();
-			return {
-				x: rect.left + rect.width / 2 + 0.25,
-				y: rect.top + rect.height / 2,
-				width: rect.width,
-				left: rect.left,
-			};
+			return { x: rect.left + rect.width / 2 + 0.25, y: rect.top + rect.height / 2, width: rect.width, left: rect.left };
 		});
 		await page.mouse.move(point.x, point.y);
 		await page.mouse.down();
@@ -8237,16 +7425,12 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ControlOrMeta+Home');
 		await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
 		await page.keyboard.press('ControlOrMeta+End');
-		await expect
-			.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight))
-			.toBe(true);
-		await expect
-			.poll(async () => {
-				const map = (await slider.boundingBox())!;
-				const bar = (await thumb.boundingBox())!;
-				return map.y + map.height - bar.y - bar.height;
-			})
-			.toBeCloseTo(0, 1);
+		await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
+		await expect.poll(async () => {
+			const map = (await slider.boundingBox())!;
+			const bar = (await thumb.boundingBox())!;
+			return map.y + map.height - bar.y - bar.height;
+		}).toBeCloseTo(0, 1);
 		await minimap.hover();
 		await expect(slider).toHaveCSS('opacity', '1');
 		const box = (await slider.boundingBox())!;
@@ -8332,14 +7516,10 @@ suite('standalone browser component', () => {
 		}
 		const point = measurements[4]!;
 		await page.mouse.click(point.x, point.y);
-		await expect
-			.poll(() =>
-				editor.element.locator('.stanza-editor-caret.primary').evaluate((element, point) => {
-					const bounds = element.getBoundingClientRect();
-					return Math.abs(bounds.left + parseFloat(getComputedStyle(element).paddingLeft) - point.x);
-				}, point),
-			)
-			.toBeLessThan(1);
+		await expect.poll(() => editor.element.locator('.stanza-editor-caret.primary').evaluate((element, point) => {
+			const bounds = element.getBoundingClientRect();
+			return Math.abs(bounds.left + parseFloat(getComputedStyle(element).paddingLeft) - point.x);
+		}, point)).toBeLessThan(1);
 		await page.keyboard.insertText('!');
 		await expect.poll(() => editor.lines.allTextContents()).toEqual([...lines.slice(0, 4), '\t\t!nested']);
 		await editor.input.press('ControlOrMeta+z');
@@ -8361,30 +7541,24 @@ suite('standalone browser component', () => {
 		await editor.element.hover();
 		await page.mouse.wheel(0, 600);
 		await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(600);
-		await expect
-			.poll(() =>
-				editor.element.evaluate(root => {
-					const bounds = root.getBoundingClientRect();
-					const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')].filter(
-						row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom,
-					);
-					return {
-						hasVisibleLines: rows.length > 0,
-						aligned: rows.every(row => {
-							const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!;
-							return (
-								number.querySelector('.line-numbers')!.textContent === String(Number(row.dataset.lineIndex) + 1) &&
-								number.getBoundingClientRect().top === row.getBoundingClientRect().top
-							);
-						}),
-						scrollTop: root.scrollTop,
-					};
+		await expect.poll(() => editor.element.evaluate(root => {
+			const bounds = root.getBoundingClientRect();
+			const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+				.filter(row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom);
+			return {
+				hasVisibleLines: rows.length > 0,
+				aligned: rows.every(row => {
+					const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!;
+					return number.querySelector('.line-numbers')!.textContent === String(Number(row.dataset.lineIndex) + 1)
+						&& number.getBoundingClientRect().top === row.getBoundingClientRect().top;
 				}),
-			)
-			.toEqual({ hasVisibleLines: true, aligned: true, scrollTop: 0 });
+				scrollTop: root.scrollTop,
+			};
+		})).toEqual({ hasVisibleLines: true, aligned: true, scrollTop: 0 });
 		const lineIndex = await editor.element.evaluate(root => {
 			const bounds = root.getBoundingClientRect();
-			return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')].find(row => row.getBoundingClientRect().top >= bounds.top)!.dataset.lineIndex!;
+			return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+				.find(row => row.getBoundingClientRect().top >= bounds.top)!.dataset.lineIndex!;
 		});
 		// Gutter overlays ignore pointer events; the editor resolves the clicked
 		// position through its hit-test controller rather than a number element handler.
@@ -8393,16 +7567,14 @@ suite('standalone browser component', () => {
 		// Line-number clicks select the complete source line. Collapse that selection
 		// to its start before editing, and verify the selected row independently.
 		const clickedLine = Number(lineIndex) + 1;
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing()))
-			.toMatchObject({
-				selection: `[${clickedLine},1 -> ${clickedLine + 1},1]`,
-				focused: true,
-			});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toMatchObject({
+			selection: `[${clickedLine},1 -> ${clickedLine + 1},1]`, focused: true,
+		});
 		await page.keyboard.press('ArrowLeft');
 		await page.keyboard.press('Home');
 		await page.keyboard.insertText('!');
-		await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`)).toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
+		await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`))
+			.toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
 		await expect(editor.input).toBeFocused();
 	});
 
@@ -8433,17 +7605,11 @@ suite('standalone browser component', () => {
 		await editor.input.press('ControlOrMeta+Home');
 		await editor.input.press('End');
 		await editor.input.evaluate(element => {
-			const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+			const context = (element as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!context) throw new Error('Browser EditContext is unavailable');
-			context.dispatchEvent(
-				Object.assign(new Event('textupdate'), {
-					text: 'hi',
-					updateRangeStart: 0,
-					updateRangeEnd: 5,
-					selectionStart: 0,
-					selectionEnd: 2,
-				}),
-			);
+			context.dispatchEvent(Object.assign(new Event('textupdate'), {
+				text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 0, selectionEnd: 2,
+			}));
 		});
 		await expect(editor.lines).toHaveText(['hi', 'world']);
 		await page.keyboard.insertText('!');
@@ -8488,13 +7654,11 @@ suite('standalone browser component', () => {
 			},
 			{
 				id: 'ash-high-contrast-dark',
-				colors: ['rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 0)'],
-				shadow: 'none',
+				colors: ['rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 0)'], shadow: 'none',
 			},
 			{
 				id: 'ash-high-contrast-light',
-				colors: ['rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 238)'],
-				shadow: 'none',
+				colors: ['rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 238)'], shadow: 'none',
 			},
 		] as const) {
 			const [background, hover, active] = colors;
@@ -8504,17 +7668,13 @@ suite('standalone browser component', () => {
 			await expect(thumb).toHaveCSS('background-color', background);
 			await expect(slider).toHaveCSS('background-color', background);
 			await expect(vertical).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await expect
-				.poll(() =>
-					editor.element.locator('canvas.decorationsOverviewRuler').evaluate((element: HTMLCanvasElement) => {
-						const pixels = element.getContext('2d')!.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
-						const probe = document.createElement('canvas').getContext('2d')!;
-						probe.fillStyle = getComputedStyle(element.closest('.stanza-editor')!).backgroundColor;
-						probe.fillRect(0, 0, 1, 1);
-						return Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',');
-					}),
-				)
-				.toBe(true);
+			await expect.poll(() => editor.element.locator('canvas.decorationsOverviewRuler').evaluate((element: HTMLCanvasElement) => {
+				const pixels = element.getContext('2d')!.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
+				const probe = document.createElement('canvas').getContext('2d')!;
+				probe.fillStyle = getComputedStyle(element.closest('.stanza-editor')!).backgroundColor;
+				probe.fillRect(0, 0, 1, 1);
+				return Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',');
+			})).toBe(true);
 			await expect.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow)).toBe(shadow);
 			await minimap.hover();
 			await expect(slider).toHaveCSS('background-color', hover);
@@ -8545,6 +7705,7 @@ suite('standalone browser component', () => {
 		expect(colors.overridden).toBe('rgb(18, 52, 86)');
 		expect(colors.restored).toBe(colors.initial);
 	});
+
 
 	test('nested completion snippets retain inner mirrors and outer Tab and Shift Tab navigation', async function () {
 		const { page } = browserTests;

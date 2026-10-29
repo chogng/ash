@@ -28,10 +28,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 	private _defaultExternalOpener: IExternalOpener | undefined;
 	private readonly _externalOpeners = new LinkedList<IExternalOpener>();
 
-	constructor(
-		@ICodeEditorService editorService: ICodeEditorService,
-		@ICommandService private readonly commandService: ICommandService,
-	) {
+	constructor(@ICodeEditorService editorService: ICodeEditorService, @ICommandService private readonly commandService: ICommandService) {
 		super();
 		this._defaultExternalOpener = {
 			openExternal: async href => {
@@ -50,13 +47,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 				const parsed = extractSelection(typeof target === 'string' ? URI.parse(target) : target);
 				const resource = parsed.uri;
 				const editor = await editorService.openCodeEditor(
-					{
-						resource,
-						options: {
-							...options?.editorOptions,
-							selection: parsed.selection ?? options?.editorOptions?.selection,
-						},
-					},
+					{ resource, options: { ...options?.editorOptions, selection: parsed.selection ?? options?.editorOptions?.selection } },
 					editorService.getFocusedCodeEditor(),
 					options?.openToSide,
 				);
@@ -90,7 +81,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 		if (!options?.skipValidation) {
 			const validationTarget = this._resolvedUriTargets.get(resource.toString()) ?? target;
 			for (const validator of this._validators) {
-				if (!(await validator.shouldOpen(validationTarget, options))) return false;
+				if (!await validator.shouldOpen(validationTarget, options)) return false;
 			}
 		}
 		if (resource.scheme === 'command') {

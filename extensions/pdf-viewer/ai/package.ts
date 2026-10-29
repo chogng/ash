@@ -8,12 +8,7 @@ import { gzipSync } from 'node:zlib';
 /** Stages an offline PDF MCP + Skill package; signing and installation remain with Extensions. */
 export async function buildPdfReadingPackage(source: string, output: string): Promise<void> {
 	if (process.platform !== 'darwin' && process.platform !== 'linux') throw new Error('The packaged stdio launcher currently supports macOS and Linux; build and validate on the target host');
-	try {
-		await stat(output);
-		throw new Error('Refusing to replace an existing PDF reading submission');
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-	}
+	try { await stat(output); throw new Error('Refusing to replace an existing PDF reading submission'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 	const staging = output + '.partial-' + crypto.randomUUID();
 	const payload = join(staging, 'package');
 	const server = join(payload, 'server');
@@ -21,21 +16,7 @@ export async function buildPdfReadingPackage(source: string, output: string): Pr
 	const { build } = require('esbuild') as typeof import('esbuild');
 	try {
 		await mkdir(server, { recursive: true });
-		const bundled = await build({
-			metafile: true,
-			entryPoints: { server: join(source, 'ai/server.ts'), worker: join(source, 'ai/worker.ts') },
-			outdir: server,
-			outExtension: { '.js': '.mjs' },
-			platform: 'node',
-			format: 'esm',
-			target: 'node22',
-			bundle: true,
-			external: ['pdfjs-dist/*', '@napi-rs/canvas'],
-			banner: {
-				js: "import { createRequire as createBundleRequire } from 'node:module'; const require = createBundleRequire(import.meta.url);",
-			},
-			logLevel: 'silent',
-		});
+		const bundled = await build({ metafile: true, entryPoints: { server: join(source, 'ai/server.ts'), worker: join(source, 'ai/worker.ts') }, outdir: server, outExtension: { '.js': '.mjs' }, platform: 'node', format: 'esm', target: 'node22', bundle: true, external: ['pdfjs-dist/*', '@napi-rs/canvas'], banner: { js: "import { createRequire as createBundleRequire } from 'node:module'; const require = createBundleRequire(import.meta.url);" }, logLevel: 'silent' });
 		await writeBundledNotices(Object.keys(bundled.metafile.inputs), payload);
 		await writeFile(join(server, 'launch'), '#!/usr/bin/env node\nimport("./server.mjs").catch(error => { console.error(error.message); process.exitCode = 1; });\n', { mode: 0o755 });
 		await chmod(join(server, 'launch'), 0o755);
@@ -47,11 +28,7 @@ export async function buildPdfReadingPackage(source: string, output: string): Pr
 			await cp(join(pdfRoot, path), target, { recursive: true, dereference: true });
 		}
 		const canvasRoot = dirname(require.resolve('@napi-rs/canvas/package.json'));
-		await cp(canvasRoot, join(modules, '@napi-rs/canvas'), {
-			recursive: true,
-			dereference: true,
-			filter: path => !path.slice(canvasRoot.length + 1).startsWith('node_modules'),
-		});
+		await cp(canvasRoot, join(modules, '@napi-rs/canvas'), { recursive: true, dereference: true, filter: path => !path.slice(canvasRoot.length + 1).startsWith('node_modules') });
 		require('@napi-rs/canvas');
 		const native = Object.keys(require.cache).find(path => path.includes('@napi-rs') && path.endsWith('.node'));
 		if (!native) throw new Error('The target host has no supported canvas binary');
@@ -61,13 +38,7 @@ export async function buildPdfReadingPackage(source: string, output: string): Pr
 		const compressed = gzipSync(nativeBytes, { level: 9 });
 		if (nativeBytes.length > 64 * 1024 * 1024 || compressed.length > 16 * 1024 * 1024) throw new Error('Canvas binary exceeds the supported package budget');
 		await writeFile(join(server, 'canvas.node.gz'), compressed);
-		await writeFile(
-			join(server, 'native.json'),
-			JSON.stringify({
-				bytes: nativeBytes.length,
-				sha256: createHash('sha256').update(nativeBytes).digest('hex'),
-			}) + '\n',
-		);
+		await writeFile(join(server, 'native.json'), JSON.stringify({ bytes: nativeBytes.length, sha256: createHash('sha256').update(nativeBytes).digest('hex') }) + '\n');
 		await cp(join(nativeRoot, 'package.json'), join(server, 'native-package.json'));
 		await mkdir(join(payload, 'mcp'));
 		await writeFile(join(payload, 'mcp/package.json'), JSON.stringify({ schemaVersion: 1, transport: 'stdio', command: 'server/launch', args: [] }, null, 2) + '\n');
@@ -75,46 +46,10 @@ export async function buildPdfReadingPackage(source: string, output: string): Pr
 		await cp(join(source, 'ai/README.md'), join(payload, 'README.md'));
 		await cp(resolve(source, '../../LICENSE'), join(payload, 'LICENSE'));
 		await cp(join(dirname(require.resolve('@modelcontextprotocol/sdk/server/index.js')), '../../..', 'LICENSE'), join(payload, 'MCP-SDK-LICENSE'));
-		await writeFile(
-			join(payload, 'runtime.json'),
-			JSON.stringify(
-				{
-					platform: process.platform,
-					architecture: process.arch,
-					node: '>=22.13.0',
-					canvas: nativePackage.name,
-					pdfjs: JSON.parse(await readFile(join(pdfRoot, 'package.json'), 'utf8')).version,
-				},
-				null,
-				2,
-			) + '\n',
-		);
-		await writeFile(
-			join(staging, 'catalog.json'),
-			JSON.stringify(
-				{
-					schemaVersion: 2,
-					packageType: 'plugin',
-					source: 'official',
-					id: 'ash/pdf-reading',
-					version: '1.0.0',
-					displayName: 'PDF Reading',
-					description: 'Read PDF text and page images with AI, with page citations and source version checks.',
-					license: 'LicenseRef-Ash',
-					capabilities: [
-						{ kind: 'mcp', id: 'pdf-reading', path: 'mcp/package.json' },
-						{ kind: 'skill', id: 'pdf-reading', path: 'skills/pdf-reading' },
-					],
-				},
-				null,
-				2,
-			) + '\n',
-		);
+		await writeFile(join(payload, 'runtime.json'), JSON.stringify({ platform: process.platform, architecture: process.arch, node: '>=22.13.0', canvas: nativePackage.name, pdfjs: JSON.parse(await readFile(join(pdfRoot, 'package.json'), 'utf8')).version }, null, 2) + '\n');
+		await writeFile(join(staging, 'catalog.json'), JSON.stringify({ schemaVersion: 2, packageType: 'plugin', source: 'official', id: 'ash/pdf-reading', version: '1.0.0', displayName: 'PDF Reading', description: 'Read PDF text and page images with AI, with page citations and source version checks.', license: 'LicenseRef-Ash', capabilities: [{ kind: 'mcp', id: 'pdf-reading', path: 'mcp/package.json' }, { kind: 'skill', id: 'pdf-reading', path: 'skills/pdf-reading' }] }, null, 2) + '\n');
 		await rename(staging, output);
-	} catch (error) {
-		await rm(staging, { recursive: true, force: true });
-		throw error;
-	}
+	} catch (error) { await rm(staging, { recursive: true, force: true }); throw error; }
 }
 
 /** Preserve licenses for the dependencies whose code esbuild includes in the stdio runtime. */
@@ -125,13 +60,9 @@ async function writeBundledNotices(inputs: string[], payload: string): Promise<v
 		while (directory !== dirname(directory)) {
 			try {
 				const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
-				if (typeof manifest.name === 'string') {
-					packages.add(directory);
-					break;
-				}
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+				if (typeof manifest.name === 'string') { packages.add(directory); break; }
 			}
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 			directory = dirname(directory);
 		}
 	}

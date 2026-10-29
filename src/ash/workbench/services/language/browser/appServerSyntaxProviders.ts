@@ -4,34 +4,12 @@ import { nestDocumentSymbols } from '../../../../editor/common/languages.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
-import type {
-	ISyntaxApi,
-	SyntaxAnalyzeResult,
-	SyntaxDiagnostic,
-	SyntaxSelectionRangesResult,
-	SyntaxSymbol,
-	SyntaxRange,
-	SyntaxLanguage,
-	SyntaxEdit,
-} from '../../../../platform/syntax/common/syntaxApi.js';
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage, SyntaxEdit } from '../../../../platform/syntax/common/syntaxApi.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { type TextSnapshot } from '../../../../editor/common/core/textChange.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import {
-	type LanguageDocumentSymbol,
-	type LanguageDocumentSymbolProvider,
-	type LanguageDocumentSymbolRequest,
-	type LanguageFoldingRange,
-	type LanguageFoldingRangeProvider,
-	type LanguageFoldingRangeRequest,
-	type LanguageSelectionRangeProvider,
-	type LanguageSelectionRangeRequest,
-	type SyntaxProvider,
-	type SyntaxProviderRequest,
-	LanguageDiagnosticSeverity,
-	type LanguageDiagnosticResult,
-} from '../../../../editor/common/languages.js';
+import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest, type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest, type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest, type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;
@@ -99,16 +77,12 @@ class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, Lang
 			session.markOversized();
 			return Object.freeze([]);
 		}
-		const result = await session.selectionRanges(
-			language,
-			request.snapshot.version,
-			text,
+		const result = await session.selectionRanges(language, request.snapshot.version, text,
 			request.ranges.map(range => ({
 				start: { lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 },
 				end: { lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 },
 			})),
-			signal,
-		);
+			signal);
 		return result && !request.model.tokenization.syntaxTree ? projectAppServerSyntaxSelectionRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
@@ -146,36 +120,19 @@ class ModelSyntaxSession extends Disposable {
 	private readonly pendingEdits = new Map<number, readonly SyntaxEdit[]>();
 	private requiresReopen = false;
 
-	constructor(
-		private readonly syntax: ISyntaxApi,
-		private readonly model: TextModel,
-		onModelDispose: () => void,
-	) {
+	constructor(private readonly syntax: ISyntaxApi, private readonly model: TextModel, onModelDispose: () => void) {
 		super();
-		this._register(
-			model.onDidChangeContent(change => {
-				this.pendingEdits.set(
-					change.version,
-					Object.freeze(
-						change.changes.map(contentChange =>
-							Object.freeze({
-								startOffset: contentChange.rangeOffset,
-								endOffset: contentChange.rangeOffset + contentChange.rangeLength,
-								text: contentChange.text,
-							}),
-						),
-					),
-				);
-				if (model.getValueLength() > MAX_SYNTAX_INPUT_BYTES) this.requiresReopen = true;
-			}),
-		);
+		this._register(model.onDidChangeContent(change => {
+			this.pendingEdits.set(change.version, Object.freeze(change.changes.map(contentChange => Object.freeze({
+				startOffset: contentChange.rangeOffset,
+				endOffset: contentChange.rangeOffset + contentChange.rangeLength,
+				text: contentChange.text,
+			}))));
+			if (model.getValueLength() > MAX_SYNTAX_INPUT_BYTES) this.requiresReopen = true;
+		}));
 		this._register(model.onWillDispose(onModelDispose));
 		// A backend switch releases the old parser and its queued text deltas.
-		this._register(
-			model.onDidChangeTokens(() => {
-				if (model.tokenization.syntaxTree) onModelDispose();
-			}),
-		);
+		this._register(model.onDidChangeTokens(() => { if (model.tokenization.syntaxTree) onModelDispose(); }));
 	}
 
 	public async analyze(language: SyntaxLanguage, version: number, text: string, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
@@ -220,12 +177,7 @@ class ModelSyntaxSession extends Disposable {
 				for (let nextVersion = current.version + 1; nextVersion <= version; nextVersion += 1) {
 					const edits = this.pendingEdits.get(nextVersion);
 					if (!edits) throw new Error(`Missing editor changes for syntax revision ${nextVersion}`);
-					await this.syntax.update({
-						documentId: this.model.id,
-						previousRevision: nextVersion - 1,
-						revision: nextVersion,
-						edits,
-					});
+					await this.syntax.update({ documentId: this.model.id, previousRevision: nextVersion - 1, revision: nextVersion, edits });
 					this.pendingEdits.delete(nextVersion);
 				}
 			} else if (current.version !== version) {
@@ -234,10 +186,7 @@ class ModelSyntaxSession extends Disposable {
 			this.synchronized = Object.freeze({ generation, language, version });
 			return query();
 		});
-		this.queue = result.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.queue = result.then(() => undefined, () => undefined);
 		return result;
 	}
 
@@ -308,18 +257,11 @@ function projectRange(range: SyntaxRange, lines: readonly string[]): Range {
 	return Range.fromPositions(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 
-function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): Position {
-	if (
-		!Number.isSafeInteger(position.lineIndex) ||
-		!Number.isSafeInteger(position.columnIndex) ||
-		position.lineIndex < 0 ||
-		position.columnIndex < 0 ||
-		position.lineIndex >= lines.length ||
-		position.columnIndex > lines[position.lineIndex]!.length
-	) {
+function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number; }, lines: readonly string[]): Position {
+	if (!Number.isSafeInteger(position.lineIndex) || !Number.isSafeInteger(position.columnIndex) || position.lineIndex < 0 || position.columnIndex < 0 || position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
 		throw new RangeError('App Server syntax range is outside its editor snapshot');
 	}
-	return new Position(position.lineIndex + 1, position.columnIndex + 1);
+	return new Position((position.lineIndex) + 1, (position.columnIndex) + 1);
 }
 
 function snapshotLines(snapshot: TextSnapshot): readonly string[] {

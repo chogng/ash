@@ -20,19 +20,13 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(card).not.toHaveCSS('box-shadow', 'none');
 	await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
 	const expectCardGeometry = async (): Promise<void> => {
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
-					const layout = document.querySelector<HTMLElement>('.ash-sessions-workbench-layout')!.getBoundingClientRect();
-					const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
-					const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
-					return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom].map(
-						Math.round,
-					);
-				}),
-			)
-			.toEqual([4, 4, 0, 0, 0, 0]);
+		await expect.poll(() => page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
+			const layout = document.querySelector<HTMLElement>('.ash-sessions-workbench-layout')!.getBoundingClientRect();
+			const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
+			const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
+			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom].map(Math.round);
+		})).toEqual([4, 4, 0, 0, 0, 0]);
 	};
 	await expectCardGeometry();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
@@ -41,13 +35,11 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
-	await expect
-		.poll(async () => {
-			const part = (await sessions.boundingBox())!;
-			const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
-			return [pane.x - part.x, pane.width - part.width].map(Math.round);
-		})
-		.toEqual([0, 0]);
+	await expect.poll(async () => {
+		const part = (await sessions.boundingBox())!;
+		const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
+		return [pane.x - part.x, pane.width - part.width].map(Math.round);
+	}).toEqual([0, 0]);
 	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
 	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
@@ -82,14 +74,10 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await page.setViewportSize({ width: 1_280, height: 900 });
 	const sidebarBounds = (await sidebar.boundingBox())!;
 	const sashes = page.locator('.ash-sessions-workbench-layout .ash-sash');
-	const sidebarSashIndex = await sashes.evaluateAll(
-		(elements, edge) =>
-			elements.findIndex(element => {
-				const bounds = element.getBoundingClientRect();
-				return bounds.height > 200 && Math.abs(bounds.x + bounds.width / 2 - edge) < 8;
-			}),
-		sidebarBounds.x + sidebarBounds.width,
-	);
+	const sidebarSashIndex = await sashes.evaluateAll((elements, edge) => elements.findIndex(element => {
+		const bounds = element.getBoundingClientRect();
+		return bounds.height > 200 && Math.abs(bounds.x + bounds.width / 2 - edge) < 8;
+	}), sidebarBounds.x + sidebarBounds.width);
 	expect(sidebarSashIndex).toBeGreaterThanOrEqual(0);
 	const sash = (await sashes.nth(sidebarSashIndex).boundingBox())!;
 	await page.mouse.move(sash.x + sash.width / 2, sash.y + sash.height / 2);
@@ -97,13 +85,11 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await page.mouse.move(sash.x + sash.width / 2 + 40, sash.y + sash.height / 2, { steps: 5 });
 	await page.mouse.up();
 	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(sidebarBounds.width + 20);
-	await expect
-		.poll(async () => {
-			const part = (await page.locator('[data-part="sessions"]').boundingBox())!;
-			const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
-			return Math.abs(pane.width - part.width);
-		})
-		.toBeLessThanOrEqual(1);
+	await expect.poll(async () => {
+		const part = (await page.locator('[data-part="sessions"]').boundingBox())!;
+		const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
+		return Math.abs(pane.width - part.width);
+	}).toBeLessThanOrEqual(1);
 	const sidebarWidth = (await sidebar.boundingBox())!.width;
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(auxiliarybar).toBeVisible();
@@ -166,32 +152,19 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 		await page.mouse.move(sash.x + sash.width / 2 + delta, sash.y + sash.height / 2, { steps: 5 });
 		await page.mouse.up();
 	};
-	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number }[]> =>
-		panes.evaluateAll(elements =>
-			elements.map(element => {
-				const chat = element.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')!;
-				return {
-					identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
-					active: element.classList.contains('active'),
-					// These drafts are one model line; a narrow editor can wrap it into several visual rows.
-					text: [...element.querySelectorAll('.view-lines > .view-line .stanza-editor-line-text')]
-						.map(line => line.textContent)
-						.join('')
-						.replace(/\u00a0/g, ' '),
-					width: element.getBoundingClientRect().width,
-				};
-			}),
-		);
-	const draftReference = async (): Promise<{
-		kind: 'untitled';
-		session: { untitledSessionId: string; title: string; workspace: { type: 'current' } };
-	}> => ({
+	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number; }[]> => panes.evaluateAll(elements => elements.map(element => {
+		const chat = element.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')!;
+		return {
+			identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
+			active: element.classList.contains('active'),
+			// These drafts are one model line; a narrow editor can wrap it into several visual rows.
+			text: [...element.querySelectorAll('.view-lines > .view-line .stanza-editor-line-text')].map(line => line.textContent).join('').replace(/\u00a0/g, ' '),
+			width: element.getBoundingClientRect().width,
+		};
+	}));
+	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }> => ({
 		kind: 'untitled',
-		session: {
-			untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id'))!,
-			title: 'New session',
-			workspace: { type: 'current' },
-		},
+		session: { untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
 	});
 	await typeDraft('Chat first draft');
 	const chatReferences = [await draftReference()];
@@ -216,13 +189,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
 	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
 	await seedStorageOnNextLoad(application, page, identity, {
-		'sessions.viewState': {
-			value: JSON.stringify({
-				version: 1,
-				pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } },
-			}),
-			target: StorageTarget.MACHINE,
-		},
+		'sessions.viewState': { value: JSON.stringify({ version: 1, pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } } }), target: StorageTarget.MACHINE },
 		'sessions.gridState': null,
 		'sessions.gridState.chat': null,
 		'sessions.gridState.code': null,
@@ -261,15 +228,13 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(4);
 	await expect.poll(async () => (await snapshot()).map(({ identity, text }) => ({ identity, text }))).toEqual(shared.slice(1).map(({ identity, text }) => ({ identity, text })));
-	await expect
-		.poll(async () => {
-			const entries = await readStorageEntries(application, page, identity);
-			return {
-				removed: Boolean(entries[`sessions.inputDraft:untitled:${shared[0]!.identity}`]),
-				retained: Boolean(entries[`sessions.inputDraft:untitled:${shared[4]!.identity}`]),
-			};
-		})
-		.toEqual({ removed: false, retained: true });
+	await expect.poll(async () => {
+		const entries = await readStorageEntries(application, page, identity);
+		return {
+			removed: Boolean(entries[`sessions.inputDraft:untitled:${shared[0]!.identity}`]),
+			retained: Boolean(entries[`sessions.inputDraft:untitled:${shared[4]!.identity}`]),
+		};
+	}).toEqual({ removed: false, retained: true });
 	// Selecting an already visible Session focuses its group without collapsing its siblings.
 	const selected = (await snapshot()).find(slot => slot.active)!;
 	await page.locator('.ash-sessions-list-item[aria-current="page"]').click();
@@ -288,72 +253,31 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 test('Sessions migrates nested editor geometry into its conversation grid and restores drafts after reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.setViewportSize({ width: 1900, height: 950 });
-	const references: {
-		kind: 'untitled';
-		session: { untitledSessionId: string; title: string; workspace: { type: 'current' } };
-	}[] = [];
+	const references: { kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }[] = [];
 	for (let index = 0; index < 3; index++) {
 		if (index) await page.locator('[data-action-id="sessions.newSession"] button').click();
 		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.input.focus();
 		await editor.waitForTypeInEditor(`Retained draft ${index}`);
 		const chat = page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)');
-		references.push({
-			kind: 'untitled',
-			session: {
-				untitledSessionId: (await chat.getAttribute('data-untitled-session-id'))!,
-				title: `Conversation ${index}`,
-				workspace: { type: 'current' },
-			},
-		});
+		references.push({ kind: 'untitled', session: { untitledSessionId: (await chat.getAttribute('data-untitled-session-id'))!, title: `Conversation ${index}`, workspace: { type: 'current' } } });
 	}
 	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
-	await expect
-		.poll(async () => {
-			const stored = (await readStorageEntries(application, page, identity))['sessions.viewState'];
-			return stored && JSON.parse(stored.value).drafts.length;
-		})
-		.toBe(3);
+	await expect.poll(async () => {
+		const stored = (await readStorageEntries(application, page, identity))['sessions.viewState'];
+		return stored && JSON.parse(stored.value).drafts.length;
+	}).toBe(3);
 	const entries = await readStorageEntries(application, page, identity);
 	const selection = JSON.parse(entries['sessions.viewState'].value);
 	const groupIds = ['saved-left', 'saved-top', 'saved-bottom'];
-	const leaf = (groupId: string, size: number) => ({
-		type: 'leaf',
-		data: { groupId },
-		size,
-		visible: true,
-		priority: 'normal',
-	});
+	const leaf = (groupId: string, size: number) => ({ type: 'leaf', data: { groupId }, size, visible: true, priority: 'normal' });
 	await seedStorageOnNextLoad(application, page, identity, {
-		'sessions.viewState': {
-			value: JSON.stringify({ ...selection, visible: references, active: 2 }),
-			target: StorageTarget.MACHINE,
-		},
+		'sessions.viewState': { value: JSON.stringify({ ...selection, visible: references, active: 2 }), target: StorageTarget.MACHINE },
 		'sessions.gridState': {
 			value: JSON.stringify({
-				version: 2,
-				groups: references.map((reference, index) => ({
-					groupId: groupIds[index],
-					id: `untitled:${reference.session.untitledSessionId}`,
-				})),
-				layout: {
-					type: 'branch',
-					orientation: 'horizontal',
-					size: 1200,
-					priority: 'normal',
-					children: [
-						leaf(groupIds[0]!, 400),
-						{
-							type: 'branch',
-							orientation: 'vertical',
-							size: 800,
-							priority: 'normal',
-							children: [leaf(groupIds[1]!, 200), leaf(groupIds[2]!, 400)],
-						},
-					],
-				},
-			}),
-			target: StorageTarget.MACHINE,
+				version: 2, groups: references.map((reference, index) => ({ groupId: groupIds[index], id: `untitled:${reference.session.untitledSessionId}` })),
+				layout: { type: 'branch', orientation: 'horizontal', size: 1200, priority: 'normal', children: [leaf(groupIds[0]!, 400), { type: 'branch', orientation: 'vertical', size: 800, priority: 'normal', children: [leaf(groupIds[1]!, 200), leaf(groupIds[2]!, 400)] }] },
+			}), target: StorageTarget.MACHINE
 		},
 	});
 	await page.reload({ waitUntil: 'domcontentloaded' });
@@ -362,27 +286,14 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 		await expect(host.locator('.ash-sessions-chat-slot')).toHaveCount(3);
 		await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
 		const expectedIds = references.map(reference => reference.session.untitledSessionId);
-		await expect
-			.poll(() =>
-				host
-					.locator('.ash-sessions-chat-slot')
-					.evaluateAll(
-						(slots, expected) =>
-							expected.map(id => {
-								const slot = slots.find(slot => slot.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')?.dataset.untitledSessionId === id)!;
-								const bounds = slot.getBoundingClientRect();
-								return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-							}),
-						expectedIds,
-					)
-					.then(([left, top, bottom]) => ({
-						leftOf: left.x < top.x,
-						stacked: top.y < bottom.y && Math.abs(top.x - bottom.x) < 1,
-						widthRatio: Math.round(top.width / left.width),
-						heightRatio: Math.round(bottom.height / top.height),
-					})),
-			)
-			.toEqual({ leftOf: true, stacked: true, widthRatio: 2, heightRatio: 2 });
+		await expect.poll(() => host.locator('.ash-sessions-chat-slot').evaluateAll((slots, expected) => expected.map(id => {
+			const slot = slots.find(slot => slot.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')?.dataset.untitledSessionId === id)!;
+			const bounds = slot.getBoundingClientRect();
+			return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+		}), expectedIds).then(([left, top, bottom]) => ({
+			leftOf: left.x < top.x, stacked: top.y < bottom.y && Math.abs(top.x - bottom.x) < 1,
+			widthRatio: Math.round(top.width / left.width), heightRatio: Math.round(bottom.height / top.height),
+		}))).toEqual({ leftOf: true, stacked: true, widthRatio: 2, heightRatio: 2 });
 		await expect(host.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', expectedIds[2]!);
 		for (let index = 0; index < references.length; index++) {
 			const slot = host.locator('.ash-sessions-chat-slot').filter({ has: page.locator(`[data-untitled-session-id="${expectedIds[index]}"]`) });
@@ -396,7 +307,5 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 	const saved = JSON.parse((await readStorageEntries(application, page, identity))['sessions.gridState'].value);
 	expect(saved.version).toBe(3);
 	expect(saved.layout.children[1].orientation).toBe('vertical');
-	expect([saved.layout.children[0].data.id, ...saved.layout.children[1].children.map((leaf: { data: { id: string } }) => leaf.data.id)]).toEqual(
-		references.map(reference => `untitled:${reference.session.untitledSessionId}`),
-	);
+	expect([saved.layout.children[0].data.id, ...saved.layout.children[1].children.map((leaf: { data: { id: string; }; }) => leaf.data.id)]).toEqual(references.map(reference => `untitled:${reference.session.untitledSessionId}`));
 });

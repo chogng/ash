@@ -2,14 +2,8 @@ import * as strings from '../../../base/common/strings.js';
 import type { IEditorWhitespace, ILineHeightChangeAccessor, IPartialViewLinesViewportData, IViewWhitespaceViewportData, IWhitespaceChangeAccessor } from '../viewModel.js';
 import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
-interface IPendingChange {
-	id: string;
-	newAfterLineNumber: number;
-	newHeight: number;
-}
-interface IPendingRemove {
-	id: string;
-}
+interface IPendingChange { id: string; newAfterLineNumber: number; newHeight: number; }
+interface IPendingRemove { id: string; }
 
 class PendingChanges {
 	private hasPending = false;
@@ -17,18 +11,9 @@ class PendingChanges {
 	private changes: IPendingChange[] = [];
 	private removes: IPendingRemove[] = [];
 
-	insert(value: EditorWhitespace): void {
-		this.hasPending = true;
-		this.inserts.push(value);
-	}
-	change(value: IPendingChange): void {
-		this.hasPending = true;
-		this.changes.push(value);
-	}
-	remove(value: IPendingRemove): void {
-		this.hasPending = true;
-		this.removes.push(value);
-	}
+	insert(value: EditorWhitespace): void { this.hasPending = true; this.inserts.push(value); }
+	change(value: IPendingChange): void { this.hasPending = true; this.changes.push(value); }
+	remove(value: IPendingRemove): void { this.hasPending = true; this.removes.push(value); }
 
 	commit(linesLayout: LinesLayout): void {
 		if (!this.hasPending) return;
@@ -51,7 +36,7 @@ export class EditorWhitespace implements IEditorWhitespace {
 		public ordinal: number,
 		public height: number,
 		public minWidth: number,
-	) {}
+	) { }
 }
 
 /** Owns the vertical layout of model lines and whitespace zones. */
@@ -88,13 +73,8 @@ export class LinesLayout {
 		return low;
 	}
 
-	setDefaultLineHeight(lineHeight: number): void {
-		this.lineHeightsManager.defaultLineHeight = lineHeight;
-	}
-	setPadding(paddingTop: number, paddingBottom: number): void {
-		this.paddingTop = paddingTop;
-		this.paddingBottom = paddingBottom;
-	}
+	setDefaultLineHeight(lineHeight: number): void { this.lineHeightsManager.defaultLineHeight = lineHeight; }
+	setPadding(paddingTop: number, paddingBottom: number): void { this.paddingTop = paddingTop; this.paddingBottom = paddingBottom; }
 
 	onFlushed(lineCount: number, customLineHeightData: CustomLineHeightData[]): void {
 		this.lineCount = lineCount;
@@ -122,17 +102,13 @@ export class LinesLayout {
 			callback({
 				insertWhitespace: (afterLineNumber, ordinal, heightInPx, minWidth) => {
 					hadAChange = true;
-					const id = this.instanceId + ++this.lastWhitespaceId;
+					const id = this.instanceId + (++this.lastWhitespaceId);
 					this.pendingChanges.insert(new EditorWhitespace(id, afterLineNumber | 0, ordinal | 0, heightInPx | 0, minWidth | 0));
 					return id;
 				},
 				changeOneWhitespace: (id, newAfterLineNumber, newHeight) => {
 					hadAChange = true;
-					this.pendingChanges.change({
-						id,
-						newAfterLineNumber: newAfterLineNumber | 0,
-						newHeight: newHeight | 0,
-					});
+					this.pendingChanges.change({ id, newAfterLineNumber: newAfterLineNumber | 0, newHeight: newHeight | 0 });
 				},
 				removeWhitespace: id => {
 					hadAChange = true;
@@ -158,19 +134,16 @@ export class LinesLayout {
 		}
 		const idsToRemove = new Set(removes.map(remove => remove.id));
 		const changesById = new Map(changes.map(change => [change.id, change]));
-		const apply = (values: EditorWhitespace[]): EditorWhitespace[] =>
-			values.flatMap(whitespace => {
-				if (idsToRemove.has(whitespace.id)) return [];
-				const change = changesById.get(whitespace.id);
-				if (change) {
-					whitespace.afterLineNumber = change.newAfterLineNumber;
-					whitespace.height = change.newHeight;
-				}
-				return [whitespace];
-			});
-		this.whitespaces = apply(this.whitespaces)
-			.concat(apply(inserts))
-			.sort((a, b) => a.afterLineNumber - b.afterLineNumber || a.ordinal - b.ordinal);
+		const apply = (values: EditorWhitespace[]): EditorWhitespace[] => values.flatMap(whitespace => {
+			if (idsToRemove.has(whitespace.id)) return [];
+			const change = changesById.get(whitespace.id);
+			if (change) {
+				whitespace.afterLineNumber = change.newAfterLineNumber;
+				whitespace.height = change.newHeight;
+			}
+			return [whitespace];
+		});
+		this.whitespaces = apply(this.whitespaces).concat(apply(inserts)).sort((a, b) => a.afterLineNumber - b.afterLineNumber || a.ordinal - b.ordinal);
 		this.prefixSumValidIndex = -1;
 	}
 
@@ -180,9 +153,7 @@ export class LinesLayout {
 		this.prefixSumValidIndex = Math.min(this.prefixSumValidIndex, index - 1);
 	}
 
-	private findWhitespaceIndex(id: string): number {
-		return this.whitespaces.findIndex(whitespace => whitespace.id === id);
-	}
+	private findWhitespaceIndex(id: string): number { return this.whitespaces.findIndex(whitespace => whitespace.id === id); }
 
 	private changeOneWhitespace(id: string, newAfterLineNumber: number, newHeight: number): void {
 		const index = this.findWhitespaceIndex(id);
@@ -267,9 +238,7 @@ export class LinesLayout {
 		return index < this.whitespaces.length ? index : -1;
 	}
 
-	getFirstWhitespaceIndexAfterLineNumber(lineNumber: number): number {
-		return this.findFirstWhitespaceAfterLineNumber(lineNumber | 0);
-	}
+	getFirstWhitespaceIndexAfterLineNumber(lineNumber: number): number { return this.findFirstWhitespaceAfterLineNumber(lineNumber | 0); }
 
 	getVerticalOffsetForLineNumber(lineNumber: number, includeViewZones = false): number {
 		lineNumber |= 0;
@@ -277,37 +246,23 @@ export class LinesLayout {
 		return lineHeight + this.getWhitespaceAccumulatedHeightBeforeLineNumber(lineNumber - (includeViewZones ? 1 : 0)) + this.paddingTop;
 	}
 
-	getLineHeightForLineNumber(lineNumber: number): number {
-		return this.lineHeightsManager.heightForLineNumber(lineNumber);
-	}
+	getLineHeightForLineNumber(lineNumber: number): number { return this.lineHeightsManager.heightForLineNumber(lineNumber); }
 
 	getVerticalOffsetAfterLineNumber(lineNumber: number, includeViewZones = false): number {
 		lineNumber |= 0;
-		return (
-			this.lineHeightsManager.getAccumulatedLineHeightsIncludingLineNumber(lineNumber) +
-			this.getWhitespaceAccumulatedHeightBeforeLineNumber(lineNumber + (includeViewZones ? 1 : 0)) +
-			this.paddingTop
-		);
+		return this.lineHeightsManager.getAccumulatedLineHeightsIncludingLineNumber(lineNumber) + this.getWhitespaceAccumulatedHeightBeforeLineNumber(lineNumber + (includeViewZones ? 1 : 0)) + this.paddingTop;
 	}
 
-	hasWhitespace(): boolean {
-		return this.whitespaces.length > 0;
-	}
+	hasWhitespace(): boolean { return this.whitespaces.length > 0; }
 
 	getWhitespaceMinWidth(): number {
 		if (this.minWidth === -1) this.minWidth = this.whitespaces.reduce((maximum, whitespace) => Math.max(maximum, whitespace.minWidth), 0);
 		return this.minWidth;
 	}
 
-	isAfterLines(verticalOffset: number): boolean {
-		return verticalOffset > this.getLinesTotalHeight();
-	}
-	isInTopPadding(verticalOffset: number): boolean {
-		return this.paddingTop !== 0 && verticalOffset < this.paddingTop;
-	}
-	isInBottomPadding(verticalOffset: number): boolean {
-		return this.paddingBottom !== 0 && verticalOffset >= this.getLinesTotalHeight() - this.paddingBottom;
-	}
+	isAfterLines(verticalOffset: number): boolean { return verticalOffset > this.getLinesTotalHeight(); }
+	isInTopPadding(verticalOffset: number): boolean { return this.paddingTop !== 0 && verticalOffset < this.paddingTop; }
+	isInBottomPadding(verticalOffset: number): boolean { return this.paddingBottom !== 0 && verticalOffset >= this.getLinesTotalHeight() - this.paddingBottom; }
 
 	getLineNumberAtOrAfterVerticalOffset(verticalOffset: number): number {
 		verticalOffset |= 0;
@@ -356,8 +311,7 @@ export class LinesLayout {
 		let centeredLineNumber = -1;
 		for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
 			const lineHeight = this.getLineHeightForLineNumber(lineNumber);
-			if (centeredLineNumber === -1 && ((currentVerticalOffset <= verticalCenter && verticalCenter < currentVerticalOffset + lineHeight) || currentVerticalOffset > verticalCenter))
-				centeredLineNumber = lineNumber;
+			if (centeredLineNumber === -1 && ((currentVerticalOffset <= verticalCenter && verticalCenter < currentVerticalOffset + lineHeight) || currentVerticalOffset > verticalCenter)) centeredLineNumber = lineNumber;
 			currentVerticalOffset += lineHeight;
 			relativeVerticalOffset[lineNumber - startLineNumber] = currentLineRelativeOffset;
 			currentLineRelativeOffset += lineHeight;
@@ -371,10 +325,7 @@ export class LinesLayout {
 					whitespaceHeight = this.getHeightForWhitespaceIndex(whitespaceIndex) | 0;
 				}
 			}
-			if (currentVerticalOffset >= verticalOffset2) {
-				endLineNumber = lineNumber;
-				break;
-			}
+			if (currentVerticalOffset >= verticalOffset2) { endLineNumber = lineNumber; break; }
 		}
 		if (centeredLineNumber === -1) centeredLineNumber = endLineNumber;
 		const endTop = this.getVerticalOffsetForLineNumber(endLineNumber) | 0;
@@ -382,16 +333,7 @@ export class LinesLayout {
 		let completelyVisibleEndLineNumber = endLineNumber;
 		if (completelyVisibleStartLineNumber < completelyVisibleEndLineNumber && startTop < verticalOffset1) completelyVisibleStartLineNumber++;
 		if (completelyVisibleStartLineNumber < completelyVisibleEndLineNumber && endTop + this.getLineHeightForLineNumber(endLineNumber) > verticalOffset2) completelyVisibleEndLineNumber--;
-		return {
-			bigNumbersDelta,
-			startLineNumber,
-			endLineNumber,
-			relativeVerticalOffset,
-			centeredLineNumber,
-			completelyVisibleStartLineNumber,
-			completelyVisibleEndLineNumber,
-			lineHeight: this.lineHeightsManager.defaultLineHeight,
-		};
+		return { bigNumbersDelta, startLineNumber, endLineNumber, relativeVerticalOffset, centeredLineNumber, completelyVisibleStartLineNumber, completelyVisibleEndLineNumber, lineHeight: this.lineHeightsManager.defaultLineHeight };
 	}
 
 	getVerticalOffsetForWhitespaceIndex(whitespaceIndex: number): number {
@@ -424,12 +366,7 @@ export class LinesLayout {
 		if (index < 0 || index >= this.whitespaces.length) return null;
 		const verticalOffsetForWhitespace = this.getVerticalOffsetForWhitespaceIndex(index);
 		if (verticalOffsetForWhitespace > verticalOffset) return null;
-		return {
-			id: this.getIdForWhitespaceIndex(index),
-			afterLineNumber: this.getAfterLineNumberForWhitespaceIndex(index),
-			verticalOffset: verticalOffsetForWhitespace,
-			height: this.getHeightForWhitespaceIndex(index),
-		};
+		return { id: this.getIdForWhitespaceIndex(index), afterLineNumber: this.getAfterLineNumberForWhitespaceIndex(index), verticalOffset: verticalOffsetForWhitespace, height: this.getHeightForWhitespaceIndex(index) };
 	}
 
 	getWhitespaceViewportData(verticalOffset1: number, verticalOffset2: number): IViewWhitespaceViewportData[] {
@@ -439,29 +376,14 @@ export class LinesLayout {
 		for (let index = startIndex; index < this.whitespaces.length; index++) {
 			const verticalOffset = this.getVerticalOffsetForWhitespaceIndex(index);
 			if (verticalOffset >= verticalOffset2) break;
-			result.push({
-				id: this.getIdForWhitespaceIndex(index),
-				afterLineNumber: this.getAfterLineNumberForWhitespaceIndex(index),
-				verticalOffset,
-				height: this.getHeightForWhitespaceIndex(index),
-			});
+			result.push({ id: this.getIdForWhitespaceIndex(index), afterLineNumber: this.getAfterLineNumberForWhitespaceIndex(index), verticalOffset, height: this.getHeightForWhitespaceIndex(index) });
 		}
 		return result;
 	}
 
-	getWhitespaces(): IEditorWhitespace[] {
-		return this.whitespaces.slice();
-	}
-	getWhitespacesCount(): number {
-		return this.whitespaces.length;
-	}
-	getIdForWhitespaceIndex(index: number): string {
-		return this.whitespaces[index | 0]!.id;
-	}
-	getAfterLineNumberForWhitespaceIndex(index: number): number {
-		return this.whitespaces[index | 0]!.afterLineNumber;
-	}
-	getHeightForWhitespaceIndex(index: number): number {
-		return this.whitespaces[index | 0]!.height;
-	}
+	getWhitespaces(): IEditorWhitespace[] { return this.whitespaces.slice(); }
+	getWhitespacesCount(): number { return this.whitespaces.length; }
+	getIdForWhitespaceIndex(index: number): string { return this.whitespaces[index | 0]!.id; }
+	getAfterLineNumberForWhitespaceIndex(index: number): number { return this.whitespaces[index | 0]!.afterLineNumber; }
+	getHeightForWhitespaceIndex(index: number): number { return this.whitespaces[index | 0]!.height; }
 }

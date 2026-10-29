@@ -4,18 +4,16 @@ import { localize } from '../../../nls.js';
 import type { IExtensionTerminalProfile, ITerminalProfile, TerminalArguments, TerminalIcon } from './terminal.js';
 
 /** Schema candidates are suggestions; unavailable persisted names retain their fallback semantics. */
-export function createProfileSchemaEnums(
-	detectedProfiles: readonly ITerminalProfile[],
-	extensionProfiles?: readonly IExtensionTerminalProfile[],
-): { values: (string | null)[]; markdownDescriptions: string[] } {
+export function createProfileSchemaEnums(detectedProfiles: readonly ITerminalProfile[], extensionProfiles?: readonly IExtensionTerminalProfile[]): {
+	values: (string | null)[];
+	markdownDescriptions: string[];
+} {
 	const values: (string | null)[] = [null];
 	const markdownDescriptions = [localize('terminalAutomaticProfile', 'Automatically detect the default')];
 	for (const profile of detectedProfiles) {
 		if (values.includes(profile.profileName)) continue;
 		values.push(profile.profileName);
-		markdownDescriptions.push(
-			`$(${profile.icon?.id ?? 'terminal'}) ${profile.profileName}\n\n\`\`\`json\n${JSON.stringify({ path: profile.path, args: profile.args, env: profile.env, overrideName: profile.overrideName, color: profile.color }, null, 2)}\n\`\`\``,
-		);
+		markdownDescriptions.push(`$(${profile.icon?.id ?? 'terminal'}) ${profile.profileName}\n\n\`\`\`json\n${JSON.stringify({ path: profile.path, args: profile.args, env: profile.env, overrideName: profile.overrideName, color: profile.color }, null, 2)}\n\`\`\``);
 	}
 	for (const profile of extensionProfiles ?? []) {
 		if (values.includes(profile.title)) continue;

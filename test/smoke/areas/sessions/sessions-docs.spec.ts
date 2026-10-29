@@ -15,10 +15,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const navigation = page.locator('.ash-sessions-activity-content');
 		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await expect(navigation.locator('[data-action-id="sessions.open.creator"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
-		const choose = page.getByRole('button', {
-			name: locale === 'en' ? 'Choose Docs editor' : '选择 Docs 编辑器',
-			exact: true,
-		});
+		const choose = page.getByRole('button', { name: locale === 'en' ? 'Choose Docs editor' : '选择 Docs 编辑器', exact: true });
 		await choose.click();
 		const quick = new QuickAccess(page);
 		await expect(quick.items).toHaveCount(4);
@@ -26,10 +23,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await choose.click();
 		await expect(quick.items.filter({ hasText: 'Markdown' }).last().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.input.press('Escape');
-		await page
-			.locator('.ash-creator-home')
-			.getByRole('button', { name: locale === 'en' ? 'Docs' : '文档', exact: true })
-			.click();
+		await page.locator('.ash-creator-home').getByRole('button', { name: locale === 'en' ? 'Docs' : '文档', exact: true }).click();
 		const markdown = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));
 		await markdown.waitForEditorFocus();
 		await markdown.waitForTypeInEditor('# Retained Docs draft');

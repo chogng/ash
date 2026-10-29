@@ -33,20 +33,13 @@ export function createSshRemoteAuthority(host: string): SshRemoteAuthority {
 export function createSshRemoteWorkspaceUri(host: string, path: string): URI {
 	const authority = createSshRemoteAuthority(host);
 	const normalizedPath = normalizeRemoteWorkspacePath(path);
-	const encodedPath = remoteUriPath(normalizedPath)
-		.split('/')
-		.map(segment => encodeURIComponent(segment))
-		.join('/');
+	const encodedPath = remoteUriPath(normalizedPath).split('/').map(segment => encodeURIComponent(segment)).join('/');
 	return URI.parse(`${ASH_REMOTE_SCHEME}://${authority.authority}${encodedPath}`);
 }
 
 /** Optional Session runtimes use an opaque authority; SessionDirectory owns execution routing. */
 export function createProviderRemoteWorkspaceUri(providerId: string, workspace: string, path: string): URI {
-	return URI.from({
-		scheme: ASH_REMOTE_SCHEME,
-		authority: `provider+${encodeURIComponent(JSON.stringify([providerId, workspace]))}`,
-		path: remoteUriPath(normalizeRemoteWorkspacePath(path)),
-	});
+	return URI.from({ scheme: ASH_REMOTE_SCHEME, authority: `provider+${encodeURIComponent(JSON.stringify([providerId, workspace]))}`, path: remoteUriPath(normalizeRemoteWorkspacePath(path)) });
 }
 
 /** Resolves the connection authority encoded by a Remote resource URI. */
@@ -103,13 +96,7 @@ export function normalizeRemoteWorkspacePath(path: string): string {
 		if (drive) normalized = normalized[0]!.toUpperCase() + normalized.slice(1);
 		const rest = normalized.slice(drive ? 3 : 2);
 		if ((drive && normalized[2] !== '/') || (!drive && rest.split('/').length < 2)) throw new Error('Remote workspace path must be absolute');
-		if (
-			!(drive && rest.length === 0) &&
-			rest
-				.split('/')
-				.some(segment => !segment || /[. ]$/u.test(segment) || /[<>:"|?*]/u.test(segment) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])[ ]*(?:\.|$)/iu.test(segment))
-		)
-			throw new Error('Remote workspace path must be canonical');
+		if (!(drive && rest.length === 0) && rest.split('/').some(segment => !segment || /[. ]$/u.test(segment) || /[<>:"|?*]/u.test(segment) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])[ ]*(?:\.|$)/iu.test(segment))) throw new Error('Remote workspace path must be canonical');
 		return normalized;
 	}
 	// This is a filesystem identity, including legitimate spaces in the final POSIX name.

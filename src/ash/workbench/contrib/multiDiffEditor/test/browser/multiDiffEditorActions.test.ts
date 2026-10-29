@@ -47,29 +47,24 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		class TrackingMultiDiffEditor extends MultiDiffEditor {
 			public readonly calls: string[] = [];
 
-			constructor(@IInstantiationService instantiationService: IInstantiationService, @IThemeService themes: IThemeService, @IStorageService storage: IStorageService) {
-				super(
-					{
-						modelService: {
-							acquire: async () => {
-								throw new Error('Not used');
-							},
-							dispose() {},
-							[Symbol.dispose]() {},
-						},
-						createComputationService: () => ({
-							computeDiff: async () => {
-								throw new Error('Not used');
-							},
-							onDidChange: Event.None,
-							dispose() {},
-							[Symbol.dispose]() {},
-						}),
+			constructor(
+				@IInstantiationService instantiationService: IInstantiationService,
+				@IThemeService themes: IThemeService,
+				@IStorageService storage: IStorageService,
+			) {
+				super({
+					modelService: {
+						acquire: async () => { throw new Error('Not used'); },
+						dispose() { },
+						[Symbol.dispose]() { },
 					},
-					instantiationService,
-					themes,
-					storage,
-				);
+					createComputationService: () => ({
+						computeDiff: async () => { throw new Error('Not used'); },
+						onDidChange: Event.None,
+						dispose() { },
+						[Symbol.dispose]() { },
+					}),
+				}, instantiationService, themes, storage);
 			}
 
 			public override nextChange(): undefined {
@@ -114,10 +109,8 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		const openedInputs: IResourceEditorInput[] = [];
 		services.registerInstance(IEditorService, {
 			...emptyEditorServiceState,
-			async openEditor(input) {
-				openedInputs.push(input);
-			},
-			focusActiveEditor() {},
+			async openEditor(input) { openedInputs.push(input); },
+			focusActiveEditor() { },
 		});
 		using commands = new CommandService(services);
 		using contexts = new ContextKeyService();
@@ -126,7 +119,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(menus.getMenuActions(MenuId.EditorTitle), []);
 		contexts.setContext(ActiveEditorContext.key, MULTI_DIFF_EDITOR_ID);
 		assert.deepEqual(
-			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map(action => action.id)]),
+			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map((action) => action.id)]),
 			[
 				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffToggleCollapseAllCommandId]],
 				['1_diff', [MultiDiffToggleCollapseUnchangedRegionsCommandId]],
@@ -147,10 +140,9 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.equal(toggle.icon, new MultiDiffToggleCollapseAllAction().desc.icon);
 		const targetInput = { resource: URI.parse('file:///workspace/src/first.ts') };
 		const fileActions = menus.getMenuActions(MenuId.MultiDiffEditorFileToolbar, { arg: targetInput });
-		assert.deepEqual(
-			fileActions.map(([group, actions]) => [group, actions.map(action => action.id)]),
-			[['navigation', [MultiDiffGoToFileCommandId]]],
-		);
+		assert.deepEqual(fileActions.map(([group, actions]) => [group, actions.map((action) => action.id)]), [
+			['navigation', [MultiDiffGoToFileCommandId]],
+		]);
 		await fileActions[0]![1][0]!.run();
 		assert.deepEqual(openedInputs, [targetInput]);
 
@@ -163,10 +155,9 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand', 'toggleCollapse', 'toggleUnchanged']);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(chinese.locale, chinese.bundles);
-		assert.deepEqual(
-			[new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction()].map(action => commandActionLabel(action.desc.title)),
-			['折叠所有差异', '展开所有差异', '切换折叠未变更区域'],
-		);
+		assert.deepEqual([
+			new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction(),
+		].map(action => commandActionLabel(action.desc.title)), ['折叠所有差异', '展开所有差异', '切换折叠未变更区域']);
 		const chineseToggle = new MultiDiffToggleCollapseAllAction().desc;
 		assert.equal(commandActionLabel(chineseToggle.title), '折叠所有差异');
 		assert.ok(chineseToggle.toggled && 'condition' in chineseToggle.toggled);

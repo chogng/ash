@@ -56,8 +56,7 @@ export class RemoteRuntimeInstaller {
 
 	constructor(readonly options: RemoteRuntimeInstallerOptions) {
 		validateTrustedRemoteRuntimeArtifact(options.artifact);
-		if (!validLocalCommand(options.remoteExecutable) || !validLocalCommand(options.sshExecutable))
-			throw new Error('Remote installer executables must be non-empty and contain no control characters');
+		if (!validLocalCommand(options.remoteExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error('Remote installer executables must be non-empty and contain no control characters');
 		if (options.installRoot !== undefined && !isCanonicalAbsoluteRemotePath(options.installRoot)) throw new Error('Remote runtime install root must be a canonical absolute remote path');
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
@@ -88,25 +87,18 @@ export class RemoteRuntimeInstaller {
 		const reportProgress = request.onProgress ?? this.options.onProgress;
 		const progressDecoder = reportProgress === undefined ? undefined : new RemoteRuntimeInstallProgressDecoder(reportProgress);
 		if (progressDecoder !== undefined) args.push('--progress', 'json-lines');
-		const observer = progressDecoder === undefined && request.signal === undefined ? undefined : { onStderrData: (chunk: string) => progressDecoder?.accept(chunk), signal: request.signal };
+		const observer = progressDecoder === undefined && request.signal === undefined
+			? undefined
+			: { onStderrData: (chunk: string) => progressDecoder?.accept(chunk), signal: request.signal };
 		const result = await this.runCommand(this.options.remoteExecutable, args, this.options.environment, observer);
 		progressDecoder?.finish();
 		if (result.exitCode !== 0) {
 			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
 			throw new Error(`Remote runtime installation failed: ${diagnostic}`);
 		}
-		const executable = result.stdout
-			.split(/\r?\n/u)
-			.map(line => line.trim())
-			.reverse()
-			.find(line => line.length > 0);
+		const executable = result.stdout.split(/\r?\n/u).map(line => line.trim()).reverse().find(line => line.length > 0);
 		const suffix = artifact.target.endsWith('-windows-msvc') ? '.exe' : '';
-		if (
-			executable === undefined ||
-			!isCanonicalAbsoluteRemotePath(executable) ||
-			isWindowsRemotePath(executable) !== (suffix === '.exe') ||
-			!executable.endsWith(`/bin/ash-remote-server${suffix}`)
-		) {
+		if (executable === undefined || !isCanonicalAbsoluteRemotePath(executable) || isWindowsRemotePath(executable) !== (suffix === '.exe') || !executable.endsWith(`/bin/ash-remote-server${suffix}`)) {
 			throw new Error('Remote runtime installation did not return a valid immutable executable path');
 		}
 		return executable;
@@ -116,7 +108,7 @@ export class RemoteRuntimeInstaller {
 class RemoteRuntimeInstallProgressDecoder {
 	private buffered = '';
 
-	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) {}
+	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) { }
 
 	accept(chunk: string): void {
 		this.buffered += chunk;
@@ -151,13 +143,8 @@ function parseRemoteRuntimeInstallProgress(line: string): RemoteRuntimeInstallPr
 		case 'finalizingRemoteInstall':
 			return Object.freeze({ phase: value.phase });
 		case 'uploading':
-			if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes)
-				throw new Error('Remote runtime installer returned invalid upload progress');
-			return Object.freeze({
-				phase: value.phase,
-				transferredBytes: value.transferredBytes,
-				totalBytes: value.totalBytes,
-			});
+			if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes) throw new Error('Remote runtime installer returned invalid upload progress');
+			return Object.freeze({ phase: value.phase, transferredBytes: value.transferredBytes, totalBytes: value.totalBytes });
 		case 'complete':
 			if (value.disposition !== 'installed' && value.disposition !== 'reused') throw new Error('Remote runtime installer returned an invalid completion disposition');
 			return Object.freeze({ phase: value.phase, disposition: value.disposition });

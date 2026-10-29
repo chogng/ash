@@ -34,17 +34,9 @@ export class DeleteOperations {
 		model: ICursorSimpleModel,
 		selections: Selection[],
 		autoClosedCharacters: Range[],
-	): boolean {
-		return model.editingPolicy?.isAutoClosingPairDelete(autoClosingDelete, autoClosingBrackets, autoClosingQuotes, autoClosingPairsOpen, model, selections, autoClosedCharacters) ?? false;
-	}
+	): boolean { return model.editingPolicy?.isAutoClosingPairDelete(autoClosingDelete, autoClosingBrackets, autoClosingQuotes, autoClosingPairsOpen, model, selections, autoClosedCharacters) ?? false; }
 
-	public static deleteLeft(
-		prevEditOperationType: EditOperationType,
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		selections: Selection[],
-		autoClosedCharacters: Range[],
-	): [boolean, Array<ICommand | null>] {
+	public static deleteLeft(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[], autoClosedCharacters: Range[]): [boolean, Array<ICommand | null>] {
 		const paired = model.editingPolicy?.deleteAutoClosedPair(config, model, selections, autoClosedCharacters);
 		if (paired) return paired;
 
@@ -65,7 +57,8 @@ export class DeleteOperations {
 	public static cut(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[]): EditOperationResult {
 		const commands: Array<ICommand | null> = [];
 		let previousRange: Range | undefined;
-		const ordered = selections.map((selection, index) => ({ selection, index })).sort((left, right) => Position.compare(left.selection.getStartPosition(), right.selection.getStartPosition()));
+		const ordered = selections.map((selection, index) => ({ selection, index }))
+			.sort((left, right) => Position.compare(left.selection.getStartPosition(), right.selection.getStartPosition()));
 		for (const { selection, index } of ordered) {
 			let range: Range | undefined;
 			if (!selection.isEmpty()) {
@@ -89,6 +82,8 @@ export class DeleteOperations {
 		});
 	}
 }
+
+
 
 function deleteRightRange(selection: Selection, model: ICursorSimpleModel, config: CursorConfiguration): Range {
 	if (!selection.isEmpty()) return selection;

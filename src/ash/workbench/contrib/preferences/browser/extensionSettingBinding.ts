@@ -14,30 +14,16 @@ export class ExtensionSettingBinding extends Disposable implements SettingValueB
 	private generation = 0;
 	readonly id: string;
 	readonly defaultValue: unknown;
-	constructor(
-		private readonly configuration: IRegisteredConfiguration,
+	constructor(private readonly configuration: IRegisteredConfiguration,
 		@ICommandService private readonly commands: ICommandService,
 		@IServerEventApi events: IServerEventApi,
-		@ILogService private readonly log: ILogService,
-	) {
-		super();
-		this.id = configuration.key;
-		this.value = this.defaultValue = configuration.defaultValue;
-		const refresh = (): void => {
-			void this.read().catch(error => {
-				if (!this.isDisposed) this.log.error('extensions', 'Cannot read extension setting', error);
-			});
-		};
-		const listener = events.subscribe(event => {
-			if (event.method === 'config/changed') refresh();
-		});
-		this._register(toDisposable(() => listener.dispose()));
-		this._register(CommandsRegistry.onDidChangeCommands(refresh));
-		refresh();
+		@ILogService private readonly log: ILogService) {
+		super(); this.id = configuration.key; this.value = this.defaultValue = configuration.defaultValue;
+		const refresh = (): void => { void this.read().catch(error => { if (!this.isDisposed) this.log.error('extensions', 'Cannot read extension setting', error); }); };
+		const listener = events.subscribe(event => { if (event.method === 'config/changed') refresh(); }); this._register(toDisposable(() => listener.dispose()));
+		this._register(CommandsRegistry.onDidChangeCommands(refresh)); refresh();
 	}
-	getValue(): unknown {
-		return this.value;
-	}
+	getValue(): unknown { return this.value; }
 	private async read(): Promise<void> {
 		const binding = this.configuration.extensionBinding!;
 		const generation = ++this.generation;
@@ -45,15 +31,12 @@ export class ExtensionSettingBinding extends Disposable implements SettingValueB
 		const result: unknown = await this.commands.executeCommand(binding.readCommand);
 		if (this.isDisposed || generation !== this.generation) return;
 		if (!result || typeof result !== 'object' || !(binding.property in result)) throw new TypeError('Extension setting read result is invalid');
-		this.value = this.configuration.parse((result as Record<string, unknown>)[binding.property]);
-		this.changed.fire();
+		this.value = this.configuration.parse((result as Record<string, unknown>)[binding.property]); this.changed.fire();
 	}
 	async updateValue(value: unknown): Promise<void> {
 		const binding = this.configuration.extensionBinding!;
 		await this.commands.executeCommand(binding.writeCommand, this.configuration.parse(value));
 		await this.read();
 	}
-	async resetValue(): Promise<void> {
-		await this.updateValue(this.defaultValue);
-	}
+	async resetValue(): Promise<void> { await this.updateValue(this.defaultValue); }
 }

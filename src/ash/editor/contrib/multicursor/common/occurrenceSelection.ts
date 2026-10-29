@@ -25,12 +25,16 @@ export function addOccurrenceSelection(model: ITextModel, selections: readonly S
 
 	const matches = findOccurrences(model, source);
 	const selectedRanges = new Set(selections.map(selection => rangeKey(model, selection)));
-	const startOffset = direction === EditorOccurrenceDirection.Next ? model.getOffsetAt(source.getEndPosition()) : model.getOffsetAt(source.getStartPosition());
-	const candidate = orderedCandidates(model, matches, startOffset, direction).find(
-		match => !selectedRanges.has(rangeKey(model, Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition()))),
-	);
+	const startOffset = direction === EditorOccurrenceDirection.Next
+		? model.getOffsetAt(source.getEndPosition())
+		: model.getOffsetAt(source.getStartPosition());
+	const candidate = orderedCandidates(model, matches, startOffset, direction)
+		.find(match => !selectedRanges.has(rangeKey(model, Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition()))));
 	if (!candidate) return selections;
-	return Object.freeze([...selections, Selection.fromPositions(candidate.range.getStartPosition(), candidate.range.getEndPosition())]);
+	return Object.freeze([
+		...selections,
+		Selection.fromPositions(candidate.range.getStartPosition(), candidate.range.getEndPosition()),
+	]);
 }
 
 /** Selects every exact occurrence of the primary selection or cursor word. */
@@ -58,17 +62,17 @@ function findOccurrences(model: ITextModel, source: Selection): readonly FindMat
 
 function orderedCandidates(model: ITextModel, matches: readonly FindMatch[], startOffset: number, direction: EditorOccurrenceDirection): readonly FindMatch[] {
 	const ordered = direction === EditorOccurrenceDirection.Next ? matches : [...matches].reverse();
-	const beforeWrap = ordered.filter(match =>
-		direction === EditorOccurrenceDirection.Next ? model.getOffsetAt(match.range.getStartPosition()) >= startOffset : model.getOffsetAt(match.range.getEndPosition()) <= startOffset,
-	);
-	const afterWrap = ordered.filter(match =>
-		direction === EditorOccurrenceDirection.Next ? model.getOffsetAt(match.range.getStartPosition()) < startOffset : model.getOffsetAt(match.range.getEndPosition()) > startOffset,
-	);
+	const beforeWrap = ordered.filter(match => direction === EditorOccurrenceDirection.Next
+		? model.getOffsetAt(match.range.getStartPosition()) >= startOffset
+		: model.getOffsetAt(match.range.getEndPosition()) <= startOffset);
+	const afterWrap = ordered.filter(match => direction === EditorOccurrenceDirection.Next
+		? model.getOffsetAt(match.range.getStartPosition()) < startOffset
+		: model.getOffsetAt(match.range.getEndPosition()) > startOffset);
 	return Object.freeze([...beforeWrap, ...afterWrap]);
 }
 
 function replacePrimarySelection(selections: readonly Selection[], replacement: Selection): readonly Selection[] {
-	const nextSelections = selections.map((selection, index) => (index === 0 ? replacement : selection));
+	const nextSelections = selections.map((selection, index) => index === 0 ? replacement : selection);
 	return Object.freeze(nextSelections);
 }
 

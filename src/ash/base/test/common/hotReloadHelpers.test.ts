@@ -8,7 +8,7 @@ import type { IReader } from '../../common/observable.js';
 import type { IDisposable } from '../../common/lifecycle.js';
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string; }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 enableHotReload();
@@ -18,10 +18,7 @@ test('readHotReloadableExport invalidates its reader when the defining module re
 	using reader = new TestReader();
 	assert.equal(readHotReloadableExport(exported, reader), exported);
 
-	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({
-		oldExports: { exported },
-		newSrc: 'feature.ts',
-	});
+	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({ oldExports: { exported }, newSrc: 'feature.ts' });
 	assert.ok(accept);
 	assert.equal(accept({ exported: () => 'after' }), true);
 	assert.equal(reader.invalidations, 1);
@@ -33,26 +30,20 @@ test('readHotReloadableExport ignores unrelated module replacements', () => {
 	using reader = new TestReader();
 	readHotReloadableExport(exported, reader);
 
-	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({
-		oldExports: { unrelated: () => undefined },
-		newSrc: 'other.ts',
-	});
+	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({ oldExports: { unrelated: () => undefined }, newSrc: 'other.ts' });
 	assert.equal(accept, undefined);
 	assert.equal(reader.invalidations, 0);
 });
 
 test('createHotClass retains one observable slot across class replacement', async () => {
-	const Original = class HotReloadHelpersFixture {};
+	const Original = class HotReloadHelpersFixture { };
 	const original = createHotClass(Original);
-	const Replacement = class HotReloadHelpersFixture {};
+	const Replacement = class HotReloadHelpersFixture { };
 	const replacement = createHotClass(Replacement);
 
 	assert.equal(replacement, original);
 	assert.notEqual(original.get(), Replacement);
-	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({
-		oldExports: { HotReloadHelpersFixture: Original },
-		newSrc: 'hotClass.ts',
-	});
+	const accept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({ oldExports: { HotReloadHelpersFixture: Original }, newSrc: 'hotClass.ts' });
 	assert.ok(accept);
 	assert.equal(accept({ HotReloadHelpersFixture: Replacement }), true);
 	await new Promise(resolve => setTimeout(resolve, 0));
@@ -65,7 +56,7 @@ class TestReader implements IReader, IDisposable {
 
 	readObservable<T>(observable: IObservable<T>): T {
 		this.registration?.dispose();
-		this.registration = observable.onDidChange(() => (this.invalidations += 1));
+		this.registration = observable.onDidChange(() => this.invalidations += 1);
 		return observable.get();
 	}
 

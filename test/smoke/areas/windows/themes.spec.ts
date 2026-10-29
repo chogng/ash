@@ -17,24 +17,20 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 		await popup.setViewportSize({ width, height: 900 });
 		await expect(titlebar.getByRole('button', { name: 'Open Theme…', exact: true })).toBeVisible();
 		await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
-		await expect
-			.poll(() =>
-				titlebar.locator('.ash-dropdown-with-primary-action-view-item').evaluate(element => {
-					const main = element.querySelector('.ash-dropdown-with-primary-primary button')!.getBoundingClientRect();
-					const arrow = element.querySelector('.ash-dropdown-with-primary-dropdown button')!.getBoundingClientRect();
-					const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
-					return {
-						mainHeight: main.height,
-						arrowHeight: arrow.height,
-						arrowWidth: arrow.width,
-						actionSize,
-						mainHasSize: main.height >= actionSize,
-						matchingHeight: Math.abs(main.height - arrow.height) < 0.5,
-						squareArrow: Math.abs(arrow.width - arrow.height) < 0.5,
-					};
-				}),
-			)
-			.toMatchObject({ mainHasSize: true, matchingHeight: true, squareArrow: true });
+		await expect.poll(() => titlebar.locator('.ash-dropdown-with-primary-action-view-item').evaluate(element => {
+			const main = element.querySelector('.ash-dropdown-with-primary-primary button')!.getBoundingClientRect();
+			const arrow = element.querySelector('.ash-dropdown-with-primary-dropdown button')!.getBoundingClientRect();
+			const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
+			return {
+				mainHeight: main.height,
+				arrowHeight: arrow.height,
+				arrowWidth: arrow.width,
+				actionSize,
+				mainHasSize: main.height >= actionSize,
+				matchingHeight: Math.abs(main.height - arrow.height) < 0.5,
+				squareArrow: Math.abs(arrow.width - arrow.height) < 0.5,
+			};
+		})).toMatchObject({ mainHasSize: true, matchingHeight: true, squareArrow: true });
 		await expect(titlebar.getByRole('button', { name: 'Open Theme (JSON)', exact: true })).toBeVisible();
 	}
 	const search = popup.getByRole('searchbox', { name: 'Search colors', exact: true });
@@ -74,11 +70,9 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await trigger.press('Enter');
 	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
 	const value = picker.getByRole('textbox', { name: 'Color value', exact: true });
-	await value.fill('2F6FED');
-	await value.press('Enter');
+	await value.fill('2F6FED'); await value.press('Enter');
 	const opacity = picker.getByRole('spinbutton', { name: 'Opacity (%)', exact: true });
-	await opacity.fill('40');
-	await opacity.press('Enter');
+	await opacity.fill('40'); await opacity.press('Enter');
 	await expect(color).toHaveValue('2F6FED');
 	await expect(popup.getByRole('spinbutton', { name: 'Opacity for editor.background (%)', exact: true })).toHaveValue('40');
 	await picker.getByRole('button', { name: 'Close', exact: true }).click();
@@ -87,17 +81,11 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await titlebar.getByRole('button', { name: 'Open Theme (JSON)', exact: true }).press('Enter');
 	await expect(source.input).toBeFocused();
 	await source.input.press('ControlOrMeta+a');
-	await popup.keyboard.insertText(
-		JSON.stringify(
-			{
-				name: 'Shared color picker regression',
-				type: 'light',
-				colors: { 'editor.background': '#123456' },
-			},
-			null,
-			2,
-		),
-	);
+	await popup.keyboard.insertText(JSON.stringify({
+		name: 'Shared color picker regression',
+		type: 'light',
+		colors: { 'editor.background': '#123456' },
+	}, null, 2));
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#123456');
 	await titlebar.getByRole('button', { name: 'Open Theme (UI)', exact: true }).click();
 	await expect(color).toHaveValue('123456');
@@ -137,10 +125,7 @@ test('Theme Editor opens themes in workspace tabs and preserves edits while swit
 	await input.fill('palette.ts');
 	await expect(picker.getByRole('option')).toHaveCount(0);
 	await input.fill('Ash Dark');
-	await picker
-		.getByRole('option')
-		.filter({ has: page.getByText('Ash Dark', { exact: true }) })
-		.click();
+	await picker.getByRole('option').filter({ has: page.getByText('Ash Dark', { exact: true }) }).click();
 	await expect(picker).toBeHidden();
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveCount(1);
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'dark.json' })).toHaveCount(1);
@@ -166,10 +151,7 @@ test('Theme Editor opens themes in workspace tabs and preserves edits while swit
 	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
 	await open.click();
 	await input.fill('Ash Light');
-	await picker
-		.getByRole('option')
-		.filter({ has: page.getByText('Ash Light', { exact: true }) })
-		.click();
+	await picker.getByRole('option').filter({ has: page.getByText('Ash Light', { exact: true }) }).click();
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveAttribute('aria-selected', 'true');
 	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
 	await draft.click();
@@ -207,10 +189,7 @@ test('Theme Editor tab close confirms unsaved changes and allows cancel, save an
 	await titlebar.getByRole('button', { name: 'Open Theme…', exact: true }).click();
 	const picker = page.locator('.ash-quick-pick');
 	await picker.getByRole('combobox', { name: 'Open Theme…', exact: true }).fill('Tab close regression');
-	await picker
-		.getByRole('option')
-		.filter({ has: page.getByText('Tab close regression', { exact: true }) })
-		.click();
+	await picker.getByRole('option').filter({ has: page.getByText('Tab close regression', { exact: true }) }).click();
 	await page.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
 	await page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#456789');
 	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", close);
@@ -266,9 +245,7 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await expect(page.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
 	const errors: string[] = [];
 	popup.on('pageerror', error => errors.push(error.message));
-	popup.on('console', message => {
-		if (message.type() === 'error') errors.push(message.text());
-	});
+	popup.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 	const editor = popup.locator('.ash-theme-editor:visible');
 	const preview = editor.frameLocator('.ash-theme-editor-preview');
 	await expect(preview.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -278,10 +255,7 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).press('Enter');
 	await expect(preview.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
-	for (const size of [
-		{ width: 1100, height: 760 },
-		{ width: 1440, height: 900 },
-	]) {
+	for (const size of [{ width: 1100, height: 760 }, { width: 1440, height: 900 }]) {
 		await popup.setViewportSize(size);
 		await preview.getByRole('button', { name: 'Hide Panel', exact: true }).click();
 		await preview.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
@@ -325,9 +299,7 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 });
 
 test('Seti extension fonts render in Explorer and editor tabs and can be switched off', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
-	if (!('windows' in application)) {
-		return;
-	}
+	if (!('windows' in application)) { return; }
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
 	await cp('extensions/theme-seti', join(home, 'extensions', 'theme-seti'), { recursive: true });
 	await workbench.page.reload();
@@ -336,15 +308,11 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 	const icon = row.locator('.ash-file-icon');
 	await expect(icon).toHaveCount(1);
 	await expect.poll(() => icon.textContent()).not.toBe('');
-	await expect
-		.poll(() =>
-			icon.evaluate(async element => {
-				const family = getComputedStyle(element).fontFamily;
-				await document.fonts.load('16px ' + family);
-				return family.startsWith('ash-file-icon-') && document.fonts.check('16px ' + family);
-			}),
-		)
-		.toBe(true);
+	await expect.poll(() => icon.evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		await document.fonts.load('16px ' + family);
+		return family.startsWith('ash-file-icon-') && document.fonts.check('16px ' + family);
+	})).toBe(true);
 	await row.click();
 	const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' });
 	const tabIcon = tab.locator('.ash-icon-label-icon');
@@ -357,15 +325,11 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 		return { width: bounds.width, height: bounds.height, beforeText: bounds.right <= text.left };
 	});
 	expect(geometry).toEqual({ width: 16, height: 16, beforeText: true });
-	await expect
-		.poll(() =>
-			tabIcon.evaluate(async element => {
-				const family = getComputedStyle(element).fontFamily;
-				await document.fonts.load('16px ' + family);
-				return document.fonts.check('16px ' + family);
-			}),
-		)
-		.toBe(true);
+	await expect.poll(() => tabIcon.evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		await document.fonts.load('16px ' + family);
+		return document.fonts.check('16px ' + family);
+	})).toBe(true);
 	const tabId = await tab.getAttribute('id');
 	for (const id of [null, 'vs-seti']) {
 		await (async id => {
@@ -379,7 +343,8 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 			await expect(tabIcon).toBeEmpty();
 			await expect(tabIcon).not.toHaveClass(/is-reserved/u);
 			await expect(tabIcon).toBeHidden();
-		} else await expect.poll(() => tabIcon.textContent()).not.toBe('');
+		}
+		else await expect.poll(() => tabIcon.textContent()).not.toBe('');
 		await expect(tab).toHaveAttribute('id', tabId!);
 	}
 });
@@ -467,7 +432,7 @@ test('Settings modal dims and restores Electron window controls', { tag: ['@elec
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
 		if (process.platform === 'darwin') return false;
-		const state = globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] };
+		const state = globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; };
 		state.modalControlColors = [];
 		const window = BrowserWindow.getAllWindows()[0]!;
 		const setOverlay = window.setTitleBarOverlay.bind(window);
@@ -483,25 +448,19 @@ test('Settings modal dims and restores Electron window controls', { tag: ['@elec
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
-	await expect
-		.poll(() =>
-			application.evaluate(() => {
-				const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1);
-				return !!colors && colors.color !== '#ffffff' && colors.symbolColor !== '#424242';
-			}),
-		)
-		.toBe(true);
+	await expect.poll(() => application.evaluate(() => {
+		const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; }).modalControlColors.at(-1);
+		return !!colors && colors.color !== '#ffffff' && colors.symbolColor !== '#424242';
+	})).toBe(true);
 	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
 	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toHaveCount(0);
-	await expect
-		.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1)))
-		.toEqual({ color: '#ffffff', symbolColor: '#424242' });
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; }).modalControlColors.at(-1))).toEqual({ color: '#ffffff', symbolColor: '#424242' });
 });
 
 test('Desktop migrates a user theme through the file provider and applies its colors', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
-		const state = globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] };
+		const state = globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string; }[]; };
 		state.themeUpdates = [];
 		if (process.platform === 'darwin') return false;
 		const window = BrowserWindow.getAllWindows()[0]!;
@@ -514,20 +473,7 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	});
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
 	await mkdir(join(home, 'themes'), { recursive: true });
-	await writeFile(
-		join(home, 'themes', 'test-migration.json'),
-		JSON.stringify({
-			version: 1,
-			id: 'test-migration',
-			label: 'Test Migration',
-			colorScheme: 'dark',
-			colors: {
-				'editor.background': '#123456',
-				'titleBar.background': '#18293a',
-				'titleBar.actionForeground': '#fedcba',
-			},
-		}),
-	);
+	await writeFile(join(home, 'themes', 'test-migration.json'), JSON.stringify({ version: 1, id: 'test-migration', label: 'Test Migration', colorScheme: 'dark', colors: { 'editor.background': '#123456', 'titleBar.background': '#18293a', 'titleBar.actionForeground': '#fedcba' } }));
 	await workbench.page.reload();
 	await workbench.waitForReady();
 	const source = JSON.parse(await readFile(join(home, 'themes', 'test-migration.json'), 'utf8'));
@@ -540,44 +486,23 @@ test('Desktop migrates a user theme through the file provider and applies its co
 		await writeUserSettings(workbench.page, JSON.stringify(values), snapshot.revision);
 	})();
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#123456');
-	await writeFile(
-		join(home, 'themes', 'test-migration.json'),
-		JSON.stringify({
-			name: 'Test Migration',
-			type: 'dark',
-			colors: {
-				'editor.background': '#304050',
-				'titleBar.background': '#18293a',
-				'titleBar.actionForeground': '#fedcba',
-			},
-		}),
-	);
+	await writeFile(join(home, 'themes', 'test-migration.json'), JSON.stringify({
+		name: 'Test Migration', type: 'dark',
+		colors: { 'editor.background': '#304050', 'titleBar.background': '#18293a', 'titleBar.actionForeground': '#fedcba' },
+	}));
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#304050');
 	if (hasOverlay) {
-		await expect
-			.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] }).themeUpdates.at(-1)))
-			.toEqual({ color: '#18293a', symbolColor: '#fedcba' });
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string; }[]; }).themeUpdates.at(-1))).toEqual({ color: '#18293a', symbolColor: '#fedcba' });
 	}
 });
+
 
 test('structured theme settings persist scoped colors and token rules after reload', async ({ workbench }) => {
 	const page = workbench.page;
 	const entries = [
-		{
-			setting: 'workbench.colorCustomizations',
-			key: '[Ash Dark][Ash Light]',
-			value: { 'editor.selectionBackground': '#123456' },
-		},
-		{
-			setting: 'editor.tokenColorCustomizations',
-			key: 'variables',
-			value: { foreground: '#654321', fontStyle: 'bold' },
-		},
-		{
-			setting: 'editor.semanticTokenColorCustomizations',
-			key: 'rules',
-			value: { 'variable.readonly': { foreground: '#fedcba', italic: false } },
-		},
+		{ setting: 'workbench.colorCustomizations', key: '[Ash Dark][Ash Light]', value: { 'editor.selectionBackground': '#123456' } },
+		{ setting: 'editor.tokenColorCustomizations', key: 'variables', value: { foreground: '#654321', fontStyle: 'bold' } },
+		{ setting: 'editor.semanticTokenColorCustomizations', key: 'rules', value: { 'variable.readonly': { foreground: '#fedcba', italic: false } } },
 	];
 	const openAppearance = async (): Promise<void> => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');

@@ -11,15 +11,10 @@ export interface SemanticGlyphStyle {
 
 /** Encodes the shared editor presentation into GPU glyph metadata. */
 export class SemanticTokenStyleResolver {
-	constructor(
-		private readonly theme: IColorTheme,
-		private readonly enabled: boolean,
-	) {}
+	constructor(private readonly theme: IColorTheme, private readonly enabled: boolean) { }
 
 	public resolve(token: ResolvedSemanticToken | undefined, tokenMetadata: number): SemanticGlyphStyle {
-		if (!token) {
-			return { tokenMetadata, color: undefined };
-		}
+		if (!token) { return { tokenMetadata, color: undefined }; }
 		const presentation = resolveSemanticTokenPresentation(token, this.theme, this.enabled);
 		if (presentation.fontStyle !== undefined) {
 			let flags = FontStyle.None;
@@ -28,9 +23,6 @@ export class SemanticTokenStyleResolver {
 			}
 			tokenMetadata = (tokenMetadata & ~MetadataConsts.FONT_STYLE_MASK) | (flags << MetadataConsts.FONT_STYLE_OFFSET);
 		}
-		return {
-			tokenMetadata,
-			color: presentation.foreground === undefined ? undefined : Color.Format.CSS.parse(presentation.foreground)?.toNumber32Bit(),
-		};
+		return { tokenMetadata, color: presentation.foreground === undefined ? undefined : Color.Format.CSS.parse(presentation.foreground)?.toNumber32Bit() };
 	}
 }

@@ -8,7 +8,7 @@ import { OpeningBracketId, Tokenizer, TokenKind } from './tokenizer.js';
 
 /**
  * Non incrementally built ASTs are immutable.
- */
+*/
 export function parseDocument(tokenizer: Tokenizer, edits: TextEditInfo[], oldNode: AstNode | undefined, createImmutableLists: boolean): AstNode {
 	const parser = new Parser(tokenizer, edits, oldNode, createImmutableLists);
 	return parser.parseDocument();
@@ -16,7 +16,7 @@ export function parseDocument(tokenizer: Tokenizer, edits: TextEditInfo[], oldNo
 
 /**
  * Non incrementally built ASTs are immutable.
- */
+*/
 class Parser {
 	private readonly oldNodeReader?: NodeReader;
 	private readonly positionMapper: BeforeEditPositionMapper;
@@ -25,14 +25,14 @@ class Parser {
 
 	/**
 	 * Reports how many nodes were constructed in the last parse operation.
-	 */
+	*/
 	get nodesConstructed() {
 		return this._itemsConstructed;
 	}
 
 	/**
 	 * Reports how many nodes were reused in the last parse operation.
-	 */
+	*/
 	get nodesReused() {
 		return this._itemsFromCache;
 	}
@@ -63,7 +63,10 @@ class Parser {
 		return result;
 	}
 
-	private parseList(openedBracketIds: SmallImmutableSet<OpeningBracketId>, level: number): AstNode | null {
+	private parseList(
+		openedBracketIds: SmallImmutableSet<OpeningBracketId>,
+		level: number,
+	): AstNode | null {
 		const items: AstNode[] = [];
 
 		while (true) {
@@ -71,7 +74,11 @@ class Parser {
 
 			if (!child) {
 				const token = this.tokenizer.peek();
-				if (!token || (token.kind === TokenKind.ClosingBracket && token.bracketIds.intersects(openedBracketIds))) {
+				if (
+					!token ||
+					(token.kind === TokenKind.ClosingBracket &&
+						token.bracketIds.intersects(openedBracketIds))
+				) {
 					break;
 				}
 
@@ -116,7 +123,10 @@ class Parser {
 		return undefined;
 	}
 
-	private parseChild(openedBracketIds: SmallImmutableSet<number>, level: number): AstNode {
+	private parseChild(
+		openedBracketIds: SmallImmutableSet<number>,
+		level: number,
+	): AstNode {
 		this._itemsConstructed++;
 
 		const token = this.tokenizer.read()!;
@@ -138,11 +148,23 @@ class Parser {
 				const child = this.parseList(set, level + 1);
 
 				const nextToken = this.tokenizer.peek();
-				if (nextToken && nextToken.kind === TokenKind.ClosingBracket && (nextToken.bracketId === token.bracketId || nextToken.bracketIds.intersects(token.bracketIds))) {
+				if (
+					nextToken &&
+					nextToken.kind === TokenKind.ClosingBracket &&
+					(nextToken.bracketId === token.bracketId || nextToken.bracketIds.intersects(token.bracketIds))
+				) {
 					this.tokenizer.read();
-					return PairAstNode.create(token.astNode as BracketAstNode, child, nextToken.astNode as BracketAstNode);
+					return PairAstNode.create(
+						token.astNode as BracketAstNode,
+						child,
+						nextToken.astNode as BracketAstNode
+					);
 				} else {
-					return PairAstNode.create(token.astNode as BracketAstNode, child, null);
+					return PairAstNode.create(
+						token.astNode as BracketAstNode,
+						child,
+						null
+					);
 				}
 			}
 			default:

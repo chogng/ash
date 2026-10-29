@@ -28,19 +28,19 @@ export interface EditorGroupWorkingSet {
 
 export type EditorWorkingSetLayout =
 	| {
-			readonly type: 'leaf';
-			readonly data: { readonly groupId: number };
-			readonly size: number;
-			readonly visible: boolean;
-			readonly priority: 'low' | 'normal' | 'high';
-	  }
+		readonly type: 'leaf';
+		readonly data: { readonly groupId: number; };
+		readonly size: number;
+		readonly visible: boolean;
+		readonly priority: 'low' | 'normal' | 'high';
+	}
 	| {
-			readonly type: 'branch';
-			readonly orientation: 'horizontal' | 'vertical';
-			readonly size: number;
-			readonly children: readonly EditorWorkingSetLayout[];
-			readonly priority: 'low' | 'normal' | 'high';
-	  };
+		readonly type: 'branch';
+		readonly orientation: 'horizontal' | 'vertical';
+		readonly size: number;
+		readonly children: readonly EditorWorkingSetLayout[];
+		readonly priority: 'low' | 'normal' | 'high';
+	};
 
 /** Validates the whole saved geometry before any live group or pane is moved. */
 export function parseEditorWorkingSetLayout(value: unknown, groupIds: ReadonlySet<number>): EditorWorkingSetLayout {
@@ -59,13 +59,7 @@ export function parseEditorWorkingSetLayout(value: unknown, groupIds: ReadonlySe
 			seen.add(data.groupId);
 			return;
 		}
-		if (
-			node.type !== 'branch' ||
-			(node.orientation !== 'horizontal' && node.orientation !== 'vertical') ||
-			node.orientation === parentOrientation ||
-			!Array.isArray(node.children) ||
-			!node.children.length
-		) {
+		if (node.type !== 'branch' || (node.orientation !== 'horizontal' && node.orientation !== 'vertical') || node.orientation === parentOrientation || !Array.isArray(node.children) || !node.children.length) {
 			throw new TypeError('Invalid Editor Grid branch');
 		}
 		for (const child of node.children) visit(child, node.orientation, depth + 1);

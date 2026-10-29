@@ -20,18 +20,13 @@ test('retirement-only catalog changes notify consumers and keep date-only eviden
 	const resources = new DisposableStore();
 	try {
 		const entry = modelEntry();
-		const models = resources.add(
-			new LanguageModelsService(
-				modelCatalogApi(async () => ({ models: [entry] })),
-				{ onConnectionState: () => ({ dispose() {} }) } as unknown as IAppServerApi,
-				{ subscribe: () => ({ dispose() {} }) } as unknown as IServerEventApi,
-				{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
-				{
-					onDidChangeAccounts: Event.None,
-					read: async () => ({ revision: 1n, accounts: [] }),
-				} as unknown as IAccountService,
-			),
-		);
+		const models = resources.add(new LanguageModelsService(
+			modelCatalogApi(async () => ({ models: [entry] })),
+			{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+			{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
+			{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
+			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
+		));
 		let changes = 0;
 		resources.add(models.onDidChangeModels(() => changes++));
 		assert.equal((await models.refreshModels())[0].retirement, undefined);
@@ -94,18 +89,13 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 test('model input capabilities notify consumers and do not change previous catalog snapshots', async () => {
 	using resources = new DisposableStore();
 	const entry = modelEntry();
-	const models = resources.add(
-		new LanguageModelsService(
-			modelCatalogApi(async () => ({ models: [entry] })),
-			{ onConnectionState: () => ({ dispose() {} }) } as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() {} }) } as unknown as IServerEventApi,
-			{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
-			{
-				onDidChangeAccounts: Event.None,
-				read: async () => ({ revision: 1n, accounts: [] }),
-			} as unknown as IAccountService,
-		),
-	);
+	const models = resources.add(new LanguageModelsService(
+		modelCatalogApi(async () => ({ models: [entry] })),
+		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
+		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
+	));
 	const snapshots = [];
 	let changes = 0;
 	resources.add(models.onDidChangeModels(() => changes++));
@@ -125,19 +115,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		generation: 1,
 		catalog: [modelEntry('initial')],
 		catalogScopes: [] as NonNullable<ModelListResult['catalog_scopes']>,
-		providers: [
-			{
-				provider: 'openai',
-				connection: 'chatgpt-subscription',
-				access: 'subscription',
-				active: true,
-				configured: true,
-				ready: true,
-				displayName: 'ChatGPT',
-				apiKeyPolicy: 'unsupported',
-				apiKeyConfigured: false,
-			},
-		] as ProviderListResult['providers'],
+		providers: [{ provider: 'openai', connection: 'chatgpt-subscription', access: 'subscription', active: true, configured: true, ready: true, displayName: 'ChatGPT', apiKeyPolicy: 'unsupported', apiKeyConfigured: false }] as ProviderListResult['providers'],
 		catalogReads: 0,
 		providerReads: 0,
 		account: accountRead(),
@@ -151,98 +129,48 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		readDiscovery: undefined as ((connection: string) => Promise<ModelListResult['models']>) | undefined,
 	};
 	services.registerInstance(IAppServerApi, {
-		get connectionGeneration() {
-			return source.generation;
-		},
+		get connectionGeneration() { return source.generation; },
 		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],
 		onConnectionState: states.event,
 	});
 	services.registerInstance(IServerEventApi, { subscribe: events.event });
 	if (!omitAccounts) {
-		services.registerInstance(
-			IAccountService,
-			resources.add(
-				new AppServerAccountService(
-					{
-						read: async () => {
-							source.accountReads++;
-							return source.readAccount ? source.readAccount() : source.account;
-						},
-					} as IAccountApi,
-					{ subscribe: events.event },
-				),
-			),
-		);
+		services.registerInstance(IAccountService, resources.add(new AppServerAccountService({
+			read: async () => { source.accountReads++; return source.readAccount ? source.readAccount() : source.account; },
+		} as IAccountApi, { subscribe: events.event })));
 	}
 	services.registerInstance(IAgentModelsService, {
 		...modelCatalogApi(
-			async () => {
-				source.catalogReads++;
-				return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes };
-			},
-			async () => {
-				source.providerReads++;
-				return { providers: source.providers };
-			},
-			async (connection: string) => {
-				source.discoveries.push(connection);
-				return source.readDiscovery ? source.readDiscovery(connection) : [];
-			},
+			async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes }; },
+			async () => { source.providerReads++; return { providers: source.providers }; },
+			async (connection: string) => { source.discoveries.push(connection); return source.readDiscovery ? source.readDiscovery(connection) : []; },
 		),
-		setModel: async () => {
-			source.configWrites++;
-		},
+		setModel: async () => { source.configWrites++; },
 	});
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None,
 		isModelVisible: () => true,
-		setModelVisible: async () => {
-			source.selectionWrites++;
-		},
+		setModelVisible: async () => { source.selectionWrites++; },
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: () => {
-			source.selectionWrites++;
-		},
+		rememberSelectedModel: () => { source.selectionWrites++; },
 	});
 	const models = resources.add(services.createInstance(LanguageModelsService));
-	resources.add(
-		models.onDidChangeModels(() => {
-			source.changes++;
-		}),
-	);
+	resources.add(models.onDidChangeModels(() => { source.changes++; }));
 	return { source, models, events, states };
 }
 
 function modelsUpdated(result: ProviderModelsListResult = { type: 'empty' }): ServerNotification {
 	return {
 		method: 'provider/models/updated',
-		params: {
-			connection: 'chatgpt-subscription',
-			accountId: 'account-a',
-			organization: null,
-			plan: 'Plus',
-			result,
-		},
+		params: { connection: 'chatgpt-subscription', accountId: 'account-a', organization: null, plan: 'Plus', result },
 	};
 }
 
 function accountRead(update: Partial<AccountDto> = {}): AccountReadResult {
 	return {
 		revision: '1',
-		accounts: [
-			{
-				provider: 'chatgpt-subscription',
-				accountId: 'account-a',
-				email: null,
-				displayName: null,
-				organization: null,
-				plan: 'Plus',
-				status: 'ready',
-				credentialRevision: '1',
-				...update,
-			},
-		],
+		accounts: [{ provider: 'chatgpt-subscription', accountId: 'account-a', email: null, displayName: null, organization: null, plan: 'Plus', status: 'ready', credentialRevision: '1', ...update }],
 	};
 }
 
@@ -261,21 +189,9 @@ test('provider model notifications reread the authoritative catalog and provider
 	source.catalog = [modelEntry('current'), modelEntry('unrelated', 'other')];
 	events.fire(modelsUpdated({ type: 'models', models: [modelEntry('payload-only')] }));
 	await settleCatalogEvents();
-	assert.deepEqual(
-		{
-			models: (await models.listModelCatalog()).map(entry => entry.model),
-			reads: [source.catalogReads, source.providerReads],
-			writes: [source.configWrites, source.selectionWrites],
-		},
-		{
-			models: [
-				{ provider: 'openai', model: 'current' },
-				{ provider: 'other', model: 'unrelated' },
-			],
-			reads: [2, 2],
-			writes: [0, 0],
-		},
-	);
+	assert.deepEqual({ models: (await models.listModelCatalog()).map(entry => entry.model), reads: [source.catalogReads, source.providerReads], writes: [source.configWrites, source.selectionWrites] }, {
+		models: [{ provider: 'openai', model: 'current' }, { provider: 'other', model: 'unrelated' }], reads: [2, 2], writes: [0, 0],
+	});
 });
 
 for (const result of [{ type: 'empty' }, { type: 'failed', failure: { code: 'rateLimited' } }] as const) {
@@ -316,25 +232,15 @@ test('a notification at the load completion boundary schedules a fresh authorita
 	using resources = new DisposableStore();
 	const { source, models, events } = catalogFixture(resources);
 	let queued = false;
-	resources.add(
-		models.onDidChangeModels(() => {
-			if (queued) {
-				return;
-			}
-			queued = true;
-			source.catalog = [modelEntry('latest')];
-			queueMicrotask(() => events.fire(modelsUpdated()));
-		}),
-	);
+	resources.add(models.onDidChangeModels(() => {
+		if (queued) { return; }
+		queued = true;
+		source.catalog = [modelEntry('latest')];
+		queueMicrotask(() => events.fire(modelsUpdated()));
+	}));
 	await models.refreshModels();
 	await settleCatalogEvents();
-	assert.deepEqual(
-		{
-			names: (await models.listModels()).map(entry => entry.model.model),
-			reads: [source.catalogReads, source.providerReads],
-		},
-		{ names: ['latest'], reads: [2, 2] },
-	);
+	assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), reads: [source.catalogReads, source.providerReads] }, { names: ['latest'], reads: [2, 2] });
 });
 
 test('simultaneous retired and current completions leave the open picker on the current account', async () => {
@@ -343,16 +249,10 @@ test('simultaneous retired and current completions leave the open picker on the 
 	const old = new DeferredPromise<ModelListResult>();
 	source.readCatalog = () => old.p;
 	let displayed: string[] = [];
-	const retired = models.listModels().then(entries => {
-		displayed = entries.map(entry => entry.model.model);
-	});
-	resources.add(
-		models.onDidChangeModels(() => {
-			void models.listModels().then(entries => {
-				displayed = entries.map(entry => entry.model.model);
-			});
-		}),
-	);
+	const retired = models.listModels().then(entries => { displayed = entries.map(entry => entry.model.model); });
+	resources.add(models.onDidChangeModels(() => {
+		void models.listModels().then(entries => { displayed = entries.map(entry => entry.model.model); });
+	}));
 	const current = new DeferredPromise<ModelListResult>();
 	source.readCatalog = () => current.p;
 	events.fire(accountUpdate({ accountId: 'account-b' }));
@@ -399,18 +299,8 @@ test('a reconnect can load immediately and old completion cannot publish or clea
 	await settleCatalogEvents();
 	const joined = models.refreshModels();
 	await current.complete({ models: [modelEntry('restored')] });
-	assert.deepEqual(
-		(await retired).map(entry => entry.model.model),
-		['restored'],
-	);
-	assert.deepEqual(
-		{
-			fresh: (await fresh).map(entry => entry.model.model),
-			joined: (await joined).map(entry => entry.model.model),
-			reads: source.catalogReads,
-		},
-		{ fresh: ['restored'], joined: ['restored'], reads: 3 },
-	);
+	assert.deepEqual((await retired).map(entry => entry.model.model), ['restored']);
+	assert.deepEqual({ fresh: (await fresh).map(entry => entry.model.model), joined: (await joined).map(entry => entry.model.model), reads: source.catalogReads }, { fresh: ['restored'], joined: ['restored'], reads: 3 });
 });
 
 test('connection generation changes cannot return a previous cached scope even without a state callback', async () => {
@@ -430,20 +320,13 @@ test('an account boundary queued by acceptance gives the original caller the suc
 	using resources = new DisposableStore();
 	const { source, models, events } = catalogFixture(resources);
 	let queued = false;
-	resources.add(
-		models.onDidChangeModels(() => {
-			if (queued) {
-				return;
-			}
-			queued = true;
-			source.catalog = [modelEntry('successor')];
-			queueMicrotask(() => events.fire(accountUpdate({ accountId: 'account-b' })));
-		}),
-	);
-	assert.deepEqual(
-		(await models.refreshModels()).map(entry => entry.model.model),
-		['successor'],
-	);
+	resources.add(models.onDidChangeModels(() => {
+		if (queued) { return; }
+		queued = true;
+		source.catalog = [modelEntry('successor')];
+		queueMicrotask(() => events.fire(accountUpdate({ accountId: 'account-b' })));
+	}));
+	assert.deepEqual((await models.refreshModels()).map(entry => entry.model.model), ['successor']);
 });
 
 test('a notification at the failure completion boundary is not lost', async () => {
@@ -468,19 +351,7 @@ test('disposing a pending catalog read rejects late data and does not start dyna
 	const { source, models } = catalogFixture(resources);
 	const pending = new DeferredPromise<ModelListResult>();
 	source.readCatalog = () => pending.p;
-	source.providers = [
-		{
-			provider: 'kimi',
-			connection: 'kimi-desktop',
-			access: 'local',
-			active: true,
-			configured: true,
-			ready: true,
-			displayName: 'Kimi',
-			apiKeyPolicy: 'unsupported',
-			apiKeyConfigured: false,
-		},
-	];
+	source.providers = [{ provider: 'kimi', connection: 'kimi-desktop', access: 'local', active: true, configured: true, ready: true, displayName: 'Kimi', apiKeyPolicy: 'unsupported', apiKeyConfigured: false }];
 	const result = models.refreshModels();
 	const rejected = assert.rejects(result, error => isCancellationError(error));
 	models.dispose();
@@ -495,24 +366,12 @@ for (const changed of [{ accountId: 'account-b' }, { organization: 'org-b' }, { 
 		const { source, models, events } = catalogFixture(resources);
 		events.fire(accountUpdate());
 		await settleCatalogEvents();
-		assert.deepEqual(
-			(await models.listModels()).map(entry => entry.model.model),
-			['initial'],
-		);
+		assert.deepEqual((await models.listModels()).map(entry => entry.model.model), ['initial']);
 		let displayed = ['initial'];
-		resources.add(
-			models.onDidChangeModels(() => {
-				void models
-					.listModels()
-					.then(entries => {
-						displayed = entries.map(entry => entry.model.model);
-					})
-					.catch(() => {});
-			}),
-		);
-		source.readCatalog = async () => {
-			throw new Error('New account unavailable');
-		};
+		resources.add(models.onDidChangeModels(() => {
+			void models.listModels().then(entries => { displayed = entries.map(entry => entry.model.model); }).catch(() => { });
+		}));
+		source.readCatalog = async () => { throw new Error('New account unavailable'); };
 		events.fire(accountUpdate(changed));
 		await settleCatalogEvents();
 		assert.deepEqual(await models.listModels(), []);
@@ -528,9 +387,7 @@ test('same-account read failure keeps the last valid catalog without notifying a
 	await settleCatalogEvents();
 	const snapshot = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary catalog failure');
-	};
+	source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
 	events.fire(modelsUpdated({ type: 'failed', failure: { code: 'unreachable' } }));
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
@@ -544,9 +401,7 @@ test('same-account credential rotation retains usable model metadata when reread
 	await settleCatalogEvents();
 	const snapshot = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary refresh failure');
-	};
+	source.readCatalog = async () => { throw new Error('Temporary refresh failure'); };
 	events.fire(accountUpdate({ credentialRevision: '2' }));
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
@@ -558,37 +413,13 @@ test('an unrelated GitHub account update cannot clear the model catalog after a 
 	const { source, models, events } = catalogFixture(resources);
 	const initial = accountUpdate();
 	assert.equal(initial.method, 'account/updated');
-	if (initial.method !== 'account/updated') {
-		throw new Error('Expected account snapshot');
-	}
+	if (initial.method !== 'account/updated') { throw new Error('Expected account snapshot'); }
 	events.fire(initial);
 	await settleCatalogEvents();
 	const snapshot = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary refresh failure');
-	};
-	events.fire({
-		method: 'account/updated',
-		params: {
-			account: {
-				revision: '2',
-				accounts: [
-					...initial.params.account.accounts,
-					{
-						provider: 'github',
-						accountId: 'github-user',
-						email: null,
-						displayName: null,
-						organization: null,
-						plan: null,
-						status: 'ready',
-						credentialRevision: '1',
-					},
-				],
-			},
-		},
-	});
+	source.readCatalog = async () => { throw new Error('Temporary refresh failure'); };
+	events.fire({ method: 'account/updated', params: { account: { revision: '2', accounts: [...initial.params.account.accounts, { provider: 'github', accountId: 'github-user', email: null, displayName: null, organization: null, plan: null, status: 'ready', credentialRevision: '1' }] } } });
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
 	events.fire(initial);
@@ -612,10 +443,7 @@ for (const rejects of [false, true]) {
 		await settleCatalogEvents();
 		if (rejects) await old.error(new Error('Retired account unavailable'));
 		else await old.complete({ models: [modelEntry('old-account')] });
-		assert.deepEqual(
-			(await retired).map(entry => entry.model.model),
-			['new-account'],
-		);
+		assert.deepEqual((await retired).map(entry => entry.model.model), ['new-account']);
 	});
 }
 
@@ -624,9 +452,7 @@ test('logging out publishes an empty selectable view before a failing catalog re
 	const { source, models, events } = catalogFixture(resources);
 	events.fire(accountUpdate());
 	await settleCatalogEvents();
-	source.readCatalog = async () => {
-		throw new Error('Signed out');
-	};
+	source.readCatalog = async () => { throw new Error('Signed out'); };
 	events.fire({ method: 'account/updated', params: { account: { revision: '2', accounts: [] } } });
 	await settleCatalogEvents();
 	assert.deepEqual(await models.listModels(), []);
@@ -638,22 +464,14 @@ test('login completion updates the catalog while a duplicate account update stay
 	events.fire(accountUpdate());
 	await settleCatalogEvents();
 	const updated = accountUpdate({ accountId: 'account-b' });
-	if (updated.method !== 'account/updated') {
-		throw new Error('Expected account snapshot');
-	}
+	if (updated.method !== 'account/updated') { throw new Error('Expected account snapshot'); }
 	source.catalog = [modelEntry('signed-in')];
-	events.fire({
-		method: 'account/login/completed',
-		params: { loginId: 'login-b', status: { type: 'succeeded' }, account: updated.params.account },
-	});
+	events.fire({ method: 'account/login/completed', params: { loginId: 'login-b', status: { type: 'succeeded' }, account: updated.params.account } });
 	await settleCatalogEvents();
 	const changes = source.changes;
 	events.fire(updated);
 	await settleCatalogEvents();
-	assert.deepEqual(
-		(await models.listModels()).map(entry => entry.model.model),
-		['signed-in'],
-	);
+	assert.deepEqual((await models.listModels()).map(entry => entry.model.model), ['signed-in']);
 	assert.equal(source.changes, changes);
 	assert.deepEqual([source.configWrites, source.selectionWrites], [0, 0]);
 });
@@ -662,24 +480,13 @@ test('failed login with the same model account does not clear usable catalog met
 	using resources = new DisposableStore();
 	const { source, models, events } = catalogFixture(resources);
 	const initial = accountUpdate();
-	if (initial.method !== 'account/updated') {
-		throw new Error('Expected account snapshot');
-	}
+	if (initial.method !== 'account/updated') { throw new Error('Expected account snapshot'); }
 	events.fire(initial);
 	await settleCatalogEvents();
 	const snapshot = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary refresh failure');
-	};
-	events.fire({
-		method: 'account/login/completed',
-		params: {
-			loginId: 'login-failed',
-			status: { type: 'failed', failure: { code: 'cancelled', message: 'Cancelled' } },
-			account: initial.params.account,
-		},
-	});
+	source.readCatalog = async () => { throw new Error('Temporary refresh failure'); };
+	events.fire({ method: 'account/login/completed', params: { loginId: 'login-failed', status: { type: 'failed', failure: { code: 'cancelled', message: 'Cancelled' } }, account: initial.params.account } });
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
 	assert.equal(source.changes, changes);
@@ -692,9 +499,7 @@ test('API key changes retire pending data and notify even when the new credentia
 	const old = new DeferredPromise<ModelListResult>();
 	source.readCatalog = () => old.p;
 	const retired = models.refreshModels();
-	source.readCatalog = async () => {
-		throw new Error('New credential unavailable');
-	};
+	source.readCatalog = async () => { throw new Error('New credential unavailable'); };
 	events.fire({ method: 'provider/apiKey/changed', params: { connection: 'openai-api', apiKeyConfigured: true } });
 	await settleCatalogEvents();
 	await old.complete({ models: [modelEntry('old-credential')] });
@@ -710,19 +515,7 @@ test('API key changes retire pending data and notify even when the new credentia
 test('provider-only readiness changes notify consumers even when model metadata is identical', async () => {
 	using resources = new DisposableStore();
 	const { source, models, events } = catalogFixture(resources);
-	source.providers = [
-		{
-			provider: 'openai',
-			connection: 'openai-api',
-			access: 'apiKey',
-			active: true,
-			configured: true,
-			ready: false,
-			displayName: 'OpenAI',
-			apiKeyPolicy: 'required',
-			apiKeyConfigured: false,
-		},
-	];
+	source.providers = [{ provider: 'openai', connection: 'openai-api', access: 'apiKey', active: true, configured: true, ready: false, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false }];
 	await models.listModelCatalog();
 	const changes = source.changes;
 	source.providers = source.providers.map(provider => ({ ...provider, ready: true, apiKeyConfigured: true }));
@@ -736,23 +529,14 @@ test('provider-only readiness changes notify consumers even when model metadata 
 
 for (const event of [
 	accountUpdate({ credentialRevision: '2' }),
-	{
-		method: 'account/login/completed',
-		params: {
-			loginId: 'first-login',
-			status: { type: 'failed', failure: { code: 'cancelled', message: 'Cancelled' } },
-			account: accountRead(),
-		},
-	},
+	{ method: 'account/login/completed', params: { loginId: 'first-login', status: { type: 'failed', failure: { code: 'cancelled', message: 'Cancelled' } }, account: accountRead() } },
 ] satisfies ServerNotification[]) {
 	test(`the first same-account ${event.method} keeps a loaded catalog when rereading fails`, async () => {
 		using resources = new DisposableStore();
 		const { source, models, events } = catalogFixture(resources);
 		const snapshot = await models.listModelCatalog();
 		const changes = source.changes;
-		source.readCatalog = async () => {
-			throw new Error('Temporary catalog failure');
-		};
+		source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
 		events.fire(event);
 		await settleCatalogEvents();
 		assert.equal(await models.listModelCatalog(), snapshot);
@@ -765,30 +549,8 @@ test('the first unrelated account event keeps a loaded catalog when rereading fa
 	const { source, models, events } = catalogFixture(resources);
 	const snapshot = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary catalog failure');
-	};
-	events.fire({
-		method: 'account/updated',
-		params: {
-			account: {
-				revision: '2',
-				accounts: [
-					...source.account.accounts,
-					{
-						provider: 'github',
-						accountId: 'github-user',
-						email: null,
-						displayName: null,
-						organization: null,
-						plan: null,
-						status: 'ready',
-						credentialRevision: '1',
-					},
-				],
-			},
-		},
-	});
+	source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
+	events.fire({ method: 'account/updated', params: { account: { revision: '2', accounts: [...source.account.accounts, { provider: 'github', accountId: 'github-user', email: null, displayName: null, organization: null, plan: null, status: 'ready', credentialRevision: '1' }] } } });
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
 	assert.deepEqual({ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads }, { changes, accountReads: 1, catalogReads: 2 });
@@ -798,9 +560,7 @@ test('the first changed model account clears a loaded catalog before a failing r
 	using resources = new DisposableStore();
 	const { source, models, events } = catalogFixture(resources);
 	await models.listModels();
-	source.readCatalog = async () => {
-		throw new Error('New account unavailable');
-	};
+	source.readCatalog = async () => { throw new Error('New account unavailable'); };
 	events.fire(accountUpdate({ accountId: 'account-b' }));
 	const immediate = await models.listModels();
 	await settleCatalogEvents();
@@ -815,10 +575,7 @@ test('an initial account snapshot gates catalog acceptance and cannot replace a 
 	source.readAccount = () => account.p;
 	source.readCatalog = () => catalog.p;
 	let completed = false;
-	const pending = models.listModels().then(entries => {
-		completed = true;
-		return entries;
-	});
+	const pending = models.listModels().then(entries => { completed = true; return entries; });
 	await catalog.complete({ models: [modelEntry('old-account')] });
 	await settleCatalogEvents();
 	const acceptedBeforeAccount = completed;
@@ -828,19 +585,10 @@ test('an initial account snapshot gates catalog acceptance and cannot replace a 
 	await settleCatalogEvents();
 	await account.complete(accountRead());
 	const current = await pending;
-	source.readCatalog = async () => {
-		throw new Error('Temporary catalog failure');
-	};
+	source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
 	events.fire(accountUpdate({ accountId: 'account-b', credentialRevision: '2' }));
 	await settleCatalogEvents();
-	assert.deepEqual(
-		{
-			acceptedBeforeAccount,
-			returned: current.map(entry => entry.model.model),
-			retained: (await models.listModels()).map(entry => entry.model.model),
-		},
-		{ acceptedBeforeAccount: false, returned: ['new-account'], retained: ['new-account'] },
-	);
+	assert.deepEqual({ acceptedBeforeAccount, returned: current.map(entry => entry.model.model), retained: (await models.listModels()).map(entry => entry.model.model) }, { acceptedBeforeAccount: false, returned: ['new-account'], retained: ['new-account'] });
 });
 
 for (const rejects of [false, true]) {
@@ -848,7 +596,7 @@ for (const rejects of [false, true]) {
 		using resources = new DisposableStore();
 		const { source, models, events, states } = catalogFixture(resources);
 		const account = new DeferredPromise<AccountReadResult>();
-		void account.p.catch(() => {});
+		void account.p.catch(() => { });
 		source.readAccount = () => account.p;
 		const retired = models.listModels();
 		states.fire('crashed');
@@ -861,81 +609,39 @@ for (const rejects of [false, true]) {
 		if (rejects) await account.error(new Error('Retired account read'));
 		else await account.complete(accountRead());
 		const current = await retired;
-		source.readCatalog = async () => {
-			throw new Error('Temporary catalog failure');
-		};
+		source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
 		events.fire(accountUpdate({ accountId: 'account-b', credentialRevision: '2' }));
 		await settleCatalogEvents();
-		assert.deepEqual(
-			{
-				returned: current.map(entry => entry.model.model),
-				retained: (await models.listModels()).map(entry => entry.model.model),
-			},
-			{ returned: ['restored'], retained: ['restored'] },
-		);
+		assert.deepEqual({ returned: current.map(entry => entry.model.model), retained: (await models.listModels()).map(entry => entry.model.model) }, { returned: ['restored'], retained: ['restored'] });
 	});
 }
 
 test('a failed initial account read cannot publish an unscoped catalog and can retry', async () => {
 	using resources = new DisposableStore();
 	const { source, models } = catalogFixture(resources);
-	source.readAccount = async () => {
-		throw new Error('Account snapshot unavailable');
-	};
+	source.readAccount = async () => { throw new Error('Account snapshot unavailable'); };
 	let failure: unknown;
-	try {
-		await models.listModels();
-	} catch (error) {
-		failure = error;
-	}
+	try { await models.listModels(); } catch (error) { failure = error; }
 	const changesBeforeRetry = source.changes;
 	source.readAccount = undefined;
-	assert.deepEqual(
-		{
-			failure: failure instanceof Error ? failure.message : undefined,
-			changesBeforeRetry,
-			recovered: (await models.listModels()).map(entry => entry.model.model),
-			accountReads: source.accountReads,
-		},
-		{ failure: 'Account snapshot unavailable', changesBeforeRetry: 0, recovered: ['initial'], accountReads: 2 },
-	);
+	assert.deepEqual({ failure: failure instanceof Error ? failure.message : undefined, changesBeforeRetry, recovered: (await models.listModels()).map(entry => entry.model.model), accountReads: source.accountReads }, { failure: 'Account snapshot unavailable', changesBeforeRetry: 0, recovered: ['initial'], accountReads: 2 });
 });
 
 test('model catalog creation rejects a missing required account service', () => {
 	using resources = new DisposableStore();
-	assert.throws(() => catalogFixture(resources, true), {
-		message: `Unknown service: ${IAccountService.description}`,
-	});
+	assert.throws(() => catalogFixture(resources, true), { message: `Unknown service: ${IAccountService.description}` });
 });
 
+
 function externalModelsUpdated(identity: string | null): ServerNotification {
-	return {
-		method: 'provider/models/updated',
-		params: {
-			connection: 'kimi-desktop',
-			catalogScope: { connection: 'kimi-desktop', identity },
-			result: { type: 'failed', failure: { code: 'unreachable' } },
-		},
-	};
+	return { method: 'provider/models/updated', params: { connection: 'kimi-desktop', catalogScope: { connection: 'kimi-desktop', identity }, result: { type: 'failed', failure: { code: 'unreachable' } } } };
 }
 
 test('ready external connections read cached authoritative rows without remote discovery', async () => {
 	using resources = new DisposableStore();
 	const { source, models } = catalogFixture(resources);
-	source.providers.push({
-		provider: 'kimi-desktop',
-		connection: 'kimi-desktop',
-		access: 'local',
-		active: true,
-		configured: true,
-		ready: true,
-		displayName: 'Kimi Desktop',
-		apiKeyPolicy: 'unsupported',
-		apiKeyConfigured: false,
-	});
-	source.readDiscovery = async () => {
-		throw new Error('Network unavailable');
-	};
+	source.providers.push({ provider: 'kimi-desktop', connection: 'kimi-desktop', access: 'local', active: true, configured: true, ready: true, displayName: 'Kimi Desktop', apiKeyPolicy: 'unsupported', apiKeyConfigured: false });
+	source.readDiscovery = async () => { throw new Error('Network unavailable'); };
 	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
 	assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), discoveries: source.discoveries }, { names: ['initial'], discoveries: [] });
 });
@@ -946,9 +652,7 @@ for (const identity of ['scope-b', null]) {
 		const { source, models, events } = catalogFixture(resources);
 		source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
 		await models.listModels();
-		source.readCatalog = async () => {
-			throw new Error('Current scope unavailable');
-		};
+		source.readCatalog = async () => { throw new Error('Current scope unavailable'); };
 		events.fire(externalModelsUpdated(identity));
 		await settleCatalogEvents();
 		assert.deepEqual(await models.listModels(), []);
@@ -962,9 +666,7 @@ test('same external credential failure retains the exact accepted catalog', asyn
 	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
 	const catalog = await models.listModelCatalog();
 	const changes = source.changes;
-	source.readCatalog = async () => {
-		throw new Error('Temporary read failure');
-	};
+	source.readCatalog = async () => { throw new Error('Temporary read failure'); };
 	events.fire(externalModelsUpdated('scope-a'));
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), catalog);
@@ -983,16 +685,10 @@ test('a late external snapshot cannot restore credentials retired by a scope not
 	source.catalog = [modelEntry('current-external')];
 	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-b' }];
 	events.fire(externalModelsUpdated('scope-b'));
-	await pending.complete({
-		models: [modelEntry('retired-external')],
-		catalog_scopes: [{ connection: 'kimi-desktop', identity: 'scope-a' }],
-	});
+	await pending.complete({ models: [modelEntry('retired-external')], catalog_scopes: [{ connection: 'kimi-desktop', identity: 'scope-a' }] });
 	await refresh;
 	await settleCatalogEvents();
-	assert.deepEqual(
-		(await models.listModels()).map(entry => entry.model.model),
-		['current-external'],
-	);
+	assert.deepEqual((await models.listModels()).map(entry => entry.model.model), ['current-external']);
 });
 
 function modelCatalogApi(
@@ -1001,29 +697,22 @@ function modelCatalogApi(
 	readDiscovery: (connection: string) => Promise<ModelListResult['models']> = async () => [],
 ): IAgentModelsService {
 	return createAppServerAgentModelsService({
-		async request(definition: { method: string }, params: { connection?: string }): Promise<unknown> {
+		async request(definition: { method: string; }, params: { connection?: string; }): Promise<unknown> {
 			switch (definition.method) {
-				case 'model/list':
-					return readCatalog();
-				case 'provider/list':
-					return readProviders();
-				case 'provider/models/list':
-					return { type: 'models', models: await readDiscovery(params.connection!) };
-				default:
-					throw new Error(`Unexpected model request: ${definition.method}`);
+				case 'model/list': return readCatalog();
+				case 'provider/list': return readProviders();
+				case 'provider/models/list': return { type: 'models', models: await readDiscovery(params.connection!) };
+				default: throw new Error(`Unexpected model request: ${definition.method}`);
 			}
 		},
 	} as unknown as AppServerProtocolClient);
 }
 
+
 test('Model and effort saves serialize against fresh backend revisions while Auto retains executable defaults', async () => {
 	using resources = new DisposableStore();
 	const first = new DeferredPromise<void>();
-	let defaults = {
-		revision: 1,
-		model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null,
-		reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null,
-	};
+	let defaults = { revision: 1, model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
 	const writes: unknown[] = [];
 	const api = {
 		...modelCatalogApi(async () => ({ models: [] })),
@@ -1032,33 +721,19 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 			writes.push({ update, revision });
 			if (writes.length === 1) await first.p;
 			assert.equal(revision, defaults.revision);
-			defaults = {
-				revision: revision + 1,
-				model: update.model === undefined ? defaults.model : update.model,
-				reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort,
-			};
+			defaults = { revision: revision + 1, model: update.model === undefined ? defaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort };
 		},
 	};
-	const models = resources.add(
-		new LanguageModelsService(
-			api,
-			{ connectionGeneration: 1, onConnectionState: () => ({ dispose() {} }) } as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-			{
-				onDidChangeModels: Event.None,
-				getDefaultNewChatModel: () => undefined,
-				rememberSelectedModel: (value: import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null) =>
-					assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state'),
-			} as unknown as ILanguageModelsConfigurationService,
-			{ onDidChangeAccounts: Event.None } as IAccountService,
-		),
-	);
+	const models = resources.add(new LanguageModelsService(api,
+		{ connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const model = { provider: 'example', model: 'reasoning' };
 	const select = models.rememberSelectedModel(model);
 	const effort = models.saveReasoningEffort(model, 'high');
 	const auto = models.rememberSelectedModel(undefined);
-	await Promise.resolve();
-	await Promise.resolve();
+	await Promise.resolve(); await Promise.resolve();
 	assert.equal(writes.length, 1);
 	await first.complete();
 	await Promise.all([select, effort, auto]);
@@ -1074,58 +749,38 @@ test('A failed default save leaves the backend snapshot intact and permits a lat
 	let fail = true;
 	let configured = false;
 	const defaults = { revision: 3, model: null, reasoningEffort: null };
-	const models = resources.add(
-		new LanguageModelsService(
-			{
-				...modelCatalogApi(async () => ({ models: [] })),
-				readDefaults: async () => defaults,
-				configureDefaults: async () => {
-					if (fail) throw new Error('write rejected');
-					configured = true;
-				},
-			},
-			{ connectionGeneration: 1, onConnectionState: () => ({ dispose() {} }) } as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-			{
-				onDidChangeModels: Event.None,
-				rememberSelectedModel: () => {},
-			} as unknown as ILanguageModelsConfigurationService,
-			{ onDidChangeAccounts: Event.None } as IAccountService,
-		),
-	);
+	const models = resources.add(new LanguageModelsService({
+		...modelCatalogApi(async () => ({ models: [] })),
+		readDefaults: async () => defaults,
+		configureDefaults: async () => { if (fail) throw new Error('write rejected'); configured = true; },
+	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None, rememberSelectedModel: () => { } } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
 	await models.readModelDefaults();
 	await assert.rejects(models.rememberSelectedModel({ provider: 'example', model: 'test' }), /write rejected/);
 	assert.deepEqual(await models.readModelDefaults(), defaults);
 	assert.equal(configured, false);
-	fail = false;
-	await models.rememberSelectedModel({ provider: 'example', model: 'test' });
-	assert.equal(configured, true);
+	fail = false; await models.rememberSelectedModel({ provider: 'example', model: 'test' }); assert.equal(configured, true);
 });
+
 
 test('A late model-default snapshot from a disconnected connection cannot become the new profile selection', async () => {
 	using resources = new DisposableStore();
 	const connection = resources.add(new Emitter<AppServerConnectionState>());
-	const old = new DeferredPromise<{ revision: number; model: null; reasoningEffort: null }>();
+	const old = new DeferredPromise<{ revision: number; model: null; reasoningEffort: null; }>();
 	let generation = 1;
-	const models = resources.add(
-		new LanguageModelsService(
-			{ ...modelCatalogApi(async () => ({ models: [] })), readDefaults: () => old.p },
-			{
-				get connectionGeneration() {
-					return generation;
-				},
-				onConnectionState: connection.event,
-			} as unknown as IAppServerApi,
-			{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-			{ onDidChangeModels: Event.None } as ILanguageModelsConfigurationService,
-			{ onDidChangeAccounts: Event.None } as IAccountService,
-		),
-	);
+	const models = resources.add(new LanguageModelsService({ ...modelCatalogApi(async () => ({ models: [] })), readDefaults: () => old.p },
+		{ get connectionGeneration() { return generation; }, onConnectionState: connection.event } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+		{ onDidChangeModels: Event.None } as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const reading = models.readModelDefaults();
 	connection.fire('stopped');
 	await old.complete({ revision: 99, model: null, reasoningEffort: null });
 	await assert.rejects(reading, error => isCancellationError(error));
 });
+
 
 for (const pendingOperation of ['read', 'write'] as const) {
 	test(`A ${pendingOperation} from a closed connection cannot apply a model choice even without a replacement generation`, async () => {
@@ -1135,34 +790,14 @@ for (const pendingOperation of ['read', 'write'] as const) {
 		const started = new DeferredPromise<void>();
 		let writes = 0;
 		let remembered = 0;
-		const models = resources.add(
-			new LanguageModelsService(
-				{
-					...modelCatalogApi(async () => ({ models: [] })),
-					readDefaults: async () => {
-						if (pendingOperation === 'read') {
-							await started.complete();
-							await pending.p;
-						}
-						return { revision: 1, model: null, reasoningEffort: null };
-					},
-					configureDefaults: async () => {
-						writes++;
-						if (pendingOperation === 'write') {
-							await started.complete();
-							await pending.p;
-						}
-					},
-				},
-				{ connectionGeneration: 1, onConnectionState: connection.event } as unknown as IAppServerApi,
-				{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-				{
-					onDidChangeModels: Event.None,
-					rememberSelectedModel: () => remembered++,
-				} as unknown as ILanguageModelsConfigurationService,
-				{ onDidChangeAccounts: Event.None } as IAccountService,
-			),
-		);
+		const models = resources.add(new LanguageModelsService({
+			...modelCatalogApi(async () => ({ models: [] })),
+			readDefaults: async () => { if (pendingOperation === 'read') { await started.complete(); await pending.p; } return { revision: 1, model: null, reasoningEffort: null }; },
+			configureDefaults: async () => { writes++; if (pendingOperation === 'write') { await started.complete(); await pending.p; } },
+		}, { connectionGeneration: 1, onConnectionState: connection.event } as unknown as IAppServerApi,
+			{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
+			{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
+			{ onDidChangeAccounts: Event.None } as IAccountService));
 		const saving = models.rememberSelectedModel({ provider: 'example', model: 'test' });
 		const rejected = assert.rejects(saving, error => isCancellationError(error));
 		await started.p;
@@ -1174,52 +809,25 @@ for (const pendingOperation of ['read', 'write'] as const) {
 	});
 }
 
+
 test('A config notification racing a confirmed model save cannot turn its readback into a failed choice', async () => {
 	using resources = new DisposableStore();
 	const readback = new DeferredPromise<Awaited<ReturnType<IAgentModelsService['readDefaults']>>>();
 	const reading = new DeferredPromise<void>();
-	let notify: (event: ServerNotification) => void = () => {
-		throw new Error('Expected a notification subscription');
-	};
-	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = {
-		revision: 1,
-		model: null,
-		reasoningEffort: null,
-	};
+	let notify: (event: ServerNotification) => void = () => { throw new Error('Expected a notification subscription'); };
+	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = { revision: 1, model: null, reasoningEffort: null };
 	let reads = 0;
 	let writes = 0;
 	let remembered = 0;
 	const model = { provider: 'example', model: 'test' };
-	const models = resources.add(
-		new LanguageModelsService(
-			{
-				...modelCatalogApi(async () => ({ models: [] })),
-				readDefaults: async () => {
-					if (++reads === 2) {
-						await reading.complete();
-						return readback.p;
-					}
-					return defaults;
-				},
-				configureDefaults: async () => {
-					writes++;
-					defaults = { ...defaults, revision: 2, model };
-				},
-			},
-			{ connectionGeneration: 1, onConnectionState: () => ({ dispose() {} }) } as unknown as IAppServerApi,
-			{
-				subscribe: listener => {
-					notify = listener;
-					return { dispose() {} };
-				},
-			} as IServerEventApi,
-			{
-				onDidChangeModels: Event.None,
-				rememberSelectedModel: () => remembered++,
-			} as unknown as ILanguageModelsConfigurationService,
-			{ onDidChangeAccounts: Event.None } as IAccountService,
-		),
-	);
+	const models = resources.add(new LanguageModelsService({
+		...modelCatalogApi(async () => ({ models: [] })),
+		readDefaults: async () => { if (++reads === 2) { await reading.complete(); return readback.p; } return defaults; },
+		configureDefaults: async () => { writes++; defaults = { ...defaults, revision: 2, model }; },
+	}, { connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: listener => { notify = listener; return { dispose() { } }; } } as IServerEventApi,
+		{ onDidChangeModels: Event.None, rememberSelectedModel: () => remembered++ } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const saving = models.rememberSelectedModel(model);
 	await reading.p;
 	notify({ method: 'config/changed', params: { revision: 2, generation: 2 } });

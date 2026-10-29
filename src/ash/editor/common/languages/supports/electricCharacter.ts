@@ -13,6 +13,7 @@ export interface IElectricAction {
 }
 
 export class BracketElectricCharacterSupport {
+
 	private readonly _richEditBrackets: RichEditBrackets | null;
 
 	constructor(richEditBrackets: RichEditBrackets | null) {
@@ -66,7 +67,7 @@ export class BracketElectricCharacterSupport {
 		}
 
 		return {
-			matchOpenBracket: bracketText,
+			matchOpenBracket: bracketText
 		};
 	}
 }

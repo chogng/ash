@@ -8,20 +8,14 @@ import { AbstractPolicyService, validatePolicyValues } from './policy.js';
 /** Reads an administrator-controlled JSON file; malformed replacement files retain prior policy. */
 export class FilePolicyService extends AbstractPolicyService {
 	private pending: Promise<void> = Promise.resolve();
-	constructor(
-		private readonly file: URI,
-		private readonly files: IFileService,
-		log: ILogService,
-	) {
+	constructor(private readonly file: URI, private readonly files: IFileService, log: ILogService) {
 		super();
 		this._register(files.watch(dirname(file), { recursive: false, excludes: [] }));
-		this._register(
-			files.onDidChangeFiles(event => {
-				if (!event.resources || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(file, resource))) {
-					void this.refresh().catch(error => log.error(getErrorMessage(error)));
-				}
-			}),
-		);
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(file, resource))) {
+				void this.refresh().catch(error => log.error(getErrorMessage(error)));
+			}
+		}));
 	}
 	protected refresh(): Promise<void> {
 		const operation = this.pending.then(async () => {
@@ -35,7 +29,7 @@ export class FilePolicyService extends AbstractPolicyService {
 				else throw error;
 			}
 		});
-		this.pending = operation.catch(() => {});
+		this.pending = operation.catch(() => { });
 		return operation;
 	}
 }

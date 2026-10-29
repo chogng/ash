@@ -37,7 +37,11 @@ test('HoverService coordinates grouped Hovers and context menus', async () => {
 	const contextMenus = new TestContextMenuService();
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(HoverConfiguration.delay, 1_000);
-	const hoverService = new HoverService(configuration, contextViews, contextMenus);
+	const hoverService = new HoverService(
+		configuration,
+		contextViews,
+		contextMenus,
+	);
 
 	const first = hoverService.showHover({
 		target: firstTarget,
@@ -122,11 +126,7 @@ test('HoverService suppresses replacement Hovers until the pointer moves after a
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(HoverConfiguration.delay, 0);
 	const hoverService = new HoverService(configuration, contextViews, contextMenus);
-	const previousHover = hoverService.setupHover({
-		target: previousTarget,
-		content: 'Previous Action Hover',
-		groupId: 'actions',
-	});
+	const previousHover = hoverService.setupHover({ target: previousTarget, content: 'Previous Action Hover', groupId: 'actions' });
 	const hover = hoverService.setupHover({ target, content: 'Action Hover', groupId: 'actions' });
 
 	previousHover.show();
@@ -143,11 +143,7 @@ test('HoverService suppresses replacement Hovers until the pointer moves after a
 	replacementTarget.textContent = 'Replacement Action';
 	container.append(replacementTarget);
 	replacementTarget.getBoundingClientRect = () => rectangle(140, 100, 80, 24);
-	const replacementHover = hoverService.setupHover({
-		target: replacementTarget,
-		content: 'Action Hover',
-		groupId: 'actions',
-	});
+	const replacementHover = hoverService.setupHover({ target: replacementTarget, content: 'Action Hover', groupId: 'actions' });
 	replacementTarget.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
 	await nextTimer();
 	assert.equal(replacementHover.visible, false);
@@ -258,8 +254,8 @@ class TestContextMenuService extends Disposable implements IContextMenuService {
 		this._onDidHideContextMenu.fire();
 	}
 
-	showContextMenu(): void {}
-	hideContextMenu(): void {}
+	showContextMenu(): void { }
+	hideContextMenu(): void { }
 }
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -283,5 +279,5 @@ function rectangle(left: number, top: number, width: number, height: number): DO
 }
 
 async function nextTimer(): Promise<void> {
-	await new Promise<void>(resolve => environment.window.setTimeout(resolve, 5));
+	await new Promise<void>((resolve) => environment.window.setTimeout(resolve, 5));
 }

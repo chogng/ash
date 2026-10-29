@@ -20,11 +20,17 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { SplitView } = await import('../../browser/ui/splitview/splitview.js');
+const { SplitView } = await import(
+	'../../browser/ui/splitview/splitview.js'
+);
 
 class TestView {
 	readonly element: HTMLDivElement;
-	readonly layouts: Array<{ readonly size: number; readonly offset: number; readonly orthogonalSize: number }> = [];
+	readonly layouts: Array<{
+		readonly size: number;
+		readonly offset: number;
+		readonly orthogonalSize: number;
+	}> = [];
 	visible = true;
 
 	constructor(
@@ -53,19 +59,11 @@ test('SplitView proportional layout preserves unequal pane ratios on either axis
 			for (const size of [200, 300, 500]) split.addView(new TestView(dom.window.document, 80, Infinity), size);
 			split.layout(1_000, 400);
 			split.layout(800, 600);
-			assert.deepEqual(
-				[0, 1, 2].map(index => split.getViewSize(index)),
-				[160, 240, 400],
-			);
+			assert.deepEqual([0, 1, 2].map(index => split.getViewSize(index)), [160, 240, 400]);
 			split.layout(2_000, 300);
-			assert.deepEqual(
-				[0, 1, 2].map(index => split.getViewSize(index)),
-				[400, 600, 1_000],
-			);
+			assert.deepEqual([0, 1, 2].map(index => split.getViewSize(index)), [400, 600, 1_000]);
 		}
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('SplitView owns constrained pixel sizes and positions', () => {
@@ -82,11 +80,13 @@ test('SplitView owns constrained pixel sizes and positions', () => {
 
 	assert.equal(split.viewCount, 3);
 	assert.deepEqual(
-		[0, 1, 2].map(index => split.getViewSize(index)),
+		[0, 1, 2].map((index) => split.getViewSize(index)),
 		[35, 172.5, 292.5],
 	);
 	assert.equal(split.element.querySelectorAll('.ash-sash').length, 1);
-	const panes = split.element.querySelectorAll<HTMLElement>('.ash-split-view-pane');
+	const panes = split.element.querySelectorAll<HTMLElement>(
+		'.ash-split-view-pane',
+	);
 	assert.equal(panes[0]?.style.left, '0px');
 	assert.equal(panes[1]?.style.left, '35px');
 	assert.equal(panes[2]?.style.left, '207.5px');
@@ -115,7 +115,10 @@ test('SplitView clamps absolute sash drag deltas without boundary jumps', () => 
 	dom.window.dispatchEvent(pointerEvent(dom.window, 'pointermove', 140));
 	dom.window.dispatchEvent(pointerEvent(dom.window, 'pointerup', 140));
 
-	assert.deepEqual([split.getViewSize(0), split.getViewSize(1)], [260, 140]);
+	assert.deepEqual(
+		[split.getViewSize(0), split.getViewSize(1)],
+		[260, 140],
+	);
 
 	split.dispose();
 	dom.window.close();
@@ -206,9 +209,15 @@ test('SplitView sashes support keyboard resizing', () => {
 	const sash = split.element.querySelector<HTMLElement>('.ash-sash');
 	assert.ok(sash);
 
-	sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+	sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		key: 'ArrowRight',
+	}));
 
-	assert.deepEqual([split.getViewSize(0), split.getViewSize(1)], [110, 90]);
+	assert.deepEqual(
+		[split.getViewSize(0), split.getViewSize(1)],
+		[110, 90],
+	);
 
 	split.dispose();
 	dom.window.close();
@@ -349,7 +358,7 @@ test('SplitView emits reset for a visible logical boundary', () => {
 	split.addView(new TestView(dom.window.document, 100, 400), 200);
 	split.layout(400, 200);
 	let resetBoundary = -1;
-	split.onDidSashReset(index => (resetBoundary = index));
+	split.onDidSashReset((index) => resetBoundary = index);
 
 	requiredSash(split.element).dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 
@@ -427,13 +436,23 @@ test('SplitView publishes snap visibility after applying the complete resize', (
 test('SplitView validates view constraints before mounting', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const split = new SplitView(dom.window.document.body, 'horizontal');
-	assert.throws(() => split.addView(new TestView(dom.window.document, 100, 40), 100), /maximum size/);
+	assert.throws(
+		() => split.addView(
+			new TestView(dom.window.document, 100, 40),
+			100,
+		),
+		/maximum size/,
+	);
 	assert.equal(split.viewCount, 0);
 	split.dispose();
 	dom.window.close();
 });
 
-function pointerEvent(targetWindow: typeof browserEnvironment.window, type: string, clientX: number): Event {
+function pointerEvent(
+	targetWindow: typeof browserEnvironment.window,
+	type: string,
+	clientX: number,
+): Event {
 	return new targetWindow.MouseEvent(type, {
 		bubbles: true,
 		button: 0,
@@ -447,7 +466,12 @@ function requiredSash(container: HTMLElement): HTMLElement {
 	return sash;
 }
 
-function dragSash(targetWindow: typeof browserEnvironment.window, sash: HTMLElement, delta: number, altKey = false): void {
+function dragSash(
+	targetWindow: typeof browserEnvironment.window,
+	sash: HTMLElement,
+	delta: number,
+	altKey = false,
+): void {
 	sash.dispatchEvent(dragEvent(targetWindow, sash, 'pointerdown', 0, altKey));
 	targetWindow.dispatchEvent(dragEvent(targetWindow, sash, 'pointermove', delta, altKey));
 	targetWindow.dispatchEvent(dragEvent(targetWindow, sash, 'pointerup', delta, altKey));

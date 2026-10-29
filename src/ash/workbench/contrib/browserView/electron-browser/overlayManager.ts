@@ -40,78 +40,43 @@ export class BrowserOverlayManager extends Disposable {
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 	) {
 		super();
-		this._register(
-			menus.onDidShowContextMenu(() => {
-				this.menuVisible = true;
-				this.changes.fire();
-			}),
-		);
-		this._register(
-			menus.onDidHideContextMenu(() => {
-				this.menuVisible = false;
-				this.changes.fire();
-			}),
-		);
+		this._register(menus.onDidShowContextMenu(() => { this.menuVisible = true; this.changes.fire(); }));
+		this._register(menus.onDidHideContextMenu(() => { this.menuVisible = false; this.changes.fire(); }));
 		this._register(dialogs.onWillShowDialog(() => this.changes.fire()));
 		this._register(dialogs.onDidCloseDialog(() => this.changes.fire()));
 		const observer = new targetWindow.MutationObserver(records => {
 			// Page-state rendering is unrelated to overlays and must not schedule another IPC update.
-			if (records.some(record => this.isOverlayMutation(record))) {
-				this.changes.fire();
-			}
+			if (records.some(record => this.isOverlayMutation(record))) { this.changes.fire(); }
 		});
-		observer.observe(targetWindow.document.body, {
-			subtree: true,
-			childList: true,
-			attributes: true,
-			attributeFilter: ['class', 'style', 'hidden'],
-		});
+		observer.observe(targetWindow.document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
 		this._register(toDisposable(() => observer.disconnect()));
 		this._register(addDisposableListener(targetWindow, 'resize', () => this.changes.fire()));
-		this._register(
-			addDisposableListener(targetWindow.document, 'transitionend', event => {
-				if (event.target instanceof targetWindow.Element && event.target.closest(overlaySelector)) {
-					this.changes.fire();
-				}
-			}),
-		);
+		this._register(addDisposableListener(targetWindow.document, 'transitionend', event => {
+			if (event.target instanceof targetWindow.Element && event.target.closest(overlaySelector)) { this.changes.fire(); }
+		}));
 	}
 
 	public getOverlappingOverlays(element: HTMLElement): IBrowserOverlayInfo[] {
 		const bounds = element.getBoundingClientRect();
 		const rect = { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
 		// OS menus and queued dialogs can obscure the page before their renderer DOM exists.
-		if (this.dialogs.dialogs.length > 0) {
-			return [{ type: BrowserOverlayType.Dialog, rect }];
-		}
-		if (this.menuVisible) {
-			return [{ type: BrowserOverlayType.Menu, rect }];
-		}
+		if (this.dialogs.dialogs.length > 0) { return [{ type: BrowserOverlayType.Dialog, rect }]; }
+		if (this.menuVisible) { return [{ type: BrowserOverlayType.Menu, rect }]; }
 		const overlays: IBrowserOverlayInfo[] = [];
 		for (const overlay of this.targetWindow.document.querySelectorAll<HTMLElement>(overlaySelector)) {
-			if (overlay.closest('[hidden]')) {
-				continue;
-			}
+			if (overlay.closest('[hidden]')) { continue; }
 			const style = this.targetWindow.getComputedStyle(overlay);
-			if (style.display === 'none' || style.visibility === 'hidden') {
-				continue;
-			}
+			if (style.display === 'none' || style.visibility === 'hidden') { continue; }
 			const candidate = overlay.getBoundingClientRect();
-			if (candidate.width <= 0 || candidate.height <= 0 || candidate.right <= bounds.left || candidate.left >= bounds.right || candidate.bottom <= bounds.top || candidate.top >= bounds.bottom) {
-				continue;
-			}
+			if (candidate.width <= 0 || candidate.height <= 0 || candidate.right <= bounds.left || candidate.left >= bounds.right || candidate.bottom <= bounds.top || candidate.top >= bounds.bottom) { continue; }
 			const type = [...overlayRoots].find(([selector]) => overlay.matches(selector))![1];
-			overlays.push({
-				type,
-				rect: { left: candidate.left, top: candidate.top, width: candidate.width, height: candidate.height },
-			});
+			overlays.push({ type, rect: { left: candidate.left, top: candidate.top, width: candidate.width, height: candidate.height } });
 		}
 		return overlays;
 	}
 
 	private isOverlayMutation(record: MutationRecord): boolean {
-		const isOverlay = (node: Node): boolean =>
-			node instanceof this.targetWindow.Element && (node.matches(overlaySelector) || !!node.closest(overlaySelector) || !!node.querySelector(overlaySelector));
+		const isOverlay = (node: Node): boolean => node instanceof this.targetWindow.Element && (node.matches(overlaySelector) || !!node.closest(overlaySelector) || !!node.querySelector(overlaySelector));
 		return isOverlay(record.target) || [...record.addedNodes, ...record.removedNodes].some(isOverlay);
 	}
 }

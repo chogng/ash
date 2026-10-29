@@ -47,11 +47,7 @@ test('resource detection follows registrations instead of a hardcoded MIME or su
 	using languages = new LanguageService();
 	const input = { resource: URI.file('/project/demo.ts'), contentType: 'application/typescript' };
 	assert.equal(languageForEditorInput(input, languages), 'plaintext');
-	const registration = languages.registerLanguage({
-		id: 'custom',
-		extensions: ['.ts'],
-		mimetypes: ['application/typescript'],
-	});
+	const registration = languages.registerLanguage({ id: 'custom', extensions: ['.ts'], mimetypes: ['application/typescript'] });
 	assert.equal(languageForEditorInput(input, languages), 'custom');
 	registration.dispose();
 	assert.equal(languageForEditorInput(input, languages), 'plaintext');
@@ -61,13 +57,10 @@ test('Stanza excludes registered structured documents by MIME and suffix', async
 	using types = DocumentTypes.registerTypes();
 	types.replace([{ id: 'academy', contentType: ACADEMY_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-paper'] }]);
 	assert.equal(matchCodeEditor({ resource: URI.file('C:/papers/research.ash-paper') }), EditorPaneMatch.None);
-	assert.equal(
-		matchCodeEditor({
-			resource: URI.file('C:\\papers\\research.ash-paper'),
-			contentType: ACADEMY_DOCUMENT_CONTENT_TYPE,
-		}),
-		EditorPaneMatch.None,
-	);
+	assert.equal(matchCodeEditor({
+		resource: URI.file('C:\\papers\\research.ash-paper'),
+		contentType: ACADEMY_DOCUMENT_CONTENT_TYPE,
+	}), EditorPaneMatch.None);
 });
 
 test('Stanza diff inputs have one stable tab identity and select only the diff pane', () => {
@@ -91,33 +84,13 @@ test('editor resource access selects comparison sides and filters their resource
 	assert.equal(EditorResourceAccessor.getOriginalUri(comparison), undefined);
 	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY }), modified.resource);
 	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.SECONDARY }), original.resource);
-	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH }), {
-		primary: modified.resource,
-		secondary: original.resource,
-	});
-	assert.deepEqual(
-		EditorResourceAccessor.getOriginalUri(comparison, {
-			supportSideBySide: SideBySideEditor.BOTH,
-			filterByScheme: 'file',
-		}),
-		{ primary: modified.resource, secondary: undefined },
-	);
-	assert.equal(
-		EditorResourceAccessor.getOriginalUri(comparison, {
-			supportSideBySide: SideBySideEditor.PRIMARY,
-			filterByScheme: ['git-change'],
-		}),
-		undefined,
-	);
-	assert.strictEqual(
-		EditorResourceAccessor.getOriginalUri(comparison, {
-			supportSideBySide: SideBySideEditor.ANY,
-			filterByScheme: ['git-change'],
-		}),
-		original.resource,
-	);
+	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH }), { primary: modified.resource, secondary: original.resource });
+	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH, filterByScheme: 'file' }), { primary: modified.resource, secondary: undefined });
+	assert.equal(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY, filterByScheme: ['git-change'] }), undefined);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.ANY, filterByScheme: ['git-change'] }), original.resource);
 	assert.strictEqual(comparison.resource, identity);
 });
+
 
 test('files select the text editor before language extensions load while specialized editors keep priority', () => {
 	const registry = new EditorPaneRegistry();
@@ -126,17 +99,13 @@ test('files select the text editor before language extensions load while special
 		id: CODE_EDITOR_ID,
 		name: 'Code',
 		canOpen: matchCodeEditor,
-		create: () => {
-			throw new Error('Only editor selection is exercised');
-		},
+		create: () => { throw new Error('Only editor selection is exercised'); },
 	});
 	using pdf = registry.registerEditorPane({
 		id: PDF_EDITOR_ID,
 		name: 'PDF',
 		canOpen: matchPdfEditor,
-		create: () => {
-			throw new Error('Only editor selection is exercised');
-		},
+		create: () => { throw new Error('Only editor selection is exercised'); },
 	});
 
 	for (const filename of ['main.ts', 'main.rs', 'custom.unknown', 'README', 'sample.bin']) {
@@ -152,13 +121,10 @@ test('static document declarations exclude the text editor only for the owning r
 	using registry = new EditorPaneRegistry();
 	assert.equal(matchCodeEditor(input), EditorPaneMatch.Builtin);
 	registry.registerStatic({
-		id: 'test.staticDocument',
-		name: 'Test Document',
+		id: 'test.staticDocument', name: 'Test Document',
 		documentType: { id: 'test-static', contentType: 'test/document', extensions: ['.ash-testdoc'] },
 		canOpen: () => EditorPaneMatch.Default,
-		create: () => {
-			throw new Error('This routing test must not create a pane');
-		},
+		create: () => { throw new Error('This routing test must not create a pane'); },
 	});
 	assert.equal(matchCodeEditor(input), EditorPaneMatch.None);
 	registry.dispose();

@@ -57,35 +57,18 @@ export function createSplitBlockCommand(schema: DocumentSchema, document: Docume
 }
 
 /** Splits a paragraph inside a list item into a new sibling list item. */
-export function createSplitListItemCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	listItemId: DocumentNodeId,
-	paragraphId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	offset: number,
-): DocumentCommand | undefined {
+export function createSplitListItemCommand(schema: DocumentSchema, document: DocumentNode, listItemId: DocumentNodeId, paragraphId: DocumentNodeId, textNodeId: DocumentNodeId, offset: number): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
 	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	const paragraphLocation = findDocumentNode(document, paragraphId);
 	if (!paragraphLocation || paragraphLocation.parent?.id !== listItemId || !isTextBearingBlock(paragraphLocation.node)) return undefined;
 	const textIndex = paragraphLocation.node.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	const text = textIndex >= 0 ? paragraphLocation.node.content[textIndex] : undefined;
-	if (
-		(!text && (textNodeId.length > 0 || paragraphLocation.node.content.length > 0)) ||
-		!Number.isSafeInteger(offset) ||
-		offset < 0 ||
-		(text && offset > text.text!.length) ||
-		(!text && offset !== 0)
-	)
-		return undefined;
+	if ((!text && (textNodeId.length > 0 || paragraphLocation.node.content.length > 0)) || !Number.isSafeInteger(offset) || offset < 0 || (text && offset > text.text!.length) || (!text && offset !== 0)) return undefined;
 	const rightText = text ? text.text!.slice(offset) : '';
 	const trailingInline = text ? paragraphLocation.node.content.slice(textIndex + 1) : [];
 	const trailingBlocks = itemLocation.node.content.slice(paragraphLocation.index + 1);
-	const rightParagraph = schema.createNode(paragraphLocation.node.type, {
-		attrs: withoutPageBreak(paragraphLocation.node.attrs),
-		content: rightText.length > 0 ? [schema.createText(rightText, { marks: text?.marks ?? [] })] : [],
-	});
+	const rightParagraph = schema.createNode(paragraphLocation.node.type, { attrs: withoutPageBreak(paragraphLocation.node.attrs), content: rightText.length > 0 ? [schema.createText(rightText, { marks: text?.marks ?? [] })] : [] });
 	const newItem = schema.createNode('listItem', { content: [rightParagraph] });
 	let transaction = new DocumentTransaction();
 	if (text && offset === 0) transaction = transaction.deleteNode(text.id);
@@ -106,14 +89,7 @@ export function createExitEmptyListItemCommand(schema: DocumentSchema, document:
 	const itemLocation = findDocumentNode(document, listItemId);
 	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	const paragraphLocation = findDocumentNode(document, paragraphId);
-	if (
-		!paragraphLocation ||
-		paragraphLocation.parent?.id !== listItemId ||
-		paragraphLocation.node.type !== 'paragraph' ||
-		paragraphLocation.node.content.length > 0 ||
-		itemLocation.node.content.length !== 1
-	)
-		return undefined;
+	if (!paragraphLocation || paragraphLocation.parent?.id !== listItemId || paragraphLocation.node.type !== 'paragraph' || paragraphLocation.node.content.length > 0 || itemLocation.node.content.length !== 1) return undefined;
 	const list = itemLocation.parent;
 	const listLocation = findDocumentNode(document, list.id);
 	if (!listLocation?.parent) return undefined;
@@ -146,13 +122,11 @@ export function createJoinAdjacentListItemCommand(document: DocumentNode, listIt
 	const source = direction === 'backward' ? itemLocation.node : adjacent;
 	const targetParagraph = target.content.at(-1);
 	const sourceParagraph = source.content[0];
-	const canMergeParagraphs =
-		targetParagraph !== undefined && sourceParagraph !== undefined && isTextBearingBlock(targetParagraph) && isTextBearingBlock(sourceParagraph) && targetParagraph.type === sourceParagraph.type;
+	const canMergeParagraphs = targetParagraph !== undefined && sourceParagraph !== undefined && isTextBearingBlock(targetParagraph) && isTextBearingBlock(sourceParagraph) && targetParagraph.type === sourceParagraph.type;
 	const movedSourceContent = canMergeParagraphs ? source.content.slice(1) : source.content;
 	let transaction = new DocumentTransaction();
 	if (canMergeParagraphs) {
-		for (let index = 0; index < sourceParagraph.content.length; index += 1)
-			transaction = transaction.moveNode(sourceParagraph.content[index]!.id, targetParagraph.id, targetParagraph.content.length + index);
+		for (let index = 0; index < sourceParagraph.content.length; index += 1) transaction = transaction.moveNode(sourceParagraph.content[index]!.id, targetParagraph.id, targetParagraph.content.length + index);
 		transaction = transaction.deleteNode(sourceParagraph.id);
 	}
 	for (let index = 0; index < movedSourceContent.length; index += 1) transaction = transaction.moveNode(movedSourceContent[index]!.id, target.id, target.content.length + index);
@@ -165,13 +139,7 @@ export function createJoinAdjacentListItemCommand(document: DocumentNode, listIt
 }
 
 /** Indents or outdents a list item without changing its stable identity. */
-export function createListItemIndentationCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	listItemId: DocumentNodeId,
-	paragraphId: DocumentNodeId,
-	direction: ListItemIndentation,
-): DocumentCommand | undefined {
+export function createListItemIndentationCommand(schema: DocumentSchema, document: DocumentNode, listItemId: DocumentNodeId, paragraphId: DocumentNodeId, direction: ListItemIndentation): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
 	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	if (!findDocumentNode(document, paragraphId) || !itemLocation.node.content.some(child => child.id === paragraphId)) return undefined;
@@ -241,10 +209,7 @@ export function createToggleListCommand(schema: DocumentSchema, document: Docume
 	if (location.parent.type === 'listItem') {
 		const listLocation = findDocumentNode(document, location.parent.id);
 		if (!listLocation?.parent || !isListType(listLocation.parent.type) || listLocation.parent.type === listType) return undefined;
-		return {
-			transaction: new DocumentTransaction().setNodeType(listLocation.parent.id, listType, listAttributes(listType, listLocation.parent.attrs)),
-			focus: { blockId },
-		};
+		return { transaction: new DocumentTransaction().setNodeType(listLocation.parent.id, listType, listAttributes(listType, listLocation.parent.attrs)), focus: { blockId } };
 	}
 	if (location.parent.type !== 'doc') return undefined;
 	const item = schema.createNode('listItem', { content: [location.node] });
@@ -270,8 +235,9 @@ export function createJoinAdjacentBlockCommand(document: DocumentNode, blockId: 
 		if (canMerge) transaction = transaction.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!).deleteNode(sourceFirst.id);
 		for (let index = 0; index < movedContent.length; index += 1) transaction = transaction.moveNode(movedContent[index]!.id, adjacent.id, adjacent.content.length + index);
 		transaction = transaction.deleteNode(location.node.id);
-		const point =
-			canMerge && movedContent.length === 0 ? { nodeId: targetLast.id, offset: targetLast.text!.length + sourceFirst.text!.length } : lastTextPoint([...adjacent.content, ...movedContent]);
+		const point = canMerge && movedContent.length === 0
+			? { nodeId: targetLast.id, offset: targetLast.text!.length + sourceFirst.text!.length }
+			: lastTextPoint([...adjacent.content, ...movedContent]);
 		if (point) transaction = transaction.withSelection(textSelection(point));
 		return { transaction, focus: { blockId: adjacent.id, ...(point ? { point } : {}) } };
 	}
@@ -284,7 +250,9 @@ export function createJoinAdjacentBlockCommand(document: DocumentNode, blockId: 
 	if (canMerge) transaction = transaction.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!).deleteNode(sourceFirst.id);
 	for (let index = 0; index < movedContent.length; index += 1) transaction = transaction.moveNode(movedContent[index]!.id, location.node.id, location.node.content.length + index);
 	transaction = transaction.deleteNode(adjacent.id);
-	const focus = canMerge && point && targetLast?.text !== undefined ? point : (point ?? firstTextPoint(adjacent.content));
+	const focus = canMerge && point && targetLast?.text !== undefined
+		? point
+		: point ?? firstTextPoint(adjacent.content);
 	if (focus) transaction = transaction.withSelection(textSelection(focus));
 	return { transaction, focus: { blockId: location.node.id, ...(focus ? { point: focus } : {}) } };
 }
@@ -304,10 +272,7 @@ export function createJoinAdjacentTextRunCommand(document: DocumentNode, blockId
 			.replaceText(adjacent.id, offset, offset, current.text)
 			.deleteNode(current.id)
 			.withSelection(textSelection({ nodeId: adjacent.id, offset: offset + current.text.length }));
-		return {
-			transaction,
-			focus: { blockId, point: { nodeId: adjacent.id, offset: offset + current.text.length } },
-		};
+		return { transaction, focus: { blockId, point: { nodeId: adjacent.id, offset: offset + current.text.length } } };
 	}
 	const offset = current.text.length;
 	const transaction = new DocumentTransaction()
@@ -343,8 +308,7 @@ export function createInsertParagraphAfterCommand(schema: DocumentSchema, docume
 /** Inserts a rectangular table after the active block and focuses its first cell. */
 export function createInsertTableCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, rows = 2, columns = 2): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
-	if (!location?.parent || !isTextBearingBlock(location.node) || !Number.isSafeInteger(rows) || !Number.isSafeInteger(columns) || rows < 1 || rows > 20 || columns < 1 || columns > 20)
-		return undefined;
+	if (!location?.parent || !isTextBearingBlock(location.node) || !Number.isSafeInteger(rows) || !Number.isSafeInteger(columns) || rows < 1 || rows > 20 || columns < 1 || columns > 20) return undefined;
 	const tableRows: DocumentNode[] = [];
 	let firstParagraph: DocumentNode | undefined;
 	for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
@@ -370,7 +334,7 @@ export function findTableCellContext(document: DocumentNode, descendantId: Docum
 export function findAdjacentTableCell(document: DocumentNode, cellId: DocumentNodeId, direction: TableCellDirection): DocumentNodeId | undefined {
 	const context = findTableCellContext(document, cellId);
 	if (!context) return undefined;
-	const cells = context.table.content.flatMap(row => (row.type === 'tableRow' ? row.content.filter(cell => cell.type === 'tableCell') : []));
+	const cells = context.table.content.flatMap(row => row.type === 'tableRow' ? row.content.filter(cell => cell.type === 'tableCell') : []);
 	const index = cells.findIndex(cell => cell.id === context.cell.id);
 	if (index < 0) return undefined;
 	return cells[index + (direction === 'backward' ? -1 : 1)]?.id;
@@ -449,27 +413,14 @@ export function createInsertImageCommand(schema: DocumentSchema, document: Docum
 }
 
 /** Inserts any schema-declared inline atomic node at a text selection. */
-export function createInsertInlineNodeAtSelectionCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	node: DocumentNode,
-): DocumentCommand | undefined {
+export function createInsertInlineNodeAtSelectionCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, node: DocumentNode): DocumentCommand | undefined {
 	if (selection.kind !== 'text' || node.text !== undefined || schema.getNodeSpec(node.type)?.kind !== 'inline') return undefined;
 	schema.validateFragment(node, { allowIncompleteContent: true });
 	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [node]);
 }
 
 /** Inserts an inline image at a text selection, replacing selected text atomically. */
-export function createInsertImageAtSelectionCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	src: string,
-	alt = '',
-): DocumentCommand | undefined {
+export function createInsertImageAtSelectionCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, src: string, alt = ''): DocumentCommand | undefined {
 	if (typeof src !== 'string' || src.length === 0) return undefined;
 	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [createImageNode(schema, src, alt)]);
 }
@@ -479,11 +430,7 @@ export function createInsertHardBreakCommand(schema: DocumentSchema, document: D
 	const location = findDocumentNode(document, blockId);
 	if (!location || !isTextBearingBlock(location.node)) return undefined;
 	const hardBreak = schema.createNode('hardBreak');
-	if (!selection)
-		return {
-			transaction: new DocumentTransaction().insertNode(blockId, location.node.content.length, hardBreak),
-			focus: { blockId },
-		};
+	if (!selection) return { transaction: new DocumentTransaction().insertNode(blockId, location.node.content.length, hardBreak), focus: { blockId } };
 	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [hardBreak]);
 }
 
@@ -521,14 +468,7 @@ export function createDeleteNodeSelectionCommand(document: DocumentNode, selecti
 }
 
 /** Replaces a text selection inside one block while preserving unaffected inline runs. */
-export function createReplaceTextCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	replacement: string,
-	marks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createReplaceTextCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	if (selection.kind === 'all') return createReplaceDocumentTextCommand(schema, document, replacement, marks);
 	if (selection.kind !== 'text') return undefined;
 	const crossBlockCommand = createReplaceCrossBlockTextCommand(schema, document, selection, replacement, marks);
@@ -545,10 +485,7 @@ export function createReplaceTextCommand(
 		const transaction = new DocumentTransaction()
 			.replaceText(textNode.id, offset, offset, normalizedReplacement, marks)
 			.withSelection(textSelection({ nodeId: textNode.id, offset: offset + normalizedReplacement.length }));
-		return {
-			transaction,
-			focus: { blockId, point: { nodeId: textNode.id, offset: offset + normalizedReplacement.length } },
-		};
+		return { transaction, focus: { blockId, point: { nodeId: textNode.id, offset: offset + normalizedReplacement.length } } };
 	}
 	if (range.selected.length === 0) return undefined;
 	const startNode = blockLocation.node.content[range.startIndex]!;
@@ -559,19 +496,14 @@ export function createReplaceTextCommand(
 		let transaction = new DocumentTransaction();
 		for (let index = range.endIndex; index > range.startIndex; index -= 1) {
 			const node = blockLocation.node.content[index]!;
-			transaction = node.text === undefined ? transaction.deleteNode(node.id) : transaction.replaceText(node.id, 0, index === range.endIndex ? range.end.offset : node.text.length, '');
+			transaction = node.text === undefined ? transaction.deleteNode(node.id)
+				: transaction.replaceText(node.id, 0, index === range.endIndex ? range.end.offset : node.text.length, '');
 		}
 		transaction = transaction.replaceText(startNode.id, range.start.offset, range.startIndex === range.endIndex ? range.end.offset : startNode.text!.length, normalizedReplacement);
 		const retainedStart = range.start.offset + normalizedReplacement.length > 0 || (range.startIndex === range.endIndex && range.end.offset < startNode.text!.length);
-		const point = retainedStart
-			? { nodeId: startNode.id, offset: range.start.offset + normalizedReplacement.length }
-			: range.end.offset < endNode.text!.length
-				? { nodeId: endNode.id, offset: 0 }
-				: undefined;
-		return {
-			transaction: point ? transaction.withSelection(textSelection(point)) : transaction,
-			focus: { blockId, ...(point ? { point } : {}) },
-		};
+		const point = retainedStart ? { nodeId: startNode.id, offset: range.start.offset + normalizedReplacement.length }
+			: range.end.offset < endNode.text!.length ? { nodeId: endNode.id, offset: 0 } : undefined;
+		return { transaction: point ? transaction.withSelection(textSelection(point)) : transaction, focus: { blockId, ...(point ? { point } : {}) } };
 	}
 	const insertionMarks = marks ? [...marks] : startNode.marks;
 	const replacementNodes: DocumentNode[] = [];
@@ -611,23 +543,12 @@ export function createReplaceTextCommand(
 	for (let index = range.endIndex; index >= range.startIndex; index -= 1) transaction = transaction.deleteNode(blockLocation.node.content[index]!.id);
 	for (let index = 0; index < replacementNodes.length; index += 1) transaction = transaction.insertNode(blockId, range.startIndex + index, replacementNodes[index]!);
 	const caret = insertedNode ?? suffixNode ?? prefixNode;
-	const point = caret
-		? {
-				nodeId: caret.id,
-				offset: insertedNode ? insertedNode.text!.length : suffixNode ? 0 : prefixNode!.text!.length,
-			}
-		: undefined;
+	const point = caret ? { nodeId: caret.id, offset: insertedNode ? insertedNode.text!.length : suffixNode ? 0 : prefixNode!.text!.length } : undefined;
 	if (point) transaction = transaction.withSelection(textSelection(point));
 	return { transaction, focus: { blockId, ...(point ? { point } : {}) } };
 }
 
-function createReplaceCrossBlockTextCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	selection: Extract<DocumentSelection, { kind: 'text' }>,
-	replacement: string,
-	marks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+function createReplaceCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text'; }>, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	const range = resolveCrossBlockTextRange(document, selection);
 	if (!range) return undefined;
 	const normalizedReplacement = normalizeInlineText(replacement);
@@ -641,17 +562,11 @@ function createReplaceCrossBlockTextCommand(
 	let insertedNode: DocumentNode | undefined;
 	let suffixNode: DocumentNode | undefined;
 	if (range.start.offset > 0) {
-		prefixNode = schema.createText(startNode.text!.slice(0, range.start.offset), {
-			id: startNode.id,
-			marks: startNode.marks,
-		});
+		prefixNode = schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks });
 		replacementNodes.push(prefixNode);
 	}
 	if (normalizedReplacement.length > 0) {
-		insertedNode = schema.createText(normalizedReplacement, {
-			...(prefixNode ? {} : { id: startNode.id }),
-			marks: marks ? [...marks] : startNode.marks,
-		});
+		insertedNode = schema.createText(normalizedReplacement, { ...(prefixNode ? {} : { id: startNode.id }), marks: marks ? [...marks] : startNode.marks });
 		replacementNodes.push(insertedNode);
 	}
 	if (range.end.offset < endNode.text!.length) {
@@ -678,14 +593,7 @@ function createReplaceCrossBlockTextCommand(
 }
 
 /** Inserts multiline plain text as sibling blocks while preserving inline runs around the selection. */
-export function createPasteTextCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	pastedText: string,
-	marks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createPasteTextCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, pastedText: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	if (selection.kind === 'all') return createReplaceDocumentTextCommand(schema, document, pastedText, marks);
 	if (selection.kind !== 'text') return undefined;
 	const normalizedText = normalizeInlineText(pastedText);
@@ -700,20 +608,8 @@ export function createPasteTextCommand(
 	const endNode = blockLocation.node.content[range.endIndex]!;
 	const before = [...blockLocation.node.content.slice(0, range.startIndex)];
 	const after = [...blockLocation.node.content.slice(range.endIndex + 1)];
-	const prefix =
-		range.start.offset > 0
-			? schema.createText(startNode.text!.slice(0, range.start.offset), {
-					id: startNode.id,
-					marks: startNode.marks,
-				})
-			: undefined;
-	const suffix =
-		range.end.offset < endNode.text!.length
-			? schema.createText(endNode.text!.slice(range.end.offset), {
-					id: range.startIndex === range.endIndex ? undefined : endNode.id,
-					marks: endNode.marks,
-				})
-			: undefined;
+	const prefix = range.start.offset > 0 ? schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks }) : undefined;
+	const suffix = range.end.offset < endNode.text!.length ? schema.createText(endNode.text!.slice(range.end.offset), { id: range.startIndex === range.endIndex ? undefined : endNode.id, marks: endNode.marks }) : undefined;
 	if (prefix) before.push(prefix);
 	if (suffix) after.unshift(suffix);
 	const insertionMarks = marks ? [...marks] : startNode.marks;
@@ -739,13 +635,7 @@ export function createPasteTextCommand(
 	return { transaction, focus: { blockId: focusBlockId, ...(point ? { point } : {}) } };
 }
 
-function createPasteCrossBlockTextCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	selection: Extract<DocumentSelection, { kind: 'text' }>,
-	normalizedText: string,
-	marks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+function createPasteCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text'; }>, normalizedText: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	const range = resolveCrossBlockTextRange(document, selection);
 	if (!range) return undefined;
 	const startContent = range.start.block.content;
@@ -754,13 +644,7 @@ function createPasteCrossBlockTextCommand(
 	const endNode = endContent[range.end.index]!;
 	const before: DocumentNode[] = [...startContent.slice(0, range.start.index)];
 	const after: DocumentNode[] = [];
-	if (range.start.offset > 0)
-		before.push(
-			schema.createText(startNode.text!.slice(0, range.start.offset), {
-				id: startNode.id,
-				marks: startNode.marks,
-			}),
-		);
+	if (range.start.offset > 0) before.push(schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks }));
 	if (range.end.offset < endNode.text!.length) after.push(schema.createText(endNode.text!.slice(range.end.offset), { id: endNode.id, marks: endNode.marks }));
 	after.push(...endContent.slice(range.end.index + 1));
 	const insertionMarks = marks ? [...marks] : startNode.marks;
@@ -792,13 +676,7 @@ function createPasteCrossBlockTextCommand(
 }
 
 /** Inserts a Stanza fragment at a text selection while remapping pasted node identities. */
-export function createInsertFragmentCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	fragment: DocumentFragment,
-): DocumentCommand | undefined {
+export function createInsertFragmentCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, fragment: DocumentFragment): DocumentCommand | undefined {
 	if (fragment.content.length === 0) return undefined;
 	if (selection.kind === 'all') return createReplaceDocumentFragmentCommand(schema, document, fragment);
 	if (selection.kind !== 'text') return undefined;
@@ -819,34 +697,12 @@ export function createInsertFragmentCommand(
 	const endNode = location.node.content[range.endIndex]!;
 	const before = [...location.node.content.slice(0, range.startIndex)];
 	const after = [...location.node.content.slice(range.endIndex + 1)];
-	if (range.start.offset > 0)
-		before.push(
-			schema.createText(startNode.text!.slice(0, range.start.offset), {
-				id: startNode.id,
-				marks: startNode.marks,
-			}),
-		);
-	if (range.end.offset < endNode.text!.length)
-		after.unshift(
-			schema.createText(endNode.text!.slice(range.end.offset), {
-				id: range.startIndex === range.endIndex ? undefined : endNode.id,
-				marks: endNode.marks,
-			}),
-		);
+	if (range.start.offset > 0) before.push(schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks }));
+	if (range.end.offset < endNode.text!.length) after.unshift(schema.createText(endNode.text!.slice(range.end.offset), { id: range.startIndex === range.endIndex ? undefined : endNode.id, marks: endNode.marks }));
 	if (pastedBlocks.every(isTextBearingBlock)) {
-		const first = schema.createNode(location.node.type, {
-			attrs: location.node.attrs,
-			content: [...before, ...pastedBlocks[0]!.content],
-		});
+		const first = schema.createNode(location.node.type, { attrs: location.node.attrs, content: [...before, ...pastedBlocks[0]!.content] });
 		const lastIndex = pastedBlocks.length - 1;
-		const blocks = [
-			first,
-			...pastedBlocks.slice(1, lastIndex),
-			schema.createNode(pastedBlocks[lastIndex]!.type, {
-				attrs: pastedBlocks[lastIndex]!.attrs,
-				content: [...pastedBlocks[lastIndex]!.content, ...after],
-			}),
-		];
+		const blocks = [first, ...pastedBlocks.slice(1, lastIndex), schema.createNode(pastedBlocks[lastIndex]!.type, { attrs: pastedBlocks[lastIndex]!.attrs, content: [...pastedBlocks[lastIndex]!.content, ...after] })];
 		let transaction = new DocumentTransaction();
 		for (const child of location.node.content) transaction = transaction.deleteNode(child.id);
 		for (let index = 0; index < first.content.length; index += 1) transaction = transaction.insertNode(blockId, index, first.content[index]!);
@@ -873,21 +729,12 @@ export function createInsertFragmentCommand(
 
 function cloneNodeWithFreshIds(schema: DocumentSchema, node: DocumentNode): DocumentNode {
 	if (node.text !== undefined) return schema.createText(node.text, { marks: node.marks });
-	return schema.createNode(node.type, {
-		attrs: node.attrs,
-		content: node.content.map(child => cloneNodeWithFreshIds(schema, child)),
-	});
+	return schema.createNode(node.type, { attrs: node.attrs, content: node.content.map(child => cloneNodeWithFreshIds(schema, child)) });
 }
 
 function createReplaceDocumentTextCommand(schema: DocumentSchema, document: DocumentNode, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	if (!schema.canContainChild(schema.topNodeType, 'paragraph')) return undefined;
-	const content = normalizeInlineText(replacement)
-		.split('\n')
-		.map(line =>
-			schema.createNode('paragraph', {
-				content: line.length > 0 ? [schema.createText(line, { marks: marks ?? [] })] : [],
-			}),
-		);
+	const content = normalizeInlineText(replacement).split('\n').map(line => schema.createNode('paragraph', { content: line.length > 0 ? [schema.createText(line, { marks: marks ?? [] })] : [] }));
 	return createReplaceDocumentContentCommand(schema, document, content);
 }
 
@@ -944,85 +791,33 @@ function lastTextPointInNode(node: DocumentNode): DocumentPoint | undefined {
 }
 
 /** Toggles a mark across a selection in one text-bearing block, splitting inline runs when necessary. */
-export function createToggleMarkCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	markType: string,
-	attrs: DocumentAttributes = {},
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createToggleMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, attrs: DocumentAttributes = {}, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	return createMarkCommand(schema, document, blockId, textNodeId, selection, markType, attrs, 'toggle', storedMarks);
 }
 
 /** Applies a mark across a text selection, updating attributes on existing marks. */
-export function createSetMarkCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	markType: string,
-	attrs: DocumentAttributes = {},
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createSetMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, attrs: DocumentAttributes = {}, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	return createMarkCommand(schema, document, blockId, textNodeId, selection, markType, attrs, 'set', storedMarks);
 }
 
 /** Updates one persistent typography attribute without discarding the other text-style attribute. */
-export function createSetTextStyleCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	attrs: DocumentTextStyleAttributes,
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createSetTextStyleCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, attrs: DocumentTextStyleAttributes, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	return createMarkCommand(schema, document, blockId, textNodeId, selection, 'textStyle', { ...attrs }, 'merge', storedMarks);
 }
 
 /** Removes a mark across a text selection. */
-export function createRemoveMarkCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	markType: string,
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createRemoveMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	return createMarkCommand(schema, document, blockId, textNodeId, selection, markType, {}, 'remove', storedMarks);
 }
 
 /** Sets a validated link mark across a text selection. */
-export function createSetLinkMarkCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	href: string,
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+export function createSetLinkMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, href: string, storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	const normalizedHref = typeof href === 'string' ? href.trim() : '';
 	if (normalizedHref.length === 0) return undefined;
 	return createSetMarkCommand(schema, document, blockId, textNodeId, selection, 'link', { href: normalizedHref }, storedMarks);
 }
 
-function createMarkCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	selection: DocumentSelection,
-	markType: string,
-	attrs: DocumentAttributes,
-	mode: 'remove' | 'set' | 'toggle' | 'merge',
-	storedMarks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+function createMarkCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, selection: DocumentSelection, markType: string, attrs: DocumentAttributes, mode: 'remove' | 'set' | 'toggle' | 'merge', storedMarks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	if (selection.kind !== 'text' || (selection.anchor.nodeId !== textNodeId && selection.head.nodeId !== textNodeId)) return undefined;
 	const blockLocation = findDocumentNode(document, blockId);
 	if (!blockLocation || !isTextBearingBlock(blockLocation.node)) return undefined;
@@ -1033,10 +828,7 @@ function createMarkCommand(
 		const point = selection.anchor;
 		const currentMarks = storedMarks ?? marksAtPoint(blockLocation.node, point);
 		const nextMarks = updateStoredMarks(schema, currentMarks, markType, attrs, mode);
-		return {
-			transaction: new DocumentTransaction().withSelection(selection).withStoredMarks(nextMarks),
-			focus: { blockId, point },
-		};
+		return { transaction: new DocumentTransaction().withSelection(selection).withStoredMarks(nextMarks), focus: { blockId, point } };
 	}
 	const removeMark = mode === 'remove' || (mode === 'toggle' && range.selected.every(part => part.node.marks.some(mark => mark.type === markType)));
 	const replacements = new Map<number, readonly TextSegment[]>();
@@ -1066,18 +858,14 @@ function marksAtPoint(block: DocumentNode, point: DocumentPoint): readonly Docum
 	return node?.marks ?? [];
 }
 
-function updateStoredMarks(
-	schema: DocumentSchema,
-	current: readonly DocumentMark[],
-	markType: string,
-	attrs: DocumentAttributes,
-	mode: 'remove' | 'set' | 'toggle' | 'merge',
-): readonly DocumentMark[] {
+function updateStoredMarks(schema: DocumentSchema, current: readonly DocumentMark[], markType: string, attrs: DocumentAttributes, mode: 'remove' | 'set' | 'toggle' | 'merge'): readonly DocumentMark[] {
 	const hasMark = current.some(mark => mark.type === markType);
 	const remove = mode === 'remove' || (mode === 'toggle' && hasMark);
 	const existing = current.find(mark => mark.type === markType);
 	const nextAttrs = mode === 'merge' && existing ? { ...existing.attrs, ...attrs } : attrs;
-	const next = remove ? current.filter(mark => mark.type !== markType) : [...current.filter(mark => mark.type !== markType), { type: markType, attrs: nextAttrs }];
+	const next = remove
+		? current.filter(mark => mark.type !== markType)
+		: [...current.filter(mark => mark.type !== markType), { type: markType, attrs: nextAttrs }];
 	schema.validateMarks(next);
 	return Object.freeze(next.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })));
 }
@@ -1127,7 +915,7 @@ function findTableCellContextInNode(node: DocumentNode, descendantId: DocumentNo
 	return undefined;
 }
 
-function createTableRow(schema: DocumentSchema, columns: number): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId } {
+function createTableRow(schema: DocumentSchema, columns: number): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId; } {
 	const cells: DocumentNode[] = [];
 	let firstBlockId: DocumentNodeId | undefined;
 	for (let index = 0; index < columns; index += 1) {
@@ -1138,10 +926,7 @@ function createTableRow(schema: DocumentSchema, columns: number): { readonly row
 	return { row: schema.createNode('tableRow', { content: cells }), firstBlockId: firstBlockId! };
 }
 
-function createTableCell(schema: DocumentSchema): {
-	readonly node: DocumentNode;
-	readonly firstBlockId: DocumentNodeId;
-} {
+function createTableCell(schema: DocumentSchema): { readonly node: DocumentNode; readonly firstBlockId: DocumentNodeId; } {
 	const paragraph = schema.createNode('paragraph');
 	return { node: schema.createNode('tableCell', { content: [paragraph] }), firstBlockId: paragraph.id };
 }
@@ -1213,7 +998,7 @@ interface InlineRange {
 	readonly start: DocumentPoint;
 	readonly end: DocumentPoint;
 	readonly forward: boolean;
-	readonly selected: readonly { node: DocumentNode; from: number; to: number }[];
+	readonly selected: readonly { node: DocumentNode; from: number; to: number; }[];
 }
 
 interface TextBearingBlockLocation {
@@ -1223,8 +1008,8 @@ interface TextBearingBlockLocation {
 }
 
 interface CrossBlockTextRange {
-	readonly start: TextBearingBlockLocation & { readonly index: number; readonly offset: number };
-	readonly end: TextBearingBlockLocation & { readonly index: number; readonly offset: number };
+	readonly start: TextBearingBlockLocation & { readonly index: number; readonly offset: number; };
+	readonly end: TextBearingBlockLocation & { readonly index: number; readonly offset: number; };
 }
 
 interface TextSegment {
@@ -1241,13 +1026,7 @@ interface InlineNodeRange {
 	readonly forward: boolean;
 }
 
-function createReplaceInlineSelectionCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-	replacementNodes: readonly DocumentNode[],
-): DocumentCommand | undefined {
+function createReplaceInlineSelectionCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, replacementNodes: readonly DocumentNode[]): DocumentCommand | undefined {
 	if (selection.kind !== 'text') return undefined;
 	const location = findDocumentNode(document, blockId);
 	if (!location || !isTextBearingBlock(location.node)) return undefined;
@@ -1259,28 +1038,18 @@ function createReplaceInlineSelectionCommand(
 	let prefixNode: DocumentNode | undefined;
 	let suffixNode: DocumentNode | undefined;
 	if (range.start.offset > 0) {
-		prefixNode = schema.createText(startNode.text!.slice(0, range.start.offset), {
-			id: startNode.id,
-			marks: startNode.marks,
-		});
+		prefixNode = schema.createText(startNode.text!.slice(0, range.start.offset), { id: startNode.id, marks: startNode.marks });
 		nodes.push(prefixNode);
 	}
 	nodes.push(...replacementNodes);
 	if (range.end.offset < endNode.text!.length) {
-		suffixNode = schema.createText(endNode.text!.slice(range.end.offset), {
-			...(range.startIndex === range.endIndex ? {} : { id: endNode.id }),
-			marks: endNode.marks,
-		});
+		suffixNode = schema.createText(endNode.text!.slice(range.end.offset), { ...(range.startIndex === range.endIndex ? {} : { id: endNode.id }), marks: endNode.marks });
 		nodes.push(suffixNode);
 	}
 	let transaction = new DocumentTransaction();
 	for (let index = range.endIndex; index >= range.startIndex; index -= 1) transaction = transaction.deleteNode(location.node.content[index]!.id);
 	for (let index = 0; index < nodes.length; index += 1) transaction = transaction.insertNode(blockId, range.startIndex + index, nodes[index]!);
-	const point = suffixNode
-		? { nodeId: suffixNode.id, offset: 0 }
-		: prefixNode
-			? { nodeId: prefixNode.id, offset: prefixNode.text!.length }
-			: findInlineSelectionFallbackPoint(location.node.content, range.startIndex, range.endIndex);
+	const point = suffixNode ? { nodeId: suffixNode.id, offset: 0 } : prefixNode ? { nodeId: prefixNode.id, offset: prefixNode.text!.length } : findInlineSelectionFallbackPoint(location.node.content, range.startIndex, range.endIndex);
 	if (point) transaction = transaction.withSelection(textSelection(point));
 	return { transaction, focus: { blockId, ...(point ? { point } : {}) } };
 }
@@ -1297,7 +1066,7 @@ function findInlineSelectionFallbackPoint(content: readonly DocumentNode[], star
 	return undefined;
 }
 
-function resolveInlineNodeRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): InlineNodeRange | undefined {
+function resolveInlineNodeRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text'; }>): InlineNodeRange | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1314,7 +1083,7 @@ function resolveInlineNodeRange(block: DocumentNode, selection: Extract<Document
 	};
 }
 
-function resolveCrossBlockTextRange(document: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): CrossBlockTextRange | undefined {
+function resolveCrossBlockTextRange(document: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text'; }>): CrossBlockTextRange | undefined {
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head || anchor.block.id === head.block.id || anchor.parent.id !== head.parent.id) return undefined;
@@ -1347,7 +1116,7 @@ function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNo
 	return { block, parent, parentIndex: linear ? parent.content.indexOf(block) : blockLocation.index };
 }
 
-function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): InlineRange | undefined {
+function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text'; }>): InlineRange | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1359,7 +1128,7 @@ function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSele
 	const endIndex = forward ? headIndex : anchorIndex;
 	const start = forward ? selection.anchor : selection.head;
 	const end = forward ? selection.head : selection.anchor;
-	const selected: { node: DocumentNode; from: number; to: number }[] = [];
+	const selected: { node: DocumentNode; from: number; to: number; }[] = [];
 	for (let index = startIndex; index <= endIndex; index += 1) {
 		const node = block.content[index]!;
 		if (node.text === undefined) return undefined;
@@ -1371,53 +1140,30 @@ function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSele
 	return { startIndex, endIndex, start, end, forward, selected };
 }
 
-function createMarkedTextSegments(
-	schema: DocumentSchema,
-	node: DocumentNode,
-	from: number,
-	to: number,
-	markType: string,
-	attrs: DocumentAttributes,
-	removeMark: boolean,
-	replaceExisting: boolean,
-	mergeExisting = false,
-): readonly TextSegment[] {
+function createMarkedTextSegments(schema: DocumentSchema, node: DocumentNode, from: number, to: number, markType: string, attrs: DocumentAttributes, removeMark: boolean, replaceExisting: boolean, mergeExisting = false): readonly TextSegment[] {
 	if (from === to) return [{ from: 0, to: node.text!.length, node }];
-	const parts: Array<{ from: number; to: number; marks: DocumentNode['marks'] }> = [];
+	const parts: Array<{ from: number; to: number; marks: DocumentNode['marks']; }> = [];
 	if (from > 0) parts.push({ from: 0, to: from, marks: node.marks });
 	if (to > from) {
 		const marks = removeMark
 			? node.marks.filter(mark => mark.type !== markType)
 			: replaceExisting
 				? node.marks.some(mark => mark.type === markType)
-					? node.marks.map(mark => (mark.type === markType ? { type: markType, attrs: mergeExisting ? { ...mark.attrs, ...attrs } : attrs } : mark))
+					? node.marks.map(mark => mark.type === markType ? { type: markType, attrs: mergeExisting ? { ...mark.attrs, ...attrs } : attrs } : mark)
 					: [...node.marks, { type: markType, attrs }]
-				: node.marks.some(mark => mark.type === markType)
-					? node.marks
-					: [...node.marks, { type: markType, attrs }];
+				: node.marks.some(mark => mark.type === markType) ? node.marks : [...node.marks, { type: markType, attrs }];
 		parts.push({ from, to, marks });
 	}
 	if (to < node.text!.length) parts.push({ from: to, to: node.text!.length, marks: node.marks });
-	return parts.map((part, index) => ({
-		from: part.from,
-		to: part.to,
-		node: schema.createText(node.text!.slice(part.from, part.to), {
-			...(index === 0 ? { id: node.id } : {}),
-			marks: part.marks,
-		}),
-	}));
+	return parts.map((part, index) => ({ from: part.from, to: part.to, node: schema.createText(node.text!.slice(part.from, part.to), { ...(index === 0 ? { id: node.id } : {}), marks: part.marks }) }));
 }
 
 function mapInlineBoundary(point: DocumentPoint, segments: readonly TextSegment[], preferNext: boolean): DocumentPoint {
-	const segment =
-		segments.find(candidate => point.offset > candidate.from && point.offset < candidate.to) ??
-		(preferNext ? segments.find(candidate => candidate.from === point.offset) : undefined) ??
-		[...segments].reverse().find(candidate => candidate.to === point.offset) ??
-		segments[0]!;
-	return {
-		nodeId: segment.node.id,
-		offset: Math.max(0, Math.min(segment.to - segment.from, point.offset - segment.from)),
-	};
+	const segment = segments.find(candidate => point.offset > candidate.from && point.offset < candidate.to)
+		?? (preferNext ? segments.find(candidate => candidate.from === point.offset) : undefined)
+		?? [...segments].reverse().find(candidate => candidate.to === point.offset)
+		?? segments[0]!;
+	return { nodeId: segment.node.id, offset: Math.max(0, Math.min(segment.to - segment.from, point.offset - segment.from)) };
 }
 
 /** A break belongs to the original paragraph boundary, not every paragraph created by Enter. */

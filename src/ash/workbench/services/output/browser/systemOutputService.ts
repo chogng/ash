@@ -16,61 +16,52 @@ export class SystemOutputService extends Disposable implements ILogSink {
 	constructor(output: IOutputService, appServer: IAppServerApi, logger?: ILogger, files?: ILogFileService) {
 		super();
 		this.savedWindow = Boolean(files);
-		this.windowChannel = this._register(
-			output.createChannel({
-				id: windowLogId,
-				label: windowLogGroup.name,
-				kind: 'log',
-				source: 'core',
-				logger: logger ? { label: localize('output.workbenchLogger', 'Workbench'), control: logger } : undefined,
-			}),
-		);
-		this.appServerChannel = this._register(
-			output.createChannel({
-				id: files ? 'app-server-connection' : 'app-server',
-				label: files ? localize('output.appServerConnection', 'App Server Connection') : localize('output.appServer', 'App Server'),
-				kind: 'log',
-				source: 'core',
-			}),
-		);
+		this.windowChannel = this._register(output.createChannel({
+			id: windowLogId, label: windowLogGroup.name, kind: 'log', source: 'core',
+			logger: logger ? { label: localize('output.workbenchLogger', 'Workbench'), control: logger } : undefined,
+		}));
+		this.appServerChannel = this._register(output.createChannel({
+			id: files ? 'app-server-connection' : 'app-server',
+			label: files ? localize('output.appServerConnection', 'App Server Connection') : localize('output.appServer', 'App Server'),
+			kind: 'log', source: 'core',
+		}));
 		const appendConnection = (level: LogEntry['level'], message: string, error?: unknown): void => {
 			this.appServerChannel.appendLine(outputLogEntry({ timestampMillis: Date.now(), level, category: 'connection', message, error }));
 		};
-		const connection = appServer.onConnectionState(state =>
-			appendConnection(state === 'crashed' ? 'error' : state === 'restarting' ? 'warning' : 'information', localize('output.connectionState', 'App Server connection is {0}.', state)),
-		);
+		const connection = appServer.onConnectionState(state => appendConnection(
+			state === 'crashed' ? 'error' : state === 'restarting' ? 'warning' : 'information',
+			localize('output.connectionState', 'App Server connection is {0}.', state),
+		));
 		this._register(toDisposable(() => connection.dispose()));
-		void appServer
-			.getConnectionState()
-			.then(state => {
-				if (!this.isDisposed) appendConnection(state === 'crashed' ? 'error' : 'information', localize('output.initialConnectionState', 'Initial App Server connection state: {0}.', state));
-			})
-			.catch(error => {
-				if (!this.isDisposed) appendConnection('error', localize('output.connectionError', 'Could not read App Server connection state: {0}', errorMessage(error)), error);
-			});
+		void appServer.getConnectionState().then(state => {
+			if (!this.isDisposed) appendConnection(
+				state === 'crashed' ? 'error' : 'information',
+				localize('output.initialConnectionState', 'Initial App Server connection state: {0}.', state),
+			);
+		}).catch(error => {
+			if (!this.isDisposed) appendConnection(
+				'error', localize('output.connectionError', 'Could not read App Server connection state: {0}', errorMessage(error)), error,
+			);
+		});
 		if (files) {
 			logger?.info('logs', localize('output.windowLogReady', 'Window logging initialized.'));
-			void files
-				.list()
-				.then(sources => {
-					if (this.isDisposed) return;
-					const window = sources.find(source => source.currentWindow);
-					this.savedWindow = Boolean(window);
-					if (window) openLogOutput(output, files, window, this.windowChannel);
-					const otherSources = sources.filter(source => source.live && !source.currentWindow && (source.source === 'main' || source.source === 'app-server'));
-					for (const source of otherSources) {
-						this._register(openLogOutput(output, files, source));
-					}
-				})
-				.catch(error => {
-					if (this.isDisposed) return;
-					this.savedWindow = false;
-					this.windowChannel.appendLine({
-						severity: 'error',
-						category: 'logs',
-						text: localize('output.savedLogError', 'Could not read saved logs: {0}', errorMessage(error)),
-					});
+			void files.list().then(sources => {
+				if (this.isDisposed) return;
+				const window = sources.find(source => source.currentWindow);
+				this.savedWindow = Boolean(window);
+				if (window) openLogOutput(output, files, window, this.windowChannel);
+				const otherSources = sources.filter(source => source.live && !source.currentWindow && (source.source === 'main' || source.source === 'app-server'));
+				for (const source of otherSources) {
+					this._register(openLogOutput(output, files, source));
+				}
+			}).catch(error => {
+				if (this.isDisposed) return;
+				this.savedWindow = false;
+				this.windowChannel.appendLine({
+					severity: 'error', category: 'logs',
+					text: localize('output.savedLogError', 'Could not read saved logs: {0}', errorMessage(error)),
 				});
+			});
 		}
 	}
 
@@ -86,14 +77,7 @@ export function openLogOutput(output: IOutputService, files: ILogFileService, so
 	if (present && !existing) return present;
 	// Raw files are streams, so text filters match model lines rather than an
 	// arbitrary filesystem read chunk. Only structured records use log filtering.
-	const channel =
-		present ??
-		output.createChannel({
-			id,
-			label: savedLogLabel(source),
-			kind: source.format === 'jsonl' ? 'log' : 'output',
-			source: 'core',
-		});
+	const channel = present ?? output.createChannel({ id, label: savedLogLabel(source), kind: source.format === 'jsonl' ? 'log' : 'output', source: 'core' });
 	const reader = new LogOutputReader(channel, files, source);
 	setDisposableOwner(reader, channel);
 	return channel;
@@ -117,27 +101,17 @@ class LogOutputReader extends Disposable {
 	private cursor: ILogFileCursor | undefined;
 	private failed = false;
 	private clearVersion = 0;
-	private readonly scheduler = this._register(
-		new RunOnceScheduler(() => {
-			void this.read();
-		}, 1_000),
-	);
+	private readonly scheduler = this._register(new RunOnceScheduler(() => { void this.read(); }, 1_000));
 
-	constructor(
-		private readonly channel: IOutputChannel,
-		private readonly files: ILogFileService,
-		private readonly source: ILogFile,
-	) {
+	constructor(private readonly channel: IOutputChannel, private readonly files: ILogFileService, private readonly source: ILogFile) {
 		super();
 		this._register(channel.onDidDispose(() => this.dispose()));
-		this._register(
-			channel.onDidChange(change => {
-				if (change.kind !== 'clear') return;
-				this.clearVersion++;
-				// A pre-clear snapshot must not refill the cache. Keep the incremental
-				// cursor so the next read can deliver new output without replaying history.
-			}),
-		);
+		this._register(channel.onDidChange(change => {
+			if (change.kind !== 'clear') return;
+			this.clearVersion++;
+			// A pre-clear snapshot must not refill the cache. Keep the incremental
+			// cursor so the next read can deliver new output without replaying history.
+		}));
 		void this.read();
 	}
 
@@ -149,23 +123,19 @@ class LogOutputReader extends Disposable {
 			this.cursor = result.cursor;
 			if (clearVersion !== this.clearVersion) return;
 			this.failed = false;
-			if (result.gap)
-				this.channel.appendLine({
-					severity: 'warning',
-					category: 'logs',
-					text: localize('output.logGap', 'Earlier output is unavailable because this log rotated, was truncated, or exceeded the read limit.'),
-				});
+			if (result.gap) this.channel.appendLine({
+				severity: 'warning', category: 'logs',
+				text: localize('output.logGap', 'Earlier output is unavailable because this log rotated, was truncated, or exceeded the read limit.'),
+			});
 			if (this.source.format === 'text') {
 				this.channel.append({ text: result.text, category: this.source.source });
 			} else {
 				for (const line of result.text.split('\n')) {
 					if (!line) continue;
-					try {
-						this.channel.appendLine(outputLogEntry(validateLogEntry(JSON.parse(line))));
-					} catch {
+					try { this.channel.appendLine(outputLogEntry(validateLogEntry(JSON.parse(line)))); }
+					catch {
 						this.channel.appendLine({
-							severity: 'warning',
-							category: 'logs',
+							severity: 'warning', category: 'logs',
 							text: localize('output.invalidLogRecord', 'Unrecognized saved log record: {0}', line),
 						});
 					}
@@ -173,12 +143,10 @@ class LogOutputReader extends Disposable {
 			}
 		} catch (error) {
 			if (this.isDisposed) return;
-			if (!this.failed)
-				this.channel.appendLine({
-					severity: 'error',
-					category: 'logs',
-					text: localize('output.savedLogError', 'Could not read saved logs: {0}', errorMessage(error)),
-				});
+			if (!this.failed) this.channel.appendLine({
+				severity: 'error', category: 'logs',
+				text: localize('output.savedLogError', 'Could not read saved logs: {0}', errorMessage(error)),
+			});
 			this.failed = true;
 		} finally {
 			if (!this.isDisposed && this.source.live) this.scheduler.schedule();

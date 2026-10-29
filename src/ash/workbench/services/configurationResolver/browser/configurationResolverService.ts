@@ -26,9 +26,7 @@ import { ConfigurationResolverExpression } from '../common/configurationResolver
 /** Workspace stays the sole owner of folder identity; each resolution reads its current folders. */
 export class ConfigurationResolverService extends Disposable implements IConfigurationResolverService {
 	private readonly contributedVariables = new Map<string, () => Promise<string | undefined>>();
-	public get resolvableVariables(): ReadonlySet<string> {
-		return new Set([...executionVariableNames, ...this.contributedVariables.keys()]);
-	}
+	public get resolvableVariables(): ReadonlySet<string> { return new Set([...executionVariableNames, ...this.contributedVariables.keys()]); }
 	private workspaceGeneration = 0;
 	private readonly interactions = new Set<CancellationTokenSource>();
 
@@ -43,15 +41,13 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
-		this._register(
-			toDisposable(() => {
-				for (const interaction of this.interactions) {
-					interaction.cancel();
-				}
-				this.interactions.clear();
-				this.contributedVariables.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const interaction of this.interactions) {
+				interaction.cancel();
+			}
+			this.interactions.clear();
+			this.contributedVariables.clear();
+		}));
 	}
 
 	public contributeVariable(variable: string, resolution: () => Promise<string | undefined>): void {
@@ -90,26 +86,18 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 		if (os === undefined) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
 		const key = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
 		const overrides = input[key];
-		if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)))
-			throw new TypeError(localize('configurationResolver.invalidPlatform', "The '{0}' configuration must be an object.", key));
+		if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))) throw new TypeError(localize('configurationResolver.invalidPlatform', "The '{0}' configuration must be an object.", key));
 		// Select before collecting references: another platform must never invoke a command or input.
-		const selected = { ...input, ...(overrides as Record<string, unknown>) };
+		const selected = { ...input, ...overrides as Record<string, unknown> };
 		for (const platform of ['windows', 'osx', 'linux']) delete selected[platform];
 		return ConfigurationResolverExpression.parse(selected as T);
 	}
 
-	private async resolveNonInteractive(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		expression: ConfigurationResolverExpression<unknown>,
-		environment?: Readonly<Record<string, string | undefined>>,
-		skipContributed = false,
-	): Promise<true> {
+	private async resolveNonInteractive(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, expression: ConfigurationResolverExpression<unknown>, environment?: Readonly<Record<string, string | undefined>>, skipContributed = false): Promise<true> {
 		const generation = this.workspaceGeneration;
 		const attempted = new Set<string>();
 		while (true) {
-			const references = [...expression.unresolved()].filter(
-				reference => !['command', 'input'].includes(reference.name) && !(skipContributed && this.contributedVariables.has(reference.inner)) && !attempted.has(reference.id),
-			);
+			const references = [...expression.unresolved()].filter(reference => !['command', 'input'].includes(reference.name) && !(skipContributed && this.contributedVariables.has(reference.inner)) && !attempted.has(reference.id));
 			if (references.length === 0) return true;
 			const resolve = await this.createResolver(folder, new Set(references.map(reference => reference.inner)), environment);
 			if (generation !== this.workspaceGeneration) throw new CancellationError();
@@ -121,11 +109,7 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 		}
 	}
 
-	private async createResolver(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		references: ReadonlySet<string>,
-		suppliedEnvironment?: Readonly<Record<string, string | undefined>>,
-	): Promise<(value: string) => string> {
+	private async createResolver(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, references: ReadonlySet<string>, suppliedEnvironment?: Readonly<Record<string, string | undefined>>): Promise<(value: string) => string> {
 		this.assertNotDisposed();
 		const generation = this.workspaceGeneration;
 		const workspace = this.workspace.getWorkspace();
@@ -137,9 +121,7 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 		const selected = folder && folders.find(candidate => candidate.uri.toString() === folder.uri.toString());
 		// Capture the editor before any host request or interaction yields. A command
 		// may change tabs or selection, but this invocation keeps one editor snapshot.
-		const editorReferences = [...references].filter(reference =>
-			/^(?:file(?:WorkspaceFolder(?:Basename)?|Dirname(?:Basename)?|Extname|Basename(?:NoExtension)?)?|relativeFile(?:Dirname)?|selectedText|lineNumber|columnNumber)(?::|$)/.test(reference),
-		);
+		const editorReferences = [...references].filter(reference => /^(?:file(?:WorkspaceFolder(?:Basename)?|Dirname(?:Basename)?|Extname|Basename(?:NoExtension)?)?|relativeFile(?:Dirname)?|selectedText|lineNumber|columnNumber)(?::|$)/.test(reference));
 		const editor = editorReferences.length ? this.instantiation.createInstance(ActiveEditorVariableResolver).snapshot() : undefined;
 		if (names.size && folder && !selected) throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", folder.name));
 		if (names.has('')) throw new Error(localize('configurationResolver.missingEnvironmentName', 'An environment variable name is required.'));
@@ -153,7 +135,9 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 			if (windowsEnvironment) environment = Object.fromEntries(Object.entries(environment).map(([key, value]) => [key.toUpperCase(), value]));
 		}
 		const values = new Map<string, string>();
-		const extensions = [...references].some(reference => /^extensionInstallFolder(?::|$)/.test(reference)) ? this.instantiation.createInstance(ExtensionInstallFolderResolver) : undefined;
+		const extensions = [...references].some(reference => /^extensionInstallFolder(?::|$)/.test(reference))
+			? this.instantiation.createInstance(ExtensionInstallFolderResolver)
+			: undefined;
 		for (const reference of references) {
 			const colon = reference.indexOf(':');
 			const variable = colon === -1 ? reference : reference.slice(0, colon);
@@ -173,40 +157,24 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 					const extension = rules.extname(file);
 					if (variable === 'relativeFile' || variable === 'relativeFileDirname') {
 						const base = name === undefined ? folder : folders.find(candidate => candidate.name === name);
-						if (name !== undefined && !base)
-							throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", reference));
+						if (name !== undefined && !base) throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", reference));
 						const target = variable === 'relativeFile' ? file : directory;
 						const value = base ? rules.relative(this.labels.getUriLabel(base.uri, { noPrefix: true }), target) : target;
 						values.set(reference, variable === 'relativeFileDirname' && !value ? '.' : value);
 					} else if (variable === 'fileWorkspaceFolder' || variable === 'fileWorkspaceFolderBasename') {
 						const containing = this.workspace.getWorkspaceFolder(editor.resource);
-						if (!containing)
-							throw new Error(localize('configurationResolver.missingFileFolder', "Cannot resolve '{0}': the active file does not belong to an open workspace folder.", reference));
+						if (!containing) throw new Error(localize('configurationResolver.missingFileFolder', "Cannot resolve '{0}': the active file does not belong to an open workspace folder.", reference));
 						const path = this.labels.getUriLabel(containing.uri, { noPrefix: true });
 						values.set(reference, variable === 'fileWorkspaceFolder' ? path : rules.basename(path));
 					} else {
-						values.set(
-							reference,
-							variable === 'file'
-								? file
-								: variable === 'fileDirname'
-									? directory
-									: variable === 'fileDirnameBasename'
-										? rules.basename(directory)
-										: variable === 'fileExtname'
-											? extension
-											: variable === 'fileBasename'
-												? filename
-												: rules.basename(file, extension),
-						);
+						values.set(reference, variable === 'file' ? file : variable === 'fileDirname' ? directory : variable === 'fileDirnameBasename' ? rules.basename(directory) : variable === 'fileExtname' ? extension : variable === 'fileBasename' ? filename : rules.basename(file, extension));
 					}
 				}
 			} else if (variable === 'extensionInstallFolder') {
 				values.set(reference, await extensions!.resolve(name ?? ''));
 			} else if (variable === 'config') {
 				const value = name && this.configuration.getValue<unknown>(name, { resource: folder?.uri });
-				if (!name || !['string', 'number', 'boolean'].includes(typeof value))
-					throw new Error(localize('configurationResolver.invalidConfiguration', "Cannot resolve configuration '{0}': its value must be a string, number or boolean.", name ?? ''));
+				if (!name || !['string', 'number', 'boolean'].includes(typeof value)) throw new Error(localize('configurationResolver.invalidConfiguration', "Cannot resolve configuration '{0}': its value must be a string, number or boolean.", name ?? ''));
 				values.set(reference, String(value));
 			} else if (variable === 'userHome') {
 				const home = this.paths.resolvedUserHome;
@@ -233,41 +201,23 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 			if (reference.startsWith('env:')) {
 				const name = windowsEnvironment ? reference.slice(4).toUpperCase() : reference.slice(4);
 				if (!name) throw new Error(localize('configurationResolver.missingEnvironmentName', 'An environment variable name is required.'));
-				return Object.hasOwn(environment, name) ? (environment[name] ?? '') : '';
+				return Object.hasOwn(environment, name) ? environment[name] ?? '' : '';
 			}
 			return values.get(reference) ?? value;
 		};
 	}
 
-	public async resolveWithInteractionReplace<T>(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		config: T,
-		section?: string,
-		variables?: Readonly<Record<string, string>>,
-		target?: ConfigurationTarget,
-	): Promise<(T extends ConfigurationResolverExpression<infer R> ? R : T) | undefined> {
+	public async resolveWithInteractionReplace<T>(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, config: T, section?: string, variables?: Readonly<Record<string, string>>, target?: ConfigurationTarget): Promise<(T extends ConfigurationResolverExpression<infer R> ? R : T) | undefined> {
 		const expression = await this.resolveInteraction(folder, config, section, variables, target);
 		return expression?.toObject() as (T extends ConfigurationResolverExpression<infer R> ? R : T) | undefined;
 	}
 
-	public async resolveWithInteraction(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		config: unknown,
-		section?: string,
-		variables?: Readonly<Record<string, string>>,
-		target?: ConfigurationTarget,
-	): Promise<Map<string, string> | undefined> {
+	public async resolveWithInteraction(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, config: unknown, section?: string, variables?: Readonly<Record<string, string>>, target?: ConfigurationTarget): Promise<Map<string, string> | undefined> {
 		const expression = await this.resolveInteraction(folder, config, section, variables, target);
 		return expression && new Map([...expression.resolved()].map(([reference, result]) => [reference.inner, result.value!]));
 	}
 
-	private async resolveInteraction<T>(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		config: T,
-		section?: string,
-		variables?: Readonly<Record<string, string>>,
-		target?: ConfigurationTarget,
-	): Promise<ConfigurationResolverExpression<T> | undefined> {
+	private async resolveInteraction<T>(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, config: T, section?: string, variables?: Readonly<Record<string, string>>, target?: ConfigurationTarget): Promise<ConfigurationResolverExpression<T> | undefined> {
 		this.assertNotDisposed();
 		using interaction = new CancellationTokenSource();
 		using listener = this.workspace.onDidChangeWorkspace(() => interaction.cancel());
@@ -278,14 +228,20 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 			const ready = await raceCancellation(this.resolveNonInteractive(folder, expression, undefined, true), interaction.token);
 			if (!ready) return undefined;
 			const resolved = expression.toObject();
-			const references = new Set([...expression.unresolved()].filter(reference => reference.name === 'command' || reference.name === 'input').map(reference => reference.inner));
+			const references = new Set([...expression.unresolved()]
+				.filter(reference => reference.name === 'command' || reference.name === 'input')
+				.map(reference => reference.inner));
 			if (interaction.token.isCancellationRequested) {
 				return undefined;
 			}
 			// File acquisition and UI dependencies are needed only for configured inputs.
 			// This short-lived helper borrows the window's owners; it stores no configuration.
-			let inputs = [...references].some(reference => reference.startsWith('input:')) ? this.instantiation.createInstance(ConfiguredInputResolver) : undefined;
-			const definitions = inputs ? await raceCancellation(inputs.load(folder, section, references, target), interaction.token) : new Map<string, ConfiguredInput>();
+			let inputs = [...references].some(reference => reference.startsWith('input:'))
+				? this.instantiation.createInstance(ConfiguredInputResolver)
+				: undefined;
+			const definitions = inputs
+				? await raceCancellation(inputs.load(folder, section, references, target), interaction.token)
+				: new Map<string, ConfiguredInput>();
 			if (!definitions) return undefined;
 			for (const replacement of expression.unresolved()) {
 				const contributed = this.contributedVariables.get(replacement.inner);
@@ -305,10 +261,9 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 					}
 					const definition = definitions.get(reference)!;
 					if (definition.type === 'command') command = definition.command;
-					result =
-						definition.type === 'command'
-							? await raceCancellation(this.commands.executeCommand(definition.command, definition.args), interaction.token)
-							: await inputs!.show(definition, interaction.token);
+					result = definition.type === 'command'
+						? await raceCancellation(this.commands.executeCommand(definition.command, definition.args), interaction.token)
+						: await inputs!.show(definition, interaction.token);
 				} else if (replacement.name === 'command') {
 					const name = reference.slice('command:'.length);
 					command = variables && Object.hasOwn(variables, name) ? variables[name]! : name;
@@ -322,7 +277,7 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 				}
 				if (typeof result !== 'string') throw commandResultError(command);
 				expression.resolve(replacement, reference.startsWith('input:') ? { value: result, input: definitions.get(reference) } : result);
-				if (!(await raceCancellation(this.resolveNonInteractive(folder, expression, undefined, true), interaction.token))) return undefined;
+				if (!await raceCancellation(this.resolveNonInteractive(folder, expression, undefined, true), interaction.token)) return undefined;
 			}
 			if (interaction.token.isCancellationRequested) {
 				return undefined;
@@ -342,7 +297,7 @@ class ExtensionInstallFolderResolver {
 	constructor(
 		@IExtensionService private readonly extensions: IExtensionService,
 		@ILabelService private readonly labels: ILabelService,
-	) {}
+	) { }
 
 	public async resolve(id: string): Promise<string> {
 		const extension = id ? await this.extensions.getExtension(id) : undefined;
@@ -356,26 +311,16 @@ class ActiveEditorVariableResolver {
 	constructor(
 		@IEditorService private readonly editors: IEditorService,
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
-	) {}
+	) { }
 
-	snapshot(): {
-		readonly resource: URI | undefined;
-		readonly selectedText: string | undefined;
-		readonly line: number | undefined;
-		readonly column: number | undefined;
-	} {
+	snapshot(): { readonly resource: URI | undefined; readonly selectedText: string | undefined; readonly line: number | undefined; readonly column: number | undefined; } {
 		const resource = this.editors.activeEditor?.resource;
 		const control = this.codeEditors.getActiveCodeEditor();
 		const model = control?.getModel();
 		const selection = control?.getSelection();
 		const position = control?.getPosition();
 		const matches = resource && model?.uri.toString() === resource.toString();
-		return {
-			resource,
-			selectedText: matches && selection ? model!.getValueInRange(selection) : undefined,
-			line: matches ? position?.lineNumber : undefined,
-			column: matches ? position?.column : undefined,
-		};
+		return { resource, selectedText: matches && selection ? model!.getValueInRange(selection) : undefined, line: matches ? position?.lineNumber : undefined, column: matches ? position?.column : undefined };
 	}
 }
 
@@ -385,14 +330,9 @@ class ConfiguredInputResolver {
 		@IFileService private readonly files: IFileService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-	) {}
+	) { }
 
-	public async load(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		section: string | undefined,
-		references: ReadonlySet<string>,
-		target?: ConfigurationTarget,
-	): Promise<Map<string, ConfiguredInput>> {
+	public async load(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, section: string | undefined, references: ReadonlySet<string>, target?: ConfigurationTarget): Promise<Map<string, ConfiguredInput>> {
 		let definitions: unknown[] | undefined;
 		const keys = this.configuration.keys().default;
 		if (section && keys.some(key => key === section || key.startsWith(`${section}.`))) {
@@ -428,43 +368,33 @@ class ConfiguredInputResolver {
 		return selected;
 	}
 
-	public async show(input: Exclude<ConfiguredInput, { type: 'command' }>, token: CancellationToken): Promise<string | undefined> {
+	public async show(input: Exclude<ConfiguredInput, { type: 'command'; }>, token: CancellationToken): Promise<string | undefined> {
 		if (token.isCancellationRequested) return undefined;
 		if (input.type === 'promptString') {
-			return this.quickInput.input(
-				{
-					title: input.description,
-					placeHolder: input.description,
-					value: input.default,
-					password: input.password,
-				},
-				token,
-			);
+			return this.quickInput.input({
+				title: input.description,
+				placeHolder: input.description,
+				value: input.default,
+				password: input.password,
+			}, token);
 		}
-		using picker = this.quickInput.createQuickPick<IQuickPickItem & { readonly inputValue: string }>();
+		using picker = this.quickInput.createQuickPick<IQuickPickItem & { readonly inputValue: string; }>();
 		using listeners = new DisposableStore();
 		picker.ariaLabel = input.description;
 		picker.placeholder = input.description;
-		picker.items = input.options
-			.map(option => {
-				const value = typeof option === 'string' ? option : option.value;
-				return {
-					label: typeof option === 'string' ? option : (option.label ?? value),
-					inputValue: value,
-					picked: value === input.default,
-				};
-			})
-			.sort((left, right) => Number(right.picked) - Number(left.picked));
+		picker.items = input.options.map(option => {
+			const value = typeof option === 'string' ? option : option.value;
+			return { label: typeof option === 'string' ? option : option.label ?? value, inputValue: value, picked: value === input.default };
+		}).sort((left, right) => Number(right.picked) - Number(left.picked));
 		return await new Promise(resolve => {
-			listeners.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
+			listeners.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
 
-					resolve(item.inputValue);
-					picker.hide();
-				}),
-			);
+				resolve(item.inputValue);
+				picker.hide();
+
+			}));
 			listeners.add(picker.onDidHide(() => resolve(undefined)));
 			listeners.add(token.onCancellationRequested(() => picker.hide()));
 			picker.show();
@@ -482,9 +412,10 @@ function isConfiguredInput(value: unknown): value is ConfiguredInput {
 	}
 	if (value.type === 'promptString') return !('password' in value) || typeof value.password === 'boolean';
 	if (value.type !== 'pickString' || !('options' in value) || !Array.isArray(value.options) || value.options.length === 0) return false;
-	return value.options.every(
-		option => typeof option === 'string' || (option && typeof option === 'object' && typeof option.value === 'string' && (option.label === undefined || typeof option.label === 'string')),
-	);
+	return value.options.every(option => typeof option === 'string' || (
+		option && typeof option === 'object' && typeof option.value === 'string' &&
+		(option.label === undefined || typeof option.label === 'string')
+	));
 }
 
 function commandResultError(command: string): Error {

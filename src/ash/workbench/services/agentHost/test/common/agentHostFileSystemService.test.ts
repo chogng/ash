@@ -12,9 +12,7 @@ import { InMemoryFileSystemProvider } from '../../../../../platform/files/common
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { AgentHostFileSystemService } from '../../common/agentHostFileSystemService.js';
 
-const unavailable = (): never => {
-	throw new Error('Unexpected backend operation');
-};
+const unavailable = (): never => { throw new Error('Unexpected backend operation'); };
 
 function connection(root: URI, content: string): IRemoteFilesystemConnection {
 	return {
@@ -39,10 +37,7 @@ suite('AgentHostFileSystemService workspace registration', () => {
 		using provider = new AgentHostFileSystemProvider({
 			api: {
 				...createDisconnectedFileApi(unavailable),
-				readFile: async params => {
-					requests.push(params);
-					return { content: params.dirId!, revision: 'r1' };
-				},
+				readFile: async params => { requests.push(params); return { content: params.dirId!, revision: 'r1' }; },
 			},
 			resourceApi: createDisconnectedResourceApi(unavailable),
 			directories: () => [
@@ -90,10 +85,7 @@ suite('AgentHostFileSystemService workspace registration', () => {
 			using incoming = new AgentHostFileSystemProvider(connection(URI.file('/'), 'incoming'));
 			const root = URI.from({ scheme: occupied, path: '/' });
 			await existing.createDirectory(root);
-			await existing.writeFile(root.with({ path: '/original.txt' }), new TextEncoder().encode('original'), {
-				create: true,
-				overwrite: false,
-			});
+			await existing.writeFile(root.with({ path: '/original.txt' }), new TextEncoder().encode('original'), { create: true, overwrite: false });
 			using previous = files.registerProvider(occupied, existing);
 			assert.throws(() => services.createInstance(AgentHostFileSystemService, incoming, undefined), new RegExp(`already registered: ${occupied}`));
 			assert.equal((await files.readFile(root.with({ path: '/original.txt' }))).content, 'original');

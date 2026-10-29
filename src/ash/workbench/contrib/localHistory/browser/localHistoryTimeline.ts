@@ -27,11 +27,9 @@ export class LocalHistoryTimeline extends Disposable implements TimelineProvider
 			this.registration.clear();
 			if (configuration.getValue<boolean>('workbench.localHistory.enabled')) this.registration.value = timeline.registerTimelineProvider(this);
 		};
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('workbench.localHistory.enabled')) update();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('workbench.localHistory.enabled')) update();
+		}));
 		this._register(history.onDidAddEntry(({ entry }) => this.changed.fire({ id: this.id, uri: entry.workingCopy.resource, reset: true })));
 		update();
 	}
@@ -45,18 +43,12 @@ export class LocalHistoryTimeline extends Disposable implements TimelineProvider
 		return {
 			source: this.id,
 			items: page.map(entry => ({
-				id: entry.id,
-				handle: entry.id,
-				source: this.id,
+				id: entry.id, handle: entry.id, source: this.id,
 				label: localize('timeline.localHistory.saved', 'File Saved'),
 				description: new Date(entry.timestamp).toLocaleString(),
 				timestamp: entry.timestamp,
 				tooltip: localize('timeline.localHistory.entry', '{0} — {1}', entry.workingCopy.name, new Date(entry.timestamp).toLocaleString()),
-				command: {
-					id: 'workbench.action.localHistory.open',
-					title: localize('timeline.localHistory.compare', 'Compare with File'),
-					arguments: [uri, entry.id],
-				},
+				command: { id: 'workbench.action.localHistory.open', title: localize('timeline.localHistory.compare', 'Compare with File'), arguments: [uri, entry.id] },
 			})),
 			paging: { cursor: start + page.length < entries.length ? page.at(-1)?.id : undefined },
 		};

@@ -4,21 +4,16 @@ import { localize } from '../../../../nls.js';
 import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import type { IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 
-export function resolveContentAndKeybindingItems(
-	keybindingService: IKeybindingService,
-	value?: string,
-):
-	| {
-			content: MarkdownString;
-			configureKeybindingItems: (IQuickPickItem & { id: string })[] | undefined;
-			configuredKeybindingItems: (IQuickPickItem & { id: string })[] | undefined;
-	  }
-	| undefined {
+export function resolveContentAndKeybindingItems(keybindingService: IKeybindingService, value?: string): {
+	content: MarkdownString;
+	configureKeybindingItems: (IQuickPickItem & { id: string; })[] | undefined;
+	configuredKeybindingItems: (IQuickPickItem & { id: string; })[] | undefined;
+} | undefined {
 	if (!value) {
 		return undefined;
 	}
-	const assigned = new Map<string, IQuickPickItem & { id: string }>();
-	const unassigned = new Map<string, IQuickPickItem & { id: string }>();
+	const assigned = new Map<string, IQuickPickItem & { id: string; }>();
+	const unassigned = new Map<string, IQuickPickItem & { id: string; }>();
 	const text = value.replace(/<keybinding:([^<>\s]+)>/gu, (_marker, commandId: string) => {
 		const binding = keybindingService.lookupKeybinding(commandId);
 		const item = { id: commandId, label: commandId };

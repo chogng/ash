@@ -6,7 +6,13 @@ class SpacesDiffResult {
 	looksLikeAlignment = false;
 }
 
-function spacesDiff(a: string, aLength: number, b: string, bLength: number, result: SpacesDiffResult): void {
+function spacesDiff(
+	a: string,
+	aLength: number,
+	b: string,
+	bLength: number,
+	result: SpacesDiffResult,
+): void {
 	result.spacesDiff = 0;
 	result.looksLikeAlignment = false;
 
@@ -36,13 +42,13 @@ function spacesDiff(a: string, aLength: number, b: string, bLength: number, resu
 	if (tabsDiff === 0) {
 		result.spacesDiff = spacesCountDiff;
 		if (
-			spacesCountDiff > 0 &&
-			bSpacesCount > 0 &&
-			bSpacesCount < a.length &&
-			bSpacesCount < b.length &&
-			b.charCodeAt(bSpacesCount) !== CharCode.Space &&
-			a.charCodeAt(bSpacesCount - 1) === CharCode.Space &&
-			a.charCodeAt(a.length - 1) === CharCode.Comma
+			spacesCountDiff > 0
+			&& bSpacesCount > 0
+			&& bSpacesCount < a.length
+			&& bSpacesCount < b.length
+			&& b.charCodeAt(bSpacesCount) !== CharCode.Space
+			&& a.charCodeAt(bSpacesCount - 1) === CharCode.Space
+			&& a.charCodeAt(a.length - 1) === CharCode.Comma
 		) {
 			result.looksLikeAlignment = true;
 		}
@@ -57,7 +63,11 @@ export interface IGuessedIndentation {
 }
 
 /** Infers indentation from at most the first 10,000 physical lines. */
-export function guessIndentation(source: ITextBuffer, defaultTabSize: number, defaultInsertSpaces: boolean): IGuessedIndentation {
+export function guessIndentation(
+	source: ITextBuffer,
+	defaultTabSize: number,
+	defaultInsertSpaces: boolean,
+): IGuessedIndentation {
 	const linesCount = Math.min(source.getLineCount(), 10_000);
 	let linesIndentedWithTabsCount = 0;
 	let linesIndentedWithSpacesCount = 0;
@@ -92,7 +102,10 @@ export function guessIndentation(source: ITextBuffer, defaultTabSize: number, de
 		else if (currentLineSpacesCount > 1) linesIndentedWithSpacesCount++;
 
 		spacesDiff(previousLineText, previousLineIndentation, currentLineText, currentLineIndentation, temporaryResult);
-		if (temporaryResult.looksLikeAlignment && !(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)) continue;
+		if (
+			temporaryResult.looksLikeAlignment
+			&& !(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)
+		) continue;
 
 		if (temporaryResult.spacesDiff <= maximumTabSizeGuess) {
 			spacesDiffCount[temporaryResult.spacesDiff]++;
@@ -116,7 +129,12 @@ export function guessIndentation(source: ITextBuffer, defaultTabSize: number, de
 				tabSize = possibleTabSize;
 			}
 		}
-		if (tabSize === 4 && spacesDiffCount[4] > 0 && spacesDiffCount[2] > 0 && spacesDiffCount[2] >= (spacesDiffCount[4] * 2) / 3) tabSize = 2;
+		if (
+			tabSize === 4
+			&& spacesDiffCount[4] > 0
+			&& spacesDiffCount[2] > 0
+			&& spacesDiffCount[2] >= spacesDiffCount[4] * 2 / 3
+		) tabSize = 2;
 	}
 
 	return { insertSpaces, tabSize };

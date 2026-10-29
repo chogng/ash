@@ -25,88 +25,38 @@ export class RemoteStatusIndicator extends Disposable implements IWorkbenchContr
 		super();
 		let state = options.remoteAgentService.connectionState ?? 'connecting';
 		let connection = options.remoteAgentService.connection;
-		const status = this._register(
-			options.statusbarService.addEntry(remoteStatusEntry(state, connection, options.runCommand), {
-				id: 'ash.status.remote',
-				alignment: StatusbarAlignment.Left,
-				priority: RemoteStatusPriority,
-			}),
-		);
-		this._register(
-			options.remoteAgentService.onDidChangeConnectionState(nextState => {
-				state = nextState;
-				status.update(remoteStatusEntry(state, connection, options.runCommand));
-			}),
-		);
-		this._register(
-			options.remoteAgentService.onDidChangeConnection(nextConnection => {
-				connection = nextConnection;
-				status.update(remoteStatusEntry(state, connection, options.runCommand));
-			}),
-		);
+		const status = this._register(options.statusbarService.addEntry(remoteStatusEntry(state, connection, options.runCommand), {
+			id: 'ash.status.remote',
+			alignment: StatusbarAlignment.Left,
+			priority: RemoteStatusPriority,
+		}));
+		this._register(options.remoteAgentService.onDidChangeConnectionState(nextState => {
+			state = nextState;
+			status.update(remoteStatusEntry(state, connection, options.runCommand));
+		}));
+		this._register(options.remoteAgentService.onDidChangeConnection(nextConnection => {
+			connection = nextConnection;
+			status.update(remoteStatusEntry(state, connection, options.runCommand));
+		}));
 	}
 }
 
 function remoteStatusEntry(state: RemoteConnectionState, connection: RemoteAgentConnection | undefined, runCommand: (id: string) => unknown): IStatusbarEntry {
 	let backend = localize({ bundle: 'ash.workbench', key: 'remote.indicator.local' }, 'local backend');
-	if (connection?.kind === 'ssh') {
-		backend = localize({ bundle: 'ash.workbench', key: 'remote.indicator.ssh' }, 'SSH host {0}', connection.host);
-	}
-	if (connection?.kind === 'remote') {
-		backend = localize({ bundle: 'ash.workbench', key: 'remote.indicator.remote' }, 'Remote host {0}', connection.authority);
-	}
+	if (connection?.kind === 'ssh') { backend = localize({ bundle: 'ash.workbench', key: 'remote.indicator.ssh' }, 'SSH host {0}', connection.host); }
+	if (connection?.kind === 'remote') { backend = localize({ bundle: 'ash.workbench', key: 'remote.indicator.remote' }, 'Remote host {0}', connection.authority); }
 	const run = () => runCommand(connection?.kind === 'ssh' && state === 'disconnected' ? ReconnectRemoteCommandId : ConnectToRemoteCommandId);
 	const kind = connection && connection.kind !== 'local' && state === 'connected' ? 'remote' : undefined;
 	switch (state) {
 		case 'connected':
-			return {
-				showInAllWindows: true,
-				kind,
-				icon: Lxicon.remote,
-				text: '',
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.ready' }, 'Remote connection to {0} is ready', backend),
-				tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connected' }, 'Connected to {0}', backend),
-				run,
-			};
+			return { showInAllWindows: true, kind, icon: Lxicon.remote, text: '', ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.ready' }, 'Remote connection to {0} is ready', backend), tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connected' }, 'Connected to {0}', backend), run };
 		case 'connecting':
-			return {
-				showInAllWindows: true,
-				kind,
-				icon: Lxicon.remote,
-				text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connectingText' }, 'Connecting…'),
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connecting' }, 'Remote connection to {0} is connecting', backend),
-				tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connectingTooltip' }, 'Connecting to {0}', backend),
-				run,
-			};
+			return { showInAllWindows: true, kind, icon: Lxicon.remote, text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connectingText' }, 'Connecting…'), ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connecting' }, 'Remote connection to {0} is connecting', backend), tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.connectingTooltip' }, 'Connecting to {0}', backend), run };
 		case 'reconnecting':
-			return {
-				showInAllWindows: true,
-				kind,
-				icon: Lxicon.remote,
-				text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnectingText' }, 'Reconnecting…'),
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnecting' }, 'Remote connection to {0} is reconnecting', backend),
-				tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnectingTooltip' }, 'Reconnecting to {0}', backend),
-				run,
-			};
+			return { showInAllWindows: true, kind, icon: Lxicon.remote, text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnectingText' }, 'Reconnecting…'), ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnecting' }, 'Remote connection to {0} is reconnecting', backend), tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.reconnectingTooltip' }, 'Reconnecting to {0}', backend), run };
 		case 'disconnecting':
-			return {
-				showInAllWindows: true,
-				kind,
-				icon: Lxicon.remote,
-				text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectingText' }, 'Disconnecting…'),
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnecting' }, 'Remote connection to {0} is disconnecting', backend),
-				tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectingTooltip' }, 'Disconnecting from {0}', backend),
-				run,
-			};
+			return { showInAllWindows: true, kind, icon: Lxicon.remote, text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectingText' }, 'Disconnecting…'), ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnecting' }, 'Remote connection to {0} is disconnecting', backend), tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectingTooltip' }, 'Disconnecting from {0}', backend), run };
 		case 'disconnected':
-			return {
-				showInAllWindows: true,
-				kind,
-				icon: Lxicon.remote,
-				text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectedText' }, 'Disconnected'),
-				ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnected' }, 'Remote connection to {0} is disconnected', backend),
-				tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectedTooltip' }, '{0} is disconnected', backend),
-				run,
-			};
+			return { showInAllWindows: true, kind, icon: Lxicon.remote, text: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectedText' }, 'Disconnected'), ariaLabel: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnected' }, 'Remote connection to {0} is disconnected', backend), tooltip: localize({ bundle: 'ash.workbench', key: 'remote.indicator.disconnectedTooltip' }, '{0} is disconnected', backend), run };
 	}
 }

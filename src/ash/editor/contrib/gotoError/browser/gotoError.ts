@@ -33,9 +33,13 @@ export class DiagnosticNavigationController extends Disposable {
 		stopEvent(event);
 		const active = this.viewModel.getSelections()[0]!.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
-		const index = direction > 0 ? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0) : findPreviousDiagnostic(diagnostics, active);
+		const index = direction > 0
+			? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)
+			: findPreviousDiagnostic(diagnostics, active);
 		const target = diagnostics[index === -1 ? (direction > 0 ? 0 : diagnostics.length - 1) : index]!;
-		this.viewModel.setSelections('editor.action.marker.next', [Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())]);
+		this.viewModel.setSelections('editor.action.marker.next', [
+			Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition()),
+		]);
 		this.viewport.revealPosition(target.range.getStartPosition());
 		this.viewport.announceAccessibilityStatus(describeDiagnostic(target.metadata));
 	}
@@ -47,7 +51,7 @@ function describeDiagnostic(diagnostic: LanguageDiagnostic): string {
 	return `${prefix}: ${diagnostic.message}`;
 }
 
-function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range }[], active: Position): number {
+function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range; }[], active: Position): number {
 	for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
 		if (Position.compare(diagnostics[index]!.range.getEndPosition(), active) < 0) return index;
 	}
@@ -55,9 +59,13 @@ function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range }[
 }
 
 registerEditorContribution({
-	id: 'editor.contrib.gotoError',
-	install: context => {
+	id: 'editor.contrib.gotoError', install: context => {
 		if (context.kind !== 'text') return;
-		return new DiagnosticNavigationController(context.controller.element, context.view, context.viewModel, context.getService(TextEditorCapability.diagnosticDecorations));
-	},
+		return new DiagnosticNavigationController(
+			context.controller.element,
+			context.view,
+			context.viewModel,
+			context.getService(TextEditorCapability.diagnosticDecorations),
+		);
+	}
 });

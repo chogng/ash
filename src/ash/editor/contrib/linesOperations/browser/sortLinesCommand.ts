@@ -11,7 +11,7 @@ export class SortLinesCommand implements ICommand {
 	constructor(
 		private readonly selection: Selection,
 		private readonly descending: boolean,
-	) {}
+	) { }
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);
@@ -50,7 +50,10 @@ function sortData(model: ITextModel, selection: Selection, descending: boolean):
 	const after = [...before].sort((left, right) => collator.compare(left, right));
 	if (descending) after.reverse();
 	return {
-		range: Range.fromPositions(new Position(startLineNumber, 1), new Position(endLineNumber, model.getLineMaxColumn(endLineNumber))),
+		range: Range.fromPositions(
+			new Position(startLineNumber, 1),
+			new Position(endLineNumber, model.getLineMaxColumn(endLineNumber)),
+		),
 		before,
 		after,
 	};

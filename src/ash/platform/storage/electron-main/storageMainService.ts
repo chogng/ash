@@ -36,9 +36,7 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 	private initializing: Promise<void> | undefined;
 	private closing: Promise<void> | undefined;
 
-	constructor(private readonly filePath: string) {
-		super();
-	}
+	constructor(private readonly filePath: string) { super(); }
 
 	public async initialize(): Promise<void> {
 		this.assertNotDisposed();
@@ -46,34 +44,25 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		this.initializing ??= this.run(async () => {
 			await mkdir(dirname(this.filePath), { recursive: true });
 			let source: string;
-			try {
-				source = await readFile(this.filePath, 'utf8');
-			} catch (error) {
-				if (isRecord(error) && error.code === 'ENOENT') {
-					return;
-				}
+			try { source = await readFile(this.filePath, 'utf8'); }
+			catch (error) {
+				if (isRecord(error) && error.code === 'ENOENT') { return; }
 				throw error;
 			}
 			const data: unknown = JSON.parse(source);
-			if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !Array.isArray(data.storages)) {
-				throw new TypeError('Invalid Desktop storage file');
-			}
+			if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !Array.isArray(data.storages)) { throw new TypeError('Invalid Desktop storage file'); }
 			if (data.version === 1) {
 				const migrated = migrateStorage(data.storages);
 				// The original document is an archive, never a second runtime storage source.
 				await writeFile(`${this.filePath}.v1`, source, 'utf8');
 				await this.write(migrated);
-				for (const [key, snapshot] of migrated) {
-					this.storages.set(key, snapshot);
-				}
+				for (const [key, snapshot] of migrated) { this.storages.set(key, snapshot); }
 				return;
 			}
 			for (const candidate of data.storages) {
 				const snapshot = validateStorageSnapshot(candidate);
 				const key = storageIdentityKey(snapshot.identity);
-				if (this.storages.has(key)) {
-					throw new TypeError('Duplicate Desktop storage identity');
-				}
+				if (this.storages.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
 				this.storages.set(key, { ...snapshot, isNew: false });
 			}
 		});
@@ -91,17 +80,10 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 			const existing = this.storages.get(key);
 			if (existing) {
 				// An interrupted migration can be completed only when its source still equals the durable target.
-				if (legacy && !sameEntries(legacy, existing.entries)) {
-					throw new Error('Desktop storage migration conflict');
-				}
+				if (legacy && !sameEntries(legacy, existing.entries)) { throw new Error('Desktop storage migration conflict'); }
 				return { ...existing, isNew: false };
 			}
-			const snapshot: IStorageSnapshot = {
-				identity,
-				revision: 0,
-				isNew: true,
-				entries: legacy ?? validateStorageEntries({}),
-			};
+			const snapshot: IStorageSnapshot = { identity, revision: 0, isNew: true, entries: legacy ?? validateStorageEntries({}) };
 			await this.persist(key, snapshot);
 			return snapshot;
 		});
@@ -111,15 +93,9 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		return this.run(async () => {
 			const identityKey = storageIdentityKey(identity);
 			const current = this.storages.get(identityKey);
-			if (!current) {
-				throw new Error('Storage scope has not been initialized');
-			}
+			if (!current) { throw new Error('Storage scope has not been initialized'); }
 			const entries: Record<string, IStorageEntry> = Object.assign(Object.create(null), current.entries);
-			if (entry) {
-				entries[key] = entry;
-			} else {
-				delete entries[key];
-			}
+			if (entry) { entries[key] = entry; } else { delete entries[key]; }
 			const snapshot = { ...current, revision: current.revision + 1, entries };
 			await this.persist(identityKey, snapshot);
 			this.changes.fire(snapshot);
@@ -131,22 +107,13 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		return this.run(async () => {
 			const next = new Map(this.storages);
 			for (const [key, snapshot] of next) {
-				if (
-					snapshot.identity.scope === StorageScope.WORKSPACE &&
-					snapshot.identity.id.startsWith('empty-window-') &&
-					!protectedWorkspaceIds.has(snapshot.identity.id) &&
-					!this.users.has(key)
-				) {
+				if (snapshot.identity.scope === StorageScope.WORKSPACE && snapshot.identity.id.startsWith('empty-window-') && !protectedWorkspaceIds.has(snapshot.identity.id) && !this.users.has(key)) {
 					next.delete(key);
 				}
 			}
-			if (next.size !== this.storages.size) {
-				await this.write(next);
-			}
+			if (next.size !== this.storages.size) { await this.write(next); }
 			this.storages.clear();
-			for (const [key, snapshot] of next) {
-				this.storages.set(key, snapshot);
-			}
+			for (const [key, snapshot] of next) { this.storages.set(key, snapshot); }
 		});
 	}
 
@@ -157,18 +124,13 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		this.users.set(key, (this.users.get(key) ?? 0) + 1);
 		return toDisposable(() => {
 			const remaining = this.users.get(key)! - 1;
-			if (remaining === 0) {
-				this.users.delete(key);
-			} else {
-				this.users.set(key, remaining);
-			}
+			if (remaining === 0) { this.users.delete(key); }
+			else { this.users.set(key, remaining); }
 		});
 	}
 
 	public flush(): Promise<void> {
-		if (!this.closing) {
-			this.saving.fire({ reason: WillSaveStateReason.PERIODIC });
-		}
+		if (!this.closing) { this.saving.fire({ reason: WillSaveStateReason.PERIODIC }); }
 		return this.queue;
 	}
 	public close(): Promise<void> {
@@ -182,15 +144,10 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 
 	private run<T>(operation: () => Promise<T>): Promise<T> {
 		this.assertNotDisposed();
-		if (this.closing) {
-			throw new Error('Desktop storage is closing');
-		}
+		if (this.closing) { throw new Error('Desktop storage is closing'); }
 		const result = this.queue.then(operation);
 		// A rejected request settles its caller; it must not block unrelated scopes.
-		this.queue = result.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.queue = result.then(() => undefined, () => undefined);
 		return result;
 	}
 
@@ -203,14 +160,7 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 
 	private async write(storages: ReadonlyMap<string, IStorageSnapshot>): Promise<void> {
 		const temporary = `${this.filePath}.${process.pid}.tmp`;
-		await writeFile(
-			temporary,
-			JSON.stringify({
-				version: 2,
-				storages: [...storages.values()].map(snapshot => ({ ...snapshot, isNew: false })),
-			}),
-			'utf8',
-		);
+		await writeFile(temporary, JSON.stringify({ version: 2, storages: [...storages.values()].map(snapshot => ({ ...snapshot, isNew: false })) }), 'utf8');
 		await Promises.rename(temporary, this.filePath);
 	}
 }
@@ -224,9 +174,7 @@ function migrateStorage(candidates: readonly unknown[]): ReadonlyMap<string, ISt
 		}
 		const snapshot = validateStorageSnapshot(candidate);
 		const key = storageIdentityKey(snapshot.identity);
-		if (storages.has(key)) {
-			throw new TypeError('Duplicate Desktop storage identity');
-		}
+		if (storages.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
 		storages.set(key, { ...snapshot, isNew: false });
 	}
 	return storages;

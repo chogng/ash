@@ -25,7 +25,7 @@ test('Chat input editor fallback owns multiline change and submit gestures', () 
 	});
 	const changes: string[] = [];
 	let submissions = 0;
-	using changeListener = editor.onDidChange(value => changes.push(value));
+	using changeListener = editor.onDidChange((value) => changes.push(value));
 	using submitListener = editor.onDidSubmit(() => submissions++);
 	const textarea = editor.element;
 	assert.ok(textarea instanceof dom.window.HTMLTextAreaElement);
@@ -35,14 +35,12 @@ test('Chat input editor fallback owns multiline change and submit gestures', () 
 
 	editor.value = 'First draft';
 	assert.deepEqual(changes, ['First draft']);
-	textarea.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			bubbles: true,
-			cancelable: true,
-			key: 'Enter',
-			shiftKey: true,
-		}),
-	);
+	textarea.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'Enter',
+		shiftKey: true,
+	}));
 	assert.equal(submissions, 0);
 	const submitEvent = new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
@@ -96,13 +94,9 @@ test('Chat input editor registry selects and releases a product provider', () =>
 
 class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
-	getSelection() {
-		return { anchor: this.value.length, active: this.value.length };
-	}
-	setSelection(_selection: { readonly anchor: number; readonly active: number }): void {}
-	isAtHistoryBoundary(_direction: 'previous' | 'next'): boolean {
-		return true;
-	}
+	getSelection() { return { anchor: this.value.length, active: this.value.length }; }
+	setSelection(_selection: { readonly anchor: number; readonly active: number; }): void { }
+	isAtHistoryBoundary(_direction: 'previous' | 'next'): boolean { return true; }
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange: Event<string> = this._onDidChange.event;
@@ -120,9 +114,6 @@ class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.focus();
 	}
 
-	layout(): void {}
-	public insertText(text: string): void {
-		this.value += text;
-		this._onDidChange.fire(this.value);
-	}
+	layout(): void { }
+	public insertText(text: string): void { this.value += text; this._onDidChange.fire(this.value); }
 }

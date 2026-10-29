@@ -24,11 +24,7 @@ export class CountBadge extends Disposable {
 	public readonly domNode: HTMLSpanElement;
 	private readonly hover: IManagedHover | undefined;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: ICountBadgeOptions = {},
-		styles?: ICountBadgeStyles,
-	) {
+	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}, styles?: ICountBadgeStyles) {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-count-badge';

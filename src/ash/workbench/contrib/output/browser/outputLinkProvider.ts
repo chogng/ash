@@ -13,14 +13,9 @@ export class OutputLinkProvider extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
-		this._register(
-			languageFeatures.linkProvider.register(
-				{ scheme: 'output' },
-				{
-					provideLinks: (request, signal) => (signal.aborted ? [] : this.provideLinks(request)),
-				},
-			),
-		);
+		this._register(languageFeatures.linkProvider.register({ scheme: 'output' }, {
+			provideLinks: (request, signal) => signal.aborted ? [] : this.provideLinks(request),
+		}));
 	}
 
 	private provideLinks(request: LanguageLinkRequest): readonly LanguageLink[] {
@@ -30,14 +25,8 @@ export class OutputLinkProvider extends Disposable {
 		for (let index = 0; index < lines.length; index++) {
 			for (const link of detectOutputLinks(lines[index]!, folders)) {
 				const position = link.selection.getStartPosition();
-				const target = withSelection(link.resource, {
-					startLineNumber: position.lineNumber,
-					startColumn: position.column,
-				});
-				links.push({
-					range: new Range(index + 1, link.startIndex + 1, index + 1, link.endIndex + 1),
-					target: target.toString(),
-				});
+				const target = withSelection(link.resource, { startLineNumber: position.lineNumber, startColumn: position.column });
+				links.push({ range: new Range(index + 1, link.startIndex + 1, index + 1, link.endIndex + 1), target: target.toString() });
 			}
 		}
 		return links;

@@ -33,8 +33,7 @@ const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});
 const services = new InstantiationService();
 const memory = new InMemoryFileSystemProvider();
-const files = createTestFileService(memory);
-services.registerInstance(IFileService, files);
+const files = createTestFileService(memory); services.registerInstance(IFileService, files);
 registerTestComponentServices(services);
 services.registerInstance(IConfigurationService, new TestConfigurationService());
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
@@ -53,24 +52,16 @@ const packages: IExtensionApi = {
 		const response = await fetch('/__pdf_catalog');
 		const catalog = normalizeExtensionCatalog(await response.json());
 		return enabled || options?.includeDisabled ? catalog : { ...catalog, extensions: [] };
-	},
-	resources,
+	}, resources,
 };
-services.registerInstance(IExtensionService, {
-	getExtensionPointContributions: () => [],
-} as unknown as IExtensionService);
+services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 services.registerInstance(IExtensionApi, packages);
 services.registerInstance(IExtensionHostApi, {
 	invoke: async (request, signal) => {
-		const response = await fetch('/__pdf_invoke', {
-			method: 'POST',
-			signal,
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(request.payload),
-		});
+		const response = await fetch('/__pdf_invoke', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.payload) });
 		if (!response.ok) throw new Error('PDF provider request failed');
 		return response.json();
-	},
+	}
 } as IExtensionHostApi);
 const bridge = services.createInstance(MainThreadClientEditors, 30000, loadExtensionEditorModule);
 const responseFiles = new ChatResponseResourceFileSystemProvider();
@@ -84,98 +75,35 @@ window.pdfExtensionTest = {
 	available: () => EditorPanes.getEditorPanesForInput({ resource: uri }).some(pane => pane.id === 'ash.workbench.pdfViewer'),
 	async enable(value: boolean) {
 		enabled = value;
-		const response = await fetch(`/__pdf_extension?locale=${locale}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ enabled: value }),
-		});
-		await bridge.update((await response.json()) as ExtensionHostFleetSnapshot);
+		const response = await fetch(`/__pdf_extension?locale=${locale}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: value }) });
+		await bridge.update(await response.json() as ExtensionHostFleetSnapshot);
 	},
 	async open(readOnly = false) {
-		pane?.dispose();
-		container.replaceChildren();
+		pane?.dispose(); container.replaceChildren();
 		const input = { resource: uri, readOnly };
 		const descriptor = EditorPanes.getEditorPane(input);
 		if (!descriptor) throw new Error('No admitted PDF extension');
 		pane = await descriptor.create({ input, instantiationService: services });
-		pane.create(container);
-		pane.setVisible(true);
+		pane.create(container); pane.setVisible(true);
 		await pane.setInput(input, new AbortController().signal);
 	},
-	async verbosity(enabled: boolean) {
-		await services.get(IConfigurationService).updateValue('accessibility.verbosity.resourceEditor', enabled);
-	},
-	setTheme(theme: 'dark' | 'hcDark' | 'hcLight') {
-		(services.get(IThemeService) as TestThemeService).setColorTheme(theme === 'hcDark' ? highContrastDarkColorTheme : theme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme);
-	},
+	async verbosity(enabled: boolean) { await services.get(IConfigurationService).updateValue('accessibility.verbosity.resourceEditor', enabled); },
+	setTheme(theme: 'dark' | 'hcDark' | 'hcLight') { (services.get(IThemeService) as TestThemeService).setColorTheme(theme === 'hcDark' ? highContrastDarkColorTheme : theme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme); },
 	previewChat() {
-		chat?.dispose();
-		pane?.dispose();
-		pane = undefined;
-		chat = services.createInstance(ChatAttachmentsContentPart, {
-			ownerDocument: document,
-			variables: [
-				{
-					type: 'resource',
-					resource: uri,
-					name: 'paper.pdf',
-					presentation: 'document',
-					mimeType: 'application/pdf',
-				},
-			],
-			readResource: async () => new Blob([bytes], { type: 'application/pdf' }),
-		});
+		chat?.dispose(); pane?.dispose(); pane = undefined;
+		chat = services.createInstance(ChatAttachmentsContentPart, { ownerDocument: document, variables: [{ type: 'resource', resource: uri, name: 'paper.pdf', presentation: 'document', mimeType: 'application/pdf' }], readResource: async () => new Blob([bytes], { type: 'application/pdf' }) });
 		container.replaceChildren(chat.domNode);
 	},
-	accessible(help = false) {
-		return AccessibleViewRegistry.getImplementations()
-			.filter(item => item.name.startsWith('resource-editor-') && item.type === (help ? AccessibleViewType.Help : AccessibleViewType.View))
-			.map(item => item.getProvider(services)?.provideContent() ?? '')
-			.join('');
-	},
+	accessible(help = false) { return AccessibleViewRegistry.getImplementations().filter(item => item.name.startsWith('resource-editor-') && item.type === (help ? AccessibleViewType.Help : AccessibleViewType.View)).map(item => item.getProvider(services)?.provideContent() ?? '').join(''); },
 	async saved() {
-		try {
-			return JSON.parse(new TextDecoder().decode((await memory.readFile(URI.file('/fixture/paper.pdf.ash-annotations.json'))).bytes));
-		} catch {
-			return undefined;
-		}
+		try { return JSON.parse(new TextDecoder().decode((await memory.readFile(URI.file('/fixture/paper.pdf.ash-annotations.json'))).bytes)); }
+		catch { return undefined; }
 	},
-	async unchanged() {
-		return String((await memory.readFile(uri)).bytes) === String(bytes);
-	},
-	close() {
-		chat?.dispose();
-		chat = undefined;
-		pane?.dispose();
-		pane = undefined;
-		container.replaceChildren();
-	},
-	dispose() {
-		chat?.dispose();
-		pane?.dispose();
-		responseFiles.dispose();
-		bridge.dispose();
-		theme.dispose();
-		services.dispose();
-		files.dispose();
-		memory.dispose();
-	},
+	async unchanged() { return String((await memory.readFile(uri)).bytes) === String(bytes); },
+	close() { chat?.dispose(); chat = undefined; pane?.dispose(); pane = undefined; container.replaceChildren(); },
+	dispose() { chat?.dispose(); pane?.dispose(); responseFiles.dispose(); bridge.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
 };
 
 declare global {
-	interface Window {
-		pdfExtensionTest: {
-			setTheme(theme: 'dark' | 'hcDark' | 'hcLight'): void;
-			accessible(help?: boolean): string;
-			verbosity(enabled: boolean): Promise<void>;
-			previewChat(): void;
-			available(): boolean;
-			enable(value: boolean): Promise<void>;
-			open(readOnly?: boolean): Promise<void>;
-			saved(): Promise<{ annotations: unknown[] } | undefined>;
-			unchanged(): Promise<boolean>;
-			close(): void;
-			dispose(): void;
-		};
-	}
+	interface Window { pdfExtensionTest: { setTheme(theme: 'dark' | 'hcDark' | 'hcLight'): void; accessible(help?: boolean): string; verbosity(enabled: boolean): Promise<void>; previewChat(): void; available(): boolean; enable(value: boolean): Promise<void>; open(readOnly?: boolean): Promise<void>; saved(): Promise<{ annotations: unknown[]; } | undefined>; unchanged(): Promise<boolean>; close(): void; dispose(): void; }; }
 }

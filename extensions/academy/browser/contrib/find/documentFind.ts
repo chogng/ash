@@ -53,18 +53,16 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 		this.panel.hidden = true;
 		this.element.append(this.panel);
 		this._register(this.query.onDidChange(() => this.context.invalidateView()));
-		this._register(
-			addDisposableListener(this.panel, 'keydown', event => {
-				if (event.key === 'Enter' && event.target === this.query.inputElement && !event.isComposing) {
-					event.preventDefault();
-					this.navigate(event.shiftKey ? -1 : 1);
-				} else if (event.key === 'Escape') {
-					event.preventDefault();
-					event.stopPropagation();
-					this.close();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.panel, 'keydown', event => {
+			if (event.key === 'Enter' && event.target === this.query.inputElement && !event.isComposing) {
+				event.preventDefault();
+				this.navigate(event.shiftKey ? -1 : 1);
+			} else if (event.key === 'Escape') {
+				event.preventDefault();
+				event.stopPropagation();
+				this.close();
+			}
+		}));
 	}
 
 	setState(state: DocumentFormattingState): void {
@@ -75,14 +73,10 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 
 	getDecorations(document: DocumentNode, selection: DocumentSelection | undefined) {
 		if (this.panel.hidden) return [];
-		return findDocumentText(document, this.query.value, this.options()).map((match, index) =>
-			createDocumentDecoration({
-				id: `find-${index}`,
-				from: match.selection.anchor,
-				to: match.selection.head,
-				className: selectionsEqual(match.selection, selection) ? 'stanza-document-find-current' : 'stanza-document-find-match',
-			}),
-		);
+		return findDocumentText(document, this.query.value, this.options()).map((match, index) => createDocumentDecoration({
+			id: `find-${index}`, from: match.selection.anchor, to: match.selection.head,
+			className: selectionsEqual(match.selection, selection) ? 'stanza-document-find-current' : 'stanza-document-find-match',
+		}));
 	}
 
 	handleKeydown(event: KeyboardEvent): void {
@@ -105,12 +99,8 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 		this.context.focusEditor();
 	}
 
-	private options() {
-		return { matchCase: this.matchCase.checked, wholeWord: this.wholeWord.checked };
-	}
-	private matches(): readonly DocumentFindMatch[] {
-		return this.state?.document ? findDocumentText(this.state.document, this.query.value, this.options()) : [];
-	}
+	private options() { return { matchCase: this.matchCase.checked, wholeWord: this.wholeWord.checked }; }
+	private matches(): readonly DocumentFindMatch[] { return this.state?.document ? findDocumentText(this.state.document, this.query.value, this.options()) : []; }
 	private selectedIndex(matches: readonly DocumentFindMatch[]): number {
 		return matches.findIndex(match => selectionsEqual(match.selection, this.state?.selection));
 	}

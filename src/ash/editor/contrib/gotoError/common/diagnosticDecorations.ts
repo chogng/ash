@@ -16,22 +16,14 @@ import { accentForeground, errorForeground, warningForeground } from '../../../.
 export class LanguageDiagnosticDecorationBridge extends Disposable {
 	readonly decorations: TextDecorationCollection<LanguageDiagnostic>;
 
-	constructor(
-		private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>,
-		private readonly externalSource?: LanguageDiagnosticsSource,
-		private readonly resource?: URI,
-		private readonly renderDecorations = true,
-	) {
+	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly externalSource?: LanguageDiagnosticsSource, private readonly resource?: URI, private readonly renderDecorations = true) {
 		super();
 		this.decorations = this._register(new TextDecorationCollection(store.textModel));
 		try {
 			this._register(store.onDidChange(() => this.synchronize()));
-			if (externalSource)
-				this._register(
-					externalSource.onDidChangeDiagnostics(resource => {
-						if (resource.toString() === this.resource?.toString()) this.synchronize();
-					}),
-				);
+			if (externalSource) this._register(externalSource.onDidChangeDiagnostics(resource => {
+				if (resource.toString() === this.resource?.toString()) this.synchronize();
+			}));
 			if (externalSource) this._register(store.textModel.onDidChangeContent(() => this.synchronize()));
 			this.synchronize();
 		} catch (error) {
@@ -45,14 +37,12 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 		const external = this.resource ? this.externalSource?.getDiagnostics(this.resource) : undefined;
 		const externalDiagnostics = external?.revision === this.store.textModel.version ? external.diagnostics : [];
 		const diagnostics = deduplicateDiagnostics([...localDiagnostics, ...externalDiagnostics]);
-		this.decorations.replaceAll(
-			diagnostics.map(diagnostic => ({
-				range: diagnostic.range,
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: this.renderDecorations ? diagnosticDecorationOptions(diagnostic) : undefined,
-				metadata: diagnostic,
-			})),
-		);
+		this.decorations.replaceAll(diagnostics.map(diagnostic => ({
+			range: diagnostic.range,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: this.renderDecorations ? diagnosticDecorationOptions(diagnostic) : undefined,
+			metadata: diagnostic,
+		})));
 	}
 }
 
@@ -76,7 +66,7 @@ export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omi
 	}
 }
 
-function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string }): Omit<IModelDecorationOptions, 'stickiness'> {
+function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string; }): Omit<IModelDecorationOptions, 'stickiness'> {
 	const color = themeColorFromId(colorId);
 	return {
 		description: 'marker-decoration',
@@ -96,10 +86,7 @@ function diagnosticHoverText(diagnostic: LanguageDiagnostic): string {
 
 /** Publishes the local syntax worker's current revision into the shared diagnostic repository. */
 export class LanguageDiagnosticPublisherBridge extends Disposable {
-	constructor(
-		private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>,
-		private readonly publisher: LanguageDiagnosticsPublisher,
-	) {
+	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly publisher: LanguageDiagnosticsPublisher) {
 		super();
 		this._register(publisher);
 		this._register(store.onDidChange(() => this.synchronize()));

@@ -29,26 +29,12 @@ registerSingleton(IAgentHostCanvasCollection, AgentHostCanvasCollection, Instant
 registerCanvasCommands();
 
 for (const [key, title, description] of [
-	[
-		CanvasesEnabledSettingId,
-		localize('canvas.settingTitle', 'Conversation Canvases'),
-		localize('canvas.settingDescription', 'Show interactive pages opened by the agent beside their conversations.'),
-	],
-	[
-		AccessibilityVerbositySettingId.SessionCanvas,
-		localize('canvas.verbosityTitle', 'Canvas accessibility help'),
-		localize('canvas.verbosityDescription', 'Announce how to open accessibility help when a Canvas receives focus.'),
-	],
+	[CanvasesEnabledSettingId, localize('canvas.settingTitle', 'Conversation Canvases'), localize('canvas.settingDescription', 'Show interactive pages opened by the agent beside their conversations.')],
+	[AccessibilityVerbositySettingId.SessionCanvas, localize('canvas.verbosityTitle', 'Canvas accessibility help'), localize('canvas.verbosityDescription', 'Announce how to open accessibility help when a Canvas receives focus.')],
 ]) {
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-		key,
-		defaultValue: true,
-		parse: value => {
-			if (typeof value !== 'boolean') {
-				throw new TypeError(localize('canvas.invalidSetting', 'Canvas settings must be boolean.'));
-			}
-			return value;
-		},
+		key, defaultValue: true,
+		parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize('canvas.invalidSetting', 'Canvas settings must be boolean.')); } return value; },
 		setting: { valueType: 'boolean', title, description },
 	});
 }
@@ -63,43 +49,32 @@ registerWorkbenchContribution('workbench.contrib.canvases', WorkbenchPhase.Block
 	resources.add(registerCanvasContextPicker(accessor));
 	resources.add(autorun(reader => ownerAvailable.set(canvases.enabled.read(reader) && contexts.contexts.read(reader).some(context => contexts.isOwnerVisible(context.owner)))));
 	resources.add(autorun(reader => available.set(canvases.reopenableCanvases.read(reader).length > 0)));
-	resources.add(
-		EditorPanes.registerEditorPane({
-			id: CanvasInput.EDITOR_ID,
-			name: localize('canvas.editorName', 'Canvas'),
-			canOpen: input => (input instanceof CanvasInput ? EditorPaneMatch.Default : EditorPaneMatch.None),
-			create: () => instantiation.createInstance(CanvasEditor),
-		}),
-	);
+	resources.add(EditorPanes.registerEditorPane({
+		id: CanvasInput.EDITOR_ID, name: localize('canvas.editorName', 'Canvas'),
+		canOpen: input => input instanceof CanvasInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => instantiation.createInstance(CanvasEditor),
+	}));
 	if (!contexts.workingSets) {
-		resources.add(
-			EditorInputSerializers.register({
-				typeId: CanvasInput.ID,
-				canSerialize: input => input instanceof CanvasInput,
-				serialize: input => (input as CanvasInput).serializationId,
-				deserialize: value => {
-					const input = typeof value === 'string' ? canvases.restoreCanvasInput(value) : undefined;
-					if (!input) {
-						throw new UnknownEditorInputSerializerError(CanvasInput.ID);
-					}
-					return input;
-				},
-			}),
-		);
+		resources.add(EditorInputSerializers.register({
+			typeId: CanvasInput.ID,
+			canSerialize: input => input instanceof CanvasInput,
+			serialize: input => (input as CanvasInput).serializationId,
+			deserialize: value => {
+				const input = typeof value === 'string' ? canvases.restoreCanvasInput(value) : undefined;
+				if (!input) { throw new UnknownEditorInputSerializerError(CanvasInput.ID); }
+				return input;
+			},
+		}));
 	}
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-		resources.add(
-			AccessibleViewRegistry.register({
-				type,
-				name: 'sessionCanvas-' + type,
-				priority: 200,
-				when: ContextKeyExpr.has(SessionCanvasFocusedContext.key),
-				getProvider: services => {
-					const pane = services.get(IEditorService).activeEditorPane;
-					return pane instanceof CanvasEditor ? pane.createAccessibleProvider(type) : undefined;
-				},
-			}),
-		);
+		resources.add(AccessibleViewRegistry.register({
+			type, name: 'sessionCanvas-' + type, priority: 200,
+			when: ContextKeyExpr.has(SessionCanvasFocusedContext.key),
+			getProvider: services => {
+				const pane = services.get(IEditorService).activeEditorPane;
+				return pane instanceof CanvasEditor ? pane.createAccessibleProvider(type) : undefined;
+			},
+		}));
 	}
 	return resources;
 });

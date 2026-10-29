@@ -9,36 +9,26 @@ export class Debugger {
 	constructor(
 		@IConfigurationResolverService private readonly resolver: IConfigurationResolverService,
 		@IExtensionService private readonly extensions: IExtensionService,
-	) {}
+	) { }
 
 	public async substituteVariables(folder: IWorkspaceFolder | undefined, config: IDebugConfiguration): Promise<IDebugConfiguration | undefined> {
 		// Command variables receive launch.json fields rather than the Workbench's session identity.
-		const execution = await this.resolver.resolveWithInteractionReplace(
-			folder,
-			{
-				...config.arguments,
-				name: config.name,
-				type: config.type,
-				request: config.request,
-				...(config.adapter === undefined ? {} : { debugAdapter: config.adapter }),
-				...(config.preLaunchTask === undefined ? {} : { preLaunchTask: config.preLaunchTask }),
-				...(config.postDebugTask === undefined ? {} : { postDebugTask: config.postDebugTask }),
-			},
-			'launch',
-			this.extensions.debugAdapters.get(config.type)?.variables,
-		);
+		const execution = await this.resolver.resolveWithInteractionReplace(folder, {
+			...config.arguments,
+			name: config.name,
+			type: config.type,
+			request: config.request,
+			...(config.adapter === undefined ? {} : { debugAdapter: config.adapter }),
+			...(config.preLaunchTask === undefined ? {} : { preLaunchTask: config.preLaunchTask }),
+			...(config.postDebugTask === undefined ? {} : { postDebugTask: config.postDebugTask }),
+		}, 'launch', this.extensions.debugAdapters.get(config.type)?.variables);
 		if (!execution) {
 			return undefined;
 		}
 		const { name, type, request, debugAdapter, preLaunchTask, postDebugTask, ...args } = execution;
 		// Substitution crosses into a process boundary. A command result must not turn
 		// a previously valid executable into an empty or malformed process argument.
-		if (
-			debugAdapter &&
-			debugAdapter.connection === undefined &&
-			debugAdapter.inline === undefined &&
-			(!debugAdapter.program.trim() || [debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))
-		) {
+		if (debugAdapter && debugAdapter.connection === undefined && debugAdapter.inline === undefined && (!debugAdapter.program.trim() || [debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))) {
 			throw new Error(localize('debug.invalidResolvedAdapter', 'The resolved debug adapter executable is empty or contains an invalid process argument.'));
 		}
 		return {

@@ -20,139 +20,53 @@ import { ISessionsService, type SessionsViewSelection } from '../../../../servic
 import { AgentTraceOutput } from '../../browser/agentTraceOutput.js';
 
 function selection(sessionId: string): SessionsViewSelection {
-	return {
-		kind: 'session',
-		active: { session: { sessionId, title: sessionId }, threadId: 'root' },
-	} as SessionsViewSelection;
+	return { kind: 'session', active: { session: { sessionId, title: sessionId }, threadId: 'root' } } as SessionsViewSelection;
 }
 
 function record(sequence: number, type: string, extra: Record<string, unknown> = {}): AgentTraceEvent {
-	return {
-		eventId: `event-${sequence}`,
-		sequence,
-		recordedAt: sequence,
-		event: { type, threadId: 'root', turnId: 'turn', ...extra },
-	};
+	return { eventId: `event-${sequence}`, sequence, recordedAt: sequence, event: { type, threadId: 'root', turnId: 'turn', ...extra } };
 }
 
 function setup(resources: DisposableStore) {
 	const parent = workbenchInstantiationService(resources);
 	const owner = resources.add(parent.createChild());
 	const active = observableValue<SessionsViewSelection | undefined>('selection', selection('first'));
-	const visibility = resources.add(new Emitter<{ id: string; visible: boolean }>());
+	const visibility = resources.add(new Emitter<{ id: string; visible: boolean; }>());
 	let visible = true;
-	const commands: { id: string; args: readonly unknown[] }[] = [];
-	resources.add(
-		CommandsRegistry.register('sessions.trace.open', (_accessor, ...args) => {
-			commands.push({ id: 'sessions.trace.open', args });
-		}),
-	);
-	owner.registerInstance(ISessionsService, {
-		getSelection: (reader?: IReader) => ({ activeSelection: active.read(reader), visibleSelections: [] }),
-		get activeSelection() {
-			return active.get();
-		},
-	} as unknown as ISessionsService);
-	owner.registerInstance(IViewsService, {
-		onDidChangeViewVisibility: visibility.event,
-		isViewVisible: () => visible,
-	} as unknown as IViewsService);
-	const events = [
-		record(1, 'turnStarted'),
-		record(2, 'itemCompleted', { item: { type: 'agentMessage', text: 'message body stays in Trace' } }),
-		record(3, 'itemCompleted', {
-			item: { type: 'toolCall', name: 'shell-command', arguments: 'private tool arguments' },
-		}),
-		record(4, 'itemCompleted', {
-			item: { type: 'toolResult', toolCallId: 'call', text: 'private tool result', isError: true },
-		}),
-		record(5, 'turnCompleted'),
-	];
-	const diagnostics: AgentTraceDiagnosticEvent[] = [
-		{
-			eventId: 'attempt',
-			sequence: 1,
-			recordedAt: 1,
-			threadId: 'root',
-			turnId: 'turn',
-			event: { type: 'modelAttemptStarted', attemptId: 'attempt-1' },
-		},
-	];
-	const reads: { sessionId: string; after: Readonly<Record<string, number>> }[] = [];
+	const commands: { id: string; args: readonly unknown[]; }[] = [];
+	resources.add(CommandsRegistry.register('sessions.trace.open', (_accessor, ...args) => { commands.push({ id: 'sessions.trace.open', args }); }));
+	owner.registerInstance(ISessionsService, { getSelection: (reader?: IReader) => ({ activeSelection: active.read(reader), visibleSelections: [] }), get activeSelection() { return active.get(); } } as unknown as ISessionsService);
+	owner.registerInstance(IViewsService, { onDidChangeViewVisibility: visibility.event, isViewVisible: () => visible } as unknown as IViewsService);
+	const events = [record(1, 'turnStarted'), record(2, 'itemCompleted', { item: { type: 'agentMessage', text: 'message body stays in Trace' } }), record(3, 'itemCompleted', { item: { type: 'toolCall', name: 'shell-command', arguments: 'private tool arguments' } }), record(4, 'itemCompleted', { item: { type: 'toolResult', toolCallId: 'call', text: 'private tool result', isError: true } }), record(5, 'turnCompleted')];
+	const diagnostics: AgentTraceDiagnosticEvent[] = [{ eventId: 'attempt', sequence: 1, recordedAt: 1, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: 'attempt-1' } }];
+	const reads: { sessionId: string; after: Readonly<Record<string, number>>; }[] = [];
 	const diagnosticReads: number[] = [];
 	let readOverride: ((sessionId: string) => Promise<AgentTracePage>) | undefined;
 	owner.registerInstance(IChatDebugService, {
 		readTrace: async (sessionId, after) => {
 			reads.push({ sessionId, after: { ...after } });
-			return readOverride
-				? readOverride(sessionId)
-				: {
-						trace: {
-							formatVersion: 3,
-							sessionId,
-							historyPrefixes: [],
-							threads: [
-								{
-									threadId: 'root',
-									events: events.filter(record => record.sequence > (after.root ?? 0)),
-								},
-							],
-						},
-						cursors: { root: events.at(-1)?.sequence ?? 0 },
-						hasMore: false,
-					};
+			return readOverride ? readOverride(sessionId) : { trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: events.filter(record => record.sequence > (after.root ?? 0)) }] }, cursors: { root: events.at(-1)?.sequence ?? 0 }, hasMore: false };
 		},
 		readTraceDiagnostics: async (_sessionId, after) => {
 			diagnosticReads.push(after);
-			return {
-				diagnostics: {
-					formatVersion: 2,
-					captureId: 'capture',
-					recordingStatus: 'recording',
-					droppedRecords: 0,
-					pendingRecords: 0,
-					events: diagnostics.filter(record => record.sequence > after),
-				},
-				cursor: diagnostics.at(-1)?.sequence ?? 0,
-				hasMore: false,
-			};
+			return { diagnostics: { formatVersion: 2, captureId: 'capture', recordingStatus: 'recording', droppedRecords: 0, pendingRecords: 0, events: diagnostics.filter(record => record.sequence > after) }, cursor: diagnostics.at(-1)?.sequence ?? 0, hasMore: false };
 		},
-		readTracePayload: async () => {
-			throw new Error('Output must not acquire request or response bodies');
-		},
-		readTraceGraph: async () => {
-			throw new Error('Output must not acquire the execution graph');
-		},
+		readTracePayload: async () => { throw new Error('Output must not acquire request or response bodies'); },
+		readTraceGraph: async () => { throw new Error('Output must not acquire the execution graph'); },
 	});
 	const services = createCodeEditorServices(resources, owner);
 	const reader = resources.add(services.createInstance(AgentTraceOutput));
 	const output = services.get(IOutputService);
 	return {
-		reader,
-		output,
-		services,
-		active,
-		events,
-		diagnostics,
-		reads,
-		diagnosticReads,
-		commands,
-		setVisible(value: boolean) {
-			visible = value;
-			visibility.fire({ id: OUTPUT_VIEW_ID, visible });
-		},
-		overrideRead(read: typeof readOverride) {
-			readOverride = read;
-		},
+		reader, output, services, active, events, diagnostics, reads, diagnosticReads, commands,
+		setVisible(value: boolean) { visible = value; visibility.fire({ id: OUTPUT_VIEW_ID, visible }); },
+		overrideRead(read: typeof readOverride) { readOverride = read; },
 	};
 }
 
 async function waitFor(ready: () => boolean): Promise<void> {
 	const deadline = Date.now() + 2000;
-	while (!ready()) {
-		assert.ok(Date.now() < deadline, 'Agent output did not reach the expected state');
-		await new Promise<void>(resolve => setTimeout(resolve, 0));
-	}
+	while (!ready()) { assert.ok(Date.now() < deadline, 'Agent output did not reach the expected state'); await new Promise<void>(resolve => setTimeout(resolve, 0)); }
 }
 
 test('Agent Output reads bounded execution summaries and opens exact saved events without loading bodies', async () => {
@@ -161,17 +75,7 @@ test('Agent Output reads bounded execution summaries and opens exact saved event
 	await waitFor(() => fixture.output.getChannel('agent')!.getText().includes('Model attempt started'));
 	const channel = fixture.output.getChannel('agent')!;
 	assert.equal(channel.label, 'Agent · first (first)');
-	assert.deepEqual(
-		channel.entries.map(entry => [entry.category, entry.severity]),
-		[
-			[undefined, 'log'],
-			['agent', 'information'],
-			['tool', 'information'],
-			['tool', 'error'],
-			['agent', 'information'],
-			['model', 'information'],
-		],
-	);
+	assert.deepEqual(channel.entries.map(entry => [entry.category, entry.severity]), [[undefined, 'log'], ['agent', 'information'], ['tool', 'information'], ['tool', 'error'], ['agent', 'information'], ['model', 'information']]);
 	assert.doesNotMatch(channel.getText(), /private tool|message body/);
 	const model = await channel.loadModel();
 	assert.ok(model instanceof TextModel);
@@ -182,12 +86,7 @@ test('Agent Output reads bounded execution summaries and opens exact saved event
 	const target = links.find(link => link.target.includes('eventId=event-4'));
 	assert.ok(target);
 	await fixture.services.get(IOpenerService).open(URI.parse(target.target), { fromUserGesture: true });
-	assert.deepEqual(fixture.commands, [
-		{
-			id: 'sessions.trace.open',
-			args: [{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-4' }],
-		},
-	]);
+	assert.deepEqual(fixture.commands, [{ id: 'sessions.trace.open', args: [{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-4' }] }]);
 });
 
 test('clearing Agent Output preserves durable facts and read positions while newer events keep arriving', async () => {
@@ -200,10 +99,7 @@ test('clearing Agent Output preserves durable facts and read positions while new
 	fixture.setVisible(false);
 	fixture.setVisible(true);
 	await waitFor(() => channel.entries.length === 1);
-	assert.deepEqual(
-		channel.entries.map(entry => [entry.category, entry.severity]),
-		[['agent', 'information']],
-	);
+	assert.deepEqual(channel.entries.map(entry => [entry.category, entry.severity]), [['agent', 'information']]);
 	assert.deepEqual(fixture.reads.at(-1), { sessionId: 'first', after: { root: 5 } });
 	assert.equal(fixture.diagnosticReads.at(-1), 1);
 	assert.equal(fixture.events.length, 6);
@@ -218,12 +114,7 @@ test('Agent Output stays on its selected Session and rejects reads finishing aft
 	fixture.active.set(selection('second'), undefined);
 	assert.equal(fixture.output.getChannel('agent')!.label, 'Agent · first (first)');
 	let finish!: (page: AgentTracePage) => void;
-	fixture.overrideRead(
-		() =>
-			new Promise(resolve => {
-				finish = resolve;
-			}),
-	);
+	fixture.overrideRead(() => new Promise(resolve => { finish = resolve; }));
 	fixture.setVisible(false);
 	fixture.setVisible(true);
 	await waitFor(() => !!finish);
@@ -231,16 +122,7 @@ test('Agent Output stays on its selected Session and rejects reads finishing aft
 	fixture.reader.showCurrent();
 	const channel = fixture.output.getChannel('agent')!;
 	assert.equal(channel.label, 'Agent · second (second)');
-	finish({
-		trace: {
-			formatVersion: 3,
-			sessionId: 'first',
-			historyPrefixes: [],
-			threads: [{ threadId: 'root', events: [record(100, 'turnFailed')] }],
-		},
-		cursors: { root: 100 },
-		hasMore: false,
-	});
+	finish({ trace: { formatVersion: 3, sessionId: 'first', historyPrefixes: [], threads: [{ threadId: 'root', events: [record(100, 'turnFailed')] }] }, cursors: { root: 100 }, hasMore: false });
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.doesNotMatch(channel.getText(), /Turn failed/);
 	const reads = fixture.reads.length;
@@ -254,25 +136,11 @@ test('clear during an outstanding history read consumes its cursor without resto
 	using resources = new DisposableStore();
 	const fixture = setup(resources);
 	let finish!: (page: AgentTracePage) => void;
-	fixture.overrideRead(
-		() =>
-			new Promise(resolve => {
-				finish = resolve;
-			}),
-	);
+	fixture.overrideRead(() => new Promise(resolve => { finish = resolve; }));
 	await waitFor(() => !!finish);
 	const channel = fixture.output.getChannel('agent')!;
 	channel.clear();
-	finish({
-		trace: {
-			formatVersion: 3,
-			sessionId: 'first',
-			historyPrefixes: [],
-			threads: [{ threadId: 'root', events: fixture.events }],
-		},
-		cursors: { root: 5 },
-		hasMore: false,
-	});
+	finish({ trace: { formatVersion: 3, sessionId: 'first', historyPrefixes: [], threads: [{ threadId: 'root', events: fixture.events }] }, cursors: { root: 5 }, hasMore: false });
 	await waitFor(() => fixture.diagnosticReads.length === 1);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(channel.getText(), '');

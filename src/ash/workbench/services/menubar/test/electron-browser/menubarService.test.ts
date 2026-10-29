@@ -10,7 +10,11 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { NATIVE_MENUBAR_SELECT_CHANNEL, type INativeMenubarSelection } from '../../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../../platform/menubar/electron-browser/menubar.js';
-import { NativeMenubarMainService, nativeMenubarIpcRoutes, type INativeMenubarMainMenuItem } from '../../../../../platform/menubar/electron-main/menubarMainService.js';
+import {
+	NativeMenubarMainService,
+	nativeMenubarIpcRoutes,
+	type INativeMenubarMainMenuItem,
+} from '../../../../../platform/menubar/electron-main/menubarMainService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NativeMenubarControl } from '../../../../electron-browser/parts/titlebar/menubarControl.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
@@ -20,26 +24,22 @@ test('registered menubar service publishes the controller menu through Main and 
 	const listeners = new Map<string, (value: unknown) => void>();
 	using main = new NativeMenubarMainService({
 		applicationName: 'Ash',
-		setApplicationMenu: value => {
-			template = value;
-		},
-		setWindowTouchBar() {},
+		setApplicationMenu: value => { template = value; },
+		setWindowTouchBar() { },
 	});
 	const window = {
 		id: 7,
 		isDestroyed: () => false,
 		isFocused: () => true,
-		on() {},
-		removeListener() {},
+		on() { },
+		removeListener() { },
 		webContents: { send: (channel: string, value: unknown) => listeners.get(channel)?.(value) },
 	};
 	using registration = main.registerWindow(window);
 	const routes = nativeMenubarIpcRoutes(main, window);
 	const published = new DeferredPromise<void>();
 	const bridge: ISandboxIpcRenderer = {
-		send() {
-			throw new Error('Unexpected IPC send');
-		},
+		send() { throw new Error('Unexpected IPC send'); },
 		async invoke(channel, value) {
 			const route = routes.find(route => route.channel === channel);
 			assert.ok(route, 'Only the existing trusted menubar update route is used');
@@ -50,11 +50,7 @@ test('registered menubar service publishes the controller menu through Main and 
 			assert.equal(channel, NATIVE_MENUBAR_SELECT_CHANNEL);
 			assert.equal(listeners.has(channel), false);
 			listeners.set(channel, listener);
-			return {
-				dispose: () => {
-					listeners.delete(channel);
-				},
-			};
+			return { dispose: () => { listeners.delete(channel); } };
 		},
 	};
 	// The production transport reads Electron's preload boundary at module load.
@@ -69,21 +65,13 @@ test('registered menubar service publishes the controller menu through Main and 
 		using missingServices = new InstantiationService();
 		assert.throws(() => missingServices.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu), /menubarService/);
 		let runs = 0;
-		const action: IAction = {
-			id: 'save',
-			label: 'Save',
-			tooltip: '',
-			enabled: true,
-			run: async () => {
-				runs++;
-			},
-		};
+		const action: IAction = { id: 'save', label: 'Save', tooltip: '', enabled: true, run: async () => { runs++; } };
 		services.registerInstance(IMenuService, {
 			createMenu: id => ({
 				onDidChange: Event.None,
-				getActions: () => (id === MenuId.MenubarMainMenu ? [['navigation', [new SubmenuAction('file', 'File', [action])]]] : []),
-				dispose() {},
-				[Symbol.dispose]() {},
+				getActions: () => id === MenuId.MenubarMainMenu ? [['navigation', [new SubmenuAction('file', 'File', [action])]]] : [],
+				dispose() { },
+				[Symbol.dispose]() { },
 			}),
 			getMenuActions: () => [],
 		});

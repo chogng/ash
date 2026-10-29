@@ -5,8 +5,8 @@ import type { ITerminalWidget } from './widgets.js';
 
 export interface ILinkHoverTargetOptions {
 	readonly viewportRange: IViewportRange;
-	readonly cellDimensions: { readonly width: number; readonly height: number };
-	readonly terminalDimensions: { readonly width: number; readonly height: number };
+	readonly cellDimensions: { readonly width: number; readonly height: number; };
+	readonly terminalDimensions: { readonly width: number; readonly height: number; };
 }
 
 /** Uses public cell coordinates; the shared Hover service owns presentation and Escape. */
@@ -17,9 +17,7 @@ export class TerminalHover extends Disposable implements ITerminalWidget {
 		private readonly target: ILinkHoverTargetOptions,
 		private readonly text: string,
 		@IHoverService private readonly hover: IHoverService,
-	) {
-		super();
-	}
+	) { super(); }
 
 	attach(container: HTMLElement): void {
 		this.assertNotDisposed();
@@ -37,13 +35,6 @@ export class TerminalHover extends Disposable implements ITerminalWidget {
 		anchor.style.height = `${(range.end.y - range.start.y + 1) * cell.height}px`;
 		container.append(anchor);
 		this._register(toDisposable(() => anchor.remove()));
-		this._register(
-			this.hover.showHover({
-				target: anchor,
-				content: this.text,
-				groupId: 'terminal-links',
-				setupKeyboardEvents: false,
-			}),
-		);
+		this._register(this.hover.showHover({ target: anchor, content: this.text, groupId: 'terminal-links', setupKeyboardEvents: false }));
 	}
 }

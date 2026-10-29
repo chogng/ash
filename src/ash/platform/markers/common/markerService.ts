@@ -1,7 +1,16 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
-import { type IMarker, type IMarkerData, type IMarkerChangeOptions, type IMarkerReadOptions, type IMarkerService, type IResourceMarker, MarkerSeverity, type MarkerStatistics } from './markers.js';
+import {
+	type IMarker,
+	type IMarkerData,
+	type IMarkerChangeOptions,
+	type IMarkerReadOptions,
+	type IMarkerService,
+	type IResourceMarker,
+	MarkerSeverity,
+	type MarkerStatistics,
+} from './markers.js';
 
 interface MarkerSnapshot {
 	readonly resource: URI;
@@ -45,11 +54,7 @@ export class MarkerService extends Disposable implements IMarkerService {
 			return;
 		}
 		const next = current ?? new Map<string, MarkerSnapshot>();
-		next.set(key, {
-			resource,
-			markers: markers.map(marker => storeMarker(owner, resource, marker)),
-			truncated: options?.isTruncated === true,
-		});
+		next.set(key, { resource, markers: markers.map(marker => storeMarker(owner, resource, marker)), truncated: options?.isTruncated === true });
 		this.byOwner.set(owner, next);
 		this.changed.fire([resource]);
 	}
@@ -110,18 +115,10 @@ export class MarkerService extends Disposable implements IMarkerService {
 		const result: MarkerStatistics = { errors: 0, warnings: 0, infos: 0, unknowns: 0 };
 		for (const marker of this.read()) {
 			switch (marker.severity) {
-				case MarkerSeverity.Error:
-					result.errors++;
-					break;
-				case MarkerSeverity.Warning:
-					result.warnings++;
-					break;
-				case MarkerSeverity.Info:
-					result.infos++;
-					break;
-				default:
-					result.unknowns++;
-					break;
+				case MarkerSeverity.Error: result.errors++; break;
+				case MarkerSeverity.Warning: result.warnings++; break;
+				case MarkerSeverity.Info: result.infos++; break;
+				default: result.unknowns++; break;
 			}
 		}
 		return result;

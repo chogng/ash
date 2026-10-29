@@ -1,9 +1,6 @@
 type DecoratedMethod = (...args: unknown[]) => unknown;
 
-function methodFrom(descriptor: PropertyDescriptor): {
-	readonly key: 'value' | 'get';
-	readonly method: DecoratedMethod;
-} {
+function methodFrom(descriptor: PropertyDescriptor): { readonly key: 'value' | 'get'; readonly method: DecoratedMethod; } {
 	if (typeof descriptor.value === 'function') return { key: 'value', method: descriptor.value };
 	if (typeof descriptor.get === 'function') return { key: 'get', method: descriptor.get };
 	throw new TypeError('Decorator requires a method or getter');
@@ -48,12 +45,14 @@ export function debounce<T>(delay: number, reducer?: IDebounceReducer<T>, initia
 		if (typeof propertyKey === 'symbol') throw new TypeError('Decorator does not support symbol keys');
 		const property = descriptor as PropertyDescriptor;
 		const { key, method } = methodFrom(property);
-		const states = new WeakMap<object, { timer: ReturnType<typeof setTimeout>; value: T | undefined }>();
+		const states = new WeakMap<object, { timer: ReturnType<typeof setTimeout>; value: T | undefined; }>();
 		property[key] = function (this: object, ...args: unknown[]): void {
 			const previous = states.get(this);
 			if (previous) clearTimeout(previous.timer);
 			const accumulated = previous ? previous.value : initialValueProvider?.();
-			const value = reducer ? reducer(accumulated as T, ...args) : undefined;
+			const value = reducer
+				? reducer(accumulated as T, ...args)
+				: undefined;
 			const timer = setTimeout(() => {
 				states.delete(this);
 				method.apply(this, reducer ? [value] : args);

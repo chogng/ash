@@ -46,7 +46,10 @@ export class DebugTaskRunner extends AbstractDisposable {
 			await raceCancellationError(this.tasks.refresh(), controller.signal);
 			throwIfCancelled(controller.signal);
 			const folderId = 'folders' in root ? undefined : root.id;
-			const matches = this.tasks.tasks.filter(task => (task.id === taskId || task.label === taskId) && (folderId === undefined || task.dirId === undefined || task.dirId === folderId));
+			const matches = this.tasks.tasks.filter(task =>
+				(task.id === taskId || task.label === taskId)
+				&& (folderId === undefined || task.dirId === undefined || task.dirId === folderId),
+			);
 			if (matches.length === 0) {
 				throw new Error(localize('debug.taskNotFound', "Debug task '{0}' was not found", taskId));
 			}

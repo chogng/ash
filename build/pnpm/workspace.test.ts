@@ -23,7 +23,7 @@ test('Node version declarations agree with the build runtime', () => {
 test('pnpm owns every repository Node project with one lockfile', () => {
 	const rootManifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
 		packageManager?: string;
-		engines?: { pnpm?: string };
+		engines?: { pnpm?: string; };
 		scripts?: Record<string, string>;
 	};
 	const workspace = readFileSync(join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8');
@@ -32,17 +32,8 @@ test('pnpm owns every repository Node project with one lockfile', () => {
 	assert.equal(rootManifest.engines?.pnpm, '12.10.0');
 	assert.equal(rootManifest.scripts?.preinstall, 'node build/pnpm/preinstall.ts');
 	assert.ok(lockfile.includes(`specifier: runtime:${readFileSync(join(repositoryRoot, '.nvmrc'), 'utf8').trim()}`));
-	const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map(match => match[1]);
-	assert.deepEqual(packages, [
-		'build',
-		'extensions/css',
-		'extensions/typescript-basics',
-		'extensions/pdf-viewer',
-		'extensions/markdown-math',
-		'extensions/markdown-language-features',
-		'extensions/json-language-features',
-		'test/scenario',
-	]);
+	const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
+	assert.deepEqual(packages, ['build', 'extensions/css', 'extensions/typescript-basics', 'extensions/pdf-viewer', 'extensions/markdown-math', 'extensions/markdown-language-features', 'extensions/json-language-features', 'test/scenario']);
 	assert.doesNotMatch(workspace, /^storeDir:/m);
 	for (const dependency of ['electron', 'esbuild', 'sharp', 'unrs-resolver', 'workerd']) {
 		assert.match(workspace, new RegExp(`^  ${dependency}: true$`, 'm'));

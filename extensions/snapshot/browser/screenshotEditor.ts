@@ -7,7 +7,15 @@ import type { ImageRectangle as IRectangle } from '../common/image.js';
 const SCREENSHOT_MAX_PIXELS = 16_777_216;
 const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
 type ScreenshotIcon = ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
-import { clampScreenshotRectangle, paintScreenshotAnnotation, screenshotRectangle, type ScreenshotAnnotation, type ScreenshotPoint, type ScreenshotTool } from './screenshotEditorModel.js';
+import {
+	clampScreenshotRectangle,
+	paintScreenshotAnnotation,
+	screenshotRectangle,
+	type ScreenshotAnnotation,
+	type ScreenshotPoint,
+	type ScreenshotTool
+} from './screenshotEditorModel.js';
+
 
 interface ScreenshotEditorOptions {
 	readonly defaultAction: 'copy' | 'attach';
@@ -61,7 +69,7 @@ export class ScreenshotEditor extends Disposable {
 	private constructor(
 		document: Document,
 		bitmap: ImageBitmap,
-		private readonly options: ScreenshotEditorOptions,
+		private readonly options: ScreenshotEditorOptions
 	) {
 		super();
 		this.document = document;
@@ -127,12 +135,12 @@ export class ScreenshotEditor extends Disposable {
 			arrow: localize('screenshot.arrow', 'Arrow'),
 			pen: localize('screenshot.pen', 'Pen'),
 			text: localize('screenshot.text', 'Text'),
-			mosaic: localize('screenshot.mosaic', 'Mosaic'),
+			mosaic: localize('screenshot.mosaic', 'Mosaic')
 		};
 		for (const tool of Object.keys(toolNames) as ScreenshotTool[]) {
 			this.toolButtons.set(
 				tool,
-				button(tools, toolNames[tool], tool, () => this.selectTool(tool)),
+				button(tools, toolNames[tool], tool, () => this.selectTool(tool))
 			);
 		}
 		this.color = node('input');
@@ -172,15 +180,9 @@ export class ScreenshotEditor extends Disposable {
 		button(actions, localize('screenshot.save', 'Save'), 'save', () => {
 			void this.export('save');
 		}).title = localize('screenshot.saveTitle', 'Save screenshot');
-		button(
-			actions,
-			localize('screenshot.copy', 'Copy'),
-			'copy',
-			() => {
-				void this.export('copy');
-			},
-			options.defaultAction === 'copy',
-		);
+		button(actions, localize('screenshot.copy', 'Copy'), 'copy', () => {
+			void this.export('copy');
+		}, options.defaultAction === 'copy');
 		button(
 			actions,
 			localize('chat.screenshot.attach', 'Add to Chat'),
@@ -188,7 +190,7 @@ export class ScreenshotEditor extends Disposable {
 			() => {
 				void this.export('attach');
 			},
-			options.defaultAction === 'attach',
+			options.defaultAction === 'attach'
 		);
 		this.fields = node('div', 'ash-screenshot-fields');
 		this.fields.hidden = true;
@@ -196,7 +198,7 @@ export class ScreenshotEditor extends Disposable {
 			x: localize('chat.screenshot.x', 'X'),
 			y: localize('chat.screenshot.y', 'Y'),
 			width: localize('chat.screenshot.width', 'Width'),
-			height: localize('chat.screenshot.height', 'Height'),
+			height: localize('chat.screenshot.height', 'Height')
 		};
 		for (const key of ['x', 'y', 'width', 'height'] as const) {
 			const label = node('label');
@@ -210,10 +212,11 @@ export class ScreenshotEditor extends Disposable {
 			this._register(
 				addDisposableListener(input, 'change', () => {
 					if (!this.region) return;
-					if (Number.isFinite(input.valueAsNumber)) this.setRegion({ ...this.region, [key]: input.valueAsNumber });
+					if (Number.isFinite(input.valueAsNumber))
+						this.setRegion({ ...this.region, [key]: input.valueAsNumber });
 					this.render();
 					this.announce();
-				}),
+				})
 			);
 		}
 		this.toolbar.append(tools, actions, this.fields);
@@ -234,24 +237,32 @@ export class ScreenshotEditor extends Disposable {
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-live', 'polite');
 		this.help = node('dialog', 'ash-screenshot-help');
-		this.element.append(this.imageArea, hint, this.dimensions, this.toolbar, this.textInput, this.status, this.help);
+		this.element.append(
+			this.imageArea,
+			hint,
+			this.dimensions,
+			this.toolbar,
+			this.textInput,
+			this.status,
+			this.help
+		);
 		document.body.append(this.element);
 		this._register(
 			toDisposable(() => {
 				this.bitmap.close();
 				this.element.remove();
 				if (this.originalFocus?.isConnected) this.originalFocus.focus();
-			}),
+			})
 		);
 		this._register(
-			addDisposableListener(this.element, 'cancel', event => {
+			addDisposableListener(this.element, 'cancel', (event) => {
 				event.preventDefault();
 				void this.complete({ kind: 'cancel' });
-			}),
+			})
 		);
-		this._register(addDisposableListener(this.imageArea, 'pointerdown', event => this.pointerDown(event)));
-		this._register(addDisposableListener(this.imageArea, 'pointermove', event => this.pointerMove(event)));
-		this._register(addDisposableListener(this.imageArea, 'pointerup', event => this.pointerUp(event)));
+		this._register(addDisposableListener(this.imageArea, 'pointerdown', (event) => this.pointerDown(event)));
+		this._register(addDisposableListener(this.imageArea, 'pointermove', (event) => this.pointerMove(event)));
+		this._register(addDisposableListener(this.imageArea, 'pointerup', (event) => this.pointerUp(event)));
 		for (const event of ['pointercancel', 'lostpointercapture'] as const) {
 			this._register(
 				addDisposableListener(this.imageArea, event, () => {
@@ -259,12 +270,12 @@ export class ScreenshotEditor extends Disposable {
 					this.pendingAnnotation = undefined;
 					this.element.classList.remove('dragging');
 					this.paint();
-				}),
+				})
 			);
 		}
-		this._register(addDisposableListener(document, 'keydown', event => this.keyDown(event), true));
+		this._register(addDisposableListener(document, 'keydown', (event) => this.keyDown(event), true));
 		this._register(
-			addDisposableListener(this.textInput, 'keydown', event => {
+			addDisposableListener(this.textInput, 'keydown', (event) => {
 				if (event.key === 'Enter' && !event.isComposing) {
 					event.preventDefault();
 					event.stopPropagation();
@@ -277,7 +288,7 @@ export class ScreenshotEditor extends Disposable {
 					this.textPoint = undefined;
 					this.imageArea.focus();
 				}
-			}),
+			})
 		);
 		this._register(addDisposableListener(document.defaultView!, 'resize', () => this.render()));
 		this.selectTool('select');
@@ -286,10 +297,18 @@ export class ScreenshotEditor extends Disposable {
 		this.element.showModal();
 		this.imageArea.focus();
 		this.render();
-		if (options.accessibilityHints) this.status.textContent = localize('screenshot.hint', 'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.');
+		if (options.accessibilityHints)
+			this.status.textContent = localize(
+				'screenshot.hint',
+				'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.'
+			);
 	}
 
-	static async create(document: Document, image: Uint8Array, options: ScreenshotEditorOptions): Promise<ScreenshotEditor> {
+	static async create(
+		document: Document,
+		image: Uint8Array,
+		options: ScreenshotEditorOptions
+	): Promise<ScreenshotEditor> {
 		const bitmap = await createImageBitmap(new Blob([new Uint8Array(image)], { type: 'image/png' }));
 		if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > SCREENSHOT_MAX_PIXELS) {
 			bitmap.close();
@@ -317,8 +336,20 @@ export class ScreenshotEditor extends Disposable {
 	private point(event: PointerEvent): ScreenshotPoint {
 		const bounds = this.canvas.getBoundingClientRect();
 		return {
-			x: Math.max(0, Math.min(this.bitmap.width, Math.round(((event.clientX - bounds.left) * this.bitmap.width) / bounds.width))),
-			y: Math.max(0, Math.min(this.bitmap.height, Math.round(((event.clientY - bounds.top) * this.bitmap.height) / bounds.height))),
+			x: Math.max(
+				0,
+				Math.min(
+					this.bitmap.width,
+					Math.round(((event.clientX - bounds.left) * this.bitmap.width) / bounds.width)
+				)
+			),
+			y: Math.max(
+				0,
+				Math.min(
+					this.bitmap.height,
+					Math.round(((event.clientY - bounds.top) * this.bitmap.height) / bounds.height)
+				)
+			)
 		};
 	}
 
@@ -327,7 +358,12 @@ export class ScreenshotEditor extends Disposable {
 		event.preventDefault();
 		this.commitText();
 		const start = this.point(event);
-		const inside = this.region && start.x >= this.region.x && start.y >= this.region.y && start.x <= this.region.x + this.region.width && start.y <= this.region.y + this.region.height;
+		const inside =
+			this.region &&
+			start.x >= this.region.x &&
+			start.y >= this.region.y &&
+			start.x <= this.region.x + this.region.width &&
+			start.y <= this.region.y + this.region.height;
 		if (this.tool === 'text' && inside) {
 			this.textPoint = start;
 			const bounds = this.canvas.getBoundingClientRect();
@@ -335,14 +371,15 @@ export class ScreenshotEditor extends Disposable {
 				left: `${event.clientX}px`,
 				top: `${event.clientY}px`,
 				maxWidth: `${Math.max(100, bounds.right - event.clientX)}px`,
-				color: this.color.value,
+				color: this.color.value
 			});
 			this.textInput.value = '';
 			this.textInput.hidden = false;
 			this.textInput.focus();
 			return;
 		}
-		const handle = (event.target as HTMLElement).dataset.handle ?? (inside && this.tool === 'select' ? 'move' : 'new');
+		const handle =
+			(event.target as HTMLElement).dataset.handle ?? (inside && this.tool === 'select' ? 'move' : 'new');
 		this.drag = { id: event.pointerId, start, rect: this.region, handle, points: [start] };
 		if (this.tool === 'select' || !inside) {
 			if (handle === 'new') {
@@ -365,7 +402,7 @@ export class ScreenshotEditor extends Disposable {
 			const rect = this.region!;
 			const clipped = {
 				x: Math.max(rect.x, Math.min(rect.x + rect.width, point.x)),
-				y: Math.max(rect.y, Math.min(rect.y + rect.height, point.y)),
+				y: Math.max(rect.y, Math.min(rect.y + rect.height, point.y))
 			};
 			drag.points = this.tool === 'pen' ? [...drag.points, clipped] : [drag.start, clipped];
 			this.pendingAnnotation = this.annotation(drag.points);
@@ -377,17 +414,17 @@ export class ScreenshotEditor extends Disposable {
 			this.setRegion({
 				...drag.rect,
 				x: Math.max(0, Math.min(this.bitmap.width - drag.rect.width, drag.rect.x + point.x - drag.start.x)),
-				y: Math.max(0, Math.min(this.bitmap.height - drag.rect.height, drag.rect.y + point.y - drag.start.y)),
+				y: Math.max(0, Math.min(this.bitmap.height - drag.rect.height, drag.rect.y + point.y - drag.start.y))
 			});
 		} else {
 			const rect = drag.rect;
 			const first = {
 				x: drag.handle.includes('w') ? point.x : rect.x,
-				y: drag.handle.includes('n') ? point.y : rect.y,
+				y: drag.handle.includes('n') ? point.y : rect.y
 			};
 			const last = {
 				x: drag.handle.includes('e') ? point.x : rect.x + rect.width,
-				y: drag.handle.includes('s') ? point.y : rect.y + rect.height,
+				y: drag.handle.includes('s') ? point.y : rect.y + rect.height
 			};
 			this.setRegion(screenshotRectangle(first, last));
 		}
@@ -412,13 +449,14 @@ export class ScreenshotEditor extends Disposable {
 			color: this.color.value,
 			width: Number(this.lineWidth.value),
 			points,
-			...(text ? { text } : {}),
+			...(text ? { text } : {})
 		};
 	}
 
 	private commitText(): void {
 		if (!this.textPoint) return;
-		if (this.textInput.value.trim()) this.annotations.push({ ...this.annotation([this.textPoint], this.textInput.value), tool: 'text' });
+		if (this.textInput.value.trim())
+			this.annotations.push({ ...this.annotation([this.textPoint], this.textInput.value), tool: 'text' });
 		this.textPoint = undefined;
 		this.textInput.hidden = true;
 		this.paint();
@@ -473,7 +511,8 @@ export class ScreenshotEditor extends Disposable {
 		event.stopImmediatePropagation();
 		const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
 		const key = event.shiftKey ? (horizontal ? 'width' : 'height') : horizontal ? 'x' : 'y';
-		const delta = (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) * (event.ctrlKey || event.metaKey ? 10 : 1);
+		const delta =
+			(event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) * (event.ctrlKey || event.metaKey ? 10 : 1);
 		this.setRegion({ ...this.region, [key]: this.region[key] + delta });
 		this.announce();
 	}
@@ -486,7 +525,8 @@ export class ScreenshotEditor extends Disposable {
 	private paint(): void {
 		this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		this.context.drawImage(this.bitmap, 0, 0);
-		for (const annotation of [...this.annotations, ...(this.pendingAnnotation ? [this.pendingAnnotation] : [])]) paintScreenshotAnnotation(this.context, annotation);
+		for (const annotation of [...this.annotations, ...(this.pendingAnnotation ? [this.pendingAnnotation] : [])])
+			paintScreenshotAnnotation(this.context, annotation);
 	}
 
 	private render(): void {
@@ -503,17 +543,17 @@ export class ScreenshotEditor extends Disposable {
 		const bottom = rect ? top + (rect.height * image.height) / this.bitmap.height : 0;
 		const masks = rect
 			? [
-					[0, 0, viewport.innerWidth, top],
-					[0, top, left, bottom - top],
-					[right, top, viewport.innerWidth - right, bottom - top],
-					[0, bottom, viewport.innerWidth, viewport.innerHeight - bottom],
-				]
+				[0, 0, viewport.innerWidth, top],
+				[0, top, left, bottom - top],
+				[right, top, viewport.innerWidth - right, bottom - top],
+				[0, bottom, viewport.innerWidth, viewport.innerHeight - bottom]
+			]
 			: [
-					[0, 0, viewport.innerWidth, viewport.innerHeight],
-					[0, 0, 0, 0],
-					[0, 0, 0, 0],
-					[0, 0, 0, 0],
-				];
+				[0, 0, viewport.innerWidth, viewport.innerHeight],
+				[0, 0, 0, 0],
+				[0, 0, 0, 0],
+				[0, 0, 0, 0]
+			];
 		for (const [index, shade] of this.shades.entries()) {
 			const [x, y, width, height] = masks[index];
 			Object.assign(shade.style, { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });
@@ -526,17 +566,25 @@ export class ScreenshotEditor extends Disposable {
 			left: `${image.left + x * scaleX}px`,
 			top: `${image.top + y * scaleY}px`,
 			width: `${width * scaleX}px`,
-			height: `${height * scaleY}px`,
+			height: `${height * scaleY}px`
 		});
 		this.dimensions.textContent = localize('screenshot.dimensions', '{0} × {1} pixels', width, height);
 		Object.assign(this.dimensions.style, {
 			left: `${image.left + x * scaleX}px`,
-			top: `${Math.max(8, image.top + y * scaleY - 32)}px`,
+			top: `${Math.max(8, image.top + y * scaleY - 32)}px`
 		});
 		for (const [key, input] of this.inputs) {
 			input.value = String(this.region[key]);
 			input.min = key === 'x' || key === 'y' ? '0' : '1';
-			input.max = String(key === 'x' ? this.bitmap.width - 1 : key === 'y' ? this.bitmap.height - 1 : key === 'width' ? this.bitmap.width - x : this.bitmap.height - y);
+			input.max = String(
+				key === 'x'
+					? this.bitmap.width - 1
+					: key === 'y'
+						? this.bitmap.height - 1
+						: key === 'width'
+							? this.bitmap.width - x
+							: this.bitmap.height - y
+			);
 		}
 		this.positionToolbar();
 	}
@@ -545,24 +593,39 @@ export class ScreenshotEditor extends Disposable {
 		if (!this.region) return;
 		const bounds = this.selection.getBoundingClientRect();
 		const { innerWidth, innerHeight } = this.document.defaultView!;
-		const left = Math.max(8, Math.min(innerWidth - this.toolbar.offsetWidth - 8, bounds.right - this.toolbar.offsetWidth));
+		const left = Math.max(
+			8,
+			Math.min(innerWidth - this.toolbar.offsetWidth - 8, bounds.right - this.toolbar.offsetWidth)
+		);
 		const below = bounds.bottom + 12;
-		const top = below + this.toolbar.offsetHeight <= innerHeight - 8 ? below : Math.max(8, Math.min(innerHeight - this.toolbar.offsetHeight - 8, bounds.top - this.toolbar.offsetHeight - 12));
+		const top =
+			below + this.toolbar.offsetHeight <= innerHeight - 8
+				? below
+				: Math.max(
+					8,
+					Math.min(
+						innerHeight - this.toolbar.offsetHeight - 8,
+						bounds.top - this.toolbar.offsetHeight - 12
+					)
+				);
 		Object.assign(this.toolbar.style, { left: `${left}px`, top: `${top}px` });
 	}
 
 	private describe(): string {
 		return this.region
 			? localize(
-					'screenshot.description',
-					'Selected region: X {0}, Y {1}, Width {2}, Height {3} pixels. Annotations: {4}. Image contents are not described.',
-					this.region.x,
-					this.region.y,
-					this.region.width,
-					this.region.height,
-					this.annotations.length,
-				)
-			: localize('screenshot.noSelection', 'No region selected. Drag to select a region or choose Entire screen.');
+				'screenshot.description',
+				'Selected region: X {0}, Y {1}, Width {2}, Height {3} pixels. Annotations: {4}. Image contents are not described.',
+				this.region.x,
+				this.region.y,
+				this.region.width,
+				this.region.height,
+				this.annotations.length
+			)
+			: localize(
+				'screenshot.noSelection',
+				'No region selected. Drag to select a region or choose Entire screen.'
+			);
 	}
 
 	private announce(): void {
@@ -573,7 +636,9 @@ export class ScreenshotEditor extends Disposable {
 		const focused = this.document.activeElement as HTMLElement;
 		this.help.replaceChildren();
 		const heading = this.document.createElement('h2');
-		heading.textContent = summary ? localize('screenshot.summary', 'Screenshot selection') : localize('screenshot.helpTitle', 'Screenshot Help');
+		heading.textContent = summary
+			? localize('screenshot.summary', 'Screenshot selection')
+			: localize('screenshot.helpTitle', 'Screenshot Help');
 		this.help.setAttribute('aria-label', heading.textContent);
 		const content = this.document.createElement('textarea');
 		content.readOnly = true;
@@ -583,17 +648,15 @@ export class ScreenshotEditor extends Disposable {
 		close.textContent = localize('screenshot.closeHelp', 'Close help');
 		this.helpListeners.clear();
 		this.helpListeners.add(addDisposableListener(close, 'click', () => this.help.close()));
-		this.helpListeners.add(
-			addDisposableListener(
-				this.help,
-				'close',
-				() => {
-					this.helpListeners.clear();
-					if (focused.isConnected) focused.focus();
-				},
-				{ once: true },
-			),
-		);
+		this.helpListeners.add(addDisposableListener(
+			this.help,
+			'close',
+			() => {
+				this.helpListeners.clear();
+				if (focused.isConnected) focused.focus();
+			},
+			{ once: true }
+		));
 		this.help.append(heading, content, close);
 		this.help.showModal();
 		content.focus();
@@ -607,7 +670,7 @@ export class ScreenshotEditor extends Disposable {
 		output.width = width;
 		output.height = height;
 		output.getContext('2d')!.drawImage(this.canvas, x, y, width, height, 0, 0, width, height);
-		const blob = await new Promise<Blob | null>(resolve => output.toBlob(resolve, 'image/png'));
+		const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, 'image/png'));
 		if (blob && !this.isDisposed) await this.complete({ kind, image: new Uint8Array(await blob.arrayBuffer()) });
 	}
 
@@ -619,7 +682,8 @@ export class ScreenshotEditor extends Disposable {
 		try {
 			if (await this.options.complete(result)) this.dispose();
 		} catch (error) {
-			if (!this.isDisposed) this.status.textContent = localize('screenshot.failed', 'Screenshot action failed: {0}', String(error));
+			if (!this.isDisposed)
+				this.status.textContent = localize('screenshot.failed', 'Screenshot action failed: {0}', String(error));
 		} finally {
 			this.busy = false;
 			if (!this.isDisposed) {

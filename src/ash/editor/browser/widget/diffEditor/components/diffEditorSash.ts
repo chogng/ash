@@ -28,32 +28,26 @@ export class DiffEditorSash extends Disposable {
 		this.element.classList.add('stanza-diff-sash');
 		this.element.setAttribute('aria-controls', `${originalId} ${modifiedId}`);
 		this.updateLabel();
-		this._register(
-			this.sash.onDidStart(() => {
-				this.startLeft = this.left;
-			}),
-		);
-		this._register(
-			this.sash.onDidChange(event => {
-				if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return;
-				const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
-				this.ratio = left / this.width;
-				this.onDidResize();
-			}),
-		);
-		this._register(
-			this.sash.onDidReset(() => {
-				this.ratio = undefined;
-				this.onDidResize();
-			}),
-		);
+		this._register(this.sash.onDidStart(() => { this.startLeft = this.left; }));
+		this._register(this.sash.onDidChange(event => {
+			if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return;
+			const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
+			this.ratio = left / this.width;
+			this.onDidResize();
+		}));
+		this._register(this.sash.onDidReset(() => {
+			this.ratio = undefined;
+			this.onDidResize();
+		}));
 	}
 
 	public get left(): number {
 		const ratio = this.options.enableSplitViewResizing ? this.ratio : undefined;
 		// User movement starts in whole pixels. Recover the nearest pixel after
 		// the ratio round trip instead of flooring floating-point error into a lost step.
-		const desired = ratio === undefined ? Math.floor(this.options.splitViewDefaultRatio * this.width) : Math.round(ratio * this.width);
+		const desired = ratio === undefined
+			? Math.floor(this.options.splitViewDefaultRatio * this.width)
+			: Math.round(ratio * this.width);
 		if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return desired;
 		return Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
 	}
@@ -67,13 +61,9 @@ export class DiffEditorSash extends Disposable {
 		this.element.style.left = `${left}px`;
 		this.element.style.top = `${top}px`;
 		this.element.style.height = `${height}px`;
-		this.sash.state = !visible
-			? SashState.Disabled
-			: left <= MINIMUM_EDITOR_WIDTH + this.leadingWidth
-				? SashState.AtMinimum
-				: left >= width - MINIMUM_EDITOR_WIDTH
-					? SashState.AtMaximum
-					: SashState.Enabled;
+		this.sash.state = !visible ? SashState.Disabled
+			: left <= MINIMUM_EDITOR_WIDTH + this.leadingWidth ? SashState.AtMinimum
+				: left >= width - MINIMUM_EDITOR_WIDTH ? SashState.AtMaximum : SashState.Enabled;
 		this.updateValue(left);
 		return left;
 	}
@@ -84,10 +74,12 @@ export class DiffEditorSash extends Disposable {
 	}
 
 	private updateValue(left: number): void {
-		const percent = this.width > 0 ? Math.round((left / this.width) * 100) : Math.round(this.options.splitViewDefaultRatio * 100);
-		const minimumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth ? Math.round(((MINIMUM_EDITOR_WIDTH + this.leadingWidth) / this.width) * 100) : 0;
+		const percent = this.width > 0 ? Math.round(left / this.width * 100) : Math.round(this.options.splitViewDefaultRatio * 100);
+		const minimumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
+			? Math.round((MINIMUM_EDITOR_WIDTH + this.leadingWidth) / this.width * 100) : 0;
 		this.element.setAttribute('aria-valuemin', String(minimumPercent));
-		const maximumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth ? Math.round(((this.width - MINIMUM_EDITOR_WIDTH) / this.width) * 100) : 100;
+		const maximumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
+			? Math.round((this.width - MINIMUM_EDITOR_WIDTH) / this.width * 100) : 100;
 		this.element.setAttribute('aria-valuemax', String(maximumPercent));
 		this.element.setAttribute('aria-valuenow', String(percent));
 		this.element.setAttribute('aria-valuetext', localize('diffEditor.columnWidths', 'Original {0}%, modified {1}%', percent, 100 - percent));

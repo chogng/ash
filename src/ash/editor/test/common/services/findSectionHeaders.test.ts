@@ -14,14 +14,12 @@ test('section headers include named regions but not ordinary foldable lines', ()
 		markSectionHeaderRegex: '',
 	});
 
-	assert.deepEqual(headers, [
-		{
-			range: Range.fromPositions(new Position(0 + 1, 10 + 1), new Position(0 + 1, 24 + 1)),
-			text: ' Runtime ',
-			hasSeparatorLine: true,
-			shouldBeInComments: false,
-		},
-	]);
+	assert.deepEqual(headers, [{
+		range: Range.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (24) + 1)),
+		text: ' Runtime ',
+		hasSeparatorLine: true,
+		shouldBeInComments: false,
+	}]);
 });
 
 test('section headers collect single-line and multiline MARK matches', () => {
@@ -41,15 +39,11 @@ test('section headers collect single-line and multiline MARK matches', () => {
 
 test('section headers reject invalid MARK expressions', () => {
 	using model = new TextModel('// MARK: Value');
-	assert.throws(
-		() =>
-			findSectionHeaders(model, {
-				findRegionSectionHeaders: false,
-				findMarkSectionHeaders: true,
-				markSectionHeaderRegex: '(',
-			}),
-		/valid regular expression/,
-	);
+	assert.throws(() => findSectionHeaders(model, {
+		findRegionSectionHeaders: false,
+		findMarkSectionHeaders: true,
+		markSectionHeaderRegex: '(',
+	}), /valid regular expression/);
 });
 
 test('section headers skip zero-width matches and retain later visible headers', () => {
@@ -59,8 +53,5 @@ test('section headers skip zero-width matches and retain later visible headers',
 		findMarkSectionHeaders: true,
 		markSectionHeaderRegex: '(?=foo)|MARK: (?<label>[^\\n]+)',
 	});
-	assert.deepEqual(
-		headers.map(header => [header.text, header.range]),
-		[['Ready', new Range(2, 1, 2, 12)]],
-	);
+	assert.deepEqual(headers.map(header => [header.text, header.range]), [['Ready', new Range(2, 1, 2, 12)]]);
 });

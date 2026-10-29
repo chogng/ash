@@ -13,20 +13,14 @@ import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding' | 'commandDelegate'> &
-	Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
-		readonly lineWrapping?: EditorLineWrapping;
-		readonly wrappingIndent?: WrappingIndent;
-		readonly cursorOptions?: IEditorOptions;
-		readonly padding?: {
-			readonly top: number;
-			readonly bottom: number;
-			readonly left: number;
-			readonly right: number;
-		};
-		readonly model: TextModel;
-		readonly selectionController?: CursorsController;
-	};
+export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding' | 'commandDelegate'> & Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
+	readonly lineWrapping?: EditorLineWrapping;
+	readonly wrappingIndent?: WrappingIndent;
+	readonly cursorOptions?: IEditorOptions;
+	readonly padding?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number; };
+	readonly model: TextModel;
+	readonly selectionController?: CursorsController;
+};
 
 /** Builds the same configuration-model-view chain used by an editor widget. */
 export class TestView extends View {
@@ -45,8 +39,7 @@ export class TestView extends View {
 			commandDelegate: {
 				type: text => setup.viewModel.type(text, 'keyboard'),
 				paste: (text, pasteOnNewLine, multicursorText) => setup.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'),
-				compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) =>
-					setup.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
+				compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) => setup.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
 				startComposition: () => setup.viewModel.startComposition(),
 				endComposition: () => setup.viewModel.endComposition('keyboard'),
 				cut: () => setup.viewModel.cut('keyboard'),
@@ -104,23 +97,25 @@ function createViewModel(options: TestViewOptions): {
 	const attachedView = options.model.onBeforeAttached();
 	store.add(toDisposable(() => options.model.onBeforeDetached(attachedView)));
 	const lineBreaksComputerFactory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	const viewModel = store.add(
-		new ViewModel(
-			1,
-			configuration,
-			options.model,
-			lineBreaksComputerFactory,
-			lineBreaksComputerFactory,
-			callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
-			languageConfigurationService,
-			themeService,
-			attachedView,
-			{ batchChanges: callback => callback() },
-		),
-	);
+	const viewModel = store.add(new ViewModel(
+		1,
+		configuration,
+		options.model,
+		lineBreaksComputerFactory,
+		lineBreaksComputerFactory,
+		callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
+		languageConfigurationService,
+		themeService,
+		attachedView,
+		{ batchChanges: callback => callback() },
+	));
 	if (options.selectionController) {
 		const synchronizeSelections = (): void => {
-			viewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections(options.selectionController!.getSelections()));
+			viewModel.setCursorStates(
+				'test',
+				CursorChangeReason.Explicit,
+				CursorState.fromModelSelections(options.selectionController!.getSelections()),
+			);
 		};
 		synchronizeSelections();
 		store.add(options.selectionController.onDidChange(synchronizeSelections));
@@ -135,15 +130,10 @@ function createViewModel(options: TestViewOptions): {
 
 function testWrappingIndent(value: WrappingIndent | undefined): IEditorOptions['wrappingIndent'] {
 	switch (value) {
-		case WrappingIndent.None:
-			return 'none';
-		case WrappingIndent.Same:
-			return 'same';
-		case WrappingIndent.Indent:
-			return 'indent';
-		case WrappingIndent.DeepIndent:
-			return 'deepIndent';
-		default:
-			return undefined;
+		case WrappingIndent.None: return 'none';
+		case WrappingIndent.Same: return 'same';
+		case WrappingIndent.Indent: return 'indent';
+		case WrappingIndent.DeepIndent: return 'deepIndent';
+		default: return undefined;
 	}
 }

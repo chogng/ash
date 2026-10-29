@@ -9,17 +9,13 @@ export class RemoteExtensionHost extends Disposable {
 	private readiness = new DeferredPromise<void>();
 	private revision = 0;
 
-	constructor(
-		private readonly authority: string,
-		@IExtensionHostApi public readonly api: IExtensionHostApi,
+	constructor(private readonly authority: string, @IExtensionHostApi public readonly api: IExtensionHostApi,
 		@IRemoteAuthorityResolverService private readonly resolver: IRemoteAuthorityResolverService,
 	) {
 		super();
 		void this.readiness.p.catch(() => undefined);
 		const connection = api.onConnectionState(state => {
-			if (state !== 'ready') {
-				this.retire();
-			}
+			if (state !== 'ready') { this.retire(); }
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		this._register(toDisposable(() => this.retire()));
@@ -30,31 +26,20 @@ export class RemoteExtensionHost extends Disposable {
 		const revision = ++this.revision;
 		try {
 			const result = await this.resolver.resolveAuthority(this.authority);
-			if (this.isDisposed || revision !== this.revision) {
-				throw new CancellationError();
-			}
+			if (this.isDisposed || revision !== this.revision) { throw new CancellationError(); }
 			const snapshot = await this.api.start(result.options?.extensionHostEnv ?? {});
-			if (this.isDisposed || revision !== this.revision) {
-				throw new CancellationError();
-			}
+			if (this.isDisposed || revision !== this.revision) { throw new CancellationError(); }
 			await this.readiness.complete();
 			return snapshot;
 		} catch (error) {
-			if (revision === this.revision) {
-				await this.readiness.error(error);
-			}
+			if (revision === this.revision) { await this.readiness.error(error); }
 			throw error;
 		}
 	}
 
-	public get isReady(): boolean {
-		return !this.isDisposed && this.readiness.isResolved;
-	}
+	public get isReady(): boolean { return !this.isDisposed && this.readiness.isResolved; }
 
-	public whenReady(): Promise<void> {
-		this.assertNotDisposed();
-		return this.readiness.p;
-	}
+	public whenReady(): Promise<void> { this.assertNotDisposed(); return this.readiness.p; }
 
 	private retire(): void {
 		this.revision++;

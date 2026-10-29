@@ -32,13 +32,9 @@ export class CustomizeSkillActions extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 		@ISessionsService private readonly views: ISessionsService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
-	) {
-		super();
-	}
+	) { super(); }
 
-	public get isAvailable(): boolean {
-		return !!this.primary.host.userDataHome;
-	}
+	public get isAvailable(): boolean { return !!this.primary.host.userDataHome; }
 
 	public async upload(): Promise<boolean> {
 		const selection = await this.dialogs.prompt<readonly File[]>({
@@ -64,13 +60,8 @@ export class CustomizeSkillActions extends Disposable {
 		for (const file of selected) {
 			this.assertActive();
 			const path = folder ? file.webkitRelativePath.slice(folder.length + 1) : file.name;
-			if (
-				(folder && !file.webkitRelativePath.startsWith(`${folder}/`)) ||
-				!path ||
-				path.length > 1024 ||
-				path.split('/').some(segment => !segment || segment === '.' || segment === '..' || /[\\\x00-\x1f\x7f]/.test(segment)) ||
-				paths.has(path)
-			) {
+			if (folder && !file.webkitRelativePath.startsWith(`${folder}/`) || !path || path.length > 1024
+				|| path.split('/').some(segment => !segment || segment === '.' || segment === '..' || /[\\\x00-\x1f\x7f]/.test(segment)) || paths.has(path)) {
 				throw new Error(localize('customize.invalidSkillPath', 'The skill contains an unsupported file path.'));
 			}
 			const limit = path === 'SKILL.md' ? 1024 * 1024 : 256 * 1024;
@@ -100,27 +91,13 @@ export class CustomizeSkillActions extends Disposable {
 			this.document.body.append(input);
 			let settled = false;
 			const lifetime = new DisposableStore();
-			const finish = (files: readonly File[]) => {
-				settled = true;
-				this.picker.clear();
-				resolve(files);
-			};
-			lifetime.add(
-				toDisposable(() => {
-					input.remove();
-					if (!settled) reject(canceled());
-				}),
-			);
-			lifetime.add(addDisposableListener(input, 'change', () => finish([...(input.files ?? [])])));
+			const finish = (files: readonly File[]) => { settled = true; this.picker.clear(); resolve(files); };
+			lifetime.add(toDisposable(() => { input.remove(); if (!settled) reject(canceled()); }));
+			lifetime.add(addDisposableListener(input, 'change', () => finish([...input.files ?? []])));
 			lifetime.add(addDisposableListener(input, 'cancel', () => finish([])));
 			this.picker.value = lifetime;
-			try {
-				input.click();
-			} catch (error) {
-				settled = true;
-				this.picker.clear();
-				reject(error);
-			}
+			try { input.click(); }
+			catch (error) { settled = true; this.picker.clear(); reject(error); }
 		});
 	}
 
@@ -150,9 +127,7 @@ export class CustomizeSkillActions extends Disposable {
 	public createWithAsh(): void {
 		this.assertActive();
 		this.views.openNewSession(localize('customize.createSkill', 'Create a skill'));
-		this.navigation.appendToActiveDraft(
-			'$skill-creator\n' + localize('customize.createSkillPrompt', 'Help me create a reusable skill. Ask me what it should do and when to use it, then help me write and validate it.'),
-		);
+		this.navigation.appendToActiveDraft('$skill-creator\n' + localize('customize.createSkillPrompt', 'Help me create a reusable skill. Ask me what it should do and when to use it, then help me write and validate it.'));
 	}
 
 	private skillName(resource: URI, content: string): string {
@@ -160,18 +135,9 @@ export class CustomizeSkillActions extends Disposable {
 		const parsed = new PromptFileParser().parse(resource, content);
 		const name = parsed.header?.getAttribute('name')?.value;
 		const description = parsed.header?.getAttribute('description')?.value;
-		if (
-			!parsed.header ||
-			parsed.header.errors.length ||
-			name?.type !== 'scalar' ||
-			name.value.length > 64 ||
-			!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name.value) ||
-			description?.type !== 'scalar' ||
-			!description.value.trim()
-		) {
-			throw new Error(
-				localize('customize.invalidSkill', 'The skill needs a valid name (up to 64 lowercase letters, numbers and single hyphens), a description, and valid SKILL.md frontmatter.'),
-			);
+		if (!parsed.header || parsed.header.errors.length || name?.type !== 'scalar' || name.value.length > 64
+			|| !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name.value) || description?.type !== 'scalar' || !description.value.trim()) {
+			throw new Error(localize('customize.invalidSkill', 'The skill needs a valid name (up to 64 lowercase letters, numbers and single hyphens), a description, and valid SKILL.md frontmatter.'));
 		}
 		return name.value;
 	}
@@ -180,7 +146,7 @@ export class CustomizeSkillActions extends Disposable {
 		this.assertActive();
 		const home = this.primary.host.userDataHome;
 		const root = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/skills' });
-		const rootReference = home && (await this.paths.getHostPath(URI.joinPath(home, 'skills')));
+		const rootReference = home && await this.paths.getHostPath(URI.joinPath(home, 'skills'));
 		if (!rootReference) throw new Error(localize('customize.skillStorageUnavailable', 'Skill storage is unavailable on this host.'));
 		const temporary = URI.from({ scheme: Schemas.vscodeUserData, path: `/user/.skill-import-${generateUuid()}` });
 		const target = URI.joinPath(root, name);
@@ -200,12 +166,10 @@ export class CustomizeSkillActions extends Disposable {
 			// Publishing one directory rejects collisions and never overwrites an existing skill.
 			await this.files.rename(temporary, target, 'error');
 		} finally {
-			await this.files.delete(temporary, 'ignore', 'recursive').catch(() => {});
+			await this.files.delete(temporary, 'ignore', 'recursive').catch(() => { });
 		}
 		return URI.joinPath(target, 'SKILL.md');
 	}
 
-	private assertActive(): void {
-		if (this.isDisposed) throw canceled();
-	}
+	private assertActive(): void { if (this.isDisposed) throw canceled(); }
 }

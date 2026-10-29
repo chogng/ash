@@ -1,8 +1,17 @@
 import { OperatingSystem } from '../../../base/common/platform.js';
-import type { IKeyboardLayoutDefinition, IKeyboardLayoutInfo, IKeyboardMapping, IKeyboardMappingEntry, KeyboardLayoutSource } from './keyboardLayout.js';
+import type {
+	IKeyboardLayoutDefinition,
+	IKeyboardLayoutInfo,
+	IKeyboardMapping,
+	IKeyboardMappingEntry,
+	KeyboardLayoutSource,
+} from './keyboardLayout.js';
 
 /** Validates a canonical keyboard-layout snapshot crossing a host boundary. */
-export function validateKeyboardLayoutDefinition(value: unknown, expectedSource: KeyboardLayoutSource): IKeyboardLayoutDefinition | undefined {
+export function validateKeyboardLayoutDefinition(
+	value: unknown,
+	expectedSource: KeyboardLayoutSource,
+): IKeyboardLayoutDefinition | undefined {
 	if (value === undefined || value === null) {
 		return undefined;
 	}
@@ -30,7 +39,10 @@ export function validateKeyboardMapping(value: unknown): IKeyboardMapping {
 	return Object.freeze(mapping);
 }
 
-function validateLayoutInfo(value: unknown, expectedSource: KeyboardLayoutSource): IKeyboardLayoutInfo {
+function validateLayoutInfo(
+	value: unknown,
+	expectedSource: KeyboardLayoutSource,
+): IKeyboardLayoutInfo {
 	const layout = expectRecord(value, 'keyboard layout info');
 	expectKeys(layout, ['id', 'isUSStandard', 'label', 'operatingSystem', 'source'], 'keyboard layout info');
 	if (typeof layout.id !== 'string' || layout.id.length === 0 || layout.id.length > 256) {
@@ -59,11 +71,17 @@ function validateLayoutInfo(value: unknown, expectedSource: KeyboardLayoutSource
 
 function validateMappingEntry(value: unknown, code: string): IKeyboardMappingEntry {
 	const entry = expectRecord(value, `keyboard mapping ${code}`);
-	expectKeys(
-		entry,
-		['value', 'valueIsDeadKey', 'vkey', 'withAltGr', 'withAltGrIsDeadKey', 'withShift', 'withShiftAltGr', 'withShiftAltGrIsDeadKey', 'withShiftIsDeadKey'],
-		`keyboard mapping ${code}`,
-	);
+	expectKeys(entry, [
+		'value',
+		'valueIsDeadKey',
+		'vkey',
+		'withAltGr',
+		'withAltGrIsDeadKey',
+		'withShift',
+		'withShiftAltGr',
+		'withShiftAltGrIsDeadKey',
+		'withShiftIsDeadKey',
+	], `keyboard mapping ${code}`);
 	return Object.freeze({
 		value: expectOutput(entry.value, `${code}.value`),
 		withShift: expectOutput(entry.withShift, `${code}.withShift`),
@@ -81,7 +99,11 @@ export function expectKeyboardLayoutRecord(value: unknown, name: string): Record
 	return expectRecord(value, name);
 }
 
-export function expectKeyboardLayoutKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
+export function expectKeyboardLayoutKeys(
+	value: Record<string, unknown>,
+	allowed: readonly string[],
+	name: string,
+): void {
 	expectKeys(value, allowed, name);
 }
 
@@ -94,7 +116,7 @@ function expectRecord(value: unknown, name: string): Record<string, unknown> {
 
 function expectKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
 	const allowedKeys = new Set(allowed);
-	if (Object.keys(value).some(key => !allowedKeys.has(key))) {
+	if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
 		throw new TypeError(`${name} contains unknown fields`);
 	}
 }
@@ -117,5 +139,7 @@ function expectOptionalBoolean(value: unknown, name: string): boolean | undefine
 }
 
 function isOperatingSystem(value: unknown): value is OperatingSystem {
-	return value === OperatingSystem.Windows || value === OperatingSystem.Macintosh || value === OperatingSystem.Linux;
+	return value === OperatingSystem.Windows ||
+		value === OperatingSystem.Macintosh ||
+		value === OperatingSystem.Linux;
 }

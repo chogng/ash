@@ -20,9 +20,7 @@ export class WelcomeView extends ViewPane {
 	private readonly description: HTMLElement;
 	private readonly configurationRequest = this._register(new MutableDisposable<DisposableStore>());
 
-	constructor(
-		container: HTMLElement,
-		options: IViewPaneOptions,
+	constructor(container: HTMLElement, options: IViewPaneOptions,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IContextKeyService private readonly contexts: IContextKeyService,
@@ -32,29 +30,25 @@ export class WelcomeView extends ViewPane {
 		super(container, { minimumBodySize: 32, ...options });
 		this.element.classList.add('ash-debug-section');
 		this.contentElement.classList.add('ash-debug-section-content', 'ash-debug-welcome-content');
-		this.button = this._register(
-			new Button(this.contentElement, {
-				...defaultButtonStyles,
-				label: localize('debug.createLaunch', 'Create a launch.json file'),
-				presentation: 'primary',
-				onClick: () => {
-					void this.configure().catch(error => {
-						if (!isCancellationError(error)) {
-							this.notifications.error(error instanceof Error ? error.message : String(error));
-						}
-					});
-				},
-			}),
-		);
+		this.button = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('debug.createLaunch', 'Create a launch.json file'),
+			presentation: 'primary',
+			onClick: () => {
+				void this.configure().catch(error => {
+					if (!isCancellationError(error)) {
+						this.notifications.error(error instanceof Error ? error.message : String(error));
+					}
+				});
+			},
+		}));
 		this.description = h(container.ownerDocument, 'p');
 		this.contentElement.append(this.description);
 		this._register(workspace.onDidChangeWorkspace(() => this.updateWelcome()));
 		this.updateWelcome();
-		this._register(
-			this.onDidChangeVisibility(visible => {
-				if (!visible) this.configurationRequest.clear();
-			}),
-		);
+		this._register(this.onDidChangeVisibility(visible => {
+			if (!visible) this.configurationRequest.clear();
+		}));
 	}
 
 	private updateWelcome(): void {

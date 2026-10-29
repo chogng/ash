@@ -4,7 +4,7 @@ import type { IExtensionResourceLoaderService } from '../../../../platform/exten
 import type { IEditorPane } from '../../../common/editor.js';
 /** A lifetime-bound constructor callback; it exposes no lookup, registration or service container. */
 export type EditorClientInstantiation = <T>(constructor: new (...args: any[]) => T, ...args: any[]) => T;
-export type ResourceEditorConstructor = new (...args: any[]) => IEditorPane & { create(parent: HTMLElement): void };
+export type ResourceEditorConstructor = new (...args: any[]) => IEditorPane & { create(parent: HTMLElement): void; };
 
 /** Package-owned view behavior. The loader supplies only the versioned public client mechanisms. */
 export interface ExtensionEditorModule {

@@ -9,7 +9,7 @@ import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 export const IAuxiliaryWindowsMainService = createServiceIdentifier<IAuxiliaryWindowsMainService>('auxiliaryWindowsMainService');
 
 export interface IAuxiliaryWindowsMainService {
-	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent }>;
+	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>;
 	createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel?: number): BrowserWindowConstructorOptions;
 	/** The opener's resources own this registration, including any descendant windows. */
 	registerWindow(webContents: WebContents, parentId: number, options?: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'>): IDisposable;

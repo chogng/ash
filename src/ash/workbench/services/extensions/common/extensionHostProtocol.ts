@@ -17,17 +17,9 @@ export function createExtensionHostInitialization(workspace: IWorkspaceContextSe
 }
 
 export type BrowserExtensionHostRequest =
-	| {
-			readonly id: number;
-			readonly type: 'activate';
-			readonly entryPoint: string;
-			readonly language: string;
-			readonly extensionId: string;
-			readonly configuration: JsonValue;
-			readonly initialization: JsonValue;
-	  }
-	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0] }
-	| { readonly id: number; readonly type: 'deactivate' }
-	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number }
-	| { readonly id: number; readonly type: 'commandResult'; readonly success: true; readonly result: JsonValue }
-	| { readonly id: number; readonly type: 'commandResult'; readonly success: false; readonly error: string };
+	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; readonly extensionId: string; readonly configuration: JsonValue; readonly initialization: JsonValue; }
+	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0]; }
+	| { readonly id: number; readonly type: 'deactivate'; }
+	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number; }
+	| { readonly id: number; readonly type: 'commandResult'; readonly success: true; readonly result: JsonValue; }
+	| { readonly id: number; readonly type: 'commandResult'; readonly success: false; readonly error: string; };

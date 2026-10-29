@@ -10,47 +10,27 @@ import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/p
 import type { DesignShape } from '../common/model/document.js';
 import { IDesignEditorService } from './designEditorService.js';
 
-interface DesignLayer {
-	readonly element: DesignShape;
-	readonly children?: readonly DesignLayer[];
-}
+interface DesignLayer { readonly element: DesignShape; readonly children?: readonly DesignLayer[]; }
 
 function shapeLabel(shape: DesignShape): string {
 	const label = layerName(shape);
-	return shape.scrollPosition === 'fixed'
-		? localize('sessions.design.prototype.fixedLayer', '{0} (Fixed)', label)
-		: shape.scrollPosition === 'sticky'
-			? localize('sessions.design.prototype.stickyLayer', '{0} (Sticky)', label)
-			: label;
+	return shape.scrollPosition === 'fixed' ? localize('sessions.design.prototype.fixedLayer', '{0} (Fixed)', label) : shape.scrollPosition === 'sticky' ? localize('sessions.design.prototype.stickyLayer', '{0} (Sticky)', label) : label;
 }
 
 function layerName(shape: DesignShape): string {
 	if (shape.kind === 'frame' && (shape.component || shape.instance)) {
-		const role = shape.instance
-			? localize('sessions.design.instance', 'Instance')
-			: shape.component?.kind === 'set'
-				? localize('sessions.design.componentSet', 'Component set')
-				: localize('sessions.design.mainComponent', 'Main component');
+		const role = shape.instance ? localize('sessions.design.instance', 'Instance') : shape.component?.kind === 'set' ? localize('sessions.design.componentSet', 'Component set') : localize('sessions.design.mainComponent', 'Main component');
 		return shape.name ? localize('sessions.design.componentLayer', '{0}: {1}', role, shape.name) : role;
 	}
-	if (shape.name) {
-		return shape.name;
-	}
+	if (shape.name) { return shape.name; }
 	switch (shape.kind) {
-		case 'rectangle':
-			return localize('sessions.design.rectangle', 'Rectangle');
-		case 'ellipse':
-			return localize('sessions.design.ellipse', 'Ellipse');
-		case 'text':
-			return shape.text || localize('sessions.design.text', 'Text');
-		case 'path':
-			return localize('sessions.design.path', 'Bézier path');
-		case 'frame':
-			return localize('sessions.design.frame', 'Frame');
-		case 'image':
-			return localize('sessions.design.image', 'Image');
-		case 'group':
-			return localize('sessions.design.group', 'Group');
+		case 'rectangle': return localize('sessions.design.rectangle', 'Rectangle');
+		case 'ellipse': return localize('sessions.design.ellipse', 'Ellipse');
+		case 'text': return shape.text || localize('sessions.design.text', 'Text');
+		case 'path': return localize('sessions.design.path', 'Bézier path');
+		case 'frame': return localize('sessions.design.frame', 'Frame');
+		case 'image': return localize('sessions.design.image', 'Image');
+		case 'group': return localize('sessions.design.group', 'Group');
 	}
 }
 
@@ -72,60 +52,43 @@ export class DesignLayersView extends ViewPane {
 		const treeContainer = h(container.ownerDocument, 'div', { className: 'ash-design-layers-tree' });
 		this.contentElement.append(empty, treeContainer);
 		this._register(contextKeys.createScoped(treeContainer)).createKey('sessionsDesignLayersFocused', true);
-		this.tree = this._register(
-			new WorkbenchObjectTree(treeContainer, {
-				configurationService: configuration,
-				ariaLabel: localize('sessions.design.layers', 'Layers'),
-				multipleSelectionSupport: true,
-				modelOptions: { identityProvider: { getId: shape => shape.id } },
-				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: shapeLabel },
-				renderElement: shape => h(container.ownerDocument, 'span', { className: 'ash-design-layer-label' }, shapeLabel(shape)),
-			}),
-		);
-		this._register(
-			addDisposableListener(treeContainer, 'keydown', event => {
-				const editor = editors.activeEditor.get();
-				if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-					event.preventDefault();
-					event.stopPropagation();
-					editor?.showContextMenu(treeContainer, () => this.focus());
-				} else if (editor?.handleLayerKeyDown(event)) {
-					this.focus();
+		this.tree = this._register(new WorkbenchObjectTree(treeContainer, {
+			configurationService: configuration,
+			ariaLabel: localize('sessions.design.layers', 'Layers'),
+			multipleSelectionSupport: true,
+			modelOptions: { identityProvider: { getId: shape => shape.id } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: shapeLabel },
+			renderElement: shape => h(container.ownerDocument, 'span', { className: 'ash-design-layer-label' }, shapeLabel(shape)),
+		}));
+		this._register(addDisposableListener(treeContainer, 'keydown', event => {
+			const editor = editors.activeEditor.get();
+			if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+				event.preventDefault(); event.stopPropagation();
+				editor?.showContextMenu(treeContainer, () => this.focus());
+			} else if (editor?.handleLayerKeyDown(event)) { this.focus(); }
+		}));
+		this._register(this.tree.onDidChangeSelection(event => {
+			if (event.browserEvent) editors.activeEditor.get()?.selectShapes(event.elements.map(shape => shape.id));
+		}));
+		this._register(autorunWithStore((reader, store) => {
+			const editor = editors.activeEditor.read(reader);
+			let renderedShapes: readonly DesignShape[] | undefined = [];
+			const refresh = (): void => {
+				const shapes = editor?.documentController.model.value.shapes;
+				if (shapes !== renderedShapes) {
+					renderedShapes = shapes;
+					// Frontmost objects appear first, without changing the document's paint order.
+					const layers = (items: readonly DesignShape[]): DesignLayer[] => [...items].reverse().map(element => ({ element, ...(element.kind === 'frame' || element.kind === 'group' ? { children: layers(element.children) } : {}) }));
+					this.tree.setChildren(layers(shapes ?? []));
 				}
-			}),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(event => {
-				if (event.browserEvent) editors.activeEditor.get()?.selectShapes(event.elements.map(shape => shape.id));
-			}),
-		);
-		this._register(
-			autorunWithStore((reader, store) => {
-				const editor = editors.activeEditor.read(reader);
-				let renderedShapes: readonly DesignShape[] | undefined = [];
-				const refresh = (): void => {
-					const shapes = editor?.documentController.model.value.shapes;
-					if (shapes !== renderedShapes) {
-						renderedShapes = shapes;
-						// Frontmost objects appear first, without changing the document's paint order.
-						const layers = (items: readonly DesignShape[]): DesignLayer[] =>
-							[...items].reverse().map(element => ({
-								element,
-								...(element.kind === 'frame' || element.kind === 'group' ? { children: layers(element.children) } : {}),
-							}));
-						this.tree.setChildren(layers(shapes ?? []));
-					}
-					empty.hidden = !!shapes?.length;
-					this.tree.setSelection([...(editor?.selection.ids ?? [])]);
-				};
-				if (editor) store.add(editor.onDidChangeView(refresh));
-				refresh();
-			}),
-		);
+				empty.hidden = !!shapes?.length;
+				this.tree.setSelection([...(editor?.selection.ids ?? [])]);
+			};
+			if (editor) store.add(editor.onDidChangeView(refresh));
+			refresh();
+		}));
 	}
-	public focus(): void {
-		this.tree.domFocus();
-	}
+	public focus(): void { this.tree.domFocus(); }
 	public override getOptimalWidth(): number {
 		const left = this.contentElement.getBoundingClientRect().left;
 		const range = this.contentElement.ownerDocument.createRange();
@@ -140,12 +103,7 @@ export class DesignLayersView extends ViewPane {
 
 /** AuxiliaryBarPart hosts the editor-owned property component without copying its model. */
 export class DesignPropertiesView extends ViewPane {
-	constructor(
-		container: HTMLElement,
-		options: IViewPaneOptions,
-		@IDesignEditorService private readonly editors: IDesignEditorService,
-		@IContextKeyService contextKeys: IContextKeyService,
-	) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IDesignEditorService private readonly editors: IDesignEditorService, @IContextKeyService contextKeys: IContextKeyService) {
 		super(container, options);
 		this.contentElement.classList.add('ash-design-properties-view');
 		this.contentElement.tabIndex = 0;
@@ -153,23 +111,16 @@ export class DesignPropertiesView extends ViewPane {
 		const empty = h(container.ownerDocument, 'p', { className: 'ash-design-panel-message' });
 		empty.textContent = localize('sessions.design.propertiesEmpty', 'Select one object to edit its properties.');
 		this.contentElement.append(empty);
-		this._register(
-			autorunWithStore((reader, store) => {
-				const editor = editors.activeEditor.read(reader);
-				if (!editor) {
-					empty.hidden = false;
-					return;
-				}
-				const properties = editor.propertiesDomNode;
-				this.contentElement.append(properties);
-				store.add(toDisposable(() => properties.remove()));
-				const refresh = (): void => {
-					empty.hidden = editor.hasProperties;
-				};
-				store.add(editor.onDidChangeView(refresh));
-				refresh();
-			}),
-		);
+		this._register(autorunWithStore((reader, store) => {
+			const editor = editors.activeEditor.read(reader);
+			if (!editor) { empty.hidden = false; return; }
+			const properties = editor.propertiesDomNode;
+			this.contentElement.append(properties);
+			store.add(toDisposable(() => properties.remove()));
+			const refresh = (): void => { empty.hidden = editor.hasProperties; };
+			store.add(editor.onDidChangeView(refresh));
+			refresh();
+		}));
 	}
 	public focus(): void {
 		const editor = this.editors.activeEditor.get();

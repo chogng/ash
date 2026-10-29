@@ -5,12 +5,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import {
-	IExtensionRecommendationNotificationService,
-	RecommendationSource,
-	RecommendationsNotificationResult,
-	type IExtensionRecommendations,
-} from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationNotificationService, RecommendationSource, RecommendationsNotificationResult, type IExtensionRecommendations } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -34,9 +29,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		try {
 			const value: unknown = JSON.parse(this.storage.get(ignoredKey, StorageScope.PROFILE, '[]'));
 			return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string').map(identity) : [];
-		} catch {
-			return [];
-		}
+		} catch { return []; }
 	}
 
 	constructor(
@@ -52,55 +45,17 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		super();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (
-					(event.affectsConfiguration('extensions.ignoreRecommendations') || event.affectsConfiguration('extensions.showRecommendationsOnlyOnDemand')) &&
-					this.hasToIgnoreRecommendationNotifications()
-				) {
-					this.notifications.clear();
-				}
-			}),
-		);
-		this._register(
-			workspaceConfigs.onDidChangeExtensionsConfigs(() => {
-				++this.generation;
-				this.notifications.clear();
-			}),
-		);
-		this._register(
-			packages.onDidChangeInstalled(() => {
-				++this.generation;
-				this.notifications.clear();
-			}),
-		);
-		this._register(
-			ignored.onDidChangeIgnoredRecommendations(() => {
-				++this.generation;
-				this.notifications.clear();
-			}),
-		);
-		this._register(
-			ignored.onDidChangeGlobalIgnoredRecommendation(() => {
-				this.attempted.clear();
-				this.prompted.clear();
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				this.clearSession();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if ((event.affectsConfiguration('extensions.ignoreRecommendations') || event.affectsConfiguration('extensions.showRecommendationsOnlyOnDemand')) && this.hasToIgnoreRecommendationNotifications()) { this.notifications.clear(); }
+		}));
+		this._register(workspaceConfigs.onDidChangeExtensionsConfigs(() => { ++this.generation; this.notifications.clear(); }));
+		this._register(packages.onDidChangeInstalled(() => { ++this.generation; this.notifications.clear(); }));
+		this._register(ignored.onDidChangeIgnoredRecommendations(() => { ++this.generation; this.notifications.clear(); }));
+		this._register(ignored.onDidChangeGlobalIgnoredRecommendation(() => { this.attempted.clear(); this.prompted.clear(); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.clearSession(); }));
 	}
 
-	private clearSession(): void {
-		++this.generation;
-		this.attempted.clear();
-		this.prompted.clear();
-		this.shown = 0;
-		this.executableShown = false;
-		this.notifications.clear();
-	}
+	private clearSession(): void { ++this.generation; this.attempted.clear(); this.prompted.clear(); this.shown = 0; this.executableShown = false; this.notifications.clear(); }
 	public resetIgnoredRecommendations(): void {
 		this.clearSession();
 		this.storage.remove(ignoredKey, StorageScope.PROFILE);
@@ -112,32 +67,21 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 	}
 
 	public async promptWorkspaceRecommendations(recommendations: readonly string[], signal?: AbortSignal): Promise<void> {
-		if (this.storage.getBoolean(ignoredWorkspaceKey, StorageScope.WORKSPACE, false)) {
-			return;
-		}
+		if (this.storage.getBoolean(ignoredWorkspaceKey, StorageScope.WORKSPACE, false)) { return; }
 		await this.promptImportantExtensionsInstallNotification({
-			extensions: recommendations,
-			source: RecommendationSource.WORKSPACE,
-			signal,
+			extensions: recommendations, source: RecommendationSource.WORKSPACE, signal,
 			name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace'),
 		});
 	}
 
 	public async promptImportantExtensionsInstallNotification(request: IExtensionRecommendations): Promise<RecommendationsNotificationResult> {
-		if (this.isDisposed || request.signal?.aborted || this.hasToIgnoreRecommendationNotifications()) {
-			return RecommendationsNotificationResult.Ignored;
-		}
+		if (this.isDisposed || request.signal?.aborted || this.hasToIgnoreRecommendationNotifications()) { return RecommendationsNotificationResult.Ignored; }
 		const key = `${request.source}:${request.extensions.map(identity).sort().join(',')}`;
-		if (this.attempted.has(key)) {
-			return RecommendationsNotificationResult.Ignored;
-		}
+		if (this.attempted.has(key)) { return RecommendationsNotificationResult.Ignored; }
 		this.attempted.add(key);
 		const generation = this.generation;
 		const [installed, configs] = await Promise.allSettled([this.packages.listInstalled(), this.workspaceConfigs.getExtensionsConfigs()]);
-		if (installed.status === 'rejected' || configs.status === 'rejected') {
-			this.attempted.delete(key);
-			return RecommendationsNotificationResult.Ignored;
-		}
+		if (installed.status === 'rejected' || configs.status === 'rejected') { this.attempted.delete(key); return RecommendationsNotificationResult.Ignored; }
 		const excluded = new Set([
 			...this.ignoredRecommendations,
 			...this.ignored.ignoredRecommendations,
@@ -147,134 +91,74 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		]);
 		const candidates: ExtensionsPackageSummary[] = [];
 		for (const id of new Set(request.extensions)) {
-			if (request.signal?.aborted) {
-				break;
-			}
-			if (excluded.has(identity(id)) || this.prompted.has(identity(id))) {
-				continue;
-			}
+			if (request.signal?.aborted) { break; }
+			if (excluded.has(identity(id)) || this.prompted.has(identity(id))) { continue; }
 			// Reserve before awaiting the registry so concurrent sources cannot suggest the same package twice.
 			this.prompted.add(identity(id));
 			try {
 				// Package identity is resolved by the catalog owner, independently of human search terms.
 				const details = await this.packages.get(id);
 				candidates.push({
-					id: details.package.id,
-					version: details.package.version,
-					packageType: details.packageType,
-					displayName: details.displayName,
-					description: details.description,
+					id: details.package.id, version: details.package.version, packageType: details.packageType,
+					displayName: details.displayName, description: details.description,
 				});
-			} catch {
-				this.prompted.delete(identity(id)); /* A missing or offline registry must not interrupt editing. */
-			}
+			} catch { this.prompted.delete(identity(id)); /* A missing or offline registry must not interrupt editing. */ }
 		}
 		if (this.isDisposed || request.signal?.aborted || generation !== this.generation || this.hasToIgnoreRecommendationNotifications() || !candidates.length) {
-			for (const candidate of candidates) {
-				this.prompted.delete(identity(candidate.id));
-			}
+			for (const candidate of candidates) { this.prompted.delete(identity(candidate.id)); }
 			this.attempted.delete(key);
 			return RecommendationsNotificationResult.Ignored;
 		}
 		// Keep automatic discovery quiet during a busy window. Explicit workspace recommendations
 		// retain their own suppression scope, and all candidates remain available in Recommended.
-		if (request.source !== RecommendationSource.WORKSPACE && (this.shown >= 3 || (request.source === RecommendationSource.EXE && (this.executableShown || this.shown >= 2)))) {
-			for (const candidate of candidates) {
-				this.prompted.delete(identity(candidate.id));
-			}
+		if (request.source !== RecommendationSource.WORKSPACE && (this.shown >= 3 || request.source === RecommendationSource.EXE && (this.executableShown || this.shown >= 2))) {
+			for (const candidate of candidates) { this.prompted.delete(identity(candidate.id)); }
 			this.attempted.delete(key);
 			return RecommendationsNotificationResult.TooMany;
 		}
-		if (request.source !== RecommendationSource.WORKSPACE) {
-			++this.shown;
-		}
-		if (request.source === RecommendationSource.EXE) {
-			this.executableShown = true;
-		}
+		if (request.source !== RecommendationSource.WORKSPACE) { ++this.shown; }
+		if (request.source === RecommendationSource.EXE) { this.executableShown = true; }
 		// Each request completes on a user action, dismissal or window shutdown.
 		return new Promise(resolve => {
 			const lifetime = this.notifications.add(new DisposableStore());
 			let result = RecommendationsNotificationResult.Cancelled;
 			const action = (id: string, label: string, run: () => void | Promise<void>): IAction => ({
-				id,
-				label,
-				tooltip: label,
-				enabled: true,
+				id, label, tooltip: label, enabled: true,
 				run: async () => {
 					result = RecommendationsNotificationResult.Accepted;
 					handle.close();
-					try {
-						await run();
-					} catch (error) {
-						this.notificationService.error(error instanceof Error ? error : String(error));
-					}
+					try { await run(); } catch (error) { this.notificationService.error(error instanceof Error ? error : String(error)); }
 				},
 			});
 			const show = action('extensions.recommendations.show', localize({ bundle: 'ash.extensions', key: 'showRecommendations' }, 'Show recommendations'), async () => {
-				await this.commands.executeCommand(
-					OPEN_EXTENSIONS_COMMAND_ID,
-					candidates.length > 1
-						? { query: '@recommended' }
-						: {
-								mode: 'browse',
-								query: request.searchValue ?? candidates[0].displayName,
-								...(request.languageId ? { languageId: request.languageId } : {}),
-							},
-				);
+				await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, candidates.length > 1 ? { query: '@recommended' } : { mode: 'browse', query: request.searchValue ?? candidates[0].displayName, ...(request.languageId ? { languageId: request.languageId } : {}) });
 			});
 			const install = action('extensions.recommendations.install', localize({ bundle: 'ash.extensions', key: 'installRecommended' }, 'Install'), async () => {
-				for (const candidate of candidates) {
-					await changeExtensionPackage(this.packages, this.dialogs, this.notificationService, 'install', await this.packages.get(candidate.id, candidate.version));
-				}
+				for (const candidate of candidates) { await changeExtensionPackage(this.packages, this.dialogs, this.notificationService, 'install', await this.packages.get(candidate.id, candidate.version)); }
 			});
 			const never = action('extensions.recommendations.never', localize({ bundle: 'ash.extensions', key: 'neverRecommend' }, "Don't show again"), () => {
-				if (request.source === RecommendationSource.WORKSPACE) {
-					this.storage.store(ignoredWorkspaceKey, true, StorageScope.WORKSPACE, StorageTarget.USER);
-				} else {
-					this.storage.store(
-						ignoredKey,
-						JSON.stringify([...new Set([...this.ignoredRecommendations, ...candidates.map(candidate => identity(candidate.id))])]),
-						StorageScope.PROFILE,
-						StorageTarget.USER,
-					);
-				}
+				if (request.source === RecommendationSource.WORKSPACE) { this.storage.store(ignoredWorkspaceKey, true, StorageScope.WORKSPACE, StorageTarget.USER); }
+				else { this.storage.store(ignoredKey, JSON.stringify([...new Set([...this.ignoredRecommendations, ...candidates.map(candidate => identity(candidate.id))])]), StorageScope.PROFILE, StorageTarget.USER); }
 			});
 			const handle = this.notificationService.notify({
-				severity: Severity.Info,
-				priority: NotificationPriority.OPTIONAL,
-				source: {
-					id: 'extensions.recommendations',
-					label: localize({ bundle: 'ash.extensions', key: 'recommendationSource' }, 'Extension recommendations'),
-				},
+				severity: Severity.Info, priority: NotificationPriority.OPTIONAL,
+				source: { id: 'extensions.recommendations', label: localize({ bundle: 'ash.extensions', key: 'recommendationSource' }, 'Extension recommendations') },
 				message: localize({ bundle: 'ash.extensions', key: 'contextRecommendation' }, 'Recommended for {0}: {1}.', request.name, candidates.map(candidate => candidate.displayName).join(', ')),
 				actions: { primary: [install, show], secondary: [never] },
 			});
-			lifetime.add(
-				handle.onDidClose(() => {
-					resolve(result);
-					this.notifications.delete(lifetime);
-					lifetime.dispose();
-				}),
-			);
-			lifetime.add(
-				toDisposable(() => {
-					handle.close();
-					resolve(result);
-				}),
-			);
+			lifetime.add(handle.onDidClose(() => {
+				resolve(result);
+				this.notifications.delete(lifetime);
+				lifetime.dispose();
+			}));
+			lifetime.add(toDisposable(() => { handle.close(); resolve(result); }));
 			if (request.signal) {
 				const close = (): void => {
 					// Context retirement is not a user dismissal. The still-relevant replacement context may retry.
 					this.attempted.delete(key);
-					for (const candidate of candidates) {
-						this.prompted.delete(identity(candidate.id));
-					}
-					if (request.source !== RecommendationSource.WORKSPACE) {
-						--this.shown;
-					}
-					if (request.source === RecommendationSource.EXE) {
-						this.executableShown = false;
-					}
+					for (const candidate of candidates) { this.prompted.delete(identity(candidate.id)); }
+					if (request.source !== RecommendationSource.WORKSPACE) { --this.shown; }
+					if (request.source === RecommendationSource.EXE) { this.executableShown = false; }
 					handle.close();
 				};
 				request.signal.addEventListener('abort', close, { once: true });

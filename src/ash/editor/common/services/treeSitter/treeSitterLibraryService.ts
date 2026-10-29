@@ -43,9 +43,9 @@ export interface RelativeToken {
 }
 
 export interface TreeSitterFacts {
-	readonly folds: readonly { startLineIndex: number; endLineIndex: number; kind?: 'comment' | 'region' }[];
-	readonly symbols: readonly { name: string; kind: string; range: IRange; selectionRange: IRange }[];
-	readonly diagnostics: readonly { range: IRange; missing: boolean }[];
+	readonly folds: readonly { startLineIndex: number; endLineIndex: number; kind?: 'comment' | 'region'; }[];
+	readonly symbols: readonly { name: string; kind: string; range: IRange; selectionRange: IRange; }[];
+	readonly diagnostics: readonly { range: IRange; missing: boolean; }[];
 }
 export interface TreeSitterBracket {
 	readonly range: IRange;
@@ -60,11 +60,12 @@ export interface TreeSitterBracket {
 export interface TreeSitterSyntaxResult {
 	readonly brackets?: readonly TreeSitterBracket[];
 	readonly revision: number;
-	readonly rows?: readonly { row: number; tokens: readonly RelativeToken[] }[];
+	readonly rows?: readonly { row: number; tokens: readonly RelativeToken[]; }[];
 	readonly facts?: TreeSitterFacts;
 	readonly selections?: readonly IRange[];
 	readonly preview?: readonly (readonly import('../../tokens/languageTokens.js').LanguageToken[])[];
 	readonly measures: readonly TreeSitterTokenizationMeasure[];
 }
+
 
 export const treeSitterChannel = { protocol: 'ash.editor.treeSitter', version: 1 } as const;

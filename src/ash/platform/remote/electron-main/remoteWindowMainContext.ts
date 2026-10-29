@@ -64,18 +64,17 @@ export class RemoteWindowMainContext extends Disposable {
 				return current.rollback();
 			},
 		};
-		this.ipcRoutes = Object.freeze([...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery), ...remoteConnectionIpcRoutes(options.connections)]);
+		this.ipcRoutes = Object.freeze([
+			...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery),
+			...remoteConnectionIpcRoutes(options.connections),
+		]);
 		this._register(options.tunnels);
-		this._register(
-			options.workspaceContext.onDidChangeWorkspace(() => {
-				void options.tunnels.closeAll().catch(error => this.reportError('Failed to close Remote tunnels after Workspace change', error));
-			}),
-		);
-		this._register(
-			options.supervisor.onStateChange(() => {
-				options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
-			}),
-		);
+		this._register(options.workspaceContext.onDidChangeWorkspace(() => {
+			void options.tunnels.closeAll().catch(error => this.reportError('Failed to close Remote tunnels after Workspace change', error));
+		}));
+		this._register(options.supervisor.onStateChange(() => {
+			options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
+		}));
 	}
 
 	private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {

@@ -87,23 +87,21 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	) {
 		super(container, options.id, themeService, storageService);
 		this.viewDescriptorService = options.viewDescriptorService;
-		this.activeCompositeContext = options.contextKeyService ? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService) : undefined;
+		this.activeCompositeContext = options.contextKeyService
+			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
+			: undefined;
 		this._register(toDisposable(() => this.activeCompositeContext?.reset()));
 		this.location = options.location;
-		this._register(
-			this.onDidCompositeOpen(({ composite }) => {
-				const id = composite.getId();
-				this.activeCompositeContext?.set(id);
-				this.compositeBar.setActiveComposite(id);
-				this.storeActiveComposite(id);
-			}),
-		);
-		this._register(
-			this.onDidCompositeClose(() => {
-				this.activeCompositeContext?.reset();
-				this.compositeBar.setActiveComposite(undefined);
-			}),
-		);
+		this._register(this.onDidCompositeOpen(({ composite }) => {
+			const id = composite.getId();
+			this.activeCompositeContext?.set(id);
+			this.compositeBar.setActiveComposite(id);
+			this.storeActiveComposite(id);
+		}));
+		this._register(this.onDidCompositeClose(() => {
+			this.activeCompositeContext?.reset();
+			this.compositeBar.setActiveComposite(undefined);
+		}));
 		const ownerDocument = container.ownerDocument;
 		const ariaLabel = localize(options.localizationService, options.ariaLabelKey, options.ariaLabel);
 		const viewsAriaLabel = localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel);
@@ -111,26 +109,20 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.titleDomNode.classList.add('ash-pane-composite-title');
 		this.titleContentDomNode = h(ownerDocument, 'div');
 		this.titleContentDomNode.className = 'ash-pane-composite-title-content';
-		this.compositeBar = this._register(
-			new CompositeBar(
-				this.titleContentDomNode,
-				{
-					overflowActionSize: 22,
-					openComposite: options.openComposite,
-					activityHoverOptions: options.activityHoverOptions ?? { position: () => HoverPosition.ABOVE },
-					viewDescriptorService: options.viewDescriptorService,
-					localizationService: options.localizationService,
-					location: options.location,
-					ariaLabel: viewsAriaLabel,
-					presentation: options.compositeBarPresentation,
-					orientation: options.compositeBarOrientation,
-					contextMenuProvider: options.compositeBarContextMenuProvider,
-					storageService,
-					containerFilter: options.compositeBarContainerFilter,
-				},
-				activityService,
-			),
-		);
+		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
+			overflowActionSize: 22,
+			openComposite: options.openComposite,
+			activityHoverOptions: options.activityHoverOptions ?? { position: () => HoverPosition.ABOVE },
+			viewDescriptorService: options.viewDescriptorService,
+			localizationService: options.localizationService,
+			location: options.location,
+			ariaLabel: viewsAriaLabel,
+			presentation: options.compositeBarPresentation,
+			orientation: options.compositeBarOrientation,
+			contextMenuProvider: options.compositeBarContextMenuProvider,
+			storageService,
+			containerFilter: options.compositeBarContainerFilter,
+		}, activityService));
 		this.titleActionsSlotDomNode = h(ownerDocument, 'div');
 		this.titleActionsSlotDomNode.className = 'ash-pane-composite-title-actions';
 		this.viewTitleActionsDomNode = h(ownerDocument, 'div');
@@ -146,12 +138,13 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		if (contextMenus) this.createCompositeToolBar(compositeActions, contextMenus, ariaLabel);
 
 		if (options.titleActions) {
-			const actions = this._register(
-				new MenuWorkbenchToolBar(this.partTitleActionsDomNode, options.titleActions.menuService, options.titleActions.contextMenuProvider, options.titleActions.menuId, {
-					highlightToggledItems: true,
-					toolbarOptions: { primaryGroup: options.titleActions.primaryGroup },
-				}),
-			);
+			const actions = this._register(new MenuWorkbenchToolBar(
+				this.partTitleActionsDomNode,
+				options.titleActions.menuService,
+				options.titleActions.contextMenuProvider,
+				options.titleActions.menuId,
+				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
+			));
 			actions.element.classList.add('ash-pane-composite-title-menu-actions');
 			if (options.location === ViewContainerLocation.Panel || options.location === ViewContainerLocation.AuxiliaryBar) {
 				const separator = h(ownerDocument, 'div');
@@ -159,28 +152,24 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				separator.classList.add('ash-pane-composite-title-separator');
 				separator.setAttribute('aria-orientation', 'vertical');
 				this.partTitleActionsDomNode.prepend(separator);
-				const updateSeparator = () => {
-					separator.hidden = actions.element.hidden;
-				};
+				const updateSeparator = () => { separator.hidden = actions.element.hidden; };
 				this._register(actions.onDidChangeMenuItems(updateSeparator));
 				updateSeparator();
 			}
 		}
 
 		this.setCompositeBarVisible(options.compositeBarVisible ?? true);
-		this._register(
-			this.viewDescriptorService.onDidChangeViewContainers(({ removed }) => {
-				for (const container of removed) {
-					if (container.location !== this.location) continue;
-					const active = this.activeCompositeId === container.id;
-					this.removeComposite(container.id);
-					if (active) {
-						this.activeCompositeContext?.reset();
-						this.setTitleProjection(undefined);
-					}
+		this._register(this.viewDescriptorService.onDidChangeViewContainers(({ removed }) => {
+			for (const container of removed) {
+				if (container.location !== this.location) continue;
+				const active = this.activeCompositeId === container.id;
+				this.removeComposite(container.id);
+				if (active) {
+					this.activeCompositeContext?.reset();
+					this.setTitleProjection(undefined);
 				}
-			}),
-		);
+			}
+		}));
 	}
 
 	public override showComposite(compositeId: string, focus = false): void {
@@ -197,10 +186,12 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
 	getCompositeIdToRestore(): string | undefined {
-		const available = this.viewDescriptorService
-			.getViewContainers(this.location)
-			.filter(container => !container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
-		const stored = this.storageService.get(activeCompositeStorageKeys[this.location], StorageScope.WORKSPACE);
+		const available = this.viewDescriptorService.getViewContainers(this.location).filter(container =>
+			!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
+		const stored = this.storageService.get(
+			activeCompositeStorageKeys[this.location],
+			StorageScope.WORKSPACE,
+		);
 		if (stored && available.some(container => container.id === stored)) {
 			return stored;
 		}
@@ -234,8 +225,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	}
 
 	private updateTitleVisibility(): void {
-		this.titleDomNode.hidden =
-			!this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsDomNode.childElementCount === 0 && this.partTitleActionsDomNode.childElementCount === 0;
+		this.titleDomNode.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsDomNode.childElementCount === 0 && this.partTitleActionsDomNode.childElementCount === 0;
 	}
 
 	private storeActiveComposite(compositeId: string): void {

@@ -58,21 +58,14 @@ export class TextFileSaveConflictError extends Error {
 }
 
 export class TextFileBinaryError extends Error {
-	constructor(
-		readonly resource: URI,
-		message = 'The file is binary or uses an unsupported text encoding',
-		options?: ErrorOptions,
-	) {
+	constructor(readonly resource: URI, message = 'The file is binary or uses an unsupported text encoding', options?: ErrorOptions) {
 		super(`${message}: ${resource.toString()}`, options);
 		this.name = 'TextFileBinaryError';
 	}
 }
 
 export class TextFileTooLargeError extends Error {
-	constructor(
-		readonly resource: URI,
-		readonly sizeBytes: number,
-	) {
+	constructor(readonly resource: URI, readonly sizeBytes: number) {
 		super(`The text file is too large to open safely (${sizeBytes} bytes): ${resource.toString()}`);
 		this.name = 'TextFileTooLargeError';
 	}

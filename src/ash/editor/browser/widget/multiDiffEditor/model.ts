@@ -55,16 +55,7 @@ export function validateDocumentDiffItems(items: readonly IDocumentDiffItem[]): 
 	if (!Array.isArray(items)) throw new TypeError('Multi-diff editor items must be an array');
 	const ids = new Set<string>();
 	for (const item of items) {
-		if (
-			!item ||
-			typeof item !== 'object' ||
-			typeof item.id !== 'string' ||
-			item.id.length === 0 ||
-			typeof item.label !== 'string' ||
-			item.label.trim().length === 0 ||
-			typeof item.resolve !== 'function' ||
-			typeof item.onDidChange !== 'function'
-		) {
+		if (!item || typeof item !== 'object' || typeof item.id !== 'string' || item.id.length === 0 || typeof item.label !== 'string' || item.label.trim().length === 0 || typeof item.resolve !== 'function' || typeof item.onDidChange !== 'function') {
 			throw new TypeError('Multi-diff editor items require a unique ID, label, and resolvable model');
 		}
 		if (ids.has(item.id)) throw new TypeError(`Duplicate multi-diff item ID '${item.id}'`);
@@ -116,43 +107,19 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 		}
 	}
 
-	public get id(): string {
-		return this.descriptor.id;
-	}
-	public get originalUri(): URI | undefined {
-		return this.descriptor.originalUri;
-	}
-	public get modifiedUri(): URI | undefined {
-		return this.descriptor.modifiedUri;
-	}
-	public get label(): string {
-		return this.descriptor.label;
-	}
-	public get originalLabel(): string | undefined {
-		return this.descriptor.originalLabel;
-	}
-	public get modifiedLabel(): string | undefined {
-		return this.descriptor.modifiedLabel;
-	}
-	public get readOnly(): boolean | undefined {
-		return this.descriptor.readOnly;
-	}
-	public get binary(): boolean {
-		return this.descriptor.binary === true || this.resolvedBinary;
-	}
-	public get model(): DiffModel | undefined {
-		return this.resolvedModel;
-	}
-	public get state(): IDocumentDiffItem['state'] {
-		return this.currentState;
-	}
-	public get error(): Error | undefined {
-		return this.loadError;
-	}
+	public get id(): string { return this.descriptor.id; }
+	public get originalUri(): URI | undefined { return this.descriptor.originalUri; }
+	public get modifiedUri(): URI | undefined { return this.descriptor.modifiedUri; }
+	public get label(): string { return this.descriptor.label; }
+	public get originalLabel(): string | undefined { return this.descriptor.originalLabel; }
+	public get modifiedLabel(): string | undefined { return this.descriptor.modifiedLabel; }
+	public get readOnly(): boolean | undefined { return this.descriptor.readOnly; }
+	public get binary(): boolean { return this.descriptor.binary === true || this.resolvedBinary; }
+	public get model(): DiffModel | undefined { return this.resolvedModel; }
+	public get state(): IDocumentDiffItem['state'] { return this.currentState; }
+	public get error(): Error | undefined { return this.loadError; }
 
-	public get isInUse(): boolean {
-		return this.users > 0;
-	}
+	public get isInUse(): boolean { return this.users > 0; }
 
 	public retain(): IDisposable {
 		this.users++;

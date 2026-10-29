@@ -2,7 +2,7 @@
 let platformTextDecoder: InstanceType<typeof TextDecoder> | undefined;
 
 export function getPlatformTextDecoder(): InstanceType<typeof TextDecoder> {
-	return (platformTextDecoder ??= new TextDecoder('UTF-16LE'));
+	return platformTextDecoder ??= new TextDecoder('UTF-16LE');
 }
 
 export function decodeUTF16LE(source: Uint8Array, offset: number, length: number): string {
@@ -12,7 +12,7 @@ export function decodeUTF16LE(source: Uint8Array, offset: number, length: number
 	for (let start = 0; start < length; start += chunkSize) {
 		const end = Math.min(length, start + chunkSize);
 		const codes = new Array<number>(end - start);
-		for (let index = start; index < end; index += 1) codes[index - start] = source[offset + index * 2]! | (source[offset + index * 2 + 1]! << 8);
+		for (let index = start; index < end; index += 1) codes[index - start] = source[offset + index * 2]! | source[offset + index * 2 + 1]! << 8;
 		chunks.push(String.fromCharCode(...codes));
 	}
 	return chunks.join('');
@@ -52,7 +52,7 @@ export class StringBuilder {
 	appendCharCode(charCode: number): void {
 		if (!Number.isSafeInteger(charCode) || charCode < 0 || charCode > 0xffff) throw new RangeError('Character code must be a UTF-16 code unit');
 		const remainingSpace = this._capacity - this._bufferLength;
-		if (remainingSpace <= 1 && (remainingSpace === 0 || (charCode >= 0xd800 && charCode <= 0xdbff))) this._flushBuffer();
+		if (remainingSpace <= 1 && (remainingSpace === 0 || charCode >= 0xD800 && charCode <= 0xDBFF)) this._flushBuffer();
 		this._buffer[this._bufferLength++] = charCode;
 	}
 

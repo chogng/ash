@@ -39,11 +39,7 @@ test('Remote runtime recovery leaves the active connection untouched when verifi
 test('Remote reconnect restarts an exhausted crashed connection without changing runtime', async () => {
 	const lifecycle: string[] = [];
 	const host = new TestRecoveryHost(lifecycle, 'crashed');
-	const coordinator = new RemoteConnectionRecoveryCoordinator(
-		host,
-		createLauncher(async () => '/unused'),
-		() => lifecycle.push('prepare'),
-	);
+	const coordinator = new RemoteConnectionRecoveryCoordinator(host, createLauncher(async () => '/unused'), () => lifecycle.push('prepare'));
 
 	assert.deepEqual(await coordinator.reconnect(), { kind: 'reconnected' });
 
@@ -54,10 +50,7 @@ test('Remote reconnect restarts an exhausted crashed connection without changing
 test('Remote reconnect releases its operation gate after a failed start', async () => {
 	const lifecycle: string[] = [];
 	const host = new TestRecoveryHost(lifecycle, 'crashed', 1);
-	const coordinator = new RemoteConnectionRecoveryCoordinator(
-		host,
-		createLauncher(async () => '/unused'),
-	);
+	const coordinator = new RemoteConnectionRecoveryCoordinator(host, createLauncher(async () => '/unused'));
 
 	await assert.rejects(() => coordinator.reconnect(), /temporary SSH failure/);
 	assert.deepEqual(await coordinator.reconnect(), { kind: 'reconnected' });
@@ -68,10 +61,7 @@ test('Remote reconnect releases its operation gate after a failed start', async 
 test('Remote reconnect is idempotent when connected and rejects an active transition', async () => {
 	const lifecycle: string[] = [];
 	const host = new TestRecoveryHost(lifecycle);
-	const coordinator = new RemoteConnectionRecoveryCoordinator(
-		host,
-		createLauncher(async () => '/unused'),
-	);
+	const coordinator = new RemoteConnectionRecoveryCoordinator(host, createLauncher(async () => '/unused'));
 
 	assert.deepEqual(await coordinator.reconnect(), { kind: 'alreadyConnected' });
 	host.state = 'restarting';
@@ -98,23 +88,14 @@ function createLauncher(rollbackRuntime: () => Promise<string>): RemoteAppServer
 		workspace: createSshRemoteWorkspaceUri('work-server', '/home/ash/project'),
 		sshExecutable: 'ssh',
 		remoteExecutable: '/srv/ash/runtime/two/bin/ash-remote-server',
-		carrier: new AppServerDaemonLauncher({
-			executable: '/runtime/ash-app-server-daemon',
-			args: ['connect-selected'],
-			environment: {},
-			fileExists: () => true,
-		}),
+		carrier: new AppServerDaemonLauncher({ executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		rollbackRuntime,
 	});
 }
 
 class TestRecoveryHost implements RemoteConnectionRecoveryHost {
-	constructor(
-		private readonly lifecycle: string[],
-		public state: AppServerConnectionState = 'ready',
-		private startFailures = 0,
-	) {}
+	constructor(private readonly lifecycle: string[], public state: AppServerConnectionState = 'ready', private startFailures = 0) { }
 
 	async stop(): Promise<void> {
 		this.lifecycle.push('stop');
@@ -132,10 +113,8 @@ class TestRecoveryHost implements RemoteConnectionRecoveryHost {
 	}
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>(accept => {
-		resolve = accept;
-	});
+	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };
 }

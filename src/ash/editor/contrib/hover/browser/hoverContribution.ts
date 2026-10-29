@@ -19,5 +19,5 @@ registerEditorContribution({
 
 registerEditorContribution({
 	id: GlyphHoverController.ID,
-	install: context => (context.kind === 'text' ? context.instantiationService.createInstance(GlyphHoverController, context.editor) : undefined),
+	install: context => context.kind === 'text' ? context.instantiationService.createInstance(GlyphHoverController, context.editor) : undefined,
 });

@@ -7,7 +7,7 @@ export interface IExtensionIdentifier {
 
 /** Profile-wide editor enablement is separate from backend execution authorization. */
 export interface IGlobalExtensionEnablementService {
-	readonly onDidChangeEnablement: Event<{ readonly source?: string }>;
+	readonly onDidChangeEnablement: Event<{ readonly source?: string; }>;
 	getDisabledExtensions(): readonly IExtensionIdentifier[];
 	enableExtension(extension: IExtensionIdentifier): Promise<boolean>;
 	disableExtension(extension: IExtensionIdentifier): Promise<boolean>;

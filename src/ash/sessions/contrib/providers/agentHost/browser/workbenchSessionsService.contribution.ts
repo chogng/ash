@@ -13,21 +13,14 @@ import { IDevContainerAgentHostService } from '../../../../common/devContainerAg
 import { DevContainerAgentHostService } from '../../../../browser/devContainerAgentHostService.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
-	constructor(
-		@IWorkspaceContextService workspace: IWorkspaceContextService,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@ISessionsProvidersService providers: ISessionsProvidersService,
-	) {
-		super(
-			instantiationService.createInstance(AppServerSessionsProvider, {
-				workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
-				selectWorkspace: async folders => {
-					using selection = instantiationService.createInstance(WorkspaceSelection);
-					return await selection.pick(folders);
-				},
-			} satisfies AppServerSessionsProviderHost),
-			providers,
-		);
+	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService, @ISessionsProvidersService providers: ISessionsProvidersService) {
+		super(instantiationService.createInstance(AppServerSessionsProvider, {
+			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
+			selectWorkspace: async folders => {
+				using selection = instantiationService.createInstance(WorkspaceSelection);
+				return await selection.pick(folders);
+			},
+		} satisfies AppServerSessionsProviderHost), providers);
 	}
 }
 
@@ -40,4 +33,5 @@ class WorkbenchSessionsStartupContribution extends Disposable {
 
 registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
 registerSingleton(IDevContainerAgentHostService, DevContainerAgentHostService, InstantiationType.Delayed);
-registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution));
+registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution));

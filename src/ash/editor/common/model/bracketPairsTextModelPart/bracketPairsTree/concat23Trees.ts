@@ -5,7 +5,7 @@ import { AstNode, AstNodeKind, ListAstNode } from './ast.js';
  * This mutates the items of the input array!
  * If all items have the same height, this method has runtime O(items.length).
  * Otherwise, it has runtime O(items.length * max(log(items.length), items.max(i => i.height))).
- */
+*/
 export function concat23Trees(items: AstNode[]): AstNode | null {
 	if (items.length === 0) {
 		return null;
@@ -17,7 +17,7 @@ export function concat23Trees(items: AstNode[]): AstNode | null {
 	let i = 0;
 	/**
 	 * Reads nodes of same height and concatenates them to a single node.
-	 */
+	*/
 	function readNode(): AstNode | null {
 		if (i >= items.length) {
 			return null;
@@ -87,7 +87,8 @@ function heightDiff(node1: AstNode, node2: AstNode): number {
 function concat(node1: AstNode, node2: AstNode): AstNode {
 	if (node1.listHeight === node2.listHeight) {
 		return ListAstNode.create23(node1, node2, null, false);
-	} else if (node1.listHeight > node2.listHeight) {
+	}
+	else if (node1.listHeight > node2.listHeight) {
 		// node1 is the tree we want to insert into
 		return append(node1 as ListAstNode, node2);
 	} else {
@@ -98,7 +99,7 @@ function concat(node1: AstNode, node2: AstNode): AstNode {
 /**
  * Appends the given node to the end of this (2,3) tree.
  * Returns the new root.
- */
+*/
 function append(list: ListAstNode, nodeToAppend: AstNode): AstNode {
 	list = list.toMutable();
 	let curNode: AstNode = list;
@@ -147,7 +148,7 @@ function append(list: ListAstNode, nodeToAppend: AstNode): AstNode {
 /**
  * Prepends the given node to the end of this (2,3) tree.
  * Returns the new root.
- */
+*/
 function prepend(list: ListAstNode, nodeToAppend: AstNode): AstNode {
 	list = list.toMutable();
 	let curNode: AstNode = list;

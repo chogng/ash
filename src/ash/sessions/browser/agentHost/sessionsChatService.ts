@@ -40,35 +40,13 @@ export class SessionsChatService extends Disposable implements IChatService {
 		for (const scope of this.scopes.getScopes()) {
 			const chat = scope.services.chat;
 			this.listeners.add(chat.onDidSubmitRequest(event => this.onDidSubmitRequestEmitter.fire(pair(event, scope))));
-			this.listeners.add(
-				chat.onDidChangeInteractionOffer(event =>
-					this.onDidChangeInteractionOfferEmitter.fire({
-						...pair(event, scope),
-						offer: event.offer && this.qualifyOffer(event.offer, scope),
-					}),
-				),
-			);
+			this.listeners.add(chat.onDidChangeInteractionOffer(event => this.onDidChangeInteractionOfferEmitter.fire({ ...pair(event, scope), offer: event.offer && this.qualifyOffer(event.offer, scope) })));
 			this.listeners.add(chat.onDidChangeSession(event => this.onDidChangeSessionEmitter.fire({ ...event, sessionId: scope.identity(event.sessionId) })));
 			this.listeners.add(chat.onDidUpdateThread(event => this.onDidUpdateThreadEmitter.fire(pair(event, scope))));
 			this.listeners.add(chat.onDidUpdateThreadTranscript(event => this.onDidUpdateThreadTranscriptEmitter.fire(pair(event, scope))));
-			this.listeners.add(
-				chat.onDidUpdateGoal(event =>
-					this.onDidUpdateGoalEmitter.fire({
-						...event,
-						threadId: scope.identity(event.threadId),
-						goal: event.goal && goal(event.goal, scope),
-					}),
-				),
-			);
+			this.listeners.add(chat.onDidUpdateGoal(event => this.onDidUpdateGoalEmitter.fire({ ...event, threadId: scope.identity(event.threadId), goal: event.goal && goal(event.goal, scope) })));
 			this.listeners.add(chat.onDidBecomeReady(() => this.onDidBecomeReadyEmitter.fire()));
-			this.listeners.add(
-				chat.onDidUpdateTurnChanges(event =>
-					this.onDidUpdateTurnChangesEmitter.fire({
-						...pair(event, scope),
-						changeSets: event.changeSets.map(value => pair(value, scope)),
-					}),
-				),
-			);
+			this.listeners.add(chat.onDidUpdateTurnChanges(event => this.onDidUpdateTurnChangesEmitter.fire({ ...pair(event, scope), changeSets: event.changeSets.map(value => pair(value, scope)) })));
 			this.listeners.add(chat.onDidChangeQueue(() => this.onDidChangeQueueEmitter.fire()));
 		}
 	}
@@ -85,21 +63,13 @@ export class SessionsChatService extends Disposable implements IChatService {
 			scope.assertCurrent();
 			const offer = scope.services.chat.getInteractionOffer(scope.backendIdentity(args[0]), scope.backendIdentity(args[1]));
 			return offer && this.qualifyOffer(offer, scope);
-		} catch {
-			return undefined;
-		}
+		} catch { return undefined; }
 	}
 	private qualifyOffer(offer: AgentInteractionOffer, scope: ISessionProviderScope): AgentInteractionOffer {
 		let offers = this.scopedOffers.get(scope);
-		if (!offers) {
-			offers = new WeakMap();
-			this.scopedOffers.set(scope, offers);
-		}
+		if (!offers) { offers = new WeakMap(); this.scopedOffers.set(scope, offers); }
 		let qualified = offers.get(offer);
-		if (!qualified) {
-			qualified = pair(offer, scope);
-			offers.set(offer, qualified);
-		}
+		if (!qualified) { qualified = pair(offer, scope); offers.set(offer, qualified); }
 		return qualified;
 	}
 	renameThread(...args: Parameters<IChatService['renameThread']>): ReturnType<IChatService['renameThread']> {
@@ -146,12 +116,8 @@ export class SessionsChatService extends Disposable implements IChatService {
 	}
 	unsubscribeThread(...args: Parameters<IChatService['unsubscribeThread']>): ReturnType<IChatService['unsubscribeThread']> {
 		let scope: ISessionProviderScope;
-		try {
-			scope = this.scopes.getScope(args[0]);
-			scope.assertCurrent();
-		} catch {
-			return Promise.resolve();
-		} // Retiring a host has already released its connection-owned leases.
+		try { scope = this.scopes.getScope(args[0]); scope.assertCurrent(); }
+		catch { return Promise.resolve(); } // Retiring a host has already released its connection-owned leases.
 		return scope.services.chat.unsubscribeThread(scope.backendIdentity(args[0]), scope.backendIdentity(args[1]), args[2]);
 	}
 
@@ -323,42 +289,22 @@ export class SessionsChatService extends Disposable implements IChatService {
 	}
 }
 
-function pair<T extends { readonly sessionId: string; readonly threadId: string }>(value: T, scope: ISessionProviderScope): T {
+function pair<T extends { readonly sessionId: string; readonly threadId: string; }>(value: T, scope: ISessionProviderScope): T {
 	return { ...value, sessionId: scope.identity(value.sessionId), threadId: scope.identity(value.threadId) };
 }
-function goal(value: ThreadGoal, scope: ISessionProviderScope): ThreadGoal {
-	return { ...value, threadId: scope.identity(value.threadId) };
-}
+function goal(value: ThreadGoal, scope: ISessionProviderScope): ThreadGoal { return { ...value, threadId: scope.identity(value.threadId) }; }
 function thread(value: Thread, scope: ISessionProviderScope): Thread {
-	const origin =
-		value.origin.type === 'root'
-			? value.origin
-			: value.origin.type === 'replacement'
-				? { ...value.origin, sourceThreadId: scope.identity(value.origin.sourceThreadId) }
-				: { ...value.origin, parentThreadId: scope.identity(value.origin.parentThreadId) };
+	const origin = value.origin.type === 'root' ? value.origin : value.origin.type === 'replacement'
+		? { ...value.origin, sourceThreadId: scope.identity(value.origin.sourceThreadId) }
+		: { ...value.origin, parentThreadId: scope.identity(value.origin.parentThreadId) };
 	return { ...pair(value, scope), origin, goal: value.goal && goal(value.goal, scope) };
 }
 function threadRead<T extends ThreadRead>(value: T, scope: ISessionProviderScope): T {
 	return { ...value, thread: thread(value.thread, scope), transcript: pair(value.transcript, scope) };
 }
-function backendOptions<
-	T extends {
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly source?: { readonly sessionId: string; readonly threadId: string };
-	},
->(value: T, scope: ISessionProviderScope): T {
+function backendOptions<T extends { readonly sessionId: string; readonly threadId: string; readonly source?: { readonly sessionId: string; readonly threadId: string; }; }>(value: T, scope: ISessionProviderScope): T {
 	return {
-		...value,
-		sessionId: scope.backendIdentity(value.sessionId),
-		threadId: scope.backendIdentity(value.threadId),
-		...('source' in value
-			? {
-					source: value.source && {
-						sessionId: scope.backendIdentity(value.source.sessionId),
-						threadId: scope.backendIdentity(value.source.threadId),
-					},
-				}
-			: {}),
+		...value, sessionId: scope.backendIdentity(value.sessionId), threadId: scope.backendIdentity(value.threadId),
+		...('source' in value ? { source: value.source && { sessionId: scope.backendIdentity(value.source.sessionId), threadId: scope.backendIdentity(value.source.threadId) } } : {}),
 	};
 }

@@ -45,10 +45,7 @@ suite('File model provider identity', () => {
 	test('case-sensitive files retain independent models and tab identities', async () => {
 		const firstResource = URI.file('/workspace/Main.txt');
 		const secondResource = URI.file('/workspace/MAIN.txt');
-		const provider = new MemoryFileService([
-			[firstResource, 'first'],
-			[secondResource, 'second'],
-		]);
+		const provider = new MemoryFileService([[firstResource, 'first'], [secondResource, 'second']]);
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -58,10 +55,7 @@ suite('File model provider identity', () => {
 		using first = await models.acquire({ resource: firstResource }, signal);
 		using second = await models.acquire({ resource: secondResource }, signal);
 		assert.notEqual(first.model, second.model);
-		assert.deepEqual(
-			models.getModels().map(model => model.getText()),
-			['first', 'second'],
-		);
+		assert.deepEqual(models.getModels().map(model => model.getText()), ['first', 'second']);
 		const group = new EditorGroupModel(undefined, undefined, services.get(IUriIdentityService).extUri);
 		using firstInput = new FileEditorInput(firstResource);
 		using secondInput = new FileEditorInput(secondResource);
@@ -88,13 +82,7 @@ suite('File model provider identity', () => {
 		const lower = URI.file('/workspace/main.txt');
 		const upper = URI.file('/workspace/MAIN.txt');
 		using changes = new Emitter<void>();
-		const provider = new MutableFileProvider(
-			[
-				[lower, 'lower'],
-				[upper, 'upper'],
-			],
-			changes,
-		);
+		const provider = new MutableFileProvider([[lower, 'lower'], [upper, 'upper']], changes);
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -108,9 +96,7 @@ suite('File model provider identity', () => {
 		changes.fire();
 		initializeTestLocalization('zh-CN');
 		try {
-			await assert.rejects(models.acquire({ resource: upper }, signal), {
-				message: `文件系统中的“${upper.toString()}”对应多个已打开的文档。请关闭重复文档后重新打开。`,
-			});
+			await assert.rejects(models.acquire({ resource: upper }, signal), { message: `文件系统中的“${upper.toString()}”对应多个已打开的文档。请关闭重复文档后重新打开。` });
 		} finally {
 			resetNlsResolver();
 		}
@@ -141,25 +127,14 @@ suite('File model provider identity', () => {
 		const upper = URI.file('/workspace/MAIN.txt');
 		const alias = URI.file('/workspace/Main.txt');
 		using changes = new Emitter<void>();
-		const provider = new MutableFileProvider(
-			[
-				[lower, 'lower'],
-				[upper, 'upper'],
-				[alias, 'alias'],
-			],
-			changes,
-		);
+		const provider = new MutableFileProvider([[lower, 'lower'], [upper, 'upper'], [alias, 'alias']], changes);
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
 		using textFiles = createTestTextFileService(files);
 		using models = services.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 		const signal = new AbortController().signal;
-		using participant = models.addSaveCompletionParticipant({
-			prepare: async () => async () => {
-				throw new Error('Recovery failed');
-			},
-		});
+		using participant = models.addSaveCompletionParticipant({ prepare: async () => async () => { throw new Error('Recovery failed'); } });
 		for (const resource of [lower, upper]) {
 			using reference = await models.acquire({ resource }, signal);
 			await assert.rejects(reference.save(signal));
@@ -200,15 +175,9 @@ class InsensitiveFileProvider extends MemoryFileService {
 		this.fileResources = resources.map(([resource]) => resource);
 	}
 
-	public override stat(resource: URI): ReturnType<MemoryFileService['stat']> {
-		return super.stat(this.fileResource(resource));
-	}
-	public override readFile(resource: URI): ReturnType<MemoryFileService['readFile']> {
-		return super.readFile(this.fileResource(resource));
-	}
-	public override writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		return super.writeFile(this.fileResource(resource), bytes, options);
-	}
+	public override stat(resource: URI): ReturnType<MemoryFileService['stat']> { return super.stat(this.fileResource(resource)); }
+	public override readFile(resource: URI): ReturnType<MemoryFileService['readFile']> { return super.readFile(this.fileResource(resource)); }
+	public override writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> { return super.writeFile(this.fileResource(resource), bytes, options); }
 
 	private fileResource(resource: URI): URI {
 		return this.fileResources.find(candidate => extUriIgnorePathCase.isEqual(candidate, resource)) ?? resource;

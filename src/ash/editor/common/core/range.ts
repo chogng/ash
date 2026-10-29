@@ -26,6 +26,7 @@ export interface IRange {
  * A range in the editor. (startLineNumber,startColumn) is <= (endLineNumber,endColumn)
  */
 export class Range {
+
 	/**
 	 * Line number on which the range starts (starts at 1).
 	 */
@@ -44,7 +45,7 @@ export class Range {
 	public readonly endColumn: number;
 
 	constructor(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number) {
-		if (startLineNumber > endLineNumber || (startLineNumber === endLineNumber && startColumn > endColumn)) {
+		if ((startLineNumber > endLineNumber) || (startLineNumber === endLineNumber && startColumn > endColumn)) {
 			this.startLineNumber = endLineNumber;
 			this.startColumn = endColumn;
 			this.endLineNumber = startLineNumber;
@@ -68,7 +69,7 @@ export class Range {
 	 * Test if `range` is empty.
 	 */
 	public static isEmpty(range: IRange): boolean {
-		return range.startLineNumber === range.endLineNumber && range.startColumn === range.endColumn;
+		return (range.startLineNumber === range.endLineNumber && range.startColumn === range.endColumn);
 	}
 
 	/**
@@ -264,7 +265,14 @@ export class Range {
 		if (!a && !b) {
 			return true;
 		}
-		return !!a && !!b && a.startLineNumber === b.startLineNumber && a.startColumn === b.startColumn && a.endLineNumber === b.endLineNumber && a.endColumn === b.endColumn;
+		return (
+			!!a &&
+			!!b &&
+			a.startLineNumber === b.startLineNumber &&
+			a.startColumn === b.startColumn &&
+			a.endLineNumber === b.endLineNumber &&
+			a.endColumn === b.endColumn
+		);
 	}
 
 	/**
@@ -382,11 +390,11 @@ export class Range {
 	 */
 	public static isIRange(obj: unknown): obj is IRange {
 		return (
-			!!obj &&
-			typeof (obj as IRange).startLineNumber === 'number' &&
-			typeof (obj as IRange).startColumn === 'number' &&
-			typeof (obj as IRange).endLineNumber === 'number' &&
-			typeof (obj as IRange).endColumn === 'number'
+			!!obj
+			&& (typeof (obj as IRange).startLineNumber === 'number')
+			&& (typeof (obj as IRange).startColumn === 'number')
+			&& (typeof (obj as IRange).endLineNumber === 'number')
+			&& (typeof (obj as IRange).endColumn === 'number')
 		);
 	}
 
@@ -431,12 +439,12 @@ export class Range {
 	 */
 	public static areOnlyIntersecting(a: IRange, b: IRange): boolean {
 		// Check if `a` is before `b`
-		if (a.endLineNumber < b.startLineNumber - 1 || (a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn - 1)) {
+		if (a.endLineNumber < (b.startLineNumber - 1) || (a.endLineNumber === b.startLineNumber && a.endColumn < (b.startColumn - 1))) {
 			return false;
 		}
 
 		// Check if `b` is before `a`
-		if (b.endLineNumber < a.startLineNumber - 1 || (b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn - 1)) {
+		if (b.endLineNumber < (a.startLineNumber - 1) || (b.endLineNumber === a.startLineNumber && b.endColumn < (a.startColumn - 1))) {
 			return false;
 		}
 
@@ -472,8 +480,8 @@ export class Range {
 			}
 			return aStartLineNumber - bStartLineNumber;
 		}
-		const aExists = a ? 1 : 0;
-		const bExists = b ? 1 : 0;
+		const aExists = (a ? 1 : 0);
+		const bExists = (b ? 1 : 0);
 		return aExists - bExists;
 	}
 

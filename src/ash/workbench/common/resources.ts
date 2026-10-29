@@ -28,20 +28,16 @@ export class ResourceGlobMatcher extends Disposable {
 	) {
 		super();
 		this.refresh();
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (shouldUpdate(event) && this.refresh()) {
-					this.expressionChanged.fire();
-				}
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				if (this.refresh()) {
-					this.expressionChanged.fire();
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (shouldUpdate(event) && this.refresh()) {
+				this.expressionChanged.fire();
+			}
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => {
+			if (this.refresh()) {
+				this.expressionChanged.fire();
+			}
+		}));
 		this._register(toDisposable(() => this.rules.clear()));
 	}
 
@@ -55,7 +51,7 @@ export class ResourceGlobMatcher extends Disposable {
 		const absolute = normalizePath(resource.scheme === Schemas.file ? resource.fsPath : resource.path);
 		// Use the workspace owner's containment decision, including nested roots and path casing.
 		const relative = folder ? resource.path.slice(folder.uri.path.replace(/\/$/, '').length).replace(/^\//, '') : absolute;
-		return rules.matches(relative, undefined, hasSibling) !== null || (rules.hasAbsolutePath && relative !== absolute && rules.matches(absolute, undefined, hasSibling) !== null);
+		return rules.matches(relative, undefined, hasSibling) !== null || rules.hasAbsolutePath && relative !== absolute && rules.matches(absolute, undefined, hasSibling) !== null;
 	}
 
 	private refresh(): boolean {
@@ -67,18 +63,12 @@ export class ResourceGlobMatcher extends Disposable {
 			if (!configured || Object.keys(configured).length === 0) {
 				continue;
 			}
-			const expression: IExpression = Object.fromEntries(
-				Object.entries(configured).map(([pattern, value]) => [normalizePath(pattern), typeof value === 'object' ? { when: value.when } : value]),
-			);
+			const expression: IExpression = Object.fromEntries(Object.entries(configured).map(([pattern, value]) => [normalizePath(pattern), typeof value === 'object' ? { when: value.when } : value]));
 			const previous = this.rules.get(key);
 			if (previous && equals(previous.expression, expression)) {
 				next.set(key, previous);
 			} else {
-				next.set(key, {
-					expression,
-					matches: parse(expression),
-					hasAbsolutePath: Object.keys(expression).some(pattern => /^(?:\/|[a-z]:\/)/i.test(pattern)),
-				});
+				next.set(key, { expression, matches: parse(expression), hasAbsolutePath: Object.keys(expression).some(pattern => /^(?:\/|[a-z]:\/)/i.test(pattern)) });
 				changed = true;
 			}
 		}

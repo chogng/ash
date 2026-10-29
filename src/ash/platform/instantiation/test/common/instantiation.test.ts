@@ -24,19 +24,12 @@ teardown(() => {
 });
 
 test('refined service contracts share registration and constructor injection', () => {
-	interface IBase {
-		readonly name: string;
-	}
-	interface IExtended extends IBase {
-		readonly enabled: boolean;
-	}
+	interface IBase { readonly name: string; }
+	interface IExtended extends IBase { readonly enabled: boolean; }
 	const IBase = createDecorator<IBase>('test.refined');
 	const IExtended = refineServiceDecorator<IBase, IExtended>(IBase);
 	class Consumer {
-		constructor(
-			@IBase readonly base: IBase,
-			@IExtended readonly extended: IExtended,
-		) {}
+		constructor(@IBase readonly base: IBase, @IExtended readonly extended: IExtended) { }
 	}
 	using services = new InstantiationService();
 	const instance: IExtended = { name: 'shared', enabled: true };
@@ -55,11 +48,9 @@ test('service identifiers with the same name share registrations', () => {
 });
 
 test('a live service collection resolves descriptors added after scope creation', () => {
-	const IValue = createDecorator<{ value: string }>('test.live');
+	const IValue = createDecorator<{ value: string; }>('test.live');
 	const IMessage = createDecorator<string>('test.live.message');
-	class Value {
-		constructor(@IMessage readonly value: string) {}
-	}
+	class Value { constructor(@IMessage readonly value: string) { } }
 	const collection = new ServiceCollection([IMessage, 'ready']);
 	using services = new InstantiationService(collection);
 	collection.set(IValue, new SyncDescriptor(Value));
@@ -75,9 +66,7 @@ test('a delayed service binds early event listeners and preserves method receive
 		private readonly changes = this._register(new Emitter<number>());
 		readonly onDidChange = this.changes.event;
 		private readonly value = ++created;
-		fire(): void {
-			this.changes.fire(this.value);
-		}
+		fire(): void { this.changes.fire(this.value); }
 	}
 	using services = new InstantiationService(new ServiceCollection([IService, new SyncDescriptor(Service, [], true)]));
 	const service = services.get(IService);
@@ -98,11 +87,7 @@ test('a delayed service binds early event listeners and preserves method receive
 test('an unused delayed service is not constructed during scope disposal', () => {
 	const IService = createDecorator<object>('test.delayed.unused');
 	let created = 0;
-	class Service {
-		constructor() {
-			created++;
-		}
-	}
+	class Service { constructor() { created++; } }
 	const services = new InstantiationService(new ServiceCollection([IService, new SyncDescriptor(Service, [], true)]));
 	services.get(IService);
 	services.dispose();
@@ -113,15 +98,12 @@ test('repeated lookup and dependency validation leave resolved delayed proxies u
 	const IService = createDecorator<Service>('test.delayed.lookup');
 	const IConsumer = createDecorator<Consumer>('test.delayed.lookup.consumer');
 	let created = 0;
-	class Service {
-		constructor() {
-			created++;
-		}
-	}
-	class Consumer {
-		constructor(@IService readonly service: Service) {}
-	}
-	using services = new InstantiationService(new ServiceCollection([IService, new SyncDescriptor(Service, [], true)], [IConsumer, new SyncDescriptor(Consumer)]));
+	class Service { constructor() { created++; } }
+	class Consumer { constructor(@IService readonly service: Service) { } }
+	using services = new InstantiationService(new ServiceCollection(
+		[IService, new SyncDescriptor(Service, [], true)],
+		[IConsumer, new SyncDescriptor(Consumer)],
+	));
 	const service = services.get(IService);
 	assert.equal(services.get(IService), service);
 	assert.equal(services.get(IConsumer).service, service);
@@ -133,25 +115,18 @@ test('delayed cyclic owners stay lazy during repeated lookup and dependency vali
 	const ISecond = createDecorator<Second>('test.delayed.cycle.second');
 	const constructed: string[] = [];
 	class First {
-		constructor(@ISecond readonly second: Second) {
-			constructed.push('first');
-		}
-		read(): Second {
-			return this.second;
-		}
+		constructor(@ISecond readonly second: Second) { constructed.push('first'); }
+		read(): Second { return this.second; }
 	}
 	class Second {
-		constructor(@IFirst readonly first: First) {
-			constructed.push('second');
-		}
-		read(): First {
-			return this.first;
-		}
+		constructor(@IFirst readonly first: First) { constructed.push('second'); }
+		read(): First { return this.first; }
 	}
-	class Consumer {
-		constructor(@ISecond readonly second: Second) {}
-	}
-	using services = new InstantiationService(new ServiceCollection([IFirst, new SyncDescriptor(First, [], true)], [ISecond, new SyncDescriptor(Second, [], true)]));
+	class Consumer { constructor(@ISecond readonly second: Second) { } }
+	using services = new InstantiationService(new ServiceCollection(
+		[IFirst, new SyncDescriptor(First, [], true)],
+		[ISecond, new SyncDescriptor(Second, [], true)],
+	));
 	const first = services.get(IFirst);
 	assert.equal(services.get(IFirst), first);
 	const consumer = services.createInstance(Consumer);
@@ -168,17 +143,16 @@ test('delayed descriptor dependencies can retain each other without recursive co
 	const created: string[] = [];
 	class First {
 		readonly value = 'first';
-		constructor(@ISecond readonly peer: Second) {
-			created.push('first');
-		}
+		constructor(@ISecond readonly peer: Second) { created.push('first'); }
 	}
 	class Second {
 		readonly value = 'second';
-		constructor(@IFirst readonly peer: First) {
-			created.push('second');
-		}
+		constructor(@IFirst readonly peer: First) { created.push('second'); }
 	}
-	using services = new InstantiationService(new ServiceCollection([IFirst, new SyncDescriptor(First, [], true)], [ISecond, new SyncDescriptor(Second, [], true)]));
+	using services = new InstantiationService(new ServiceCollection(
+		[IFirst, new SyncDescriptor(First, [], true)],
+		[ISecond, new SyncDescriptor(Second, [], true)],
+	));
 	const first = services.get(IFirst);
 	assert.equal(first.value, 'first');
 	assert.deepEqual(created, ['first']);
@@ -192,28 +166,21 @@ test('missing transitive dependencies of delayed services fail before a consumer
 	const IDependency = createDecorator<Dependency>('test.delayed.dependency');
 	const IService = createDecorator<Service>('test.delayed.required');
 	let created = 0;
-	class Dependency {
-		constructor(@IMissing readonly missing: object) {}
-	}
-	class Service {
-		constructor(@IDependency readonly dependency: Dependency) {}
-	}
-	class Consumer {
-		constructor(@IService service: Service) {
-			created++;
-		}
-	}
-	using services = new InstantiationService(new ServiceCollection([IDependency, new SyncDescriptor(Dependency, [], true)], [IService, new SyncDescriptor(Service, [], true)]));
+	class Dependency { constructor(@IMissing readonly missing: object) { } }
+	class Service { constructor(@IDependency readonly dependency: Dependency) { } }
+	class Consumer { constructor(@IService service: Service) { created++; } }
+	using services = new InstantiationService(new ServiceCollection(
+		[IDependency, new SyncDescriptor(Dependency, [], true)],
+		[IService, new SyncDescriptor(Service, [], true)],
+	));
 	assert.throws(() => services.createInstance(Consumer), /Unknown service: test.delayed.missing/);
 	assert.equal(created, 0);
 });
 
 test('parent services resolve dependencies from their owner when requested by a child', () => {
 	const IMessage = createDecorator<string>('test.scope.message');
-	const IService = createDecorator<{ message: string }>('test.scope.owner');
-	class Service {
-		constructor(@IMessage readonly message: string) {}
-	}
+	const IService = createDecorator<{ message: string; }>('test.scope.owner');
+	class Service { constructor(@IMessage readonly message: string) { } }
 	using parent = new InstantiationService(new ServiceCollection([IMessage, 'parent'], [IService, new SyncDescriptor(Service)]));
 	using child = parent.createChild(new ServiceCollection([IMessage, 'child']));
 	assert.equal(child.get(IService).message, 'parent');
@@ -256,9 +223,7 @@ test('children release their services before late-created parent dependencies', 
 		}
 	}
 	class ChildService extends Disposable {
-		constructor(@IParent private readonly parent: ParentService) {
-			super();
-		}
+		constructor(@IParent private readonly parent: ParentService) { super(); }
 		protected override disposeCore(): void {
 			assert.equal(this.parent.isDisposed, false);
 			events.push('child');
@@ -279,7 +244,7 @@ test('constructor services resolve from the creating scope after explicit argume
 			readonly label: string,
 			@IMessage readonly message: string,
 			@IInstantiationService readonly services: IInstantiationService,
-		) {}
+		) { }
 	}
 	using parent = new InstantiationService();
 	parent.registerInstance(IMessage, 'parent');
@@ -293,31 +258,25 @@ test('constructor services resolve from the creating scope after explicit argume
 test('constructor service metadata is inherited without changing the base class', () => {
 	const IMessage = createDecorator<string>('test.constructor.inheritance');
 	const IOther = createDecorator<string>('test.constructor.other');
-	class Base {
-		constructor(@IMessage readonly message: string) {}
-	}
-	class Inherited extends Base {}
-	class Overridden extends Base {
-		constructor(@IOther message: string) {
-			super(message);
-		}
-	}
+	class Base { constructor(@IMessage readonly message: string) { } }
+	class Inherited extends Base { }
+	class Overridden extends Base { constructor(@IOther message: string) { super(message); } }
 	using services = new InstantiationService();
 	services.registerInstance(IMessage, 'base');
 	services.registerInstance(IOther, 'override');
-	assert.deepEqual(
-		[services.createInstance(Base).message, services.createInstance(Inherited).message, services.createInstance(Overridden).message, services.createInstance(Base).message],
-		['base', 'base', 'override', 'base'],
-	);
+	assert.deepEqual([
+		services.createInstance(Base).message,
+		services.createInstance(Inherited).message,
+		services.createInstance(Overridden).message,
+		services.createInstance(Base).message,
+	], ['base', 'base', 'override', 'base']);
 });
 
 test('missing services and invalid constructor arguments fail before construction', () => {
 	const IMessage = createDecorator<string>('test.constructor.required');
 	let created = 0;
 	class Consumer {
-		constructor(label: string, @IMessage message: string) {
-			created++;
-		}
+		constructor(label: string, @IMessage message: string) { created++; }
 	}
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(Consumer, 'label'), /Unknown service: test.constructor.required/);
@@ -339,9 +298,16 @@ test('instantiation resolves descriptor arguments in contract order', () => {
 	}
 	const descriptor = new SyncDescriptor(Contribution, ['static']);
 
-	const contribution = container.createInstance(descriptor, 'dynamic');
+	const contribution = container.createInstance(
+		descriptor,
+		'dynamic',
+	);
 
-	assert.deepEqual(contribution.arguments, ['static', 'dynamic', 'service']);
+	assert.deepEqual(contribution.arguments, [
+		'static',
+		'dynamic',
+		'service',
+	]);
 	container.dispose();
 });
 
@@ -357,12 +323,15 @@ test('invocation accessors cannot escape their call', () => {
 	}, 'done');
 
 	assert.equal(result, 'ready:done');
-	assert.throws(() => escapedAccessor?.get(serviceId), /only valid during invocation/);
+	assert.throws(
+		() => escapedAccessor?.get(serviceId),
+		/only valid during invocation/,
+	);
 	container.dispose();
 });
 
 test('singleton factories are delayed and resolved once', () => {
-	const serviceId = createServiceIdentifier<{ id: number }>('test.singleton');
+	const serviceId = createServiceIdentifier<{ id: number; }>('test.singleton');
 	const container = new InstantiationService();
 	let created = 0;
 	container.registerSingleton(serviceId, () => ({ id: ++created }));
@@ -380,7 +349,10 @@ test('service registration is explicit and rejects a duplicate in one scope', ()
 	const container = new InstantiationService();
 	container.registerInstance(serviceId, 'first');
 
-	assert.throws(() => container.registerInstance(serviceId, 'second'), /already registered in this scope/u);
+	assert.throws(
+		() => container.registerInstance(serviceId, 'second'),
+		/already registered in this scope/u,
+	);
 	assert.equal(container.get(serviceId), 'first');
 	container.dispose();
 });
@@ -419,7 +391,10 @@ test('cyclic singleton dependencies report the dependency chain', () => {
 	container.registerSingleton(first, accessor => `${accessor.get(second)}`);
 	container.registerSingleton(second, accessor => `${accessor.get(first)}`);
 
-	assert.throws(() => container.get(first), /Cyclic service dependency: test\.first -> test\.second -> test\.first/u);
+	assert.throws(
+		() => container.get(first),
+		/Cyclic service dependency: test\.first -> test\.second -> test\.first/u,
+	);
 	container.dispose();
 });
 
@@ -447,16 +422,11 @@ test('ServiceCollection transfers explicit instances into a container', () => {
 });
 
 test('global singleton descriptors remain explicit until a container adopts them', () => {
-	const serviceId = createServiceIdentifier<{ readonly created: number }>('test.global-singleton');
+	const serviceId = createServiceIdentifier<{ readonly created: number; }>('test.global-singleton');
 	let created = 0;
-	class RegisteredService {
-		readonly created = ++created;
-	}
+	class RegisteredService { readonly created = ++created; }
 	registerSingleton(serviceId, RegisteredService, InstantiationType.Delayed);
-	assert.equal(
-		getSingletonServiceDescriptors().some(([id]) => id === serviceId),
-		true,
-	);
+	assert.equal(getSingletonServiceDescriptors().some(([id]) => id === serviceId), true);
 	using container = new InstantiationService();
 	assert.equal(container.getOptional(serviceId), undefined);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === serviceId)![1];

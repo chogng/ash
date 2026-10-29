@@ -19,9 +19,7 @@ async function withConversation(chat: IChatService, appServer: IAppServerApi, se
 	const generation = appServer.connectionGeneration;
 	let retired = false;
 	// Close can retire a resolved response before its consumer runs without changing generation.
-	const listener = appServer.onConnectionState(state => {
-		if (state !== 'ready') retired = true;
-	});
+	const listener = appServer.onConnectionState(state => { if (state !== 'ready') retired = true; });
 	try {
 		const result = await chat.readThread(sessionId, threadId);
 		const state = await appServer.getConnectionState();
@@ -49,16 +47,8 @@ export class CopyChatSessionLinkAction extends Action2 {
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const selected = context === undefined ? navigation.getActiveConversation() : context;
-		if (
-			!selected ||
-			typeof selected !== 'object' ||
-			!('sessionId' in selected) ||
-			!('threadId' in selected) ||
-			typeof selected.sessionId !== 'string' ||
-			!selected.sessionId ||
-			typeof selected.threadId !== 'string' ||
-			!selected.threadId
-		) {
+		if (!selected || typeof selected !== 'object' || !('sessionId' in selected) || !('threadId' in selected)
+			|| typeof selected.sessionId !== 'string' || !selected.sessionId || typeof selected.threadId !== 'string' || !selected.threadId) {
 			throw new Error(localize('chat.sessionLink.draft', 'Send a message in this conversation before copying its link.'));
 		}
 		// Capture the command target before asynchronous reads; later selection changes cannot redirect it.
@@ -69,9 +59,8 @@ export class CopyChatSessionLinkAction extends Action2 {
 			const address = await navigation.prepareConversationLink(sessionId, threadId);
 			await clipboard.writeText(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString());
 		} else {
-			await withConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId, () =>
-				clipboard.writeText(buildOpenSessionLinkUri(sessionId, threadId, connectionAuthority).toString()),
-			);
+			await withConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId,
+				() => clipboard.writeText(buildOpenSessionLinkUri(sessionId, threadId, connectionAuthority).toString()));
 		}
 		accessibility.status(localize('chat.sessionLink.copied', 'Conversation link copied to clipboard'));
 	}
@@ -93,11 +82,8 @@ export class ChatSessionLinkOpener extends Disposable {
 		const resource = typeof target === 'string' ? URI.parse(target) : target;
 		if (resource.scheme !== OPEN_SESSION_LINK_SCHEME) return false;
 		let link;
-		try {
-			link = parseOpenSessionLinkUri(resource);
-		} catch {
-			throw new Error(localize('chat.sessionLink.invalid', 'This conversation link is invalid.'));
-		}
+		try { link = parseOpenSessionLinkUri(resource); }
+		catch { throw new Error(localize('chat.sessionLink.invalid', 'This conversation link is invalid.')); }
 		if (this.navigation.openConversationLink) {
 			await this.navigation.openConversationLink(link);
 			if (this.isDisposed) throw canceled();
@@ -115,24 +101,12 @@ export class ChatSessionLinkOpener extends Disposable {
 }
 
 export function registerChatCopyActions(): void {
-	registerAction2(
-		class CopyItemAction extends Action2 {
-			constructor() {
-				super({ id: 'workbench.action.chat.copyItem', title: localize2('chat.message.copy', 'Copy message') });
-			}
-			public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
-				if (
-					!context ||
-					typeof context !== 'object' ||
-					!('text' in context) ||
-					typeof context.text !== 'string' ||
-					!('type' in context) ||
-					(context.type !== 'agentMessage' && context.type !== 'userMessage')
-				)
-					return;
-				await accessor.get(IClipboardService).writeText(context.text);
-			}
-		},
-	);
+	registerAction2(class CopyItemAction extends Action2 {
+		constructor() { super({ id: 'workbench.action.chat.copyItem', title: localize2('chat.message.copy', 'Copy message') }); }
+		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
+			await accessor.get(IClipboardService).writeText(context.text);
+		}
+	});
 	registerAction2(CopyChatSessionLinkAction);
 }

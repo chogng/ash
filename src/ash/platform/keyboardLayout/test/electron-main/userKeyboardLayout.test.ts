@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import { parseUserKeyboardLayoutResource, USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import {
+	parseUserKeyboardLayoutResource,
+	USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT,
+} from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 
 test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash JSON', () => {
@@ -33,14 +36,10 @@ test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash J
 	});
 	assert.equal(canonical?.layout.source, 'user');
 	assert.equal(canonical?.layout.id, 'custom.academy');
-	assert.throws(
-		() =>
-			parseUserKeyboardLayoutResource({
-				layout: { id: 'bad', label: 'Bad', operatingSystem: OperatingSystem.Linux },
-				rawMapping: { KeyA: { ...mappingEntry('a', 'A'), unexpected: true } },
-			}),
-		/unknown fields/,
-	);
+	assert.throws(() => parseUserKeyboardLayoutResource({
+		layout: { id: 'bad', label: 'Bad', operatingSystem: OperatingSystem.Linux },
+		rawMapping: { KeyA: { ...mappingEntry('a', 'A'), unexpected: true } },
+	}), /unknown fields/);
 });
 
 test('profile keyboard-layout.json is created and hot-reloaded, including invalidation', async () => {
@@ -49,21 +48,17 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 		const filePath = join(directory, 'keyboard-layout.json');
 		const errors: unknown[] = [];
 		let openedResource: string | undefined;
-		let changeFile: () => void = () => {
-			throw new Error('Host file watch was not registered');
-		};
+		let changeFile: () => void = () => { throw new Error('Host file watch was not registered'); };
 		let watchClosed = false;
 		const service = await UserKeyboardLayoutMainService.create({
 			filePath,
 			watchFile(resource, onChange) {
 				assert.equal(resource, filePath);
 				changeFile = onChange;
-				return toDisposable(() => {
-					watchClosed = true;
-				});
+				return toDisposable(() => { watchClosed = true; });
 			},
-			onError: error => errors.push(error),
-			openResource: async resource => {
+			onError: (error) => errors.push(error),
+			openResource: async (resource) => {
 				openedResource = resource;
 				return '';
 			},
@@ -80,18 +75,10 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 			assert.equal(openedResource, filePath);
 
 			const loaded = nextChange(service);
-			await writeFile(
-				filePath,
-				`${JSON.stringify(
-					{
-						layout: { id: 'custom.test', label: 'Custom Test', source: 'user', operatingSystem: 'linux' },
-						rawMapping: { KeyT: mappingEntry('t', 'T') },
-					},
-					null,
-					2,
-				)}\n`,
-				'utf8',
-			);
+			await writeFile(filePath, `${JSON.stringify({
+				layout: { id: 'custom.test', label: 'Custom Test', source: 'user', operatingSystem: 'linux' },
+				rawMapping: { KeyT: mappingEntry('t', 'T') },
+			}, null, 2)}\n`, 'utf8');
 			changeFile();
 			await loaded;
 			assert.equal((await service.readKeyboardLayout())?.layout.id, 'custom.test');
@@ -102,10 +89,7 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 			await invalidated;
 			assert.equal(await service.readKeyboardLayout(), undefined);
 			assert.equal(errors.length, 1);
-			assert.deepEqual(
-				snapshots.map(value => (value === undefined ? undefined : (value as { layout: { id: string } }).layout.id)),
-				['custom.test', undefined],
-			);
+			assert.deepEqual(snapshots.map(value => value === undefined ? undefined : (value as { layout: { id: string; }; }).layout.id), ['custom.test', undefined]);
 		} finally {
 			await service.close();
 			assert.equal(watchClosed, true);

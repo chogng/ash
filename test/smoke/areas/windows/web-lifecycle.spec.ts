@@ -18,12 +18,7 @@ test('Sessions UI development opens directly and restores a draft after reload',
 	const failures: string[] = [];
 	let launch: Awaited<ReturnType<typeof launchWeb>> | undefined;
 	try {
-		launch = await launchWeb('development', await freePort(), {
-			...process.env,
-			ASH_WEB_APP_SERVER: '0',
-			ASH_DEV_AGENTS_WINDOW: '1',
-			NO_COLOR: '1',
-		});
+		launch = await launchWeb('development', await freePort(), { ...process.env, ASH_WEB_APP_SERVER: '0', ASH_DEV_AGENTS_WINDOW: '1', NO_COLOR: '1' });
 		const page = await browser.newPage();
 		page.on('pageerror', error => failures.push(error.message));
 		await page.goto(launch.url);
@@ -40,42 +35,23 @@ test('Sessions UI development opens directly and restores a draft after reload',
 		await editor.waitForEditorContents(text => text === 'Sessions UI development draft');
 		expect(failures).toEqual([]);
 	} finally {
-		if (failures.length)
-			await testInfo.attach('page-errors', {
-				body: JSON.stringify(failures),
-				contentType: 'application/json',
-			});
+		if (failures.length) await testInfo.attach('page-errors', { body: JSON.stringify(failures), contentType: 'application/json' });
 		await browser.close();
 		if (launch) await stop(launch.child);
 	}
 });
 
-for (const [mode, entry] of [
-	['production', 'workbench'],
-	['development', 'workbench'],
-	['development', 'sessions'],
-] as const) {
+for (const [mode, entry] of [['production', 'workbench'], ['development', 'workbench'], ['development', 'sessions']] as const) {
 	test(`Web ${entry} ${mode} reconnects after backend restart without reloading and revokes closed launches`, { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 		test.setTimeout(90_000);
 		const profile = await mkdtemp(join(tmpdir(), 'ash-web-lifecycle-'));
 		const port = await freePort();
-		const env = {
-			...process.env,
-			ASH_WEB_APP_SERVER: '1',
-			ASH_DEV_AGENTS_WINDOW: entry === 'sessions' ? '1' : '0',
-			ASH_WEB_APP_SERVER_PROFILE: profile,
-			ASH_HOME: profile,
-			ASH_WORKSPACE_ROOT: testWorkspace.directory,
-		};
+		const env = { ...process.env, ASH_WEB_APP_SERVER: '1', ASH_DEV_AGENTS_WINDOW: entry === 'sessions' ? '1' : '0', ASH_WEB_APP_SERVER_PROFILE: profile, ASH_HOME: profile, ASH_WORKSPACE_ROOT: testWorkspace.directory };
 		const browser = await chromium.launch();
 		const context = await browser.newContext();
 		const page = await context.newPage();
 		const diagnostics: string[] = [];
-		page.on('console', message => {
-			if (message.type() === 'error') {
-				diagnostics.push(message.text());
-			}
-		});
+		page.on('console', message => { if (message.type() === 'error') { diagnostics.push(message.text()); } });
 		page.on('pageerror', error => diagnostics.push(error.message));
 		page.on('websocket', socket => {
 			socket.on('close', () => diagnostics.push(`Socket closed: ${socket.url()}`));
@@ -85,19 +61,14 @@ for (const [mode, entry] of [
 		let hostDiagnostics = '';
 		try {
 			launch = await launchWeb(mode, port, env);
-			launch.child.stderr!.on('data', chunk => {
-				hostDiagnostics = (hostDiagnostics + String(chunk)).slice(-8192);
-			});
+			launch.child.stderr!.on('data', chunk => { hostDiagnostics = (hostDiagnostics + String(chunk)).slice(-8192); });
 			await page.goto(launch.url);
 			await expectWorkspace(page, entry);
 			expect(new URL(page.url()).pathname).toBe(entry === 'sessions' ? '/browser/sessions/sessions.html' : '/browser/workbench/workbench.html');
 			expect(new URL(page.url()).hash).toBe('');
 			const session = await page.evaluate(() => {
 				const endpoint = sessionStorage.getItem('ash.appServer.endpoint')!;
-				return {
-					endpoint,
-					token: sessionStorage.getItem(`ash.appServer.session:${new URL(endpoint).origin}`)!,
-				};
+				return { endpoint, token: sessionStorage.getItem(`ash.appServer.session:${new URL(endpoint).origin}`)! };
 			});
 			if (mode === 'development') {
 				expect(new URL(session.endpoint).origin).not.toBe(new URL(page.url()).origin);
@@ -117,37 +88,23 @@ for (const [mode, entry] of [
 			await page.keyboard.insertText('Keep my unsent message after reconnect');
 			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
 			await page.evaluate(() => {
-				(globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost = globalThis.ashWebWorkbenchHost;
+				(globalThis as typeof globalThis & { acceptanceHost: unknown; }).acceptanceHost = globalThis.ashWebWorkbenchHost;
 			});
 			await stopBackend(env);
-			await expect
-				.poll(async () => {
-					try {
-						await fetch(session.endpoint, { signal: AbortSignal.timeout(500) });
-						return true;
-					} catch {
-						return false;
-					}
-				})
-				.toBe(false);
+			await expect.poll(async () => {
+				try { await fetch(session.endpoint, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
+			}).toBe(false);
 			expect(launch.child.exitCode).toBeNull();
 			await stopBackend(env, 'start');
-			await expect
-				.poll(
-					async () => {
-						return page.evaluate(async () => {
-							try {
-								const host = globalThis.ashWebWorkbenchHost!;
-								return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
-							} catch {
-								return undefined;
-							}
-						});
-					},
-					{ timeout: 30_000 },
-				)
-				.toBe('const value = 1;\n');
-			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
+			await expect.poll(async () => {
+				return page.evaluate(async () => {
+					try {
+						const host = globalThis.ashWebWorkbenchHost!;
+						return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
+					} catch { return undefined; }
+				});
+			}, { timeout: 30_000 }).toBe('const value = 1;\n');
+			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown; }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
 			await expect(selected).toHaveAttribute('aria-current', 'page');
 			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
 			// A second client writes through the real API; only a restored catalog subscription
@@ -164,10 +121,7 @@ for (const [mode, entry] of [
 				const added = sidebar.locator(rows).filter({ hasText: 'Created by another client' });
 				await expect(added).toBeVisible();
 				await peer.evaluate(async sessionId => {
-					await globalThis.ashWebWorkbenchHost!.api.session.archive({
-						commandId: crypto.randomUUID(),
-						sessionId,
-					});
+					await globalThis.ashWebWorkbenchHost!.api.session.archive({ commandId: crypto.randomUUID(), sessionId });
 				}, peerSessionId);
 				await expect(added).toHaveCount(0);
 				await expect(selected).toHaveAttribute('aria-current', 'page');
@@ -175,32 +129,16 @@ for (const [mode, entry] of [
 			} finally {
 				await peer.close();
 			}
-			const resumed = await fetch(new URL('/ash/session', session.endpoint), {
-				method: 'POST',
-				headers: {
-					Origin: mode === 'development' ? new URL(page.url()).origin : new URL(session.endpoint).origin,
-					Authorization: `Bearer ${session.token}`,
-				},
-			});
+			const resumed = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: mode === 'development' ? new URL(page.url()).origin : new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
 			expect(resumed.status).toBe(200);
 
 			await stop(launch.child);
-			await expect
-				.poll(async () => {
-					try {
-						await fetch(session.endpoint, { signal: AbortSignal.timeout(500) });
-						return true;
-					} catch {
-						return false;
-					}
-				})
-				.toBe(false);
+			await expect.poll(async () => {
+				try { await fetch(session.endpoint, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
+			}).toBe(false);
 			if (mode === 'production') {
 				launch = await launchWeb(mode, port, env);
-				const revoked = await fetch(new URL('/ash/session', session.endpoint), {
-					method: 'POST',
-					headers: { Origin: new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` },
-				});
+				const revoked = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
 				expect(revoked.status).toBe(401);
 				await Promise.all([page.waitForEvent('load'), page.goto(launch.url)]);
 				await expectWorkspace(page, entry);
@@ -209,9 +147,7 @@ for (const [mode, entry] of [
 			throw new Error(`${String(error)}\n${hostDiagnostics}\n${diagnostics.slice(-12).join('\n')}\n${await page.locator('body').innerText()}`, { cause: error });
 		} finally {
 			await browser.close();
-			if (launch) {
-				await stop(launch.child);
-			}
+			if (launch) { await stop(launch.child); }
 			await stopBackend(env);
 			await rm(profile, { recursive: true, force: true });
 		}
@@ -221,12 +157,7 @@ for (const [mode, entry] of [
 test('Web backend selection restores a Sessions connection and preserves its draft', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const profile = await mkdtemp(join(tmpdir(), 'ash-web-select-'));
-	const env = {
-		...process.env,
-		ASH_WEB_APP_SERVER_PROFILE: profile,
-		ASH_HOME: profile,
-		ASH_WORKSPACE_ROOT: testWorkspace.directory,
-	};
+	const env = { ...process.env, ASH_WEB_APP_SERVER_PROFILE: profile, ASH_HOME: profile, ASH_WORKSPACE_ROOT: testWorkspace.directory };
 	const browser = await chromium.launch();
 	let launch: Awaited<ReturnType<typeof startWeb>> | undefined;
 	try {
@@ -238,28 +169,15 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 		await editor.waitForEditorFocus();
 		await page.keyboard.insertText('Retain my Sessions draft');
 		await editor.waitForEditorContents(text => text === 'Retain my Sessions draft');
-		await page.evaluate(() => {
-			(globalThis as typeof globalThis & { acceptanceDocument: Document }).acceptanceDocument = document;
-		});
-		await test.step('Stop the backend and select its current development package', async () => {
-			await stopBackend(env);
-			await launch!.reloadBackend();
-		});
-		await expect
-			.poll(
-				() =>
-					page.evaluate(async () => {
-						try {
-							const host = globalThis.ashWebWorkbenchHost!;
-							return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
-						} catch {
-							return undefined;
-						}
-					}),
-				{ timeout: 30_000 },
-			)
-			.toBe('const value = 1;\n');
-		expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceDocument: Document }).acceptanceDocument === document)).toBe(true);
+		await page.evaluate(() => { (globalThis as typeof globalThis & { acceptanceDocument: Document; }).acceptanceDocument = document; });
+		await test.step('Stop the backend and select its current development package', async () => { await stopBackend(env); await launch!.reloadBackend(); });
+		await expect.poll(() => page.evaluate(async () => {
+			try {
+				const host = globalThis.ashWebWorkbenchHost!;
+				return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
+			} catch { return undefined; }
+		}), { timeout: 30_000 }).toBe('const value = 1;\n');
+		expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceDocument: Document; }).acceptanceDocument === document)).toBe(true);
 		await editor.waitForEditorContents(text => text === 'Retain my Sessions draft');
 	} finally {
 		await browser.close();
@@ -272,12 +190,7 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 async function createConversation(page: Page, title: string): Promise<string> {
 	return page.evaluate(async title => {
 		const api = globalThis.ashWebWorkbenchHost!.api.session;
-		const created = await api.create({
-			commandId: crypto.randomUUID(),
-			title,
-			executionTarget: null,
-			agent: { type: 'default' },
-		});
+		const created = await api.create({ commandId: crypto.randomUUID(), title, executionTarget: null, agent: { type: 'default' } });
 		await api.createThread({ commandId: crypto.randomUUID(), sessionId: created.session.sessionId, title: 'Main' });
 		return created.session.sessionId;
 	}, title);
@@ -294,54 +207,33 @@ async function expectWorkspace(page: Page, entry: 'workbench' | 'sessions'): Pro
 	expect(result.content).toBe('const value = 1;\n');
 }
 
-async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string }> {
-	const args =
-		mode === 'production'
-			? ['build/desktop/launch/web.ts', '.build/desktop/web/ash', String(port)]
-			: ['node_modules/vite/bin/vite.js', '--config', 'build/desktop/vite/vite.config.ts', '--mode', 'web', '--port', String(port)];
-	const child = spawn(process.execPath, args, {
-		cwd: join(repository, '.'),
-		env,
-		stdio: ['ignore', 'pipe', 'pipe'],
-		windowsHide: true,
-	});
+async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string; }> {
+	const args = mode === 'production'
+		? ['build/desktop/launch/web.ts', '.build/desktop/web/ash', String(port)]
+		: ['node_modules/vite/bin/vite.js', '--config', 'build/desktop/vite/vite.config.ts', '--mode', 'web', '--port', String(port)];
+	const child = spawn(process.execPath, args, { cwd: join(repository, '.'), env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 	try {
 		const url = await new Promise<string>((resolveUrl, reject) => {
 			let output = '';
 			const timer = setTimeout(() => finish(new Error(`Web startup timed out: ${output}`)), 40_000);
 			const finish = (error?: Error, url?: string): void => {
-				clearTimeout(timer);
-				child.off('error', onError);
-				child.off('exit', onExit);
-				child.stdout!.off('data', onData);
-				child.stderr!.off('data', onData);
-				child.stdout!.resume();
-				child.stderr!.resume();
-				if (error) {
-					reject(error);
-				} else {
-					resolveUrl(url!);
-				}
+				clearTimeout(timer); child.off('error', onError); child.off('exit', onExit);
+				child.stdout!.off('data', onData); child.stderr!.off('data', onData);
+				child.stdout!.resume(); child.stderr!.resume();
+				if (error) { reject(error); } else { resolveUrl(url!); }
 			};
 			const onError = (error: Error): void => finish(error);
 			const onExit = (): void => finish(new Error(`Web exited before ready: ${output}`));
 			const onData = (chunk: Buffer): void => {
 				output = (output + chunk.toString()).slice(-16_384);
 				const match = (env.ASH_WEB_APP_SERVER === '0' ? /Local:\s+(http:\/\/[^\s\x1b]+)/ : /Open Ash: (http:\/\/[^\s\x1b]+)/).exec(output);
-				if (match) {
-					finish(undefined, match[1]);
-				}
+				if (match) { finish(undefined, match[1]); }
 			};
-			child.stdout!.on('data', onData);
-			child.stderr!.on('data', onData);
-			child.once('error', onError);
-			child.once('exit', onExit);
+			child.stdout!.on('data', onData); child.stderr!.on('data', onData);
+			child.once('error', onError); child.once('exit', onExit);
 		});
 		return { child, url };
-	} catch (error) {
-		await stop(child);
-		throw error;
-	}
+	} catch (error) { await stop(child); throw error; }
 }
 
 async function stopBackend(env: NodeJS.ProcessEnv, command: 'stop' | 'start' = 'stop'): Promise<void> {
@@ -350,14 +242,12 @@ async function stopBackend(env: NodeJS.ProcessEnv, command: 'stop' | 'start' = '
 	await new Promise<void>((resolveExit, reject) => {
 		const child = spawn(executable, [command], { env, stdio: 'ignore', windowsHide: true });
 		child.once('error', reject);
-		child.once('exit', code => (code === 0 ? resolveExit() : reject(new Error(`Backend stop failed: ${code}`))));
+		child.once('exit', code => code === 0 ? resolveExit() : reject(new Error(`Backend stop failed: ${code}`)));
 	});
 }
 
 async function stop(child: ChildProcess): Promise<void> {
-	if (child.exitCode !== null || child.signalCode !== null) {
-		return;
-	}
+	if (child.exitCode !== null || child.signalCode !== null) { return; }
 	await new Promise<void>(resolveExit => {
 		child.once('close', resolveExit);
 		child.kill();
@@ -368,9 +258,7 @@ async function freePort(): Promise<number> {
 	const server = createServer();
 	await new Promise<void>(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
 	const address = server.address();
-	if (!address || typeof address === 'string') {
-		throw new Error('Missing test port');
-	}
+	if (!address || typeof address === 'string') { throw new Error('Missing test port'); }
 	await new Promise<void>(resolveClose => server.close(() => resolveClose()));
 	return address.port;
 }

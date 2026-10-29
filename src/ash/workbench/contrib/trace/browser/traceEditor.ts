@@ -35,7 +35,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 	private exportButton!: Button;
 	private selected: string | undefined;
 	private visible: readonly TraceSpan[] = [];
-	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement }>();
+	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement; }>();
 	private frame: number | undefined;
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
@@ -45,9 +45,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-	) {
-		super(traceEditorId, themeService, storageService);
-	}
+	) { super(traceEditorId, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
@@ -62,52 +60,37 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		this.address = this.field(toolbar, localize('trace.address', 'Trace address'));
 		this.address.value = 'ws://127.0.0.1:4319/';
 		this.token = this.field(toolbar, localize('trace.token', 'Trace token'), 'password');
-		this.connectButton = this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('trace.connect', 'Connect'),
-				presentation: 'primary',
-				onClick: () => {
-					this.selected = undefined;
-					this.connection.connect(this.address.value, this.token.value);
-				},
-			}),
-		);
-		this.disconnectButton = this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('trace.disconnect', 'Disconnect'),
-				onClick: () => this.connection.disconnect(),
-			}),
-		);
-		this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('trace.clear', 'Clear'),
-				onClick: () => {
-					this.selected = undefined;
-					this.connection.clear();
-				},
-			}),
-		);
-		this.exportButton = this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('trace.export', 'Export filtered OTLP'),
-				onClick: () => {
-					triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
-				},
-			}),
-		);
-		this._register(
-			new Button(toolbar, {
-				...defaultButtonStyles,
-				label: localize('trace.help', 'Help'),
-				onClick: () => {
-					void this.showHelp();
-				},
-			}),
-		);
+		this.connectButton = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.connect', 'Connect'),
+			presentation: 'primary',
+			onClick: () => {
+				this.selected = undefined;
+				this.connection.connect(this.address.value, this.token.value);
+			},
+		}));
+		this.disconnectButton = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.disconnect', 'Disconnect'),
+			onClick: () => this.connection.disconnect(),
+		}));
+		this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.clear', 'Clear'),
+			onClick: () => { this.selected = undefined; this.connection.clear(); },
+		}));
+		this.exportButton = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.export', 'Export filtered OTLP'),
+			onClick: () => {
+				triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
+			},
+		}));
+		this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.help', 'Help'),
+			onClick: () => { void this.showHelp(); },
+		}));
 		this.filter = this.field(this.domNode, localize('trace.filter', 'Filter by name, outcome or trace ID'), 'search');
 		this._register(this.filter.onDidChange(() => this.scheduleRender()));
 		this.statusDomNode = h(document, 'div');
@@ -130,59 +113,35 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		this.detailsDomNode.setAttribute('aria-label', localize('trace.details', 'Span details'));
 		body.append(this.listDomNode, this.detailsDomNode);
 		this.domNode.append(this.statusDomNode, this.countDomNode, body);
-		this._register(
-			addDisposableListener(this.listDomNode, 'click', event => {
-				const row = (event.target as Element).closest<HTMLElement>('.ash-trace-row');
-				if (row) {
-					this.select(row.dataset.key!);
-					this.listDomNode.focus();
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.listDomNode, 'keydown', event => {
-				if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !this.visible.length) {
-					return;
-				}
-				event.preventDefault();
-				event.stopPropagation();
-				const current = this.visible.findIndex(span => span.key === this.selected);
-				const index = event.key === 'Home' ? 0 : event.key === 'End' ? this.visible.length - 1 : Math.max(0, Math.min(this.visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
-				this.select(this.visible[index]!.key);
-				this.rows.get(this.selected!)!.domNode.scrollIntoView({ block: 'nearest' });
-			}),
-		);
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {}));
+		this._register(addDisposableListener(this.listDomNode, 'click', event => {
+			const row = (event.target as Element).closest<HTMLElement>('.ash-trace-row');
+			if (row) { this.select(row.dataset.key!); this.listDomNode.focus(); }
+		}));
+		this._register(addDisposableListener(this.listDomNode, 'keydown', event => {
+			if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !this.visible.length) { return; }
+			event.preventDefault();
+			event.stopPropagation();
+			const current = this.visible.findIndex(span => span.key === this.selected);
+			const index = event.key === 'Home' ? 0 : event.key === 'End' ? this.visible.length - 1 :
+				Math.max(0, Math.min(this.visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
+			this.select(this.visible[index]!.key);
+			this.rows.get(this.selected!)!.domNode.scrollIntoView({ block: 'nearest' });
+		}));
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+		}));
 		this._register(this.connection.onDidChange(() => this.scheduleRender()));
-		this._register(
-			toDisposable(() => {
-				if (this.frame !== undefined) {
-					document.defaultView!.cancelAnimationFrame(this.frame);
-				}
-				this.token.value = '';
-			}),
-		);
+		this._register(toDisposable(() => {
+			if (this.frame !== undefined) { document.defaultView!.cancelAnimationFrame(this.frame); }
+			this.token.value = '';
+		}));
 		this.render();
 	}
 
-	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		signal.throwIfAborted();
-	}
-	public override clearInput(): void {
-		this.connection.disconnect();
-		this.connection.clear();
-		this.token.value = '';
-	}
-	public override layout(dimension: IDimension): void {
-		this.domNode.style.width = dimension.width + 'px';
-		this.domNode.style.height = dimension.height + 'px';
-	}
+	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
+	public override clearInput(): void { this.connection.disconnect(); this.connection.clear(); this.token.value = ''; }
+	public override layout(dimension: IDimension): void { this.domNode.style.width = dimension.width + 'px'; this.domNode.style.height = dimension.height + 'px'; }
 	public override setVisible(visibility: boolean): void {
-		super.setVisible(visibility);
-		this.shown = visibility;
-		if (this.shown) {
-			this.scheduleRender();
-		}
+		super.setVisible(visibility); this.shown = visibility; if (this.shown) { this.scheduleRender(); }
 	}
 	public override focus(): void {
 		this.address.focus();
@@ -198,14 +157,12 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		caption.textContent = text;
 		label.append(caption);
 		container.append(label);
-		return this._register(
-			new InputBox(label, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type,
-				ariaLabel: text,
-				presentation: 'field',
-			}),
-		);
+		return this._register(new InputBox(label, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type,
+			ariaLabel: text,
+			presentation: 'field',
+		}));
 	}
 
 	private filtered(): readonly TraceSpan[] {
@@ -214,13 +171,8 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 	}
 
 	private scheduleRender(): void {
-		if (this.frame !== undefined || !this.shown || this.isDisposed) {
-			return;
-		}
-		this.frame = this.domNode.ownerDocument.defaultView!.requestAnimationFrame(() => {
-			this.frame = undefined;
-			this.render();
-		});
+		if (this.frame !== undefined || !this.shown || this.isDisposed) { return; }
+		this.frame = this.domNode.ownerDocument.defaultView!.requestAnimationFrame(() => { this.frame = undefined; this.render(); });
 	}
 
 	private render(): void {
@@ -232,23 +184,14 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		this.address.enabled = this.token.enabled = !busy;
 		this.exportButton.enabled = this.visible.length > 0;
 		const status = connectionLabel(this.connection.state);
-		if (this.statusDomNode.textContent !== status) {
-			this.statusDomNode.textContent = status;
-		}
+		if (this.statusDomNode.textContent !== status) { this.statusDomNode.textContent = status; }
 		this.countDomNode.textContent = localize('trace.count', '{0} shown / {1} retained · {2} dropped', this.visible.length, spans.length, this.connection.buffer.dropped);
 		const keys = new Set(this.visible.map(span => span.key));
-		for (const [key, row] of this.rows) {
-			if (!keys.has(key)) {
-				row.domNode.remove();
-				this.rows.delete(key);
-			}
-		}
-		if (!this.selected || !keys.has(this.selected)) {
-			this.selected = this.visible[0]?.key;
-		}
+		for (const [key, row] of this.rows) { if (!keys.has(key)) { row.domNode.remove(); this.rows.delete(key); } }
+		if (!this.selected || !keys.has(this.selected)) { this.selected = this.visible[0]?.key; }
 		const byKey = new Map(spans.map(span => [span.key, span]));
 		const start = spans[0]?.start ?? 0n;
-		const end = spans.reduce((end, span) => (span.end > end ? span.end : end), start + 1n);
+		const end = spans.reduce((end, span) => span.end > end ? span.end : end, start + 1n);
 		const range = Number(end - start);
 		let previous: HTMLElement | undefined;
 		for (const span of this.visible) {
@@ -276,52 +219,31 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 			const seen = new Set([span.key]);
 			while (ancestor.parentSpanId) {
 				const parent = byKey.get(ancestor.traceId + ':' + ancestor.parentSpanId);
-				if (!parent || seen.has(parent.key)) {
-					break;
-				}
-				seen.add(parent.key);
-				ancestor = parent;
-				depth++;
+				if (!parent || seen.has(parent.key)) { break; }
+				seen.add(parent.key); ancestor = parent; depth++;
 			}
-			row.label.textContent = localize(
-				'trace.row',
-				'{0} · {1} · +{2} ms · {3} ms',
-				span.name,
-				outcomeLabel(span.outcome),
-				(Number(span.start - start) / 1e6).toFixed(3),
-				(Number(span.end - span.start) / 1e6).toFixed(3),
-			);
+			row.label.textContent = localize('trace.row', '{0} · {1} · +{2} ms · {3} ms', span.name, outcomeLabel(span.outcome), (Number(span.start - start) / 1e6).toFixed(3), (Number(span.end - span.start) / 1e6).toFixed(3));
 			row.label.style.paddingInlineStart = Math.min(depth, 12) * 12 + 'px';
-			row.bar.style.marginInlineStart = (Number(span.start - start) / range) * 100 + '%';
-			row.bar.style.width = (Number(span.end - span.start) / range) * 100 + '%';
+			row.bar.style.marginInlineStart = Number(span.start - start) / range * 100 + '%';
+			row.bar.style.width = Number(span.end - span.start) / range * 100 + '%';
 			const next = previous ? previous.nextSibling : this.listDomNode.firstChild;
-			if (next !== row.domNode) {
-				this.listDomNode.insertBefore(row.domNode, next);
-			}
+			if (next !== row.domNode) { this.listDomNode.insertBefore(row.domNode, next); }
 			previous = row.domNode;
 		}
 		this.updateSelection();
 	}
 
-	private select(key: string): void {
-		this.selected = key;
-		this.updateSelection();
-	}
+	private select(key: string): void { this.selected = key; this.updateSelection(); }
 	private updateSelection(): void {
 		for (const [key, row] of this.rows) {
 			row.domNode.classList.toggle('selected', key === this.selected);
 			row.domNode.setAttribute('aria-selected', String(key === this.selected));
 		}
 		const span = this.visible.find(span => span.key === this.selected);
-		if (span) {
-			this.listDomNode.setAttribute('aria-activedescendant', this.rows.get(span.key)!.domNode.id);
-		} else {
-			this.listDomNode.removeAttribute('aria-activedescendant');
-		}
+		if (span) { this.listDomNode.setAttribute('aria-activedescendant', this.rows.get(span.key)!.domNode.id); }
+		else { this.listDomNode.removeAttribute('aria-activedescendant'); }
 		const details = span ? exportTrace([span]) : localize('trace.empty', 'No spans. Connect, then perform an action in Ash.');
-		if (this.detailsDomNode.textContent !== details) {
-			this.detailsDomNode.textContent = details;
-		}
+		if (this.detailsDomNode.textContent !== details) { this.detailsDomNode.textContent = details; }
 	}
 
 	private showHelp(): void {
@@ -331,29 +253,19 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 
 function outcomeLabel(outcome: string): string {
 	switch (outcome) {
-		case 'succeeded':
-			return localize('trace.succeeded', 'Succeeded');
-		case 'failed':
-			return localize('trace.failed', 'Failed');
-		case 'cancelled':
-			return localize('trace.cancelled', 'Cancelled');
-		default:
-			return outcome;
+		case 'succeeded': return localize('trace.succeeded', 'Succeeded');
+		case 'failed': return localize('trace.failed', 'Failed');
+		case 'cancelled': return localize('trace.cancelled', 'Cancelled');
+		default: return outcome;
 	}
 }
 function connectionLabel(state: TraceConnectionState): string {
 	switch (state) {
-		case 'disconnected':
-			return localize('trace.disconnected', 'Disconnected');
-		case 'connecting':
-			return localize('trace.connecting', 'Connecting…');
-		case 'connected':
-			return localize('trace.connected', 'Connected · listening for completed spans');
-		case 'configurationError':
-			return localize('trace.configurationError', 'Use a loopback ws:// address with no query and a 64-digit hexadecimal token.');
-		case 'connectionError':
-			return localize('trace.connectionError', 'Connection failed. Check the running App Server, address and token.');
-		case 'protocolError':
-			return localize('trace.protocolError', 'Invalid trace stream. The connection was closed.');
+		case 'disconnected': return localize('trace.disconnected', 'Disconnected');
+		case 'connecting': return localize('trace.connecting', 'Connecting…');
+		case 'connected': return localize('trace.connected', 'Connected · listening for completed spans');
+		case 'configurationError': return localize('trace.configurationError', 'Use a loopback ws:// address with no query and a 64-digit hexadecimal token.');
+		case 'connectionError': return localize('trace.connectionError', 'Connection failed. Check the running App Server, address and token.');
+		case 'protocolError': return localize('trace.protocolError', 'Invalid trace stream. The connection was closed.');
 	}
 }

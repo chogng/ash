@@ -30,11 +30,9 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
+		}));
 	}
 
 	get currentCatalog(): ExtensionFileTemplateCatalog {
@@ -54,6 +52,7 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 		this.catalog = Object.freeze({ revision: this.catalog.revision + 1, templates: Object.freeze(normalized) });
 		this.changeEmitter.fire(this.catalog);
 	}
+
 }
 
 function normalizeTemplate(template: ExtensionFileTemplateDefinition): ExtensionFileTemplateDefinition {

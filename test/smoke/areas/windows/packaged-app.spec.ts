@@ -9,7 +9,7 @@ import { launchElectron, launchElectronApplication } from '../../../automation/p
 import { Workbench } from '../../../automation/workbench.js';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
 
-test('Desktop package omits standalone Node and retains its Electron binding after quit and a TUI restart', { tag: ['@win32', '@darwin'] }, async ({}, testInfo) => {
+test('Desktop package omits standalone Node and retains its Electron binding after quit and a TUI restart', { tag: ['@win32', '@darwin'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a delivered Desktop bundle.');
@@ -19,12 +19,7 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	expect(metadata.javascriptRuntime.kind).toBe('hostProvidedNode');
 	expect(metadata.components.node).toBeUndefined();
 	for (const path of ['ash-resources/node', 'ash-resources/licenses/node']) {
-		expect(
-			await access(join(resources, path)).then(
-				() => true,
-				() => false,
-			),
-		).toBe(false);
+		expect(await access(join(resources, path)).then(() => true, () => false)).toBe(false);
 	}
 	// Keep the profile/run socket below Windows AF_UNIX's address-length limit.
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
@@ -39,32 +34,11 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
 	const daemon = join(resources, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
-	const carrierEnvironment: Record<string, string> = {
-		...environment,
-		ASH_APP_SERVER_PATH: join(resources, metadata.entrypoint),
-	};
+	const carrierEnvironment: Record<string, string> = { ...environment, ASH_APP_SERVER_PATH: join(resources, metadata.entrypoint) };
 	for (const name of ['ASH_ELECTRON_RUN_AS_NODE_PATH', 'ASH_ELECTRON_RUN_AS_NODE_SHA256', 'ASH_ELECTRON_RUNTIME_BINDING', 'ASH_ELECTRON_RUNTIME_AVAILABLE']) delete carrierEnvironment[name];
-	const lifecycle = async (operation: string) =>
-		JSON.parse(
-			(
-				await promisify(execFile)(daemon, [operation], {
-					env: carrierEnvironment,
-					timeout: 20_000,
-					windowsHide: true,
-				})
-			).stdout,
-		);
+	const lifecycle = async (operation: string) => JSON.parse((await promisify(execFile)(daemon, [operation], { env: carrierEnvironment, timeout: 20_000, windowsHide: true })).stdout);
 	// This scenario owns daemon cleanup so quitting Electron does not tear down the shared backend.
-	const desktop = await launchElectron({
-		packagedBundle: bundlePath,
-		appServerMode: 'required',
-		startupTimeout: 60_000,
-		userDataDirectory,
-		profileDirectory: profile,
-		workspaceDirectory,
-		workspacePermissions: 'development',
-		environment,
-	});
+	const desktop = await launchElectron({ packagedBundle: bundlePath, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, profileDirectory: profile, workspaceDirectory, workspacePermissions: 'development', environment });
 	try {
 		const page = await desktop.application.firstWindow();
 		await new Workbench(page).waitForReady();
@@ -76,7 +50,7 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 		const quitting = desktop.application.evaluate(({ app }) => app.quit());
 		// The background daemon can retain inherited handles after Main exits. Observe the real
 		// process exit before waiting for Playwright's pipe-close acknowledgement.
-		void quitting.catch(() => {});
+		void quitting.catch(() => { });
 		await expect.poll(() => electronProcess.exitCode, { timeout: 15_000 }).toBe(0);
 		const afterQuit = await lifecycle('version');
 		expect(afterQuit.pid).toBe(before.pid);
@@ -84,10 +58,7 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 		expect(restarted.status).toBe('restarted');
 		expect(restarted.pid).not.toBe(before.pid);
 		const directory = join(profile, 'app-server-packages', 'manifests');
-		const selected = (await readdir(directory))
-			.filter(name => /^\d{20}\.json$/u.test(name))
-			.sort()
-			.at(-1)!;
+		const selected = (await readdir(directory)).filter(name => /^\d{20}\.json$/u.test(name)).sort().at(-1)!;
 		const selection = JSON.parse(await readFile(join(directory, selected), 'utf8'));
 		expect(selection.formatVersion).toBe(1);
 		expect(selection.installation.electronVersion).toBe(electronVersion);
@@ -104,7 +75,7 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	}
 });
 
-test('Windows package saves files, executes a terminal command and restarts with its bundled backend', { tag: ['@win32'] }, async ({}, testInfo) => {
+test('Windows package saves files, executes a terminal command and restarts with its bundled backend', { tag: ['@win32'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash-win32-x64 directory.');
@@ -128,7 +99,7 @@ test('Windows package saves files, executes a terminal command and restarts with
 	}
 });
 
-test('macOS package launches, opens a window tab, and installs its shell command', { tag: ['@darwin'] }, async ({}, testInfo) => {
+test('macOS package launches, opens a window tab, and installs its shell command', { tag: ['@darwin'] }, async ({ }, testInfo) => {
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash.app directory.');
 	const bundlePath = resolve(bundle!);
@@ -143,52 +114,25 @@ test('macOS package launches, opens a window tab, and installs its shell command
 	environment.SHELL = '/bin/sh';
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
-	const desktop = await launchElectronApplication({
-		packagedBundle: bundlePath,
-		appServerMode: 'required',
-		userDataDirectory,
-		environment,
-	});
+	const desktop = await launchElectronApplication({ packagedBundle: bundlePath, appServerMode: 'required', userDataDirectory, environment });
 	const { application } = desktop;
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
-		expect(
-			await application.evaluate(({ app }) => ({
-				packaged: app.isPackaged,
-				dockVisible: app.dock!.isVisible(),
-			})),
-		).toEqual({ packaged: true, dockVisible: true });
+		expect(await application.evaluate(({ app }) => ({ packaged: app.isPackaged, dockVisible: app.dock!.isVisible() }))).toEqual({ packaged: true, dockVisible: true });
 		const commandPath = await page.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:native-host:shell-command', 'install') as Promise<string>;
 		});
 		await access(commandPath);
 		expect(await readFile(commandPath, 'utf8')).toContain(bundlePath);
 		await page.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:native-host:shell-command', 'uninstall');
 		});
-		expect(
-			await access(commandPath).then(
-				() => true,
-				() => false,
-			),
-		).toBe(false);
+		expect(await access(commandPath).then(() => true, () => false)).toBe(false);
 		await page.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } };
-				}
-			).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'newTab' });
 		});
 		await expect.poll(() => application.windows().length).toBe(2);

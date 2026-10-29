@@ -33,16 +33,13 @@ test('signed package metadata selects exactly one local or network catalog sourc
 	const root = await mkdtemp(join(tmpdir(), 'ash-remote-release-binding-test-'));
 	try {
 		const location = { appPath: '/ignored', isPackaged: true, resourcesPath: root };
-		await writeFile(
-			join(root, 'ash-package.json'),
-			JSON.stringify({
-				remoteRuntimeCatalog: {
-					url: 'https://releases.example/ash/catalog.json',
-					sha256: 'a'.repeat(64),
-					trustBinding: 'signedProductPackage',
-				},
-			}),
-		);
+		await writeFile(join(root, 'ash-package.json'), JSON.stringify({
+			remoteRuntimeCatalog: {
+				url: 'https://releases.example/ash/catalog.json',
+				sha256: 'a'.repeat(64),
+				trustBinding: 'signedProductPackage',
+			},
+		}));
 		assert.deepEqual(packagedRemoteRuntimeCatalogSource(location, join(root, 'cache')), {
 			kind: 'network',
 			catalogUrl: 'https://releases.example/ash/catalog.json',
@@ -50,32 +47,26 @@ test('signed package metadata selects exactly one local or network catalog sourc
 			cacheRoot: join(root, 'cache'),
 		});
 
-		await writeFile(
-			join(root, 'ash-package.json'),
-			JSON.stringify({
-				remoteRuntimeCatalog: {
-					path: 'ash-remote-runtimes/catalog.json',
-					sha256: 'b'.repeat(64),
-					trustBinding: 'signedProductPackage',
-				},
-			}),
-		);
+		await writeFile(join(root, 'ash-package.json'), JSON.stringify({
+			remoteRuntimeCatalog: {
+				path: 'ash-remote-runtimes/catalog.json',
+				sha256: 'b'.repeat(64),
+				trustBinding: 'signedProductPackage',
+			},
+		}));
 		assert.deepEqual(packagedRemoteRuntimeCatalogSource(location, join(root, 'cache')), {
 			kind: 'packaged',
 			bundleRoot: join(root, 'ash-remote-runtimes'),
 			expectedSha256: 'b'.repeat(64),
 		});
 
-		await writeFile(
-			join(root, 'ash-package.json'),
-			JSON.stringify({
-				remoteRuntimeCatalog: {
-					url: 'https://user@releases.example/ash/catalog.json',
-					sha256: 'a'.repeat(64),
-					trustBinding: 'signedProductPackage',
-				},
-			}),
-		);
+		await writeFile(join(root, 'ash-package.json'), JSON.stringify({
+			remoteRuntimeCatalog: {
+				url: 'https://user@releases.example/ash/catalog.json',
+				sha256: 'a'.repeat(64),
+				trustBinding: 'signedProductPackage',
+			},
+		}));
 		assert.throws(() => packagedRemoteRuntimeCatalogSource(location, join(root, 'cache')), /credential-free HTTPS/);
 	} finally {
 		await rm(root, { force: true, recursive: true });
@@ -139,22 +130,8 @@ test('bundle location follows the canonical development and packaged roots', asy
 	await mkdir(join(developmentRoot, 'manifests'), { recursive: true });
 	await writeFile(join(developmentRoot, 'manifests', '00000000000000000001.json'), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
 	try {
-		assert.equal(
-			packagedRemoteRuntimeBundleRoot({
-				appPath: join(workspace, '.'),
-				isPackaged: false,
-				resourcesPath: '/ignored',
-			}),
-			join(developmentRoot, 'packages', '0.1.0', build, 'ash-remote-runtimes'),
-		);
-		assert.equal(
-			packagedRemoteRuntimeBundleRoot({
-				appPath: '/ignored',
-				isPackaged: true,
-				resourcesPath: '/Applications/Ash.app/Contents/Resources',
-			}),
-			join('/Applications/Ash.app/Contents/Resources', 'ash-remote-runtimes'),
-		);
+		assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: join(workspace, '.'), isPackaged: false, resourcesPath: '/ignored' }), join(developmentRoot, 'packages', '0.1.0', build, 'ash-remote-runtimes'));
+		assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: '/ignored', isPackaged: true, resourcesPath: '/Applications/Ash.app/Contents/Resources' }), join('/Applications/Ash.app/Contents/Resources', 'ash-remote-runtimes'));
 	} finally {
 		await rm(workspace, { force: true, recursive: true });
 	}

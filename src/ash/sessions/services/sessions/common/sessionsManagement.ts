@@ -15,7 +15,7 @@ export interface ISessionsManagementService {
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
 	/** Keeps draft identity resolvable after materialization, independently of foreground selection. */
-	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>;
+	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>;
 	readonly activeUntitledSession: IUntitledChatSession | undefined;
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;

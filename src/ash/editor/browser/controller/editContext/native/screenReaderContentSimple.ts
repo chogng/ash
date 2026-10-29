@@ -8,18 +8,7 @@ import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
-import {
-	clampScreenReaderOffset,
-	createScreenReaderContentState,
-	DEFAULT_SCREEN_READER_PAGE_SIZE,
-	domOffsetAtPoint,
-	domPointAtOffset,
-	modelOffsetAtContentOffset,
-	screenReaderLineOffsetAtModelOffset,
-	type IScreenReaderContent,
-	type ScreenReaderContentLayout,
-	type ScreenReaderContentState,
-} from './screenReaderUtils.js';
+import { clampScreenReaderOffset, createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, screenReaderLineOffsetAtModelOffset, type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from './screenReaderUtils.js';
 
 /** Plain-text screen-reader projection used by the native EditContext. */
 export class SimpleScreenReaderContent extends Disposable implements IScreenReaderContent {
@@ -65,7 +54,11 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 	onFocusChange(focused: boolean): void {
 		this.focused = focused;
 		if (focused) {
-			this.selectionChangeListener.value = addDisposableListener(this.domNode.domNode.ownerDocument, 'selectionchange', () => this.handleSelectionChange());
+			this.selectionChangeListener.value = addDisposableListener(
+				this.domNode.domNode.ownerDocument,
+				'selectionchange',
+				() => this.handleSelectionChange(),
+			);
 			return;
 		}
 		this.selectionChangeListener.clear();
@@ -81,16 +74,17 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 			this.clear();
 			return;
 		}
-		this.sync(
-			createScreenReaderContentState(this.model, primarySelection, {
-				pageSize: this.accessibilityPageSize,
-			}),
-		);
+		this.sync(createScreenReaderContentState(this.model, primarySelection, {
+			pageSize: this.accessibilityPageSize,
+		}));
 	}
 
 	updateScrollTop(primarySelection: Selection): void {
 		if (!this.state) return;
-		this.element.scrollTop = screenReaderLineOffsetAtModelOffset(this.state, this.model.offsetAt(primarySelection.getPosition())) * this.lineHeight;
+		this.element.scrollTop = screenReaderLineOffsetAtModelOffset(
+			this.state,
+			this.model.offsetAt(primarySelection.getPosition()),
+		) * this.lineHeight;
 	}
 
 	getState(): ScreenReaderContentState | undefined {
@@ -121,7 +115,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		this.lineHeight = layout.lineHeight;
 	}
 
-	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number } | undefined {
+	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number; } | undefined {
 		const state = this.state;
 		if (!state) return undefined;
 		const selection = this.domNode.domNode.ownerDocument.getSelection();
@@ -175,8 +169,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 			this.context.configuration.options.get(EditorOption.accessibilitySupport) !== AccessibilitySupport.Enabled ||
 			this.viewController.compositionController.composing ||
 			!IME.enabled
-		)
-			return;
+		) return;
 		const now = Date.now();
 		if (now - this.previousSelectionChangeEventTime < 5) return;
 		this.previousSelectionChangeEventTime = now;

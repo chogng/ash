@@ -51,12 +51,10 @@ export class Pane extends Disposable implements ISplitViewView {
 	private collapsed: boolean;
 	private isClosing = false;
 	private didLayout = false;
-	private readonly closeAnimation = this._register(
-		new RunOnceScheduler(() => {
-			this.isClosing = false;
-			this.renderCollapsedState();
-		}, UI_ANIMATION_DURATION.normal),
-	);
+	private readonly closeAnimation = this._register(new RunOnceScheduler(() => {
+		this.isClosing = false;
+		this.renderCollapsedState();
+	}, UI_ANIMATION_DURATION.normal));
 	private _minimumBodySize: number;
 	private _maximumBodySize: number;
 	private readonly change = this._register(new Emitter<number | undefined>());
@@ -116,32 +114,22 @@ export class Pane extends Disposable implements ISplitViewView {
 		container.append(element);
 		this.collapsed = options.collapsed === true;
 		this.renderCollapsedState();
-		this._register(
-			addDisposableListener(this.headerButton, 'click', () => {
-				this.setCollapsed(!this.collapsed);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.headerButton, 'keydown', event => {
-				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-				event.preventDefault();
-				this.setCollapsed(event.key === 'ArrowLeft');
-			}),
-		);
+		this._register(addDisposableListener(this.headerButton, 'click', () => {
+			this.setCollapsed(!this.collapsed);
+		}));
+		this._register(addDisposableListener(this.headerButton, 'keydown', event => {
+			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+			event.preventDefault();
+			this.setCollapsed(event.key === 'ArrowLeft');
+		}));
 		this.onDidFocus = this.focusedEmitter.event;
 		this.onDidBlur = this.blurredEmitter.event;
 		// Actions retain their Pane owner when a Part hosts them outside the pane's DOM subtree.
 		const updateFocus = (): void => {
 			const focused = this.hasFocus();
-			if (focused === this.focused) {
-				return;
-			}
+			if (focused === this.focused) { return; }
 			this.focused = focused;
-			if (focused) {
-				this.focusedEmitter.fire();
-			} else {
-				this.blurredEmitter.fire();
-			}
+			if (focused) { this.focusedEmitter.fire(); } else { this.blurredEmitter.fire(); }
 		};
 		for (const root of [element, this.headerActionsElement]) {
 			const tracker = this._register(trackFocus(root));
@@ -193,9 +181,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		if (!Number.isFinite(size) || size < 0 || size > this.maximumBodySize) {
 			throw new RangeError('Invalid pane body size constraints');
 		}
-		if (size === this._minimumBodySize) {
-			return;
-		}
+		if (size === this._minimumBodySize) { return; }
 		this._minimumBodySize = size;
 		this.change.fire(undefined);
 	}
@@ -208,9 +194,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		if (Number.isNaN(size) || size < this.minimumBodySize) {
 			throw new RangeError('Invalid pane body size constraints');
 		}
-		if (size === this._maximumBodySize) {
-			return;
-		}
+		if (size === this._maximumBodySize) { return; }
 		this._maximumBodySize = size;
 		this.change.fire(undefined);
 	}
@@ -234,7 +218,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	}
 
 	/** Subclasses lay out content here; the container owns the outer geometry. */
-	protected layoutBody(_height: number, _width: number): void {}
+	protected layoutBody(_height: number, _width: number): void { }
 
 	setHeaderActionsHost(host?: HTMLElement): void {
 		const focused = this.element.ownerDocument.activeElement;
@@ -287,11 +271,9 @@ export class PaneView extends Disposable {
 	private readonly scrollable: ScrollableElement;
 	private readonly splitView: SplitView;
 	private readonly panes: Pane[] = [];
-	private readonly animationReset = this._register(
-		new RunOnceScheduler(() => {
-			this.splitView.element.classList.remove('animated');
-		}, UI_ANIMATION_DURATION.normal),
-	);
+	private readonly animationReset = this._register(new RunOnceScheduler(() => {
+		this.splitView.element.classList.remove('animated');
+	}, UI_ANIMATION_DURATION.normal));
 	private height = 0;
 	private width = 0;
 	private didLayout = false;
@@ -304,30 +286,24 @@ export class PaneView extends Disposable {
 		this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
 		this.element = this.scrollable.element;
 		this.element.classList.add('ash-pane-view-container');
-		this.splitView = this._register(
-			new SplitView(this.scrollable.contentElement, 'vertical', {
-				styles: { separatorBorder: 'var(--ash-border)' },
-			}),
-		);
+		this.splitView = this._register(new SplitView(this.scrollable.contentElement, 'vertical', {
+			styles: { separatorBorder: 'var(--ash-border)' },
+		}));
 		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				const index = this.panes.findIndex(pane => pane.element.querySelector('.ash-pane-view-header-button') === event.target);
-				if (index < 0 || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-				const headers = this.panes.filter(pane => pane.isHeaderVisible());
-				const current = headers.indexOf(this.panes[index]!);
-				const target = event.key === 'Home' ? 0 : event.key === 'End' ? headers.length - 1 : Math.max(0, Math.min(headers.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
-				event.preventDefault();
-				headers[target]?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus();
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.panes.length = 0;
-			}),
-		);
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			const index = this.panes.findIndex(pane => pane.element.querySelector('.ash-pane-view-header-button') === event.target);
+			if (index < 0 || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+			const headers = this.panes.filter(pane => pane.isHeaderVisible());
+			const current = headers.indexOf(this.panes[index]!);
+			const target = event.key === 'Home' ? 0 : event.key === 'End' ? headers.length - 1 : Math.max(0, Math.min(headers.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
+			event.preventDefault();
+			headers[target]?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus();
+		}));
+		this._register(toDisposable(() => {
+			this.panes.length = 0;
+		}));
 	}
 
 	addPane(pane: Pane, size: number, index = this.panes.length): void {
@@ -335,37 +311,28 @@ export class PaneView extends Disposable {
 		let wasCollapsed = pane.isCollapsed();
 		let expandedSize = size;
 		// Pane visibility belongs to its consumer, independently of SplitView geometry.
-		this.splitView.addView(
-			{
-				element: pane.element,
-				get minimumSize() {
-					return pane.minimumSize;
-				},
-				get maximumSize() {
-					return pane.maximumSize;
-				},
-				onDidChange: listener =>
-					pane.onDidChange(preferredSize => {
-						const collapsed = pane.isCollapsed();
-						const requestedSize = wasCollapsed && !collapsed ? expandedSize : preferredSize;
-						if (wasCollapsed !== collapsed && this.didLayout && !isReducedMotion(this.element)) {
-							this.splitView.element.classList.add('animated');
-							this.animationReset.schedule();
-						}
-						wasCollapsed = collapsed;
-						const contentHeightChanged = this.didLayout && this.updateContentHeight();
-						listener(requestedSize);
-						if (contentHeightChanged) this.scrollable.layout();
-						this.updateSashLabels();
-					}),
-				layout: (height, offset, width) => {
-					if (!pane.isCollapsed()) expandedSize = height;
-					pane.layout(height, offset, width);
-				},
+		this.splitView.addView({
+			element: pane.element,
+			get minimumSize() { return pane.minimumSize; },
+			get maximumSize() { return pane.maximumSize; },
+			onDidChange: listener => pane.onDidChange(preferredSize => {
+				const collapsed = pane.isCollapsed();
+				const requestedSize = wasCollapsed && !collapsed ? expandedSize : preferredSize;
+				if (wasCollapsed !== collapsed && this.didLayout && !isReducedMotion(this.element)) {
+					this.splitView.element.classList.add('animated');
+					this.animationReset.schedule();
+				}
+				wasCollapsed = collapsed;
+				const contentHeightChanged = this.didLayout && this.updateContentHeight();
+				listener(requestedSize);
+				if (contentHeightChanged) this.scrollable.layout();
+				this.updateSashLabels();
+			}),
+			layout: (height, offset, width) => {
+				if (!pane.isCollapsed()) expandedSize = height;
+				pane.layout(height, offset, width);
 			},
-			size,
-			index,
-		);
+		}, size, index);
 		this.panes.splice(index, 0, pane);
 		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();

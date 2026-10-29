@@ -38,12 +38,8 @@ export class BannerPart extends Part implements IBannerService {
 	private returnFocus: HTMLElement | undefined;
 	private readonly focused: IContextKey<boolean>;
 
-	override get minimumHeight(): number {
-		return this.height;
-	}
-	override get maximumHeight(): number {
-		return this.height;
-	}
+	override get minimumHeight(): number { return this.height; }
+	override get maximumHeight(): number { return this.height; }
 
 	constructor(
 		container: HTMLElement,
@@ -64,38 +60,25 @@ export class BannerPart extends Part implements IBannerService {
 		this.domNode.setAttribute('role', 'region');
 		this.domNode.tabIndex = 0;
 		this.setVisible(false);
-		const focused = (this.focused = BannerFocused.bindTo(contextKeys));
-		this._register(
-			toDisposable(() => {
-				focused.reset();
-				this.notices.clear();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'focusin', event => {
-				// Returning from help must preserve the control that originally led into the banner.
-				const previous = event.relatedTarget;
-				if (
-					isHTMLElement(previous) &&
-					previous.isConnected &&
-					previous !== this.domNode.ownerDocument.body &&
-					!this.domNode.contains(previous) &&
-					!previous.closest('dialog, [role="dialog"]')
-				) {
-					this.returnFocus = previous;
-				}
-				focused.set(true);
-				if (!this.domNode.contains(event.relatedTarget as Node | null)) {
-					const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Banner);
-					if (hint) status(hint);
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'focusout', event => {
-				if (!this.domNode.contains(event.relatedTarget as Node | null)) focused.set(false);
-			}),
-		);
+		const focused = this.focused = BannerFocused.bindTo(contextKeys);
+		this._register(toDisposable(() => { focused.reset(); this.notices.clear(); }));
+		this._register(addDisposableListener(this.domNode, 'focusin', event => {
+			// Returning from help must preserve the control that originally led into the banner.
+			const previous = event.relatedTarget;
+			if (isHTMLElement(previous) && previous.isConnected &&
+				previous !== this.domNode.ownerDocument.body && !this.domNode.contains(previous) &&
+				!previous.closest('dialog, [role="dialog"]')) {
+				this.returnFocus = previous;
+			}
+			focused.set(true);
+			if (!this.domNode.contains(event.relatedTarget as Node | null)) {
+				const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Banner);
+				if (hint) status(hint);
+			}
+		}));
+		this._register(addDisposableListener(this.domNode, 'focusout', event => {
+			if (!this.domNode.contains(event.relatedTarget as Node | null)) focused.set(false);
+		}));
 	}
 
 	show(item: IBannerItem): void {
@@ -113,12 +96,8 @@ export class BannerPart extends Part implements IBannerService {
 		if (this.displayed) this.domNode.focus();
 	}
 
-	focusNextAction(): void {
-		this.moveFocus(1);
-	}
-	focusPreviousAction(): void {
-		this.moveFocus(-1);
-	}
+	focusNextAction(): void { this.moveFocus(1); }
+	focusPreviousAction(): void { this.moveFocus(-1); }
 
 	private moveFocus(direction: 1 | -1): void {
 		if (!this.displayed) return;
@@ -181,13 +160,9 @@ export class BannerPart extends Part implements IBannerService {
 		const actions = h(document, 'div');
 		actions.className = 'ash-banner-actions';
 		for (const action of next.actions ?? []) {
-			this.content.add(
-				this.instantiation.createInstance(Link, actions, action, {
-					opener: (href: string) => {
-						void this.opener.open(href, { allowCommands: true, fromUserGesture: true }).catch(onUnexpectedError);
-					},
-				}),
-			);
+			this.content.add(this.instantiation.createInstance(Link, actions, action, {
+				opener: (href: string) => { void this.opener.open(href, { allowCommands: true, fromUserGesture: true }).catch(onUnexpectedError); },
+			}));
 		}
 		this.domNode.append(actions);
 		const close = h(document, 'button');
@@ -195,20 +170,13 @@ export class BannerPart extends Part implements IBannerService {
 		close.type = 'button';
 		const closeLabel = next.closeLabel ?? localize('banner.close', 'Close Banner');
 		close.setAttribute('aria-label', closeLabel);
-		this.content.add(
-			this.hover.setupDelayedHover(close, {
-				content: closeLabel,
-				position: { hoverPosition: HoverPosition.BELOW },
-			}),
-		);
+		this.content.add(this.hover.setupDelayedHover(close, { content: closeLabel, position: { hoverPosition: HoverPosition.BELOW } }));
 		appendIcon(Lxicon.close, close);
 		const item = next;
-		this.content.add(
-			addDisposableListener(close, 'click', () => {
-				this.hide(item.id);
-				item.onClose?.();
-			}),
-		);
+		this.content.add(addDisposableListener(close, 'click', () => {
+			this.hide(item.id);
+			item.onClose?.();
+		}));
 		this.domNode.append(close);
 		if (!wasVisible) this.setBannerVisible(true);
 		// State changes never steal editor focus, but keep a keyboard user inside an updated notice.
@@ -239,13 +207,9 @@ for (const [key, command] of [
 	});
 }
 
-registerAction2(
-	class extends Action2 {
-		constructor() {
-			super({ id: 'workbench.action.focusBanner', title: localize2('banner.focus', 'Focus Banner'), f1: true });
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IBannerService).focus();
-		}
-	},
-);
+registerAction2(class extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.focusBanner', title: localize2('banner.focus', 'Focus Banner'), f1: true });
+	}
+	override run(accessor: ServicesAccessor): void { accessor.get(IBannerService).focus(); }
+});

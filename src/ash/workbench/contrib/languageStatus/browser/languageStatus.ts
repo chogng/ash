@@ -70,20 +70,13 @@ export class LanguageStatusContribution extends Disposable {
 		const tooltip = statuses.map(status => `${typeof status.label === 'string' ? status.label : status.label.value}: ${status.detail}`).join('\n');
 		const severity = Math.max(...statuses.map(status => status.severity));
 		const entry = {
-			text,
-			tooltip,
-			ariaLabel: `${text}. ${tooltip}`,
+			text, tooltip, ariaLabel: `${text}. ${tooltip}`,
 			icon: severity >= Severity.Error ? Lxicon.error : severity >= Severity.Warning ? Lxicon.warning : Lxicon.info,
 			showProgress: statuses.some(status => status.busy),
 			run: () => this.open(),
 		};
 		if (this.entry.value) this.entry.value.update(entry);
-		else
-			this.entry.value = this.statusbar.addEntry(entry, {
-				id: LanguageStatusContribution.Id,
-				alignment: StatusbarAlignment.Right,
-				priority: 15,
-			});
+		else this.entry.value = this.statusbar.addEntry(entry, { id: LanguageStatusContribution.Id, alignment: StatusbarAlignment.Right, priority: 15 });
 	}
 
 	private open(): void {
@@ -96,32 +89,21 @@ export class LanguageStatusContribution extends Disposable {
 		for (const status of this.currentStatuses()) {
 			if (actions.length) actions.push(new Separator());
 			const label = typeof status.label === 'string' ? status.label : status.label.value;
-			actions.push({
-				id: status.id,
-				label: `${label}: ${status.detail}`,
-				tooltip: status.name,
-				enabled: false,
-				run: () => undefined,
-			});
+			actions.push({ id: status.id, label: `${label}: ${status.detail}`, tooltip: status.name, enabled: false, run: () => undefined });
 			const command = status.command;
-			if (command)
-				actions.push({
-					id: `${status.id}.configure`,
-					label: localize('languageStatus.action', '{0}: {1}', label, command.title),
-					tooltip: command.tooltip ?? '',
-					enabled: true,
-					run: () => this.commands.executeCommand(command.id, ...(command.arguments ?? [])),
-				});
+			if (command) actions.push({
+				id: `${status.id}.configure`, label: localize('languageStatus.action', '{0}: {1}', label, command.title),
+				tooltip: command.tooltip ?? '', enabled: true,
+				run: () => this.commands.executeCommand(command.id, ...(command.arguments ?? [])),
+			});
 		}
 		this.menuFocused.set(true);
 		this.menus.showContextMenu({
-			getAnchor: () => anchor,
-			getActions: () => actions,
+			getAnchor: () => anchor, getActions: () => actions,
 			// Keep explanatory rows in the shared DOM surface, including accessible views.
 			getMenuClassName: () => 'ash-language-status-menu',
 			cancellationToken: cancelOnDispose(resources),
-			anchorPosition: AnchorPosition.Above,
-			autoSelectFirstItem: true,
+			anchorPosition: AnchorPosition.Above, autoSelectFirstItem: true,
 			onHide: didCancel => {
 				this.menuFocused.reset();
 				if (didCancel && anchor.isConnected) anchor.focus();

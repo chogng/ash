@@ -94,7 +94,9 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 		const height = finiteDimension(options.height ?? (restored ? restored.height + restored.featureHeightOffset : undefined), 720);
 		const left = options.left ?? restored?.left;
 		const top = options.top ?? restored?.top;
-		const positionKeys = this.workbenchRoot.getAttribute('data-runtime') === 'electron' && left !== undefined && top !== undefined ? (['x', 'y'] as const) : (['left', 'top'] as const);
+		const positionKeys = this.workbenchRoot.getAttribute('data-runtime') === 'electron' && left !== undefined && top !== undefined
+			? ['x', 'y'] as const
+			: ['left', 'top'] as const;
 		const features = [
 			'popup=yes',
 			options.zoomLevel === undefined ? undefined : `window-zoom-level=${options.zoomLevel}`,
@@ -105,9 +107,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			`height=${height}`,
 			left === undefined ? undefined : `${positionKeys[0]}=${Math.round(left)}`,
 			top === undefined ? undefined : `${positionKeys[1]}=${Math.round(top)}`,
-		]
-			.filter((feature): feature is string => feature !== undefined)
-			.join(',');
+		].filter((feature): feature is string => feature !== undefined).join(',');
 		const target = this.opener.open('about:blank', `ash-auxiliary-${generateUuid()}`, features);
 		if (!target) throw new Error('The browser blocked opening an auxiliary editor window');
 		try {
@@ -117,16 +117,13 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 		}
 		const auxiliary = this.createAuxiliaryWindow(target, options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor'));
 		this.windows.set(auxiliary.id, auxiliary);
-		this.windowListeners.set(
-			auxiliary.id,
-			auxiliary.onDidClose(() => {
-				this.storageService.store(AUXILIARY_WINDOW_STATE_KEY, JSON.stringify(auxiliary.createState()), StorageScope.APPLICATION, StorageTarget.MACHINE);
-				this.windowListeners.deleteAndDispose(auxiliary.id);
-				const closedWindow = this.windows.deleteAndLeak(auxiliary.id);
-				// Release the window after every close listener has received the event.
-				queueMicrotask(() => closedWindow?.dispose());
-			}),
-		);
+		this.windowListeners.set(auxiliary.id, auxiliary.onDidClose(() => {
+			this.storageService.store(AUXILIARY_WINDOW_STATE_KEY, JSON.stringify(auxiliary.createState()), StorageScope.APPLICATION, StorageTarget.MACHINE);
+			this.windowListeners.deleteAndDispose(auxiliary.id);
+			const closedWindow = this.windows.deleteAndLeak(auxiliary.id);
+			// Release the window after every close listener has received the event.
+			queueMicrotask(() => closedWindow?.dispose());
+		}));
 		await auxiliary.whenStylesHaveLoaded;
 		if (this.windows.get(auxiliary.id) !== auxiliary) throw new Error('The auxiliary editor window closed before its styles loaded');
 		auxiliary.recordFrameOffsets();
@@ -185,31 +182,30 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		this.container.className = 'ash-auxiliary-window-container ash-workbench';
 		this.container.setAttribute('aria-label', title);
 		window.document.body.append(this.container);
-		this._register(
-			observeMutations(workbenchRoot, () => this.syncWorkbenchRoot(workbenchRoot), {
-				attributes: true,
-				attributeFilter: ['class', ...WORKBENCH_ROOT_ATTRIBUTES],
-			}),
-		);
+		this._register(observeMutations(workbenchRoot, () => this.syncWorkbenchRoot(workbenchRoot), {
+			attributes: true,
+			attributeFilter: ['class', ...WORKBENCH_ROOT_ATTRIBUTES],
+		}));
 		this.syncWorkbenchRoot(workbenchRoot);
 		const targetDocument = window.document;
-		const updateIcons = (): void => setIconResolver(targetDocument, icon => getIconDefinition(icon, themeService.getProductIconTheme().icons));
+		const updateIcons = (): void => setIconResolver(
+			targetDocument,
+			icon => getIconDefinition(icon, themeService.getProductIconTheme().icons),
+		);
 		updateIcons();
 		this._register(themeService.onDidProductIconThemeChange(updateIcons));
 		this._register(toDisposable(() => setIconResolver(targetDocument, icon => getIconDefinition(icon))));
 		this._register(addDisposableListener(window, 'resize', () => this.layout()));
 		this._register(addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
 		this._register(addDisposableListener(window, 'unload', () => this.publishClosed()));
-		this._register(
-			toDisposable(() => {
-				this.closingState ??= this.readCurrentState();
-				this.container.remove();
-				window.document.documentElement.classList.remove('ash-auxiliary-window');
-				window.document.body.classList.remove('ash-auxiliary-window-body');
-				if (!this.closed && !window.closed) window.close();
-				this.publishClosed();
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.closingState ??= this.readCurrentState();
+			this.container.remove();
+			window.document.documentElement.classList.remove('ash-auxiliary-window');
+			window.document.body.classList.remove('ash-auxiliary-window-body');
+			if (!this.closed && !window.closed) window.close();
+			this.publishClosed();
+		}));
 	}
 
 	layout(): void {
@@ -261,11 +257,7 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 
 	private handleBeforeUnload(event: BeforeUnloadEvent): void {
 		let reason: string | undefined;
-		this.beforeUnloadEmitter.fire({
-			veto: candidate => {
-				reason ??= candidate;
-			},
-		});
+		this.beforeUnloadEmitter.fire({ veto: candidate => { reason ??= candidate; } });
 		if (!reason) {
 			this.closingState = this.readCurrentState();
 			return;
@@ -288,21 +280,13 @@ function finiteDimension(value: number | undefined, fallback: number): number {
 export function parseAuxiliaryWindowState(raw: string | undefined): AuxiliaryWindowState | undefined {
 	if (!raw) return undefined;
 	let value: unknown;
-	try {
-		value = JSON.parse(raw);
-	} catch {
-		return undefined;
-	}
+	try { value = JSON.parse(raw); } catch { return undefined; }
 	if (typeof value !== 'object' || value === null) return undefined;
 	const state = value as Partial<AuxiliaryWindowState>;
-	if (![state.width, state.height, state.left, state.top, state.featureWidthOffset, state.featureHeightOffset].every(candidate => typeof candidate === 'number' && Number.isFinite(candidate)))
-		return undefined;
+	if (![state.width, state.height, state.left, state.top, state.featureWidthOffset, state.featureHeightOffset].every(candidate => typeof candidate === 'number' && Number.isFinite(candidate))) return undefined;
 	if (state.width! <= 0 || state.height! <= 0) return undefined;
-	if (
-		(state.zoomLevel !== undefined && (typeof state.zoomLevel !== 'number' || !Number.isFinite(state.zoomLevel) || state.zoomLevel < -8 || state.zoomLevel > 8)) ||
-		(state.alwaysOnTop !== undefined && typeof state.alwaysOnTop !== 'boolean') ||
-		(state.mode !== undefined && !['normal', 'maximized', 'fullscreen'].includes(state.mode))
-	)
-		return undefined;
+	if (state.zoomLevel !== undefined && (typeof state.zoomLevel !== 'number' || !Number.isFinite(state.zoomLevel) || state.zoomLevel < -8 || state.zoomLevel > 8)
+		|| state.alwaysOnTop !== undefined && typeof state.alwaysOnTop !== 'boolean'
+		|| state.mode !== undefined && !['normal', 'maximized', 'fullscreen'].includes(state.mode)) return undefined;
 	return state as AuxiliaryWindowState;
 }

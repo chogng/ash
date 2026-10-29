@@ -12,17 +12,9 @@ test('Windows launcher probes PowerShell and passes canonical drive paths to the
 	const executable = 'C:/Program Files/Ash/ash-remote-server.exe';
 	const launcher = new RemoteAppServerProcessLauncher({
 		workspace: createSshRemoteWorkspaceUri('windows-dev', "c:\\开发 O'Brien"),
-		sshExecutable: 'ssh',
-		remoteExecutable: executable,
-		localEnvironment: {},
-		carrier: createCarrier((_executable, _args, options) => {
-			environment = options.environment;
-			return {} as ChildProcessWithoutNullStreams;
-		}),
-		probeRuntime: async (_executable, args) => {
-			command = args.at(-1)!;
-			return { exitCode: 0, stdout: `__ASH_REMOTE_RUNTIME_FOUND__:${executable}\r\n`, stderr: '' };
-		},
+		sshExecutable: 'ssh', remoteExecutable: executable, localEnvironment: {},
+		carrier: createCarrier((_executable, _args, options) => { environment = options.environment; return {} as ChildProcessWithoutNullStreams; }),
+		probeRuntime: async (_executable, args) => { command = args.at(-1)!; return { exitCode: 0, stdout: `__ASH_REMOTE_RUNTIME_FOUND__:${executable}\r\n`, stderr: '' }; },
 	});
 	await launcher.validate();
 	launcher.launch();
@@ -34,11 +26,7 @@ test('Windows launcher probes PowerShell and passes canonical drive paths to the
 });
 
 test('Remote launcher starts a local daemon carrier with a remote connection scope', () => {
-	const launches: Array<{
-		executable: string;
-		args: readonly string[];
-		environment: Readonly<Record<string, string>>;
-	}> = [];
+	const launches: Array<{ executable: string; args: readonly string[]; environment: Readonly<Record<string, string>>; }> = [];
 	const child = {} as ChildProcessWithoutNullStreams;
 	const carrier = createCarrier((executable, args, options) => {
 		launches.push({ executable, args, environment: options.environment });
@@ -52,19 +40,10 @@ test('Remote launcher starts a local daemon carrier with a remote connection sco
 		carrier,
 	});
 	assert.equal(launcher.launch(), child);
-	assert.deepEqual(launches, [
-		{
-			executable: '/runtime/ash-app-server-daemon',
-			args: ['connect-selected'],
-			environment: {
-				ASH_HOME: '/profile',
-				SSH_AUTH_SOCK: '/tmp/agent.sock',
-				ASH_REMOTE_HOST: 'work-server',
-				ASH_REMOTE_ROOT: '/home/ash/project with spaces',
-				ASH_REMOTE_RUNTIME: '/opt/ash/bin/ash-remote-server',
-			},
-		},
-	]);
+	assert.deepEqual(launches, [{
+		executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'],
+		environment: { ASH_HOME: '/profile', SSH_AUTH_SOCK: '/tmp/agent.sock', ASH_REMOTE_HOST: 'work-server', ASH_REMOTE_ROOT: '/home/ash/project with spaces', ASH_REMOTE_RUNTIME: '/opt/ash/bin/ash-remote-server' },
+	}]);
 	launcher.replaceWorkspaceRoot(undefined);
 	launcher.launch();
 	assert.equal(launcher.workspaceRoot, undefined);
@@ -74,11 +53,8 @@ test('Remote launcher starts a local daemon carrier with a remote connection sco
 
 test('Remote launcher retargets the same authority without opening the path locally', () => {
 	const launcher = new RemoteAppServerProcessLauncher({
-		workspace: createSshRemoteWorkspaceUri('work-server', '/srv/one'),
-		sshExecutable: 'ssh',
-		remoteExecutable: '/opt/ash/bin/ash-remote-server',
-		localEnvironment: {},
-		carrier: createCarrier(),
+		workspace: createSshRemoteWorkspaceUri('work-server', '/srv/one'), sshExecutable: 'ssh',
+		remoteExecutable: '/opt/ash/bin/ash-remote-server', localEnvironment: {}, carrier: createCarrier(),
 	});
 	launcher.replaceWorkspaceRoot('/srv/two');
 	launcher.launch();
@@ -88,7 +64,7 @@ test('Remote launcher retargets the same authority without opening the path loca
 });
 
 test('Desktop validates the selected runtime before starting the App Server', async () => {
-	let probe: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv } | undefined;
+	let probe: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; } | undefined;
 	const launcher = new RemoteAppServerProcessLauncher({
 		workspace: createSshRemoteWorkspaceUri('Work-Server', '/home/ash/project'),
 		sshExecutable: 'ssh',
@@ -139,11 +115,7 @@ test('Desktop provisions a missing runtime in Main and re-probes the exact insta
 			probes.push([...args]);
 			return probes.length === 1
 				? { exitCode: 127, stdout: '__ASH_REMOTE_RUNTIME_MISSING__\n', stderr: '' }
-				: {
-						exitCode: 0,
-						stdout: '__ASH_REMOTE_RUNTIME_FOUND__:/srv/ash/runtime/bin/ash-remote-server\n',
-						stderr: '',
-					};
+				: { exitCode: 0, stdout: '__ASH_REMOTE_RUNTIME_FOUND__:/srv/ash/runtime/bin/ash-remote-server\n', stderr: '' };
 		},
 		provisionRuntime: async host => {
 			provisions.push(host);
@@ -157,7 +129,10 @@ test('Desktop provisions a missing runtime in Main and re-probes the exact insta
 
 	assert.deepEqual(provisions, ['work-server']);
 	assert.deepEqual(settlements, [2]);
-	assert.deepEqual(probes, [[...sshRuntimeProbeArguments('work-server', 'ash')], [...sshRuntimeProbeArguments('work-server', '/srv/ash/runtime/bin/ash-remote-server')]]);
+	assert.deepEqual(probes, [
+		[...sshRuntimeProbeArguments('work-server', 'ash')],
+		[...sshRuntimeProbeArguments('work-server', '/srv/ash/runtime/bin/ash-remote-server')],
+	]);
 	assert.equal(launcher.options.carrier.environment.ASH_REMOTE_RUNTIME, '/srv/ash/runtime/bin/ash-remote-server');
 });
 
@@ -170,12 +145,8 @@ test('Desktop settles bootstrap progress when provisioning fails', async () => {
 		carrier: createCarrier(),
 		localEnvironment: {},
 		probeRuntime: async () => ({ exitCode: 127, stdout: '__ASH_REMOTE_RUNTIME_MISSING__\n', stderr: '' }),
-		provisionRuntime: async () => {
-			throw new Error('cancelled install');
-		},
-		settleRuntimeProvision: () => {
-			settlements += 1;
-		},
+		provisionRuntime: async () => { throw new Error('cancelled install'); },
+		settleRuntimeProvision: () => { settlements += 1; },
 	});
 
 	await assert.rejects(() => launcher.validate(), /cancelled install/);
@@ -219,11 +190,7 @@ test('Desktop resolves and activates a persisted exact runtime only around the i
 		activateRuntime: async (host, workspace, runtime) => {
 			lifecycle.push(`activate:${host}:${workspace}:${runtime}`);
 		},
-		probeRuntime: async () => ({
-			exitCode: 0,
-			stdout: '__ASH_REMOTE_RUNTIME_FOUND__:/srv/ash/runtime/one/bin/ash-remote-server\n',
-			stderr: '',
-		}),
+		probeRuntime: async () => ({ exitCode: 0, stdout: '__ASH_REMOTE_RUNTIME_FOUND__:/srv/ash/runtime/one/bin/ash-remote-server\n', stderr: '' }),
 	});
 
 	await launcher.validate();
@@ -232,7 +199,10 @@ test('Desktop resolves and activates a persisted exact runtime only around the i
 	assert.equal(launcher.options.carrier.environment.ASH_REMOTE_RUNTIME, '/srv/ash/runtime/one/bin/ash-remote-server');
 
 	await launcher.didInitialize();
-	assert.deepEqual(lifecycle, ['resolve:work-server:/home/ash/project', 'activate:work-server:/home/ash/project:/srv/ash/runtime/one/bin/ash-remote-server']);
+	assert.deepEqual(lifecycle, [
+		'resolve:work-server:/home/ash/project',
+		'activate:work-server:/home/ash/project:/srv/ash/runtime/one/bin/ash-remote-server',
+	]);
 });
 
 test('Desktop selects only a host-verified rollback runtime', async () => {
@@ -327,17 +297,10 @@ test('an explicit new startup validation permits protocol provisioning after a f
 	assert.equal(provisions, 2);
 });
 
-function createCarrier(spawnProcess: NonNullable<ConstructorParameters<typeof AppServerDaemonLauncher>[0]['spawnProcess']> = () => ({}) as ChildProcessWithoutNullStreams): AppServerDaemonLauncher {
+function createCarrier(spawnProcess: NonNullable<ConstructorParameters<typeof AppServerDaemonLauncher>[0]['spawnProcess']> = () => ({} as ChildProcessWithoutNullStreams)): AppServerDaemonLauncher {
 	return new AppServerDaemonLauncher({
-		executable: '/runtime/ash-app-server-daemon',
-		args: ['connect-selected'],
-		environment: {
-			ASH_HOME: '/profile',
-			ASH_WORKSPACE_ROOT: '/local',
-			ASH_DIR_GRANT_SOURCE: 'userConfig',
-			SSH_AUTH_SOCK: '/tmp/agent.sock',
-		},
-		fileExists: () => true,
-		spawnProcess,
+		executable: '/runtime/ash-app-server-daemon', args: ['connect-selected'],
+		environment: { ASH_HOME: '/profile', ASH_WORKSPACE_ROOT: '/local', ASH_DIR_GRANT_SOURCE: 'userConfig', SSH_AUTH_SOCK: '/tmp/agent.sock' },
+		fileExists: () => true, spawnProcess,
 	});
 }

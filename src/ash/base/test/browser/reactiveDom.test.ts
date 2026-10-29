@@ -11,16 +11,15 @@ test('reactive DOM updates class, state, style, and nested children', () => {
 	const label = observableValue('label', 'Before');
 	const width = observableValue('width', '10px');
 	const backgroundColor = observableValue('backgroundColor', 'red');
-	const view = n.div(
-		{
-			className: ['root', active.map(value => value && 'active')],
-			attributes: { 'aria-expanded': active.map(value => String(value)) },
-			properties: { hidden: active.map(value => !value) },
-			dataset: { state: active.map(value => (value ? 'active' : 'idle')) },
-			style: { width, backgroundColor },
-		},
-		[n.elem('span', { className: 'label' }, label)],
-	);
+	const view = n.div({
+		className: ['root', active.map(value => value && 'active')],
+		attributes: { 'aria-expanded': active.map(value => String(value)) },
+		properties: { hidden: active.map(value => !value) },
+		dataset: { state: active.map(value => value ? 'active' : 'idle') },
+		style: { width, backgroundColor },
+	}, [
+		n.elem('span', { className: 'label' }, label),
+	]);
 	const live = view.toLiveElement();
 
 	assert.equal(live.element.ownerDocument, ownerDocument);
@@ -57,16 +56,14 @@ test('reactive DOM projects and removes SVG dataset values', () => {
 	const ownerDocument = new JSDOM('<!doctype html><body></body>').window.document;
 	const n = createReactiveDom(ownerDocument);
 	const state = observableValue<string | undefined>('state', 'ready');
-	const live = n
-		.svg(
-			{
-				dataset: { state },
-			},
-			n.svgElem('path', { attributes: { d: 'M0 0h16v16z' } }),
-		)
-		.toLiveElement();
+	const live = n.svg({
+		dataset: { state },
+	}, n.svgElem('path', { attributes: { d: 'M0 0h16v16z' } })).toLiveElement();
 
-	assert.equal(live.element.outerHTML, '<svg data-state="ready"><path d="M0 0h16v16z"></path></svg>');
+	assert.equal(
+		live.element.outerHTML,
+		'<svg data-state="ready"><path d="M0 0h16v16z"></path></svg>',
+	);
 	state.set(undefined);
 	assert.equal(live.element.outerHTML, '<svg><path d="M0 0h16v16z"></path></svg>');
 	live.dispose();

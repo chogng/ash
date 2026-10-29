@@ -79,9 +79,15 @@ export interface IStatusbarService {
 	overrideStyle(style: IStatusbarStyleOverride): IDisposable;
 	readonly onDidChangeEntries: Event<void>;
 
-	addEntry(entry: IStatusbarEntry, options: IStatusbarEntryOptions): IStatusbarEntryAccessor;
+	addEntry(
+		entry: IStatusbarEntry,
+		options: IStatusbarEntryOptions,
+	): IStatusbarEntryAccessor;
 
-	getEntries(alignment: StatusbarAlignment): readonly IStatusbarEntryItem[];
+	getEntries(
+		alignment: StatusbarAlignment,
+	): readonly IStatusbarEntryItem[];
 }
 
-export const IStatusbarService = createServiceIdentifier<IStatusbarService>('statusbarService');
+export const IStatusbarService =
+	createServiceIdentifier<IStatusbarService>('statusbarService');

@@ -29,21 +29,15 @@ export interface ITerminalCompletionService {
 
 /** One window owns the providers; every request still belongs to its original terminal prompt. */
 export class TerminalCompletionService extends Disposable implements ITerminalCompletionService {
-	private readonly registered = new Map<string, ITerminalCompletionProvider & { readonly controller: AbortController }>();
-	get providers(): IterableIterator<ITerminalCompletionProvider> {
-		return this.registered.values();
-	}
+	private readonly registered = new Map<string, ITerminalCompletionProvider & { readonly controller: AbortController; }>();
+	get providers(): IterableIterator<ITerminalCompletionProvider> { return this.registered.values(); }
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeProviders = this.changed.event;
 	registerTerminalCompletionProvider(extensionIdentifier: string, id: string, provider: ITerminalCompletionProvider, ...triggerCharacters: string[]): IDisposable {
 		if (this.isDisposed) throw new CancellationError();
 		const key = `${extensionIdentifier}/${id}`;
 		if (this.registered.has(key)) throw new Error('Terminal completion provider is already registered');
-		const entry = {
-			controller: new AbortController(),
-			triggerCharacters,
-			provideCompletions: provider.provideCompletions.bind(provider),
-		};
+		const entry = { controller: new AbortController(), triggerCharacters, provideCompletions: provider.provideCompletions.bind(provider) };
 		this.registered.set(key, entry);
 		this.changed.fire();
 		return toDisposable(() => {
@@ -57,13 +51,11 @@ export class TerminalCompletionService extends Disposable implements ITerminalCo
 		if (signal.aborted) return [];
 		const entries = [...this.registered.entries()].filter(([, entry]) => triggerCharacter === undefined || entry.triggerCharacters?.includes(triggerCharacter));
 		// An async callback isolates both synchronous throws and rejected provider promises.
-		const replies = await Promise.allSettled(
-			entries.map(async ([key, entry]) => {
-				if (signal.aborted || this.registered.get(key) !== entry) return [];
-				const cancellation = AbortSignal.any([signal, entry.controller.signal]);
-				return raceCancellationError(entry.provideCompletions(instance, value, cursorIndex, cancellation), cancellation);
-			}),
-		);
+		const replies = await Promise.allSettled(entries.map(async ([key, entry]) => {
+			if (signal.aborted || this.registered.get(key) !== entry) return [];
+			const cancellation = AbortSignal.any([signal, entry.controller.signal]);
+			return raceCancellationError(entry.provideCompletions(instance, value, cursorIndex, cancellation), cancellation);
+		}));
 		if (signal.aborted) return [];
 		return replies.flatMap((reply, index) => {
 			const [key, entry] = entries[index]!;

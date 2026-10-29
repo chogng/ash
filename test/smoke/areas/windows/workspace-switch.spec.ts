@@ -8,30 +8,18 @@ import { expect, test } from '../../../automation/test.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
 function windowsPreferredDropEffect(): number {
-	const output = execFileSync(
-		'powershell.exe',
-		[
-			'-NoProfile',
-			'-STA',
-			'-Command',
-			'Add-Type -AssemblyName System.Windows.Forms; $data = [System.Windows.Forms.Clipboard]::GetDataObject().GetData("Preferred DropEffect"); if ($data -isnot [System.IO.MemoryStream]) { throw "Missing Preferred DropEffect" }; [BitConverter]::ToInt32($data.ToArray(), 0)',
-		],
-		{ encoding: 'utf8' },
-	);
+	const output = execFileSync('powershell.exe', [
+		'-NoProfile', '-STA', '-Command',
+		'Add-Type -AssemblyName System.Windows.Forms; $data = [System.Windows.Forms.Clipboard]::GetDataObject().GetData("Preferred DropEffect"); if ($data -isnot [System.IO.MemoryStream]) { throw "Missing Preferred DropEffect" }; [BitConverter]::ToInt32($data.ToArray(), 0)',
+	], { encoding: 'utf8' });
 	return Number(output.trim());
 }
 
 function pasteInWindowsExplorer(directory: string): void {
-	execFileSync(
-		'powershell.exe',
-		[
-			'-NoProfile',
-			'-STA',
-			'-Command',
-			'$folder = (New-Object -ComObject Shell.Application).NameSpace($env:ASH_TEST_PASTE_DIRECTORY); if ($null -eq $folder) { throw "Explorer destination is unavailable" }; $folder.Self.InvokeVerb("paste")',
-		],
-		{ env: { ...process.env, ASH_TEST_PASTE_DIRECTORY: directory } },
-	);
+	execFileSync('powershell.exe', [
+		'-NoProfile', '-STA', '-Command',
+		'$folder = (New-Object -ComObject Shell.Application).NameSpace($env:ASH_TEST_PASTE_DIRECTORY); if ($null -eq $folder) { throw "Explorer destination is unavailable" }; $folder.Self.InvokeVerb("paste")',
+	], { env: { ...process.env, ASH_TEST_PASTE_DIRECTORY: directory } });
 }
 
 test('repeated folder opens wait for the permission choice past 30 seconds', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -40,52 +28,32 @@ test('repeated folder opens wait for the permission choice past 30 seconds', { t
 	await mkdir(nextFolder);
 	const page = workbench.page;
 	const initial = await page.evaluate(() => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:workspace:context:read');
 	});
 	expect(parseWorkspace(initial).folders[0]?.uri.fsPath).toBe(testWorkspace.directory);
 
-	const opening = page
-		.evaluate(folder => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } };
-				}
-			).ash.ipcRenderer;
-			return ipc.invoke('ash:native-host:open-workspace', folder);
-		}, nextFolder)
-		.then(
-			() => undefined,
-			error => String(error),
-		);
+	const opening = page.evaluate(folder => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
+		return ipc.invoke('ash:native-host:open-workspace', folder);
+	}, nextFolder).then(() => undefined, error => String(error));
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
-	const repeatedOpening = page
-		.evaluate(folder => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } };
-				}
-			).ash.ipcRenderer;
-			return ipc.invoke('ash:native-host:open-workspace', folder);
-		}, nextFolder)
-		.then(
-			() => undefined,
-			error => String(error),
-		);
+	const repeatedOpening = page.evaluate(folder => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
+		return ipc.invoke('ash:native-host:open-workspace', folder);
+	}, nextFolder).then(() => undefined, error => String(error));
 	await page.waitForTimeout(31_000);
 	await expect(prompt).toBeVisible();
 	await prompt.getByRole('button', { name: 'Open Read-Only' }).click();
 	expect(await Promise.all([opening, repeatedOpening])).toEqual([undefined, undefined]);
-	await expect
-		.poll(async () => {
-			const workspace = await page.evaluate(() => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-				return ipc.invoke('ash:workspace:context:read');
-			});
-			return parseWorkspace(workspace).folders[0]?.uri.fsPath;
-		})
-		.toBe(nextFolder);
+	await expect.poll(async () => {
+		const workspace = await page.evaluate(() => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			return ipc.invoke('ash:workspace:context:read');
+		});
+		return parseWorkspace(workspace).folders[0]?.uri.fsPath;
+	}).toBe(nextFolder);
 });
 
 test('opening a folder displays its files in Explorer', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -96,11 +64,7 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	await writeFile(join(nextFolder, 'inner', 'deep', 'nested.txt'), 'nested');
 	const page = workbench.page;
 	const opening = page.evaluate(folder => {
-		const ipc = (
-			globalThis as unknown as {
-				ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } };
-			}
-		).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder);
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
@@ -176,127 +140,53 @@ test('Explorer shortcuts copy and move binary files into folders', { tag: ['@ele
 		return data instanceof Blob ? data.text() : undefined;
 	});
 	expect(copiedFiles).toContain('clipboard.bin');
-	await expect(
-		page.evaluate(async () => {
-			const ipc = (
-				globalThis as unknown as {
-					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<void> } };
-				}
-			).ash.ipcRenderer;
-			await ipc.invoke('ash:host:writeClipboardResources', { resources: [], operation: 'delete' });
-		}),
-	).rejects.toThrow(/Invalid clipboard resources/);
+	await expect(page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
+		await ipc.invoke('ash:host:writeClipboardResources', { resources: [], operation: 'delete' });
+	})).rejects.toThrow(/Invalid clipboard resources/);
 	if (process.platform === 'win32') {
-		const fileDropList = execFileSync('powershell.exe', ['-NoProfile', '-STA', '-Command', 'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList()'], {
-			encoding: 'utf8',
-		})
-			.trim()
-			.split(/\r?\n/);
+		const fileDropList = execFileSync('powershell.exe', [
+			'-NoProfile', '-STA', '-Command',
+			'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList()',
+		], { encoding: 'utf8' }).trim().split(/\r?\n/);
 		expect(fileDropList).toContain(join(directory, 'clipboard.bin'));
 		expect(windowsPreferredDropEffect()).toBe(1);
 		pasteInWindowsExplorer(join(directory, 'os-copy-target'));
-		await expect
-			.poll(async () =>
-				readFile(join(directory, 'os-copy-target', 'clipboard.bin')).then(
-					value => [...value],
-					() => [],
-				),
-			)
-			.toEqual([...bytes]);
-		expect(
-			await stat(join(directory, 'clipboard.bin')).then(
-				() => true,
-				() => false,
-			),
-		).toBe(true);
+		await expect.poll(async () => readFile(join(directory, 'os-copy-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+		expect(await stat(join(directory, 'clipboard.bin')).then(() => true, () => false)).toBe(true);
 	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
-	await expect
-		.poll(async () =>
-			readFile(join(directory, 'paste-target', 'clipboard.bin')).then(
-				value => [...value],
-				() => [],
-			),
-		)
-		.toEqual([...bytes]);
+	await expect.poll(async () => readFile(join(directory, 'paste-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 	await source.click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+x' : 'Control+x');
 	if (process.platform === 'win32') expect(windowsPreferredDropEffect()).toBe(2);
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'move-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
-	await expect
-		.poll(async () =>
-			readFile(join(directory, 'move-target', 'clipboard.bin')).then(
-				value => [...value],
-				() => [],
-			),
-		)
-		.toEqual([...bytes]);
-	await expect
-		.poll(async () =>
-			stat(join(directory, 'clipboard.bin')).then(
-				() => true,
-				() => false,
-			),
-		)
-		.toBe(false);
+	await expect.poll(async () => readFile(join(directory, 'move-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+	await expect.poll(async () => stat(join(directory, 'clipboard.bin')).then(() => true, () => false)).toBe(false);
 	if (process.platform === 'win32') {
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'os-cut.bin', exact: true }).click();
 		await page.keyboard.press('Control+x');
 		expect(windowsPreferredDropEffect()).toBe(2);
 		pasteInWindowsExplorer(join(directory, 'os-move-target'));
-		await expect
-			.poll(async () =>
-				readFile(join(directory, 'os-move-target', 'os-cut.bin')).then(
-					value => [...value],
-					() => [],
-				),
-			)
-			.toEqual([...bytes]);
-		await expect
-			.poll(async () =>
-				stat(join(directory, 'os-cut.bin')).then(
-					() => true,
-					() => false,
-				),
-			)
-			.toBe(false);
+		await expect.poll(async () => readFile(join(directory, 'os-move-target', 'os-cut.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+		await expect.poll(async () => stat(join(directory, 'os-cut.bin')).then(() => true, () => false)).toBe(false);
 	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'folder-to-copy', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
-	await expect
-		.poll(async () =>
-			readFile(join(directory, 'paste-target', 'folder-to-copy', 'nested.bin')).then(
-				value => [...value],
-				() => [],
-			),
-		)
-		.toEqual([...bytes]);
+	await expect.poll(async () => readFile(join(directory, 'paste-target', 'folder-to-copy', 'nested.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 	if (process.platform === 'win32') {
 		const external = join(directory, 'external.bin');
 		await writeFile(external, bytes);
-		execFileSync(
-			'powershell.exe',
-			[
-				'-NoProfile',
-				'-STA',
-				'-Command',
-				'Add-Type -AssemblyName System.Windows.Forms; $files = New-Object System.Collections.Specialized.StringCollection; [void]$files.Add($env:ASH_TEST_CLIPBOARD_FILE); [System.Windows.Forms.Clipboard]::SetFileDropList($files)',
-			],
-			{ env: { ...process.env, ASH_TEST_CLIPBOARD_FILE: external } },
-		);
+		execFileSync('powershell.exe', [
+			'-NoProfile', '-STA', '-Command',
+			'Add-Type -AssemblyName System.Windows.Forms; $files = New-Object System.Collections.Specialized.StringCollection; [void]$files.Add($env:ASH_TEST_CLIPBOARD_FILE); [System.Windows.Forms.Clipboard]::SetFileDropList($files)',
+		], { env: { ...process.env, ASH_TEST_CLIPBOARD_FILE: external } });
 		await page.keyboard.press('Control+v');
-		await expect
-			.poll(async () =>
-				readFile(join(directory, 'paste-target', 'external.bin')).then(
-					value => [...value],
-					() => [],
-				),
-			)
-			.toEqual([...bytes]);
+		await expect.poll(async () => readFile(join(directory, 'paste-target', 'external.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 		const externalDirectory = await mkdtemp(join(tmpdir(), 'ash-explorer-cut-'));
 		try {
 			const externalFile = join(externalDirectory, 'external-cut.bin');
@@ -304,55 +194,20 @@ test('Explorer shortcuts copy and move binary files into folders', { tag: ['@ele
 			await mkdir(externalFolder);
 			await writeFile(externalFile, bytes);
 			await writeFile(join(externalFolder, 'nested.bin'), bytes);
-			execFileSync(
-				'powershell.exe',
-				[
-					'-NoProfile',
-					'-STA',
-					'-Command',
-					'Add-Type -AssemblyName System.Windows.Forms; $paths = New-Object System.Collections.Specialized.StringCollection; [void]$paths.Add($env:ASH_TEST_CUT_FILE); [void]$paths.Add($env:ASH_TEST_CUT_FOLDER); $data = New-Object System.Windows.Forms.DataObject; $data.SetFileDropList($paths); $data.SetData("Preferred DropEffect", (New-Object System.IO.MemoryStream(,[byte[]](2,0,0,0)))); [System.Windows.Forms.Clipboard]::SetDataObject($data, $true)',
-				],
-				{ env: { ...process.env, ASH_TEST_CUT_FILE: externalFile, ASH_TEST_CUT_FOLDER: externalFolder } },
-			);
+			execFileSync('powershell.exe', [
+				'-NoProfile', '-STA', '-Command',
+				'Add-Type -AssemblyName System.Windows.Forms; $paths = New-Object System.Collections.Specialized.StringCollection; [void]$paths.Add($env:ASH_TEST_CUT_FILE); [void]$paths.Add($env:ASH_TEST_CUT_FOLDER); $data = New-Object System.Windows.Forms.DataObject; $data.SetFileDropList($paths); $data.SetData("Preferred DropEffect", (New-Object System.IO.MemoryStream(,[byte[]](2,0,0,0)))); [System.Windows.Forms.Clipboard]::SetDataObject($data, $true)',
+			], { env: { ...process.env, ASH_TEST_CUT_FILE: externalFile, ASH_TEST_CUT_FOLDER: externalFolder } });
 			expect(windowsPreferredDropEffect()).toBe(2);
 			await page.keyboard.press('Control+v');
-			await expect
-				.poll(async () =>
-					readFile(join(directory, 'paste-target', 'external-cut.bin')).then(
-						value => [...value],
-						() => [],
-					),
-				)
-				.toEqual([...bytes]);
-			await expect
-				.poll(async () =>
-					readFile(join(directory, 'paste-target', 'external-cut-folder', 'nested.bin')).then(
-						value => [...value],
-						() => [],
-					),
-				)
-				.toEqual([...bytes]);
-			await expect
-				.poll(async () =>
-					stat(externalFile).then(
-						() => true,
-						() => false,
-					),
-				)
-				.toBe(false);
-			await expect
-				.poll(async () =>
-					stat(externalFolder).then(
-						() => true,
-						() => false,
-					),
-				)
-				.toBe(false);
-			const remainingClipboardFiles = execFileSync(
-				'powershell.exe',
-				['-NoProfile', '-STA', '-Command', 'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList().Count'],
-				{ encoding: 'utf8' },
-			);
+			await expect.poll(async () => readFile(join(directory, 'paste-target', 'external-cut.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+			await expect.poll(async () => readFile(join(directory, 'paste-target', 'external-cut-folder', 'nested.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+			await expect.poll(async () => stat(externalFile).then(() => true, () => false)).toBe(false);
+			await expect.poll(async () => stat(externalFolder).then(() => true, () => false)).toBe(false);
+			const remainingClipboardFiles = execFileSync('powershell.exe', [
+				'-NoProfile', '-STA', '-Command',
+				'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList().Count',
+			], { encoding: 'utf8' });
 			expect(Number(remainingClipboardFiles.trim())).toBe(0);
 		} finally {
 			const path = resolve(externalDirectory);
@@ -382,34 +237,19 @@ test.describe('System clipboard', () => {
 				await clipboard.write([new ClipboardItem({ 'text/uri-list': url })]);
 			}, pathToFileURL(copySource).href);
 			await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
-			await expect
-				.poll(async () =>
-					readFile(join(destination, 'external-copy.bin')).then(
-						value => [...value],
-						() => [],
-					),
-				)
-				.toEqual([0, 255, 42]);
-			expect(
-				await stat(copySource).then(
-					() => true,
-					() => false,
-				),
-			).toBe(true);
+			await expect.poll(async () => readFile(join(destination, 'external-copy.bin')).then(value => [...value], () => [])).toEqual([0, 255, 42]);
+			expect(await stat(copySource).then(() => true, () => false)).toBe(true);
 
 			const moveFormats = process.platform === 'darwin' ? ['finder'] : ['gnome', 'kde'];
 			for (const format of moveFormats) {
 				const source = join(externalDirectory, `external-${format}.bin`);
 				await writeFile(source, Buffer.from([0, 254, 43]));
-				await electron.evaluate(
-					async ({ clipboard, ClipboardItem }, { url, format }) => {
-						const formats: Record<string, string> = { 'text/uri-list': url };
-						if (format === 'gnome') formats['electron application/osclipboard;format="x-special/gnome-copied-files"'] = `cut\n${url}`;
-						if (format === 'kde') formats['electron application/osclipboard;format="application/x-kde-cutselection"'] = '1';
-						await clipboard.write([new ClipboardItem(formats)]);
-					},
-					{ url: pathToFileURL(source).href, format },
-				);
+				await electron.evaluate(async ({ clipboard, ClipboardItem }, { url, format }) => {
+					const formats: Record<string, string> = { 'text/uri-list': url };
+					if (format === 'gnome') formats['electron application/osclipboard;format="x-special/gnome-copied-files"'] = `cut\n${url}`;
+					if (format === 'kde') formats['electron application/osclipboard;format="application/x-kde-cutselection"'] = '1';
+					await clipboard.write([new ClipboardItem(formats)]);
+				}, { url: pathToFileURL(source).href, format });
 				if (format !== 'finder') {
 					const marker = format === 'gnome' ? 'x-special/gnome-copied-files' : 'application/x-kde-cutselection';
 					expect(await electron.evaluate(({ clipboard }, mime) => clipboard.has(`electron application/osclipboard;format="${mime}"`), marker)).toBe(true);
@@ -418,24 +258,8 @@ test.describe('System clipboard', () => {
 					}
 				}
 				await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+v' : 'Control+v');
-				await expect
-					.poll(async () =>
-						readFile(join(destination, `external-${format}.bin`)).then(
-							value => [...value],
-							() => [],
-						),
-					)
-					.toEqual([0, 254, 43]);
-				await expect
-					.poll(
-						async () =>
-							stat(source).then(
-								() => true,
-								() => false,
-							),
-						{ message: `${format} cut should remove the source` },
-					)
-					.toBe(false);
+				await expect.poll(async () => readFile(join(destination, `external-${format}.bin`)).then(value => [...value], () => [])).toEqual([0, 254, 43]);
+				await expect.poll(async () => stat(source).then(() => true, () => false), { message: `${format} cut should remove the source` }).toBe(false);
 				if (format !== 'finder') {
 					const marker = format === 'gnome' ? 'x-special/gnome-copied-files' : 'application/x-kde-cutselection';
 					await expect.poll(() => electron.evaluate(({ clipboard }, mime) => clipboard.has(`electron application/osclipboard;format="${mime}"`), marker)).toBe(false);
@@ -476,14 +300,7 @@ test('Explorer creates a child folder from a folder context menu', { tag: ['@ele
 	await expect(input).toBeVisible();
 	await input.fill('created-from-menu');
 	await input.press('Enter');
-	await expect
-		.poll(async () =>
-			stat(join(parent, 'created-from-menu')).then(
-				metadata => metadata.isDirectory(),
-				() => false,
-			),
-		)
-		.toBe(true);
+	await expect.poll(async () => stat(join(parent, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
 	await folder.click();
 	await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
 });
@@ -526,23 +343,11 @@ test('Explorer uses the desktop clipboard and imports binary files from a paste 
 	await source.click();
 	await explorer.getByRole('tree').focus();
 	await page.keyboard.press('ControlOrMeta+C');
-	await expect
-		.poll(() =>
-			page.evaluate(async () => {
-				const ipc = (
-					globalThis as unknown as {
-						ash: {
-							ipcRenderer: {
-								invoke(channel: string): Promise<{ resources: string[]; operation: 'copy' | 'move' }>;
-							};
-						};
-					}
-				).ash.ipcRenderer;
-				const result = await ipc.invoke('ash:host:readClipboardResources');
-				return result.resources.length;
-			}),
-		)
-		.toBe(1);
+	await expect.poll(() => page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ resources: string[]; operation: 'copy' | 'move'; }>; }; }; }).ash.ipcRenderer;
+		const result = await ipc.invoke('ash:host:readClipboardResources');
+		return result.resources.length;
+	})).toBe(1);
 	await folder.click();
 	await explorer.getByRole('tree').focus();
 	await page.keyboard.press('ControlOrMeta+V');
@@ -557,12 +362,5 @@ test('Explorer uses the desktop clipboard and imports binary files from a paste 
 		data.items.add(new File([new Uint8Array([0, 255, 42])], 'picture.bin'));
 		tree.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
 	});
-	await expect
-		.poll(async () =>
-			readFile(join(destination, 'picture.bin')).then(
-				bytes => [...bytes],
-				() => undefined,
-			),
-		)
-		.toEqual([0, 255, 42]);
+	await expect.poll(async () => readFile(join(destination, 'picture.bin')).then(bytes => [...bytes], () => undefined)).toEqual([0, 255, 42]);
 });

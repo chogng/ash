@@ -9,18 +9,12 @@ import { readExtensionUiTargets } from './extensionManifest.ts';
 test('every shipped extension explicitly declares its product windows', async () => {
 	const root = resolve(import.meta.dirname, '../../extensions');
 	for (const entry of await readdir(root, { withFileTypes: true })) {
-		if (!entry.isDirectory() || entry.name === 'node_modules') {
-			continue;
-		}
+		if (!entry.isDirectory() || entry.name === 'node_modules') { continue; }
 		const text = await readFile(join(root, entry.name, 'package.json'), 'utf8').catch(error => {
-			if (error.code === 'ENOENT') {
-				return undefined;
-			}
+			if (error.code === 'ENOENT') { return undefined; }
 			throw error;
 		});
-		if (text === undefined) {
-			continue;
-		}
+		if (text === undefined) { continue; }
 		const manifest = JSON.parse(text);
 		assert.ok(readExtensionUiTargets(manifest.ashUiTargets), `${entry.name} must declare ashUiTargets`);
 	}
@@ -45,27 +39,11 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await mkdir(join(directory, 'extensions/capability'));
 		await writeFile(join(directory, 'extensions/capability/Cargo.toml'), '[package]\nname = "capability"\nversion = "1.0.0"\n');
 		await mkdir(join(directory, 'extensions/installed-editor'), { recursive: true });
-		await writeFile(
-			join(directory, 'extensions/installed-editor/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'installed-editor',
-				version: '1.0.0',
-				ashRuntime: { kind: 'rust', client: { apiVersion: 1, entry: 'dist/editor.js' } },
-			}),
-		);
+		await writeFile(join(directory, 'extensions/installed-editor/package.json'), JSON.stringify({ publisher: 'test', name: 'installed-editor', version: '1.0.0', ashRuntime: { kind: 'rust', client: { apiVersion: 1, entry: 'dist/editor.js' } } }));
 		await mkdir(join(directory, 'livekit-server'));
 		await writeFile(join(directory, 'livekit-server/runtime.json'), JSON.stringify({ schemaVersion: 1, id: 'ash.livekit', entrypoint: 'bin/livekit-server' }));
 		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });
-		await writeFile(
-			join(directory, 'extensions/git/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'git',
-				version: '1.0.0',
-				ashRuntime: { kind: 'rust', entrypoint: 'test-capability' },
-			}),
-		);
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'test-capability' } }));
 		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
 		await writeFile(join(directory, 'extensions/git/build.rs'), 'fn main() {}');
 		await mkdir(join(directory, 'extensions/git/common'), { recursive: true });
@@ -78,100 +56,38 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await writeFile(join(directory, 'extensions/language/package.json'), JSON.stringify({ publisher: 'test', name: 'language', version: '1.0.0' }));
 		await writeFile(join(directory, 'extensions/language/tree-sitter/parser/Cargo.toml'), '[package]\nname = "tree-sitter-parser"');
 		const parserSource = await open(join(directory, 'extensions/language/tree-sitter/parser/src/parser.c'), 'w');
-		try {
-			await parserSource.truncate(17 * 1024 * 1024);
-		} finally {
-			await parserSource.close();
-		}
+		try { await parserSource.truncate(17 * 1024 * 1024); }
+		finally { await parserSource.close(); }
 		for (const path of ['tree-sitter/parser.wasm', 'tree-sitter/nested/parser.wasm', 'tree-sitter/grammars.json', 'queries/highlights.scm', 'queries/LICENSE.txt']) {
 			await writeFile(join(directory, 'extensions/language', path), path);
 		}
 		await mkdir(join(directory, 'extensions/language-pack/translations'), { recursive: true });
-		const catalog = {
-			schemaVersion: 1,
-			locale: 'zh-CN',
-			catalogVersion: 'ash-1',
-			bundles: { ash: { hello: '你好' } },
-		};
-		await writeFile(
-			join(directory, 'extensions/language-pack/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'language-pack',
-				version: '1.0.0',
-				engines: { ash: '*' },
-				contributes: {
-					localizations: [{ languageId: 'zh-CN', translations: [{ id: 'ash', path: 'localization/package.json' }] }],
-				},
-			}),
-		);
-		await mkdir(join(directory, '.build/desktop/localization/extensions/test.language-pack/localization'), {
-			recursive: true,
-		});
+		const catalog = { schemaVersion: 1, locale: 'zh-CN', catalogVersion: 'ash-1', bundles: { ash: { hello: '你好' } } };
+		await writeFile(join(directory, 'extensions/language-pack/package.json'), JSON.stringify({ publisher: 'test', name: 'language-pack', version: '1.0.0', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }));
+		await mkdir(join(directory, '.build/desktop/localization/extensions/test.language-pack/localization'), { recursive: true });
 		await writeFile(join(directory, '.build/desktop/localization/extensions/test.language-pack/localization/package.json'), JSON.stringify(catalog));
 		await mkdir(join(directory, 'extensions/optional-language'), { recursive: true });
-		await writeFile(
-			join(directory, 'extensions/optional-language/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'optional-language',
-				engines: { ash: '*' },
-				contributes: { localizations: [{ languageId: 'fr' }] },
-			}),
-		);
+		await writeFile(join(directory, 'extensions/optional-language/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-language', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'fr' }] } }));
 		await writeFile(join(directory, 'extensions/optional-language/optional.json'), 'French must be downloaded');
 		await mkdir(join(directory, 'extensions/optional-keymap'));
-		await writeFile(
-			join(directory, 'extensions/optional-keymap/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'optional-keymap',
-				ashDistribution: 'marketplace',
-				contributes: { keybindings: [{ key: 'ctrl+d', command: 'editor.action.addSelectionToNextFindMatch' }] },
-			}),
-		);
+		await writeFile(join(directory, 'extensions/optional-keymap/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-keymap', ashDistribution: 'marketplace', contributes: { keybindings: [{ key: 'ctrl+d', command: 'editor.action.addSelectionToNextFindMatch' }] } }));
 		const language = join(directory, 'extensions/node-language');
 		await mkdir(join(language, 'node_modules/fixture-runtime'), { recursive: true });
 		await writeFile(join(language, 'node_modules/fixture-runtime/package.json'), JSON.stringify({ name: 'fixture-runtime', version: '1.0.0', main: 'index.cjs' }));
 		await writeFile(join(language, 'node_modules/fixture-runtime/index.cjs'), 'module.exports = "bundled language server";');
 		await writeFile(join(language, 'node_modules/fixture-runtime/LICENSE'), 'Synthetic license fixture');
 		await writeFile(join(language, 'server.cjs'), 'console.log(require("fixture-runtime"));');
-		await writeFile(
-			join(language, 'package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'node-language',
-				version: '1.0.0',
-				ashLanguageServers: {
-					version: 2,
-					servers: [
-						{
-							id: 'fixture',
-							languages: ['fixture'],
-							runtime: 'node',
-							entrypoint: 'server.cjs',
-							runtimePackages: ['fixture-runtime'],
-						},
-					],
-				},
-			}),
-		);
-		const run = () =>
-			spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
-				cwd: directory,
-				encoding: 'utf8',
-				timeout: 15_000,
-				// This fixture owns its catalog, including any externally configured roots.
-				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
-			});
+		await writeFile(join(language, 'package.json'), JSON.stringify({ publisher: 'test', name: 'node-language', version: '1.0.0', ashLanguageServers: { version: 2, servers: [{ id: 'fixture', languages: ['fixture'], runtime: 'node', entrypoint: 'server.cjs', runtimePackages: ['fixture-runtime'] }] } }));
+		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
+			cwd: directory, encoding: 'utf8', timeout: 15_000,
+			// This fixture owns its catalog, including any externally configured roots.
+			env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
+		});
 		const packaged = run();
 		assert.ifError(packaged.error);
 		assert.equal(packaged.status, 0, packaged.stderr);
 		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
-		assert.deepEqual(
-			bundle.catalog.extensions.map((extension: { id: string }) => extension.id),
-			['test.git', 'test.language', 'test.language-pack', 'test.node-language', 'test.theme-defaults'],
-		);
+		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language', 'test.language-pack', 'test.node-language', 'test.theme-defaults']);
 		const nodeResources = bundle.resources['test.node-language'];
 		assert.equal(Buffer.from(nodeResources['licenses/fixture-runtime/LICENSE'], 'base64').toString(), 'Synthetic license fixture');
 		assert.equal(Buffer.from(nodeResources['node_modules/fixture-runtime/index.cjs'], 'base64').toString(), 'module.exports = "bundled language server";');
@@ -181,15 +97,8 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		assert.equal(server.status, 0, server.stderr);
 		assert.equal(server.stdout.trim(), 'bundled language server');
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['package.json', 'package.nls.zh-CN.json']);
-		assert.deepEqual(Object.keys(bundle.resources['test.language']).sort(), [
-			'package.json',
-			'queries/LICENSE.txt',
-			'queries/highlights.scm',
-			'tree-sitter/grammars.json',
-			'tree-sitter/nested/parser.wasm',
-			'tree-sitter/parser.wasm',
-		]);
-		assert.equal(bundle.catalog.extensions.find((extension: { id: string }) => extension.id === 'test.language-pack').sourceKind, 'builtIn');
+		assert.deepEqual(Object.keys(bundle.resources['test.language']).sort(), ['package.json', 'queries/LICENSE.txt', 'queries/highlights.scm', 'tree-sitter/grammars.json', 'tree-sitter/nested/parser.wasm', 'tree-sitter/parser.wasm']);
+		assert.equal(bundle.catalog.extensions.find((extension: { id: string; }) => extension.id === 'test.language-pack').sourceKind, 'builtIn');
 		assert.deepEqual(JSON.parse(Buffer.from(bundle.resources['test.language-pack']['localization/package.json'], 'base64').toString('utf8')), catalog);
 		await writeFile(join(directory, 'outside.cjs'), 'module.exports = "outside package";');
 		await writeFile(join(language, 'server.cjs'), 'require("../../outside.cjs");');
@@ -231,25 +140,8 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		// Real author packages install the SDK for its types; the Worker must still use its host facade.
 		await mkdir(join(directory, 'extensions/git/node_modules/@ash'), { recursive: true });
 		await symlink(resolve(import.meta.dirname, '../../sdk/typescript'), join(directory, 'extensions/git/node_modules/@ash/sdk'), process.platform === 'win32' ? 'junction' : 'dir');
-		await writeFile(
-			join(directory, 'extensions/git/package.json'),
-			JSON.stringify({
-				publisher: 'test',
-				name: 'git',
-				version: '1.0.0',
-				browser: 'browser/main.ts',
-				contributes: {
-					commands: [
-						{ command: 'test.browser.command', title: 'Ash browser command' },
-						{ command: 'test.browser.disposeImage', title: 'Dispose image editor' },
-					],
-					imageEditors: [{ id: 'test.image', displayName: 'Image' }],
-				},
-			}),
-		);
-		await writeFile(
-			join(directory, 'extensions/git/browser/main.ts'),
-			`import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }, { command: 'test.browser.disposeImage', title: 'Dispose image editor' }], imageEditors: [{ id: 'test.image', displayName: 'Image' }] } }));
+		await writeFile(join(directory, 'extensions/git/browser/main.ts'), `import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
 export function activate(context) {
  const image = window.registerImageEditorProvider('test.image', {resolveImageEditor(_context, view) { view.html = '<p>HTML-only image editor</p>'; }});
  context.subscriptions.push(image, commands.register('test.browser.disposeImage', () => image.dispose()));
@@ -260,28 +152,18 @@ export function activate(context) {
   await window.showInformationMessage('Ash browser command');
   return marker;
  }));
-}`,
-		);
+}`);
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
 		await writeFile(join(directory, 'extensions/git/browser/sample.ts'), 'export const sample = 1;');
 		const run = () => {
-			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
-				cwd: directory,
-				encoding: 'utf8',
-				timeout: 30_000,
-				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
-			});
+			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
 			assert.ifError(result.error);
 			assert.equal(result.status, 0, result.stderr);
 		};
 		run();
 		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
 		const publicationPath = join(directory, '.build/builtin/current.json');
-		const publication = async () =>
-			JSON.parse(await readFile(publicationPath, 'utf8')) as {
-				builtIn: string[];
-				packageNames: Record<string, string>;
-			};
+		const publication = async () => JSON.parse(await readFile(publicationPath, 'utf8')) as { builtIn: string[]; packageNames: Record<string, string>; };
 		const firstPublication = await publication();
 		const gitSnapshot = firstPublication.builtIn.find(id => firstPublication.packageNames[id] === 'git')!;
 		const preparedEntry = join(directory, '.build/builtin/packages', gitSnapshot, 'browser/main.ts');
@@ -290,12 +172,7 @@ export function activate(context) {
 		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
 		assert.match(module, /combined-entry-marker/);
 		assert.doesNotMatch(module, /from ['"]\.\/helper\.js['"]|Promise<string>/);
-		const exercised = spawnSync(
-			process.execPath,
-			[
-				'--input-type=module',
-				'-e',
-				`
+		const exercised = spawnSync(process.execPath, ['--input-type=module', '-e', `
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -324,11 +201,7 @@ assert.deepEqual(requests, [
 ]);
 await runtime.deactivate();
 await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), /not active|disposed/);
-`,
-				preparedEntry,
-			],
-			{ cwd: directory, encoding: 'utf8', timeout: 15_000 },
-		);
+`, preparedEntry], { cwd: directory, encoding: 'utf8', timeout: 15_000 });
 		assert.ifError(exercised.error);
 		assert.equal(exercised.status, 0, exercised.stdout + exercised.stderr);
 		const cache = join(directory, '.build/browser-extensions');
@@ -358,7 +231,7 @@ await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 
 		const dependencies = await snapshots();
 		await writeFile(join(directory, 'extensions/git/browser/shared.ts'), "export const external = 'external-two';");
 		run();
-		assert.equal(Object.keys(dependencies).filter(key => dependencies[key] !== edited[key]).length, 1);
+		assert.equal(Object.keys(dependencies).filter(key => dependencies[key] !== (edited[key])).length, 1);
 		const dependentEdit = await snapshots();
 		assert.equal(Object.keys(dependentEdit).filter(key => dependentEdit[key] !== dependencies[key]).length, 1, 'package module edits invalidate only their consumer');
 		const latest = JSON.parse(await readFile(catalog, 'utf8'));
@@ -383,21 +256,9 @@ await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 
 		const accepted = await publication();
 		await writeFile(join(directory, 'shared.ts'), "export const external = 'private-host-module';");
 		await symlink(join(directory, 'shared.ts'), join(directory, 'extensions/git/browser/private-link.ts'));
-		for (const source of [
-			"export { external as marker } from '../../../shared.ts';",
-			"export { external as marker } from 'unlisted-host-package';",
-			"import type { external } from '../../../shared.ts'; export const marker = 'typed-import';",
-			"export type Private = import('../../../shared.ts').external; export const marker = 'typed-query';",
-			"export { external as marker } from './private-link.ts';",
-			"import type { external } from './private-link.ts'; export const marker = 'typed-symlink';",
-		]) {
+		for (const source of ["export { external as marker } from '../../../shared.ts';", "export { external as marker } from 'unlisted-host-package';", "import type { external } from '../../../shared.ts'; export const marker = 'typed-import';", "export type Private = import('../../../shared.ts').external; export const marker = 'typed-query';", "export { external as marker } from './private-link.ts';", "import type { external } from './private-link.ts'; export const marker = 'typed-symlink';"]) {
 			await writeFile(join(directory, 'extensions/git/browser/helper.ts'), source);
-			const rejected = spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
-				cwd: directory,
-				encoding: 'utf8',
-				timeout: 30_000,
-				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
-			});
+			const rejected = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
 			assert.ifError(rejected.error);
 			assert.notEqual(rejected.status, 0, source);
 			assert.match(rejected.stderr, /escapes its package|declared dependency or @ash\/sdk/);
@@ -430,21 +291,15 @@ for (const resource of ['manifest', 'file'] as const) {
 			await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ publisher: 'test', name: 'budget', version: '1.0.0' }));
 			const path = join(packageRoot, resource === 'manifest' ? 'package.json' : 'large.bin');
 			const file = await open(path, 'w');
-			try {
-				await file.truncate((resource === 'manifest' ? 4 : 16) * 1024 * 1024 + 1);
-			} finally {
-				await file.close();
-			}
+			try { await file.truncate((resource === 'manifest' ? 4 : 16) * 1024 * 1024 + 1); }
+			finally { await file.close(); }
 			const result = spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 				cwd: directory,
 				env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' },
-				encoding: 'utf8',
-				timeout: 30_000,
+				encoding: 'utf8', timeout: 30_000,
 			});
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, resource === 'manifest' ? /manifest exceeds its byte limit/ : /exceeds its resource budget/);
-		} finally {
-			await rm(directory, { recursive: true, force: true });
-		}
+		} finally { await rm(directory, { recursive: true, force: true }); }
 	});
 }

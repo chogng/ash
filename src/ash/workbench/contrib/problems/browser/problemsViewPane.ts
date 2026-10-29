@@ -24,7 +24,12 @@ interface ProblemEntry {
 	readonly marker: IMarker;
 }
 
-const severities = Object.freeze([MarkerSeverity.Error, MarkerSeverity.Warning, MarkerSeverity.Info, MarkerSeverity.Hint]);
+const severities = Object.freeze([
+	MarkerSeverity.Error,
+	MarkerSeverity.Warning,
+	MarkerSeverity.Info,
+	MarkerSeverity.Hint,
+]);
 
 // Severity is a bit mask in the domain contract; CSS keeps its existing semantic state names.
 const severityClasses: Readonly<Record<MarkerSeverity, string>> = Object.freeze({
@@ -60,43 +65,36 @@ export class ProblemsViewPane extends ViewPane {
 		super(container, options);
 		this.contentElement.classList.add('ash-problems');
 		const document = container.ownerDocument;
-		const controls = (this.titleControls = h(document, 'div'));
+		const controls = this.titleControls = h(document, 'div');
 		controls.className = 'ash-problems-controls';
 		this._register(toDisposable(() => controls.remove()));
-		this.filterInput = this._register(
-			new InputBox(controls, {
-				inputBoxStyles: defaultInputBoxStyles,
-				presentation: 'compact',
-				placeholder: localize('problems.filter', 'Filter problems'),
-				ariaLabel: localize('problems.filterLabel', 'Filter problems by message or file'),
-			}),
-		);
+		this.filterInput = this._register(new InputBox(controls, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'compact',
+			placeholder: localize('problems.filter', 'Filter problems'),
+			ariaLabel: localize('problems.filterLabel', 'Filter problems by message or file'),
+		}));
 		this.filterInput.element.classList.add('ash-problems-filter');
-		const filterActions = this._register(
-			new ActionBar(this.filterInput.element, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				ariaLabel: localize('problems.actions', 'Problems actions'),
-				actions: [
-					{
-						id: 'ash.problems.filter',
-						label: localize('problems.filterMenu', 'Filter'),
-						tooltip: localize('problems.severities', 'Problem Severities'),
-						icon: Lxicon.filter,
-						enabled: true,
-						checked: undefined,
-						run: () => undefined,
-					},
-				],
-				actionViewItemProvider: (action, options) => new DropdownMenuActionViewItem(action, () => this.severityActions(), contextMenuService, options),
-			}),
-		);
+		const filterActions = this._register(new ActionBar(this.filterInput.element, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+			ariaLabel: localize('problems.actions', 'Problems actions'),
+			actions: [{
+				id: 'ash.problems.filter',
+				label: localize('problems.filterMenu', 'Filter'),
+				tooltip: localize('problems.severities', 'Problem Severities'),
+				icon: Lxicon.filter,
+				enabled: true,
+				checked: undefined,
+				run: () => undefined,
+			}],
+			actionViewItemProvider: (action, options) => new DropdownMenuActionViewItem(
+				action, () => this.severityActions(), contextMenuService, options),
+		}));
 		filterActions.element.classList.add('ash-toolbar');
-		this.titleActions = this._register(
-			new ActionBar(controls, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				ariaLabel: localize('problems.actions', 'Problems actions'),
-			}),
-		);
+		this.titleActions = this._register(new ActionBar(controls, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+			ariaLabel: localize('problems.actions', 'Problems actions'),
+		}));
 		this.titleActions.element.classList.add('ash-toolbar');
 		this.headerActionsElement.append(controls);
 		this.statusElement = h(document, 'div');
@@ -109,35 +107,31 @@ export class ProblemsViewPane extends ViewPane {
 		const statusRow = h(document, 'div');
 		statusRow.className = 'ash-problems-status-row';
 		statusRow.append(this.statusElement);
-		this.clearFiltersButton = this._register(
-			new Button(statusRow, {
-				...defaultButtonStyles,
-				label: localize('problems.clearFilters', 'Clear Filters'),
-				size: 'small',
-				onClick: () => this.clearFilters(),
-			}),
-		);
+		this.clearFiltersButton = this._register(new Button(statusRow, {
+			...defaultButtonStyles,
+			label: localize('problems.clearFilters', 'Clear Filters'),
+			size: 'small',
+			onClick: () => this.clearFilters(),
+		}));
 		this.clearFiltersButton.domNode.hidden = true;
 		this.contentElement.append(statusRow, this.resultsElement);
 		this._register(this.filterInput.onDidChange(() => this.render()));
 		this._register(workspaceService.onDidChangeWorkspace(() => this.render()));
-		this._register(
-			addDisposableListener(this.resultsElement, 'click', event => {
-				const target = event.target instanceof container.ownerDocument.defaultView!.Element ? event.target : undefined;
-				const heading = target?.closest<HTMLButtonElement>('.ash-problems-file-heading');
-				if (heading) {
-					const resource = heading.dataset.resource!;
-					if (this.collapsedResources.has(resource)) this.collapsedResources.delete(resource);
-					else this.collapsedResources.add(resource);
-					this.updateGroupExpansion(heading.closest<HTMLLIElement>('.ash-problems-file')!);
-					return;
-				}
-				const button = target?.closest<HTMLButtonElement>('.ash-problems-item-button');
-				const index = Number(button?.dataset.problemIndex);
-				const problem = Number.isSafeInteger(index) ? this.renderedProblems[index] : undefined;
-				if (problem) void this.openProblem(problem);
-			}),
-		);
+		this._register(addDisposableListener(this.resultsElement, 'click', event => {
+			const target = event.target instanceof container.ownerDocument.defaultView!.Element ? event.target : undefined;
+			const heading = target?.closest<HTMLButtonElement>('.ash-problems-file-heading');
+			if (heading) {
+				const resource = heading.dataset.resource!;
+				if (this.collapsedResources.has(resource)) this.collapsedResources.delete(resource);
+				else this.collapsedResources.add(resource);
+				this.updateGroupExpansion(heading.closest<HTMLLIElement>('.ash-problems-file')!);
+				return;
+			}
+			const button = target?.closest<HTMLButtonElement>('.ash-problems-item-button');
+			const index = Number(button?.dataset.problemIndex);
+			const problem = Number.isSafeInteger(index) ? this.renderedProblems[index] : undefined;
+			if (problem) void this.openProblem(problem);
+		}));
 		this._register(markerService.onMarkerChanged(() => this.render()));
 		this.render();
 	}
@@ -164,20 +158,11 @@ export class ProblemsViewPane extends ViewPane {
 
 	private async copyProblems(): Promise<void> {
 		this.interactionError = undefined;
-		const text = this.renderedProblems
-			.map(({ marker }) =>
-				localize(
-					'problems.copyEntry',
-					'{0}({1},{2}): {3}: {4} {5}',
-					marker.resource.scheme === 'file' ? marker.resource.fsPath : marker.resource.toString(),
-					marker.startLineNumber,
-					marker.startColumn,
-					severityLabel(marker.severity),
-					marker.message,
-					diagnosticSource(marker),
-				).trimEnd(),
-			)
-			.join('\n');
+		const text = this.renderedProblems.map(({ marker }) => localize(
+			'problems.copyEntry', '{0}({1},{2}): {3}: {4} {5}',
+			marker.resource.scheme === 'file' ? marker.resource.fsPath : marker.resource.toString(),
+			marker.startLineNumber, marker.startColumn, severityLabel(marker.severity), marker.message, diagnosticSource(marker),
+		).trimEnd()).join('\n');
 		try {
 			await this.clipboardService.writeText(text);
 			if (!this.isDisposed) this.render();
@@ -222,26 +207,19 @@ export class ProblemsViewPane extends ViewPane {
 		const enabled = visible.length > 0;
 		if (enabled !== this.actionsEnabled) {
 			this.actionsEnabled = enabled;
-			this.titleActions.updateActions([
-				{
-					id: 'ash.problems.collapseAll',
-					label: localize('problems.collapseAll', 'Collapse All'),
-					tooltip: localize('problems.collapseAll', 'Collapse All'),
-					icon: Lxicon.collapseAll,
-					enabled,
-					checked: undefined,
-					run: () => this.collapseAll(),
-				},
-				{
-					id: 'ash.problems.copy',
-					label: localize('problems.copy', 'Copy Problems'),
-					tooltip: localize('problems.copy', 'Copy Problems'),
-					icon: Lxicon.copy,
-					enabled,
-					checked: undefined,
-					run: () => this.copyProblems(),
-				},
-			]);
+			this.titleActions.updateActions([{
+				id: 'ash.problems.collapseAll',
+				label: localize('problems.collapseAll', 'Collapse All'),
+				tooltip: localize('problems.collapseAll', 'Collapse All'),
+				icon: Lxicon.collapseAll, enabled, checked: undefined,
+				run: () => this.collapseAll(),
+			}, {
+				id: 'ash.problems.copy',
+				label: localize('problems.copy', 'Copy Problems'),
+				tooltip: localize('problems.copy', 'Copy Problems'),
+				icon: Lxicon.copy, enabled, checked: undefined,
+				run: () => this.copyProblems(),
+			}]);
 		}
 		const indexes = new Map(visible.map((problem, index) => [problem, index]));
 		this.resultsElement.replaceChildren(...groupProblems(visible).map(group => this.renderGroup(group.resource, group.problems, indexes)));
@@ -308,12 +286,7 @@ export class ProblemsViewPane extends ViewPane {
 	private async openProblem(entry: ProblemEntry): Promise<void> {
 		this.interactionError = undefined;
 		try {
-			await this.editorService.openEditor(
-				{ resource: entry.marker.resource, label: resourceName(entry.marker.resource) },
-				{
-					selection: new Range(entry.marker.startLineNumber, entry.marker.startColumn, entry.marker.endLineNumber, entry.marker.endColumn),
-				},
-			);
+			await this.editorService.openEditor({ resource: entry.marker.resource, label: resourceName(entry.marker.resource) }, { selection: new Range(entry.marker.startLineNumber, entry.marker.startColumn, entry.marker.endLineNumber, entry.marker.endColumn) });
 		} catch (error) {
 			if (this.isDisposed) return;
 			this.interactionError = error instanceof Error ? error.message : localize('problems.openFailed', 'Could not open problem location.');
@@ -327,17 +300,11 @@ function markerEntries(markers: readonly IMarker[]): readonly ProblemEntry[] {
 }
 
 function compareProblems(left: ProblemEntry, right: ProblemEntry): number {
-	return (
-		left.marker.resource.toString().localeCompare(right.marker.resource.toString()) ||
-		severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) ||
-		left.marker.startLineNumber - right.marker.startLineNumber ||
-		left.marker.startColumn - right.marker.startColumn ||
-		left.marker.message.localeCompare(right.marker.message)
-	);
+	return left.marker.resource.toString().localeCompare(right.marker.resource.toString()) || severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) || left.marker.startLineNumber - right.marker.startLineNumber || left.marker.startColumn - right.marker.startColumn || left.marker.message.localeCompare(right.marker.message);
 }
 
-function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[] }[] {
-	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[] }>();
+function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[]; }[] {
+	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[]; }>();
 	for (const problem of problems) {
 		const key = problem.marker.resource.toString();
 		const group = getOrSet(groups, key, { resource: problem.marker.resource, problems: [] });
@@ -355,20 +322,18 @@ function matchesFilter(entry: ProblemEntry, filter: string): boolean {
 
 function severityLabel(severity: MarkerSeverity): string {
 	switch (severity) {
-		case MarkerSeverity.Error:
-			return localize('problems.errors', 'Errors');
-		case MarkerSeverity.Warning:
-			return localize('problems.warnings', 'Warnings');
-		case MarkerSeverity.Info:
-			return localize('problems.information', 'Information');
-		case MarkerSeverity.Hint:
-			return localize('problems.hints', 'Hints');
+		case MarkerSeverity.Error: return localize('problems.errors', 'Errors');
+		case MarkerSeverity.Warning: return localize('problems.warnings', 'Warnings');
+		case MarkerSeverity.Info: return localize('problems.information', 'Information');
+		case MarkerSeverity.Hint: return localize('problems.hints', 'Hints');
 	}
 }
 
 function statusMessage(total: number, visible: number, hasFilters: boolean, state: WorkbenchState): string {
 	// Loose files can still publish diagnostics in an empty window, so actual markers take precedence.
-	if (total === 0) return state === WorkbenchState.EMPTY ? localize('problems.noProject', 'Open a folder to view project diagnostics.') : localize('problems.empty', 'No problems detected.');
+	if (total === 0) return state === WorkbenchState.EMPTY
+		? localize('problems.noProject', 'Open a folder to view project diagnostics.')
+		: localize('problems.empty', 'No problems detected.');
 	if (visible === 0 && hasFilters) return localize('problems.noMatches', 'No problems match the current filters ({0} total).', total);
 	if (visible !== total) return localize('problems.filteredCount', '{0} of {1} problems shown.', visible, total);
 	return total === 1 ? localize('problems.oneProblem', '1 problem in the workspace.') : localize('problems.count', '{0} problems in the workspace.', total);

@@ -31,7 +31,9 @@ class EditorGroupWatermarkRegistry {
 
 	register(entry: IEditorGroupWatermarkEntry): IDisposable {
 		if (this.entries.has(entry.id)) {
-			throw new TypeError(`Editor group watermark entry '${entry.id}' is already registered`);
+			throw new TypeError(
+				`Editor group watermark entry '${entry.id}' is already registered`,
+			);
 		}
 		this.entries.set(entry.id, entry);
 		this._onDidChange.fire();
@@ -48,29 +50,24 @@ class EditorGroupWatermarkRegistry {
 }
 
 /** Registry populated by command contributions shown in the empty editor. */
-export const EditorGroupWatermarkEntries = new EditorGroupWatermarkRegistry();
+export const EditorGroupWatermarkEntries =
+	new EditorGroupWatermarkRegistry();
 
 EditorGroupWatermarkEntries.register({
 	id: 'workbench.action.quickOpen',
-	get label() {
-		return localize('workbench.editor.goToFile', 'Go to File');
-	},
+	get label() { return localize('workbench.editor.goToFile', 'Go to File'); },
 	command: 'workbench.action.quickOpen',
 	icon: Lxicon.goToFile,
 });
 EditorGroupWatermarkEntries.register({
 	id: 'workbench.action.findInFiles',
-	get label() {
-		return localize('search.focus', 'Search in Files');
-	},
+	get label() { return localize('search.focus', 'Search in Files'); },
 	command: 'workbench.action.findInFiles',
 	icon: Lxicon.search,
 });
 EditorGroupWatermarkEntries.register({
 	id: ShowAllCommandsCommandId,
-	get label() {
-		return localize('quickAccess.showAllCommands', 'Show All Commands');
-	},
+	get label() { return localize('quickAccess.showAllCommands', 'Show All Commands'); },
 	command: ShowAllCommandsCommandId,
 	icon: Lxicon.command,
 });
@@ -80,11 +77,7 @@ export class EditorGroupWatermark extends Disposable {
 	private static readonly SETTINGS_KEY = 'workbench.tips.enabled';
 	readonly domNode: HTMLElement;
 	private readonly rendered = this._register(new DisposableStore());
-	private readonly shortcuts: {
-		readonly command: CommandId;
-		readonly row: HTMLButtonElement;
-		readonly label: MutableDisposable<KeybindingLabel>;
-	}[] = [];
+	private readonly shortcuts: { readonly command: CommandId; readonly row: HTMLButtonElement; readonly label: MutableDisposable<KeybindingLabel>; }[] = [];
 
 	constructor(
 		container: HTMLElement,
@@ -100,14 +93,14 @@ export class EditorGroupWatermark extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(EditorGroupWatermark.SETTINGS_KEY)) {
+				this.render();
+			}
+		}));
 		this._register(
-			this.configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(EditorGroupWatermark.SETTINGS_KEY)) {
-					this.render();
-				}
-			}),
+			this.keybindingService.onDidUpdateKeybindings(() => this.updateKeybindings()),
 		);
-		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.updateKeybindings()));
 		this.render();
 	}
 
@@ -129,34 +122,29 @@ export class EditorGroupWatermark extends Disposable {
 		heading.textContent = localize('workbench.editor.startWorking', 'Start Working');
 		const entries = h(ownerDocument, 'div');
 		entries.className = 'ash-editor-group-watermark-entries';
-		const rows = EditorGroupWatermarkEntries.getEntries().map(entry => {
-			const row = h(ownerDocument, 'button');
-			row.type = 'button';
-			row.className = 'ash-editor-group-watermark-entry';
-			// Keep the action name concise and announce its shortcut through the description.
-			row.setAttribute('aria-label', entry.label);
-			const name = h(ownerDocument, 'span');
-			name.className = 'ash-editor-group-watermark-name';
-			if (entry.icon) {
-				appendIcon(entry.icon, name);
-			}
-			const label = h(ownerDocument, 'span');
-			label.className = 'ash-editor-group-watermark-label';
-			label.textContent = entry.label;
-			name.append(label);
-			row.append(name);
-			this.shortcuts.push({
-				command: entry.command,
-				row,
-				label: this.rendered.add(new MutableDisposable<KeybindingLabel>()),
-			});
-			this.rendered.add(
-				addDisposableListener(row, 'click', () => {
+		const rows = EditorGroupWatermarkEntries.getEntries()
+			.map((entry) => {
+				const row = h(ownerDocument, 'button');
+				row.type = 'button';
+				row.className = 'ash-editor-group-watermark-entry';
+				// Keep the action name concise and announce its shortcut through the description.
+				row.setAttribute('aria-label', entry.label);
+				const name = h(ownerDocument, 'span');
+				name.className = 'ash-editor-group-watermark-name';
+				if (entry.icon) {
+					appendIcon(entry.icon, name);
+				}
+				const label = h(ownerDocument, 'span');
+				label.className = 'ash-editor-group-watermark-label';
+				label.textContent = entry.label;
+				name.append(label);
+				row.append(name);
+				this.shortcuts.push({ command: entry.command, row, label: this.rendered.add(new MutableDisposable<KeybindingLabel>()) });
+				this.rendered.add(addDisposableListener(row, 'click', () => {
 					void this.commandService.executeCommand(entry.command).catch(onUnexpectedError);
-				}),
-			);
-			return row;
-		});
+				}));
+				return row;
+			});
 		entries.append(...rows);
 		this.domNode.replaceChildren(...(rows.length ? [heading, entries] : []));
 		this.updateKeybindings();

@@ -16,34 +16,32 @@ interface IEnableViewZoneCopySelectionOptions {
 /** Copy source text, including its EOLs, only when both selection endpoints belong to deleted code. */
 export function enableCopySelection(options: IEnableViewZoneCopySelectionOptions): DisposableStore {
 	const store = new DisposableStore();
-	store.add(
-		addDisposableListener<ClipboardEvent>(options.domNode.ownerDocument, 'copy', event => {
-			if (event.defaultPrevented) {
-				return;
-			}
-			const selection = options.domNode.ownerDocument.getSelection();
-			if (!selection || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) {
-				return;
-			}
-			const positionAt = (node: Node, offset: number): Position | undefined => {
-				const element = isHTMLElement(node) ? node : node.parentElement;
-				return element && options.domNode.contains(element) ? options.getModelPositionAt(element, offset) : undefined;
-			};
-			const anchor = positionAt(selection.anchorNode, selection.anchorOffset);
-			const focus = positionAt(selection.focusNode, selection.focusOffset);
-			if (!anchor || !focus) {
-				return;
-			}
-			const start = Position.isBefore(anchor, focus) ? anchor : focus;
-			const end = start === anchor ? focus : anchor;
-			const text = options.originalModel.getValueInRange(Range.fromPositions(start, end));
-			event.preventDefault();
-			if (event.clipboardData) {
-				event.clipboardData.setData('text/plain', text);
-			} else {
-				void options.clipboardService.writeText(text).catch(onUnexpectedError);
-			}
-		}),
-	);
+	store.add(addDisposableListener<ClipboardEvent>(options.domNode.ownerDocument, 'copy', event => {
+		if (event.defaultPrevented) {
+			return;
+		}
+		const selection = options.domNode.ownerDocument.getSelection();
+		if (!selection || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) {
+			return;
+		}
+		const positionAt = (node: Node, offset: number): Position | undefined => {
+			const element = isHTMLElement(node) ? node : node.parentElement;
+			return element && options.domNode.contains(element) ? options.getModelPositionAt(element, offset) : undefined;
+		};
+		const anchor = positionAt(selection.anchorNode, selection.anchorOffset);
+		const focus = positionAt(selection.focusNode, selection.focusOffset);
+		if (!anchor || !focus) {
+			return;
+		}
+		const start = Position.isBefore(anchor, focus) ? anchor : focus;
+		const end = start === anchor ? focus : anchor;
+		const text = options.originalModel.getValueInRange(Range.fromPositions(start, end));
+		event.preventDefault();
+		if (event.clipboardData) {
+			event.clipboardData.setData('text/plain', text);
+		} else {
+			void options.clipboardService.writeText(text).catch(onUnexpectedError);
+		}
+	}));
 	return store;
 }

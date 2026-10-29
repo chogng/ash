@@ -16,33 +16,25 @@ export class WebviewService extends Disposable implements IWebviewService {
 		this._register(toDisposable(() => this.setActiveWebview(undefined)));
 	}
 
-	public get activeWebview(): IWebview | undefined {
-		return this.focusedWebview;
-	}
-	public get webviews(): Iterable<IWebview> {
-		return this.views.keys();
-	}
+	public get activeWebview(): IWebview | undefined { return this.focusedWebview; }
+	public get webviews(): Iterable<IWebview> { return this.views.keys(); }
 
 	public createWebviewElement(initInfo: WebviewInitInfo): IWebviewElement {
 		this.assertNotDisposed();
 		const webview = this.instantiation.createInstance(WebviewElement, initInfo);
 		const listeners = this.views.set(webview, new DisposableStore());
 		listeners.add(webview.onDidFocus(() => this.setActiveWebview(webview)));
-		listeners.add(
-			webview.onDidBlur(() => {
-				if (this.focusedWebview === webview) {
-					this.setActiveWebview(undefined);
-				}
-			}),
-		);
-		listeners.add(
-			webview.onDidDispose(() => {
-				if (this.focusedWebview === webview) {
-					this.setActiveWebview(undefined);
-				}
-				this.views.deleteAndDispose(webview);
-			}),
-		);
+		listeners.add(webview.onDidBlur(() => {
+			if (this.focusedWebview === webview) {
+				this.setActiveWebview(undefined);
+			}
+		}));
+		listeners.add(webview.onDidDispose(() => {
+			if (this.focusedWebview === webview) {
+				this.setActiveWebview(undefined);
+			}
+			this.views.deleteAndDispose(webview);
+		}));
 		return webview;
 	}
 

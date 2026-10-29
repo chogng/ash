@@ -376,16 +376,15 @@ test('Grid rejects duplicate views in its descriptor', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const view = new TestGridView(dom.window.document, 0, Infinity);
 	assert.throws(
-		() =>
-			new Grid(dom.window.document.body, {
-				type: 'branch',
-				orientation: 'horizontal',
-				size: 200,
-				children: [
-					{ type: 'leaf', view, size: 100 },
-					{ type: 'leaf', view, size: 100 },
-				],
-			}),
+		() => new Grid(dom.window.document.body, {
+			type: 'branch',
+			orientation: 'horizontal',
+			size: 200,
+			children: [
+				{ type: 'leaf', view, size: 100 },
+				{ type: 'leaf', view, size: 100 },
+			],
+		}),
 		/same view twice/,
 	);
 	dom.window.close();
@@ -412,16 +411,25 @@ test('SerializableGrid restores view identity and runtime geometry', () => {
 
 	const snapshot = grid.serialize();
 	const restoredViews = new Map<string, SerializableTestGridView>();
-	const restored = SerializableGrid.deserialize(dom.window.document.body, snapshot, {
-		fromJSON: data => {
-			if (typeof data !== 'string') {
-				throw new TypeError('Serialized test view ID must be a string');
-			}
-			const view = new SerializableTestGridView(dom.window.document, data, data === 'editor' ? 120 : 100, data === 'editor' ? Infinity : 600);
-			restoredViews.set(data, view);
-			return view;
+	const restored = SerializableGrid.deserialize(
+		dom.window.document.body,
+		snapshot,
+		{
+			fromJSON: (data) => {
+				if (typeof data !== 'string') {
+					throw new TypeError('Serialized test view ID must be a string');
+				}
+				const view = new SerializableTestGridView(
+					dom.window.document,
+					data,
+					data === 'editor' ? 120 : 100,
+					data === 'editor' ? Infinity : 600,
+				);
+				restoredViews.set(data, view);
+				return view;
+			},
 		},
-	});
+	);
 	restored.layout(900, 600);
 
 	assert.equal(restored.isViewVisible(restoredViews.get('left')!), false);
@@ -435,13 +443,12 @@ test('SerializableGrid restores view identity and runtime geometry', () => {
 
 function dragGridSash(targetWindow: typeof browserEnvironment.window, sash: HTMLElement, delta: number): void {
 	const vertical = sash.classList.contains('ash-sash-vertical');
-	const event = (type: string, coordinate: number) =>
-		new targetWindow.MouseEvent(type, {
-			bubbles: true,
-			button: 0,
-			clientX: vertical ? coordinate : 0,
-			clientY: vertical ? 0 : coordinate,
-		});
+	const event = (type: string, coordinate: number) => new targetWindow.MouseEvent(type, {
+		bubbles: true,
+		button: 0,
+		clientX: vertical ? coordinate : 0,
+		clientY: vertical ? 0 : coordinate,
+	});
 	sash.dispatchEvent(event('pointerdown', 0));
 	targetWindow.dispatchEvent(event('pointermove', delta));
 	targetWindow.dispatchEvent(event('pointerup', delta));

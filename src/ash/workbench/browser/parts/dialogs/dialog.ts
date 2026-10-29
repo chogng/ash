@@ -7,36 +7,35 @@ import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, 
 
 /** Maps queued domain requests to the service-independent Dialog widget. */
 export class BrowserDialogHandler implements IDialogHandler {
-	constructor(private readonly container: HTMLElement) {}
+	constructor(private readonly container: HTMLElement) { }
 
 	async showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
 		if (signal.aborted) return { button: DialogResult.Cancel };
 		const disposables = new DisposableStore();
 		try {
-			const buttons =
-				request.kind === 'choice' ? [...request.buttons] : [request.primaryButton ?? (request.kind === 'confirmation' ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK'))];
+			const buttons = request.kind === 'choice'
+				? [...request.buttons]
+				: [request.primaryButton ?? (request.kind === 'confirmation' ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK'))];
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const dialog = disposables.add(
-				new Dialog(this.container, request.title ?? defaultTitle(request), buttons, {
-					buttonStyles: defaultButtonStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					dialogStyles: defaultDialogStyles,
-					cancelId,
-					type: request.kind === 'message' || request.kind === 'choice' ? (request.severity ?? 'question') : 'question',
-					detail: request.detail,
-					inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
-					checkboxLabel: request.checkbox?.label,
-					checkboxChecked: request.checkbox?.checked,
-					renderBody: body => {
-						const message = h(body.ownerDocument, 'p', { className: 'ash-dialog-message' });
-						message.textContent = request.message;
-						body.append(message);
-					},
-				}),
-			);
+			const dialog = disposables.add(new Dialog(this.container, request.title ?? defaultTitle(request), buttons, {
+				buttonStyles: defaultButtonStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				dialogStyles: defaultDialogStyles,
+				cancelId,
+				type: request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				detail: request.detail,
+				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
+				checkboxLabel: request.checkbox?.label,
+				checkboxChecked: request.checkbox?.checked,
+				renderBody: body => {
+					const message = h(body.ownerDocument, 'p', { className: 'ash-dialog-message' });
+					message.textContent = request.message;
+					body.append(message);
+				},
+			}));
 			disposables.add(addDisposableListener(signal, 'abort', () => dialog.dispose(), { once: true }));
 			const result = await dialog.show();
 			const cancelled = result.button === cancelId;

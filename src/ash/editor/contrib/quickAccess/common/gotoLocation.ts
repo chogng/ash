@@ -7,7 +7,9 @@ export interface GotoLocation {
 	readonly kind: 'lineColumn' | 'offset';
 }
 
-export type GotoLocationParseResult = { readonly kind: 'empty' | 'invalid'; readonly message: string } | { readonly kind: 'location'; readonly location: GotoLocation; readonly message: string };
+export type GotoLocationParseResult =
+	| { readonly kind: 'empty' | 'invalid'; readonly message: string; }
+	| { readonly kind: 'location'; readonly location: GotoLocation; readonly message: string; };
 
 /**
  * Parses Stanza's Go to Line input into a clamped model position.
@@ -44,18 +46,21 @@ function parseLineColumn(model: ITextModel, value: string): GotoLocationParseRes
 	if (requestedLine === undefined) {
 		return Object.freeze({ kind: 'invalid', message: `Type a line number from 1 to ${model.getLineCount()}` });
 	}
-	const oneBasedLine = requestedLine < 0 ? model.getLineCount() + 1 + requestedLine : requestedLine;
+	const oneBasedLine = requestedLine < 0
+		? model.getLineCount() + 1 + requestedLine
+		: requestedLine;
 	const lineIndex = clamp(oneBasedLine - 1, 0, model.getLineCount() - 1);
 	const requestedColumn = parts.length > 1 ? parseInteger(parts[1]!.trim()) : undefined;
 	if (parts.length > 1 && requestedColumn === undefined) {
-		return Object.freeze({
-			kind: 'invalid',
-			message: `Type a column number from 1 to ${model.getLineContent(lineIndex + 1).length + 1}`,
-		});
+		return Object.freeze({ kind: 'invalid', message: `Type a column number from 1 to ${model.getLineContent((lineIndex) + 1).length + 1}` });
 	}
-	const lineLength = model.getLineContent(lineIndex + 1).length;
-	const oneBasedColumn = requestedColumn === undefined ? 1 : requestedColumn < 0 ? lineLength + 2 + requestedColumn : requestedColumn;
-	return locationResult(new Position(lineIndex + 1, clamp(oneBasedColumn - 1, 0, lineLength) + 1), 'lineColumn');
+	const lineLength = model.getLineContent((lineIndex) + 1).length;
+	const oneBasedColumn = requestedColumn === undefined
+		? 1
+		: requestedColumn < 0
+			? lineLength + 2 + requestedColumn
+			: requestedColumn;
+	return locationResult(new Position((lineIndex) + 1, (clamp(oneBasedColumn - 1, 0, lineLength)) + 1), 'lineColumn');
 }
 
 function locationResult(position: Position, kind: GotoLocation['kind']): GotoLocationParseResult {

@@ -13,20 +13,13 @@ export class XtermAddonImporter {
 
 	importAddon<T extends keyof IXtermAddonNameToCtor>(name: T): Promise<IXtermAddonNameToCtor[T]> {
 		if (name === 'serialize') {
-			this.serialize ??= import('@xterm/addon-serialize')
-				.then(module => module.SerializeAddon)
-				.catch(error => {
-					this.serialize = undefined;
-					throw error;
-				});
+			this.serialize ??= import('@xterm/addon-serialize').then(module => module.SerializeAddon).catch(error => { this.serialize = undefined; throw error; });
 			return this.serialize as Promise<IXtermAddonNameToCtor[T]>;
 		}
-		this.search ??= import('@xterm/addon-search')
-			.then(module => module.SearchAddon)
-			.catch(error => {
-				this.search = undefined;
-				throw error;
-			});
+		this.search ??= import('@xterm/addon-search').then(module => module.SearchAddon).catch(error => {
+			this.search = undefined;
+			throw error;
+		});
 		return this.search as Promise<IXtermAddonNameToCtor[T]>;
 	}
 }

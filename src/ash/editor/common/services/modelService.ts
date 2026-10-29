@@ -35,7 +35,7 @@ export class ModelService extends Disposable implements IModelService {
 	private _modelCreationOptionsByLanguageAndResource: Record<string, ITextModelCreationOptions> = Object.create(null) as Record<string, ITextModelCreationOptions>;
 	private readonly _onModelAdded = this._register(new Emitter<TextModel>());
 	private readonly _onModelRemoved = this._register(new Emitter<TextModel>());
-	private readonly _onModelModeChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
+	private readonly _onModelModeChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
 	readonly _serviceBrand: undefined;
 
 	readonly onModelAdded = this._onModelAdded.event;
@@ -70,16 +70,14 @@ export class ModelService extends Disposable implements IModelService {
 			largeFileOptimizations: creationOptions.largeFileOptimizations,
 			bracketPairColorizationOptions: creationOptions.bracketPairColorizationOptions,
 			languageConfigurationService: this._languageConfigurationService,
-			...(this._languageService && this._languageFeaturesService
-				? {
-						tokenization: {
-							languageIdCodec: this._languageService.languageIdCodec,
-							syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
-							documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
-							...this._tokenizationOptions,
-						},
-					}
-				: {}),
+			...(this._languageService && this._languageFeaturesService ? {
+				tokenization: {
+					languageIdCodec: this._languageService.languageIdCodec,
+					syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
+					documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
+					...this._tokenizationOptions,
+				},
+			} : {}),
 		});
 		if (creationOptions.detectIndentation) model.detectIndentation(creationOptions.insertSpaces, creationOptions.tabSize);
 		if (languageSelection) model.setLanguage(languageSelection);
@@ -154,20 +152,17 @@ export class ModelService extends Disposable implements IModelService {
 		if (!options) {
 			// The current Profile configuration owns language settings, without resource overrides.
 			const overrides: IConfigurationOverrides = { overrideIdentifier: language };
-			options = ModelService._readModelOptions(
-				{
-					tabSize: this._configurationService.getValue<number>(modelConfiguration.tabSize, overrides),
-					indentSize: this._configurationService.getValue<number | 'tabSize'>(modelConfiguration.indentSize, overrides),
-					insertSpaces: this._configurationService.getValue<boolean>(modelConfiguration.insertSpaces, overrides),
-					detectIndentation: this._configurationService.getValue<boolean>(modelConfiguration.detectIndentation, overrides),
-					trimAutoWhitespace: this._configurationService.getValue<boolean>(modelConfiguration.trimAutoWhitespace, overrides),
-					largeFileOptimizations: this._configurationService.getValue<boolean>(modelConfiguration.largeFileOptimizations, overrides),
-					bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationEnabled, overrides),
-					bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
-					eol: this._getEOL(resource, language),
-				},
-				isForSimpleWidget,
-			);
+			options = ModelService._readModelOptions({
+				tabSize: this._configurationService.getValue<number>(modelConfiguration.tabSize, overrides),
+				indentSize: this._configurationService.getValue<number | 'tabSize'>(modelConfiguration.indentSize, overrides),
+				insertSpaces: this._configurationService.getValue<boolean>(modelConfiguration.insertSpaces, overrides),
+				detectIndentation: this._configurationService.getValue<boolean>(modelConfiguration.detectIndentation, overrides),
+				trimAutoWhitespace: this._configurationService.getValue<boolean>(modelConfiguration.trimAutoWhitespace, overrides),
+				largeFileOptimizations: this._configurationService.getValue<boolean>(modelConfiguration.largeFileOptimizations, overrides),
+				bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationEnabled, overrides),
+				bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
+				eol: this._getEOL(resource, language),
+			}, isForSimpleWidget);
 			this._modelCreationOptionsByLanguageAndResource[cacheKey] = options;
 		}
 		return options;
@@ -192,9 +187,7 @@ export class ModelService extends Disposable implements IModelService {
 
 	private _getEOL(resource: URI | undefined, language: string): string {
 		if (resource) return this._resourcePropertiesService.getEOL(resource, language);
-		const configured = this._configurationService.getValue<'auto' | '\n' | '\r\n'>(modelConfiguration.filesEol, {
-			overrideIdentifier: language,
-		});
+		const configured = this._configurationService.getValue<'auto' | '\n' | '\r\n'>(modelConfiguration.filesEol, { overrideIdentifier: language });
 		return configured === 'auto' ? (isLinux || isMacintosh ? '\n' : '\r\n') : configured;
 	}
 
@@ -220,17 +213,14 @@ export class ModelService extends Disposable implements IModelService {
 		if (currentOptions && currentOptions.defaultEOL !== newOptions.defaultEOL && model.getLineCount() === 1) {
 			model.setEOL(newOptions.defaultEOL === DefaultEndOfLine.LF ? EndOfLineSequence.LF : EndOfLineSequence.CRLF);
 		}
-		if (
-			currentOptions &&
-			currentOptions.detectIndentation === newOptions.detectIndentation &&
-			currentOptions.insertSpaces === newOptions.insertSpaces &&
-			currentOptions.tabSize === newOptions.tabSize &&
-			currentOptions.indentSize === newOptions.indentSize &&
-			currentOptions.trimAutoWhitespace === newOptions.trimAutoWhitespace &&
-			currentOptions.bracketPairColorizationOptions.enabled === newOptions.bracketPairColorizationOptions.enabled &&
-			currentOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType === newOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType
-		)
-			return;
+		if (currentOptions
+			&& currentOptions.detectIndentation === newOptions.detectIndentation
+			&& currentOptions.insertSpaces === newOptions.insertSpaces
+			&& currentOptions.tabSize === newOptions.tabSize
+			&& currentOptions.indentSize === newOptions.indentSize
+			&& currentOptions.trimAutoWhitespace === newOptions.trimAutoWhitespace
+			&& currentOptions.bracketPairColorizationOptions.enabled === newOptions.bracketPairColorizationOptions.enabled
+			&& currentOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType === newOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType) return;
 		if (newOptions.detectIndentation) {
 			model.detectIndentation(newOptions.insertSpaces, newOptions.tabSize);
 			model.updateOptions({
@@ -313,9 +303,11 @@ export class ModelService extends Disposable implements IModelService {
 	}
 
 	protected _schemaShouldMaintainUndoRedoElements(resource: URI): boolean {
-		return (
-			resource.scheme === 'file' || resource.scheme === 'vscode-remote' || resource.scheme === 'vscode-userdata' || resource.scheme === 'vscode-notebook-cell' || resource.scheme === 'fake-fs'
-		);
+		return resource.scheme === 'file'
+			|| resource.scheme === 'vscode-remote'
+			|| resource.scheme === 'vscode-userdata'
+			|| resource.scheme === 'vscode-notebook-cell'
+			|| resource.scheme === 'fake-fs';
 	}
 
 	protected _getSHA1Computer(): ITextModelSHA1Computer {
@@ -387,7 +379,10 @@ const MODEL_CONFIGURATION_KEYS: readonly string[] = Object.freeze([
 ]);
 
 function isTextBufferFactory(value: unknown): value is ITextBufferFactory {
-	return !!value && typeof value === 'object' && typeof (value as ITextBufferFactory).create === 'function' && typeof (value as ITextBufferFactory).getFirstLineText === 'function';
+	return !!value
+		&& typeof value === 'object'
+		&& typeof (value as ITextBufferFactory).create === 'function'
+		&& typeof (value as ITextBufferFactory).getFirstLineText === 'function';
 }
 
 function readModelValue(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): string {
@@ -400,7 +395,7 @@ function readModelValue(value: string | ITextBufferFactory, defaultEOL: DefaultE
 	}
 }
 
-function createModelBuffer(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable } {
+function createModelBuffer(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable; } {
 	if (typeof value !== 'string') return value.create(defaultEOL);
 	const textBuffer = createPieceTreeTextBuffer(value, defaultEOL);
 	return { textBuffer, disposable: textBuffer };
@@ -425,7 +420,7 @@ class DisposedModelInfo {
 		public readonly time: number,
 		public readonly heapSize: number,
 		public readonly sha1: string,
-	) {}
+	) { }
 }
 
 export interface ITextModelSHA1Computer {

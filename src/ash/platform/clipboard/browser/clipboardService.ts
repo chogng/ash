@@ -9,9 +9,7 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 	private findText = '';
 	private readonly typedText = new Map<string, string>();
 	private static readonly fileFormat = 'web application/x-ash-resources';
-	constructor(private readonly clipboard: Clipboard | undefined) {
-		super();
-	}
+	constructor(private readonly clipboard: Clipboard | undefined) { super(); }
 
 	public triggerPaste(targetWindowId: number): Promise<void> | undefined {
 		const document = getWindowById(targetWindowId)?.window.document;
@@ -35,10 +33,7 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 			for (const type of item.types) {
 				const blob = await item.getType(type);
 				// Web custom formats carry a transport prefix, not part of the provider MIME type.
-				result.push({
-					type: type.startsWith('web ') ? type.slice(4) : type,
-					data: new Uint8Array(await blob.arrayBuffer()),
-				});
+				result.push({ type: type.startsWith('web ') ? type.slice(4) : type, data: new Uint8Array(await blob.arrayBuffer()) });
 			}
 		}
 		return result;
@@ -82,15 +77,9 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 		const item = (await this.clipboard.read())[0];
 		if (!item?.types.includes(BrowserClipboardService.fileFormat)) return { resources: [], operation: 'copy' };
 		const values: unknown = JSON.parse(await (await item.getType(BrowserClipboardService.fileFormat)).text());
-		if (
-			!values ||
-			typeof values !== 'object' ||
-			!('resources' in values) ||
-			!('operation' in values) ||
-			!Array.isArray(values.resources) ||
-			!values.resources.every(value => typeof value === 'string') ||
-			(values.operation !== 'copy' && values.operation !== 'move')
-		) {
+		if (!values || typeof values !== 'object' || !('resources' in values) || !('operation' in values)
+			|| !Array.isArray(values.resources) || !values.resources.every(value => typeof value === 'string')
+			|| (values.operation !== 'copy' && values.operation !== 'move')) {
 			throw new Error('Invalid file resources on the clipboard');
 		}
 		return { resources: values.resources.map(value => URI.parse(value)), operation: values.operation };
@@ -102,11 +91,12 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 			await this.clipboard.writeText('');
 			return;
 		}
-		await this.clipboard.write([
-			new ClipboardItem({
-				[BrowserClipboardService.fileFormat]: new Blob([JSON.stringify({ resources: resources.map(resource => resource.toString()), operation })], { type: 'application/x-ash-resources' }),
-			}),
-		]);
+		await this.clipboard.write([new ClipboardItem({
+			[BrowserClipboardService.fileFormat]: new Blob(
+				[JSON.stringify({ resources: resources.map(resource => resource.toString()), operation })],
+				{ type: 'application/x-ash-resources' },
+			),
+		})]);
 	}
 
 	async hasResources(): Promise<boolean> {

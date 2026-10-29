@@ -2,21 +2,14 @@ import { VSBuffer } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { CodebaseSymbolsSearchHitDto, CodebaseSymbolsStatusResult as CodebaseSymbolsStatusDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ICodebaseSymbolsApi } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
-import type {
-	ICodebaseSymbolsService,
-	CodebaseSymbolsMatch,
-	CodebaseSymbolsPosition,
-	CodebaseSymbolsRange,
-	CodebaseSymbolsSearchResult,
-	CodebaseSymbolsStatus,
-} from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
+import type { ICodebaseSymbolsService, CodebaseSymbolsMatch, CodebaseSymbolsPosition, CodebaseSymbolsRange, CodebaseSymbolsSearchResult, CodebaseSymbolsStatus } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
 
 const MAX_QUERY_BYTES = 8192;
 const MAX_RESULTS = 100;
 
 /** App Server transport adapter for the frontend codebase-symbols contract. */
 export class AppServerCodebaseSymbolsService implements ICodebaseSymbolsService {
-	constructor(private readonly api: ICodebaseSymbolsApi) {}
+	constructor(private readonly api: ICodebaseSymbolsApi) { }
 
 	async status(signal: AbortSignal = new AbortController().signal): Promise<CodebaseSymbolsStatus> {
 		return status(await raceCancellationError(this.api.status(), signal, 'Symbol-index status was cancelled'));

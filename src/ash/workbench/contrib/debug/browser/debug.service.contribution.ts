@@ -23,23 +23,10 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 registerWorkbenchServiceContribution({
 	service: IDebugService,
 	dependencies: [
-		IExtensionService,
-		IFileService,
-		IWorkspaceContextService,
-		IDebugAdapterProcessService,
-		ITerminalService,
-		ITerminalProfileResolverService,
-		ITerminalProcessService,
-		IStorageService,
-		ILifecycleService,
-		ITaskService,
-		IAdapterManager,
-		ILogService,
-		IConfigurationResolverService,
-		IConfigurationService,
-		IEditorService,
-		ITextModelService,
-		INotificationService,
+		IExtensionService, IFileService, IWorkspaceContextService, IDebugAdapterProcessService,
+		ITerminalService, ITerminalProfileResolverService, ITerminalProcessService,
+		IStorageService, ILifecycleService, ITaskService, IAdapterManager, ILogService, IConfigurationResolverService,
+		IConfigurationService, IEditorService, ITextModelService, INotificationService,
 	],
 	install: context => {
 		const service = context.register(context.container.createInstance(DebugService));

@@ -20,26 +20,17 @@ server.setRequestHandler(CallToolRequestSchema, async (call, extra) => {
 		const result = await run(request, extra.signal);
 		return { content: result.content };
 	} catch (error) {
-		return {
-			isError: true,
-			content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
-		};
+		return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
 	}
 });
 
 /** Termination also interrupts synchronous parsing/rendering, which AbortSignal alone cannot stop. */
 function run(request: PdfReadRequest, signal: AbortSignal): Promise<ReadingResult> {
 	if (signal.aborted) return Promise.reject(new Error('PDF reading cancelled'));
-	const worker = new Worker(new URL('./worker.mjs', import.meta.url), {
-		workerData: request,
-		resourceLimits: { maxOldGenerationSizeMb: 256 },
-		stdout: true,
-		stderr: true,
-	});
+	const worker = new Worker(new URL('./worker.mjs', import.meta.url), { workerData: request, resourceLimits: { maxOldGenerationSizeMb: 256 }, stdout: true, stderr: true });
 	workers.add(worker);
 	// PDF.js or native diagnostics must never corrupt the MCP stdout transport.
-	worker.stdout.resume();
-	worker.stderr.resume();
+	worker.stdout.resume(); worker.stderr.resume();
 	return new Promise<ReadingResult>((resolve, reject) => {
 		let settled = false;
 		const finish = (error?: Error, result?: ReadingResult): void => {
@@ -47,19 +38,14 @@ function run(request: PdfReadRequest, signal: AbortSignal): Promise<ReadingResul
 			settled = true;
 			clearTimeout(timer);
 			signal.removeEventListener('abort', abort);
-			void worker.terminate().finally(() => {
-				workers.delete(worker);
-				error ? reject(error) : resolve(result!);
-			});
+			void worker.terminate().finally(() => { workers.delete(worker); error ? reject(error) : resolve(result!); });
 		};
 		const abort = (): void => finish(new Error('PDF reading cancelled'));
 		const timer = setTimeout(() => finish(new Error('PDF reading exceeded its 30-second time budget')), 30000);
 		signal.addEventListener('abort', abort, { once: true });
-		worker.once('message', (message: { result?: ReadingResult; error?: string }) => finish(message.error ? new Error(message.error) : undefined, message.result));
+		worker.once('message', (message: { result?: ReadingResult; error?: string; }) => finish(message.error ? new Error(message.error) : undefined, message.result));
 		worker.once('error', error => finish(error));
-		worker.once('exit', code => {
-			if (!settled) finish(new Error(`PDF worker exited before returning a result (${code})`));
-		});
+		worker.once('exit', code => { if (!settled) finish(new Error(`PDF worker exited before returning a result (${code})`)); });
 	});
 }
 
@@ -70,13 +56,7 @@ async function close(): Promise<void> {
 	await server.close();
 	cleanupNative();
 }
-process.once('SIGTERM', () => {
-	void close();
-});
-process.once('SIGINT', () => {
-	void close();
-});
-process.stdin.once('end', () => {
-	void close();
-});
+process.once('SIGTERM', () => { void close(); });
+process.once('SIGINT', () => { void close(); });
+process.stdin.once('end', () => { void close(); });
 await server.connect(new StdioServerTransport());

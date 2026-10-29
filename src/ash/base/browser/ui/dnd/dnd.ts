@@ -14,7 +14,7 @@ export const DragAndDropDataKind = Object.freeze({
 	Native: 'native',
 } as const);
 
-export type DragAndDropDataKind = (typeof DragAndDropDataKind)[keyof typeof DragAndDropDataKind];
+export type DragAndDropDataKind = typeof DragAndDropDataKind[keyof typeof DragAndDropDataKind];
 
 /** One collection drag payload as observed by a browser UI component. */
 export interface DragAndDropData<T> {

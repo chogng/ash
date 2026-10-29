@@ -10,7 +10,7 @@ export class SimpleFileDialog {
 	constructor(
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
-	) {}
+	) { }
 
 	async showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
 		const current = this.workspace.getWorkspace();
@@ -20,14 +20,12 @@ export class SimpleFileDialog {
 		const value = await this.quickInput.input({
 			title: options.title ?? localize('dialog.openFolder', 'Open Folder'),
 			placeHolder: localize('dialog.remoteFolderPath', 'Enter an absolute folder path on the current remote host.'),
-			value: options.defaultUri?.scheme === 'ash-remote' ? getRemoteWorkspacePath(options.defaultUri) : current.folders[0] ? getRemoteWorkspacePath(current.folders[0].uri) : '/',
+			value: options.defaultUri?.scheme === 'ash-remote'
+				? getRemoteWorkspacePath(options.defaultUri)
+				: current.folders[0] ? getRemoteWorkspacePath(current.folders[0].uri) : '/',
 			validateInput: async path => {
-				try {
-					parse(path);
-					return undefined;
-				} catch {
-					return localize('dialog.remoteFolderPath', 'Enter an absolute folder path on the current remote host.');
-				}
+				try { parse(path); return undefined; }
+				catch { return localize('dialog.remoteFolderPath', 'Enter an absolute folder path on the current remote host.'); }
 			},
 		});
 		if (value === undefined || current !== this.workspace.getWorkspace()) return undefined;

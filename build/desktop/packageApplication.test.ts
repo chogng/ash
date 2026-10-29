@@ -70,24 +70,8 @@ for (const platform of ['darwin', 'win32', 'linux'] as const) {
 		const source = join(root, 'source');
 		const destination = join(root, 'application');
 		const files: Record<string, string> = { 'package.json': '{}' };
-		for (const [name, binary] of [
-			['native-keymap', 'keymapping.node'],
-			['native-is-elevated', 'iselevated.node'],
-		]) {
-			for (const path of [
-				'package.json',
-				'index.js',
-				'License.txt',
-				'ThirdPartyNotices.txt',
-				'src/keyboard.cc',
-				'deps/table.inc',
-				'binding.gyp',
-				'build/Makefile',
-				'build/Release/obj.target/source.o',
-				`build/Release/${binary}`,
-				`bin/platform/${binary}`,
-				'README.md',
-			]) {
+		for (const [name, binary] of [['native-keymap', 'keymapping.node'], ['native-is-elevated', 'iselevated.node']]) {
+			for (const path of ['package.json', 'index.js', 'License.txt', 'ThirdPartyNotices.txt', 'src/keyboard.cc', 'deps/table.inc', 'binding.gyp', 'build/Makefile', 'build/Release/obj.target/source.o', `build/Release/${binary}`, `bin/platform/${binary}`, 'README.md']) {
 				files[`node_modules/${name}/${path}`] = path;
 			}
 		}
@@ -100,10 +84,8 @@ for (const platform of ['darwin', 'win32', 'linux'] as const) {
 			filter: path => !ignoreApplicationFile(`/${relative(source, path).split(sep).join('/')}`, platform),
 		});
 		for (const [path, content] of Object.entries(files)) {
-			const expected =
-				path === 'package.json' ||
-				((!path.includes('native-is-elevated') || platform === 'win32') &&
-					/\/(?:package\.json|index\.js|License\.txt|ThirdPartyNotices\.txt|build\/Release\/(?:keymapping|iselevated)\.node)$/u.test(path));
+			const expected = path === 'package.json' || (!path.includes('native-is-elevated') || platform === 'win32')
+				&& /\/(?:package\.json|index\.js|License\.txt|ThirdPartyNotices\.txt|build\/Release\/(?:keymapping|iselevated)\.node)$/u.test(path);
 			if (expected) assert.equal(await readFile(join(destination, path), 'utf8'), content);
 			else await assert.rejects(stat(join(destination, path)), { code: 'ENOENT' });
 		}

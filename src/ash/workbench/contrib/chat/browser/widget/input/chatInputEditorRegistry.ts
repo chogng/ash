@@ -15,7 +15,7 @@ export interface ChatInputEditorOptions {
 	readonly ariaLabel: string;
 	readonly slashCommands: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
-	readonly height?: { readonly minimum: number; readonly maximum: number };
+	readonly height?: { readonly minimum: number; readonly maximum: number; };
 	/** Move to the next control with Tab instead of inserting indentation. */
 	readonly tabFocusMode?: boolean;
 }
@@ -108,20 +108,16 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.placeholder = options.placeholder;
 		this.element.setAttribute('aria-label', options.ariaLabel);
 		options.container.append(this.element);
-		this._register(
-			addDisposableListener(this.element, 'input', () => {
-				this.layout();
-				this._onDidChange.fire(this.value);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
-				event.preventDefault();
-				event.stopPropagation();
-				this._onDidSubmit.fire();
-			}),
-		);
+		this._register(addDisposableListener(this.element, 'input', () => {
+			this.layout();
+			this._onDidChange.fire(this.value);
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', (event) => {
+			if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this._onDidSubmit.fire();
+		}));
 		this._register(toDisposable(() => this.element.remove()));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		const observer = new ResizeObserver(() => layout.schedule());

@@ -37,27 +37,17 @@ suite('extensions browser component', () => {
 		await expect(detail).toBeVisible();
 		await expect.poll(() => detail.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		const detailSource = (await detail.getAttribute('src'))!;
-		const sameAsset = await page.evaluate(
-			async ({ list, detail }) => {
-				const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
-				const [left, right] = await Promise.all([read(list), read(detail)]);
-				return left.length === right.length && left.every((value, index) => value === right[index]);
-			},
-			{ list: source, detail: detailSource },
-		);
+		const sameAsset = await page.evaluate(async ({ list, detail }) => {
+			const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
+			const [left, right] = await Promise.all([read(list), read(detail)]);
+			return left.length === right.length && left.every((value, index) => value === right[index]);
+		}, { list: source, detail: detailSource });
 		expect(sameAsset).toBe(true);
 		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
 		for (const released of [source, detailSource]) {
-			expect(
-				await page.evaluate(async source => {
-					try {
-						await fetch(source);
-						return false;
-					} catch {
-						return true;
-					}
-				}, released),
-			).toBe(true);
+			expect(await page.evaluate(async source => {
+				try { await fetch(source); return false; } catch { return true; }
+			}, released)).toBe(true);
 		}
 	});
 
@@ -67,14 +57,8 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?locale=zh-CN&theme=${theme}`);
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
 			for (const [id, official] of [
-				['ash.cpp', true],
-				['ash.csharp', true],
-				['vscode.css', true],
-				['ash.dart', true],
-				['ash.bat', false],
-				['ash.bazel', false],
-				['ash.clojure', false],
-				['ash.coffeescript', false],
+				['ash.cpp', true], ['ash.csharp', true], ['vscode.css', true], ['ash.dart', true],
+				['ash.bat', false], ['ash.bazel', false], ['ash.clojure', false], ['ash.coffeescript', false],
 			] as const) {
 				const row = page.locator(`[data-view-id="ash.extensions.plugins"] [data-package-id="${id}"]`);
 				await row.scrollIntoViewIfNeeded();
@@ -87,64 +71,34 @@ suite('extensions browser component', () => {
 				await expect(detail).toBeVisible();
 				await expect(detail).toHaveAttribute('src', official ? /^blob:/u : /^data:image\/svg\+xml;base64,/u);
 				await expect.poll(() => detail.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-				expect(
-					await page.evaluate(
-						async ({ list, detail }) => {
-							const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
-							const [left, right] = await Promise.all([read(list), read(detail)]);
-							return left.length === right.length && left.every((value, index) => value === right[index]);
-						},
-						{ list: source, detail: (await detail.getAttribute('src'))! },
-					),
-				).toBe(true);
-				if (official) {
-					await expect(page.locator('.ash-extension-editor').getByRole('link', { name: 'NOTICE.md', exact: true })).toBeVisible();
-				}
+				expect(await page.evaluate(async ({ list, detail }) => {
+					const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
+					const [left, right] = await Promise.all([read(list), read(detail)]);
+					return left.length === right.length && left.every((value, index) => value === right[index]);
+				}, { list: source, detail: (await detail.getAttribute('src'))! })).toBe(true);
+				if (official) { await expect(page.locator('.ash-extension-editor').getByRole('link', { name: 'NOTICE.md', exact: true })).toBeVisible(); }
 				await expect(row.locator('.extension-icon')).toHaveAttribute('aria-hidden', 'true');
 			}
 		});
 	}
 	function serviceAccount(id: string, displayName: string, oauth = false): ConnectorView {
 		return {
-			id,
-			displayName,
-			description: `Authorize ${displayName}`,
-			mcpDeclarationId: `fixture:${id}:mcp:tools`,
-			mcpServerId: null,
-			connectionGeneration: 0,
-			enabled: false,
-			state: { status: 'disconnected' },
-			oauthMethods: oauth ? ['browser'] : [],
-			canConnectOAuth: oauth,
-			canConnectApiToken: !oauth,
-			canDisconnect: false,
-			canRefreshOAuth: false,
-			canRevokeOAuth: false,
+			id, displayName, description: `Authorize ${displayName}`, mcpDeclarationId: `fixture:${id}:mcp:tools`, mcpServerId: null,
+			connectionGeneration: 0, enabled: false, state: { status: 'disconnected' }, oauthMethods: oauth ? ['browser'] : [],
+			canConnectOAuth: oauth, canConnectApiToken: !oauth, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false,
 		};
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
 		const zh = locale === 'zh-CN';
-		const labels = {
-			add: zh ? '添加连接' : 'Add connection',
-			account: zh ? '服务账号' : 'Service account',
-			choose: zh ? '选择服务账号' : 'Choose a service account',
-			token: zh ? '使用 API 令牌连接' : 'Connect with API token',
-			cancel: zh ? '取消' : 'Cancel',
-		};
+		const labels = { add: zh ? '添加连接' : 'Add connection', account: zh ? '服务账号' : 'Service account', choose: zh ? '选择服务账号' : 'Choose a service account', token: zh ? '使用 API 令牌连接' : 'Connect with API token', cancel: zh ? '取消' : 'Cancel' };
 		test(`Add connection authorizes a service account with a token even without MCP management in ${locale}`, async function () {
 			const { page } = browserTests;
 
 			await page.goto(`/extensions.html?classification&locale=${locale}`);
 			const github = serviceAccount('github', 'GitHub account');
 			const docs = serviceAccount('documents', 'Cloud documents', true);
-			await page.evaluate(
-				entries => {
-					window.ashExtensionsIntegration.setConnectors(entries);
-					window.ashExtensionsIntegration.setMcpSupported(false);
-				},
-				[github, docs],
-			);
+			await page.evaluate(entries => { window.ashExtensionsIntegration.setConnectors(entries); window.ashExtensionsIntegration.setMcpSupported(false); }, [github, docs]);
 			const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
 			await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
 			const add = pane.getByRole('button', { name: labels.add, exact: true });
@@ -184,9 +138,7 @@ suite('extensions browser component', () => {
 			await expect(details.getByRole('status')).toHaveText(zh ? '已连接 · Octocat' : 'Connected · Octocat');
 			await expect(pane.getByRole('option').filter({ hasText: github.displayName })).toHaveCount(1);
 			await expect(pane.getByRole('option').filter({ hasText: github.displayName })).toContainText(zh ? '已连接 · Octocat' : 'Connected · Octocat');
-			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0].startsWith('connector/') || entry[0] === 'mcp/server/upsert'))).toEqual([
-				['connector/connect', 'github', 'octocat'],
-			]);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0].startsWith('connector/') || entry[0] === 'mcp/server/upsert'))).toEqual([['connector/connect', 'github', 'octocat']]);
 		});
 
 		test(`Add connection signs in with current service permissions in ${locale}`, async function () {
@@ -198,10 +150,7 @@ suite('extensions browser component', () => {
 			const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
 			await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
 			await pane.getByRole('button', { name: labels.add, exact: true }).click();
-			await page
-				.getByRole('dialog', { name: labels.add, exact: true })
-				.getByRole('option', { name: new RegExp(labels.account, 'u') })
-				.click();
+			await page.getByRole('dialog', { name: labels.add, exact: true }).getByRole('option', { name: new RegExp(labels.account, 'u') }).click();
 			const picker = page.getByRole('combobox', { name: labels.choose, exact: true });
 			await expect(picker).toBeFocused();
 			// Permission changes while the picker is open must be read before showing authorization actions.
@@ -224,10 +173,7 @@ suite('extensions browser component', () => {
 			const add = pane.getByRole('button', { name: labels.add, exact: true });
 			const openAccounts = async () => {
 				await add.click();
-				await page
-					.getByRole('dialog', { name: labels.add, exact: true })
-					.getByRole('option', { name: new RegExp(labels.account, 'u') })
-					.click();
+				await page.getByRole('dialog', { name: labels.add, exact: true }).getByRole('option', { name: new RegExp(labels.account, 'u') }).click();
 			};
 			await openAccounts();
 			const empty = page.getByRole('dialog').filter({ hasText: zh ? '暂无可用的服务账号。' : 'No service accounts are available.' });
@@ -238,13 +184,7 @@ suite('extensions browser component', () => {
 			await openAccounts();
 			await expect(pane.locator('.extensions-status')).toContainText('Service catalog unavailable');
 			await expect(add).toBeEnabled();
-			await page.evaluate(
-				entry => {
-					window.ashExtensionsIntegration.failConnectorList(false);
-					window.ashExtensionsIntegration.setConnectors([entry]);
-				},
-				serviceAccount('documents', 'Cloud documents', true),
-			);
+			await page.evaluate(entry => { window.ashExtensionsIntegration.failConnectorList(false); window.ashExtensionsIntegration.setConnectors([entry]); }, serviceAccount('documents', 'Cloud documents', true));
 			await openAccounts();
 			await page.getByRole('combobox', { name: labels.choose, exact: true }).press('Escape');
 			await expect(add).toBeFocused();
@@ -326,20 +266,8 @@ suite('extensions browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpStatusStarted())).toBe(true);
 			const before = await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors);
 			await page.evaluate(() => {
-				window.ashExtensionsIntegration.setMcpServers([
-					{
-						id: 'latest',
-						displayName: 'Latest server',
-						httpOrigin: null,
-						state: { status: 'disconnected' },
-						catalogGeneration: 2,
-						connectionGeneration: null,
-						toolCount: 0,
-					},
-				]);
-				for (let index = 0; index < 25; index++) {
-					window.ashExtensionsIntegration.notifyConnectorsChanged();
-				}
+				window.ashExtensionsIntegration.setMcpServers([{ id: 'latest', displayName: 'Latest server', httpOrigin: null, state: { status: 'disconnected' }, catalogGeneration: 2, connectionGeneration: null, toolCount: 0 }]);
+				for (let index = 0; index < 25; index++) { window.ashExtensionsIntegration.notifyConnectorsChanged(); }
 			});
 			try {
 				await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
@@ -393,47 +321,12 @@ suite('extensions browser component', () => {
 				await page.goto(`/extensions.html?classification&locale=${locale}&theme=${theme}`);
 				await page.evaluate(() => {
 					window.ashExtensionsIntegration.addMcpPackage();
-					window.ashExtensionsIntegration.addConnector({
-						declarationId: 'marketplace:example/web:mcp:fixture-server',
-						serverId: 'github:connector:account:mcp:tools',
-					});
+					window.ashExtensionsIntegration.addConnector({ declarationId: 'marketplace:example/web:mcp:fixture-server', serverId: 'github:connector:account:mcp:tools' });
 					window.ashExtensionsIntegration.setMcpServers([
-						{
-							id: 'marketplace:example/web:mcp:fixture-server',
-							displayName: 'Declared service server',
-							httpOrigin: null,
-							state: { status: 'connected' },
-							catalogGeneration: 1,
-							connectionGeneration: 1,
-							toolCount: 4,
-						},
-						{
-							id: 'github:connector:account:mcp:tools',
-							displayName: 'Account runtime server',
-							httpOrigin: null,
-							state: { status: 'disconnected' },
-							catalogGeneration: 1,
-							connectionGeneration: null,
-							toolCount: 0,
-						},
-						{
-							id: 'user:mcp:same-name',
-							displayName: 'GitHub account',
-							httpOrigin: null,
-							state: { status: 'disabled' },
-							catalogGeneration: 1,
-							connectionGeneration: null,
-							toolCount: 0,
-						},
-						{
-							id: 'independent',
-							displayName: 'Independent server',
-							httpOrigin: null,
-							state: { status: 'connected' },
-							catalogGeneration: 1,
-							connectionGeneration: 1,
-							toolCount: 1,
-						},
+						{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'Declared service server', httpOrigin: null, state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 4 },
+						{ id: 'github:connector:account:mcp:tools', displayName: 'Account runtime server', httpOrigin: null, state: { status: 'disconnected' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+						{ id: 'user:mcp:same-name', displayName: 'GitHub account', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+						{ id: 'independent', displayName: 'Independent server', httpOrigin: null, state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 },
 					]);
 					window.ashExtensionsIntegration.notifyConnectorsChanged();
 				});
@@ -450,14 +343,12 @@ suite('extensions browser component', () => {
 				await expect(pane.locator('.ash-pane-view-header-actions button')).toHaveCount(1);
 				await page.screenshot({ path: `.build/desktop/ui-previews/connections-flat-${locale}-${theme}.png` });
 				const search = page.locator('#extensions').getByRole('searchbox');
-				await search.fill('@connections GitHub');
-				await search.press('Enter');
+				await search.fill('@connections GitHub'); await search.press('Enter');
 				await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('2');
 				await search.press('Escape');
 				await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('3');
 				await list.focus();
-				await page.keyboard.press('Home');
-				await page.keyboard.press('Enter');
+				await page.keyboard.press('Home'); await page.keyboard.press('Enter');
 				const details = page.locator('.ash-extension-editor');
 				await expect(details.getByRole('heading', { name: 'GitHub account', exact: true })).toBeVisible();
 				await expect(details.locator('.extension-detail-heading')).toContainText(locale === 'en' ? 'This connection uses a service account.' : '此连接通过服务账号授权。');
@@ -467,15 +358,8 @@ suite('extensions browser component', () => {
 				await expect(details.locator('.extension-detail-info')).toContainText(locale === 'en' ? 'MCP server' : 'MCP 服务器');
 				await details.getByRole('tab', { name: locale === 'en' ? 'MCP server' : 'MCP 服务器', exact: true }).click();
 				await expect(details.locator('.extension-capabilities')).toContainText('github:connector:account:mcp:tools');
-				await page.screenshot({
-					path: `.build/desktop/ui-previews/connection-flat-details-${locale}-${theme}.png`,
-				});
-				await details
-					.getByRole('button', {
-						name: locale === 'en' ? 'Open MCP server details' : '打开 MCP 服务器详情',
-						exact: true,
-					})
-					.click();
+				await page.screenshot({ path: `.build/desktop/ui-previews/connection-flat-details-${locale}-${theme}.png` });
+				await details.getByRole('button', { name: locale === 'en' ? 'Open MCP server details' : '打开 MCP 服务器详情', exact: true }).click();
 				await expect(details.getByRole('heading', { name: 'Account runtime server', exact: true })).toBeVisible();
 				await expect(details.locator('.extension-detail-identity > .extension-metadata')).toHaveText('github:connector:account:mcp:tools');
 				await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disconnected' : '已断开');
@@ -483,12 +367,7 @@ suite('extensions browser component', () => {
 				await expect(details.locator('.extension-detail-identity > .extension-metadata')).toHaveText('user:mcp:same-name');
 				await expect(details.locator('.extension-detail-heading')).toContainText(locale === 'en' ? 'This connection uses an MCP server.' : '此连接通过 MCP 服务器提供工具。');
 				await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disabled' : '已禁用');
-				await expect(
-					details.getByRole('button', {
-						name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接',
-						exact: true,
-					}),
-				).toHaveCount(0);
+				await expect(details.getByRole('button', { name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接', exact: true })).toHaveCount(0);
 			});
 		}
 
@@ -498,10 +377,7 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?classification&locale=${locale}`);
 			await page.evaluate(() => {
 				window.ashExtensionsIntegration.addMcpPackage();
-				window.ashExtensionsIntegration.addConnector({
-					declarationId: 'marketplace:example/web:mcp:fixture-server',
-					serverId: 'github:connector:account:mcp:tools',
-				});
+				window.ashExtensionsIntegration.addConnector({ declarationId: 'marketplace:example/web:mcp:fixture-server', serverId: 'github:connector:account:mcp:tools' });
 				window.ashExtensionsIntegration.setMcpServers([]);
 				window.ashExtensionsIntegration.notifyConnectorsChanged();
 			});
@@ -518,46 +394,8 @@ suite('extensions browser component', () => {
 	}
 
 	for (const labels of [
-		{
-			locale: 'en',
-			add: 'Add connection',
-			http: 'HTTP server',
-			id: 'Server ID',
-			name: 'Display name',
-			url: 'HTTP or HTTPS server URL',
-			credential: 'Credential reference (optional)',
-			save: 'Save',
-			disabled: 'Disabled',
-			enable: 'Enable',
-			disconnect: 'Disconnect',
-			disconnected: 'Disconnected',
-			connect: 'Connect',
-			connected: 'Connected',
-			edit: 'Edit MCP server',
-			remove: 'Remove MCP server',
-			confirm: 'Remove',
-			cancel: 'Cancel',
-		},
-		{
-			locale: 'zh-CN',
-			add: '添加连接',
-			http: 'HTTP 服务器',
-			id: '服务器标识符',
-			name: '显示名称',
-			url: 'HTTP 或 HTTPS 服务器地址',
-			credential: '凭据引用（可选）',
-			save: '保存',
-			disabled: '已禁用',
-			enable: '启用',
-			disconnect: '断开',
-			disconnected: '已断开',
-			connect: '连接',
-			connected: '已连接',
-			edit: '编辑 MCP 服务器',
-			remove: '移除 MCP 服务器',
-			confirm: '移除',
-			cancel: '取消',
-		},
+		{ locale: 'en', add: 'Add connection', http: 'HTTP server', id: 'Server ID', name: 'Display name', url: 'HTTP or HTTPS server URL', credential: 'Credential reference (optional)', save: 'Save', disabled: 'Disabled', enable: 'Enable', disconnect: 'Disconnect', disconnected: 'Disconnected', connect: 'Connect', connected: 'Connected', edit: 'Edit MCP server', remove: 'Remove MCP server', confirm: 'Remove', cancel: 'Cancel' },
+		{ locale: 'zh-CN', add: '添加连接', http: 'HTTP 服务器', id: '服务器标识符', name: '显示名称', url: 'HTTP 或 HTTPS 服务器地址', credential: '凭据引用（可选）', save: '保存', disabled: '已禁用', enable: '启用', disconnect: '断开', disconnected: '已断开', connect: '连接', connected: '已连接', edit: '编辑 MCP 服务器', remove: '移除 MCP 服务器', confirm: '移除', cancel: '取消' },
 	]) {
 		test(`Independent MCP configuration and lifecycle actions refresh the pane and details in ${labels.locale}`, async function () {
 			const { page } = browserTests;
@@ -570,19 +408,11 @@ suite('extensions browser component', () => {
 			await expect(add.getByRole('combobox')).toHaveAttribute('placeholder', labels.locale === 'en' ? 'How would you like to connect?' : '你想如何建立连接？');
 			await expect(add.getByRole('option').filter({ hasText: labels.locale === 'en' ? 'Service account' : '服务账号' })).toBeVisible();
 			await page.screenshot({ path: `.build/desktop/ui-previews/add-connection-accounts-${labels.locale}.png` });
-			await add
-				.getByRole('option')
-				.filter({ hasText: labels.locale === 'en' ? 'Custom MCP server' : '自定义 MCP 服务器' })
-				.click();
+			await add.getByRole('option').filter({ hasText: labels.locale === 'en' ? 'Custom MCP server' : '自定义 MCP 服务器' }).click();
 			await expect(add).toContainText(labels.locale === 'en' ? 'Choose a connection method.' : '选择接入方式。');
 			await expect(add).toContainText(labels.locale === 'en' ? 'for a service URL' : '有服务地址时');
 			await expect(add).toContainText(labels.locale === 'en' ? 'on this computer' : '本机运行服务');
-			await expect(
-				add.getByRole('button', {
-					name: labels.locale === 'en' ? 'Local process (stdio)' : '本地进程（stdio）',
-					exact: true,
-				}),
-			).toBeVisible();
+			await expect(add.getByRole('button', { name: labels.locale === 'en' ? 'Local process (stdio)' : '本地进程（stdio）', exact: true })).toBeVisible();
 			await page.screenshot({ path: `.build/desktop/ui-previews/add-connection-${labels.locale}.png` });
 			await add.getByRole('button', { name: labels.http, exact: true }).click();
 			await expect(add).toContainText(labels.locale === 'en' ? 'Configure HTTP server.' : '配置HTTP 服务器。');
@@ -623,34 +453,13 @@ suite('extensions browser component', () => {
 			await page.getByRole('dialog', { name: labels.remove, exact: true }).getByRole('button', { name: labels.confirm, exact: true }).click();
 			await expect(mcp.getByRole('option').filter({ hasText: 'Renamed standalone' })).toHaveCount(0);
 			await expect(details.getByRole('button', { name: labels.edit, exact: true })).toHaveCount(0);
-			const mutations = await page.evaluate(() =>
-				window.ashExtensionsIntegration.requests.filter((entry: any) =>
-					['mcp/server/upsert', 'mcp/server/enablement/set', 'mcp/server/connect', 'mcp/server/disconnect', 'mcp/server/remove'].includes(entry[0]),
-				),
-			);
+			const mutations = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => ['mcp/server/upsert', 'mcp/server/enablement/set', 'mcp/server/connect', 'mcp/server/disconnect', 'mcp/server/remove'].includes(entry[0])));
 			expect(mutations).toMatchObject([
-				[
-					'mcp/server/upsert',
-					{
-						expectedRevision: 1,
-						server: {
-							id: 'user:mcp:standalone',
-							displayName: 'Standalone test',
-							enablement: 'disabled',
-							credential: { type: 'reference', credentialRef: 'stored-token' },
-						},
-					},
-				],
+				['mcp/server/upsert', { expectedRevision: 1, server: { id: 'user:mcp:standalone', displayName: 'Standalone test', enablement: 'disabled', credential: { type: 'reference', credentialRef: 'stored-token' } } }],
 				['mcp/server/enablement/set', { expectedRevision: 2, serverId: 'user:mcp:standalone', enablement: 'enabled' }],
 				['mcp/server/connect', { serverId: 'user:mcp:standalone' }],
 				['mcp/server/disconnect', { serverId: 'user:mcp:standalone' }],
-				[
-					'mcp/server/upsert',
-					{
-						expectedRevision: 3,
-						server: { id: 'user:mcp:standalone', displayName: 'Renamed standalone', enablement: 'enabled' },
-					},
-				],
+				['mcp/server/upsert', { expectedRevision: 3, server: { id: 'user:mcp:standalone', displayName: 'Renamed standalone', enablement: 'enabled' } }],
 				['mcp/server/remove', { expectedRevision: 4, serverId: 'user:mcp:standalone' }],
 			]);
 		});
@@ -692,15 +501,10 @@ suite('extensions browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/extensions.html');
-		await page.evaluate(() =>
-			window.ashExtensionsIntegration.configureMcp({
-				id: 'user:mcp:reviewed',
-				displayName: 'Reviewed server',
-				transport: { type: 'streamableHttp', url: 'https://example.test/mcp' },
-				credential: { type: 'unauthenticated' },
-				enablement: 'enabled',
-			}),
-		);
+		await page.evaluate(() => window.ashExtensionsIntegration.configureMcp({
+			id: 'user:mcp:reviewed', displayName: 'Reviewed server', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' },
+			credential: { type: 'unauthenticated' }, enablement: 'enabled',
+		}));
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await mcp.getByRole('option').filter({ hasText: 'Reviewed server' }).click();
@@ -732,7 +536,7 @@ suite('extensions browser component', () => {
 			const pane = page.locator('[data-view-id="ash.extensions.skills"]');
 			await pane.getByRole('button', { name: title, exact: true }).click();
 			await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }));
-			const count = (shown: number, total: number) => (locale === 'en' ? `Showing ${shown} of ${total} results` : `显示 ${shown} 条，共 ${total} 条结果`);
+			const count = (shown: number, total: number) => locale === 'en' ? `Showing ${shown} of ${total} results` : `显示 ${shown} 条，共 ${total} 条结果`;
 			await expect(pane.getByRole('status')).toHaveText(count(30, 146));
 			for (const shown of [60, 90, 120, 146]) {
 				const more = pane.getByRole('button', { name: loadMore, exact: true });
@@ -743,8 +547,7 @@ suite('extensions browser component', () => {
 			await expect(pane.getByRole('button', { name: loadMore, exact: true })).toBeHidden();
 			await expect(pane.getByRole('listbox')).toBeFocused();
 			const picker = pane.getByRole('combobox', { name: sourceLabel, exact: true });
-			await picker.focus();
-			await page.keyboard.press('Enter');
+			await picker.focus(); await page.keyboard.press('Enter');
 			await expect(page.getByRole('option', { name: allSources, exact: true })).toBeVisible();
 			await expect(page.getByRole('option', { name: 'open-vsx', exact: true })).toHaveCount(0);
 			await page.getByRole('option', { name: 'other', exact: true }).click();
@@ -763,10 +566,7 @@ suite('extensions browser component', () => {
 		});
 	}
 
-	for (const [locale, installedLabel, installLabel] of [
-		['en', 'Installed', 'Install'],
-		['zh-CN', '已安装', '安装'],
-	]) {
+	for (const [locale, installedLabel, installLabel] of [['en', 'Installed', 'Install'], ['zh-CN', '已安装', '安装']]) {
 		for (const [view, paneTitle, discoveryLabel, query, name, packageId] of [
 			['skills', locale === 'zh-CN' ? '技能' : 'Skills', locale === 'zh-CN' ? '发现技能' : 'Discover skills', 'Web', 'Web tools', 'example/web'],
 			['mcp', locale === 'zh-CN' ? '连接' : 'Connections', locale === 'zh-CN' ? '发现连接' : 'Discover connections', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
@@ -810,9 +610,7 @@ suite('extensions browser component', () => {
 		await page.goto('/extensions.html?marketplace&partialDiscoveryFailure');
 		const pane = page.locator('[data-view-id="ash.extensions.skills"]');
 		await pane.getByRole('button', { name: 'Skills', exact: true }).click();
-		await page.evaluate(() => {
-			void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' });
-		});
+		await page.evaluate(() => { void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }); });
 		await expect(pane.getByRole('option')).toContainText('Web tools');
 		await expect(pane.getByRole('status')).toContainText('Catalog unavailable');
 	});
@@ -825,9 +623,7 @@ suite('extensions browser component', () => {
 		await pane.getByRole('button', { name: 'Skills', exact: true }).click();
 		await expect(pane.getByRole('option')).toContainText('review');
 		await page.evaluate(() => window.ashExtensionsIntegration.holdDiscoverySearch());
-		await page.evaluate(() => {
-			void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' });
-		});
+		await page.evaluate(() => { void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }); });
 		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.discoverySearchStarted())).toBe(true);
 		const progress = pane.locator('.ash-view-pane-progress-indicator');
 		await expect(progress).toBeVisible();
@@ -847,9 +643,7 @@ suite('extensions browser component', () => {
 		await page.goto('/extensions.html?marketplace');
 		const pane = page.locator('[data-view-id="ash.extensions.skills"]');
 		await pane.getByRole('button', { name: 'Skills', exact: true }).click();
-		await page.evaluate(() => {
-			void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' });
-		});
+		await page.evaluate(() => { void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }); });
 		await expect(pane.getByRole('option')).toContainText('Web tools');
 		await page.evaluate(() => window.ashExtensionsIntegration.setDiscoveryEnabled(false));
 		await expect(pane.getByRole('option')).toHaveCount(0);
@@ -916,7 +710,7 @@ suite('extensions browser component', () => {
 		const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => ['gitClone', 'gitCancel', 'pluginInstall', 'commandError'].includes(entry[0])));
 		expect(requests).toHaveLength(2);
 		expect(requests[0]).toMatchObject(['gitClone', { url: 'https://example.test/plugin.git', reference: 'release' }]);
-		const cloneRequest = requests[0] as [string, { operationId: string }];
+		const cloneRequest = requests[0] as [string, { operationId: string; }];
 		expect(requests[1]).toEqual(['gitCancel', cloneRequest[1].operationId]);
 	});
 
@@ -938,10 +732,7 @@ suite('extensions browser component', () => {
 			await expect(viewport).toHaveCSS('scrollbar-width', 'none');
 			await expect(editor).toHaveCSS('overflow-y', 'visible');
 			await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
-			const bounds = await root.evaluate(element => ({
-				viewport: element.clientHeight,
-				host: element.parentElement!.clientHeight,
-			}));
+			const bounds = await root.evaluate(element => ({ viewport: element.clientHeight, host: element.parentElement!.clientHeight }));
 			expect(bounds.viewport).toBe(bounds.host);
 			await track.press('End');
 			await expect.poll(async () => Number(await track.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
@@ -953,9 +744,7 @@ suite('extensions browser component', () => {
 			await editor.getByRole('tab', { name: featuresLabel, exact: true }).press('Enter');
 			await expect(editor.getByRole('tabpanel', { name: featuresLabel, exact: true })).toBeVisible();
 			await editor.getByRole('tab', { name: detailsLabel, exact: true }).press('Enter');
-			await page.locator('#details').evaluate(element => {
-				element.style.width = '360px';
-			});
+			await page.locator('#details').evaluate(element => { element.style.width = '360px'; });
 			await expect(editor).toHaveClass(/compact/u);
 			const content = (await editor.locator('.extension-detail-content').boundingBox())!;
 			const info = (await editor.locator('.extension-detail-info').boundingBox())!;
@@ -984,25 +773,16 @@ suite('extensions browser component', () => {
 			await expect(editor.locator('.extension-detail-content').getByRole('link', { name: 'Unsafe', exact: true })).toHaveCount(0);
 			expect(await page.evaluate(() => (window as any).fixtureUnsafe)).toBeUndefined();
 			const details = editor.getByRole('tab', { name: detailsLabel, exact: true });
-			await details.focus();
-			await details.press('ArrowRight');
+			await details.focus(); await details.press('ArrowRight');
 			const features = editor.getByRole('tab', { name: featuresLabel, exact: true });
-			await expect(features).toBeFocused();
-			await expect(details).toHaveAttribute('aria-selected', 'true');
+			await expect(features).toBeFocused(); await expect(details).toHaveAttribute('aria-selected', 'true');
 			await features.press('Enter');
 			await expect(features).toHaveAttribute('aria-selected', 'true');
 			await expect(editor.getByRole('tabpanel', { name: featuresLabel, exact: true })).toContainText('editorExtension');
 			await expect(editor.getByRole('tabpanel', { name: detailsLabel, exact: true })).toBeHidden();
 			await details.click();
 			await editor.locator('.extension-detail-links').getByRole('link', { name: 'README.md', exact: true }).click();
-			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').at(-1))).toMatchObject([
-				'document',
-				{
-					readOnly: true,
-					languageId: 'markdown',
-					initialText: expect.stringContaining('# Sample editor extension'),
-				},
-			]);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').at(-1))).toMatchObject(['document', { readOnly: true, languageId: 'markdown', initialText: expect.stringContaining('# Sample editor extension') }]);
 		});
 	}
 
@@ -1048,20 +828,14 @@ suite('extensions browser component', () => {
 		await expect(editor.getByRole('tabpanel', { name: 'Tools', exact: true })).toContainText('fixture_search');
 		await expect(editor.getByRole('complementary')).toContainText('Contract version');
 		const registrations = await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPane'));
-		expect(registrations).toEqual([
-			['editorPane', 'ash.extensions.editor'],
-			['editorPane', 'ash.extensions.editor'],
-			['editorPane', 'ash.extensions.editor'],
-		]);
+		expect(registrations).toEqual([['editorPane', 'ash.extensions.editor'], ['editorPane', 'ash.extensions.editor'], ['editorPane', 'ash.extensions.editor']]);
 	});
 
 	test('A late README cannot replace another capability in the editor', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/extensions.html');
-		await page.evaluate(() => {
-			window.ashExtensionsIntegration.holdReadme();
-		});
+		await page.evaluate(() => { window.ashExtensionsIntegration.holdReadme(); });
 		await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
 		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.readmeStarted())).toBe(true);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
@@ -1087,9 +861,7 @@ suite('extensions browser component', () => {
 			await editor.getByRole('tab', { name: 'Details', exact: true }).focus();
 			await expect.poll(() => editor.getByRole('tab', { name: 'Details', exact: true }).evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(1);
 			await page.screenshot({ path: `.build/desktop/ui-previews/extension-details-${theme}.png` });
-			await page.locator('#details').evaluate(element => {
-				element.style.width = '360px';
-			});
+			await page.locator('#details').evaluate(element => { element.style.width = '360px'; });
 			await expect(editor).toHaveClass(/compact/u);
 			await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 			const narrowContent = await editor.locator('.extension-detail-content').boundingBox();
@@ -1100,14 +872,8 @@ suite('extensions browser component', () => {
 			const toggle = editor.getByRole('switch', { name: 'Enable skill', exact: true });
 			await expect(toggle).toBeChecked();
 			for (const width of [360, 850]) {
-				await page.locator('#details').evaluate((element, width) => {
-					element.style.width = `${width}px`;
-				}, width);
-				if (width < 720) {
-					await expect(editor).toHaveClass(/compact/u);
-				} else {
-					await expect(editor).not.toHaveClass(/compact/u);
-				}
+				await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+				if (width < 720) { await expect(editor).toHaveClass(/compact/u); } else { await expect(editor).not.toHaveClass(/compact/u); }
 				const identity = await editor.locator('.extension-detail-identity').boundingBox();
 				const row = await editor.locator('.extension-detail-identity-row').boundingBox();
 				const track = editor.locator('.ash-switch-track');
@@ -1129,14 +895,8 @@ suite('extensions browser component', () => {
 			await expect(editor.locator('.extension-detail-description')).toHaveText('Rust language configuration, syntax highlighting and language server support.');
 			await expect(editor.getByRole('switch')).toBeChecked();
 			for (const width of [360, 850]) {
-				await page.locator('#details').evaluate((element, width) => {
-					element.style.width = `${width}px`;
-				}, width);
-				if (width < 720) {
-					await expect(editor).toHaveClass(/compact/u);
-				} else {
-					await expect(editor).not.toHaveClass(/compact/u);
-				}
+				await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+				if (width < 720) { await expect(editor).toHaveClass(/compact/u); } else { await expect(editor).not.toHaveClass(/compact/u); }
 				const identity = await editor.locator('.extension-detail-identity').boundingBox();
 				const track = await editor.locator('.ash-switch-track').boundingBox();
 				const header = await editor.locator('.extension-detail-header').boundingBox();
@@ -1151,10 +911,7 @@ suite('extensions browser component', () => {
 		});
 	}
 
-	for (const [locale, title, reason] of [
-		['en', 'Recommended', 'Recommended by this workspace'],
-		['zh-CN', '推荐', '此工作区推荐'],
-	]) {
+	for (const [locale, title, reason] of [['en', 'Recommended', 'Recommended by this workspace'], ['zh-CN', '推荐', '此工作区推荐']]) {
 		test(`Recommendations can be ignored and restored by keyboard in ${locale}`, async function () {
 			const { page } = browserTests;
 			await page.goto(`/extensions.html?locale=${locale}`);
@@ -1163,14 +920,12 @@ suite('extensions browser component', () => {
 			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.ignoreRecommendation'));
 			const picker = page.locator('.ash-quick-pick').getByRole('combobox');
 			await expect(picker).toBeFocused();
-			await picker.fill('publisher.sample@ash');
-			await picker.press('Enter');
+			await picker.fill('publisher.sample@ash'); await picker.press('Enter');
 			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
 			await expect(pane.getByRole('option').filter({ hasText: 'publisher.sample@ash' })).toHaveCount(0);
 			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.undoIgnoreRecommendation'));
 			await expect(picker).toBeFocused();
-			await picker.fill('publisher.sample');
-			await picker.press('Enter');
+			await picker.fill('publisher.sample'); await picker.press('Enter');
 			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
 			await expect(pane.getByRole('option').filter({ hasText: 'publisher.sample@ash' })).toBeVisible();
 			await expect(pane).not.toContainText('excluded/tool');
@@ -1232,7 +987,7 @@ suite('extensions browser component', () => {
 			test(`Manifest UI targets stay consistent in marketplace, details and recommendations (${locale}, legacy=${legacy})`, async function () {
 				const { page } = browserTests;
 				await page.goto(`/extensions.html?locale=${locale}${legacy ? '&legacyUiTargets' : ''}`);
-				const label = legacy ? (locale === 'zh-CN' ? '未声明' : 'Not declared') : locale === 'zh-CN' ? 'IDE 和 Agent Window' : 'IDE and Agent Window';
+				const label = legacy ? locale === 'zh-CN' ? '未声明' : 'Not declared' : locale === 'zh-CN' ? 'IDE 和 Agent Window' : 'IDE and Agent Window';
 				await page.evaluate(() => window.ashExtensionsIntegration.open({ mode: 'browse', query: 'Web tools' }));
 				const market = page.locator('[data-view-id="ash.extensions.view"]').getByRole('option').filter({ hasText: 'Web tools' });
 				await expect(market).toContainText(label);
@@ -1276,9 +1031,7 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?productTips&locale=${locale}`);
 			await page.evaluate(() => window.ashExtensionsIntegration.open({ query: '@recommended' }));
 			const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
-			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.markdown@ash' })).toContainText(
-				locale === 'zh-CN' ? '为浏览器中的 Ash 推荐' : 'Recommended for Ash in a browser',
-			);
+			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.markdown@ash' })).toContainText(locale === 'zh-CN' ? '为浏览器中的 Ash 推荐' : 'Recommended for Ash in a browser');
 			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.python@ash' })).toContainText(locale === 'zh-CN' ? '此主机可使用 Python' : 'Python is available on this host');
 			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.python@ash' })).toContainText(locale === 'zh-CN' ? 'IDE' : 'IDE');
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.showRecommendedKeymaps'));
@@ -1331,7 +1084,7 @@ suite('extensions browser component', () => {
 			await page.keyboard.press('Enter');
 			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.localPackages().map(({ enabled, granted }) => ({ enabled, granted })))).toEqual([{ enabled: false, granted: false }]);
-			const request = (await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'pluginInstall'))) as [string, Record<string, unknown>];
+			const request = await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'pluginInstall')) as [string, Record<string, unknown>];
 			expect(request[1]).toMatchObject({ expectedRevision: 0, path: 'examples/extensions/inspect', dirId: null });
 			expect(request[1].commandId).toMatch(/^desktop-plugin-install-/u);
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageLocal'));
@@ -1353,10 +1106,7 @@ suite('extensions browser component', () => {
 			await page.getByRole('dialog', { name: 'SDK fixture', exact: true }).getByRole('button', { name: revoke, exact: true }).click();
 			await expect(editor.getByRole('button', { name: uninstall, exact: true })).toBeEnabled();
 			await editor.getByRole('button', { name: uninstall, exact: true }).click();
-			await page
-				.getByRole('dialog', { name: locale === 'en' ? 'Uninstall extension' : '卸载扩展', exact: true })
-				.getByRole('button', { name: uninstall, exact: true })
-				.click();
+			await page.getByRole('dialog', { name: locale === 'en' ? 'Uninstall extension' : '卸载扩展', exact: true }).getByRole('button', { name: uninstall, exact: true }).click();
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.localPackages())).toEqual([]);
 			await page.evaluate(() => window.ashExtensionsIntegration.dispose());
 			await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
@@ -1384,15 +1134,7 @@ suite('extensions browser component', () => {
 		await lsp.getByRole('button', { name: 'Find language servers in Extensions', exact: true }).click();
 		await expect(page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option')).toHaveCount(1);
 		await expect(page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option')).toContainText('Web tools');
-		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashExtensionsIntegration.requests.some(
-						(entry: any) => entry[0] === 'search' && entry[1].languageId === 'typescriptreact' && entry[1].capabilityKind === 'executable' && entry[1].packageType === null,
-					),
-				),
-			)
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'search' && entry[1].languageId === 'typescriptreact' && entry[1].capabilityKind === 'executable' && entry[1].packageType === null))).toBe(true);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
 		const skills = page.locator('[data-view-id="ash.extensions.skills"]');
 		await skills.getByRole('option').filter({ hasText: 'review' }).click();
@@ -1400,9 +1142,7 @@ suite('extensions browser component', () => {
 		await expect(details).toContainText('workspace / bad-skill: Invalid metadata');
 		await details.locator('.extension-detail-enablement .ash-switch-track').click();
 		await expect(details.getByRole('switch', { name: 'Enable skill', exact: true })).not.toBeChecked();
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([
-			['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3],
-		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3]]);
 		await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
 		await expect(lsp.getByRole('status')).toContainText('Refresh before saving again.');
 		await expect(lsp.getByRole('button', { name: 'Save server configuration', exact: true })).toBeDisabled();
@@ -1411,12 +1151,7 @@ suite('extensions browser component', () => {
 		await lsp.getByLabel('Executable path (optional)', { exact: true }).fill('/tools/server');
 		await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(2);
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').at(-1))).toEqual([
-			'configure',
-			'typescript-language-server',
-			{ mode: 'enabled', executable: '/tools/server' },
-			4,
-		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').at(-1))).toEqual(['configure', 'typescript-language-server', { mode: 'enabled', executable: '/tools/server' }, 4]);
 		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
 		await expect(page.locator('.ash-extensions, .ash-language-server-settings')).toHaveCount(0);
 	});
@@ -1441,50 +1176,15 @@ suite('extensions browser component', () => {
 			await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Authorize execution' : '授权执行', exact: true })).toBeVisible();
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy'))).toEqual([]);
-			for (const [action, policyAction] of locale === 'en'
-				? [
-						['Disable', 'disable'],
-						['Authorize execution', 'grant'],
-						['Revoke execution authorization', 'revoke'],
-						['Enable', 'enable'],
-					]
-				: [
-						['禁用', 'disable'],
-						['授权执行', 'grant'],
-						['撤销执行授权', 'revoke'],
-						['启用', 'enable'],
-					]) {
-				if (policyAction === 'enable' || policyAction === 'disable') {
-					await editor.getByRole('switch').press('Space');
-				} else {
-					await editor.getByRole('button', { name: action, exact: true }).click();
-				}
+			for (const [action, policyAction] of locale === 'en' ? [['Disable', 'disable'], ['Authorize execution', 'grant'], ['Revoke execution authorization', 'revoke'], ['Enable', 'enable']] : [['禁用', 'disable'], ['授权执行', 'grant'], ['撤销执行授权', 'revoke'], ['启用', 'enable']]) {
+				if (policyAction === 'enable' || policyAction === 'disable') { await editor.getByRole('switch').press('Space'); }
+				else { await editor.getByRole('button', { name: action, exact: true }).click(); }
 				if (policyAction === 'grant' || policyAction === 'revoke') {
 					await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: action, exact: true }).click();
 				}
-				await expect
-					.poll(() =>
-						page.evaluate(() =>
-							window.ashExtensionsIntegration.requests
-								.filter((entry: any) => entry[0] === 'editorPolicy')
-								.map((entry: any) => entry[1].action)
-								.at(-1),
-						),
-					)
-					.toBe(policyAction);
+				await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => entry[1].action).at(-1))).toBe(policyAction);
 			}
-			expect(
-				await page.evaluate(() =>
-					window.ashExtensionsIntegration.requests
-						.filter((entry: any) => entry[0] === 'editorPolicy')
-						.map((entry: any) => [entry[1].action, entry[1].expectedRevision, entry[1].installationId]),
-				),
-			).toEqual([
-				['disable', 1, 'version-one'],
-				['grant', 2, 'version-one'],
-				['revoke', 3, 'version-one'],
-				['enable', 4, 'version-one'],
-			]);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => [entry[1].action, entry[1].expectedRevision, entry[1].installationId]))).toEqual([['disable', 1, 'version-one'], ['grant', 2, 'version-one'], ['revoke', 3, 'version-one'], ['enable', 4, 'version-one']]);
 		});
 	}
 
@@ -1515,7 +1215,7 @@ suite('extensions browser component', () => {
 			await page.goto('/extensions.html');
 			const view = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
 			await expect(view.getByRole('option')).toHaveCount(1);
-			await page.evaluate(trigger => (trigger === 'command' ? window.ashExtensionsIntegration.startHeldCommand() : window.ashExtensionsIntegration.startHeldSearch()), trigger);
+			await page.evaluate(trigger => trigger === 'command' ? window.ashExtensionsIntegration.startHeldCommand() : window.ashExtensionsIntegration.startHeldSearch(), trigger);
 			await expect(view.getByRole('status')).toHaveText('Loading Extensions…');
 			await page.evaluate(() => window.ashExtensionsIntegration.open({ mode: 'installed' }));
 			const installedView = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
@@ -1539,10 +1239,7 @@ suite('extensions browser component', () => {
 
 		await page.goto('/extensions.html');
 		await installFixture(page);
-		await page.evaluate(() => {
-			window.ashExtensionsIntegration.addOtherPackage();
-			return window.ashExtensionsIntegration.open({ mode: 'installed' });
-		});
+		await page.evaluate(() => { window.ashExtensionsIntegration.addOtherPackage(); return window.ashExtensionsIntegration.open({ mode: 'installed' }); });
 		await page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').getByRole('option').filter({ hasText: 'example/web' }).click();
 		const editor = page.locator('.ash-extension-editor');
 		await editor.getByRole('button', { name: 'Update', exact: true }).click();
@@ -1553,9 +1250,7 @@ suite('extensions browser component', () => {
 		await expect(updated).toBeVisible();
 		await updated.click();
 		await expect(editor).toContainText('2.0.0');
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'update'))).toEqual([
-			['update', { installationId: 'version-one', version: '2.0.0' }],
-		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'update'))).toEqual([['update', { installationId: 'version-one', version: '2.0.0' }]]);
 	});
 
 	test('Extensions reviews bundled capabilities and uninstalls a selected version offline', async function () {
@@ -1571,11 +1266,7 @@ suite('extensions browser component', () => {
 		await review.getByRole('button', { name: 'Cancel', exact: true }).click();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'install'))).toEqual([]);
 		await installFixture(page);
-		await page.evaluate(() => {
-			window.ashExtensionsIntegration.addSecondVersion();
-			window.ashExtensionsIntegration.setOffline();
-			return window.ashExtensionsIntegration.open({ mode: 'installed' });
-		});
+		await page.evaluate(() => { window.ashExtensionsIntegration.addSecondVersion(); window.ashExtensionsIntegration.setOffline(); return window.ashExtensionsIntegration.open({ mode: 'installed' }); });
 		const installedView = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
 		const versions = installedView.locator('[data-package-id="example/web"]');
 		await expect(versions).toHaveCount(2);
@@ -1586,9 +1277,7 @@ suite('extensions browser component', () => {
 		await page.getByRole('dialog', { name: 'Uninstall extension', exact: true }).getByRole('button', { name: 'Uninstall', exact: true }).click();
 		await expect(versions).toHaveCount(1);
 		await expect(installedView.locator('[data-package-id="ash.language-pack-zh-cn"]')).toBeVisible();
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'uninstall'))).toEqual([
-			['uninstall', { installationId: 'version-two', mode: 'whenUnused' }],
-		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'uninstall'))).toEqual([['uninstall', { installationId: 'version-two', mode: 'whenUnused' }]]);
 	});
 
 	test('Third-party Ash sources can be added, paused and resumed through Extensions', async function () {
@@ -1600,9 +1289,7 @@ suite('extensions browser component', () => {
 		await page.keyboard.press('Enter');
 		const setup = page.getByRole('dialog', { name: 'Add Ash open source…', exact: true });
 		const inputs = setup.getByRole('textbox');
-		for (const [index, value] of ['community', 'https://extensions.example/metadata/', 'https://extensions.example/targets/', '{"signed":{}}'].entries()) {
-			await inputs.nth(index).fill(value);
-		}
+		for (const [index, value] of ['community', 'https://extensions.example/metadata/', 'https://extensions.example/targets/', '{"signed":{}}'].entries()) { await inputs.nth(index).fill(value); }
 		await setup.getByRole('button', { name: 'Add', exact: true }).click();
 		await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
 		for (const state of ['Enabled · select to pause', 'Paused · select to resume']) {
@@ -1612,10 +1299,7 @@ suite('extensions browser component', () => {
 			await picker.getByRole('option').filter({ hasText: 'community' }).click();
 			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
 		}
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'setSourceEnabled').map((entry: any) => entry[1]))).toEqual([
-			{ sourceId: 'community', enabled: false, expectedRevision: 1 },
-			{ sourceId: 'community', enabled: true, expectedRevision: 2 },
-		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'setSourceEnabled').map((entry: any) => entry[1]))).toEqual([{ sourceId: 'community', enabled: false, expectedRevision: 1 }, { sourceId: 'community', enabled: true, expectedRevision: 2 }]);
 	});
 
 	for (const [locale, disabled, languagePackReason] of [
@@ -1633,11 +1317,7 @@ suite('extensions browser component', () => {
 			const editor = page.locator('.ash-extension-editor');
 			await expect(editor.getByRole('heading', { name: '中文语言包（Rust 目录）', exact: true })).toBeVisible();
 			await expect(editor.getByRole('status')).toContainText(languagePackReason);
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'extensionResource' && entry[1].extensionId === 'ash.language-pack-zh-cn').length),
-				)
-				.toBeGreaterThan(0);
+			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'extensionResource' && entry[1].extensionId === 'ash.language-pack-zh-cn').length)).toBeGreaterThan(0);
 		});
 
 		test(`Installed extensions include the built-in Chinese language pack in ${locale}`, async function () {
@@ -1699,19 +1379,13 @@ suite('extensions browser component', () => {
 			const provider = plugins.locator('[data-package-id="ash.rust"]');
 			await expect(provider).toBeVisible();
 			await expect(provider.locator('.extension-metadata')).toHaveText('IDE · The Rust Programming Language');
-			await expect(provider.locator('.extension-body > .ash-icon-label')).toHaveText([
-				'Rust',
-				'IDE · The Rust Programming Language',
-				locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。',
-			]);
+			await expect(provider.locator('.extension-body > .ash-icon-label')).toHaveText(['Rust', 'IDE · The Rust Programming Language', locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。']);
 			await expect(provider).toHaveAccessibleName(/The Rust Programming Language/u);
 			await expect(provider.getByRole('button')).toHaveCount(0);
 			await provider.click();
 			const editor = page.locator('.ash-extension-editor');
 			await expect(editor.locator('.extension-detail-attribution')).toHaveText('The Rust Programming Language');
-			await expect(editor.locator('.extension-detail-description')).toHaveText(
-				locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。',
-			);
+			await expect(editor.locator('.extension-detail-description')).toHaveText(locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。');
 			await editor.getByRole('switch').press('Space');
 			await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
 			for (const query of ['The Rust Programming Language', 'rust-analyzer', '@installed rust-analyzer', '@builtin rust-analyzer']) {
@@ -1803,9 +1477,9 @@ suite('extensions browser component', () => {
 			await list.press('Enter');
 			const details = page.locator('.ash-extension-editor');
 			await expect(details).toContainText('workspace / bad-skill: Invalid metadata');
-			await expect(details.locator('.extension-metadata')).toHaveText(
-				locale === 'en' ? 'Developer: Acme · Version: 2.1.0 · Updated: 2026-10-20' : '开发方：Acme · 版本：2.1.0 · 更新于：2026-10-20',
-			);
+			await expect(details.locator('.extension-metadata')).toHaveText(locale === 'en'
+				? 'Developer: Acme · Version: 2.1.0 · Updated: 2026-10-20'
+				: '开发方：Acme · 版本：2.1.0 · 更新于：2026-10-20');
 			await expect(details.locator('.extension-detail-description > p')).toHaveText('Review changes.');
 			await expect(details.getByRole('tabpanel', { name: locale === 'en' ? 'Details' : '详情', exact: true })).toContainText('Use when reviewing a project before release.');
 			await expect(details.locator('.extension-actions')).toBeHidden();
@@ -1817,20 +1491,12 @@ suite('extensions browser component', () => {
 			await expect(toggle).not.toBeChecked();
 			await expect(toggle).toBeFocused();
 			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText(locale === 'en' ? 'Acme · Disabled' : 'Acme · 已禁用');
-			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([
-				['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope'],
-			]);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope']]);
 			await toggle.press('Space');
 			await expect(toggle).toBeChecked();
 			await expect(toggle).toBeEnabled();
 			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText('Acme');
-			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill').at(-1))).toEqual([
-				'skill',
-				{ source: 'marketplace:example/web', name: 'review' },
-				true,
-				4,
-				'session-scope',
-			]);
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill').at(-1))).toEqual(['skill', { source: 'marketplace:example/web', name: 'review' }, true, 4, 'session-scope']);
 			await page.evaluate(() => window.ashExtensionsIntegration.changeRevision());
 			await toggle.press('Space');
 			await expect(details.getByRole('status')).toContainText('Configuration changed. Refresh before saving.');
@@ -1876,19 +1542,13 @@ suite('extensions browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto(`/extensions.html?locale=${locale}`);
-			await page.evaluate(() =>
-				window.ashExtensionsIntegration.setMcpServers(
-					(['disabled', 'disconnected', 'connected', 'stale', 'unavailable'] as const).map((status, index) => ({
-						id: `configured-${index}`,
-						displayName: `Configured ${index}`,
-						httpOrigin: index === 4 ? 'https://example.com' : null,
-						state: status === 'unavailable' ? { status, reason: 'Connection refused <script>unsafe()</script>' } : { status },
-						catalogGeneration: 7,
-						connectionGeneration: status === 'connected' ? 2 : null,
-						toolCount: index === 2 ? 17 : 0,
-					})),
-				),
-			);
+			await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers(
+				(['disabled', 'disconnected', 'connected', 'stale', 'unavailable'] as const).map((status, index) => ({
+					id: `configured-${index}`, displayName: `Configured ${index}`, httpOrigin: index === 4 ? 'https://example.com' : null,
+					state: status === 'unavailable' ? { status, reason: 'Connection refused <script>unsafe()</script>' } : { status },
+					catalogGeneration: 7, connectionGeneration: status === 'connected' ? 2 : null, toolCount: index === 2 ? 17 : 0,
+				}))
+			));
 			const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 			await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 			await expect(mcp.getByRole('option')).toHaveCount(5);
@@ -1903,29 +1563,12 @@ suite('extensions browser component', () => {
 			await expect(details.getByRole('heading', { name: 'Configured 0', exact: true })).toBeVisible();
 			await expect(details.getByRole('status')).toHaveText(states[0]);
 			await mcp.getByRole('option').filter({ hasText: 'Configured 2' }).click();
-			await expect(
-				details
-					.locator('dt')
-					.filter({ hasText: /^Tools$|^工具$/ })
-					.locator('xpath=following-sibling::dd[1]'),
-			).toHaveText('17');
+			await expect(details.locator('dt').filter({ hasText: /^Tools$|^工具$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('17');
 			await mcp.getByRole('option').filter({ hasText: 'Configured 4' }).click();
 			await expect(details.locator('dt').filter({ hasText: diagnosticLabel }).locator('xpath=following-sibling::dd[1]')).toHaveText('Connection refused <script>unsafe()</script>');
 			await expect(details).toContainText('https://example.com');
 			await expect(details.locator('script')).toHaveCount(0);
-			await page.evaluate(() =>
-				window.ashExtensionsIntegration.setMcpServers([
-					{
-						id: 'configured-4',
-						displayName: 'Recovered server',
-						httpOrigin: 'https://example.com',
-						state: { status: 'connected' },
-						catalogGeneration: 8,
-						connectionGeneration: 3,
-						toolCount: 0,
-					},
-				]),
-			);
+			await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers([{ id: 'configured-4', displayName: 'Recovered server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 8, connectionGeneration: 3, toolCount: 0 }]));
 			await details.getByRole('button', { name: refreshLabel, exact: true }).click();
 			await expect(details.getByRole('status')).toHaveText(states[2]);
 			await expect(details.getByRole('heading', { name: 'Recovered server', exact: true })).toBeVisible();
@@ -1945,20 +1588,8 @@ suite('extensions browser component', () => {
 		await page.goto('/extensions.html');
 		await page.evaluate(() => {
 			window.ashExtensionsIntegration.addMcpPackage();
-			window.ashExtensionsIntegration.configureMcp({
-				id: 'user:mcp:fallback',
-				displayName: 'Configured fallback',
-				transport: { type: 'streamableHttp', url: 'https://example.test/mcp' },
-				credential: { type: 'unauthenticated' },
-				enablement: 'enabled',
-			});
-			window.ashExtensionsIntegration.configureMcp({
-				id: 'user:mcp:disabled',
-				displayName: 'Disabled fallback',
-				transport: { type: 'streamableHttp', url: 'https://example.test/mcp' },
-				credential: { type: 'unauthenticated' },
-				enablement: 'disabled',
-			});
+			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:fallback', displayName: 'Configured fallback', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
+			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:disabled', displayName: 'Disabled fallback', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' }, credential: { type: 'unauthenticated' }, enablement: 'disabled' });
 			window.ashExtensionsIntegration.failMcpStatus();
 		});
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
@@ -1992,11 +1623,7 @@ suite('extensions browser component', () => {
 		await expect(details.getByRole('status')).toHaveText('Connected');
 		await details.getByRole('tab', { name: 'Tools', exact: true }).click();
 		await expect(details).toContainText('Could not load tool descriptions: Error: Tool catalog unavailable');
-		await page.evaluate(() => {
-			window.ashExtensionsIntegration.addMcpPackage();
-			window.ashExtensionsIntegration.setMcpSupported(false);
-			window.ashExtensionsIntegration.requests.length = 0;
-		});
+		await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.setMcpSupported(false); window.ashExtensionsIntegration.requests.length = 0; });
 		await page.evaluate(() => window.ashExtensionsIntegration.refreshMcp());
 		await expect(mcp.getByRole('status')).toContainText('MCP server status is unavailable.');
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/status'))).toEqual([]);
@@ -2006,28 +1633,10 @@ suite('extensions browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/extensions.html');
-		await page.evaluate(() =>
-			window.ashExtensionsIntegration.setMcpServers([
-				{
-					id: 'first',
-					displayName: 'First server',
-					httpOrigin: null,
-					state: { status: 'unavailable', reason: 'Retired diagnostic' },
-					catalogGeneration: 1,
-					connectionGeneration: null,
-					toolCount: 0,
-				},
-				{
-					id: 'second',
-					displayName: 'Second server',
-					httpOrigin: null,
-					state: { status: 'disabled' },
-					catalogGeneration: 1,
-					connectionGeneration: null,
-					toolCount: 0,
-				},
-			]),
-		);
+		await page.evaluate(() => window.ashExtensionsIntegration.setMcpServers([
+			{ id: 'first', displayName: 'First server', httpOrigin: null, state: { status: 'unavailable', reason: 'Retired diagnostic' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+			{ id: 'second', displayName: 'Second server', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+		]));
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await expect(mcp.getByRole('option')).toHaveCount(2);
@@ -2088,10 +1697,7 @@ suite('extensions browser component', () => {
 
 			await page.setViewportSize({ width: 1280, height: 840 });
 			await page.goto(`/extensions.html?classification&preview&theme=${theme}`);
-			await page.evaluate(() => {
-				window.ashExtensionsIntegration.addMcpPackage();
-				window.ashExtensionsIntegration.addSkillOnlyPlugin();
-			});
+			await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.addSkillOnlyPlugin(); });
 			for (const name of ['Skills', 'Connections', 'Recommended']) {
 				await page.locator('#extensions').getByRole('button', { name, exact: true }).press('ArrowRight');
 			}
@@ -2104,10 +1710,7 @@ suite('extensions browser component', () => {
 				await expect.poll(() => view.locator('.ash-pane-view-header-title').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 			}
 			const boundary = page.locator('#extensions .ash-split-view-pane').nth(1);
-			const separator = await boundary.evaluate(element => {
-				const style = getComputedStyle(element, '::before');
-				return { height: style.height, color: style.backgroundColor };
-			});
+			const separator = await boundary.evaluate(element => { const style = getComputedStyle(element, '::before'); return { height: style.height, color: style.backgroundColor }; });
 			expect(separator.height).toBe('1px');
 			expect(separator.color).not.toBe('rgba(0, 0, 0, 0)');
 			await page.screenshot({ path: `.build/desktop/ui-previews/extensions-panes-${theme}.png` });
@@ -2156,24 +1759,8 @@ suite('extensions browser component', () => {
 	}
 
 	for (const labels of [
-		{
-			locale: 'en',
-			signIn: 'Sign in',
-			signOut: 'Sign out',
-			cancel: 'Cancel sign-in',
-			waiting: 'Complete sign-in in your browser.',
-			connected: 'Connected',
-			disconnected: 'Disconnected',
-		},
-		{
-			locale: 'zh-CN',
-			signIn: '登录',
-			signOut: '退出登录',
-			cancel: '取消登录',
-			waiting: '请在浏览器中完成登录。',
-			connected: '已连接',
-			disconnected: '已断开',
-		},
+		{ locale: 'en', signIn: 'Sign in', signOut: 'Sign out', cancel: 'Cancel sign-in', waiting: 'Complete sign-in in your browser.', connected: 'Connected', disconnected: 'Disconnected' },
+		{ locale: 'zh-CN', signIn: '登录', signOut: '退出登录', cancel: '取消登录', waiting: '请在浏览器中完成登录。', connected: '已连接', disconnected: '已断开' },
 	]) {
 		test(`MCP OAuth sign-in, cancellation and local logout in ${labels.locale}`, async function () {
 			const { page } = browserTests;
@@ -2181,13 +1768,7 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?locale=${labels.locale}`);
 			await page.evaluate(() => {
 				window.ashExtensionsIntegration.enableMcpOAuth();
-				window.ashExtensionsIntegration.configureMcp({
-					id: 'user:mcp:oauth',
-					displayName: 'OAuth fixture',
-					transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' },
-					credential: { type: 'unauthenticated' },
-					enablement: 'enabled',
-				});
+				window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:oauth', displayName: 'OAuth fixture', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
 			});
 			const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 			await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
@@ -2208,15 +1789,7 @@ suite('extensions browser component', () => {
 			await details.getByRole('button', { name: labels.signOut, exact: true }).click();
 			await expect(mcp.getByRole('option').filter({ hasText: 'OAuth fixture' })).toContainText(labels.disconnected);
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/oauth/complete'))).toEqual([
-				[
-					'mcp/oauth/complete',
-					{
-						flowId: 'synthetic-flow',
-						state: 'synthetic-state',
-						authorizationCode: 'synthetic-code',
-						issuer: 'https://issuer.test',
-					},
-				],
+				['mcp/oauth/complete', { flowId: 'synthetic-flow', state: 'synthetic-state', authorizationCode: 'synthetic-code', issuer: 'https://issuer.test' }],
 			]);
 		});
 	}
@@ -2227,36 +1800,18 @@ suite('extensions browser component', () => {
 
 			await page.goto(`/extensions.html?locale=${locale}`);
 			const lsp = page.locator('.ash-language-server-settings');
-			const advanced = lsp.getByLabel(locale === 'en' ? 'Advanced configuration (JSON)' : '高级配置（JSON）', {
-				exact: true,
-			});
+			const advanced = lsp.getByLabel(locale === 'en' ? 'Advanced configuration (JSON)' : '高级配置（JSON）', { exact: true });
 			await expect(advanced).toBeVisible();
 			await advanced.focus();
 			await page.keyboard.press('ControlOrMeta+A');
-			await page.keyboard.insertText(
-				'{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"enabled"},"initializationOptions":{"feature":true},"settings":{"python":{"strict":true}}}',
-			);
-			const save = lsp.getByRole('button', {
-				name: locale === 'en' ? 'Save server configuration' : '保存服务器配置',
-				exact: true,
-			});
+			await page.keyboard.insertText('{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"enabled"},"initializationOptions":{"feature":true},"settings":{"python":{"strict":true}}}');
+			const save = lsp.getByRole('button', { name: locale === 'en' ? 'Save server configuration' : '保存服务器配置', exact: true });
 			await page.keyboard.press('Tab');
 			await expect(save).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(1);
 			const request = await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'configure'));
-			expect(request).toEqual([
-				'configure',
-				expect.any(String),
-				expect.objectContaining({
-					languageIds: ['python'],
-					args: ['--stdio'],
-					environment: { EXAMPLE: 'enabled' },
-					initializationOptions: { feature: true },
-					settings: { python: { strict: true } },
-				}),
-				expect.any(Number),
-			]);
+			expect(request).toEqual(['configure', expect.any(String), expect.objectContaining({ languageIds: ['python'], args: ['--stdio'], environment: { EXAMPLE: 'enabled' }, initializationOptions: { feature: true }, settings: { python: { strict: true } } }), expect.any(Number)]);
 			await advanced.fill('{"args":42}');
 			await save.click();
 			await expect(advanced).toBeFocused();
@@ -2286,12 +1841,7 @@ suite('extensions browser component', () => {
 			await expect(review).not.toContainText('Node');
 			await review.getByRole('button', { name: authorize, exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'editorPolicy' && entry[1].action === 'grant'))).toBe(true);
-			await expect(
-				editor.getByRole('button', {
-					name: locale === 'en' ? 'Revoke execution authorization' : '撤销执行授权',
-					exact: true,
-				}),
-			).toBeVisible();
+			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Revoke execution authorization' : '撤销执行授权', exact: true })).toBeVisible();
 		});
 	}
 
@@ -2320,11 +1870,7 @@ suite('extensions browser component', () => {
 			expect(await rowOffset()).toBeCloseTo(initialOffset);
 		});
 
-		for (const [view, theme] of [
-			['plugins', 'light'],
-			['skills', 'dark'],
-			['mcp', 'hc'],
-		]) {
+		for (const [view, theme] of [['plugins', 'light'], ['skills', 'dark'], ['mcp', 'hc']]) {
 			test(`Extensions use the shared scrollbar for ${view} in ${locale}`, async function () {
 				const { page } = browserTests;
 
@@ -2334,17 +1880,10 @@ suite('extensions browser component', () => {
 					await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }));
 				} else if (view === 'mcp') {
 					await page.evaluate(async () => {
-						window.ashExtensionsIntegration.setMcpServers(
-							Array.from({ length: 30 }, (_, index) => ({
-								id: `scroll-server-${index}`,
-								displayName: `Scroll server ${index}`,
-								httpOrigin: null,
-								state: { status: 'disconnected' },
-								catalogGeneration: 1,
-								connectionGeneration: null,
-								toolCount: 0,
-							})),
-						);
+						window.ashExtensionsIntegration.setMcpServers(Array.from({ length: 30 }, (_, index) => ({
+							id: `scroll-server-${index}`, displayName: `Scroll server ${index}`, httpOrigin: null,
+							state: { status: 'disconnected' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0,
+						})));
 						await window.ashExtensionsIntegration.refreshMcp();
 					});
 					await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
@@ -2371,10 +1910,7 @@ suite('extensions browser component', () => {
 				await expect(list).toHaveCSS('overflow-y', 'visible');
 				await expect(viewport).toHaveCSS('scrollbar-width', 'none');
 				await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
-				const bounds = await root.evaluate(element => ({
-					root: element.getBoundingClientRect().toJSON(),
-					host: element.parentElement!.getBoundingClientRect().toJSON(),
-				}));
+				const bounds = await root.evaluate(element => ({ root: element.getBoundingClientRect().toJSON(), host: element.parentElement!.getBoundingClientRect().toJSON() }));
 				expect(bounds.root.height).toBeCloseTo(bounds.host.height);
 				expect(bounds.root.width).toBeCloseTo(bounds.host.width);
 				await list.press('Home');
@@ -2407,9 +1943,7 @@ suite('extensions browser component', () => {
 				await page.mouse.up();
 				await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 				await expect.poll(async () => Number(await track.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
-				await page.screenshot({
-					path: `.build/desktop/ui-previews/extensions-scrollbar-${view}-${locale}.png`,
-				});
+				await page.screenshot({ path: `.build/desktop/ui-previews/extensions-scrollbar-${view}-${locale}.png` });
 				if (view === 'plugins') {
 					const search = page.locator('#extensions').getByRole('searchbox');
 					await search.fill('@installed ash.bat');
@@ -2464,23 +1998,14 @@ suite('extensions browser component', () => {
 						const badge = element.querySelector<HTMLElement>('.ash-count-badge')!;
 						const actions = element.querySelector<HTMLElement>('.ash-pane-view-header-actions')!;
 						const style = getComputedStyle(badge);
-						return {
-							header: element.getBoundingClientRect().toJSON(),
-							badge: badge.getBoundingClientRect().toJSON(),
-							actions: actions.getBoundingClientRect().toJSON(),
-							background: style.backgroundColor,
-							foreground: style.color,
-							outline: style.outlineColor,
-						};
+						return { header: element.getBoundingClientRect().toJSON(), badge: badge.getBoundingClientRect().toJSON(), actions: actions.getBoundingClientRect().toJSON(), background: style.backgroundColor, foreground: style.color, outline: style.outlineColor };
 					});
 					expect(bounds.badge.right).toBeCloseTo(bounds.header.right - 12);
 					expect(bounds.badge.top + bounds.badge.height / 2).toBeCloseTo(bounds.header.top + bounds.header.height / 2);
 					expect(bounds.actions.right).toBeLessThanOrEqual(bounds.badge.left);
 					expect(bounds.background).not.toBe('rgba(0, 0, 0, 0)');
 					expect(bounds.foreground).not.toBe(bounds.background);
-					if (theme === 'hc') {
-						expect(bounds.outline).not.toBe(bounds.background);
-					}
+					if (theme === 'hc') { expect(bounds.outline).not.toBe(bounds.background); }
 				}
 				await page.screenshot({ path: `.build/desktop/ui-previews/extensions-badges-${locale}-${theme}.png` });
 
@@ -2494,11 +2019,7 @@ suite('extensions browser component', () => {
 				await search.press('Enter');
 				await expect(plugins.getByRole('option')).toHaveCount(1);
 				const bat = plugins.locator('[data-package-id="ash.bat"]');
-				await expect(bat.locator('.extension-body > .ash-icon-label')).toHaveText(
-					locale === 'en'
-						? ['Batch Language Support', 'IDE', 'Language identification, syntax highlighting, editing configuration, and snippets.']
-						: ['批处理语言支持', 'IDE', '提供语言识别、语法高亮、编辑配置和代码片段。'],
-				);
+				await expect(bat.locator('.extension-body > .ash-icon-label')).toHaveText(locale === 'en' ? ['Batch Language Support', 'IDE', 'Language identification, syntax highlighting, editing configuration, and snippets.'] : ['批处理语言支持', 'IDE', '提供语言识别、语法高亮、编辑配置和代码片段。']);
 				await expect(bat.locator('.extension-footer, .extension-state')).toHaveCount(0);
 				await expect(bat.getByRole('button')).toHaveCount(0);
 				await expect(plugins.locator('.ash-count-badge')).toHaveText('1');
@@ -2523,9 +2044,7 @@ suite('extensions browser component', () => {
 			await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toHaveCount(1);
-			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText(
-				`${locale === 'en' ? 'IDE and Agent Window' : 'IDE 和 Agent Window'} · Fixture author`,
-			);
+			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText(`${locale === 'en' ? 'IDE and Agent Window' : 'IDE 和 Agent Window'} · Fixture author`);
 			await page.locator('#extensions').getByRole('searchbox').fill('@installed Academy');
 			const installations = await page.evaluate(() => window.ashExtensionsIntegration.installationSnapshot());
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.browse'));
@@ -2547,17 +2066,11 @@ suite('extensions browser component', () => {
 			await page.locator('[data-view-id="ash.extensions.view"]').getByRole('button', { name: install, exact: true }).click();
 			await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.showInstalled'));
-			const installed = await page.evaluate(() => {
-				window.ashExtensionsIntegration.addConnector();
-				return window.ashExtensionsIntegration.installationSnapshot();
-			});
+			const installed = await page.evaluate(() => { window.ashExtensionsIntegration.addConnector(); return window.ashExtensionsIntegration.installationSnapshot(); });
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
 			await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
 			const details = page.locator('.ash-extension-editor');
-			const skillToggle = details.getByRole('switch', {
-				name: locale === 'en' ? 'Enable skill' : '启用技能',
-				exact: true,
-			});
+			const skillToggle = details.getByRole('switch', { name: locale === 'en' ? 'Enable skill' : '启用技能', exact: true });
 			await skillToggle.press('Space');
 			await expect(skillToggle).not.toBeChecked();
 			const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
@@ -2570,14 +2083,10 @@ suite('extensions browser component', () => {
 			await details.getByRole('switch').press('Space');
 			await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Connected · Octocat' : '已连接 · Octocat');
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/enablement/set'))).toEqual([
-				['connector/enablement/set', 'github', false],
-				['connector/enablement/set', 'github', true],
+				['connector/enablement/set', 'github', false], ['connector/enablement/set', 'github', true],
 			]);
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/connect' || entry[0] === 'connector/oauth'))).toEqual([]);
-			const tokenButton = details.getByRole('button', {
-				name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接',
-				exact: true,
-			});
+			const tokenButton = details.getByRole('button', { name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接', exact: true });
 			await tokenButton.press('Enter');
 			const tokenDialog = page.getByRole('dialog', { name: 'GitHub account', exact: true });
 			await tokenDialog.getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true }).click();
@@ -2630,8 +2139,7 @@ suite('extensions browser component', () => {
 			const filter = page.locator('[data-action-id="ash.extensions.filterSearch"] button');
 			const clear = page.locator('[data-action-id="ash.extensions.clearSearch"] button');
 			const titles = page.locator('#extensions .ash-pane-view-header-title');
-			const names =
-				locale === 'en' ? ['Marketplace', 'Installed', 'Skills', 'Plugins', 'Connections', 'Built-in', 'Recommended'] : ['扩展市场', '已安装', '技能', '插件', '连接', '内置', '推荐'];
+			const names = locale === 'en' ? ['Marketplace', 'Installed', 'Skills', 'Plugins', 'Connections', 'Built-in', 'Recommended'] : ['扩展市场', '已安装', '技能', '插件', '连接', '内置', '推荐'];
 			await expect(clear).toBeDisabled();
 			await search.fill('@installed ash.bat');
 			await search.press('Enter');
@@ -2647,23 +2155,13 @@ suite('extensions browser component', () => {
 			await expect(menu.getByRole('menuitemcheckbox', { name: names[1], exact: true })).toHaveAttribute('aria-checked', 'true');
 			await menu.getByRole('menuitemcheckbox').first().press('Escape');
 			await expect(filter).toBeFocused();
-			for (const [token, index, title] of [
-				['@skills', 2, names[2]],
-				['@plugins', 3, names[3]],
-				['@connections', 4, names[4]],
-				['@builtin', 5, names[3]],
-				['@recommended', 6, names[6]],
-				['@installed', 1, null],
-			]) {
+			for (const [token, index, title] of [['@skills', 2, names[2]], ['@plugins', 3, names[3]], ['@connections', 4, names[4]], ['@builtin', 5, names[3]], ['@recommended', 6, names[6]], ['@installed', 1, null]]) {
 				await filter.click();
 				await page.getByRole('menuitemcheckbox', { name: names[index as number], exact: true }).click();
 				await expect(search).toHaveValue(`${token} ash.bat`);
 				await expect(search).toBeFocused();
-				if (title) {
-					await expect(titles).toHaveText([title as string]);
-				} else {
-					await expect(titles).toHaveCount(4);
-				}
+				if (title) { await expect(titles).toHaveText([title as string]); }
+				else { await expect(titles).toHaveCount(4); }
 			}
 			await search.fill('@connectors ash.bat');
 			await search.press('Enter');
@@ -2696,32 +2194,9 @@ suite('extensions browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto(`/extensions.html?classification&locale=${locale}`);
-			const labels =
-				locale === 'en'
-					? [
-							'Browse Marketplace',
-							'Show installed',
-							'Manage built-in editor extensions',
-							'Ignore an extension recommendation',
-							'Restore an ignored extension recommendation',
-							'Restore dismissed extension recommendation notifications',
-							'Show recommended keymaps',
-							'Manage extension sources',
-							'Install extension from workspace',
-							'Install extension from Git repository',
-						]
-					: [
-							'浏览扩展市场',
-							'显示已安装',
-							'管理内置编辑器扩展',
-							'忽略扩展推荐',
-							'恢复已忽略的扩展推荐',
-							'恢复已关闭的扩展推荐通知',
-							'显示推荐的键位方案',
-							'管理扩展来源',
-							'从工作区安装扩展',
-							'从 Git 仓库安装扩展',
-						];
+			const labels = locale === 'en'
+				? ['Browse Marketplace', 'Show installed', 'Manage built-in editor extensions', 'Ignore an extension recommendation', 'Restore an ignored extension recommendation', 'Restore dismissed extension recommendation notifications', 'Show recommended keymaps', 'Manage extension sources', 'Install extension from workspace', 'Install extension from Git repository']
+				: ['浏览扩展市场', '显示已安装', '管理内置编辑器扩展', '忽略扩展推荐', '恢复已忽略的扩展推荐', '恢复已关闭的扩展推荐通知', '显示推荐的键位方案', '管理扩展来源', '从工作区安装扩展', '从 Git 仓库安装扩展'];
 			const more = page.locator('#extensions [data-action-id="ash.toolbar.moreActions"] button');
 			await expect(more).toHaveCount(1);
 			await more.focus();
@@ -2760,10 +2235,7 @@ suite('extensions browser component', () => {
 			const search = page.locator('#extensions').getByRole('searchbox');
 			const refresh = page.locator('#extensions [data-action-id="ash.extensions.refresh"] button');
 			const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
-			const add = connectors.getByRole('button', {
-				name: locale === 'en' ? 'Add connection' : '添加连接',
-				exact: true,
-			});
+			const add = connectors.getByRole('button', { name: locale === 'en' ? 'Add connection' : '添加连接', exact: true });
 			await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
 			await page.locator('#details').click();
 			await page.mouse.move(900, 600);
@@ -2803,6 +2275,7 @@ suite('extensions browser component', () => {
 			expect(after.connectors).toBeGreaterThan(before.connectors);
 		});
 	}
+
 
 	test('Saving detail enablement preserves focus moved to the shared search box', async function () {
 		const { page } = browserTests;

@@ -1,8 +1,16 @@
-import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	IAccessibleViewService,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../../editor/browser/editorBrowser.js';
+import {
+	ContentWidgetPositionPreference,
+	type ICodeEditor,
+	type IContentWidget,
+	type IContentWidgetPosition,
+} from '../../../../editor/browser/editorBrowser.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -51,7 +59,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 			}),
 		);
 		this._register(
-			addDisposableListener(this.node, 'keydown', event => {
+			addDisposableListener(this.node, 'keydown', (event) => {
 				if (event.key === 'Escape') {
 					event.preventDefault();
 					event.stopPropagation();
@@ -107,12 +115,19 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 			key === this.dismissed
 		)
 			return;
-		const current = () => !this.isDisposed && generation === this.generation && key === this.pauseKey() && this.debug.getViewModel().focusedStackFrame === frame;
+		const current = () =>
+			!this.isDisposed &&
+			generation === this.generation &&
+			key === this.pauseKey() &&
+			this.debug.getViewModel().focusedStackFrame === frame;
 		void session.exceptionInfo(session.threadId).then(
-			info => {
+			(info) => {
 				if (!current()) return;
 				this.heading.textContent = info.exceptionId;
-				this.details.textContent = [info.description, describe(info.details)].filter(Boolean).join('\n').slice(0, 65536);
+				this.details.textContent = [info.description, describe(info.details)]
+					.filter(Boolean)
+					.join('\n')
+					.slice(0, 65536);
 				this.details.setAttribute('aria-label', localize('debug.exceptionDetails', 'Debug exception details'));
 				this.position = {
 					position: { lineNumber: Math.max(1, frame.lineNumber), column: Math.max(1, frame.columnNumber) },
@@ -120,7 +135,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 				};
 				this.editor.layoutContentWidget(this);
 			},
-			error => {
+			(error) => {
 				if (!current() || isCancellationError(error)) return;
 				this.heading.textContent = localize('debug.exceptionDetails', 'Debug exception details');
 				this.details.textContent = error instanceof Error ? error.message : String(error);
@@ -135,5 +150,9 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 }
 
 function describe(details: IDebugExceptionDetails | undefined): string {
-	return details ? [details.typeName, details.message, details.stackTrace, ...(details.innerException ?? []).map(describe)].filter(Boolean).join('\n') : '';
+	return details
+		? [details.typeName, details.message, details.stackTrace, ...(details.innerException ?? []).map(describe)]
+			.filter(Boolean)
+			.join('\n')
+		: '';
 }

@@ -36,11 +36,7 @@ suite('Desktop metered connection renderer', () => {
 
 	test('reports explicit browser signals, shares overrides across windows, and removes listeners on disposal', async () => {
 		const registry = new ConfigurationRegistry();
-		registry.registerConfiguration({
-			key: 'network.meteredConnection',
-			defaultValue: 'auto',
-			parse: value => value as string,
-		});
+		registry.registerConfiguration({ key: 'network.meteredConnection', defaultValue: 'auto', parse: value => value as string });
 		using configuration = new InMemoryConfigurationService(registry);
 		using mainServices = new InstantiationService();
 		mainServices.registerInstance(IConfigurationService, configuration);
@@ -60,9 +56,7 @@ suite('Desktop metered connection renderer', () => {
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				};
 			},
-			registerChannel() {
-				throw new Error('Unexpected renderer channel');
-			},
+			registerChannel() { throw new Error('Unexpected renderer channel'); },
 		});
 		const connection = new BrowserConnection();
 		using first = rendererServices.createInstance(ElectronMeteredConnectionService, () => connection);
@@ -70,9 +64,7 @@ suite('Desktop metered connection renderer', () => {
 		await Promise.all([first.whenConnectionStateInitialized, second.whenConnectionStateInitialized]);
 		assert.deepEqual([first.isConnectionMetered, second.isConnectionMetered], [false, false]);
 		const changed = new DeferredPromise<boolean>();
-		using subscription = second.onDidChangeIsConnectionMetered(value => {
-			void changed.complete(value);
-		});
+		using subscription = second.onDidChangeIsConnectionMetered(value => { void changed.complete(value); });
 		connection.saveData = true;
 		connection.dispatchEvent(new Event('change'));
 		assert.equal(await changed.p, true);
@@ -98,13 +90,13 @@ suite('Desktop metered connection renderer', () => {
 				async call<T>(command: string): Promise<T> {
 					if (command === MeteredConnectionCommand.IsConnectionMetered) {
 						void queried.complete();
-						return (await snapshot.p) as T;
+						return await snapshot.p as T;
 					}
 					return undefined as T;
 				},
 				listen: <T>() => changes.event as import('../../../../base/common/event.js').Event<T>,
 			}),
-			registerChannel() {},
+			registerChannel() { },
 		});
 		using renderer = services.createInstance(ElectronMeteredConnectionService, () => undefined);
 		await queried.p;
@@ -122,13 +114,10 @@ suite('Desktop metered connection renderer', () => {
 		services.registerInstance(IMainProcessService, {
 			_serviceBrand: undefined,
 			getChannel: () => ({
-				async call<T>(command: string): Promise<T> {
-					calls.push(command);
-					return false as T;
-				},
+				async call<T>(command: string): Promise<T> { calls.push(command); return false as T; },
 				listen: <T>() => changes.event as import('../../../../base/common/event.js').Event<T>,
 			}),
-			registerChannel() {},
+			registerChannel() { },
 		});
 		using renderer = services.createInstance(ElectronMeteredConnectionService, () => undefined);
 		renderer.dispose();
@@ -143,10 +132,8 @@ suite('Desktop metered connection renderer', () => {
 		const ready = new DeferredPromise<void>();
 		using changes = new Emitter<boolean>();
 		services.registerInstance(IMeteredConnectionService, {
-			_serviceBrand: undefined,
-			isConnectionMetered: true,
-			whenConnectionStateInitialized: ready.p,
-			onDidChangeIsConnectionMetered: changes.event,
+			_serviceBrand: undefined, isConnectionMetered: true,
+			whenConnectionStateInitialized: ready.p, onDidChangeIsConnectionMetered: changes.event,
 		});
 		const calls: string[] = [];
 		services.registerInstance(IMainProcessService, {
@@ -159,7 +146,7 @@ suite('Desktop metered connection renderer', () => {
 				},
 				listen: () => AshEvent.None,
 			}),
-			registerChannel() {},
+			registerChannel() { },
 		});
 		using update = services.createInstance(ElectronUpdateService);
 		const automatic = update.checkAutomatically();
@@ -181,35 +168,18 @@ suite('Desktop metered connection renderer', () => {
 			using contextKeys = new ContextKeyService();
 			services.registerInstance(IContextKeyService, contextKeys);
 			services.registerInstance(IMeteredConnectionService, {
-				_serviceBrand: undefined,
-				isConnectionMetered: true,
+				_serviceBrand: undefined, isConnectionMetered: true,
 				onDidChangeIsConnectionMetered: networkChanges.event,
 			});
 			let attempts = 0;
 			services.registerInstance(IUpdateService, {
-				state: 'idle',
-				onDidChangeState: AshEvent.None,
-				async checkAutomatically() {
-					attempts++;
-					return undefined;
-				},
-				async checkForUpdates() {
-					throw new Error('Unexpected manual check');
-				},
-				async downloadUpdate() {
-					throw new Error('Unexpected download');
-				},
-				async installUpdate() {
-					throw new Error('Unexpected install');
-				},
+				state: 'idle', onDidChangeState: AshEvent.None,
+				async checkAutomatically() { attempts++; return undefined; },
+				async checkForUpdates() { throw new Error('Unexpected manual check'); },
+				async downloadUpdate() { throw new Error('Unexpected download'); },
+				async installUpdate() { throw new Error('Unexpected install'); },
 			});
-			using host = WorkbenchContributionsRegistry.createHost(
-				services,
-				error => {
-					throw error;
-				},
-				['workbench.contrib.desktopAutomaticUpdate'],
-			);
+			using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.desktopAutomaticUpdate']);
 			host.advance(WorkbenchPhase.AfterRestored);
 			networkChanges.fire(false);
 			assert.equal(attempts, 0);

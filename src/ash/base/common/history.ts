@@ -15,10 +15,7 @@ export class HistoryNavigator<T> extends Disposable {
 	private values: T[] = [];
 	private position = 0;
 
-	constructor(
-		private readonly history: IHistory<T> = new Set<T>(),
-		private readonly limit = 10,
-	) {
+	constructor(private readonly history: IHistory<T> = new Set<T>(), private readonly limit = 10) {
 		super();
 		if (limit < 1) {
 			throw new RangeError('History limit must be positive');
@@ -29,9 +26,7 @@ export class HistoryNavigator<T> extends Disposable {
 		}
 	}
 
-	public getHistory(): T[] {
-		return [...this.values];
-	}
+	public getHistory(): T[] { return [...this.values]; }
 
 	public add(value: T): void {
 		this.history.delete(value);
@@ -54,38 +49,20 @@ export class HistoryNavigator<T> extends Disposable {
 		return this.current();
 	}
 
-	public current(): T | null {
-		return this.values[this.position] ?? null;
-	}
-	public first(): T | null {
-		this.position = 0;
-		return this.current();
-	}
-	public last(): T | null {
-		this.position = Math.max(0, this.values.length - 1);
-		return this.current();
-	}
-	public isFirst(): boolean {
-		return this.position === 0 && this.values.length > 0;
-	}
-	public isLast(): boolean {
-		return this.position === this.values.length - 1;
-	}
-	public isNowhere(): boolean {
-		return this.position === this.values.length;
-	}
-	public has(value: T): boolean {
-		return this.history.has(value);
-	}
+	public current(): T | null { return this.values[this.position] ?? null; }
+	public first(): T | null { this.position = 0; return this.current(); }
+	public last(): T | null { this.position = Math.max(0, this.values.length - 1); return this.current(); }
+	public isFirst(): boolean { return this.position === 0 && this.values.length > 0; }
+	public isLast(): boolean { return this.position === this.values.length - 1; }
+	public isNowhere(): boolean { return this.position === this.values.length; }
+	public has(value: T): boolean { return this.history.has(value); }
 
 	public clear(): void {
 		this.history.clear();
 		this.refresh();
 	}
 
-	public reset(): void {
-		this.position = this.values.length;
-	}
+	public reset(): void { this.position = this.values.length; }
 
 	private refresh(): void {
 		const values: T[] = [];

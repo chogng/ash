@@ -1,15 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import {
-	LanguageCompletionTriggerKind,
-	createLanguageCompletionIncompleteRefreshContext,
-	createLanguageCompletionInvokeContext,
-	createLanguageCompletionTriggerCharacterContext,
-	type LanguageCompletionContext,
-	type LanguageCompletionProvider,
-	type LanguageCompletionProviderCatalog,
-} from '../../common/languages.js';
+import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from '../../common/languages.js';
 
 test('Completion provider registry preserves registration order and selectors', () => {
 	using registry = new LanguageCompletionProviderRegistry();
@@ -43,14 +35,8 @@ test('Completion provider registry preserves registration order and selectors', 
 		registry.getProviders('typescript', createLanguageCompletionIncompleteRefreshContext()).map(entry => entry.id),
 		['first', 'universal'],
 	);
-	assert.deepEqual(
-		catalogs.map(catalog => catalog.revision),
-		[1, 2],
-	);
-	assert.deepEqual(
-		registry.providerCatalog.providers.map(entry => entry.id),
-		['first', 'universal'],
-	);
+	assert.deepEqual(catalogs.map(catalog => catalog.revision), [1, 2]);
+	assert.deepEqual(registry.providerCatalog.providers.map(entry => entry.id), ['first', 'universal']);
 	assert.equal(Object.isFrozen(registry.providerCatalog.providers[0]), true);
 });
 
@@ -77,22 +63,42 @@ test('Provider registration captures methods and unregisters independently', asy
 test('Provider registry validates identities, selectors, triggers, and lifecycle', () => {
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(provider('one', ['typescript'], ['.']));
-	assert.throws(() => registry.register(provider('one', ['javascript'], [])), /already registered/);
-	assert.throws(() => registry.register(provider('bad id', ['typescript'], [])), /provider ID/);
-	assert.throws(() => registry.register(provider('empty', [], [])), /declare language IDs/);
-	assert.throws(() => registry.register(provider('duplicate', ['typescript', 'typescript'], [])), /language IDs must be unique/);
-	assert.throws(() => registry.register(provider('trigger', ['typescript'], ['.', '.'])), /trigger characters must be unique/);
-	assert.throws(() => createLanguageCompletionTriggerCharacterContext('ab'), /one Unicode code point/);
 	assert.throws(
-		() =>
-			registry.getProviders('typescript', {
-				kind: 'unknown' as LanguageCompletionTriggerKind,
-			} as LanguageCompletionContext),
+		() => registry.register(provider('one', ['javascript'], [])),
+		/already registered/,
+	);
+	assert.throws(
+		() => registry.register(provider('bad id', ['typescript'], [])),
+		/provider ID/,
+	);
+	assert.throws(
+		() => registry.register(provider('empty', [], [])),
+		/declare language IDs/,
+	);
+	assert.throws(
+		() => registry.register(provider('duplicate', ['typescript', 'typescript'], [])),
+		/language IDs must be unique/,
+	);
+	assert.throws(
+		() => registry.register(provider('trigger', ['typescript'], ['.', '.'])),
+		/trigger characters must be unique/,
+	);
+	assert.throws(
+		() => createLanguageCompletionTriggerCharacterContext('ab'),
+		/one Unicode code point/,
+	);
+	assert.throws(
+		() => registry.getProviders('typescript', {
+			kind: 'unknown' as LanguageCompletionTriggerKind,
+		} as LanguageCompletionContext),
 		/Unknown language completion trigger kind/,
 	);
 
 	registry.dispose();
-	assert.throws(() => registry.getProviders('typescript', createLanguageCompletionInvokeContext()), /already disposed/);
+	assert.throws(
+		() => registry.getProviders('typescript', createLanguageCompletionInvokeContext()),
+		/already disposed/,
+	);
 });
 
 test('a provider group replaces itself without colliding with stable IDs', () => {
@@ -101,19 +107,17 @@ test('a provider group replaces itself without colliding with stable IDs', () =>
 	using external = registry.register(provider('external', ['typescript'], []));
 
 	assert.throws(() => group.replace([provider('external', ['typescript'], [])]), /already registered/);
-	assert.deepEqual(
-		registry.getProviders('typescript', createLanguageCompletionInvokeContext()).map(candidate => candidate.id),
-		['demo', 'external'],
-	);
+	assert.deepEqual(registry.getProviders('typescript', createLanguageCompletionInvokeContext()).map(candidate => candidate.id), ['demo', 'external']);
 
 	group.replace([provider('demo', ['javascript'], [])]);
-	assert.deepEqual(
-		registry.getProviders('typescript', createLanguageCompletionInvokeContext()).map(candidate => candidate.id),
-		['external'],
-	);
+	assert.deepEqual(registry.getProviders('typescript', createLanguageCompletionInvokeContext()).map(candidate => candidate.id), ['external']);
 });
 
-function provider(id: string, languageIds: readonly string[], triggerCharacters: readonly string[]): LanguageCompletionProvider {
+function provider(
+	id: string,
+	languageIds: readonly string[],
+	triggerCharacters: readonly string[],
+): LanguageCompletionProvider {
 	return {
 		id,
 		languageIds,

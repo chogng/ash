@@ -7,21 +7,17 @@ import { EditorPaneSelectionChangeReason, type EditorPaneStatus, type IEditorCon
 
 export function toEditorPaneSelectionChangeReason(source: string): EditorPaneSelectionChangeReason {
 	switch (source) {
-		case TextEditorSelectionSource.PROGRAMMATIC:
-			return EditorPaneSelectionChangeReason.PROGRAMMATIC;
-		case TextEditorSelectionSource.NAVIGATION:
-			return EditorPaneSelectionChangeReason.NAVIGATION;
-		case TextEditorSelectionSource.JUMP:
-			return EditorPaneSelectionChangeReason.JUMP;
-		default:
-			return EditorPaneSelectionChangeReason.USER;
+		case TextEditorSelectionSource.PROGRAMMATIC: return EditorPaneSelectionChangeReason.PROGRAMMATIC;
+		case TextEditorSelectionSource.NAVIGATION: return EditorPaneSelectionChangeReason.NAVIGATION;
+		case TextEditorSelectionSource.JUMP: return EditorPaneSelectionChangeReason.JUMP;
+		default: return EditorPaneSelectionChangeReason.USER;
 	}
 }
 
 /** Selection details shared by text-based Workbench panes. */
 export interface ITextEditorControl extends IEditorControl {
 	getSelections?(): Selection[] | null;
-	readonly onDidScrollChange?: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
+	readonly onDidScrollChange?: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
 	getScrollTop?(): number;
 	getScrollLeft?(): number;
 	setScrollPosition?(position: IEditorPaneScrollPosition): void;

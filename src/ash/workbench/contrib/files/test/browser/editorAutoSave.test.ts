@@ -25,24 +25,22 @@ test('File auto save writes a dirty working copy after the configured delay', as
 	const copy: IWorkingCopy = {
 		resource: URI.file('/project/main.ts'),
 		backupKind: 'text',
-		get isDirty() {
-			return dirty;
-		},
+		get isDirty() { return dirty; },
 		hasExternalChange: false,
 		onDidChangeDirty: dirtyChanges.event,
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: contentChanges.event,
 		backup: () => 'edited',
-		restoreBackup() {},
+		restoreBackup() { },
 		async save() {
 			saves++;
 			dirty = false;
 			dirtyChanges.fire();
 		},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		saveAs: async () => { },
+		revert: async () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	const editorPart = {
 		domNode: browser.window.document.body,

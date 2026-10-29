@@ -1,10 +1,4 @@
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	type IAccessibleViewContentProvider,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewImplementation } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -22,9 +16,7 @@ export class ReplAccessibleView implements IAccessibleViewImplementation {
 		if (!view || !focused || !view.element.contains(focused)) {
 			return undefined;
 		}
-		const provider = new AccessibleContentProvider(
-			AccessibleViewProviderId.Repl,
-			{ type: this.type },
+		const provider = new AccessibleContentProvider(AccessibleViewProviderId.Repl, { type: this.type },
 			() => view.getVisibleContent(),
 			() => {
 				if (focused.isConnected) {
@@ -32,9 +24,7 @@ export class ReplAccessibleView implements IAccessibleViewImplementation {
 				} else {
 					view.focus();
 				}
-			},
-			AccessibilityVerbositySettingId.DebugConsole,
-		);
+			}, AccessibilityVerbositySettingId.DebugConsole);
 		provider.onDidChangeContent = view.onDidChangeContent;
 		return provider;
 	}

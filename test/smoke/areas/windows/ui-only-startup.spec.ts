@@ -2,6 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+
 test('Electron Workbench and Agents open without preparing the App Server package', { tag: ['@electron-ui'] }, async ({ workbench, target, runningApplication }) => {
 	const applicationMenu = workbench.page.getByRole('button', { name: 'Application menu' });
 	await expect(applicationMenu).toHaveCount(process.platform === 'darwin' ? 0 : 1);

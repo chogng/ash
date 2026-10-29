@@ -1,12 +1,5 @@
 import { ShiftCommand } from '../commands/shiftCommand.js';
-import {
-	getEditorIndentationUnit,
-	normalizeEditorIndentationText,
-	resolveEditorIndentationOptions,
-	unshiftEditorIndentation,
-	EditorIndentationKind,
-	type ResolvedEditorIndentationOptions,
-} from '../core/misc/indentation.js';
+import { getEditorIndentationUnit, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, EditorIndentationKind, type ResolvedEditorIndentationOptions } from '../core/misc/indentation.js';
 import { CompositionEndOvertypeOperation, CompositionOperation, PasteOperation, SimpleCharacterTypeOperation, TabOperation, TypeWithoutInterceptorsOperation } from './cursorTypeEditOperations.js';
 import { type CursorConfiguration, EditOperationResult, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
 import { type Selection } from '../core/selection.js';
@@ -40,32 +33,12 @@ export class TypeOperations {
 	public static tab(config: CursorConfiguration, model: ITextModel, selections: Selection[]): ICommand[] {
 		return TabOperation.getCommands(config, model, selections);
 	}
-	public static compositionType(
-		prevEditOperationType: EditOperationType,
-		config: CursorConfiguration,
-		model: ITextModel,
-		selections: Selection[],
-		text: string,
-		replacePrevCharCnt: number,
-		replaceNextCharCnt: number,
-		positionDelta: number,
-	): EditOperationResult {
+	public static compositionType(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, selections: Selection[], text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): EditOperationResult {
 		return CompositionOperation.getEdits(prevEditOperationType, config, model, selections, text, replacePrevCharCnt, replaceNextCharCnt, positionDelta);
 	}
-	public static compositionEndWithInterceptors(
-		_prevEditOperationType: EditOperationType,
-		config: CursorConfiguration,
-		model: ITextModel,
-		compositions: CompositionOutcome[] | null,
-		selections: Selection[],
-		autoClosedCharacters: Range[],
-	): EditOperationResult | null {
+	public static compositionEndWithInterceptors(_prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, compositions: CompositionOutcome[] | null, selections: Selection[], autoClosedCharacters: Range[]): EditOperationResult | null {
 		const policy = model.editingPolicy;
-		return policy
-			? policy.compositionEndWithInterceptors(_prevEditOperationType, config, model, compositions, selections, autoClosedCharacters)
-			: compositions
-				? CompositionEndOvertypeOperation.getEdits(config, compositions)
-				: null;
+		return policy ? policy.compositionEndWithInterceptors(_prevEditOperationType, config, model, compositions, selections, autoClosedCharacters) : compositions ? CompositionEndOvertypeOperation.getEdits(config, compositions) : null;
 	}
 	public static typeWithInterceptors(
 		isDoingComposition: boolean,
@@ -76,10 +49,7 @@ export class TypeOperations {
 		autoClosedCharacters: Range[],
 		text: string,
 	): EditOperationResult {
-		return (
-			model.editingPolicy?.typeWithInterceptors(isDoingComposition, prevEditOperationType, config, model, selections, autoClosedCharacters, text) ??
-			SimpleCharacterTypeOperation.getEdits(config, prevEditOperationType, selections, text, isDoingComposition)
-		);
+		return model.editingPolicy?.typeWithInterceptors(isDoingComposition, prevEditOperationType, config, model, selections, autoClosedCharacters, text) ?? SimpleCharacterTypeOperation.getEdits(config, prevEditOperationType, selections, text, isDoingComposition);
 	}
 	public static typeWithoutInterceptors(prevEditOperationType: EditOperationType, _config: CursorConfiguration, _model: ITextModel, selections: Selection[], text: string): EditOperationResult {
 		if (typeof text !== 'string') {
@@ -97,7 +67,7 @@ export class CompositionOutcome {
 		public readonly insertedSelectionStart: number,
 		public readonly insertedSelectionEnd: number,
 		public readonly insertedTextRange: Range,
-	) {}
+	) { }
 }
 function indentationOptions(config: CursorConfiguration): ResolvedEditorIndentationOptions {
 	return resolveEditorIndentationOptions({

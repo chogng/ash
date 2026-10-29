@@ -13,18 +13,13 @@ export async function runCssOrderCommand(testInfo: TestInfo, baseURL: string, mo
 	await writeFile(config, JSON.stringify({ server: { type: 'http', url: baseURL } }));
 	const command = resolve(import.meta.dirname, `../../cssOrder${mode}.mts`);
 	const { stdout } = await promisify(execFile)(process.execPath, [command, '--config', config, '--out', directory, ...args], {
-		cwd: resolve(import.meta.dirname, '../../../..'),
-		windowsHide: true,
-		timeout: testInfo.timeout - 10_000,
-		maxBuffer: 2 * 1024 * 1024,
+		cwd: resolve(import.meta.dirname, '../../../..'), windowsHide: true,
+		timeout: testInfo.timeout - 10_000, maxBuffer: 2 * 1024 * 1024,
 	});
 	console.log(stdout);
 	const report = JSON.parse(await readFile(resolve(directory, 'report.json'), 'utf8')) as Awaited<ReturnType<Renderer['scan']>>;
 	await testInfo.attach('css-order-report', { path: resolve(directory, 'report.md'), contentType: 'text/markdown' });
-	await testInfo.attach('css-source-manifest', {
-		path: resolve(directory, 'report.json'),
-		contentType: 'application/json',
-	});
+	await testInfo.attach('css-source-manifest', { path: resolve(directory, 'report.json'), contentType: 'application/json' });
 	for (const images of Object.values(report.images)) {
 		for (const image of images) await testInfo.attach(image.name, { path: image.path, contentType: 'image/png' });
 	}
@@ -34,35 +29,18 @@ export async function runCssOrderCommand(testInfo: TestInfo, baseURL: string, mo
 export async function runScreenshotCommand(testInfo: TestInfo, mode: 'capture' | 'compare', name: string, baseURL?: string) {
 	const config = testInfo.outputPath(`${name}-config.json`);
 	const directory = testInfo.outputPath(name);
-	await writeFile(
-		config,
-		JSON.stringify(
-			mode === 'capture'
-				? { server: { type: 'http', url: baseURL } }
-				: {
-						sessions: [{ name: 'current' }, { name: 'baseline', source: { worktree: { ref: 'HEAD' } } }],
-						compare: { baseline: 'baseline', current: 'current' },
-					},
-		),
-	);
-	const { stdout } = await promisify(execFile)(
-		process.execPath,
-		[resolve(import.meta.dirname, '../../run.ts'), mode === 'capture' ? '--screenshots' : '--compare', '--config', config, '--out', directory],
-		{
-			cwd: resolve(import.meta.dirname, '../../../..'),
-			windowsHide: true,
-			timeout: testInfo.timeout - 10_000,
-			maxBuffer: 2 * 1024 * 1024,
-		},
-	);
+	await writeFile(config, JSON.stringify(mode === 'capture' ? { server: { type: 'http', url: baseURL } } : {
+		sessions: [{ name: 'current' }, { name: 'baseline', source: { worktree: { ref: 'HEAD' } } }],
+		compare: { baseline: 'baseline', current: 'current' },
+	}));
+	const { stdout } = await promisify(execFile)(process.execPath, [
+		resolve(import.meta.dirname, '../../run.ts'),
+		mode === 'capture' ? '--screenshots' : '--compare', '--config', config, '--out', directory,
+	], { cwd: resolve(import.meta.dirname, '../../../..'), windowsHide: true, timeout: testInfo.timeout - 10_000, maxBuffer: 2 * 1024 * 1024 });
 	console.log(stdout);
 	const manifestPath = resolve(directory, mode === 'capture' ? 'manifest.json' : 'current/manifest.json');
 	const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as ScreenshotManifest;
 	await testInfo.attach(`${name}-manifest`, { path: manifestPath, contentType: 'application/json' });
-	if (mode === 'compare')
-		await testInfo.attach(`${name}-report`, {
-			path: resolve(directory, 'report.md'),
-			contentType: 'text/markdown',
-		});
+	if (mode === 'compare') await testInfo.attach(`${name}-report`, { path: resolve(directory, 'report.md'), contentType: 'text/markdown' });
 	return { manifest, directory };
 }

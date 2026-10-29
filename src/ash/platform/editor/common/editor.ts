@@ -31,7 +31,7 @@ export interface IEditorOptions {
 
 export interface IModalEditorPartOptions {
 	/** Preferred outer size; the modal host constrains it to the available viewport. */
-	readonly size?: { readonly width: number; readonly height: number };
+	readonly size?: { readonly width: number; readonly height: number; };
 }
 
 export const enum EditorOpenSource {

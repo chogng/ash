@@ -9,19 +9,13 @@ export class AccessibilitySignalDebuggerContribution extends Disposable {
 	constructor(@IDebugService debug: IDebugService, @IAccessibilitySignalService signals: IAccessibilitySignalService) {
 		super();
 		const attach = (session: IDebugSession | undefined): void => {
-			if (this.session === session) {
-				return;
-			}
+			if (this.session === session) { return; }
 			this.session = session;
 			this.sessionListener.clear();
-			if (!session) {
-				return;
-			}
+			if (!session) { return; }
 			// Re-selecting a paused session is quiet; only a live transition emits a cue.
 			this.sessionListener.value = session.onDidChangeState(state => {
-				if (state === 'stopped') {
-					void signals.playSignal(AccessibilitySignal.onDebugBreak);
-				}
+				if (state === 'stopped') { void signals.playSignal(AccessibilitySignal.onDebugBreak); }
 			});
 		};
 		this._register(debug.onDidChangeSession(attach));

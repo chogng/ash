@@ -10,10 +10,7 @@ export class IndexedDB {
 	private readonly transactions = new Set<IDBTransaction>();
 	private closed = false;
 
-	constructor(
-		private readonly database: IDBDatabase,
-		private readonly name: string,
-	) {
+	constructor(private readonly database: IDBDatabase, private readonly name: string) {
 		database.onversionchange = () => this.close();
 	}
 
@@ -60,11 +57,7 @@ export class IndexedDB {
 		this.closed = true;
 		this.database.onversionchange = null;
 		for (const transaction of this.transactions) {
-			try {
-				transaction.abort();
-			} catch {
-				/* A commit may have finished before its completion event is delivered. */
-			}
+			try { transaction.abort(); } catch { /* A commit may have finished before its completion event is delivered. */ }
 		}
 		this.database.close();
 	}

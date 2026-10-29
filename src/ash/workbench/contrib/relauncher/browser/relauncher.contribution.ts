@@ -36,20 +36,15 @@ export class SettingsChangeRelauncher extends Disposable {
 		this.menuStyle = this.readMenuStyle(this.titleBarStyle);
 		this.startupMenuStyle = contextMenus.contextMenuStyle;
 		this._register(configuration.onDidChangeConfiguration(event => this.onConfigurationChange(event)));
-		this.ready = windowHost
-			.getTitleBarStyle()
-			.then(titleBarStyle => {
-				if (this._store.isDisposed) return;
-				this.startupTitleBarStyle = titleBarStyle;
-				// Settings can change before this contribution is created or while Main answers.
-				if (this.requiresRestart(this.checkTitleBarAfterReady, this.checkMenuAfterReady)) this.checkForRestart();
-			})
-			.catch(onUnexpectedError);
+		this.ready = windowHost.getTitleBarStyle().then(titleBarStyle => {
+			if (this._store.isDisposed) return;
+			this.startupTitleBarStyle = titleBarStyle;
+			// Settings can change before this contribution is created or while Main answers.
+			if (this.requiresRestart(this.checkTitleBarAfterReady, this.checkMenuAfterReady)) this.checkForRestart();
+		}).catch(onUnexpectedError);
 	}
 
-	onWorkspaceRestored(): Promise<void> {
-		return this.ready;
-	}
+	onWorkspaceRestored(): Promise<void> { return this.ready; }
 
 	private readMenuStyle(titleBarStyle: TitleBarStyleConfiguration): 'custom' | 'system' {
 		return resolveContextMenuStyle(this.configuration.getValue<MenuStyleConfiguration>(MenuSettings.MenuStyle), titleBarStyle, isMacintosh ? 'macos' : 'desktop');

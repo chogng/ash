@@ -21,39 +21,19 @@ import { OpenAgentsWindowSystemWideKeybindingContribution } from '../../electron
 import { registerOpenAgentsWindowCommand } from '../../electron-browser/openAgentsWindowCommand.js';
 
 class TestKeybindingService extends Disposable implements IKeybindingService {
-	public enableKeybindingHoldMode(): Promise<void> | undefined {
-		return undefined;
-	}
+	public enableKeybindingHoldMode(): Promise<void> | undefined { return undefined; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidUpdateKeybindings = this.changed.event;
 	public bindings: readonly IUserFriendlyKeybinding[] = [];
 
 	public readonly inChordMode = false;
-	public getKeybindings(): readonly ResolvedKeybindingItem[] {
-		return this.bindings.map(
-			(entry, index) =>
-				new ResolvedKeybindingItem(undefined, entry.command, entry.args, undefined, false, null, false, {
-					entry,
-					index,
-				}),
-		);
-	}
-	public registerSchemaContribution() {
-		return Disposable.None;
-	}
-	public resolveKeybinding(): never {
-		throw new Error('unused');
-	}
-	public resolveUserBinding() {
-		return undefined;
-	}
-	public lookupKeybinding() {
-		return undefined;
-	}
-	public lookupKeybindings() {
-		return [];
-	}
-	public async reload(): Promise<void> {}
+	public getKeybindings(): readonly ResolvedKeybindingItem[] { return this.bindings.map((entry, index) => new ResolvedKeybindingItem(undefined, entry.command, entry.args, undefined, false, null, false, { entry, index })); }
+	public registerSchemaContribution() { return Disposable.None; }
+	public resolveKeybinding(): never { throw new Error('unused'); }
+	public resolveUserBinding() { return undefined; }
+	public lookupKeybinding() { return undefined; }
+	public lookupKeybindings() { return []; }
+	public async reload(): Promise<void> { }
 	public async updateKeybindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void> {
 		this.bindings = bindings;
 		this.changed.fire();
@@ -63,12 +43,8 @@ class TestKeybindingService extends Disposable implements IKeybindingService {
 class RecordingLog extends NullLoggerService {
 	public readonly warnings: string[] = [];
 	public readonly errors: unknown[] = [];
-	public override warn(message: string): void {
-		this.warnings.push(message);
-	}
-	public override error(message: string | Error, argument?: unknown): void {
-		this.errors.push(argument ?? message);
-	}
+	public override warn(message: string): void { this.warnings.push(message); }
+	public override error(message: string | Error, argument?: unknown): void { this.errors.push(argument ?? message); }
 }
 
 class Fixture extends Disposable {
@@ -85,85 +61,57 @@ class Fixture extends Disposable {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
-			onDidSuspendOS: () => ({ dispose() {} }),
-			onDidResumeOS: () => ({ dispose() {} }),
-			getScreenshot: async () => {
-				throw new Error('Unused screenshot capability');
-			},
-			moveTerminalToWindow: async () => {
-				throw new Error('Unexpected terminal transfer');
-			},
+			onDidSuspendOS: () => ({ dispose() { } }),
+			onDidResumeOS: () => ({ dispose() { } }),
+			getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
+			moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 			takeTerminalTransfer: async () => undefined,
-			completeTerminalTransfer: async () => {
-				throw new Error('Unexpected terminal transfer completion');
-			},
-			onDidRequestTerminalTransfer: () => ({ dispose() {} }),
-			getAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
-			updateAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
-			claimAgentsWindowInvitation: () => {
-				throw new Error('Unused invitation capability');
-			},
-			markAgentsWindowInvitationShown: () => {
-				throw new Error('Unused invitation capability');
-			},
-			releaseAgentsWindowInvitation: () => {
-				throw new Error('Unused invitation capability');
-			},
-			onDidChangeAgentHostEditorState: () => {
-				throw new Error('Unused invitation capability');
-			},
+			completeTerminalTransfer: async () => { throw new Error('Unexpected terminal transfer completion'); },
+			onDidRequestTerminalTransfer: () => ({ dispose() { } }),
+			getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
+			claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
+			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
+			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			getTitleBarStyle: async () => 'custom',
 			getWindowClientSize: async () => undefined,
-			onDidChangeWindowClientSize: () => ({ dispose() {} }),
+			onDidChangeWindowClientSize: () => ({ dispose() { } }),
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
-			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
-			openExternal: async () => {
-				throw new Error('unused');
-			},
-			showMessageBox: async () => {
-				throw new Error('unused');
-			},
+			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
+			openExternal: async () => { throw new Error('unused'); },
+			showMessageBox: async () => { throw new Error('unused'); },
 			listWindows: async () => [],
-			focusWindowById: async () => {},
-			focusWindow: async () => {},
-			closeWindow: async () => {},
-			closeOtherWindows: async () => {},
+			focusWindowById: async () => { },
+			focusWindow: async () => { },
+			closeWindow: async () => { },
+			closeOtherWindows: async () => { },
 			getZoomLevel: async () => 0,
 			onDidChangeZoomLevel: () => Disposable.None,
-			setZoomLevel: async () => {},
-			getAuxiliaryWindowState: async () => {
-				throw new Error('Unused window state');
-			},
-			onDidChangeAuxiliaryWindowState: () => ({ dispose() {} }),
-			onDidChangeWindowAlwaysOnTop: () => ({ dispose() {} }),
+			setZoomLevel: async () => { },
+			getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },
+			onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
+			onDidChangeWindowAlwaysOnTop: () => ({ dispose() { } }),
 			isAlwaysOnTop: async () => false,
-			setAlwaysOnTop: async () => {},
-			performNativeTabAction: async () => {},
-			openNewWindowTab: async () => {},
+			setAlwaysOnTop: async () => { },
+			performNativeTabAction: async () => { },
+			openNewWindowTab: async () => { },
 			pickFolder: async () => undefined,
 			showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
-			openWorkspace: async () => {},
-			openWindow: async () => {},
-			openAgentsWindow: async options => {
-				this.opened.push(options);
-			},
+			openWorkspace: async () => { },
+			openWindow: async () => { },
+			openAgentsWindow: async options => { this.opened.push(options); },
 			syncSystemWideKeybindings: async bindings => {
 				this.payloads.push(structuredClone([...bindings]));
-				if (this.error) {
-					throw this.error;
-				}
+				if (this.error) { throw this.error; }
 				return this.result;
 			},
-			revealFile: async () => {},
-			setWindowTheme: async () => {},
-			setWindowDimmed: async () => {},
-			toggleDeveloperTools: async () => {},
+			revealFile: async () => { },
+			setWindowTheme: async () => { },
+			setWindowDimmed: async () => { },
+			toggleDeveloperTools: async () => { },
 			showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 			isAccessibilitySupportEnabled: async () => false,
 			onDidChangeAccessibilitySupport: () => Disposable.None,
@@ -175,15 +123,7 @@ class Fixture extends Disposable {
 	}
 
 	public start(): void {
-		const host = this._register(
-			WorkbenchContributionsRegistry.createHost(
-				this.services,
-				error => {
-					throw error;
-				},
-				[OpenAgentsWindowSystemWideKeybindingContribution.ID],
-			),
-		);
+		const host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, [OpenAgentsWindowSystemWideKeybindingContribution.ID]));
 		host.advance(WorkbenchPhase.AfterRestored);
 	}
 }
@@ -219,18 +159,9 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		]);
 		fixture.start();
 		await flush();
-		assert.deepEqual(
-			fixture.payloads.map(payload => payload.map(({ commandId, args, userSettingsLabel }) => ({ commandId, args, userSettingsLabel }))),
-			[
-				[
-					{
-						commandId: OPEN_AGENTS_WINDOW_COMMAND_ID,
-						args,
-						userSettingsLabel: 'ctrl+shift+c',
-					},
-				],
-			],
-		);
+		assert.deepEqual(fixture.payloads.map(payload => payload.map(({ commandId, args, userSettingsLabel }) => ({ commandId, args, userSettingsLabel }))), [[{
+			commandId: OPEN_AGENTS_WINDOW_COMMAND_ID, args, userSettingsLabel: 'ctrl+shift+c',
+		}]]);
 		assert.deepEqual(fixture.log.warnings, ['[OpenAgentsWindow] duplicate system-wide shortcut ctrl+shift+a']);
 	});
 
@@ -249,10 +180,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		assert.equal(fixture.payloads.length, 1);
 		mock.timers.tick(1);
 		await flush();
-		assert.deepEqual(
-			fixture.payloads.map(payload => payload.map(binding => binding.userSettingsLabel)),
-			[['ctrl+shift+a'], []],
-		);
+		assert.deepEqual(fixture.payloads.map(payload => payload.map(binding => binding.userSettingsLabel)), [['ctrl+shift+a'], []]);
 	});
 
 	test('retries registration failures without repeating warnings', async () => {
@@ -283,10 +211,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await fixture.resource.updateKeybindings([binding('ctrl+shift+a')]);
 		mock.timers.tick(100);
 		await flush();
-		assert.deepEqual(
-			fixture.payloads.map(payload => payload.map(binding => binding.userSettingsLabel)),
-			[['ctrl+shift+a'], ['ctrl+shift+b'], ['ctrl+shift+a']],
-		);
+		assert.deepEqual(fixture.payloads.map(payload => payload.map(binding => binding.userSettingsLabel)), [['ctrl+shift+a'], ['ctrl+shift+b'], ['ctrl+shift+a']]);
 		assert.equal(fixture.log.errors.length, 1);
 	});
 
@@ -314,13 +239,6 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, options);
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID);
 		await assert.rejects(commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, { unexpected: true }), /Invalid Agents Window options/);
-		assert.deepEqual(
-			{
-				opened: fixture.opened,
-				menus: MenusRegistry.getMenuItems(MenuId.CommandPalette),
-				keybindings: KeybindingsRegistry.getKeybindings(),
-			},
-			{ opened: [options, undefined], menus, keybindings },
-		);
+		assert.deepEqual({ opened: fixture.opened, menus: MenusRegistry.getMenuItems(MenuId.CommandPalette), keybindings: KeybindingsRegistry.getKeybindings() }, { opened: [options, undefined], menus, keybindings });
 	});
 });

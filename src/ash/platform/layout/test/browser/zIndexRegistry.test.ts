@@ -12,12 +12,22 @@ test('ZIndexRegistry projects named layers as CSS variables', () => {
 	const registry = new ZIndexRegistry();
 	const variable = registry.registerZIndex(ZIndex.Sash, 1, 'layout-test');
 	assert.equal(variable, '--ash-z-index-layout-test');
-	assert.match([...browserEnvironment.window.document.head.querySelectorAll('style')].map(style => style.textContent ?? '').join('\n'), /--ash-z-index-layout-test:\s*36;/);
+	assert.match(
+		[...browserEnvironment.window.document.head.querySelectorAll('style')]
+			.map((style) => style.textContent ?? '')
+			.join('\n'),
+		/--ash-z-index-layout-test:\s*36;/,
+	);
 
 	assert.throws(() => registry.registerZIndex(ZIndex.Sash, 0, 'layout-test'), /already been registered/);
 	assert.throws(() => registry.registerZIndex(ZIndex.Sash, 0, 'LayoutTest'), /must start/);
 	assert.throws(() => registry.registerZIndex(ZIndex.Sash, 5, 'layout-test-overflow'), /exceeded/);
 
 	registry.dispose();
-	assert.doesNotMatch([...browserEnvironment.window.document.head.querySelectorAll('style')].map(style => style.textContent ?? '').join('\n'), /--ash-z-index-layout-test:/);
+	assert.doesNotMatch(
+		[...browserEnvironment.window.document.head.querySelectorAll('style')]
+			.map((style) => style.textContent ?? '')
+			.join('\n'),
+		/--ash-z-index-layout-test:/,
+	);
 });

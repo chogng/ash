@@ -18,28 +18,21 @@ export class ReplaceService implements IReplaceService {
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
-	) {}
+	) { }
 
-	public async replace(
-		matches: readonly SearchMatch[],
-		query: IContentSearchQuery,
-		replacement: string,
-		options: { readonly preview: boolean; readonly preserveCase: boolean; readonly signal: AbortSignal },
-	): Promise<SearchReplaceResult> {
+	public async replace(matches: readonly SearchMatch[], query: IContentSearchQuery, replacement: string, options: { readonly preview: boolean; readonly preserveCase: boolean; readonly signal: AbortSignal; }): Promise<SearchReplaceResult> {
 		using references = new DisposableStore();
 		const grouped = new Map<string, SearchMatch[]>();
 		for (const match of matches) {
 			const key = extUri.getComparisonKey(match.file.resource);
 			const entries = grouped.get(key);
-			if (entries) {
-				entries.push(match);
-			} else {
-				grouped.set(key, [match]);
-			}
+			if (entries) { entries.push(match); } else { grouped.set(key, [match]); }
 		}
 		const pattern = query.patternKind === 'regex' ? parseReplaceString(replacement) : ReplacePattern.fromStaticValue(replacement);
-		const sensitive = query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text));
-		const expression = query.patternKind === 'regex' ? new RegExp(query.text.replace(/\r\n|\r/g, '\n').replaceAll('\n', '\\r?\\n'), sensitive ? 'gmu' : 'gmiu') : undefined;
+		const sensitive = query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text);
+		const expression = query.patternKind === 'regex'
+			? new RegExp(query.text.replace(/\r\n|\r/g, '\n').replaceAll('\n', '\\r?\\n'), sensitive ? 'gmu' : 'gmiu')
+			: undefined;
 		const edits: LanguageTextDocumentEdit[] = [];
 		const acquired: TextModelReference[] = [];
 		for (const entries of grouped.values()) {
@@ -58,31 +51,20 @@ export class ReplaceService implements IReplaceService {
 					expression.lastIndex = match.previewRange.start;
 					const found = expression.exec(match.preview);
 					if (!found || found.index !== match.previewRange.start || found[0].length !== match.previewRange.end - match.previewRange.start) {
-						throw new WorkspaceEditConflictError(
-							localize('search.replacePatternChanged', 'The search expression no longer matches the selected result. Refresh the results before replacing.'),
-						);
+						throw new WorkspaceEditConflictError(localize('search.replacePatternChanged', 'The search expression no longer matches the selected result. Refresh the results before replacing.'));
 					}
 					captures = found;
 				}
 				return { range: match.range, text: pattern.buildReplaceString(captures, options.preserveCase) };
 			});
-			edits.push({
-				kind: 'textDocument',
-				resource,
-				version: reference.model.version,
-				expectedText: reference.model.getText(),
-				edits: textEdits,
-			});
+			edits.push({ kind: 'textDocument', resource, version: reference.model.version, expectedText: reference.model.getText(), edits: textEdits });
 		}
-		const result = await this.bulkEdits.apply(
-			{ entries: edits },
-			{
-				token: options.signal,
-				showPreview: options.preview,
-				label: localize('search.replaceLabel', 'Replace search results'),
-				skipSaveForResources: acquired.filter(reference => reference.resource.scheme === Schemas.untitled).map(reference => reference.resource),
-			},
-		);
+		const result = await this.bulkEdits.apply({ entries: edits }, {
+			token: options.signal,
+			showPreview: options.preview,
+			label: localize('search.replaceLabel', 'Replace search results'),
+			skipSaveForResources: acquired.filter(reference => reference.resource.scheme === Schemas.untitled).map(reference => reference.resource),
+		});
 		const saveErrors: string[] = [];
 		if (result.isApplied) {
 			// Search replacement saves affected working copies; shared models preserve unrelated dirty edits.
@@ -90,29 +72,19 @@ export class ReplaceService implements IReplaceService {
 			for (const reference of acquired) {
 				// Bulk edits already save closed files. Open working copies need the
 				// Search command's save step, and retain dirty text if that save fails.
-				if (reference.resource.scheme === Schemas.untitled || !affected.has(extUri.getComparisonKey(reference.resource)) || !this.workingCopies.get(reference.resource).length) {
-					continue;
-				}
+				if (reference.resource.scheme === Schemas.untitled || !affected.has(extUri.getComparisonKey(reference.resource)) || !this.workingCopies.get(reference.resource).length) { continue; }
 				// Persist the replacement transaction without creating additional undo steps.
-				try {
-					await reference.save(options.signal, { skipSaveParticipants: true });
-				} catch (error) {
-					saveErrors.push(error instanceof Error ? error.message : String(error));
-				}
+				try { await reference.save(options.signal, { skipSaveParticipants: true }); } catch (error) { saveErrors.push(error instanceof Error ? error.message : String(error)); }
 			}
 		}
-		if (!result.isApplied) {
-			return { ...result, saveErrors };
-		}
+		if (!result.isApplied) { return { ...result, saveErrors }; }
 		return {
 			...result,
 			saveErrors,
 			undo: async () => {
 				await result.undo();
 				for (const resource of result.resources) {
-					if (resource.scheme === Schemas.untitled || !this.workingCopies.get(resource).length) {
-						continue;
-					}
+					if (resource.scheme === Schemas.untitled || !this.workingCopies.get(resource).length) { continue; }
 					using reference = await this.models.acquire({ resource }, new AbortController().signal);
 					await reference.save(new AbortController().signal, { skipSaveParticipants: true });
 				}

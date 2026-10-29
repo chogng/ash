@@ -27,10 +27,7 @@ export class KeybindingLabel extends Disposable {
 	readonly element: HTMLSpanElement;
 	private _keybinding: ResolvedKeybinding;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: KeybindingLabelOptions,
-	) {
+	constructor(container: HTMLElement, private readonly options: KeybindingLabelOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this._keybinding = options.keybinding;
@@ -63,34 +60,37 @@ export class KeybindingLabel extends Disposable {
 	private render(): void {
 		const ownerDocument = this.element.ownerDocument;
 		const parts = getKeybindingLabelParts(this._keybinding);
-		this.element.replaceChildren(
-			...parts.map(part => {
-				if (this.options.presentation === 'keycap') {
-					const chord = h(ownerDocument, 'span');
-					chord.className = 'ash-keybinding-label-chord';
-					// The complete shortcut is announced by the containing label.
-					chord.setAttribute('aria-hidden', 'true');
-					chord.append(
-						...part.keys.map(key => {
-							const token = h(ownerDocument, 'kbd');
-							token.textContent = key;
-							if (this.options.keybindingLabelBottomBorder) {
-								token.style.borderBottomColor = this.options.keybindingLabelBottomBorder;
-							}
-							if (this.options.keybindingLabelShadow) {
-								token.style.boxShadow = `0 1px 0 ${this.options.keybindingLabelShadow}`;
-							}
-							return token;
-						}),
-					);
-					return chord;
-				}
-				const token = h(ownerDocument, 'kbd');
-				token.textContent = part.label;
-				setAriaAttribute(token, 'label', part.ariaLabel);
-				return token;
-			}),
+		this.element.replaceChildren(...parts.map((part) => {
+			if (this.options.presentation === 'keycap') {
+				const chord = h(ownerDocument, 'span');
+				chord.className = 'ash-keybinding-label-chord';
+				// The complete shortcut is announced by the containing label.
+				chord.setAttribute('aria-hidden', 'true');
+				chord.append(...part.keys.map(key => {
+					const token = h(ownerDocument, 'kbd');
+					token.textContent = key;
+					if (this.options.keybindingLabelBottomBorder) {
+						token.style.borderBottomColor = this.options.keybindingLabelBottomBorder;
+					}
+					if (this.options.keybindingLabelShadow) {
+						token.style.boxShadow = `0 1px 0 ${this.options.keybindingLabelShadow}`;
+					}
+					return token;
+				}));
+				return chord;
+			}
+			const token = h(ownerDocument, 'kbd');
+			token.textContent = part.label;
+			setAriaAttribute(token, 'label', part.ariaLabel);
+			return token;
+		}));
+		setAriaAttribute(
+			this.element,
+			'label',
+			getKeybindingLabel(
+				this._keybinding,
+				KeybindingLabelStyle.Aria,
+			),
 		);
-		setAriaAttribute(this.element, 'label', getKeybindingLabel(this._keybinding, KeybindingLabelStyle.Aria));
 	}
 }

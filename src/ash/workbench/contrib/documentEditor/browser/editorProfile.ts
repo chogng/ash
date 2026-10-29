@@ -15,10 +15,7 @@ export interface EditorRuntimeOptions {
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
 export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
 	return {
-		...profile.create(),
-		...runtime,
-		editorId: profile.editorId,
-		contentType: profile.contentType,
+		...profile.create(), ...runtime, editorId: profile.editorId, contentType: profile.contentType,
 		collaborationSchemaId: profile.collaborationSchemaId,
 	};
 }
@@ -32,8 +29,9 @@ export function createDocumentEditorPane(profile: EditorProfile, options: Editor
 		providerSignal,
 		modelCompatibility,
 		createDocumentCollaborationService: () => {
-			const appServerService =
-				options.documentCollaborationApi && options.serverEvents ? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents) : undefined;
+			const appServerService = options.documentCollaborationApi && options.serverEvents
+				? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
+				: undefined;
 			return instantiationService.createInstance(DocumentCollaborationService, appServerService);
 		},
 	});

@@ -7,14 +7,10 @@ import { bisectConflict, parseFixtureArguments, reverseDocuments, ScanBudgetExce
 
 test('binary search isolates real conflicting files instead of an irrelevant crossing document', async () => {
 	let calls = 0;
-	const result = await bisectConflict(
-		32,
-		async order => {
-			calls++;
-			return order.indexOf(3) > order.indexOf(27);
-		},
-		Date.now() + 5000,
-	);
+	const result = await bisectConflict(32, async order => {
+		calls++;
+		return order.indexOf(3) > order.indexOf(27);
+	}, Date.now() + 5000);
 	assert.equal(result.kind, 'pair');
 	assert.deepEqual(result.indices, [3, 27]);
 	assert.equal(result.probes, calls);
@@ -41,10 +37,7 @@ test('filtered reversal still identifies a crossed, unselected conflicting docum
 test('unreproducible render and expired budget never become a clean localization', async () => {
 	const result = await bisectConflict(4, async () => false, Date.now() + 5000);
 	assert.equal(result.kind, 'unlocalized');
-	await assert.rejects(
-		bisectConflict(4, async () => true, Date.now() - 1),
-		ScanBudgetExceeded,
-	);
+	await assert.rejects(bisectConflict(4, async () => true, Date.now() - 1), ScanBudgetExceeded);
 });
 
 test('binary search retains a valid boundary when intermediate verdicts are non-monotonic', async () => {
@@ -63,23 +56,9 @@ test('binary search retains a valid boundary when intermediate verdicts are non-
 
 test('scanner command validates filters, time budget and bounded page concurrency', () => {
 	const request = parseFixtureArguments(['--fixture-id-regex', 'Select', '--time-budget-minutes', '2', '--concurrency', '3', '--grep', 'scan registered']);
-	assert.deepEqual(request.options, {
-		pattern: 'Select',
-		sourcePattern: '.*',
-		budgetMs: 120_000,
-		concurrency: 3,
-		batchSize: 1000,
-	});
+	assert.deepEqual(request.options, { pattern: 'Select', sourcePattern: '.*', budgetMs: 120_000, concurrency: 3, batchSize: 1000 });
 	assert.deepEqual(request.playwrightArgs, ['--grep', 'scan registered']);
-	for (const args of [
-		['--batch-size', '0'],
-		['--batch-size', '2.5'],
-		['--concurrency', '0'],
-		['--concurrency', '2.5'],
-		['--time-budget-minutes', 'Infinity'],
-		['--fixture-id-regex', '['],
-		['--stylesheet-source-regex', ''],
-	]) {
+	for (const args of [['--batch-size', '0'], ['--batch-size', '2.5'], ['--concurrency', '0'], ['--concurrency', '2.5'], ['--time-budget-minutes', 'Infinity'], ['--fixture-id-regex', '['], ['--stylesheet-source-regex', '']]) {
 		assert.throws(() => parseFixtureArguments(args));
 	}
 });
@@ -91,7 +70,7 @@ test('standalone commands show usage and reject missing bisection selection befo
 	const help = await execute(process.execPath, [scan, '--help'], { windowsHide: true, timeout: 10_000 });
 	assert.match(help.stdout, /Usage:.*cssOrderScan\.mts/);
 	assert.doesNotMatch(help.stdout, /Component explorer:/);
-	await assert.rejects(execute(process.execPath, [bisect], { windowsHide: true, timeout: 10_000 }), (error: NodeJS.ErrnoException & { stderr?: string; stdout?: string }) => {
+	await assert.rejects(execute(process.execPath, [bisect], { windowsHide: true, timeout: 10_000 }), (error: NodeJS.ErrnoException & { stderr?: string; stdout?: string; }) => {
 		assert.match(error.stderr ?? '', /Bisection requires --fixture-id-regex/);
 		assert.doesNotMatch(error.stdout ?? '', /Component explorer:/);
 		return true;

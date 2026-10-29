@@ -11,36 +11,14 @@ import { localize } from '../../../../../nls.js';
 
 export const SELECT_MICROPHONE_COMMAND = 'workbench.action.chat.selectSpeechToTextMicrophone';
 
-export function getDictationContextMenuActions(
-	commandService: ICommandService,
-	configurationService: IConfigurationService,
-	keybindingService: IKeybindingService,
-	keybindingCommandId: string,
-): IAction[] {
-	const action = (id: string, label: string, run: () => unknown, checked?: boolean): IAction => ({
-		id,
-		label,
-		tooltip: label,
-		enabled: true,
-		checked,
-		run,
-	});
+export function getDictationContextMenuActions(commandService: ICommandService, configurationService: IConfigurationService, keybindingService: IKeybindingService, keybindingCommandId: string): IAction[] {
+	const action = (id: string, label: string, run: () => unknown, checked?: boolean): IAction => ({ id, label, tooltip: label, enabled: true, checked, run });
 	const binding = keybindingService.lookupKeybinding(keybindingCommandId);
 	const shortcut = binding ? getKeybindingLabel(binding) : undefined;
 	return [
-		action('dictation.configureShortcut', localize('dictation.configureShortcut', 'Configure shortcut{0}', shortcut ? ` (${shortcut})` : ''), () =>
-			commandService.executeCommand(OpenKeyboardShortcutsCommandId),
-		),
-		action(
-			'dictation.toggleButton',
-			localize('dictation.showButton.title', 'Show microphone button'),
-			() => configurationService.updateValue('dictation.showButton', configurationService.getValue('dictation.showButton') === false),
-			configurationService.getValue('dictation.showButton') !== false,
-		),
-		action('dictation.disable', localize('dictation.disable', 'Disable dictation'), async () => {
-			await commandService.executeCommand('workbench.action.chat.cancelSpeechToText');
-			await configurationService.updateValue('dictation.enabled', false);
-		}),
+		action('dictation.configureShortcut', localize('dictation.configureShortcut', 'Configure shortcut{0}', shortcut ? ` (${shortcut})` : ''), () => commandService.executeCommand(OpenKeyboardShortcutsCommandId)),
+		action('dictation.toggleButton', localize('dictation.showButton.title', 'Show microphone button'), () => configurationService.updateValue('dictation.showButton', configurationService.getValue('dictation.showButton') === false), configurationService.getValue('dictation.showButton') !== false),
+		action('dictation.disable', localize('dictation.disable', 'Disable dictation'), async () => { await commandService.executeCommand('workbench.action.chat.cancelSpeechToText'); await configurationService.updateValue('dictation.enabled', false); }),
 		new Separator(),
 		action(SELECT_MICROPHONE_COMMAND, localize('dictation.selectMicrophone', 'Select microphone'), () => commandService.executeCommand(SELECT_MICROPHONE_COMMAND)),
 		action('dictation.openSettings', localize('dictation.openSettings', 'Dictation settings'), () => commandService.executeCommand(OpenSettingsCommandId, { section: 'dictation' })),
@@ -49,15 +27,7 @@ export function getDictationContextMenuActions(
 
 export function addMicButtonContextMenuListener(container: HTMLElement, getActions: () => IAction[], contextMenuService: IContextMenuService): IDisposable {
 	return addDisposableListener(container, 'contextmenu', event => {
-		event.preventDefault();
-		event.stopPropagation();
-		contextMenuService.showContextMenu({
-			getAnchor: () => ({
-				x: event.clientX,
-				y: event.clientY,
-				targetWindow: container.ownerDocument.defaultView!,
-			}),
-			getActions,
-		});
+		event.preventDefault(); event.stopPropagation();
+		contextMenuService.showContextMenu({ getAnchor: () => ({ x: event.clientX, y: event.clientY, targetWindow: container.ownerDocument.defaultView! }), getActions });
 	});
 }

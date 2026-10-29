@@ -2,16 +2,7 @@ import { timeout } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	DebugExceptionsSnapshot,
-	DebugBreakpointIntent,
-	DebugInspection,
-	DebugInspectionValue,
-	DebugSessionInitializeOptions,
-	IDebugAdapterProcessReadResult,
-	IDebugAdapterProcessService,
-	IDebugAdapterProcessStartOptions,
-} from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { DebugExceptionsSnapshot, DebugBreakpointIntent, DebugInspection, DebugInspectionValue, DebugSessionInitializeOptions, IDebugAdapterProcessReadResult, IDebugAdapterProcessService, IDebugAdapterProcessStartOptions } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import type { InlineDebugAdapter } from '../common/debug.js';
 
 /** Workbench connection to one Rust-owned DAP client. Inline IO stays bound to
@@ -23,43 +14,26 @@ export class RawDebugSession {
 	private closing: Promise<void> | undefined;
 	private readonly cancellations = new DisposableStore();
 
-	constructor(
-		private readonly processes: IDebugAdapterProcessService,
-		private readonly inline?: InlineDebugAdapter,
-	) {}
+	constructor(private readonly processes: IDebugAdapterProcessService, private readonly inline?: InlineDebugAdapter) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<void> {
 		if (this.closed) throw new CancellationError();
 		try {
-			const id = await this.processes.start(
-				this.inline
-					? {
-							arguments: [],
-							connection: { type: 'client' },
-							...(options.dirId === undefined ? {} : { dirId: options.dirId }),
-						}
-					: options,
-			);
+			const id = await this.processes.start(this.inline ? { arguments: [], connection: { type: 'client' }, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) } : options);
 			if (this.closed) {
 				await this.processes.close(id);
 				throw new CancellationError();
 			}
 			this.id = id;
 		} catch (error) {
-			await this.close().catch(() => {
-				/* Preserve the startup error after attempting both releases. */
-			});
+			await this.close().catch(() => { /* Preserve the startup error after attempting both releases. */ });
 			throw error;
 		}
 	}
 
-	initialize(options: DebugSessionInitializeOptions): Promise<void> {
-		return this.processes.initializeSession(this.sessionId(), options);
-	}
+	initialize(options: DebugSessionInitializeOptions): Promise<void> { return this.processes.initializeSession(this.sessionId(), options); }
 
-	configurationDone(exceptionFilters: readonly string[] | undefined): Promise<void> {
-		return this.processes.completeConfiguration(this.sessionId(), exceptionFilters);
-	}
+	configurationDone(exceptionFilters: readonly string[] | undefined): Promise<void> { return this.processes.completeConfiguration(this.sessionId(), exceptionFilters); }
 
 	async setExceptionBreakpoints(filters: readonly string[]): Promise<DebugExceptionsSnapshot> {
 		const id = this.sessionId();
@@ -75,12 +49,8 @@ export class RawDebugSession {
 		throw new CancellationError();
 	}
 
-	setBreakpoints(version: number, intents: readonly DebugBreakpointIntent[]): Promise<void> {
-		return this.processes.setBreakpoints(this.sessionId(), version, intents);
-	}
-	readBreakpoints() {
-		return this.processes.readBreakpoints(this.sessionId());
-	}
+	setBreakpoints(version: number, intents: readonly DebugBreakpointIntent[]): Promise<void> { return this.processes.setBreakpoints(this.sessionId(), version, intents); }
+	readBreakpoints() { return this.processes.readBreakpoints(this.sessionId()); }
 
 	async inspect(query: DebugInspection, inspectionRevision: number): Promise<DebugInspectionValue> {
 		const id = this.sessionId();
@@ -104,10 +74,7 @@ export class RawDebugSession {
 		let cancellation: IDisposable | undefined;
 		const cancel = () => {
 			if (cancellation && this.cancellations.delete(cancellation)) cancellation.dispose();
-			if (supportsCancel && !this.closed)
-				void this.request('cancel', { requestId }).catch(() => {
-					/* Cancellation is advisory in DAP; the original response is still drained. */
-				});
+			if (supportsCancel && !this.closed) void this.request('cancel', { requestId }).catch(() => { /* Cancellation is advisory in DAP; the original response is still drained. */ });
 		};
 		if (token) cancellation = this.cancellations.add(token.onCancellationRequested(cancel));
 		try {
@@ -125,9 +92,7 @@ export class RawDebugSession {
 		}
 	}
 
-	send(message: unknown): Promise<void> {
-		return this.processes.send(this.sessionId(), message);
-	}
+	send(message: unknown): Promise<void> { return this.processes.send(this.sessionId(), message); }
 
 	async read(afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
 		const id = this.sessionId();
@@ -154,11 +119,11 @@ export class RawDebugSession {
 		this.cancellations.dispose();
 		const id = this.id;
 		this.id = undefined;
-		return (this.closing = Promise.resolve().then(async () => {
+		return this.closing = Promise.resolve().then(async () => {
 			// Both owners must finish even if one side's close fails.
 			const results = await Promise.allSettled([id ? this.processes.close(id) : Promise.resolve(), this.inline?.close()]);
 			for (const result of results) if (result.status === 'rejected') throw result.reason;
-		}));
+		});
 	}
 
 	private sessionId(): string {

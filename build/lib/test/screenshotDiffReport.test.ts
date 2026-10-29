@@ -7,22 +7,11 @@ import { test } from 'node:test';
 import { compareScreenshotManifests, readScreenshotManifest, writeScreenshotDiffReport, type ScreenshotManifest } from '../screenshotDiffReport.ts';
 
 const environment = { platform: 'win32', browserVersion: 'test-browser' };
-const fixture = (fixtureId: string, imageHash = 'a'.repeat(64)) => ({
-	fixtureId,
-	labels: ['blocks-ci'],
-	imageHash,
-	imagePath: `images/${imageHash}.png`,
-});
+const fixture = (fixtureId: string, imageHash = 'a'.repeat(64)) => ({ fixtureId, labels: ['blocks-ci'], imageHash, imagePath: `images/${imageHash}.png` });
 
 test('manifest comparison accounts for changed, added, removed and errored fixtures', () => {
-	const baseline: ScreenshotManifest = {
-		environment,
-		fixtures: [fixture('same'), fixture('changed'), fixture('removed')],
-	};
-	const current: ScreenshotManifest = {
-		environment,
-		fixtures: [fixture('same'), fixture('changed', 'b'.repeat(64)), fixture('added'), { fixtureId: 'error', labels: [], hasError: true, error: 'Deliberate render error' }],
-	};
+	const baseline: ScreenshotManifest = { environment, fixtures: [fixture('same'), fixture('changed'), fixture('removed')] };
+	const current: ScreenshotManifest = { environment, fixtures: [fixture('same'), fixture('changed', 'b'.repeat(64)), fixture('added'), { fixtureId: 'error', labels: [], hasError: true, error: 'Deliberate render error' }] };
 	const result = compareScreenshotManifests(baseline, current);
 	assert.deepEqual(result.summary, { unchanged: 1, changed: 1, added: 1, removed: 1, error: 1 });
 	assert.equal(result.entries.find(entry => entry.fixtureId === 'error')?.current?.error, 'Deliberate render error');
@@ -46,9 +35,7 @@ test('manifest boundary rejects missing images, duplicate IDs, escaped paths and
 		await writeFile(resolve(directory, fixture('corrupt').imagePath), 'not a PNG');
 		await writeFile(path, JSON.stringify({ environment, fixtures: [fixture('corrupt')] }));
 		await assert.rejects(readScreenshotManifest(path), /PNG or hash/);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('reports copy verified before and after PNGs and retain rendering errors', async () => {
@@ -61,10 +48,7 @@ test('reports copy verified before and after PNGs and retain rendering errors', 
 			await writeFile(resolve(directory, name, 'images', `${hash}.png`), png);
 		}
 		const baseline: ScreenshotManifest = { environment, fixtures: [fixture('removed', hash)] };
-		const current: ScreenshotManifest = {
-			environment,
-			fixtures: [fixture('added', hash), { fixtureId: 'broken', labels: [], hasError: true, error: 'Deliberate fixture failure' }],
-		};
+		const current: ScreenshotManifest = { environment, fixtures: [fixture('added', hash), { fixtureId: 'broken', labels: [], hasError: true, error: 'Deliberate fixture failure' }] };
 		const before = resolve(directory, 'baseline/manifest.json');
 		const after = resolve(directory, 'current/manifest.json');
 		await writeFile(before, JSON.stringify(baseline));
@@ -75,7 +59,5 @@ test('reports copy verified before and after PNGs and retain rendering errors', 
 		const markdown = await readFile(resolve(directory, 'report/report.md'), 'utf8');
 		assert.match(markdown, /Deliberate fixture failure/);
 		assert.match(markdown, /Baseline \| Current/);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });

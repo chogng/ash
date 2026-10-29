@@ -32,18 +32,14 @@ export class FocusTracker extends Disposable {
 		private readonly onFocusChange: (focused: boolean) => void,
 	) {
 		super();
-		this._register(
-			addDisposableListener(this.domNode, 'focus', () => {
-				logService.trace('NativeEditContext.focus');
-				if (!this.paused) this.refreshFocusState();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'blur', () => {
-				logService.trace('NativeEditContext.blur');
-				if (!this.paused) this.setFocused(false);
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'focus', () => {
+			logService.trace('NativeEditContext.focus');
+			if (!this.paused) this.refreshFocusState();
+		}));
+		this._register(addDisposableListener(this.domNode, 'blur', () => {
+			logService.trace('NativeEditContext.blur');
+			if (!this.paused) this.setFocused(false);
+		}));
 	}
 
 	get isFocused(): boolean {
@@ -100,11 +96,24 @@ export function clampOffset(value: number, length: number): number {
 	return Math.min(Math.max(0, Number.isSafeInteger(value) ? value : 0), length);
 }
 
-export function isNativeTextUpdateEvent(event: { readonly text?: unknown; readonly updateRangeStart?: unknown; readonly updateRangeEnd?: unknown } | null | undefined): boolean {
-	return Boolean(event && typeof event.text === 'string' && isFiniteOffset(event.updateRangeStart as number) && isFiniteOffset(event.updateRangeEnd as number));
+export function isNativeTextUpdateEvent(event: {
+	readonly text?: unknown;
+	readonly updateRangeStart?: unknown;
+	readonly updateRangeEnd?: unknown;
+} | null | undefined): boolean {
+	return Boolean(
+		event &&
+		typeof event.text === 'string' &&
+		isFiniteOffset(event.updateRangeStart as number) &&
+		isFiniteOffset(event.updateRangeEnd as number),
+	);
 }
 
-export function createNativeTextWindow(text: string, selectionStart: number, selectionEnd: number): { readonly startOffset: number; readonly endOffset: number } {
+export function createNativeTextWindow(
+	text: string,
+	selectionStart: number,
+	selectionEnd: number,
+): { readonly startOffset: number; readonly endOffset: number; } {
 	if (text.length <= NATIVE_TEXT_WINDOW_LENGTH) {
 		return { startOffset: 0, endOffset: text.length };
 	}

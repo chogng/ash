@@ -14,7 +14,17 @@ export enum ZIndex {
 	PaneDropOverlay = 10_000,
 }
 
-const ZIndexValues = [ZIndex.Base, ZIndex.Sash, ZIndex.SuggestWidget, ZIndex.Hover, ZIndex.DragImage, ZIndex.MenubarMenuItemsHolder, ZIndex.ContextView, ZIndex.ModalDialog, ZIndex.PaneDropOverlay];
+const ZIndexValues = [
+	ZIndex.Base,
+	ZIndex.Sash,
+	ZIndex.SuggestWidget,
+	ZIndex.Hover,
+	ZIndex.DragImage,
+	ZIndex.MenubarMenuItemsHolder,
+	ZIndex.ContextView,
+	ZIndex.ModalDialog,
+	ZIndex.PaneDropOverlay,
+];
 
 /**
  * Registers named z-index values and projects them as CSS variables into every
@@ -35,7 +45,9 @@ export class ZIndexRegistry extends Disposable {
 
 		const value = relativeLayer + offset;
 		if (findBase(value) !== relativeLayer) {
-			throw new RangeError(`Relative z-index layer ${relativeLayer} is exceeded by ${value}`);
+			throw new RangeError(
+				`Relative z-index layer ${relativeLayer} is exceeded by ${value}`,
+			);
 		}
 		this.values.set(name, value);
 		this.updateStyleSheet();
@@ -47,7 +59,9 @@ export class ZIndexRegistry extends Disposable {
 	}
 
 	private updateStyleSheet(): void {
-		const declarations = [...this.values.entries()].map(([name, value]) => `  ${this.variableName(name)}: ${value};`).join('\n');
+		const declarations = [...this.values.entries()]
+			.map(([name, value]) => `  ${this.variableName(name)}: ${value};`)
+			.join('\n');
 		this.styleSheet.setText(`:root {\n${declarations}\n}`);
 	}
 }
@@ -56,11 +70,23 @@ const zIndexRegistry = new ZIndexRegistry();
 
 export const ZIndexVariables = Object.freeze({
 	sash: zIndexRegistry.registerZIndex(ZIndex.Sash, 0, 'sash'),
-	quickInput: zIndexRegistry.registerZIndex(ZIndex.ModalDialog, 0, 'quick-input'),
-	contextView: zIndexRegistry.registerZIndex(ZIndex.ContextView, 0, 'context-view'),
+	quickInput: zIndexRegistry.registerZIndex(
+		ZIndex.ModalDialog,
+		0,
+		'quick-input',
+	),
+	contextView: zIndexRegistry.registerZIndex(
+		ZIndex.ContextView,
+		0,
+		'context-view',
+	),
 });
 
-export function registerZIndex(relativeLayer: ZIndex, offset: number, name: string): string {
+export function registerZIndex(
+	relativeLayer: ZIndex,
+	offset: number,
+	name: string,
+): string {
 	return zIndexRegistry.registerZIndex(relativeLayer, offset, name);
 }
 
@@ -74,6 +100,8 @@ function findBase(value: number): ZIndex {
 
 function validateName(name: string): void {
 	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
-		throw new TypeError('z-index name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens');
+		throw new TypeError(
+			'z-index name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens',
+		);
 	}
 }

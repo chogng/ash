@@ -32,20 +32,9 @@ suite('Client-owned Code features', () => {
 	test('extension host retirement cannot withdraw built-in editor features', async () => {
 		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
 		let requests = 0;
-		using bridge = new MainThreadClientEditors(
-			30_000,
-			async () => {
-				throw new Error('No extension module should load');
-			},
-			{
-				invoke: async () => {
-					requests++;
-					throw new Error('No provider should run');
-				},
-			} as unknown as IExtensionHostApi,
-			{ list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi,
-			emptyEditorDeclarations,
-		);
+		using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('No extension module should load'); },
+			{ invoke: async () => { requests++; throw new Error('No provider should run'); } } as unknown as IExtensionHostApi,
+			{ list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi, emptyEditorDeclarations);
 		for (let generation = 1; generation <= 4; generation++) {
 			await bridge.update({ generation, extensions: [] });
 			bridge.clear();

@@ -29,7 +29,8 @@ export class TabAction<T> implements IAction {
 		public selected: boolean,
 		readonly activate: (value: T) => void,
 		readonly select?: (value: T, event: MouseEvent | KeyboardEvent) => boolean,
-	) {}
+	) {
+	}
 
 	get id(): string {
 		return this.tab.id;
@@ -86,34 +87,30 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		}
 		container.append(tab);
 
-		this._register(
-			addDisposableListener(tab, 'click', event => {
-				event.preventDefault();
-				event.stopPropagation();
-				if (this.tabAction.select?.(this.tabAction.tab.value, event)) {
-					return;
-				}
-				this.tabAction.run();
-			}),
-		);
+		this._register(addDisposableListener(tab, 'click', (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			if (this.tabAction.select?.(this.tabAction.tab.value, event)) {
+				return;
+			}
+			this.tabAction.run();
+		}));
 		if (this.onClose || this.tabAction.select) {
 			tab.setAttribute('aria-keyshortcuts', [this.onClose ? 'Delete' : '', this.tabAction.select ? 'Control+Space Shift+Space' : ''].filter(Boolean).join(' '));
-			this._register(
-				addDisposableListener(tab, 'keydown', event => {
-					if (this.tabAction.select && event.key === ' ' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-						event.preventDefault();
-						event.stopPropagation();
-						this.tabAction.select(this.tabAction.tab.value, event);
-						return;
-					}
-					if (!this.onClose || event.key !== 'Delete') {
-						return;
-					}
+			this._register(addDisposableListener(tab, 'keydown', (event) => {
+				if (this.tabAction.select && event.key === ' ' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
 					event.preventDefault();
 					event.stopPropagation();
-					this.onClose(this.tabAction.tab.value);
-				}),
-			);
+					this.tabAction.select(this.tabAction.tab.value, event);
+					return;
+				}
+				if (!this.onClose || event.key !== 'Delete') {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				this.onClose(this.tabAction.tab.value);
+			}));
 		}
 		this.update();
 	}
@@ -167,20 +164,17 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		if (this.label && previous && (previous.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
 			this.label.setLabel(item.label, item.description, { icon: item.icon });
 		}
-		if (
-			previous &&
-			previous.label === item.label &&
-			previous.actions === item.actions &&
-			previous.primaryAction === item.primaryAction &&
-			previous.closeActionTooltip === item.closeActionTooltip
-		) {
+		if (previous && previous.label === item.label && previous.actions === item.actions && previous.primaryAction === item.primaryAction && previous.closeActionTooltip === item.closeActionTooltip) {
 			return;
 		}
 		if (this.onClose && !item.primaryAction && (!this.closeAction || previous?.primaryAction || previous?.label !== item.label || previous.closeActionTooltip !== item.closeActionTooltip)) {
 			this.closeAction = closeTabAction(this.tabAction, this.onClose, this.closeActionIcon);
 		}
 		const primaryAction = item.primaryAction ?? this.closeAction;
-		const actions = [...(item.actions?.items ?? []), ...(primaryAction ? [primaryAction] : [])];
+		const actions = [
+			...(item.actions?.items ?? []),
+			...(primaryAction ? [primaryAction] : []),
+		];
 		const hadActionFocus = this.toolbar.value?.element.contains(container.ownerDocument.activeElement);
 		if (actions.length === 0) {
 			this.toolbar.clear();

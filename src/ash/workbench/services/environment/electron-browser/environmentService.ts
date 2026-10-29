@@ -10,27 +10,15 @@ export class ElectronWorkbenchEnvironmentService implements IWorkbenchEnvironmen
 	readonly initialLogLevel?: LogLevel;
 	readonly extensionLogLevel?: readonly (readonly [string, string])[];
 	public readonly webviewExternalEndpoint = `${Schemas.vscodeWebview}://{{uuid}}`;
-	constructor(
-		value?: unknown,
-		readonly expectsTerminalTransfer = false,
-	) {
+	constructor(value?: unknown, readonly expectsTerminalTransfer = false) {
 		if (value === undefined) return;
-		if (
-			!isRecord(value) ||
+		if (!isRecord(value) ||
 			(value.logLevel !== undefined && (typeof value.logLevel !== 'string' || parseLogLevel(value.logLevel) === undefined)) ||
 			(value.initialLogLevel !== undefined && !isLogLevel(value.initialLogLevel)) ||
-			!Array.isArray(value.extensionLogLevel) ||
-			value.extensionLogLevel.length > 512 ||
-			value.extensionLogLevel.some(
-				entry =>
-					!Array.isArray(entry) ||
-					entry.length !== 2 ||
-					typeof entry[0] !== 'string' ||
-					!/^[a-z0-9-]+\.[a-z0-9-]+$/i.test(entry[0]) ||
-					typeof entry[1] !== 'string' ||
-					parseLogLevel(entry[1]) === undefined,
-			)
-		) {
+			!Array.isArray(value.extensionLogLevel) || value.extensionLogLevel.length > 512 ||
+			value.extensionLogLevel.some(entry => !Array.isArray(entry) || entry.length !== 2 ||
+				typeof entry[0] !== 'string' || !/^[a-z0-9-]+\.[a-z0-9-]+$/i.test(entry[0]) ||
+				typeof entry[1] !== 'string' || parseLogLevel(entry[1]) === undefined)) {
 			throw new TypeError('Invalid startup log configuration');
 		}
 		this.logLevel = value.logLevel as string | undefined;

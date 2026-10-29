@@ -36,9 +36,10 @@ export function memoryResource(sessionId: string, revision: number, reference: s
 
 /** Virtual memory files expose exact bytes, with an editable hex codec for text editors. */
 export class DebugMemoryFileSystemProvider extends Disposable implements IFileSystemProvider {
-	readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
+	readonly capabilities =
+		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	readonly onDidChangeCapabilities = Event.None;
-	private readonly changes = this._register(new Emitter<{ resources: readonly URI[] }>());
+	private readonly changes = this._register(new Emitter<{ resources: readonly URI[]; }>());
 	readonly onDidChangeFiles = this.changes.event;
 	private readonly watches = this._register(new DisposableMap<object, DisposableStore>());
 
@@ -54,12 +55,9 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 		const address = this.address(resource);
 		const key = {};
 		const lifetime = this.watches.set(key, new DisposableStore());
-		lifetime.add(
-			address.session.onDidInvalidateMemory(event => {
-				if (event.memoryReference === address.reference && event.offset < address.offset + address.count && event.offset + event.count > address.offset)
-					this.changes.fire({ resources: [resource] });
-			}),
-		);
+		lifetime.add(address.session.onDidInvalidateMemory(event => {
+			if (event.memoryReference === address.reference && event.offset < address.offset + address.count && event.offset + event.count > address.offset) this.changes.fire({ resources: [resource] });
+		}));
 		lifetime.add(address.session.onDidChangeState(() => this.changes.fire({ resources: [resource] })));
 		return toDisposable(() => this.watches.deleteAndDispose(key));
 	}
@@ -82,12 +80,23 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 			count < 1 ||
 			count > 4096
 		) {
-			throw new FileSystemProviderError(localize('debug.memoryAddressInvalid', 'Invalid debug memory address or byte range.'), FileSystemProviderErrorCode.Unavailable);
+			throw new FileSystemProviderError(
+				localize('debug.memoryAddressInvalid', 'Invalid debug memory address or byte range.'),
+				FileSystemProviderErrorCode.Unavailable,
+			);
 		}
 		const session = this.debug.getSession(id);
 		const revision = Number(query.get('revision'));
-		if (!query.has('revision') || !Number.isSafeInteger(revision) || revision !== session?.inspectionRevision || session.state !== 'stopped')
-			throw new FileSystemProviderError(localize('debug.memoryExpired', 'This memory view expired. Reopen it from the current paused session.'), FileSystemProviderErrorCode.Unavailable);
+		if (
+			!query.has('revision') ||
+			!Number.isSafeInteger(revision) ||
+			revision !== session?.inspectionRevision ||
+			session.state !== 'stopped'
+		)
+			throw new FileSystemProviderError(
+				localize('debug.memoryExpired', 'This memory view expired. Reopen it from the current paused session.'),
+				FileSystemProviderErrorCode.Unavailable,
+			);
 		return { session, reference, offset, count };
 	}
 
@@ -97,7 +106,11 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 		this.address(resource);
 		if (result.unreadableBytes || result.data.length !== address.count)
 			throw new FileSystemProviderError(
-				localize('debug.memoryUnreadable', '{0} requested memory bytes are unreadable. Choose a smaller range.', Math.max(result.unreadableBytes, address.count - result.data.length)),
+				localize(
+					'debug.memoryUnreadable',
+					'{0} requested memory bytes are unreadable. Choose a smaller range.',
+					Math.max(result.unreadableBytes, address.count - result.data.length),
+				),
 				FileSystemProviderErrorCode.Unavailable,
 			);
 		return { resource, bytes: result.data, revision: encodeBase64(VSBuffer.wrap(new Uint8Array(result.data))) };
@@ -106,21 +119,35 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 	async readTextFile(resource: URI): Promise<IFileContent> {
 		const result = await this.readFile(resource);
 		const lines: string[] = [];
-		for (let start = 0; start < result.bytes.length; start += 16) lines.push([...result.bytes.slice(start, start + 16)].map(byte => byte.toString(16).padStart(2, '0')).join(' '));
+		for (let start = 0; start < result.bytes.length; start += 16)
+			lines.push(
+				[...result.bytes.slice(start, start + 16)].map((byte) => byte.toString(16).padStart(2, '0')).join(' '),
+			);
 		return { resource, content: lines.join('\n'), revision: result.revision, encoding: 'utf8' };
 	}
 
-	async writeTextFile(resource: URI, content: string, _encoding: string, options: IFileWriteOptions): Promise<IFileWriteResult> {
+	async writeTextFile(
+		resource: URI,
+		content: string,
+		_encoding: string,
+		options: IFileWriteOptions,
+	): Promise<IFileWriteResult> {
 		if (content.length > 16384 || !/^\s*(?:[\da-fA-F]{2}(?:\s+|$))*$/.test(content))
-			throw new FileSystemProviderError(localize('debug.memoryHexInvalid', 'Enter pairs of hexadecimal digits separated by spaces or newlines.'), FileSystemProviderErrorCode.Unavailable);
+			throw new FileSystemProviderError(
+				localize(
+					'debug.memoryHexInvalid',
+					'Enter pairs of hexadecimal digits separated by spaces or newlines.',
+				),
+				FileSystemProviderErrorCode.Unavailable,
+			);
 		return this.writeFile(
 			resource,
 			Uint8Array.from(
 				content.trim()
 					? content
-							.trim()
-							.split(/\s+/)
-							.map(byte => parseInt(byte, 16))
+						.trim()
+						.split(/\s+/)
+						.map((byte) => parseInt(byte, 16))
 					: [],
 			),
 			options,
@@ -129,20 +156,38 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 
 	async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		const address = this.address(resource);
-		if (!options.overwrite || bytes.length !== address.count || !address.session.capabilities.supportsWriteMemoryRequest)
+		if (
+			!options.overwrite ||
+			bytes.length !== address.count ||
+			!address.session.capabilities.supportsWriteMemoryRequest
+		)
 			throw new FileSystemProviderError(
-				localize('debug.memoryWriteInvalid', 'Memory edits must preserve the selected byte count and require adapter write support.'),
+				localize(
+					'debug.memoryWriteInvalid',
+					'Memory edits must preserve the selected byte count and require adapter write support.',
+				),
 				FileSystemProviderErrorCode.NoPermissions,
 			);
-		if (options.expectedRevision !== undefined && options.expectedRevision !== (await this.readFile(resource)).revision)
-			throw new FileSystemProviderError(localize('debug.memoryConflict', 'Memory changed since this view was read. Reopen it before editing.'), FileSystemProviderErrorCode.FileWriteLocked);
+		if (
+			options.expectedRevision !== undefined &&
+			options.expectedRevision !== (await this.readFile(resource)).revision
+		)
+			throw new FileSystemProviderError(
+				localize('debug.memoryConflict', 'Memory changed since this view was read. Reopen it before editing.'),
+				FileSystemProviderErrorCode.FileWriteLocked,
+			);
 		this.address(resource);
 		const written = await address.session.writeMemory(address.reference, address.offset, bytes);
 		this.address(resource);
 		this.changes.fire({ resources: [resource] });
 		if (written !== bytes.length)
 			throw new FileSystemProviderError(
-				localize('debug.memoryPartialWrite', 'The adapter wrote only {0} of {1} bytes. Reopen memory to inspect the result.', written, bytes.length),
+				localize(
+					'debug.memoryPartialWrite',
+					'The adapter wrote only {0} of {1} bytes. Reopen memory to inspect the result.',
+					written,
+					bytes.length,
+				),
 				FileSystemProviderErrorCode.Unavailable,
 			);
 		return {

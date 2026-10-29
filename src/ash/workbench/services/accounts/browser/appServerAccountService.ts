@@ -11,10 +11,7 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 	private readonly _onDidCompleteLogin = this._register(new Emitter<AccountLoginCompletion>());
 	readonly onDidCompleteLogin = this._onDidCompleteLogin.event;
 
-	constructor(
-		private readonly api: IAccountApi,
-		events: IServerEventApi,
-	) {
+	constructor(private readonly api: IAccountApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === 'account/updated') {
@@ -39,12 +36,7 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 		}
 		return started.type === 'browser'
 			? { type: 'browser', loginId: started.loginId, authorizationUrl: started.authorizationUrl }
-			: {
-					type: 'deviceCode',
-					loginId: started.loginId,
-					verificationUrl: started.verificationUrl,
-					userCode: started.userCode,
-				};
+			: { type: 'deviceCode', loginId: started.loginId, verificationUrl: started.verificationUrl, userCode: started.userCode };
 	}
 
 	async cancelLogin(loginId: string): Promise<void> {
@@ -76,7 +68,9 @@ function account(value: AccountDto): Account {
 function accountLoginCompletion(value: AccountLoginCompleted): AccountLoginCompletion {
 	return {
 		loginId: value.loginId,
-		status: value.status.type === 'succeeded' ? { type: 'succeeded' } : { type: 'failed', failure: { ...value.status.failure } },
+		status: value.status.type === 'succeeded'
+			? { type: 'succeeded' }
+			: { type: 'failed', failure: { ...value.status.failure } },
 		account: accountState(value.account),
 	};
 }

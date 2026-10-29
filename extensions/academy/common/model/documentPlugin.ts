@@ -83,10 +83,5 @@ export function createDocumentPlugin<T>(key: DocumentPluginKey<T>, state: Docume
 	if (!state || typeof state.init !== 'function' || typeof state.apply !== 'function') throw new TypeError(`Document plugin '${key.name}' requires init and apply state functions`);
 	if (options.filterTransaction !== undefined && typeof options.filterTransaction !== 'function') throw new TypeError(`Document plugin '${key.name}' filterTransaction must be a function`);
 	if (options.decorations !== undefined && typeof options.decorations !== 'function') throw new TypeError(`Document plugin '${key.name}' decorations must be a function`);
-	return Object.freeze({
-		key,
-		state,
-		...(options.filterTransaction ? { filterTransaction: options.filterTransaction } : {}),
-		...(options.decorations ? { decorations: options.decorations } : {}),
-	});
+	return Object.freeze({ key, state, ...(options.filterTransaction ? { filterTransaction: options.filterTransaction } : {}), ...(options.decorations ? { decorations: options.decorations } : {}) });
 }

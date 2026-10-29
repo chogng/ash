@@ -1,5 +1,7 @@
-export const NATIVE_CONTEXT_MENU_POPUP_CHANNEL = 'ash:context-menu:popup';
-export const NATIVE_CONTEXT_MENU_CLOSE_CHANNEL = 'ash:context-menu:close';
+export const NATIVE_CONTEXT_MENU_POPUP_CHANNEL =
+	'ash:context-menu:popup';
+export const NATIVE_CONTEXT_MENU_CLOSE_CHANNEL =
+	'ash:context-menu:close';
 
 export interface INativeContextMenuSeparator {
 	readonly type: 'separator';
@@ -21,7 +23,10 @@ export interface INativeContextSubmenu {
 	readonly items: readonly NativeContextMenuItem[];
 }
 
-export type NativeContextMenuItem = INativeContextMenuSeparator | INativeContextMenuAction | INativeContextSubmenu;
+export type NativeContextMenuItem =
+	| INativeContextMenuSeparator
+	| INativeContextMenuAction
+	| INativeContextSubmenu;
 
 export interface INativeContextMenuRequest {
 	readonly items: readonly NativeContextMenuItem[];
@@ -37,7 +42,9 @@ export interface INativeContextMenuResult {
 
 /** Narrow host capability used to present a serialized native context menu. */
 export interface INativeContextMenuApi {
-	popup(request: INativeContextMenuRequest): Promise<INativeContextMenuResult>;
+	popup(
+		request: INativeContextMenuRequest,
+	): Promise<INativeContextMenuResult>;
 	close(): Promise<void>;
 }
 
@@ -49,7 +56,9 @@ const MAX_LABEL_LENGTH = 512;
 const MAX_COORDINATE = 1_000_000;
 
 /** Validates the complete renderer-to-main native menu payload. */
-export function validateNativeContextMenuRequest(value: unknown): INativeContextMenuRequest {
+export function validateNativeContextMenuRequest(
+	value: unknown,
+): INativeContextMenuRequest {
 	const request = looseRecord(value);
 	const keys = ['items', 'x', 'y'];
 	const hasElementAnchor = 'elementAnchor' in request;
@@ -74,7 +83,9 @@ export function validateNativeContextMenuRequest(value: unknown): INativeContext
 	};
 }
 
-export function validateNativeContextMenuClose(value: unknown): Record<string, never> {
+export function validateNativeContextMenuClose(
+	value: unknown,
+): Record<string, never> {
 	if (value === undefined) return {};
 	exactRecord(value, []);
 	return {};
@@ -85,7 +96,11 @@ interface IValidationState {
 	readonly ids: Set<string>;
 }
 
-function validateItems(value: unknown, depth: number, state: IValidationState): readonly NativeContextMenuItem[] {
+function validateItems(
+	value: unknown,
+	depth: number,
+	state: IValidationState,
+): readonly NativeContextMenuItem[] {
 	if (!Array.isArray(value) || value.length === 0) {
 		throw new Error('context menu items must be a non-empty array');
 	}
@@ -111,7 +126,11 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 				if (item.checked !== undefined) keys.push('checked');
 				if (item.accelerator !== undefined) keys.push('accelerator');
 				requireExactKeys(item, keys);
-				const id = boundedString(item.id, `items[${index}].id`, MAX_ID_LENGTH);
+				const id = boundedString(
+					item.id,
+					`items[${index}].id`,
+					MAX_ID_LENGTH,
+				);
 				if (state.ids.has(id)) {
 					throw new Error(`duplicate context menu action id: ${id}`);
 				}
@@ -119,26 +138,43 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 				const result: INativeContextMenuAction = {
 					type: 'action',
 					id,
-					label: boundedString(item.label, `items[${index}].label`, MAX_LABEL_LENGTH),
+					label: boundedString(
+						item.label,
+						`items[${index}].label`,
+						MAX_LABEL_LENGTH,
+					),
 					enabled: boolean(item.enabled, `items[${index}].enabled`),
 					...(item.accelerator === undefined
 						? {}
 						: {
-								accelerator: boundedString(item.accelerator, `items[${index}].accelerator`, MAX_ID_LENGTH),
-							}),
+							accelerator: boundedString(
+								item.accelerator,
+								`items[${index}].accelerator`,
+								MAX_ID_LENGTH,
+							),
+						}),
 				};
 				return item.checked === undefined
 					? result
 					: {
-							...result,
-							checked: boolean(item.checked, `items[${index}].checked`),
-						};
+						...result,
+						checked: boolean(item.checked, `items[${index}].checked`),
+					};
 			}
 			case 'submenu':
-				requireExactKeys(item, ['enabled', 'items', 'label', 'type']);
+				requireExactKeys(item, [
+					'enabled',
+					'items',
+					'label',
+					'type',
+				]);
 				return {
 					type: 'submenu',
-					label: boundedString(item.label, `items[${index}].label`, MAX_LABEL_LENGTH),
+					label: boundedString(
+						item.label,
+						`items[${index}].label`,
+						MAX_LABEL_LENGTH,
+					),
 					enabled: boolean(item.enabled, `items[${index}].enabled`),
 					items: validateItems(item.items, depth + 1, state),
 				};
@@ -148,7 +184,10 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 	});
 }
 
-function exactRecord(value: unknown, keys: readonly string[]): Record<string, unknown> {
+function exactRecord(
+	value: unknown,
+	keys: readonly string[],
+): Record<string, unknown> {
 	const result = looseRecord(value);
 	requireExactKeys(result, keys);
 	return result;
@@ -161,16 +200,32 @@ function looseRecord(value: unknown): Record<string, unknown> {
 	return value as Record<string, unknown>;
 }
 
-function requireExactKeys(value: Record<string, unknown>, keys: readonly string[]): void {
+function requireExactKeys(
+	value: Record<string, unknown>,
+	keys: readonly string[],
+): void {
 	const actual = Object.keys(value).sort();
 	const expected = [...keys].sort();
-	if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
-		throw new Error(`context menu object must contain exactly: ${expected.join(', ')}`);
+	if (
+		actual.length !== expected.length ||
+		actual.some((key, index) => key !== expected[index])
+	) {
+		throw new Error(
+			`context menu object must contain exactly: ${expected.join(', ')}`,
+		);
 	}
 }
 
-function boundedString(value: unknown, field: string, maxLength: number): string {
-	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maxLength) {
+function boundedString(
+	value: unknown,
+	field: string,
+	maxLength: number,
+): string {
+	if (
+		typeof value !== 'string' ||
+		value.trim().length === 0 ||
+		value.length > maxLength
+	) {
 		throw new Error(`${field} must be a non-empty bounded string`);
 	}
 	return value;
@@ -184,7 +239,10 @@ function boolean(value: unknown, field: string): boolean {
 }
 
 function coordinate(value: unknown, field: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value as number) > MAX_COORDINATE) {
+	if (
+		typeof value !== 'number' || !Number.isFinite(value) ||
+		Math.abs(value as number) > MAX_COORDINATE
+	) {
 		throw new Error(`${field} must be a bounded finite number`);
 	}
 	return value as number;

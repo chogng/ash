@@ -17,7 +17,7 @@ export interface BundledGrammar {
 	tags: string[];
 	folds: string[];
 	injections: string[];
-	snapshots?: { highlights?: string[]; tags?: string[] };
+	snapshots?: { highlights?: string[]; tags?: string[]; };
 	languages: GrammarLanguage[];
 }
 
@@ -43,8 +43,7 @@ export function grammarResource(root: string, directory: string, path: string): 
 		owner = match[1]!;
 		path = match[2]!;
 	}
-	const base = resolve(root, 'extensions', owner),
-		target = resolve(base, path);
+	const base = resolve(root, 'extensions', owner), target = resolve(base, path);
 	if (relative(base, target).split(sep).includes('..')) throw new RangeError('Grammar resource escapes its language package');
 	return target;
 }
@@ -52,45 +51,28 @@ export function grammarResource(root: string, directory: string, path: string): 
 /** Read and validate the sole built-in language registry before generating either runtime. */
 export async function readGrammarPackages(root = repository): Promise<GrammarPackage[]> {
 	const packages: GrammarPackage[] = [];
-	const names = new Set<string>(),
-		variants = new Set<string>(),
-		aliases = new Map<string, string>();
+	const names = new Set<string>(), variants = new Set<string>(), aliases = new Map<string, string>();
 	for (const directory of (await readdir(resolve(root, 'extensions'))).sort()) {
 		const manifest = resolve(root, 'extensions', directory, 'tree-sitter/grammars.json');
 		let grammars: BundledGrammar[];
-		try {
-			grammars = JSON.parse(await readFile(manifest, 'utf8'));
-		} catch (error) {
-			if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue;
-			throw error;
-		}
+		try { grammars = JSON.parse(await readFile(manifest, 'utf8')); }
+		catch (error) { if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue; throw error; }
 		if (!Array.isArray(grammars) || !grammars.length) throw new TypeError(`Invalid grammar manifest: ${manifest}`);
 		for (const grammar of grammars) {
 			if (!grammar || !identifier.test(grammar.name) || names.has(grammar.name)) throw new TypeError(`Invalid or duplicate grammar: ${manifest}`);
 			names.add(grammar.name);
-			if (grammar.snapshots !== undefined && (typeof grammar.snapshots !== 'object' || grammar.snapshots === null || Array.isArray(grammar.snapshots)))
-				throw new TypeError(`Invalid snapshot bindings: ${manifest}`);
-			for (const query of [grammar.snapshots?.highlights, grammar.snapshots?.tags])
-				if (query !== undefined && (!Array.isArray(query) || !query.length || !query.every(value => binding.test(value)))) throw new TypeError(`Invalid snapshot binding: ${manifest}`);
+			if (grammar.snapshots !== undefined && (typeof grammar.snapshots !== 'object' || grammar.snapshots === null || Array.isArray(grammar.snapshots))) throw new TypeError(`Invalid snapshot bindings: ${manifest}`);
+			for (const query of [grammar.snapshots?.highlights, grammar.snapshots?.tags]) if (query !== undefined && (!Array.isArray(query) || !query.length || !query.every(value => binding.test(value)))) throw new TypeError(`Invalid snapshot binding: ${manifest}`);
 			if (grammar.snapshots?.highlights && grammar.snapshots.highlights.length !== 1) throw new TypeError(`Snapshot highlighting needs one upstream binding: ${manifest}`);
 			for (const key of ['highlights', 'tags', 'folds', 'injections'] as const) {
-				if (!Array.isArray(grammar[key]) || (key === 'highlights' && !grammar[key].length)) throw new TypeError(`Invalid ${key} queries: ${manifest}`);
+				if (!Array.isArray(grammar[key]) || key === 'highlights' && !grammar[key].length) throw new TypeError(`Invalid ${key} queries: ${manifest}`);
 				for (const path of grammar[key]) {
 					if (!path.endsWith('.scm') || !(await readFile(grammarResource(root, directory, path), 'utf8')).trim()) throw new TypeError(`Invalid grammar query: ${path}`);
 				}
 			}
 			if (!Array.isArray(grammar.languages) || !grammar.languages.length) throw new TypeError(`Missing language declarations: ${manifest}`);
 			for (const language of grammar.languages) {
-				if (
-					!language ||
-					!identifier.test(language.id) ||
-					!/^[A-Z][A-Za-z]*$/.test(language.variant) ||
-					variants.has(language.variant) ||
-					!identifier.test(language.editorLanguage) ||
-					!Array.isArray(language.editorIds) ||
-					!Array.isArray(language.aliases)
-				)
-					throw new TypeError(`Invalid language declaration: ${manifest}`);
+				if (!language || !identifier.test(language.id) || !/^[A-Z][A-Za-z]*$/.test(language.variant) || variants.has(language.variant) || !identifier.test(language.editorLanguage) || !Array.isArray(language.editorIds) || !Array.isArray(language.aliases)) throw new TypeError(`Invalid language declaration: ${manifest}`);
 				variants.add(language.variant);
 				for (const alias of new Set([language.id, ...language.editorIds, ...language.aliases])) {
 					if (!(language.aliases.includes(alias) ? languageAlias : identifier).test(alias) || aliases.has(alias)) throw new TypeError(`Duplicate or invalid syntax language alias: ${alias}`);
@@ -107,45 +89,27 @@ export async function readGrammarPackages(root = repository): Promise<GrammarPac
 		const manifest = JSON.parse(await readFile(resolve(root, 'extensions', directory, 'package.json'), 'utf8'));
 		for (const language of manifest.contributes?.languages ?? []) if (!ids.has(language.id)) throw new Error(`Missing Tree-sitter registration for ${directory}:${language.id}`);
 	}
-	for (const { grammars } of packages)
-		for (const grammar of grammars)
-			for (const language of grammar.languages) {
-				if (!ids.has(language.editorLanguage)) throw new Error(`Unknown embedded editor language: ${language.editorLanguage}`);
-			}
+	for (const { grammars } of packages) for (const grammar of grammars) for (const language of grammar.languages) {
+		if (!ids.has(language.editorLanguage)) throw new Error(`Unknown embedded editor language: ${language.editorLanguage}`);
+	}
 	return packages;
 }
 
 function generate(root: string, packages: readonly GrammarPackage[], wasmDirectory: string): Map<string, string> {
 	const entries = packages.flatMap(pkg => pkg.grammars.map(grammar => ({ directory: pkg.directory, grammar })));
 	const languages = entries.flatMap(({ grammar }) => grammar.languages);
-	const rustQuery = (directory: string, paths: readonly string[]) =>
-		paths.length
-			? `concat!(${paths
-					.map(
-						path =>
-							`include_str!(${JSON.stringify(
-								'../../../' +
-									relative(root, grammarResource(root, directory, path))
-										.split(sep)
-										.join('/'),
-							)})`,
-					)
-					.join(', "\\n", ')})`
-			: '""';
+	const rustQuery = (directory: string, paths: readonly string[]) => paths.length ? `concat!(${paths.map(path => `include_str!(${JSON.stringify('../../../' + relative(root, grammarResource(root, directory, path)).split(sep).join('/'))})`).join(', "\\n", ')})` : '""';
 	const snapshotQuery = (binding: string) => `ash_grammars::query(${JSON.stringify(binding)}).expect("bundled snapshot query")`;
 	const definitions = entries.flatMap(({ directory, grammar }) => {
-		const highlights = rustQuery(directory, grammar.highlights),
-			tags = rustQuery(directory, grammar.tags);
-		return grammar.languages.map(
-			language => `        SyntaxLanguage::${language.variant} => LanguageDefinition {
+		const highlights = rustQuery(directory, grammar.highlights), tags = rustQuery(directory, grammar.tags);
+		return grammar.languages.map(language => `        SyntaxLanguage::${language.variant} => LanguageDefinition {
             language: ash_grammars::language(${JSON.stringify(grammar.name)}).expect("bundled grammar").into(),
             highlights: ${grammar.snapshots?.highlights?.map(snapshotQuery)[0] ?? highlights},
             tags: || [${grammar.snapshots?.tags?.map(snapshotQuery).join(', ') ?? tags}].join("\\n"),
             editor_highlights: ${highlights},
             injections: ${rustQuery(directory, grammar.injections)},
             folds: ${rustQuery(directory, grammar.folds)},
-        },`,
-		);
+        },`);
 	});
 	const rust = `${header}
 #[cfg(test)]
@@ -162,10 +126,7 @@ impl SyntaxLanguage {
     /// Select parser support independently of the source language's identity.
     pub fn for_language(language: &ash_language::LanguageId) -> Option<Self> {
         match language.as_str() {
-${languages
-	.filter(language => language.editorIds.length)
-	.map(language => `            ${language.editorIds.map(id => JSON.stringify(id)).join(' | ')} => Some(Self::${language.variant}),`)
-	.join('\n')}
+${languages.filter(language => language.editorIds.length).map(language => `            ${language.editorIds.map(id => JSON.stringify(id)).join(' | ')} => Some(Self::${language.variant}),`).join('\n')}
             _ => None,
         }
     }
@@ -211,36 +172,18 @@ ${languages.map(language => `        SyntaxLanguageDto::${language.variant} => S
 }
 `;
 	const metadata = `${header}
-export const syntaxLanguageDefinitions = ${JSON.stringify(
-		languages.map(({ id, editorLanguage, editorIds, aliases }) => ({ id, editorLanguage, editorIds, aliases })),
-		null,
-		'\t',
-	)} as const;
+export const syntaxLanguageDefinitions = ${JSON.stringify(languages.map(({ id, editorLanguage, editorIds, aliases }) => ({ id, editorLanguage, editorIds, aliases })), null, '\t')} as const;
 `;
 	const imports = new Map<string, string>();
 	const importResource = (specifier: string, suffix: string): string => {
 		const key = specifier + suffix;
 		let name = imports.get(key);
-		if (!name) {
-			name = `resource${imports.size}`;
-			imports.set(key, name);
-		}
+		if (!name) { name = `resource${imports.size}`; imports.set(key, name); }
 		return name;
 	};
 	const webDefinitions = entries.flatMap(({ directory, grammar }) => {
 		const url = importResource('../../../../../../' + wasmDirectory + '/wasm/' + grammar.name + '.wasm', '?url&no-inline');
-		const query = (paths: readonly string[]) =>
-			paths
-				.map(path =>
-					importResource(
-						'../../../../../../' +
-							relative(root, grammarResource(root, directory, path))
-								.split(sep)
-								.join('/'),
-						'?raw',
-					),
-				)
-				.join(" + '\\n' + ") || "''";
+		const query = (paths: readonly string[]) => paths.map(path => importResource('../../../../../../' + relative(root, grammarResource(root, directory, path)).split(sep).join('/'), '?raw')).join(" + '\\n' + ") || "''";
 		const value = `{ url: ${url}, query: ${query(grammar.highlights)}, tags: ${query(grammar.tags)}, folds: ${query(grammar.folds)}, injections: ${query(grammar.injections)} }`;
 		return grammar.languages.map(language => `\t${JSON.stringify(language.id)}: ${value},`);
 	});
@@ -262,27 +205,18 @@ ${webDefinitions.join('\n')}
 
 async function formatRust(source: string, root: string): Promise<string> {
 	return new Promise((done, fail) => {
-		const child = spawn('rustfmt', ['--edition', '2024', '--emit', 'stdout'], {
-			cwd: root,
-			stdio: ['pipe', 'pipe', 'pipe'],
-			windowsHide: true,
-		});
-		let output = '',
-			errors = '';
-		child.stdout.setEncoding('utf8').on('data', chunk => {
-			output += chunk;
-		});
-		child.stderr.setEncoding('utf8').on('data', chunk => {
-			errors += chunk;
-		});
+		const child = spawn('rustfmt', ['--edition', '2024', '--emit', 'stdout'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+		let output = '', errors = '';
+		child.stdout.setEncoding('utf8').on('data', chunk => { output += chunk; });
+		child.stderr.setEncoding('utf8').on('data', chunk => { errors += chunk; });
 		child.once('error', fail);
-		child.once('close', code => (code === 0 ? done(output) : fail(new Error(`Rust registration formatting failed: ${errors}`))));
+		child.once('close', code => code === 0 ? done(output) : fail(new Error(`Rust registration formatting failed: ${errors}`)));
 		child.stdin.end(source);
 	});
 }
 
 /** Check generated registries in CI, or update checked-in outputs without requiring Node at runtime. */
-export async function generateTreeSitterRegistry(options: { root?: string; check?: boolean } = {}): Promise<void> {
+export async function generateTreeSitterRegistry(options: { root?: string; check?: boolean; } = {}): Promise<void> {
 	const root = options.root ?? repository;
 	const lock = JSON.parse(await readFile(resolve(root, 'third_party/ash-grammars/runtime-lock.json'), 'utf8'));
 	if (!/^\d+\.\d+\.\d+$/.test(lock.version) || !/^[a-f0-9]{64}$/.test(lock.wasm?.sha256)) throw new Error('Invalid grammar release lock');
@@ -291,11 +225,7 @@ export async function generateTreeSitterRegistry(options: { root?: string; check
 		const content = path.endsWith('.rs') ? await formatRust(generated, root) : formatGeneratedTypeScript(generated);
 		const target = resolve(root, path);
 		let previous: string | undefined;
-		try {
-			previous = await readFile(target, 'utf8');
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-		}
+		try { previous = await readFile(target, 'utf8'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 		if (previous === content) continue;
 		if (options.check) throw new Error(`Stale Tree-sitter registration: ${path}; run pnpm tree-sitter:generate`);
 		await mkdir(dirname(target), { recursive: true });

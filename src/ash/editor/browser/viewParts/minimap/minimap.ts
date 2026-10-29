@@ -53,16 +53,11 @@ export class Minimap extends ViewPart {
 	private sliderTop = 0;
 	private rasterKey: string | undefined;
 	private rasterDirty = true;
-	private readonly scrolling = this._register(
-		new RunOnceScheduler(() => {
-			this.domNode.classList.remove('stanza-editor-minimap-scrolling');
-		}, 500),
-	);
+	private readonly scrolling = this._register(new RunOnceScheduler(() => {
+		this.domNode.classList.remove('stanza-editor-minimap-scrolling');
+	}, 500));
 
-	constructor(
-		context: ViewContext,
-		private readonly source: MinimapOptions,
-	) {
+	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
 		this.domNode = h(source.host.ownerDocument, 'div');
 		this.root = new FastDomNode(this.domNode);
@@ -80,36 +75,30 @@ export class Minimap extends ViewPart {
 		this.domNode.append(this.canvas, this.slider);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.invalidateRaster()));
-		this._register(
-			addDisposableListener(this.domNode, 'pointerdown', event => {
-				if (event.button !== 0) return;
-				const localY = event.clientY - this.domNode.getBoundingClientRect().top;
-				this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight ? localY - this.sliderTop : this.sliderHeight / 2;
-				this.dragging = true;
-				this.domNode.classList.add('stanza-editor-minimap-dragging');
-				this.domNode.setPointerCapture(event.pointerId);
-				this.moveTo(event.clientY);
-				event.preventDefault();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'pointermove', event => {
-				if (this.dragging) this.moveTo(event.clientY);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'pointerup', event => {
-				this.dragging = false;
-				this.domNode.classList.remove('stanza-editor-minimap-dragging');
-				if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'pointercancel', () => {
-				this.dragging = false;
-				this.domNode.classList.remove('stanza-editor-minimap-dragging');
-			}),
-		);
+		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
+			if (event.button !== 0) return;
+			const localY = event.clientY - this.domNode.getBoundingClientRect().top;
+			this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight
+				? localY - this.sliderTop
+				: this.sliderHeight / 2;
+			this.dragging = true;
+			this.domNode.classList.add('stanza-editor-minimap-dragging');
+			this.domNode.setPointerCapture(event.pointerId);
+			this.moveTo(event.clientY);
+			event.preventDefault();
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointermove', event => {
+			if (this.dragging) this.moveTo(event.clientY);
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointerup', event => {
+			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
+			if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointercancel', () => {
+			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
+		}));
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> {
@@ -123,9 +112,7 @@ export class Minimap extends ViewPart {
 		return true;
 	}
 
-	public override onFlushed(): boolean {
-		return this.invalidateRaster();
-	}
+	public override onFlushed(): boolean { return this.invalidateRaster(); }
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
 		if (event.scrollTopChanged && this._context.configuration.options.get(EditorOption.minimap).autohide === 'scroll') {
 			this.domNode.classList.add('stanza-editor-minimap-scrolling');
@@ -133,18 +120,10 @@ export class Minimap extends ViewPart {
 		}
 		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged;
 	}
-	public override onLineMappingChanged(): boolean {
-		return this.invalidateRaster();
-	}
-	public override onTokensChanged(): boolean {
-		return this.invalidateRaster();
-	}
-	public override onTokensColorsChanged(): boolean {
-		return this.invalidateRaster();
-	}
-	public override onThemeChanged(): boolean {
-		return this.invalidateRaster();
-	}
+	public override onLineMappingChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensColorsChanged(): boolean { return this.invalidateRaster(); }
+	public override onThemeChanged(): boolean { return this.invalidateRaster(); }
 	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
 		return event.affectsMinimap ? this.invalidateRaster() : false;
 	}
@@ -167,15 +146,13 @@ export class Minimap extends ViewPart {
 		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
 		// The horizontal scrollbar occupies the bottom of the vertical track even
 		// when its auto thumb is faded out. Use that same extent for the document map.
-		const horizontalScrollbarHeight =
-			scrollbar.horizontal === ScrollbarVisibility.Visible || (scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
-				? scrollbar.horizontalScrollbarSize
-				: 0;
+		const horizontalScrollbarHeight = scrollbar.horizontal === ScrollbarVisibility.Visible || (scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
+			? scrollbar.horizontalScrollbarSize : 0;
 		const trackHeight = Math.max(0, context.viewportHeight - horizontalScrollbarHeight);
-		this.contentHeight = Math.min(trackHeight, Math.max(0, (rows * geometry.minimapLineHeight) / Math.max(1, pixelRatio)));
-		const scaleY = geometry.minimapIsSampling ? (this.contentHeight * pixelRatio) / rows : geometry.minimapLineHeight;
+		this.contentHeight = Math.min(trackHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
+		const scaleY = geometry.minimapIsSampling ? this.contentHeight * pixelRatio / rows : geometry.minimapLineHeight;
 		const viewportRows = context.viewportHeight / lineHeight;
-		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, (viewportRows * scaleY) / pixelRatio));
+		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, viewportRows * scaleY / pixelRatio));
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
 		const scrollRatio = scrollRange > 0 ? context.scrollTop / scrollRange : 0;
 		this.sliderTop = scrollRatio * (this.contentHeight - this.sliderHeight);
@@ -256,7 +233,7 @@ export class Minimap extends ViewPart {
 		const lineCount = endLine - startLine;
 		const sampleCount = Math.min(lineCount, Math.ceil(lineCount * scaleY));
 		for (let sample = 0; sample < sampleCount; sample++) {
-			const line = projection.lineAt(startLine + Math.floor((sample * lineCount) / sampleCount))!;
+			const line = projection.lineAt(startLine + Math.floor(sample * lineCount / sampleCount))!;
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
 			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY - rasterOffset) + innerLinePadding;
 			if (y < 0 || y + glyphHeight > height) {
@@ -274,7 +251,7 @@ export class Minimap extends ViewPart {
 			for (let offset = 0; offset < text.length && (column + 1) * charWidth <= width; offset++) {
 				const charCode = text.charCodeAt(offset);
 				if (charCode === 9) {
-					column += tabSize - (column % tabSize);
+					column += tabSize - column % tabSize;
 					continue;
 				}
 				if (charCode === 32) {

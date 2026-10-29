@@ -76,7 +76,7 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.input = undefined;
 	}
 
-	public override layout(_dimension: IDimension): void {}
+	public override layout(_dimension: IDimension): void { }
 
 	public override focus(): void {
 		this.firstButton?.focus();
@@ -89,62 +89,42 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.root.classList.toggle('warning', severity === Severity.Warning);
 		this.root.classList.toggle('info', severity === Severity.Info);
 		this.root.setAttribute('role', severity === Severity.Info ? 'status' : 'alert');
-		this.severityLabel.textContent =
-			severity === Severity.Warning
-				? localize('workbench.editorOpenWarning', 'Warning')
-				: severity === Severity.Info
-					? localize('workbench.editorOpenInfo', 'Information')
-					: localize('workbench.editorOpenError', 'Error');
-		this.title.textContent = error?.forceMessage
-			? error.message
-			: this.input
-				? localize('workbench.editorOpenFailure', 'Unable to open {0}', this.input.label || basename(this.input.resource))
-				: localize('workbench.editorOpenFailureGeneric', 'Unable to open editor');
+		this.severityLabel.textContent = severity === Severity.Warning
+			? localize('workbench.editorOpenWarning', 'Warning')
+			: severity === Severity.Info
+				? localize('workbench.editorOpenInfo', 'Information')
+				: localize('workbench.editorOpenError', 'Error');
+		this.title.textContent = error?.forceMessage ? error.message : this.input
+			? localize('workbench.editorOpenFailure', 'Unable to open {0}', this.input.label || basename(this.input.resource))
+			: localize('workbench.editorOpenFailureGeneric', 'Unable to open editor');
 		this.detail.hidden = error?.forceMessage === true;
-		this.detail.textContent = this.error instanceof Error ? this.error.message : localize('workbench.editorOpenUnknownError', 'An unknown error occurred while opening this editor.');
-		const actions: readonly IAction[] = error?.actions.length
-			? error.actions
-			: [
-					{
-						id: 'workbench.editor.retry',
-						label: localize('workbench.editorOpenRetry', 'Retry'),
-						tooltip: '',
-						enabled: true,
-						run: this.onRetry,
-					},
-				];
+		this.detail.textContent = this.error instanceof Error ? this.error.message
+			: localize('workbench.editorOpenUnknownError', 'An unknown error occurred while opening this editor.');
+		const actions: readonly IAction[] = error?.actions.length ? error.actions : [{
+			id: 'workbench.editor.retry',
+			label: localize('workbench.editorOpenRetry', 'Retry'),
+			tooltip: '',
+			enabled: true,
+			run: this.onRetry,
+		}];
 		this.buttons.clear();
 		this.firstButton = undefined;
 		for (const action of actions) {
-			const button: Button = this.buttons.add(
-				new Button(this.actionsDomNode, {
-					...defaultButtonStyles,
-					label: action.label,
-					enabled: action.enabled,
-					presentation: this.firstButton ? 'secondary' : 'primary',
-					onClick: () => {
-						void this.runAction(action, button);
-					},
-				}),
-			);
+			const button: Button = this.buttons.add(new Button(this.actionsDomNode, {
+				...defaultButtonStyles,
+				label: action.label,
+				enabled: action.enabled,
+				presentation: this.firstButton ? 'secondary' : 'primary',
+				onClick: () => { void this.runAction(action, button); },
+			}));
 			if (!this.firstButton && action.enabled) this.firstButton = button;
 		}
-		this.buttons.add(
-			new Button(this.actionsDomNode, {
-				...defaultButtonStyles,
-				label: localize('workbench.editorOpenClose', 'Close Editor'),
-				presentation: 'secondary',
-				onClick: () => {
-					void this.runAction({
-						id: 'workbench.editor.close',
-						label: '',
-						tooltip: '',
-						enabled: true,
-						run: this.onClose,
-					});
-				},
-			}),
-		);
+		this.buttons.add(new Button(this.actionsDomNode, {
+			...defaultButtonStyles,
+			label: localize('workbench.editorOpenClose', 'Close Editor'),
+			presentation: 'secondary',
+			onClick: () => { void this.runAction({ id: 'workbench.editor.close', label: '', tooltip: '', enabled: true, run: this.onClose }); },
+		}));
 	}
 
 	private async runAction(action: IAction, button?: Button): Promise<void> {

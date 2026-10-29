@@ -52,25 +52,12 @@ suite('Session browser page policy', () => {
 		const model = await foreground.resolve();
 		f.groupInputs.length = 0;
 		f.editorEvents.fire({
-			kind: 'groupChanged',
-			groupId: 1,
-			event: {
-				kind: 'editorClosed',
-				reason: 'reset',
-				editor: {
-					input: foreground,
-					groupId: 1,
-					instanceId: 'browser',
-					paneId: 'browser',
-					index: 0,
-					isActive: true,
-					isPreview: false,
-					isSticky: false,
-					isDirty: false,
-					canRevert: false,
-					hasExternalChange: false,
+			kind: 'groupChanged', groupId: 1, event: {
+				kind: 'editorClosed', reason: 'reset', editor: {
+					input: foreground, groupId: 1, instanceId: 'browser', paneId: 'browser', index: 0,
+					isActive: true, isPreview: false, isSticky: false, isDirty: false, canRevert: false, hasExternalChange: false,
 				},
-			},
+			}
 		});
 		f.selection.set(selected(first));
 		assert.equal(await foreground.resolve(), model);
@@ -102,13 +89,7 @@ suite('Session browser page policy', () => {
 
 	test('draft promotion preserves browser ownership and an error catalog does not close pages', async () => {
 		using f = fixture();
-		const draft: IUntitledChatSession = {
-			untitledSessionId: 'draft-one',
-			title: 'Draft',
-			model: undefined,
-			agent: undefined,
-			workspace: { type: 'current' },
-		};
+		const draft: IUntitledChatSession = { untitledSessionId: 'draft-one', title: 'Draft', model: undefined, agent: undefined, workspace: { type: 'current' } };
 		f.drafts = [draft];
 		f.selection.set({ kind: 'untitled', session: draft });
 		const input = await f.create();
@@ -155,13 +136,7 @@ suite('Session browser page policy', () => {
 });
 
 function session(sessionId: string, threadId: string): ISession {
-	return {
-		sessionId,
-		title: sessionId,
-		status: 'active',
-		nextApprovalMode: 'manual',
-		chats: [{ threadId, origin: { type: 'root' }, status: 'active' }],
-	};
+	return { sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId, origin: { type: 'root' }, status: 'active' }] };
 }
 
 function selected(session: ISession): SessionsViewSelection {
@@ -169,17 +144,7 @@ function selected(session: ISession): SessionsViewSelection {
 }
 
 function node(threadId: string, children: readonly AgentTreeNode[] = []): AgentTreeNode {
-	return {
-		threadId,
-		threadSequence: 1,
-		title: threadId,
-		origin: { type: 'root' },
-		membershipStatus: 'active',
-		executionStatus: 'idle',
-		usage: { inputTokens: 0, outputTokens: 0 },
-		joins: [],
-		children,
-	};
+	return { threadId, threadSequence: 1, title: threadId, origin: { type: 'root' }, membershipStatus: 'active', executionStatus: 'idle', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children };
 }
 
 function fixture() {
@@ -188,204 +153,79 @@ function fixture() {
 	const editorEvents = resources.add(new Emitter<EditorPartChangeEvent>());
 	const catalogChanged = resources.add(new Emitter<void>());
 	const selection = observableValue<SessionsViewSelection | undefined>('browser foreground', selected(first));
-	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>('browser draft promotion', new Map());
+	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('browser draft promotion', new Map());
 	const f = {
-		pages: new Map<string, IBrowserViewInfo>(),
-		catalog: [first, second] as readonly ISession[],
-		drafts: [] as readonly IUntitledChatSession[],
-		state: 'ready' as SessionsManagementState,
-		opened: [] as IResourceEditorInput[],
-		groupInputs: [] as IResourceEditorInput[],
-		destroyed: [] as string[],
-		selection,
-		materialized,
-		catalogChanged,
-		editorEvents,
+		pages: new Map<string, IBrowserViewInfo>(), catalog: [first, second] as readonly ISession[], drafts: [] as readonly IUntitledChatSession[],
+		state: 'ready' as SessionsManagementState, opened: [] as IResourceEditorInput[], groupInputs: [] as IResourceEditorInput[], destroyed: [] as string[],
+		selection, materialized, catalogChanged, editorEvents,
 	};
 	const management = {
-		onDidChange: catalogChanged.event,
-		materializedSessions: materialized,
-		get sessions() {
-			return f.catalog;
-		},
-		get untitledSessions() {
-			return f.drafts;
-		},
-		get state() {
-			return f.state;
-		},
+		onDidChange: catalogChanged.event, materializedSessions: materialized,
+		get sessions() { return f.catalog; }, get untitledSessions() { return f.drafts; }, get state() { return f.state; },
 	} as unknown as ISessionsManagementService;
 	const sessions = {
-		get activeSelection() {
-			return selection.get();
-		},
-		getSelection: (reader?: IReader) => {
-			const active = selection.read(reader);
-			return { activeSelection: active, visibleSelections: active ? [active] : [] };
-		},
+		get activeSelection() { return selection.get(); },
+		getSelection: (reader?: IReader) => { const active = selection.read(reader); return { activeSelection: active, visibleSelections: active ? [active] : [] }; },
 	} as unknown as ISessionsService;
 	const pages: IBrowserViewService = {
-		setContentVisibility: async () => {},
-		respondToPasswordSave: async () => {},
-		respondToPasswordFill: async () => {},
-		respondToAuthentication: async () => {},
-		setPermissions: async () => {},
-		respondToFileRequest: async () => {},
-		toggleDevTools: async () => {},
-		clearStorage: async () => {},
-		setBrowserZoomIndex: async () => {},
-		setDeviceEmulation: async () => {},
-		updateWindowConfiguration: async () => {},
-		getConsoleLogs: async () => '',
-		getSelectedText: async () => '',
-		getAccessibilityTree: async () => '',
-		findInPage: async () => {},
-		stopFindInPage: async () => {},
-		toggleElementSelection: async () => {},
-		setElementComments: async () => {},
-		toggleAreaSelection: async () => {},
-		captureScreenshot: async () => {
-			throw new Error('Unexpected screenshot');
-		},
-		getBrowserHistory: async () => ({ items: [] }),
-		deleteBrowserHistory: async () => {},
+		setContentVisibility: async () => { },
+		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
+		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
+		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getBrowserViews: async () => [...f.pages.values()],
 		getOrCreateBrowserView: async (id, options) => {
 			const existing = f.pages.get(id);
-			if (existing) {
-				return existing;
-			}
-			const info: IBrowserViewInfo = {
-				id,
-				host: { windowId: 1 },
-				owner: options.owner,
-				session: options.session,
-				state: {
-					targetId: id,
-					url: options.initialUrl,
-					title: '',
-					loading: false,
-					canGoBack: false,
-					canGoForward: false,
-					visible: false,
-				},
-			};
+			if (existing) { return existing; }
+			const info: IBrowserViewInfo = { id, host: { windowId: 1 }, owner: options.owner, session: options.session, state: { targetId: id, url: options.initialUrl, title: '', loading: false, canGoBack: false, canGoForward: false, visible: false } };
 			f.pages.set(id, info);
 			events.fire({ type: 'created', info });
 			return info;
 		},
 		getState: async id => f.pages.get(id)!.state,
-		getSharing: async () => [],
-		setSharing: async () => {},
-		respondToPermission: async () => {},
-		clearPermissions: async () => {},
-		cancelDownloads: async () => {},
-		loadURL: async () => {},
-		goBack: async () => {},
-		goForward: async () => {},
-		reload: async () => {},
-		stop: async () => {},
-		focus: async () => {},
-		layout: async () => {},
-		setVisible: async () => {},
-		destroyBrowserView: async id => {
-			f.destroyed.push(id);
-			f.pages.delete(id);
-			events.fire({ type: 'closed', targetId: id });
-		},
+		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
+		loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { }, layout: async () => { }, setVisible: async () => { },
+		destroyBrowserView: async id => { f.destroyed.push(id); f.pages.delete(id); events.fire({ type: 'closed', targetId: id }); },
 		onDidEvent: events.event,
 	};
 	const editors: IEditorService = {
 		...emptyEditorServiceState,
-		onDidActiveEditorChange: Event.None,
-		onDidVisibleEditorsChange: Event.None,
-		activeEditor: undefined,
-		visibleEditors: [],
-		focusActiveEditor: () => {},
+		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { },
 		openEditor: async input => {
 			f.opened.push(input);
-			if ('resolve' in input && typeof input.resolve === 'function') {
-				await input.resolve();
-			}
+			if ('resolve' in input && typeof input.resolve === 'function') { await input.resolve(); }
 			f.groupInputs.push(input);
 		},
 	};
 	const editorPart = {
 		onDidChangeEditors: editorEvents.event,
-		groups: [
-			{
-				inputs: f.groupInputs,
-				closeEditor: async (input: IResourceEditorInput) => {
-					f.groupInputs.splice(f.groupInputs.indexOf(input), 1);
-					return true;
-				},
-			},
-		],
+		groups: [{ inputs: f.groupInputs, closeEditor: async (input: IResourceEditorInput) => { f.groupInputs.splice(f.groupInputs.indexOf(input), 1); return true; } }],
 	} as unknown as IEditorPart;
 	const dialogs = resources.add(new DialogsModel());
 	const configuration = resources.add(new InMemoryConfigurationService());
-	const services = resources.add(
-		new InstantiationService(
-			new ServiceCollection(
-				[IConfigurationService, configuration],
-				[
-					IWorkspaceContextService,
-					{
-						onDidChangeWorkspace: Event.None,
-						onDidChangeWorkspaceFolders: Event.None,
-						onDidChangeWorkbenchState: Event.None,
-						onDidChangeWorkspaceName: Event.None,
-						getWorkspace: () => ({ id: 'browser-test', folders: [] }),
-						getWorkbenchState: () => WorkbenchState.FOLDER,
-						getWorkspaceFolder: () => null,
-					},
-				],
-				[
-					IWorkspaceTrustManagementService,
-					resources.add(
-						Object.assign(new TestWorkspaceTrustManagementService(), {
-							onDidChangeTrust: Event.None,
-							getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({
-								uri,
-								trusted: true,
-								permissions: undefined,
-							}),
-							getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }),
-						} satisfies Partial<IWorkspaceTrustManagementService>),
-					),
-				],
-				[
-					IFileService,
-					{
-						readFileBytes: async () => {
-							throw new Error('No test file configured');
-						},
-					} as unknown as IFileService,
-				],
-				[IBrowserViewService, pages],
-				[IEditorService, editors],
-				[IEditorPart, editorPart],
-				[IDialogsModel, dialogs],
-				[ITelemetryService, new NullTelemetryServiceShape()],
-				[ISessionsManagementService, management],
-				[ISessionsService, sessions],
-			),
-		),
-	);
+	const services = resources.add(new InstantiationService(new ServiceCollection(
+		[IConfigurationService, configuration],
+		[IWorkspaceContextService, {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [] }), getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null
+		}],
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>))],
+		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
+		[ITelemetryService, new NullTelemetryServiceShape()], [ISessionsManagementService, management], [ISessionsService, sessions],
+	)));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
 	services.registerInstance(IBrowserViewWorkbenchService, views);
 	const controller = resources.add(services.createInstance(SessionBrowserViewController));
 	return Object.assign(f, {
-		views,
-		controller,
-		main: pages,
-		[Symbol.dispose]: () => resources.dispose(),
-		create: (threadId?: string) =>
-			views.createBrowserView({
-				initialUrl: 'https://example.test/',
-				owner: threadId ? { type: 'agent', sessionId: threadId } : { type: 'user' },
-				session: threadId ? { scope: BrowserViewStorageScope.Agent, affinity: threadId } : { scope: BrowserViewStorageScope.Workspace },
-			}),
+		views, controller, main: pages, [Symbol.dispose]: () => resources.dispose(),
+		create: (threadId?: string) => views.createBrowserView({
+			initialUrl: 'https://example.test/',
+			owner: threadId ? { type: 'agent', sessionId: threadId } : { type: 'user' },
+			session: threadId ? { scope: BrowserViewStorageScope.Agent, affinity: threadId } : { scope: BrowserViewStorageScope.Workspace },
+		}),
 	});
 }
 

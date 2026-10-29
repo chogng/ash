@@ -1,6 +1,12 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import { CancellationToken, CancellationTokenPool, CancellationTokenSource, cancelOnDispose, throwIfCancelled } from '../../common/cancellation.js';
+import {
+	CancellationToken,
+	CancellationTokenPool,
+	CancellationTokenSource,
+	cancelOnDispose,
+	throwIfCancelled,
+} from '../../common/cancellation.js';
 import { raceCancellationError } from '../../common/async.js';
 import { errorHandler, isCancellationError, setUnexpectedErrorHandler } from '../../common/errors.js';
 import { DisposableStore, type IDisposable } from '../../common/lifecycle.js';
@@ -11,7 +17,7 @@ test('CancellationToken exposes stable none and cancelled tokens', async () => {
 	assert.equal(CancellationToken.None.isCancellationRequested, false);
 	assert.equal(CancellationToken.Cancelled.isCancellationRequested, true);
 	let cancelled = false;
-	using listener = CancellationToken.Cancelled.onCancellationRequested(() => (cancelled = true));
+	using listener = CancellationToken.Cancelled.onCancellationRequested(() => cancelled = true);
 	assert.equal(cancelled, false);
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(cancelled, true);
@@ -22,7 +28,7 @@ test('CancellationTokenSource cancels once, keeps token identity, and follows it
 	using child = new CancellationTokenSource(parent.token);
 	const token = child.token;
 	let count = 0;
-	using listener = token.onCancellationRequested(() => (count += 1));
+	using listener = token.onCancellationRequested(() => count += 1);
 
 	parent.cancel();
 	parent.cancel();
@@ -56,13 +62,10 @@ test('CancellationTokenSource propagates cancellation synchronously inside event
 
 	runWithBufferedEvents(() => {
 		parent.cancel();
-		assert.deepEqual(
-			{
-				cancelled: [parent.token, child.token, pool.token].map(token => token.isCancellationRequested),
-				notifications,
-			},
-			{ cancelled: [true, true, true], notifications: ['pool', 'child', 'parent'] },
-		);
+		assert.deepEqual({
+			cancelled: [parent.token, child.token, pool.token].map(token => token.isCancellationRequested),
+			notifications,
+		}, { cancelled: [true, true, true], notifications: ['pool', 'child', 'parent'] });
 	});
 	parent.cancel();
 	assert.deepEqual(notifications, ['pool', 'child', 'parent']);
@@ -74,14 +77,10 @@ test('failed buffered mutations cannot roll back cancellation propagation', asyn
 	const pending = raceCancellationError(new Promise<void>(() => undefined), child.token);
 	const failure = new Error('mutation failed');
 
-	assert.throws(
-		() =>
-			runWithBufferedEvents(() => {
-				parent.cancel();
-				throw failure;
-			}),
-		error => error === failure,
-	);
+	assert.throws(() => runWithBufferedEvents(() => {
+		parent.cancel();
+		throw failure;
+	}), error => error === failure);
 
 	assert.equal(child.token.isCancellationRequested, true);
 	await assert.rejects(pending, isCancellationError);
@@ -169,9 +168,7 @@ test('listener failures are reported without stopping cancellation propagation',
 	const previousHandler = errorHandler.getUnexpectedErrorHandler();
 	setUnexpectedErrorHandler(error => failures.push(error));
 	try {
-		using listener = parent.token.onCancellationRequested(() => {
-			throw failure;
-		});
+		using listener = parent.token.onCancellationRequested(() => { throw failure; });
 		using child = new CancellationTokenSource(parent.token);
 		parent.cancel();
 		assert.deepEqual([failures, child.token.isCancellationRequested], [[failure], true]);
@@ -237,14 +234,22 @@ test('raceCancellationError preserves settlement and classifies caller cancellat
 	const reason = new Error('stop waiting');
 	const pending = raceCancellationError(new Promise<number>(() => undefined), cancelled.signal, 'Module wait cancelled');
 	cancelled.abort(reason);
-	await assert.rejects(pending, error => isCancellationError(error) && error.message === 'Module wait cancelled' && error.reason === reason);
+	await assert.rejects(pending, error => (
+		isCancellationError(error) &&
+		error.message === 'Module wait cancelled' &&
+		error.reason === reason
+	));
 
 	const alreadyCancelled = new AbortController();
 	alreadyCancelled.abort('already');
-	await assert.rejects(raceCancellationError(Promise.resolve(1), alreadyCancelled.signal), error => isCancellationError(error) && error.reason === 'already');
+	await assert.rejects(raceCancellationError(Promise.resolve(1), alreadyCancelled.signal), error => (
+		isCancellationError(error) && error.reason === 'already'
+	));
 
 	using source = new CancellationTokenSource();
 	const tokenRace = raceCancellationError(new Promise<number>(() => undefined), source.token, 'Token wait cancelled');
 	source.cancel();
-	await assert.rejects(tokenRace, error => isCancellationError(error) && error.message === 'Token wait cancelled');
+	await assert.rejects(tokenRace, error => (
+		isCancellationError(error) && error.message === 'Token wait cancelled'
+	));
 });

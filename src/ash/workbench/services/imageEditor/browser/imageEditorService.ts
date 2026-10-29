@@ -5,33 +5,22 @@ import type { IImageEditorService, ImageEditorProvider, ImageEditorOptions, Imag
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 
 export abstract class ImageEditorService extends Disposable implements IImageEditorService {
-	private readonly providers = new Map<string, ImageEditorProvider & { readonly dispose: () => void }>();
-	private attachmentHandler: { readonly run: (capture: ImageEditorCapture) => Promise<void>; readonly lifetime: AbortController } | undefined;
+	private readonly providers = new Map<string, ImageEditorProvider & { readonly dispose: () => void; }>();
+	private attachmentHandler: { readonly run: (capture: ImageEditorCapture) => Promise<void>; readonly lifetime: AbortController; } | undefined;
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
-	get available(): boolean {
-		return !this.isDisposed && [...this.providers.values()].filter(provider => provider.default).length === 1;
-	}
-	get accessibilityHelp(): string {
-		return this.available ? [...this.providers.values()].find(provider => provider.default)!.accessibilityHelp : '';
-	}
+	get available(): boolean { return !this.isDisposed && [...this.providers.values()].filter(provider => provider.default).length === 1; }
+	get accessibilityHelp(): string { return this.available ? [...this.providers.values()].find(provider => provider.default)!.accessibilityHelp : ''; }
 	register(provider: ImageEditorProvider) {
 		this.assertNotDisposed();
 		if (this.providers.has(provider.id)) throw new TypeError('Duplicate image editor provider');
 		const lifetime = new AbortController();
-		const entry = {
-			...provider,
-			signal: AbortSignal.any([provider.signal, lifetime.signal]),
-			dispose: () => lifetime.abort(),
-		};
+		const entry = { ...provider, signal: AbortSignal.any([provider.signal, lifetime.signal]), dispose: () => lifetime.abort() };
 		this.providers.set(provider.id, entry);
 		this.changed.fire();
 		return toDisposable(() => {
 			entry.dispose();
-			if (this.providers.get(provider.id) === entry) {
-				this.providers.delete(provider.id);
-				this.changed.fire();
-			}
+			if (this.providers.get(provider.id) === entry) { this.providers.delete(provider.id); this.changed.fire(); }
 		});
 	}
 	async resolve(source: 'screen' | 'selection', signal: AbortSignal, id?: string) {

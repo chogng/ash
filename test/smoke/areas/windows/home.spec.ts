@@ -15,12 +15,7 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	try {
 		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
-		desktop = await launchElectron({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: testWorkspace.directory,
-			workspacePermissions: 'development',
-		});
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
 		const opened = desktop.application.waitForEvent('window');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
@@ -61,14 +56,7 @@ test('Desktop uses the selected Ash home for UI and backend startup', { tag: ['@
 	expect(await realpath(paths.home!)).toBe(await realpath(join(paths.userData, 'profile')));
 	await expect(workbench.element).toBeVisible();
 	if (target.appServerMode === 'required') {
-		await expect
-			.poll(async () =>
-				access(join(paths.home!, 'state.sqlite3')).then(
-					() => true,
-					() => false,
-				),
-			)
-			.toBe(true);
+		await expect.poll(async () => access(join(paths.home!, 'state.sqlite3')).then(() => true, () => false)).toBe(true);
 	}
 });
 
@@ -77,20 +65,11 @@ test('Desktop reopens an authorized workspace after its backend stops', { tag: [
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	try {
-		desktop = await launchElectron({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: testWorkspace.directory,
-			workspacePermissions: 'development',
-		});
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		await desktop.close();
 		desktop = undefined;
 
-		desktop = await launchElectron({
-			appServerMode: 'required',
-			userDataDirectory: directory,
-			workspaceDirectory: testWorkspace.directory,
-		});
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory });
 		const page = desktop.driver.workbench.page;
 		await expect(desktop.driver.workbench.element).toBeVisible();
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -109,17 +88,14 @@ test('Desktop reopens an authorized workspace after its backend stops', { tag: [
 });
 
 for (const packageState of ['selected', 'other'] as const) {
-	const title = packageState === 'selected' ? 'Desktop reuses a daemon from the selected development package' : 'Desktop replaces a daemon started from another package generation';
+	const title = packageState === 'selected'
+		? 'Desktop reuses a daemon from the selected development package'
+		: 'Desktop replaces a daemon started from another package generation';
 	test(title, { tag: ['@electron-app-server'] }, async ({ target }) => {
 		test.skip(packageState === 'other' && process.platform !== 'win32', 'This checks Windows package identity.');
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const profile = join(userDataDirectory, 'profile');
-		const packageLocation = {
-			appPath: resolve(import.meta.dirname, '../../../..'),
-			isPackaged: false,
-			platform: process.platform,
-			resourcesPath: '',
-		};
+		const packageLocation = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
 		const daemon = appServerDaemonExecutablePath(packageLocation);
 		const selectedBackend = appServerExecutablePath(packageLocation);
 		const existingBackend = packageState === 'selected' ? selectedBackend : join(userDataDirectory, 'other-app-server.exe');
@@ -130,9 +106,9 @@ for (const packageState of ['selected', 'other'] as const) {
 			if (packageState === 'other') {
 				await link(selectedBackend, existingBackend);
 			}
-			const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number; };
 			desktop = await launchElectron({ appServerMode: 'required', userDataDirectory });
-			const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number; };
 			expect(connected.pid === started.pid).toBe(packageState === 'selected');
 		} finally {
 			try {
@@ -145,55 +121,32 @@ for (const packageState of ['selected', 'other'] as const) {
 	});
 }
 
+
 test('startup marks record shell readiness and completed restoration in the running workbench', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.workbench.restored').length)).toBe(1);
-	const timings = await page.evaluate(() =>
-		Object.fromEntries(
-			performance
-				.getEntriesByType('mark')
-				.filter(mark => mark.name.startsWith('ash.'))
-				.map(mark => [mark.name, mark.startTime]),
-		),
-	);
+	const timings = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => [mark.name, mark.startTime])));
 	// The theme-gated shell callback runs after synchronous construction completes.
 	const workbenchStages = ['constructor-start', 'services-ready', 'constructor-done', 'shell-ready', 'views-restored', 'restored'];
 	for (const stage of workbenchStages) {
 		expect(timings[`ash.workbench.${stage}`], stage).toBeDefined();
 	}
 	for (let index = 1; index < workbenchStages.length; index++) {
-		expect(timings[`ash.workbench.${workbenchStages[index]}`], `${workbenchStages[index]} follows ${workbenchStages[index - 1]}`).toBeGreaterThanOrEqual(
-			timings[`ash.workbench.${workbenchStages[index - 1]}`]!,
-		);
+		expect(timings[`ash.workbench.${workbenchStages[index]}`], `${workbenchStages[index]} follows ${workbenchStages[index - 1]}`).toBeGreaterThanOrEqual(timings[`ash.workbench.${workbenchStages[index - 1]}`]!);
 	}
 	if (target.kind === 'electron') {
-		const desktopStages = [
-			'contributions-start',
-			'contributions-ready',
-			'open-start',
-			'api-ready',
-			'themes-ready',
-			'workspace-ready',
-			'configuration-ready',
-			'workbench-start',
-			'workbench-created',
-			'lifecycle-ready',
-		];
+		const desktopStages = ['contributions-start', 'contributions-ready', 'open-start', 'api-ready', 'themes-ready', 'workspace-ready', 'configuration-ready', 'workbench-start', 'workbench-created', 'lifecycle-ready'];
 		for (let index = 0; index < desktopStages.length; index++) {
 			const mark = timings[`ash.desktop.${desktopStages[index]}`];
 			expect(mark, desktopStages[index]).toBeDefined();
-			if (index > 0) {
-				expect(mark).toBeGreaterThanOrEqual(timings[`ash.desktop.${desktopStages[index - 1]}`]!);
-			}
+			if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.desktop.${desktopStages[index - 1]}`]!); }
 		}
 		if (target.appServerMode === 'required') {
 			const connectionStages = ['start', 'acquire-start', 'acquired', 'initialized', 'workspace-initialized'];
 			for (let index = 0; index < connectionStages.length; index++) {
 				const mark = timings[`ash.rendererApi.${connectionStages[index]}`];
 				expect(mark, connectionStages[index]).toBeDefined();
-				if (index > 0) {
-					expect(mark).toBeGreaterThanOrEqual(timings[`ash.rendererApi.${connectionStages[index - 1]}`]!);
-				}
+				if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.rendererApi.${connectionStages[index - 1]}`]!); }
 			}
 		} else {
 			expect(timings['ash.rendererApi.initialized']).toBeUndefined();

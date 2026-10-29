@@ -22,9 +22,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await expect(picker).toBeVisible();
 	if (target.appServerMode === 'required') {
 		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
-		if (await automatic.isChecked()) {
-			await automatic.press('Space');
-		}
+		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
 		await search.fill('GPT-6.1 Sol');
 		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);

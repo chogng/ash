@@ -6,7 +6,7 @@ import { isRecord } from '../common/types.js';
 export const Promises = {
 	async rename(source: string, target: string, windowsRetryTimeout: number | false = 60_000): Promise<void> {
 		const deadline = process.platform === 'win32' && windowsRetryTimeout !== false ? Date.now() + windowsRetryTimeout : 0;
-		for (;;) {
+		for (; ;) {
 			try {
 				await fs.rename(source, target);
 				return;
@@ -17,13 +17,7 @@ export const Promises = {
 				}
 				// A process can hold its working directory for its entire lifetime. Waiting
 				// the file-replacement retry budget would leave a folder rename stuck for a minute.
-				if (
-					await fs.lstat(source).then(
-						stat => stat.isDirectory(),
-						() => false,
-					)
-				)
-					throw error;
+				if (await fs.lstat(source).then(stat => stat.isDirectory(), () => false)) throw error;
 				await setTimeout(Math.min(50, deadline - Date.now()));
 			}
 		}

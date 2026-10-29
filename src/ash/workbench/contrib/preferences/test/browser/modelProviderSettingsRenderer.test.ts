@@ -14,20 +14,8 @@ import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCa
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 import { ModelProviderSettingsRenderer } from '../../browser/modelProviderSettingsRenderer.js';
 
-const provider: CustomModelProvider = {
-	id: 'custom-test',
-	name: 'Test gateway',
-	baseUrl: 'https://test.example/v1',
-	apiFormat: 'chatCompletions',
-	order: 1,
-	models: [],
-};
-const discovered = (id: string): ModelCatalogEntry => ({
-	model: { provider: provider.id, model: id },
-	displayName: id,
-	longContext: null,
-	discovered: true,
-});
+const provider: CustomModelProvider = { id: 'custom-test', name: 'Test gateway', baseUrl: 'https://test.example/v1', apiFormat: 'chatCompletions', order: 1, models: [] };
+const discovered = (id: string): ModelCatalogEntry => ({ model: { provider: provider.id, model: id }, displayName: id, longContext: null, discovered: true });
 const nextTurn = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
 function setup(resources: DisposableStore, configuration = provider) {
@@ -36,12 +24,7 @@ function setup(resources: DisposableStore, configuration = provider) {
 	const notifications = resources.add(new TestNotificationService());
 	const enabled = new Set<string>();
 	const calls = { discovery: 0, probes: [] as string[], writes: [] as CustomModelProvider[] };
-	const source = {
-		catalog: [] as readonly ModelCatalogEntry[],
-		failDiscovery: false,
-		failSave: false,
-		probe: undefined as Promise<{ type: 'passed' }> | undefined,
-	};
+	const source = { catalog: [] as readonly ModelCatalogEntry[], failDiscovery: false, failSave: false, probe: undefined as Promise<{ type: 'passed'; }> | undefined };
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 	const models: Partial<ILanguageModelsService> = {
@@ -49,30 +32,10 @@ function setup(resources: DisposableStore, configuration = provider) {
 		listModelCatalog: async () => source.catalog,
 		refreshModels: async () => source.catalog,
 		isModelVisible: model => enabled.has(model.model),
-		setModelVisible: async (model, visible) => {
-			if (visible) {
-				enabled.add(model.model);
-			} else {
-				enabled.delete(model.model);
-			}
-		},
-		saveCustomModelProvider: async value => {
-			if (source.failSave) {
-				throw new Error('Write rejected');
-			}
-			calls.writes.push(value);
-		},
-		testProviderModel: async (_provider, id) => {
-			calls.probes.push(id);
-			return source.probe ?? (id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' });
-		},
-		discoverProviderModels: async () => {
-			calls.discovery++;
-			if (source.failDiscovery) {
-				throw new Error('Endpoint unavailable');
-			}
-			return source.catalog;
-		},
+		setModelVisible: async (model, visible) => { if (visible) { enabled.add(model.model); } else { enabled.delete(model.model); } },
+		saveCustomModelProvider: async value => { if (source.failSave) { throw new Error('Write rejected'); } calls.writes.push(value); },
+		testProviderModel: async (_provider, id) => { calls.probes.push(id); return source.probe ?? (id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' }); },
+		discoverProviderModels: async () => { calls.discovery++; if (source.failDiscovery) { throw new Error('Endpoint unavailable'); } return source.catalog; },
 	};
 	services.registerInstance(ILanguageModelsService, models as ILanguageModelsService);
 	const card = resources.add(services.createInstance(ModelProviderSettingsRenderer, document, configuration, false, false));
@@ -92,10 +55,7 @@ test('Provider Test models discovers an empty table once and tests every row wit
 	assert.deepEqual(calls.probes, ['available', 'rejected']);
 	assert.deepEqual([...enabled], []);
 	assert.equal(card.domNode.querySelectorAll('tbody > tr').length, 2);
-	assert.deepEqual(
-		notifications.model.getNotifications().map(item => [item.severity, item.message]),
-		[[Severity.Warning, 'Test gateway: 1 of 2 models passed.']],
-	);
+	assert.deepEqual(notifications.model.getNotifications().map(item => [item.severity, item.message]), [[Severity.Warning, 'Test gateway: 1 of 2 models passed.']]);
 	button('Test models').click();
 	await nextTurn();
 	assert.equal(calls.discovery, 1);
@@ -104,13 +64,7 @@ test('Provider Test models discovers an empty table once and tests every row wit
 
 test('Provider refresh retains manual mappings, discovery membership and visibility after deleting a declaration', async () => {
 	using resources = new DisposableStore();
-	const { card, source, calls, enabled, button } = setup(resources, {
-		...provider,
-		models: [
-			{ id: 'available', contextWindow: 1_000_000 },
-			{ id: 'local-alias', contextWindow: 128000, upstreamModel: 'available' },
-		],
-	});
+	const { card, source, calls, enabled, button } = setup(resources, { ...provider, models: [{ id: 'available', contextWindow: 1_000_000 }, { id: 'local-alias', contextWindow: 128000, upstreamModel: 'available' }] });
 	source.catalog = [discovered('available')];
 	await card.initialize();
 	card.domNode.querySelector<HTMLInputElement>('input[aria-label="Enable available"]')!.click();
@@ -135,10 +89,7 @@ test('Provider refresh retains manual mappings, discovery membership and visibil
 
 test('Provider manual models test without discovery and a failed deletion preserves the declaration', async () => {
 	using resources = new DisposableStore();
-	const { card, calls, source, button } = setup(resources, {
-		...provider,
-		models: [{ id: 'manual', contextWindow: 128000 }],
-	});
+	const { card, calls, source, button } = setup(resources, { ...provider, models: [{ id: 'manual', contextWindow: 128000 }] });
 	button('Test models').click();
 	await nextTurn();
 	assert.equal(calls.discovery, 0);
@@ -168,11 +119,8 @@ test('Provider empty discovery stays distinct from a failed discovery and permit
 
 test('Disposing a provider form prevents its pending probe from announcing a late success', async () => {
 	using resources = new DisposableStore();
-	const { card, source, button, notifications } = setup(resources, {
-		...provider,
-		models: [{ id: 'manual', contextWindow: 128000 }],
-	});
-	const probe = new DeferredPromise<{ type: 'passed' }>();
+	const { card, source, button, notifications } = setup(resources, { ...provider, models: [{ id: 'manual', contextWindow: 128000 }] });
+	const probe = new DeferredPromise<{ type: 'passed'; }>();
 	source.probe = probe.p;
 	button('Test models').click();
 	await nextTurn();

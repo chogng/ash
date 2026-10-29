@@ -31,15 +31,10 @@ export class Editor {
 	/** Checks rendered viewport text; folded and offscreen model lines are absent. */
 	async waitForEditorContents(accept: (contents: string) => boolean): Promise<void> {
 		await expect(this.element).toBeVisible();
-		await expect
-			.poll(
-				async () => {
-					const lines = await this.lines.allTextContents();
-					return accept(lines.join('\n').replace(/\u00a0/g, ' '));
-				},
-				{ message: 'editor viewport contents match' },
-			)
-			.toBe(true);
+		await expect.poll(async () => {
+			const lines = await this.lines.allTextContents();
+			return accept(lines.join('\n').replace(/\u00a0/g, ' '));
+		}, { message: 'editor viewport contents match' }).toBe(true);
 	}
 
 	async foldAtLine(line: number): Promise<void> {

@@ -10,24 +10,15 @@ suite('language browser component', () => {
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		await page.goto('/language.html');
 		try {
-			await page.evaluate(() => {
-				window.languageIntegration.progress(10);
-				window.languageIntegration.updatePeer(10);
-			});
+			await page.evaluate(() => { window.languageIntegration.progress(10); window.languageIntegration.updatePeer(10); });
 			const progress = page.locator('[data-statusbar-item-id="status.progress"]');
 			const peer = page.locator('[data-statusbar-item-id="test.sync"]');
 			const icon = progress.locator('.ash-statusbar-progress');
 			const peerIcon = peer.locator('.ash-statusbar-progress');
 			const animation = await icon.evaluateHandle(element => element.getAnimations()[0]!);
 			const peerAnimation = await peerIcon.evaluateHandle(element => element.getAnimations()[0]!);
-			await animation.evaluate(async animation => {
-				await animation.ready;
-				animation.currentTime = 650;
-			});
-			await peerAnimation.evaluate(async animation => {
-				await animation.ready;
-				animation.currentTime = 650;
-			});
+			await animation.evaluate(async animation => { await animation.ready; animation.currentTime = 650; });
+			await peerAnimation.evaluate(async animation => { await animation.ready; animation.currentTime = 650; });
 			await progress.getByRole('button').focus();
 			for (const percentage of [20, 40, 60]) {
 				await page.evaluate(percentage => window.languageIntegration.progress(percentage), percentage);
@@ -59,19 +50,13 @@ suite('language browser component', () => {
 		try {
 			await page.evaluate(() => window.languageIntegration.progress(68));
 			const entry = page.locator('[data-statusbar-item-id="status.progress"]');
-			const action = entry.getByRole('button', {
-				name: 'rust-analyzer: Indexing (68%): Reading workspace',
-				exact: true,
-			});
+			const action = entry.getByRole('button', { name: 'rust-analyzer: Indexing (68%): Reading workspace', exact: true });
 			await expect(entry).toHaveText('rust-analyzer: Indexing (68%): Reading workspace');
 			await page.locator('.ash-workbench-statusbar').focus();
 			await page.keyboard.press('ArrowRight');
 			await expect(action).toBeFocused();
 			await page.evaluate(() => window.languageIntegration.progress(90));
-			const updated = entry.getByRole('button', {
-				name: 'rust-analyzer: Indexing (90%): Reading workspace',
-				exact: true,
-			});
+			const updated = entry.getByRole('button', { name: 'rust-analyzer: Indexing (90%): Reading workspace', exact: true });
 			await expect(updated).toBeFocused();
 			await updated.press('Enter');
 			expect(await page.evaluate(() => window.languageIntegration.revealedChannel())).toBe('rust-analyzer');
@@ -92,9 +77,7 @@ suite('language browser component', () => {
 
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
-		page.on('console', message => {
-			if (message.type() === 'error') errors.push(message.text());
-		});
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 		await page.goto('/language.html');
 		try {
 			expect(await page.evaluate(() => window.languageIntegration.registered())).toBe(false);

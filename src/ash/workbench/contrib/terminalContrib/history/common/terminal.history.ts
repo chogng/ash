@@ -11,11 +11,7 @@ export const enum TerminalHistorySettingId {
 	ShellIntegrationCommandHistory = 'terminal.integrated.shellIntegration.history',
 }
 
-const settingDescription = () =>
-	localize(
-		'terminal.history.limitDescription',
-		'Controls the number of nonce-verified commands per terminal profile and directories per workspace execution host to keep. Set to 0 to disable both histories.',
-	);
+const settingDescription = () => localize('terminal.history.limitDescription', 'Controls the number of nonce-verified commands per terminal profile and directories per workspace execution host to keep. Set to 0 to disable both histories.');
 
 /** Merged into the existing integrated terminal configuration registration. */
 export const terminalHistoryConfiguration: Readonly<Record<string, IConfigurationPropertySchema>> = {
@@ -24,22 +20,14 @@ export const terminalHistoryConfiguration: Readonly<Record<string, IConfiguratio
 		default: 100,
 		minimum: 0,
 		maximum: 10000,
-		get description() {
-			return settingDescription();
-		},
-		get markdownDescription() {
-			return settingDescription();
-		},
+		get description() { return settingDescription(); },
+		get markdownDescription() { return settingDescription(); },
 		ashSetting: {
 			valueType: 'number',
 			minimum: 0,
 			maximum: 10000,
-			get title() {
-				return localize('terminal.history.limitTitle', 'Terminal command history limit');
-			},
-			get description() {
-				return settingDescription();
-			},
+			get title() { return localize('terminal.history.limitTitle', 'Terminal command history limit'); },
+			get description() { return settingDescription(); },
 		},
 	},
 };

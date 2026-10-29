@@ -16,13 +16,11 @@ class InspectTokensController extends Disposable implements IEditorContribution 
 	constructor(private readonly editor: ICodeEditor) {
 		super();
 		this._register(editor.onDidChangeModel(() => this.widget.clear()));
-		this._register(
-			editor.onKeyDown(event => {
-				if (!this.widget.value || event.keyCode !== KeyCode.Escape) return;
-				event.stop();
-				this.widget.clear();
-			}),
-		);
+		this._register(editor.onKeyDown(event => {
+			if (!this.widget.value || event.keyCode !== KeyCode.Escape) return;
+			event.stop();
+			this.widget.clear();
+		}));
 	}
 
 	public open(): void {
@@ -111,11 +109,12 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 		const column = Math.min(position.column, Math.max(1, line.length));
 		const tokens = this.model.tokenization.getLineTokens(position.lineNumber);
 		const index = tokens.findTokenIndexAtOffset(column - 1);
-		const token = this.model.tokenization.getLanguageTokens(position.lineNumber - 1).find(candidate => candidate.range.startColumn <= column && column < candidate.range.endColumn);
+		const token = this.model.tokenization.getLanguageTokens(position.lineNumber - 1).find(candidate =>
+			candidate.range.startColumn <= column && column < candidate.range.endColumn);
 		this.sample.textContent = token ? this.model.getValueInRange(token.range) : tokens.getTokenText(index);
 		this.language.textContent = token?.languageId ?? tokens.getLanguageId(index);
 		this.scope.textContent = this.model.tokenization.hasAccurateTokensForLine(position.lineNumber)
-			? (token?.tokenType ?? standardTokenType(tokens.getStandardTokenType(index)))
+			? token?.tokenType ?? standardTokenType(tokens.getStandardTokenType(index))
 			: localize('inspectTokens.analyzing', 'Analyzing…');
 		this.modifiers.textContent = token?.modifiers.join(', ') || '—';
 		this.foreground.textContent = token?.presentation?.foreground ?? '—';
@@ -125,14 +124,10 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 
 function standardTokenType(type: StandardTokenType): string {
 	switch (type) {
-		case StandardTokenType.Comment:
-			return localize('inspectTokens.comment', 'Comment');
-		case StandardTokenType.String:
-			return localize('inspectTokens.string', 'String');
-		case StandardTokenType.RegEx:
-			return localize('inspectTokens.regex', 'Regular expression');
-		default:
-			return localize('inspectTokens.other', 'Other');
+		case StandardTokenType.Comment: return localize('inspectTokens.comment', 'Comment');
+		case StandardTokenType.String: return localize('inspectTokens.string', 'String');
+		case StandardTokenType.RegEx: return localize('inspectTokens.regex', 'Regular expression');
+		default: return localize('inspectTokens.other', 'Other');
 	}
 }
 

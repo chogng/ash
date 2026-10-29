@@ -41,72 +41,65 @@ export class EditorGutter<T extends IGutterItemInfo> extends Disposable {
 		this._register(editor.onDidChangeViewZones(invalidate));
 		this._register(editor.onDidContentSizeChange(invalidate));
 		this._register(editor.onDidChangeCursorSelection(invalidate));
-		this._register(
-			addDisposableListener(domNode, 'focusout', () =>
-				queueMicrotask(() => {
-					if (!this.isDisposed) invalidate();
-				}),
-			),
-		);
-		this._register(
-			autorun(reader => {
-				this.geometry.read(reader);
-				const visible = editor.getVisibleRanges();
-				const range = visible.length ? LineRange.join(visible.map(range => LineRange.fromRangeInclusive(range))) : new LineRange(1, 1);
-				const items = provider.getIntersectingGutterItems(range, reader);
-				const live = new Set(items.map(item => item.id));
-				for (const id of this.views.keys()) {
-					if (live.has(id)) {
-						continue;
-					}
-					this.views.deleteAndDispose(id);
+		this._register(addDisposableListener(domNode, 'focusout', () => queueMicrotask(() => {
+			if (!this.isDisposed) invalidate();
+		})));
+		this._register(autorun(reader => {
+			this.geometry.read(reader);
+			const visible = editor.getVisibleRanges();
+			const range = visible.length ? LineRange.join(visible.map(range => LineRange.fromRangeInclusive(range))) : new LineRange(1, 1);
+			const items = provider.getIntersectingGutterItems(range, reader);
+			const live = new Set(items.map(item => item.id));
+			for (const id of this.views.keys()) {
+				if (live.has(id)) {
+					continue;
 				}
-				const scrollTop = editor.getScrollTop();
-				const viewport = { start: 0, endExclusive: editor.getLayoutInfo().height };
-				// Read editor geometry before writing any positions.
-				const bounds = items.map(item => ({
-					item,
-					start: editor.getTopForLineNumber(item.range.startLineNumber, true) - scrollTop,
-					endExclusive:
-						(item.range.isEmpty ? editor.getTopForLineNumber(item.range.startLineNumber) : editor.getBottomForLineNumber(item.range.endLineNumberExclusive - 1, true)) - scrollTop,
-				}));
-				let previousNode: HTMLElement | undefined;
-				for (const { item, start, endExclusive } of bounds) {
-					let entry = this.views.get(item.id);
-					const inViewport = endExclusive > viewport.start && start < viewport.endExclusive;
-					// Menu views can prepare full-document action arguments. Do not create
-					// them for offscreen hunks, but retain a focused view until focus leaves.
-					const focused = entry?.domNode.contains(domNode.ownerDocument.activeElement) === true;
-					if (!inViewport && !focused) {
-						this.views.deleteAndDispose(item.id);
-						continue;
-					}
-					if (!entry) {
-						const target = h(domNode.ownerDocument, 'div');
-						const store = new DisposableStore();
-						store.add(appendRemoveOnDispose(domNode, target));
-						const value = observableValue(this, item);
-						let view: IGutterItemView;
-						try {
-							view = store.add(provider.createView(value, target));
-						} catch (error) {
-							store.dispose();
-							throw error;
-						}
-						entry = { ...toDisposable(() => store.dispose()), item: value, domNode: target, view };
-						this.views.set(item.id, entry);
-						// Newly visible views join source order without moving a focused sibling.
-						const nextNode = previousNode ? previousNode.nextSibling : domNode.firstChild;
-						if (nextNode !== target) domNode.insertBefore(target, nextNode);
-					} else {
-						entry.item.set(item);
-					}
-					entry.domNode.style.top = `${start}px`;
-					entry.domNode.style.height = `${Math.max(0, endExclusive - start)}px`;
-					entry.view.layout({ start, endExclusive }, viewport);
-					previousNode = entry.domNode;
+				this.views.deleteAndDispose(id);
+			}
+			const scrollTop = editor.getScrollTop();
+			const viewport = { start: 0, endExclusive: editor.getLayoutInfo().height };
+			// Read editor geometry before writing any positions.
+			const bounds = items.map(item => ({
+				item,
+				start: editor.getTopForLineNumber(item.range.startLineNumber, true) - scrollTop,
+				endExclusive: (item.range.isEmpty ? editor.getTopForLineNumber(item.range.startLineNumber) : editor.getBottomForLineNumber(item.range.endLineNumberExclusive - 1, true)) - scrollTop,
+			}));
+			let previousNode: HTMLElement | undefined;
+			for (const { item, start, endExclusive } of bounds) {
+				let entry = this.views.get(item.id);
+				const inViewport = endExclusive > viewport.start && start < viewport.endExclusive;
+				// Menu views can prepare full-document action arguments. Do not create
+				// them for offscreen hunks, but retain a focused view until focus leaves.
+				const focused = entry?.domNode.contains(domNode.ownerDocument.activeElement) === true;
+				if (!inViewport && !focused) {
+					this.views.deleteAndDispose(item.id);
+					continue;
 				}
-			}),
-		);
+				if (!entry) {
+					const target = h(domNode.ownerDocument, 'div');
+					const store = new DisposableStore();
+					store.add(appendRemoveOnDispose(domNode, target));
+					const value = observableValue(this, item);
+					let view: IGutterItemView;
+					try {
+						view = store.add(provider.createView(value, target));
+					} catch (error) {
+						store.dispose();
+						throw error;
+					}
+					entry = { ...toDisposable(() => store.dispose()), item: value, domNode: target, view };
+					this.views.set(item.id, entry);
+					// Newly visible views join source order without moving a focused sibling.
+					const nextNode = previousNode ? previousNode.nextSibling : domNode.firstChild;
+					if (nextNode !== target) domNode.insertBefore(target, nextNode);
+				} else {
+					entry.item.set(item);
+				}
+				entry.domNode.style.top = `${start}px`;
+				entry.domNode.style.height = `${Math.max(0, endExclusive - start)}px`;
+				entry.view.layout({ start, endExclusive }, viewport);
+				previousNode = entry.domNode;
+			}
+		}));
 	}
 }

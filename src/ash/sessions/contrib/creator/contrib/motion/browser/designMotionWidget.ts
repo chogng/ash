@@ -33,48 +33,23 @@ export class DesignMotionWidget extends Disposable {
 	private isActive = false;
 	private isBusy = false;
 
-	constructor(
-		ownerDocument: Document,
-		private readonly model: DesignModel,
-		private readonly commands: DocumentCommands,
-	) {
+	constructor(ownerDocument: Document, private readonly model: DesignModel, private readonly commands: DocumentCommands) {
 		super();
-		this.domNode = h(ownerDocument, 'section', {
-			className: 'ash-design-motion-widget',
-			attributes: { 'aria-label': localize('sessions.design.motionTimeline', 'Animation timeline') },
-		});
+		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-motion-widget', attributes: { 'aria-label': localize('sessions.design.motionTimeline', 'Animation timeline') } });
 		const playback = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
 		const properties = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
-		const hint = h(
-			ownerDocument,
-			'span',
-			{ className: 'ash-design-motion-hint' },
-			localize('sessions.design.motionHint', 'Select an object, add keyframes, then edit its position, rotation and opacity. Interpolation is linear.'),
-		);
-		this.playButton = this._register(
-			new Button(playback, {
-				...defaultButtonStyles,
-				label: localize('sessions.design.playMotion', 'Play'),
-				onClick: () => this.togglePlayback(),
-			}),
-		);
-		this.timeline = h(ownerDocument, 'input', {
-			properties: { type: 'range', min: '0', max: '1000', step: '1', value: '0' },
-			attributes: { 'aria-label': localize('sessions.design.motionTime', 'Animation time (ms)') },
-		});
+		const hint = h(ownerDocument, 'span', { className: 'ash-design-motion-hint' }, localize('sessions.design.motionHint', 'Select an object, add keyframes, then edit its position, rotation and opacity. Interpolation is linear.'));
+		this.playButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.playMotion', 'Play'),
+			onClick: () => this.togglePlayback(),
+		}));
+		this.timeline = h(ownerDocument, 'input', { properties: { type: 'range', min: '0', max: '1000', step: '1', value: '0' }, attributes: { 'aria-label': localize('sessions.design.motionTime', 'Animation time (ms)') } });
 		this.timeLabel = h(ownerDocument, 'span', { className: 'ash-design-motion-time' });
 		playback.append(this.timeline, this.timeLabel);
-		this.durationInput = h(ownerDocument, 'input', {
-			properties: { type: 'number', min: '1', step: '1' },
-			attributes: { 'aria-label': localize('sessions.design.motionDuration', 'Duration (ms)') },
-		});
-		this.loopInput = h(ownerDocument, 'input', {
-			properties: { type: 'checkbox' },
-			attributes: { 'aria-label': localize('sessions.design.motionLoop', 'Loop') },
-		});
-		this.frameSelect = h(ownerDocument, 'select', {
-			attributes: { 'aria-label': localize('sessions.design.keyframe', 'Keyframe') },
-		});
+		this.durationInput = h(ownerDocument, 'input', { properties: { type: 'number', min: '1', step: '1' }, attributes: { 'aria-label': localize('sessions.design.motionDuration', 'Duration (ms)') } });
+		this.loopInput = h(ownerDocument, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': localize('sessions.design.motionLoop', 'Loop') } });
+		this.frameSelect = h(ownerDocument, 'select', { attributes: { 'aria-label': localize('sessions.design.keyframe', 'Keyframe') } });
 		properties.append(
 			h(ownerDocument, 'label', {}, localize('sessions.design.motionDuration', 'Duration (ms)'), this.durationInput),
 			h(ownerDocument, 'label', {}, localize('sessions.design.motionLoop', 'Loop'), this.loopInput),
@@ -86,87 +61,52 @@ export class DesignMotionWidget extends Disposable {
 			['rotation', localize('sessions.design.motionRotation', 'Keyframe rotation')],
 			['opacity', localize('sessions.design.motionOpacity', 'Keyframe opacity')],
 		] as const) {
-			const input = h(ownerDocument, 'input', {
-				properties: { type: 'number', step: field === 'opacity' ? '0.1' : 'any' },
-				attributes: { 'aria-label': label },
-			});
-			if (field === 'opacity') {
-				input.min = '0';
-				input.max = '1';
-			}
+			const input = h(ownerDocument, 'input', { properties: { type: 'number', step: field === 'opacity' ? '0.1' : 'any' }, attributes: { 'aria-label': label } });
+			if (field === 'opacity') { input.min = '0'; input.max = '1'; }
 			properties.append(h(ownerDocument, 'label', {}, label, input));
 			this.fields.set(field, input);
-			this._register(
-				addDisposableListener(input, 'change', () => {
-					if (!input.checkValidity() || !Number.isFinite(input.valueAsNumber)) {
-						this.update(this.shape, this.isBusy);
-						return;
-					}
-					const motion = this.shape!.motion!;
-					this.commit({
-						...motion,
-						keyframes: motion.keyframes.map((frame, index) => (index === this.frameIndex ? { ...frame, [field]: input.valueAsNumber } : frame)),
-					});
-				}),
-			);
-		}
-		this.addButton = this._register(
-			new Button(playback, {
-				...defaultButtonStyles,
-				label: localize('sessions.design.addKeyframe', 'Add keyframe'),
-				onClick: () => this.addKeyframe(),
-			}),
-		);
-		this.removeButton = this._register(
-			new Button(playback, {
-				...defaultButtonStyles,
-				label: localize('sessions.design.removeKeyframe', 'Remove keyframe'),
-				onClick: () => {
-					const motion = this.shape!.motion!;
-					this.commit({
-						...motion,
-						keyframes: motion.keyframes.filter((_, index) => index !== this.frameIndex),
-					});
-				},
-			}),
-		);
-		this.clearButton = this._register(
-			new Button(playback, {
-				...defaultButtonStyles,
-				label: localize('sessions.design.clearMotion', 'Remove animation'),
-				onClick: () => {
-					const { motion, ...shape } = this.shape!;
-					this.stop();
-					this.commands.updateShape(shape);
-				},
-			}),
-		);
-		this.domNode.append(hint, playback, properties);
-		this._register(
-			addDisposableListener(this.timeline, 'input', () => {
-				this.stop();
-				this.setTime(this.timeline.valueAsNumber);
-			}),
-		);
-		this._register(
-			addDisposableListener(this.durationInput, 'change', () => {
-				if (!this.durationInput.checkValidity() || !Number.isFinite(this.durationInput.valueAsNumber)) {
-					this.update(this.shape, this.isBusy);
-					return;
-				}
-				this.commit({ ...this.shape!.motion!, duration: this.durationInput.valueAsNumber });
-			}),
-		);
-		this._register(addDisposableListener(this.loopInput, 'change', () => this.commit({ ...this.shape!.motion!, loop: this.loopInput.checked })));
-		this._register(
-			addDisposableListener(this.frameSelect, 'change', () => {
-				this.stop();
-				this.frameIndex = Number(this.frameSelect.value);
+			this._register(addDisposableListener(input, 'change', () => {
+				if (!input.checkValidity() || !Number.isFinite(input.valueAsNumber)) { this.update(this.shape, this.isBusy); return; }
 				const motion = this.shape!.motion!;
-				this.setTime(motion.keyframes[this.frameIndex].offset * motion.duration);
-				this.update(this.shape, this.isBusy);
-			}),
-		);
+				this.commit({ ...motion, keyframes: motion.keyframes.map((frame, index) => index === this.frameIndex ? { ...frame, [field]: input.valueAsNumber } : frame) });
+			}));
+		}
+		this.addButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.addKeyframe', 'Add keyframe'),
+			onClick: () => this.addKeyframe(),
+		}));
+		this.removeButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.removeKeyframe', 'Remove keyframe'),
+			onClick: () => {
+				const motion = this.shape!.motion!;
+				this.commit({ ...motion, keyframes: motion.keyframes.filter((_, index) => index !== this.frameIndex) });
+			},
+		}));
+		this.clearButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.clearMotion', 'Remove animation'),
+			onClick: () => {
+				const { motion, ...shape } = this.shape!;
+				this.stop();
+				this.commands.updateShape(shape);
+			},
+		}));
+		this.domNode.append(hint, playback, properties);
+		this._register(addDisposableListener(this.timeline, 'input', () => { this.stop(); this.setTime(this.timeline.valueAsNumber); }));
+		this._register(addDisposableListener(this.durationInput, 'change', () => {
+			if (!this.durationInput.checkValidity() || !Number.isFinite(this.durationInput.valueAsNumber)) { this.update(this.shape, this.isBusy); return; }
+			this.commit({ ...this.shape!.motion!, duration: this.durationInput.valueAsNumber });
+		}));
+		this._register(addDisposableListener(this.loopInput, 'change', () => this.commit({ ...this.shape!.motion!, loop: this.loopInput.checked })));
+		this._register(addDisposableListener(this.frameSelect, 'change', () => {
+			this.stop();
+			this.frameIndex = Number(this.frameSelect.value);
+			const motion = this.shape!.motion!;
+			this.setTime(motion.keyframes[this.frameIndex].offset * motion.duration);
+			this.update(this.shape, this.isBusy);
+		}));
 		this._register(toDisposable(() => this.stop()));
 	}
 
@@ -184,21 +124,14 @@ export class DesignMotionWidget extends Disposable {
 	public setActive(isActive: boolean): void {
 		this.isActive = isActive;
 		this.domNode.classList.toggle('visible', isActive);
-		if (!isActive) {
-			this.stop();
-			this.setTime(0);
-		}
+		if (!isActive) { this.stop(); this.setTime(0); }
 	}
 
 	public update(shape: DesignShape | undefined, isBusy: boolean): void {
-		if (this.shape?.id !== shape?.id) {
-			this.frameIndex = 0;
-		}
+		if (this.shape?.id !== shape?.id) { this.frameIndex = 0; }
 		this.shape = shape;
 		this.isBusy = isBusy;
-		if (isBusy) {
-			this.stop();
-		}
+		if (isBusy) { this.stop(); }
 		this.timeline.max = `${designMotionDuration(this.model.value.shapes)}`;
 		const motion = shape?.motion;
 		this.addButton.enabled = !!shape && !isBusy;
@@ -209,13 +142,11 @@ export class DesignMotionWidget extends Disposable {
 		this.durationInput.disabled = this.loopInput.disabled = this.frameSelect.disabled = !motion || isBusy;
 		this.durationInput.value = `${motion?.duration ?? 1000}`;
 		this.loopInput.checked = motion?.loop ?? false;
-		this.frameSelect.replaceChildren(
-			...(motion?.keyframes ?? []).map((frame, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${Math.round(frame.offset * 100)}%`)),
-		);
+		this.frameSelect.replaceChildren(...(motion?.keyframes ?? []).map((frame, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${Math.round(frame.offset * 100)}%`)));
 		this.frameSelect.value = `${this.frameIndex}`;
 		for (const [field, input] of this.fields) {
 			input.disabled = !motion || isBusy;
-			input.value = `${motion?.keyframes[this.frameIndex][field] ?? (field === 'opacity' ? 1 : (shape?.[field] ?? 0))}`;
+			input.value = `${motion?.keyframes[this.frameIndex][field] ?? (field === 'opacity' ? 1 : shape?.[field] ?? 0)}`;
 		}
 		this.timeLabel.textContent = localize('sessions.design.motionTimeValue', '{0} ms', Math.round(this.time));
 	}
@@ -233,20 +164,10 @@ export class DesignMotionWidget extends Disposable {
 		let motion = shape.motion;
 		if (!motion) {
 			const frame = sampleDesignMotion(shape, 0);
-			motion = {
-				duration: 1000,
-				loop: false,
-				keyframes: [
-					{ ...frame, offset: 0 },
-					{ ...frame, offset: 1 },
-				],
-			};
+			motion = { duration: 1000, loop: false, keyframes: [{ ...frame, offset: 0 }, { ...frame, offset: 1 }] };
 			this.frameIndex = 1;
 		} else {
-			const frame: DesignKeyframe = {
-				...sampleDesignMotion({ ...shape, motion: { ...motion, loop: false } }, this.time),
-				offset: Math.min(1, this.time / motion.duration),
-			};
+			const frame: DesignKeyframe = { ...sampleDesignMotion({ ...shape, motion: { ...motion, loop: false } }, this.time), offset: Math.min(1, this.time / motion.duration) };
 			const keyframes = [...motion.keyframes.filter(current => current.offset !== frame.offset), frame].sort((a, b) => a.offset - b.offset);
 			this.frameIndex = keyframes.indexOf(frame);
 			motion = { ...motion, keyframes };
@@ -269,35 +190,23 @@ export class DesignMotionWidget extends Disposable {
 	}
 
 	private togglePlayback(): void {
-		if (this.animationFrame !== undefined) {
-			this.stop();
-			return;
-		}
+		if (this.animationFrame !== undefined) { this.stop(); return; }
 		const window = getWindow(this.domNode);
 		const duration = designMotionDuration(this.model.value.shapes);
 		const isLooping = this.hasLoop(this.model.value.shapes);
 		const start = window.performance.now() - (this.time >= duration ? 0 : this.time);
 		this.playButton.label = localize('sessions.design.pauseMotion', 'Pause');
 		const tick = (timestamp: number): void => {
-			if (!this.isActive || !this.domNode.checkVisibility()) {
-				this.stop();
-				return;
-			}
+			if (!this.isActive || !this.domNode.checkVisibility()) { this.stop(); return; }
 			this.setTime(isLooping ? timestamp - start : Math.min(duration, timestamp - start));
-			if (!isLooping && this.time >= duration) {
-				this.stop();
-				return;
-			}
+			if (!isLooping && this.time >= duration) { this.stop(); return; }
 			this.animationFrame = window.requestAnimationFrame(tick);
 		};
 		this.animationFrame = window.requestAnimationFrame(tick);
 	}
 
 	private stop(): void {
-		if (this.animationFrame !== undefined) {
-			getWindow(this.domNode).cancelAnimationFrame(this.animationFrame);
-			this.animationFrame = undefined;
-		}
+		if (this.animationFrame !== undefined) { getWindow(this.domNode).cancelAnimationFrame(this.animationFrame); this.animationFrame = undefined; }
 		this.playButton.label = localize('sessions.design.playMotion', 'Play');
 	}
 }

@@ -11,26 +11,37 @@ export class SashSettingsController extends Disposable {
 	private readonly configurationService: IConfigurationService;
 	private readonly binding: SashSettingsBinding;
 
-	constructor(configurationService: IConfigurationService, root: HTMLElement) {
+	constructor(
+		configurationService: IConfigurationService,
+		root: HTMLElement,
+	) {
 		super();
 		this.configurationService = configurationService;
 		this.binding = this._register(new SashSettingsBinding(root));
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(SashConfiguration.size) || event.affectsConfiguration(SashConfiguration.hoverDelay)) {
-					this.apply();
-				}
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration((event) => {
+			if (
+				event.affectsConfiguration(SashConfiguration.size) ||
+				event.affectsConfiguration(SashConfiguration.hoverDelay)
+			) {
+				this.apply();
+			}
+		}));
 		this.apply();
 	}
 
 	private apply(): void {
-		const configuredSize = this.configurationService.getValue<number>(SashConfiguration.size);
+		const configuredSize = this.configurationService.getValue<number>(
+			SashConfiguration.size,
+		);
 		this.binding.update({
 			dragAreaSize: Math.max(configuredSize, MinimumDragAreaSize),
-			hoverFeedbackSize: Math.min(configuredSize, MaximumHoverFeedbackSize),
-			hoverDelay: this.configurationService.getValue<number>(SashConfiguration.hoverDelay),
+			hoverFeedbackSize: Math.min(
+				configuredSize,
+				MaximumHoverFeedbackSize,
+			),
+			hoverDelay: this.configurationService.getValue<number>(
+				SashConfiguration.hoverDelay,
+			),
 		});
 	}
 }

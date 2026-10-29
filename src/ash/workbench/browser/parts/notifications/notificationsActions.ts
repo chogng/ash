@@ -24,7 +24,7 @@ export class CopyNotificationMessageAction implements IAction {
 		readonly id: string,
 		readonly label: string,
 		@IClipboardService private readonly clipboardService: IClipboardService,
-	) {}
+	) { }
 
 	async run(notification: NotificationItem): Promise<void> {
 		await this.clipboardService.writeText(notification.message);

@@ -26,13 +26,11 @@ export class SmartSelectController extends Disposable {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza smart select dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event), true));
-		this._register(
-			editor.onDidChangeCursorSelection(event => {
-				if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') {
-					this.reset();
-				}
-			}),
-		);
+		this._register(editor.onDidChangeCursorSelection(event => {
+			if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') {
+				this.reset();
+			}
+		}));
 		this._register(toDisposable(() => this.reset()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.reset()));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.reset()));
@@ -58,7 +56,7 @@ export class SmartSelectController extends Disposable {
 				this.commitExpansion(before, this.viewport.textModel.createVersionedSnapshot(), []);
 				return;
 			}
-			const request = (this.request = new AbortController());
+			const request = this.request = new AbortController();
 			const snapshot = this.viewport.textModel.createVersionedSnapshot();
 			void this.expand(request, before, snapshot);
 		} else if (event.key === 'ArrowLeft') {
@@ -85,7 +83,7 @@ export class SmartSelectController extends Disposable {
 					return;
 				}
 				try {
-					syntaxRanges.push(...(await provider.provideSelectionRanges(context, request.signal)));
+					syntaxRanges.push(...await provider.provideSelectionRanges(context, request.signal));
 				} catch (error) {
 					if (!request.signal.aborted && !isCancellationError(error)) {
 						this.onError(error);
@@ -117,6 +115,11 @@ registerEditorContribution({
 	id: 'editor.contrib.smartSelect',
 	install: context => {
 		if (context.kind !== 'text') return;
-		return context.instantiationService.createInstance(SmartSelectController, context.controller.element, context.editor, context.view, context.onLanguageError);
+		return context.instantiationService.createInstance(SmartSelectController,
+			context.controller.element,
+			context.editor,
+			context.view,
+			context.onLanguageError,
+		);
 	},
 });

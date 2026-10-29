@@ -28,10 +28,7 @@ test('PDF annotation model updates and removes selected notes without changing o
 	const note = model.addNote(2, { x: 0.4, y: 0.5 }, 'First draft', '#ff0000', new Date('2026-08-08T00:00:00.000Z'));
 	model.updateNote(note.id, 'Reviewed', new Date('2026-08-08T00:01:00.000Z'));
 
-	assert.deepEqual(
-		model.annotations.map(annotation => (annotation.kind === 'note' ? annotation.text : undefined)),
-		['Reviewed'],
-	);
+	assert.deepEqual(model.annotations.map((annotation) => annotation.kind === 'note' ? annotation.text : undefined), ['Reviewed']);
 	model.remove(note.id);
 	assert.equal(model.annotations.length, 0);
 	model.undo();

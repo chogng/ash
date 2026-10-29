@@ -41,19 +41,15 @@ export class EmptyFileEditor extends EditorPane implements IEditorPane {
 				this.domNode.removeAttribute('aria-description');
 			}
 		};
-		this._register(
-			this.configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) {
-					updateHint();
-				}
-			}),
-		);
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) {
+				updateHint();
+			}
+		}));
 		updateHint();
 	}
-	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {}
-	public override clearInput(): void {}
-	public override layout(_dimension: IDimension): void {}
-	public override focus(): void {
-		this.domNode.focus();
-	}
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(_dimension: IDimension): void { }
+	public override focus(): void { this.domNode.focus(); }
 }

@@ -39,30 +39,10 @@ suite('Ash Code terminal dictation', () => {
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\'));
 			await expect(start).toBeEnabled();
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.new'));
-			await expect
-				.poll(() =>
-					page.evaluate(() => ({
-						active: window.ashTerminalGroupsIntegration.active(),
-						created: window.ashTerminalGroupsIntegration.metadata().created,
-					})),
-				)
-				.toEqual({ active: 'terminal-instance-2', created: 2 });
+			await expect.poll(() => page.evaluate(() => ({ active: window.ashTerminalGroupsIntegration.active(), created: window.ashTerminalGroupsIntegration.metadata().created }))).toEqual({ active: 'terminal-instance-2', created: 2 });
 			await expect(start).toHaveCount(0);
 			await page.evaluate(() => window.ashTerminalClipboardIntegration.activateOriginal());
-			await expect
-				.poll(() =>
-					page.evaluate(() => ({
-						active: window.ashTerminalGroupsIntegration.active(),
-						states: window.ashTerminalGroupsIntegration.dictation(),
-					})),
-				)
-				.toEqual({
-					active: 'terminal-instance-1',
-					states: [
-						{ id: 'terminal-instance-1', state: 'idle' },
-						{ id: 'terminal-instance-2', state: 'unavailable' },
-					],
-				});
+			await expect.poll(() => page.evaluate(() => ({ active: window.ashTerminalGroupsIntegration.active(), states: window.ashTerminalGroupsIntegration.dictation() }))).toEqual({ active: 'terminal-instance-1', states: [{ id: 'terminal-instance-1', state: 'idle' }, { id: 'terminal-instance-2', state: 'unavailable' }] });
 			await expect(start).toBeVisible();
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=clear\x1b\\'));
 			await expect(start).toHaveCount(0);
@@ -86,9 +66,7 @@ suite('Ash Code terminal dictation', () => {
 		await entry.focus();
 		await entry.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(2);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'ash code\r')))
-			.toEqual([{ terminalId: 'input-shell-2', data: 'ash code\r' }]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'ash code\r'))).toEqual([{ terminalId: 'input-shell-2', data: 'ash code\r' }]);
 		await expect(page.locator('.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.startVoice"]')).toHaveCount(0);
 	});
 });

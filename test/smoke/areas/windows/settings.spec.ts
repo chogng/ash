@@ -29,14 +29,8 @@ test('Path rule settings use editable lists and persist removal of default rules
 		await expect(dsStore).toBeFocused();
 		await dsStore.press('Tab');
 		await expect(dsStore.getByRole('button').first()).toBeFocused();
-		const editRule = dsStore.getByRole('button', {
-			name: chinese ? '编辑规则 **/.DS_Store' : 'Edit rule **/.DS_Store',
-			exact: true,
-		});
-		const removeRule = dsStore.getByRole('button', {
-			name: chinese ? '移除规则 **/.DS_Store' : 'Remove rule **/.DS_Store',
-			exact: true,
-		});
+		const editRule = dsStore.getByRole('button', { name: chinese ? '编辑规则 **/.DS_Store' : 'Edit rule **/.DS_Store', exact: true });
+		const removeRule = dsStore.getByRole('button', { name: chinese ? '移除规则 **/.DS_Store' : 'Remove rule **/.DS_Store', exact: true });
 		await expect(editRule).toHaveText('');
 		await expect(editRule.locator('[data-ash-icon-id="edit"]')).toBeVisible();
 		await expect(removeRule).toHaveText('');
@@ -86,20 +80,15 @@ test('Path rule settings use editable lists and persist removal of default rules
 		await expect.poll(saved).toEqual({ '**/*.generated.js': { when: '$(basename).ts' } });
 		if (!chinese && target.kind === 'browser') {
 			for (const [colorScheme, forcedColors, theme] of [
-				['dark', 'none', 'ash-dark'],
-				['dark', 'active', 'ash-high-contrast-dark'],
-				['light', 'active', 'ash-high-contrast-light'],
-				['light', 'none', 'ash-light'],
+				['dark', 'none', 'ash-dark'], ['dark', 'active', 'ash-high-contrast-dark'],
+				['light', 'active', 'ash-high-contrast-light'], ['light', 'none', 'ash-light'],
 			] as const) {
 				await page.emulateMedia({ colorScheme, forcedColors });
 				await expect(workbench.element).toHaveAttribute('data-color-theme', theme);
 				await rows.first().focus();
 				await expect(rows.first()).toHaveCSS('outline-style', 'solid');
 				await expect(rows.first().locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '1');
-				await testInfo.attach(`path-rules-${theme}`, {
-					body: await settings.screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(`path-rules-${theme}`, { body: await settings.screenshot(), contentType: 'image/png' });
 			}
 			await page.setViewportSize({ width: 720, height: 900 });
 			await expect(control).toBeVisible();
@@ -108,20 +97,14 @@ test('Path rule settings use editable lists and persist removal of default rules
 			await custom.press('Enter');
 			await expect(editor.getByRole('textbox').first()).toBeFocused();
 			expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-			await testInfo.attach('path-rules-narrow-editor', {
-				body: await settings.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach('path-rules-narrow-editor', { body: await settings.screenshot(), contentType: 'image/png' });
 			await editor.getByRole('textbox').first().press('Escape');
 			await page.setViewportSize({ width: 1440, height: 900 });
 		}
 		const size = await control.boundingBox();
 		expect(size!.width).toBeGreaterThan(200);
 		expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await testInfo.attach(`path-rule-settings-${chinese ? 'zh-CN' : 'en'}`, {
-			body: await control.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach(`path-rule-settings-${chinese ? 'zh-CN' : 'en'}`, { body: await control.screenshot(), contentType: 'image/png' });
 		await workbench.menus.select(application, () => control.locator('.ash-setting-item-actions-trigger').click(), [chinese ? '重置设置' : 'Reset Setting']);
 		await expect(rows).toHaveCount(6);
 		await expect.poll(saved).toBeUndefined();
@@ -153,10 +136,7 @@ test('Settings maturity labels and filters work in English and Chinese', async (
 		await expect(gpu).toBeVisible();
 		await expect(gpu.locator('.ash-settings-maturity')).toHaveText(locale === 'en' ? 'Experimental' : '实验性');
 		await expect(gpu).toHaveAccessibleDescription(locale === 'en' ? 'Experimental' : '实验性');
-		await testInfo.attach(`experimental-settings-${locale}`, {
-			body: await workbench.page.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach(`experimental-settings-${locale}`, { body: await workbench.page.screenshot(), contentType: 'image/png' });
 		await workbench.menus.select(application, () => settings.locator('.ash-settings-search-filter').press('Enter'), [locale === 'en' ? 'Stable' : '稳定']);
 		await expect(search).toHaveValue('@stable');
 		await expect(gpu).not.toBeVisible();
@@ -343,9 +323,7 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
 	await chineseSettings.locator('[data-settings-group-id="workbench"]').click();
 	await chineseSettings.locator('[data-settings-category-id="appearance"]').click();
-	await expect
-		.poll(() => colors.locator('[data-pattern-part="key"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value)))
-		.toEqual(['widget.shadow', 'sessions.inputShadow', 'hover.shadow']);
+	await expect.poll(() => colors.locator('[data-pattern-part="key"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['widget.shadow', 'sessions.inputShadow', 'hover.shadow']);
 	await expect(colors).toContainText('用方向键选择建议，再按 Enter 确认');
 	await colors.locator('.ash-string-map-row').nth(1).getByRole('button').click();
 	await colors.getByRole('button', { name: '添加颜色', exact: true }).click();
@@ -445,11 +423,8 @@ test('Dictation settings separate local models and cloud API connections with ke
 	await page.getByRole('option', { name: 'Cloud', exact: true }).click();
 	await expect(grid).toHaveCount(0);
 	await expect(settings.getByRole('combobox', { name: 'Cloud dictation provider' })).toBeVisible();
-	if (target.appServerMode === 'required') {
-		await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible();
-	} else {
-		await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible();
-	}
+	if (target.appServerMode === 'required') { await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible(); }
+	else { await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible(); }
 	await settings.getByRole('button', { name: 'Manage API connections' }).click();
 	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
@@ -495,9 +470,7 @@ test('Local model management reports backend import errors and unavailable captu
 test('Desktop Voice imports after Settings closes and shares model deletion with Sessions', { tag: '@electron-app-server' }, async ({ application, target, workbench }) => {
 	const source = process.env.ASH_DICTATION_MODEL_TEST_SOURCE;
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || !source, 'Requires the connected desktop and a prepared voice model fixture');
-	if (!source || !('windows' in application)) {
-		return;
-	}
+	if (!source || !('windows' in application)) { return; }
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -664,7 +637,9 @@ test('Editor settings have separate pages with keyboard navigation and global se
 		['editor-files', 'files.autoSave'],
 	]) {
 		await workbench.settingsEditor.selectEditorCategory(category!);
-		const control = category === 'editor-language' ? settings.locator(`[data-settings-item-id="${setting}"]`) : settings.locator(`[data-configuration-key="${setting}"]`);
+		const control = category === 'editor-language'
+			? settings.locator(`[data-settings-item-id="${setting}"]`)
+			: settings.locator(`[data-configuration-key="${setting}"]`);
 		await expect(control).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCount(0);
 	}
@@ -700,10 +675,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 
 	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Tabs and groups');
-	for (const [category, key] of [
-		['editor-opening', 'workbench.editor.showTabs'],
-		['editor-files', 'workbench.editor.defaultBinaryEditor'],
-	]) {
+	for (const [category, key] of [['editor-opening', 'workbench.editor.showTabs'], ['editor-files', 'workbench.editor.defaultBinaryEditor']]) {
 		await workbench.settingsEditor.selectEditorCategory(category!);
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
@@ -733,9 +705,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	}
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="startup"]').click();
-	const startupNavigationRow = page.locator('.ash-tree-row', {
-		has: page.locator('[data-settings-category-id="startup"]'),
-	});
+	const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
 	await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
 	await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
 	await expect(rootTitle).toBeHidden();
@@ -793,46 +763,42 @@ test('File opening settings save through their controls and survive reloading th
 	await expect(threshold).toHaveValue('16');
 });
 
-test(
-	'editor settings apply immediately, persist after reload and reset to their default',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ application, target, workbench, reloadWorkbench }) => {
-		let page = workbench.page;
-		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-		let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
-		await expect(numbers.first()).toHaveText('1');
-		let settings = workbench.settingsEditor;
-		await settings.openUserSettingsUI();
-		await settings.selectEditorCategory('editor-display');
-		await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
-		let row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
-		let control = row.getByRole('switch');
-		await expect(control).toBeChecked();
-		await control.press('Space');
-		await expect(control).not.toBeChecked();
-		await expect(control).not.toHaveAttribute('aria-busy', 'true');
-		await settings.element.locator('.ash-modal-editor-close').click();
-		await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
-		await expect(numbers).toHaveCount(0);
-		({ application, workbench } = await reloadWorkbench());
-		page = workbench.page;
-		numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
-		settings = workbench.settingsEditor;
-		row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
-		control = row.getByRole('switch');
-		await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
-		await expect(numbers).toHaveCount(0);
-		await settings.openUserSettingsUI();
-		await settings.selectEditorCategory('editor-display');
-		await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
-		await expect(control).not.toBeChecked();
-		await row.hover();
-		await workbench.menus.select(application, () => row.locator('.ash-setting-item-actions-trigger').click(), ['Reset Setting']);
-		await expect(control).toBeChecked();
-		await settings.element.locator('.ash-modal-editor-close').click();
-		await expect(numbers.first()).toHaveText('1');
-	},
-);
+test('editor settings apply immediately, persist after reload and reset to their default', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, reloadWorkbench }) => {
+	let page = workbench.page;
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
+	await expect(numbers.first()).toHaveText('1');
+	let settings = workbench.settingsEditor;
+	await settings.openUserSettingsUI();
+	await settings.selectEditorCategory('editor-display');
+	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
+	let row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
+	let control = row.getByRole('switch');
+	await expect(control).toBeChecked();
+	await control.press('Space');
+	await expect(control).not.toBeChecked();
+	await expect(control).not.toHaveAttribute('aria-busy', 'true');
+	await settings.element.locator('.ash-modal-editor-close').click();
+	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
+	await expect(numbers).toHaveCount(0);
+	({ application, workbench } = await reloadWorkbench());
+	page = workbench.page;
+	numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
+	settings = workbench.settingsEditor;
+	row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
+	control = row.getByRole('switch');
+	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
+	await expect(numbers).toHaveCount(0);
+	await settings.openUserSettingsUI();
+	await settings.selectEditorCategory('editor-display');
+	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
+	await expect(control).not.toBeChecked();
+	await row.hover();
+	await workbench.menus.select(application, () => row.locator('.ash-setting-item-actions-trigger').click(), ['Reset Setting']);
+	await expect(control).toBeChecked();
+	await settings.element.locator('.ash-modal-editor-close').click();
+	await expect(numbers.first()).toHaveText('1');
+});
 
 // Selectable built-in themes are contributed by the real extension host.
 test('Changing the color theme does not add a modified marker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
@@ -890,13 +856,13 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 	await page.evaluate(() => {
 		const row = document.querySelector<HTMLElement>('[data-settings-item-id="accessibility.verbosity.memories"]')!;
 		const indicator = row.querySelector<HTMLElement>('.ash-settings-indicators')!;
-		const measurements: { pending: boolean; height: number }[] = [];
+		const measurements: { pending: boolean; height: number; }[] = [];
 		const sample = () => measurements.push({ pending: !indicator.hidden, height: row.getBoundingClientRect().height });
 		const observer = new MutationObserver(sample);
 		observer.observe(indicator, { attributes: true, childList: true, subtree: true });
 		sample();
-		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver }).settingRowMeasurements = measurements;
-		(window as Window & { settingRowObserver?: MutationObserver }).settingRowObserver = observer;
+		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver; }).settingRowMeasurements = measurements;
+		(window as Window & { settingRowObserver?: MutationObserver; }).settingRowObserver = observer;
 	});
 	for (let index = 0; index < 4; index++) {
 		await row.locator('.ash-switch-track').click();
@@ -904,10 +870,7 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 		await expect(row.locator('.ash-settings-indicators')).toBeHidden();
 	}
 	const measurements = await page.evaluate(() => {
-		const state = window as Window & {
-			settingRowMeasurements?: { pending: boolean; height: number }[];
-			settingRowObserver?: MutationObserver;
-		};
+		const state = window as Window & { settingRowMeasurements?: { pending: boolean; height: number; }[]; settingRowObserver?: MutationObserver; };
 		state.settingRowObserver!.disconnect();
 		return state.settingRowMeasurements!;
 	});
@@ -990,12 +953,7 @@ test.describe('Manage menu', () => {
 		expect(tooltipBounds!.x).toBeGreaterThanOrEqual(buttonBounds!.x + buttonBounds!.width);
 		const items = await workbench.menus.inspect(application, () => manageButton.click());
 		expect(items.map(item => item.label)).toEqual([
-			expect.stringMatching(/^Command Palette/),
-			expect.stringMatching(/^Settings/),
-			'Extensions',
-			'Keyboard Shortcuts',
-			expect.stringMatching(/^Run Task/),
-			'Themes',
+			expect.stringMatching(/^Command Palette/), expect.stringMatching(/^Settings/), 'Extensions', 'Keyboard Shortcuts', expect.stringMatching(/^Run Task/), 'Themes',
 			...(target.kind === 'electron' ? ['Check for Updates...'] : []),
 		]);
 		await workbench.menus.select(application, () => manageButton.click(), ['Settings']);
@@ -1033,9 +991,7 @@ test.describe('Manage menu', () => {
 		expect(Math.abs(popupBounds!.x + popupBounds!.width - autoFetchBounds!.x - autoFetchBounds!.width)).toBeLessThanOrEqual(1);
 		await page.keyboard.press('Escape');
 		await page.locator('[data-settings-group-id="workbench"]').click();
-		const appearanceRow = page.locator('.ash-tree-row', {
-			has: page.locator('[data-settings-category-id="appearance"]'),
-		});
+		const appearanceRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="appearance"]') });
 		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
@@ -1045,12 +1001,8 @@ test.describe('Manage menu', () => {
 			await expect(card).toHaveCSS('border-radius', '8px');
 		}
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
-		const themeGroup = appearanceGroups.filter({
-			has: page.getByRole('heading', { name: 'Color theme', exact: true }),
-		});
-		const appearanceSettings = themeGroup.locator('.ash-configuration-setting').filter({
-			has: page.locator('[data-configuration-key="workbench.colorTheme"], [data-configuration-key="workbench.iconTheme"], [data-configuration-key="workbench.productIconTheme"]'),
-		});
+		const themeGroup = appearanceGroups.filter({ has: page.getByRole('heading', { name: 'Color theme', exact: true }) });
+		const appearanceSettings = themeGroup.locator('.ash-configuration-setting').filter({ has: page.locator('[data-configuration-key="workbench.colorTheme"], [data-configuration-key="workbench.iconTheme"], [data-configuration-key="workbench.productIconTheme"]') });
 		await expect(appearanceSettings).toHaveCount(3);
 		for (const setting of await appearanceSettings.all()) {
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
@@ -1113,9 +1065,7 @@ test.describe('Manage menu', () => {
 	test('Manage menu starts a desktop update check', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 		const page = workbench.page;
 		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), ['Check for Updates...']);
-		await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({
-			timeout: 45_000,
-		});
+		await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
 		await expect(page.getByText('Checking for updates...')).toHaveCount(0);
 	});
 

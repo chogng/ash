@@ -16,11 +16,7 @@ export class TextureAtlasSlabAllocator implements ITextureAtlasAllocator {
 	private rowHeight = 0;
 	private nextIndex = 0;
 
-	constructor(
-		private readonly canvas: OffscreenCanvas,
-		private readonly pageIndex: number,
-		options: TextureAtlasSlabAllocatorOptions = {},
-	) {
+	constructor(private readonly canvas: OffscreenCanvas, private readonly pageIndex: number, options: TextureAtlasSlabAllocatorOptions = {}) {
 		this.context = ensureNonNullable(canvas.getContext('2d', { willReadFrequently: true }));
 		this.minimumSlabSize = options.minimumSlabSize ?? 8;
 	}

@@ -50,24 +50,16 @@ export function checkStyles(files: readonly string[], validator: IValidator = ge
 		};
 		validator(content, (variable, offset) => report(offset, `Unknown CSS variable ${variable}`));
 		const rootHas = findRootAnchoredHas(content);
-		if (rootHas !== undefined) {
-			report(rootHas, 'Root-anchored :has() causes page-wide style invalidation; project state through a class owned by the component.');
-		}
+		if (rootHas !== undefined) { report(rootHas, 'Root-anchored :has() causes page-wide style invalidation; project state through a class owned by the component.'); }
 		const classSubstring = findClassAttributeSubstringSelector(content);
-		if (classSubstring !== undefined) {
-			report(classSubstring, 'Class attribute substring selectors react to unrelated class changes; select a stable class.');
-		}
+		if (classSubstring !== undefined) { report(classSubstring, 'Class attribute substring selectors react to unrelated class changes; select a stable class.'); }
 		if (/^src\/ash\/(?:base|platform|editor)\//.test(name)) {
 			const workbenchRoot = findWorkbenchSelector(content);
-			if (workbenchRoot !== undefined) {
-				report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.');
-			}
+			if (workbenchRoot !== undefined) { report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.'); }
 		}
 		if (/^src\/ash\/(?:base|platform|editor|workbench)\//.test(name)) {
 			const sessionsReference = findSessionsReference(content);
-			if (sessionsReference !== undefined) {
-				report(sessionsReference, 'Shared CSS must not depend on Sessions classes or variables; put Agent Window presentations in src/ash/sessions.');
-			}
+			if (sessionsReference !== undefined) { report(sessionsReference, 'Shared CSS must not depend on Sessions classes or variables; put Agent Window presentations in src/ash/sessions.'); }
 		}
 	}
 	return errors;
@@ -100,9 +92,7 @@ export function stylelint(sources?: readonly string[]): number {
 	}
 	console.log(`Stylelint: checked ${files.length} CSS files; ${errors.length} errors; ${suggestions.length} design suggestions.`);
 	if (errors.some(error => error.includes('Unknown CSS variable'))) {
-		console.error(
-			'Registered colors and sizes belong in build/lib/stylelint/ash-known-variables.json. Run pnpm stylelint:update after changing token registrations; review other variables against their defining owner.',
-		);
+		console.error('Registered colors and sizes belong in build/lib/stylelint/ash-known-variables.json. Run pnpm stylelint:update after changing token registrations; review other variables against their defining owner.');
 	}
 	return errors.length ? 1 : 0;
 }

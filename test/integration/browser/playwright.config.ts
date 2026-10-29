@@ -28,46 +28,21 @@ export default defineConfig({
 	projects: [
 		{ name: 'chromium', testIgnore: 'gpuText.integration.spec.ts', use: { browserName: 'chromium' } },
 		{
-			name: 'chrome-gpu',
-			testMatch: 'gpuText.integration.spec.ts',
-			use: {
-				browserName: 'chromium',
-				channel: 'chrome',
-				deviceScaleFactor: 1.25,
+			name: 'chrome-gpu', testMatch: 'gpuText.integration.spec.ts', use: {
+				browserName: 'chromium', channel: 'chrome', deviceScaleFactor: 1.25,
 				// Hosted Linux runners have no GPU. Exercise Dawn's real rendering path
 				// with its software Vulkan adapter; local runs keep their hardware adapter.
-				launchOptions:
-					process.env.CI && process.platform === 'linux'
-						? {
-								args: [
-									'--enable-unsafe-webgpu',
-									'--use-webgpu-adapter=swiftshader',
-									'--use-vulkan=swiftshader',
-									'--enable-features=Vulkan',
-									'--use-angle=vulkan',
-									'--disable-vulkan-surface',
-								],
-							}
-						: {},
+				launchOptions: process.env.CI && process.platform === 'linux' ? {
+					args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-vulkan=swiftshader', '--enable-features=Vulkan', '--use-angle=vulkan', '--disable-vulkan-surface'],
+				} : {},
 			},
 		},
 	],
-	webServer: process.env.ASH_EDITOR_BROWSER_EXTERNAL_SERVER
-		? undefined
-		: {
-				command: 'node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../build/desktop/launch/web.ts ../../../.build/desktop/editor-browser 5185',
-				url: 'http://127.0.0.1:5185/textModel.html',
-				reuseExistingServer: false,
-				timeout: 120_000,
-			},
-	reporter: [
-		['list'],
-		[
-			'html',
-			{
-				outputFolder: runDirectory ? resolve(runDirectory, 'report') : '../../../.build/desktop/playwright/editor-report',
-				open: 'never',
-			},
-		],
-	],
+	webServer: process.env.ASH_EDITOR_BROWSER_EXTERNAL_SERVER ? undefined : {
+		command: 'node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../build/desktop/launch/web.ts ../../../.build/desktop/editor-browser 5185',
+		url: 'http://127.0.0.1:5185/textModel.html',
+		reuseExistingServer: false,
+		timeout: 120_000,
+	},
+	reporter: [['list'], ['html', { outputFolder: runDirectory ? resolve(runDirectory, 'report') : '../../../.build/desktop/playwright/editor-report', open: 'never' }]],
 });

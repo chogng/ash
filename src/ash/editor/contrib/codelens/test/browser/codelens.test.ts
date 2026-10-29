@@ -8,15 +8,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	type IStorageService,
-	type IStorageValueChangeEvent,
-	type IWillSaveStateEvent,
-	StorageScope,
-	StorageTarget,
-	type StorageValue,
-	WillSaveStateReason,
-} from '../../../../../platform/storage/common/storage.js';
+import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../../browser/editorBrowser.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -41,10 +33,10 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	let disposedLists = 0;
 	const primary: CodeLensProvider = {
 		provideCodeLenses: () => ({
-			lenses: [lens(1, 4, undefined, 'primary-deferred'), lens(0, 2, command('primary.immediate', 'Primary'))],
-			dispose: () => {
-				disposedLists += 1;
-			},
+			lenses: [
+				lens(1, 4, undefined, 'primary-deferred'),
+				lens(0, 2, command('primary.immediate', 'Primary')),
+			], dispose: () => { disposedLists += 1; }
 		}),
 		resolveCodeLens: (_model, value) => {
 			primaryResolveCount += 1;
@@ -59,9 +51,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 		},
 	};
 	const broken: CodeLensProvider = {
-		provideCodeLenses: () => {
-			throw new Error('broken provider');
-		},
+		provideCodeLenses: () => { throw new Error('broken provider'); },
 	};
 	using primaryRegistration = providers.register('typescript', primary);
 	using secondaryRegistration = providers.register('typescript', secondary);
@@ -71,10 +61,11 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	errorHandler.setUnexpectedErrorHandler(error => errors.push(error));
 	const result = await getCodeLensModel(providers, model, CancellationToken.None).finally(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 
-	assert.deepEqual(
-		result.lenses.map(item => item.symbol.command?.id ?? item.symbol.id),
-		['primary.immediate', 'secondary.immediate', 'primary-deferred'],
-	);
+	assert.deepEqual(result.lenses.map(item => item.symbol.command?.id ?? item.symbol.id), [
+		'primary.immediate',
+		'secondary.immediate',
+		'primary-deferred',
+	]);
 	assert.equal(result.lenses[2]!.provider, primary);
 	assert.equal(errors.length, 1);
 	const deferred = result.lenses[2]!;
@@ -99,7 +90,10 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 		provideCodeLenses: (_model, token) => {
 			providerToken = token;
 			return {
-				lenses: [lens(1, 0, command('immediate', 'Immediate')), lens(1, 5, undefined, 'deferred')],
+				lenses: [
+					lens(1, 0, command('immediate', 'Immediate')),
+					lens(1, 5, undefined, 'deferred'),
+				]
 			};
 		},
 		resolveCodeLens: (_model, value) => {
@@ -127,25 +121,12 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	assert.equal(viewport.domNode.domNode.querySelectorAll('.stanza-editor-codelens').length, 1);
 	assert.equal(widget.getAttribute('aria-label'), 'CodeLens commands');
 	assert.equal(widget.style.top, '20px');
-	assert.equal(viewport.getPositionContentCoordinates(new Position(1 + 1, 0 + 1)).top, 34);
-	assert.deepEqual(
-		[...widget.querySelectorAll('button')].map(button => button.textContent),
-		['Immediate', 'Deferred'],
-	);
+	assert.equal(viewport.getPositionContentCoordinates(new Position((1) + 1, (0) + 1)).top, 34);
+	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Deferred']);
 	assert.equal(resolveCount, 1);
 	let mouseDown: IEditorMouseEvent | undefined;
-	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => {
-		mouseDown = event;
-	});
-	widget.querySelector('button')!.dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', {
-			bubbles: true,
-			cancelable: true,
-			button: 2,
-			buttons: 2,
-			clientX: 80,
-		}),
-	);
+	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => { mouseDown = event; });
+	widget.querySelector('button')!.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: 80 }));
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	viewport.layout({ width: 320, height: 60 });
 	viewport.render(true, false);
@@ -161,10 +142,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	await contribution.getModel();
 	widget = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-codelens');
 	assert.equal(widget, initialWidget);
-	assert.deepEqual(
-		[...widget.querySelectorAll('button')].map(button => button.textContent),
-		['Immediate', 'Updated'],
-	);
+	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Updated']);
 	assert.equal(resolveCount, 2);
 
 	contribution.dispose();
@@ -175,11 +153,9 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 
 test('CodeLens model waits for every visible resolve batch in the current request', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
-	using model = new TextModel(Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'), {
-		languageId: 'typescript',
-	});
+	using model = new TextModel(Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'), { languageId: 'typescript' });
 	const providers = new LanguageFeatureRegistry<CodeLensProvider>();
-	const requests: Array<{ readonly value: CodeLens; readonly resolve: (value: CodeLens) => void }> = [];
+	const requests: Array<{ readonly value: CodeLens; readonly resolve: (value: CodeLens) => void; }> = [];
 	using registration = providers.register('typescript', {
 		provideCodeLenses: () => ({ lenses: [lens(0, 0, undefined, 'first'), lens(10, 0, undefined, 'second')] }),
 		resolveCodeLens: (_model, value) => new Promise(resolve => requests.push({ value, resolve })),
@@ -198,33 +174,27 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 	await waitFor(() => requests.length === 2);
 	const currentModel = contribution.getModel();
 	let settled = false;
-	void currentModel.then(() => {
-		settled = true;
-	});
+	void currentModel.then(() => { settled = true; });
 	requests[1]!.resolve({ ...requests[1]!.value, command: command('second', 'Second') });
 	await Promise.resolve();
 	await Promise.resolve();
 	assert.equal(settled, false);
 
 	requests[0]!.resolve({ ...requests[0]!.value, command: command('first', 'First') });
-	assert.deepEqual(
-		(await currentModel).lenses.map(item => item.symbol.command?.id),
-		['first', 'second'],
-	);
+	assert.deepEqual((await currentModel).lenses.map(item => item.symbol.command?.id), ['first', 'second']);
 	dom.window.close();
 });
 
 test('CodeLens cache retains labels without executable commands and rejects a different line count', () => {
 	const resource = URI.parse('file:///cached.ts');
-	const provider: CodeLensProvider = { provideCodeLenses: () => ({ lenses: [] }) };
+	const provider: CodeLensProvider = {
+		provideCodeLenses: () => ({ lenses: [] }),
+	};
 	const codeLensModel = modelFrom(provider, lens(1, 0, command('source.run', 'Run')));
 	try {
 		codeLensCache.put(resource, 2, codeLensModel);
 
-		assert.deepEqual(
-			codeLensCache.get(resource, 2)?.lenses.map(item => item.symbol.command),
-			[{ id: '', title: 'Run' }],
-		);
+		assert.deepEqual(codeLensCache.get(resource, 2)?.lenses.map(item => item.symbol.command), [{ id: '', title: 'Run' }]);
 		assert.equal(codeLensCache.get(resource, 3), undefined);
 	} finally {
 		codeLensCache.delete(resource);
@@ -249,17 +219,13 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 		using secondModel = new TextModel('first\nsecond', { languageId: 'typescript' });
 		const secondProviders = new LanguageFeatureRegistry<CodeLensProvider>();
 		let provideFreshLenses: ((value: readonly ReturnType<typeof lens>[]) => void) | undefined;
-		const freshLenses = new Promise<readonly ReturnType<typeof lens>[]>(resolve => {
-			provideFreshLenses = resolve;
-		});
+		const freshLenses = new Promise<readonly ReturnType<typeof lens>[]>(resolve => { provideFreshLenses = resolve; });
 		using secondRegistration = secondProviders.register('typescript', {
 			provideCodeLenses: async () => ({ lenses: await freshLenses }),
 		});
 		using secondViewport = createViewport(secondDom, secondModel);
 		const executions: string[] = [];
-		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, codeLensCache, resource, id => {
-			executions.push(id);
-		});
+		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, codeLensCache, resource, id => { executions.push(id); });
 
 		const cachedCommand = requiredElement<HTMLElement>(secondViewport.domNode.domNode, '.stanza-editor-codelens-command');
 		assert.deepEqual({ tagName: cachedCommand.tagName, title: cachedCommand.textContent }, { tagName: 'SPAN', title: 'Cached' });
@@ -313,13 +279,9 @@ test('CodeLens cache persists workspace line positions without command data', ()
 	});
 	let binding: ReturnType<CodeLensCache['bindStorage']> | undefined = codeLensCache.bindStorage(storage);
 	try {
-		assert.deepEqual(
-			codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({
-				lineIndex: item.symbol.range.startLineNumber - 1,
-				command: item.symbol.command,
-			})),
-			[{ lineIndex: 2, command: undefined }],
-		);
+		assert.deepEqual(codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({ lineIndex: item.symbol.range.startLineNumber - 1, command: item.symbol.command })), [
+			{ lineIndex: 2, command: undefined },
+		]);
 		const restoredDom = new JSDOM('<!doctype html><body><main></main></body>');
 		using restoredModel = new TextModel('first\nsecond\nthird', { languageId: 'typescript' });
 		const restoredProviders = new LanguageFeatureRegistry<CodeLensProvider>();
@@ -333,20 +295,17 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, codeLensCache, restoredResource, undefined);
 		restoredViewport.render(true, false);
 		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.domNode.domNode, '.stanza-editor-codelens');
-		assert.deepEqual(
-			{
-				hidden: restoredWidget.hidden,
-				zoneTop: restoredWidget.style.top,
-				thirdLineTop: restoredViewport.getPositionContentCoordinates(new Position(2 + 1, 0 + 1)).top,
-				contentHeight: restoredViewport.viewportLayout.contentSize.height,
-			},
-			{
-				hidden: true,
-				zoneTop: '0px',
-				thirdLineTop: 54,
-				contentHeight: 74,
-			},
-		);
+		assert.deepEqual({
+			hidden: restoredWidget.hidden,
+			zoneTop: restoredWidget.style.top,
+			thirdLineTop: restoredViewport.getPositionContentCoordinates(new Position((2) + 1, (0) + 1)).top,
+			contentHeight: restoredViewport.viewportLayout.contentSize.height,
+		}, {
+			hidden: true,
+			zoneTop: '0px',
+			thirdLineTop: 54,
+			contentHeight: 74,
+		});
 		restoredDom.window.close();
 
 		const provider: CodeLensProvider = { provideCodeLenses: () => ({ lenses: [] }) };
@@ -359,17 +318,11 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			[storedResource.toString()]: { lineCount: 2, lines: [2] },
 		});
 		assert.equal(serialized.includes('source.run') || serialized.includes('Run'), false);
-		storage.fireExternalChange(
-			'codelens/cache2',
-			JSON.stringify({
-				[switchedResource.toString()]: { lineCount: 1, lines: [1] },
-			}),
-		);
+		storage.fireExternalChange('codelens/cache2', JSON.stringify({
+			[switchedResource.toString()]: { lineCount: 1, lines: [1] },
+		}));
 		assert.equal(codeLensCache.get(storedResource, 2), undefined);
-		assert.deepEqual(
-			codeLensCache.get(switchedResource, 1)?.lenses.map(item => item.symbol.range.startLineNumber),
-			[1],
-		);
+		assert.deepEqual(codeLensCache.get(switchedResource, 1)?.lenses.map(item => item.symbol.range.startLineNumber), [1]);
 
 		codeLensCache.put(closingResource, 1, modelFrom(provider, lens(0, 0, command('closing.run', 'Closing'))));
 		binding.dispose();
@@ -385,7 +338,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 });
 
 function lens(lineIndex: number, columnIndex: number, value?: ReturnType<typeof command>, id?: string) {
-	const position = new Position(lineIndex + 1, columnIndex + 1);
+	const position = new Position((lineIndex) + 1, (columnIndex) + 1);
 	return {
 		range: Range.fromPositions(position),
 		...(value ? { command: value } : {}),

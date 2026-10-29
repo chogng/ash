@@ -22,17 +22,11 @@ test('in-memory change events index exact sections and descendants without match
 	await service.updateValue('editorial.enabled', false);
 
 	const sections = ['editor', 'editor.options', 'editor.option', 'editor.options.fontSize', 'editorial', '', 'editor.', 'Editor'];
-	assert.deepEqual(
-		events.map(event => sections.map(section => event.affectsConfiguration(section))),
-		[
-			[true, true, false, false, false, false, false, false],
-			[false, false, false, false, true, false, false, false],
-		],
-	);
-	assert.deepEqual(
-		events.map(event => [...event.affectedKeys]),
-		[['editor.options'], ['editorial.enabled']],
-	);
+	assert.deepEqual(events.map(event => sections.map(section => event.affectsConfiguration(section))), [
+		[true, true, false, false, false, false, false, false],
+		[false, false, false, false, true, false, false, false],
+	]);
+	assert.deepEqual(events.map(event => [...event.affectedKeys]), [['editor.options'], ['editorial.enabled']]);
 	assert.equal(events[0]!.affectsConfiguration('editor'), true, 'an older event retains its own index');
 });
 
@@ -64,10 +58,7 @@ test('in-memory configuration resolves base and language override values', async
 	assert.equal(service.getValue(tabSize), 8);
 	assert.equal(service.getValue(tabSize, { overrideIdentifier: 'typescript' }), 2);
 	assert.equal(service.getValue(tabSize, { overrideIdentifier: 'javascript' }), 8);
-	assert.deepEqual(service.getValue('editor', { overrideIdentifier: 'typescript' }), {
-		tabSize: 2,
-		insertSpaces: true,
-	});
+	assert.deepEqual(service.getValue('editor', { overrideIdentifier: 'typescript' }), { tabSize: 2, insertSpaces: true });
 	assert.deepEqual(events, [
 		{
 			source: ConfigurationTarget.MEMORY,
@@ -106,7 +97,9 @@ test('in-memory configuration validates writes and reports canonical data', asyn
 	await assert.rejects(service.updateValue('editor.unknown', 2), /not registered/u);
 	await assert.rejects(service.updateValue(tabSize, 0), /positive integer/u);
 	await service.updateValue(tabSize, 6, { overrideIdentifiers: ['typescript', 'typescript', 'javascript'] });
-	assert.deepEqual(service.inspect<number>(tabSize, { overrideIdentifier: 'typescript' }).memory?.overrides, [{ identifiers: ['javascript', 'typescript'], value: 6 }]);
+	assert.deepEqual(service.inspect<number>(tabSize, { overrideIdentifier: 'typescript' }).memory?.overrides, [
+		{ identifiers: ['javascript', 'typescript'], value: 6 },
+	]);
 
 	assert.deepEqual(service.keys(), {
 		default: ['editor.tabSize'],
@@ -137,10 +130,7 @@ test('in-memory configuration rejects unsupported owners and compares effective 
 	let affectsTypeScript: boolean | undefined;
 	let affectsJavaScript: boolean | undefined;
 	using listener = service.onDidChangeConfiguration(event => {
-		affectsTypeScript = event.affectsConfiguration(tabSize, {
-			overrideIdentifier: 'typescript',
-			resource: URI.file('/workspace/file.ts'),
-		});
+		affectsTypeScript = event.affectsConfiguration(tabSize, { overrideIdentifier: 'typescript', resource: URI.file('/workspace/file.ts') });
 		affectsJavaScript = event.affectsConfiguration(tabSize, { overrideIdentifier: 'javascript' });
 	});
 	await service.updateValue(tabSize, 6, ConfigurationTarget.MEMORY);
@@ -153,6 +143,9 @@ test('in-memory configuration rejects unsupported owners and compares effective 
 
 	await assert.rejects(service.updateValue(tabSize, 2, ConfigurationTarget.USER), /Unable to write editor\.tabSize to target 2/u);
 	await assert.rejects(service.updateValue(tabSize, 2, 99 as ConfigurationTarget), /target is invalid/u);
-	await assert.rejects(service.updateValue(tabSize, 2, { resource: URI.parse('file:///workspace/file.ts') }, ConfigurationTarget.MEMORY), /does not support resource overrides/u);
+	await assert.rejects(
+		service.updateValue(tabSize, 2, { resource: URI.parse('file:///workspace/file.ts') }, ConfigurationTarget.MEMORY),
+		/does not support resource overrides/u,
+	);
 	await assert.rejects(service.reloadConfiguration(ConfigurationTarget.USER), /Unable to reload in-memory configuration target 2/u);
 });

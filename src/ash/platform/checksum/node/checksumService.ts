@@ -31,7 +31,7 @@ export function checksumChannel(applicationRoot: string, isBuilt: boolean, servi
 				throw new TypeError('Invalid application checksum read');
 			}
 			result ??= readApplicationChecksums(applicationRoot, isBuilt, service);
-			return (await result) as T;
+			return await result as T;
 		},
 		listen<T>(): never {
 			throw new TypeError('Application checksums have no subscription');
@@ -58,7 +58,8 @@ async function readApplicationChecksums(applicationRoot: string, isBuilt: boolea
 	}
 	// Validate the whole persisted manifest before accessing any of its paths.
 	for (const [path, expected] of entries) {
-		const invalidPath = !/^(dist|resources)\//u.test(path) || path.includes('\\') || path.includes('\0') || path.split('/').some(segment => !segment || segment === '.' || segment === '..');
+		const invalidPath = !/^(dist|resources)\//u.test(path) || path.includes('\\') || path.includes('\0')
+			|| path.split('/').some(segment => !segment || segment === '.' || segment === '..');
 		const invalidChecksum = typeof expected !== 'string' || !/^[a-f0-9]{64}$/u.test(expected);
 		if (invalidPath || invalidChecksum) {
 			throw new TypeError('Invalid application checksum entry');

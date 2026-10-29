@@ -10,24 +10,17 @@ export class FileElement {
 		readonly uri: URI,
 		readonly kind: FileKind,
 		readonly label: string,
-	) {}
+	) { }
 }
 
 export class SymbolElement {
-	constructor(readonly symbol: LanguageDocumentSymbol) {}
-	get label(): string {
-		return this.symbol.name;
-	}
+	constructor(readonly symbol: LanguageDocumentSymbol) { }
+	get label(): string { return this.symbol.name; }
 }
 
 /** Builds the resource path displayed for one editor input. */
 export class BreadcrumbsModel {
-	constructor(
-		readonly resource: URI,
-		private readonly workspaceFolder: IWorkspaceFolder | null,
-		private readonly fallbackLabel?: string,
-		private readonly showWorkspaceRoot = false,
-	) {}
+	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string, private readonly showWorkspaceRoot = false) { }
 
 	getElements(): readonly FileElement[] {
 		const segments = this.resource.toEncodedComponents().path.split('/').filter(Boolean);
@@ -37,7 +30,11 @@ export class BreadcrumbsModel {
 			elements.push(new FileElement(this.workspaceFolder.uri, FileKind.Directory, this.workspaceFolder.name));
 		}
 		if (this.resource.authority && !this.workspaceFolder) {
-			elements.push(new FileElement(this.resource.with({ path: '/' }), FileKind.Directory, this.resource.authority));
+			elements.push(new FileElement(
+				this.resource.with({ path: '/' }),
+				FileKind.Directory,
+				this.resource.authority,
+			));
 		}
 		let currentPath = '';
 		for (const [index, segment] of segments.entries()) {
@@ -47,16 +44,18 @@ export class BreadcrumbsModel {
 				continue;
 			}
 			const isWorkspaceRoot = this.workspaceFolder !== null && index === rootDepth - 1;
-			elements.push(
-				new FileElement(
-					this.resource.withEncodedPath(currentPath),
-					index === segments.length - 1 && !isWorkspaceRoot ? FileKind.File : FileKind.Directory,
-					isWorkspaceRoot ? this.workspaceFolder!.name : decodeURIComponent(segment),
-				),
-			);
+			elements.push(new FileElement(
+				this.resource.withEncodedPath(currentPath),
+				index === segments.length - 1 && !isWorkspaceRoot ? FileKind.File : FileKind.Directory,
+				isWorkspaceRoot ? this.workspaceFolder!.name : decodeURIComponent(segment),
+			));
 		}
 		if (elements.length === 0) {
-			elements.push(new FileElement(this.resource, FileKind.File, this.fallbackLabel?.trim() || this.resource.toString()));
+			elements.push(new FileElement(
+				this.resource,
+				FileKind.File,
+				this.fallbackLabel?.trim() || this.resource.toString(),
+			));
 		}
 		return elements;
 	}

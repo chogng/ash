@@ -52,10 +52,7 @@ test('plain typing, deletion and Enter share cursor history without optional edi
 	editor.focus();
 	const input = (inputType: string, data: string | null = null) => {
 		const event = new dom.window.InputEvent('beforeinput', {
-			bubbles: true,
-			cancelable: true,
-			inputType,
-			data,
+			bubbles: true, cancelable: true, inputType, data,
 		});
 		editor.controller.element.dispatchEvent(event);
 		assert.equal(event.defaultPrevented, true);

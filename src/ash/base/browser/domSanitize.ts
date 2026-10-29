@@ -1,100 +1,29 @@
-import createDOMPurify, { type Config as DOMPurifyConfig, type DOMPurify, type WindowLike } from './dompurify/dompurify.js';
+import createDOMPurify, {
+	type Config as DOMPurifyConfig,
+	type DOMPurify,
+	type WindowLike,
+} from './dompurify/dompurify.js';
 import type { TrustedHTML } from 'trusted-types/lib/index.js';
 import { Schemas } from '../common/network.js';
 import { reset } from './dom.js';
 
 /** Safe markup that does not accept user input. */
 export const basicMarkupHtmlTags = Object.freeze([
-	'a',
-	'abbr',
-	'b',
-	'bdo',
-	'blockquote',
-	'br',
-	'caption',
-	'cite',
-	'code',
-	'col',
-	'colgroup',
-	'dd',
-	'del',
-	'details',
-	'dfn',
-	'div',
-	'dl',
-	'dt',
-	'em',
-	'figcaption',
-	'figure',
-	'h1',
-	'h2',
-	'h3',
-	'h4',
-	'h5',
-	'h6',
-	'hr',
-	'i',
-	'img',
-	'ins',
-	'kbd',
-	'label',
-	'li',
-	'mark',
-	'ol',
-	'p',
-	'pre',
-	'q',
-	'rp',
-	'rt',
-	'ruby',
-	's',
-	'samp',
-	'small',
-	'source',
-	'span',
-	'strike',
-	'strong',
-	'sub',
-	'summary',
-	'sup',
-	'table',
-	'tbody',
-	'td',
-	'tfoot',
-	'th',
-	'thead',
-	'time',
-	'tr',
-	'tt',
-	'u',
-	'ul',
-	'var',
-	'video',
-	'wbr',
+	'a', 'abbr', 'b', 'bdo', 'blockquote', 'br', 'caption', 'cite', 'code', 'col', 'colgroup',
+	'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt', 'em', 'figcaption', 'figure',
+	'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'ins', 'kbd', 'label', 'li',
+	'mark', 'ol', 'p', 'pre', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'source',
+	'span', 'strike', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
+	'tfoot', 'th', 'thead', 'time', 'tr', 'tt', 'u', 'ul', 'var', 'video', 'wbr',
 ]);
 
 export const defaultAllowedAttrs = Object.freeze([
-	'href',
-	'target',
-	'src',
-	'alt',
-	'title',
-	'for',
-	'name',
-	'role',
-	'tabindex',
-	'x-dispatch',
-	'required',
-	'checked',
-	'placeholder',
-	'type',
-	'start',
-	'width',
-	'height',
-	'align',
+	'href', 'target', 'src', 'alt', 'title', 'for', 'name', 'role', 'tabindex',
+	'x-dispatch', 'required', 'checked', 'placeholder', 'type', 'start', 'width',
+	'height', 'align',
 ]);
 
-export type SanitizeAttributePredicate = (node: Element, data: { readonly attrName: string; readonly attrValue: string }) => boolean | string;
+export type SanitizeAttributePredicate = (node: Element, data: { readonly attrName: string; readonly attrValue: string; }) => boolean | string;
 
 export interface SanitizeAttributeRule {
 	readonly attributeName: string;
@@ -102,14 +31,21 @@ export interface SanitizeAttributeRule {
 }
 
 export interface DomSanitizerConfig {
-	readonly allowedTags?: { readonly override?: readonly string[]; readonly augment?: readonly string[] };
+	readonly allowedTags?: {
+		readonly override?: readonly string[];
+		readonly augment?: readonly string[];
+	};
 	readonly allowedAttributes?: {
 		readonly override?: ReadonlyArray<string | SanitizeAttributeRule>;
 		readonly augment?: ReadonlyArray<string | SanitizeAttributeRule>;
 	};
-	readonly allowedLinkProtocols?: { readonly override?: readonly string[] | '*' };
+	readonly allowedLinkProtocols?: {
+		readonly override?: readonly string[] | '*';
+	};
 	readonly allowRelativeLinkPaths?: boolean;
-	readonly allowedMediaProtocols?: { readonly override?: readonly string[] | '*' };
+	readonly allowedMediaProtocols?: {
+		readonly override?: readonly string[] | '*';
+	};
 	readonly allowRelativeMediaPaths?: boolean;
 	readonly mediaSourceIsAllowed?: (source: string) => boolean;
 	readonly replaceWithPlaintext?: boolean;
@@ -124,7 +60,10 @@ export interface HtmlSanitizerOptions {
 }
 
 const relativeProtocol = 'ash-relative-path';
-const selfClosingTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+const selfClosingTags = new Set([
+	'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+	'param', 'source', 'track', 'wbr',
+]);
 
 /** Sanitizes HTML for a Trusted Types HTML sink in the current document. */
 export function sanitizeHtml(untrusted: string, config?: DomSanitizerConfig): TrustedHTML {
@@ -170,15 +109,25 @@ export function convertTagToPlaintext(node: Node): DocumentFragment | undefined 
 	return fragment;
 }
 
-function configurePurifier(ownerDocument: Document, config: DomSanitizerConfig = {}, afterSanitizeAttributes?: (element: Element) => void): { purifier: DOMPurify; purifierConfig: DOMPurifyConfig } {
+function configurePurifier(
+	ownerDocument: Document,
+	config: DomSanitizerConfig = {},
+	afterSanitizeAttributes?: (element: Element) => void,
+): { purifier: DOMPurify; purifierConfig: DOMPurifyConfig; } {
 	const ownerWindow = ownerDocument.defaultView;
 	if (!ownerWindow) {
 		throw new Error('HTML sanitization requires a document with a window');
 	}
 	// A fresh instance binds hooks and Trusted Types policy to this document's realm.
 	const purifier = createDOMPurify(ownerWindow as unknown as WindowLike);
-	const allowedTags = [...(config.allowedTags?.override ?? basicMarkupHtmlTags), ...(config.allowedTags?.augment ?? [])];
-	const attributes = [...(config.allowedAttributes?.override ?? defaultAllowedAttrs), ...(config.allowedAttributes?.augment ?? [])];
+	const allowedTags = [
+		...(config.allowedTags?.override ?? basicMarkupHtmlTags),
+		...(config.allowedTags?.augment ?? []),
+	];
+	const attributes = [
+		...(config.allowedAttributes?.override ?? defaultAllowedAttrs),
+		...(config.allowedAttributes?.augment ?? []),
+	];
 	const allowedAttributes = new Set<string>();
 	const attributeRules = new Map<string, SanitizeAttributePredicate>();
 	for (const attribute of attributes) {
@@ -226,8 +175,8 @@ function configurePurifier(ownerDocument: Document, config: DomSanitizerConfig =
 				continue;
 			}
 			const isLink = name === 'href' && element.localName.toLowerCase() === 'a';
-			const allowed =
-				(value.startsWith('#') && name === 'href') || isAllowedUrl(value, isLink ? linkProtocols : mediaProtocols, isLink ? config.allowRelativeLinkPaths : config.allowRelativeMediaPaths);
+			const allowed = value.startsWith('#') && name === 'href'
+				|| isAllowedUrl(value, isLink ? linkProtocols : mediaProtocols, isLink ? config.allowRelativeLinkPaths : config.allowRelativeMediaPaths);
 			if (!allowed) {
 				element.removeAttribute(name);
 				continue;
@@ -261,9 +210,10 @@ function isAllowedUrl(value: string, protocols: readonly string[] | '*', allowRe
 	}
 	try {
 		const protocol = new URL(value, `${relativeProtocol}://base/`).protocol.slice(0, -1);
-		return (
-			protocols.includes(protocol) || (allowRelative && protocol === relativeProtocol && !value.trimStart().startsWith('//') && !value.trim().toLowerCase().startsWith(`${relativeProtocol}:`))
-		);
+		return protocols.includes(protocol)
+			|| allowRelative && protocol === relativeProtocol
+			&& !value.trimStart().startsWith('//')
+			&& !value.trim().toLowerCase().startsWith(`${relativeProtocol}:`);
 	} catch {
 		return false;
 	}

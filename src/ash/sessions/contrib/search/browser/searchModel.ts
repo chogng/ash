@@ -10,13 +10,13 @@ import { IProjectsService } from '../../projects/browser/projectsService.js';
 
 export type SearchCategory = 'all' | 'sessions' | 'projects' | 'scheduled';
 export type SearchTarget =
-	| { readonly kind: 'draft'; readonly id: string }
-	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId }
-	| { readonly kind: 'project'; readonly id: string }
-	| { readonly kind: 'automation'; readonly id: string }
-	| { readonly kind: 'contributed'; readonly open: () => Promise<void> }
-	| { readonly kind: 'newSession' }
-	| { readonly kind: 'projects' };
+	| { readonly kind: 'draft'; readonly id: string; }
+	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
+	| { readonly kind: 'project'; readonly id: string; }
+	| { readonly kind: 'automation'; readonly id: string; }
+	| { readonly kind: 'contributed'; readonly open: () => Promise<void>; }
+	| { readonly kind: 'newSession'; }
+	| { readonly kind: 'projects'; };
 
 export interface SearchResult {
 	readonly id: string;
@@ -60,99 +60,65 @@ export class SessionsSearchModel extends Disposable {
 			const results: SearchResult[] = [...sourceResults.read(reader)];
 			for (const draft of sessions.untitledSessions) {
 				results.push({
-					id: `draft:${draft.untitledSessionId}`,
-					category: 'sessions',
+					id: `draft:${draft.untitledSessionId}`, category: 'sessions',
 					title: draft.title.trim() || localize('chat.sessions.new', 'New Session'),
 					description: localize('sessions.history.draft', 'Draft'),
-					icon: Lxicon.chat4,
-					target: { kind: 'draft', id: draft.untitledSessionId },
+					icon: Lxicon.chat4, target: { kind: 'draft', id: draft.untitledSessionId },
 				});
 			}
 			for (const session of sessions.sessions) {
-				if (session.status !== 'active') {
-					continue;
-				}
+				if (session.status !== 'active') { continue; }
 				for (const thread of session.chats) {
-					if (thread.status !== 'active') {
-						continue;
-					}
+					if (thread.status !== 'active') { continue; }
 					results.push({
-						id: `session:${session.sessionId}:${thread.threadId}`,
-						category: 'sessions',
+						id: `session:${session.sessionId}:${thread.threadId}`, category: 'sessions',
 						title: (thread.origin.type === 'root' ? session.title : thread.title || session.title).trim() || localize('chat.sessions.new', 'New Session'),
 						description: [session.providerLabel, thread.origin.type !== 'root' ? session.title : undefined].filter(Boolean).join(' · '),
-						icon: Lxicon.chat4,
-						target: { kind: 'session', sessionId: session.sessionId, threadId: thread.threadId },
+						icon: Lxicon.chat4, target: { kind: 'session', sessionId: session.sessionId, threadId: thread.threadId },
 					});
 				}
 			}
 			for (const project of projectState.projects) {
 				if (!project.archived) {
 					results.push({
-						id: `project:${project.id}`,
-						category: 'projects',
-						title: project.name,
-						icon: Lxicon.projects,
-						target: { kind: 'project', id: project.id },
+						id: `project:${project.id}`, category: 'projects', title: project.name,
+						icon: Lxicon.projects, target: { kind: 'project', id: project.id },
 					});
 				}
 			}
 			if (projectState.message) {
 				results.push({
-					id: 'projects:retry',
-					category: 'projects',
+					id: 'projects:retry', category: 'projects',
 					title: localize('sessions.search.projectsFailed', 'Could not load projects'),
 					description: localize('sessions.search.projectsRetry', 'Open Projects to try again'),
-					icon: Lxicon.warning,
-					target: { kind: 'projects' },
+					icon: Lxicon.warning, target: { kind: 'projects' },
 				});
 			}
 			for (const plan of schedules) {
 				results.push({
-					id: `automation:${plan.id}`,
-					category: 'scheduled',
-					title: plan.name,
-					description: plan.target.directory,
-					icon: Lxicon.history,
+					id: `automation:${plan.id}`, category: 'scheduled', title: plan.name,
+					description: plan.target.directory, icon: Lxicon.history,
 					target: { kind: 'automation', id: plan.id },
 				});
 			}
-			results.push({
-				id: 'action:newSession',
-				category: 'actions',
-				title: localize('chat.sessions.new', 'New Session'),
-				icon: Lxicon.add,
-				target: { kind: 'newSession' },
-			});
+			results.push({ id: 'action:newSession', category: 'actions', title: localize('chat.sessions.new', 'New Session'), icon: Lxicon.add, target: { kind: 'newSession' } });
 			const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
 			return {
-				query,
-				category,
-				results: results.filter(
-					result => (category === 'all' || result.category === category) && words.every(word => `${result.title} ${result.description ?? ''}`.toLocaleLowerCase().includes(word)),
-				),
+				query, category,
+				results: results.filter(result => (category === 'all' || result.category === category) && words.every(word => `${result.title} ${result.description ?? ''}`.toLocaleLowerCase().includes(word))),
 				loading: sessions.state === 'loading' || projectState.loading || scheduleState === 'loading',
 				error: this.error.read(reader),
 			};
 		});
 	}
 
-	setQuery(value: string): void {
-		this.query.set(value);
-	}
-	setCategory(value: SearchCategory): void {
-		this.category.set(value);
-	}
+	setQuery(value: string): void { this.query.set(value); }
+	setCategory(value: SearchCategory): void { this.category.set(value); }
 
 	async refresh(): Promise<void> {
 		this.error.set(undefined);
-		await Promise.all([
-			this.projects.reload(),
-			this.automations.refresh().catch(() => {
-				if (!this.isDisposed) {
-					this.error.set(localize('sessions.search.schedulesFailed', 'Could not load schedules. Try opening Search again.'));
-				}
-			}),
-		]);
+		await Promise.all([this.projects.reload(), this.automations.refresh().catch(() => {
+			if (!this.isDisposed) { this.error.set(localize('sessions.search.schedulesFailed', 'Could not load schedules. Try opening Search again.')); }
+		})]);
 	}
 }

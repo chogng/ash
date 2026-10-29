@@ -1,4 +1,6 @@
-import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import {
+	createServiceIdentifier,
+} from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 
@@ -14,7 +16,7 @@ export interface IDialogOptions {
 	readonly title?: string;
 	readonly message: string;
 	readonly detail?: string;
-	readonly checkbox?: { readonly label: string; readonly checked?: boolean };
+	readonly checkbox?: { readonly label: string; readonly checked?: boolean; };
 }
 
 export interface IDialogInput {
@@ -61,7 +63,7 @@ export interface IPromptDialogOptions extends IDialogOptions {
 
 export interface IActionPromptButton<T> {
 	readonly label: string;
-	run(checkbox: { readonly checkboxChecked?: boolean }): T | Promise<T>;
+	run(checkbox: { readonly checkboxChecked?: boolean; }): T | Promise<T>;
 }
 
 export interface IActionPromptOptions<T> extends IDialogOptions {
@@ -77,16 +79,24 @@ export interface IActionPromptResult<T> {
 
 /** Requests understood by a host-specific dialog handler. */
 export type DialogRequest =
-	| ({ readonly kind: 'message' } & IMessageDialogOptions)
-	| ({ readonly kind: 'confirmation' } & IConfirmationDialogOptions)
-	| ({ readonly kind: 'prompt' } & IPromptDialogOptions)
 	| ({
-			readonly kind: 'choice';
-			readonly severity?: DialogSeverity;
-			readonly buttons: readonly string[];
-			readonly cancelButton: string;
-	  } & IDialogOptions)
-	| ({ readonly kind: 'input' } & IInputDialogOptions);
+		readonly kind: 'message';
+	} & IMessageDialogOptions)
+	| ({
+		readonly kind: 'confirmation';
+	} & IConfirmationDialogOptions)
+	| ({
+		readonly kind: 'prompt';
+	} & IPromptDialogOptions)
+	| ({
+		readonly kind: 'choice';
+		readonly severity?: DialogSeverity;
+		readonly buttons: readonly string[];
+		readonly cancelButton: string;
+	} & IDialogOptions)
+	| ({
+		readonly kind: 'input';
+	} & IInputDialogOptions);
 
 /** Result returned by a host-specific dialog handler. */
 export enum DialogResult {
@@ -108,7 +118,10 @@ export interface IDialogOutcome {
  * Implementations must observe `signal` and settle as cancelled after abort.
  */
 export interface IDialogHandler {
-	showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome>;
+	showDialog(
+		request: DialogRequest,
+		signal: AbortSignal,
+	): Promise<IDialogOutcome>;
 }
 
 /** Window-scoped access to modal workbench dialogs. */
@@ -125,7 +138,8 @@ export interface IDialogService {
 	about(): Promise<void>;
 }
 
-export const IDialogService = createServiceIdentifier<IDialogService>('dialogService');
+export const IDialogService =
+	createServiceIdentifier<IDialogService>('dialogService');
 
 /** Selects a file path for an editor Save As operation. */
 export interface IFileDialogService {
@@ -172,4 +186,5 @@ export interface IOpenDialogOptions {
 	readonly availableFileSystems?: readonly string[];
 }
 
-export const IFileDialogService = createServiceIdentifier<IFileDialogService>('fileDialogService');
+export const IFileDialogService =
+	createServiceIdentifier<IFileDialogService>('fileDialogService');

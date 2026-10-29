@@ -51,25 +51,7 @@ suite('target path operations', () => {
 	});
 
 	test('normalizes Windows drive, rooted and UNC paths without crossing their roots', () => {
-		for (const path of [
-			'',
-			'.',
-			'C:',
-			'C:relative/..',
-			'a/../',
-			'C:/work/.',
-			'//server/share',
-			'//server/share/../a',
-			'///server//share//folder/../',
-			'C://work///../notes',
-			'C:\\',
-			'C:\\work\\..\\notes',
-			'C:relative\\..\\notes',
-			'\\work\\..\\notes',
-			'\\\\server\\share\\folder\\..\\notes',
-			'\\\\server\\share\\..\\notes',
-			'C:/work/../notes/',
-		]) {
+		for (const path of ['', '.', 'C:', 'C:relative/..', 'a/../', 'C:/work/.', '//server/share', '//server/share/../a', '///server//share//folder/../', 'C://work///../notes', 'C:\\', 'C:\\work\\..\\notes', 'C:relative\\..\\notes', '\\work\\..\\notes', '\\\\server\\share\\folder\\..\\notes', '\\\\server\\share\\..\\notes', 'C:/work/../notes/']) {
 			assert.deepEqual([win32.normalize(path), win32.isAbsolute(path)], [nodePath.win32.normalize(path), nodePath.win32.isAbsolute(path)], path);
 		}
 	});

@@ -139,7 +139,10 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 		let changed = false;
 		for (const option of editorOptionsRegistry) {
 			if (!Object.prototype.hasOwnProperty.call(update, option.name)) continue;
-			const result = option.applyUpdate((this.rawOptions as Record<string, unknown>)[option.name], (update as Record<string, unknown>)[option.name]);
+			const result = option.applyUpdate(
+				(this.rawOptions as Record<string, unknown>)[option.name],
+				(update as Record<string, unknown>)[option.name],
+			);
 			(this.rawOptions as Record<string, unknown>)[option.name] = result.newValue;
 			changed ||= result.didChange;
 		}
@@ -194,8 +197,10 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 			outerHeight: this.containerObserver.getHeight(),
 			emptySelectionClipboard: browser.isWebKit || browser.isFirefox,
 			pixelRatio: PixelRatio.getInstance(this.targetWindow).value,
-			accessibilitySupport: this.accessibilityService.isScreenReaderOptimized() ? AccessibilitySupport.Enabled : this.accessibilityService.getAccessibilitySupport(),
-			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown }).EditContext === 'function',
+			accessibilitySupport: this.accessibilityService.isScreenReaderOptimized()
+				? AccessibilitySupport.Enabled
+				: this.accessibilityService.getAccessibilitySupport(),
+			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown; }).EditContext === 'function',
 		};
 	}
 
@@ -214,7 +219,11 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 
 	private computeOptions(): ComputedEditorOptions {
 		const browserEnv = this._readEnvConfiguration();
-		const fontInfo = this._readFontInfo(createBareFontInfoFromValidatedSettings(this.validatedOptions, browserEnv.pixelRatio, this.isSimpleWidget));
+		const fontInfo = this._readFontInfo(createBareFontInfoFromValidatedSettings(
+			this.validatedOptions,
+			browserEnv.pixelRatio,
+			this.isSimpleWidget,
+		));
 		const env: IEnvironmentalOptions = {
 			memory: this.computeMemory,
 			outerWidth: browserEnv.outerWidth,

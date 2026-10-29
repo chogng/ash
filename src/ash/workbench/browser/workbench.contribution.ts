@@ -1,11 +1,21 @@
-import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '../common/views.js';
-import { registerFilesViews } from '../contrib/files/browser/explorerViewlet.js';
+import {
+	ViewContainerLocation,
+	WorkbenchViewContainerId,
+	ViewsRegistry,
+} from '../common/views.js';
+import {
+	registerFilesViews,
+} from '../contrib/files/browser/explorerViewlet.js';
 import '../contrib/files/browser/files.contribution.js';
 import { registerOutlineView } from '../contrib/outline/browser/outline.contribution.js';
 import { registerTimelineView } from '../contrib/timeline/browser/timeline.contribution.js';
 import '../contrib/accessibility/browser/accessibility.contribution.js';
-import { registerSCMViews } from '../contrib/scm/browser/scm.contribution.js';
-import { registerSearchViews } from '../contrib/search/browser/search.contribution.js';
+import {
+	registerSCMViews,
+} from '../contrib/scm/browser/scm.contribution.js';
+import {
+	registerSearchViews,
+} from '../contrib/search/browser/search.contribution.js';
 import '../contrib/chat/browser/chat.contribution.js';
 import { registerProblemsView } from '../contrib/problems/browser/problems.contribution.js';
 import { registerTerminalView } from '../contrib/terminal/browser/terminal.contribution.js';
@@ -15,16 +25,7 @@ import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { localize } from '../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import {
-	OpenWorkspaceAction,
-	OpenWorkspaceConfigFileAction,
-	AddRootFolderAction,
-	RemoveRootFolderAction,
-	SaveWorkspaceAsAction,
-	CloseWorkspaceAction,
-	OpenFolderAction,
-	OpenFolderViaWorkspaceAction,
-} from './actions/workspaceActions.js';
+import { OpenWorkspaceAction, OpenWorkspaceConfigFileAction, AddRootFolderAction, RemoveRootFolderAction, SaveWorkspaceAsAction, CloseWorkspaceAction, OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
 import { ShowAboutDialogAction, ReloadWindowAction } from './actions/windowActions.js';
 import '../contrib/bulkEdit/browser/preview/bulkEdit.contribution.js';
 import '../contrib/markdown/browser/markdown.contribution.js';
@@ -58,12 +59,8 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('workbench.tips.enabled.title', 'Empty editor tips');
-		},
-		get description() {
-			return localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.');
-		},
+		get title() { return localize('workbench.tips.enabled.title', 'Empty editor tips'); },
+		get description() { return localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.'); },
 	},
 });
 
@@ -76,15 +73,8 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() {
-			return localize('workbench.editor.restoreEditors.title', 'Restore editors');
-		},
-		get description() {
-			return localize(
-				'workbench.editor.restoreEditors.description',
-				'Restore open editors and editor groups when a Workbench window reopens. Unsaved changes are restored even when this is off.',
-			);
-		},
+		get title() { return localize('workbench.editor.restoreEditors.title', 'Restore editors'); },
+		get description() { return localize('workbench.editor.restoreEditors.description', 'Restore open editors and editor groups when a Workbench window reopens. Unsaved changes are restored even when this is off.'); },
 	},
 });
 

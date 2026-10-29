@@ -9,15 +9,8 @@ suite('terminalProviders browser component', () => {
 		await page.waitForFunction(() => !!window.ashTerminalSuggestIntegration && !!window.ashTerminalInputIntegration);
 		await page.evaluate(value => {
 			const feed = window.ashTerminalInputIntegration.feed;
-			feed('', {
-				type: 'processReady',
-				isWindowsPty: false,
-				shellType: 'bash' as import('../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash,
-			});
-			feed('', { type: 'promptStart' });
-			feed('$ ');
-			feed('', { type: 'commandStart' });
-			feed(value);
+			feed('', { type: 'processReady', isWindowsPty: false, shellType: 'bash' as import('../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash });
+			feed('', { type: 'promptStart' }); feed('$ '); feed('', { type: 'commandStart' }); feed(value);
 		}, value);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe(`${value}|`);
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
@@ -47,13 +40,10 @@ suite('terminalProviders browser component', () => {
 		await prompt(page, 'cat sp');
 		const label = "sp ace'$(literal);&`literal`\\[x].txt";
 		const insertText = "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'";
-		await page.evaluate(
-			({ label, insertText }) => {
-				window.ashTerminalSuggestIntegration.provider([{ label, insertText, replacementRange: [4, 6] }]);
-				void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-			},
-			{ label, insertText },
-		);
+		await page.evaluate(({ label, insertText }) => {
+			window.ashTerminalSuggestIntegration.provider([{ label, insertText, replacementRange: [4, 6] }]);
+			void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+		}, { label, insertText });
 		const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
 		await expect(page.getByRole('option')).toContainText(label);
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
@@ -73,9 +63,7 @@ suite('terminalProviders browser component', () => {
 			window.ashTerminalInputIntegration.feed('\x1b[5D');
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git --he| tail');
-		await page.evaluate(() => {
-			void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-		});
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest'); });
 		const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
 		await expect(page.getByRole('option')).toContainText('--help');
 		await picker.press('Enter');
@@ -114,10 +102,7 @@ suite('terminalProviders browser component', () => {
 		const { page } = browserTests;
 
 		await prompt(page, 'git ');
-		await page.evaluate(async () => {
-			await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true);
-			window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']);
-		});
+		await page.evaluate(async () => { await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true); window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']); });
 		await page.locator('.xterm-helper-textarea').press('-');
 		expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('-'));
@@ -144,10 +129,7 @@ suite('terminalProviders browser component', () => {
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('x'));
 		await expect(picker).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests()[0]?.cancelled)).toBe(true);
-		await page.evaluate(() => {
-			window.ashTerminalSuggestIntegration.disposeProvider();
-			window.ashTerminalSuggestIntegration.releaseProvider();
-		});
+		await page.evaluate(() => { window.ashTerminalSuggestIntegration.disposeProvider(); window.ashTerminalSuggestIntegration.releaseProvider(); });
 		await expect(page.getByRole('option')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
@@ -191,6 +173,7 @@ suite('terminalProviders browser component', () => {
 		await page.locator('.xterm-helper-textarea').press('Escape');
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
+
 
 	test('terminal extension trigger waits for the whole typed run when an earlier fragment ends with the same trigger', async function () {
 		const { page } = browserTests;

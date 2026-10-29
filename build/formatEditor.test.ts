@@ -11,7 +11,7 @@ const repository = resolve(import.meta.dirname, '..');
 // This checks the development workspace's VS Code settings with a real extension host.
 // The optional executable and isolated extension directory are provisioned by the caller.
 test(
-	'VS Code save formatting matches the pinned Bun CI formatter',
+	'VS Code save formatting matches the workspace CI formatters',
 	{
 		skip: !process.env.ASH_VSCODE_EXECUTABLE,
 		timeout: 120_000,
@@ -31,9 +31,10 @@ test(
 				await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 			}
 		});
-		for (const path of [join(workspace, '.vscode'), join(workspace, 'node_modules'), harness, join(profile, 'User'), output]) await mkdir(path, { recursive: true });
-		for (const name of ['.prettierrc.toml', '.prettierignore', '.gitignore', '.editorconfig', '.vscode/settings.json']) await copyFile(join(repository, name), join(workspace, name));
+		for (const path of [join(workspace, '.vscode'), join(workspace, 'build'), join(workspace, 'node_modules'), harness, join(profile, 'User'), output]) await mkdir(path, { recursive: true });
+		for (const name of ['tsfmt.json', 'build/format.ts', '.prettierrc.toml', '.prettierignore', '.gitignore', '.editorconfig', '.vscode/settings.json']) await copyFile(join(repository, name), join(workspace, name));
 		await symlink(join(repository, 'node_modules/bun'), join(workspace, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
+		await symlink(join(repository, 'node_modules/typescript'), join(workspace, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 		assert.equal(spawnSync('git', ['init', '--quiet', workspace], { encoding: 'utf8' }).status, 0);
 		await writeFile(
 			join(profile, 'User/settings.json'),
@@ -47,10 +48,10 @@ test(
 			}),
 		);
 		const samples = [
-			['typescript', 'source.ts', 'export const value={name:"example"}\n'],
-			['typescriptreact', 'component.tsx', 'export const View=()=> <div title="example"/>\n'],
-			['javascript', 'source.js', 'const value={name:"example"}\n'],
-			['javascriptreact', 'component.jsx', 'export const View=()=> <div title="example"/>\n'],
+			['typescript', 'src/source.ts', 'export const value={name:"example"}\n'],
+			['typescriptreact', 'src/component.tsx', 'export const View=()=> <div title="example"/>\n'],
+			['javascript', 'src/source.js', 'const value={name:"example"}\n'],
+			['javascriptreact', 'src/component.jsx', 'export const View=()=> <div title="example"/>\n'],
 			['json', 'config [with spaces].json', '{"value":1,"nested":{"enabled":true}}\n'],
 			['json', 'config $(touch formatter-shell-marker).json', '{"value":1,"nested":{"enabled":true}}\n'],
 			['json', 'localized.json', JSON.stringify({ value: '中文'.repeat(30_000) }) + '\n'],
@@ -69,7 +70,9 @@ test(
 			const file = join(workspace, name);
 			await mkdir(dirname(file), { recursive: true });
 			await writeFile(file, '');
-			const formatted = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file], { cwd: workspace, input, encoding: 'utf8' });
+			const source = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'].includes(language);
+			const arguments_ = source ? [join(workspace, 'build/format.ts'), '--stdin-filepath', file] : ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file];
+			const formatted = spawnSync(bun, arguments_, { cwd: workspace, input, encoding: 'utf8' });
 			assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
 			if (!name.startsWith('fixtures/') && !name.startsWith('output/')) assert.notEqual(formatted.stdout, input, name);
 			cases.push({ language, name, file, input, expected: formatted.stdout });
@@ -157,14 +160,16 @@ exports.activate = async () => {
 		if (report.passed) {
 			const checked = spawnSync(
 				bun,
-				['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--check', '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,yml,yaml,md,css,html}'],
+				['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--check', '**/*.{json,jsonc,yml,yaml,md,css,html}'],
 				{
 					cwd: workspace,
 					encoding: 'utf8',
 				},
 			);
 			report.ciCheck = { status: checked.status, output: checked.stdout + checked.stderr };
-			report.passed = checked.status === 0;
+			const sources = spawnSync(bun, [join(workspace, 'build/format.ts'), '--check', 'src'], { cwd: workspace, encoding: 'utf8' });
+			report.ciCheck.output += sources.stdout + sources.stderr;
+			report.passed = checked.status === 0 && sources.status === 0;
 		}
 		await writeFile(join(output, 'editor-result.json'), JSON.stringify(report, null, 2) + '\n');
 		await (await application.firstWindow()).screenshot({ path: join(output, 'editor-save.png') });

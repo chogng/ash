@@ -25,26 +25,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
 import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplorer } from './fileCommands.js';
-import {
-	cancelExplorerCut,
-	CANCEL_CUT_COMMAND_ID,
-	copyExplorerItems,
-	COPY_FILE_COMMAND_ID,
-	createNewFile,
-	createNewFolder,
-	CUT_FILE_COMMAND_ID,
-	deleteExplorerItem,
-	DELETE_FILE_COMMAND_ID,
-	DOWNLOAD_COMMAND_ID,
-	NEW_FILE_COMMAND_ID,
-	NEW_FOLDER_COMMAND_ID,
-	openExplorerItemToSide,
-	OPEN_TO_SIDE_COMMAND_ID,
-	pasteExplorerItems,
-	PASTE_FILE_COMMAND_ID,
-	renameExplorerItem,
-	RENAME_FILE_COMMAND_ID,
-} from './fileActions.js';
+import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_COMMAND_ID, createNewFile, createNewFolder, CUT_FILE_COMMAND_ID, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, pasteExplorerItems, PASTE_FILE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
 import { FileDownload } from './fileImportExport.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 import { ExplorerFocusedContext, IExplorerService } from './files.js';
@@ -61,144 +42,134 @@ interface BinaryComparisonItem extends IQuickPickItem {
 	readonly input: IResourceEditorInput;
 }
 
-registerAction2(
-	class CompareBinaryEditorsAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.compareActiveFileAsBinary',
-				title: localize2({ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' }, 'Compare Active File as Binary With...'),
-				f1: true,
-			});
-		}
+registerAction2(class CompareBinaryEditorsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.compareActiveFileAsBinary',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' }, 'Compare Active File as Binary With...'),
+			f1: true,
+		});
+	}
 
-		public override run(accessor: ServicesAccessor): void {
-			const editors = accessor.get(IEditorPart);
-			const modified = editors.activeInput;
-			if (!modified || !isFileInput(modified)) {
-				return;
-			}
-			const candidates = editors.editorsMru.map(editor => editor.input).filter(input => isFileInput(input) && !extUri.isEqual(input.resource, modified.resource));
-			if (candidates.length === 0) {
-				return;
-			}
-			const picker = accessor.get(IQuickInputService).createQuickPick<BinaryComparisonItem>();
-			const disposables = new DisposableStore();
-			disposables.add(picker);
-			picker.placeholder = localize('files.binaryComparePlaceholder', 'Select the original file to compare');
-			picker.items = candidates.map(input => ({
-				input,
-				label: input.label ?? (basename(input.resource) || input.resource.toString()),
-				detail: input.resource.toString(),
-			}));
-			disposables.add(
-				picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
+	public override run(accessor: ServicesAccessor): void {
+		const editors = accessor.get(IEditorPart);
+		const modified = editors.activeInput;
+		if (!modified || !isFileInput(modified)) { return; }
+		const candidates = editors.editorsMru
+			.map(editor => editor.input)
+			.filter(input => isFileInput(input) && !extUri.isEqual(input.resource, modified.resource));
+		if (candidates.length === 0) { return; }
+		const picker = accessor.get(IQuickInputService).createQuickPick<BinaryComparisonItem>();
+		const disposables = new DisposableStore();
+		disposables.add(picker);
+		picker.placeholder = localize('files.binaryComparePlaceholder', 'Select the original file to compare');
+		picker.items = candidates.map(input => ({
+			input,
+			label: input.label ?? (basename(input.resource) || input.resource.toString()),
+			detail: input.resource.toString(),
+		}));
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) return;
 
-					picker.hide();
-					void editors.openEditor(createBinaryDiffEditorInput(item.input, modified), { pinned: true });
-				}),
-			);
-			disposables.add(picker.onDidHide(() => disposables.dispose()));
-			picker.show();
-		}
-	},
-);
+			picker.hide();
+			void editors.openEditor(createBinaryDiffEditorInput(item.input, modified), { pinned: true });
+
+		}));
+		disposables.add(picker.onDidHide(() => disposables.dispose()));
+		picker.show();
+	}
+});
 
 function isFileInput(input: IResourceEditorInput): boolean {
 	return input.resource.scheme === Schemas.file || isRemoteResource(input.resource);
 }
 
-registerAction2(
-	class OpenFileAction extends Action2 {
-		constructor() {
-			super({
-				id: OPEN_FILE_COMMAND_ID,
-				title: localize2({ bundle: 'ash', key: 'workbench.openFile' }, 'Open File...'),
-				f1: true,
-				menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: 0 },
-				keybinding: { primary: Keybinding.single(logicalKey('o', { primaryKey: true })) },
-			});
-		}
+registerAction2(class OpenFileAction extends Action2 {
+	constructor() {
+		super({
+			id: OPEN_FILE_COMMAND_ID,
+			title: localize2({ bundle: 'ash', key: 'workbench.openFile' }, 'Open File...'),
+			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: 0 },
+			keybinding: { primary: Keybinding.single(logicalKey('o', { primaryKey: true })) },
+		});
+	}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const resources = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
-			for (const resource of resources ?? []) await accessor.get(IEditorService).openEditor(new FileEditorInput(resource));
-		}
-	},
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const resources = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
+		for (const resource of resources ?? []) await accessor.get(IEditorService).openEditor(new FileEditorInput(resource));
+	}
+});
+
+registerAction2(class NewUntitledTextEditorAction extends Action2 {
+	constructor() {
+		super({
+			id: NEW_UNTITLED_FILE_COMMAND_ID,
+			title: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
+			icon: Lxicon.add,
+			f1: true,
+			menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -1 },
+			keybinding: {
+				primary: Keybinding.single(logicalKey('n', { primaryKey: true })),
+			},
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const untitled = await accessor.get(IUntitledTextEditorService).resolve();
+		await accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled));
+	}
+});
+
+registerAction2(class SaveActiveEditorAction extends Action2 {
+	constructor() {
+		super({
+			id: SAVE_FILE_COMMAND_ID,
+			title: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
+			f1: true,
+			menu: {
+				id: MenuId.MenubarFileMenu,
+				when: EditorsVisibleContext.isEqualTo(true),
+				group: '3_save',
+				order: 1,
+			},
+			keybinding: {
+				primary: Keybinding.single(logicalKey('s', { primaryKey: true })),
+			},
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IEditorPart).saveActiveEditor();
+	}
+});
+
+const fileResourceWhen = ContextKeyExpr.or(
+	ResourceSchemeContext.isEqualTo(Schemas.file),
+	ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME),
 );
 
-registerAction2(
-	class NewUntitledTextEditorAction extends Action2 {
-		constructor() {
-			super({
-				id: NEW_UNTITLED_FILE_COMMAND_ID,
-				title: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
-				tooltip: localize2({ bundle: 'ash', key: 'workbench.newUntitledFile' }, 'New Untitled Text Editor'),
-				icon: Lxicon.add,
-				f1: true,
-				menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -1 },
-				keybinding: {
-					primary: Keybinding.single(logicalKey('n', { primaryKey: true })),
-				},
-			});
-		}
+registerAction2(class RevealInExplorerAction extends Action2 {
+	constructor() {
+		super({
+			id: REVEAL_IN_EXPLORER_COMMAND_ID,
+			title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
+			precondition: ContextKeyExpr.and(fileResourceWhen, ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)),
+			menu: {
+				id: MenuId.EditorTitleContext,
+				group: '2_files',
+				order: 30,
+			},
+		});
+	}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const untitled = await accessor.get(IUntitledTextEditorService).resolve();
-			await accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled));
-		}
-	},
-);
-
-registerAction2(
-	class SaveActiveEditorAction extends Action2 {
-		constructor() {
-			super({
-				id: SAVE_FILE_COMMAND_ID,
-				title: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
-				tooltip: localize2({ bundle: 'ash', key: 'workbench.save' }, 'Save'),
-				f1: true,
-				menu: {
-					id: MenuId.MenubarFileMenu,
-					when: EditorsVisibleContext.isEqualTo(true),
-					group: '3_save',
-					order: 1,
-				},
-				keybinding: {
-					primary: Keybinding.single(logicalKey('s', { primaryKey: true })),
-				},
-			});
-		}
-
-		override run(accessor: ServicesAccessor): Promise<void> {
-			return accessor.get(IEditorPart).saveActiveEditor();
-		}
-	},
-);
-
-const fileResourceWhen = ContextKeyExpr.or(ResourceSchemeContext.isEqualTo(Schemas.file), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME));
-
-registerAction2(
-	class RevealInExplorerAction extends Action2 {
-		constructor() {
-			super({
-				id: REVEAL_IN_EXPLORER_COMMAND_ID,
-				title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
-				precondition: ContextKeyExpr.and(fileResourceWhen, ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)),
-				menu: {
-					id: MenuId.EditorTitleContext,
-					group: '2_files',
-					order: 30,
-				},
-			});
-		}
-
-		override run(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
-			return revealInExplorer(accessor, resource);
-		}
-	},
-);
+	override run(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
+		return revealInExplorer(accessor, resource);
+	}
+});
 
 const selectedFileWhen = ContextKeyExpr.has('ashExplorerIsFile');
 const canCreateWhen = ContextKeyExpr.has('ashExplorerCanCreate');
@@ -233,52 +204,45 @@ for (const action of [
 	});
 }
 
-registerAction2(
-	class RefreshExplorerAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.files.action.refreshFilesExplorer',
-				title: localize2('files.refreshExplorer', 'Refresh Explorer'),
-				icon: Lxicon.refresh,
-				f1: true,
-				menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 30 },
-			});
-		}
+registerAction2(class RefreshExplorerAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.files.action.refreshFilesExplorer',
+			title: localize2('files.refreshExplorer', 'Refresh Explorer'),
+			icon: Lxicon.refresh,
+			f1: true,
+			menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 30 },
+		});
+	}
 
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(IViewsService).openView(VIEW_ID);
-			await accessor.get(IExplorerService).refresh();
-		}
-	},
-);
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IViewsService).openView(VIEW_ID);
+		await accessor.get(IExplorerService).refresh();
+	}
+});
 
-registerAction2(
-	class CollapseExplorerFoldersAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.files.action.collapseExplorerFolders',
-				title: localize2('files.collapseExplorerFolders', 'Collapse Folders in Explorer'),
-				icon: Lxicon.collapseAll,
-				f1: true,
-				menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 40 },
-			});
-		}
+registerAction2(class CollapseExplorerFoldersAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.files.action.collapseExplorerFolders',
+			title: localize2('files.collapseExplorerFolders', 'Collapse Folders in Explorer'),
+			icon: Lxicon.collapseAll,
+			f1: true,
+			menu: { id: MenuId.for('ViewTitle'), group: 'navigation', when: explorerTitleWhen, order: 40 },
+		});
+	}
 
-		public override run(accessor: ServicesAccessor): void {
-			accessor.get(IViewsService).getViewWithId<ExplorerView>(VIEW_ID)?.collapseAll();
-		}
-	},
-);
+	public override run(accessor: ServicesAccessor): void {
+		accessor.get(IViewsService).getViewWithId<ExplorerView>(VIEW_ID)?.collapseAll();
+	}
+});
 
 CommandsRegistry.registerMany([
 	{ id: REMOVE_ROOT_FOLDER_COMMAND_ID, handler: removeRootFolder },
 	{ id: NEW_FILE_COMMAND_ID, handler: createNewFile },
 	{ id: NEW_FOLDER_COMMAND_ID, handler: createNewFolder },
 	{ id: OPEN_TO_SIDE_COMMAND_ID, handler: openExplorerItemToSide },
-	{
-		id: DOWNLOAD_COMMAND_ID,
-		handler: (accessor, resource) => new FileDownload(accessor.get(IFileService)).download(resolveFileResource(accessor, resource), document),
-	},
+	{ id: DOWNLOAD_COMMAND_ID, handler: (accessor, resource) => new FileDownload(accessor.get(IFileService)).download(resolveFileResource(accessor, resource), document) },
 	{ id: COPY_PATH_COMMAND_ID, handler: copyFilePath },
 	{ id: COPY_RELATIVE_PATH_COMMAND_ID, handler: copyRelativeFilePath },
 	{ id: RENAME_FILE_COMMAND_ID, handler: renameExplorerItem },
@@ -292,102 +256,47 @@ CommandsRegistry.registerMany([
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: ADD_ROOT_FOLDER_COMMAND_ID, title: localize2('workspace.addFolder', 'Add Folder to Workspace...') },
 	when: ContextKeyExpr.and(ExplorerRootContext.isEqualTo(true), EnterMultiRootWorkspaceSupportContext.isEqualTo(true)),
-	group: '2_workspace',
-	order: 10,
+	group: '2_workspace', order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: REMOVE_ROOT_FOLDER_COMMAND_ID,
-		title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...'),
-	},
-	when: ContextKeyExpr.and(
-		ExplorerRootContext.isEqualTo(true),
-		ExplorerFolderContext.isEqualTo(true),
-		EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-		ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-	),
-	group: '2_workspace',
-	order: 30,
+	command: { id: REMOVE_ROOT_FOLDER_COMMAND_ID, title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...') },
+	when: ContextKeyExpr.and(ExplorerRootContext.isEqualTo(true), ExplorerFolderContext.isEqualTo(true), EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
+	group: '2_workspace', order: 30,
 });
 
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-	command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') },
-	when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-});
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-	command: {
-		id: NEW_FOLDER_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'),
-	},
-	when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-});
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
-	when: fileResourceWhen,
-});
-MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-	command: {
-		id: COPY_RELATIVE_PATH_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'),
-	},
-	when: fileResourceWhen,
-});
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FOLDER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') }, when: fileResourceWhen });
+MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') }, when: fileResourceWhen });
 
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: {
-		id: COPY_PATH_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'),
-		precondition: fileResourceWhen,
-	},
+	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), precondition: fileResourceWhen },
 	group: '2_files',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
-	command: {
-		id: COPY_RELATIVE_PATH_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'),
-		precondition: fileResourceWhen,
-	},
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), precondition: fileResourceWhen },
 	group: '2_files',
 	order: 20,
 });
 
 for (const id of [MenuId.ChatInputResourceAttachmentContext, MenuId.ChatInputSymbolAttachmentContext]) {
 	MenusRegistry.appendMenuItem(id, {
-		command: {
-			id: OPEN_TO_SIDE_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side'),
-		},
+		command: { id: OPEN_TO_SIDE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side') },
 		when: ContextKeyExpr.and(ResourceSetContext.isEqualTo(true), ExplorerFolderContext.isEqualTo(false)),
-		group: 'navigation',
-		order: 10,
+		group: 'navigation', order: 10,
 	});
 	MenusRegistry.appendMenuItem(id, {
-		command: {
-			id: REVEAL_IN_EXPLORER_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
-		},
-		when: fileResourceWhen,
-		group: 'navigation',
-		order: 20,
+		command: { id: REVEAL_IN_EXPLORER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View') },
+		when: fileResourceWhen, group: 'navigation', order: 20,
 	});
 	MenusRegistry.appendMenuItem(id, {
-		command: {
-			id: COPY_PATH_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'),
-		},
-		when: fileResourceWhen,
-		group: '1_cutcopypaste',
-		order: 10,
+		command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
+		when: fileResourceWhen, group: '1_cutcopypaste', order: 10,
 	});
 	MenusRegistry.appendMenuItem(id, {
-		command: {
-			id: COPY_RELATIVE_PATH_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'),
-		},
-		when: fileResourceWhen,
-		group: '1_cutcopypaste',
-		order: 20,
+		command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
+		when: fileResourceWhen, group: '1_cutcopypaste', order: 20,
 	});
 }
 
@@ -398,28 +307,19 @@ MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	order: 4,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: NEW_FOLDER_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'),
-	},
+	command: { id: NEW_FOLDER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...') },
 	when: canCreateWhen,
 	group: 'navigation',
 	order: 6,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: OPEN_TO_SIDE_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side'),
-	},
+	command: { id: OPEN_TO_SIDE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side') },
 	when: selectedFileWhen,
 	group: 'navigation',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: DOWNLOAD_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'),
-	},
+	command: { id: DOWNLOAD_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...') },
 	when: downloadWhen,
 	group: '5b_importexport',
 	order: 10,
@@ -427,20 +327,17 @@ MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: CUT_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.cut' }, 'Cut') },
 	when: canModifyWhen,
-	group: '5_cutcopypaste',
-	order: 8,
+	group: '5_cutcopypaste', order: 8,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: COPY_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.copy' }, 'Copy') },
 	when: canModifyWhen,
-	group: '5_cutcopypaste',
-	order: 10,
+	group: '5_cutcopypaste', order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: PASTE_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.paste' }, 'Paste') },
 	when: canCreateWhen,
-	group: '5_cutcopypaste',
-	order: 20,
+	group: '5_cutcopypaste', order: 20,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
@@ -449,30 +346,19 @@ MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: COPY_RELATIVE_PATH_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'),
-	},
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
 	when: selectedResourceWhen,
 	group: '6_copypath',
 	order: 20,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: RENAME_FILE_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'files.rename' }, 'Rename'),
-		precondition: canModifyWhen,
-	},
+	command: { id: RENAME_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.rename' }, 'Rename'), precondition: canModifyWhen },
 	when: canModifyWhen,
 	group: '7_modification',
 	order: 10,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
-	command: {
-		id: DELETE_FILE_COMMAND_ID,
-		title: localize2({ bundle: 'ash', key: 'files.deletePermanently' }, 'Delete Permanently'),
-		precondition: canModifyWhen,
-	},
+	command: { id: DELETE_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.deletePermanently' }, 'Delete Permanently'), precondition: canModifyWhen },
 	when: canModifyWhen,
 	group: '7_modification',
 	order: 20,
@@ -486,43 +372,20 @@ KeybindingsRegistry.registerKeybindingRule({
 });
 KeybindingsRegistry.registerKeybindingRule({
 	command: DELETE_FILE_COMMAND_ID,
-	keybinding: isMacintosh ? Keybinding.single(logicalKey('Backspace', { primaryKey: true, altKey: true })) : Keybinding.single(logicalKey('Delete', { shiftKey: true })),
+	keybinding: isMacintosh
+		? Keybinding.single(logicalKey('Backspace', { primaryKey: true, altKey: true }))
+		: Keybinding.single(logicalKey('Delete', { shiftKey: true })),
 	when: explorerShortcutWhen,
 	priority: KeybindingWeight.WorkbenchContrib + 10,
 });
-KeybindingsRegistry.registerKeybindingRule({
-	command: CUT_FILE_COMMAND_ID,
-	keybinding: Keybinding.single(logicalKey('x', { primaryKey: true })),
-	when: explorerShortcutWhen,
-	priority: KeybindingWeight.WorkbenchContrib + 10,
-});
-KeybindingsRegistry.registerKeybindingRule({
-	command: COPY_FILE_COMMAND_ID,
-	keybinding: Keybinding.single(logicalKey('c', { primaryKey: true })),
-	when: explorerShortcutWhen,
-	priority: KeybindingWeight.WorkbenchContrib + 10,
-});
+KeybindingsRegistry.registerKeybindingRule({ command: CUT_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('x', { primaryKey: true })), when: explorerShortcutWhen, priority: KeybindingWeight.WorkbenchContrib + 10 });
+KeybindingsRegistry.registerKeybindingRule({ command: COPY_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('c', { primaryKey: true })), when: explorerShortcutWhen, priority: KeybindingWeight.WorkbenchContrib + 10 });
 // Let the tree receive the browser paste event, including files copied in the system file manager.
-KeybindingsRegistry.registerKeybindingPassThrough({
-	command: PASTE_FILE_COMMAND_ID,
-	keybinding: Keybinding.single(logicalKey('v', { primaryKey: true })),
-	when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen),
-	priority: KeybindingWeight.WorkbenchContrib + 10,
-});
+KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
 if (isMacintosh) {
-	KeybindingsRegistry.registerKeybindingPassThrough({
-		command: PASTE_FILE_COMMAND_ID,
-		keybinding: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })),
-		when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen),
-		priority: KeybindingWeight.WorkbenchContrib + 10,
-	});
+	KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
 }
-KeybindingsRegistry.registerKeybindingRule({
-	command: CANCEL_CUT_COMMAND_ID,
-	keybinding: Keybinding.single(logicalKey('Escape')),
-	when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), ContextKeyExpr.has('ashExplorerHasCutFiles')),
-	priority: KeybindingWeight.WorkbenchContrib + 10,
-});
+KeybindingsRegistry.registerKeybindingRule({ command: CANCEL_CUT_COMMAND_ID, keybinding: Keybinding.single(logicalKey('Escape')), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), ContextKeyExpr.has('ashExplorerHasCutFiles')), priority: KeybindingWeight.WorkbenchContrib + 10 });
 
 KeybindingsRegistry.registerKeybindingRule({
 	command: OPEN_TO_SIDE_COMMAND_ID,
@@ -537,13 +400,17 @@ const pathChordPrefix = logicalKey('k', { primaryKey: true });
 for (const editorFocused of [false, true]) {
 	KeybindingsRegistry.registerKeybindingRule({
 		command: COPY_PATH_COMMAND_ID,
-		keybinding: editorFocused && !isWindows ? Keybinding.chord(pathChordPrefix, copyPathKey) : Keybinding.single(copyPathKey),
+		keybinding: editorFocused && !isWindows
+			? Keybinding.chord(pathChordPrefix, copyPathKey)
+			: Keybinding.single(copyPathKey),
 		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
 		priority: KeybindingWeight.WorkbenchContrib,
 	});
 	KeybindingsRegistry.registerKeybindingRule({
 		command: COPY_RELATIVE_PATH_COMMAND_ID,
-		keybinding: editorFocused || isWindows ? Keybinding.chord(pathChordPrefix, copyRelativePathKey) : Keybinding.single(copyRelativePathKey),
+		keybinding: editorFocused || isWindows
+			? Keybinding.chord(pathChordPrefix, copyRelativePathKey)
+			: Keybinding.single(copyRelativePathKey),
 		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
 		priority: KeybindingWeight.WorkbenchContrib,
 	});

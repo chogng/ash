@@ -34,30 +34,21 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 
 	async list(): Promise<PluginCatalogView> {
 		const catalog = await this.api.list();
-		return {
-			...catalog,
-			packages: catalog.packages.map(({ uiTargets, ...plugin }) => ({
-				...plugin,
-				...(uiTargets
-					? {
-							uiTargets: uiTargets.map(target => (target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents)),
-						}
-					: {}),
-			})),
-		};
+		return { ...catalog, packages: catalog.packages.map(({ uiTargets, ...plugin }) => ({ ...plugin, ...(uiTargets ? { uiTargets: uiTargets.map(target => target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents) } : {}) })) };
 	}
 
 	async installLocal(path: string, expectedRevision: number): Promise<PluginInstallation> {
-		const result = await this.api.installLocal({
-			commandId: `desktop-plugin-install-${crypto.randomUUID()}`,
-			expectedRevision,
-			path,
-			dirId: null,
-		});
+		const result = await this.api.installLocal({ commandId: `desktop-plugin-install-${crypto.randomUUID()}`, expectedRevision, path, dirId: null });
 		return { id: result.id, version: result.version, digest: result.digest };
 	}
 
-	async installFromGit(folder: IWorkspaceFolder, url: string, reference: string | undefined, packagePath: string, signal: AbortSignal): Promise<PluginInstallation> {
+	async installFromGit(
+		folder: IWorkspaceFolder,
+		url: string,
+		reference: string | undefined,
+		packagePath: string,
+		signal: AbortSignal,
+	): Promise<PluginInstallation> {
 		const controller = new AbortController();
 		const lifetime = this.gitInstalls.add(toDisposable(() => controller.abort()));
 		try {
@@ -68,7 +59,13 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		}
 	}
 
-	private async installGitPackage(folder: IWorkspaceFolder, url: string, reference: string | undefined, packagePath: string, signal: AbortSignal): Promise<PluginInstallation> {
+	private async installGitPackage(
+		folder: IWorkspaceFolder,
+		url: string,
+		reference: string | undefined,
+		packagePath: string,
+		signal: AbortSignal,
+	): Promise<PluginInstallation> {
 		// Validate the user-entered package path before joining it to any host resource.
 		const parts = packagePath === '' || packagePath === '.' ? [] : packagePath.split('/');
 		if (parts.some(part => !/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..' || part.toLowerCase() === '.git')) {
@@ -80,21 +77,15 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		const checkout = URI.joinPath(folder.uri, checkoutName);
 		const staging = URI.joinPath(folder.uri, packageName);
 		const targetPath = isRemoteResource(checkout) ? getRemoteWorkspacePath(checkout) : checkout.fsPath;
-		if (signal.aborted) {
-			throw canceled();
-		}
-		const cancel = () => {
-			void this.git.cancel(operationId).catch(() => undefined);
-		};
+		if (signal.aborted) { throw canceled(); }
+		const cancel = () => { void this.git.cancel(operationId).catch(() => undefined); };
 		signal.addEventListener('abort', cancel, { once: true });
 		try {
 			await this.git.clone(operationId, url, targetPath, reference);
 		} finally {
 			signal.removeEventListener('abort', cancel);
 		}
-		if (signal.aborted) {
-			throw canceled();
-		}
+		if (signal.aborted) { throw canceled(); }
 		let source = checkout;
 		for (const part of parts) {
 			source = URI.joinPath(source, part);
@@ -106,14 +97,10 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		try {
 			// Git configuration, credentials and hooks are checkout metadata, never package bytes.
 			await this.copyGitPackage(source, staging, signal);
-			if (signal.aborted) {
-				throw canceled();
-			}
+			if (signal.aborted) { throw canceled(); }
 			// Bind installation to the captured folder, even if the active workspace changed while cloning.
 			const catalog = await this.api.list();
-			if (signal.aborted) {
-				throw canceled();
-			}
+			if (signal.aborted) { throw canceled(); }
 			const result = await this.api.installLocal({
 				commandId: `desktop-plugin-git-${operationId}`,
 				expectedRevision: catalog.revision,
@@ -129,12 +116,8 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 
 	private async copyGitPackage(source: URI, destination: URI, signal: AbortSignal): Promise<void> {
 		for (const entry of await this.files.readDirectory(source)) {
-			if (signal.aborted) {
-				throw canceled();
-			}
-			if (entry.name.toLowerCase() === '.git') {
-				continue;
-			}
+			if (signal.aborted) { throw canceled(); }
+			if (entry.name.toLowerCase() === '.git') { continue; }
 			const target = URI.joinPath(destination, entry.name);
 			if (entry.kind === FileKind.Directory) {
 				await this.files.createDirectory(target);

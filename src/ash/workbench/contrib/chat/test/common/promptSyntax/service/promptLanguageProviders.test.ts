@@ -17,36 +17,20 @@ async function complete(source: string, position: Position, name = 'SKILL.md', a
 	using model = new TextModel(source, { resource: URI.file(`/skills/review/${name}`), languageId: 'markdown' });
 	const controller = new AbortController();
 	if (aborted) controller.abort();
-	using service = createTestLanguageModelToolsService({
-		isAvailable: false,
-		read: async () => {
-			throw new Error('Unexpected catalog read');
-		},
-	});
-	return await new PromptHeaderAutocompletion(service).provideCompletions(
-		{
-			requestId: 1,
-			resource: model.uri,
-			languageId: 'markdown',
-			position,
-			context: { kind: LanguageCompletionTriggerKind.Invoke },
-			snapshot: model.createVersionedSnapshot(),
-		},
-		controller.signal,
-	);
+	using service = createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected catalog read'); } });
+	return await new PromptHeaderAutocompletion(service).provideCompletions({
+		requestId: 1, resource: model.uri, languageId: 'markdown', position,
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+	}, controller.signal);
 }
 
 test('Skill header completion offers the existing schema keys, excluding already present root keys', async () => {
 	const result = await complete('---\nname: review\n\n---\nBody', new Position(3, 1));
-	assert.deepEqual(
-		result?.items.map(item => item.label),
-		['description', 'license', 'compatibility', 'metadata', 'allowed-tools'],
-	);
+	assert.deepEqual(result?.items.map(item => item.label), ['description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
 	const filtered = await complete('---\nname: review\nde\n---', new Position(3, 3));
-	assert.deepEqual(
-		filtered?.items.map(item => ({ label: item.label, insertText: item.insertText, range: item.range })),
-		[{ label: 'description', insertText: 'description: ', range: new Range(3, 1, 3, 3) }],
-	);
+	assert.deepEqual(filtered?.items.map(item => ({ label: item.label, insertText: item.insertText, range: item.range })), [
+		{ label: 'description', insertText: 'description: ', range: new Range(3, 1, 3, 3) },
+	]);
 });
 
 test('Skill completion does not enter body, nested mappings, other files or cancelled requests', async () => {
@@ -55,26 +39,15 @@ test('Skill completion does not enter body, nested mappings, other files or canc
 	assert.equal(await complete('---\nde', new Position(2, 3), 'README.md'), undefined);
 	assert.equal(await complete('Body\nde', new Position(2, 3)), undefined);
 	assert.equal(await complete('---\nde', new Position(2, 3), 'SKILL.md', true), undefined);
-	assert.deepEqual(
-		(await complete('---\nde', new Position(2, 3)))?.items.map(item => item.label),
-		['description'],
-	);
+	assert.deepEqual((await complete('---\nde', new Position(2, 3)))?.items.map(item => item.label), ['description']);
 });
 
 test('Skill hover describes only an existing header key at its exact range', () => {
-	using model = new TextModel('---\nname: review\n---\nname: body', {
-		resource: URI.file('/skills/review/SKILL.md'),
-		languageId: 'markdown',
-	});
+	using model = new TextModel('---\nname: review\n---\nname: body', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
 	const controller = new AbortController();
 	const request = {
-		model,
-		snapshot: model.createVersionedSnapshot(),
-		resource: model.uri,
-		languageId: 'markdown',
-		modelLanguageId: 'markdown',
-		signal: controller.signal,
-		position: new Position(2, 2),
+		model, snapshot: model.createVersionedSnapshot(), resource: model.uri,
+		languageId: 'markdown', modelLanguageId: 'markdown', signal: controller.signal, position: new Position(2, 2),
 	};
 	const provider = new PromptHoverProvider();
 	const hover = provider.provideHover(request, controller.signal);
@@ -88,94 +61,41 @@ test('Skill hover describes only an existing header key at its exact range', () 
 
 test('Skill value completion uses the actual directory name and AST hover handles quoted keys', async () => {
 	const result = await complete('---\nname: re\n---', new Position(2, 9));
-	assert.deepEqual(
-		result?.items.map(item => ({ label: item.label, range: item.range })),
-		[{ label: 'review', range: new Range(2, 7, 2, 9) }],
-	);
-	using model = new TextModel('---\n"description": >-\n  Review changes\n---', {
-		resource: URI.file('/skills/review/SKILL.md'),
-		languageId: 'markdown',
-	});
+	assert.deepEqual(result?.items.map(item => ({ label: item.label, range: item.range })), [{ label: 'review', range: new Range(2, 7, 2, 9) }]);
+	using model = new TextModel('---\n"description": >-\n  Review changes\n---', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
 	const controller = new AbortController();
-	const hover = new PromptHoverProvider().provideHover(
-		{
-			model,
-			snapshot: model.createVersionedSnapshot(),
-			resource: model.uri,
-			languageId: 'markdown',
-			modelLanguageId: 'markdown',
-			signal: controller.signal,
-			position: new Position(2, 3),
-		},
-		controller.signal,
-	);
+	const hover = new PromptHoverProvider().provideHover({ model, snapshot: model.createVersionedSnapshot(), resource: model.uri, languageId: 'markdown', modelLanguageId: 'markdown', signal: controller.signal, position: new Position(2, 3) }, controller.signal);
 	assert.deepEqual(hover?.range, new Range(2, 1, 2, 14));
 });
+
 
 test('Skill draft diagnostics explain syntax and schema without accepting or executing catalog data', () => {
 	const parser = new PromptFileParser();
 	const validator = new PromptValidator();
 	const uri = URI.file('/skills/review/SKILL.md');
 	const invalid = validator.validate(parser.parse(uri, '---\nname: review\ndescription: [one, two]\nmetadata:\n  owner: [team]\nmodel: unknown\n---'));
-	assert.deepEqual(
-		invalid.map(error => error.code),
-		['textField', 'metadataShape', 'unknownField'],
-	);
+	assert.deepEqual(invalid.map(error => error.code), ['textField', 'metadataShape', 'unknownField']);
 	assert.deepEqual(invalid[0]!.range, new Range(3, 14, 3, 24));
 	assert.deepEqual(validator.validate(parser.parse(uri, '---\nname: review\ndescription: >-\n  Review changes.\nmetadata: { owner: editor }\n---')), []);
-	assert.deepEqual(
-		validator.validate(parser.parse(uri, '---\n---')).map(error => error.code),
-		['requiredField', 'requiredField'],
-	);
-	assert.deepEqual(
-		validator.validate(parser.parse(uri, '')).map(error => error.code),
-		['missingHeader'],
-	);
+	assert.deepEqual(validator.validate(parser.parse(uri, '---\n---')).map(error => error.code), ['requiredField', 'requiredField']);
+	assert.deepEqual(validator.validate(parser.parse(uri, '')).map(error => error.code), ['missingHeader']);
 });
 
+
 test('allowed-tools suggestions read the real capability catalog, omit hidden and existing tools and reject a cancelled reply', async () => {
-	using model = new TextModel('---\nname: review\nallowed-tools: existing re_file\n---', {
-		resource: URI.file('/skills/review/SKILL.md'),
-		languageId: 'markdown',
-	});
+	using model = new TextModel('---\nname: review\nallowed-tools: existing re_file\n---', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
 	const pending = new DeferredPromise<ToolCatalogFixture>();
 	let reads = 0;
-	using service = createTestLanguageModelToolsService({
-		isAvailable: true,
-		read: () => {
-			reads++;
-			return pending.p;
-		},
-	});
+	using service = createTestLanguageModelToolsService({ isAvailable: true, read: () => { reads++; return pending.p; } });
 	const provider = new PromptHeaderAutocompletion(service);
 	const controller = new AbortController();
-	const request = {
-		requestId: 1,
-		resource: model.uri,
-		languageId: 'markdown',
-		position: new Position(3, 26),
-		context: { kind: LanguageCompletionTriggerKind.Invoke as const },
-		snapshot: model.createVersionedSnapshot(),
-	};
+	const request = { requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, 26), context: { kind: LanguageCompletionTriggerKind.Invoke as const }, snapshot: model.createVersionedSnapshot() };
 	const first = provider.provideCompletions(request, controller.signal);
 	assert.equal(reads, 1);
-	const tools: ToolCatalogFixture = {
-		tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({
-			name,
-			description: name + ' description',
-			source: 'local',
-			sourceDetails: [],
-			exposure: index === 2 ? 'hidden' : 'direct',
-			authority: 'directoryRead',
-		})),
-		sourceGroups: [],
-	};
+	const tools: ToolCatalogFixture = { tools: ['existing', 'read_file', 'restricted'].map((name, index) => ({ name, description: name + ' description', source: 'local', sourceDetails: [], exposure: index === 2 ? 'hidden' : 'direct', authority: 'directoryRead' })), sourceGroups: [] };
 	await pending.complete(tools);
 	const result = await first;
-	assert.deepEqual(
-		result?.items.map(item => ({ label: item.label, range: item.range })),
-		[{ label: 'read_file', range: new Range(3, 25, 3, 32) }],
-	);
+	assert.deepEqual(result?.items.map(item => ({ label: item.label, range: item.range })), [{ label: 'read_file', range: new Range(3, 25, 3, 32) }]);
 	const delayed = new DeferredPromise<ToolCatalogFixture>();
 	using delayedService = createTestLanguageModelToolsService({ isAvailable: true, read: () => delayed.p });
 	const cancelled = new PromptHeaderAutocompletion(delayedService).provideCompletions(request, controller.signal);
@@ -184,76 +104,42 @@ test('allowed-tools suggestions read the real capability catalog, omit hidden an
 	assert.equal(await cancelled, undefined);
 });
 
+
 test('Prompt links use the original Skill URI and reject code, remote web links and cancelled requests', () => {
 	const uri = URI.parse('private://skill/review/SKILL.md?source=pinned');
-	using model = new TextModel('---\nname: review\n---\n[Guide](references/guide.md) and `[code](hidden.md)`', {
-		resource: uri,
-		languageId: 'markdown',
-	});
+	using model = new TextModel('---\nname: review\n---\n[Guide](references/guide.md) and `[code](hidden.md)`', { resource: uri, languageId: 'markdown' });
 	const controller = new AbortController();
-	const request = {
-		model,
-		snapshot: model.createVersionedSnapshot(),
-		resource: uri,
-		languageId: 'markdown',
-		modelLanguageId: 'markdown',
-		signal: controller.signal,
-	};
+	const request = { model, snapshot: model.createVersionedSnapshot(), resource: uri, languageId: 'markdown', modelLanguageId: 'markdown', signal: controller.signal };
 	const provider = new PromptLinkProvider();
-	assert.deepEqual(
-		provider.provideLinks(request, controller.signal).map(link => ({ range: link.range, target: link.target })),
-		[{ range: new Range(4, 9, 4, 28), target: uri.with({ path: '/review/references/guide.md' }).toString() }],
-	);
+	assert.deepEqual(provider.provideLinks(request, controller.signal).map(link => ({ range: link.range, target: link.target })), [{ range: new Range(4, 9, 4, 28), target: uri.with({ path: '/review/references/guide.md' }).toString() }]);
 	controller.abort();
 	assert.deepEqual(provider.provideLinks(request, controller.signal), []);
 });
 
 test('Skill tool completion uses qualified references and tool set membership, including aliases already present in the header', async () => {
 	using service = createTestLanguageModelToolsService({
-		isAvailable: true,
-		read: async () => ({
-			tools: [
-				{
-					name: 'search_docs',
-					description: 'Search documents',
-					source: 'mcp',
-					sourceDetails: ['docs-server'],
-					exposure: 'deferred',
-					authority: 'providerDefined',
-				},
-			],
+		isAvailable: true, read: async () => ({
+			tools: [{ name: 'search_docs', description: 'Search documents', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' }],
 			sourceGroups: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
-		}),
+		})
 	});
 	const provider = new PromptHeaderAutocompletion(service);
 	for (const existing of ['', 'search_docs ']) {
 		const line = `allowed-tools: ${existing}mcp/`;
-		using model = new TextModel(`---\nname: review\n${line}\n---`, {
-			resource: URI.file('/skills/review/SKILL.md'),
-			languageId: 'markdown',
-		});
-		const result = await provider.provideCompletions(
-			{
-				requestId: 1,
-				resource: model.uri,
-				languageId: 'markdown',
-				position: new Position(3, line.length + 1),
-				context: { kind: LanguageCompletionTriggerKind.Invoke },
-				snapshot: model.createVersionedSnapshot(),
-			},
-			new AbortController().signal,
-		);
-		assert.deepEqual(
-			result?.items.map(item => ({ label: item.label, documentation: item.documentation })),
-			existing
-				? [{ label: 'mcp/docs-server/*', documentation: 'search_docs' }]
-				: [
-						{ label: 'mcp/docs-server/search_docs', documentation: 'Search documents' },
-						{ label: 'mcp/docs-server/*', documentation: 'search_docs' },
-					],
-		);
+		using model = new TextModel(`---\nname: review\n${line}\n---`, { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
+		const result = await provider.provideCompletions({
+			requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, line.length + 1),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.deepEqual(result?.items.map(item => ({ label: item.label, documentation: item.documentation })), existing ? [
+			{ label: 'mcp/docs-server/*', documentation: 'search_docs' },
+		] : [
+			{ label: 'mcp/docs-server/search_docs', documentation: 'Search documents' },
+			{ label: 'mcp/docs-server/*', documentation: 'search_docs' },
+		]);
 	}
 });
+
 
 test('Skill name completion at an empty value never proposes an inverted replacement range', async () => {
 	for (const source of ['---\nname:\n---', '---\nname: \n---']) {
@@ -265,23 +151,9 @@ test('Skill name completion at an empty value never proposes an inverted replace
 });
 
 test('Skill diagnostic hover uses the actual quoted key range when the key includes a colon', () => {
-	using model = new TextModel('---\n"custom:key": text\n---', {
-		resource: URI.file('/skills/review/SKILL.md'),
-		languageId: 'markdown',
-	});
+	using model = new TextModel('---\n"custom:key": text\n---', { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
 	const signal = new AbortController().signal;
-	const hover = new PromptHoverProvider().provideHover(
-		{
-			model,
-			snapshot: model.createVersionedSnapshot(),
-			resource: model.uri,
-			languageId: 'markdown',
-			modelLanguageId: 'markdown',
-			signal,
-			position: new Position(2, 8),
-		},
-		signal,
-	);
+	const hover = new PromptHoverProvider().provideHover({ model, snapshot: model.createVersionedSnapshot(), resource: model.uri, languageId: 'markdown', modelLanguageId: 'markdown', signal, position: new Position(2, 8) }, signal);
 	assert.equal(hover?.contents.length, 1);
 	assert.match(String(hover?.contents[0]), /custom:key/u);
 });

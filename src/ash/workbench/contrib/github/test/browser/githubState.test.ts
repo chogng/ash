@@ -22,9 +22,7 @@ suite('github browser component', () => {
 			const card = page.locator('.ash-github-resource-hover');
 			const glyph = card.locator('.ash-icon');
 			await expect(card.locator('.ash-github-hover-metadata')).toHaveText(label);
-			expect(
-				await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
-			).toContain(label);
+			expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(label);
 			await expect(glyph).toHaveAttribute('data-ash-icon-id', icon);
 			await expect(glyph).toHaveAttribute('aria-hidden', 'true');
 			expect(await glyph.evaluate(element => element.style.color)).toBe(`var(--ash-${color})`);
@@ -42,19 +40,14 @@ suite('github browser component', () => {
 	test('Issue closure reasons are readable in Chinese in links, details and the accessible view', async function () {
 		const { page } = browserTests;
 
-		for (const [reason, label] of [
-			['not_planned', '已关闭：不计划处理'],
-			['duplicate', '已关闭：重复问题'],
-		] as const) {
+		for (const [reason, label] of [['not_planned', '已关闭：不计划处理'], ['duplicate', '已关闭：重复问题']] as const) {
 			await page.goto(`/github.html?issueState=closed&issueReason=${reason}&locale=zh-CN`);
 			const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
 			await expect(issue).toContainText(label);
 			await issue.focus();
 			await page.keyboard.press('F2');
 			await expect(page.locator('.ash-github-resource-hover .ash-github-hover-metadata')).toHaveText(label);
-			expect(
-				await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
-			).toContain(label);
+			expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(label);
 		}
 	});
 
@@ -75,12 +68,7 @@ suite('github browser component', () => {
 		await link.evaluate(element => element.removeAttribute('hidden'));
 		await expect(spinner).not.toHaveClass(/paused/);
 		await page.emulateMedia({ reducedMotion: 'reduce' });
-		expect(
-			await spinner
-				.locator('i')
-				.first()
-				.evaluate(element => getComputedStyle(element).animationName),
-		).toBe('none');
+		expect(await spinner.locator('i').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
 		await page.evaluate(() => window.ashGitHubIntegration.theme('highContrast'));
 		expect(await spinner.evaluate(element => getComputedStyle(element).color === getComputedStyle(element.parentElement!).color)).toBe(true);
 		const retainedSpinner = await spinner.elementHandle();
@@ -96,10 +84,7 @@ suite('github browser component', () => {
 		const { page } = browserTests;
 
 		const errors: string[] = [];
-		page.on('pageerror', error => {
-			errors.push(error.message);
-			console.error(error.message);
-		});
+		page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });
 		await page.goto('/github.html');
 		const repository = page.locator('main a[href="https://github.com/team/repo"]');
 		const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
@@ -121,12 +106,8 @@ suite('github browser component', () => {
 		await expect(card.getByRole('link', { name: 'team/repo', exact: true })).toBeFocused();
 		await expect(card.locator('.ash-github-hover-description')).toHaveText(/^Issue details .*…$/);
 		await expect(card).toHaveAttribute('data-github-content', /Long description Long description/);
-		expect(
-			await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
-		).toContain('Long description '.repeat(30).trim());
-		expect(
-			await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
-		).toContain('Escape closes the card');
+		expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('Long description '.repeat(30).trim());
+		expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('Escape closes the card');
 		await page.keyboard.press('Escape');
 		await expect(issue).toBeFocused();
 		await page.keyboard.press('Enter');
@@ -181,16 +162,11 @@ suite('github browser component', () => {
 		const { page } = browserTests;
 
 		const errors: string[] = [];
-		page.on('pageerror', error => {
-			errors.push(error.message);
-			console.error(error.message);
-		});
+		page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });
 		await page.goto('/github.html');
 		const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
 		await expect(issue).toContainText('Open');
-		await page.evaluate(() =>
-			window.ashGitHubIntegration.render('[One](https://github.com/team/repo/issues/7) [Two](https://github.com/team/repo/issues/7) [Held](https://github.com/team/repo/issues/9)'),
-		);
+		await page.evaluate(() => window.ashGitHubIntegration.render('[One](https://github.com/team/repo/issues/7) [Two](https://github.com/team/repo/issues/7) [Held](https://github.com/team/repo/issues/9)'));
 		await expect(issue).toHaveCount(2);
 		await expect(issue.nth(0)).toContainText('Open');
 		await expect(issue.nth(1)).toContainText('Open');
@@ -238,12 +214,7 @@ suite('github browser component', () => {
 			const retainedAnchor = await pr.elementHandle();
 			await page.evaluate(() => window.ashGitHubIntegration.dispose());
 			await expect(pr).toHaveCount(0);
-			expect(
-				await retainedAnchor!.evaluate(element => ({
-					text: element.textContent,
-					icons: element.querySelectorAll('.ash-icon').length,
-				})),
-			).toEqual({ text: 'PR', icons: 0 });
+			expect(await retainedAnchor!.evaluate(element => ({ text: element.textContent, icons: element.querySelectorAll('.ash-icon').length }))).toEqual({ text: 'PR', icons: 0 });
 			await retainedAnchor!.dispose();
 		});
 	}

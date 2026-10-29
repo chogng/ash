@@ -48,11 +48,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 	public registerSingleton<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>, options: SingletonRegistrationOptions = {}): void {
 		this.assertNotDisposed();
 		this.assertCanRegister(id);
-		this.factories.set(id, {
-			factory,
-			transient: false,
-			delayed: options.instantiation === InstantiationType.Delayed,
-		});
+		this.factories.set(id, { factory, transient: false, delayed: options.instantiation === InstantiationType.Delayed });
 	}
 
 	public registerTransient<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>): void {
@@ -223,21 +219,14 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		let instance: object | undefined;
 		let initializing = false;
 		const members = new Map<PropertyKey, unknown>();
-		const pending = new Set<{
-			readonly property: PropertyKey;
-			readonly listener: (event: unknown) => unknown;
-			readonly thisArgs: unknown;
-			subscription?: IDisposable;
-		}>();
-		this._register(
-			toDisposable(() => {
-				for (const entry of pending) {
-					entry.subscription?.dispose();
-				}
-				pending.clear();
-				members.clear();
-			}),
-		);
+		const pending = new Set<{ readonly property: PropertyKey; readonly listener: (event: unknown) => unknown; readonly thisArgs: unknown; subscription?: IDisposable; }>();
+		this._register(toDisposable(() => {
+			for (const entry of pending) {
+				entry.subscription?.dispose();
+			}
+			pending.clear();
+			members.clear();
+		}));
 		const initialize = (): object => {
 			this.assertNotDisposed();
 			if (initializing) {
@@ -257,55 +246,47 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 			}
 			return instance;
 		};
-		const proxy = new Proxy(
-			{},
-			{
-				get: (_target, property) => {
-					this.assertNotDisposed();
-					if (members.has(property)) {
-						return members.get(property);
-					}
-					if (typeof property === 'string' && /^(onDid|onWill)/.test(property)) {
-						const event: Event<unknown> = (listener, thisArgs, disposables) => {
-							this.assertNotDisposed();
-							if (instance) {
-								return (Reflect.get(instance, property) as Event<unknown>)(listener, thisArgs, disposables);
-							}
-							const entry = {
-								property,
-								listener,
-								thisArgs,
-								subscription: undefined as IDisposable | undefined,
-							};
-							pending.add(entry);
-							const subscription = toDisposable(() => {
-								pending.delete(entry);
-								entry.subscription?.dispose();
-							});
-							if (Array.isArray(disposables)) {
-								disposables.push(subscription);
-							} else {
-								disposables?.add(subscription);
-							}
-							return subscription;
-						};
-						members.set(property, event);
-						return event;
-					}
-					const object = initialize();
-					const value = Reflect.get(object, property, object);
-					if (typeof value !== 'function') {
-						return value;
-					}
-					const method = value.bind(object);
-					members.set(property, method);
-					return method;
-				},
-				set: (_target, property, value) => Reflect.set(initialize(), property, value),
-				getPrototypeOf: () => Reflect.getPrototypeOf(initialize()),
-				has: (_target, property) => Reflect.has(initialize(), property),
+		const proxy = new Proxy({}, {
+			get: (_target, property) => {
+				this.assertNotDisposed();
+				if (members.has(property)) {
+					return members.get(property);
+				}
+				if (typeof property === 'string' && /^(onDid|onWill)/.test(property)) {
+					const event: Event<unknown> = (listener, thisArgs, disposables) => {
+						this.assertNotDisposed();
+						if (instance) {
+							return (Reflect.get(instance, property) as Event<unknown>)(listener, thisArgs, disposables);
+						}
+						const entry = { property, listener, thisArgs, subscription: undefined as IDisposable | undefined };
+						pending.add(entry);
+						const subscription = toDisposable(() => {
+							pending.delete(entry);
+							entry.subscription?.dispose();
+						});
+						if (Array.isArray(disposables)) {
+							disposables.push(subscription);
+						} else {
+							disposables?.add(subscription);
+						}
+						return subscription;
+					};
+					members.set(property, event);
+					return event;
+				}
+				const object = initialize();
+				const value = Reflect.get(object, property, object);
+				if (typeof value !== 'function') {
+					return value;
+				}
+				const method = value.bind(object);
+				members.set(property, method);
+				return method;
 			},
-		);
+			set: (_target, property, value) => Reflect.set(initialize(), property, value),
+			getPrototypeOf: () => Reflect.getPrototypeOf(initialize()),
+			has: (_target, property) => Reflect.has(initialize(), property),
+		});
 		delayedServices.add(proxy);
 		return proxy;
 	}

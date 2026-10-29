@@ -15,16 +15,7 @@ const identity = { id: 'ash.keys', name: 'keys', publisher: 'ash', version: '1.0
 const parse = (keybindings: unknown) => parseExtensionManifest(JSON.stringify({ ...identity, contributes: { keybindings } }), identity);
 
 test('Keybinding declarations validate every platform and preserve context and structured arguments', () => {
-	const manifest = parse([
-		{
-			key: 'ctrl+d',
-			mac: 'cmd+d',
-			linux: 'alt+d',
-			command: 'test.select',
-			when: 'editorTextFocus',
-			args: { value: 12 },
-		},
-	]);
+	const manifest = parse([{ key: 'ctrl+d', mac: 'cmd+d', linux: 'alt+d', command: 'test.select', when: 'editorTextFocus', args: { value: 12 } }]);
 	const rule = manifest.contributes.keybindings[0]!;
 	assert.equal(rule.command, 'test.select');
 	assert.deepEqual([...rule.when!.keys()], ['editorTextFocus']);
@@ -36,9 +27,7 @@ test('Keybinding declarations validate every platform and preserve context and s
 		{ key: 'ctrl+d', mac: 42, command: 'test.select' },
 		{ key: 'ctrl+d', command: '-test.select' },
 		{ key: 'ctrl+d', command: 'test.select', when: '(' },
-	]) {
-		assert.throws(() => parse([contribution]), TypeError);
-	}
+	]) { assert.throws(() => parse([contribution]), TypeError); }
 });
 
 test('A real optional keymap admits editing bindings, rejects command execution and retires its registrations', async () => {
@@ -48,43 +37,19 @@ test('A real optional keymap admits editing bindings, rejects command execution 
 		{ key: 'ctrl+shift+q', command: 'editor.action.copyLinesDownAction', args: { unexpected: true } },
 	);
 	const manifestJson = JSON.stringify(manifest);
-	const descriptor: ExtensionDescriptor = {
-		id: 'ash.keymap-sublime',
-		displayName: 'Sublime Text Keymap',
-		name: manifest.name,
-		publisher: manifest.publisher,
-		version: manifest.version,
-		sourceKind: 'registry',
-		manifestJson,
-		manifestSha256: 'sha256:' + createHash('sha256').update(manifestJson).digest('hex'),
-		packageSha256: 'sha256:' + 'a'.repeat(64),
-	};
-	let extensions = [descriptor];
-	let generation = 0;
+	const descriptor: ExtensionDescriptor = { id: 'ash.keymap-sublime', displayName: 'Sublime Text Keymap', name: manifest.name, publisher: manifest.publisher, version: manifest.version, sourceKind: 'registry', manifestJson, manifestSha256: 'sha256:' + createHash('sha256').update(manifestJson).digest('hex'), packageSha256: 'sha256:' + 'a'.repeat(64) };
+	let extensions = [descriptor]; let generation = 0;
 	const before = new Set(KeybindingsRegistry.getKeybindings());
 	using adapters = new AdapterManager();
-	using service = new AppServerExtensionService(
-		{
-			api: {
-				list: async () => ({ generation: ++generation, extensions, diagnostics: [] }),
-				resources: new ExtensionResourceLoaderService(async () => {
-					throw new Error('A keymap must not load executable resources');
-				}),
-			},
-		},
-		createEmptyTestLanguagePacks(),
-		adapters,
-	);
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation: ++generation, extensions, diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('A keymap must not load executable resources'); }) } }, createEmptyTestLanguagePacks(), adapters);
 	await service.start();
 	const added = () => KeybindingsRegistry.getKeybindings().filter(rule => !before.has(rule));
 	assert.equal(added().length, 8);
 	assert.ok(added().every(rule => rule.priority === KeybindingWeight.ExternalExtension));
 	assert.ok(added().every(rule => rule.kind === 'command' && rule.command.startsWith('editor.action.') && rule.args === undefined));
-	extensions = [];
-	await service.reload();
+	extensions = []; await service.reload();
 	assert.deepEqual(added(), []);
-	extensions = [descriptor];
-	await service.reload();
+	extensions = [descriptor]; await service.reload();
 	assert.equal(added().length, 8);
 	service.dispose();
 	assert.deepEqual(added(), []);

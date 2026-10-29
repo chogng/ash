@@ -79,9 +79,9 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
+		observe(): void { }
+		unobserve(): void { }
+		disconnect(): void { }
 	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -115,21 +115,14 @@ test('Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService });
 	using services = paneServices(models);
-	const pane = createPane(services, resourceStore, {
-		textDirection: EditorTextDirection.RightToLeft,
-		fontFamily: 'Fira Code, monospace',
-		fontSize: 16,
-	});
+	const pane = createPane(services, resourceStore, { textDirection: EditorTextDirection.RightToLeft, fontFamily: 'Fira Code, monospace', fontSize: 16 });
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
-	await pane.setInput(
-		{
-			resource: URI.file('C:\\project\\main.ts'),
-			label: 'main.ts',
-			initialText: 'const alpha = 1;',
-		},
-		new AbortController().signal,
-	);
+	await pane.setInput({
+		resource: URI.file('C:\\project\\main.ts'),
+		label: 'main.ts',
+		initialText: 'const alpha = 1;',
+	}, new AbortController().signal);
 
 	assert.equal(pane.getValue(), 'const alpha = 1;');
 	const control = pane.getControl();
@@ -137,13 +130,7 @@ test('Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	assert.ok(control.getContribution('editor.contrib.findController'));
 	assert.ok(control.getContribution('editor.contrib.inlayHints'));
 	assert.ok(control.getContribution('store.contrib.stickyScrollController'));
-	assert.deepEqual(pane.getStatus(), {
-		lineNumber: 1,
-		columnNumber: 1,
-		languageId: 'typescript',
-		encoding: 'UTF-8',
-		endOfLine: 'LF',
-	});
+	assert.deepEqual(pane.getStatus(), { lineNumber: 1, columnNumber: 1, languageId: 'typescript', encoding: 'UTF-8', endOfLine: 'LF' });
 	assert.equal(parent.querySelectorAll('.stanza-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-editor').length, 1);
 	const editor = parent.querySelector<HTMLElement>('.stanza-editor')!;
@@ -300,15 +287,12 @@ test('open code editor applies live view settings and actions without replacing 
 	await configuration.updateValue(CodeEditorConfiguration.lineHeight, 28);
 	await configuration.updateValue(CodeEditorConfiguration.fontLigatures, true);
 	assert.equal(pane.getControl(), control);
-	assert.deepEqual(
-		{
-			family: control.getOption(EditorOption.fontFamily),
-			size: control.getOption(EditorOption.fontSize),
-			lineHeight: control.getOption(EditorOption.lineHeight),
-			ligatures: control.getOption(EditorOption.fontLigatures),
-		},
-		{ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' },
-	);
+	assert.deepEqual({
+		family: control.getOption(EditorOption.fontFamily),
+		size: control.getOption(EditorOption.fontSize),
+		lineHeight: control.getOption(EditorOption.lineHeight),
+		ligatures: control.getOption(EditorOption.fontLigatures),
+	}, { family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' });
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, '');
 	await configuration.updateValue(CodeEditorConfiguration.lineHeight, 0);
 	assert.equal(control.getOption(EditorOption.fontFamily), EDITOR_FONT_DEFAULTS.fontFamily);
@@ -337,9 +321,7 @@ test('font, wrapping and format-on-type settings follow resource language withou
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using parentServices = paneServices(models);
 	using services = parentServices.createChild();
-	using configuration = new WorkbenchConfigurationService({
-		source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial", "editor.wordWrap": "bounded", "editor.wordWrapColumn": 36, "editor.minimap.maxColumn": 20, "editor.formatOnType": true }, "[settings-font-other]": { "editor.fontSize": 29, "editor.minimap.maxColumn": 60, "editor.wordWrap": "off", "editor.formatOnType": false } }',
-	});
+	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial", "editor.wordWrap": "bounded", "editor.wordWrapColumn": 36, "editor.minimap.maxColumn": 20, "editor.formatOnType": true }, "[settings-font-other]": { "editor.fontSize": 29, "editor.minimap.maxColumn": 60, "editor.wordWrap": "off", "editor.formatOnType": false } }' });
 	services.registerInstance(IConfigurationService, configuration);
 	using language = services.get(ILanguageService).registerLanguage({ id: 'settings-font-other' });
 	using pane = createPane(services, resourceStore, {});
@@ -391,10 +373,7 @@ test('Workbench Go to Line command opens colon Quick Access and commits the acti
 	using services = parentServices.createChild();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
-	using quickInput = new TestQuickInputService({
-		instantiationService: services,
-		container: dom.window.document.body,
-	});
+	using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	const quickAccess = services.get(IQuickInputService).quickAccess;
 	using pane = createPane(services, resourceStore, {
@@ -465,26 +444,23 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 
 		await pane.setInput({ resource: URI.file('/project/second.ts'), label: 'second.ts', initialText: 'second file' }, new AbortController().signal);
 
-		assert.deepEqual(
-			{
-				value: pane.getValue(),
-				parts: parts.length,
-				oldEditorDisposed: first.isDisposed,
-				oldModelDisposed: oldModel.isDisposed(),
-				oldDomConnected: oldDom.isConnected,
-				mountedEditors: parent.querySelectorAll('.stanza-editor').length,
-				newEditorFocused: parts[1]?.hasTextFocus(),
-			},
-			{
-				value: 'second file',
-				parts: 2,
-				oldEditorDisposed: true,
-				oldModelDisposed: true,
-				oldDomConnected: false,
-				mountedEditors: 1,
-				newEditorFocused: true,
-			},
-		);
+		assert.deepEqual({
+			value: pane.getValue(),
+			parts: parts.length,
+			oldEditorDisposed: first.isDisposed,
+			oldModelDisposed: oldModel.isDisposed(),
+			oldDomConnected: oldDom.isConnected,
+			mountedEditors: parent.querySelectorAll('.stanza-editor').length,
+			newEditorFocused: parts[1]?.hasTextFocus(),
+		}, {
+			value: 'second file',
+			parts: 2,
+			oldEditorDisposed: true,
+			oldModelDisposed: true,
+			oldDomConnected: false,
+			mountedEditors: 1,
+			newEditorFocused: true,
+		});
 
 		const second = parts[1]!;
 		const secondModel = second.getModel();
@@ -493,22 +469,19 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 		outside.focus();
 		assert.equal(dom.window.document.activeElement, outside);
 		await pane.setInput({ resource: URI.file('/project/third.ts'), label: 'third.ts', initialText: 'third file' }, new AbortController().signal);
-		assert.deepEqual(
-			{
-				value: pane.getValue(),
-				oldEditorDisposed: second.isDisposed,
-				oldModelDisposed: secondModel.isDisposed(),
-				mountedEditors: parent.querySelectorAll('.stanza-editor').length,
-				focusStayedOutside: dom.window.document.activeElement === outside,
-			},
-			{
-				value: 'third file',
-				oldEditorDisposed: true,
-				oldModelDisposed: true,
-				mountedEditors: 1,
-				focusStayedOutside: true,
-			},
-		);
+		assert.deepEqual({
+			value: pane.getValue(),
+			oldEditorDisposed: second.isDisposed,
+			oldModelDisposed: secondModel.isDisposed(),
+			mountedEditors: parent.querySelectorAll('.stanza-editor').length,
+			focusStayedOutside: dom.window.document.activeElement === outside,
+		}, {
+			value: 'third file',
+			oldEditorDisposed: true,
+			oldModelDisposed: true,
+			mountedEditors: 1,
+			focusStayedOutside: true,
+		});
 	} finally {
 		pane.dispose();
 		dom.window.close();
@@ -524,10 +497,7 @@ test('Stanza editor pane acquires the Workbench language service for its detecte
 	using languageService = new LanguageService();
 	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	using languages = new LanguageFeaturesService();
-	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
-		languageService,
-		languageFeaturesService: languages,
-	});
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService: languages });
 	using services = paneServices(models, languages);
 	const diagnostics = new RecordingLanguageDiagnosticsService();
 	const pane = createPane(services, resourceStore, { languageDiagnosticsService: diagnostics });
@@ -536,10 +506,7 @@ test('Stanza editor pane acquires the Workbench language service for its detecte
 
 	await pane.setInput({ resource }, new AbortController().signal);
 
-	assert.deepEqual(
-		diagnostics.acquired.map(entry => ({ resource: entry.resource.toString(), languageId: entry.languageId })),
-		[{ resource: resource.toString(), languageId: 'typescript' }],
-	);
+	assert.deepEqual(diagnostics.acquired.map(entry => ({ resource: entry.resource.toString(), languageId: entry.languageId })), [{ resource: resource.toString(), languageId: 'typescript' }]);
 	assert.equal(diagnostics.activeAcquisitions, 1);
 	pane.clearInput();
 	assert.equal(diagnostics.activeAcquisitions, 0);
@@ -548,25 +515,17 @@ test('Stanza editor pane acquires the Workbench language service for its detecte
 });
 
 class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService {
-	readonly acquired: Array<{ readonly resource: URI; readonly languageId: string; readonly model: TextModel }> = [];
+	readonly acquired: Array<{ readonly resource: URI; readonly languageId: string; readonly model: TextModel; }> = [];
 	activeAcquisitions = 0;
 	readonly onDidChangeDiagnostics = () => toDisposable(() => undefined);
 	acquire(resource: URI, languageId: string, model: TextModel) {
 		this.acquired.push({ resource, languageId, model });
 		this.activeAcquisitions += 1;
-		return toDisposable(() => {
-			this.activeAcquisitions -= 1;
-		});
+		return toDisposable(() => { this.activeAcquisitions -= 1; });
 	}
-	createPublisher(): LanguageDiagnosticsPublisher {
-		return { update: () => undefined, dispose: () => undefined, [Symbol.dispose]: () => undefined };
-	}
-	getDiagnostics(): LanguageDiagnosticSnapshot | undefined {
-		return undefined;
-	}
-	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] {
-		return [];
-	}
+	createPublisher(): LanguageDiagnosticsPublisher { return { update: () => undefined, dispose: () => undefined, [Symbol.dispose]: () => undefined }; }
+	getDiagnostics(): LanguageDiagnosticSnapshot | undefined { return undefined; }
+	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] { return []; }
 }
 
 test('Stanza editor pane releases a load cancelled before content resolution', async () => {
@@ -574,12 +533,7 @@ test('Stanza editor pane releases a load cancelled before content resolution', a
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const pending = deferred<ResolvedTextFileContent>();
-	const textFiles = {
-		onDidSave: Event.None,
-		onDidChangeFiles: inertFileChanges,
-		resolve: () => pending.promise,
-		save: async () => ({ revision: undefined }),
-	};
+	const textFiles = { onDidSave: Event.None, onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
@@ -612,12 +566,7 @@ for (const close of ['abort', 'clear', 'dispose'] as const) {
 		const pending = deferred<TextModel>();
 		using provider = services.get(ITextModelService).registerTextModelContentProvider('review', { provideTextContent: () => pending.promise });
 		let parts = 0;
-		using pane = createPane(services, resourceStore, {
-			createPart: () => {
-				parts++;
-				return createInertEditorPart();
-			},
-		});
+		using pane = createPane(services, resourceStore, { createPart: () => { parts++; return createInertEditorPart(); } });
 		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
 		const controller = new AbortController();
 		const opening = pane.setInput({ resource: URI.parse('review:/late.txt') }, controller.signal);
@@ -638,9 +587,7 @@ test('restored untitled editor inputs retain their draft content, language and e
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('unrelated file content'));
 	using languages = new LanguageService();
 	using language = languages.registerLanguage({ id: 'typescript' });
-	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
-		languageService: languages,
-	});
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService: languages });
 	using services = paneServices(models);
 	const resource = URI.parse('untitled:/Untitled-7');
 	using draft = services.createInstance(UntitledTextEditorModel, resource, 'Recovered', 'recovered draft 内容', 'typescript');
@@ -682,23 +629,19 @@ test('Stanza editor pane saves and reverts its shared model reference', async ()
 	pane.create(parent);
 	await pane.setInput({ resource, label: 'main.ts' }, new AbortController().signal);
 
-	reference.model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 4 + 1)),
-			text: 'saved',
-		},
-	]);
+	reference.model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
+		text: 'saved',
+	}]);
 	assert.equal(pane.isDirty, true);
 	await pane.save();
 	assert.deepEqual(textFiles.savedTexts, ['saved disk']);
 	assert.equal(pane.isDirty, false);
 
-	reference.model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, 5 + 1)),
-			text: ' locally',
-		},
-	]);
+	reference.model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
+		text: ' locally',
+	}]);
 	textFiles.setText('from disk');
 	await pane.revert();
 	assert.equal(pane.getValue(), 'from disk');
@@ -719,20 +662,12 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 	const timers = new Map<number, () => void>();
 	let nextTimer = 0;
 	const clock = {
-		setTimeout(callback: () => void): number {
-			const id = ++nextTimer;
-			timers.set(id, callback);
-			return id;
-		},
-		clearTimeout(id: number): void {
-			timers.delete(id);
-		},
+		setTimeout(callback: () => void): number { const id = ++nextTimer; timers.set(id, callback); return id; },
+		clearTimeout(id: number): void { timers.delete(id); },
 	};
 	using tracker = new WorkingCopyBackupTracker(copies, backups, clock as unknown as Window);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
-	using completion = models.addSaveCompletionParticipant({
-		prepare: (model, signal, recovery) => tracker.prepareSave(model, signal, recovery),
-	});
+	using completion = models.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => tracker.prepareSave(model, signal, recovery) });
 	using services = paneServices(models);
 	using pane = createPane(services, store, { workingCopyService: copies, createPart: createInertEditorPart });
 	try {
@@ -779,7 +714,7 @@ test('editor save cancels when a participant switches the pane input without wri
 			createPart: options => {
 				options.registerBeforeSave?.(() => pane.setInput({ resource: second }, new AbortController().signal));
 				return createInertEditorPart();
-			},
+			}
 		});
 		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
 		await pane.setInput({ resource: first }, new AbortController().signal);
@@ -789,9 +724,7 @@ test('editor save cancels when a participant switches the pane input without wri
 		secondReference.model.setValue('second dirty');
 		await assert.rejects(pane.save(), isCancellationError);
 		assert.deepEqual({ writes: textFiles.savedTexts, first: firstReference.isDirty, second: secondReference.isDirty }, { writes: [], first: true, second: true });
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('Stanza editor pane saves through the shared whitespace participant', async () => {
@@ -850,10 +783,7 @@ test('Stanza editor pane resolves extension first-line languages after loading a
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
 	using registration = languageService.registerLanguage({ id: 'demo', firstLine: '#!.*\\bdemo' }, { priority: 100 });
-	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
-		languageService,
-		languageFeaturesService: languages,
-	});
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService: languages });
 	using services = paneServices(models, languages);
 	let languageId: string | undefined;
 	const pane = createPane(services, resourceStore, {
@@ -978,10 +908,7 @@ test('Workbench owns the code editor save shortcut and reports failures', async 
 	const errors: unknown[] = [];
 	const failedResources: (URI | undefined)[] = [];
 	const pane = createPane(services, resourceStore, {
-		onSaveError: (error, resource) => {
-			errors.push(error);
-			failedResources.push(resource);
-		},
+		onSaveError: (error, resource) => { errors.push(error); failedResources.push(resource); },
 	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('C:\\project\\save.ts') }, new AbortController().signal);
@@ -1002,60 +929,43 @@ test('Workbench owns the code editor save shortcut and reports failures', async 
 	dom.window.close();
 });
 
-for (const configuredReadonly of [false, true])
-	test(`dismissing a ${configuredReadonly ? 'configured read-only' : 'failed file'} save keeps dirty content and rejects as cancellation`, async () => {
-		const dom = createTestDom('<!doctype html><body><main></main></body>');
-		using browser = toDisposable(() => dom.window.close());
-		const textFiles = new ImmediateTextFiles('on disk');
-		const resourceStore = new BrowserTextResourceStore(textFiles);
-		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
-		using parentServices = paneServices(models);
-		using services = parentServices.createChild();
-		using dialogs = new DialogService();
-		services.registerInstance(IDialogService, dialogs);
-		let readonly = false;
-		services.registerInstance(IFilesConfigurationService, {
-			onDidChangeReadonly: Event.None,
-			isReadonly: () => readonly,
-		});
-		services.registerInstance(IFileDialogService, {
-			pickFolderAndOpen: async () => assert.fail('Unexpected folder dialog'),
-			pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace dialog'),
-			pickFileToSave: async () => assert.fail('Unexpected Save As'),
-			showSaveConfirm: async () => ConfirmResult.CANCEL,
-			showSaveDialog: async () => assert.fail('Unexpected save dialog'),
-			showOpenDialog: async () => assert.fail('Unexpected open dialog'),
-		});
-		using pane = registerTestComponentServices(services).createInstance(TextFileEditor, resourceStore, {
-			createPart: createInertEditorPart,
-		});
-		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
-		const resource = URI.file('/project/readonly.txt');
-		await pane.setInput({ resource }, new AbortController().signal);
-		using reference = await models.acquire({ resource }, new AbortController().signal);
-		reference.model.setValue('unsaved edits');
-		assert.equal(pane.isDirty, true);
-		textFiles.failSave = true;
-		readonly = configuredReadonly;
-		const rejected = assert.rejects(
-			pane.save(),
-			error => isCancellationError(error) && error.cause instanceof Error && (configuredReadonly ? /read-only/.test(error.cause.message) : error.cause.message === 'conflict'),
-		);
-		await waitFor(() => dialogs.model.dialogs.length === 1);
-		assert.equal(dialogs.model.dialogs[0]!.request.title, 'Could not save file');
-		dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
-		await rejected;
-		assert.equal(dialogs.model.dialogs.length, 0);
-		assert.equal(pane.isDirty, true);
-		assert.equal(reference.model.getValue(), 'unsaved edits');
-		assert.deepEqual(textFiles.savedTexts, []);
-		// A subsequent explicit save still works; dismissing did not mark the copy saved.
-		textFiles.failSave = false;
-		readonly = false;
-		await pane.save();
-		assert.equal(pane.isDirty, false);
-		assert.deepEqual(textFiles.savedTexts, ['unsaved edits']);
+for (const configuredReadonly of [false, true]) test(`dismissing a ${configuredReadonly ? 'configured read-only' : 'failed file'} save keeps dirty content and rejects as cancellation`, async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	using browser = toDisposable(() => dom.window.close());
+	const textFiles = new ImmediateTextFiles('on disk');
+	const resourceStore = new BrowserTextResourceStore(textFiles);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+	using parentServices = paneServices(models);
+	using services = parentServices.createChild();
+	using dialogs = new DialogService();
+	services.registerInstance(IDialogService, dialogs);
+	let readonly = false;
+	services.registerInstance(IFilesConfigurationService, { onDidChangeReadonly: Event.None, isReadonly: () => readonly });
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => assert.fail('Unexpected folder dialog'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace dialog'),
+		pickFileToSave: async () => assert.fail('Unexpected Save As'), showSaveConfirm: async () => ConfirmResult.CANCEL,
+		showSaveDialog: async () => assert.fail('Unexpected save dialog'), showOpenDialog: async () => assert.fail('Unexpected open dialog'),
 	});
+	using pane = registerTestComponentServices(services).createInstance(TextFileEditor, resourceStore, { createPart: createInertEditorPart });
+	pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+	const resource = URI.file('/project/readonly.txt');
+	await pane.setInput({ resource }, new AbortController().signal);
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	reference.model.setValue('unsaved edits');
+	assert.equal(pane.isDirty, true);
+	textFiles.failSave = true; readonly = configuredReadonly;
+	const rejected = assert.rejects(pane.save(), error => isCancellationError(error) && error.cause instanceof Error && (configuredReadonly ? /read-only/.test(error.cause.message) : error.cause.message === 'conflict'));
+	await waitFor(() => dialogs.model.dialogs.length === 1);
+	assert.equal(dialogs.model.dialogs[0]!.request.title, 'Could not save file');
+	dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
+	await rejected;
+	assert.equal(dialogs.model.dialogs.length, 0);
+	assert.equal(pane.isDirty, true); assert.equal(reference.model.getValue(), 'unsaved edits');
+	assert.deepEqual(textFiles.savedTexts, []);
+	// A subsequent explicit save still works; dismissing did not mark the copy saved.
+	textFiles.failSave = false; readonly = false;
+	await pane.save(); assert.equal(pane.isDirty, false); assert.deepEqual(textFiles.savedTexts, ['unsaved edits']);
+});
 
 class ImmediateTextFiles implements ITextFileService {
 	readonly onDidSave = Event.None;
@@ -1064,7 +974,7 @@ class ImmediateTextFiles implements ITextFileService {
 	failSave = false;
 	private revision = 1;
 
-	constructor(private text: string) {}
+	constructor(private text: string) { }
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
@@ -1076,7 +986,7 @@ class ImmediateTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(request: { readonly text: string }): Promise<{ readonly revision: string | undefined }> {
+	async save(request: { readonly text: string; }): Promise<{ readonly revision: string | undefined; }> {
 		if (this.failSave) throw new Error('conflict');
 		this.savedTexts.push(request.text);
 		this.text = request.text;
@@ -1104,12 +1014,12 @@ async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 
 function inertFileChanges() {
 	return {
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(resolver => {
 		resolve = resolver;
@@ -1168,37 +1078,26 @@ function createInertEditorPart(): EditorPanePart {
 		onDidScrollChange: Event.None,
 		onDidChangeConfiguration: Event.None,
 		onDidLayoutChange: Event.None,
-		layout: () => {},
-		focus: () => {},
+		layout: () => { },
+		focus: () => { },
 		getValue: () => '',
 		getModel: () => null,
-		createDecorationsCollection: () => ({
-			onDidChange: Event.None,
-			set: () => [],
-			append: () => [],
-			clear: () => {},
-			getRange: () => null,
-			getRanges: () => [],
-			has: () => false,
-			length: 0,
-		}),
+		createDecorationsCollection: () => ({ onDidChange: Event.None, set: () => [], append: () => [], clear: () => { }, getRange: () => null, getRanges: () => [], has: () => false, length: 0 }),
 		getScrollTop: () => 0,
 		getScrollLeft: () => 0,
 		getVisibleRanges: () => [],
 		getTopForLineNumber: () => 0,
 		getBottomForLineNumber: () => 0,
-		getLayoutInfo: () => {
-			throw new Error('Inert editor has no layout');
-		},
-		setScrollTop: () => {},
-		setScrollLeft: () => {},
-		changeViewZones: () => {},
+		getLayoutInfo: () => { throw new Error('Inert editor has no layout'); },
+		setScrollTop: () => { },
+		setScrollLeft: () => { },
+		changeViewZones: () => { },
 		executeEdits: () => false,
 		getSelections: () => null,
-		setSelection: () => {},
-		updateOptions: () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		setSelection: () => { },
+		updateOptions: () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 }
 

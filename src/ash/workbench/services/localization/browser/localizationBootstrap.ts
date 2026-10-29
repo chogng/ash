@@ -10,11 +10,8 @@ import { productLanguagePackCatalogs } from '../common/localizationCatalogs.js';
 /** This module must not import contributions or the settings registry before NLS is ready. */
 export async function initializeBrowserLocalization(files: Pick<IFileService, 'readFile'>, store: Pick<ILanguagePackStore, 'read' | 'write'>): Promise<void> {
 	let source = '{}';
-	try {
-		source = (await files.readFile(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }))).content;
-	} catch (error) {
-		if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
-	}
+	try { source = (await files.readFile(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }))).content; }
+	catch (error) { if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error; }
 	const values = parseJsonc(source) as Record<string, unknown>;
 	if (!values || typeof values !== 'object' || Array.isArray(values)) throw new TypeError('Settings must be an object');
 	const preference = values['workbench.locale'];

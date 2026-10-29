@@ -5,25 +5,17 @@ import { expect, test as base } from '../../../automation/test.js';
 
 const distribution = process.env.ASH_RECOMMENDATIONS_DISTRIBUTION;
 const trustedRoot = process.env.ASH_RECOMMENDATIONS_TRUSTED_ROOT;
-const test = base.extend<{ recommendationScenario: 'file' | 'language' | 'workspace' }>({
+const test = base.extend<{ recommendationScenario: 'file' | 'language' | 'workspace'; }>({
 	recommendationScenario: ['file', { option: true }],
 	useDefaultLanguageServer: false,
 	backendFixture: async ({ testWorkspace, recommendationScenario }, use) => {
-		if (!distribution || !trustedRoot) {
-			throw new Error('Provide a signed distribution containing ash.fixture-language@ash for Python, Rust and .fixture-yaml.');
-		}
-		if (recommendationScenario !== 'workspace') {
-			await rm(join(testWorkspace.directory, 'Cargo.toml'));
-		}
+		if (!distribution || !trustedRoot) { throw new Error('Provide a signed distribution containing ash.fixture-language@ash for Python, Rust and .fixture-yaml.'); }
+		if (recommendationScenario !== 'workspace') { await rm(join(testWorkspace.directory, 'Cargo.toml')); }
 		await writeFile(join(testWorkspace.directory, 'settings.fixture-yaml'), 'value: true\n');
 		await mkdir(join(testWorkspace.directory, '.ash'));
 		await writeFile(join(testWorkspace.directory, '.ash/extensions.json'), JSON.stringify({ recommendations: [], unwantedRecommendations: ['ash.academy@ash'] }));
 		const registry = await SignedExtensionRegistry.createEditor(join(testWorkspace.directory, 'recommendations-registry'), distribution, trustedRoot, 'ash.fixture-language@ash');
-		try {
-			await use(registry);
-		} finally {
-			await registry.close();
-		}
+		try { await use(registry); } finally { await registry.close(); }
 	},
 });
 test.skip(!distribution || !trustedRoot, 'Optional real catalog acceptance; supply ASH_RECOMMENDATIONS_DISTRIBUTION and ASH_RECOMMENDATIONS_TRUSTED_ROOT.');

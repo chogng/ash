@@ -24,9 +24,7 @@ class TestShortcuts implements IGlobalShortcutRegistry {
 		return true;
 	}
 
-	isRegistered(accelerator: string): boolean {
-		return this.callbacks.has(accelerator);
-	}
+	isRegistered(accelerator: string): boolean { return this.callbacks.has(accelerator); }
 
 	unregister(accelerator: string): void {
 		this.releases.push(accelerator);
@@ -41,31 +39,12 @@ function binding(accelerator: string): INativeSystemWideKeybinding {
 test('renderer shortcut leases preserve failed replacements and release on navigation, crash and disposal', () => {
 	const shortcuts = new TestShortcuts();
 	const messages: unknown[] = [];
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => 1,
-		runCommand: () => assert.fail('Renderer leases dispatch to their owning renderer'),
-		onError: error => {
-			throw error;
-		},
-	});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => assert.fail('Renderer leases dispatch to their owning renderer'), onError: error => { throw error; } });
 	using lifetime = new DisposableStore();
-	const contents = Object.assign(new EventEmitter(), {
-		isDestroyed: () => false,
-		send: (...args: unknown[]) => messages.push(args),
-	});
+	const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send: (...args: unknown[]) => messages.push(args) });
 	const window = { id: 1, webContents: contents, isDestroyed: () => false } as unknown as BrowserWindow;
 	const route = service.createWindowRoutes(window, lifetime)[0];
-	const update = (accelerator: string) =>
-		route.invoke(
-			route.validate({
-				id: 'image.capture',
-				commandId: 'test.image.capture',
-				accelerator,
-				label: accelerator,
-				global: true,
-			}),
-		);
+	const update = (accelerator: string) => route.invoke(route.validate({ id: 'image.capture', commandId: 'test.image.capture', accelerator, label: accelerator, global: true }));
 	assert.deepEqual(update('Control+Shift+A'), { available: true, activeLabel: 'Control+Shift+A' });
 	shortcuts.unavailable.add('Control+Shift+B');
 	assert.deepEqual(update('Control+Shift+B'), { available: false, activeLabel: 'Control+Shift+A' });
@@ -86,25 +65,10 @@ test('renderer shortcut leases preserve failed replacements and release on navig
 });
 
 test('global keybinding IPC binds named leases to bounded commands and actual registration results', () => {
-	const request = {
-		id: 'image.capture',
-		commandId: 'test.image.capture',
-		accelerator: 'Command+Control+A',
-		label: 'Control+Command+A',
-		global: true,
-	};
+	const request = { id: 'image.capture', commandId: 'test.image.capture', accelerator: 'Command+Control+A', label: 'Control+Command+A', global: true };
 	assert.equal(validateGlobalKeybindingRequest(request), request);
-	for (const invalid of [
-		{ ...request, windowId: 3 },
-		{ ...request, accelerator: 'Command+Control+A;other' },
-		{ ...request, global: 1 },
-		{ ...request, commandId: '' },
-	])
-		assert.throws(() => validateGlobalKeybindingRequest(invalid));
-	assert.deepEqual(validateGlobalKeybindingResult({ available: false, activeLabel: 'Control+Command+B' }), {
-		available: false,
-		activeLabel: 'Control+Command+B',
-	});
+	for (const invalid of [{ ...request, windowId: 3 }, { ...request, accelerator: 'Command+Control+A;other' }, { ...request, global: 1 }, { ...request, commandId: '' }]) assert.throws(() => validateGlobalKeybindingRequest(invalid));
+	assert.deepEqual(validateGlobalKeybindingResult({ available: false, activeLabel: 'Control+Command+B' }), { available: false, activeLabel: 'Control+Command+B' });
 	assert.throws(() => validateGlobalKeybindingResult({ available: 'yes', activeLabel: '' }));
 });
 
@@ -115,12 +79,8 @@ test('global shortcut opens in the active window and releases with its last owne
 	using service = new GlobalKeybindingsMainService({
 		shortcuts,
 		activeWindowId: () => activeWindowId,
-		runCommand: windowId => {
-			opened.push(windowId);
-		},
-		onError: error => {
-			throw error;
-		},
+		runCommand: windowId => { opened.push(windowId); },
+		onError: error => { throw error; },
 	});
 
 	assert.deepEqual(service.updateKeybindings(1, [binding('Control+Shift+A')]), { failed: [] });
@@ -146,10 +106,8 @@ test('unavailable operating-system shortcut reports its user label', () => {
 	using service = new GlobalKeybindingsMainService({
 		shortcuts,
 		activeWindowId: () => 1,
-		runCommand: () => {},
-		onError: error => {
-			throw error;
-		},
+		runCommand: () => { },
+		onError: error => { throw error; },
 	});
 
 	assert.deepEqual(service.updateKeybindings(1, [{ ...binding('Control+Shift+B'), userSettingsLabel: 'ctrl+shift+b' }]), {
@@ -164,28 +122,21 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 	using service = new GlobalKeybindingsMainService({
 		shortcuts,
 		activeWindowId: () => 2,
-		runCommand: (windowId, commandId, options) => {
-			calls.push({ windowId, commandId, options });
-		},
-		onError: error => {
-			throw error;
-		},
+		runCommand: (windowId, commandId, options) => { calls.push({ windowId, commandId, options }); },
+		onError: error => { throw error; },
 	});
 	const payload = validateSystemWideKeybindings(JSON.parse(JSON.stringify([{ ...binding('Control+Shift+A'), args }])));
-	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => {} }]), /must be an object/);
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => { } }]), /must be an object/);
 	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), unexpected: true }]), /Invalid system-wide/);
 	service.updateKeybindings(1, payload);
 	service.updateKeybindings(2, payload);
 	service.removeWindow(1);
 	shortcuts.callbacks.get('Control+Shift+A')!();
 	await Promise.resolve();
-	assert.deepEqual(
-		{ calls, releases: shortcuts.releases },
-		{
-			calls: [{ windowId: 2, commandId: 'workbench.action.openAgentsWindow', options: args }],
-			releases: [],
-		},
-	);
+	assert.deepEqual({ calls, releases: shortcuts.releases }, {
+		calls: [{ windowId: 2, commandId: 'workbench.action.openAgentsWindow', options: args }],
+		releases: [],
+	});
 	service.removeWindow(2);
 	assert.deepEqual(shortcuts.releases, ['Control+Shift+A']);
 });
@@ -193,14 +144,7 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 test('contribution shortcuts acquire replacements before releasing the previous working shortcut', () => {
 	const shortcuts = new TestShortcuts();
 	const fired: string[] = [];
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => undefined,
-		runCommand: () => assert.fail('Wrong owner'),
-		onError: error => {
-			throw error;
-		},
-	});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => undefined, runCommand: () => assert.fail('Wrong owner'), onError: error => { throw error; } });
 	using owner = service.createOwner(1, binding => fired.push(binding.accelerator));
 	assert.equal(owner.update(binding('Control+A')), true);
 	shortcuts.unavailable.add('Control+B');
@@ -218,21 +162,14 @@ test('contribution shortcuts acquire replacements before releasing the previous 
 
 test('temporary availability checks release only their own registration and preserve existing owners', () => {
 	const shortcuts = new TestShortcuts();
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => undefined,
-		runCommand: () => {},
-		onError: error => {
-			throw error;
-		},
-	});
-	using owner = service.createOwner(1, () => {});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => undefined, runCommand: () => { }, onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { });
 	shortcuts.unavailable.add('Control+A');
 	assert.equal(owner.check('Control+A', 'screenshot'), false);
 	assert.deepEqual(shortcuts.releases, []);
 	assert.equal(owner.check('Control+B', 'screenshot'), true);
 	assert.deepEqual(shortcuts.releases, ['Control+B']);
-	const foreignCallback = () => {};
+	const foreignCallback = () => { };
 	shortcuts.register('Control+C', foreignCallback);
 	assert.equal(owner.check('Control+C', 'screenshot'), false);
 	assert.equal(shortcuts.callbacks.get('Control+C'), foreignCallback);
@@ -245,16 +182,7 @@ test('temporary availability checks release only their own registration and pres
 test('contribution ownership survives user shortcut synchronization and releases when its window closes', () => {
 	const shortcuts = new TestShortcuts();
 	const fired: string[] = [];
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => 1,
-		runCommand: () => {
-			fired.push('user');
-		},
-		onError: error => {
-			throw error;
-		},
-	});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => { fired.push('user'); }, onError: error => { throw error; } });
 	using owner = service.createOwner(1, () => fired.push('screenshot'));
 	owner.update({ ...binding('Control+A'), commandId: 'screenshot' });
 	service.updateKeybindings(1, [binding('Control+B')]);
@@ -269,17 +197,8 @@ test('contribution ownership survives user shortcut synchronization and releases
 test('contribution global shortcut falls back while a non-owner window has focus', () => {
 	const shortcuts = new TestShortcuts();
 	let fired = 0;
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => 99,
-		runCommand: () => assert.fail('Wrong routing'),
-		onError: error => {
-			throw error;
-		},
-	});
-	using owner = service.createOwner(1, () => {
-		fired++;
-	});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 99, runCommand: () => assert.fail('Wrong routing'), onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { fired++; });
 	owner.update(binding('Control+A'));
 	shortcuts.callbacks.get('Control+A')!();
 	assert.equal(fired, 1);
@@ -287,15 +206,8 @@ test('contribution global shortcut falls back while a non-owner window has focus
 
 test('renderer navigation clears user bindings while contribution leases can register again', () => {
 	const shortcuts = new TestShortcuts();
-	using service = new GlobalKeybindingsMainService({
-		shortcuts,
-		activeWindowId: () => 1,
-		runCommand: () => {},
-		onError: error => {
-			throw error;
-		},
-	});
-	using owner = service.createOwner(1, () => {});
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => { }, onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { });
 	for (let navigation = 0; navigation < 2; navigation++) {
 		owner.update(binding('Control+A'));
 		service.updateKeybindings(1, [binding('Control+B')]);

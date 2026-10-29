@@ -26,23 +26,12 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		root.append(line);
 	}
 	const view = { textModel: model, domNode: { domNode: root }, onDidChangeLayout: layout.event } as unknown as View;
-	const editor = {
-		getOption: () => ({ enabled: false }),
-		onDidChangeConfiguration: Event.None,
-		createDecorationsCollection: () => ({ clear() {}, set() {} }),
-	} as unknown as ICodeEditor;
+	const editor = { getOption: () => ({ enabled: false }), onDidChangeConfiguration: Event.None, createDecorationsCollection: () => ({ clear() { }, set() { } }) } as unknown as ICodeEditor;
 	const getLineContent = model.getLineContent;
 	let reads = 0;
-	model.getLineContent = line => {
-		reads++;
-		return getLineContent.call(model, line);
-	};
+	model.getLineContent = line => { reads++; return getLineContent.call(model, line); };
 	try {
-		using controller = new SectionHeadersController(view, model, editor, configurations, () => ({
-			findRegionSectionHeaders: true,
-			findMarkSectionHeaders: false,
-			markSectionHeaderRegex: '',
-		}));
+		using controller = new SectionHeadersController(view, model, editor, configurations, () => ({ findRegionSectionHeaders: true, findMarkSectionHeaders: false, markSectionHeaderRegex: '' }));
 		const header = root.children[4]!;
 		assert.equal(header.getAttribute('data-section-header'), 'true');
 		assert.ok(reads < 400, `${reads} line reads for a ten-line viewport`);

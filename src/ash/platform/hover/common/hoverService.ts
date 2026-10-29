@@ -11,7 +11,7 @@ export const HoverConfiguration = Object.freeze({
 	delay: configurationRegistry.registerConfiguration<number>({
 		key: 'workbench.hover.delay',
 		defaultValue: 500,
-		parse: value => parseHoverDelay(value, 'workbench.hover.delay'),
+		parse: (value) => parseHoverDelay(value, 'workbench.hover.delay'),
 		setting: {
 			valueType: 'number',
 			title: 'Hover delay',
@@ -23,7 +23,10 @@ export const HoverConfiguration = Object.freeze({
 	reducedDelay: configurationRegistry.registerConfiguration<number>({
 		key: 'workbench.hover.reducedDelay',
 		defaultValue: 30,
-		parse: value => parseHoverDelay(value, 'workbench.hover.reducedDelay'),
+		parse: (value) => parseHoverDelay(
+			value,
+			'workbench.hover.reducedDelay',
+		),
 		setting: {
 			valueType: 'number',
 			title: 'Fast hover delay',
@@ -38,8 +41,15 @@ export const HoverConfiguration = Object.freeze({
 export type HoverDelayMode = 'standard' | 'reduced' | 'instant';
 
 function parseHoverDelay(value: unknown, key: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < MinimumHoverDelay || value > MaximumHoverDelay) {
-		throw new RangeError(`${key} must be a finite number between ${MinimumHoverDelay} and ${MaximumHoverDelay}`);
+	if (
+		typeof value !== 'number' ||
+		!Number.isFinite(value) ||
+		value < MinimumHoverDelay ||
+		value > MaximumHoverDelay
+	) {
+		throw new RangeError(
+			`${key} must be a finite number between ${MinimumHoverDelay} and ${MaximumHoverDelay}`,
+		);
 	}
 	return value;
 }

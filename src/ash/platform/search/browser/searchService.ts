@@ -13,13 +13,11 @@ const IDLE_POLL_MILLIS = 20;
 
 /** Searches only resources granted to the browser file provider, without a process or a server path. */
 export class FileContentSearchService implements IContentSearchService {
-	constructor(private readonly files: Pick<IFileService, 'readDirectory' | 'readFileBytes'>) {}
+	constructor(private readonly files: Pick<IFileService, 'readDirectory' | 'readFileBytes'>) { }
 
 	async search(folder: IWorkspaceFolder, query: IContentSearchQuery, options: IContentSearchOptions = {}): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
-		if (!query.text) {
-			return { resultCount: 0, limitHit: false, error: undefined };
-		}
+		if (!query.text) { return { resultCount: 0, limitHit: false, error: undefined }; }
 		const sensitive = query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text));
 		const pattern = query.text.replace(/\r\n|\r/g, '\n');
 		const expression = new RegExp(query.patternKind === 'regex' ? pattern : escapeRegExpCharacters(pattern), sensitive ? 'gmu' : 'gmiu');
@@ -31,73 +29,42 @@ export class FileContentSearchService implements IContentSearchService {
 			throwIfAborted(options.signal);
 			for (const entry of await this.files.readDirectory(directory)) {
 				throwIfAborted(options.signal);
-				if (limitHit) {
-					return;
-				}
+				if (limitHit) { return; }
 				const path = prefix + entry.name;
-				if (query.excludePatterns.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) {
-					continue;
-				}
-				if (entry.kind === FileKind.Directory) {
-					await visit(entry.resource, path + '/');
-					continue;
-				}
-				if (entry.kind !== FileKind.File || (query.includePatterns.length && !query.includePatterns.some(pattern => matchesPattern(pattern, path)))) {
-					continue;
-				}
+				if (query.excludePatterns.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) { continue; }
+				if (entry.kind === FileKind.Directory) { await visit(entry.resource, path + '/'); continue; }
+				if (entry.kind !== FileKind.File || (query.includePatterns.length && !query.includePatterns.some(pattern => matchesPattern(pattern, path)))) { continue; }
 				const { bytes } = await this.files.readFileBytes(entry.resource);
 				throwIfAborted(options.signal);
-				if (bytes.includes(0)) {
-					continue;
-				}
+				if (bytes.includes(0)) { continue; }
 				let content: string;
-				try {
-					content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-				} catch {
-					continue;
-				} // Binary resources do not produce text matches.
+				try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { continue; } // Binary resources do not produce text matches.
 				content = content.replace(/\r\n|\r/g, '\n');
 				const lineStarts = [0];
-				for (let offset = content.indexOf('\n'); offset >= 0; offset = content.indexOf('\n', offset + 1)) {
-					lineStarts.push(offset + 1);
-				}
+				for (let offset = content.indexOf('\n'); offset >= 0; offset = content.indexOf('\n', offset + 1)) { lineStarts.push(offset + 1); }
 				let lineIndex = 0;
-				const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number }[] }>();
+				const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number; }[]; }>();
 				for (const found of content.matchAll(expression)) {
 					throwIfAborted(options.signal);
-					if (!found[0].length) {
-						continue;
-					}
+					if (!found[0].length) { continue; }
 					const start = found.index;
 					const end = start + found[0].length;
-					if (query.wholeWord && (/[\p{L}\p{N}_]$/u.test(content.slice(Math.max(0, start - 2), start)) || /^[\p{L}\p{N}_]/u.test(content.slice(end, end + 2)))) {
-						continue;
-					}
-					while (lineIndex + 1 < lineStarts.length && lineStarts[lineIndex + 1]! <= start) {
-						lineIndex++;
-					}
+					if (query.wholeWord && (/[\p{L}\p{N}_]$/u.test(content.slice(Math.max(0, start - 2), start)) || /^[\p{L}\p{N}_]/u.test(content.slice(end, end + 2)))) { continue; }
+					while (lineIndex + 1 < lineStarts.length && lineStarts[lineIndex + 1]! <= start) { lineIndex++; }
 					const blockStart = lineStarts[lineIndex]!;
 					const nextLine = content.indexOf('\n', end);
 					const blockEnd = nextLine < 0 ? content.length : nextLine;
 					const key = `${blockStart}:${blockEnd}`;
 					let block = blocks.get(key);
 					if (!block) {
-						if (resultCount === limit) {
-							limitHit = true;
-							break;
-						}
+						if (resultCount === limit) { limitHit = true; break; }
 						resultCount++;
 						block = { lineNumber: lineIndex + 1, preview: content.slice(blockStart, blockEnd), ranges: [] };
 						blocks.set(key, block);
 					}
 					block.ranges.push({ start: start - blockStart, end: end - blockStart });
 				}
-				const results = [...blocks.values()].map(block => ({
-					dirId: folder.id,
-					dirName: folder.name,
-					path,
-					...block,
-				}));
+				const results = [...blocks.values()].map(block => ({ dirId: folder.id, dirName: folder.name, path, ...block }));
 				for (let offset = 0; offset < results.length; offset += RESULT_BATCH_SIZE) {
 					options.onProgress?.(results.slice(offset, offset + RESULT_BATCH_SIZE));
 					throwIfAborted(options.signal);
@@ -117,7 +84,11 @@ export class BrowserContentSearchService implements IContentSearchService {
 		this.api = api;
 	}
 
-	public async search(folder: IWorkspaceFolder, query: IContentSearchQuery, options: IContentSearchOptions = {}): Promise<IContentSearchComplete> {
+	public async search(
+		folder: IWorkspaceFolder,
+		query: IContentSearchQuery,
+		options: IContentSearchOptions = {},
+	): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
 		const start = this.api.start({
 			dirId: folder.id,
@@ -135,11 +106,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 		} catch (error) {
 			if (options.signal?.aborted) {
 				// Cancellation ends renderer waiting now; a handle delivered later still belongs to this call.
-				void start
-					.then(job => this.api.cancel({ dirId: folder.id, searchId: job.searchId }))
-					.catch(() => {
-						/* Failed starts have no handle; a closed connection already owns cleanup. */
-					});
+				void start.then(job => this.api.cancel({ dirId: folder.id, searchId: job.searchId })).catch(() => { /* Failed starts have no handle; a closed connection already owns cleanup. */ });
 			}
 			throwIfAborted(options.signal);
 			throw error;
@@ -158,14 +125,11 @@ export class BrowserContentSearchService implements IContentSearchService {
 				throwIfAborted(options.signal);
 				if (snapshot.matches.length > 0) {
 					cursor = snapshot.nextMatch;
-					options.onProgress?.(
-						snapshot.matches.map(match => ({
-							...match,
-							dirId: folder.id,
-							dirName: folder.name,
-							ranges: match.ranges.map(range => ({ ...range })),
-						})),
-					);
+					options.onProgress?.(snapshot.matches.map((match) => ({
+						...match,
+						dirId: folder.id, dirName: folder.name,
+						ranges: match.ranges.map((range) => ({ ...range })),
+					})));
 				}
 				if (snapshot.completed) {
 					return {
@@ -180,14 +144,12 @@ export class BrowserContentSearchService implements IContentSearchService {
 			throwIfAborted(options.signal);
 			throw error;
 		} finally {
-			await this.api
-				.cancel({
-					dirId: folder.id,
-					searchId: started.searchId,
-				})
-				.catch(() => {
-					// Cancellation is cleanup after completion or connection loss.
-				});
+			await this.api.cancel({
+				dirId: folder.id,
+				searchId: started.searchId,
+			}).catch(() => {
+				// Cancellation is cleanup after completion or connection loss.
+			});
 		}
 	}
 }

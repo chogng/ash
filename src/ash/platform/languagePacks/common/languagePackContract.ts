@@ -8,7 +8,7 @@ export interface LanguagePackCatalog {
 	readonly localizedLanguageName: string;
 	readonly catalogVersion: string;
 	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
-	readonly extensionTranslations?: Readonly<Record<string, { readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>> }>>;
+	readonly extensionTranslations?: Readonly<Record<string, { readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>>; }>>;
 }
 
 export interface PreinstalledLanguagePack {

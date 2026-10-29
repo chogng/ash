@@ -1,10 +1,16 @@
 import { localize2 } from '../../../nls.js';
 
-import { Action2, MenuId } from '../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
+import {
+	Action2,
+	MenuId,
+} from '../../../platform/actions/common/actions.js';
+import type {
+	ServicesAccessor,
+} from '../../../platform/instantiation/common/instantiation.js';
 import { INativeHostService } from '../../common/services.js';
 
-export const ToggleDeveloperToolsCommandId = 'workbench.action.toggleDevTools';
+export const ToggleDeveloperToolsCommandId =
+	'workbench.action.toggleDevTools';
 
 /** Toggles the developer tools for the active Electron window. */
 export class ToggleDevToolsAction extends Action2 {

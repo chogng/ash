@@ -2,7 +2,8 @@ import { localize } from '../../../../nls.js';
 import type { DesignEffect } from '../common/model/designEffects.js';
 import { designBlendLabel } from './designPaintLabels.js';
 
-export function designEffectTypeLabel(type: DesignEffect['type']): string {
+export function designEffectTypeLabel(
+	type: DesignEffect['type']): string {
 	return {
 		'drop-shadow': localize('sessions.design.effectDropShadow', 'Drop shadow'),
 		'inner-shadow': localize('sessions.design.effectInnerShadow', 'Inner shadow'),
@@ -11,7 +12,8 @@ export function designEffectTypeLabel(type: DesignEffect['type']): string {
 	}[type];
 }
 
-export function describeDesignEffect(effect: DesignEffect): string {
+export function describeDesignEffect(
+	effect: DesignEffect): string {
 	const details = [designEffectTypeLabel(effect.type)];
 	if (effect.visible === false) {
 		details.push(localize('sessions.design.hidden', 'Hidden'));
@@ -24,18 +26,11 @@ export function describeDesignEffect(effect: DesignEffect): string {
 		}
 	} else if ('progressive' in effect && effect.progressive) {
 		const { startBlur, start, end } = effect.progressive;
-		details.push(
-			localize(
-				'sessions.design.blurProgressiveReview',
-				'Progressive blur: {0} to {1}; start ({2}%, {3}%); end ({4}%, {5}%)',
-				startBlur,
-				effect.blur,
-				start.x * 100,
-				start.y * 100,
-				end.x * 100,
-				end.y * 100,
-			),
-		);
+		details.push(localize(
+			'sessions.design.blurProgressiveReview',
+			'Progressive blur: {0} to {1}; start ({2}%, {3}%); end ({4}%, {5}%)',
+			startBlur, effect.blur, start.x * 100, start.y * 100, end.x * 100, end.y * 100
+		));
 	} else {
 		details.push(localize('sessions.design.effectBlurReview', 'Blur: {0}', effect.blur));
 	}

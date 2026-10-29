@@ -70,7 +70,12 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 			const matchLines = match[0].split('\n');
 			const startColumn = match.index - precedingText.lastIndexOf('\n');
 			const lastMatchLine = matchLines[matchLines.length - 1]!;
-			const range = new Range(lineNumber, startColumn, lineNumber + matchLines.length - 1, matchLines.length === 1 ? startColumn + match[0].length : lastMatchLine.length + 1);
+			const range = new Range(
+				lineNumber,
+				startColumn,
+				lineNumber + matchLines.length - 1,
+				matchLines.length === 1 ? startColumn + match[0].length : lastMatchLine.length + 1,
+			);
 			const header = {
 				range,
 				text: (match.groups ?? {})['label'] ?? '',
@@ -84,7 +89,7 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 	return headers;
 }
 
-function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean } {
+function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean; } {
 	text = text.trim();
 	const hasSeparatorLine = text.startsWith('-');
 	return { text: text.replace(trimDashesRegex, ''), hasSeparatorLine };

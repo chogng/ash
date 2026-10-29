@@ -29,7 +29,7 @@ export function applySnippetTransform(value: string, transform: SnippetTransform
 	if (typeof value !== 'string') throw new TypeError('Language completion snippet transform value must be a string');
 	return value.replace(new RegExp(transform.pattern, transform.options), (...arguments_: unknown[]) => {
 		const trailingArgumentCount = typeof arguments_.at(-1) === 'object' ? 3 : 2;
-		const captures = arguments_.slice(0, -trailingArgumentCount).map(capture => (typeof capture === 'string' ? capture : ''));
+		const captures = arguments_.slice(0, -trailingArgumentCount).map(capture => typeof capture === 'string' ? capture : '');
 		return expandTransformFormat(transform.format, captures);
 	});
 }
@@ -85,12 +85,14 @@ function expandBracedCaptureExpression(expression: string, captures: readonly st
 	if (directive.startsWith('-')) return capture.length === 0 ? expandTransformFormat(directive.slice(1), captures) : '';
 	if (directive.startsWith('?')) {
 		const condition = splitConditional(directive.slice(1));
-		return capture.length > 0 ? expandTransformFormat(condition.whenTruthy, captures) : expandTransformFormat(condition.whenFalsy, captures);
+		return capture.length > 0
+			? expandTransformFormat(condition.whenTruthy, captures)
+			: expandTransformFormat(condition.whenFalsy, captures);
 	}
 	return capture.length === 0 ? expandTransformFormat(directive, captures) : capture;
 }
 
-function readBracedExpression(format: string, startOffset: number): { readonly text: string; readonly nextOffset: number } {
+function readBracedExpression(format: string, startOffset: number): { readonly text: string; readonly nextOffset: number; } {
 	let depth = 0;
 	let text = '';
 	for (let offset = startOffset; offset < format.length; offset += 1) {
@@ -118,7 +120,7 @@ function readBracedExpression(format: string, startOffset: number): { readonly t
 	throw new SyntaxError('Unclosed completion snippet transform format expression');
 }
 
-function splitConditional(value: string): { readonly whenTruthy: string; readonly whenFalsy: string } {
+function splitConditional(value: string): { readonly whenTruthy: string; readonly whenFalsy: string; } {
 	let depth = 0;
 	for (let offset = 0; offset < value.length; offset += 1) {
 		const character = value[offset]!;
@@ -152,7 +154,7 @@ function capitalize(value: string): string {
 
 function camelCase(value: string): string {
 	const words = splitWords(value);
-	return words.map((word, index) => (index === 0 ? word.toLocaleLowerCase() : capitalize(word))).join('');
+	return words.map((word, index) => index === 0 ? word.toLocaleLowerCase() : capitalize(word)).join('');
 }
 
 function pascalCase(value: string): string {

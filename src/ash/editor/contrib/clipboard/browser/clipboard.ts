@@ -15,15 +15,7 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { CopyOptions, generateDataToCopyAndStoreInMemory, InMemoryClipboardMetadataManager } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { NativeEditContextRegistry } from '../../../browser/controller/editContext/native/nativeEditContextRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	EditorContributionInstantiation,
-	MultiCommand,
-	registerEditorAction,
-	registerEditorContribution,
-	type Command,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, EditorContributionInstantiation, MultiCommand, registerEditorAction, registerEditorContribution, type Command, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
@@ -39,89 +31,69 @@ function registerCommand<T extends Command>(command: T): T {
 }
 
 // Default shortcuts belong to editor text; terminals and native inputs own their keyboard handling.
-export const CutAction = registerCommand(
-	new MultiCommand({
-		id: 'editor.action.clipboardCutAction',
-		precondition: undefined,
-		kbOpts: isNative
-			? {
-					primary: KeyMod.CtrlCmd | KeyCode.KeyX,
-					win: { primary: KeyMod.CtrlCmd | KeyCode.KeyX, secondary: [KeyMod.Shift | KeyCode.Delete] },
-					weight: KeybindingWeight.EditorContrib,
-					kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
-				}
-			: undefined,
-		menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.cutLabel', 'Cut'), 1, true),
-	}),
-);
+export const CutAction = registerCommand(new MultiCommand({
+	id: 'editor.action.clipboardCutAction',
+	precondition: undefined,
+	kbOpts: isNative ? {
+		primary: KeyMod.CtrlCmd | KeyCode.KeyX,
+		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyX, secondary: [KeyMod.Shift | KeyCode.Delete] },
+		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
+	} : undefined,
+	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.cutLabel', 'Cut'), 1, true),
+}));
 
-export const CopyAction = registerCommand(
-	new MultiCommand({
-		id: 'editor.action.clipboardCopyAction',
-		precondition: undefined,
-		kbOpts: isNative
-			? {
-					primary: KeyMod.CtrlCmd | KeyCode.KeyC,
-					win: { primary: KeyMod.CtrlCmd | KeyCode.KeyC, secondary: [KeyMod.CtrlCmd | KeyCode.Insert] },
-					weight: KeybindingWeight.EditorContrib,
-					kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
-				}
-			: undefined,
-		menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.copyLabel', 'Copy'), 2, false),
-	}),
-);
+export const CopyAction = registerCommand(new MultiCommand({
+	id: 'editor.action.clipboardCopyAction',
+	precondition: undefined,
+	kbOpts: isNative ? {
+		primary: KeyMod.CtrlCmd | KeyCode.KeyC,
+		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyC, secondary: [KeyMod.CtrlCmd | KeyCode.Insert] },
+		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
+	} : undefined,
+	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.copyLabel', 'Copy'), 2, false),
+}));
 
-export const PasteAction = registerCommand(
-	new MultiCommand({
-		id: 'editor.action.clipboardPasteAction',
-		precondition: undefined,
-		kbOpts: isNative
-			? {
-					primary: KeyMod.CtrlCmd | KeyCode.KeyV,
-					win: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
-					linux: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
-					weight: KeybindingWeight.EditorContrib,
-					kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
-				}
-			: undefined,
-		menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.pasteLabel', 'Paste'), 4, true),
-	}),
-);
+export const PasteAction = registerCommand(new MultiCommand({
+	id: 'editor.action.clipboardPasteAction',
+	precondition: undefined,
+	kbOpts: isNative ? {
+		primary: KeyMod.CtrlCmd | KeyCode.KeyV,
+		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
+		linux: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
+		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
+	} : undefined,
+	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.pasteLabel', 'Paste'), 4, true),
+}));
 
-onActivate(() =>
-	MenusRegistry.appendMenuItem(MenuId.MenubarEditMenu, {
-		submenu: MenuId.MenubarCopy,
-		title: nls.localize2('copy as', 'Copy As'),
-		group: '2_ccp',
-		order: 3,
-	}),
-);
-onActivate(() =>
-	MenusRegistry.appendMenuItem(MenuId.EditorContext, {
-		submenu: MenuId.EditorContextCopy,
-		title: nls.localize2('copy as', 'Copy As'),
-		group: CLIPBOARD_CONTEXT_MENU_GROUP,
-		order: 3,
-	}),
-);
+onActivate(() => MenusRegistry.appendMenuItem(MenuId.MenubarEditMenu, {
+	submenu: MenuId.MenubarCopy,
+	title: nls.localize2('copy as', 'Copy As'),
+	group: '2_ccp',
+	order: 3,
+}));
+onActivate(() => MenusRegistry.appendMenuItem(MenuId.EditorContext, {
+	submenu: MenuId.EditorContextCopy,
+	title: nls.localize2('copy as', 'Copy As'),
+	group: CLIPBOARD_CONTEXT_MENU_GROUP,
+	order: 3,
+}));
 
 registerExecCommandImpl(CutAction, 'cut');
 registerExecCommandImpl(CopyAction, 'copy');
 
 if (PasteAction) {
-	onActivate(() =>
-		PasteAction.addImplementation(10_000, 'code-editor', accessor => {
-			const editor = getClipboardEditor(accessor);
-			if (!editor) return false;
-			return pasteIntoEditor(editor, accessor.get(IClipboardService));
-		}),
-	);
-	onActivate(() =>
-		PasteAction.addImplementation(0, 'generic-dom', accessor => {
-			const windowId = getWindowId(getActiveWindow());
-			return windowId === undefined ? false : (accessor.get(IClipboardService).triggerPaste(windowId) ?? false);
-		}),
-	);
+	onActivate(() => PasteAction.addImplementation(10_000, 'code-editor', accessor => {
+		const editor = getClipboardEditor(accessor);
+		if (!editor) return false;
+		return pasteIntoEditor(editor, accessor.get(IClipboardService));
+	}));
+	onActivate(() => PasteAction.addImplementation(0, 'generic-dom', accessor => {
+		const windowId = getWindowId(getActiveWindow());
+		return windowId === undefined ? false : accessor.get(IClipboardService).triggerPaste(windowId) ?? false;
+	}));
 }
 
 async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
@@ -187,46 +159,39 @@ registerEditorAction(ExecCommandCopyWithSyntaxHighlightingAction);
 
 function clipboardMenuOptions(title: string, order: number, writable: boolean) {
 	const when = writable ? EditorContextKeys.writable : undefined;
-	return [
-		{
-			menuId: MenuId.MenubarEditMenu,
-			group: '2_ccp',
-			title,
-			order,
-		},
-		{
-			menuId: MenuId.EditorContext,
-			group: CLIPBOARD_CONTEXT_MENU_GROUP,
-			title,
-			when,
-			order,
-		},
-		{
-			menuId: MenuId.CommandPalette,
-			group: '',
-			title,
-			order: 1,
-		},
-		{
-			menuId: MenuId.SimpleEditorContext,
-			group: CLIPBOARD_CONTEXT_MENU_GROUP,
-			title,
-			when,
-			order,
-		},
-	];
+	return [{
+		menuId: MenuId.MenubarEditMenu,
+		group: '2_ccp',
+		title,
+		order,
+	}, {
+		menuId: MenuId.EditorContext,
+		group: CLIPBOARD_CONTEXT_MENU_GROUP,
+		title,
+		when,
+		order,
+	}, {
+		menuId: MenuId.CommandPalette,
+		group: '',
+		title,
+		order: 1,
+	}, {
+		menuId: MenuId.SimpleEditorContext,
+		group: CLIPBOARD_CONTEXT_MENU_GROUP,
+		title,
+		when,
+		order,
+	}];
 }
 
 function registerExecCommandImpl(target: MultiCommand | undefined, browserCommand: 'cut' | 'copy'): void {
 	if (!target) return;
-	onActivate(() =>
-		target.addImplementation(10_000, 'code-editor', accessor => {
-			const editor = getClipboardEditor(accessor);
-			if (!editor) return false;
-			if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty()) return true;
-			return executeEditorClipboardCommand(editor, accessor.get(IClipboardService), browserCommand);
-		}),
-	);
+	onActivate(() => target.addImplementation(10_000, 'code-editor', accessor => {
+		const editor = getClipboardEditor(accessor);
+		if (!editor) return false;
+		if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty()) return true;
+		return executeEditorClipboardCommand(editor, accessor.get(IClipboardService), browserCommand);
+	}));
 	onActivate(() => target.addImplementation(0, 'generic-dom', () => executeDocumentCommand(browserCommand)));
 }
 
@@ -264,13 +229,11 @@ function createClipboardCancellation(editor: ICodeEditor, resources: DisposableS
 	resources.add(toDisposable(() => request.dispose(true)));
 	resources.add(editor.onDidBlurEditorText(() => request.cancel()));
 	resources.add(editor.onDidCompositionStart(() => request.cancel()));
-	resources.add(
-		editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
-				request.cancel();
-			}
-		}),
-	);
+	resources.add(editor.onDidChangeConfiguration(event => {
+		if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
+			request.cancel();
+		}
+	}));
 	return request.token;
 }
 
@@ -307,11 +270,9 @@ function executeDocumentCommand(command: 'cut' | 'copy' | 'paste'): boolean {
 	return typeof document.execCommand === 'function' && document.execCommand(command);
 }
 
+
 class ClipboardKeybindings extends Disposable implements IEditorContribution {
-	constructor(
-		private readonly editor: ICodeEditor,
-		@IClipboardService private readonly clipboardService: IClipboardService,
-	) {
+	constructor(private readonly editor: ICodeEditor, @IClipboardService private readonly clipboardService: IClipboardService) {
 		super();
 		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
 	}

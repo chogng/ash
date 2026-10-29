@@ -36,20 +36,13 @@ test('retiring a pending factory closes its late socket instead of returning it'
 	let finish!: (socket: ISocket) => void;
 	using registration = factories.register(RemoteConnectionType.Managed, {
 		supports: () => true,
-		connect: () =>
-			new Promise(resolve => {
-				finish = resolve;
-			}),
+		connect: () => new Promise(resolve => { finish = resolve; }),
 	});
 	const connecting = factories.connect(new ManagedRemoteConnection(1), '', '', 'test');
 	registration.dispose();
 	let disposed = false;
 	// Only the disposal capability is reached after retirement; no simulated socket IO is involved.
-	finish({
-		dispose: () => {
-			disposed = true;
-		},
-	} as ISocket);
+	finish({ dispose: () => { disposed = true; } } as ISocket);
 	await assert.rejects(connecting, /[Cc]ancel/);
 	assert.equal(disposed, true);
 });

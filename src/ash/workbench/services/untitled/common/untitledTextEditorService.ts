@@ -48,13 +48,11 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(
-			workingCopies.onDidUnregister(copy => {
-				if (this.isUntitled(copy.resource) && this.workingCopies.get(copy.resource).length === 0) {
-					this.release(extUri.getComparisonKey(copy.resource));
-				}
-			}),
-		);
+		this._register(workingCopies.onDidUnregister(copy => {
+			if (this.isUntitled(copy.resource) && this.workingCopies.get(copy.resource).length === 0) {
+				this.release(extUri.getComparisonKey(copy.resource));
+			}
+		}));
 	}
 
 	public create(options: IExistingUntitledTextEditorOptions = {}): IUntitledTextEditorModel {
@@ -132,10 +130,7 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 }
 
 class UntitledTextEditorEntry extends Disposable {
-	constructor(
-		public readonly model: UntitledTextEditorModel,
-		onDispose: () => void,
-	) {
+	constructor(public readonly model: UntitledTextEditorModel, onDispose: () => void) {
 		super();
 		this._register(model);
 		this._register(model.onWillDispose(onDispose));

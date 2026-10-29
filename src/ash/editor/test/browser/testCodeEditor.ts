@@ -35,13 +35,7 @@ import { ILanguageFeaturesService } from '../../common/services/languageFeatures
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
-import {
-	StandaloneBulkEditService,
-	StandaloneCommandService,
-	StandaloneKeybindingService,
-	StandaloneNotificationService,
-	StandaloneWorkspaceContextService,
-} from '../../standalone/browser/standaloneServices.js';
+import { StandaloneBulkEditService, StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService, StandaloneWorkspaceContextService } from '../../standalone/browser/standaloneServices.js';
 import { IBulkEditService } from '../../browser/services/bulkEditService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
@@ -79,10 +73,7 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: InstantiationService): void {
 	if (!services.has(IAccessibilitySignalService)) {
-		services.registerInstance(IAccessibilitySignalService, {
-			playSignal: async () => {},
-			playSignalLoop: () => Disposable.None,
-		});
+		services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 	}
 	if (!services.has(IClipboardService)) {
 		services.registerSingleton(IClipboardService, () => new BrowserClipboardService(undefined));
@@ -106,15 +97,11 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	}
 	if (!services.has(IAccessibilityService)) {
-		services.registerSingleton(
-			IAccessibilityService,
-			accessor =>
-				new AccessibilityService({
-					root: document.body,
-					contextKeyService: accessor.get(IContextKeyService),
-					configurationService: accessor.get(IConfigurationService),
-				}),
-		);
+		services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+			root: document.body,
+			contextKeyService: accessor.get(IContextKeyService),
+			configurationService: accessor.get(IConfigurationService),
+		}));
 	}
 	if (!services.has(IMarkerService)) {
 		services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
@@ -153,7 +140,11 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerSingleton(IContextMenuService, () => services.createInstance(new SyncDescriptor(BrowserContextMenuService)));
 	}
 	if (!services.has(IHoverService)) {
-		services.registerSingleton(IHoverService, accessor => new HoverService(accessor.get(IConfigurationService), accessor.get(IContextViewService), accessor.get(IContextMenuService)));
+		services.registerSingleton(IHoverService, accessor => new HoverService(
+			accessor.get(IConfigurationService),
+			accessor.get(IContextViewService),
+			accessor.get(IContextMenuService),
+		));
 	}
 	if (!services.has(ILanguageFeatureDebounceService)) {
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
@@ -199,14 +190,7 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 			overrides.registerSingleton(IContextViewService, () => overrides.createInstance(BrowserContextViewService, widgetOptions.container.ownerDocument.body));
 		}
 		if (!overrides.has(IQuickInputService)) {
-			overrides.registerSingleton(
-				IQuickInputService,
-				() =>
-					new TestQuickInputService({
-						instantiationService: overrides,
-						container: widgetOptions.container.ownerDocument.body,
-					}),
-			);
+			overrides.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: overrides, container: widgetOptions.container.ownerDocument.body }));
 		}
 		if (languageConfigurationService) {
 			overrides.registerInstance(ILanguageConfigurationService, languageConfigurationService);

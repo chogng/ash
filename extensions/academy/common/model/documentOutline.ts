@@ -16,7 +16,7 @@ export interface DocumentOutlineOptions {
 export function buildDocumentOutline(document: DocumentNode, options: DocumentOutlineOptions = {}): DocumentOutline {
 	if (!document || typeof document !== 'object') throw new TypeError('A document is required to build an outline');
 	const entries: DocumentOutlineEntry[] = [];
-	const headingStack: Array<{ readonly nodeId: DocumentNodeId; readonly level: number }> = [];
+	const headingStack: Array<{ readonly nodeId: DocumentNodeId; readonly level: number; }> = [];
 	const isHeading = options.isHeading ?? (node => node.type === 'heading');
 	const getLevel = options.getLevel ?? defaultHeadingLevel;
 	const getTitle = options.getTitle ?? defaultHeadingTitle;
@@ -25,15 +25,13 @@ export function buildDocumentOutline(document: DocumentNode, options: DocumentOu
 		if (isHeading(node)) {
 			const level = normalizeHeadingLevel(getLevel(node));
 			while (headingStack.length > 0 && headingStack[headingStack.length - 1]!.level >= level) headingStack.pop();
-			entries.push(
-				Object.freeze({
-					nodeId: node.id,
-					parentHeadingId: headingStack[headingStack.length - 1]?.nodeId,
-					depth: headingStack.length,
-					level,
-					title: getTitle(node),
-				}),
-			);
+			entries.push(Object.freeze({
+				nodeId: node.id,
+				parentHeadingId: headingStack[headingStack.length - 1]?.nodeId,
+				depth: headingStack.length,
+				level,
+				title: getTitle(node),
+			}));
 			headingStack.push({ nodeId: node.id, level });
 		}
 		for (const child of node.content) visit(child);

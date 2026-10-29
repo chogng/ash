@@ -2,8 +2,14 @@ import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
-import { DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE, type IWindowClientSize } from '../common/window.js';
-import { WorkbenchState } from '../../workspace/common/workspace.js';
+import {
+	DEFAULT_EMPTY_WINDOW_SIZE,
+	DEFAULT_WORKSPACE_WINDOW_SIZE,
+	type IWindowClientSize,
+} from '../common/window.js';
+import {
+	WorkbenchState,
+} from '../../workspace/common/workspace.js';
 
 export const WindowMode = {
 	Normal: 'normal',
@@ -12,7 +18,7 @@ export const WindowMode = {
 } as const;
 
 /** Stable string values used by runtime and persisted window state. */
-export type WindowMode = (typeof WindowMode)[keyof typeof WindowMode];
+export type WindowMode = typeof WindowMode[keyof typeof WindowMode];
 
 /** A complete operating-system window rectangle. */
 export interface IWindowBounds {
@@ -57,10 +63,10 @@ export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposab
 	sendWhenReady(channel: string, token: CancellationToken, ...args: unknown[]): void;
 	ready(): Promise<ICodeWindow<TWindow>>;
 	setReady(): void;
-	load(configuration: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean }): Promise<void>;
+	load(configuration: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean; }): Promise<void>;
 	reload(): Promise<void>;
 	reportWindowError(gone: boolean, shutdownSignal?: AbortSignal): Promise<void>;
-	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean }): void;
+	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean; }): void;
 }
 
 /**
@@ -81,8 +87,13 @@ export interface IWindowState {
 }
 
 /** Returns a fresh default state sized for the requested workbench state. */
-export function defaultWindowState(workbenchState: WorkbenchState, mode: WindowMode = WindowMode.Normal): IWindowState {
-	const size = workbenchState === WorkbenchState.EMPTY ? DEFAULT_EMPTY_WINDOW_SIZE : DEFAULT_WORKSPACE_WINDOW_SIZE;
+export function defaultWindowState(
+	workbenchState: WorkbenchState,
+	mode: WindowMode = WindowMode.Normal,
+): IWindowState {
+	const size = workbenchState === WorkbenchState.EMPTY
+		? DEFAULT_EMPTY_WINDOW_SIZE
+		: DEFAULT_WORKSPACE_WINDOW_SIZE;
 
 	return {
 		mode,

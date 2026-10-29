@@ -28,15 +28,11 @@ export class BrowserViewDebugger extends Disposable {
 		this.assertNotDisposed();
 		if (this.leases === 0) {
 			this.attachedHere = !this.contents.debugger.isAttached();
-			if (this.attachedHere) {
-				this.contents.debugger.attach('1.3');
-			}
+			if (this.attachedHere) { this.contents.debugger.attach('1.3'); }
 		}
 		this.leases++;
 		return toDisposable(() => {
-			if (--this.leases === 0 && !this.isDisposed && this.attachedHere && this.contents.debugger.isAttached()) {
-				this.contents.debugger.detach();
-			}
+			if (--this.leases === 0 && !this.isDisposed && this.attachedHere && this.contents.debugger.isAttached()) { this.contents.debugger.detach(); }
 		});
 	}
 	public sendCommand(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown> {
@@ -47,28 +43,19 @@ export class BrowserViewDebugger extends Disposable {
 			this.contents.emit('-cancel-dialogs');
 		}
 		this.pending.add(command);
-		void command.then(
-			() => this.pending.delete(command),
-			() => this.pending.delete(command),
-		);
+		void command.then(() => this.pending.delete(command), () => this.pending.delete(command));
 		return command;
 	}
 	public async whenIdle(): Promise<void> {
-		while (this.pending.size > 0) {
-			await Promise.allSettled(this.pending);
-		}
+		while (this.pending.size > 0) { await Promise.allSettled(this.pending); }
 	}
 	public async getTargetId(): Promise<string> {
 		const result = await this.sendCommand('Target.getTargetInfo');
-		if (!isRecord(result) || !isRecord(result.targetInfo) || typeof result.targetInfo.targetId !== 'string') {
-			throw new Error('BrowserCDPTargetUnavailable');
-		}
+		if (!isRecord(result) || !isRecord(result.targetInfo) || typeof result.targetInfo.targetId !== 'string') { throw new Error('BrowserCDPTargetUnavailable'); }
 		return result.targetInfo.targetId;
 	}
 	protected override disposeCore(): void {
-		if (this.attachedHere && !this.contents.isDestroyed() && this.contents.debugger.isAttached()) {
-			this.contents.debugger.detach();
-		}
+		if (this.attachedHere && !this.contents.isDestroyed() && this.contents.debugger.isAttached()) { this.contents.debugger.detach(); }
 		super.disposeCore();
 	}
 }

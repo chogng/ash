@@ -48,7 +48,11 @@ export class SettingsSearchQuery {
 			}
 			textTokens.push(token);
 		}
-		this.text = textTokens.join(' ').replace(/[":]/gu, ' ').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
+		this.text = textTokens.join(' ')
+			.replace(/[":]/gu, ' ')
+			.replace(/\s+/gu, ' ')
+			.trim()
+			.toLocaleLowerCase();
 		this.terms = this.text ? this.text.split(' ') : [];
 		this.idFilter = idFilter;
 		this.hasModifiedFilter = hasModifiedFilter;
@@ -68,11 +72,15 @@ export class SettingsSearchQuery {
 		if (this.tagFilters.some(tag => !tags.has(tag))) return false;
 		if (this.idFilter) {
 			const id = target.id?.toLocaleLowerCase();
-			const matchesId = this.idFilter.endsWith('*') ? id?.startsWith(this.idFilter.slice(0, -1)) : id === this.idFilter;
+			const matchesId = this.idFilter.endsWith('*')
+				? id?.startsWith(this.idFilter.slice(0, -1))
+				: id === this.idFilter;
 			if (!matchesId) return false;
 		}
 		if (this.terms.length === 0) return true;
-		const searchableText = [target.id, target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])].join(' ').toLocaleLowerCase();
+		const searchableText = [target.id, target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]
+			.join(' ')
+			.toLocaleLowerCase();
 		return this.terms.every(term => searchableText.includes(term));
 	}
 }

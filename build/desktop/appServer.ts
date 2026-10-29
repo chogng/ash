@@ -44,14 +44,7 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 	return file === 'Cargo.toml' || file === 'Cargo.lock';
 }
 
-export async function watchAppServer(
-	options: {
-		skipInitial?: boolean;
-		javascriptRuntime?: 'host-provided-node' | 'packaged-node';
-		onDidBuild?: () => Promise<void>;
-		environment?: NodeJS.ProcessEnv;
-	} = {},
-): Promise<() => void> {
+export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; environment?: NodeJS.ProcessEnv; } = {}): Promise<() => void> {
 	let buildRequested = !options.skipInitial;
 	let protocolRequested = buildRequested;
 	let fullBuildRequired = buildRequested;
@@ -80,13 +73,7 @@ export async function watchAppServer(
 			// libuv filters non-recursive directory events after FSEvents delivers
 			// them. A root-directory watch therefore also subscribes to build caches.
 			for (const file of ['Cargo.toml', 'Cargo.lock']) {
-				watchers.push(
-					watchNativeFile(
-						resolve(repositoryRoot, file),
-						event => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest),
-						error => console.error(`[app-server] Manifest watcher failed: ${file}`, error),
-					),
-				);
+				watchers.push(watchNativeFile(resolve(repositoryRoot, file), event => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest), error => console.error(`[app-server] Manifest watcher failed: ${file}`, error)));
 			}
 		} else {
 			watchers.push(watch(repositoryRoot, (event, file) => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest)));
@@ -139,13 +126,10 @@ export async function watchAppServer(
 				buildRequested = false;
 				const sources = [...changedSources];
 				changedSources.clear();
-				fullBuildRequired ||=
-					sources.length === 0 ||
-					!liveDirectory ||
-					sources.some(source => {
-						const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
-						return file === undefined || !file.endsWith('.rs');
-					});
+				fullBuildRequired ||= sources.length === 0 || !liveDirectory || sources.some(source => {
+					const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
+					return file === undefined || !file.endsWith('.rs');
+				});
 				let needsProtocol = protocolRequested || sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
 				protocolRequested = false;
 				try {
@@ -186,14 +170,10 @@ export async function watchAppServer(
 	async function runBackendBuild(liveOnly: boolean): Promise<void> {
 		if (liveOnly && liveBuilder) return liveBuilder.build();
 		// Web owns a packaged Node runtime; Electron supplies Node from its host.
-		const buildArguments =
-			options.javascriptRuntime === 'packaged-node' ? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node'] : ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
-		await runPython(buildArguments, {
-			cwd: repositoryRoot,
-			environment,
-			operation: 'backend build',
-			signal: cancellation.signal,
-		});
+		const buildArguments = options.javascriptRuntime === 'packaged-node'
+			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		await runPython(buildArguments, { cwd: repositoryRoot, environment, operation: 'backend build', signal: cancellation.signal });
 	}
 
 	function stop(): void {

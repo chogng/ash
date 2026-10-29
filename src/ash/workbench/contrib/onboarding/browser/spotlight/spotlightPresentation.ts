@@ -9,7 +9,7 @@ import { onboardingTargetRegistry } from './onboardingTarget.js';
 import '../media/spotlight.css';
 
 export class SpotlightPresentation {
-	constructor(private readonly container: HTMLElement) {}
+	constructor(private readonly container: HTMLElement) { }
 
 	public async show(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
 		if (steps.length === 0) return 'unavailable';
@@ -67,22 +67,18 @@ export class SpotlightPresentation {
 			root.append(frame, card);
 			this.container.append(root);
 			resources.add(toDisposable(() => root.remove()));
-			const dismiss = resources.add(
-				new Button(actions, {
-					...defaultButtonStyles,
-					label: localize('onboarding.dismiss', 'Dismiss'),
-					presentation: 'secondary',
-					onClick: () => finish('dismissed'),
-				}),
-			);
-			const next = resources.add(
-				new Button(actions, {
-					...defaultButtonStyles,
-					label: index === total - 1 ? localize('onboarding.done', 'Done') : localize('onboarding.next', 'Next'),
-					presentation: 'primary',
-					onClick: () => finish('completed'),
-				}),
-			);
+			const dismiss = resources.add(new Button(actions, {
+				...defaultButtonStyles,
+				label: localize('onboarding.dismiss', 'Dismiss'),
+				presentation: 'secondary',
+				onClick: () => finish('dismissed'),
+			}));
+			const next = resources.add(new Button(actions, {
+				...defaultButtonStyles,
+				label: index === total - 1 ? localize('onboarding.done', 'Done') : localize('onboarding.next', 'Next'),
+				presentation: 'primary',
+				onClick: () => finish('completed'),
+			}));
 			const targetWindow = getWindow(this.container);
 			const position = (): void => {
 				if (!target.isConnected) {
@@ -104,17 +100,15 @@ export class SpotlightPresentation {
 			};
 			resources.add(addDisposableListener(targetWindow, 'resize', position));
 			resources.add(addDisposableListener(this.container, 'scroll', position, true));
-			resources.add(
-				addDisposableListener(card, 'keydown', event => {
-					if (event.key === 'Escape') {
-						event.preventDefault();
-						finish('dismissed');
-					} else if (event.key === 'F1') {
-						event.preventDefault();
-						help.hidden = false;
-					}
-				}),
-			);
+			resources.add(addDisposableListener(card, 'keydown', event => {
+				if (event.key === 'Escape') {
+					event.preventDefault();
+					finish('dismissed');
+				} else if (event.key === 'F1') {
+					event.preventDefault();
+					help.hidden = false;
+				}
+			}));
 			if (step.advanceOnTargetClick) resources.add(addDisposableListener(target, 'click', () => finish('completed')));
 			resources.add(token.onCancellationRequested(() => finish('cancelled')));
 			if (token.isCancellationRequested) {

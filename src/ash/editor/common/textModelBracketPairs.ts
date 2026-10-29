@@ -4,14 +4,14 @@ import { IPosition } from './core/position.js';
 import { IRange, Range } from './core/range.js';
 import { ClosingBracketKind, OpeningBracketKind } from './languages/supports/languageBracketsConfiguration.js';
 interface BracketPairKinds {
-	readonly openingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind };
-	readonly closingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind } | null;
+	readonly openingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind; };
+	readonly closingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind; } | null;
 }
 
 export interface IBracketPairsTextModelPart {
 	/**
 	 * Is fired when bracket pairs change, either due to a text or a settings change.
-	 */
+	*/
 	readonly onDidChange: Event<void>;
 
 	/**
@@ -76,7 +76,7 @@ export class BracketInfo {
 		public readonly nestingLevel: number,
 		public readonly nestingLevelOfEqualBracketType: number,
 		public readonly isInvalid: boolean,
-	) {}
+	) { }
 }
 
 export class BracketPairInfo {
@@ -88,7 +88,9 @@ export class BracketPairInfo {
 		public readonly nestingLevel: number,
 		public readonly nestingLevelOfEqualBracketType: number,
 		private readonly bracketPairNode: BracketPairKinds,
-	) {}
+
+	) {
+	}
 
 	public get openingBracketInfo(): OpeningBracketKind {
 		return this.bracketPairNode.openingBracket.bracketInfo as OpeningBracketKind;
@@ -106,13 +108,13 @@ export class BracketPairWithMinIndentationInfo extends BracketPairInfo {
 		closingBracketRange: Range | undefined,
 		/**
 		 * 0-based
-		 */
+		*/
 		nestingLevel: number,
 		nestingLevelOfEqualBracketType: number,
 		bracketPairNode: BracketPairKinds,
 		/**
 		 * -1 if not requested, otherwise the size of the minimum indentation in the bracket pair in terms of visible columns.
-		 */
+		*/
 		public readonly minVisibleColumnIndentation: number,
 	) {
 		super(range, openingBracketRange, closingBracketRange, nestingLevel, nestingLevelOfEqualBracketType, bracketPairNode);

@@ -19,32 +19,24 @@ export interface IChatSessionPickerDelegate {
 /** Presents session options using the input's existing popup and focus owner. */
 export class ChatSessionPickerActionItem extends ChatInputPickerActionViewItem {
 	constructor(action: IAction, delegate: IChatSessionPickerDelegate, listOptions: IActionListOptions, @IInstantiationService instantiationService: IInstantiationService) {
-		super(
-			action,
-			{
-				actionProvider: {
-					getActions: async () => {
-						const isCurrent = delegate.captureContext();
-						const options = await delegate.getOptions();
-						if (this.isDisposed || !isCurrent()) return [];
-						return options.map(option =>
-							option instanceof Separator
-								? option
-								: {
-										...option,
-										run: async () => {
-											if (this.isDisposed || !isCurrent() || !option.enabled) return;
-											await option.run();
-											if (!this.isDisposed && isCurrent()) delegate.onDidSelect();
-										},
-									},
-						);
-					},
+		super(action, {
+			actionProvider: {
+				getActions: async () => {
+					const isCurrent = delegate.captureContext();
+					const options = await delegate.getOptions();
+					if (this.isDisposed || !isCurrent()) return [];
+					return options.map(option => option instanceof Separator ? option : {
+						...option,
+						run: async () => {
+							if (this.isDisposed || !isCurrent() || !option.enabled) return;
+							await option.run();
+							if (!this.isDisposed && isCurrent()) delegate.onDidSelect();
+						},
+					});
 				},
-				listOptions,
 			},
-			instantiationService,
-		);
+			listOptions,
+		}, instantiationService);
 	}
 
 	public override render(container: HTMLElement): void {

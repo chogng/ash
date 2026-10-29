@@ -89,17 +89,13 @@ export class Button extends Disposable {
 		});
 		this._register(toDisposable(() => domNode.remove()));
 		const root = new FastDomNode(domNode);
-		root.setClassName(
-			[
-				'ash-button',
-				`ash-button-${options.presentation ?? 'quiet'}`,
-				`ash-button-${options.size ?? 'standard'}`,
-				options.iconOnly === true && 'icon-only',
-				options.contentAlignment === 'labelCentered' && 'label-centered',
-			]
-				.filter(value => value !== false)
-				.join(' '),
-		);
+		root.setClassName([
+			'ash-button',
+			`ash-button-${options.presentation ?? 'quiet'}`,
+			`ash-button-${options.size ?? 'standard'}`,
+			options.iconOnly === true && 'icon-only',
+			options.contentAlignment === 'labelCentered' && 'label-centered',
+		].filter(value => value !== false).join(' '));
 		this.root = root;
 		this.domNode = root.domNode;
 		const properties = {
@@ -133,7 +129,7 @@ export class Button extends Disposable {
 
 	private getContent(label = ''): IconLabel {
 		if (!this.content.value) {
-			const content = (this.content.value = new IconLabel(this.domNode, { label, icon: this.currentIcon }));
+			const content = this.content.value = new IconLabel(this.domNode, { label, icon: this.currentIcon });
 			content.element.classList.add('ash-button-content');
 			content.labelElement.classList.add('ash-button-label');
 			// Hosts can append their own swatches or indicators before the first label is assigned.
@@ -142,42 +138,28 @@ export class Button extends Disposable {
 		return this.content.value;
 	}
 
-	set enabled(value: boolean) {
-		this.domNode.disabled = !value;
-	}
-	get enabled(): boolean {
-		return !this.domNode.disabled;
-	}
+	set enabled(value: boolean) { this.domNode.disabled = !value; }
+	get enabled(): boolean { return !this.domNode.disabled; }
 
-	focus(): void {
-		this.domNode.focus();
-	}
+	focus(): void { this.domNode.focus(); }
 
-	blur(): void {
-		this.domNode.blur();
-	}
+	blur(): void { this.domNode.blur(); }
 
-	hasFocus(): boolean {
-		return this.domNode.ownerDocument.activeElement === this.domNode;
-	}
+	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
 	set label(value: string) {
 		if (!value && !this.currentIcon) this.content.clear();
 		else this.getContent().setLabel(value, undefined, { icon: this.currentIcon });
 		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, 'label', value);
 	}
-	get label(): string {
-		return this.content.value?.labelElement.textContent ?? '';
-	}
+	get label(): string { return this.content.value?.labelElement.textContent ?? ''; }
 
 	set icon(value: Icon | undefined) {
 		this.currentIcon = value;
 		if (!value && !this.label) this.content.clear();
 		else this.getContent().setIcon(value);
 	}
-	get icon(): Icon | undefined {
-		return this.currentIcon;
-	}
+	get icon(): Icon | undefined { return this.currentIcon; }
 
 	toggleClassName(className: string, shouldHaveIt?: boolean): void {
 		this.root.toggleClassName(className, shouldHaveIt);
@@ -188,18 +170,14 @@ export class Button extends Disposable {
 		this.root.toggleClassName('hidden', value);
 	}
 
-	get hidden(): boolean {
-		return this.domNode.classList.contains('hidden');
-	}
+	get hidden(): boolean { return this.domNode.classList.contains('hidden'); }
 
 	set checked(value: boolean | undefined) {
 		this.root.toggleClassName('checked', value === true);
 		setAriaAttribute(this.domNode, 'pressed', value);
 	}
 
-	get checked(): boolean {
-		return this.domNode.classList.contains('checked');
-	}
+	get checked(): boolean { return this.domNode.classList.contains('checked'); }
 
 	setTitle(title: string | undefined): void {
 		this.hover.clear();
@@ -222,10 +200,7 @@ export class ButtonWithDropdown extends Disposable {
 	readonly onDidClick: Event<DOMEventMap['click']>;
 	private readonly menu = this._register(new MutableDisposable<CancellationTokenSource>());
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: IButtonWithDropdownOptions,
-	) {
+	constructor(container: HTMLElement, private readonly options: IButtonWithDropdownOptions) {
 		super();
 		this.element = h(container.ownerDocument, 'div', { className: 'ash-button-dropdown' });
 		container.append(this.element);
@@ -233,65 +208,51 @@ export class ButtonWithDropdown extends Disposable {
 		this.primaryButton = this._register(new Button(this.element, options));
 		this.onDidClick = this.primaryButton.onDidClick;
 		const menuLabel = localize('button.moreActions', 'More Actions...');
-		this.dropdownButton = this._register(
-			new Button(this.element, {
-				...options,
-				label: menuLabel,
-				ariaLabel: menuLabel,
-				title: menuLabel,
-				icon: Lxicon.chevronDown,
-				iconOnly: true,
-				contentAlignment: 'groupCentered',
-				checked: undefined,
-				type: 'button',
-				onClick: () => {
-					if (this.menu.value) {
-						this.hideDropdown();
-					} else {
-						this.showDropdown();
-					}
-				},
-			}),
-		);
+		this.dropdownButton = this._register(new Button(this.element, {
+			...options,
+			label: menuLabel,
+			ariaLabel: menuLabel,
+			title: menuLabel,
+			icon: Lxicon.chevronDown,
+			iconOnly: true,
+			contentAlignment: 'groupCentered',
+			checked: undefined,
+			type: 'button',
+			onClick: () => {
+				if (this.menu.value) {
+					this.hideDropdown();
+				} else {
+					this.showDropdown();
+				}
+			},
+		}));
 		this.dropdownButton.domNode.setAttribute('aria-haspopup', 'menu');
 		this.dropdownButton.domNode.setAttribute('aria-expanded', 'false');
 		// Follow the rendered border box, including larger fonts and host-specific button sizing.
-		this._register(
-			observeElementSize(this.primaryButton.domNode, size => {
-				if (size.height > 0) {
-					this.dropdownButton.domNode.style.width = `${size.height}px`;
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownButton.enabled) {
-					stopEvent(event);
-					this.showDropdown();
-				} else if (event.key === 'ArrowRight' && event.target === this.primaryButton.domNode && this.dropdownButton.enabled) {
-					stopEvent(event);
-					this.dropdownButton.focus();
-				} else if (event.key === 'ArrowLeft' && event.target === this.dropdownButton.domNode && this.primaryButton.enabled) {
-					stopEvent(event);
-					this.primaryButton.focus();
-				}
-			}),
-		);
+		this._register(observeElementSize(this.primaryButton.domNode, size => {
+			if (size.height > 0) {
+				this.dropdownButton.domNode.style.width = `${size.height}px`;
+			}
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownButton.enabled) {
+				stopEvent(event);
+				this.showDropdown();
+			} else if (event.key === 'ArrowRight' && event.target === this.primaryButton.domNode && this.dropdownButton.enabled) {
+				stopEvent(event);
+				this.dropdownButton.focus();
+			} else if (event.key === 'ArrowLeft' && event.target === this.dropdownButton.domNode && this.primaryButton.enabled) {
+				stopEvent(event);
+				this.primaryButton.focus();
+			}
+		}));
 	}
 
-	focus(): void {
-		this.primaryButton.focus();
-	}
+	focus(): void { this.primaryButton.focus(); }
 
-	get enabled(): boolean {
-		return this.primaryButton.enabled;
-	}
-	get label(): string {
-		return this.primaryButton.label;
-	}
-	set label(value: string) {
-		this.primaryButton.label = value;
-	}
+	get enabled(): boolean { return this.primaryButton.enabled; }
+	get label(): string { return this.primaryButton.label; }
+	set label(value: string) { this.primaryButton.label = value; }
 	set enabled(value: boolean) {
 		this.primaryButton.enabled = value;
 		this.dropdownButton.enabled = value;
@@ -309,10 +270,7 @@ export class ButtonWithDropdown extends Disposable {
 			return;
 		}
 		const primary: IAction = {
-			id: 'button.primary',
-			label: this.primaryButton.label,
-			tooltip: '',
-			enabled: this.primaryButton.enabled,
+			id: 'button.primary', label: this.primaryButton.label, tooltip: '', enabled: this.primaryButton.enabled,
 			run: () => this.primaryButton.domNode.click(),
 		};
 		const menuActions = this.options.addPrimaryActionToDropdown === false ? actions : [primary, new Separator(), ...actions];
@@ -341,11 +299,8 @@ export class ButtonWithDropdown extends Disposable {
 		if (!menu) {
 			return;
 		}
-		try {
-			menu.cancel();
-		} finally {
-			this.didHideMenu(menu);
-		}
+		try { menu.cancel(); }
+		finally { this.didHideMenu(menu); }
 	}
 
 	private didHideMenu(menu: CancellationTokenSource): void {
@@ -359,10 +314,7 @@ export class ButtonWithDropdown extends Disposable {
 	}
 
 	protected override disposeCore(): void {
-		try {
-			this.hideDropdown();
-		} finally {
-			super.disposeCore();
-		}
+		try { this.hideDropdown(); }
+		finally { super.disposeCore(); }
 	}
 }

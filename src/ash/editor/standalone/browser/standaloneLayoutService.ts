@@ -26,21 +26,17 @@ export class StandaloneLayoutService extends Disposable implements ILayoutServic
 	constructor(@ICodeEditorService private readonly editors: ICodeEditorService) {
 		super();
 		this.lastActiveContainer = this.activeContainer;
-		this._register(
-			editors.onCodeEditorAdd(editor => {
-				this.track(editor);
-				this.publishLayout(editor);
-				this.publishActiveContainer();
-			}),
-		);
-		this._register(
-			editors.onCodeEditorRemove(editor => {
-				this.editorListeners.deleteAndDispose(editor);
-				this.publishActiveContainer();
-				this.layoutMain.fire(this.mainContainerDimension);
-				this.layoutActive.fire(this.activeContainerDimension);
-			}),
-		);
+		this._register(editors.onCodeEditorAdd(editor => {
+			this.track(editor);
+			this.publishLayout(editor);
+			this.publishActiveContainer();
+		}));
+		this._register(editors.onCodeEditorRemove(editor => {
+			this.editorListeners.deleteAndDispose(editor);
+			this.publishActiveContainer();
+			this.layoutMain.fire(this.mainContainerDimension);
+			this.layoutActive.fire(this.activeContainerDimension);
+		}));
 		for (const editor of editors.listCodeEditors()) {
 			this.track(editor);
 		}

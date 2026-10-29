@@ -11,28 +11,19 @@ export class InsertCodeBlockOperation {
 		@IEditorService private readonly editors: IEditorService,
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
 		@IEditorPart private readonly editorPart: IEditorPart,
-	) {}
+	) { }
 
 	public async run(context: ICodeBlockActionContext): Promise<void> {
 		const input = this.editors.activeEditor;
 		const control = this.editorPart.activePane?.getControl();
-		const editor =
-			this.codeEditors.listCodeEditors().find(candidate => candidate === control) ??
-			this.codeEditors
-				.listDiffEditors()
-				.find(candidate => candidate === control)
-				?.getModifiedEditor();
+		const editor = this.codeEditors.listCodeEditors().find(candidate => candidate === control)
+			?? this.codeEditors.listDiffEditors().find(candidate => candidate === control)?.getModifiedEditor();
 		if (!editor || !input) throw new Error(localize('chat.code.noEditor', 'Open a file editor and place the cursor where the code should be inserted.'));
 		if (input.readOnly || editor.getOption(EditorOption.readOnly)) throw new Error(localize('chat.code.readOnly', 'The active file editor is read-only.'));
 		const selections = editor.getSelections();
 		if (!selections?.length || !context.code) return;
 		editor.pushUndoStop();
-		if (
-			!editor.executeEdits(
-				'chat.insertCodeBlock',
-				selections.map(range => ({ range, text: context.code })),
-			)
-		) {
+		if (!editor.executeEdits('chat.insertCodeBlock', selections.map(range => ({ range, text: context.code })))) {
 			throw new Error(localize('chat.code.insertFailed', 'The active editor could not insert this code block.'));
 		}
 		editor.pushUndoStop();

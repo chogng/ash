@@ -34,14 +34,36 @@ export class RemoteConnections implements IRemoteConnectionApi {
 
 	async save(connection: RemoteConnectionDefinition): Promise<RemoteConnectionDefinition> {
 		const expected = canonicalRemoteConnectionDefinition(connection);
-		const output = await this.invoke(['connections', 'save', '--name', expected.name, '--host', expected.host, '--dir', expected.workspace, '--mode', 'create']);
+		const output = await this.invoke([
+			'connections',
+			'save',
+			'--name',
+			expected.name,
+			'--host',
+			expected.host,
+			'--dir',
+			expected.workspace,
+			'--mode',
+			'create',
+		]);
 		return exactMutationResult(output, expected);
 	}
 
 	async update(originalName: string, connection: RemoteConnectionDefinition): Promise<RemoteConnectionDefinition> {
 		const normalizedOriginalName = canonicalRemoteConnectionName(originalName);
 		const expected = canonicalRemoteConnectionDefinition(connection);
-		const output = await this.invoke(['connections', 'update', '--name', normalizedOriginalName, '--new-name', expected.name, '--host', expected.host, '--dir', expected.workspace]);
+		const output = await this.invoke([
+			'connections',
+			'update',
+			'--name',
+			normalizedOriginalName,
+			'--new-name',
+			expected.name,
+			'--host',
+			expected.host,
+			'--dir',
+			expected.workspace,
+		]);
 		return exactMutationResult(output, expected);
 	}
 
@@ -64,8 +86,7 @@ export class RemoteConnections implements IRemoteConnectionApi {
 			if (connection.name !== normalizedName) throw new Error('Remote connection lookup returned a different named target');
 			if (expectedConnection) {
 				const expected = canonicalRemoteConnectionDefinition(expectedConnection);
-				if (expected.name !== connection.name || expected.host !== connection.host || expected.workspace !== connection.workspace)
-					throw new Error(localize('remote.connection.targetChanged', 'Remote target changed after confirmation; select it again'));
+				if (expected.name !== connection.name || expected.host !== connection.host || expected.workspace !== connection.workspace) throw new Error(localize('remote.connection.targetChanged', 'Remote target changed after confirmation; select it again'));
 			}
 			await this.options.scheduleConnect(connection);
 		} finally {
@@ -106,11 +127,7 @@ function connectionRecord(value: unknown): RemoteConnectionDefinition {
 		throw new Error('Remote connection catalog command returned an invalid record');
 	}
 	// Rust's directory field is a transport fact; the frontend contract identifies a remote workspace.
-	const connection = canonicalRemoteConnectionDefinition({
-		name: record.name,
-		host: record.host,
-		workspace: record.dir,
-	});
+	const connection = canonicalRemoteConnectionDefinition({ name: record.name, host: record.host, workspace: record.dir });
 	if (connection.name !== record.name || connection.host !== record.host || connection.workspace !== record.dir) {
 		throw new Error('Remote connection catalog command returned a non-canonical record');
 	}

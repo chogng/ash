@@ -38,12 +38,10 @@ test('DomWidget scopes retain the latest constructor, replace twice, and release
 					super();
 					this.element.textContent = `${label}:${version}`;
 					events.push(`create:${version}`);
-					this._register(
-						toDisposable(() => {
-							events.push(`dispose:${version}`);
-							this.element.remove();
-						}),
-					);
+					this._register(toDisposable(() => {
+						events.push(`dispose:${version}`);
+						this.element.remove();
+					}));
 				}
 			};
 		};
@@ -66,14 +64,10 @@ test('DomWidget scopes retain the latest constructor, replace twice, and release
 		for (const version of ['second', 'third']) {
 			widget(version).registerWidgetHotReplacement('domWidget.test#scoped');
 		}
-		assert.deepEqual(
-			{ text: versions.get().element.textContent, connected: roots.map(root => root.isConnected), events },
-			{
-				text: 'kept:third',
-				connected: [false, false, true],
-				events: ['create:initial', 'create:second', 'dispose:initial', 'create:third', 'dispose:second'],
-			},
-		);
+		assert.deepEqual({ text: versions.get().element.textContent, connected: roots.map(root => root.isConnected), events }, {
+			text: 'kept:third', connected: [false, false, true],
+			events: ['create:initial', 'create:second', 'dispose:initial', 'create:third', 'dispose:second'],
+		});
 		scope.dispose();
 		widget('after-disposal').registerWidgetHotReplacement('domWidget.test#scoped');
 		assert.deepEqual(events, ['create:initial', 'create:second', 'dispose:initial', 'create:third', 'dispose:second', 'dispose:third']);
@@ -88,20 +82,14 @@ test('DomWidget identities distinguish classes with the same name in different m
 	enableHotReload();
 	const dom = new JSDOM('<!doctype html>');
 	try {
-		const First = class SameName extends DomWidget {
-			public readonly element = dom.window.document.createElement('div');
-		};
-		const Second = class SameName extends DomWidget {
-			public readonly element = dom.window.document.createElement('div');
-		};
+		const First = class SameName extends DomWidget { public readonly element = dom.window.document.createElement('div'); };
+		const Second = class SameName extends DomWidget { public readonly element = dom.window.document.createElement('div'); };
 		First.registerWidgetHotReplacement('first.ts#SameName');
 		Second.registerWidgetHotReplacement('second.ts#SameName');
 		using scope = new DisposableStore();
 		const first = First.createObservable(scope).get();
 		const second = Second.createObservable(scope).get();
-		const Replacement = class SameName extends DomWidget {
-			public readonly element = dom.window.document.createElement('section');
-		};
+		const Replacement = class SameName extends DomWidget { public readonly element = dom.window.document.createElement('section'); };
 		Replacement.registerWidgetHotReplacement('second.ts#SameName');
 		assert.deepEqual({ firstDisposed: first.isDisposed, secondDisposed: second.isDisposed }, { firstDisposed: false, secondDisposed: true });
 	} finally {
@@ -113,19 +101,16 @@ test('DomWidget replacements resolve decorated services in the same scope and re
 	enableHotReload();
 	const dom = new JSDOM('<!doctype html>');
 	try {
-		const ILabelService = createDecorator<{ readonly label: string }>('domWidget.test.label');
+		const ILabelService = createDecorator<{ readonly label: string; }>('domWidget.test.label');
 		const dependency = { label: 'service' };
 		class Initial extends DomWidget {
 			public readonly element = dom.window.document.createElement('div');
-			constructor(
-				public readonly suffix: string,
-				@ILabelService public readonly service: { readonly label: string },
-			) {
+			constructor(public readonly suffix: string, @ILabelService public readonly service: { readonly label: string; }) {
 				super();
 				this.element.textContent = `${service.label}:${suffix}`;
 			}
 		}
-		class Replacement extends Initial {}
+		class Replacement extends Initial { }
 		Initial.registerWidgetHotReplacement('domWidget.test#injected');
 		using services = new InstantiationService();
 		using scope = new DisposableStore();
@@ -139,7 +124,5 @@ test('DomWidget replacements resolve decorated services in the same scope and re
 		assert.equal(instances.get().element.textContent, 'service:kept');
 		scope.dispose();
 		assert.equal(instances.get().isDisposed, true);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });

@@ -17,15 +17,11 @@ suite('Terminal scoped logging', () => {
 		using lifetime = new DisposableStore();
 		const entries: LogEntry[] = [];
 		let flushed = false;
-		const host = lifetime.add(
-			new LogService({
-				level: LogLevel.Trace,
-				sinks: [{ log: entry => entries.push(entry) }],
-				flush: async () => {
-					flushed = true;
-				},
-			}),
-		);
+		const host = lifetime.add(new LogService({
+			level: LogLevel.Trace,
+			sinks: [{ log: entry => entries.push(entry) }],
+			flush: async () => { flushed = true; },
+		}));
 		const services = lifetime.add(new InstantiationService());
 		const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace-original', uri: URI.file('/workspace') }));
 		services.registerInstance(ILoggerService, host);
@@ -42,14 +38,11 @@ suite('Terminal scoped logging', () => {
 		await terminal.flush();
 		assert.equal(flushed, true);
 		assert.deepEqual(levels, [LogLevel.Error]);
-		assert.deepEqual(
-			entries.map(entry => [entry.category, entry.message]),
-			[
-				['terminal', '[workspa] ready argument'],
-				['terminal', '[changed] changed'],
-				['terminal', 'problem'],
-			],
-		);
+		assert.deepEqual(entries.map(entry => [entry.category, entry.message]), [
+			['terminal', '[workspa] ready argument'],
+			['terminal', '[changed] changed'],
+			['terminal', 'problem'],
+		]);
 		assert.ok(entries[2]!.error instanceof Error);
 		terminal.dispose();
 		terminal.error('released');

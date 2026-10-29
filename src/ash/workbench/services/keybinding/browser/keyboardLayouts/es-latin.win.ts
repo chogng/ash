@@ -1,5 +1,6 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
+
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { name: '0000080A', id: '', text: 'Latin American' },
 	secondaryLayouts: [],
@@ -158,6 +159,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserForward: [],
 		BrowserStop: [],
 		BrowserRefresh: [],
-		BrowserFavorites: [],
-	},
+		BrowserFavorites: []
+	}
+
 });

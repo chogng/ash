@@ -37,39 +37,17 @@ export class ChatScreenshotContribution extends Disposable {
 		@IPreferencesService private readonly preferences: IPreferencesService,
 	) {
 		super();
-		this._register(
-			editors.onDidChange(() => {
-				void this.checkShortcut();
-			}),
-		);
-		this._register(
-			keybindings.onDidUpdateKeybindings(() => {
-				void this.checkShortcut();
-			}),
-		);
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(ScreenshotGlobalShortcutSetting)) void this.checkShortcut();
-			}),
-		);
+		this._register(editors.onDidChange(() => { void this.checkShortcut(); }));
+		this._register(keybindings.onDidUpdateKeybindings(() => { void this.checkShortcut(); }));
+		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(ScreenshotGlobalShortcutSetting)) void this.checkShortcut(); }));
 		const trigger = subscribe<unknown>(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, value => {
-			if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'id' || typeof (value as { id?: unknown }).id !== 'string')
-				throw new TypeError('Invalid global keybinding trigger');
-			if ((value as { id: string }).id === 'chat.screenshot')
-				void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start screenshot from global shortcut', error));
+			if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'id' || typeof (value as { id?: unknown; }).id !== 'string') throw new TypeError('Invalid global keybinding trigger');
+			if ((value as { id: string; }).id === 'chat.screenshot') void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start screenshot from global shortcut', error));
 		});
-		this._register(
-			toDisposable(() => {
-				trigger.dispose();
-				void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
-					id: 'chat.screenshot',
-					commandId: ScreenshotCommandId,
-					accelerator: '',
-					label: '',
-					global: false,
-				}).catch(() => {});
-			}),
-		);
+		this._register(toDisposable(() => {
+			trigger.dispose();
+			void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, { id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: '', label: '', global: false }).catch(() => { });
+		}));
 		void this.checkShortcut();
 	}
 
@@ -83,18 +61,22 @@ export class ChatScreenshotContribution extends Disposable {
 			try {
 				const result = validateGlobalKeybindingResult(
 					await invoke<unknown>(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
-						id: 'chat.screenshot',
-						commandId: ScreenshotCommandId,
-						accelerator: accelerator ?? '',
+						id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: accelerator ?? '',
 						label: binding ? getKeybindingLabel(binding) : '',
-						global: global && !!binding,
-					}),
+						global: global && !!binding
+					})
 				);
 				if (this.isDisposed || generation !== this.shortcutGeneration) return;
 				this.shortcut = {
 					global,
-					availability: !binding ? 'unassigned' : !accelerator ? 'unsupported' : result.available ? 'available' : 'unavailable',
-					activeLabel: result.activeLabel,
+					availability: !binding
+						? 'unassigned'
+						: !accelerator
+							? 'unsupported'
+							: result.available
+								? 'available'
+								: 'unavailable',
+					activeLabel: result.activeLabel
 				};
 			} catch (error) {
 				if (this.isDisposed || generation !== this.shortcutGeneration) return;
@@ -102,7 +84,7 @@ export class ChatScreenshotContribution extends Disposable {
 			}
 			this.updateWarning();
 		});
-		this.pendingShortcut = operation.catch(() => {});
+		this.pendingShortcut = operation.catch(() => { });
 		return operation;
 	}
 
@@ -135,22 +117,15 @@ export class ChatScreenshotContribution extends Disposable {
 		this.warning.clear();
 		if (!message) return;
 		const warning = this.notifications.notify({
-			severity: Severity.Warning,
-			message: message,
-			actions: {
-				primary: [
-					{
-						tooltip: '',
-						enabled: true,
-						id: 'screenshot.changeShortcut',
-						label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
-						run: () =>
-							this.preferences.openGlobalKeybindingSettings(false, {
-								query: `@command:${ScreenshotCommandId}`,
-							}),
-					},
-				],
-			},
+			severity: Severity.Warning, message: message, actions: {
+				primary: [{
+					tooltip: '',
+					enabled: true,
+					id: 'screenshot.changeShortcut',
+					label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
+					run: () => this.preferences.openGlobalKeybindingSettings(false, { query: `@command:${ScreenshotCommandId}` })
+				}]
+			}
 		});
 		this.warning.value = toDisposable(() => warning.close());
 	}

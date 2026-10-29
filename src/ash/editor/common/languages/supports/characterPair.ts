@@ -1,6 +1,7 @@
 import { IAutoClosingPair, StandardAutoClosingPairConditional, LanguageConfiguration } from '../languageConfiguration.js';
 
 export class CharacterPairSupport {
+
 	static readonly DEFAULT_AUTOCLOSE_BEFORE_LANGUAGE_DEFINED_QUOTES = ';:.,=}])> \n\t';
 	static readonly DEFAULT_AUTOCLOSE_BEFORE_LANGUAGE_DEFINED_BRACKETS = '\'"`;:.,=}])> \n\t';
 	static readonly DEFAULT_AUTOCLOSE_BEFORE_WHITESPACE = ' \n\t';
@@ -36,7 +37,7 @@ export class CharacterPairSupport {
 	}
 
 	public getAutoCloseBeforeSet(forQuotes: boolean): string {
-		return forQuotes ? this._autoCloseBeforeForQuotes : this._autoCloseBeforeForBrackets;
+		return (forQuotes ? this._autoCloseBeforeForQuotes : this._autoCloseBeforeForBrackets);
 	}
 
 	public getSurroundingPairs(): IAutoClosingPair[] {

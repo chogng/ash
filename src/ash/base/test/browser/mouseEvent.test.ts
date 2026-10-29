@@ -18,7 +18,11 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { StandardMouseEvent, StandardPointerEvent, StandardWheelEvent } = await import('../../browser/mouseEvent.js');
+const {
+	StandardMouseEvent,
+	StandardPointerEvent,
+	StandardWheelEvent,
+} = await import('../../browser/mouseEvent.js');
 
 test('StandardMouseEvent exposes stable coordinates and event controls', () => {
 	const event = new browserEnvironment.window.MouseEvent('dblclick', {
@@ -51,7 +55,9 @@ test('StandardPointerEvent supplies mouse-compatible pointer defaults', () => {
 		buttons: 1,
 		clientX: 8,
 	});
-	const standard = new StandardPointerEvent(event as unknown as PointerEvent);
+	const standard = new StandardPointerEvent(
+		event as unknown as PointerEvent,
+	);
 
 	assert.equal(standard.pointerId, 0);
 	assert.equal(standard.pointerType, 'mouse');
@@ -62,38 +68,39 @@ test('StandardPointerEvent supplies mouse-compatible pointer defaults', () => {
 });
 
 test('StandardWheelEvent normalizes pixel, line, and page deltas', () => {
-	const pixel = new StandardWheelEvent(
-		wheelEvent({
-			deltaX: 3,
-			deltaY: 7,
-			deltaMode: 0,
-		}),
-	);
-	const line = new StandardWheelEvent(
-		wheelEvent({
-			deltaX: 2,
-			deltaY: -3,
-			deltaMode: 1,
-		}),
-		{
-			lineHeight: 20,
-		},
-	);
-	const page = new StandardWheelEvent(
-		wheelEvent({
-			deltaX: 1,
-			deltaY: 2,
-			deltaMode: 2,
-		}),
-		{
-			pageWidth: 300,
-			pageHeight: 200,
-		},
-	);
+	const pixel = new StandardWheelEvent(wheelEvent({
+		deltaX: 3,
+		deltaY: 7,
+		deltaMode: 0,
+	}));
+	const line = new StandardWheelEvent(wheelEvent({
+		deltaX: 2,
+		deltaY: -3,
+		deltaMode: 1,
+	}), {
+		lineHeight: 20,
+	});
+	const page = new StandardWheelEvent(wheelEvent({
+		deltaX: 1,
+		deltaY: 2,
+		deltaMode: 2,
+	}), {
+		pageWidth: 300,
+		pageHeight: 200,
+	});
 
-	assert.deepEqual([pixel.deltaX, pixel.deltaY], [3, 7]);
-	assert.deepEqual([line.deltaX, line.deltaY], [40, -60]);
-	assert.deepEqual([page.deltaX, page.deltaY], [300, 400]);
+	assert.deepEqual(
+		[pixel.deltaX, pixel.deltaY],
+		[3, 7],
+	);
+	assert.deepEqual(
+		[line.deltaX, line.deltaY],
+		[40, -60],
+	);
+	assert.deepEqual(
+		[page.deltaX, page.deltaY],
+		[300, 400],
+	);
 });
 
 test('StandardWheelEvent stop prevents the native default', () => {
@@ -105,7 +112,9 @@ test('StandardWheelEvent stop prevents the native default', () => {
 	assert.equal(event.defaultPrevented, true);
 });
 
-function wheelEvent(options: WheelEventInit): WheelEvent {
+function wheelEvent(
+	options: WheelEventInit,
+): WheelEvent {
 	return new browserEnvironment.window.WheelEvent('wheel', {
 		bubbles: true,
 		cancelable: true,

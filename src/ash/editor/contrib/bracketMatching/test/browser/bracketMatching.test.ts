@@ -21,17 +21,11 @@ test('Bracket match controller stores standard decoration options and clears the
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel('function value() {\n}', {
-		languageId: 'typescript',
-		languageConfigurationService: configurations,
-	});
+	using model = new TextModel('function value() {\n}', { languageId: 'typescript', languageConfigurationService: configurations });
 	using registration = configurations.register('typescript', {
-		brackets: [
-			['(', ')'],
-			['{', '}'],
-		],
+		brackets: [['(', ')'], ['{', '}']],
 	});
-	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(0 + 1, 17 + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (17) + 1))]);
 	const bracketPairs = model.bracketPairs;
 	using decorations = new TextDecorationCollection<void>(model);
 	using viewport = new View({
@@ -45,40 +39,28 @@ test('Bracket match controller stores standard decoration options and clears the
 	using controller = new BracketMatchingController(editorFor(model, selections), bracketPairs, decorations, 'always');
 	viewport.layout({ width: 240, height: 40 });
 
-	assert.deepEqual(
-		model
-			.getAllDecorations()
-			.filter(decoration => decoration.options.className === 'bracket-match')
-			.map(decoration => ({
-				range: decoration.range,
-				className: decoration.options.className,
-			})),
-		[
-			{
-				range: new Range(1, 18, 1, 19),
-				className: 'bracket-match',
-			},
-			{
-				range: new Range(2, 1, 2, 2),
-				className: 'bracket-match',
-			},
-		],
-	);
+	assert.deepEqual(model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').map(decoration => ({
+		range: decoration.range,
+		className: decoration.options.className,
+	})), [{
+		range: new Range(1, 18, 1, 19),
+		className: 'bracket-match',
+	}, {
+		range: new Range(2, 1, 2, 2),
+		className: 'bracket-match',
+	}]);
 
-	selections.setSelections([Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))]);
+	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
 	assert.equal(model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').length, 0);
 	dom.window.close();
 });
 
 test('Bracket match controller distinguishes near, always, and never modes', () => {
 	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel('{ value }', {
-		languageId: 'typescript',
-		languageConfigurationService: configurations,
-	});
+	using model = new TextModel('{ value }', { languageId: 'typescript', languageConfigurationService: configurations });
 	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
 	const bracketPairs = model.bracketPairs;
-	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(0 + 1, 3 + 1))]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 	const editor = editorFor(model, selections);
 
 	using nearDecorations = new TextDecorationCollection<void>(model);

@@ -9,24 +9,14 @@ export function webAppServerVitePlugin(entryPath: string): Plugin {
 		name: 'ash-web-app-server',
 		apply: 'serve',
 		async configureServer(server) {
-			if (!server.httpServer) {
-				throw new Error('Web App Server requires an HTTP server');
-			}
+			if (!server.httpServer) { throw new Error('Web App Server requires an HTTP server'); }
 			server.config.server.host = '127.0.0.1';
 			server.config.server.strictPort = true;
 			const origin = `http://127.0.0.1:${server.config.server.port ?? 5173}`;
 			const launch = await startWeb({ port: 0, origin, environment: process.env });
 			try {
-				const stopWatching = await watchAppServer({
-					skipInitial: true,
-					javascriptRuntime: 'packaged-node',
-					onDidBuild: launch.reloadBackend,
-				});
-				close = () =>
-					(closing ??= (async () => {
-						stopWatching();
-						await launch.close();
-					})());
+				const stopWatching = await watchAppServer({ skipInitial: true, javascriptRuntime: 'packaged-node', onDidBuild: launch.reloadBackend });
+				close = () => closing ??= (async () => { stopWatching(); await launch.close(); })();
 			} catch (error) {
 				await launch.close();
 				throw error;
@@ -40,8 +30,6 @@ export function webAppServerVitePlugin(entryPath: string): Plugin {
 				await server.close();
 			});
 		},
-		closeBundle() {
-			return close?.();
-		},
+		closeBundle() { return close?.(); },
 	};
 }

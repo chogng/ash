@@ -6,6 +6,7 @@ import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from '../ed
 import { ITextModel } from '../model.js';
 
 export class ReplaceCommand implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -29,12 +30,7 @@ export class ReplaceCommand implements ICommand {
 
 /** Restores an explicit selection in UTF-16 offsets relative to the inserted text. */
 export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
-	constructor(
-		range: Range,
-		text: string,
-		private readonly anchorOffset: number,
-		private readonly activeOffset: number,
-	) {
+	constructor(range: Range, text: string, private readonly anchorOffset: number, private readonly activeOffset: number) {
 		super(range, text);
 	}
 
@@ -47,6 +43,7 @@ export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
 }
 
 export class ReplaceOvertypeCommand implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -78,6 +75,7 @@ export class ReplaceOvertypeCommand implements ICommand {
 }
 
 export class ReplaceCommandThatSelectsText implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 
@@ -98,6 +96,7 @@ export class ReplaceCommandThatSelectsText implements ICommand {
 }
 
 export class ReplaceCommandWithoutChangingPosition implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -120,6 +119,7 @@ export class ReplaceCommandWithoutChangingPosition implements ICommand {
 }
 
 export class ReplaceCommandWithOffsetCursorState implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 	private readonly _columnDeltaOffset: number;
@@ -146,6 +146,7 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 }
 
 export class ReplaceOvertypeCommandOnCompositionEnd implements ICommand {
+
 	private readonly _range: Range;
 
 	constructor(range: Range) {
@@ -174,6 +175,7 @@ export class ReplaceOvertypeCommandOnCompositionEnd implements ICommand {
 }
 
 export class ReplaceCommandThatPreservesSelection implements ICommand {
+
 	private readonly _range: Range;
 	private readonly _text: string;
 	private readonly _initialSelection: Selection;

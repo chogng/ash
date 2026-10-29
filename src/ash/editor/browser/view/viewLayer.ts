@@ -70,10 +70,7 @@ export class ViewLayer<TLine> extends Disposable {
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();
 		const contentRevision = this.readContentRevision();
-		const renderRange = {
-			startLineIndex: viewportData.startLineNumber - 1,
-			endLineIndexExclusive: viewportData.endLineNumber,
-		};
+		const renderRange = { startLineIndex: viewportData.startLineNumber - 1, endLineIndexExclusive: viewportData.endLineNumber };
 		const structureChanged = this.renderedModelVersion !== visualProjection.modelVersion || this.renderedProjectionRevision !== projectionRevision;
 		const contentChanged = this.renderedContentRevision !== contentRevision;
 		if (
@@ -132,11 +129,7 @@ export class ViewPartRows extends Disposable {
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	private rows = new Map<number, FastDomNode<HTMLDivElement>>();
 
-	constructor(
-		host: HTMLElement,
-		className: string,
-		private readonly rowClassName: string,
-	) {
+	constructor(host: HTMLElement, className: string, private readonly rowClassName: string) {
 		super();
 		const element = h(host.ownerDocument, 'div');
 		this.domNode = new FastDomNode(element);

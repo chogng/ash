@@ -8,7 +8,7 @@ export interface ICustomViewDescriptor {
 	readonly ctor: SyncDescriptor<AbstractCustomView>;
 	/** Restores the workspace beneath this page without dismissing the Custom View. */
 	readonly entryCommand?: string;
-	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string };
+	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; };
 }
 
 /** The host owns chrome and scrolling; contributed views own only their content and lifetime. */
@@ -21,5 +21,5 @@ export abstract class AbstractCustomView extends Disposable {
 
 	abstract layout(width: number, height: number): void;
 
-	focus(): void {}
+	focus(): void { }
 }

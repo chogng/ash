@@ -27,17 +27,7 @@ test('Memories can be created, edited, authorized and deleted through the produc
 	await view.getByLabel('Saved memories', { exact: true }).selectOption({ label: 'Playwright fixture' });
 	await expect(view.getByLabel('Memory content', { exact: true })).toHaveValue('Updated fixture\n中文正文');
 	const memoryId = await view.getByLabel('Saved memories', { exact: true }).inputValue();
-	const reference =
-		'memory:' +
-		Buffer.from(
-			JSON.stringify({
-				memoryId,
-				scope: { type: 'profile' },
-				revision: 2,
-				startByte: 0,
-				endByte: Buffer.byteLength('Updated fixture\n中文正文'),
-			}),
-		).toString('base64url');
+	const reference = 'memory:' + Buffer.from(JSON.stringify({ memoryId, scope: { type: 'profile' }, revision: 2, startByte: 0, endByte: Buffer.byteLength('Updated fixture\n中文正文') })).toString('base64url');
 	await view.getByLabel('Memory reference', { exact: true }).fill(reference);
 	await view.getByRole('button', { name: 'Open reference', exact: true }).click();
 	await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', true);
@@ -54,6 +44,7 @@ test('Memories can be created, edited, authorized and deleted through the produc
 	await workbench.dialogs.confirm(application, 'Delete memory', 'Delete', () => view.getByRole('button', { name: 'Delete memory', exact: true }).click());
 	await expect(view.getByLabel('Saved memories', { exact: true })).not.toContainText('Playwright fixture');
 });
+
 
 test('Browser Memories keeps authorization and saving disabled when the backend requires a desktop host', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('ash.memories.open');

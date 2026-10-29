@@ -52,7 +52,7 @@ class ViewCursorRenderData {
 		public readonly height: number,
 		public readonly textContent: string,
 		public readonly presentation: ViewCursorCharacterPresentation | undefined,
-	) {}
+	) { }
 }
 
 interface CursorGrapheme {
@@ -72,7 +72,7 @@ interface DomCaretGeometry {
 export class ViewCursor {
 	private readonly fastDomNode: FastDomNode<HTMLDivElement>;
 	private isVisible = true;
-	private position = new Position(0 + 1, 0 + 1);
+	private position = new Position((0) + 1, (0) + 1);
 	private plurality = CursorPlurality.Single;
 	private style: TextEditorCursorStyle;
 	private lineWidth: number;
@@ -191,18 +191,14 @@ export class ViewCursor {
 			this.fastDomNode.setDisplay('none');
 			return null;
 		}
-		this.fastDomNode.setClassName(
-			[
-				'cursor',
-				'stanza-editor-caret',
-				cursorStyleClass(this.style),
-				this.plurality === CursorPlurality.MultiSecondary ? '' : 'primary',
-				cursorPluralityClass(this.plurality),
-				...(renderData.presentation?.classNames ?? []),
-			]
-				.filter(Boolean)
-				.join(' '),
-		);
+		this.fastDomNode.setClassName([
+			'cursor',
+			'stanza-editor-caret',
+			cursorStyleClass(this.style),
+			this.plurality === CursorPlurality.MultiSecondary ? '' : 'primary',
+			cursorPluralityClass(this.plurality),
+			...(renderData.presentation?.classNames ?? []),
+		].filter(Boolean).join(' '));
 		if (this.lastRenderedContent !== renderData.textContent) {
 			this.lastRenderedContent = renderData.textContent;
 			this.fastDomNode.domNode.textContent = renderData.textContent;
@@ -253,7 +249,9 @@ export class ViewCursor {
 			});
 			if (grapheme.endColumn === grapheme.position.column) return geometry;
 			const range = Range.fromPositions(grapheme.position, new Position(grapheme.position.lineNumber, grapheme.endColumn));
-			const characterRange = context.linesVisibleRangesForRange(range, false)?.find(candidate => candidate.lineNumber === visualLineIndex + 1)?.ranges[0];
+			const characterRange = context.linesVisibleRangesForRange(range, false)
+				?.find(candidate => candidate.lineNumber === visualLineIndex + 1)
+				?.ranges[0];
 			if (!characterRange) {
 				return geometry;
 			}
@@ -267,10 +265,7 @@ export class ViewCursor {
 			this.model,
 			[Selection.fromPositions(modelPosition)],
 			this.readVisualProjection(),
-			{
-				startLineIndex: context.viewportData.startLineNumber - 1,
-				endLineIndexExclusive: context.viewportData.endLineNumber,
-			},
+			{ startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber },
 			this.readTextLeft(),
 			this.textMeasurer,
 		).carets[0];
@@ -287,10 +282,13 @@ export class ViewCursor {
 	private getCharacterPresentation(position: Position): ViewCursorCharacterPresentation | undefined {
 		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(position);
 		const columnIndex = modelPosition.column - 1;
-		const token = this.semanticTokenSource?.getLineTokens(modelPosition.lineNumber - 1).find(candidate => candidate.startColumn <= columnIndex && columnIndex < candidate.endColumn);
+		const token = this.semanticTokenSource?.getLineTokens(modelPosition.lineNumber - 1)
+			.find(candidate => candidate.startColumn <= columnIndex && columnIndex < candidate.endColumn);
 		if (!token) return undefined;
 		const syntaxFontStyle = token.syntaxPresentation?.fontStyle ?? [];
-		const decorations = syntaxFontStyle.filter(style => style === 'underline' || style === 'strikethrough').map(style => (style === 'strikethrough' ? 'line-through' : style));
+		const decorations = syntaxFontStyle
+			.filter(style => style === 'underline' || style === 'strikethrough')
+			.map(style => style === 'strikethrough' ? 'line-through' : style);
 		return Object.freeze({
 			classNames: Object.freeze(['stanza-editor-token', ...(token.presentation ? [token.presentation] : []), ...(token.modifiers ?? [])]),
 			...(syntaxFontStyle.includes('italic') ? { fontStyle: 'italic' } : {}),
@@ -306,29 +304,20 @@ function cursorLeft(style: TextEditorCursorStyle, caretLeft: number, characterLe
 
 function cursorStyleClass(style: TextEditorCursorStyle): string {
 	switch (style) {
-		case TextEditorCursorStyle.Block:
-			return 'cursor-style-block';
-		case TextEditorCursorStyle.Underline:
-			return 'cursor-style-underline';
-		case TextEditorCursorStyle.LineThin:
-			return 'cursor-style-line-thin';
-		case TextEditorCursorStyle.BlockOutline:
-			return 'cursor-style-block-outline';
-		case TextEditorCursorStyle.UnderlineThin:
-			return 'cursor-style-underline-thin';
-		default:
-			return 'cursor-style-line';
+		case TextEditorCursorStyle.Block: return 'cursor-style-block';
+		case TextEditorCursorStyle.Underline: return 'cursor-style-underline';
+		case TextEditorCursorStyle.LineThin: return 'cursor-style-line-thin';
+		case TextEditorCursorStyle.BlockOutline: return 'cursor-style-block-outline';
+		case TextEditorCursorStyle.UnderlineThin: return 'cursor-style-underline-thin';
+		default: return 'cursor-style-line';
 	}
 }
 
 function cursorPluralityClass(plurality: CursorPlurality): string {
 	switch (plurality) {
-		case CursorPlurality.MultiPrimary:
-			return 'cursor-primary';
-		case CursorPlurality.MultiSecondary:
-			return 'cursor-secondary';
-		default:
-			return '';
+		case CursorPlurality.MultiPrimary: return 'cursor-primary';
+		case CursorPlurality.MultiSecondary: return 'cursor-secondary';
+		default: return '';
 	}
 }
 

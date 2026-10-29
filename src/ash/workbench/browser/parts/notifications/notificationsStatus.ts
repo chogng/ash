@@ -16,55 +16,34 @@ export class NotificationsStatus extends Disposable {
 	private toastsVisible = false;
 	private readonly unread = new Set<number>();
 
-	constructor(
-		private readonly model: NotificationsModel,
-		private readonly statusbar: IStatusbarService | undefined,
-		private readonly toggle: () => void,
-		@INotificationService private readonly notificationService: INotificationService,
-		@IConfigurationService private readonly configurationService: IConfigurationService,
-	) {
+	constructor(private readonly model: NotificationsModel, private readonly statusbar: IStatusbarService | undefined, private readonly toggle: () => void, @INotificationService private readonly notificationService: INotificationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
-		this._register(
-			model.onDidAdd(item => {
-				this.observe(item);
-				if (!this.centerVisible) {
-					this.unread.add(item.id);
-				}
-				this.render();
-			}),
-		);
-		this._register(
-			model.onDidRemove(item => {
-				this.itemChanges.deleteAndDispose(item.id);
-				this.unread.delete(item.id);
-				this.render();
-			}),
-		);
+		this._register(model.onDidAdd(item => {
+			this.observe(item);
+			if (!this.centerVisible) { this.unread.add(item.id); }
+			this.render();
+		}));
+		this._register(model.onDidRemove(item => {
+			this.itemChanges.deleteAndDispose(item.id);
+			this.unread.delete(item.id);
+			this.render();
+		}));
 		this._register(notificationService.onDidChangeFilter(() => this.render()));
-		this._register(
-			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(NotificationsSettings.NOTIFICATIONS_POSITION)) this.render();
-			}),
-		);
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(NotificationsSettings.NOTIFICATIONS_POSITION)) this.render();
+		}));
 		this._register(model.onDidChangeStatusMessage(() => this.renderStatusMessage()));
 		for (const item of model.getNotifications()) this.observe(item);
 		this.renderStatusMessage();
 		this.render();
 	}
 
-	private observe(item: NotificationItem): void {
-		this.itemChanges.set(
-			item.id,
-			item.onDidChange(() => this.render()),
-		);
-	}
+	private observe(item: NotificationItem): void { this.itemChanges.set(item.id, item.onDidChange(() => this.render())); }
 
 	public update(isCenterVisible: boolean, isToastsVisible: boolean): void {
 		this.centerVisible = isCenterVisible;
 		this.toastsVisible = isToastsVisible;
-		if (isCenterVisible) {
-			this.unread.clear();
-		}
+		if (isCenterVisible) { this.unread.clear(); }
 		this.render();
 	}
 
@@ -85,22 +64,13 @@ export class NotificationsStatus extends Disposable {
 		} else {
 			label = localize('notifications.newCount', '{0} New Notifications', this.unread.size);
 		}
-		if (running > 0) {
-			label = localize('notifications.inProgress', '{0} ({1} in progress)', label, running);
-		}
+		if (running > 0) { label = localize('notifications.inProgress', '{0} ({1} in progress)', label, running); }
 		if (muted) {
 			icon = attention ? Lxicon.bellSlashDot : Lxicon.bellSlash;
 			label = localize('notifications.doNotDisturbStatus', 'Do Not Disturb Mode is Enabled. {0}', label);
 		}
 		const action = this.centerVisible ? localize('notifications.hideCenter', 'Hide Notification Center') : localize('notifications.showCenter', 'Show Notification Center');
-		return {
-			showInAllWindows: true,
-			icon,
-			text: '',
-			ariaLabel: this.centerVisible ? label : `${action}. ${label}`,
-			tooltip: label,
-			run: this.toggle,
-		};
+		return { showInAllWindows: true, icon, text: '', ariaLabel: this.centerVisible ? label : `${action}. ${label}`, tooltip: label, run: this.toggle };
 	}
 
 	private render(): void {
@@ -110,36 +80,22 @@ export class NotificationsStatus extends Disposable {
 			this.alignment = undefined;
 		} else if (this.statusbar) {
 			const alignment = position === NotificationsPosition.BOTTOM_LEFT ? StatusbarAlignment.Left : StatusbarAlignment.Right;
-			if (this.alignment !== alignment) {
-				this.bell.clear();
-				this.alignment = alignment;
-			}
+			if (this.alignment !== alignment) { this.bell.clear(); this.alignment = alignment; }
 			if (this.bell.value) this.bell.value.update(this.entry());
-			else
-				this.bell.value = this.statusbar.addEntry(this.entry(), {
-					id: 'ash.status.notifications',
-					alignment,
-					priority: Number.MAX_SAFE_INTEGER,
-				});
+			else this.bell.value = this.statusbar.addEntry(this.entry(), { id: 'ash.status.notifications', alignment, priority: Number.MAX_SAFE_INTEGER });
 		}
 	}
 
 	private renderStatusMessage(): void {
 		this.statusMessage.clear();
 		const item = this.model.statusMessage;
-		if (!item || !this.statusbar) {
-			return;
-		}
+		if (!item || !this.statusbar) { return; }
 		let entry: IStatusbarEntryAccessor | undefined;
 		const show = setTimeout(() => {
 			entry = this.statusbar!.addEntry({ text: item.message, ariaLabel: item.message }, { id: 'status.message', alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER });
 		}, item.options?.showAfter ?? 0);
 		const hideAfter = item.options?.hideAfter ?? 0;
 		const hide = hideAfter > 0 ? setTimeout(() => this.statusMessage.clear(), hideAfter) : undefined;
-		this.statusMessage.value = toDisposable(() => {
-			clearTimeout(show);
-			clearTimeout(hide);
-			entry?.dispose();
-		});
+		this.statusMessage.value = toDisposable(() => { clearTimeout(show); clearTimeout(hide); entry?.dispose(); });
 	}
 }

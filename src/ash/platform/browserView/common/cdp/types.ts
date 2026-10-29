@@ -1,22 +1,8 @@
 import type { Event } from '../../../../base/common/event.js';
 
-export interface CDPRequest {
-	readonly id: number;
-	readonly method: string;
-	readonly params?: unknown;
-	readonly sessionId?: string;
-}
-export interface CDPResponse {
-	readonly id: number;
-	readonly result?: unknown;
-	readonly error?: { code: number; message: string };
-	readonly sessionId?: string;
-}
-export interface CDPEvent {
-	readonly method: string;
-	readonly params: unknown;
-	readonly sessionId?: string;
-}
+export interface CDPRequest { readonly id: number; readonly method: string; readonly params?: unknown; readonly sessionId?: string; }
+export interface CDPResponse { readonly id: number; readonly result?: unknown; readonly error?: { code: number; message: string; }; readonly sessionId?: string; }
+export interface CDPEvent { readonly method: string; readonly params: unknown; readonly sessionId?: string; }
 export interface CDPTargetInfo {
 	readonly targetId: string;
 	readonly type: string;
@@ -29,10 +15,7 @@ export interface CDPTargetInfo {
 }
 
 export class CDPError extends Error {
-	constructor(
-		message: string,
-		readonly code: number,
-	) {
+	constructor(message: string, readonly code: number) {
 		super(message);
 		this.name = 'CDPError';
 	}
@@ -69,9 +52,9 @@ export interface CDPWindowBounds {
 }
 
 export type CDPTargetEvent =
-	| { readonly type: 'created' | 'changed'; readonly targetInfo: CDPTargetInfo }
-	| { readonly type: 'destroyed'; readonly targetId: string }
-	| { readonly type: 'message'; readonly targetId: string; readonly message: CDPEvent };
+	| { readonly type: 'created' | 'changed'; readonly targetInfo: CDPTargetInfo; }
+	| { readonly type: 'destroyed'; readonly targetId: string; }
+	| { readonly type: 'message'; readonly targetId: string; readonly message: CDPEvent; };
 
 /** Per-connection host operations. Membership, access checks and page lifetimes remain with the host. */
 export interface ICDPBrowserHost {
@@ -82,7 +65,7 @@ export interface ICDPBrowserHost {
 	getTargets(): CDPTargetInfo[];
 	getTargetInfo(targetId: string): CDPTargetInfo;
 	getVersion(): CDPBrowserVersion;
-	getWindowForTarget(targetId: string): { windowId: number; bounds: CDPWindowBounds };
+	getWindowForTarget(targetId: string): { windowId: number; bounds: CDPWindowBounds; };
 	getBrowserContexts(): string[];
 	createBrowserContext(): string;
 	disposeBrowserContext(browserContextId: string): Promise<void>;

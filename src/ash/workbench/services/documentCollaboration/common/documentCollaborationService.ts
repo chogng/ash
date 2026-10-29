@@ -5,6 +5,7 @@ import type { DocumentNode } from '../../documentEditor/common/documentCodec.js'
 import type { Event } from '../../../../base/common/event.js';
 import type { DocumentSelection } from '../../documentEditor/common/documentCodec.js';
 
+
 export interface DocumentCollaborationSnapshot {
 	readonly roomId: string;
 	readonly version: number;
@@ -24,9 +25,9 @@ export interface DocumentCollaborationRemoteEnvelope<TTransaction = unknown> ext
 	readonly version: number;
 }
 export type DocumentCollaborationSubmitOutcome<TTransaction = unknown> =
-	| { readonly kind: 'accepted'; readonly update: DocumentCollaborationRemoteEnvelope<TTransaction> }
-	| { readonly kind: 'conflict'; readonly updates: readonly DocumentCollaborationRemoteEnvelope<TTransaction>[] }
-	| { readonly kind: 'resync'; readonly snapshot: DocumentCollaborationSnapshot };
+	| { readonly kind: 'accepted'; readonly update: DocumentCollaborationRemoteEnvelope<TTransaction>; }
+	| { readonly kind: 'conflict'; readonly updates: readonly DocumentCollaborationRemoteEnvelope<TTransaction>[]; }
+	| { readonly kind: 'resync'; readonly snapshot: DocumentCollaborationSnapshot; };
 
 /** Transactions remain opaque to the transport owner and are decoded by the package codec. */
 export interface DocumentCollaborationConnection<TTransaction = unknown> extends IDisposable {

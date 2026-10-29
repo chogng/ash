@@ -31,31 +31,12 @@ test('color hover waits for the committed color presentation and rejects it afte
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('#f00');
 	using features = new LanguageFeaturesService();
-	const requests: { signal: AbortSignal; complete: () => void }[] = [];
+	const requests: { signal: AbortSignal; complete: () => void; }[] = [];
 	using registration = features.colorProvider.register('*', {
 		provideDocumentColors: () => [{ range: new Range(1, 1, 1, 5), color: { red: 1, green: 0, blue: 0, alpha: 1 } }],
-		provideColorPresentations: (request, signal) =>
-			new Promise(resolve =>
-				requests.push({
-					signal,
-					complete: () =>
-						resolve([
-							{
-								label: request.color.green > 0.5 ? '#00ff00' : '#ff0000',
-								textEdit: {
-									range: request.range,
-									text: request.color.green > 0.5 ? '#00ff00' : '#ff0000',
-								},
-							},
-						]),
-				}),
-			),
+		provideColorPresentations: (request, signal) => new Promise(resolve => requests.push({ signal, complete: () => resolve([{ label: request.color.green > 0.5 ? '#00ff00' : '#ff0000', textEdit: { range: request.range, text: request.color.green > 0.5 ? '#00ff00' : '#ff0000' } }]) })),
 	});
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		languageFeaturesService: features,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
 	editor.layout({ width: 500, height: 160 });
 	await waitFor(() => dom.window.document.querySelector('.colorpicker-color-decoration') !== null);
 	editor.setPosition(new Position(1, 2));
@@ -93,6 +74,7 @@ test('color hover waits for the committed color presentation and rejects it afte
 	assert.equal(model.getText(), '#f00');
 });
 
+
 test('color picker decorates, edits, and undoes a CSS color as one operation', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeDom = toDisposable(() => dom.window.close());
@@ -113,15 +95,9 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	assert.match(swatch.className, /dyn-rule-/u);
 	editor.setPosition(new Position(1, 16));
 	editor.focus();
-	editor.view.controller.element.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', {
-			key: 'c',
-			ctrlKey: true,
-			shiftKey: true,
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
+	editor.view.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+		key: 'c', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true,
+	}));
 
 	const dialog = dom.window.document.querySelector<HTMLElement>('.stanza-editor-color-picker')!;
 	await waitFor(() => !dialog.hidden && dialog.querySelector('.stanza-editor-color-picker-presentation')?.querySelectorAll('option').length === 3);
@@ -157,8 +133,8 @@ test('color detector returns the tracked range before its debounced provider ref
 	detector.refresh();
 	await waitFor(() => detector.totalColorCount === 1);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'x' }]);
-	const data = detector.getColorData(new Position(0 + 1, 2 + 1));
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
+	const data = detector.getColorData(new Position((0) + 1, (2) + 1));
 
 	assert.ok(data);
 	assert.equal(model.getTextInRange(data.information.range), '#f00');
@@ -184,17 +160,13 @@ for (const change of ['language', 'provider', 'readOnly', 'dispose'] as const) {
 			provideColorPresentations: (request, cancellation) => {
 				languages.push(request.languageId);
 				signal = cancellation;
-				return new Promise(resolve => {
-					finish = () => resolve([{ label: '#0f0' }]);
-				});
+				return new Promise(resolve => { finish = () => resolve([{ label: '#0f0' }]); });
 			},
 		});
 		const errors: unknown[] = [];
 		using editor = createTestCodeEditor({
-			container,
-			model,
-			languageFeaturesService: features,
-			onLanguageError: error => errors.push(error),
+			container, model,
+			languageFeaturesService: features, onLanguageError: error => errors.push(error),
 		});
 		editor.layout({ width: 500, height: 160 });
 		model.setLanguage('scss');
@@ -240,30 +212,18 @@ test('color picker disables old edits while a provider resolves the latest color
 		provideDocumentColors: () => [{ range: new Range(1, 1, 1, 4), color: { red: 1, green: 0, blue: 0, alpha: 1 } }],
 		provideColorPresentations: request => {
 			const green = request.color.green > 0.5;
-			const values = [
-				{ label: green ? 'green' : 'red' },
-				{
-					label: green ? 'GREEN' : 'RED',
-					textEdit: { range: request.range, text: green ? 'GREEN' : 'RED' },
-					additionalTextEdits: [{ range: new Range(1, 6, 1, 11), text: 'updated' }],
-				},
-			];
-			if (requestCount++ === 0) {
-				return values;
-			}
-			return new Promise(resolve => {
-				complete = () => resolve(values);
-			});
+			const values = [{ label: green ? 'green' : 'red' }, {
+				label: green ? 'GREEN' : 'RED',
+				textEdit: { range: request.range, text: green ? 'GREEN' : 'RED' },
+				additionalTextEdits: [{ range: new Range(1, 6, 1, 11), text: 'updated' }],
+			}];
+			if (requestCount++ === 0) { return values; }
+			return new Promise(resolve => { complete = () => resolve(values); });
 		},
 	});
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
-	using editor = createTestCodeEditor({
-		container,
-		model,
-		languageFeaturesService: features,
-		onLanguageError: error => errors.push(error),
-	});
+	using editor = createTestCodeEditor({ container, model, languageFeaturesService: features, onLanguageError: error => errors.push(error) });
 	editor.layout({ width: 500, height: 160 });
 	const controller = editor.getContribution<ColorPickerController>('editor.contrib.colorPicker')!;
 	await controller.showAtPosition(new Position(1, 2));
@@ -314,22 +274,15 @@ test('color picker guesses the document format from the first current result aft
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('#f00');
 	using features = new LanguageFeaturesService();
-	const requests: { signal: AbortSignal; complete: () => void }[] = [];
+	const requests: { signal: AbortSignal; complete: () => void; }[] = [];
 	using registration = features.colorProvider.register('*', {
 		provideDocumentColors: () => [{ range: new Range(1, 1, 1, 5), color: { red: 1, green: 0, blue: 0, alpha: 1 } }],
-		provideColorPresentations: (request, signal) =>
-			new Promise(resolve =>
-				requests.push({
-					signal,
-					complete: () => resolve([{ label: `rgb(0, ${Math.round(request.color.green * 255)}, 0)` }, { label: request.color.green > 0.5 ? '#00ff00' : '#ff0000' }]),
-				}),
-			),
+		provideColorPresentations: (request, signal) => new Promise(resolve => requests.push({
+			signal,
+			complete: () => resolve([{ label: `rgb(0, ${Math.round(request.color.green * 255)}, 0)` }, { label: request.color.green > 0.5 ? '#00ff00' : '#ff0000' }]),
+		})),
 	});
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		languageFeaturesService: features,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
 	editor.layout({ width: 500, height: 160 });
 	const pending = editor.getContribution<ColorPickerController>('editor.contrib.colorPicker')!.showAtPosition(new Position(1, 2));
 	await waitFor(() => requests.length === 1);

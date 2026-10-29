@@ -20,13 +20,7 @@ import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
-import {
-	IFileTextModelService,
-	ITextModelResourceService,
-	type ITextModelSaveParticipant,
-	type ITextModelSaveCompletionParticipant,
-	type TextModelReference,
-} from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { SaveReason } from '../../../../common/editor.js';
 import { type LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
@@ -55,29 +49,9 @@ test('bulk edit preview follows ordered create and text operations without mutat
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: 'create', resource: created, existing: 'error', contents: 'seed' },
-			{
-				kind: 'textDocument',
-				resource: created,
-				expectedText: 'seed',
-				edits: [{ range: new Range(1, 5, 1, 5), text: 'hello' }],
-			},
-			{
-				kind: 'textDocument',
-				resource: existing,
-				expectedText: 'alpha',
-				edits: [
-					{
-						range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)),
-						text: 'omega',
-					},
-				],
-			},
-			{
-				kind: 'textDocument',
-				resource: existing,
-				expectedText: 'omega',
-				edits: [{ range: Range.fromPositions(new Position(0 + 1, 5 + 1)), text: '!' }],
-			},
+			{ kind: 'textDocument', resource: created, expectedText: 'seed', edits: [{ range: new Range(1, 5, 1, 5), text: 'hello' }] },
+			{ kind: 'textDocument', resource: existing, expectedText: 'alpha', edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: 'omega' }] },
+			{ kind: 'textDocument', resource: existing, expectedText: 'omega', edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }] },
 		],
 	};
 
@@ -85,10 +59,7 @@ test('bulk edit preview follows ordered create and text operations without mutat
 		using preview = await previewEdits(edit, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
 
 		assert.equal(preview.canApply, true);
-		assert.equal(
-			preview.entries.every(entry => entry.error === undefined),
-			true,
-		);
+		assert.equal(preview.entries.every(entry => entry.error === undefined), true);
 		assert.equal(preview.entries[1]?.before, 'seed');
 		assert.equal(preview.entries[1]?.after, 'seedhello');
 		assert.equal(preview.entries[2]?.before, 'alpha');
@@ -110,21 +81,8 @@ test('bulk edit preview reports invalid ranges without clamping or mutating the 
 	using files = new PreviewFileService([[resource, 'abc']]);
 	using models = new PreviewTextModelService([[resource, 'abc']], [resource]);
 	try {
-		using preview = await previewEdits(
-			{
-				entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }],
-			},
-			{ files, models, workingCopies: emptyWorkingCopies() },
-			new AbortController().signal,
-		);
-		assert.deepEqual(
-			{
-				canApply: preview.canApply,
-				error: preview.entries[0]?.error,
-				text: models.getModel(resource)?.getText(),
-			},
-			{ canApply: false, error: 'The edit range is outside the document.', text: 'abc' },
-		);
+		using preview = await previewEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }] }, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
+		assert.deepEqual({ canApply: preview.canApply, error: preview.entries[0]?.error, text: models.getModel(resource)?.getText() }, { canApply: false, error: 'The edit range is outside the document.', text: 'abc' });
 	} finally {
 		globals.dispose();
 		browser.window.close();
@@ -137,10 +95,7 @@ test('conflict detection covers both rename resources, model mutations and dispo
 	const source = URI.file('/workspace/source.ts');
 	const target = URI.file('/workspace/target.ts');
 	const text = URI.file('/workspace/text.ts');
-	using files = new PreviewFileService([
-		[source, 'source'],
-		[text, 'text'],
-	]);
+	using files = new PreviewFileService([[source, 'source'], [text, 'text']]);
 	using models = new PreviewTextModelService([[text, 'text']], [text]);
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(files));
@@ -180,22 +135,13 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 		services.registerInstance(IEditorService, new TestEditorService());
 		services.registerInstance(IWorkingCopyService, emptyWorkingCopies());
 		services.registerInstance(IDialogService, {
-			onWillShowDialog: EventUtils.None,
-			onDidShowDialog: EventUtils.None,
+			onWillShowDialog: EventUtils.None, onDidShowDialog: EventUtils.None,
 			confirm: async () => ({ confirmed: true }),
-			showMessage: async () => {},
-			info: async () => {},
-			warn: async () => {},
-			error: async () => {},
-			prompt: async () => ({}),
-			input: async () => ({ confirmed: false }),
-			about: async () => {},
+			showMessage: async () => { }, info: async () => { }, warn: async () => { }, error: async () => { },
+			prompt: async () => ({}), input: async () => ({ confirmed: false }), about: async () => { },
 		});
 		try {
-			using pane = services.createInstance(BulkEditPane, browser.window.document.body, {
-				id: BulkEditPane.ID,
-				title: 'Refactor Preview',
-			});
+			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 			browser.window.document.body.append(pane.element);
 			pane.setVisible(true);
 			const previousPanelId = outcome === 'cancel' ? undefined : WorkbenchViewContainerId.Output;
@@ -211,18 +157,10 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 					return pane;
 				},
 				getViewWithId: () => pane,
-				getVisibleViewContainer: () => (selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null),
-				openViewContainer: async (id: string) => {
-					selectedPanelId = id;
-					return null;
-				},
-				closeViewContainer: () => {
-					selectedPanelId = undefined;
-				},
-				focusView: async () => {
-					pane.focus();
-					return true;
-				},
+				getVisibleViewContainer: () => selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null,
+				openViewContainer: async (id: string) => { selectedPanelId = id; return null; },
+				closeViewContainer: () => { selectedPanelId = undefined; },
+				focusView: async () => { pane.focus(); return true; },
 			} as unknown as IViewsService);
 			using bulkEdits = services.createInstance(BulkEditService);
 			services.registerInstance(IBulkEditService, bulkEdits);
@@ -230,29 +168,20 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 			const descriptor = ViewsRegistry.getView(BulkEditPane.ID)!;
 			assert.equal(ViewsRegistry.getViewContainer(WorkbenchViewContainerId.BulkEdit)!.hideIfEmpty, true);
 			assert.equal(contextKeys.contextMatchesRules(descriptor.when), false);
-			const waitForInput = () =>
-				new Promise<void>(resolve => {
-					const observer = new browser.window.MutationObserver(() => {
-						if (pane.hasInput) {
-							observer.disconnect();
-							resolve();
-						}
-					});
-					observer.observe(pane.element, { childList: true, subtree: true });
+			const waitForInput = () => new Promise<void>(resolve => {
+				const observer = new browser.window.MutationObserver(() => {
+					if (pane.hasInput) { observer.disconnect(); resolve(); }
 				});
-			const edits = [
-				{ range: new Range(1, 1, 1, 2), text: 'A' },
-				{ range: new Range(1, 2, 1, 3), text: 'B' },
-			];
+				observer.observe(pane.element, { childList: true, subtree: true });
+			});
+			const edits = [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }];
 			const ready = waitForInput();
 			const controller = new AbortController();
 			const pending = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true, token: controller.signal });
 			await ready;
 			assert.equal(selectedPanelId, WorkbenchViewContainerId.BulkEdit);
 			assert.equal(contextKeys.contextMatchesRules(descriptor.when), true);
-			const provider = AccessibleViewRegistry.getImplementations()
-				.find(provider => provider.name === 'bulk-edit-preview-help')!
-				.getProvider(services);
+			const provider = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'bulk-edit-preview-help')!.getProvider(services);
 			assert.match(provider!.provideContent(), /Press Escape to cancel/);
 			provider!.dispose();
 			assert.ok(AccessibleViewRegistry.getImplementations().some(provider => provider.type === AccessibleViewType.View && provider.name === 'bulk-edit-preview-view'));
@@ -294,13 +223,9 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 
 class PreviewTextModelService extends Disposable implements IFileTextModelService {
 	readonly onDidChangeEncoding = Event.None;
-	getEncodingSupport() {
-		return undefined;
-	}
-	hasPendingSaveRecovery(): boolean {
-		return false;
-	}
-	async waitForSaveRecovery(): Promise<void> {}
+	getEncodingSupport() { return undefined; }
+	hasPendingSaveRecovery(): boolean { return false; }
+	async waitForSaveRecovery(): Promise<void> { }
 	private readonly participants = new Set<ITextModelSaveParticipant>();
 	private readonly completions = new Set<ITextModelSaveCompletionParticipant>();
 	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant) {
@@ -324,15 +249,13 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 		super();
 		this.resources = new Map(resources.map(([resource, text]) => [resource.toString(), text]));
 		this.persistentResources = new Set(persistentResources.map(resource => resource.toString()));
-		this._register(
-			toDisposable(() => {
-				for (const model of this.persistentModels.values()) model.dispose();
-				this.persistentModels.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const model of this.persistentModels.values()) model.dispose();
+			this.persistentModels.clear();
+		}));
 	}
 
-	async acquire(input: { readonly resource: URI; readonly initialText?: string }): Promise<TextModelReference> {
+	async acquire(input: { readonly resource: URI; readonly initialText?: string; }): Promise<TextModelReference> {
 		const key = input.resource.toString();
 		const existing = this.persistentModels.get(key);
 		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? '', { resource: input.resource });
@@ -352,20 +275,14 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 					for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
 				}
 				for (const participant of this.completions) {
-					const complete = await participant.prepare(model, signal, { retry: false, acknowledge: () => {} });
+					const complete = await participant.prepare(model, signal, { retry: false, acknowledge: () => { } });
 					await complete?.(model.getText());
 				}
 			},
 			revert: async () => undefined,
-			saveAs: async () => {
-				throw new Error('Preview must not save copies');
-			},
-			dispose: () => {
-				if (!persistent) model.dispose();
-			},
-			[Symbol.dispose]() {
-				if (!persistent) model.dispose();
-			},
+			saveAs: async () => { throw new Error('Preview must not save copies'); },
+			dispose: () => { if (!persistent) model.dispose(); },
+			[Symbol.dispose]() { if (!persistent) model.dispose(); },
 		};
 		this.references.push(reference);
 		return reference;
@@ -377,17 +294,15 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	getModels(): readonly TextModel[] {
 		return [...this.persistentModels.values()];
 	}
-	async refresh(): Promise<void> {}
+	async refresh(): Promise<void> { }
 }
 
 class PreviewFileService extends Disposable implements IFileSystemProvider {
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
-	public watch(): IDisposable {
-		return Disposable.None;
-	}
+	public watch(): IDisposable { return Disposable.None; }
 
-	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined }>());
+	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined; }>());
 	readonly onDidChangeFiles = this.changeEmitter.event;
 	private readonly resources = new Map<string, string>();
 
@@ -396,60 +311,30 @@ class PreviewFileService extends Disposable implements IFileSystemProvider {
 		for (const [resource, text] of resources) this.resources.set(resource.toString(), text);
 	}
 
-	notify(resource: URI): void {
-		this.changeEmitter.fire({ resources: [resource] });
-	}
+	notify(resource: URI): void { this.changeEmitter.fire({ resources: [resource] }); }
 
-	has(resource: URI): boolean {
-		return this.resources.has(resource.toString());
-	}
-	read(resource: URI): string {
-		return this.resources.get(resource.toString()) ?? '';
-	}
+	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
+	read(resource: URI): string { return this.resources.get(resource.toString()) ?? ''; }
 	async stat(resource: URI) {
 		if (!this.has(resource)) throw new FileNotFoundError(resource);
-		return {
-			resource,
-			kind: FileKind.File,
-			sizeBytes: this.read(resource).length,
-			readonly: false,
-			modifiedAtMillis: undefined,
-		};
+		return { resource, kind: FileKind.File, sizeBytes: this.read(resource).length, readonly: false, modifiedAtMillis: undefined };
 	}
-	async readDirectory(): Promise<readonly never[]> {
-		return [];
-	}
+	async readDirectory(): Promise<readonly never[]> { return []; }
 	async readFile(resource: URI) {
 		if (!this.has(resource)) throw new FileNotFoundError(resource);
 		const content = this.read(resource);
 		return { resource, bytes: new TextEncoder().encode(content), revision: '1' };
 	}
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) {
-			throw new Error('Preview must not write files');
-		}
-		const request = {
-			resource,
-			content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
-			...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
-		};
+		if (!options.overwrite) { throw new Error('Preview must not write files'); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		throw new Error('Preview must not write files');
 	}
-	async createFile(): Promise<never> {
-		throw new Error('Preview must not create files');
-	}
-	async createDirectory(): Promise<never> {
-		throw new Error('Preview must not create directories');
-	}
-	async copy(): Promise<void> {
-		throw new Error('Copy is not used in this test');
-	}
-	async rename(): Promise<never> {
-		throw new Error('Preview must not rename files');
-	}
-	async delete(): Promise<never> {
-		throw new Error('Preview must not delete files');
-	}
+	async createFile(): Promise<never> { throw new Error('Preview must not create files'); }
+	async createDirectory(): Promise<never> { throw new Error('Preview must not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename(): Promise<never> { throw new Error('Preview must not rename files'); }
+	async delete(): Promise<never> { throw new Error('Preview must not delete files'); }
 }
 
 function emptyWorkingCopies(): IWorkingCopyService {
@@ -462,8 +347,8 @@ function emptyWorkingCopies(): IWorkingCopyService {
 		register: () => toDisposable(() => undefined),
 		get: () => [],
 		getAll: () => [],
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
@@ -472,11 +357,7 @@ function installDomGlobals(browser: JSDOM) {
 	return registerWindow(browser.window as unknown as Window);
 }
 
-async function previewEdits(
-	edit: LanguageWorkspaceEdit,
-	dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService },
-	signal: AbortSignal,
-): Promise<BulkFileOperations> {
+async function previewEdits(edit: LanguageWorkspaceEdit, dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService; }, signal: AbortSignal): Promise<BulkFileOperations> {
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(dependencies.files));
 	services.registerInstance(ITextModelResourceService, dependencies.models);

@@ -52,49 +52,27 @@ process.stdin.on('data', chunk => {
 });
 `;
 
-const test = base.extend<{ reportLanguageServerMessages: boolean }>({
+const test = base.extend<{ reportLanguageServerMessages: boolean; }>({
 	reportLanguageServerMessages: [true, { option: true }],
 	useDefaultLanguageServer: false,
 	backendConfiguration: async ({ testWorkspace, reportLanguageServerMessages }, use) => {
 		const executable = join(testWorkspace.directory, 'language-server.cjs');
 		await writeFile(executable, server);
 		await mkdir(join(testWorkspace.directory, '.vscode'));
-		await writeFile(
-			join(testWorkspace.directory, '.vscode/settings.json'),
-			'// workspace JSONC\n{ "rust-analyzer.cargo.allTargets": false, "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.extraEnv": { "NATIVE_LIB": "/prepared/workspace/lib" }, }',
-		);
-		await use(
-			`[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(process.execPath)}\nargs = [${JSON.stringify(executable)}]\nenvironment = { LSP_RECORD = ${JSON.stringify(join(testWorkspace.directory, 'lsp.jsonl'))}, LSP_REPORT_MESSAGES = "${reportLanguageServerMessages ? '1' : '0'}" }\n`,
-		);
+		await writeFile(join(testWorkspace.directory, '.vscode/settings.json'), '// workspace JSONC\n{ "rust-analyzer.cargo.allTargets": false, "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.extraEnv": { "NATIVE_LIB": "/prepared/workspace/lib" }, }');
+		await use(`[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(process.execPath)}\nargs = [${JSON.stringify(executable)}]\nenvironment = { LSP_RECORD = ${JSON.stringify(join(testWorkspace.directory, 'lsp.jsonl'))}, LSP_REPORT_MESSAGES = "${reportLanguageServerMessages ? '1' : '0'}" }\n`);
 	},
-	electronUserSettings: async ({}, use) => {
-		await use({ 'rust-analyzer.cargo.allTargets': true, 'rust-analyzer.check.workspace': false });
-	},
+	electronUserSettings: async ({ }, use) => { await use({ 'rust-analyzer.cargo.allTargets': true, 'rust-analyzer.check.workspace': false }); },
 });
 
 test('Rust workspace settings reach initialize and configuration, reload on edit, and server messages remain accessible', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
-	const records = async (): Promise<Array<{ initialization?: unknown; configuration?: unknown }>> => {
-		const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => {
-			if (error.code === 'ENOENT') return '';
-			throw error;
-		});
-		return source
-			.trim()
-			.split('\n')
-			.filter(Boolean)
-			.map(line => JSON.parse(line));
+	const records = async (): Promise<Array<{ initialization?: unknown; configuration?: unknown; }>> => {
+		const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
+		return source.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 	};
 	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' }).click();
-	const expected = {
-		cachePriming: { enable: false },
-		cargo: {
-			allTargets: false,
-			buildScripts: { enable: false },
-			extraEnv: { NATIVE_LIB: '/prepared/workspace/lib' },
-		},
-		check: { workspace: false },
-	};
+	const expected = { cachePriming: { enable: false }, cargo: { allTargets: false, buildScripts: { enable: false }, extraEnv: { NATIVE_LIB: '/prepared/workspace/lib' } }, check: { workspace: false } };
 	await expect.poll(async () => (await records()).find(value => value.configuration)?.configuration).toEqual(expected);
 	expect((await records()).find(value => value.initialization)?.initialization).toEqual(expected);
 	const notifications = page.getByRole('region', { name: 'Notifications', exact: true });
@@ -118,28 +96,14 @@ test('Rust workspace settings reach initialize and configuration, reload on edit
 
 for (const locale of ['en', 'zh-CN']) {
 	test.describe(`Rust settings ${locale}`, () => {
-		test.use({
-			reportLanguageServerMessages: false,
-			electronUserSettings: {
-				'workbench.locale': locale,
-				'rust-analyzer.cargo.allTargets': true,
-				'rust-analyzer.check.workspace': false,
-			},
-		});
+		test.use({ reportLanguageServerMessages: false, electronUserSettings: { 'workbench.locale': locale, 'rust-analyzer.cargo.allTargets': true, 'rust-analyzer.check.workspace': false } });
 		test('Rust settings stay lazy and apply cache capacity and thread modes on first use', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
 			const page = workbench.page;
 			const chinese = locale === 'zh-CN';
 			const saved = async () => JSON.parse((await readUserSettings(page)).content);
-			const records = async (): Promise<Array<{ started?: number; initialization?: unknown; configuration?: unknown }>> => {
-				const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => {
-					if (error.code === 'ENOENT') return '';
-					throw error;
-				});
-				return source
-					.trim()
-					.split('\n')
-					.filter(Boolean)
-					.map(line => JSON.parse(line));
+			const records = async (): Promise<Array<{ started?: number; initialization?: unknown; configuration?: unknown; }>> => {
+				const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
+				return source.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 			};
 			await workbench.settingsEditor.openUserSettingsUI();
 			const settings = workbench.settingsEditor.element;
@@ -149,10 +113,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(release).toHaveAttribute('aria-label', chinese ? '自动释放闲置语言服务器' : 'Release idle language servers');
 			await expect(release).toHaveAttribute('aria-checked', 'false');
 			await expect(settings).toContainText(chinese ? '磁盘上的 Cargo 编译产物不能恢复这份缓存' : 'Cargo build artifacts on disk do not restore this cache');
-			await testInfo.attach('language-cache-defaults', {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach('language-cache-defaults', { body: await page.screenshot(), contentType: 'image/png' });
 			await release.focus();
 			await release.press('Space');
 			await expect.poll(async () => (await saved())['languageServers.autoSuspend']).toBe(true);
@@ -161,10 +122,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await waiting.fill('15');
 			await waiting.press('Tab');
 			await expect.poll(async () => (await saved())['languageServers.idleTimeoutMinutes']).toBe(15);
-			await testInfo.attach('language-idle-settings', {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach('language-idle-settings', { body: await page.screenshot(), contentType: 'image/png' });
 			await workbench.settingsEditor.selectGroup('extensions');
 			await expect(settings.locator('[data-settings-category-id="extension.ash.rust"]')).toHaveText('Rust');
 			await workbench.settingsEditor.selectCategory('extension.ash.rust');
@@ -178,9 +136,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await priming.focus();
 			await priming.press('Space');
 			await expect.poll(async () => (await saved())['rust-analyzer.cachePriming.enable']).toBe(true);
-			await workbench.menus.select(application, () => settings.locator('[data-settings-item-id="rust-analyzer.cachePriming.enable"] .ash-setting-item-actions-trigger').click(), [
-				chinese ? '重置设置' : 'Reset Setting',
-			]);
+			await workbench.menus.select(application, () => settings.locator('[data-settings-item-id="rust-analyzer.cachePriming.enable"] .ash-setting-item-actions-trigger').click(), [chinese ? '重置设置' : 'Reset Setting']);
 			await expect(priming).toHaveAttribute('aria-checked', 'false');
 			await expect.poll(async () => (await saved())['rust-analyzer.cachePriming.enable']).toBeUndefined();
 			await search.fill('@id:rust-analyzer.check.command');
@@ -228,12 +184,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(async () => (await saved())['rust-analyzer.numThreads']).toBe(4);
 			const mode = settings.locator('[data-settings-item-id="rust-analyzer.numThreads"]').getByRole('combobox');
 			await mode.click();
-			await page
-				.getByRole('option', {
-					name: chinese ? '使用逻辑核心数。' : 'Use the number of logical cores',
-					exact: true,
-				})
-				.click();
+			await page.getByRole('option', { name: chinese ? '使用逻辑核心数。' : 'Use the number of logical cores', exact: true }).click();
 			await expect.poll(async () => (await saved())['rust-analyzer.numThreads']).toBe('logical');
 			await expect(threads).toHaveValue('');
 			await mode.click();
@@ -245,29 +196,17 @@ for (const locale of ['en', 'zh-CN']) {
 			await search.fill('rust-analyzer @modified');
 			await expect(cache).toBeVisible();
 			await expect(threads).toBeVisible();
-			await testInfo.attach('rust-memory-settings', {
-				body: await page.screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach('rust-memory-settings', { body: await page.screenshot(), contentType: 'image/png' });
 			expect(await records(), 'Opening and editing Rust settings must not start a server').toEqual([]);
 			await settings.locator('.ash-modal-editor-close').click();
 			await expect(settings).toBeHidden();
 			await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' }).click();
 			await workbench.editors.groupAt(0).editor.waitForEditorFocus();
-			const expected = {
-				cachePriming: { enable: false },
-				lru: { capacity: 32 },
-				numThreads: 4,
-				check: { command: 'clippy' },
-				imports: { granularity: { group: 'module' } },
-			};
+			const expected = { cachePriming: { enable: false }, lru: { capacity: 32 }, numThreads: 4, check: { command: 'clippy' }, imports: { granularity: { group: 'module' } } };
 			await expect.poll(async () => (await records()).find(value => value.configuration)?.configuration).toMatchObject(expected);
 			expect((await records()).find(value => value.initialization)?.initialization).toMatchObject(expected);
 			expect((await records()).filter(value => value.started)).toHaveLength(1);
-			await testInfo.attach('lazy-rust-settings-events', {
-				body: JSON.stringify(await records(), null, 2),
-				contentType: 'application/json',
-			});
+			await testInfo.attach('lazy-rust-settings-events', { body: JSON.stringify(await records(), null, 2), contentType: 'application/json' });
 		});
 	});
 }
@@ -276,16 +215,9 @@ test.describe('Language server warm retention', () => {
 	test.use({ reportLanguageServerMessages: false });
 	test('default policy reuses the same process after closing and reopening Rust', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
 		const page = workbench.page;
-		const records = async (): Promise<Array<{ started?: number; shutdown?: number; closed?: string; hover?: string }>> => {
-			const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => {
-				if (error.code === 'ENOENT') return '';
-				throw error;
-			});
-			return source
-				.trim()
-				.split('\n')
-				.filter(Boolean)
-				.map(line => JSON.parse(line));
+		const records = async (): Promise<Array<{ started?: number; shutdown?: number; closed?: string; hover?: string; }>> => {
+			const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
+			return source.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 		};
 		const rust = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' });
 		await rust.click();
@@ -304,64 +236,35 @@ test.describe('Language server warm retention', () => {
 		await editor.input.press('ControlOrMeta+i');
 		await expect(page.getByText('Fixture Rust hover', { exact: true })).toBeVisible();
 		expect((await records()).filter(value => value.started).map(value => value.started)).toEqual([pid]);
-		await testInfo.attach('warm-retention-events', {
-			body: JSON.stringify(await records(), null, 2),
-			contentType: 'application/json',
-		});
+		await testInfo.attach('warm-retention-events', { body: JSON.stringify(await records(), null, 2), contentType: 'application/json' });
 	});
 });
 
 test.describe('Language server idle release', () => {
-	test.use({
-		reportLanguageServerMessages: false,
-		electronUserSettings: { 'languageServers.autoSuspend': true, 'languageServers.idleTimeoutMinutes': 1 },
-	});
+	test.use({ reportLanguageServerMessages: false, electronUserSettings: { 'languageServers.autoSuspend': true, 'languageServers.idleTimeoutMinutes': 1 } });
 	test('last-file grace releases the process and reopening restores language features', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(120_000);
 		const page = workbench.page;
-		const records = async (): Promise<Array<{ started?: number; shutdown?: number; closed?: string; hover?: string; configuration?: unknown }>> => {
-			const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => {
-				if (error.code === 'ENOENT') return '';
-				throw error;
-			});
-			return source
-				.trim()
-				.split('\n')
-				.filter(Boolean)
-				.map(line => JSON.parse(line));
+		const records = async (): Promise<Array<{ started?: number; shutdown?: number; closed?: string; hover?: string; configuration?: unknown; }>> => {
+			const source = await readFile(join(testWorkspace.directory, 'lsp.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
+			return source.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
 		};
 		const rust = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' });
 		await rust.click();
 		await expect.poll(async () => (await records()).filter(value => value.started).length).toBe(1);
 		const editor = workbench.editors.groupAt(0).editor;
 		await editor.waitForEditorFocus();
-		expect(
-			(await records()).filter(value => value.shutdown),
-			JSON.stringify(await records()),
-		).toHaveLength(0);
+		expect((await records()).filter(value => value.shutdown), JSON.stringify(await records())).toHaveLength(0);
 		const closedAt = Date.now();
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 		await expect.poll(async () => (await records()).filter(value => value.closed).length).toBe(1);
-		expect(
-			(await records()).filter(value => value.shutdown),
-			JSON.stringify(await records()),
-		).toHaveLength(0);
+		expect((await records()).filter(value => value.shutdown), JSON.stringify(await records())).toHaveLength(0);
 		// Advancing the whole renderer clock also expires unrelated in-flight RPCs.
 		// Unit tests own exact timer boundaries; Desktop verifies real release and reuse.
 		await expect.poll(async () => (await records()).filter(value => value.shutdown).length, { timeout: 75_000 }).toBe(1);
 		expect(Date.now() - closedAt).toBeGreaterThanOrEqual(60_000);
 		const pid = (await records()).find(value => value.started)!.started!;
-		await expect
-			.poll(() => {
-				try {
-					process.kill(pid, 0);
-					return true;
-				} catch (error) {
-					if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
-					throw error;
-				}
-			})
-			.toBe(false);
+		await expect.poll(() => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } }).toBe(false);
 		await rust.click();
 		await expect.poll(async () => (await records()).filter(value => value.started).length).toBe(2);
 		await expect.poll(async () => (await records()).filter(value => value.configuration).length).toBe(2);
@@ -383,9 +286,6 @@ test.describe('Language server idle release', () => {
 		await editor.waitForEditorContents(text => text.includes('syntax stays available'));
 		await expect.poll(() => editor.element.locator('[style*="--ash-editor-token-foreground"]').count()).toBeGreaterThan(0);
 		expect((await records()).filter(value => value.started)).toHaveLength(2);
-		await testInfo.attach('rust-syntax-with-lsp-stopped', {
-			body: await page.screenshot(),
-			contentType: 'image/png',
-		});
+		await testInfo.attach('rust-syntax-with-lsp-stopped', { body: await page.screenshot(), contentType: 'image/png' });
 	});
 });

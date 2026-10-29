@@ -49,10 +49,7 @@ export class AgentsVoiceWidget extends Disposable {
 	private holding = false;
 	private readonly rows = new Map<string, HTMLElement>();
 
-	constructor(
-		container: HTMLElement,
-		private readonly callbacks: VoiceWidgetCallbacks,
-		options: VoiceWidgetOptions,
+	constructor(container: HTMLElement, private readonly callbacks: VoiceWidgetCallbacks, options: VoiceWidgetOptions,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
@@ -155,85 +152,64 @@ export class AgentsVoiceWidget extends Disposable {
 		const title = h(document, 'h2');
 		title.textContent = localize('agentsVoice.title', 'Voice conversation');
 		header.append(title);
-		if (options.showClose !== false)
-			this._register(
-				new Button(header, {
-					...defaultButtonStyles,
-					label: localize('agentsVoice.close', 'Close window'),
-					onClick: callbacks.closeWindow,
-				}),
-			);
+		if (options.showClose !== false) this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.close', 'Close window'),
+			onClick: callbacks.closeWindow,
+		}));
 		header.hidden = options.inputBoxLayout === true;
 		this.status = h(document, 'div');
 		this.status.className = 'ash-agents-voice-status';
 		this.status.setAttribute('role', 'status');
 		const controls = h(document, 'div');
 		controls.className = 'ash-agents-voice-controls';
-		this.openChat = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.openChat', 'Open Chat'),
-				onClick: callbacks.openSession,
-			}),
-		);
+		this.openChat = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.openChat', 'Open Chat'),
+			onClick: callbacks.openSession,
+		}));
 		this.openChat.domNode.hidden = options.inputBoxLayout === true;
-		if (callbacks.connect)
-			this._register(
-				new Button(controls, {
-					...defaultButtonStyles,
-					label: localize('agentsVoice.start', 'Start voice'),
-					onClick: callbacks.connect,
-				}),
-			);
-		this.mute = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.mute', 'Mute microphone'),
-				enabled: false,
-				onClick: callbacks.toggleMute,
-			}),
-		);
-		this.mode = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.usePtt', 'Use push to talk'),
-				enabled: false,
-				checked: false,
-				onClick: callbacks.toggleInputMode,
-			}),
-		);
-		this.ptt = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.hold', 'Hold to speak'),
-				enabled: false,
-				checked: false,
-			}),
-		);
-		this.interrupt = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.interrupt', 'Interrupt reply'),
-				enabled: false,
-				onClick: callbacks.stopPlayback,
-			}),
-		);
-		this.disconnect = this._register(
-			new Button(controls, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.disconnect', 'Disconnect'),
-				enabled: false,
-				onClick: callbacks.disconnect,
-			}),
-		);
-		if (!options.inputBoxLayout)
-			this._register(
-				new Button(controls, {
-					...defaultButtonStyles,
-					label: localize('agentsVoice.sessions', 'Conversations'),
-					onClick: callbacks.showSessionsPicker,
-				}),
-			);
+		if (callbacks.connect) this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.start', 'Start voice'),
+			onClick: callbacks.connect,
+		}));
+		this.mute = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.mute', 'Mute microphone'),
+			enabled: false,
+			onClick: callbacks.toggleMute,
+		}));
+		this.mode = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.usePtt', 'Use push to talk'),
+			enabled: false,
+			checked: false,
+			onClick: callbacks.toggleInputMode,
+		}));
+		this.ptt = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.hold', 'Hold to speak'),
+			enabled: false,
+			checked: false,
+		}));
+		this.interrupt = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.interrupt', 'Interrupt reply'),
+			enabled: false,
+			onClick: callbacks.stopPlayback,
+		}));
+		this.disconnect = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.disconnect', 'Disconnect'),
+			enabled: false,
+			onClick: callbacks.disconnect,
+		}));
+		if (!options.inputBoxLayout) this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.sessions', 'Conversations'),
+			onClick: callbacks.showSessionsPicker,
+		}));
 		this.transcript = h(document, 'div');
 		this.transcript.className = 'ash-agents-voice-transcript';
 		this.transcript.tabIndex = 0;
@@ -245,107 +221,52 @@ export class AgentsVoiceWidget extends Disposable {
 		this.transcript.hidden = options.inputBoxLayout === true;
 		container.append(this.element);
 		this.setTranscriptTurns([]);
-		const release = () => {
-			if (this.holding) {
-				this.holding = false;
-				callbacks.pttUp();
-			}
-		};
-		const press = () => {
-			if (!this.holding && this.ptt.enabled) {
-				this.holding = true;
-				callbacks.pttDown();
-			}
-		};
-		this._register(
-			addDisposableListener(this.ptt.domNode, 'pointerdown', event => {
-				if (event.button !== 0 || !this.ptt.enabled) return;
-				this.ptt.domNode.setPointerCapture(event.pointerId);
-				press();
-			}),
-		);
+		const release = () => { if (this.holding) { this.holding = false; callbacks.pttUp(); } };
+		const press = () => { if (!this.holding && this.ptt.enabled) { this.holding = true; callbacks.pttDown(); } };
+		this._register(addDisposableListener(this.ptt.domNode, 'pointerdown', event => {
+			if (event.button !== 0 || !this.ptt.enabled) return;
+			this.ptt.domNode.setPointerCapture(event.pointerId);
+			press();
+		}));
 		for (const type of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'] as const) this._register(addDisposableListener(this.ptt.domNode, type, release));
-		this._register(
-			addDisposableListener(this.ptt.domNode, 'keydown', event => {
-				if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-				if (event.key === ' ' || event.key === 'Enter') {
-					event.preventDefault();
-					if (!event.repeat) press();
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.ptt.domNode, 'keyup', event => {
-				if (event.key === ' ' || event.key === 'Enter') {
-					event.preventDefault();
-					release();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.ptt.domNode, 'keydown', event => {
+			if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+			if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); if (!event.repeat) press(); }
+		}));
+		this._register(addDisposableListener(this.ptt.domNode, 'keyup', event => {
+			if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); }
+		}));
 		this._register(addDisposableListener(document.defaultView!, 'blur', release));
 		this._register(toDisposable(release));
 		const scope = this._register(contextKeys.createScoped(this.element));
 		const focusedKey = new RawContextKey<boolean>('agentsVoiceWidgetFocused', false);
 		const focused = focusedKey.bindTo(scope);
-		this._register(
-			addDisposableListener(this.element, 'focusin', () => {
-				focused.set(true);
-				if (configuration.getValue<boolean>(AccessibilityVerbositySettingId.AgentsVoice) !== false) {
-					this.element.setAttribute('aria-description', localize('agentsVoice.helpHint', 'Use the accessibility help command for voice conversation controls.'));
-				} else this.element.removeAttribute('aria-description');
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'focusout', event => {
-				if (!this.element.contains(event.relatedTarget as Node | null)) focused.reset();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.element, 'keydown', event => {
-				if (event.key === 'Escape') {
-					event.preventDefault();
-					callbacks.closeWindow();
-				}
-			}),
-		);
+		this._register(addDisposableListener(this.element, 'focusin', () => {
+			focused.set(true);
+			if (configuration.getValue<boolean>(AccessibilityVerbositySettingId.AgentsVoice) !== false) {
+				this.element.setAttribute('aria-description', localize('agentsVoice.helpHint', 'Use the accessibility help command for voice conversation controls.'));
+			} else this.element.removeAttribute('aria-description');
+		}));
+		this._register(addDisposableListener(this.element, 'focusout', event => {
+			if (!this.element.contains(event.relatedTarget as Node | null)) focused.reset();
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key === 'Escape') { event.preventDefault(); callbacks.closeWindow(); }
+		}));
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			this._register(
-				AccessibleViewRegistry.register({
-					name: `agentsVoice-${generateUuid()}`,
-					type,
-					priority: 110,
-					when: focusedKey.isEqualTo(true),
-					getProvider: () => {
-						const focusedElement = document.activeElement;
-						if (!this.element.contains(focusedElement)) return undefined;
-						return new AccessibleContentProvider(
-							AccessibleViewProviderId.AgentsVoice,
-							{ type },
-							() =>
-								type === AccessibleViewType.Help
-									? (options.inputBoxLayout
-											? localize(
-													'agentsVoice.inputBoxHelp',
-													'Use Tab and Shift+Tab to move between voice controls. Interrupt reply stops the spoken reply. Disconnect ends voice while preserving your Chat task, draft and attachments. Escape returns focus to the Chat input.',
-												)
-											: localize(
-													'agentsVoice.help',
-													'Use Tab and Shift+Tab to move between voice controls. Enter or Space activates a button. Open Chat returns to the conversation where you can start voice and choose a provider, model and voice. Interrupt reply stops the current spoken reply. Disconnect ends voice without interrupting a Chat task. Conversations opens the conversation picker. The transcript contains the original spoken text and can be read in the accessible view. Escape closes this window; the voice conversation continues in Chat.',
-												)) +
-										'\n' +
-										localize(
-											'agentsVoice.inputHelp',
-											'Mute microphone closes audio input while keeping the connection and spoken replies. Switch between open microphone and push to talk. In push to talk mode, focus Hold to speak and hold Space or Enter to record; release to finish. Losing focus, cancelling the pointer or closing the window also ends this recording. The push to talk shortcut is <keybinding:agentsVoice.pushToTalk>.',
-										)
-									: `${this.status.textContent}\n\n${this.rows.size ? [...this.rows.values()].map(row => row.textContent).join('\n\n') : this.transcript.textContent}`,
-							() => {
-								if (focusedElement instanceof document.defaultView!.HTMLElement && focusedElement.isConnected) focusedElement.focus();
-							},
-							AccessibilityVerbositySettingId.AgentsVoice,
-						);
-					},
-				}),
-			);
+			this._register(AccessibleViewRegistry.register({
+				name: `agentsVoice-${generateUuid()}`, type, priority: 110, when: focusedKey.isEqualTo(true),
+				getProvider: () => {
+					const focusedElement = document.activeElement;
+					if (!this.element.contains(focusedElement)) return undefined;
+					return new AccessibleContentProvider(AccessibleViewProviderId.AgentsVoice, { type },
+						() => type === AccessibleViewType.Help
+							? (options.inputBoxLayout ? localize('agentsVoice.inputBoxHelp', 'Use Tab and Shift+Tab to move between voice controls. Interrupt reply stops the spoken reply. Disconnect ends voice while preserving your Chat task, draft and attachments. Escape returns focus to the Chat input.') : localize('agentsVoice.help', 'Use Tab and Shift+Tab to move between voice controls. Enter or Space activates a button. Open Chat returns to the conversation where you can start voice and choose a provider, model and voice. Interrupt reply stops the current spoken reply. Disconnect ends voice without interrupting a Chat task. Conversations opens the conversation picker. The transcript contains the original spoken text and can be read in the accessible view. Escape closes this window; the voice conversation continues in Chat.')) + '\n' + localize('agentsVoice.inputHelp', 'Mute microphone closes audio input while keeping the connection and spoken replies. Switch between open microphone and push to talk. In push to talk mode, focus Hold to speak and hold Space or Enter to record; release to finish. Losing focus, cancelling the pointer or closing the window also ends this recording. The push to talk shortcut is <keybinding:agentsVoice.pushToTalk>.')
+							: `${this.status.textContent}\n\n${this.rows.size ? [...this.rows.values()].map(row => row.textContent).join('\n\n') : this.transcript.textContent}`,
+						() => { if (focusedElement instanceof document.defaultView!.HTMLElement && focusedElement.isConnected) focusedElement.focus(); },
+						AccessibilityVerbositySettingId.AgentsVoice);
+				},
+			}));
 		}
 		this._register(toDisposable(() => this.element.remove()));
 		if (!options.inputBoxLayout) this.openChat.focus();
@@ -365,20 +286,10 @@ export class AgentsVoiceWidget extends Disposable {
 		this.disconnect.enabled = enabled;
 		if (restoreFocus) this.openChat.focus();
 	}
-	setStatusText(text: string): void {
-		if (this.status.textContent !== text) this.status.textContent = text;
-	}
-	setMuted(muted: boolean): void {
-		this.muted = muted;
-		this.updateInput();
-	}
-	setInputMode(mode: AgentVoiceInputMode): void {
-		this.inputMode = mode;
-		this.updateInput();
-	}
-	setVoiceState(state: 'listening' | 'idle'): void {
-		this.ptt.checked = this.inputMode === 'pushToTalk' && state === 'listening';
-	}
+	setStatusText(text: string): void { if (this.status.textContent !== text) this.status.textContent = text; }
+	setMuted(muted: boolean): void { this.muted = muted; this.updateInput(); }
+	setInputMode(mode: AgentVoiceInputMode): void { this.inputMode = mode; this.updateInput(); }
+	setVoiceState(state: 'listening' | 'idle'): void { this.ptt.checked = this.inputMode === 'pushToTalk' && state === 'listening'; }
 	private updateInput(): void {
 		this.mute.checked = this.muted;
 		this.mute.label = this.muted ? localize('agentsVoice.unmute', 'Unmute microphone') : localize('agentsVoice.mute', 'Mute microphone');
@@ -387,10 +298,7 @@ export class AgentsVoiceWidget extends Disposable {
 		const enabled = this.connected && !this.muted && this.inputMode === 'pushToTalk';
 		const restoreFocus = !enabled && this.ptt.hasFocus();
 		this.ptt.enabled = enabled;
-		if (!this.ptt.enabled && this.holding) {
-			this.holding = false;
-			this.callbacks.pttUp();
-		}
+		if (!this.ptt.enabled && this.holding) { this.holding = false; this.callbacks.pttUp(); }
 		if (restoreFocus && this.connected) this.mute.focus();
 	}
 
@@ -398,10 +306,7 @@ export class AgentsVoiceWidget extends Disposable {
 		const wasAtBottom = this.transcript.scrollHeight - this.transcript.clientHeight - this.transcript.scrollTop <= 4;
 		const ids = new Set(turns.map(turn => turn.itemId));
 		for (const [id, row] of this.rows) {
-			if (!ids.has(id)) {
-				row.remove();
-				this.rows.delete(id);
-			}
+			if (!ids.has(id)) { row.remove(); this.rows.delete(id); }
 		}
 		if (!turns.length) {
 			this.transcript.textContent = localize('agentsVoice.transcript.empty', 'Spoken text appears here after you start voice in Chat.');

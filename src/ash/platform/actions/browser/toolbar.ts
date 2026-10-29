@@ -26,7 +26,11 @@ export interface IWorkbenchToolBarOptions {
  * population belongs to MenuWorkbenchToolBar.
  */
 export class WorkbenchToolBar extends ToolBar {
-	constructor(container: HTMLElement, contextMenuProvider: IContextMenuProvider, options: IWorkbenchToolBarOptions = {}) {
+	constructor(
+		container: HTMLElement,
+		contextMenuProvider: IContextMenuProvider,
+		options: IWorkbenchToolBarOptions = {},
+	) {
 		super(container, {
 			buttonStyles: defaultButtonStyles,
 			contextMenuProvider,
@@ -37,7 +41,8 @@ export class WorkbenchToolBar extends ToolBar {
 			moreActionsPlacement: options.moreActionsPlacement,
 			hoverAnchorPosition: options.hoverAnchorPosition,
 			actionViewItemProvider: (action, actionViewItemOptions) =>
-				options.actionViewItemProvider?.(action, actionViewItemOptions) ?? createActionViewItem(action, contextMenuProvider, actionViewItemOptions),
+				options.actionViewItemProvider?.(action, actionViewItemOptions) ??
+				createActionViewItem(action, contextMenuProvider, actionViewItemOptions),
 		});
 	}
 }
@@ -65,19 +70,23 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	private menuTrailingActions: readonly IAction[] = [];
 	private readonly menu: IMenu;
 
-	constructor(container: HTMLElement, menuService: IMenuService, contextMenuProvider: IContextMenuProvider, menuId: MenuId, options: IMenuWorkbenchToolBarOptions = {}) {
+	constructor(
+		container: HTMLElement,
+		menuService: IMenuService,
+		contextMenuProvider: IContextMenuProvider,
+		menuId: MenuId,
+		options: IMenuWorkbenchToolBarOptions = {},
+	) {
 		super(container, contextMenuProvider, options);
 		this.leadingActions = options.leadingActions ?? [];
 		this.menuOptions = options.menuOptions;
 		this.toolbarOptions = options.toolbarOptions;
 		const menu = this._register(menuService.createMenu(menuId, options.contextKeyService));
 		this.menu = menu;
-		this._register(
-			menu.onDidChange(event => {
-				this.update(event);
-				this.changeMenuItemsEmitter.fire(this);
-			}),
-		);
+		this._register(menu.onDidChange((event) => {
+			this.update(event);
+			this.changeMenuItemsEmitter.fire(this);
+		}));
 		this.update();
 	}
 
@@ -96,7 +105,12 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 
 	private update(event?: IMenuChangeEvent): void {
 		const groups = this.menu.getActions(this.menuOptions);
-		const { primary, secondary } = getActionBarActions(groups, this.toolbarOptions?.primaryGroup, this.toolbarOptions?.shouldInlineSubmenu, this.toolbarOptions?.useSeparatorsInPrimaryActions);
+		const { primary, secondary } = getActionBarActions(
+			groups,
+			this.toolbarOptions?.primaryGroup,
+			this.toolbarOptions?.shouldInlineSubmenu,
+			this.toolbarOptions?.useSeparatorsInPrimaryActions,
+		);
 		const actions = [...this.leadingActions, ...primary];
 		const empty = actions.length === 0 && secondary.length === 0 && this.menuTrailingActions.length === 0;
 		this.element.hidden = empty;

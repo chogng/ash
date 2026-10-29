@@ -23,30 +23,24 @@ export class TerminalCommandHistory {
 	constructor(
 		private readonly configurationService: IConfigurationService,
 		private readonly storageService: IStorageService,
-	) {}
+	) { }
 
 	getCommands(shellId: string): readonly ITerminalHistoryCommand[] {
 		const limit = this.historyLimit();
 		if (limit === 0 || !isValidShellId(shellId)) return [];
-		return this.readEntries()
-			.filter(entry => entry.shellId === shellId)
-			.slice(-limit)
-			.reverse();
+		return this.readEntries().filter(entry => entry.shellId === shellId).slice(-limit).reverse();
 	}
 
-	record(shellId: string, status: 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled', command: string | undefined, isTrusted: boolean | undefined, storageDisabled: boolean): void {
+	record(
+		shellId: string,
+		status: 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled',
+		command: string | undefined,
+		isTrusted: boolean | undefined,
+		storageDisabled: boolean,
+	): void {
 		const historyLimit = this.historyLimit();
-		if (
-			status === 'running' ||
-			historyLimit === 0 ||
-			storageDisabled ||
-			isTrusted !== true ||
-			!isValidShellId(shellId) ||
-			typeof command !== 'string' ||
-			command.trim().length === 0 ||
-			command.length > MAX_COMMAND_CHARACTERS ||
-			command.includes('\0')
-		) {
+		if (status === 'running' || historyLimit === 0 || storageDisabled || isTrusted !== true || !isValidShellId(shellId)
+			|| typeof command !== 'string' || command.trim().length === 0 || command.length > MAX_COMMAND_CHARACTERS || command.includes('\0')) {
 			return;
 		}
 
@@ -81,7 +75,8 @@ export class TerminalCommandHistory {
 		for (const candidate of value.entries) {
 			if (!candidate || typeof candidate !== 'object' || !('shellId' in candidate) || !('command' in candidate)) continue;
 			const { shellId, command } = candidate;
-			if (isValidShellId(shellId) && typeof command === 'string' && command.length > 0 && command.length <= MAX_COMMAND_CHARACTERS && !command.includes('\0')) {
+			if (isValidShellId(shellId) && typeof command === 'string' && command.length > 0
+				&& command.length <= MAX_COMMAND_CHARACTERS && !command.includes('\0')) {
 				entries.push({ shellId, command });
 			}
 		}
@@ -115,26 +110,14 @@ function isValidShellId(value: unknown): value is string {
 export class TerminalDirectoryHistory {
 	private readonly key = 'terminal.shellIntegration.directoryHistory.v1';
 	readonly onDidChange: Event<void>;
-	constructor(
-		private readonly configuration: IConfigurationService,
-		private readonly storage: IStorageService,
-	) {
-		this.onDidChange = (listener, thisArgs, disposables) =>
-			storage.onDidChangeValue(
-				event => {
-					if (event.scope === StorageScope.WORKSPACE && event.key === this.key) listener.call(thisArgs);
-				},
-				undefined,
-				disposables,
-			);
+	constructor(private readonly configuration: IConfigurationService, private readonly storage: IStorageService) {
+		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.WORKSPACE && event.key === this.key) listener.call(thisArgs);
+		}, undefined, disposables);
 	}
 
 	getDirectories(scope: string): readonly string[] {
-		return this.read()
-			.filter(entry => entry.scope === scope)
-			.slice(-this.limit())
-			.reverse()
-			.map(entry => entry.path);
+		return this.read().filter(entry => entry.scope === scope).slice(-this.limit()).reverse().map(entry => entry.path);
 	}
 
 	record(scope: string, path: string, isTrusted: boolean, disabled: boolean): void {
@@ -143,21 +126,16 @@ export class TerminalDirectoryHistory {
 		const entries = this.read().filter(entry => entry.scope !== scope || entry.path !== path);
 		entries.push({ scope, path });
 		const counts = new Map<string, number>();
-		const retained = entries
-			.reverse()
-			.filter(entry => {
-				const count = (counts.get(entry.scope) ?? 0) + 1;
-				counts.set(entry.scope, count);
-				return count <= limit;
-			})
-			.reverse();
+		const retained = entries.reverse().filter(entry => {
+			const count = (counts.get(entry.scope) ?? 0) + 1;
+			counts.set(entry.scope, count);
+			return count <= limit;
+		}).reverse();
 		while (retained.length && VSBuffer.fromString(JSON.stringify(retained)).byteLength > MAX_HISTORY_BYTES) retained.shift();
 		this.storage.store(this.key, JSON.stringify(retained), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
-	clear(): void {
-		this.storage.remove(this.key, StorageScope.WORKSPACE);
-	}
+	clear(): void { this.storage.remove(this.key, StorageScope.WORKSPACE); }
 
 	private limit(): number {
 		const value = this.configuration.getValue<number>(TerminalHistorySettingId.ShellIntegrationCommandHistory);
@@ -165,21 +143,18 @@ export class TerminalDirectoryHistory {
 	}
 
 	private validPath(value: unknown): value is string {
-		return (
-			typeof value === 'string' && value.length > 0 && value.length <= 32768 && !/[\x00-\x1f\x7f]/.test(value) && (/^\//.test(value) || /^[a-z]:[\\/]/i.test(value) || /^\\\\[^\\]/.test(value))
-		);
+		return typeof value === 'string' && value.length > 0 && value.length <= 32768 && !/[\x00-\x1f\x7f]/.test(value)
+			&& (/^\//.test(value) || /^[a-z]:[\\/]/i.test(value) || /^\\\\[^\\]/.test(value));
 	}
 
-	private read(): { scope: string; path: string }[] {
+	private read(): { scope: string; path: string; }[] {
 		if (!this.limit()) return [];
 		const raw = this.storage.get(this.key, StorageScope.WORKSPACE);
 		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES) return [];
 		try {
 			const value: unknown = JSON.parse(raw);
 			if (!Array.isArray(value)) return [];
-			return value.filter((entry): entry is { scope: string; path: string } => !!entry && typeof entry === 'object' && isValidShellId(entry.scope) && this.validPath(entry.path));
-		} catch {
-			return [];
-		}
+			return value.filter((entry): entry is { scope: string; path: string; } => !!entry && typeof entry === 'object' && isValidShellId(entry.scope) && this.validPath(entry.path));
+		} catch { return []; }
 	}
 }

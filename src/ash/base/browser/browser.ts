@@ -73,12 +73,12 @@ export function isStandalone(targetWindow: Window = globalThis.window): boolean 
 }
 
 export function isWCOEnabled(targetWindow: Window = globalThis.window): boolean {
-	return (targetWindow?.navigator as Navigator & { windowControlsOverlay?: { visible: boolean } })?.windowControlsOverlay?.visible === true;
+	return (targetWindow?.navigator as Navigator & { windowControlsOverlay?: { visible: boolean; }; })?.windowControlsOverlay?.visible === true;
 }
 
 /** The browser supplies viewport coordinates; callers convert to their own container. */
 export function getWCOTitlebarAreaRect(targetWindow: Window): DOMRect | undefined {
-	return (targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect } }).windowControlsOverlay?.getTitlebarAreaRect();
+	return (targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect; }; }).windowControlsOverlay?.getTitlebarAreaRect();
 }
 
 export function getMonacoEnvironment(): IMonacoEnvironment | undefined {

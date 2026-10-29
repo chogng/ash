@@ -49,7 +49,10 @@ export class CursorMoveCommands {
 			const atLastLine = selectedEndLine === viewModel.model.getLineCount();
 			const endLineNumber = atLastLine ? selectedEndLine : selectedEndLine + 1;
 			const endColumn = atLastLine ? viewModel.model.getLineMaxColumn(endLineNumber) : 1;
-			return CursorState.fromModelState(new SingleCursorState(Range.fromPositions(new Position(startLineNumber, 1)), SelectionStartKind.Simple, 0, new Position(endLineNumber, endColumn), 0));
+			return CursorState.fromModelState(new SingleCursorState(
+				Range.fromPositions(new Position(startLineNumber, 1)), SelectionStartKind.Simple, 0,
+				new Position(endLineNumber, endColumn), 0,
+			));
 		});
 	}
 
@@ -63,9 +66,10 @@ export class CursorMoveCommands {
 
 	public static selectAll(viewModel: IViewModel, _cursor: CursorState): PartialCursorState {
 		const endLineNumber = viewModel.model.getLineCount();
-		return CursorState.fromModelState(
-			new SingleCursorState(Range.fromPositions(new Position(1, 1)), SelectionStartKind.Simple, 0, new Position(endLineNumber, viewModel.model.getLineMaxColumn(endLineNumber)), 0),
-		);
+		return CursorState.fromModelState(new SingleCursorState(
+			Range.fromPositions(new Position(1, 1)), SelectionStartKind.Simple, 0,
+			new Position(endLineNumber, viewModel.model.getLineMaxColumn(endLineNumber)), 0,
+		));
 	}
 
 	public static line(viewModel: IViewModel, cursor: CursorState, inSelectionMode: boolean, rawPosition: IPosition, rawViewPosition: IPosition | undefined): PartialCursorState {
@@ -76,9 +80,10 @@ export class CursorMoveCommands {
 		if (!inSelectionMode) {
 			const nextLineNumber = Math.min(viewModel.model.getLineCount(), position.lineNumber + 1);
 			const nextColumn = nextLineNumber === position.lineNumber ? viewModel.model.getLineMaxColumn(nextLineNumber) : 1;
-			return CursorState.fromModelState(
-				new SingleCursorState(new Range(position.lineNumber, 1, nextLineNumber, nextColumn), SelectionStartKind.Line, 0, new Position(nextLineNumber, nextColumn), 0),
-			);
+			return CursorState.fromModelState(new SingleCursorState(
+				new Range(position.lineNumber, 1, nextLineNumber, nextColumn), SelectionStartKind.Line, 0,
+				new Position(nextLineNumber, nextColumn), 0,
+			));
 		}
 		const anchorLine = cursor.modelState.selectionStart.startLineNumber;
 		if (position.lineNumber < anchorLine) return CursorState.fromViewState(cursor.viewState.move(true, viewPosition.lineNumber, 1, 0));
@@ -112,14 +117,7 @@ export class CursorMoveCommands {
 		return CursorState.fromViewState(cursor.viewState.move(inSelectionMode, viewPosition.lineNumber, viewPosition.column, 0));
 	}
 
-	public static simpleMove(
-		viewModel: IViewModel,
-		cursors: CursorState[],
-		direction: CursorMove.SimpleMoveDirection,
-		inSelectionMode: boolean,
-		value: number,
-		unit: CursorMove.Unit,
-	): PartialCursorState[] | null {
+	public static simpleMove(viewModel: IViewModel, cursors: CursorState[], direction: CursorMove.SimpleMoveDirection, inSelectionMode: boolean, value: number, unit: CursorMove.Unit): PartialCursorState[] | null {
 		const amount = Math.max(1, Math.floor(value));
 		switch (direction) {
 			case CursorMove.Direction.Left:
@@ -152,17 +150,10 @@ export class CursorMoveCommands {
 		const amount = Math.max(1, Math.floor(value));
 		let lineNumber: number;
 		switch (direction) {
-			case CursorMove.Direction.ViewPortTop:
-				lineNumber = firstLineStart(viewModel.model, visibleModelRange, amount);
-				break;
-			case CursorMove.Direction.ViewPortCenter:
-				lineNumber = Math.round((visibleModelRange.startLineNumber + visibleModelRange.endLineNumber) / 2);
-				break;
-			case CursorMove.Direction.ViewPortBottom:
-				lineNumber = lastLineStart(viewModel.model, visibleModelRange, amount);
-				break;
-			default:
-				return null;
+			case CursorMove.Direction.ViewPortTop: lineNumber = firstLineStart(viewModel.model, visibleModelRange, amount); break;
+			case CursorMove.Direction.ViewPortCenter: lineNumber = Math.round((visibleModelRange.startLineNumber + visibleModelRange.endLineNumber) / 2); break;
+			case CursorMove.Direction.ViewPortBottom: lineNumber = lastLineStart(viewModel.model, visibleModelRange, amount); break;
+			default: return null;
 		}
 		const column = viewModel.model.getLineFirstNonWhitespaceColumn(lineNumber) || viewModel.model.getLineMinColumn(lineNumber);
 		return [CursorState.fromModelState(cursors[0]!.modelState.move(inSelectionMode, lineNumber, column, 0))];
@@ -180,24 +171,19 @@ export class CursorMoveCommands {
 
 function addAdjacentCursors(viewModel: IViewModel, cursors: CursorState[], useLogicalLine: boolean, direction: 'up' | 'down'): PartialCursorState[] {
 	const result: PartialCursorState[] = [];
-	const existingSelections = cursors.map(cursor => (useLogicalLine ? cursor.modelState.selection : cursor.viewState.selection));
+	const existingSelections = cursors.map(cursor => useLogicalLine ? cursor.modelState.selection : cursor.viewState.selection);
 	for (const cursor of cursors) {
 		result.push(new CursorState(cursor.modelState, cursor.viewState));
 		const adjacent = useLogicalLine
-			? CursorState.fromModelState(
-					direction === 'up'
-						? MoveOperations.translateUp(viewModel.cursorConfig, viewModel.model, cursor.modelState)
-						: MoveOperations.translateDown(viewModel.cursorConfig, viewModel.model, cursor.modelState),
-				)
-			: CursorState.fromViewState(
-					direction === 'up'
-						? MoveOperations.translateUp(viewModel.cursorConfig, viewModel, cursor.viewState)
-						: MoveOperations.translateDown(viewModel.cursorConfig, viewModel, cursor.viewState),
-				);
+			? CursorState.fromModelState(direction === 'up'
+				? MoveOperations.translateUp(viewModel.cursorConfig, viewModel.model, cursor.modelState)
+				: MoveOperations.translateDown(viewModel.cursorConfig, viewModel.model, cursor.modelState))
+			: CursorState.fromViewState(direction === 'up'
+				? MoveOperations.translateUp(viewModel.cursorConfig, viewModel, cursor.viewState)
+				: MoveOperations.translateDown(viewModel.cursorConfig, viewModel, cursor.viewState));
 		const candidate = useLogicalLine ? adjacent.modelState!.selection : adjacent.viewState!.selection;
-		const occupied =
-			existingSelections.some(selection => selectionsOverlap(selection, candidate)) ||
-			result.some(state => selectionsOverlap((useLogicalLine ? state.modelState?.selection : state.viewState?.selection)!, candidate));
+		const occupied = existingSelections.some(selection => selectionsOverlap(selection, candidate))
+			|| result.some(state => selectionsOverlap((useLogicalLine ? state.modelState?.selection : state.viewState?.selection)!, candidate));
 		if (!occupied) result.push(adjacent);
 	}
 	return result;
@@ -210,56 +196,35 @@ function selectionsOverlap(left: Selection, right: Selection): boolean {
 }
 
 function positionOverlapsSelection(position: Position, selection: Selection): boolean {
-	return selection.isEmpty() ? position.equals(selection.getPosition()) : !position.isBefore(selection.getStartPosition()) && position.isBefore(selection.getEndPosition());
+	return selection.isEmpty()
+		? position.equals(selection.getPosition())
+		: !position.isBefore(selection.getStartPosition()) && position.isBefore(selection.getEndPosition());
 }
 
-function moveHorizontal(
-	viewModel: IViewModel,
-	cursor: CursorState,
-	direction: CursorMove.Direction.Left | CursorMove.Direction.Right,
-	inSelectionMode: boolean,
-	amount: number,
-	unit: CursorMove.Unit,
-): PartialCursorState {
+function moveHorizontal(viewModel: IViewModel, cursor: CursorState, direction: CursorMove.Direction.Left | CursorMove.Direction.Right, inSelectionMode: boolean, amount: number, unit: CursorMove.Unit): PartialCursorState {
 	const state = cursor.viewState;
 	const columns = unit === CursorMove.Unit.HalfLine ? Math.max(1, Math.round(viewModel.getLineLength(state.position.lineNumber) / 2)) : amount;
 	const rtl = viewModel.getTextDirection(state.position.lineNumber) === TextDirection.RTL;
 	const moveLeft = direction === CursorMove.Direction.Left ? !rtl : rtl;
-	return CursorState.fromViewState(
-		moveLeft
-			? MoveOperations.moveLeft(viewModel.cursorConfig, viewModel, state, inSelectionMode, columns)
-			: MoveOperations.moveRight(viewModel.cursorConfig, viewModel, state, inSelectionMode, columns),
-	);
+	return CursorState.fromViewState(moveLeft
+		? MoveOperations.moveLeft(viewModel.cursorConfig, viewModel, state, inSelectionMode, columns)
+		: MoveOperations.moveRight(viewModel.cursorConfig, viewModel, state, inSelectionMode, columns));
 }
 
-function moveVertical(
-	viewModel: IViewModel,
-	cursor: CursorState,
-	direction: CursorMove.Direction.Up | CursorMove.Direction.Down,
-	inSelectionMode: boolean,
-	amount: number,
-	unit: CursorMove.Unit,
-): PartialCursorState {
-	if (unit === CursorMove.Unit.WrappedLine)
-		return CursorState.fromViewState(
-			direction === CursorMove.Direction.Up
-				? MoveOperations.moveUp(viewModel.cursorConfig, viewModel, cursor.viewState, inSelectionMode, amount)
-				: MoveOperations.moveDown(viewModel.cursorConfig, viewModel, cursor.viewState, inSelectionMode, amount),
-		);
+function moveVertical(viewModel: IViewModel, cursor: CursorState, direction: CursorMove.Direction.Up | CursorMove.Direction.Down, inSelectionMode: boolean, amount: number, unit: CursorMove.Unit): PartialCursorState {
+	if (unit === CursorMove.Unit.WrappedLine) return CursorState.fromViewState(direction === CursorMove.Direction.Up
+		? MoveOperations.moveUp(viewModel.cursorConfig, viewModel, cursor.viewState, inSelectionMode, amount)
+		: MoveOperations.moveDown(viewModel.cursorConfig, viewModel, cursor.viewState, inSelectionMode, amount));
 	if (unit === CursorMove.Unit.FoldedLine) {
 		const lineNumber = foldedTargetLine(viewModel, cursor.modelState.position.lineNumber, amount, direction);
 		const lines = Math.abs(lineNumber - cursor.modelState.position.lineNumber);
-		return CursorState.fromModelState(
-			direction === CursorMove.Direction.Up
-				? MoveOperations.moveUp(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, lines)
-				: MoveOperations.moveDown(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, lines),
-		);
+		return CursorState.fromModelState(direction === CursorMove.Direction.Up
+			? MoveOperations.moveUp(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, lines)
+			: MoveOperations.moveDown(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, lines));
 	}
-	return CursorState.fromModelState(
-		direction === CursorMove.Direction.Up
-			? MoveOperations.moveUp(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, amount)
-			: MoveOperations.moveDown(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, amount),
-	);
+	return CursorState.fromModelState(direction === CursorMove.Direction.Up
+		? MoveOperations.moveUp(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, amount)
+		: MoveOperations.moveDown(viewModel.cursorConfig, viewModel.model, cursor.modelState, inSelectionMode, amount));
 }
 
 function foldedTargetLine(viewModel: IViewModel, startLineNumber: number, amount: number, direction: CursorMove.Direction.Up | CursorMove.Direction.Down): number {
@@ -274,13 +239,7 @@ function foldedTargetLine(viewModel: IViewModel, startLineNumber: number, amount
 	return lineNumber;
 }
 
-function moveBlankLine(
-	viewModel: IViewModel,
-	cursor: CursorState,
-	direction: CursorMove.Direction.PrevBlankLine | CursorMove.Direction.NextBlankLine,
-	inSelectionMode: boolean,
-	unit: CursorMove.Unit,
-): PartialCursorState {
+function moveBlankLine(viewModel: IViewModel, cursor: CursorState, direction: CursorMove.Direction.PrevBlankLine | CursorMove.Direction.NextBlankLine, inSelectionMode: boolean, unit: CursorMove.Unit): PartialCursorState {
 	const useView = unit === CursorMove.Unit.WrappedLine;
 	const model = useView ? viewModel : viewModel.model;
 	const state = useView ? cursor.viewState : cursor.modelState;
@@ -316,156 +275,57 @@ function lastLineStart(model: ICursorSimpleModel, range: Range, count: number): 
 
 export namespace CursorMove {
 	export const RawDirection = {
-		Left: 'left',
-		Right: 'right',
-		Up: 'up',
-		Down: 'down',
-		PrevBlankLine: 'prevBlankLine',
-		NextBlankLine: 'nextBlankLine',
-		WrappedLineStart: 'wrappedLineStart',
-		WrappedLineFirstNonWhitespaceCharacter: 'wrappedLineFirstNonWhitespaceCharacter',
-		WrappedLineColumnCenter: 'wrappedLineColumnCenter',
-		WrappedLineEnd: 'wrappedLineEnd',
-		WrappedLineLastNonWhitespaceCharacter: 'wrappedLineLastNonWhitespaceCharacter',
-		ViewPortTop: 'viewPortTop',
-		ViewPortCenter: 'viewPortCenter',
-		ViewPortBottom: 'viewPortBottom',
-		ViewPortIfOutside: 'viewPortIfOutside',
+		Left: 'left', Right: 'right', Up: 'up', Down: 'down', PrevBlankLine: 'prevBlankLine', NextBlankLine: 'nextBlankLine',
+		WrappedLineStart: 'wrappedLineStart', WrappedLineFirstNonWhitespaceCharacter: 'wrappedLineFirstNonWhitespaceCharacter', WrappedLineColumnCenter: 'wrappedLineColumnCenter',
+		WrappedLineEnd: 'wrappedLineEnd', WrappedLineLastNonWhitespaceCharacter: 'wrappedLineLastNonWhitespaceCharacter',
+		ViewPortTop: 'viewPortTop', ViewPortCenter: 'viewPortCenter', ViewPortBottom: 'viewPortBottom', ViewPortIfOutside: 'viewPortIfOutside',
 	} as const;
-	export const RawUnit = {
-		Line: 'line',
-		WrappedLine: 'wrappedLine',
-		Character: 'character',
-		HalfLine: 'halfLine',
-		FoldedLine: 'foldedLine',
-	} as const;
-	export interface RawArguments {
-		to: string;
-		select?: boolean;
-		by?: string;
-		value?: number;
-		noHistory?: boolean;
-	}
-	export interface ParsedArguments {
-		direction: Direction;
-		unit: Unit;
-		select: boolean;
-		value: number;
-		noHistory: boolean;
-	}
-	export interface SimpleMoveArguments {
-		direction: SimpleMoveDirection;
-		unit: Unit;
-		select: boolean;
-		value: number;
-	}
+	export const RawUnit = { Line: 'line', WrappedLine: 'wrappedLine', Character: 'character', HalfLine: 'halfLine', FoldedLine: 'foldedLine' } as const;
+	export interface RawArguments { to: string; select?: boolean; by?: string; value?: number; noHistory?: boolean; }
+	export interface ParsedArguments { direction: Direction; unit: Unit; select: boolean; value: number; noHistory: boolean; }
+	export interface SimpleMoveArguments { direction: SimpleMoveDirection; unit: Unit; select: boolean; value: number; }
 
 	function isCursorMoveArgs(value: unknown): boolean {
 		if (!types.isObject(value)) return false;
 		const args = value as Partial<RawArguments>;
-		return (
-			types.isString(args.to) &&
-			(types.isUndefined(args.select) || types.isBoolean(args.select)) &&
-			(types.isUndefined(args.by) || types.isString(args.by)) &&
-			(types.isUndefined(args.value) || types.isNumber(args.value)) &&
-			(types.isUndefined(args.noHistory) || types.isBoolean(args.noHistory))
-		);
+		return types.isString(args.to) && (types.isUndefined(args.select) || types.isBoolean(args.select))
+			&& (types.isUndefined(args.by) || types.isString(args.by)) && (types.isUndefined(args.value) || types.isNumber(args.value))
+			&& (types.isUndefined(args.noHistory) || types.isBoolean(args.noHistory));
 	}
 
 	export const metadata: ICommandMetadata = {
 		description: 'Move the cursor to a logical editor position',
-		args: [
-			{
-				name: 'Cursor move arguments',
-				constraint: isCursorMoveArgs,
-				schema: {
-					type: 'object',
-					required: ['to'],
-					properties: {
-						to: { type: 'string', enum: Object.values(RawDirection) },
-						by: { type: 'string', enum: Object.values(RawUnit) },
-						value: { type: 'number', default: 1 },
-						select: { type: 'boolean', default: false },
-						noHistory: { type: 'boolean', default: false },
-					},
+		args: [{
+			name: 'Cursor move arguments', constraint: isCursorMoveArgs, schema: {
+				type: 'object', required: ['to'], properties: {
+					to: { type: 'string', enum: Object.values(RawDirection) }, by: { type: 'string', enum: Object.values(RawUnit) },
+					value: { type: 'number', default: 1 }, select: { type: 'boolean', default: false }, noHistory: { type: 'boolean', default: false },
 				},
-			},
-		],
+			}
+		}],
 	};
 
 	export function parse(args: Partial<RawArguments>): ParsedArguments | null {
 		const direction = directionByName.get(args.to ?? '');
 		if (direction === undefined) return null;
-		return {
-			direction,
-			unit: unitByName.get(args.by ?? '') ?? Unit.None,
-			select: args.select === true,
-			value: args.value || 1,
-			noHistory: args.noHistory === true,
-		};
+		return { direction, unit: unitByName.get(args.by ?? '') ?? Unit.None, select: args.select === true, value: args.value || 1, noHistory: args.noHistory === true };
 	}
 
 	export enum Direction {
-		Left,
-		Right,
-		Up,
-		Down,
-		PrevBlankLine,
-		NextBlankLine,
-		WrappedLineStart,
-		WrappedLineFirstNonWhitespaceCharacter,
-		WrappedLineColumnCenter,
-		WrappedLineEnd,
-		WrappedLineLastNonWhitespaceCharacter,
-		ViewPortTop,
-		ViewPortCenter,
-		ViewPortBottom,
-		ViewPortIfOutside,
+		Left, Right, Up, Down, PrevBlankLine, NextBlankLine,
+		WrappedLineStart, WrappedLineFirstNonWhitespaceCharacter, WrappedLineColumnCenter, WrappedLineEnd, WrappedLineLastNonWhitespaceCharacter,
+		ViewPortTop, ViewPortCenter, ViewPortBottom, ViewPortIfOutside,
 	}
-	export type SimpleMoveDirection =
-		| Direction.Left
-		| Direction.Right
-		| Direction.Up
-		| Direction.Down
-		| Direction.PrevBlankLine
-		| Direction.NextBlankLine
-		| Direction.WrappedLineStart
-		| Direction.WrappedLineFirstNonWhitespaceCharacter
-		| Direction.WrappedLineColumnCenter
-		| Direction.WrappedLineEnd
-		| Direction.WrappedLineLastNonWhitespaceCharacter;
+	export type SimpleMoveDirection = Direction.Left | Direction.Right | Direction.Up | Direction.Down | Direction.PrevBlankLine | Direction.NextBlankLine | Direction.WrappedLineStart | Direction.WrappedLineFirstNonWhitespaceCharacter | Direction.WrappedLineColumnCenter | Direction.WrappedLineEnd | Direction.WrappedLineLastNonWhitespaceCharacter;
 	export type ViewportDirection = Direction.ViewPortTop | Direction.ViewPortCenter | Direction.ViewPortBottom | Direction.ViewPortIfOutside;
-	export enum Unit {
-		None,
-		Line,
-		WrappedLine,
-		Character,
-		HalfLine,
-		FoldedLine,
-	}
+	export enum Unit { None, Line, WrappedLine, Character, HalfLine, FoldedLine }
 
 	const directionByName = new Map<string, Direction>([
-		[RawDirection.Left, Direction.Left],
-		[RawDirection.Right, Direction.Right],
-		[RawDirection.Up, Direction.Up],
-		[RawDirection.Down, Direction.Down],
-		[RawDirection.PrevBlankLine, Direction.PrevBlankLine],
-		[RawDirection.NextBlankLine, Direction.NextBlankLine],
-		[RawDirection.WrappedLineStart, Direction.WrappedLineStart],
-		[RawDirection.WrappedLineFirstNonWhitespaceCharacter, Direction.WrappedLineFirstNonWhitespaceCharacter],
-		[RawDirection.WrappedLineColumnCenter, Direction.WrappedLineColumnCenter],
-		[RawDirection.WrappedLineEnd, Direction.WrappedLineEnd],
-		[RawDirection.WrappedLineLastNonWhitespaceCharacter, Direction.WrappedLineLastNonWhitespaceCharacter],
-		[RawDirection.ViewPortTop, Direction.ViewPortTop],
-		[RawDirection.ViewPortCenter, Direction.ViewPortCenter],
-		[RawDirection.ViewPortBottom, Direction.ViewPortBottom],
-		[RawDirection.ViewPortIfOutside, Direction.ViewPortIfOutside],
+		[RawDirection.Left, Direction.Left], [RawDirection.Right, Direction.Right], [RawDirection.Up, Direction.Up], [RawDirection.Down, Direction.Down],
+		[RawDirection.PrevBlankLine, Direction.PrevBlankLine], [RawDirection.NextBlankLine, Direction.NextBlankLine], [RawDirection.WrappedLineStart, Direction.WrappedLineStart],
+		[RawDirection.WrappedLineFirstNonWhitespaceCharacter, Direction.WrappedLineFirstNonWhitespaceCharacter], [RawDirection.WrappedLineColumnCenter, Direction.WrappedLineColumnCenter],
+		[RawDirection.WrappedLineEnd, Direction.WrappedLineEnd], [RawDirection.WrappedLineLastNonWhitespaceCharacter, Direction.WrappedLineLastNonWhitespaceCharacter],
+		[RawDirection.ViewPortTop, Direction.ViewPortTop], [RawDirection.ViewPortCenter, Direction.ViewPortCenter], [RawDirection.ViewPortBottom, Direction.ViewPortBottom], [RawDirection.ViewPortIfOutside, Direction.ViewPortIfOutside],
 	]);
-	const unitByName = new Map<string, Unit>([
-		[RawUnit.Line, Unit.Line],
-		[RawUnit.WrappedLine, Unit.WrappedLine],
-		[RawUnit.Character, Unit.Character],
-		[RawUnit.HalfLine, Unit.HalfLine],
-		[RawUnit.FoldedLine, Unit.FoldedLine],
-	]);
+	const unitByName = new Map<string, Unit>([[RawUnit.Line, Unit.Line], [RawUnit.WrappedLine, Unit.WrappedLine], [RawUnit.Character, Unit.Character], [RawUnit.HalfLine, Unit.HalfLine], [RawUnit.FoldedLine, Unit.FoldedLine]]);
 }

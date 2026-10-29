@@ -42,17 +42,14 @@ export class StickyModelProvider extends AbstractDisposable implements IStickyMo
 		let ranges: StickyRange[] | undefined;
 		let outlineProviderId: string | undefined;
 		if (source === 'outlineModel' && registry.has(model)) {
-			const controller = (this.request = new AbortController());
+			const controller = this.request = new AbortController();
 			const cancellation = token.onCancellationRequested(() => controller.abort());
 			try {
 				const outline = await OutlineModel.create(registry, model, controller.signal, this.onError);
 				if (!outline) return null;
 				const groups = [...outline.children.values()].map(group => {
 					const scopes: StickyRange[] = [];
-					appendSymbolRanges(
-						[...group.children.values()].map(element => element.symbol),
-						scopes,
-					);
+					appendSymbolRanges([...group.children.values()].map(element => element.symbol), scopes);
 					const coverage = scopes.reduce((total, range) => total + range.endLineNumber - range.startLineNumber, 0);
 					return { id: group.id, ranges: scopes, coverage };
 				});
@@ -77,10 +74,9 @@ export class StickyModelProvider extends AbstractDisposable implements IStickyMo
 		}
 		if (!ranges) {
 			ranges = [];
-			const folds =
-				source === 'indentationModel' || !this.editor.getOption(EditorOption.folding) || this.folding.regions.length === 0
-					? computeEditorIndentFoldingRanges(model, { tabSize: model.getOptions().tabSize })
-					: this.folding.regions;
+			const folds = source === 'indentationModel' || !this.editor.getOption(EditorOption.folding) || this.folding.regions.length === 0
+				? computeEditorIndentFoldingRanges(model, { tabSize: model.getOptions().tabSize })
+				: this.folding.regions;
 			for (const fold of folds) {
 				ranges.push(new StickyRange(fold.startLineIndex + 1, fold.endLineIndex + 2));
 			}

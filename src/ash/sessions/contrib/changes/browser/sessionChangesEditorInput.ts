@@ -11,38 +11,20 @@ import './media/sessionChangesEditorInput.css';
 export class SessionChangesEditorInput extends DockedEditorInput {
 	public readonly contentType = 'application/vnd.ash.session-changes';
 	public readonly resource: URI;
-	constructor(
-		selection: SessionsViewSelection | URI,
-		public readonly changesetSelection?: ISessionChangesEditorOptions['changesetSelection'],
-	) {
+	constructor(selection: SessionsViewSelection | URI, public readonly changesetSelection?: ISessionChangesEditorOptions['changesetSelection']) {
 		super();
 		if (selection instanceof URI) {
 			this.resource = selection.with({ scheme: 'ash-session-changes' });
 		} else if (selection.kind === 'session') {
-			this.resource = URI.from({
-				scheme: 'ash-session-changes',
-				path: `/${selection.active.session.sessionId}`,
-				query: new URLSearchParams({ thread: selection.active.threadId }).toString(),
-			});
+			this.resource = URI.from({ scheme: 'ash-session-changes', path: `/${selection.active.session.sessionId}`, query: new URLSearchParams({ thread: selection.active.threadId }).toString() });
 		} else {
-			this.resource = URI.from({
-				scheme: 'ash-session-changes',
-				path: `/draft/${selection.session.untitledSessionId}`,
-			});
+			this.resource = URI.from({ scheme: 'ash-session-changes', path: `/draft/${selection.session.untitledSessionId}` });
 		}
 	}
-	public get label(): string {
-		return localize('sessions.changes.title', 'Changes');
-	}
-	public getIcon(): typeof Lxicon.diff {
-		return Lxicon.diff;
-	}
-	public getLabelExtraClasses(): readonly string[] {
-		return ['ash-session-changes-editor-label'];
-	}
-	public get sessionResource(): URI {
-		return this.resource.with({ scheme: 'ash-session' });
-	}
+	public get label(): string { return localize('sessions.changes.title', 'Changes'); }
+	public getIcon(): typeof Lxicon.diff { return Lxicon.diff; }
+	public getLabelExtraClasses(): readonly string[] { return ['ash-session-changes-editor-label']; }
+	public get sessionResource(): URI { return this.resource.with({ scheme: 'ash-session' }); }
 }
 
 EditorInputSerializers.registerStatic({
@@ -50,7 +32,9 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input.resource.scheme === 'ash-session-changes',
 	serialize: input => ({
 		resource: input.resource.toString(),
-		changesetId: input instanceof SessionChangesEditorInput ? (input.changesetSelection?.kind === 'transient' ? input.changesetSelection.changeset.id : input.changesetSelection?.id) : undefined,
+		changesetId: input instanceof SessionChangesEditorInput
+			? (input.changesetSelection?.kind === 'transient' ? input.changesetSelection.changeset.id : input.changesetSelection?.id)
+			: undefined,
 	}),
 	deserialize: value => {
 		const record = requireRecord(value, 'session Changes input');

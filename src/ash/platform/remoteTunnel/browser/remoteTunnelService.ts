@@ -7,20 +7,10 @@ export class BrowserRemoteTunnelService implements IRemoteTunnelService {
 	public readonly onDidChangeTunnelStatus = Event.None;
 	public readonly onDidChangeMode = Event.None;
 	public readonly onDidTokenFailed = Event.None;
-	public async getTunnelStatus(): Promise<TunnelStatus> {
-		return TunnelStates.uninitialized;
-	}
-	public async getMode(): Promise<TunnelMode> {
-		return INACTIVE_TUNNEL_MODE;
-	}
-	public async initialize(_mode: TunnelMode): Promise<TunnelStatus> {
-		return TunnelStates.uninitialized;
-	}
-	public async startTunnel(_mode: ActiveTunnelMode): Promise<TunnelStatus> {
-		return TunnelStates.uninitialized;
-	}
-	public async stopTunnel(): Promise<void> {}
-	public async getTunnelName(): Promise<string | undefined> {
-		return undefined;
-	}
+	public async getTunnelStatus(): Promise<TunnelStatus> { return TunnelStates.uninitialized; }
+	public async getMode(): Promise<TunnelMode> { return INACTIVE_TUNNEL_MODE; }
+	public async initialize(_mode: TunnelMode): Promise<TunnelStatus> { return TunnelStates.uninitialized; }
+	public async startTunnel(_mode: ActiveTunnelMode): Promise<TunnelStatus> { return TunnelStates.uninitialized; }
+	public async stopTunnel(): Promise<void> { }
+	public async getTunnelName(): Promise<string | undefined> { return undefined; }
 }

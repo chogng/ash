@@ -40,27 +40,25 @@ export async function getCodeLensModel(registry: LanguageFeatureRegistry<CodeLen
 	const ranks = new Map(providers.map((provider, index) => [provider, index] as const));
 	const result = new CodeLensModel();
 
-	await Promise.all(
-		providers.map(async provider => {
-			try {
-				const list = await Promise.resolve(provider.provideCodeLenses(model, token));
-				if (!list) return;
-				if (!Array.isArray(list.lenses)) {
-					list.dispose?.();
-					throw new TypeError('CodeLens provider must return a CodeLensList');
-				}
-				try {
-					for (const lens of list.lenses) validateCodeLens(model, lens);
-				} catch (error) {
-					list.dispose?.();
-					throw error;
-				}
-				result.add(list, provider);
-			} catch (error) {
-				onUnexpectedExternalError(error);
+	await Promise.all(providers.map(async provider => {
+		try {
+			const list = await Promise.resolve(provider.provideCodeLenses(model, token));
+			if (!list) return;
+			if (!Array.isArray(list.lenses)) {
+				list.dispose?.();
+				throw new TypeError('CodeLens provider must return a CodeLensList');
 			}
-		}),
-	);
+			try {
+				for (const lens of list.lenses) validateCodeLens(model, lens);
+			} catch (error) {
+				list.dispose?.();
+				throw error;
+			}
+			result.add(list, provider);
+		} catch (error) {
+			onUnexpectedExternalError(error);
+		}
+	}));
 
 	if (token.isCancellationRequested) {
 		result.dispose();

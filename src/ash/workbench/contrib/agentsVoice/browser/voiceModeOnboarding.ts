@@ -18,22 +18,17 @@ export class VoiceModeOnboardingBanner extends Disposable {
 		const heading = h(container.ownerDocument, 'h2');
 		heading.textContent = localize('agentsVoice.introduction.title', 'Talk with your agent');
 		const description = h(container.ownerDocument, 'p');
-		description.textContent = localize(
-			'agentsVoice.introduction.description',
-			'Start a voice conversation from Chat and choose a provider, model and voice. Audio goes to that provider. Spoken requests use the same Chat mode and approval controls. Your unsent message stays in the composer.',
-		);
+		description.textContent = localize('agentsVoice.introduction.description', 'Start a voice conversation from Chat and choose a provider, model and voice. Audio goes to that provider. Spoken requests use the same Chat mode and approval controls. Your unsent message stays in the composer.');
 		this.element.append(heading, description);
-		this._register(
-			new Button(this.element, {
-				...defaultButtonStyles,
-				label: localize('agentsVoice.introduction.dismiss', 'Got it'),
-				onClick: () => {
-					storage.store(AgentsVoiceStorageKeys.IntroBannerShown, true, StorageScope.PROFILE, StorageTarget.USER);
-					this.element.hidden = true;
-					onDismiss();
-				},
-			}),
-		);
+		this._register(new Button(this.element, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.introduction.dismiss', 'Got it'),
+			onClick: () => {
+				storage.store(AgentsVoiceStorageKeys.IntroBannerShown, true, StorageScope.PROFILE, StorageTarget.USER);
+				this.element.hidden = true;
+				onDismiss();
+			},
+		}));
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 	}

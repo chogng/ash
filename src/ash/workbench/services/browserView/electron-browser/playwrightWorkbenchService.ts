@@ -28,21 +28,13 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 			networkToken: networkToken ?? null,
 		});
 		const { screenshot, ...observation } = decodeAppServerServerRequestResult('browser/observe', result);
-		if (!screenshot) {
-			return observation;
-		}
-		if (screenshot.mimeType !== 'image/png') {
-			throw new TypeError('Invalid browser screenshot MIME type');
-		}
+		if (!screenshot) { return observation; }
+		if (screenshot.mimeType !== 'image/png') { throw new TypeError('Invalid browser screenshot MIME type'); }
 		return { ...observation, screenshot: { ...screenshot, mimeType: 'image/png' } };
 	}
 
 	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction, networkToken?: string | null): Promise<string | undefined> {
-		const result = await this.run(operationId, sessionId, 'perform', {
-			threadId: sessionId,
-			action: { ...action, targetId: pageId },
-			networkToken: networkToken ?? null,
-		});
+		const result = await this.run(operationId, sessionId, 'perform', { threadId: sessionId, action: { ...action, targetId: pageId }, networkToken: networkToken ?? null });
 		return decodeAppServerServerRequestResult('browser/perform', result).output ?? undefined;
 	}
 
@@ -67,26 +59,19 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 
 	private async run(operationId: string, sessionId: string, command: string, params: unknown): Promise<unknown> {
 		this.assertNotDisposed();
-		if (this.retiringSessions.has(sessionId)) {
-			throw new Error('Browser session is being released');
-		}
-		if (this.operations.has(operationId)) {
-			throw new Error('Duplicate browser operation');
-		}
+		if (this.retiringSessions.has(sessionId)) { throw new Error('Browser session is being released'); }
+		if (this.operations.has(operationId)) { throw new Error('Duplicate browser operation'); }
 		this.operations.set(operationId, sessionId);
 		this.sessions.add(sessionId);
-		try {
-			return await this.channel.call(command, { id: operationId, params });
-		} finally {
-			this.operations.delete(operationId);
-		}
+		try { return await this.channel.call(command, { id: operationId, params }); }
+		finally { this.operations.delete(operationId); }
 	}
 
 	protected override disposeCore(): void {
 		// Cancel queued page operations before retiring the connections they would otherwise recreate.
 		for (const id of this.sessions) {
 			// Main also cleans up with the window; an acknowledgement can arrive after the IPC peer closes.
-			void this.disposeSession(id).catch(() => {});
+			void this.disposeSession(id).catch(() => { });
 		}
 		this.operations.clear();
 		this.sessions.clear();

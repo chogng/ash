@@ -19,68 +19,48 @@ import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_D
 import { IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
 
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
-const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void }>();
+const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void; }>();
 
-registerAction2(
-	class ShowDictationIntroductionAction extends Action2 {
-		constructor() {
-			super({
-				id: SHOW_DICTATION_ONBOARDING_COMMAND,
-				title: localize2({ bundle: 'ash', key: 'dictation.showIntroduction' }, 'Dictation: Show introduction'),
-				f1: true,
-			});
-		}
-		public override run(accessor: ServicesAccessor): void {
-			accessor.get(IDictationOnboardingService).show();
-		}
-	},
-);
-registerAction2(
-	class ResetDictationIntroductionAction extends Action2 {
-		constructor() {
-			super({
-				id: RESET_DICTATION_ONBOARDING_COMMAND,
-				title: localize2('dictation.resetIntroduction', 'Dictation: Reset introduction'),
-				f1: true,
-			});
-		}
-		public override run(accessor: ServicesAccessor): void {
-			accessor.get(IDictationOnboardingService).reset();
-		}
-	},
-);
-registerAction2(
-	class CancelDictationAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.chat.cancelSpeechToText',
-				precondition: ChatSpeechToTextInProgress.isEqualTo(true),
-				title: localize2({ bundle: 'ash', key: 'dictation.cancelCommand' }, 'Dictation: Cancel recording'),
-				f1: true,
-			});
-		}
-		public override run(accessor: ServicesAccessor): Promise<void> {
-			const service = accessor.get(IChatSpeechToTextService);
-			preparations.get(service)?.cancel();
-			cancelDictation();
-			return service.cancel();
-		}
-	},
-);
+registerAction2(class ShowDictationIntroductionAction extends Action2 {
+	constructor() {
+		super({
+			id: SHOW_DICTATION_ONBOARDING_COMMAND,
+			title: localize2({ bundle: 'ash', key: 'dictation.showIntroduction' }, 'Dictation: Show introduction'),
+			f1: true,
+		});
+	}
+	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).show(); }
+});
+registerAction2(class ResetDictationIntroductionAction extends Action2 {
+	constructor() {
+		super({ id: RESET_DICTATION_ONBOARDING_COMMAND, title: localize2('dictation.resetIntroduction', 'Dictation: Reset introduction'), f1: true });
+	}
+	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).reset(); }
+});
+registerAction2(class CancelDictationAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.chat.cancelSpeechToText',
+			precondition: ChatSpeechToTextInProgress.isEqualTo(true),
+			title: localize2({ bundle: 'ash', key: 'dictation.cancelCommand' }, 'Dictation: Cancel recording'),
+			f1: true,
+		});
+	}
+	public override run(accessor: ServicesAccessor): Promise<void> {
+		const service = accessor.get(IChatSpeechToTextService);
+		preparations.get(service)?.cancel();
+		cancelDictation();
+		return service.cancel();
+	}
+});
 
 async function toggle(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 	const widgets = accessor.get(IChatWidgetService);
 	const widget = targetWidget(widgets, context);
 	if (!widget) return;
 	const preparation = preparations.get(accessor.get(IChatSpeechToTextService));
-	if (preparation?.widget === widget) {
-		preparation.cancel();
-		return;
-	}
-	if (activeDictationEditor() === widget.inputEditor) {
-		await stopDictation();
-		return;
-	}
+	if (preparation?.widget === widget) { preparation.cancel(); return; }
+	if (activeDictationEditor() === widget.inputEditor) { await stopDictation(); return; }
 	if (isDictating()) return;
 	await record(accessor, widget);
 }
@@ -105,12 +85,11 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	const lifetime = new DisposableStore();
 	const controller = new AbortController();
 	const preparation = {
-		widget,
-		cancel: (): void => {
+		widget, cancel: (): void => {
 			controller.abort();
 			lifetime.dispose();
 			if (preparations.get(service) === preparation) preparations.delete(service);
-		},
+		}
 	};
 	const cancel = preparation.cancel;
 	preparations.set(service, preparation);
@@ -119,12 +98,10 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	lifetime.add(Event.once(editor.onDidDispose)(cancel));
 	lifetime.add(Event.once(editor.onWillChangeModel)(cancel));
 	let owned = false;
-	lifetime.add(
-		onDidChangeDictationEditor(() => {
-			if (activeDictationEditor() === editor) owned = true;
-			else if (owned) cancel();
-		}),
-	);
+	lifetime.add(onDidChangeDictationEditor(() => {
+		if (activeDictationEditor() === editor) owned = true;
+		else if (owned) cancel();
+	}));
 	const heldFrom = Date.now();
 	// Observe release before any preparation or provider acquisition can suspend this command.
 	const release = released?.then(() => {
@@ -133,10 +110,7 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	try {
 		const model = await readDictationPreparation(configuration, local, speech);
 		if (controller.signal.aborted || !widget.visible || widget.isTranscriptProgressActive || !widgets.getAllWidgets().includes(widget) || service.isBusy || isDictating()) return;
-		if (model && (!model.available || isModelPreparing(model.status))) {
-			await preferences.openSettings({ section: 'dictation' });
-			return;
-		}
+		if (model && (!model.available || isModelPreparing(model.status))) { await preferences.openSettings({ section: 'dictation' }); return; }
 		onboarding.showIfNeeded();
 		if (preparations.get(service) === preparation) preparations.delete(service);
 		await startDictation(service, editor, editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis, log, 'chat', controller.signal);
@@ -153,91 +127,51 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	}
 }
 
-registerAction2(
-	class ToggleDictationAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.chat.toggleSpeechToText',
-				title: localize2('chat.input.dictate', 'Dictate message'),
-				f1: true,
-			});
-		}
-		public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			return toggle(accessor, context);
-		}
-	},
-);
-registerAction2(
-	class HoldDictationAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.chat.holdToSpeechToText',
-				title: localize2('dictation.hold', 'Dictation: Hold to record'),
-				f1: true,
-			});
-		}
-		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			if (isDictating()) return;
-			const widget = targetWidget(accessor.get(IChatWidgetService), context);
-			if (!widget) return;
-			const released = accessor.get(IKeybindingService).enableKeybindingHoldMode(this.desc.id);
-			if (released) await record(accessor, widget, released);
-		}
-	},
-);
-registerAction2(
-	class SelectDictationMicrophoneAction extends Action2 {
-		constructor() {
-			super({
-				id: SELECT_MICROPHONE_COMMAND,
-				title: localize2('dictation.selectMicrophone', 'Select microphone'),
-				f1: true,
-			});
-		}
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const editor = activeDictationEditor() ?? accessor.get(IChatWidgetService).lastFocusedWidget?.inputEditor;
-			const target = (editor?.getContainerDomNode().ownerDocument.defaultView ?? window) as Window & typeof globalThis;
-			const configuration = accessor.get(IConfigurationService);
-			const service = accessor.get(IChatSpeechToTextService);
-			const onboarding = accessor.get(IDictationOnboardingService);
-			const quickInput = accessor.get(IQuickInputService);
-			const devices = (await target.navigator.mediaDevices?.enumerateDevices()) ?? [];
-			const lifetime = new DisposableStore();
-			const picker = lifetime.add(quickInput.createQuickPick<IQuickPickItem & { deviceId: string }>());
-			picker.placeholder = picker.ariaLabel = localize('dictation.selectMicrophone', 'Select microphone');
-			const items = [
-				{ label: localize('dictation.defaultMicrophone', 'System default'), deviceId: '' },
-				...devices
-					.filter(device => device.kind === 'audioinput' && device.deviceId !== 'default' && device.deviceId !== 'communications')
-					.map(device => ({
-						label: device.label || localize('dictation.microphone', 'Microphone'),
-						deviceId: device.deviceId,
-					})),
-			];
-			picker.items = items;
-			picker.activeItems = items.filter(item => item.deviceId === configuration.getValue('dictation.inputDevice'));
-			await new Promise<void>((resolve, reject) => {
-				let accepted = false;
-				lifetime.add(
-					picker.onDidHide(() => {
-						if (!accepted) resolve();
-					}),
-				);
-				lifetime.add(
-					picker.onDidAccept(() => {
-						const selected = picker.selectedItems[0] ?? picker.activeItems[0];
-						if (!selected || accepted) return;
-						accepted = true;
-						picker.hide();
-						void (async () => {
-							await configuration.updateValue('dictation.inputDevice', selected.deviceId);
-							if (service.isBusy) await service.switchMicrophone(target, selected.deviceId);
-							onboarding.refreshMicrophones(service.analyserNode);
-						})().then(resolve, reject);
-					}),
-				);
-				picker.show();
-			}).finally(() => lifetime.dispose());
-		}
-	},
-);
+registerAction2(class ToggleDictationAction extends Action2 {
+	constructor() { super({ id: 'workbench.action.chat.toggleSpeechToText', title: localize2('chat.input.dictate', 'Dictate message'), f1: true }); }
+	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> { return toggle(accessor, context); }
+});
+registerAction2(class HoldDictationAction extends Action2 {
+	constructor() { super({ id: 'workbench.action.chat.holdToSpeechToText', title: localize2('dictation.hold', 'Dictation: Hold to record'), f1: true }); }
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		if (isDictating()) return;
+		const widget = targetWidget(accessor.get(IChatWidgetService), context);
+		if (!widget) return;
+		const released = accessor.get(IKeybindingService).enableKeybindingHoldMode(this.desc.id);
+		if (released) await record(accessor, widget, released);
+	}
+});
+registerAction2(class SelectDictationMicrophoneAction extends Action2 {
+	constructor() { super({ id: SELECT_MICROPHONE_COMMAND, title: localize2('dictation.selectMicrophone', 'Select microphone'), f1: true }); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const editor = activeDictationEditor() ?? accessor.get(IChatWidgetService).lastFocusedWidget?.inputEditor;
+		const target = (editor?.getContainerDomNode().ownerDocument.defaultView ?? window) as Window & typeof globalThis;
+		const configuration = accessor.get(IConfigurationService);
+		const service = accessor.get(IChatSpeechToTextService);
+		const onboarding = accessor.get(IDictationOnboardingService);
+		const quickInput = accessor.get(IQuickInputService);
+		const devices = await target.navigator.mediaDevices?.enumerateDevices() ?? [];
+		const lifetime = new DisposableStore();
+		const picker = lifetime.add(quickInput.createQuickPick<IQuickPickItem & { deviceId: string; }>());
+		picker.placeholder = picker.ariaLabel = localize('dictation.selectMicrophone', 'Select microphone');
+		const items = [{ label: localize('dictation.defaultMicrophone', 'System default'), deviceId: '' }, ...devices.filter(device => device.kind === 'audioinput' && device.deviceId !== 'default' && device.deviceId !== 'communications').map(device => ({ label: device.label || localize('dictation.microphone', 'Microphone'), deviceId: device.deviceId }))];
+		picker.items = items;
+		picker.activeItems = items.filter(item => item.deviceId === configuration.getValue('dictation.inputDevice'));
+		await new Promise<void>((resolve, reject) => {
+			let accepted = false;
+			lifetime.add(picker.onDidHide(() => { if (!accepted) resolve(); }));
+			lifetime.add(picker.onDidAccept(() => {
+				const selected = picker.selectedItems[0] ?? picker.activeItems[0];
+				if (!selected || accepted) return;
+				accepted = true;
+				picker.hide();
+				void (async () => {
+					await configuration.updateValue('dictation.inputDevice', selected.deviceId);
+					if (service.isBusy) await service.switchMicrophone(target, selected.deviceId);
+					onboarding.refreshMicrophones(service.analyserNode);
+				})().then(resolve, reject);
+			}));
+			picker.show();
+		}).finally(() => lifetime.dispose());
+	}
+});

@@ -41,16 +41,8 @@ function parseIndentationRules(value: unknown, owner: string): IndentationRule {
 	return Object.freeze({
 		decreaseIndentPattern: regularExpression(rules.decreaseIndentPattern, `${owner}.decreaseIndentPattern`),
 		increaseIndentPattern: regularExpression(rules.increaseIndentPattern, `${owner}.increaseIndentPattern`),
-		...(rules.indentNextLinePattern === undefined
-			? {}
-			: {
-					indentNextLinePattern: optionalRegularExpression(rules.indentNextLinePattern, `${owner}.indentNextLinePattern`),
-				}),
-		...(rules.unIndentedLinePattern === undefined
-			? {}
-			: {
-					unIndentedLinePattern: optionalRegularExpression(rules.unIndentedLinePattern, `${owner}.unIndentedLinePattern`),
-				}),
+		...(rules.indentNextLinePattern === undefined ? {} : { indentNextLinePattern: optionalRegularExpression(rules.indentNextLinePattern, `${owner}.indentNextLinePattern`) }),
+		...(rules.unIndentedLinePattern === undefined ? {} : { unIndentedLinePattern: optionalRegularExpression(rules.unIndentedLinePattern, `${owner}.unIndentedLinePattern`) }),
 	});
 }
 
@@ -92,11 +84,7 @@ function parseEnterAction(value: unknown, owner: string): EnterAction {
 	});
 }
 
-function optionalRegularExpressionProperty(
-	value: unknown,
-	owner: string,
-	key: 'afterText' | 'previousLineText',
-): { readonly afterText?: RegExp } | { readonly previousLineText?: RegExp } | Record<never, never> {
+function optionalRegularExpressionProperty(value: unknown, owner: string, key: 'afterText' | 'previousLineText'): { readonly afterText?: RegExp; } | { readonly previousLineText?: RegExp; } | Record<never, never> {
 	if (value === undefined || value === null) return {};
 	const expression = regularExpression(value, owner);
 	return key === 'afterText' ? { afterText: expression } : { previousLineText: expression };
@@ -150,7 +138,9 @@ function optionalRegularExpression(value: unknown, owner: string): RegExp | null
 }
 
 function regularExpression(value: unknown, owner: string): RegExp {
-	const { source, flags } = typeof value === 'string' ? { source: text(value, owner, 4096), flags: '' } : parseRegularExpressionObject(value, owner);
+	const { source, flags } = typeof value === 'string'
+		? { source: text(value, owner, 4096), flags: '' }
+		: parseRegularExpressionObject(value, owner);
 	try {
 		return Object.freeze(new RegExp(source, flags));
 	} catch (error) {
@@ -158,7 +148,7 @@ function regularExpression(value: unknown, owner: string): RegExp {
 	}
 }
 
-function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string } {
+function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string; } {
 	const expression = record(value, owner);
 	const keys = Object.keys(expression);
 	if (keys.some(key => key !== 'pattern' && key !== 'flags') || expression.pattern === undefined) {

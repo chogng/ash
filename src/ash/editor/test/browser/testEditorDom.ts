@@ -7,19 +7,18 @@ export const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 
 class TestResizeObserver implements ResizeObserver {
-	public observe(): void {}
-	public unobserve(): void {}
-	public disconnect(): void {}
+	public observe(): void { }
+	public unobserve(): void { }
+	public disconnect(): void { }
 }
 
-const installedGlobals = installEditorTestDom(
-	browserEnvironment,
-	['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent', 'NodeFilter'],
-	{
-		PointerEvent: browserEnvironment.window.PointerEvent ?? browserEnvironment.window.MouseEvent,
-		ResizeObserver: TestResizeObserver,
-	},
-);
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement',
+	'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent', 'NodeFilter',
+], {
+	PointerEvent: browserEnvironment.window.PointerEvent ?? browserEnvironment.window.MouseEvent,
+	ResizeObserver: TestResizeObserver,
+});
 
 suiteTeardown(() => {
 	installedGlobals.dispose();

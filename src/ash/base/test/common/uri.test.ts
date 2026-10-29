@@ -7,7 +7,10 @@ import { URI } from '../../common/uri.js';
 test('URI parses and canonicalizes absolute hierarchical resources', () => {
 	const resource = URI.parse('ASH://workspace/a/../An item?rev=1#anchor=3');
 
-	assert.equal(resource.toString(), 'ash://workspace/An%20item?rev=1#anchor=3');
+	assert.equal(
+		resource.toString(),
+		'ash://workspace/An%20item?rev=1#anchor=3',
+	);
 	assert.equal(resource.scheme, 'ash');
 	assert.equal(resource.authority, 'workspace');
 	assert.equal(resource.path, '/An item');
@@ -35,7 +38,10 @@ test('URI.from applies the same scheme rule to decoded components', () => {
 test('URI validates percent encoding and rejects credentials', () => {
 	assert.throws(() => URI.parse('file:///item%ZZ.txt'), TypeError);
 	assert.throws(() => URI.parse('item%ZZ.txt'), TypeError);
-	assert.throws(() => URI.parse('https://user:secret@example.com/item'), TypeError);
+	assert.throws(
+		() => URI.parse('https://user:secret@example.com/item'),
+		TypeError,
+	);
 });
 
 test('URI.file supports Windows drive paths and UNC paths', () => {
@@ -48,7 +54,10 @@ test('URI.file supports Windows drive paths and UNC paths', () => {
 
 	assert.equal(drive.toString(), 'file:///C:/Users/Ash/An%20item.txt');
 	assert.equal(drive.fsPath, 'c:\\Users\\Ash\\An item.txt');
-	assert.equal(unc.toString(), 'file://server/share/An%20item.txt');
+	assert.equal(
+		unc.toString(),
+		'file://server/share/An%20item.txt',
+	);
 	assert.equal(unc.fsPath, isWindows ? '\\\\server\\share\\An item.txt' : '//server/share/An item.txt');
 });
 
@@ -86,27 +95,14 @@ test('URI serialization retains components and can be revived', () => {
 	});
 	assert.equal(URI.revive(serialized).toString(), original.toString());
 	assert.equal(URI.revive(original), original);
-	assert.equal(
-		URI.from({
-			scheme: 'ash',
-			authority: 'workspace',
-			path: '/a b',
-			query: 'rev=2',
-			fragment: 'anchor',
-		}).toString(),
-		original.toString(),
-	);
+	assert.equal(URI.from({ scheme: 'ash', authority: 'workspace', path: '/a b', query: 'rev=2', fragment: 'anchor' }).toString(), original.toString());
 });
 
 test('URI exposes decoded components while preserving escaped path boundaries', () => {
 	const resource = URI.parse('ash://workspace/a%2Fb?name=a%26b#x%23y');
 	assert.deepEqual([resource.path, resource.query, resource.fragment], ['/a/b', 'name=a&b', 'x#y']);
 	assert.deepEqual(resource.toEncodedComponents(), {
-		scheme: 'ash',
-		authority: 'workspace',
-		path: '/a%2Fb',
-		query: 'name=a%26b',
-		fragment: 'x%23y',
+		scheme: 'ash', authority: 'workspace', path: '/a%2Fb', query: 'name=a%26b', fragment: 'x%23y',
 	});
 	assert.equal(URI.revive(JSON.parse(JSON.stringify(resource))).toString(), resource.toString());
 });
@@ -115,40 +111,14 @@ test('URI.isUri accepts URI behavior and rejects serialized components', () => {
 	const resource = URI.file('/workspace/a.txt');
 	assert.equal(URI.isUri(resource), true);
 	assert.equal(URI.isUri(resource.toJSON()), false);
-	assert.equal(
-		URI.isUri({
-			scheme: 'file',
-			authority: '',
-			path: '/workspace/a.txt',
-			query: '',
-			fragment: '',
-			fsPath: '/workspace/a.txt',
-			with() {
-				return this;
-			},
-			toString() {
-				return 'file:///workspace/a.txt';
-			},
-		}),
-		true,
-	);
-	assert.equal(
-		URI.isUri({
-			scheme: 'file',
-			authority: '',
-			path: '/workspace/a.txt',
-			query: '',
-			fragment: '',
-			fsPath: 1,
-			with() {
-				return this;
-			},
-			toString() {
-				return 'file:///workspace/a.txt';
-			},
-		}),
-		false,
-	);
+	assert.equal(URI.isUri({
+		scheme: 'file', authority: '', path: '/workspace/a.txt', query: '', fragment: '',
+		fsPath: '/workspace/a.txt', with() { return this; }, toString() { return 'file:///workspace/a.txt'; },
+	}), true);
+	assert.equal(URI.isUri({
+		scheme: 'file', authority: '', path: '/workspace/a.txt', query: '', fragment: '',
+		fsPath: 1, with() { return this; }, toString() { return 'file:///workspace/a.txt'; },
+	}), false);
 	assert.equal(URI.isUri('file:///workspace/a.txt'), false);
 });
 
@@ -162,13 +132,7 @@ test('URI.with changes decoded components while retaining unchanged encoded boun
 });
 
 test('URI.toString(true) uses minimal component encoding', () => {
-	const resource = URI.from({
-		scheme: 'ash',
-		authority: 'workspace',
-		path: '/é?中#',
-		query: 'q=é#中',
-		fragment: 'x#中',
-	});
+	const resource = URI.from({ scheme: 'ash', authority: 'workspace', path: '/é?中#', query: 'q=é#中', fragment: 'x#中' });
 	assert.equal(resource.toString(), 'ash://workspace/%C3%A9%3F%E4%B8%AD%23?q=%C3%A9%23%E4%B8%AD#x%23%E4%B8%AD');
 	assert.equal(resource.toString(true), 'ash://workspace/é%3F中%23?q=é%23中#x#中');
 });
@@ -190,12 +154,7 @@ test('URI.fsPath uses the host filesystem separators', () => {
 for (const os of ['windows', 'mac', 'linux'] as const) {
 	test(`file URI operations respect ${os} roots and separators`, () => {
 		// Platform detection runs once at module load, so each host contract needs an isolated process.
-		const result = spawnSync(
-			process.execPath,
-			[
-				'--input-type=module',
-				'--eval',
-				`
+		const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
 			globalThis.ash = { environment: { runtime: 'node', os: ${JSON.stringify(os)} } };
 			const { URI } = await import(${JSON.stringify(new URL('../../common/uri.js', import.meta.url).href)});
 			const { dirname } = await import(${JSON.stringify(new URL('../../common/resources.js', import.meta.url).href)});
@@ -215,10 +174,7 @@ for (const os of ['windows', 'mac', 'linux'] as const) {
 				singleNameParent: URI.parse('file://server/share/').joinPathSegment('..').toString(),
 				remoteChild: URI.joinPath(URI.parse('ash://workspace/root'), 'nested\\\\item.txt').toString(),
 			}));
-		`,
-			],
-			{ encoding: 'utf8' },
-		);
+		`], { encoding: 'utf8' });
 		assert.equal(result.status, 0, result.stderr);
 		const windows = os === 'windows';
 		assert.deepEqual(JSON.parse(result.stdout), {
@@ -265,7 +221,10 @@ test('URI.joinPathSegment preserves components and encodes one child name', () =
 	assert.deepEqual([child.scheme, child.authority, child.path, child.query, child.fragment], ['ash', 'workspace', '/root/hello %中?#.txt', 'rev=2', 'anchor']);
 	assert.equal(URI.file('/tmp/root/').joinPathSegment('a b').toString(), 'file:///tmp/root/a%20b');
 	assert.equal(URI.file('/tmp/root').joinPathSegment('..').toString(), isWindows ? 'file:///tmp' : 'file:///tmp/');
-	const directories = [...(isWindows ? [URI.file('C:\\project\\src'), URI.file('\\\\server\\share\\src')] : []), URI.parse('vscode-remote://ssh-remote+host/workspace?rev=1#anchor')];
+	const directories = [
+		...(isWindows ? [URI.file('C:\\project\\src'), URI.file('\\\\server\\share\\src')] : []),
+		URI.parse('vscode-remote://ssh-remote+host/workspace?rev=1#anchor'),
+	];
 	for (const directory of directories) {
 		for (const name of ['plain.txt', 'a % 中.txt', 'question?#.txt']) {
 			const base = directory.path.endsWith('/') ? directory.path.slice(0, -1) : directory.path;

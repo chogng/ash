@@ -15,8 +15,8 @@ export class RemoteConnectionRecoveryCoordinator {
 	constructor(
 		private readonly host: RemoteConnectionRecoveryHost,
 		private readonly launcher: RemoteAppServerProcessLauncher,
-		private readonly prepareForConnectionReplacement: () => void = () => {},
-	) {}
+		private readonly prepareForConnectionReplacement: () => void = () => { },
+	) { }
 
 	reconnect(): Promise<RemoteAgentReconnectResult> {
 		return this.runExclusive(() => this.performReconnect());
@@ -30,13 +30,11 @@ export class RemoteConnectionRecoveryCoordinator {
 		if (this.operation) return Promise.reject(new Error('Remote connection recovery is already in progress'));
 		const operation = operationFactory();
 		this.operation = operation;
-		void operation
-			.finally(() => {
-				if (this.operation === operation) this.operation = undefined;
-			})
-			.catch(() => {
-				// The caller observes the original operation; this branch only settles finally().
-			});
+		void operation.finally(() => {
+			if (this.operation === operation) this.operation = undefined;
+		}).catch(() => {
+			// The caller observes the original operation; this branch only settles finally().
+		});
 		return operation;
 	}
 

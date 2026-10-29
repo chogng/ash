@@ -42,11 +42,9 @@ class RemoteEndpoint extends Disposable implements ISocket {
 			this.data.fire(VSBuffer.fromString(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'));
 		}
 	}
-	end(): void {
-		this.ended.fire();
-	}
-	async drain(): Promise<void> {}
-	traceSocketEvent(_type: SocketDiagnosticsEventType): void {}
+	end(): void { this.ended.fire(); }
+	async drain(): Promise<void> { }
+	traceSocketEvent(_type: SocketDiagnosticsEventType): void { }
 }
 
 suite('Desktop Workbench Agent Host selection', () => {
@@ -57,7 +55,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	const subscriptions = new Set<(value: unknown) => void>();
 	const ipcListeners = new Map<string, Set<(value: unknown) => void>>();
 	const disabled = new Set<string>();
-	const handshakes: { channel: string; params: unknown }[] = [];
+	const handshakes: { channel: string; params: unknown; }[] = [];
 	let Service: typeof import('../../electron-browser/agentHostService.js').WorkbenchAgentHostService;
 	let createRendererApi: typeof import('../../../../electron-browser/rendererApi.js').createElectronRendererApi;
 	let testDom: IDisposable;
@@ -69,50 +67,28 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let directoryAuthorized: boolean;
 	let beforeWorkspaceRead: (() => Promise<void>) | undefined;
 	let beforeHostOpen: (() => Promise<void>) | undefined;
-	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string } }[] = [];
+	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string; }; }[] = [];
 	const hostCloses: string[] = [];
-	const directoryBindings: { readonly channel: string; readonly dirs: unknown }[] = [];
+	const directoryBindings: { readonly channel: string; readonly dirs: unknown; }[] = [];
 	let requestedWorkspace: URI;
 	let tracker: DisposableTracker;
 	let tracking: ReturnType<typeof installDisposableTracker>;
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
-			send() {},
+			send() { },
 			on: (channel, listener) => {
 				subscriptions.add(listener);
 				const listeners = ipcListeners.get(channel) ?? new Set();
 				ipcListeners.set(channel, listeners);
 				listeners.add(listener);
-				return {
-					dispose: () => {
-						subscriptions.delete(listener);
-						listeners.delete(listener);
-						if (listeners.size === 0) ipcListeners.delete(channel);
-					},
-				};
+				return { dispose: () => { subscriptions.delete(listener); listeners.delete(listener); if (listeners.size === 0) ipcListeners.delete(channel); } };
 			},
 			invoke: async (channel, payload) => {
-				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) {
-					hostOpens.push(payload as (typeof hostOpens)[number]);
-					await beforeHostOpen?.();
-					return;
-				}
-				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) {
-					hostCloses.push((payload as { id: string }).id);
-					return;
-				}
+				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) { hostOpens.push(payload as typeof hostOpens[number]); await beforeHostOpen?.(); return; }
+				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) { hostCloses.push((payload as { id: string; }).id); return; }
 				if (channel === 'ash:remote:connection') return windowConnection;
-				if (channel === 'ash:workspace:context:read') {
-					await beforeWorkspaceRead?.();
-					return {
-						id: 'desktop',
-						folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }],
-					};
-				}
-				if (channel.endsWith(':initialized')) {
-					onInitialized?.(channel);
-					return;
-				}
+				if (channel === 'ash:workspace:context:read') { await beforeWorkspaceRead?.(); return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] }; }
+				if (channel.endsWith(':initialized')) { onInitialized?.(channel); return; }
 				assert.ok(channel.endsWith(':acquire'), channel);
 				acquired.push(channel);
 				if (disabled.has(channel)) return { enabled: false };
@@ -124,66 +100,27 @@ suite('Desktop Workbench Agent Host selection', () => {
 					const frame = JSON.parse(new TextDecoder().decode(message.data));
 					if (frame.method === 'initialize') {
 						handshakes.push({ channel, params: frame.params });
-						pair.port2.postMessage({
-							data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'),
-						});
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
 					} else if (frame.method === 'config/directoryGrants/read') {
-						pair.port2.postMessage({
-							data: new TextEncoder().encode(
-								JSON.stringify({
-									jsonrpc: '2.0',
-									id: frame.id,
-									result: {
-										dir: frame.params.path,
-										permissions: directoryAuthorized ? [] : undefined,
-									},
-								}) + '\n',
-							),
-						});
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: directoryAuthorized ? [] : undefined } }) + '\n') });
 					} else if (frame.method === 'env/dirs/set') {
 						directoryBindings.push({ channel, dirs: frame.params.dirs });
 						const response = failDirectoryBinding
-							? {
-									jsonrpc: '2.0',
-									id: frame.id,
-									error: {
-										code: -32043,
-										message: 'restore rejected',
-										data: { kind: 'PermissionRequired' },
-									},
-								}
-							: {
-									jsonrpc: '2.0',
-									id: frame.id,
-									result: {
-										dirs: frame.params.dirs.map((dir: { id: string; path: string }) => ({
-											id: dir.id,
-											path: dir.path,
-											permissions: [],
-										})),
-									},
-								};
+							? { jsonrpc: '2.0', id: frame.id, error: { code: -32043, message: 'restore rejected', data: { kind: 'PermissionRequired' } } }
+							: { jsonrpc: '2.0', id: frame.id, result: { dirs: frame.params.dirs.map((dir: { id: string; path: string; }) => ({ id: dir.id, path: dir.path, permissions: [] })) } };
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify(response) + '\n') });
 						onDirectoryBound?.(channel);
 					}
 				});
-				dom.window.dispatchEvent(
-					new dom.window.MessageEvent('message', {
-						source: dom.window as unknown as Window,
-						data: { nonce: (payload as { nonce: string }).nonce },
-						ports: [pair.port1 as unknown as MessagePort],
-					}),
-				);
-				return {
-					enabled: true,
-					byteStream: true,
-					protocolVersion: 1,
-					workspaceId: 'desktop',
-					workspaceRoot: '/workspace',
-				};
+				dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+					source: dom.window as unknown as Window,
+					data: { nonce: (payload as { nonce: string; }).nonce },
+					ports: [pair.port1 as unknown as MessagePort],
+				}));
+				return { enabled: true, byteStream: true, protocolVersion: 1, workspaceId: 'desktop', workspaceRoot: '/workspace' };
 			},
 		},
-		ipcMessagePort: { acquire: () => ({ dispose() {} }) },
+		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};
@@ -196,8 +133,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 	suiteTeardown(() => {
 		testDom.dispose();
-		if (previousGlobals) Object.defineProperty(globalThis, 'ash', previousGlobals);
-		else Reflect.deleteProperty(globalThis, 'ash');
+		if (previousGlobals) Object.defineProperty(globalThis, 'ash', previousGlobals); else Reflect.deleteProperty(globalThis, 'ash');
 		dom.window.close();
 	});
 	setup(() => {
@@ -216,23 +152,18 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 	teardown(() => {
 		try {
-			for (const pair of ports.splice(0)) {
-				pair.port1.close();
-				pair.port2.close();
-			}
+			for (const pair of ports.splice(0)) { pair.port1.close(); pair.port2.close(); }
 			assert.equal(subscriptions.size, 0);
 			tracker.assertNoLeaks();
-		} finally {
-			tracking[Symbol.dispose]();
-		}
+		} finally { tracking[Symbol.dispose](); }
 	});
 
 	function options(connection: RemoteAgentConnection) {
 		return {
 			connection,
 			capabilities: { browser: true, appTools: true, textDocuments: true },
-			onDidSuspendOS: () => ({ dispose() {} }),
-			onDidResumeOS: () => ({ dispose() {} }),
+			onDidSuspendOS: () => ({ dispose() { } }),
+			onDidResumeOS: () => ({ dispose() { } }),
 		} satisfies ConstructorParameters<typeof Service>[0];
 	}
 	function register(services: InstantiationService, logger: LogService): void {
@@ -243,9 +174,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 
 	const mainProcess: IMainProcessService = {
 		_serviceBrand: undefined,
-		registerChannel: () => {
-			throw new Error('Unexpected renderer channel registration');
-		},
+		registerChannel: () => { throw new Error('Unexpected renderer channel registration'); },
 		getChannel: name => ({
 			listen: () => Event.None,
 			call: async <T>(command: string, argument?: unknown): Promise<T> => {
@@ -253,9 +182,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 				if (name === 'localFilesystem' && ['userDataHome', 'userHome'].includes(command)) result = URI.file('/profile').toString();
 				else if (name === 'localFilesystem' && command === 'readFile') result = { bytes: 'e30=', revision: 'settings-1' };
 				else if (name === 'policy' && command === 'updatePolicyDefinitions') result = {};
-				else if (name === 'logger' && command === 'log') {
-					onLog?.(argument as LogEntry);
-				} else throw new Error(`Unexpected renderer channel call: ${name}/${command}`);
+				else if (name === 'logger' && command === 'log') { onLog?.(argument as LogEntry); }
+				else throw new Error(`Unexpected renderer channel call: ${name}/${command}`);
 				return result as T;
 			},
 		}),
@@ -268,16 +196,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	}
 
 	test('the runtime registry shares one endpoint, isolates equal servers with different roots, and retires window scopes', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false, agentHosts: true },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const first = { name: 'Build', host: 'build', workspace: '/repo' };
 		const nested = { name: 'Nested', host: 'build', workspace: '/repo/nested' };
@@ -292,23 +211,14 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(registry.connections.length, 1, 'completed acquisition is owned by the runtime rather than its caller signal');
 		const second = await registry.connect(nested, new AbortController().signal);
 		assert.notEqual(host.id, second.id);
-		assert.deepEqual(
-			hostOpens.map(open => open.connection.workspace),
-			['/repo', '/repo/nested'],
-		);
-		assert.equal(
-			registry.connections.every(entry => entry.state === 'ready'),
-			true,
-		);
-		assert.deepEqual(
-			directoryBindings.slice(1).map(entry => entry.dirs),
-			[[{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }], [{ id: `agent-host:${second.id}`, path: '/repo/nested', grant: { type: 'config' } }]],
-		);
+		assert.deepEqual(hostOpens.map(open => open.connection.workspace), ['/repo', '/repo/nested']);
+		assert.equal(registry.connections.every(entry => entry.state === 'ready'), true);
+		assert.deepEqual(directoryBindings.slice(1).map(entry => entry.dirs), [
+			[{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }],
+			[{ id: `agent-host:${second.id}`, path: '/repo/nested', grant: { type: 'config' } }],
+		]);
 		registry.disconnect(host.id);
-		assert.deepEqual(
-			registry.connections.map(entry => entry.id),
-			[second.id],
-		);
+		assert.deepEqual(registry.connections.map(entry => entry.id), [second.id]);
 		host.dispose();
 		assert.deepEqual(hostCloses, [host.id]);
 		renderer.dispose();
@@ -317,16 +227,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('disconnecting a pending runtime endpoint rejects acquisition and its late Main result cannot publish a host', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false, agentHosts: true },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const opening = new DeferredPromise<void>();
 		beforeHostOpen = () => opening.p;
@@ -340,23 +241,11 @@ suite('Desktop Workbench Agent Host selection', () => {
 		await Promise.resolve();
 		assert.equal(registry.connections.length, 0);
 		assert.deepEqual(hostCloses, [id]);
-		assert.equal(
-			acquired.some(channel => channel.includes(id)),
-			false,
-		);
+		assert.equal(acquired.some(channel => channel.includes(id)), false);
 	});
 
 	test('synchronous registry observers can retire a starting endpoint before Main acquisition', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false, agentHosts: true },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		using listener = registry.onDidChangeConnections(() => {
 			const first = registry.connections[0];
@@ -368,16 +257,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('runtime reconnect waits for directory rebind, retains its domain scope, and reports failed restoration', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false, agentHosts: true },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const host = await registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
 		const generation = host.api.appServer.connectionGeneration;
@@ -401,12 +281,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(registry.connections[0]!.state, 'crashed');
 		assert.equal(registry.connections[0]!.host, host);
 		const unavailable = new DeferredPromise<void>();
-		using deadline = new TimeoutTimer(() => {
-			void unavailable.error(new Error('Host carrier did not retire'));
-		}, 5_000);
-		using recoveryChanged = host.api.appServer.recovery!.onDidChange(() => {
-			if (host.api.appServer.recovery!.status === 'unavailable') void unavailable.complete();
-		});
+		using deadline = new TimeoutTimer(() => { void unavailable.error(new Error('Host carrier did not retire')); }, 5_000);
+		using recoveryChanged = host.api.appServer.recovery!.onDidChange(() => { if (host.api.appServer.recovery!.status === 'unavailable') void unavailable.complete(); });
 		ports.at(-1)!.port2.postMessage({ intentional: true });
 		await unavailable.p;
 		assert.equal(registry.connections[0]!.state, 'stopped', 'carrier state must override a previous directory restoration failure');
@@ -418,62 +294,30 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
-		assert.deepEqual(directoryBindings, [
-			{
-				channel: 'ash:app-server:acquire',
-				dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
-			},
-		]);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 		const localReconnected = new DeferredPromise<void>();
-		onInitialized = channel => {
-			if (channel === 'ash:app-server:local:initialized') void localReconnected.complete();
-		};
+		onInitialized = channel => { if (channel === 'ash:app-server:local:initialized') void localReconnected.complete(); };
 		restart('ash:app-server:local:restart');
 		await localReconnected.p;
 		assert.equal(directoryBindings.length, 1, 'local device recovery must not rebind the workspace');
 		requestedWorkspace = createSshRemoteWorkspaceUri('host', '/next-project');
 		const rebound = new DeferredPromise<void>();
-		onDirectoryBound = () => {
-			void rebound.complete();
-		};
+		onDirectoryBound = () => { void rebound.complete(); };
 		restart('ash:app-server:restart');
 		await rebound.p;
 		assert.deepEqual(directoryBindings, [
-			{
-				channel: 'ash:app-server:acquire',
-				dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
-			},
-			{
-				channel: 'ash:app-server:acquire',
-				dirs: [{ id: 'workspace-folder', path: '/next-project', grant: { type: 'config' } }],
-			},
+			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] },
+			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/next-project', grant: { type: 'config' } }] },
 		]);
 	});
 
 	test('cancelled startup authorization keeps the renderer available and explicit retry shares the ready carrier', async () => {
 		directoryAuthorized = false;
 		let prompts = 0;
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false },
-			{
-				requestDirectoryPermissions: async () => {
-					prompts++;
-					return 'cancel';
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => { prompts++; return 'cancel'; },
+		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
 		assert.equal(recovery.status, 'failed');
@@ -491,42 +335,18 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(recovery.error, undefined);
 		assert.equal(renderer.appServer.connectionGeneration, generation);
 		assert.equal(acquired.length, acquisitions);
-		assert.deepEqual(directoryBindings, [
-			{
-				channel: 'ash:app-server:acquire',
-				dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
-			},
-		]);
+		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 	});
 
 	test('startup directory failures still reject renderer creation', async () => {
 		failDirectoryBinding = true;
-		await assert.rejects(
-			createRendererApi(
-				[],
-				{ browser: false },
-				{
-					requestDirectoryPermissions: async () => {
-						throw new Error('Saved grants need no prompt');
-					},
-				},
-				mainProcess,
-			),
-			/restore rejected/,
-		);
+		await assert.rejects(createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); },
+		}, mainProcess), /restore rejected/);
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const states: string[] = [];
 		const failedState = new DeferredPromise<void>();
@@ -540,9 +360,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			void failed.error(new Error('Workspace recovery log was not delivered'));
 			void failedState.error(new Error('Workspace recovery failure was not exposed'));
 		}, 5_000);
-		onLog = entry => {
-			if (entry.message.startsWith('Workspace recovery failed')) void failed.complete(entry);
-		};
+		onLog = entry => { if (entry.message.startsWith('Workspace recovery failed')) void failed.complete(entry); };
 		restart('ash:app-server:restart');
 		const [diagnostic] = await Promise.all([failed.p, failedState.p]);
 		assert.match(String(diagnostic.error), /PermissionRequired|restore rejected/);
@@ -568,16 +386,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('a retired workspace restoration cannot fail a newer ready connection', async () => {
-		using renderer = await createRendererApi(
-			[],
-			{ browser: false },
-			{
-				requestDirectoryPermissions: async () => {
-					throw new Error('Saved grants need no prompt');
-				},
-			},
-			mainProcess,
-		);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const entered = new DeferredPromise<void>();
 		const carrierSettled = new DeferredPromise<void>();
@@ -606,9 +415,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			restart('ash:app-server:restart');
 			await restored.p;
 			assert.equal(recovery.status, 'idle');
-			onLog = entry => {
-				if (entry.message.startsWith('Workspace recovery failed')) void staleFailure.complete();
-			};
+			onLog = entry => { if (entry.message.startsWith('Workspace recovery failed')) void staleFailure.complete(); };
 			void barrier.error(new Error('Obsolete workspace restoration'));
 			await staleFailure.p;
 			assert.equal(recovery.status, 'idle');
@@ -638,11 +445,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using suspend = new Emitter<void>();
 		using resume = new Emitter<void>();
 		register(services, logger);
-		using host = services.createInstance(Service, {
-			...options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }),
-			onDidSuspendOS: suspend.event,
-			onDidResumeOS: resume.event,
-		});
+		using host = services.createInstance(Service, { ...options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }), onDidSuspendOS: suspend.event, onDidResumeOS: resume.event });
 		assert.equal(await host.connect(), true);
 		assert.notEqual(host.client, host.localConnection.client);
 		assert.deepEqual(acquired, ['ash:app-server:local:acquire', 'ash:app-server:acquire']);
@@ -687,11 +490,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const endpoints: RemoteEndpoint[] = [];
 		using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 			supports: connection => connection.id === 24,
-			connect: async () => {
-				const endpoint = new RemoteEndpoint();
-				endpoints.push(endpoint);
-				return endpoint;
-			},
+			connect: async () => { const endpoint = new RemoteEndpoint(); endpoints.push(endpoint); return endpoint; },
 		});
 		const resolutions: unknown[] = [];
 		let extensions: IExtensionHostApi | undefined;
@@ -701,17 +500,13 @@ suite('Desktop Workbench Agent Host selection', () => {
 				resolutions.push({ factories, authority, attempt });
 				return { connectTo: new ManagedRemoteConnection(24), connectionToken: undefined };
 			},
-			initializeRemoteExtensions: async (api: IExtensionHostApi, authority: string) => {
-				assert.equal(authority, 'fixture+host');
-				extensions = api;
-				return api;
-			},
+			initializeRemoteExtensions: async (api: IExtensionHostApi, authority: string) => { assert.equal(authority, 'fixture+host'); extensions = api; return api; },
 		});
 		assert.equal(await host.connect(), true);
 		assert.notEqual(host.client, host.localConnection.client);
 		assert.equal(host.windowExtensions, extensions);
 		assert.deepEqual(resolutions, [{ factories: services.get(IRemoteSocketFactoryService), authority: 'fixture+host', attempt: 1 }]);
-		const remoteHandshake = endpoints[0].handshakes[0] as { capabilities: Record<string, unknown> };
+		const remoteHandshake = endpoints[0].handshakes[0] as { capabilities: Record<string, unknown>; };
 		assert.equal(remoteHandshake.capabilities.appTools, undefined);
 		assert.equal(remoteHandshake.capabilities.directoryGrantsHost, undefined);
 		assert.deepEqual(remoteHandshake.capabilities.textDocuments, { version: 2 });
@@ -736,18 +531,11 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const endpoints: RemoteEndpoint[] = [];
 		using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 			supports: connection => connection.id === 25,
-			connect: async () => {
-				const endpoint = new RemoteEndpoint();
-				endpoints.push(endpoint);
-				return endpoint;
-			},
+			connect: async () => { const endpoint = new RemoteEndpoint(); endpoints.push(endpoint); return endpoint; },
 		});
 		using host = services.createInstance(Service, {
 			...options({ kind: 'remote', generation: 1, authority: 'fixture+host' }),
-			resolveRemoteAuthority: async () => ({
-				connectTo: new ManagedRemoteConnection(25),
-				connectionToken: undefined,
-			}),
+			resolveRemoteAuthority: async () => ({ connectTo: new ManagedRemoteConnection(25), connectionToken: undefined }),
 			initializeRemoteExtensions: async (api: IExtensionHostApi) => {
 				started.complete();
 				await release.p;
@@ -792,8 +580,6 @@ suite('Desktop Workbench Agent Host selection', () => {
 			disabled.clear();
 			using remote = services.createInstance(Service, options({ kind: 'remote', generation: 1, authority: 'fixture+host' }));
 			await assert.rejects(remote.connect(), { message: '此窗口未提供本地 Remote 解析器。' });
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 	});
 });

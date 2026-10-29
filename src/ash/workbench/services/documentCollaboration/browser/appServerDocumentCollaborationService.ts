@@ -26,10 +26,7 @@ import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdat
 export class AppServerDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly connections = new Map<string, Set<AppServerDocumentCollaborationConnection>>();
 
-	constructor(
-		private readonly api: IDocumentCollaborationApi,
-		events: IServerEventApi,
-	) {
+	constructor(private readonly api: IDocumentCollaborationApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method !== 'document/collaboration/update' && event.method !== 'document/collaboration/presence') return;
@@ -73,12 +70,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 		if (roomConnections.size === 0) this.connections.delete(connection.roomId);
 	}
 
-	async submit(
-		connection: AppServerDocumentCollaborationConnection,
-		envelope: DocumentCollaborationEnvelope,
-		document: DocumentNode,
-		signal: AbortSignal,
-	): Promise<DocumentCollaborationSubmitOutcome> {
+	async submit(connection: AppServerDocumentCollaborationConnection, envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
 		throwIfCancelled(signal, 'Submitting a Stanza collaboration update was cancelled');
 		const submitted = await this.api.submit({
 			roomId: connection.roomId,
@@ -90,15 +82,9 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 		});
 		throwIfCancelled(signal, 'Submitting a Stanza collaboration update was cancelled');
 		switch (submitted.status) {
-			case 'accepted':
-				return { kind: 'accepted', update: decodeUpdate(submitted.update, connection.codec) };
-			case 'conflict':
-				return {
-					kind: 'conflict',
-					updates: Object.freeze(submitted.updates.map(update => decodeUpdate(update, connection.codec))),
-				};
-			case 'resync':
-				return { kind: 'resync', snapshot: decodeSnapshot(submitted.snapshot, connection.codec) };
+			case 'accepted': return { kind: 'accepted', update: decodeUpdate(submitted.update, connection.codec) };
+			case 'conflict': return { kind: 'conflict', updates: Object.freeze(submitted.updates.map(update => decodeUpdate(update, connection.codec))) };
+			case 'resync': return { kind: 'resync', snapshot: decodeSnapshot(submitted.snapshot, connection.codec) };
 		}
 	}
 
@@ -126,20 +112,13 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	readonly onDidReceivePresence = this.presenceEmitter.event;
 	readonly onDidFail = this.failureEmitter.event;
 
-	constructor(
-		private readonly service: AppServerDocumentCollaborationService,
-		readonly codec: DocumentCodec,
-		readonly clientId: string,
-		readonly initialSnapshot: DocumentCollaborationSnapshot,
-	) {
+	constructor(private readonly service: AppServerDocumentCollaborationService, readonly codec: DocumentCodec, readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
 		super();
 		this.roomId = initialSnapshot.roomId;
-		this._register(
-			toDisposable(() => {
-				void service.updatePresence(this, undefined, new AbortController().signal).catch(() => undefined);
-				service.remove(this);
-			}),
-		);
+		this._register(toDisposable(() => {
+			void service.updatePresence(this, undefined, new AbortController().signal).catch(() => undefined);
+			service.remove(this);
+		}));
 	}
 
 	readonly roomId: string;
@@ -192,11 +171,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 }
 
 function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, codec: DocumentCodec): DocumentCollaborationSnapshot {
-	return Object.freeze({
-		roomId: value.roomId,
-		version: validateProtocolInteger(value.version, 'version', 0),
-		document: codec.deserialize(value.document),
-	});
+	return Object.freeze({ roomId: value.roomId, version: validateProtocolInteger(value.version, 'version', 0), document: codec.deserialize(value.document) });
 }
 
 function decodeUpdate(value: AppServerDocumentCollaborationUpdate, codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
@@ -209,10 +184,7 @@ function decodeUpdate(value: AppServerDocumentCollaborationUpdate, codec: Docume
 	});
 }
 
-function decodePresence(value: AppServerDocumentCollaborationPresenceSnapshot): {
-	readonly generation: number;
-	readonly presences: readonly DocumentCollaborationPresence[];
-} {
+function decodePresence(value: AppServerDocumentCollaborationPresenceSnapshot): { readonly generation: number; readonly presences: readonly DocumentCollaborationPresence[]; } {
 	return Object.freeze({
 		generation: validateProtocolInteger(value.generation, 'presence generation', 0),
 		presences: Object.freeze(value.presences.map(presence => Object.freeze({ clientId: presence.clientId, selection: decodeSelection(presence.selection) }))),
@@ -228,30 +200,16 @@ function decodeSelection(value: string): DocumentSelection {
 	}
 	const selection = expectRecord(parsed, 'Stanza collaboration presence selection');
 	switch (selection.kind) {
-		case 'all':
-			return Object.freeze({ kind: 'all' });
-		case 'node':
-			return Object.freeze({
-				kind: 'node',
-				nodeId: expectString(selection.nodeId, 'Stanza collaboration node selection nodeId'),
-			});
-		case 'text':
-			return Object.freeze({
-				kind: 'text',
-				anchor: decodePoint(selection.anchor, 'Stanza collaboration text selection anchor'),
-				head: decodePoint(selection.head, 'Stanza collaboration text selection head'),
-			});
-		default:
-			throw new TypeError('Stanza collaboration presence selection has an unknown kind');
+		case 'all': return Object.freeze({ kind: 'all' });
+		case 'node': return Object.freeze({ kind: 'node', nodeId: expectString(selection.nodeId, 'Stanza collaboration node selection nodeId') });
+		case 'text': return Object.freeze({ kind: 'text', anchor: decodePoint(selection.anchor, 'Stanza collaboration text selection anchor'), head: decodePoint(selection.head, 'Stanza collaboration text selection head') });
+		default: throw new TypeError('Stanza collaboration presence selection has an unknown kind');
 	}
 }
 
-function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number } {
+function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number; } {
 	const point = expectRecord(value, name);
-	return Object.freeze({
-		nodeId: expectString(point.nodeId, `${name} nodeId`),
-		offset: validateProtocolInteger(point.offset, `${name} offset`, 0),
-	});
+	return Object.freeze({ nodeId: expectString(point.nodeId, `${name} nodeId`), offset: validateProtocolInteger(point.offset, `${name} offset`, 0) });
 }
 
 function expectRecord(value: unknown, name: string): Readonly<Record<string, unknown>> {

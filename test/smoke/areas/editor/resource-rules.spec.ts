@@ -37,10 +37,7 @@ test('resource rules control readonly editing, automatic reveal and saved histor
 		await page.evaluate(async () => {
 			const root = await navigator.storage.getDirectory();
 			const folder = await root.getDirectoryHandle(`resource-rules-${crypto.randomUUID()}`, { create: true });
-			for (const [name, content] of [
-				['main.ts', 'const value = 1;\n'],
-				['main.rs', 'fn main() {}\n'],
-			] as const) {
+			for (const [name, content] of [['main.ts', 'const value = 1;\n'], ['main.rs', 'fn main() {}\n']] as const) {
 				const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
 				await writer.write(content);
 				await writer.close();
@@ -62,9 +59,7 @@ test('resource rules control readonly editing, automatic reveal and saved histor
 	await page.keyboard.press('ControlOrMeta+S');
 	await expect(group.element.getByRole('tab', { name: 'main.ts', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await workbench.quickaccess.runCommand('workbench.action.localHistory.open');
-	const versions = workbench.quickaccess.items.filter({
-		has: page.locator('.ash-quick-pick-row-description').getByText('main.ts', { exact: true }),
-	});
+	const versions = workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('main.ts', { exact: true }) });
 	await expect(versions).toHaveCount(1);
 	await versions.first().click();
 	await editor.waitForEditorContents(text => text === 'const saved = 2;');

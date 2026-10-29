@@ -4,10 +4,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 export type ExtensionsCapabilityKind = 'skill' | 'mcp' | 'connector' | 'theme' | 'language' | 'localization' | 'executable' | 'editorExtension' | 'asset';
 
 /** Product windows declared by a package manifest, separate from execution platforms. */
-export enum ExtensionUiTarget {
-	IDE = 'ide',
-	Agents = 'agents',
-}
+export enum ExtensionUiTarget { IDE = 'ide', Agents = 'agents' }
 
 export interface ExtensionsRecommendationEnvironment {
 	readonly platform: 'macos' | 'linux' | 'windows' | 'other';
@@ -52,7 +49,7 @@ export interface ExtensionsPackageSummary {
 }
 
 export interface ExtensionsCapabilityDescriptor {
-	readonly reference: { readonly id: string };
+	readonly reference: { readonly id: string; };
 	readonly kind: ExtensionsCapabilityKind;
 	readonly id: string;
 	readonly contractVersion: string;
@@ -135,41 +132,16 @@ export interface ExtensionsBrowseSnapshot {
 }
 
 export type ExtensionsActivationSpec =
-	| { readonly kind: 'skill'; readonly contractVersion: string; readonly resource: { readonly id: string } }
-	| {
-			readonly kind: 'mcp';
-			readonly contractVersion: string;
-			readonly transport:
-				| {
-						readonly type: 'stdio';
-						readonly executable: { readonly id: string };
-						readonly args: readonly string[];
-				  }
-				| { readonly type: 'streamableHttp'; readonly url: string };
-			readonly networkHosts: readonly string[];
-	  }
-	| {
-			readonly kind: 'connector';
-			readonly contractVersion: string;
-			readonly authenticationProvider: string | null;
-			readonly mcp: { readonly id: string } | null;
-	  }
-	| { readonly kind: 'theme'; readonly contractVersion: string; readonly manifest: { readonly id: string } }
-	| { readonly kind: 'language'; readonly contractVersion: string; readonly manifest: { readonly id: string } }
-	| { readonly kind: 'localization'; readonly contractVersion: string; readonly catalog: { readonly id: string } }
-	| {
-			readonly kind: 'executable';
-			readonly contractVersion: string;
-			readonly runtime: 'direct' | 'node';
-			readonly entrypoint: { readonly id: string };
-	  };
+	| { readonly kind: 'skill'; readonly contractVersion: string; readonly resource: { readonly id: string; }; }
+	| { readonly kind: 'mcp'; readonly contractVersion: string; readonly transport: { readonly type: 'stdio'; readonly executable: { readonly id: string; }; readonly args: readonly string[]; } | { readonly type: 'streamableHttp'; readonly url: string; }; readonly networkHosts: readonly string[]; }
+	| { readonly kind: 'connector'; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string; } | null; }
+	| { readonly kind: 'theme'; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: 'language'; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: 'localization'; readonly contractVersion: string; readonly catalog: { readonly id: string; }; }
+	| { readonly kind: 'executable'; readonly contractVersion: string; readonly runtime: 'direct' | 'node'; readonly entrypoint: { readonly id: string; }; };
 
 export interface ExtensionsAcquiredCapability {
-	readonly lease: {
-		readonly id: string;
-		readonly capability: { readonly id: string };
-		readonly installationId: string;
-	};
+	readonly lease: { readonly id: string; readonly capability: { readonly id: string; }; readonly installationId: string; };
 	readonly spec: ExtensionsActivationSpec;
 }
 
@@ -195,14 +167,7 @@ export interface AshExtensionSource {
 /** Frontend Extensions business capability, independent of distribution and package internals. */
 export interface IExtensionManagementService {
 	recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment>;
-	searchPage(
-		query: string,
-		options: ExtensionsSearchOptions & {
-			readonly sourceId: string;
-			readonly pageSize: number;
-			readonly cursor?: string;
-		},
-	): Promise<ExtensionsSearchPage>;
+	searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage>;
 	readonly onDidChangeInstalled: Event<void>;
 	sources(): Promise<ExtensionRegistrySources>;
 	addSource(source: AshExtensionSource, expectedRevision: number): Promise<ExtensionRegistrySources>;
@@ -212,7 +177,7 @@ export interface IExtensionManagementService {
 	refreshBrowse(query: string, options?: ExtensionsSearchOptions): Promise<ExtensionsBrowseSnapshot>;
 	search(query: string, options?: ExtensionsSearchOptions): Promise<readonly ExtensionsPackageSummary[]>;
 	get(packageId: string, version?: string): Promise<ExtensionsPackageDetails>;
-	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: ExtensionsPackageRef }>;
+	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: ExtensionsPackageRef; }>;
 	install(packageId: string, version?: string): Promise<ExtensionsInstalledPackage>;
 	update(installationId: string, version?: string): Promise<ExtensionsInstalledPackage>;
 	uninstall(installationId: string, mode?: 'ifUnused' | 'whenUnused'): Promise<void>;
@@ -223,7 +188,7 @@ export interface IExtensionManagementService {
 	setEditorExtensionPolicy(extension: ExtensionsEditorExtensionPolicy, action: ExtensionsEditorExtensionPolicyAction, expectedRevision: number): Promise<ExtensionsEditorExtensions>;
 	acquireCapability(capabilityId: string): Promise<ExtensionsAcquiredCapability>;
 	releaseCapability(leaseId: string): Promise<void>;
-	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string }>;
+	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string; }>;
 }
 
 export const IExtensionManagementService = createServiceIdentifier<IExtensionManagementService>('extensionManagementService');

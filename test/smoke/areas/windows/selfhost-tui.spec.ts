@@ -13,9 +13,7 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 	test.skip(process.env.ASH_SELFHOST_ACCEPTANCE !== '1', 'Requires the Prepare Ash Code Debug task in this checkout.');
 	test.setTimeout(180_000);
 	const root = testWorkspace.directory;
-	const launch = JSON.parse(await readFile(join(repository, '.vscode/launch.json'), 'utf8')) as {
-		configurations: Array<Record<string, unknown>>;
-	};
+	const launch = JSON.parse(await readFile(join(repository, '.vscode/launch.json'), 'utf8')) as { configurations: Array<Record<string, unknown>>; };
 	const template = launch.configurations.find(candidate => candidate.name === 'Ash Code (TUI)');
 	if (!template) throw new Error('Missing Ash Code self-host launch configuration');
 	const configuration = JSON.parse(JSON.stringify(template).replaceAll('${workspaceFolder}', repository.replaceAll('\\', '/'))) as Record<string, unknown>;
@@ -35,13 +33,7 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 	const suffix = process.platform === 'win32' ? '.exe' : '';
 	const daemon = join(repository, '.build/cargo/ci-test', `ash-app-server-daemon${suffix}`);
 	const registration = await registerRunResource({ executable: daemon, profile });
-	const environment = {
-		...(configuration.env as object),
-		...(platform?.env as object),
-		ASH_HOME: profile,
-		CODEX_HOME: join(root, 'codex'),
-		ASH_ANNOUNCEMENT_URL: '',
-	};
+	const environment = { ...(configuration.env as object), ...(platform?.env as object), ASH_HOME: profile, CODEX_HOME: join(root, 'codex'), ASH_ANNOUNCEMENT_URL: '' };
 	await mkdir(environment.CODEX_HOME);
 	configuration.env = environment;
 	if (platform) platform.env = environment;
@@ -77,10 +69,7 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 		expect(nativePid).toBeGreaterThan(0);
 		expect(isProcessRunning(nativePid)).toBe(true);
 		await writeFile(info.outputPath('native-launch.log'), output);
-		await info.attach('native-launch-output', {
-			path: info.outputPath('native-launch.log'),
-			contentType: 'text/plain',
-		});
+		await info.attach('native-launch-output', { path: info.outputPath('native-launch.log'), contentType: 'text/plain' });
 		await debug.getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
 		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
 		await expect(debug.getByRole('status')).toContainText('running');
@@ -93,7 +82,7 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 		await input.press('Enter');
 		await expect(terminal).toContainText('Search help');
 		await page.screenshot({ path: info.outputPath('tui-native-debug.png') });
-		if (!(await debug.isVisible())) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		if (!await debug.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		await debug.getByRole('button', { name: 'Stop', exact: true }).click();
 		await expect(debug.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
 		await expect.poll(() => isProcessRunning(nativePid)).toBe(false);
@@ -103,18 +92,12 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 			await writeFile(info.outputPath(`native-${log}`), await readFile(join(profile, 'run', log)));
 		}
 		const terminalTab = page.getByRole('tab', { name: 'Terminal', exact: true }).first();
-		if (await terminalTab.isVisible().catch(() => false)) await terminalTab.click({ timeout: 2_000 }).catch(() => {});
+		if (await terminalTab.isVisible().catch(() => false)) await terminalTab.click({ timeout: 2_000 }).catch(() => { });
 		await writeFile(info.outputPath('native-terminal.log'), await workbench.terminal.activeInstance.innerText({ timeout: 2_000 }).catch(() => ''));
-		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl').catch(() => {});
-		await writeFile(
-			info.outputPath('native-completion.log'),
-			(await page
-				.locator('.ash-debug-console-output')
-				.textContent()
-				.catch(() => '')) ?? '',
-		);
+		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl').catch(() => { });
+		await writeFile(info.outputPath('native-completion.log'), await page.locator('.ash-debug-console-output').textContent().catch(() => '') ?? '');
 		const stop = debug.getByRole('button', { name: 'Stop', exact: true });
-		if (await stop.isVisible().catch(() => false)) await stop.click({ timeout: 5_000 }).catch(() => {});
+		if (await stop.isVisible().catch(() => false)) await stop.click({ timeout: 5_000 }).catch(() => { });
 		// The integrated terminal owns the launch shell and its descendants. End
 		// those clients before stopping their daemon, otherwise they can reconnect
 		// while Windows is still releasing the profile's SQLite mappings.
@@ -124,15 +107,7 @@ test('Ash debugs its real Code TUI in the integrated terminal', { tag: ['@electr
 			await expect(workbench.terminal.instances).toHaveCount(0);
 		}
 		await runningApplication.close();
-		await execute(daemon, ['stop'], {
-			env: {
-				...process.env,
-				ASH_HOME: profile,
-				ASH_APP_SERVER_PATH: join(repository, '.build/cargo/ci-test', `ash-app-server${suffix}`),
-			},
-			windowsHide: true,
-			timeout: 30_000,
-		});
+		await execute(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: join(repository, '.build/cargo/ci-test', `ash-app-server${suffix}`) }, windowsHide: true, timeout: 30_000 });
 		await registration.dispose();
 		const owned = relative(tmpdir(), profile);
 		if (isAbsolute(owned) || !owned.startsWith('ash-tui-') || owned.includes('..')) throw new Error('Unsafe TUI profile cleanup path');

@@ -17,13 +17,13 @@ interface ProductIconsPluginOptions {
 }
 
 interface ProductIconsServer extends RebuildServer {
-	readonly watcher: RebuildServer['watcher'] & { add(path: string): unknown };
+	readonly watcher: RebuildServer['watcher'] & { add(path: string): unknown; };
 }
 
 export type AshProductIconsPlugin = Omit<Plugin, 'configureServer' | 'handleHotUpdate' | 'buildStart'> & {
 	readonly configureServer: (server: ProductIconsServer) => void;
 	readonly buildStart: () => Promise<void>;
-	readonly handleHotUpdate: (context: { readonly file: string }) => [] | undefined;
+	readonly handleHotUpdate: (context: { readonly file: string; }) => [] | undefined;
 };
 
 /**
@@ -43,7 +43,9 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 		resolve(repository, 'build/resources/icons/generate.ts'),
 		resolve(repository, 'build/resources/icons/generate-to-ts.ts'),
 		resolve(repository, 'build/lib/generatedTypeScript.ts'),
+		resolve(repository, 'build/format.ts'),
 		resolve(repository, 'pnpm-lock.yaml'),
+		resolve(repository, 'tsfmt.json'),
 		resolve(repository, '.prettierrc.toml'),
 	];
 	const accepts = (path: string): boolean =>

@@ -37,9 +37,7 @@ test('ListView refreshes retained row geometry when a content splice changes del
 			assert.equal(second.style.top, `${height}px`);
 			assert.equal(view.element.style.height, `${height * 2}px`);
 		}
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('List navigates by labels without taking text input or modifier shortcuts', () => {
@@ -72,9 +70,7 @@ test('List navigates by labels without taking text input or modifier shortcuts',
 		press('c');
 		assert.equal(list.activeItem, 'Charlie');
 		assert.equal(list.element.getAttribute('aria-activedescendant'), list.row(3)!.id);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('List paging reaches the visible edge before scrolling to the next page', async () => {
@@ -103,9 +99,7 @@ test('List paging reaches the visible edge before scrolling to the next page', a
 		await list.focusPreviousPage();
 		assert.equal(list.activeIndex, 0);
 		assert.equal(viewport.scrollTop, 0);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('List range selection retains its anchor through pointer, keyboard and row changes', () => {
@@ -135,33 +129,27 @@ test('List range selection retains its anchor through pointer, keyboard and row 
 		click(3, isMacintosh ? { metaKey: true } : { ctrlKey: true });
 		assert.deepEqual(list.selection, ['Second', 'Fourth']);
 		assert.equal(list.element.getAttribute('aria-multiselectable'), 'true');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('List keeps single selection unless multiple selection is enabled', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using list = new List<string>(dom.window.document.body, {
-			renderItem: item => h(dom.window.document, 'span', undefined, item),
-		});
+		using list = new List<string>(dom.window.document.body, { renderItem: item => h(dom.window.document, 'span', undefined, item) });
 		list.items = ['First', 'Second'];
 		list.row(0)!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
 		list.row(1)!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
 		assert.deepEqual(list.selection, ['Second']);
 		assert.equal(list.element.hasAttribute('aria-multiselectable'), false);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('ListView owns flat rows and sizing without Widget selection policy', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const view = new ListView<string>(dom.window.document.body, {
-		getId: item => item,
+		getId: (item) => item,
 		getHeight: () => 24,
-		renderItem: item => {
+		renderItem: (item) => {
 			const label = h(dom.window.document, 'span');
 			label.textContent = item;
 			return label;
@@ -198,9 +186,7 @@ test('ListView can host independently focusable tree items without duplicating t
 		const item = row.querySelector<HTMLElement>('[role="treeitem"]')!;
 		item.focus();
 		assert.equal(dom.window.document.activeElement, item);
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('ListView keeps unchanged rows attached when tree items are inserted or removed', () => {
@@ -225,10 +211,7 @@ test('ListView keeps unchanged rows attached when tree items are inserted or rem
 	observer.observe(view.element, { childList: true });
 
 	view.items = ['Before', 'Folder', 'Child', 'After'];
-	assert.deepEqual(
-		[...view.element.children].map(row => row.textContent),
-		['Before', 'Folder', 'Child', 'After'],
-	);
+	assert.deepEqual([...view.element.children].map(row => row.textContent), ['Before', 'Folder', 'Child', 'After']);
 	assert.equal(view.row(0), before);
 	assert.equal(view.row(1), folder);
 	assert.equal(view.row(3), after);
@@ -238,10 +221,7 @@ test('ListView keeps unchanged rows attached when tree items are inserted or rem
 	view.items = ['Before', 'Folder', 'After'];
 	assert.equal(view.row(2), after);
 	assert.equal(dom.window.document.activeElement, focusedButton);
-	assert.deepEqual(
-		observer.takeRecords().flatMap(record => [...record.removedNodes].map(node => node.textContent)),
-		['Child'],
-	);
+	assert.deepEqual(observer.takeRecords().flatMap(record => [...record.removedNodes].map(node => node.textContent)), ['Child']);
 	observer.disconnect();
 	view.dispose();
 	dom.window.close();
@@ -252,10 +232,7 @@ test('ListView splice measures changed rows and keeps unchanged rows mounted', (
 	const measured: string[] = [];
 	const view = new ListView<string>(dom.window.document.body, {
 		getId: item => item,
-		getHeight: item => {
-			measured.push(item);
-			return 22;
-		},
+		getHeight: item => { measured.push(item); return 22; },
 		reuseRows: true,
 		renderItem: item => {
 			const label = h(dom.window.document, 'span');
@@ -438,16 +415,12 @@ test('List switches between virtual and content-sized rows without retaining poo
 		const height = () => 22;
 		using list = new List<string>(dom.window.document.body, {
 			scrolling: 'managed',
-			get getHeight() {
-				return fixedHeight ? height : undefined;
-			},
+			get getHeight() { return fixedHeight ? height : undefined; },
 			renderItem: item => h(dom.window.document, 'span', undefined, item),
 		});
 		const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		Object.defineProperties(viewport, {
-			clientWidth: { value: 100 },
-			clientHeight: { value: 44 },
-			scrollHeight: { value: 44 },
+			clientWidth: { value: 100 }, clientHeight: { value: 44 }, scrollHeight: { value: 44 },
 		});
 		list.items = ['First', 'Second'];
 		list.layout(44);
@@ -463,25 +436,21 @@ test('List switches between virtual and content-sized rows without retaining poo
 		list.items = ['First', 'Second'];
 		assert.equal((list.element.children[1] as HTMLElement).style.top, '22px');
 		assert.equal((list.element.children[1] as HTMLElement).style.height, '22px');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('ListView leaves attached rows untouched during scrolling but refreshes changed and returning rows', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		let updates = 0;
-		using view = new ListView<{ id: string; expanded: boolean }>(dom.window.document.body, {
+		using view = new ListView<{ id: string; expanded: boolean; }>(dom.window.document.body, {
 			scrolling: 'managed',
 			getId: item => item.id,
 			getHeight: () => 22,
 			reuseRows: true,
 			accessibilityProvider: { isExpanded: item => item.expanded },
 			renderItem: item => h(dom.window.document, 'span', undefined, item.id),
-			updateItem: () => {
-				updates += 1;
-			},
+			updateItem: () => { updates += 1; },
 		});
 		const viewport = view.scrollElement;
 		Object.defineProperties(viewport, {
@@ -510,12 +479,8 @@ test('ListView leaves attached rows untouched during scrolling but refreshes cha
 			view.scrollBy(-1_100);
 			assert.equal(view.row(1), first);
 			assert.equal(first.getAttribute('aria-expanded'), 'false');
-		} finally {
-			observer.disconnect();
-		}
-	} finally {
-		dom.window.close();
-	}
+		} finally { observer.disconnect(); }
+	} finally { dom.window.close(); }
 });
 
 test('ListView mounts no rows while its managed viewport is hidden and restores visible rows on layout', () => {
@@ -597,9 +562,9 @@ test('List reveals a row after its hidden viewport becomes visible before a resi
 		const viewport = view.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		let isVisible = false;
 		Object.defineProperties(viewport, {
-			clientWidth: { get: () => (isVisible ? 100 : 0) },
-			clientHeight: { get: () => (isVisible ? 44 : 0) },
-			scrollHeight: { get: () => (isVisible ? 2_200 : 0) },
+			clientWidth: { get: () => isVisible ? 100 : 0 },
+			clientHeight: { get: () => isVisible ? 44 : 0 },
+			scrollHeight: { get: () => isVisible ? 2_200 : 0 },
 		});
 		view.items = Array.from({ length: 100 }, (_, index) => index);
 		assert.equal(view.row(50), undefined);
@@ -607,36 +572,20 @@ test('List reveals a row after its hidden viewport becomes visible before a resi
 		view.reveal(50, 0.5);
 		assert.equal(viewport.scrollTop, 1_089);
 		assert.equal(view.row(50)?.textContent, '50');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('List Home and End reveal the focused row even when its focus and selection have not changed', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = new List<string>(dom.window.document.body, {
-		scrolling: 'managed',
-		keyboardNavigation: true,
-		loopNavigation: false,
-		getId: item => item,
-		getHeight: () => 22,
-		renderItem: item => {
-			const label = h(dom.window.document, 'span');
-			label.textContent = item;
-			return label;
-		},
+		scrolling: 'managed', keyboardNavigation: true, loopNavigation: false,
+		getId: item => item, getHeight: () => 22,
+		renderItem: item => { const label = h(dom.window.document, 'span'); label.textContent = item; return label; },
 	});
 	const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
-	Object.defineProperties(viewport, {
-		clientWidth: { value: 100 },
-		clientHeight: { value: 44 },
-		scrollHeight: { value: 2_200 },
-	});
+	Object.defineProperties(viewport, { clientWidth: { value: 100 }, clientHeight: { value: 44 }, scrollHeight: { value: 2_200 } });
 	list.items = Array.from({ length: 100 }, (_, index) => String(index));
-	for (const [key, index, scrollTop] of [
-		['Home', 0, 0],
-		['End', 99, 2_156],
-	] as const) {
+	for (const [key, index, scrollTop] of [['Home', 0, 0], ['End', 99, 2_156]] as const) {
 		list.setActiveIndex(index);
 		list.setSelection([index]);
 		viewport.scrollTop = key === 'Home' ? 1_100 : 0;
@@ -682,7 +631,7 @@ test('List renders in its owner document and owns active navigation', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const list = new List<string>(dom.window.document.body, {
 		ariaLabel: 'Choices',
-		renderItem: item => {
+		renderItem: (item) => {
 			const label = h(dom.window.document, 'span');
 			label.textContent = item;
 			return label;
@@ -696,7 +645,10 @@ test('List renders in its owner document and owns active navigation', () => {
 	assert.equal(list.element.getAttribute('role'), 'listbox');
 	assert.equal(list.element.getAttribute('aria-label'), 'Choices');
 	assert.equal(list.activeItem, 'First');
-	assert.equal(list.element.querySelector('.is-active')?.textContent, 'First');
+	assert.equal(
+		list.element.querySelector('.is-active')?.textContent,
+		'First',
+	);
 
 	list.focusPrevious();
 	assert.equal(list.activeItem, 'Third');
@@ -711,7 +663,7 @@ test('List renders in its owner document and owns active navigation', () => {
 test('List maps mouse interaction to activation and acceptance', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const list = new List<string>(dom.window.document.body, {
-		renderItem: item => {
+		renderItem: (item) => {
 			const label = h(dom.window.document, 'span');
 			label.textContent = item;
 			return label;
@@ -720,12 +672,18 @@ test('List maps mouse interaction to activation and acceptance', () => {
 	list.items = ['First', 'Second'];
 	const accepted: string[] = [];
 	list.onDidAccept(({ item }) => accepted.push(item));
-	const second = list.element.querySelectorAll<HTMLElement>('.ash-list-row')[1];
+	const second = list.element.querySelectorAll<HTMLElement>(
+		'.ash-list-row',
+	)[1];
 	assert.ok(second);
 
-	second.dispatchEvent(new dom.window.MouseEvent('mousemove', { bubbles: true }));
+	second.dispatchEvent(new dom.window.MouseEvent('mousemove', {
+		bubbles: true,
+	}));
 	assert.equal(list.activeItem, 'Second');
-	second.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+	second.dispatchEvent(new dom.window.MouseEvent('click', {
+		bubbles: true,
+	}));
 	assert.deepEqual(accepted, ['Second']);
 	assert.equal(second.getAttribute('aria-selected'), 'true');
 
@@ -741,7 +699,7 @@ test('List DnD exposes target sectors and positional feedback', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const events: string[] = [];
 	const list = createDndList(dom, {
-		onDragStart: data => events.push(`start:${data.kind}:${data.types.join(',')}`),
+		onDragStart: (data) => events.push(`start:${data.kind}:${data.types.join(',')}`),
 		onDragOver: (data, target, _index, sector) => {
 			events.push(`over:${data.kind}:${target}:${sector}`);
 			return { accept: true, effect: 'move', position: ListDragOverPosition.Before };
@@ -751,17 +709,7 @@ test('List DnD exposes target sectors and positional feedback', () => {
 	list.items = ['First', 'Second'];
 	const first = list.row(0)!;
 	const second = list.row(1)!;
-	second.getBoundingClientRect = () => ({
-		top: 40,
-		bottom: 80,
-		left: 0,
-		right: 100,
-		width: 100,
-		height: 40,
-		x: 0,
-		y: 40,
-		toJSON() {},
-	});
+	second.getBoundingClientRect = () => ({ top: 40, bottom: 80, left: 0, right: 100, width: 100, height: 40, x: 0, y: 40, toJSON() { } });
 	const transfer = testDataTransfer();
 	const down = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
 	first.dispatchEvent(down);
@@ -784,13 +732,13 @@ test('List DnD exposes target sectors and positional feedback', () => {
 test('List DnD distinguishes cross-list and native payloads', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const observed: string[] = [];
-	const source = createDndList(dom, { onDragOver: () => false, drop: () => {} });
+	const source = createDndList(dom, { onDragOver: () => false, drop: () => { } });
 	const target = createDndList(dom, {
-		onDragOver: data => {
+		onDragOver: (data) => {
 			observed.push(`over:${data.kind}:${data.elements.join(',')}:${data.types.join(',')}`);
 			return true;
 		},
-		drop: data => observed.push(`drop:${data.kind}:${data.elements.join(',')}:${data.files.length}`),
+		drop: (data) => observed.push(`drop:${data.kind}:${data.elements.join(',')}:${data.files.length}`),
 	});
 	source.items = ['Source'];
 	target.items = ['Target'];
@@ -816,24 +764,14 @@ test('List DnD distinguishes cross-list and native payloads', () => {
 
 test('List DnD scrolls an overflowing target near its edge', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const list = createDndList(dom, { onDragOver: () => true, drop: () => {} });
+	const list = createDndList(dom, { onDragOver: () => true, drop: () => { } });
 	list.items = ['Target'];
 	Object.defineProperty(list.element, 'clientHeight', { configurable: true, value: 100 });
 	Object.defineProperty(list.element, 'scrollHeight', { configurable: true, value: 400 });
-	list.element.getBoundingClientRect = () => ({
-		top: 0,
-		bottom: 100,
-		left: 0,
-		right: 100,
-		width: 100,
-		height: 100,
-		x: 0,
-		y: 0,
-		toJSON() {},
-	});
+	list.element.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON() { } });
 	const transfer = testDataTransfer(['Files']);
 	list.row(0)!.dispatchEvent(dragEvent(dom, 'dragover', 98, transfer));
-	await new Promise(resolve => dom.window.setTimeout(resolve, 40));
+	await new Promise((resolve) => dom.window.setTimeout(resolve, 40));
 	assert.ok(list.element.scrollTop > 0);
 	list.row(0)!.dispatchEvent(dragEvent(dom, 'drop', 98, transfer));
 	list.dispose();
@@ -843,31 +781,28 @@ test('List DnD scrolls an overflowing target near its edge', async () => {
 test('List DnD keeps feedback across nested leave events and clears an actual leave', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	let leaves = 0;
-	const list = createDndList(dom, { onDragOver: () => true, onDragLeave: () => (leaves += 1), drop: () => {} });
+	const list = createDndList(dom, { onDragOver: () => true, onDragLeave: () => leaves += 1, drop: () => { } });
 	list.items = ['Target'];
 	const row = list.row(0)!;
 	const transfer = testDataTransfer(['Files']);
 	row.dispatchEvent(dragEvent(dom, 'dragover', 0, transfer));
 	row.dispatchEvent(dragEvent(dom, 'dragleave', 0, transfer));
 	row.dispatchEvent(dragEvent(dom, 'dragover', 0, transfer));
-	await new Promise(resolve => dom.window.setTimeout(resolve, 120));
+	await new Promise((resolve) => dom.window.setTimeout(resolve, 120));
 	assert.equal(row.classList.contains('drag-over'), true);
 	assert.equal(leaves, 0);
 	row.dispatchEvent(dragEvent(dom, 'dragleave', 0, transfer));
-	await new Promise(resolve => dom.window.setTimeout(resolve, 120));
+	await new Promise((resolve) => dom.window.setTimeout(resolve, 120));
 	assert.equal(row.classList.contains('drag-over'), false);
 	assert.equal(leaves, 1);
 	list.dispose();
 	dom.window.close();
 });
 
-function createDndList(
-	dom: JSDOM,
-	callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>, 'onDragOver' | 'drop'> & Partial<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>>,
-): List<string> {
+function createDndList(dom: JSDOM, callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>, 'onDragOver' | 'drop'> & Partial<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>>): List<string> {
 	return new List<string>(dom.window.document.body, {
-		dnd: { getDragURI: item => `ash://${item}`, ...callbacks },
-		renderItem: item => {
+		dnd: { getDragURI: (item) => `ash://${item}`, ...callbacks },
+		renderItem: (item) => {
 			const label = h(dom.window.document, 'span');
 			label.textContent = item;
 			return label;

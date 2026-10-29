@@ -51,20 +51,7 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 			const bindings = parseUserKeybindings(source);
 			const formatting = { insertSpaces: true, tabSize: 2, eol: source.includes('\r\n') ? '\r\n' : '\n' };
 			if (operation === 'add') {
-				source = applyEdits(
-					source,
-					setProperty(
-						source,
-						[bindings.length],
-						{
-							key,
-							command: item.command,
-							...(item.commandArgs === undefined ? {} : { args: item.commandArgs }),
-							...(when ? { when } : {}),
-						},
-						formatting,
-					),
-				);
+				source = applyEdits(source, setProperty(source, [bindings.length], { key, command: item.command, ...(item.commandArgs === undefined ? {} : { args: item.commandArgs }), ...(when ? { when } : {}) }, formatting));
 			} else {
 				const identity = item.userBinding;
 				if (!identity || JSON.stringify(bindings[identity.index]) !== JSON.stringify(identity.entry)) {
@@ -86,10 +73,7 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 			model.pushStackElement();
 			await reference.save(this.lifetime.signal);
 		});
-		this.pending = result.then(
-			() => undefined,
-			() => undefined,
-		);
+		this.pending = result.then(() => undefined, () => undefined);
 		return result;
 	}
 }

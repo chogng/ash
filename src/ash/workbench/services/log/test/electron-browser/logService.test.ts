@@ -35,9 +35,7 @@ suite('Workbench Desktop logging', () => {
 						call: (command, arg) => channel.call('window:7', command, JSON.parse(JSON.stringify(arg ?? null)) ?? undefined),
 						listen: event => channel.listen('window:7', event),
 					}),
-					registerChannel: () => {
-						throw new Error('Unexpected channel registration');
-					},
+					registerChannel: () => { throw new Error('Unexpected channel registration'); },
 				});
 				const logger = startup.add(services.createInstance(NativeLogService, category));
 				// Native startup retains failure cleanup until the factory takes ownership.
@@ -60,29 +58,20 @@ suite('Workbench Desktop logging', () => {
 				logger.error('filtered after off');
 				const replay: LogEntry[] = [];
 				using subscription = logger.registerSink({ log: entry => replay.push(entry) }, true);
-				assert.deepEqual(
-					replay.map(entry => entry.message),
-					['ready', 'connected', 'child recorded'],
-				);
+				assert.deepEqual(replay.map(entry => entry.message), ['ready', 'connected', 'child recorded']);
 				await child.flush();
 				const files = await logger.files.list();
 				assert.equal(files.length, 1);
 				assert.equal(files[0]!.currentWindow, true);
 				const saved = await logger.files.read(files[0]!.id);
-				assert.deepEqual(
-					saved.text
-						.trim()
-						.split('\n')
-						.map(line => {
-							const entry = JSON.parse(line);
-							return [entry.source, entry.category, entry.level, entry.message];
-						}),
-					[
-						['window-7', category, LogLevel.Info, 'ready'],
-						['window-7', 'connection', LogLevel.Trace, 'connected'],
-						['window-7', 'language-server', LogLevel.Debug, 'child recorded'],
-					],
-				);
+				assert.deepEqual(saved.text.trim().split('\n').map(line => {
+					const entry = JSON.parse(line);
+					return [entry.source, entry.category, entry.level, entry.message];
+				}), [
+					['window-7', category, LogLevel.Info, 'ready'],
+					['window-7', 'connection', LogLevel.Trace, 'connected'],
+					['window-7', 'language-server', LogLevel.Debug, 'child recorded'],
+				]);
 				workbench.dispose();
 				assert.equal(logger.isDisposed, true);
 				assert.equal(child.isDisposed, true);

@@ -14,28 +14,8 @@ import { parseSessionIdentity, sessionIdentity } from '../../common/sessionIdent
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-const state: AgentVoiceSessionState = {
-	sessionId: 'same',
-	threadId: 'thread',
-	resourceId: 'voice-resource',
-	mediaEpoch: 17,
-	sequence: 29,
-	state: 'connected',
-	inputMode: 'pushToTalk',
-	muted: false,
-	listening: true,
-	inputSequence: 8,
-	usageMilliseconds: 55,
-};
-const task: AgentVoiceTaskRequest = {
-	sessionId: 'same',
-	threadId: 'thread',
-	resourceId: state.resourceId,
-	mediaEpoch: state.mediaEpoch,
-	delegationId: 'delegation',
-	commandId: 'command',
-	transcript: 'Do this',
-};
+const state: AgentVoiceSessionState = { sessionId: 'same', threadId: 'thread', resourceId: 'voice-resource', mediaEpoch: 17, sequence: 29, state: 'connected', inputMode: 'pushToTalk', muted: false, listening: true, inputSequence: 8, usageMilliseconds: 55 };
+const task: AgentVoiceTaskRequest = { sessionId: 'same', threadId: 'thread', resourceId: state.resourceId, mediaEpoch: state.mediaEpoch, delegationId: 'delegation', commandId: 'command', transcript: 'Do this' };
 
 function fixture() {
 	const lifetime = new DisposableStore();
@@ -45,72 +25,21 @@ function fixture() {
 	let retired = false;
 	let active = { ...state };
 	const backend: IAgentVoiceService = {
-		isAvailable: true,
-		get state() {
-			return active;
-		},
-		onDidChange: changed.event,
-		onDidRequestTask: tasks.event,
-		async getOptions() {
-			calls.push('options');
-			return [{ connectionId: 'model-connection', name: 'Remote', defaultModel: 'model', models: [] }];
-		},
-		async start(source, selection, signal) {
-			calls.push({ source, selection, signal });
-			return { ...active, ...source };
-		},
-		async stop() {
-			calls.push('stop');
-		},
-		async interrupt() {
-			calls.push('interrupt');
-		},
-		async setMuted(value) {
-			calls.push({ muted: value });
-		},
-		async setInputMode(value) {
-			calls.push({ inputMode: value });
-		},
-		async pttDown(id) {
-			calls.push({ down: id });
-		},
-		async pttUp(id) {
-			calls.push({ up: id });
-		},
-		async rejectTask(request) {
-			calls.push(request);
-		},
+		isAvailable: true, get state() { return active; }, onDidChange: changed.event, onDidRequestTask: tasks.event,
+		async getOptions() { calls.push('options'); return [{ connectionId: 'model-connection', name: 'Remote', defaultModel: 'model', models: [] }]; },
+		async start(source, selection, signal) { calls.push({ source, selection, signal }); return { ...active, ...source }; },
+		async stop() { calls.push('stop'); }, async interrupt() { calls.push('interrupt'); },
+		async setMuted(value) { calls.push({ muted: value }); }, async setInputMode(value) { calls.push({ inputMode: value }); },
+		async pttDown(id) { calls.push({ down: id }); }, async pttUp(id) { calls.push({ up: id }); }, async rejectTask(request) { calls.push(request); },
 	};
 	const host = { ...createDisconnectedRendererApi(), agentVoice: backend };
 	const scope: ISessionProviderScope = {
-		providerId: 'remote',
-		services: { host } as SessionProviderServices,
-		thread: host.thread,
+		providerId: 'remote', services: { host } as SessionProviderServices, thread: host.thread,
 		identity: value => sessionIdentity('remote', value, 'primary'),
-		backendIdentity: value => {
-			const parsed = parseSessionIdentity(value, 'primary');
-			if (parsed.providerId !== 'remote') throw canceled();
-			return parsed.backendSessionId;
-		},
-		assertCurrent: () => {
-			if (retired) throw canceled();
-		},
+		backendIdentity: value => { const parsed = parseSessionIdentity(value, 'primary'); if (parsed.providerId !== 'remote') throw canceled(); return parsed.backendSessionId; },
+		assertCurrent: () => { if (retired) throw canceled(); },
 	};
-	return {
-		lifetime,
-		scope,
-		backend,
-		calls,
-		changed,
-		tasks,
-		retire: () => {
-			retired = true;
-		},
-		replaceState: (value: AgentVoiceSessionState) => {
-			active = value;
-		},
-		[Symbol.dispose]: () => lifetime.dispose(),
-	};
+	return { lifetime, scope, backend, calls, changed, tasks, retire: () => { retired = true; }, replaceState: (value: AgentVoiceSessionState) => { active = value; }, [Symbol.dispose]: () => lifetime.dispose() };
 }
 
 test('retained remote voice unwraps dispatch coordinates and preserves backend media/task identities', async () => {
@@ -141,29 +70,15 @@ test('retiring voice scope hides availability/state/events and rejects every com
 	let tasks = 0;
 	using changed = voice.onDidChange(() => changes++);
 	using requested = voice.onDidRequestTask(() => tasks++);
-	context.changed.fire();
-	context.tasks.fire(task);
-	assert.equal(changes, 1);
-	assert.equal(tasks, 1);
+	context.changed.fire(); context.tasks.fire(task);
+	assert.equal(changes, 1); assert.equal(tasks, 1);
 	context.retire();
 	assert.equal(voice.isAvailable, false);
 	assert.equal(voice.state, undefined);
-	context.changed.fire();
-	context.tasks.fire(task);
-	assert.equal(changes, 1);
-	assert.equal(tasks, 1);
+	context.changed.fire(); context.tasks.fire(task);
+	assert.equal(changes, 1); assert.equal(tasks, 1);
 	const source = { sessionId: context.scope.identity('same'), threadId: context.scope.identity('thread') };
-	for (const operation of [
-		() => voice.getOptions(),
-		() => voice.start(source, { connectionId: 'connection' }),
-		() => voice.stop(),
-		() => voice.interrupt(),
-		() => voice.setMuted(true),
-		() => voice.setInputMode('openMic'),
-		() => voice.pttDown('hold'),
-		() => voice.pttUp('hold'),
-		() => voice.rejectTask({ ...task, ...source }),
-	]) {
+	for (const operation of [() => voice.getOptions(), () => voice.start(source, { connectionId: 'connection' }), () => voice.stop(), () => voice.interrupt(), () => voice.setMuted(true), () => voice.setInputMode('openMic'), () => voice.pttDown('hold'), () => voice.pttUp('hold'), () => voice.rejectTask({ ...task, ...source })]) {
 		await assert.rejects(operation(), isCancellationError);
 	}
 	assert.deepEqual(context.calls, []);
@@ -186,9 +101,6 @@ test('voice absence and foreign frontend Session identities never inherit the pr
 	const voice = createSessionVoiceService(context.scope)!;
 	await assert.rejects(voice.start({ sessionId: 'same', threadId: 'thread' }, { connectionId: 'connection' }), isCancellationError);
 	assert.deepEqual(context.calls, []);
-	const missing = {
-		...context.scope,
-		services: { host: createDisconnectedRendererApi() } as SessionProviderServices,
-	};
+	const missing = { ...context.scope, services: { host: createDisconnectedRendererApi() } as SessionProviderServices };
 	assert.equal(createSessionVoiceService(missing), undefined);
 });

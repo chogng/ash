@@ -18,9 +18,7 @@ test('File editor input restores its file identity and selected language after a
 		assert.equal(restored.languageId, 'markdown');
 		assert.equal(restored.readOnly, true);
 		assert.equal(restored.showBreadcrumbs, true);
-	} finally {
-		restored.dispose();
-	}
+	} finally { restored.dispose(); }
 });
 
 test('File editor input rejects non-file resources and corrupt restored data', () => {
@@ -28,14 +26,7 @@ test('File editor input rejects non-file resources and corrupt restored data', (
 	assert.equal(encoded.label, 'hello %中.txt');
 	assert.throws(() => new FileEditorInput(URI.parse('untitled:/draft')), /file resource/);
 	assert.throws(() => new FileEditorInputSerializer().deserialize({ resource: 'untitled:/draft' }), /file resource/);
-	assert.throws(
-		() =>
-			new FileEditorInputSerializer().deserialize({
-				resource: URI.parse('file:///C:/project/notes.txt').toString(),
-				readOnly: 'yes',
-			}),
-		/boolean/,
-	);
+	assert.throws(() => new FileEditorInputSerializer().deserialize({ resource: URI.parse('file:///C:/project/notes.txt').toString(), readOnly: 'yes' }), /boolean/);
 });
 
 test('file resource names remain decoded and retain identity through restoration', () => {
@@ -44,7 +35,5 @@ test('file resource names remain decoded and retain identity through restoration
 	assert.ok(restored instanceof FileEditorInput);
 	try {
 		assert.deepEqual([input.getName(), restored.getName(), restored.matches(input)], ['hello %中.txt', 'hello %中.txt', true]);
-	} finally {
-		restored.dispose();
-	}
+	} finally { restored.dispose(); }
 });

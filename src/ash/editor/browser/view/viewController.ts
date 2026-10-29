@@ -137,41 +137,29 @@ export class ViewController extends Disposable {
 			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
 			this.onWillKeydown = this.editContext.onWillKeydown;
-			this._register(
-				this.onDidChangeOvertype(overtyping => {
-					viewport.domNode.domNode.classList.toggle('overtype', overtyping);
-				}),
-			);
-			this._register(
-				toDisposable(() => {
-					viewport.domNode.domNode.classList.remove('input-focused');
-					viewport.domNode.domNode.classList.remove('overtype');
-				}),
-			);
-			this._register(
-				addDisposableListener(viewport.domNode.domNode, 'focus', event => {
-					if (event.target === viewport.domNode.domNode) viewport.focus();
-				}),
-			);
+			this._register(this.onDidChangeOvertype(overtyping => {
+				viewport.domNode.domNode.classList.toggle('overtype', overtyping);
+			}));
+			this._register(toDisposable(() => {
+				viewport.domNode.domNode.classList.remove('input-focused');
+				viewport.domNode.domNode.classList.remove('overtype');
+			}));
+			this._register(addDisposableListener(viewport.domNode.domNode, 'focus', event => {
+				if (event.target === viewport.domNode.domNode) viewport.focus();
+			}));
 			this._register(this.editContext.onDidFocus(() => viewport.domNode.domNode.classList.add('input-focused')));
-			this._register(
-				this.editContext.onDidBlur(() => {
-					viewport.domNode.domNode.classList.remove('input-focused');
-					this.editContext.clear();
-				}),
-			);
+			this._register(this.editContext.onDidBlur(() => {
+				viewport.domNode.domNode.classList.remove('input-focused');
+				this.editContext.clear();
+			}));
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 	}
 
-	revealPosition(position: Position): void {
-		this.viewport.revealPosition(position);
-	}
-	clearInput(): void {
-		this.editContext.clear();
-	}
+	revealPosition(position: Position): void { this.viewport.revealPosition(position); }
+	clearInput(): void { this.editContext.clear(); }
 
 	get overtyping(): boolean {
 		return this.overtype;
@@ -281,7 +269,9 @@ export class ViewController extends Disposable {
 			return;
 		}
 		const selection = selectionForMouseTarget(state.kind, this.viewport.cursorConfig, this.viewport.textModel, state.anchorRange, position);
-		this.viewModel.setSelections('mouse', state.baseSelections ? combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex) : [selection]);
+		this.viewModel.setSelections('mouse', state.baseSelections
+			? combinePointerSelection(state.baseSelections, selection, state.toggleCandidateIndex)
+			: [selection]);
 		this.revealMousePosition(position, revealType);
 	}
 
@@ -295,12 +285,9 @@ export class ViewController extends Disposable {
 
 	private hasNonMultiCursorModifier(data: IMouseDispatchData): boolean {
 		switch (this.viewport.getOption(EditorOption.multiCursorModifier)) {
-			case 'altKey':
-				return data.ctrlKey || data.metaKey;
-			case 'ctrlKey':
-				return data.altKey || data.metaKey;
-			case 'metaKey':
-				return data.ctrlKey || data.altKey;
+			case 'altKey': return data.ctrlKey || data.metaKey;
+			case 'ctrlKey': return data.altKey || data.metaKey;
+			case 'metaKey': return data.ctrlKey || data.altKey;
 		}
 	}
 
@@ -364,12 +351,7 @@ export class ViewController extends Disposable {
 	}
 
 	public insertTab(): TextModelChange | undefined {
-		return this.runViewModelEdit(
-			'insertText',
-			'\t',
-			() => this.viewModel.executeCommands(TypeOperations.tab(this.viewport.cursorConfig, this.viewport.textModel, this.viewModel.getSelections()), 'keyboard'),
-			false,
-		);
+		return this.runViewModelEdit('insertText', '\t', () => this.viewModel.executeCommands(TypeOperations.tab(this.viewport.cursorConfig, this.viewport.textModel, this.viewModel.getSelections()), 'keyboard'), false);
 	}
 
 	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
@@ -390,15 +372,16 @@ export class ViewController extends Disposable {
 		// Browser ranges describe the edit, not the selection to restore on undo.
 		// Mirror a primary-cursor update at the other cursors only when it belongs
 		// to the current selection; the command executor resolves overlapping edits.
-		const ranges = matchesSelection
-			? selections.map(selection =>
-					Range.fromPositions(
-						model.getPositionAt(model.getOffsetAt(selection.getStartPosition()) + update.updateRangeStart - primaryStart),
-						model.getPositionAt(model.getOffsetAt(selection.getEndPosition()) + update.updateRangeEnd - primaryEnd),
-					),
-				)
-			: [Range.fromPositions(model.getPositionAt(update.updateRangeStart), model.getPositionAt(update.updateRangeEnd))];
-		const commands = ranges.map(range => new ReplaceCommandWithOffsetSelection(range, update.text, update.selectionStart - update.updateRangeStart, update.selectionEnd - update.updateRangeStart));
+		const ranges = matchesSelection ? selections.map(selection => Range.fromPositions(
+			model.getPositionAt(model.getOffsetAt(selection.getStartPosition()) + update.updateRangeStart - primaryStart),
+			model.getPositionAt(model.getOffsetAt(selection.getEndPosition()) + update.updateRangeEnd - primaryEnd),
+		)) : [Range.fromPositions(model.getPositionAt(update.updateRangeStart), model.getPositionAt(update.updateRangeEnd))];
+		const commands = ranges.map(range => new ReplaceCommandWithOffsetSelection(
+			range,
+			update.text,
+			update.selectionStart - update.updateRangeStart,
+			update.selectionEnd - update.updateRangeStart,
+		));
 		model.pushStackElement();
 		const change = this.runViewModelEdit(inputType, update.text, () => this.viewModel.executeCommands(commands, inputType));
 		model.pushStackElement();
@@ -429,11 +412,16 @@ export class ViewController extends Disposable {
 
 	private executeDelete(direction: 'left' | 'right', selections: readonly Selection[], inputType: string): TextModelChange | undefined {
 		const previousType = this.viewModel.getPrevEditOperationType();
-		const operation =
-			direction === 'left'
-				? DeleteOperations.deleteLeft(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections], this.viewModel.getCursorAutoClosedCharacters())
-				: DeleteOperations.deleteRight(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections]);
-		return this.executeCommands(operation[1], inputType, direction === 'left' ? EditOperationType.DeletingLeft : EditOperationType.DeletingRight, operation[0], false);
+		const operation = direction === 'left'
+			? DeleteOperations.deleteLeft(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections], this.viewModel.getCursorAutoClosedCharacters())
+			: DeleteOperations.deleteRight(previousType, this.viewport.cursorConfig, this.viewport.textModel, [...selections]);
+		return this.executeCommands(
+			operation[1],
+			inputType,
+			direction === 'left' ? EditOperationType.DeletingLeft : EditOperationType.DeletingRight,
+			operation[0],
+			false,
+		);
 	}
 
 	private executeCommands(commands: readonly (ICommand | null)[], inputType: string, type: EditOperationType, pushBefore: boolean, pushAfter: boolean): TextModelChange | undefined {
@@ -447,9 +435,7 @@ export class ViewController extends Disposable {
 
 	private runViewModelEdit(inputType: string, insertedText: string | undefined, edit: () => void, emitDidEdit = true): TextModelChange | undefined {
 		let change: TextModelChange | undefined;
-		const capture = this.viewport.textModel.onDidChangeContent(event => {
-			change = event;
-		});
+		const capture = this.viewport.textModel.onDidChangeContent(event => { change = event; });
 		try {
 			edit();
 		} finally {
@@ -508,6 +494,7 @@ export class ViewController extends Disposable {
 	emitMouseWheel(event: IMouseWheelEvent): void {
 		this.userInputEvents.emitMouseWheel(event);
 	}
+
 }
 
 function findPointerToggleCandidate(selections: readonly Selection[], selection: Selection): number | undefined {
@@ -541,7 +528,9 @@ function selectionRangesOverlap(left: Selection, right: Selection): boolean {
 }
 
 function pointOverlapsSelection(point: Position, selection: Selection): boolean {
-	return selection.isEmpty() ? point.equals(selection.getPosition()) : !point.isBefore(selection.getStartPosition()) && point.isBefore(selection.getEndPosition());
+	return selection.isEmpty()
+		? point.equals(selection.getPosition())
+		: !point.isBefore(selection.getStartPosition()) && point.isBefore(selection.getEndPosition());
 }
 
 function selectionForMouseTarget(kind: MouseSelectionKind, config: View['cursorConfig'], model: TextModel, anchorRange: Range, position: Position): Selection {
@@ -596,14 +585,14 @@ function lineStart(lineNumber: number): Position {
 }
 
 function lineEndExclusive(model: TextModel, lineNumber: number): Position {
-	return lineNumber < model.lineCount ? new Position(lineNumber + 1, 1) : new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
+	return lineNumber < model.lineCount
+		? new Position(lineNumber + 1, 1)
+		: new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
 }
 
 let viewId = 1;
 
-function nextViewId(): string {
-	return `ash-editor-view-${viewId++}`;
-}
+function nextViewId(): string { return `ash-editor-view-${viewId++}`; }
 
 function validateOwnerId(value: string): string {
 	if (typeof value !== 'string' || value.trim().length === 0) throw new TypeError('Editor view ownerId must be a non-empty string');
@@ -637,7 +626,9 @@ function createWordDeleteCommands(config: View['cursorConfig'], model: TextModel
 			autoClosingPairs: config.autoClosingPairs,
 			autoClosedCharacters,
 		};
-		const range = direction === 'left' ? WordOperations.deleteWordLeft(context, WordNavigationType.WordStart) : WordOperations.deleteWordRight(context, WordNavigationType.WordEnd);
+		const range = direction === 'left'
+			? WordOperations.deleteWordLeft(context, WordNavigationType.WordStart)
+			: WordOperations.deleteWordRight(context, WordNavigationType.WordEnd);
 		return range && !range.isEmpty() ? new ReplaceCommand(range, '') : null;
 	});
 }
@@ -668,80 +659,89 @@ export class KeyboardNavigationController extends Disposable {
 	) {
 		super();
 		try {
-			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
+			this.targetOperatingSystem = readOperatingSystem(
+				options.operatingSystem,
+			);
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
-			throw new TypeError('Stanza keyboard and selection controllers must share one text model');
+			throw new TypeError(
+				'Stanza keyboard and selection controllers must share one text model',
+			);
 		}
-		this._register(
-			userInputEvents.onKeyDown(event => {
-				if (!event.browserEvent.defaultPrevented) this.handleKeyDown(event);
-			}),
-		);
-		const cursorListener = this._register(
-			new (class extends ViewEventHandler {
-				constructor(private readonly reset: () => void) {
-					super();
-				}
-				override onCursorStateChanged(): boolean {
-					this.reset();
-					return false;
-				}
-			})(() => {
-				if (this.applyingNavigation) return;
-				this.modelNavigationStates = undefined;
-				this.preferredVisualHorizontalOffsets = undefined;
-			}),
-		);
+		this._register(userInputEvents.onKeyDown(event => {
+			if (!event.browserEvent.defaultPrevented) this.handleKeyDown(event);
+		}));
+		const cursorListener = this._register(new class extends ViewEventHandler {
+			constructor(private readonly reset: () => void) { super(); }
+			override onCursorStateChanged(): boolean {
+				this.reset();
+				return false;
+			}
+		}(() => {
+			if (this.applyingNavigation) return;
+			this.modelNavigationStates = undefined;
+			this.preferredVisualHorizontalOffsets = undefined;
+		}));
 		viewModel.addViewEventHandler(cursorListener);
 		this._register(toDisposable(() => viewModel.removeViewEventHandler(cursorListener)));
 	}
 
 	private handleKeyDown(event: IKeyboardEvent): void {
-		const navigation = resolveStanzaKeyboardNavigation(event, this.targetOperatingSystem);
+		const navigation = resolveStanzaKeyboardNavigation(
+			event,
+			this.targetOperatingSystem,
+		);
 		if (!navigation) return;
 		event.stop();
 		const layout = this.viewport.viewportLayout;
-		const pageLineCount = Math.max(1, Math.floor(layout.viewportSize.height / layout.lineHeight));
-		const visualCommand = isVisualVerticalCommand(navigation.command) ? navigation.command : undefined;
-		const visualResult =
-			this.viewport.lineWrapping === EditorLineWrapping.On && visualCommand !== undefined
-				? navigateStanzaVisualCursors(
-						this.viewport.textModel,
-						this.viewport.getVisualLineProjection(),
-						this.viewModel.getCursorStates().map(state => state.modelState.selection),
-						{
-							command: visualCommand,
-							mode: navigation.mode,
-							pageLineCount,
-							preferredHorizontalOffsets: this.preferredVisualHorizontalOffsets,
-						},
-						text => this.viewport.measureTextWidth(text),
-						{
-							getHorizontalOffset: position => this.viewport.getVisualHorizontalOffset(position),
-							getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
-						},
-					)
-				: undefined;
+		const pageLineCount = Math.max(
+			1,
+			Math.floor(layout.viewportSize.height / layout.lineHeight),
+		);
+		const visualCommand = isVisualVerticalCommand(navigation.command)
+			? navigation.command
+			: undefined;
+		const visualResult = this.viewport.lineWrapping === EditorLineWrapping.On &&
+			visualCommand !== undefined
+			? navigateStanzaVisualCursors(
+				this.viewport.textModel,
+				this.viewport.getVisualLineProjection(),
+				this.viewModel.getCursorStates().map(state => state.modelState.selection),
+				{
+					command: visualCommand,
+					mode: navigation.mode,
+					pageLineCount,
+					preferredHorizontalOffsets: this.preferredVisualHorizontalOffsets,
+				},
+				text => this.viewport.measureTextWidth(text),
+				{
+					getHorizontalOffset: position => this.viewport.getVisualHorizontalOffset(position),
+					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
+				},
+			)
+			: undefined;
 		const currentStates = this.viewModel.getCursorStates();
-		const sourceStates =
-			this.modelNavigationStates?.length === currentStates.length &&
-			this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.modelState.selection))
-				? currentStates.map((state, index) => new CursorState(this.modelNavigationStates![index]!, state.viewState))
-				: currentStates;
+		const sourceStates = this.modelNavigationStates?.length === currentStates.length
+			&& this.modelNavigationStates.every((state, index) => state.selection.equalsSelection(currentStates[index]!.modelState.selection))
+			? currentStates.map((state, index) => new CursorState(this.modelNavigationStates![index]!, state.viewState))
+			: currentStates;
 		const movedStates = visualResult ? undefined : moveCursorStates(this.viewModel, sourceStates, navigation, pageLineCount);
-		const modelStates = visualResult ? visualResult.selections.map(selection => CursorState.fromModelSelection(selection)) : movedStates!;
+		const modelStates = visualResult
+			? visualResult.selections.map(selection => CursorState.fromModelSelection(selection))
+			: movedStates!;
 		this.applyingNavigation = true;
 		try {
 			this.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, modelStates);
 		} finally {
 			this.applyingNavigation = false;
 		}
-		this.modelNavigationStates = movedStates?.every(state => state.modelState !== null) ? movedStates.map(state => state.modelState!) : undefined;
+		this.modelNavigationStates = movedStates?.every(state => state.modelState !== null)
+			? movedStates.map(state => state.modelState!)
+			: undefined;
 		this.preferredVisualHorizontalOffsets = visualResult?.preferredHorizontalOffsets;
 		this.viewport.revealPosition(this.viewModel.getCursorStates()[0]!.modelState.position);
 	}
@@ -784,31 +784,26 @@ function moveModelCursorByWord(viewModel: IViewModel, cursor: SingleCursorState,
 	}
 	const config = viewModel.cursorConfig;
 	const classifier = getMapForWordSeparators(config.wordSeparators, config.wordSegmenterLocales);
-	const target =
-		direction === 'left'
-			? WordOperations.moveWordLeft(classifier, viewModel.model, cursor.position, WordNavigationType.WordStartFast, hasMulticursor)
-			: WordOperations.moveWordRight(classifier, viewModel.model, cursor.position, WordNavigationType.WordEnd);
+	const target = direction === 'left'
+		? WordOperations.moveWordLeft(classifier, viewModel.model, cursor.position, WordNavigationType.WordStartFast, hasMulticursor)
+		: WordOperations.moveWordRight(classifier, viewModel.model, cursor.position, WordNavigationType.WordEnd);
 	return cursor.move(inSelectionMode, target.lineNumber, target.column, 0);
 }
 
-function isVisualVerticalCommand(
-	command: EditorCursorNavigationCommand,
-): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {
-	return (
-		command === EditorCursorNavigationCommand.LineUp ||
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {
+	return command === EditorCursorNavigationCommand.LineUp ||
 		command === EditorCursorNavigationCommand.LineDown ||
 		command === EditorCursorNavigationCommand.PageUp ||
-		command === EditorCursorNavigationCommand.PageDown
-	);
+		command === EditorCursorNavigationCommand.PageDown;
 }
 
-export function resolveStanzaKeyboardNavigation(
-	event: Pick<IKeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey' | 'altGraphKey' | 'isComposing'>,
-	targetOperatingSystem: OperatingSystem,
-): KeyboardNavigationCommand | undefined {
+export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey' | 'altGraphKey' | 'isComposing'>, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
 	if (event.isComposing || event.altGraphKey) return undefined;
-	const mode = event.shiftKey ? EditorCursorNavigationMode.Extend : EditorCursorNavigationMode.Move;
-	const noCommandModifier = !event.ctrlKey && !event.altKey && !event.metaKey;
+	const mode = event.shiftKey
+		? EditorCursorNavigationMode.Extend
+		: EditorCursorNavigationMode.Move;
+	const noCommandModifier =
+		!event.ctrlKey && !event.altKey && !event.metaKey;
 	if (noCommandModifier) {
 		const command = unmodifiedCommand(event.key);
 		return command ? { command, mode } : undefined;

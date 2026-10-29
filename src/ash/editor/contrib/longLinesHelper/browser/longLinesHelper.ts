@@ -12,14 +12,12 @@ class LongLinesHelper extends Disposable implements IEditorContribution {
 
 	constructor(private readonly editor: ICodeEditor) {
 		super();
-		this._register(
-			editor.onMouseDown(event => {
-				const limit = editor.getOption(EditorOption.stopRenderingLineAfter);
-				if (limit >= 0 && event.target.type === MouseTargetType.CONTENT_TEXT && event.target.position.column >= limit) {
-					editor.updateOptions({ stopRenderingLineAfter: -1 });
-				}
-			}),
-		);
+		this._register(editor.onMouseDown(event => {
+			const limit = editor.getOption(EditorOption.stopRenderingLineAfter);
+			if (limit >= 0 && event.target.type === MouseTargetType.CONTENT_TEXT && event.target.position.column >= limit) {
+				editor.updateOptions({ stopRenderingLineAfter: -1 });
+			}
+		}));
 	}
 }
 

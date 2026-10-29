@@ -51,12 +51,8 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly boundarySashPresentation = this._register(new MutableDisposable());
 	private readonly visibleViewContainersTracker: VisibleViewContainersTracker | undefined;
 	private activityBarLocation = ActivityBarPosition.DEFAULT;
-	override get minimumWidth(): number {
-		return 170;
-	}
-	override get maximumWidth(): number {
-		return Number.POSITIVE_INFINITY;
-	}
+	override get minimumWidth(): number { return 170; }
+	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
 		const width = active ? this.getComposite(active)?.getOptimalWidth() : undefined;
@@ -74,30 +70,24 @@ export class SidebarPart extends PaneCompositePart {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
-		super(
-			container,
-			{
-				openComposite: options.openComposite,
-				activityHoverOptions: options.activityHoverOptions,
-				viewDescriptorService: options.viewDescriptorService,
-				contextKeyService: options.contextKeyService,
-				localizationService: options.localizationService,
-				id: options.id ?? 'sidebar',
-				location,
-				ariaLabel: options.ariaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
-				ariaLabelKey: options.ariaLabelKey,
-				viewsAriaLabel: options.viewsAriaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
-				viewsAriaLabelKey: options.viewsAriaLabelKey,
-				compositeBarContainerFilter: options.compositeBarContainerFilter,
-				compositeBarVisible: options.compositeBarVisible,
-				compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
-				compositeBarOrientation: location === ViewContainerLocation.Sidebar ? 'vertical' : 'horizontal',
-				titleActions: options.titleActions,
-			},
-			themeService,
-			storageService,
-			activityService,
-		);
+		super(container, {
+			openComposite: options.openComposite,
+			activityHoverOptions: options.activityHoverOptions,
+			viewDescriptorService: options.viewDescriptorService,
+			contextKeyService: options.contextKeyService,
+			localizationService: options.localizationService,
+			id: options.id ?? 'sidebar',
+			location,
+			ariaLabel: options.ariaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
+			ariaLabelKey: options.ariaLabelKey,
+			viewsAriaLabel: options.viewsAriaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
+			viewsAriaLabelKey: options.viewsAriaLabelKey,
+			compositeBarContainerFilter: options.compositeBarContainerFilter,
+			compositeBarVisible: options.compositeBarVisible,
+			compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
+			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? 'vertical' : 'horizontal',
+			titleActions: options.titleActions,
+		}, themeService, storageService, activityService);
 		this.domNode.classList.add('ash-sidebar-part');
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.
@@ -116,20 +106,16 @@ export class SidebarPart extends PaneCompositePart {
 		// Sessions supplies its own navigation bar and deliberately disables this selector.
 		if (location === ViewContainerLocation.Sidebar && options.compositeBarVisible !== false) {
 			this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, location));
-			this._register(
-				this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
-					if (before > 1 !== after > 1) {
-						this.updateActivityBarVisibility();
-					}
-				}),
-			);
-			this._register(
-				configurationService.onDidChangeConfiguration(event => {
-					if (event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
-						this.updateActivityBarVisibility();
-					}
-				}),
-			);
+			this._register(this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
+				if ((before > 1) !== (after > 1)) {
+					this.updateActivityBarVisibility();
+				}
+			}));
+			this._register(configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
+					this.updateActivityBarVisibility();
+				}
+			}));
 		}
 	}
 
@@ -165,7 +151,9 @@ export class SidebarPart extends PaneCompositePart {
 		}
 		const isTop = this.activityBarLocation === ActivityBarPosition.TOP;
 		const isBottom = this.activityBarLocation === ActivityBarPosition.BOTTOM;
-		const hide = (isTop || isBottom) && this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) && this.visibleViewContainersTracker.visibleCount <= 1;
+		const hide = (isTop || isBottom)
+			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
+			&& this.visibleViewContainersTracker.visibleCount <= 1;
 		const restoreFocus = hide && this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement);
 		this.topCompositeBarDomNode!.hidden = !isTop || hide;
 		this.bottomCompositeBarDomNode!.hidden = !isBottom || hide;

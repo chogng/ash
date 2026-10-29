@@ -11,7 +11,9 @@ export const DEFAULT_OVERSCAN_ROW_COUNT = 8;
 /** Multi-file comparisons start compact; an explicit preference still takes precedence. */
 export function hideUnchangedRegions(configuration: IConfigurationService): boolean {
 	const setting = configuration.inspect<boolean>('diffEditor.hideUnchangedRegions.enabled');
-	return isConfigured(setting) || setting.memoryValue !== undefined || setting.policyValue !== undefined ? configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled') : true;
+	return isConfigured(setting) || setting.memoryValue !== undefined || setting.policyValue !== undefined
+		? configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled')
+		: true;
 }
 
 /** Inputs supplied by an editor host; file models remain owned by that host. */
@@ -53,9 +55,7 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}
-	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0))
-		throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
-	if (options.workbenchUIElementFactory !== undefined && typeof options.workbenchUIElementFactory.createItemActions !== 'function')
-		throw new TypeError('Multi-diff editor Workbench factory must create item actions');
+	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
+	if (options.workbenchUIElementFactory !== undefined && typeof options.workbenchUIElementFactory.createItemActions !== 'function') throw new TypeError('Multi-diff editor Workbench factory must create item actions');
 	if (options.container.ownerDocument.defaultView !== getWindow(options.container)) throw new Error('Multi-diff editor container must belong to its owner window');
 }

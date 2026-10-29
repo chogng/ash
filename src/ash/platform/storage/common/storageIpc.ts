@@ -29,9 +29,7 @@ export function validateStorageIdentity(value: unknown): IStorageIdentity {
 }
 
 export function validateStorageEntries(value: unknown): Record<string, IStorageEntry> {
-	if (!isRecord(value)) {
-		throw new TypeError('Invalid storage entries');
-	}
+	if (!isRecord(value)) { throw new TypeError('Invalid storage entries'); }
 	const entries: Record<string, IStorageEntry> = Object.create(null);
 	for (const [key, entry] of Object.entries(value)) {
 		if (!key.trim() || !isRecord(entry) || typeof entry.value !== 'string' || (entry.target !== StorageTarget.USER && entry.target !== StorageTarget.MACHINE)) {
@@ -46,12 +44,7 @@ export function validateStorageSnapshot(value: unknown): IStorageSnapshot {
 	if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0 || typeof value.isNew !== 'boolean') {
 		throw new TypeError('Invalid storage snapshot');
 	}
-	return {
-		identity: validateStorageIdentity(value.identity),
-		revision: value.revision as number,
-		isNew: value.isNew,
-		entries: validateStorageEntries(value.entries),
-	};
+	return { identity: validateStorageIdentity(value.identity), revision: value.revision as number, isNew: value.isNew, entries: validateStorageEntries(value.entries) };
 }
 
 export function storageIdentityKey(identity: IStorageIdentity): string {

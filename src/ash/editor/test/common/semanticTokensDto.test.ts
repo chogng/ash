@@ -16,21 +16,15 @@ test('semantic token DTO rejects invalid result and splice boundaries', () => {
 	assert.throws(() => attachLanguageTokenResultDelta(mutable, { baseRequestId: 1, splices: [] }), /immutable normalized result/);
 
 	const result: LanguageTokenResult = Object.freeze({ tokens: Object.freeze([]) });
-	assert.throws(
-		() =>
-			attachLanguageTokenResultDelta(result, {
-				baseRequestId: 1,
-				splices: [
-					{
-						baseStartItemIndex: 0,
-						baseDeleteItemCount: 0,
-						resultStartItemIndex: 0,
-						resultInsertItemCount: 1,
-						lineDeltaBefore: 0,
-						lineDeltaAfter: 0,
-					},
-				],
-			}),
-		/inserted items exceed/,
-	);
+	assert.throws(() => attachLanguageTokenResultDelta(result, {
+		baseRequestId: 1,
+		splices: [{
+			baseStartItemIndex: 0,
+			baseDeleteItemCount: 0,
+			resultStartItemIndex: 0,
+			resultInsertItemCount: 1,
+			lineDeltaBefore: 0,
+			lineDeltaAfter: 0,
+		}],
+	}), /inserted items exceed/);
 });

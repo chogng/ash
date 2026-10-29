@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { bundledTreeSitterGrammars } from './treeSitterGrammars.generated.js';
 
-const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
+const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
 
 /** Loads bundled WASM grammars once per window; documents own and release their trees. */
 export class TreeSitterWasmLibrary extends Disposable {
@@ -46,15 +46,9 @@ export class TreeSitterWasmLibrary extends Disposable {
 		return this.queries.get(languageId);
 	}
 
-	getSymbolQueries(languageId: string): Query | undefined {
-		return this.tags.get(languageId);
-	}
-	getFoldingQueries(languageId: string): Query | undefined {
-		return this.folds.get(languageId);
-	}
-	getInjectionQueries(languageId: string): Query | undefined {
-		return this.injections.get(languageId);
-	}
+	getSymbolQueries(languageId: string): Query | undefined { return this.tags.get(languageId); }
+	getFoldingQueries(languageId: string): Query | undefined { return this.folds.get(languageId); }
+	getInjectionQueries(languageId: string): Query | undefined { return this.injections.get(languageId); }
 
 	private async loadLanguage(languageId: string): Promise<Language | undefined> {
 		const entry = definition(languageId);

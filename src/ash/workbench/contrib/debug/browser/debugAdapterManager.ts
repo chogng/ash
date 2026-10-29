@@ -19,12 +19,10 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.entries.clear();
-				this.factoriesValue = Object.freeze([]);
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.entries.clear();
+			this.factoriesValue = Object.freeze([]);
+		}));
 	}
 
 	get factories(): readonly DebugAdapterFactory[] {
@@ -66,7 +64,8 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 		for (const factory of normalized) {
 			const dynamic = factory.createDebugAdapterDescriptor !== undefined;
 			const role = JSON.stringify([factory.type, dynamic]);
-			const conflicting = this.entries.get(factory.type)?.find(entry => entry.owner !== owner && (entry.factory.createDebugAdapterDescriptor !== undefined) === dynamic);
+			const conflicting = this.entries.get(factory.type)?.find(entry =>
+				entry.owner !== owner && (entry.factory.createDebugAdapterDescriptor !== undefined) === dynamic);
 			if (roles.has(role) || conflicting) {
 				throw new Error(`Debug Adapter type '${factory.type}' is already registered by '${conflicting?.factory.sourceId ?? factory.sourceId}'`);
 			}
@@ -95,30 +94,22 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 
 	private updateFactories(): void {
 		const previous = this.factoriesValue;
-		this.factoriesValue = Object.freeze(
-			[...this.entries]
-				.map(([type, entries]) => {
-					const dynamic = entries.find(entry => entry.factory.createDebugAdapterDescriptor)?.factory;
-					const fallback = entries.find(entry => !entry.factory.createDebugAdapterDescriptor)?.factory;
-					if (!dynamic || !fallback) return (dynamic ?? fallback)!;
-					// The registry is the sole owner of defaults and callbacks. A derived
-					// descriptor lookup cannot make a default registration shadow its factory.
-					const retained = previous.find(
-						factory => factory.type === type && factory.createDebugAdapter === fallback.createDebugAdapter && factory.createDebugAdapterDescriptor === dynamic.createDebugAdapterDescriptor,
-					);
-					return (
-						retained ??
-						Object.freeze({
-							...dynamic,
-							label: fallback.label,
-							createDebugAdapter: fallback.createDebugAdapter,
-						})
-					);
-				})
-				.sort((left, right) => left.type.localeCompare(right.type)),
-		);
+		this.factoriesValue = Object.freeze([...this.entries].map(([type, entries]) => {
+			const dynamic = entries.find(entry => entry.factory.createDebugAdapterDescriptor)?.factory;
+			const fallback = entries.find(entry => !entry.factory.createDebugAdapterDescriptor)?.factory;
+			if (!dynamic || !fallback) return (dynamic ?? fallback)!;
+			// The registry is the sole owner of defaults and callbacks. A derived
+			// descriptor lookup cannot make a default registration shadow its factory.
+			const retained = previous.find(factory => factory.type === type
+				&& factory.createDebugAdapter === fallback.createDebugAdapter
+				&& factory.createDebugAdapterDescriptor === dynamic.createDebugAdapterDescriptor);
+			return retained ?? Object.freeze({
+				...dynamic, label: fallback.label, createDebugAdapter: fallback.createDebugAdapter,
+			});
+		}).sort((left, right) => left.type.localeCompare(right.type)));
 		this.changeEmitter.fire(this.factoriesValue);
 	}
+
 }
 
 function normalizeIdentifier(value: string, owner: string): string {

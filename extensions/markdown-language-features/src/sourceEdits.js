@@ -14,18 +14,11 @@ export function inputEdit(source, value) {
 	while (start < normalized.length && start < value.length && normalized[start] === value[start]) start++;
 	let end = normalized.length;
 	let nextEnd = value.length;
-	while (end > start && nextEnd > start && normalized[end - 1] === value[nextEnd - 1]) {
-		end--;
-		nextEnd--;
-	}
+	while (end > start && nextEnd > start && normalized[end - 1] === value[nextEnd - 1]) { end--; nextEnd--; }
 	if (start > 0 && /[\uDC00-\uDFFF]/u.test(normalized[start] ?? value[start] ?? '')) start--;
-	if (end < normalized.length && /[\uDC00-\uDFFF]/u.test(normalized[end])) {
-		end++;
-		nextEnd++;
-	}
+	if (end < normalized.length && /[\uDC00-\uDFFF]/u.test(normalized[end])) { end++; nextEnd++; }
 	return {
-		start: sourceOffset(source, start),
-		end: sourceOffset(source, end),
+		start: sourceOffset(source, start), end: sourceOffset(source, end),
 		text: value.slice(start, nextEnd).replaceAll('\n', source.includes('\r\n') ? '\r\n' : '\n'),
 	};
 }
@@ -40,14 +33,8 @@ export function textEdit(previous, next) {
 	while (start < previous.length && start < next.length && previous[start] === next[start]) start++;
 	let end = previous.length;
 	let nextEnd = next.length;
-	while (end > start && nextEnd > start && previous[end - 1] === next[nextEnd - 1]) {
-		end--;
-		nextEnd--;
-	}
+	while (end > start && nextEnd > start && previous[end - 1] === next[nextEnd - 1]) { end--; nextEnd--; }
 	if (start > 0 && /[\uDC00-\uDFFF]/u.test(previous[start] ?? next[start] ?? '')) start--;
-	if (end < previous.length && /[\uDC00-\uDFFF]/u.test(previous[end])) {
-		end++;
-		nextEnd++;
-	}
+	if (end < previous.length && /[\uDC00-\uDFFF]/u.test(previous[end])) { end++; nextEnd++; }
 	return { start, end, text: next.slice(start, nextEnd) };
 }

@@ -18,52 +18,25 @@ import { StickyModelProvider } from '../../browser/stickyScrollModelProvider.js'
 suite('Sticky scroll scope sources', () => {
 	test('folding ancestors retain one-based bounds and parent ownership', async () => {
 		using fixture = new Fixture();
-		fixture.folding.setRanges([
-			{ startLineIndex: 0, endLineIndex: 4 },
-			{ startLineIndex: 1, endLineIndex: 3 },
-		]);
+		fixture.folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 3 }]);
 		const model = await fixture.provider.update(CancellationToken.None);
 		const outer = model!.element!.children[0]!;
 		const inner = outer.children[0]!;
-		assert.deepEqual(
-			[outer.range, inner.range].map(range => [range!.startLineNumber, range!.endLineNumber]),
-			[
-				[1, 6],
-				[2, 5],
-			],
-		);
+		assert.deepEqual([outer.range, inner.range].map(range => [range!.startLineNumber, range!.endLineNumber]), [[1, 6], [2, 5]]);
 		assert.equal(inner.parent, outer);
 	});
 
 	test('outline headers start at the declaration and keep the innermost end separate', async () => {
 		using fixture = new Fixture();
 		using registration = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => [
-				{
-					name: 'scope',
-					kind: 'class',
-					range: new Range(1, 1, 7, 2),
-					selectionRange: new Range(2, 1, 2, 6),
-					children: [
-						{
-							name: 'body',
-							kind: 'function',
-							range: new Range(2, 1, 5, 2),
-							selectionRange: new Range(3, 1, 3, 2),
-						},
-					],
-				},
-			],
+			provideDocumentSymbols: () => [{
+				name: 'scope', kind: 'class', range: new Range(1, 1, 7, 2), selectionRange: new Range(2, 1, 2, 6),
+				children: [{ name: 'body', kind: 'function', range: new Range(2, 1, 5, 2), selectionRange: new Range(3, 1, 3, 2) }],
+			}],
 		});
 		const model = await fixture.provider.update(CancellationToken.None);
 		const outer = model!.element!.children[0]!;
-		assert.deepEqual(
-			[outer.range, outer.children[0]!.range].map(range => [range!.startLineNumber, range!.endLineNumber]),
-			[
-				[2, 7],
-				[3, 5],
-			],
-		);
+		assert.deepEqual([outer.range, outer.children[0]!.range].map(range => [range!.startLineNumber, range!.endLineNumber]), [[2, 7], [3, 5]]);
 	});
 
 	test('outline selection compares total scope coverage including nested symbols', async () => {
@@ -76,13 +49,7 @@ suite('Sticky scroll scope sources', () => {
 		});
 		const model = await fixture.provider.update(CancellationToken.None);
 		const outer = model!.element!.children[0]!;
-		assert.deepEqual(
-			[outer.range, outer.children[0]!.range].map(range => [range!.startLineNumber, range!.endLineNumber]),
-			[
-				[2, 7],
-				[3, 6],
-			],
-		);
+		assert.deepEqual([outer.range, outer.children[0]!.range].map(range => [range!.startLineNumber, range!.endLineNumber]), [[2, 7], [3, 6]]);
 	});
 
 	test('outline selection keeps its provider across refreshes and selects again after removal', async () => {
@@ -109,13 +76,9 @@ suite('Sticky scroll scope sources', () => {
 
 	test('a single outline does not preselect the winner before competing providers arrive', async () => {
 		using fixture = new Fixture();
-		using original = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => [symbol(2, 7)],
-		});
+		using original = fixture.features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => [symbol(2, 7)] });
 		const single = await fixture.provider.update(CancellationToken.None);
-		using added = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => [symbol(1, 7)],
-		});
+		using added = fixture.features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => [symbol(1, 7)] });
 		const competing = await fixture.provider.update(CancellationToken.None);
 		assert.equal(single!.outlineProviderId, undefined);
 		assert.equal(competing!.element!.children[0]!.range!.startLineNumber, 1);
@@ -128,9 +91,7 @@ suite('Sticky scroll scope sources', () => {
 			provideDocumentSymbols: () => [symbol(2, 7)],
 		});
 		using failed = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => {
-				throw failure;
-			},
+			provideDocumentSymbols: () => { throw failure; },
 		});
 		using empty = fixture.features.documentSymbolProvider.register('*', {
 			provideDocumentSymbols: () => [],
@@ -153,20 +114,12 @@ suite('Sticky scroll scope sources', () => {
 			const folded = await fixture.provider.update(CancellationToken.None);
 			fixture.folding.setRanges([]);
 			const indented = await fixture.provider.update(CancellationToken.None);
-			assert.deepEqual(
-				{
-					folded: folded!.element!.children.map(child => child.range!.startLineNumber),
-					indented: indented!.element!.children.map(child => child.range!.startLineNumber),
-					providerIds: [folded!.outlineProviderId, indented!.outlineProviderId],
-					requests,
-				},
-				{
-					folded: [1],
-					indented: [2],
-					providerIds: [undefined, undefined],
-					requests: source === 'outlineModel' ? 2 : 0,
-				},
-			);
+			assert.deepEqual({
+				folded: folded!.element!.children.map(child => child.range!.startLineNumber),
+				indented: indented!.element!.children.map(child => child.range!.startLineNumber),
+				providerIds: [folded!.outlineProviderId, indented!.outlineProviderId],
+				requests,
+			}, { folded: [1], indented: [2], providerIds: [undefined, undefined], requests: source === 'outlineModel' ? 2 : 0 });
 		});
 	}
 
@@ -174,40 +127,26 @@ suite('Sticky scroll scope sources', () => {
 		using fixture = new Fixture();
 		let original: readonly LanguageDocumentSymbol[] = [symbol(1, 7)];
 		using first = fixture.features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => original });
-		using second = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => [symbol(2, 7)],
-		});
+		using second = fixture.features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => [symbol(2, 7)] });
 		const before = await fixture.provider.update(CancellationToken.None);
 		original = [];
 		const after = await fixture.provider.update(CancellationToken.None);
-		assert.deepEqual(
-			[before, after].map(model => model!.element!.children[0]!.range!.startLineNumber),
-			[1, 2],
-		);
+		assert.deepEqual([before, after].map(model => model!.element!.children[0]!.range!.startLineNumber), [1, 2]);
 	});
 
 	test('overlapping updates cancel all previous providers and keep the newer selection', async () => {
 		using fixture = new Fixture();
-		const pending: { signal: AbortSignal; finish: (symbols: readonly LanguageDocumentSymbol[]) => void }[] = [];
+		const pending: { signal: AbortSignal; finish: (symbols: readonly LanguageDocumentSymbol[]) => void; }[] = [];
 		using first = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: request =>
-				new Promise(resolve => {
-					pending.push({ signal: request.signal, finish: resolve });
-				}),
+			provideDocumentSymbols: request => new Promise(resolve => { pending.push({ signal: request.signal, finish: resolve }); }),
 		});
 		using second = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: request =>
-				new Promise(resolve => {
-					pending.push({ signal: request.signal, finish: resolve });
-				}),
+			provideDocumentSymbols: request => new Promise(resolve => { pending.push({ signal: request.signal, finish: resolve }); }),
 		});
 		const previous = fixture.provider.update(CancellationToken.None);
 		assert.equal(pending.length, 2);
 		const current = fixture.provider.update(CancellationToken.None);
-		assert.deepEqual(
-			pending.map(request => request.signal.aborted),
-			[true, true, false, false],
-		);
+		assert.deepEqual(pending.map(request => request.signal.aborted), [true, true, false, false]);
 		pending[2]!.finish([]);
 		pending[3]!.finish([symbol(2, 7)]);
 		const model = await current;
@@ -225,9 +164,7 @@ suite('Sticky scroll scope sources', () => {
 		using registration = fixture.features.documentSymbolProvider.register('*', {
 			provideDocumentSymbols: request => {
 				signal = request.signal;
-				return new Promise(resolve => {
-					finish = resolve;
-				});
+				return new Promise(resolve => { finish = resolve; });
 			},
 		});
 		using cancellation = new CancellationTokenSource();
@@ -241,15 +178,10 @@ suite('Sticky scroll scope sources', () => {
 	test('indentation selection ignores registered symbols and works with folding disabled', async () => {
 		using fixture = new Fixture('indentationModel', false);
 		using registration = fixture.features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => {
-				throw new Error('Outline must not be requested');
-			},
+			provideDocumentSymbols: () => { throw new Error('Outline must not be requested'); },
 		});
 		const model = await fixture.provider.update(CancellationToken.None);
-		assert.deepEqual(
-			model!.element!.children.map(child => [child.range!.startLineNumber, child.range!.endLineNumber]),
-			[[2, 5]],
-		);
+		assert.deepEqual(model!.element!.children.map(child => [child.range!.startLineNumber, child.range!.endLineNumber]), [[2, 5]]);
 	});
 });
 
@@ -276,12 +208,7 @@ class Fixture extends Disposable {
 }
 
 function symbol(start: number, end: number): LanguageDocumentSymbol {
-	return {
-		name: 'scope',
-		kind: 'function',
-		range: new Range(start, 1, end, 2),
-		selectionRange: new Range(start, 1, start, 2),
-	};
+	return { name: 'scope', kind: 'function', range: new Range(start, 1, end, 2), selectionRange: new Range(start, 1, start, 2) };
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

@@ -18,15 +18,7 @@ export const IActionWidgetService = createDecorator<IActionWidgetService>('actio
 export interface IActionWidgetService {
 	readonly _serviceBrand: undefined;
 	readonly isVisible: boolean;
-	show<T>(
-		user: string,
-		supportsPreview: boolean,
-		items: readonly IActionListItem<T>[],
-		delegate: IActionListDelegate<T>,
-		anchor: ContextViewAnchor,
-		listOptions?: IActionListOptions,
-		tabs?: ITabbedActionListShowOptions<T>,
-	): void;
+	show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions?: IActionListOptions, tabs?: ITabbedActionListShowOptions<T>): void;
 	hide(didCancel?: boolean): void;
 	updateItems<T>(items: readonly IActionListItem<T>[], options?: IActionListUpdateOptions): void;
 	focusFilter(): void;
@@ -52,42 +44,18 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		return this.current.value !== undefined;
 	}
 
-	public show<T>(
-		user: string,
-		supportsPreview: boolean,
-		items: readonly IActionListItem<T>[],
-		delegate: IActionListDelegate<T>,
-		anchor: ContextViewAnchor,
-		listOptions: IActionListOptions = {},
-		tabs?: ITabbedActionListShowOptions<T>,
-	): void {
+	public show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions: IActionListOptions = {}, tabs?: ITabbedActionListShowOptions<T>): void {
 		this.hide();
 		const lifetime = new DisposableStore();
 		const document = isHTMLElement(anchor) ? anchor.ownerDocument : this.contextViewService.container.ownerDocument;
 		const ariaHint = this.configurationService.getValue<boolean>(AccessibilityVerbositySettingId.ActionWidget)
 			? localize('actionWidget.helpHint', 'Press Alt+F1 for action menu accessibility help.')
 			: undefined;
-		const list = lifetime.add(
-			tabs
-				? this.instantiationService.createInstance(
-						TabbedActionListWidget<T>,
-						user,
-						tabs.createActionList(tabs.initialTab).items,
-						delegate,
-						this.contextViewService.container,
-						ariaHint,
-						supportsPreview,
-						listOptions,
-						tabs,
-					)
-				: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions),
-		);
+		const list = lifetime.add(tabs
+			? this.instantiationService.createInstance(TabbedActionListWidget<T>, user, tabs.createActionList(tabs.initialTab).items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions, tabs)
+			: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
 		this.list = list as ActionList<unknown>;
-		lifetime.add(
-			toDisposable(() => {
-				this.list = undefined;
-			}),
-		);
+		lifetime.add(toDisposable(() => { this.list = undefined; }));
 		const layout = (): void => {
 			list.domNode.style.width = `${list.layout(0)}px`;
 			this.contextViewService.layout();
@@ -96,11 +64,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		lifetime.add(addDisposableListener(getWindow(document), 'resize', layout));
 		const source = getActiveElement(document);
 		let focused = source;
-		lifetime.add(
-			addDisposableListener(document, 'focusin', () => {
-				focused = getActiveElement(document);
-			}),
-		);
+		lifetime.add(addDisposableListener(document, 'focusin', () => { focused = getActiveElement(document); }));
 		this.current.value = lifetime;
 		this.cancelOnHide = true;
 		delegate.onShow?.(list.domNode);
@@ -115,8 +79,8 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			onHide: reason => {
 				const didCancel = this.cancelOnHide;
 				// ContextView detaches content before this callback, so remember the last focused node.
-				const restore =
-					list.domNode.contains(focused) && isHTMLElement(source) && source.isConnected && (reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic);
+				const restore = list.domNode.contains(focused) && isHTMLElement(source) && source.isConnected &&
+					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic);
 				if (this.current.value === lifetime) {
 					this.current.clear();
 				}

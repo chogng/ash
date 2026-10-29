@@ -18,29 +18,15 @@ test('Academy sections retain identities, text positions, history and persisted 
 	model.dispatch(command.transaction);
 	const section = model.document.content[1]!;
 	assert.equal(section.type, 'documentSection');
-	assert.deepEqual(
-		section.content.map(node => node.id),
-		['b', 'c'],
-	);
+	assert.deepEqual(section.content.map(node => node.id), ['b', 'c']);
 	assert.equal(model.getValue(), 'Alpha\nBeta\nGamma');
-	model.dispatch(
-		new DocumentTransaction().setNodeAttributes(section.id, {
-			...section.attrs,
-			pageSize: 'letter',
-			pageOrientation: 'landscape',
-			pageMargin: 54,
-		}),
-	);
+	model.dispatch(new DocumentTransaction().setNodeAttributes(section.id, { ...section.attrs, pageSize: 'letter', pageOrientation: 'landscape', pageMargin: 54 }));
 	assert.deepEqual(deserializeDocument(serializeDocument(model.document, schema), schema), model.document);
 	model.dispatch(createRemoveSectionCommand(model.document, 'b')!.transaction);
-	assert.deepEqual(
-		model.document.content.map(node => node.id),
-		['a', 'b', 'c'],
-	);
+	assert.deepEqual(model.document.content.map(node => node.id), ['a', 'b', 'c']);
 	model.undoBlocks();
 	assert.equal(model.document.content[1]!.attrs.pageOrientation, 'landscape');
-	model.undoBlocks();
-	model.undoBlocks();
+	model.undoBlocks(); model.undoBlocks();
 	assert.deepEqual(model.document, original);
 	model.redoBlocks();
 	assert.equal(model.document.content[1]!.content[0]!.id, 'b');
@@ -85,18 +71,7 @@ test('Academy block revisions coalesce evidence and accept/reject through the sa
 });
 
 test('Academy rejects malformed review data and nested sections at the schema boundary', () => {
-	assert.throws(() =>
-		schema.createNode('reviewComment', {
-			attrs: {
-				author: 'a',
-				createdAt: '',
-				body: 'x',
-				quote: '',
-				resolved: false,
-				anchor: '{"kind":"text","anchor":{"nodeId":"a","offset":-1}}',
-			},
-		}),
-	);
+	assert.throws(() => schema.createNode('reviewComment', { attrs: { author: 'a', createdAt: '', body: 'x', quote: '', resolved: false, anchor: '{"kind":"text","anchor":{"nodeId":"a","offset":-1}}' } }));
 	const inner = schema.createNode('documentSection', { content: [paragraph('a', 'Alpha')] });
 	assert.throws(() => schema.validate({ ...schema.createDocument(), content: [{ ...inner, content: [inner] }] }));
 });
@@ -112,8 +87,7 @@ test('Academy copy and replacement cross section boundaries without page-local i
 	model.dispatch(createReplaceTextCommand(schema, document, 'a', selection, 'X')!.transaction);
 	assert.equal(model.getValue(), 'AlXma');
 	assert.equal(model.document.content.length, 1);
-	model.undoBlocks();
-	assert.deepEqual(model.document, document);
+	model.undoBlocks(); assert.deepEqual(model.document, document);
 });
 
 test('Academy rebases a new comment over peer typing and preserves peer edits on review acceptance', async () => {
@@ -129,26 +103,20 @@ test('Academy rebases a new comment over peer typing and preserves peer edits on
 	const change = model.document.content.find(node => node.type === 'reviewChange')!;
 	model.dispatch(createResolveRevisionCommand(schema, model.document, change.id, true, 'a')!.transaction);
 	assert.equal(model.getValue(), '中Alpha!');
-	model.undoBlocks();
-	assert.equal(model.getValue(), '中Alpha!');
+	model.undoBlocks(); assert.equal(model.getValue(), '中Alpha!');
 });
 
 test('Academy structural revisions promote related block baselines into one reversible review unit', () => {
-	const original = {
-		...schema.createDocument([paragraph('a', 'Alpha'), paragraph('b', 'Beta')]),
-		attrs: { trackChanges: true },
-	};
+	const original = { ...schema.createDocument([paragraph('a', 'Alpha'), paragraph('b', 'Beta')]), attrs: { trackChanges: true } };
 	using model = DocumentTextModel.create(schema, original);
 	model.dispatch(new DocumentTransaction().replaceText('b-text', 0, 4, 'Changed'));
 	model.dispatch(createDocumentSectionCommand(schema, model.document, 'b')!.transaction);
 	const records = model.document.content.filter(node => node.type === 'reviewChange');
-	assert.equal(records.length, 1);
-	assert.equal(records[0]!.attrs.scope, 'structure');
+	assert.equal(records.length, 1); assert.equal(records[0]!.attrs.scope, 'structure');
 	model.dispatch(new DocumentTransaction().replaceText('b-text', 7, 7, '!'));
 	model.dispatch(createResolveRevisionCommand(schema, model.document, records[0]!.id, false, 'b')!.transaction);
 	assert.deepEqual(model.document, original);
-	model.undoBlocks();
-	assert.equal(model.getValue(), 'Alpha\nChanged!');
+	model.undoBlocks(); assert.equal(model.getValue(), 'Alpha\nChanged!');
 	assert.equal(model.document.content[1]!.type, 'documentSection');
 });
 
@@ -162,21 +130,13 @@ test('Academy comment positions survive marked-run replacement and restore exact
 	const mapped = JSON.parse(String(comment.attrs.anchor));
 	const { documentSelectionToText } = await import('../../../../../extensions/academy/common/model/documentSerialization.js');
 	assert.equal(documentSelectionToText(model.document, mapped), 'lph');
-	model.undoBlocks();
-	assert.deepEqual(JSON.parse(String(model.document.content[1]!.attrs.anchor)), selection);
+	model.undoBlocks(); assert.deepEqual(JSON.parse(String(model.document.content[1]!.attrs.anchor)), selection);
 });
 
 test('Academy reviews a style definition and its new references atomically', () => {
 	const original = { ...schema.createDocument([paragraph('a', 'Alpha')]), attrs: { trackChanges: true } };
 	using model = DocumentTextModel.create(schema, original);
-	model.dispatch(
-		new DocumentTransaction()
-			.setNodeAttributes(original.id, {
-				...original.attrs,
-				paragraphStyles: JSON.stringify([{ id: 'new-style', name: 'New style', level: 0, attrs: { fontSize: 15 } }]),
-			})
-			.setNodeAttributes('a', { styleId: 'new-style' }),
-	);
+	model.dispatch(new DocumentTransaction().setNodeAttributes(original.id, { ...original.attrs, paragraphStyles: JSON.stringify([{ id: 'new-style', name: 'New style', level: 0, attrs: { fontSize: 15 } }]) }).setNodeAttributes('a', { styleId: 'new-style' }));
 	const revision = model.document.content.find(node => node.type === 'reviewChange')!;
 	assert.equal(revision.attrs.scope, 'structure');
 	model.dispatch(createResolveRevisionCommand(schema, model.document, revision.id, false, 'a')!.transaction);
@@ -185,20 +145,12 @@ test('Academy reviews a style definition and its new references atomically', () 
 
 test('Academy multiline paste across sections retains the destination section and its page intent', async () => {
 	const { createPasteTextCommand } = await import('../../../../../extensions/academy/common/commands/documentCommands.js');
-	const document = schema.createDocument([
-		schema.createNode('documentSection', {
-			id: 'first-section',
-			attrs: { pageSize: 'letter' },
-			content: [paragraph('a', 'Alpha')],
-		}),
-		schema.createNode('documentSection', { content: [paragraph('b', 'Beta')] }),
-	]);
+	const document = schema.createDocument([schema.createNode('documentSection', { id: 'first-section', attrs: { pageSize: 'letter' }, content: [paragraph('a', 'Alpha')] }), schema.createNode('documentSection', { content: [paragraph('b', 'Beta')] })]);
 	using model = DocumentTextModel.create(schema, document);
 	model.dispatch(createPasteTextCommand(schema, document, 'a', textSelection({ nodeId: 'a-text', offset: 2 }, { nodeId: 'b-text', offset: 2 }), 'One\nTwo')!.transaction);
 	assert.equal(model.getValue(), 'AlOne\nTwota');
 	assert.equal(model.document.content.length, 1);
 	assert.equal(model.document.content[0]!.id, 'first-section');
 	assert.equal(model.document.content[0]!.content.length, 2);
-	model.undoBlocks();
-	assert.deepEqual(model.document, document);
+	model.undoBlocks(); assert.deepEqual(model.document, document);
 });

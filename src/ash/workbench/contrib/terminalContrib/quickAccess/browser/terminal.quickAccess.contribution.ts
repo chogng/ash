@@ -9,28 +9,18 @@ import { TerminalQuickAccessProvider } from './terminalQuickAccess.js';
 QuickAccessRegistry.register({
 	prefix: TerminalQuickAccessProvider.PREFIX,
 	ctor: TerminalQuickAccessProvider,
-	get placeholder() {
-		return localize('terminal.quickAccess.placeholder', 'Type the name of a terminal to open');
-	},
-	get helpLabel() {
-		return localize('terminal.quickAccess.help', 'Show All Opened Terminals');
-	},
+	get placeholder() { return localize('terminal.quickAccess.placeholder', 'Type the name of a terminal to open'); },
+	get helpLabel() { return localize('terminal.quickAccess.help', 'Show All Opened Terminals'); },
 });
 
-registerAction2(
-	class SwitchActiveTerminalAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.action.quickOpenTerm',
-				title: localize2('terminal.quickAccess.switch', 'Terminal: Switch Active Terminal'),
-				f1: true,
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IQuickInputService).quickAccess.show(TerminalQuickAccessProvider.PREFIX);
-		}
-	},
-);
+registerAction2(class SwitchActiveTerminalAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.quickOpenTerm', title: localize2('terminal.quickAccess.switch', 'Terminal: Switch Active Terminal'), f1: true });
+	}
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(IQuickInputService).quickAccess.show(TerminalQuickAccessProvider.PREFIX);
+	}
+});
 
 for (const [id, next] of [
 	['workbench.action.quickOpenNavigateNextInTerminalPicker', true],
@@ -39,6 +29,7 @@ for (const [id, next] of [
 	CommandsRegistry.register(id, accessor => {
 		const quickInput = accessor.get(IQuickInputService);
 		const picker = quickInput.currentQuickInput;
-		if (picker?.type === QuickInputType.QuickPick && (picker as IQuickPick<IQuickPickItem>).value.startsWith(TerminalQuickAccessProvider.PREFIX)) quickInput.navigate(next);
+		if (picker?.type === QuickInputType.QuickPick
+			&& (picker as IQuickPick<IQuickPickItem>).value.startsWith(TerminalQuickAccessProvider.PREFIX)) quickInput.navigate(next);
 	});
 }

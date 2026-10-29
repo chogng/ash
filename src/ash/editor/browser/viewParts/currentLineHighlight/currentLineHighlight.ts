@@ -63,21 +63,13 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 		return this._readFromSelections();
 	}
 
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
-		return true;
-	}
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
-		return true;
-	}
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
-		return true;
-	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
 		return event.scrollWidthChanged || event.scrollTopChanged;
 	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
-		return true;
-	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public override onFocusChanged(event: viewEvents.ViewFocusChangedEvent): boolean {
 		if (!this._renderLineHighlightOnlyWhenFocus) return false;
@@ -91,12 +83,16 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 			return;
 		}
 		const exactLines = new Set(this._cursorLineNumbers);
-		const activeModelLines = this._wordWrap ? new Set(this._cursorLineNumbers.map(lineNumber => this.modelLineAt(lineNumber))) : undefined;
+		const activeModelLines = this._wordWrap
+			? new Set(this._cursorLineNumbers.map(lineNumber => this.modelLineAt(lineNumber)))
+			: undefined;
 		this._renderData = [];
 		for (let lineNumber = context.visibleRange.startLineNumber; lineNumber <= context.visibleRange.endLineNumber; lineNumber += 1) {
 			const exact = exactLines.has(lineNumber);
 			const wrapped = activeModelLines?.has(this.modelLineAt(lineNumber)) ?? false;
-			this._renderData[lineNumber - context.visibleRange.startLineNumber] = exact || wrapped ? this._renderOne(context, exact) : '';
+			this._renderData[lineNumber - context.visibleRange.startLineNumber] = exact || wrapped
+				? this._renderOne(context, exact)
+				: '';
 		}
 	}
 
@@ -119,10 +115,9 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 	private _readFromSelections(): boolean {
 		const cursorLineNumbers = [...new Set(this._selections.map(selection => selection.positionLineNumber))].sort((left, right) => left - right);
 		const selectionIsEmpty = this._selections.every(selection => selection.isEmpty());
-		const changed =
-			selectionIsEmpty !== this._selectionIsEmpty ||
-			cursorLineNumbers.length !== this._cursorLineNumbers.length ||
-			cursorLineNumbers.some((lineNumber, index) => lineNumber !== this._cursorLineNumbers[index]);
+		const changed = selectionIsEmpty !== this._selectionIsEmpty
+			|| cursorLineNumbers.length !== this._cursorLineNumbers.length
+			|| cursorLineNumbers.some((lineNumber, index) => lineNumber !== this._cursorLineNumbers[index]);
 		this._selectionIsEmpty = selectionIsEmpty;
 		this._cursorLineNumbers = cursorLineNumbers;
 		return changed;
@@ -154,42 +149,33 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 /** Projects the active logical line into the content layer. */
 export class CurrentLineHighlightOverlay extends AbstractLineHighlightOverlay {
 	protected _renderOne(context: RenderingContext, exact: boolean): string {
-		return renderHighlight(
-			['current-line', 'stanza-editor-current-line-highlight', ...(this._shouldRenderOther() ? ['current-line-both'] : []), ...(exact ? ['current-line-exact'] : [])],
-			Math.max(context.scrollWidth, this._contentWidth),
-		);
+		return renderHighlight([
+			'current-line',
+			'stanza-editor-current-line-highlight',
+			...(this._shouldRenderOther() ? ['current-line-both'] : []),
+			...(exact ? ['current-line-exact'] : []),
+		], Math.max(context.scrollWidth, this._contentWidth));
 	}
 
-	protected _shouldRenderThis(): boolean {
-		return this._shouldRenderInContent();
-	}
-	protected _shouldRenderOther(): boolean {
-		return this._shouldRenderInMargin();
-	}
+	protected _shouldRenderThis(): boolean { return this._shouldRenderInContent(); }
+	protected _shouldRenderOther(): boolean { return this._shouldRenderInMargin(); }
 }
 
 /** Projects the active logical line into the margin layer. */
 export class CurrentLineMarginHighlightOverlay extends AbstractLineHighlightOverlay {
 	protected _renderOne(_context: RenderingContext, exact: boolean): string {
 		const margin = this._shouldRenderInMargin();
-		return renderHighlight(
-			[
-				'current-line',
-				'stanza-editor-current-line-margin-highlight',
-				...(margin ? ['current-line-margin'] : []),
-				...(this._shouldRenderOther() ? ['current-line-margin-both'] : []),
-				...(margin && exact ? ['current-line-exact-margin'] : []),
-			],
-			this._contentLeft,
-		);
+		return renderHighlight([
+			'current-line',
+			'stanza-editor-current-line-margin-highlight',
+			...(margin ? ['current-line-margin'] : []),
+			...(this._shouldRenderOther() ? ['current-line-margin-both'] : []),
+			...(margin && exact ? ['current-line-exact-margin'] : []),
+		], this._contentLeft);
 	}
 
-	protected _shouldRenderThis(): boolean {
-		return true;
-	}
-	protected _shouldRenderOther(): boolean {
-		return this._shouldRenderInContent();
-	}
+	protected _shouldRenderThis(): boolean { return true; }
+	protected _shouldRenderOther(): boolean { return this._shouldRenderInContent(); }
 }
 
 function renderHighlight(classes: readonly string[], width: number): string {

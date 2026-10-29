@@ -13,37 +13,10 @@ suite('App Server Chat Debug service', () => {
 		const calls: unknown[] = [];
 		let sessionId = 'session';
 		const threads = {
-			readTrace: async (params: unknown) => {
-				calls.push(params);
-				return {
-					trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] },
-					cursors: {},
-					hasMore: false,
-				};
-			},
-			readTraceDiagnostics: async (params: unknown) => {
-				calls.push(params);
-				return {
-					diagnostics: {
-						formatVersion: 2,
-						captureId: null,
-						recordingStatus: 'recording',
-						droppedRecords: 0,
-						pendingRecords: 0,
-						events: [],
-					},
-					cursor: 0,
-					hasMore: false,
-				};
-			},
-			readTracePayload: async (params: unknown) => {
-				calls.push(params);
-				return { payload: { semantic: true } };
-			},
-			readTraceGraph: async (params: unknown) => {
-				calls.push(params);
-				return { graph: { nodes: {}, edges: [], warnings: [] } };
-			},
+			readTrace: async (params: unknown) => { calls.push(params); return { trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false }; },
+			readTraceDiagnostics: async (params: unknown) => { calls.push(params); return { diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'recording', droppedRecords: 0, pendingRecords: 0, events: [] }, cursor: 0, hasMore: false }; },
+			readTracePayload: async (params: unknown) => { calls.push(params); return { payload: { semantic: true } }; },
+			readTraceGraph: async (params: unknown) => { calls.push(params); return { graph: { nodes: {}, edges: [], warnings: [] } }; },
 		} as unknown as IAgentThreadService;
 		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatDebugService);
 		assert.equal(registrations.length, 1);
@@ -54,12 +27,7 @@ suite('App Server Chat Debug service', () => {
 		assert.equal((await trace.readTraceDiagnostics('session', 0)).diagnostics.formatVersion, 2);
 		assert.deepEqual(await trace.readTracePayload('session', 'capture', 'payload-1'), { semantic: true });
 		assert.deepEqual(await trace.readTraceGraph('session'), { nodes: {}, edges: [], warnings: [] });
-		assert.deepEqual(calls, [
-			{ sessionId: 'session', after: {}, limit: 500 },
-			{ sessionId: 'session', after: 0, limit: 500 },
-			{ sessionId: 'session', captureId: 'capture', payloadId: 'payload-1' },
-			{ sessionId: 'session' },
-		]);
+		assert.deepEqual(calls, [{ sessionId: 'session', after: {}, limit: 500 }, { sessionId: 'session', after: 0, limit: 500 }, { sessionId: 'session', captureId: 'capture', payloadId: 'payload-1' }, { sessionId: 'session' }]);
 		sessionId = 'another-session';
 		await assert.rejects(trace.readTrace('session', {}));
 	});

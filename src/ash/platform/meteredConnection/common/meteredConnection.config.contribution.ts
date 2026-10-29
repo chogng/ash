@@ -15,10 +15,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'select',
 		title: localize('network.meteredConnection.title', 'Metered connection'),
-		description: localize(
-			'network.meteredConnection.description',
-			'Pause automatic Ash Desktop update checks and startup language-pack cache synchronization on metered connections. Manual checks, downloads, and language-pack refreshes remain available. Automatic detection uses browser data-saving and metered signals; connection speed alone does not determine billing status.',
-		),
+		description: localize('network.meteredConnection.description', 'Pause automatic Ash Desktop update checks and startup language-pack cache synchronization on metered connections. Manual checks, downloads, and language-pack refreshes remain available. Automatic detection uses browser data-saving and metered signals; connection speed alone does not determine billing status.'),
 		options: [
 			{ value: 'auto', label: localize('network.meteredConnection.auto', 'Detect automatically') },
 			{ value: 'on', label: localize('network.meteredConnection.on', 'Always treat as metered') },

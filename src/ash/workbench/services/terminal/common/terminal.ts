@@ -33,7 +33,7 @@ export interface ITerminalReloadState {
 	readonly workspaceId: string;
 	readonly remoteAuthority?: string;
 	readonly instances: readonly ITerminalSerializedState[];
-	readonly groups: readonly { readonly ids: readonly number[]; readonly sizes: readonly number[] }[];
+	readonly groups: readonly { readonly ids: readonly number[]; readonly sizes: readonly number[]; }[];
 	readonly activeId?: number;
 	readonly focusedId?: number;
 }

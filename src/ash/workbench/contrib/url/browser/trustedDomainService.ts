@@ -25,22 +25,16 @@ export class TrustedDomainService extends Disposable implements ITrustedDomainSe
 	) {
 		super();
 		this.reload();
-		this._register(
-			storage.onDidChangeValue(event => {
-				if (event.scope === StorageScope.APPLICATION && event.key === storageKey) {
-					this.reload();
-					this.changed.fire();
-				}
-			}),
-		);
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.APPLICATION && event.key === storageKey) {
+				this.reload();
+				this.changed.fire();
+			}
+		}));
 	}
 
-	get content(): string {
-		return this.source;
-	}
-	get trustedDomains(): readonly string[] {
-		return this.rules;
-	}
+	get content(): string { return this.source; }
+	get trustedDomains(): readonly string[] { return this.rules; }
 
 	isValid(resource: URI): boolean {
 		return isURLDomainTrusted(resource, this.rules);

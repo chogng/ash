@@ -66,7 +66,7 @@ export class Margin extends ViewPart {
 		return super.onScrollChanged(event) || event.scrollTopChanged || event.scrollLeftChanged;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {}
+	public override prepareRender(_context: RenderingContext): void { }
 
 	public render(context: RestrictedRenderingContext): void {
 		this._domNode.setLayerHinting(this._canUseLayerHinting);

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type {} from './fixtures/composite.page.js';
+import type { } from './fixtures/composite.page.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../test/unit/browser/context.js';
 
@@ -36,10 +36,7 @@ suite('viewpaneLayout browser component', () => {
 			await header.press('ArrowRight');
 			expect(await page.evaluate(() => window.viewpaneLayoutIntegration.watchers())).toBe(1);
 			await create.focus();
-			await testInfo.attach('short-symphony-pane', {
-				body: await page.locator('#root').screenshot(),
-				contentType: 'image/png',
-			});
+			await testInfo.attach('short-symphony-pane', { body: await page.locator('#root').screenshot(), contentType: 'image/png' });
 			await page.evaluate(() => window.viewpaneLayoutIntegration.dispose());
 			expect(await page.evaluate(() => window.viewpaneLayoutIntegration.watchers())).toBe(0);
 			expect(errors).toEqual([]);
@@ -80,11 +77,7 @@ suite('viewpaneLayout browser component', () => {
 		expect(errors).toEqual([]);
 	});
 
-	for (const [view, content] of [
-		['problems', '.ash-problems-results'],
-		['bulk', '.ash-bulk-edit-list'],
-		['ports', '.ash-remote-ports-list'],
-	]) {
+	for (const [view, content] of [['problems', '.ash-problems-results'], ['bulk', '.ash-bulk-edit-list'], ['ports', '.ash-remote-ports-list']]) {
 		test(`${view} retains a usable list beside wrapping controls or discovery errors`, async function () {
 			const { page } = browserTests;
 
@@ -134,13 +127,7 @@ suite('viewpaneLayout browser component', () => {
 		expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 	});
 
-	for (const [locale, theme] of [
-		['en', 'ash-light'],
-		['zh-CN', 'ash-light'],
-		['zh-CN', 'ash-dark'],
-		['zh-CN', 'ash-high-contrast-dark'],
-		['zh-CN', 'ash-high-contrast-light'],
-	]) {
+	for (const [locale, theme] of [['en', 'ash-light'], ['zh-CN', 'ash-light'], ['zh-CN', 'ash-dark'], ['zh-CN', 'ash-high-contrast-dark'], ['zh-CN', 'ash-high-contrast-light']]) {
 		test(`Problems keeps compact filters and keyboard menu access (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -163,21 +150,13 @@ suite('viewpaneLayout browser component', () => {
 			const bounds = await title.locator('.ash-problems-controls').evaluate(element => {
 				const input = element.querySelector('input')!.getBoundingClientRect();
 				const menu = element.querySelector('button')!.getBoundingClientRect();
-				return {
-					overflow: element.scrollWidth - element.clientWidth,
-					sameRow: Math.abs(input.top - menu.top) < 4,
-					inputWidth: input.width,
-					embedded: element.querySelector('.ash-problems-filter')!.contains(element.querySelector('button')),
-				};
+				return { overflow: element.scrollWidth - element.clientWidth, sameRow: Math.abs(input.top - menu.top) < 4, inputWidth: input.width, embedded: element.querySelector('.ash-problems-filter')!.contains(element.querySelector('button')) };
 			});
 			expect(bounds.overflow).toBeLessThanOrEqual(1);
 			expect(bounds.sameRow).toBe(true);
 			expect(bounds.embedded).toBe(true);
 			expect(bounds.inputWidth).toBeGreaterThan(80);
-			const collapse = title.getByRole('button', {
-				name: locale === 'en' ? 'Collapse All' : '全部折叠',
-				exact: true,
-			});
+			const collapse = title.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
 			await collapse.press('Enter');
 			const heading = pane.locator('.ash-problems-file-heading').first();
 			await expect(heading).toHaveAttribute('aria-expanded', 'false');
@@ -188,10 +167,7 @@ suite('viewpaneLayout browser component', () => {
 			await expect(heading).toHaveAttribute('aria-expanded', 'true');
 			await collapse.focus();
 			await page.keyboard.press('ArrowRight');
-			const copy = title.getByRole('button', {
-				name: locale === 'en' ? 'Copy Problems' : '复制问题',
-				exact: true,
-			});
+			const copy = title.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
 			await expect(copy).toBeFocused();
 			await copy.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(1);
@@ -200,18 +176,12 @@ suite('viewpaneLayout browser component', () => {
 			await page.keyboard.press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('ArrowDown');
-			const errorOption = page.getByRole('menuitemcheckbox', {
-				name: locale === 'en' ? 'Errors' : '错误',
-				exact: true,
-			});
+			const errorOption = page.getByRole('menuitemcheckbox', { name: locale === 'en' ? 'Errors' : '错误', exact: true });
 			await expect(errorOption).toHaveAttribute('aria-checked', 'true');
 			await errorOption.press('Enter');
 			await expect(pane.locator('.ash-problems-item')).toHaveCount(1);
 			await expect(filter).toBeFocused();
-			const clear = pane.getByRole('button', {
-				name: locale === 'en' ? 'Clear Filters' : '清除筛选',
-				exact: true,
-			});
+			const clear = pane.getByRole('button', { name: locale === 'en' ? 'Clear Filters' : '清除筛选', exact: true });
 			await clear.press('Enter');
 			await expect(input).toBeFocused();
 			await expect(pane.locator('.ash-problems-item')).toHaveCount(2);
@@ -248,12 +218,7 @@ suite('viewpaneLayout browser component', () => {
 				const filename = header.locator('.ash-view-pane-header-description');
 				const tree = pane.getByRole('tree');
 				await expect(filename).toHaveText('file.txt');
-				await expect(
-					header.getByRole('button', {
-						name: `${locale === 'en' ? 'Timeline' : '时间线'} file.txt`,
-						exact: true,
-					}),
-				).toBeVisible();
+				await expect(header.getByRole('button', { name: `${locale === 'en' ? 'Timeline' : '时间线'} file.txt`, exact: true })).toBeVisible();
 				await expect(tree.getByRole('treeitem').first()).toBeVisible();
 				const headerBounds = (await header.boundingBox())!;
 				const treeBounds = (await tree.boundingBox())!;
@@ -266,10 +231,7 @@ suite('viewpaneLayout browser component', () => {
 				await tree.press('Home');
 				await tree.press('Enter');
 				await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands)).toEqual(['fixture.open']);
-				await testInfo.attach(`timeline-${locale}-${theme || 'light'}`, {
-					body: await pane.screenshot(),
-					contentType: 'image/png',
-				});
+				await testInfo.attach(`timeline-${locale}-${theme || 'light'}`, { body: await pane.screenshot(), contentType: 'image/png' });
 				const longName = 'a-very-long-filename-that-must-not-push-the-view-title-out-of-the-header.txt';
 				await page.evaluate(name => window.viewpaneLayoutIntegration.timeline.setFile(`/fixture/${name}`), longName);
 				await expect(filename).toHaveText(longName);

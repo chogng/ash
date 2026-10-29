@@ -25,15 +25,9 @@ test('registered folder opener reveals directories, preserves file fallback and 
 	using fixture = new OpenerFixture();
 	const folder = URI.file('/project/nested');
 	await fixture.provider.createDirectory(folder);
-	await fixture.provider.writeFile(URI.file('/project/file.txt'), new Uint8Array([65]), {
-		create: true,
-		overwrite: false,
-	});
+	await fixture.provider.writeFile(URI.file('/project/file.txt'), new Uint8Array([65]), { create: true, overwrite: false });
 	assert.equal(await fixture.opener.open(URI.file('/project/other/../nested').with({ fragment: '3,1' })), true);
-	assert.deepEqual(
-		fixture.commands.map(call => [call[0], (call[1] as URI).path]),
-		[['revealInExplorer', '/project/nested']],
-	);
+	assert.deepEqual(fixture.commands.map(call => [call[0], (call[1] as URI).path]), [['revealInExplorer', '/project/nested']]);
 	assert.equal(fixture.fallback.length, 0);
 	assert.equal(await fixture.opener.open(URI.file('/project/file.txt')), false);
 	assert.equal(await fixture.opener.open(URI.file('/project/missing')), false);
@@ -63,9 +57,7 @@ test('pending stat cannot reveal after disposal; only native Sessions reveals an
 	const outside = URI.file('/outside');
 	await fixture.provider.createDirectory(outside);
 	const revealed: URI[] = [];
-	using native = fixture.services.createInstance(WorkbenchOpenerContribution, async (resource: URI) => {
-		revealed.push(resource);
-	});
+	using native = fixture.services.createInstance(WorkbenchOpenerContribution, async (resource: URI) => { revealed.push(resource); });
 	assert.equal(await native.open(outside), false);
 	IsSessionsWindowContext.bindTo(fixture.context).set(true);
 	assert.equal(await native.open(outside), true);
@@ -95,30 +87,16 @@ class OpenerFixture extends DisposableStore {
 	constructor() {
 		super();
 		this.add(this.files.registerProvider('file', this.provider));
-		const workspace = this.add(
-			new TestWorkspaceService({
-				id: 'project',
-				folders: [{ id: 'root', uri: URI.file('/project'), name: 'project', index: 0 }],
-			}),
-		);
+		const workspace = this.add(new TestWorkspaceService({ id: 'project', folders: [{ id: 'root', uri: URI.file('/project'), name: 'project', index: 0 }] }));
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IWorkspaceContextService, workspace);
 		this.services.registerInstance(IContextKeyService, this.context);
 		const editors = this.add(new StandaloneCodeEditorService());
-		this.add(
-			editors.registerCodeEditorOpenHandler(async input => {
-				this.fallback.push(input.resource);
-				return null;
-			}),
-		);
+		this.add(editors.registerCodeEditorOpenHandler(async input => { this.fallback.push(input.resource); return null; }));
 		this.services.registerInstance(ICodeEditorService, editors);
 		this.services.registerInstance(ICommandService, {
-			onWillExecuteCommand: Event.None,
-			onDidExecuteCommand: Event.None,
-			executeCommand: async <T>(id: string, ...args: unknown[]): Promise<T> => {
-				this.commands.push([id, ...args]);
-				return undefined as T;
-			},
+			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+			executeCommand: async <T>(id: string, ...args: unknown[]): Promise<T> => { this.commands.push([id, ...args]); return undefined as T; },
 		});
 		this.opener = this.add(this.services.createInstance(OpenerService));
 		this.services.registerInstance(IOpenerService, this.opener);
@@ -259,27 +237,9 @@ suite('link browser component', () => {
 				expected.style.color = 'var(--ash-focusBorder)';
 				const focus = getComputedStyle(expected).color;
 				expected.remove();
-				return {
-					color: style.color,
-					expected: color,
-					focus: style.outlineColor,
-					expectedFocus: focus,
-					outline: style.outlineStyle,
-					width: style.outlineWidth,
-					focused: element.matches(':focus-visible'),
-					underline: style.textDecorationLine,
-				};
+				return { color: style.color, expected: color, focus: style.outlineColor, expectedFocus: focus, outline: style.outlineStyle, width: style.outlineWidth, focused: element.matches(':focus-visible'), underline: style.textDecorationLine };
 			});
-			expect(state).toEqual({
-				color: state.expected,
-				expected: state.expected,
-				focus: state.expectedFocus,
-				expectedFocus: state.expectedFocus,
-				outline: 'solid',
-				width: '1px',
-				focused: true,
-				underline: 'underline',
-			});
+			expect(state).toEqual({ color: state.expected, expected: state.expected, focus: state.expectedFocus, expectedFocus: state.expectedFocus, outline: 'solid', width: '1px', focused: true, underline: 'underline' });
 		}
 		await page.mouse.move(0, 0);
 		expect(await page.locator('#custom-link .ash-link').evaluate(element => getComputedStyle(element).color)).toBe('rgb(255, 128, 128)');
@@ -305,14 +265,11 @@ suite('link browser component', () => {
 		await page.goto('/link.html');
 		await page.evaluate(() => window.ashLinkIntegration.openOutputEditor());
 		await page.evaluate(() => window.ashLinkIntegration.appendOutput());
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState()))
-			.toEqual({
-				panelText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
-				editorText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
-				sameModel: true,
-				readonly: true,
-			});
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState())).toEqual({
+			panelText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
+			editorText: 'src/main.ts:12:7: check this file\nsrc/other.ts(4,2): next file\n',
+			sameModel: true, readonly: true,
+		});
 		await page.evaluate(() => window.ashLinkIntegration.filterOutput('other'));
 		await expect(page.locator('#output .view-lines')).not.toContainText('check this file');
 		await expect(page.locator('#output .view-lines')).toContainText('next file');
@@ -323,10 +280,7 @@ suite('link browser component', () => {
 		expect((await page.evaluate(() => window.ashLinkIntegration.getOutputState())).editorText).not.toContain('must not change');
 		await page.evaluate(() => window.ashLinkIntegration.clearOutput());
 		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState())).toEqual({ panelText: '', editorText: '', sameModel: true, readonly: true });
-		await page.evaluate(() => {
-			window.ashLinkIntegration.disposeOutput();
-			window.ashLinkIntegration.appendOutput();
-		});
+		await page.evaluate(() => { window.ashLinkIntegration.disposeOutput(); window.ashLinkIntegration.appendOutput(); });
 		await expect(page.locator('#live-output-editor .view-lines')).toContainText('next file');
 	});
 
@@ -336,14 +290,10 @@ suite('link browser component', () => {
 		await page.goto('/link.html');
 		await expect(page.locator('#output .view-lines')).toContainText('check this file');
 		await page.evaluate(() => window.ashLinkIntegration.appendOutputLines(60));
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const scroll = window.ashLinkIntegration.getOutputScroll();
-					return scroll.end > 0 && scroll.top === scroll.end;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => {
+			const scroll = window.ashLinkIntegration.getOutputScroll();
+			return scroll.end > 0 && scroll.top === scroll.end;
+		})).toBe(true);
 		await page.locator('#output .stanza-editor').hover();
 		await page.mouse.wheel(0, -5000);
 		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputScroll().top)).toBe(0);
@@ -352,14 +302,10 @@ suite('link browser component', () => {
 		await page.evaluate(() => window.ashLinkIntegration.appendOutputLines(10));
 		expect(await page.evaluate(() => window.ashLinkIntegration.getOutputScroll().top)).toBe(0);
 		await follow.click();
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const scroll = window.ashLinkIntegration.getOutputScroll();
-					return scroll.top === scroll.end;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => {
+			const scroll = window.ashLinkIntegration.getOutputScroll();
+			return scroll.top === scroll.end;
+		})).toBe(true);
 		const input = page.locator('#output .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('ControlOrMeta+f');
@@ -390,13 +336,7 @@ suite('link browser component', () => {
 				const focusColor = getComputedStyle(probe).color;
 				probe.remove();
 				const widget = document.querySelector('.ash-output-filter-widget')!;
-				return {
-					warning: getComputedStyle(element).color,
-					warningColor,
-					focus: getComputedStyle(widget).borderColor,
-					focusColor,
-					width: getComputedStyle(widget).borderWidth,
-				};
+				return { warning: getComputedStyle(element).color, warningColor, focus: getComputedStyle(widget).borderColor, focusColor, width: getComputedStyle(widget).borderWidth };
 			});
 			expect(colors.warning).toBe(colors.warningColor);
 			expect(colors.focus).toBe(colors.focusColor);
@@ -417,6 +357,7 @@ suite('link browser component', () => {
 			await context.close();
 		}
 	});
+
 
 	for (const cowork of [false, true]) {
 		test(`trusted command links execute object arguments in ${cowork ? 'Sessions' : 'Workbench'} and stop after failure`, async function () {

@@ -20,26 +20,11 @@ export const CONTEXT_FIND_INPUT_FOCUSED = new RawContextKey<boolean>('findInputF
 export const CONTEXT_REPLACE_INPUT_FOCUSED = new RawContextKey<boolean>('replaceInputFocussed', false);
 export const CONTEXT_FIND_WIDGET_FOCUSED = new RawContextKey<boolean>('findWidgetFocused', false);
 
-export const ToggleCaseSensitiveKeybinding = {
-	primary: KeyMod.Alt | KeyCode.KeyC,
-	mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyC },
-};
-export const ToggleWholeWordKeybinding = {
-	primary: KeyMod.Alt | KeyCode.KeyW,
-	mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyW },
-};
-export const ToggleRegexKeybinding = {
-	primary: KeyMod.Alt | KeyCode.KeyR,
-	mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyR },
-};
-export const ToggleSearchScopeKeybinding = {
-	primary: KeyMod.Alt | KeyCode.KeyL,
-	mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyL },
-};
-export const TogglePreserveCaseKeybinding = {
-	primary: KeyMod.Alt | KeyCode.KeyP,
-	mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyP },
-};
+export const ToggleCaseSensitiveKeybinding = { primary: KeyMod.Alt | KeyCode.KeyC, mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyC } };
+export const ToggleWholeWordKeybinding = { primary: KeyMod.Alt | KeyCode.KeyW, mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyW } };
+export const ToggleRegexKeybinding = { primary: KeyMod.Alt | KeyCode.KeyR, mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyR } };
+export const ToggleSearchScopeKeybinding = { primary: KeyMod.Alt | KeyCode.KeyL, mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyL } };
+export const TogglePreserveCaseKeybinding = { primary: KeyMod.Alt | KeyCode.KeyP, mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyP } };
 
 export const FIND_IDS = {
 	StartFindAction: 'actions.find',
@@ -73,45 +58,30 @@ export class FindModelBoundToEditorModel extends Disposable {
 	private changingModel = false;
 	private searchError: TextSearchQueryError | null = null;
 
-	constructor(
-		private readonly editor: ICodeEditor,
-		private readonly state: FindReplaceState,
-	) {
+	constructor(private readonly editor: ICodeEditor, private readonly state: FindReplaceState) {
 		super();
 		this.bindModel();
 		this._register(editor.onDidChangeModel(() => this.bindModel()));
-		this._register(
-			state.onFindReplaceStateChange(event => {
-				if (event.isRevealed && !state.isRevealed) {
-					this.matches = [];
-					this.decorations.value?.reset();
-					this.state.changeMatchInfo(0, 0, undefined);
-				} else if (state.isRevealed && (event.isRevealed || event.searchString || event.isRegex || event.matchCase || event.wholeWord || event.searchScope)) {
-					this.research(event.moveCursor);
-				}
-			}),
-		);
-		this._register(
-			editor.onDidChangeModelContent(() => {
-				if (state.isRevealed && !this.changingModel) this.research(false);
-			}),
-		);
+		this._register(state.onFindReplaceStateChange(event => {
+			if (event.isRevealed && !state.isRevealed) {
+				this.matches = [];
+				this.decorations.value?.reset();
+				this.state.changeMatchInfo(0, 0, undefined);
+			} else if (state.isRevealed && (event.isRevealed || event.searchString || event.isRegex || event.matchCase || event.wholeWord || event.searchScope)) {
+				this.research(event.moveCursor);
+			}
+		}));
+		this._register(editor.onDidChangeModelContent(() => {
+			if (state.isRevealed && !this.changingModel) this.research(false);
+		}));
 		if (state.isRevealed) this.research(false);
 	}
 
-	public get error(): TextSearchQueryError | null {
-		return this.searchError;
-	}
+	public get error(): TextSearchQueryError | null { return this.searchError; }
 
-	public moveToPrevMatch(): void {
-		this.move(-1);
-	}
-	public moveToNextMatch(): void {
-		this.move(1);
-	}
-	public moveToMatch(index: number): void {
-		this.select(index);
-	}
+	public moveToPrevMatch(): void { this.move(-1); }
+	public moveToNextMatch(): void { this.move(1); }
+	public moveToMatch(index: number): void { this.select(index); }
 
 	public replace(): void {
 		if (!this.model || !this.matches.length || this.editor.getOption(EditorOption.readOnly)) return;
@@ -155,10 +125,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 	public selectAllMatches(): void {
 		if (!this.matches.length) return;
 		const matches = this.search(REPLACE_ALL_LIMIT);
-		this.editor.setSelections(
-			matches.map(match => Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition())),
-			'find',
-		);
+		this.editor.setSelections(matches.map(match => Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition())), 'find');
 	}
 
 	private bindModel(): void {
@@ -182,7 +149,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 			this.matches = [];
 			this.searchError = error;
 		}
-		const scopes = this.state.searchScope === null ? null : (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
+		const scopes = this.state.searchScope === null ? null : this.decorations.value?.getFindScopes() ?? this.state.searchScope;
 		this.decorations.value?.set(this.matches, scopes);
 		const index = this.findCurrentIndex();
 		this.decorations.value?.setCurrentFindMatch(this.matches[index]?.range ?? null);
@@ -192,7 +159,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 
 	private search(limit: number): readonly TextSearchMatch[] {
 		if (!this.model) return [];
-		const scopes = this.state.searchScope === null ? null : (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
+		const scopes = this.state.searchScope === null ? null : this.decorations.value?.getFindScopes() ?? this.state.searchScope;
 		if (!scopes?.length) return findTextMatches(this.model, this.query, { resultLimit: limit });
 		const found: TextSearchMatch[] = [];
 		for (const scope of scopes) {
@@ -247,7 +214,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 
 	private replacementFor(match: TextSearchMatch): string {
 		const pattern = this.state.isRegex ? parseReplaceString(this.state.replaceString) : ReplacePattern.fromStaticValue(this.state.replaceString);
-		const captures: string[] & { groups?: Record<string, string | undefined> } = [match.text, ...match.captures.map(value => value ?? '')];
+		const captures: string[] & { groups?: Record<string, string | undefined>; } = [match.text, ...match.captures.map(value => value ?? '')];
 		captures.groups = { ...match.namedCaptures };
 		return pattern.buildReplaceString(captures, this.state.preserveCase);
 	}
@@ -267,7 +234,5 @@ export class FindModelBoundToEditorModel extends Disposable {
 		};
 	}
 
-	private get selection(): Selection {
-		return this.editor.getSelection()!;
-	}
+	private get selection(): Selection { return this.editor.getSelection()!; }
 }

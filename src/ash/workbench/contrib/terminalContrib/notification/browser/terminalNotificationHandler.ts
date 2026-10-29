@@ -48,9 +48,7 @@ export class TerminalNotificationHandler extends Disposable {
 	private readonly entries = new Map<string, NotificationEntry>();
 	private anonymousId = 0;
 
-	constructor(private readonly host: IOsc99NotificationHost) {
-		super();
-	}
+	constructor(private readonly host: IOsc99NotificationHost) { super(); }
 
 	handleSequence(data: string): boolean {
 		if (this.isDisposed || !this.host.isEnabled()) return true;
@@ -71,13 +69,7 @@ export class TerminalNotificationHandler extends Disposable {
 			return true;
 		}
 		if (type === 'alive') {
-			this.reply(
-				`i=${id || '0'}:p=alive`,
-				[...this.entries.values()]
-					.filter(entry => entry.id && entry.handle)
-					.map(entry => entry.id)
-					.join(','),
-			);
+			this.reply(`i=${id || '0'}:p=alive`, [...this.entries.values()].filter(entry => entry.id && entry.handle).map(entry => entry.id).join(','));
 			return true;
 		}
 		if (type === 'close') {
@@ -89,7 +81,8 @@ export class TerminalNotificationHandler extends Disposable {
 		if (fields.get('e') === '1') {
 			try {
 				const unpadded = payload.replace(/=+$/, '');
-				if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(payload) || unpadded.length % 4 === 1 || (unpadded.length !== payload.length && payload.length % 4 !== 0)) {
+				if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(payload) || unpadded.length % 4 === 1
+					|| (unpadded.length !== payload.length && payload.length % 4 !== 0)) {
 					throw new Error('Invalid base64 payload');
 				}
 				// The buffer decoder accepts URL-safe/unpadded base64; TextDecoder rejects
@@ -107,17 +100,9 @@ export class TerminalNotificationHandler extends Disposable {
 			entry = { id, key: id, lifetime: new DisposableStore() };
 			this.entries.set(id, entry);
 		}
-		const pending = (entry.pending ??= {
-			title: '',
-			body: '',
-			buttons: '',
-			focus: true,
-			report: false,
-			closeReport: false,
-			urgency: 1,
-			wait: 0,
-			occasion: 'always',
-		});
+		const pending = entry.pending ??= {
+			title: '', body: '', buttons: '', focus: true, report: false, closeReport: false, urgency: 1, wait: 0, occasion: 'always',
+		};
 		if (pending.title.length + pending.body.length + pending.buttons.length + payload.length > maxContentLength) {
 			this.host.logWarn('Discarded an oversized OSC 99 notification');
 			this.closeEntry(entry, 'process');
@@ -133,7 +118,8 @@ export class TerminalNotificationHandler extends Disposable {
 		if (/^\d{1,10}$/.test(fields.get('w') ?? '')) pending.wait = Math.min(Number(fields.get('w')), 2147483647);
 		if (['always', 'unfocused', 'invisible'].includes(fields.get('o') ?? '')) pending.occasion = fields.get('o')!;
 		if (fields.get('d') === '0') return true;
-		if ((pending.occasion === 'unfocused' && this.host.isWindowFocused()) || (pending.occasion === 'invisible' && (this.host.isWindowFocused() || this.host.isTerminalVisible()))) {
+		if ((pending.occasion === 'unfocused' && this.host.isWindowFocused())
+			|| (pending.occasion === 'invisible' && (this.host.isWindowFocused() || this.host.isTerminalVisible()))) {
 			entry.pending = undefined;
 			if (!entry.handle) this.closeEntry(entry, 'dispose');
 			return true;
@@ -158,9 +144,7 @@ export class TerminalNotificationHandler extends Disposable {
 			entry.handle.updateActions(actions);
 		} else {
 			entry.handle = this.host.notify({
-				message,
-				severity,
-				actions,
+				message, severity, actions,
 				priority: pending.urgency === 0 ? NotificationPriority.SILENT : NotificationPriority.DEFAULT,
 				source: { id: 'terminal', label: localize('terminal.notification.source', 'Terminal') },
 			});
@@ -186,29 +170,15 @@ export class TerminalNotificationHandler extends Disposable {
 	}
 
 	private actions(entry: NotificationEntry, content: NotificationContent): INotification['actions'] {
-		const action = (id: string, label: string, run: () => unknown): IAction => ({
-			id,
-			label,
-			tooltip: label,
-			enabled: true,
-			run,
-		});
+		const action = (id: string, label: string, run: () => unknown): IAction => ({ id, label, tooltip: label, enabled: true, run });
 		return {
-			primary: content.buttons
-				.split('\u2028')
-				.slice(0, 32)
-				.map((label, index) => ({ label: plainText(label), index }))
-				.flatMap(({ label, index }) =>
-					label.trim()
-						? [
-								action(`terminal.osc99.button.${index}`, label, () => {
-									if (!this.isCurrent(entry, content)) return;
-									this.activate(entry, index + 1);
-									this.closeEntry(entry, 'action');
-								}),
-							]
-						: [],
-				),
+			primary: content.buttons.split('\u2028').slice(0, 32).map((label, index) => ({ label: plainText(label), index })).flatMap(({ label, index }) => label.trim() ? [
+				action(`terminal.osc99.button.${index}`, label, () => {
+					if (!this.isCurrent(entry, content)) return;
+					this.activate(entry, index + 1);
+					this.closeEntry(entry, 'action');
+				}),
+			] : []),
 			secondary: [
 				action('terminal.osc99.dismiss', localize('terminal.notification.dismiss', 'Dismiss'), () => {
 					if (this.isCurrent(entry, content)) this.closeEntry(entry, 'dismiss');

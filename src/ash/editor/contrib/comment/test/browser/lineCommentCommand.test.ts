@@ -14,6 +14,7 @@ const { createTestCodeEditor } = await import('../../../../test/browser/testCode
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 await import('../../browser/comment.js');
 
+
 test('Toggle Line Comment runs through the canonical editor action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -65,23 +66,15 @@ test('Toggle Line Comment retains a primary selection below a secondary caret', 
 		using model = new TextModel('alpha\nbeta\ngamma', { languageId: 'typescript' });
 		using configurations = new TestLanguageConfigurationService();
 		using registration = configurations.register('typescript', { comments: { lineComment: '//' } });
-		using editor = createTestCodeEditor({
-			container: dom.window.document.querySelector<HTMLElement>('main')!,
-			model,
-			languageConfigurationService: configurations,
-		});
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageConfigurationService: configurations });
 		const initial = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];
 		editor.setSelections(initial);
 		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');
 		assert.ok(action);
 		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
-		assert.deepEqual(
-			{ value: model.getValue(), selections: editor.getSelections() },
-			{
-				value: '// alpha\nbeta\n// gamma',
-				selections: [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)],
-			},
-		);
+		assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, {
+			value: '// alpha\nbeta\n// gamma', selections: [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)],
+		});
 		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 		assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, { value: 'alpha\nbeta\ngamma', selections: initial });
 		model.undo();

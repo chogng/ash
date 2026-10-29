@@ -3,14 +3,7 @@ import { type Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import { type LanguageFeatureRegistry } from '../../../../editor/common/languageFeatureRegistry.js';
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type LanguageHierarchyItem,
-	type LanguageHierarchyRequest,
-	type LanguageCallHierarchyProvider,
-	type LanguageCallHierarchyEntry,
-} from '../../../../editor/common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageCallHierarchyProvider, type LanguageCallHierarchyEntry, } from '../../../../editor/common/languages.js';
 
 export const enum CallHierarchyDirection {
 	CallsTo = 'incomingCalls',
@@ -21,26 +14,16 @@ export const enum CallHierarchyDirection {
 export class CallHierarchyModel extends Disposable {
 	private readonly providers = new Map<LanguageHierarchyItem, LanguageCallHierarchyProvider>();
 
-	private constructor(
-		public readonly roots: readonly LanguageHierarchyItem[],
-		private readonly request: LanguageHierarchyRequest,
-	) {
+	private constructor(public readonly roots: readonly LanguageHierarchyItem[], private readonly request: LanguageHierarchyRequest) {
 		super();
 		this._register(toDisposable(() => this.providers.clear()));
 	}
 
 	public static async create(
-		model: TextModel,
-		position: Position,
-		signal: AbortSignal,
-		registry: LanguageFeatureRegistry<LanguageCallHierarchyProvider>,
-		onError: (error: unknown) => void,
+		model: TextModel, position: Position, signal: AbortSignal,
+		registry: LanguageFeatureRegistry<LanguageCallHierarchyProvider>, onError: (error: unknown) => void,
 	): Promise<CallHierarchyModel | undefined> {
-		const request = Object.freeze({
-			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-			resource: model.uri,
-			position,
-		});
+		const request = Object.freeze({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: model.uri, position });
 		const roots: LanguageHierarchyItem[] = [];
 		const result = new CallHierarchyModel(roots, request);
 		for (const provider of registry.ordered(model)) {
@@ -60,9 +43,7 @@ export class CallHierarchyModel extends Disposable {
 					roots.push(normalized);
 				}
 			} catch (error) {
-				if (!signal.aborted) {
-					onError(error);
-				}
+				if (!signal.aborted) { onError(error); }
 			}
 		}
 		if (roots.length === 0) {
@@ -80,35 +61,26 @@ export class CallHierarchyModel extends Disposable {
 		return this.query(item, 'outgoing');
 	}
 	private async query(item: LanguageHierarchyItem, direction: 'incoming' | 'outgoing'): Promise<readonly LanguageCallHierarchyEntry[]> {
-		if (this.isDisposed || !isLanguageFeatureRequestCurrent(this.request)) {
-			return [];
-		}
+		if (this.isDisposed || !isLanguageFeatureRequestCurrent(this.request)) { return []; }
 		const provider = this.providerFor(item);
 		const request = { ...this.request, item };
-		const entries = direction === 'incoming' ? await provider.provideIncomingCalls(request, request.signal) : await provider.provideOutgoingCalls(request, request.signal);
-		if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) {
-			return [];
-		}
-		return Object.freeze(
-			entries.map(entry => {
-				const child = normalizeItem(entry.item);
-				this.providers.set(child, provider);
-				return Object.freeze({
-					...entry,
-					item: child,
-					fromRanges: Object.freeze(entry.fromRanges.map(range => Range.lift(range))),
-				});
-			}),
-		);
+		const entries = direction === 'incoming'
+			? await provider.provideIncomingCalls(request, request.signal)
+			: await provider.provideOutgoingCalls(request, request.signal);
+		if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) { return []; }
+		return Object.freeze(entries.map(entry => {
+			const child = normalizeItem(entry.item);
+			this.providers.set(child, provider);
+			return Object.freeze({ ...entry, item: child, fromRanges: Object.freeze(entry.fromRanges.map(range => Range.lift(range))) });
+		}));
 	}
 
 	private providerFor(item: LanguageHierarchyItem): LanguageCallHierarchyProvider {
 		const provider = this.providers.get(item);
-		if (!provider) {
-			throw new Error('Hierarchy item does not belong to this session');
-		}
+		if (!provider) { throw new Error('Hierarchy item does not belong to this session'); }
 		return provider;
 	}
+
 }
 
 function normalizeItem(item: LanguageHierarchyItem): LanguageHierarchyItem {

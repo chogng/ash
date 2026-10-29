@@ -14,33 +14,25 @@ const readyStatus = Object.freeze({
 });
 
 test('codebase-symbols service validates limits and removes transport nulls', async () => {
-	let request: { readonly query: string; readonly maxResults: number } | undefined;
+	let request: { readonly query: string; readonly maxResults: number; } | undefined;
 	const api: ICodebaseSymbolsApi = {
 		status: async () => readyStatus,
 		search: async params => {
 			request = params;
 			return {
 				status: readyStatus,
-				hits: [
-					{
-						name: 'SessionStore',
-						kind: 'struct',
-						containerName: null,
-						path: 'src/session.rs',
-						language: 'rust',
-						sourceRevision: 'sha256:current',
-						declarationRange: {
-							start: { lineIndex: 1, columnIndex: 0 },
-							end: { lineIndex: 3, columnIndex: 1 },
-						},
-						selectionRange: {
-							start: { lineIndex: 1, columnIndex: 7 },
-							end: { lineIndex: 1, columnIndex: 19 },
-						},
-						score: 42,
-						matchedIndices: [0, 7],
-					},
-				],
+				hits: [{
+					name: 'SessionStore',
+					kind: 'struct',
+					containerName: null,
+					path: 'src/session.rs',
+					language: 'rust',
+					sourceRevision: 'sha256:current',
+					declarationRange: { start: { lineIndex: 1, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } },
+					selectionRange: { start: { lineIndex: 1, columnIndex: 7 }, end: { lineIndex: 1, columnIndex: 19 } },
+					score: 42,
+					matchedIndices: [0, 7],
+				}],
 				discardedStaleHitCount: 1,
 			};
 		},

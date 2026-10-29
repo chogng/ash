@@ -1,16 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 
-export type AutomationSchedule =
-	| { readonly type: 'once'; readonly at: number }
-	| { readonly type: 'interval'; readonly anchor: number; readonly minutes: number }
-	| {
-			readonly type: 'weekly';
-			readonly timezone: string;
-			readonly weekdays: readonly number[];
-			readonly hour: number;
-			readonly minute: number;
-	  };
-export type AutomationSession = { readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
+export type AutomationSchedule = { readonly type: 'once'; readonly at: number; } | { readonly type: 'interval'; readonly anchor: number; readonly minutes: number; } | { readonly type: 'weekly'; readonly timezone: string; readonly weekdays: readonly number[]; readonly hour: number; readonly minute: number; };
+export type AutomationSession = { readonly type: 'new'; } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string; };
 export type AutomationStatus = 'enabled' | 'paused';
 export type AutomationRunStatus = 'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
 
@@ -61,14 +52,7 @@ export interface AutomationRun {
 export interface AutomationRunResult {
 	readonly output: string;
 	/** Undefined means the change ledger could not be read; an empty list is a confirmed empty result. */
-	readonly files:
-		| readonly {
-				readonly path: string;
-				readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged';
-				readonly additions: number;
-				readonly deletions: number;
-		  }[]
-		| undefined;
+	readonly files: readonly { readonly path: string; readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged'; readonly additions: number; readonly deletions: number; }[] | undefined;
 }
 
 /** Host automation operations; the Rust backend owns schedules and run history. */

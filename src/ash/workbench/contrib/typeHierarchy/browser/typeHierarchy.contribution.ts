@@ -39,29 +39,21 @@ class TypeHierarchyController extends Disposable {
 	private request: AbortController | undefined;
 
 	constructor(
-		input: HTMLElement,
-		private readonly editor: ICodeEditor,
-		private readonly view: View,
+		input: HTMLElement, private readonly editor: ICodeEditor, private readonly view: View,
 		private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly features: ILanguageFeaturesService,
 	) {
 		super();
 		this._register(toDisposable(() => this.close()));
-		this._register(
-			addDisposableListener(input, 'keydown', event => {
-				if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) {
-					return;
-				}
-				if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 't') {
-					if (!editor.getAction('editor.showTypeHierarchy')?.isSupported()) {
-						return;
-					}
-					stopEvent(event);
-					editor.trigger('keyboard', 'editor.showTypeHierarchy', {});
-				}
-			}),
-		);
+		this._register(addDisposableListener(input, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) { return; }
+			if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 't') {
+				if (!editor.getAction('editor.showTypeHierarchy')?.isSupported()) { return; }
+				stopEvent(event);
+				editor.trigger('keyboard', 'editor.showTypeHierarchy', {});
+			}
+		}));
 		this._register(view.textModel.onDidChangeContent(() => this.close()));
 		this._register(view.textModel.onDidChangeLanguage(() => this.close()));
 		this._register(view.textModel.onWillDispose(() => this.close()));
@@ -73,16 +65,11 @@ class TypeHierarchyController extends Disposable {
 	async startTypeHierarchyFromEditor(): Promise<void> {
 		this.close();
 		const anchor = this.editor.getPosition();
-		if (!anchor || this.isDisposed) {
-			return;
-		}
-		const request = (this.request = new AbortController());
+		if (!anchor || this.isDisposed) { return; }
+		const request = this.request = new AbortController();
 		try {
 			const model = await TypeHierarchyModel.create(this.view.textModel, anchor, request.signal, this.features.typeHierarchyProvider, this.onError);
-			if (request.signal.aborted) {
-				model?.dispose();
-				return;
-			}
+			if (request.signal.aborted) { model?.dispose(); return; }
 			if (!model) {
 				this.view.announceAccessibilityStatus(localize('typeHierarchy.empty', 'No type hierarchy found.'));
 				return;
@@ -90,11 +77,7 @@ class TypeHierarchyController extends Disposable {
 			this.peek.add(model);
 			const widget = this.peek.add(new TypeHierarchyTreePeekWidget(this.editor, this.onError));
 			this.peek.add(widget.onDidClose(() => this.close()));
-			this.peek.add(
-				widget.onDidSelectItem(item => {
-					void this.open(item).catch(this.onError);
-				}),
-			);
+			this.peek.add(widget.onDidSelectItem(item => { void this.open(item).catch(this.onError); }));
 			widget.show(anchor);
 			// The View must attach the zone before a result can take focus.
 			this.view.render(true, false);
@@ -103,10 +86,7 @@ class TypeHierarchyController extends Disposable {
 				widget.element.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-item')?.focus({ preventScroll: true });
 			}
 		} catch (error) {
-			if (!request.signal.aborted) {
-				this.onError(error);
-				this.close();
-			}
+			if (!request.signal.aborted) { this.onError(error); this.close(); }
 		}
 	}
 
@@ -131,9 +111,8 @@ class TypeHierarchyController extends Disposable {
 registerEditorContribution({
 	id: TypeHierarchyController.Id,
 	install: context => {
-		if (context.kind !== 'text') {
-			return;
-		}
-		return context.instantiationService.createInstance(TypeHierarchyController, context.controller.element, context.editor, context.view, context.options.onOpenLocation, context.onLanguageError);
+		if (context.kind !== 'text') { return; }
+		return context.instantiationService.createInstance(TypeHierarchyController,
+			context.controller.element, context.editor, context.view, context.options.onOpenLocation, context.onLanguageError);
 	},
 });

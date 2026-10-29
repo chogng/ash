@@ -34,11 +34,7 @@ export const CopyOptions = {
 	cutEventHasFired: false,
 };
 
-export function generateDataToCopyAndStoreInMemory(
-	viewModel: IViewModel,
-	id: string | undefined,
-	useFirefoxLineEndings: boolean,
-): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
+export function generateDataToCopyAndStoreInMemory(viewModel: IViewModel, id: string | undefined, useFirefoxLineEndings: boolean): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata; } {
 	const { dataToCopy, metadata } = generateDataToCopy(viewModel, id);
 	const storedText = useFirefoxLineEndings ? dataToCopy.text.replaceAll('\r\n', '\n') : dataToCopy.text;
 	InMemoryClipboardMetadataManager.INSTANCE.set(storedText, metadata);
@@ -132,13 +128,15 @@ export function createClipboardCopyEvent(
 	};
 }
 
-function generateDataToCopy(viewModel: IViewModel, id?: string): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
+function generateDataToCopy(viewModel: IViewModel, id?: string): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata; } {
 	const emptySelectionClipboard = viewModel.getEditorOption(EditorOption.emptySelectionClipboard);
 	const copyWithSyntaxHighlighting = viewModel.getEditorOption(EditorOption.copyWithSyntaxHighlighting);
 	const selections = viewModel.getCursorStates().map(cursor => cursor.modelState.selection);
 	const { sourceRanges, sourceText } = viewModel.getPlainTextToCopy(selections, emptySelectionClipboard, isWindows);
 	const text = Array.isArray(sourceText) ? sourceText.join(isWindows ? '\r\n' : '\n') : sourceText;
-	const richText = CopyOptions.forceCopyWithSyntaxHighlighting || (copyWithSyntaxHighlighting && text.length < 65_536) ? viewModel.getRichTextToCopy(selections, emptySelectionClipboard) : null;
+	const richText = CopyOptions.forceCopyWithSyntaxHighlighting || (copyWithSyntaxHighlighting && text.length < 65_536)
+		? viewModel.getRichTextToCopy(selections, emptySelectionClipboard)
+		: null;
 	const dataToCopy: ClipboardDataToCopy = Object.freeze({
 		isFromEmptySelection: emptySelectionClipboard && selections.length === 1 && selections[0]!.isEmpty(),
 		sourceRanges,
@@ -169,7 +167,7 @@ export function createClipboardPasteEvent(browserEvent: ClipboardEvent): IClipbo
 		metadata,
 		text,
 		browserEvent,
-		toExternalVSDataTransfer: () => (browserEvent.clipboardData ? toExternalVSDataTransfer(browserEvent.clipboardData) : undefined),
+		toExternalVSDataTransfer: () => browserEvent.clipboardData ? toExternalVSDataTransfer(browserEvent.clipboardData) : undefined,
 		setHandled: () => {
 			if (handled) return;
 			handled = true;
@@ -268,7 +266,7 @@ function appendHtmlClipboardText(node: Node, parts: Array<string | null>): void 
 		return;
 	}
 	if (node.nodeType !== node.ELEMENT_NODE && node.nodeType !== node.DOCUMENT_FRAGMENT_NODE) return;
-	const element = node.nodeType === node.ELEMENT_NODE ? (node as HTMLElement) : undefined;
+	const element = node.nodeType === node.ELEMENT_NODE ? node as HTMLElement : undefined;
 	if (element && (element.localName === 'script' || element.localName === 'style' || element.localName === 'noscript')) return;
 	if (element?.localName === 'br') {
 		parts.push('\n');
@@ -281,40 +279,7 @@ function appendHtmlClipboardText(node: Node, parts: Array<string | null>): void 
 }
 
 const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
-	'address',
-	'article',
-	'aside',
-	'blockquote',
-	'div',
-	'dl',
-	'dt',
-	'dd',
-	'fieldset',
-	'figcaption',
-	'figure',
-	'footer',
-	'form',
-	'h1',
-	'h2',
-	'h3',
-	'h4',
-	'h5',
-	'h6',
-	'header',
-	'hr',
-	'li',
-	'main',
-	'nav',
-	'ol',
-	'p',
-	'pre',
-	'section',
-	'table',
-	'tbody',
-	'td',
-	'tfoot',
-	'th',
-	'thead',
-	'tr',
-	'ul',
+	'address', 'article', 'aside', 'blockquote', 'div', 'dl', 'dt', 'dd', 'fieldset', 'figcaption',
+	'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li',
+	'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
 ]);

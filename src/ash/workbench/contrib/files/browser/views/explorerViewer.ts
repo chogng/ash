@@ -31,11 +31,7 @@ import { ResourceGlobMatcher } from '../../../../common/resources.js';
 export class ExplorerFindProvider extends Disposable {
 	private readonly input: HTMLInputElement;
 	private searchGeneration = 0;
-	private readonly search = this._register(
-		new RunOnceScheduler(() => {
-			void this.findWorkspaceNames();
-		}, 150),
-	);
+	private readonly search = this._register(new RunOnceScheduler(() => { void this.findWorkspaceNames(); }, 150));
 
 	constructor(
 		private readonly tree: WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>,
@@ -54,50 +50,42 @@ export class ExplorerFindProvider extends Disposable {
 		this.input.hidden = true;
 		host.append(this.input);
 		this._register(toDisposable(() => this.input.remove()));
-		this._register(
-			addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
-				if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
-				stopEvent(event);
-				this.input.hidden = false;
-				this.input.focus();
-				this.input.select();
-			}),
-		);
+		this._register(addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
+			if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
+			stopEvent(event);
+			this.input.hidden = false;
+			this.input.focus();
+			this.input.select();
+		}));
 		let root = tree.getInput();
-		this._register(
-			tree.onDidChangeLoadState(() => {
-				if (tree.getInput() === root) return;
-				root = tree.getInput();
+		this._register(tree.onDidChangeLoadState(() => {
+			if (tree.getInput() === root) return;
+			root = tree.getInput();
+			this.searchGeneration++;
+			this.search.cancel();
+			this.input.value = '';
+			this.input.hidden = true;
+			tree.clearFind();
+		}));
+		this._register(addDisposableListener(this.input, 'input', () => {
+			this.searchGeneration++;
+			tree.setFindPattern(this.input.value);
+			this.search.schedule();
+		}));
+		this._register(addDisposableListener(this.input, 'keydown', (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				stopEvent(event);
 				this.searchGeneration++;
 				this.search.cancel();
 				this.input.value = '';
 				this.input.hidden = true;
 				tree.clearFind();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.input, 'input', () => {
-				this.searchGeneration++;
-				tree.setFindPattern(this.input.value);
-				this.search.schedule();
-			}),
-		);
-		this._register(
-			addDisposableListener(this.input, 'keydown', (event: KeyboardEvent) => {
-				if (event.key === 'Escape') {
-					stopEvent(event);
-					this.searchGeneration++;
-					this.search.cancel();
-					this.input.value = '';
-					this.input.hidden = true;
-					tree.clearFind();
-					tree.domFocus();
-				} else if (event.key === 'Enter') {
-					stopEvent(event);
-					tree.findNext();
-				}
-			}),
-		);
+				tree.domFocus();
+			} else if (event.key === 'Enter') {
+				stopEvent(event);
+				tree.findNext();
+			}
+		}));
 	}
 
 	private async findWorkspaceNames(): Promise<void> {
@@ -131,7 +119,7 @@ export class ExplorerFindProvider extends Disposable {
 export class FileSorter {
 	private readonly names = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-	constructor(@IConfigurationService private readonly configurationService: IConfigurationService) {}
+	constructor(@IConfigurationService private readonly configurationService: IConfigurationService) { }
 
 	public compare(left: ExplorerItem, right: ExplorerItem): number {
 		const order = this.configurationService.getValue<SortOrder>('explorer.sortOrder') ?? SortOrder.Default;
@@ -178,14 +166,7 @@ export class ExplorerDataSource extends Disposable {
 		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
 	) {
 		super();
-		this.excludes = this._register(
-			new ResourceGlobMatcher(
-				folder => configurationService.getValue<IExpression>('files.exclude', { resource: folder }),
-				event => event.affectsConfiguration('files.exclude'),
-				workspaceContextService,
-				configurationService,
-			),
-		);
+		this.excludes = this._register(new ResourceGlobMatcher(folder => configurationService.getValue<IExpression>('files.exclude', { resource: folder }), event => event.affectsConfiguration('files.exclude'), workspaceContextService, configurationService));
 	}
 
 	public hasChildren(item: ExplorerItem): boolean {
@@ -200,34 +181,20 @@ export class ExplorerDataSource extends Disposable {
 		const siblings = new Set(raw.map(entry => entry.name));
 		let entries = raw.filter(entry => !this.excludes.matches(entry.resource, name => siblings.has(name))).map(ExplorerItem.fromFileEntry);
 		if (this.configurationService.getValue<SortOrder>('explorer.sortOrder') === SortOrder.Modified) {
-			entries = await Promise.all(
-				entries.map(async entry => {
-					const stat = await this.fileService.stat(entry.resource);
-					return new ExplorerItem(entry.resource, entry.name, entry.kind, entry.children, stat.modifiedAtMillis);
-				}),
-			);
+			entries = await Promise.all(entries.map(async entry => {
+				const stat = await this.fileService.stat(entry.resource);
+				return new ExplorerItem(entry.resource, entry.name, entry.kind, entry.children, stat.modifiedAtMillis);
+			}));
 		}
 		entries.sort((left, right) => this.sorter.compare(left, right));
 		if (!this.configurationService.getValue<boolean>(ExplorerFileNestingSettingId.Enabled)) {
 			return entries;
 		}
 		const patterns = this.configurationService.getValue<Record<string, string>>(ExplorerFileNestingSettingId.Patterns);
-		const rules = Object.entries(patterns).map(
-			([parent, children]) =>
-				[
-					parent,
-					children
-						.split(',')
-						.map(child => child.trim())
-						.filter(Boolean),
-				] as const,
-		);
+		const rules = Object.entries(patterns).map(([parent, children]) => [parent, children.split(',').map(child => child.trim()).filter(Boolean)] as const);
 		const files = entries.filter(entry => entry.kind === FileKind.File);
 		const filesByName = new Map(files.map(file => [file.name, file]));
-		const nests = new ExplorerFileNestingTrie(rules).nest(
-			files.map(file => file.name),
-			item.name,
-		);
+		const nests = new ExplorerFileNestingTrie(rules).nest(files.map(file => file.name), item.name);
 		const roots = entries.filter(entry => entry.kind !== FileKind.File);
 		for (const [name, childNames] of nests) {
 			const file = filesByName.get(name)!;
@@ -254,14 +221,12 @@ export class FilesRenderer extends Disposable {
 		@ILabelService labelService: ILabelService,
 	) {
 		super();
-		this.labels = this._register(
-			new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
-				workspaceContextService,
-				resourceIconRenderer,
-				decorationsService,
-				labelService,
-			}),
-		);
+		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService,
+			resourceIconRenderer,
+			decorationsService,
+			labelService,
+		}));
 	}
 
 	public disposeRow(row: HTMLDivElement): void {
@@ -296,23 +261,19 @@ export class FilesRenderer extends Disposable {
 				colors: this.configurationService.getValue<boolean>('explorer.decorations.colors') ?? true,
 				badges: this.configurationService.getValue<boolean>('explorer.decorations.badges') ?? true,
 			},
-			...(decoration
-				? {
-						suffix: this.configurationService.getValue<boolean>('explorer.decorations.badges') === false ? undefined : decoration.letter,
-						ariaLabel: localize('workbench.explorerDecoratedFile', '{0}, {1}', item.name, decoration.tooltip),
-					}
-				: {}),
+			...(decoration ? {
+				suffix: this.configurationService.getValue<boolean>('explorer.decorations.badges') === false ? undefined : decoration.letter,
+				ariaLabel: localize('workbench.explorerDecoratedFile', '{0}, {1}', item.name, decoration.tooltip),
+			} : {}),
 		};
 		if (names) label.setResource({ resource: item.resource, name: names }, options);
 		else label.setFile(item.resource, options);
 		const labelText = label.element.querySelector<HTMLElement>('.ash-icon-label-text');
-		resources.add(
-			this.hoverService.setupHover({
-				target: label.element,
-				content: () => (labelText && labelText.scrollWidth > labelText.clientWidth ? (names?.join('/') ?? item.name) : undefined),
-				groupId: 'explorer.items',
-			}),
-		);
+		resources.add(this.hoverService.setupHover({
+			target: label.element,
+			content: () => labelText && labelText.scrollWidth > labelText.clientWidth ? names?.join('/') ?? item.name : undefined,
+			groupId: 'explorer.items',
+		}));
 		if (item.kind === FileKind.File) {
 			for (const contribution of explorerFileContribRegistry.create(this.instantiationService, content, resources)) {
 				contribution.setResource(item.resource);
@@ -333,11 +294,9 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IPathService private readonly paths: IPathService,
-	) {
-		super();
-	}
+	) { super(); }
 
-	protected disposeCore(): void {}
+	protected disposeCore(): void { }
 
 	public getDragURI(item: ExplorerItem): string | undefined {
 		const source = this.resolveItems([item])[0] ?? item;
@@ -350,35 +309,17 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 
 	public onDragStart(data: TreeDragData<ExplorerItem>, event: DragEvent): void {
 		if (!event.dataTransfer) return;
-		event.dataTransfer.setData(
-			'text/uri-list',
-			this.resolveItems(data.elements)
-				.map(item => item.resource.toString())
-				.join('\r\n'),
-		);
+		event.dataTransfer.setData('text/uri-list', this.resolveItems(data.elements).map(item => item.resource.toString()).join('\r\n'));
 	}
 
 	public onDragOver(data: TreeDragData<ExplorerItem>, target: ExplorerItem | undefined, _index: number | undefined, _sector: unknown, event: DragEvent): boolean | TreeDragOverReaction {
 		const directory = this.getDirectory(this.segmentTarget(target, event));
 		const copy = this.isCopy(event) || data.kind === 'native';
 		if (!this.configuration.getValue<boolean>('explorer.enableDragAndDrop') || !directory || this.files.hasCapability(directory, FileSystemProviderCapabilities.Readonly)) return false;
-		if (data.elements.some(item => !(item instanceof ExplorerItem)) || (!data.elements.length && !data.types.includes('Files') && !data.types.includes('text/uri-list'))) return false;
+		if (data.elements.some(item => !(item instanceof ExplorerItem)) || !data.elements.length && !data.types.includes('Files') && !data.types.includes('text/uri-list')) return false;
 		const sources = data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements;
-		if (
-			sources.some(
-				item =>
-					this.isRoot(item) ||
-					(item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource)) ||
-					(!copy && extUriBiasedIgnorePathCase.isEqual(dirname(item.resource), directory)),
-			)
-		)
-			return false;
-		return {
-			accept: true,
-			effect: copy ? 'copy' : 'move',
-			autoExpand: true,
-			...(target?.kind === FileKind.File ? { bubble: 'up' as const } : {}),
-		};
+		if (sources.some(item => this.isRoot(item) || item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource) || !copy && extUriBiasedIgnorePathCase.isEqual(dirname(item.resource), directory))) return false;
+		return { accept: true, effect: copy ? 'copy' : 'move', autoExpand: true, ...(target?.kind === FileKind.File ? { bubble: 'up' as const } : {}) };
 	}
 
 	public drop(data: TreeDragData<ExplorerItem>, target: ExplorerItem | undefined, index: number | undefined, sector: unknown, event: DragEvent): void {
@@ -386,7 +327,7 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		const directory = this.getDirectory(this.segmentTarget(target, event))!;
 		const copy = this.isCopy(event) || data.kind === 'native';
 		const workspaceId = this.workspace.getWorkspace().id;
-		const uris = data.kind === 'native' && !data.files.length ? (event.dataTransfer?.getData('text/uri-list') ?? '') : '';
+		const uris = data.kind === 'native' && !data.files.length ? event.dataTransfer?.getData('text/uri-list') ?? '' : '';
 		void this.performDrop({ ...data, elements: data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements }, directory, copy, workspaceId, uris).catch(this.onError);
 	}
 
@@ -421,21 +362,15 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 			imported.push(new ExplorerItem(resource, basename(resource), stat.kind));
 		}
 		const sources = [...data.elements, ...imported];
-		if (sources.some(item => item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource)))
-			throw new Error(localize('files.pasteIntoSelf', 'Cannot paste a folder into itself.'));
-		const items = sources.filter(
-			item => !sources.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)),
-		);
+		if (sources.some(item => item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource))) throw new Error(localize('files.pasteIntoSelf', 'Cannot paste a folder into itself.'));
+		const items = sources.filter(item => !sources.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
 		if (!copy && this.configuration.getValue<boolean>('explorer.confirmDragAndDrop')) {
-			const confirmed = await this.dialogs.confirm({
-				message: localize('files.dragMoveConfirm', 'Move {0} items to {1}?', items.length, basename(directory)),
-				primaryButton: localize('files.dragMove', 'Move'),
-			});
+			const confirmed = await this.dialogs.confirm({ message: localize('files.dragMoveConfirm', 'Move {0} items to {1}?', items.length, basename(directory)), primaryButton: localize('files.dragMove', 'Move') });
 			if (!confirmed.confirmed) return;
 		}
 		for (const item of items) {
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			if (!(await this.paths.hasValidBasename(directory, item.name))) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', item.name));
+			if (!await this.paths.hasValidBasename(directory, item.name)) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', item.name));
 			const target = await this.copyTarget(directory, item.name, copy);
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
 			if (copy) await this.files.copy(item.resource, target);
@@ -443,7 +378,7 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		}
 		for (const file of data.files) {
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			if (!(await this.paths.hasValidBasename(directory, file.name))) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', file.name));
+			if (!await this.paths.hasValidBasename(directory, file.name)) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', file.name));
 			const target = await this.copyTarget(directory, file.name, true);
 			const bytes = new Uint8Array(await file.arrayBuffer());
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
@@ -460,12 +395,8 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		const extension = dot > 0 ? name.slice(dot) : '';
 		for (let index = 0; index < 10000; index++) {
 			const candidate = index === 0 ? target : directory.joinPathSegment(`${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
-			try {
-				await this.files.stat(candidate);
-			} catch (error) {
-				if (error instanceof FileNotFoundError) return candidate;
-				throw error;
-			}
+			try { await this.files.stat(candidate); }
+			catch (error) { if (error instanceof FileNotFoundError) return candidate; throw error; }
 		}
 		throw new Error(localize('files.pasteNoName', 'Could not find an available file name.'));
 	}

@@ -44,13 +44,7 @@ test('RangeUtil keeps one UTF-16 offset space across syntax spans', () => {
 		},
 	});
 
-	assert.deepEqual(
-		RangeUtil.readHorizontalRanges(text, 0, 1, 2, 1, new DomReadingContext(line, text))?.map(({ left, width }) => ({
-			left,
-			width,
-		})),
-		[{ left: 10, width: 20 }],
-	);
+	assert.deepEqual(RangeUtil.readHorizontalRanges(text, 0, 1, 2, 1, new DomReadingContext(line, text))?.map(({ left, width }) => ({ left, width })), [{ left: 10, width: 20 }]);
 	assert.equal(selectedText, 'b😊c');
 	dom.window.close();
 });
@@ -88,28 +82,15 @@ test('DomReadingContext scales, sorts, and merges browser rectangles once', () =
 	});
 	const context = new DomReadingContext(line, text);
 
-	assert.deepEqual(
-		RangeUtil.readHorizontalRanges(text, 0, 0, 0, 3, context)?.map(({ left, width }) => ({ left, width })),
-		[
-			{ left: 10, width: 10 },
-			{ left: 25, width: 10 },
-		],
-	);
+	assert.deepEqual(RangeUtil.readHorizontalRanges(text, 0, 0, 0, 3, context)?.map(({ left, width }) => ({ left, width })), [
+		{ left: 10, width: 10 },
+		{ left: 25, width: 10 },
+	]);
 	assert.equal(context.didDomLayout, true);
 	assert.equal(rootReads, 1);
 	dom.window.close();
 });
 
 function rectangle(left: number, top: number, width: number): DOMRect {
-	return {
-		left,
-		top,
-		width,
-		height: 20,
-		right: left + width,
-		bottom: top + 20,
-		x: left,
-		y: top,
-		toJSON: () => ({}),
-	} as DOMRect;
+	return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
 }

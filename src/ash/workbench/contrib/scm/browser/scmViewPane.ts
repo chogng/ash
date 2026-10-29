@@ -27,22 +27,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { SCMInputWidget } from './scmInput.js';
 import { ViewPane, ViewWelcomeController, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ViewsRegistry } from '../../../common/views.js';
-import {
-	ISCMService,
-	ISCMViewService,
-	SCMProviderContext,
-	SCMBusyContext,
-	SCMCanCommitContext,
-	SCMViewModeContext,
-	SCMViewSortKeyContext,
-	type SCMViewMode,
-	type SCMViewSortKey,
-	type ISCMProvider,
-	type ISCMResource,
-	type ISCMResourceGroup,
-	type ISCMRepository,
-	VIEW_PANE_ID,
-} from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, SCMViewModeContext, SCMViewSortKeyContext, type SCMViewMode, type SCMViewSortKey, type ISCMProvider, type ISCMResource, type ISCMResourceGroup, type ISCMRepository, VIEW_PANE_ID } from '../common/scm.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -53,9 +38,9 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
 type TreeElement =
-	| { readonly id: string; readonly group: ISCMResourceGroup }
-	| { readonly id: string; readonly folder: IResourceNode<ISCMResource, ISCMResourceGroup> }
-	| { readonly id: string; readonly resource: ISCMResource };
+	| { readonly id: string; readonly group: ISCMResourceGroup; }
+	| { readonly id: string; readonly folder: IResourceNode<ISCMResource, ISCMResourceGroup>; }
+	| { readonly id: string; readonly resource: ISCMResource; };
 
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
@@ -72,8 +57,8 @@ export class ScmViewPane extends ViewPane {
 	private readonly actionViewItems = new Set<ScmActionViewItem>();
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
-	private readonly resourceElements = new WeakMap<ISCMResource, Extract<TreeElement, { resource: ISCMResource }>>();
-	private readonly groupElements = new WeakMap<ISCMResourceGroup, Extract<TreeElement, { group: ISCMResourceGroup }>>();
+	private readonly resourceElements = new WeakMap<ISCMResource, Extract<TreeElement, { resource: ISCMResource; }>>();
+	private readonly groupElements = new WeakMap<ISCMResourceGroup, Extract<TreeElement, { group: ISCMResourceGroup; }>>();
 	private readonly titleToolbar = this._register(new MutableDisposable<MenuWorkbenchToolBar>());
 	private readonly titleContext: IScopedContextKeyService;
 	private readonly providerContext: IContextKey<string>;
@@ -131,108 +116,78 @@ export class ScmViewPane extends ViewPane {
 		const changesContainer = h(document, 'div');
 		changesContainer.className = 'ash-scm-changes';
 		this.contentElement.append(commitForm, this.statusElement, changesContainer);
-		this.tree = this._register(
-			new WorkbenchObjectTree<TreeElement>(changesContainer, {
-				configurationService,
-				ariaLabel: localize('scm.changesTree', 'Source control changes'),
-				scrolling: 'managed',
-				modelOptions: { identityProvider: { getId: element => element.id } },
-				keyboardNavigationLabelProvider: {
-					getKeyboardNavigationLabel: element => ('group' in element ? element.group.label : 'folder' in element ? element.folder.name : element.resource.path),
-				},
-				expandOnlyOnTwistieClick: false,
-				expandOnDoubleClick: false,
-				reuseRows: true,
-				onDidRemoveRow: row => {
-					const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder');
-					if (content) {
-						this.renderedRows.deleteAndDispose(content);
-					}
-				},
-				renderElement: element => ('group' in element ? this.renderGroup(element.group) : 'folder' in element ? this.renderFolder(element.folder) : this.renderResource(element)),
-			}),
-		);
+		this.tree = this._register(new WorkbenchObjectTree<TreeElement>(changesContainer, {
+			configurationService,
+			ariaLabel: localize('scm.changesTree', 'Source control changes'),
+			scrolling: 'managed',
+			modelOptions: { identityProvider: { getId: element => element.id } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => 'group' in element ? element.group.label : 'folder' in element ? element.folder.name : element.resource.path },
+			expandOnlyOnTwistieClick: false,
+			expandOnDoubleClick: false,
+			reuseRows: true,
+			onDidRemoveRow: row => {
+				const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder');
+				if (content) { this.renderedRows.deleteAndDispose(content); }
+			},
+			renderElement: element => 'group' in element ? this.renderGroup(element.group) : 'folder' in element ? this.renderFolder(element.folder) : this.renderResource(element),
+		}));
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Leaf file icons occupy the unused arrow column; folders retain their expansion arrows.
 			this.tree.updateOptions({
-				twistieAdditionalCssClass: element => ('resource' in element && theme.hasFileIcons ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap'),
+				twistieAdditionalCssClass: element => 'resource' in element && theme.hasFileIcons
+					? 'ash-tree-twistie-hidden'
+					: 'ash-tree-twistie-with-icon-gap'
 			});
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute(
-			'aria-description',
-			localize(
-				'scm.changesTreeHelp',
-				'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline group and file actions. The View All action on a group opens its files together in a multi-file diff editor. The inline Open File action opens the editable working file, including from staged changes. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.',
-			),
-		);
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline group and file actions. The View All action on a group opens its files together in a multi-file diff editor. The inline Open File action opens the editable working file, including from staged changes. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this.trackBodyMinimum(changesContainer, options.minimumBodySize ?? 120, () => !this.welcomeController.enabled);
-		this._register(
-			this.onDidFocus(() => {
-				if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
-					status(localize('scm.welcome.helpHint', 'Press Alt+F1 for accessibility help.'));
-				}
-			}),
-		);
-		this._register(
-			this.tree.onDidOpen(event => {
-				if ('resource' in event.element) {
-					void event.element.resource.open(event.editorOptions, event.sideBySide);
-				} else if ('key' in event.browserEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
-					this.tree.toggleCollapsed(event.element.id);
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(this.tree.element, 'keydown', event => {
-				const keyboardEvent = event as KeyboardEvent;
-				// macOS menu-key events keep the host path, whose keyboard normalization differs from other platforms.
-				if (keyboardEvent.target !== this.tree.element || !((!isMacintosh && keyboardEvent.key === 'ContextMenu') || (keyboardEvent.shiftKey && keyboardEvent.key === 'F10'))) {
-					return;
-				}
-				const focused = this.tree.focus;
-				if (focused && 'group' in focused && this.viewMode === 'tree') {
-					keyboardEvent.preventDefault();
-					keyboardEvent.stopPropagation();
-					const anchor = this.tree.element.ownerDocument.getElementById(this.tree.element.getAttribute('aria-activedescendant') ?? '') ?? this.tree.element;
-					this.showGroupMenu(focused.group, anchor);
-				}
-			}),
-		);
-		this._register(
-			addDisposableListener(commitForm, 'submit', event => {
-				event.preventDefault();
-				void this.commit();
-			}),
-		);
+		this._register(this.onDidFocus(() => {
+			if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
+				status(localize('scm.welcome.helpHint', 'Press Alt+F1 for accessibility help.'));
+			}
+		}));
+		this._register(this.tree.onDidOpen(event => {
+			if ('resource' in event.element) {
+				void event.element.resource.open(event.editorOptions, event.sideBySide);
+			} else if ('key' in event.browserEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
+				this.tree.toggleCollapsed(event.element.id);
+			}
+		}));
+		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
+			const keyboardEvent = event as KeyboardEvent;
+			// macOS menu-key events keep the host path, whose keyboard normalization differs from other platforms.
+			if (keyboardEvent.target !== this.tree.element || !((!isMacintosh && keyboardEvent.key === 'ContextMenu') || (keyboardEvent.shiftKey && keyboardEvent.key === 'F10'))) {
+				return;
+			}
+			const focused = this.tree.focus;
+			if (focused && 'group' in focused && this.viewMode === 'tree') {
+				keyboardEvent.preventDefault();
+				keyboardEvent.stopPropagation();
+				const anchor = this.tree.element.ownerDocument.getElementById(this.tree.element.getAttribute('aria-activedescendant') ?? '') ?? this.tree.element;
+				this.showGroupMenu(focused.group, anchor);
+			}
+		}));
+		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
 		// Capture acceptance before the editor handles Enter; plain Enter remains a message line break.
-		this._register(
-			addDisposableListener(
-				commitForm,
-				'keydown',
-				event => {
-					const keyboardEvent = event as KeyboardEvent;
-					if (!keyboardEvent.isComposing && !keyboardEvent.altKey && !keyboardEvent.shiftKey && keyboardEvent.key === 'Enter' && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
-						event.preventDefault();
-						event.stopPropagation();
-						void this.commit();
-					}
-				},
-				{ capture: true },
-			),
-		);
+		this._register(addDisposableListener(commitForm, 'keydown', event => {
+			const keyboardEvent = event as KeyboardEvent;
+			if (!keyboardEvent.isComposing && !keyboardEvent.altKey && !keyboardEvent.shiftKey && keyboardEvent.key === 'Enter' && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
+				event.preventDefault();
+				event.stopPropagation();
+				void this.commit();
+			}
+		}, { capture: true }));
 		this._register(scmService.onDidAddRepository(() => this.render()));
 		this._register(scmService.onDidRemoveRepository(() => this.render()));
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
 		this.bindProvider();
 	}
 
-	private get provider(): ISCMProvider | undefined {
-		return this.scmViewService.activeRepository?.provider;
-	}
+	private get provider(): ISCMProvider | undefined { return this.scmViewService.activeRepository?.provider; }
 	private get commitButton(): Button {
 		const button = this.commitActionButton.value!;
 		return button instanceof ButtonWithDropdown ? button.primaryButton : button;
@@ -259,8 +214,7 @@ export class ScmViewPane extends ViewPane {
 		this.titleToolbar.clear();
 		this.titleToolbar.value = new MenuWorkbenchToolBar(this.headerActionsElement, this.menuService, this.contextMenuProvider, MenuId.SCMTitle, {
 			ariaLabel: localize('scm.titleActions', 'Source control actions'),
-			contextKeyService: this.titleContext,
-			menuOptions: { arg: this.scmViewService.activeRepository?.id },
+			contextKeyService: this.titleContext, menuOptions: { arg: this.scmViewService.activeRepository?.id },
 		});
 		this.render();
 	}
@@ -316,14 +270,7 @@ export class ScmViewPane extends ViewPane {
 			contextKeyService: this.titleContext,
 			// Snapshots replace group objects, so both repository and group must still match when the menu runs.
 			menuActionOptions: { args: [group, repository] },
-			getAnchor: () =>
-				event
-					? {
-							x: event.clientX,
-							y: event.clientY,
-							targetWindow: anchor.ownerDocument.defaultView ?? undefined,
-						}
-					: anchor,
+			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: anchor.ownerDocument.defaultView ?? undefined } : anchor,
 		});
 	}
 
@@ -352,26 +299,17 @@ export class ScmViewPane extends ViewPane {
 			return [];
 		}
 		const groups = provider.actionButton?.secondaryCommands ?? [];
-		return Separator.join(
-			...groups.map(group =>
-				group.map(command => ({
-					id: command.id,
-					label: stripIcons(command.title),
-					tooltip: command.tooltip ?? stripIcons(command.title),
-					enabled: true,
-					run: async () => {
-						// A menu belongs to the repository that opened it, even if selection changes before execution.
-						if (this.isDisposed || this.provider !== provider || provider.isBusy) return;
-						await this.executeCommand(command);
-					},
-				})),
-			),
-		);
+		return Separator.join(...groups.map(group => group.map(command => ({
+			id: command.id, label: stripIcons(command.title), tooltip: command.tooltip ?? stripIcons(command.title), enabled: true,
+			run: async () => {
+				// A menu belongs to the repository that opened it, even if selection changes before execution.
+				if (this.isDisposed || this.provider !== provider || provider.isBusy) return;
+				await this.executeCommand(command);
+			},
+		}))));
 	}
 
-	public get viewMode(): SCMViewMode {
-		return this._viewMode;
-	}
+	public get viewMode(): SCMViewMode { return this._viewMode; }
 	public set viewMode(mode: SCMViewMode) {
 		if (this._viewMode === mode) return;
 		this._viewMode = mode;
@@ -381,9 +319,7 @@ export class ScmViewPane extends ViewPane {
 		this.render();
 	}
 
-	public get viewSortKey(): SCMViewSortKey {
-		return this._viewSortKey;
-	}
+	public get viewSortKey(): SCMViewSortKey { return this._viewSortKey; }
 	public set viewSortKey(key: SCMViewSortKey) {
 		if (this._viewSortKey === key) return;
 		this._viewSortKey = key;
@@ -411,23 +347,18 @@ export class ScmViewPane extends ViewPane {
 		const descriptor = provider?.actionButton;
 		const hasDropdown = descriptor?.secondaryCommands?.some(group => group.length > 0) === true;
 		let actionButton = this.commitActionButton.value;
-		if (!actionButton || actionButton instanceof ButtonWithDropdown !== hasDropdown) {
-			const hadFocus = actionButton instanceof ButtonWithDropdown ? actionButton.element.contains(this.element.ownerDocument.activeElement) : actionButton?.hasFocus();
+		if (!actionButton || (actionButton instanceof ButtonWithDropdown) !== hasDropdown) {
+			const hadFocus = actionButton instanceof ButtonWithDropdown
+				? actionButton.element.contains(this.element.ownerDocument.activeElement)
+				: actionButton?.hasFocus();
 			const options = {
-				...defaultButtonStyles,
-				label: localize('scm.commit', 'Commit'),
-				presentation: 'primary' as const,
-				contentAlignment: 'labelCentered' as const,
-				type: 'submit' as const,
+				...defaultButtonStyles, label: localize('scm.commit', 'Commit'), presentation: 'primary' as const,
+				contentAlignment: 'labelCentered' as const, type: 'submit' as const,
 			};
-			actionButton = hasDropdown
-				? new ButtonWithDropdown(this.commitActions, {
-						...options,
-						contextMenuProvider: this.contextMenuProvider,
-						actions: { getActions: () => this.getCommitMenuActions() },
-						addPrimaryActionToDropdown: false,
-					})
-				: new Button(this.commitActions, options);
+			actionButton = hasDropdown ? new ButtonWithDropdown(this.commitActions, {
+				...options, contextMenuProvider: this.contextMenuProvider,
+				actions: { getActions: () => this.getCommitMenuActions() }, addPrimaryActionToDropdown: false,
+			}) : new Button(this.commitActions, options);
 			this.commitActionButton.value = actionButton;
 			this.commitButton.toggleClassName('ash-scm-commit', true);
 			if (actionButton instanceof ButtonWithDropdown) {
@@ -471,45 +402,35 @@ export class ScmViewPane extends ViewPane {
 			this.renderedGroups = groups;
 			// Retain the element as well as its stable ID: the tree can then preserve
 			// unchanged row DOM, listeners and focus when another resource changes.
-			this.tree.setChildren(
-				(groups ?? []).map(group => {
-					const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(group, provider!.rootUri, extUriBiasedIgnorePathCase);
-					for (const resource of group.resources) {
-						resources.add(resource.sourceUri, resource);
-					}
-					const id = JSON.stringify([active!.id, group.id]);
-					let element = this.groupElements.get(group);
-					if (element?.id !== id) {
-						element = { id, group };
-						this.groupElements.set(group, element);
-					}
-					return {
-						element,
-						children: this.viewMode === 'tree' ? this.resourceChildren(resources.root, active!.id) : this.listChildren(group, active!.id),
-					};
-				}),
-			);
+			this.tree.setChildren((groups ?? []).map(group => {
+				const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(group, provider!.rootUri, extUriBiasedIgnorePathCase);
+				for (const resource of group.resources) {
+					resources.add(resource.sourceUri, resource);
+				}
+				const id = JSON.stringify([active!.id, group.id]);
+				let element = this.groupElements.get(group);
+				if (element?.id !== id) {
+					element = { id, group };
+					this.groupElements.set(group, element);
+				}
+				return {
+					element,
+					children: this.viewMode === 'tree' ? this.resourceChildren(resources.root, active!.id) : this.listChildren(group, active!.id),
+				};
+			}));
 		}
 		for (const item of this.actionViewItems) item.setBusy(provider?.isBusy === true);
 		this.viewWelcomeState.fire();
 	}
 
 	private listChildren(group: ISCMResourceGroup, repositoryId: string): ObjectTreeElement<TreeElement>[] {
-		return [...group.resources]
-			.sort((left, right) => {
-				const primary =
-					this.viewSortKey === 'name'
-						? basename(left.path).localeCompare(basename(right.path))
-						: this.viewSortKey === 'status'
-							? left.decorations.kind.localeCompare(right.decorations.kind)
-							: 0;
-				return primary || left.path.localeCompare(right.path);
-			})
-			.map(resource => ({
-				element: this.resourceElement(resource, JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)])),
-			}));
+		return [...group.resources].sort((left, right) => {
+			const primary = this.viewSortKey === 'name' ? basename(left.path).localeCompare(basename(right.path))
+				: this.viewSortKey === 'status' ? left.decorations.kind.localeCompare(right.decorations.kind) : 0;
+			return primary || left.path.localeCompare(right.path);
+		}).map(resource => ({ element: this.resourceElement(resource, JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)])) }));
 	}
-	private resourceElement(resource: ISCMResource, id: string): Extract<TreeElement, { resource: ISCMResource }> {
+	private resourceElement(resource: ISCMResource, id: string): Extract<TreeElement, { resource: ISCMResource; }> {
 		let element = this.resourceElements.get(resource);
 		if (element?.id !== id) {
 			element = { id, resource };
@@ -522,7 +443,9 @@ export class ScmViewPane extends ViewPane {
 		const nodes = [...parent.children].sort((left, right) => Number(left.element !== undefined) - Number(right.element !== undefined) || left.name.localeCompare(right.name));
 		return nodes.map(node => {
 			const id = JSON.stringify([repositoryId, node.context.id, extUriBiasedIgnorePathCase.getComparisonKey(node.uri)]);
-			return node.element ? { element: this.resourceElement(node.element, id) } : { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
+			return node.element
+				? { element: this.resourceElement(node.element, id) }
+				: { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
 		});
 	}
 
@@ -531,14 +454,11 @@ export class ScmViewPane extends ViewPane {
 		row.className = 'ash-scm-folder';
 		const resources = this.renderedRows.set(row, new DisposableStore());
 		const label = resources.add(this.resourceLabels.create(row));
-		label.setResource(
-			{ resource: folder.uri, name: folder.name },
-			{
-				fileKind: FileKind.Directory,
-				title: folder.relativePath.slice(1),
-				extraClasses: ['ash-scm-change-label'],
-			},
-		);
+		label.setResource({ resource: folder.uri, name: folder.name }, {
+			fileKind: FileKind.Directory,
+			title: folder.relativePath.slice(1),
+			extraClasses: ['ash-scm-change-label'],
+		});
 		row.append(label.element);
 		return row;
 	}
@@ -553,29 +473,21 @@ export class ScmViewPane extends ViewPane {
 		label.textContent = group.label;
 		label.title = group.label;
 		heading.append(label);
-		resources.add(
-			addDisposableListener(heading, 'contextmenu', event => {
-				event.preventDefault();
-				event.stopPropagation();
-				this.showGroupMenu(group, heading, event as MouseEvent);
-			}),
-		);
+		resources.add(addDisposableListener(heading, 'contextmenu', event => {
+			event.preventDefault();
+			event.stopPropagation();
+			this.showGroupMenu(group, heading, event as MouseEvent);
+		}));
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
-		const count = resources.add(
-			new CountBadge(
-				heading,
-				{
-					titleFormat: localize('scm.resourceCount', '{0} changes'),
-				},
-				defaultCountBadgeStyles,
-			),
-		);
+		const count = resources.add(new CountBadge(heading, {
+			titleFormat: localize('scm.resourceCount', '{0} changes')
+		}, defaultCountBadgeStyles));
 		count.domNode.classList.add('ash-scm-section-count');
 		count.setCount(group.resources.length);
 		return heading;
 	}
 
-	private renderResource(element: { readonly id: string; readonly resource: ISCMResource }): HTMLElement {
+	private renderResource(element: { readonly id: string; readonly resource: ISCMResource; }): HTMLElement {
 		const resource = element.resource;
 		const document = this.element.ownerDocument;
 		const item = h(document, 'div');
@@ -587,38 +499,31 @@ export class ScmViewPane extends ViewPane {
 		const name = basename(resource.path);
 		const parentPath = dirname(resource.path);
 		const fileLabel = resources.add(this.resourceLabels.create(open));
-		fileLabel.setResource(
-			{ resource: resource.sourceUri, name, description: parentPath || undefined },
-			{
-				reserveIconSpace: true,
-				strikethrough: resource.decorations.kind === 'deleted',
-				title: resource.originalPath ? `${resource.originalPath} → ${resource.path}` : resource.path,
-				extraClasses: ['ash-scm-change-label'],
-			},
-		);
+		fileLabel.setResource({ resource: resource.sourceUri, name, description: parentPath || undefined }, {
+			reserveIconSpace: true,
+			strikethrough: resource.decorations.kind === 'deleted',
+			title: resource.originalPath ? `${resource.originalPath} → ${resource.path}` : resource.path,
+			extraClasses: ['ash-scm-change-label'],
+		});
 		open.setAttribute('aria-label', resource.openLabel);
 		open.append(fileLabel.element);
 		resources.add(addDisposableListener(open, 'mousedown', event => event.stopPropagation()));
 		resources.add(addDisposableListener(open, 'keydown', event => event.stopPropagation()));
-		resources.add(
-			addDisposableListener(open, 'keydown', event => {
-				if (event.key === 'Enter' && (event.ctrlKey || event.metaKey || event.altKey)) {
-					event.preventDefault();
-					void resource.open({ pinned: true, preserveFocus: false }, true);
-				}
-			}),
-		);
-		resources.add(
-			registerOpenEditorListeners(open, options => {
-				this.tree.setFocus(element.id);
-				this.tree.setSelection([element.id]);
-				// Provider snapshots replace row buttons; previews keep focus on the retained tree instead.
-				if (options.editorOptions.preserveFocus) {
-					this.tree.domFocus();
-				}
-				void resource.open(options.editorOptions, options.openToSide);
-			}),
-		);
+		resources.add(addDisposableListener(open, 'keydown', event => {
+			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey || event.altKey)) {
+				event.preventDefault();
+				void resource.open({ pinned: true, preserveFocus: false }, true);
+			}
+		}));
+		resources.add(registerOpenEditorListeners(open, options => {
+			this.tree.setFocus(element.id);
+			this.tree.setSelection([element.id]);
+			// Provider snapshots replace row buttons; previews keep focus on the retained tree instead.
+			if (options.editorOptions.preserveFocus) {
+				this.tree.domFocus();
+			}
+			void resource.open(options.editorOptions, options.openToSide);
+		}));
 		item.append(open);
 		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`, resources).classList.add('ash-scm-change-actions');
 		const badge = h(document, 'span');
@@ -630,18 +535,16 @@ export class ScmViewPane extends ViewPane {
 	}
 
 	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string, resources: DisposableStore): HTMLDivElement {
-		const toolbar = resources.add(
-			new WorkbenchToolBar(container, this.contextMenuProvider, {
-				ariaLabel,
-				presentation: 'inherit-foreground',
-				actionViewItemProvider: (action, options) => {
-					const item = new ScmActionViewItem(action, () => this.provider?.isBusy === true, options);
-					this.actionViewItems.add(item);
-					resources.add(toDisposable(() => this.actionViewItems.delete(item)));
-					return item;
-				},
-			}),
-		);
+		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuProvider, {
+			ariaLabel,
+			presentation: 'inherit-foreground',
+			actionViewItemProvider: (action, options) => {
+				const item = new ScmActionViewItem(action, () => this.provider?.isBusy === true, options);
+				this.actionViewItems.add(item);
+				resources.add(toDisposable(() => this.actionViewItems.delete(item)));
+				return item;
+			},
+		}));
 		toolbar.setActions(actions);
 		toolbar.element.classList.add('ash-scm-action-toolbar');
 		// Toolbar input belongs to its buttons, rather than the containing tree row.
@@ -652,50 +555,31 @@ export class ScmViewPane extends ViewPane {
 	}
 }
 
-registerAction2(
-	class CollapseAllAction extends Action2 {
-		constructor() {
-			super({
-				id: 'workbench.scm.action.collapseAll',
-				title: localize2('scmCollapseAll', 'Collapse All'),
-				f1: false,
-				menu: {
-					id: MenuId.SCMResourceGroupContext,
-					group: '9_collapse',
-					when: SCMViewModeContext.isEqualTo('tree'),
-				},
-			});
-		}
+registerAction2(class CollapseAllAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.collapseAll',
+			title: localize2('scmCollapseAll', 'Collapse All'),
+			f1: false,
+			menu: { id: MenuId.SCMResourceGroupContext, group: '9_collapse', when: SCMViewModeContext.isEqualTo('tree') },
+		});
+	}
 
-		public override run(accessor: ServicesAccessor, group?: ISCMResourceGroup, repository?: ISCMRepository): void {
-			if (!group || !repository || accessor.get(ISCMViewService).activeRepository !== repository) {
-				return;
-			}
-			accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID)?.collapseAllResources(group);
+	public override run(accessor: ServicesAccessor, group?: ISCMResourceGroup, repository?: ISCMRepository): void {
+		if (!group || !repository || accessor.get(ISCMViewService).activeRepository !== repository) {
+			return;
 		}
-	},
-);
+		accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID)?.collapseAllResources(group);
+	}
+});
 
 class ScmActionViewItem extends ButtonActionViewItem {
-	constructor(
-		action: IAction,
-		private readonly isBusy: () => boolean,
-		options: ActionViewItemOptions,
-	) {
-		super(action, options);
-	}
-	public override render(container: HTMLElement): void {
-		super.render(container);
-		this.setBusy(this.isBusy());
-	}
-	public setBusy(busy: boolean): void {
-		this.button.enabled = this.action.enabled && !busy;
-	}
+	constructor(action: IAction, private readonly isBusy: () => boolean, options: ActionViewItemOptions) { super(action, options); }
+	public override render(container: HTMLElement): void { super.render(container); this.setBusy(this.isBusy()); }
+	public setBusy(busy: boolean): void { this.button.enabled = this.action.enabled && !busy; }
 }
 
-function basename(path: string): string {
-	return path.replaceAll('\\', '/').split('/').at(-1) ?? path;
-}
+function basename(path: string): string { return path.replaceAll('\\', '/').split('/').at(-1) ?? path; }
 function dirname(path: string): string {
 	const normalized = path.replaceAll('\\', '/');
 	const separator = normalized.lastIndexOf('/');

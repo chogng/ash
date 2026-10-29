@@ -18,87 +18,56 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 	) {
 		super();
 		const attach = (editor: ICodeEditor): void => {
-			if (this.editors.has(editor)) {
-				return;
-			}
+			if (this.editors.has(editor)) { return; }
 			const lifetime = new DisposableStore();
 			this.editors.set(editor, lifetime);
 			let previous = new Map<AccessibilitySignal, string>();
-			const timer = lifetime.add(
-				new RunOnceScheduler(() => {
-					if (codeEditors.getFocusedCodeEditor() !== editor) {
-						return;
+			const timer = lifetime.add(new RunOnceScheduler(() => {
+				if (codeEditors.getFocusedCodeEditor() !== editor) { return; }
+				const model = editor.getModel();
+				const position = editor.getPosition();
+				if (!model || !position) { return; }
+				const line = position.lineNumber;
+				const column = position.column;
+				const onLine = markers.read({ resource: model.uri }).filter(marker => marker.startLineNumber <= line && marker.endLineNumber >= line
+					&& (marker.endLineNumber > line || marker.endColumn > 1 || marker.startLineNumber === line));
+				const next = new Map<AccessibilitySignal, string>();
+				for (const severity of [MarkerSeverity.Error, MarkerSeverity.Warning]) {
+					const matched = onLine.filter(marker => marker.severity === severity);
+					if (!matched.length) { continue; }
+					const atPosition = matched.filter(marker => (marker.startLineNumber < line || marker.startColumn <= column)
+						&& (marker.endLineNumber > line || column < marker.endColumn
+							|| (marker.startLineNumber === line && marker.startColumn === column && marker.endColumn === column)));
+					let signal = atPosition.length ? AccessibilitySignal.errorAtPosition : AccessibilitySignal.errorOnLine;
+					if (severity === MarkerSeverity.Warning) {
+						signal = atPosition.length ? AccessibilitySignal.warningAtPosition : AccessibilitySignal.warningOnLine;
 					}
-					const model = editor.getModel();
-					const position = editor.getPosition();
-					if (!model || !position) {
-						return;
-					}
-					const line = position.lineNumber;
-					const column = position.column;
-					const onLine = markers
-						.read({ resource: model.uri })
-						.filter(marker => marker.startLineNumber <= line && marker.endLineNumber >= line && (marker.endLineNumber > line || marker.endColumn > 1 || marker.startLineNumber === line));
-					const next = new Map<AccessibilitySignal, string>();
-					for (const severity of [MarkerSeverity.Error, MarkerSeverity.Warning]) {
-						const matched = onLine.filter(marker => marker.severity === severity);
-						if (!matched.length) {
-							continue;
-						}
-						const atPosition = matched.filter(
-							marker =>
-								(marker.startLineNumber < line || marker.startColumn <= column) &&
-								(marker.endLineNumber > line || column < marker.endColumn || (marker.startLineNumber === line && marker.startColumn === column && marker.endColumn === column)),
-						);
-						let signal = atPosition.length ? AccessibilitySignal.errorAtPosition : AccessibilitySignal.errorOnLine;
-						if (severity === MarkerSeverity.Warning) {
-							signal = atPosition.length ? AccessibilitySignal.warningAtPosition : AccessibilitySignal.warningOnLine;
-						}
-						const markerKeys = (atPosition.length ? atPosition : matched).map(marker => [
-							marker.owner,
-							marker.startLineNumber,
-							marker.startColumn,
-							marker.endLineNumber,
-							marker.endColumn,
-							marker.message,
-							marker.source,
-							marker.code,
-						]);
-						const signature = JSON.stringify([model.uri.toString(), line, markerKeys]);
-						next.set(signal, signature);
-					}
-					if (debug.breakpoints.some(point => 'resource' in point && point.enabled && point.lineNumber === position.lineNumber && point.resource.toString() === model.uri.toString())) {
-						next.set(AccessibilitySignal.break, `${model.uri}:${line}`);
-					}
-					for (const [signal, signature] of next) {
-						if (previous.get(signal) !== signature) {
-							void signals.playSignal(signal);
-						}
-					}
-					previous = next;
-				}, 250),
-			);
+					const markerKeys = (atPosition.length ? atPosition : matched).map(marker => [
+						marker.owner,
+						marker.startLineNumber, marker.startColumn,
+						marker.endLineNumber, marker.endColumn,
+						marker.message, marker.source, marker.code,
+					]);
+					const signature = JSON.stringify([model.uri.toString(), line, markerKeys]);
+					next.set(signal, signature);
+				}
+				if (debug.breakpoints.some(point => 'resource' in point && point.enabled && point.lineNumber === position.lineNumber && point.resource.toString() === model.uri.toString())) {
+					next.set(AccessibilitySignal.break, `${model.uri}:${line}`);
+				}
+				for (const [signal, signature] of next) {
+					if (previous.get(signal) !== signature) { void signals.playSignal(signal); }
+				}
+				previous = next;
+			}, 250));
 			lifetime.add(editor.onDidChangeCursorPosition(() => timer.schedule()));
 			lifetime.add(editor.onDidFocusEditorText(() => timer.schedule()));
-			lifetime.add(
-				editor.onDidBlurEditorText(() => {
-					timer.cancel();
-					previous.clear();
-				}),
-			);
-			lifetime.add(
-				editor.onDidChangeModel(() => {
-					previous.clear();
-					timer.schedule();
-				}),
-			);
+			lifetime.add(editor.onDidBlurEditorText(() => { timer.cancel(); previous.clear(); }));
+			lifetime.add(editor.onDidChangeModel(() => { previous.clear(); timer.schedule(); }));
 			lifetime.add(markers.onMarkerChanged(() => timer.schedule()));
 			lifetime.add(debug.onDidChangeBreakpoints(() => timer.schedule()));
 		};
 		this._register(codeEditors.onCodeEditorAdd(attach));
 		this._register(codeEditors.onCodeEditorRemove(editor => this.editors.deleteAndDispose(editor)));
-		for (const editor of codeEditors.listCodeEditors()) {
-			attach(editor);
-		}
+		for (const editor of codeEditors.listCodeEditors()) { attach(editor); }
 	}
 }

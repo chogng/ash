@@ -35,14 +35,12 @@ export function createAcademyDocumentSchema(): DocumentSchema {
 				groups: [...new Set([...(spec.groups ?? []), 'block'])],
 			};
 		} else {
-			nodes[type] = spec.kind === 'block' ? { ...spec, groups: [...new Set([...(spec.groups ?? []), 'block'])] } : spec;
+			nodes[type] = spec.kind === 'block'
+				? { ...spec, groups: [...new Set([...(spec.groups ?? []), 'block'])] }
+				: spec;
 		}
 	}
-	nodes.documentSection = {
-		...nodes.documentSection!,
-		allowedChildren: undefined,
-		allowedChildGroups: ['block', 'academy-meta', 'academy-section', 'citation-bibliography'],
-	};
+	nodes.documentSection = { ...nodes.documentSection!, allowedChildren: undefined, allowedChildGroups: ['block', 'academy-meta', 'academy-section', 'citation-bibliography'] };
 	nodes[ACADEMY_NODE_TYPES.title] = {
 		kind: 'group',
 		groups: ['academy-meta'],

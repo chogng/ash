@@ -15,10 +15,6 @@ export class RGBA8 {
 		this.a = RGBA8._clamp(a);
 	}
 
-	equals(other: RGBA8): boolean {
-		return this.r === other.r && this.g === other.g && this.b === other.b && this.a === other.a;
-	}
-	static _clamp(value: number): number {
-		return value < 0 ? 0 : value > 255 ? 255 : value | 0;
-	}
+	equals(other: RGBA8): boolean { return this.r === other.r && this.g === other.g && this.b === other.b && this.a === other.a; }
+	static _clamp(value: number): number { return value < 0 ? 0 : value > 255 ? 255 : value | 0; }
 }

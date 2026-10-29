@@ -6,9 +6,7 @@ suite('banner browser component', () => {
 	const browserTests = useBrowserTests();
 	setup(function () {
 		const { page } = browserTests;
-		page.on('pageerror', error => {
-			throw error;
-		});
+		page.on('pageerror', error => { throw error; });
 	});
 
 	for (const locale of ['en', 'zh']) {
@@ -66,10 +64,7 @@ suite('banner browser component', () => {
 			await expect(editor).toBeFocused();
 			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
-			const reconnect = banner.getByRole('button', {
-				name: locale === 'zh' ? '重新连接' : 'Reconnect',
-				exact: true,
-			});
+			const reconnect = banner.getByRole('button', { name: locale === 'zh' ? '重新连接' : 'Reconnect', exact: true });
 			await expect(reconnect).toBeVisible();
 			await page.evaluate(() => window.ashBannerIntegration.focus());
 			await banner.press('ArrowLeft');
@@ -86,11 +81,7 @@ suite('banner browser component', () => {
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
 				await page.screenshot({ path: testInfo.outputPath(`banner-${locale}-theme-${index}.png`) });
-				const colors = await banner.evaluate(node => ({
-					background: getComputedStyle(node).backgroundColor,
-					foreground: getComputedStyle(node).color,
-					border: getComputedStyle(node).borderBottomColor,
-				}));
+				const colors = await banner.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
 				expect(colors.background).not.toBe(colors.foreground);
 				if (index > 1) expect(colors.border).not.toBe(colors.background);
 			}
@@ -248,10 +239,7 @@ suite('banner browser component', () => {
 			const editor = page.locator('.ash-workspace-trust-editor');
 			const heading = editor.getByRole('heading', { level: 2 });
 			const trust = editor.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
-			const readOnly = editor.getByRole('button', {
-				name: zh ? '以只读方式打开' : 'Open read-only',
-				exact: true,
-			});
+			const readOnly = editor.getByRole('button', { name: zh ? '以只读方式打开' : 'Open read-only', exact: true });
 			await expect(heading).toHaveText(zh ? '只读工作区' : 'Read-only workspace');
 			await expect(editor.getByRole('switch')).toHaveCount(0);
 			await expect(editor.getByRole('combobox')).toHaveCount(0);
@@ -276,10 +264,7 @@ suite('banner browser component', () => {
 			await expect(editor.getByRole('button')).toHaveCount(1);
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
-				const colors = await editor.evaluate(node => ({
-					foreground: getComputedStyle(node).color,
-					background: getComputedStyle(node).backgroundColor,
-				}));
+				const colors = await editor.evaluate(node => ({ foreground: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor }));
 				expect(colors.foreground).not.toBe(colors.background);
 				await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-theme-${index}.png`) });
 			}
@@ -306,12 +291,7 @@ suite('banner browser component', () => {
 			const geometry = await editor.evaluate(node => {
 				const content = node.querySelector<HTMLElement>('.workspace-trust-content')!;
 				const viewport = content.parentElement!;
-				return {
-					width: content.clientWidth,
-					scrollWidth: content.scrollWidth,
-					scrollHeight: viewport.scrollHeight,
-					height: viewport.clientHeight,
-				};
+				return { width: content.clientWidth, scrollWidth: content.scrollWidth, scrollHeight: viewport.scrollHeight, height: viewport.clientHeight };
 			});
 			expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width);
 			await advanced.focus();
@@ -320,11 +300,7 @@ suite('banner browser component', () => {
 			const mutation = editor.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true });
 			await mutation.focus();
 			await expect(mutation).toBeFocused();
-			await expect(
-				editor.locator('.ash-switch').filter({
-					has: page.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true }),
-				}),
-			).toBeInViewport();
+			await expect(editor.locator('.ash-switch').filter({ has: page.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true }) })).toBeInViewport();
 			await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-narrow-advanced.png`) });
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(2);
 		});
@@ -451,10 +427,7 @@ suite('banner browser component', () => {
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const origin = page.getByRole('textbox', { name: 'Editor draft' });
 			await origin.focus();
-			await page.evaluate(() => {
-				window.ashBannerIntegration.requestTrust();
-				window.ashBannerIntegration.requestTrust();
-			});
+			await page.evaluate(() => { window.ashBannerIntegration.requestTrust(); window.ashBannerIntegration.requestTrust(); });
 			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
 			await expect(dialog).toHaveCount(1);
 			await expect(dialog).toContainText(zh ? '你是否信任此工作区中文件的作者' : 'Do you trust the authors');
@@ -480,10 +453,7 @@ suite('banner browser component', () => {
 		const { page } = browserTests;
 		await page.goto('/banner.html');
 		await page.waitForFunction(() => !!window.ashBannerIntegration);
-		await page.evaluate(() => {
-			window.ashBannerIntegration.setPermissions('readonly');
-			window.ashBannerIntegration.requestTrust();
-		});
+		await page.evaluate(() => { window.ashBannerIntegration.setPermissions('readonly'); window.ashBannerIntegration.requestTrust(); });
 		const dialog = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
 		await expect(dialog).toBeVisible();
 		await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('replacement'));

@@ -64,70 +64,40 @@ export class NewChatInputWidget extends ChatInputPart {
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 	) {
-		super(
-			container,
-			{
-				...delegate,
-				send: async (text, mode, skills, contexts, submissionSignal) => {
-					if (this.isDisposed || submissionSignal?.aborted) return;
-					this.submittedMessage = true;
-					this.updateConversation();
-					try {
-						await delegate.send(text, mode, skills, contexts, submissionSignal);
-					} catch (error) {
-						// A retired submission must not change the newly selected conversation's welcome state.
-						if (!this.isDisposed && !submissionSignal?.aborted) {
-							if (this.model.items.length === 0) {
-								this.submittedMessage = false;
-							}
-							this.updateConversation();
+		super(container, {
+			...delegate,
+			send: async (text, mode, skills, contexts, submissionSignal) => {
+				if (this.isDisposed || submissionSignal?.aborted) return;
+				this.submittedMessage = true;
+				this.updateConversation();
+				try {
+					await delegate.send(text, mode, skills, contexts, submissionSignal);
+				} catch (error) {
+					// A retired submission must not change the newly selected conversation's welcome state.
+					if (!this.isDisposed && !submissionSignal?.aborted) {
+						if (this.model.items.length === 0) {
+							this.submittedMessage = false;
 						}
-						throw error;
+						this.updateConversation();
 					}
-				},
+					throw error;
+				}
 			},
-			contextMenus,
-			contextViews,
-			accessibleViews,
-			notifications,
-			{
-				create: options =>
-					instantiationService.createInstance(ChatInputEditor, {
-						...options,
-						placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
-						// Let the row center the actual text height beside its 28px controls.
-						height: { minimum: 0, maximum: 240 },
-					}),
-			},
-			[
-				{
-					id: 'ash.chat.input.attach',
-					get label() {
-						return localize('chat.attach.files', 'Attach files');
-					},
-					get tooltip() {
-						return localize('chat.attach.files', 'Attach files');
-					},
-					icon: Lxicon.add,
-					enabled: true,
-					run: () => this.contextAttachments.showPicker(),
-				},
-			],
-			{
-				layout: 'compact',
-				modePicker: 'visible',
-				modelPickerPosition: 'trailing',
-				renderSecondaryToolbar: false,
-				fileEvents: 'host',
-				draftStorage: 'host',
-			},
-			instantiationService,
-			speechToText,
-			onboarding,
-			quickInput,
-			menuService,
-			attachmentResolver,
-		);
+		}, contextMenus, contextViews, accessibleViews, notifications, {
+			create: options => instantiationService.createInstance(ChatInputEditor, {
+				...options,
+				placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
+				// Let the row center the actual text height beside its 28px controls.
+				height: { minimum: 0, maximum: 240 },
+			}),
+		}, [{
+			id: 'ash.chat.input.attach',
+			get label() { return localize('chat.attach.files', 'Attach files'); },
+			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
+			icon: Lxicon.add,
+			enabled: true,
+			run: () => this.contextAttachments.showPicker(),
+		}], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver);
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');
 		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
@@ -139,26 +109,20 @@ export class NewChatInputWidget extends ChatInputPart {
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-chat-tip-slot';
-		this.tips = this._register(
-			instantiationService.createInstance(ChatInputTipPresenter, {
-				container: tipContainer,
-				isEligible: () =>
-					!this.submittedMessage &&
-					this.model.items.length === 0 &&
-					(this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading')) &&
-					!this.model.inputState.interaction,
-				focusInput: () => this.focus(),
-			}),
-		);
+		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
+			container: tipContainer,
+			isEligible: () => !this.submittedMessage && this.model.items.length === 0
+				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
+				&& !this.model.inputState.interaction,
+			focusInput: () => this.focus(),
+		}));
 		const footer = this.inputFooter!;
 		footer.classList.add('ash-sessions-chat-input-footer');
 		const workspace = h(container.ownerDocument, 'span', { className: 'ash-sessions-chat-input-workspace' });
 		appendLabelIcon(workspace, Lxicon.folder);
 		this.workspaceLabel = h(container.ownerDocument, 'span');
 		workspace.append(this.workspaceLabel);
-		this.permissionButton = h(container.ownerDocument, 'button', {
-			className: 'ash-button ash-button-small ash-button-quiet',
-		});
+		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
 		this.permissionButton.type = 'button';
 		this.permissionButton.setAttribute('aria-haspopup', 'menu');
 		this.permissionButton.setAttribute('aria-expanded', 'false');
@@ -168,30 +132,22 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.element.append(tipContainer);
 		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
-		this._register(
-			addDisposableListener(this.inputContainer, 'focusin', event => {
-				if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
-				const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
-				if (hint) announceStatus(hint);
-			}),
-		);
+		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
+			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
+			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
+			if (hint) announceStatus(hint);
+		}));
 		this.displayedThreadId = model.threadId;
-		this.bindDraftStorage(
-			model,
-			{
-				read: identity => readNewChatDraftState(storage, identity),
-				write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
-				flush: () => storage.flush(),
-			},
-			lifecycle.onWillShutdown,
-		);
-		this._register(
-			model.onDidChange(() => {
-				if (this.displayedThreadId !== model.threadId && this.displayedThreadId !== undefined) this.submittedMessage = false;
-				this.displayedThreadId = model.threadId;
-				this.updateConversation();
-			}),
-		);
+		this.bindDraftStorage(model, {
+			read: identity => readNewChatDraftState(storage, identity),
+			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
+			flush: () => storage.flush(),
+		}, lifecycle.onWillShutdown);
+		this._register(model.onDidChange(() => {
+			if (this.displayedThreadId !== model.threadId && this.displayedThreadId !== undefined) this.submittedMessage = false;
+			this.displayedThreadId = model.threadId;
+			this.updateConversation();
+		}));
 		this._register(workspaceContext.onDidChangeWorkspaceFolders(() => this.updateWorkspace()));
 		this.updateConversation();
 	}
@@ -224,15 +180,8 @@ export class NewChatInputWidget extends ChatInputPart {
 		const session = this.sessions.sessions.find(session => session.sessionId === this.model.sessionId);
 		const target = draft?.workspace;
 		const root = target && 'root' in target ? target.root : session?.workspace?.root;
-		const labels = root
-			? [
-					root
-						.replace(/[/\\]+$/, '')
-						.split(/[/\\]/)
-						.pop() || root,
-				]
-			: target?.type === 'multiple'
-				? target.folders.map(folder => folder.label)
+		const labels = root ? [root.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || root]
+			: target?.type === 'multiple' ? target.folders.map(folder => folder.label)
 				: this.workspaceContext.getWorkspace().folders.map(folder => folder.name);
 		this.workspaceLabel.textContent = labels.join(', ');
 		this.workspaceLabel.title = root ?? labels.join(', ');

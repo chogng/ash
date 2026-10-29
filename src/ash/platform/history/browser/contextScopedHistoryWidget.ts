@@ -25,7 +25,10 @@ export interface IHistoryNavigationContext extends IDisposable {
 const registeredWidgets = new Set<IHistoryNavigationWidget>();
 let focusedWidget: IHistoryNavigationWidget | undefined;
 
-export function registerAndCreateHistoryNavigationContext(scopedContextKeyService: IContextKeyService, widget: IHistoryNavigationWidget): IHistoryNavigationContext {
+export function registerAndCreateHistoryNavigationContext(
+	scopedContextKeyService: IContextKeyService,
+	widget: IHistoryNavigationWidget,
+): IHistoryNavigationContext {
 	if (registeredWidgets.has(widget)) {
 		throw new Error('Cannot register the same widget multiple times');
 	}
@@ -46,23 +49,18 @@ export function registerAndCreateHistoryNavigationContext(scopedContextKeyServic
 
 	resources.add(widget.onDidFocus(handleFocus));
 	resources.add(widget.onDidBlur(handleBlur));
-	resources.add(
-		toDisposable(() => {
-			registeredWidgets.delete(widget);
-			handleBlur();
-			historyNavigationForwardsEnablement.reset();
-			historyNavigationBackwardsEnablement.reset();
-		}),
-	);
+	resources.add(toDisposable(() => {
+		registeredWidgets.delete(widget);
+		handleBlur();
+		historyNavigationForwardsEnablement.reset();
+		historyNavigationBackwardsEnablement.reset();
+	}));
 	if (widget.element.contains(widget.element.ownerDocument.activeElement)) handleFocus();
 
-	return Object.assign(
-		toDisposable(() => resources.dispose()),
-		{
-			historyNavigationForwardsEnablement,
-			historyNavigationBackwardsEnablement,
-		},
-	);
+	return Object.assign(toDisposable(() => resources.dispose()), {
+		historyNavigationForwardsEnablement,
+		historyNavigationBackwardsEnablement,
+	});
 }
 
 export class ContextScopedHistoryInputBox<Flexible extends boolean = false> extends HistoryInputBox<Flexible> {
@@ -78,27 +76,15 @@ export class ContextScopedHistoryInputBox<Flexible extends boolean = false> exte
 		};
 		this._register(this.onDidChange(updateNavigation));
 		updateNavigation();
-		this._register(
-			addDisposableListener(this.inputElement, 'keydown', event => {
-				if (event.isComposing || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
-					return;
-				}
-				if (!event.altKey && this.value.includes('\n')) {
-					return;
-				}
-				if (event.key === 'ArrowDown' && this.isNowhereInHistory()) {
-					return;
-				}
-				event.preventDefault();
-				event.stopPropagation();
-				if (event.key === 'ArrowUp') {
-					this.showPreviousValue();
-				} else {
-					this.showNextValue();
-				}
-				this.inputElement.setSelectionRange(this.value.length, this.value.length);
-			}),
-		);
+		this._register(addDisposableListener(this.inputElement, 'keydown', event => {
+			if (event.isComposing || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) { return; }
+			if (!event.altKey && this.value.includes('\n')) { return; }
+			if (event.key === 'ArrowDown' && this.isNowhereInHistory()) { return; }
+			event.preventDefault();
+			event.stopPropagation();
+			if (event.key === 'ArrowUp') { this.showPreviousValue(); } else { this.showNextValue(); }
+			this.inputElement.setSelectionRange(this.value.length, this.value.length);
+		}));
 		// The scope must record focus before resolving the active keybinding hint.
 		this._register(this.onDidFocus(() => this.updateHistoryHint()));
 	}
@@ -106,33 +92,32 @@ export class ContextScopedHistoryInputBox<Flexible extends boolean = false> exte
 
 export class ContextScopedFindInput<Flexible extends boolean = false> extends FindInput<Flexible> {
 	constructor(container: HTMLElement, options: IFindInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
-		super(
-			instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
-				...options,
-				ariaLabel: options.label,
-				placeholder: options.placeholder ?? options.label,
-				history: options.history,
-				showHistoryHint: options.showHistoryHint,
-			}),
-		);
+		super(instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
+			...options,
+			ariaLabel: options.label,
+			placeholder: options.placeholder ?? options.label,
+			history: options.history,
+			showHistoryHint: options.showHistoryHint,
+		}));
 	}
 }
 
 export class ContextScopedReplaceInput<Flexible extends boolean = false> extends ReplaceInput<Flexible> {
 	constructor(container: HTMLElement, options: IReplaceInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
-		super(
-			instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
-				...options,
-				ariaLabel: options.label,
-				placeholder: options.placeholder ?? options.label,
-				history: options.history,
-				showHistoryHint: options.showHistoryHint,
-			}),
-		);
+		super(instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
+			...options,
+			ariaLabel: options.label,
+			placeholder: options.placeholder ?? options.label,
+			history: options.history,
+			showHistoryHint: options.showHistoryHint,
+		}));
 	}
 }
 
-const historyEnabled = ContextKeyExpr.and(focusContext.isEqualTo(true), ContextKeyExpr.not(historyNavigationVisible.key));
+const historyEnabled = ContextKeyExpr.and(
+	focusContext.isEqualTo(true),
+	ContextKeyExpr.not(historyNavigationVisible.key),
+);
 
 CommandsRegistry.register('history.showPrevious', () => {
 	if (focusedWidget && focusedWidget.element.contains(focusedWidget.element.ownerDocument.activeElement)) {
@@ -150,16 +135,6 @@ for (const [command, key, enabled] of [
 	['history.showNext', KeyCode.DownArrow, forwardsContext],
 ] as const) {
 	const when = ContextKeyExpr.and(historyEnabled, enabled.isEqualTo(true));
-	KeybindingsRegistry.registerKeybindingRule({
-		command,
-		keybinding: key,
-		when,
-		priority: KeybindingWeight.WorkbenchContrib,
-	});
-	KeybindingsRegistry.registerKeybindingRule({
-		command,
-		keybinding: KeyMod.Alt | key,
-		when,
-		priority: KeybindingWeight.WorkbenchContrib,
-	});
+	KeybindingsRegistry.registerKeybindingRule({ command, keybinding: key, when, priority: KeybindingWeight.WorkbenchContrib });
+	KeybindingsRegistry.registerKeybindingRule({ command, keybinding: KeyMod.Alt | key, when, priority: KeybindingWeight.WorkbenchContrib });
 }

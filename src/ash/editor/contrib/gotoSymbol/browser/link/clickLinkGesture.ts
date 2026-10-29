@@ -50,75 +50,37 @@ export class ClickLinkGesture extends Disposable {
 
 	constructor(private readonly editor: ICodeEditor) {
 		super();
-		this._register(
-			editor.onMouseMove(event => {
-				this.lastMouse = event;
-				this.move.fire([this.wrap(event), null]);
-			}),
-		);
-		this._register(
-			editor.onMouseDown(event => {
-				this.down = this.wrap(event);
-			}),
-		);
-		this._register(
-			editor.onMouseUp(event => {
-				const down = this.down;
-				this.down = undefined;
-				const up = this.wrap(event);
-				if (
-					down?.hasTriggerModifier &&
-					up.hasTriggerModifier &&
-					up.isLeftClick &&
-					up.isNoneOrSingleMouseDown &&
-					down.target.position &&
-					up.target.position &&
-					down.target.position.equals(up.target.position)
-				) {
-					this.execute.fire(up);
-				}
-			}),
-		);
-		this._register(
-			editor.onMouseDrag(() => {
-				this.down = undefined;
-				this.cancel.fire();
-			}),
-		);
-		this._register(
-			editor.onMouseLeave(() => {
-				this.lastMouse = undefined;
-				this.cancel.fire();
-			}),
-		);
-		this._register(
-			editor.onKeyDown(event => {
-				const keyboard = new ClickLinkKeyboardEvent(event, this.triggerModifier);
-				if (keyboard.keyCodeIsTriggerKey && this.lastMouse && !event.browserEvent.getModifierState('AltGraph')) {
-					this.move.fire([this.wrap(this.lastMouse), keyboard]);
-				}
-			}),
-		);
-		this._register(
-			editor.onKeyUp(event => {
-				if (new ClickLinkKeyboardEvent(event, this.triggerModifier).keyCodeIsTriggerKey) {
-					this.cancel.fire();
-				}
-			}),
-		);
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.multiCursorModifier)) {
-					this.down = undefined;
-					this.cancel.fire();
-				}
-			}),
-		);
+		this._register(editor.onMouseMove(event => {
+			this.lastMouse = event;
+			this.move.fire([this.wrap(event), null]);
+		}));
+		this._register(editor.onMouseDown(event => { this.down = this.wrap(event); }));
+		this._register(editor.onMouseUp(event => {
+			const down = this.down;
+			this.down = undefined;
+			const up = this.wrap(event);
+			if (down?.hasTriggerModifier && up.hasTriggerModifier && up.isLeftClick && up.isNoneOrSingleMouseDown
+				&& down.target.position && up.target.position && down.target.position.equals(up.target.position)) {
+				this.execute.fire(up);
+			}
+		}));
+		this._register(editor.onMouseDrag(() => { this.down = undefined; this.cancel.fire(); }));
+		this._register(editor.onMouseLeave(() => { this.lastMouse = undefined; this.cancel.fire(); }));
+		this._register(editor.onKeyDown(event => {
+			const keyboard = new ClickLinkKeyboardEvent(event, this.triggerModifier);
+			if (keyboard.keyCodeIsTriggerKey && this.lastMouse && !event.browserEvent.getModifierState('AltGraph')) { this.move.fire([this.wrap(this.lastMouse), keyboard]); }
+		}));
+		this._register(editor.onKeyUp(event => {
+			if (new ClickLinkKeyboardEvent(event, this.triggerModifier).keyCodeIsTriggerKey) { this.cancel.fire(); }
+		}));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.multiCursorModifier)) { this.down = undefined; this.cancel.fire(); }
+		}));
 	}
 	private get triggerModifier(): TriggerModifier {
-		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? 'metaKey' : 'ctrlKey') : 'altKey';
+		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? isMacintosh ? 'metaKey' : 'ctrlKey' : 'altKey';
 	}
 	private wrap(event: IEditorMouseEvent): ClickLinkMouseEvent {
-		return new ClickLinkMouseEvent(event, this.triggerModifier, this.triggerModifier === 'altKey' ? (isMacintosh ? 'metaKey' : 'ctrlKey') : 'altKey');
+		return new ClickLinkMouseEvent(event, this.triggerModifier, this.triggerModifier === 'altKey' ? isMacintosh ? 'metaKey' : 'ctrlKey' : 'altKey');
 	}
 }

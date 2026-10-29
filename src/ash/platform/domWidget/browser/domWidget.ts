@@ -9,6 +9,7 @@ const constructors = new WeakMap<Function, IObservable<WidgetConstructor>>();
 
 /** A disposable DOM component whose implementation can be replaced during development. */
 export abstract class DomWidget extends Disposable {
+
 	/** The widget's stable root. The caller owns its placement in the DOM. */
 	public abstract get element(): HTMLElement;
 
@@ -19,12 +20,7 @@ export abstract class DomWidget extends Disposable {
 	}
 
 	/** Resolves decorated dependencies in the original service scope for every replacement. */
-	public static instantiateObservable<T extends DomWidget>(
-		this: new (...args: never[]) => T,
-		instantiationService: IInstantiationService,
-		store: DisposableStore,
-		...params: unknown[]
-	): IObservable<T> {
+	public static instantiateObservable<T extends DomWidget>(this: new (...args: never[]) => T, instantiationService: IInstantiationService, store: DisposableStore, ...params: unknown[]): IObservable<T> {
 		return createWidgetObservable(this, store, constructor => instantiationService.createInstance(constructor as unknown as new (...args: unknown[]) => T, ...params));
 	}
 
@@ -51,18 +47,16 @@ function createWidgetObservable<T extends DomWidget>(constructor: WidgetConstruc
 		return constObservable(instance.value);
 	}
 	const result = observableValue<T>(constructor, instance.value);
-	store.add(
-		versions.onDidChange(next => {
-			const replacement = create(next);
-			const previous = instance.clearAndLeak();
-			instance.value = replacement;
-			try {
-				// The host transfers view state and placement before old listeners and DOM are released.
-				result.set(replacement);
-			} finally {
-				previous?.dispose();
-			}
-		}),
-	);
+	store.add(versions.onDidChange(next => {
+		const replacement = create(next);
+		const previous = instance.clearAndLeak();
+		instance.value = replacement;
+		try {
+			// The host transfers view state and placement before old listeners and DOM are released.
+			result.set(replacement);
+		} finally {
+			previous?.dispose();
+		}
+	}));
 	return result;
 }

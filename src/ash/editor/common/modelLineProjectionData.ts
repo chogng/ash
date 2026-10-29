@@ -46,8 +46,9 @@ export class ModelLineProjectionData {
 		 * Refers to offsets after applying injections
 		 */
 		public breakOffsetsVisibleColumn: number[],
-		public wrappedTextIndentLength: number,
-	) {}
+		public wrappedTextIndentLength: number
+	) {
+	}
 
 	public getOutputLineCount(): number {
 		return this.breakOffsets.length;
@@ -105,9 +106,8 @@ export class ModelLineProjectionData {
 				const replacedLength = this.injectionOptions![i].replaceLength ?? 0;
 				if (replacedLength > 0 && inputOffset < this.injectionOffsets[i] + replacedLength) {
 					const start = this.injectionOffsets[i];
-					const right =
-						inputOffset > start &&
-						(affinity === PositionAffinity.Right || affinity === PositionAffinity.RightOfInjectedText || (affinity === PositionAffinity.None && inputOffset - start >= replacedLength / 2));
+					const right = inputOffset > start && (affinity === PositionAffinity.Right || affinity === PositionAffinity.RightOfInjectedText
+						|| affinity === PositionAffinity.None && inputOffset - start >= replacedLength / 2);
 					const viewStart = inputOffsetInInputWithInjection - inputOffset + start;
 					return this.offsetInInputWithInjectionsToOutputPosition(viewStart + (right ? this.injectionOptions![i].content.length : 0), affinity);
 				}
@@ -130,7 +130,7 @@ export class ModelLineProjectionData {
 		let midStart = 0;
 
 		while (low <= high) {
-			mid = (low + (high - low) / 2) | 0;
+			mid = low + ((high - low) / 2) | 0;
 
 			const midStop = this.breakOffsets[mid];
 			midStart = mid > 0 ? this.breakOffsets[mid - 1] : 0;
@@ -176,7 +176,8 @@ export class ModelLineProjectionData {
 			if (outputLineIndex > 0 && outputOffset === this.getMinOutputOffset(outputLineIndex)) {
 				return new OutputPosition(outputLineIndex - 1, this.getMaxOutputOffset(outputLineIndex - 1));
 			}
-		} else if (affinity === PositionAffinity.Right) {
+		}
+		else if (affinity === PositionAffinity.Right) {
 			const maxOutputLineIndex = this.getOutputLineCount() - 1;
 			if (outputLineIndex < maxOutputLineIndex && outputOffset === this.getMaxOutputOffset(outputLineIndex)) {
 				return new OutputPosition(outputLineIndex + 1, this.getMinOutputOffset(outputLineIndex + 1));
@@ -201,21 +202,15 @@ export class ModelLineProjectionData {
 		}
 		const options = this.injectionOptions![injectedText.injectedTextIndex];
 		// Replaced source has distinct model positions at each edge, so entering an edge must not skip the object.
-		if (
-			options.replaceLength &&
-			affinity !== PositionAffinity.LeftOfInjectedText &&
-			affinity !== PositionAffinity.RightOfInjectedText &&
-			((offsetInInputWithInjections === injectedText.offsetInInputWithInjections && hasLeftCursorStop(options.cursorStops)) ||
-				(offsetInInputWithInjections === injectedText.offsetInInputWithInjections + injectedText.length && hasRightCursorStop(options.cursorStops)))
-		) {
+		if (options.replaceLength && affinity !== PositionAffinity.LeftOfInjectedText && affinity !== PositionAffinity.RightOfInjectedText
+			&& (offsetInInputWithInjections === injectedText.offsetInInputWithInjections && hasLeftCursorStop(options.cursorStops)
+				|| offsetInInputWithInjections === injectedText.offsetInInputWithInjections + injectedText.length && hasRightCursorStop(options.cursorStops))) {
 			return offsetInInputWithInjections;
 		}
 
 		if (affinity === PositionAffinity.None) {
-			if (
-				offsetInInputWithInjections === injectedText.offsetInInputWithInjections + injectedText.length &&
-				hasRightCursorStop(this.injectionOptions![injectedText.injectedTextIndex].cursorStops)
-			) {
+			if (offsetInInputWithInjections === injectedText.offsetInInputWithInjections + injectedText.length
+				&& hasRightCursorStop(this.injectionOptions![injectedText.injectedTextIndex].cursorStops)) {
 				return injectedText.offsetInInputWithInjections + injectedText.length;
 			} else {
 				let result = injectedText.offsetInInputWithInjections;
@@ -268,11 +263,11 @@ export class ModelLineProjectionData {
 			return null;
 		}
 		return {
-			options: this.injectionOptions![injectedText.injectedTextIndex],
+			options: this.injectionOptions![injectedText.injectedTextIndex]
 		};
 	}
 
-	private getInjectedTextAtOffset(offsetInInputWithInjections: number): { injectedTextIndex: number; offsetInInputWithInjections: number; length: number } | undefined {
+	private getInjectedTextAtOffset(offsetInInputWithInjections: number): { injectedTextIndex: number; offsetInInputWithInjections: number; length: number; } | undefined {
 		const injectionOffsets = this.injectionOffsets;
 		const injectionOptions = this.injectionOptions;
 
@@ -293,7 +288,7 @@ export class ModelLineProjectionData {
 					return {
 						injectedTextIndex: i,
 						offsetInInputWithInjections: injectedTextStartOffsetInInputWithInjections,
-						length,
+						length
 					};
 				}
 
@@ -306,20 +301,16 @@ export class ModelLineProjectionData {
 }
 
 function hasRightCursorStop(cursorStop: InjectedTextCursorStops | null | undefined): boolean {
-	if (cursorStop === null || cursorStop === undefined) {
-		return true;
-	}
+	if (cursorStop === null || cursorStop === undefined) { return true; }
 	return cursorStop === InjectedTextCursorStops.Right || cursorStop === InjectedTextCursorStops.Both;
 }
 function hasLeftCursorStop(cursorStop: InjectedTextCursorStops | null | undefined): boolean {
-	if (cursorStop === null || cursorStop === undefined) {
-		return true;
-	}
+	if (cursorStop === null || cursorStop === undefined) { return true; }
 	return cursorStop === InjectedTextCursorStops.Left || cursorStop === InjectedTextCursorStops.Both;
 }
 
 export class InjectedText {
-	constructor(public readonly options: InjectedTextOptions) {}
+	constructor(public readonly options: InjectedTextOptions) { }
 }
 
 export class OutputPosition {
@@ -346,15 +337,7 @@ export interface ILineBreaksComputerContext {
 }
 
 export interface ILineBreaksComputerFactory {
-	createLineBreaksComputer(
-		context: ILineBreaksComputerContext,
-		fontInfo: FontInfo,
-		tabSize: number,
-		wrappingColumn: number,
-		wrappingIndent: WrappingIndent,
-		wordBreak: 'normal' | 'keepAll',
-		wrapOnEscapedLineFeeds: boolean,
-	): ILineBreaksComputer;
+	createLineBreaksComputer(context: ILineBreaksComputerContext, fontInfo: FontInfo, tabSize: number, wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll', wrapOnEscapedLineFeeds: boolean): ILineBreaksComputer;
 }
 
 export interface ILineBreaksComputer {

@@ -17,14 +17,14 @@ export interface IPdfAnnotationStore {
 
 /** Persists versioned PDF annotations as a JSON companion file in the workspace. */
 export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
-	constructor(private readonly files: IFileService) {}
+	constructor(private readonly files: IFileService) { }
 
 	async load(resource: URI, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
 		const sidecar = pdfAnnotationSidecarResource(resource);
 		const entries = await this.files.readDirectory(pdfAnnotationDirectory(resource));
 		throwIfCancelled(signal, 'PDF annotation loading was cancelled');
-		if (!entries.some(entry => entry.kind === FileKind.File && entry.resource.toString() === sidecar.toString())) {
+		if (!entries.some((entry) => entry.kind === FileKind.File && entry.resource.toString() === sidecar.toString())) {
 			return Object.freeze({ document: emptyPdfAnnotationDocument(), revision: undefined });
 		}
 		const content = await this.files.readFile(sidecar);
@@ -35,15 +35,7 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 	async save(resource: URI, document: PdfAnnotationDocument, expectedRevision: string | undefined, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, 'PDF annotation saving was cancelled');
 		const content = serializePdfAnnotationDocument(document);
-		const saved = await this.files.writeFile(
-			{
-				resource: pdfAnnotationSidecarResource(resource),
-				content,
-				...(expectedRevision === undefined ? {} : { expectedRevision }),
-			},
-			{ create: true, overwrite: true },
-			signal,
-		);
+		const saved = await this.files.writeFile({ resource: pdfAnnotationSidecarResource(resource), content, ...(expectedRevision === undefined ? {} : { expectedRevision }) }, { create: true, overwrite: true }, signal);
 		throwIfCancelled(signal, 'PDF annotation saving was cancelled');
 		return Object.freeze({ document: parsePdfAnnotationDocument(content), revision: saved.revision });
 	}

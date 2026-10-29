@@ -38,7 +38,7 @@ export interface IPullRequestResourceHoverData extends ResourceHoverData {
 	readonly pullRequest: GitHubPullRequest;
 	readonly checksStatus?: GitHubChecksStatus;
 	readonly onDidClickBaseBranch: () => void;
-	readonly headBranchLink: { readonly href: string; readonly onClick: () => void } | undefined;
+	readonly headBranchLink: { readonly href: string; readonly onClick: () => void; } | undefined;
 }
 
 export interface ICommitResourceHoverData extends ResourceHoverData {
@@ -58,11 +58,7 @@ export class GitHubResourcePresentation implements ILinkPresentation {
 	public readonly tooltip: string | undefined;
 	public readonly ariaLabel: string | undefined;
 
-	constructor(
-		presentation: ILinkPresentation,
-		public readonly createHover: () => IGitHubResourceHover,
-		public readonly pullRequestIcon?: ThemeIcon,
-	) {
+	constructor(presentation: ILinkPresentation, public readonly createHover: () => IGitHubResourceHover, public readonly pullRequestIcon?: ThemeIcon) {
 		this.kind = presentation.kind;
 		this.title = presentation.title;
 		this.detail = presentation.detail;
@@ -75,14 +71,8 @@ export class GitHubResourcePresentation implements ILinkPresentation {
 	}
 }
 
-export function createRepositoryResourceHover(data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo }): IGitHubResourceHover {
-	return resourceHover(
-		data,
-		data.repository.fullName,
-		data.repository.defaultBranch,
-		localize('github.repository', 'Repository'),
-		localize('github.defaultBranch', 'Default branch: {0}', data.repository.defaultBranch),
-	);
+export function createRepositoryResourceHover(data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo; }): IGitHubResourceHover {
+	return resourceHover(data, data.repository.fullName, data.repository.defaultBranch, localize('github.repository', 'Repository'), localize('github.defaultBranch', 'Default branch: {0}', data.repository.defaultBranch));
 }
 
 export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHubResourceHover {
@@ -97,10 +87,7 @@ export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHub
 export function createPullRequestResourceHover(data: IPullRequestResourceHoverData): IGitHubResourceHover {
 	const state = getPullRequestResourceStatus(data.pullRequest);
 	const card = resourceHover(data, data.pullRequest.title, `#${data.number}`, state.label, data.pullRequest.body);
-	const icon = computePullRequestIcon(state.kind, {
-		hasMergeConflicts: data.pullRequest.mergeable === false,
-		hasFailingChecks: data.checksStatus === 'failure',
-	});
+	const icon = computePullRequestIcon(state.kind, { hasMergeConflicts: data.pullRequest.mergeable === false, hasFailingChecks: data.checksStatus === 'failure' });
 	const status = card.element.querySelector<HTMLElement>('.ash-github-hover-metadata')!;
 	const glyph = appendIcon(icon, status);
 	glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
@@ -143,7 +130,7 @@ export function getIssueResourceStatus(issue: GitHubIssueDetails): ILinkPresenta
 	return { kind: 'closed', label: localize('github.status.closed', 'Closed') };
 }
 
-export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): ILinkPresentationStatus & { readonly kind: ChatPullRequestState } {
+export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): ILinkPresentationStatus & { readonly kind: ChatPullRequestState; } {
 	if (pullRequest.mergedAt) {
 		return { kind: 'merged', label: localize('github.status.merged', 'Merged') };
 	}
@@ -154,20 +141,14 @@ export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): IL
 		return { kind: 'draft', label: localize('github.status.draft', 'Draft') };
 	}
 	const label = localize('github.status.open', 'Open');
-	return {
-		kind: 'open',
-		label: pullRequest.mergeable === false ? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}` : label,
-	};
+	return { kind: 'open', label: pullRequest.mergeable === false ? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}` : label };
 }
 
 export function getPullRequestChecksStatus(checks: GitHubChecks | undefined): GitHubChecksStatus | undefined {
 	if (!checks || checks.checks.length + checks.statuses.length === 0) {
 		return undefined;
 	}
-	if (
-		checks.checks.some(check => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale'].includes(check.conclusion!)) ||
-		checks.statuses.some(status => status.state === 'failure' || status.state === 'error')
-	) {
+	if (checks.checks.some(check => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale'].includes(check.conclusion!)) || checks.statuses.some(status => status.state === 'failure' || status.state === 'error')) {
 		return 'failure';
 	}
 	if (checks.checks.some(check => check.status !== 'completed') || checks.statuses.some(status => status.state === 'pending' || status.state === 'expected')) {
@@ -178,24 +159,14 @@ export function getPullRequestChecksStatus(checks: GitHubChecks | undefined): Gi
 
 export function getPullRequestChecksStatusLabel(status: GitHubChecksStatus): string {
 	switch (status) {
-		case 'pending':
-			return localize('github.checks.pending', 'Checks pending');
-		case 'failure':
-			return localize('github.checks.failure', 'Checks failed');
-		case 'success':
-			return localize('github.checks.success', 'Checks passed');
-		case 'neutral':
-			return localize('github.checks.neutral', 'Checks completed');
+		case 'pending': return localize('github.checks.pending', 'Checks pending');
+		case 'failure': return localize('github.checks.failure', 'Checks failed');
+		case 'success': return localize('github.checks.success', 'Checks passed');
+		case 'neutral': return localize('github.checks.neutral', 'Checks completed');
 	}
 }
 
-function resourceHover(
-	data: ResourceHoverData,
-	title: string,
-	reference: string,
-	status: string,
-	body: string,
-): DisposableStore & { readonly element: HTMLElement; readonly tabbableElements: HTMLElement[] } {
+function resourceHover(data: ResourceHoverData, title: string, reference: string, status: string, body: string): DisposableStore & { readonly element: HTMLElement; readonly tabbableElements: HTMLElement[]; } {
 	const store = new DisposableStore();
 	const element = $('.ash-github-resource-hover');
 	element.classList.toggle('compact', data.density === 'compact');
@@ -221,12 +192,10 @@ function hoverLink(container: HTMLElement, label: string, href: string, onClick:
 	link.href = href;
 	link.textContent = label;
 	container.append(link);
-	store.add(
-		addDisposableListener(link, 'click', event => {
-			event.preventDefault();
-			event.stopPropagation();
-			onClick();
-		}),
-	);
+	store.add(addDisposableListener(link, 'click', event => {
+		event.preventDefault();
+		event.stopPropagation();
+		onClick();
+	}));
 	return link;
 }

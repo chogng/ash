@@ -105,10 +105,7 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 			const y = afterThreshold(session.y - session.startY);
 			if (x !== 0 || y !== 0) {
 				const before = { left: this.editor.getScrollLeft(), top: this.editor.getScrollTop() };
-				this.editor.setScrollPosition({
-					scrollLeft: before.left + x * factor,
-					scrollTop: before.top + y * factor,
-				});
+				this.editor.setScrollPosition({ scrollLeft: before.left + x * factor, scrollTop: before.top + y * factor });
 				session.didScroll ||= before.left !== this.editor.getScrollLeft() || before.top !== this.editor.getScrollTop();
 			}
 			this.scheduleFrame();

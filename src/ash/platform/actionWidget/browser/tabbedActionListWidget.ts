@@ -46,31 +46,22 @@ export class TabbedActionListWidget<T> extends ActionList<T> {
 			tabId: `${user}.action-tab.${index}`,
 			panelId: panel.id,
 		}));
-		const tabs = this._register(
-			new TabList<string>(tabHost, {
-				ariaLabel: localize('actionWidget.tabs', 'Action categories'),
-				presentation: 'inset',
-				onActivate: id => {
-					this.updateItems(options.createActionList(id).items);
-					tabs.setTabs(descriptors, id);
-					panel.setAttribute('aria-labelledby', descriptors.find(tab => tab.id === id)!.tabId);
-				},
-			}),
-		);
+		const tabs = this._register(new TabList<string>(tabHost, {
+			ariaLabel: localize('actionWidget.tabs', 'Action categories'),
+			presentation: 'inset',
+			onActivate: id => {
+				this.updateItems(options.createActionList(id).items);
+				tabs.setTabs(descriptors, id);
+				panel.setAttribute('aria-labelledby', descriptors.find(tab => tab.id === id)!.tabId);
+			},
+		}));
 		tabs.setTabs(descriptors, options.initialTab);
 		panel.setAttribute('aria-labelledby', descriptors.find(tab => tab.id === options.initialTab)!.tabId);
-		this._register(
-			addDisposableListener(
-				tabHost,
-				'keydown',
-				event => {
-					if (!event.isComposing && event.key === 'ArrowDown') {
-						stopEvent(event);
-						this.focus();
-					}
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(tabHost, 'keydown', event => {
+			if (!event.isComposing && event.key === 'ArrowDown') {
+				stopEvent(event);
+				this.focus();
+			}
+		}, true));
 	}
 }

@@ -63,9 +63,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.mergeView = this._register(instantiationService.createInstance(MergeEditor, resultEditor));
 	}
 
-	public get workingCopy(): IWorkingCopy | undefined {
-		return this.resultEditor.workingCopy;
-	}
+	public get workingCopy(): IWorkingCopy | undefined { return this.resultEditor.workingCopy; }
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
@@ -73,11 +71,9 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.domNode.className = 'ash-scm-merge-editor';
 		this.domNode.setAttribute('role', 'region');
 		this.updateAriaLabel();
-		this._register(
-			this.configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmMerge)) this.updateAriaLabel();
-			}),
-		);
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmMerge)) this.updateAriaLabel();
+		}));
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -94,14 +90,12 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.statusDomNode.setAttribute('aria-live', 'polite');
 		const actions = h(document, 'div');
 		actions.className = 'ash-scm-merge-actions';
-		this.finishButton = this._register(
-			new Button(actions, {
-				...defaultButtonStyles,
-				label: localize({ bundle: 'ash', key: 'mergeEditor.completeMerge' }, 'Complete Merge'),
-				presentation: 'primary',
-				onClick: () => void this.completeMerge(),
-			}),
-		);
+		this.finishButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'mergeEditor.completeMerge' }, 'Complete Merge'),
+			presentation: 'primary',
+			onClick: () => void this.completeMerge(),
+		}));
 		header.append(title, this.statusDomNode, actions);
 		this.fileChoicesDomNode = h(document, 'div');
 		this.domNode.append(header, this.fileChoicesDomNode);
@@ -142,22 +136,17 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			if (hasTextSources) {
 				const resultModel = this.resultEditor.getControl()?.getModel();
 				if (!resultModel) throw new Error('Merge result model is not loaded');
-				const model = (this.modelSlot.value = this.createModel(file, resultModel));
+				const model = this.modelSlot.value = this.createModel(file, resultModel);
 				await model.initialize(signal);
 				if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
 				this.mergeView.setModel(model);
-				listeners.add(
-					model.onDidChange(() => {
-						this.updateStatus();
-						if (model.isReady) this.saveMergeState(model);
-					}),
-				);
-				if (copy)
-					listeners.add(
-						copy.onDidChangeDirty(() => {
-							if (!copy.isDirty) this.saveMergeState(model);
-						}),
-					);
+				listeners.add(model.onDidChange(() => {
+					this.updateStatus();
+					if (model.isReady) this.saveMergeState(model);
+				}));
+				if (copy) listeners.add(copy.onDidChangeDirty(() => {
+					if (!copy.isDirty) this.saveMergeState(model);
+				}));
 				this.saveMergeState(model);
 			}
 			this.updateStatus();
@@ -201,9 +190,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		else this.fileChoiceButtons[0]?.focus();
 	}
 
-	public async save(): Promise<void> {
-		await this.resultEditor.save();
-	}
+	public async save(): Promise<void> { await this.resultEditor.save(); }
 
 	public getAccessibleContent(): string {
 		const input = this.input;
@@ -212,11 +199,9 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private sourceText(content: ISCMConflictFile['base']): string {
-		return content.kind === 'text'
-			? content.text
-			: content.kind === 'binary'
-				? localize({ bundle: 'ash', key: 'mergeEditor.binary' }, 'Binary file')
-				: localize({ bundle: 'ash', key: 'mergeEditor.deleted' }, 'File deleted');
+		return content.kind === 'text' ? content.text : content.kind === 'binary'
+			? localize({ bundle: 'ash', key: 'mergeEditor.binary' }, 'Binary file')
+			: localize({ bundle: 'ash', key: 'mergeEditor.deleted' }, 'File deleted');
 	}
 
 	private createModel(file: ISCMConflictFile, result: TextModel): MergeEditorModel {
@@ -234,11 +219,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const raw = this.mergeStateKey && this.storageService.get(this.mergeStateKey, StorageScope.WORKSPACE);
 		if (!raw) return undefined;
 		let value: unknown;
-		try {
-			value = JSON.parse(raw);
-		} catch {
-			return undefined;
-		}
+		try { value = JSON.parse(raw); } catch { return undefined; }
 		if (!value || typeof value !== 'object') return undefined;
 		const state = value as Record<string, unknown>;
 		if (state.version !== 1 || state.resultHash !== digest(result.getValue())) return undefined;
@@ -252,17 +233,12 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const handledStates = model.getHandledState();
 		const handled = JSON.stringify(handledStates);
 		if (this.resultEditor.isDirty && this.storedHandledState === handled) return;
-		this.storageService.store(
-			this.mergeStateKey,
-			JSON.stringify({
-				version: 1,
-				stageIds: this.stageIds,
-				resultHash: digest(model.result.getValue()),
-				handled: handledStates,
-			}),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		this.storageService.store(this.mergeStateKey, JSON.stringify({
+			version: 1,
+			stageIds: this.stageIds,
+			resultHash: digest(model.result.getValue()),
+			handled: handledStates,
+		}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		this.storedHandledState = handled;
 	}
 
@@ -276,11 +252,9 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		}
 		const unresolved = model?.isReady ? model.hunks.filter(hunk => hunk.unresolved).length : parseMergeConflictBlocks(text).length;
 		if (this.lastBlockCount !== unresolved) {
-			this.setStatus(
-				unresolved === 0
-					? localize({ bundle: 'ash', key: 'mergeEditor.noBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
-					: localize({ bundle: 'ash', key: 'mergeEditor.blockCount' }, '{0} conflicts remain.', unresolved),
-			);
+			this.setStatus(unresolved === 0
+				? localize({ bundle: 'ash', key: 'mergeEditor.noBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
+				: localize({ bundle: 'ash', key: 'mergeEditor.blockCount' }, '{0} conflicts remain.', unresolved));
 			this.lastBlockCount = unresolved;
 		}
 	}
@@ -291,30 +265,20 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.fileChoicesDomNode.replaceChildren();
 		const actions = h(this.domNode.ownerDocument, 'div');
 		actions.className = 'ash-scm-merge-file-choices';
-		this.fileChoiceButtons.push(
-			this.fileChoiceStore.add(
-				new Button(actions, {
-					...defaultButtonStyles,
-					label:
-						file.current.kind === 'missing'
-							? localize({ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' }, 'Keep Current Deletion')
-							: localize({ bundle: 'ash', key: 'mergeEditor.useCurrentFile' }, 'Use Current File'),
-					onClick: () => void this.chooseFile({ kind: 'current' }),
-				}),
-			),
-		);
-		this.fileChoiceButtons.push(
-			this.fileChoiceStore.add(
-				new Button(actions, {
-					...defaultButtonStyles,
-					label:
-						file.incoming.kind === 'missing'
-							? localize({ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' }, 'Keep Incoming Deletion')
-							: localize({ bundle: 'ash', key: 'mergeEditor.useIncomingFile' }, 'Use Incoming File'),
-					onClick: () => void this.chooseFile({ kind: 'incoming' }),
-				}),
-			),
-		);
+		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: file.current.kind === 'missing'
+				? localize({ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' }, 'Keep Current Deletion')
+				: localize({ bundle: 'ash', key: 'mergeEditor.useCurrentFile' }, 'Use Current File'),
+			onClick: () => void this.chooseFile({ kind: 'current' }),
+		})));
+		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: file.incoming.kind === 'missing'
+				? localize({ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' }, 'Keep Incoming Deletion')
+				: localize({ bundle: 'ash', key: 'mergeEditor.useIncomingFile' }, 'Use Incoming File'),
+			onClick: () => void this.chooseFile({ kind: 'incoming' }),
+		})));
 		this.fileChoicesDomNode.append(actions);
 	}
 
@@ -370,17 +334,13 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.finishButton.enabled = false;
 		control.updateOptions({ readOnly: true });
 		try {
-			if (this.resultEditor.hasExternalChange)
-				throw new Error(localize({ bundle: 'ash', key: 'mergeEditor.fileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
+			if (this.resultEditor.hasExternalChange) throw new Error(localize({ bundle: 'ash', key: 'mergeEditor.fileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
 			const saved = await provider.resolve(input.path);
 			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
 				throw new Error(localize({ bundle: 'ash', key: 'scm.mergeConflictChanged' }, 'The conflict changed. Reopen this merge editor to review the new versions.'));
 			}
-			await provider.complete(input.path, stageIds, saved.resultObjectId, {
-				kind: 'edited',
-				text: control.getValue(),
-			});
+			await provider.complete(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() });
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
 			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'Merge completed.'));
@@ -395,9 +355,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
-	private setStatus(message: string): void {
-		this.statusDomNode.textContent = message;
-	}
+	private setStatus(message: string): void { this.statusDomNode.textContent = message; }
 
 	private updateAriaLabel(): void {
 		const title = localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');

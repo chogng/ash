@@ -125,14 +125,20 @@ export class DocumentSchema {
 		return node;
 	}
 
-	createText(text: string, options: Omit<CreateNodeOptions, 'text'> = {}): DocumentNode {
+	createText(
+		text: string,
+		options: Omit<CreateNodeOptions, 'text'> = {},
+	): DocumentNode {
 		if (typeof text !== 'string' || text.length === 0) {
 			throw new TypeError('Text nodes must contain non-empty text');
 		}
 		return this.createNode('text', { ...options, text });
 	}
 
-	createDocument(content: readonly DocumentNode[] = [], id?: DocumentNodeId): DocumentNode {
+	createDocument(
+		content: readonly DocumentNode[] = [],
+		id?: DocumentNodeId,
+	): DocumentNode {
 		const document = createDocumentRoot(id ?? this.allocateNodeId(this.topNodeType), content, this.topNodeType);
 		this.validate(document);
 		return document;
@@ -149,8 +155,7 @@ export class DocumentSchema {
 		validateDocumentParagraphStyles(document);
 		const visitSections = (node: DocumentNode): void => {
 			for (const child of node.content) {
-				if ((child.type === 'documentSection' || child.type === 'reviewComment' || child.type === 'reviewChange') && node !== document)
-					throw new TypeError('Document metadata and sections must be root children');
+				if ((child.type === 'documentSection' || child.type === 'reviewComment' || child.type === 'reviewChange') && node !== document) throw new TypeError('Document metadata and sections must be root children');
 				visitSections(child);
 			}
 		};
@@ -163,7 +168,12 @@ export class DocumentSchema {
 		this.validateNode(node, new Set(), false, options.allowIncompleteContent ?? false);
 	}
 
-	private validateNode(node: DocumentNode, ids: Set<DocumentNodeId>, isRoot: boolean, allowIncompleteContent: boolean): void {
+	private validateNode(
+		node: DocumentNode,
+		ids: Set<DocumentNodeId>,
+		isRoot: boolean,
+		allowIncompleteContent: boolean,
+	): void {
 		if (!node || typeof node !== 'object') throw new TypeError('Document node is required');
 		if (ids.has(node.id)) throw new Error(`Duplicate document node id '${node.id}'`);
 		ids.add(node.id);
@@ -234,10 +244,8 @@ export class DocumentSchema {
 				declaredGroups.add(group);
 			}
 			for (const group of spec.allowedChildGroups ?? []) validateGroupName(group, `Node '${type}' allowed child group`);
-			if (spec.kind === 'text' && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0))
-				throw new TypeError(`Text node '${type}' cannot declare child content`);
-			if (spec.content && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0))
-				throw new TypeError(`Node '${type}' cannot combine content terms with allowed child lists`);
+			if (spec.kind === 'text' && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)) throw new TypeError(`Text node '${type}' cannot declare child content`);
+			if (spec.content && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)) throw new TypeError(`Node '${type}' cannot combine content terms with allowed child lists`);
 			for (const childType of spec.allowedChildren ?? []) {
 				if (!this.nodeSpecs.has(childType)) throw new TypeError(`Node '${type}' references unknown child '${childType}'`);
 			}
@@ -263,57 +271,26 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 	const tableCellBlocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table'] as const;
 	return {
 		doc: { kind: 'root', allowedChildren: [...blocks, 'documentSection', 'reviewComment', 'reviewChange'] },
-		reviewComment: {
-			kind: 'group',
-			groups: ['block'],
-			validateAttributes: attrs => validateReviewAttributes('reviewComment', attrs),
-		},
-		reviewChange: {
-			kind: 'group',
-			groups: ['block'],
-			validateAttributes: attrs => validateReviewAttributes('reviewChange', attrs),
-		},
-		documentSection: {
-			kind: 'group',
-			groups: ['block'],
-			allowedChildren: blocks,
-			minChildren: 1,
-			validateAttributes: validateDocumentPageAttributes,
-		},
-		paragraph: {
-			kind: 'block',
-			allowedChildren: ['text', 'hardBreak', 'image'],
-			validateAttributes: validateDocumentParagraphAttributes,
-		},
+		reviewComment: { kind: 'group', groups: ['block'], validateAttributes: attrs => validateReviewAttributes('reviewComment', attrs) },
+		reviewChange: { kind: 'group', groups: ['block'], validateAttributes: attrs => validateReviewAttributes('reviewChange', attrs) },
+		documentSection: { kind: 'group', groups: ['block'], allowedChildren: blocks, minChildren: 1, validateAttributes: validateDocumentPageAttributes },
+		paragraph: { kind: 'block', allowedChildren: ['text', 'hardBreak', 'image'], validateAttributes: validateDocumentParagraphAttributes },
 		heading: {
-			kind: 'block',
-			allowedChildren: ['text', 'hardBreak', 'image'],
-			defaultAttrs: { level: 1 },
-			validateAttributes: attrs => {
+			kind: 'block', allowedChildren: ['text', 'hardBreak', 'image'], defaultAttrs: { level: 1 }, validateAttributes: attrs => {
 				validateIntegerAttribute(attrs, 'level', 1, 6);
 				validateDocumentParagraphAttributes(attrs);
-			},
+			}
 		},
 		blockquote: { kind: 'block', allowedChildren: listBlocks, minChildren: 1 },
 		bulletList: { kind: 'block', allowedChildren: ['listItem'], minChildren: 1 },
 		orderedList: {
-			kind: 'block',
-			allowedChildren: ['listItem'],
-			minChildren: 1,
-			defaultAttrs: { order: 1 },
-			validateAttributes: attrs => {
+			kind: 'block', allowedChildren: ['listItem'], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => {
 				validateIntegerAttribute(attrs, 'order', 1, Number.MAX_SAFE_INTEGER);
-				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering)))
-					throw new TypeError('Invalid list numbering format');
-			},
+				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering))) throw new TypeError('Invalid list numbering format');
+			}
 		},
 		listItem: { kind: 'block', allowedChildren: listBlocks, minChildren: 1 },
-		codeBlock: {
-			kind: 'block',
-			content: [{ type: 'text', min: 0, max: 1 }],
-			defaultAttrs: { language: 'text' },
-			validateAttributes: attrs => validateStringAttribute(attrs, 'language', false),
-		},
+		codeBlock: { kind: 'block', content: [{ type: 'text', min: 0, max: 1 }], defaultAttrs: { language: 'text' }, validateAttributes: attrs => validateStringAttribute(attrs, 'language', false) },
 		table: { kind: 'block', allowedChildren: ['tableRow'], minChildren: 1 },
 		tableRow: { kind: 'block', allowedChildren: ['tableCell'], minChildren: 1 },
 		tableCell: { kind: 'block', allowedChildren: tableCellBlocks, minChildren: 1 },
@@ -410,12 +387,7 @@ function validateContentTermCardinality(owner: string, term: DocumentContentTerm
 	if (term.min !== undefined && term.max !== undefined && term.min > term.max) throw new RangeError(`Node '${owner}' content min cannot exceed max`);
 }
 
-function matchesContentExpression(
-	terms: readonly DocumentContentTerm[],
-	children: readonly DocumentNode[],
-	nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>,
-	allowIncompleteContent: boolean,
-): boolean {
+function matchesContentExpression(terms: readonly DocumentContentTerm[], children: readonly DocumentNode[], nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>, allowIncompleteContent: boolean): boolean {
 	const memo = new Map<string, boolean>();
 	const matches = (termIndex: number, childIndex: number): boolean => {
 		const key = `${termIndex}:${childIndex}`;
@@ -423,7 +395,7 @@ function matchesContentExpression(
 		if (cached !== undefined) return cached;
 		if (termIndex === terms.length) return childIndex === children.length;
 		const term = terms[termIndex]!;
-		const min = allowIncompleteContent ? 0 : (term.min ?? 0);
+		const min = allowIncompleteContent ? 0 : term.min ?? 0;
 		const max = Math.min(term.max ?? children.length - childIndex, children.length - childIndex);
 		for (let count = min; count <= max; count += 1) {
 			let matchesChildren = true;

@@ -47,7 +47,7 @@ export const DEFAULT_WORD_REGEXP = createWordRegExp();
 export function ensureValidWordDefinition(wordDefinition?: RegExp | null): RegExp {
 	let result: RegExp = DEFAULT_WORD_REGEXP;
 
-	if (wordDefinition && wordDefinition instanceof RegExp) {
+	if (wordDefinition && (wordDefinition instanceof RegExp)) {
 		if (!wordDefinition.global) {
 			let flags = 'g';
 			if (wordDefinition.ignoreCase) {
@@ -70,17 +70,19 @@ export function ensureValidWordDefinition(wordDefinition?: RegExp | null): RegEx
 	return result;
 }
 
+
 export interface IGetWordAtTextConfig {
 	maxLen: number;
 	windowSize: number;
 	timeBudget: number;
 }
 
+
 const _defaultConfig = new LinkedList<IGetWordAtTextConfig>();
 _defaultConfig.unshift({
 	maxLen: 1000,
 	windowSize: 15,
-	timeBudget: 150,
+	timeBudget: 150
 });
 
 export function setDefaultGetWordAtTextConfig(value: IGetWordAtTextConfig) {
@@ -145,7 +147,7 @@ export function getWordAtText(column: number, wordDefinition: RegExp, text: stri
 		const result = {
 			word: match[0],
 			startColumn: textOffset + 1 + match.index,
-			endColumn: textOffset + 1 + match.index + match[0].length,
+			endColumn: textOffset + 1 + match.index + match[0].length
 		};
 		wordDefinition.lastIndex = 0;
 		return result;
@@ -156,7 +158,7 @@ export function getWordAtText(column: number, wordDefinition: RegExp, text: stri
 
 function _findRegexMatchEnclosingPosition(wordDefinition: RegExp, text: string, pos: number, stopPos: number): RegExpExecArray | null {
 	let match: RegExpExecArray | null;
-	while ((match = wordDefinition.exec(text))) {
+	while (match = wordDefinition.exec(text)) {
 		if (match[0].length === 0) {
 			const codePoint = wordDefinition.unicode || wordDefinition.flags.includes('v') ? text.codePointAt(match.index) : undefined;
 			wordDefinition.lastIndex = match.index + (codePoint !== undefined && codePoint > 0xffff ? 2 : 1);

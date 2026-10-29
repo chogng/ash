@@ -21,10 +21,7 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 	private readonly fontFamily: HTMLSelectElement;
 	private readonly fontSize: HTMLSelectElement;
 
-	constructor(
-		container: HTMLElement,
-		private readonly options: FormattingContributionOptions,
-	) {
+	constructor(container: HTMLElement, private readonly options: FormattingContributionOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
@@ -36,14 +33,12 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 
-		const inlineActions = this._register(
-			new ToolBar(element, {
-				buttonStyles: defaultButtonStyles,
-				contextMenuProvider: emptyFormattingContextMenuProvider,
-				ariaLabel: 'Text formatting',
-				highlightToggledItems: true,
-			}),
-		);
+		const inlineActions = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
+			contextMenuProvider: emptyFormattingContextMenuProvider,
+			ariaLabel: 'Text formatting',
+			highlightToggledItems: true,
+		}));
 		inlineActions.element.classList.add('stanza-structured-format-inline-actions');
 		this._register(addDisposableListener(inlineActions.element, 'mousedown', event => event.preventDefault()));
 		this.inlineActions = inlineActions;
@@ -60,43 +55,37 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 			{ value: 'monospace', label: 'Monospace' },
 		]);
 		fontFamily.element.classList.add('stanza-structured-format-font-family');
-		this._register(
-			addDisposableListener(fontFamily.select, 'change', () => {
-				const value = fontFamily.select.value;
-				if (value === '') {
-					options.onClearTextStyle();
-					return;
-				}
-				options.onSetTextStyle({ fontFamily: value as DocumentTextStyleFontFamily });
-			}),
-		);
+		this._register(addDisposableListener(fontFamily.select, 'change', () => {
+			const value = fontFamily.select.value;
+			if (value === '') {
+				options.onClearTextStyle();
+				return;
+			}
+			options.onSetTextStyle({ fontFamily: value as DocumentTextStyleFontFamily });
+		}));
 		this.fontFamily = fontFamily.select;
 		const fontSize = createSelectControl(ownerDocument, 'Size', 'Font size', [
 			{ value: '', label: 'Default' },
 			...[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map(value => ({ value: String(value), label: `${value}` })),
 		]);
 		fontSize.element.classList.add('stanza-structured-format-font-size');
-		this._register(
-			addDisposableListener(fontSize.select, 'change', () => {
-				const value = fontSize.select.value;
-				if (value === '') {
-					options.onClearTextStyle();
-					return;
-				}
-				options.onSetTextStyle({ fontSize: Number(value) });
-			}),
-		);
+		this._register(addDisposableListener(fontSize.select, 'change', () => {
+			const value = fontSize.select.value;
+			if (value === '') {
+				options.onClearTextStyle();
+				return;
+			}
+			options.onSetTextStyle({ fontSize: Number(value) });
+		}));
 		this.fontSize = fontSize.select;
 		typographyControls.append(fontFamily.element, fontSize.element);
 
-		const documentActions = this._register(
-			new ToolBar(element, {
-				buttonStyles: defaultButtonStyles,
-				contextMenuProvider: emptyFormattingContextMenuProvider,
-				ariaLabel: 'Document structure',
-				highlightToggledItems: true,
-			}),
-		);
+		const documentActions = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
+			contextMenuProvider: emptyFormattingContextMenuProvider,
+			ariaLabel: 'Document structure',
+			highlightToggledItems: true,
+		}));
 		documentActions.element.classList.add('stanza-structured-format-document-actions');
 		this._register(addDisposableListener(documentActions.element, 'mousedown', event => event.preventDefault()));
 		this.documentActions = documentActions;
@@ -134,13 +123,15 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 			createAction('bold', 'Bold', 'Toggle bold', Lxicon.bold, hasTextContext && !state.readOnly, state.bold, () => this.options.onToggleMark('strong')),
 			createAction('italic', 'Italic', 'Toggle italic', Lxicon.italics, hasTextContext && !state.readOnly, state.italic, () => this.options.onToggleMark('em')),
 		]);
-		this.documentActions.setActions(
-			this.options.documentActions.map(action =>
-				createAction(action.id, action.label, action.label, undefined, hasTextContext && !state.readOnly, state.checkedDocumentActionIds.has(action.id), () =>
-					this.options.onRunDocumentAction(action.id),
-				),
-			),
-		);
+		this.documentActions.setActions(this.options.documentActions.map(action => createAction(
+			action.id,
+			action.label,
+			action.label,
+			undefined,
+			hasTextContext && !state.readOnly,
+			state.checkedDocumentActionIds.has(action.id),
+			() => this.options.onRunDocumentAction(action.id),
+		)));
 	}
 }
 
@@ -148,12 +139,7 @@ function createAction(id: string, label: string, tooltip: string, icon: IAction[
 	return { id, label, tooltip, icon, enabled, checked, run };
 }
 
-function createSelectControl(
-	ownerDocument: Document,
-	label: string,
-	ariaLabel: string,
-	options: readonly { readonly value: string; readonly label: string }[],
-): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement } {
+function createSelectControl(ownerDocument: Document, label: string, ariaLabel: string, options: readonly { readonly value: string; readonly label: string; }[]): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement; } {
 	const element = h(ownerDocument, 'label');
 	element.className = 'stanza-structured-format-select-control';
 	const text = h(ownerDocument, 'span');

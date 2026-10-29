@@ -7,21 +7,12 @@ function buildFixture(source: string) {
 	return build({
 		configFile: false,
 		logLevel: 'silent',
-		plugins: [
-			{
-				name: 'fixture',
-				resolveId(id) {
-					return id === 'fixture' ? '\0fixture' : undefined;
-				},
-				load(id) {
-					return id === '\0fixture' ? source : undefined;
-				},
-				generateBundle() {
-					this.emitFile({ type: 'asset', fileName: 'worker.wasm', source: new Uint8Array([1, 2, 3]) });
-				},
-			},
-			buildMetricsPlugin(),
-		],
+		plugins: [{
+			name: 'fixture',
+			resolveId(id) { return id === 'fixture' ? '\0fixture' : undefined; },
+			load(id) { return id === '\0fixture' ? source : undefined; },
+			generateBundle() { this.emitFile({ type: 'asset', fileName: 'worker.wasm', source: new Uint8Array([1, 2, 3]) }); },
+		}, buildMetricsPlugin()],
 		build: { write: false, rolldownOptions: { input: 'fixture' } },
 	});
 }
@@ -33,10 +24,7 @@ test('reports final emitted JavaScript bytes', async () => {
 	assert.ok(report?.type === 'asset');
 	const entries = JSON.parse(String(report.source));
 	const chunks = result.output.filter(output => output.type === 'chunk');
-	assert.equal(
-		entries[0].staticJavaScriptBytes,
-		chunks.reduce((sum, chunk) => sum + Buffer.byteLength(chunk.code), 0),
-	);
+	assert.equal(entries[0].staticJavaScriptBytes, chunks.reduce((sum, chunk) => sum + Buffer.byteLength(chunk.code), 0));
 	assert.deepEqual(entries[0].chunks[0].modules, ['fixture']);
 	assert.deepEqual(entries[0].chunks[0].dynamicImports, []);
 	const assets = result.output.find(output => output.fileName === 'build-assets.json');

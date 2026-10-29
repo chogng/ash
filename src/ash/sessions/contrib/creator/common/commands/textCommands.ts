@@ -4,14 +4,13 @@ import { designTextSegments, formatDesignText, replaceDesignText, type DesignTex
 
 /** Content and character formatting enter the same model transaction as all other edits. */
 export class TextCommands {
-	constructor(private readonly model: DesignModel) {}
+	constructor(private readonly model: DesignModel) { }
 	public get(id: string): DesignTextShape | undefined {
 		const shape = flattenDesignShapes(this.model.value.shapes).find(shape => shape.id === id);
 		return shape?.kind === 'text' ? shape : undefined;
 	}
 	private edit(id: string, update: (shape: DesignTextShape) => DesignTextShape, undoGroup?: object): void {
-		const visit = (shape: DesignShape): DesignShape =>
-			shape.id === id && shape.kind === 'text' ? update(shape) : shape.kind === 'frame' || shape.kind === 'group' ? { ...shape, children: shape.children.map(visit) } : shape;
+		const visit = (shape: DesignShape): DesignShape => shape.id === id && shape.kind === 'text' ? update(shape) : shape.kind === 'frame' || shape.kind === 'group' ? { ...shape, children: shape.children.map(visit) } : shape;
 		this.model.applyEdit(this.model.value.shapes.map(visit), undefined, undefined, undoGroup);
 	}
 	public replace(id: string, start: number, end: number, text: string, style?: DesignTextStyle, undoGroup?: object, runs?: readonly DesignTextRun[]): void {
@@ -28,14 +27,7 @@ export class TextCommands {
 			for (const run of runs) {
 				const style = { ...shape, ...run.style };
 				const strike = style.textDecoration?.includes('line-through');
-				const patch: DesignTextStyle =
-					format === 'bold'
-						? { fontWeight: enabled ? 400 : 700 }
-						: format === 'italic'
-							? { fontStyle: enabled ? 'normal' : 'italic' }
-							: {
-									textDecoration: enabled ? (strike ? 'line-through' : 'none') : strike ? 'underline line-through' : 'underline',
-								};
+				const patch: DesignTextStyle = format === 'bold' ? { fontWeight: enabled ? 400 : 700 } : format === 'italic' ? { fontStyle: enabled ? 'normal' : 'italic' } : { textDecoration: enabled ? strike ? 'line-through' : 'none' : strike ? 'underline line-through' : 'underline' };
 				result = formatDesignText(result, run.start, run.end, patch);
 			}
 			return result;

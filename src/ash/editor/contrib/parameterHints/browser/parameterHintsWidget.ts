@@ -35,25 +35,19 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 		this.element.setAttribute('aria-live', 'polite');
 		this.element.setAttribute('aria-atomic', 'true');
 		editor.addContentWidget(this);
-		this._register(
-			toDisposable(() => {
-				this.hide();
-				editor.removeContentWidget(this);
-			}),
-		);
-		this._register(
-			model.onChangedHints(hints => {
-				if (hints) this.render(hints);
-				else this.hide();
-			}),
-		);
-		this._register(
-			addDisposableListener(viewport.domNode.domNode, 'focusout', event => {
-				if (!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget)) {
-					model.cancel();
-				}
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.hide();
+			editor.removeContentWidget(this);
+		}));
+		this._register(model.onChangedHints(hints => {
+			if (hints) this.render(hints);
+			else this.hide();
+		}));
+		this._register(addDisposableListener(viewport.domNode.domNode, 'focusout', event => {
+			if (!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget)) {
+				model.cancel();
+			}
+		}));
 	}
 
 	get isVisible(): boolean {
@@ -69,12 +63,10 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 	}
 
 	getPosition(): IContentWidgetPosition | null {
-		return this.isVisible
-			? {
-					position: this.editor.getPosition(),
-					preference: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
-				}
-			: null;
+		return this.isVisible ? {
+			position: this.editor.getPosition(),
+			preference: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
+		} : null;
 	}
 
 	private render(hints: LanguageParameterHints): void {
@@ -90,19 +82,14 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 			this.editor.layoutContentWidget(this);
 			return;
 		}
-		this.element.replaceChildren(
-			...hints.signatures.map((signature, index) => {
-				const node = h(this.element.ownerDocument, 'div');
-				this.renderSignature(node, signature, activeSignature === index);
-				return node;
-			}),
-		);
-		this.element.setAttribute(
-			'aria-description',
-			hints.signatures.length > 1
-				? localize('parameterHints.navigation', 'Use Up and Down to change the active signature. Press Escape to close.')
-				: localize('parameterHints.close', 'Press Escape to close.'),
-		);
+		this.element.replaceChildren(...hints.signatures.map((signature, index) => {
+			const node = h(this.element.ownerDocument, 'div');
+			this.renderSignature(node, signature, activeSignature === index);
+			return node;
+		}));
+		this.element.setAttribute('aria-description', hints.signatures.length > 1
+			? localize('parameterHints.navigation', 'Use Up and Down to change the active signature. Press Escape to close.')
+			: localize('parameterHints.close', 'Press Escape to close.'));
 		this.element.hidden = false;
 		this.multipleSignaturesKey.set(hints.signatures.length > 1);
 		this.visibleKey.set(true);

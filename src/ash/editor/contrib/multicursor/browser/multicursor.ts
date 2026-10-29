@@ -47,18 +47,14 @@ export class SelectionHighlighter extends Disposable {
 		this.languageFeaturesService = options.languageFeaturesService;
 		this._register(editor.onDidChangeCursorSelection(() => this.update()));
 		this._register(this.model.onDidChangeContent(() => this.update()));
-		this._register(
-			editor.onDidChangeConfiguration(event => {
-				if (
-					event.hasChanged(EditorOption.selectionHighlight) ||
-					event.hasChanged(EditorOption.selectionHighlightMultiline) ||
-					event.hasChanged(EditorOption.selectionHighlightMaxLength) ||
-					event.hasChanged(EditorOption.occurrencesHighlight)
-				) {
-					this.update();
-				}
-			}),
-		);
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.selectionHighlight)
+				|| event.hasChanged(EditorOption.selectionHighlightMultiline)
+				|| event.hasChanged(EditorOption.selectionHighlightMaxLength)
+				|| event.hasChanged(EditorOption.occurrencesHighlight)) {
+				this.update();
+			}
+		}));
 		this.update();
 	}
 
@@ -75,17 +71,15 @@ export class SelectionHighlighter extends Disposable {
 		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.model.offsetAt(range.getStartPosition())}-${this.model.offsetAt(range.getEndPosition())}`).join(',')}`;
 		if (key === this.lastKey) return;
 		this.lastKey = key;
-		this.decorations.replaceAll(
-			ranges.map(range => ({
-				range,
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: {
-					description: hasSemanticHighlights ? 'selection-highlight' : 'selection-highlight-overview',
-					className: 'selection-highlight',
-				},
-				metadata: hasSemanticHighlights,
-			})),
-		);
+		this.decorations.replaceAll(ranges.map(range => ({
+			range,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: {
+				description: hasSemanticHighlights ? 'selection-highlight' : 'selection-highlight-overview',
+				className: 'selection-highlight',
+			},
+			metadata: hasSemanticHighlights,
+		})));
 	}
 
 	private findRanges(): readonly Range[] {
@@ -101,12 +95,10 @@ export class SelectionHighlighter extends Disposable {
 		const word = this.model.getWordAtPosition(source.getStartPosition());
 		const wholeWord = word !== null && source.startLineNumber === source.endLineNumber && source.startColumn === word.startColumn && source.endColumn === word.endColumn;
 		const matches = this.model.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
-		return Object.freeze(
-			matches.flatMap(match => {
-				if (selected.some(selection => rangesIntersect(this.model, match.range, selection))) return [];
-				return [match.range];
-			}),
-		);
+		return Object.freeze(matches.flatMap(match => {
+			if (selected.some(selection => rangesIntersect(this.model, match.range, selection))) return [];
+			return [match.range];
+		}));
 	}
 }
 
@@ -135,11 +127,7 @@ class InsertCursorAbove extends EditorAction {
 			id: 'editor.action.insertCursorAbove',
 			label: localize2('multicursor.AddCursorAbove', 'Add Cursor Above'),
 			precondition: undefined,
-			kbOpts: {
-				primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.UpArrow,
-				weight: KeybindingWeight.EditorContrib,
-				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.UpArrow },
-			},
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.UpArrow, weight: KeybindingWeight.EditorContrib, linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.UpArrow } },
 		});
 	}
 
@@ -159,11 +147,7 @@ class InsertCursorBelow extends EditorAction {
 			id: 'editor.action.insertCursorBelow',
 			label: localize2('multicursor.AddCursorBelow', 'Add Cursor Below'),
 			precondition: undefined,
-			kbOpts: {
-				primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.DownArrow,
-				weight: KeybindingWeight.EditorContrib,
-				linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.DownArrow },
-			},
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.DownArrow, weight: KeybindingWeight.EditorContrib, linux: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyMod.Shift | KeyCode.DownArrow } },
 		});
 	}
 
@@ -244,11 +228,7 @@ class ChangeAllAction extends EditorAction {
 			label: localize2('multicursor.ChangeAll', 'Change All Occurrences'),
 			precondition: EditorContextKeys.writable,
 			contextMenuOpts: { group: '1_modification', order: 1.2 },
-			kbOpts: {
-				primary: KeyMod.CtrlCmd | KeyCode.F2,
-				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
-				weight: KeybindingWeight.EditorContrib,
-			},
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyCode.F2, kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true), weight: KeybindingWeight.EditorContrib },
 		});
 	}
 
@@ -271,41 +251,41 @@ const selectNext = registerEditorAction(AddSelectionToNextFindMatchAction);
 const selectAll = registerEditorAction(SelectHighlightsAction);
 
 registerEditorContribution({
-	id: 'editor.contrib.multicursor',
-	install: context => {
+	id: 'editor.contrib.multicursor', install: context => {
 		if (context.kind !== 'text') return;
-		context.register(
-			context.editor.onKeyDown(event => {
-				if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) return;
-				let action: EditorAction | undefined;
-				const direction = resolveStanzaAdjacentCursorDirection(event, operatingSystem);
-				if (direction) action = direction === 'up' ? insertAbove : insertBelow;
-				else if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'i') action = insertLineEnds;
-				else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') action = selectNext;
-				else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'l') action = selectAll;
-				if (!action) return;
-				if (action === insertLineEnds && !context.viewModel.getSelections().some(selection => !selection.isEmpty())) return;
-				const editorAction = context.editor.getAction(action.id);
-				if (!editorAction?.isSupported()) return;
-				event.stop();
-				void editorAction.run().catch(context.onLanguageError);
-			}),
-		);
-	},
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) return;
+			let action: EditorAction | undefined;
+			const direction = resolveStanzaAdjacentCursorDirection(event, operatingSystem);
+			if (direction) action = direction === 'up' ? insertAbove : insertBelow;
+			else if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'i') action = insertLineEnds;
+			else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') action = selectNext;
+			else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'l') action = selectAll;
+			if (!action) return;
+			if (action === insertLineEnds && !context.viewModel.getSelections().some(selection => !selection.isEmpty())) return;
+			const editorAction = context.editor.getAction(action.id);
+			if (!editorAction?.isSupported()) return;
+			event.stop();
+			void editorAction.run().catch(context.onLanguageError);
+		}));
+	}
 });
 
 registerEditorContribution({
-	id: SelectionHighlighter.ID,
-	install: context => {
+	id: SelectionHighlighter.ID, install: context => {
 		if (context.kind !== 'text') return;
 		const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
 		if (!context.model.largeFile.tooLargeForTokenization) {
-			return new SelectionHighlighter(context.editor, decorations, {
-				languageId: context.model.getLanguageId(),
-				languageFeaturesService: context.languageFeaturesService,
-			});
+			return new SelectionHighlighter(
+				context.editor,
+				decorations,
+				{
+					languageId: context.model.getLanguageId(),
+					languageFeaturesService: context.languageFeaturesService,
+				},
+			);
 		}
-	},
+	}
 });
 
 /** Replaces non-empty selections with one caret at each selected physical line end. */
@@ -326,11 +306,12 @@ function appendUniqueCaret(selections: Selection[], position: Position): void {
 }
 
 /** Resolves the non-conflicting VS Code add-cursor chord for a host platform. */
-export function resolveStanzaAdjacentCursorDirection(
-	event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>,
-	targetOperatingSystem: OperatingSystem,
-): 'up' | 'down' | undefined {
-	const direction = event.key === 'ArrowUp' ? 'up' : event.key === 'ArrowDown' ? 'down' : undefined;
+export function resolveStanzaAdjacentCursorDirection(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>, targetOperatingSystem: OperatingSystem): 'up' | 'down' | undefined {
+	const direction = event.key === 'ArrowUp'
+		? 'up'
+		: event.key === 'ArrowDown'
+			? 'down'
+			: undefined;
 	if (!direction) return undefined;
 	if (targetOperatingSystem === OperatingSystem.Macintosh) {
 		return event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey ? direction : undefined;

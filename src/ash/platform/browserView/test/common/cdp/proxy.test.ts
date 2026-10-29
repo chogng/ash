@@ -11,47 +11,29 @@ function fixture() {
 	const store = new DisposableStore();
 	const events = store.add(new Emitter<CDPTargetEvent>());
 	const targets = new Map<string, CDPTargetInfo>();
-	const commands: Array<{ targetId: string; method: string; params: Record<string, unknown>; sessionId?: string }> = [];
-	const browser: CDPTargetInfo = {
-		targetId: 'browser',
-		type: 'browser',
-		title: '',
-		url: '',
-		attached: true,
-		canAccessOpener: false,
-		browserContextId: 'context',
-	};
+	const commands: Array<{ targetId: string; method: string; params: Record<string, unknown>; sessionId?: string; }> = [];
+	const browser: CDPTargetInfo = { targetId: 'browser', type: 'browser', title: '', url: '', attached: true, canAccessOpener: false, browserContextId: 'context' };
 	const getTarget = (id: string): CDPTargetInfo => {
 		const target = targets.get(id);
-		if (!target) {
-			throw new Error('BrowserTargetAccessDenied');
-		}
+		if (!target) { throw new Error('BrowserTargetAccessDenied'); }
 		return target;
 	};
 	const host: ICDPBrowserHost = {
 		targetInfo: browser,
 		onTargetEvent: events.event,
-		whenReady: async () => {},
+		whenReady: async () => { },
 		getTargets: () => [...targets.values()],
 		getTargetInfo: getTarget,
-		getVersion: () => ({
-			protocolVersion: '1.3',
-			product: 'Chrome/test',
-			revision: '',
-			userAgent: 'Chrome/test',
-			jsVersion: 'test',
-		}),
+		getVersion: () => ({ protocolVersion: '1.3', product: 'Chrome/test', revision: '', userAgent: 'Chrome/test', jsVersion: 'test' }),
 		getWindowForTarget: id => {
 			getTarget(id);
 			return { windowId: 1, bounds: { left: 0, top: 0, width: 640, height: 480, windowState: 'normal' } };
 		},
 		getBrowserContexts: () => ['context'],
 		createBrowserContext: () => 'new-context',
-		disposeBrowserContext: async () => {},
+		disposeBrowserContext: async () => { },
 		createTarget: async url => add('created-page', url),
-		activateTarget: id => {
-			getTarget(id);
-		},
+		activateTarget: id => { getTarget(id); },
 		closeTarget: async id => {
 			getTarget(id);
 			targets.delete(id);
@@ -81,50 +63,31 @@ suite('CDP browser proxy', () => {
 	test('detaching a browser retires its nested sessions while another browser keeps discovering and attaching', async () => {
 		using f = fixture();
 		f.add('page-one');
-		const first = ((await f.proxy.sendCommand('Target.attachToBrowserTarget')) as { sessionId: string }).sessionId;
-		const nested = ((await f.proxy.sendCommand('Target.attachToBrowserTarget', {}, first)) as { sessionId: string }).sessionId;
-		const second = ((await f.proxy.sendCommand('Target.attachToBrowserTarget')) as { sessionId: string }).sessionId;
+		const first = (await f.proxy.sendCommand('Target.attachToBrowserTarget') as { sessionId: string; }).sessionId;
+		const nested = (await f.proxy.sendCommand('Target.attachToBrowserTarget', {}, first) as { sessionId: string; }).sessionId;
+		const second = (await f.proxy.sendCommand('Target.attachToBrowserTarget') as { sessionId: string; }).sessionId;
 		for (const sessionId of [nested, second]) {
 			await f.proxy.sendCommand('Target.setDiscoverTargets', { discover: true }, sessionId);
 			await f.proxy.sendCommand('Target.setAutoAttach', { autoAttach: true, flatten: true }, sessionId);
 			await f.proxy.sendCommand('Target.setAutoAttach', { autoAttach: true, flatten: true }, sessionId);
 		}
-		assert.deepEqual(
-			f.messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').map(message => message.sessionId),
-			[nested, second],
-		);
+		assert.deepEqual(f.messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').map(message => message.sessionId), [nested, second]);
 		await f.proxy.sendCommand('Target.detachFromTarget', { sessionId: first });
 		assert.equal(f.messages.filter(message => 'method' in message && message.method === 'Target.detachedFromTarget').length, 1);
 		await f.proxy.sendMessage({ id: 1, method: 'Target.getTargets', sessionId: nested });
-		assert.deepEqual(f.messages.at(-1), {
-			id: 1,
-			sessionId: nested,
-			error: { code: -32000, message: 'BrowserCDPSessionUnavailable' },
-		});
+		assert.deepEqual(f.messages.at(-1), { id: 1, sessionId: nested, error: { code: -32000, message: 'BrowserCDPSessionUnavailable' } });
 		f.messages.length = 0;
 		f.add('page-two');
-		assert.deepEqual(
-			f.messages.filter(message => 'method' in message).map(message => [message.method, message.sessionId]),
-			[
-				['Target.targetCreated', second],
-				['Target.attachedToTarget', second],
-			],
-		);
+		assert.deepEqual(f.messages.filter(message => 'method' in message).map(message => [message.method, message.sessionId]), [
+			['Target.targetCreated', second], ['Target.attachedToTarget', second],
+		]);
 		const target = f.targets.get('page-two')!;
 		const changed = { ...target, title: 'New title' };
 		f.targets.set(target.targetId, changed);
 		f.events.fire({ type: 'changed', targetInfo: changed });
-		assert.deepEqual(f.messages.at(-1), {
-			method: 'Target.targetInfoChanged',
-			params: { targetInfo: { ...changed, attached: true } },
-			sessionId: second,
-		});
+		assert.deepEqual(f.messages.at(-1), { method: 'Target.targetInfoChanged', params: { targetInfo: { ...changed, attached: true } }, sessionId: second });
 		await f.proxy.sendCommand('Target.closeTarget', { targetId: target.targetId });
-		assert.deepEqual(f.messages.at(-1), {
-			method: 'Target.targetDestroyed',
-			params: { targetId: target.targetId },
-			sessionId: second,
-		});
+		assert.deepEqual(f.messages.at(-1), { method: 'Target.targetDestroyed', params: { targetId: target.targetId }, sessionId: second });
 		f.proxy.dispose();
 		assert.equal(f.targets.has('page-one'), true);
 	});
@@ -132,91 +95,32 @@ suite('CDP browser proxy', () => {
 	test('maps Chromium child sessions for commands and events and retires them with their page', async () => {
 		using f = fixture();
 		f.add('page');
-		const parent = (
-			(await f.proxy.sendCommand('Target.attachToTarget', { targetId: 'page', flatten: true })) as {
-				sessionId: string;
-			}
-		).sessionId;
+		const parent = (await f.proxy.sendCommand('Target.attachToTarget', { targetId: 'page', flatten: true }) as { sessionId: string; }).sessionId;
 		await f.proxy.sendCommand('Target.setAutoAttach', { autoAttach: true, flatten: true }, parent);
 		const childInfo = { ...f.targets.get('page')!, targetId: 'frame', type: 'iframe' };
-		f.events.fire({
-			type: 'message',
-			targetId: 'page',
-			message: {
-				method: 'Target.attachedToTarget',
-				params: { sessionId: 'chromium-child', targetInfo: childInfo, waitingForDebugger: false },
-			},
-		});
-		const child = ((f.messages.at(-1) as CDPEvent).params as { sessionId: string }).sessionId;
+		f.events.fire({ type: 'message', targetId: 'page', message: { method: 'Target.attachedToTarget', params: { sessionId: 'chromium-child', targetInfo: childInfo, waitingForDebugger: false } } });
+		const child = ((f.messages.at(-1) as CDPEvent).params as { sessionId: string; }).sessionId;
 		assert.notEqual(child, 'chromium-child');
-		assert.deepEqual(f.messages.at(-1), {
-			method: 'Target.attachedToTarget',
-			params: { sessionId: child, targetInfo: childInfo, waitingForDebugger: false },
-			sessionId: parent,
-		});
-		await f.proxy.sendMessage({
-			id: 2,
-			method: 'Runtime.evaluate',
-			params: { expression: '1 + 1' },
-			sessionId: child,
-		});
-		assert.deepEqual(f.commands.at(-1), {
-			targetId: 'page',
-			method: 'Runtime.evaluate',
-			params: { expression: '1 + 1' },
-			sessionId: 'chromium-child',
-		});
+		assert.deepEqual(f.messages.at(-1), { method: 'Target.attachedToTarget', params: { sessionId: child, targetInfo: childInfo, waitingForDebugger: false }, sessionId: parent });
+		await f.proxy.sendMessage({ id: 2, method: 'Runtime.evaluate', params: { expression: '1 + 1' }, sessionId: child });
+		assert.deepEqual(f.commands.at(-1), { targetId: 'page', method: 'Runtime.evaluate', params: { expression: '1 + 1' }, sessionId: 'chromium-child' });
 		assert.deepEqual(f.messages.at(-1), { id: 2, result: { value: 2 }, sessionId: child });
-		f.events.fire({
-			type: 'message',
-			targetId: 'page',
-			message: { method: 'Runtime.consoleAPICalled', params: { value: 'hello' }, sessionId: 'chromium-child' },
-		});
-		assert.deepEqual(f.messages.at(-1), {
-			method: 'Runtime.consoleAPICalled',
-			params: { value: 'hello' },
-			sessionId: child,
-		});
-		const control = (
-			(await f.proxy.sendCommand('Target.attachToTarget', { targetId: 'frame', flatten: true })) as {
-				sessionId: string;
-			}
-		).sessionId;
+		f.events.fire({ type: 'message', targetId: 'page', message: { method: 'Runtime.consoleAPICalled', params: { value: 'hello' }, sessionId: 'chromium-child' } });
+		assert.deepEqual(f.messages.at(-1), { method: 'Runtime.consoleAPICalled', params: { value: 'hello' }, sessionId: child });
+		const control = (await f.proxy.sendCommand('Target.attachToTarget', { targetId: 'frame', flatten: true }) as { sessionId: string; }).sessionId;
 		await f.proxy.sendCommand('Runtime.terminateExecution', {}, control);
-		assert.deepEqual(f.commands.at(-1), {
-			targetId: 'page',
-			method: 'Runtime.terminateExecution',
-			params: {},
-			sessionId: 'chromium-child',
-		});
-		assert.deepEqual(await f.proxy.sendCommand('Target.getTargetInfo', {}, control), {
-			targetInfo: { ...childInfo, attached: true },
-		});
+		assert.deepEqual(f.commands.at(-1), { targetId: 'page', method: 'Runtime.terminateExecution', params: {}, sessionId: 'chromium-child' });
+		assert.deepEqual(await f.proxy.sendCommand('Target.getTargetInfo', {}, control), { targetInfo: { ...childInfo, attached: true } });
 		await assert.rejects(f.proxy.sendCommand('Target.attachToTarget', { targetId: 'unshared-frame', flatten: true }), /BrowserTargetAccessDenied/);
 		await f.proxy.sendCommand('Target.detachFromTarget', { sessionId: control });
 		await f.proxy.sendCommand('Runtime.evaluate', {}, child);
-		f.events.fire({
-			type: 'message',
-			targetId: 'page',
-			message: {
-				method: 'Target.detachedFromTarget',
-				params: { sessionId: 'chromium-child', targetId: 'frame' },
-			},
-		});
-		assert.deepEqual(f.messages.at(-1), {
-			method: 'Target.detachedFromTarget',
-			params: { sessionId: child, targetId: 'frame' },
-			sessionId: parent,
-		});
+		f.events.fire({ type: 'message', targetId: 'page', message: { method: 'Target.detachedFromTarget', params: { sessionId: 'chromium-child', targetId: 'frame' } } });
+		assert.deepEqual(f.messages.at(-1), { method: 'Target.detachedFromTarget', params: { sessionId: child, targetId: 'frame' }, sessionId: parent });
 		await f.proxy.sendCommand('Runtime.evaluate', { expression: '2 + 2' }, parent);
 		assert.equal(f.commands.at(-1)?.targetId, 'page');
 		await f.proxy.sendCommand('Target.closeTarget', { targetId: 'page' });
 		await f.proxy.sendMessage({ id: 3, method: 'Runtime.evaluate', sessionId: child });
-		assert.deepEqual(f.messages.at(-1), {
-			id: 3,
-			sessionId: child,
-			error: { code: -32000, message: 'BrowserCDPSessionUnavailable' },
-		});
+		assert.deepEqual(f.messages.at(-1), { id: 3, sessionId: child, error: { code: -32000, message: 'BrowserCDPSessionUnavailable' } });
 	});
 
 	test('reports protocol errors separately from host access failures', async () => {
@@ -242,15 +146,9 @@ suite('CDP browser proxy', () => {
 		using f = fixture();
 		const started = promiseWithResolvers<void>();
 		const ready = promiseWithResolvers<void>();
-		f.host.whenReady = async () => {
-			started.resolve();
-			await ready.promise;
-		};
+		f.host.whenReady = async () => { started.resolve(); await ready.promise; };
 		let queried = false;
-		f.host.getTargets = () => {
-			queried = true;
-			return [];
-		};
+		f.host.getTargets = () => { queried = true; return []; };
 		const command = f.proxy.sendMessage({ id: 1, method: 'Target.getTargets' });
 		await started.promise;
 		f.proxy.dispose();

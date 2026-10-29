@@ -44,67 +44,34 @@ test('desktop initialization reads privileges and installation proofs through in
 		_serviceBrand: undefined,
 		getChannel: name => {
 			assert.equal(name, 'checksum');
-			return {
-				call: async <T>(command: string) => {
-					requests.push(command);
-					return reply as T;
-				},
-				listen: () => Event.None,
-			};
+			return { call: async <T>(command: string) => { requests.push(command); return reply as T; }, listen: () => Event.None };
 		},
-		registerChannel: () => {
-			throw new Error('Unexpected channel registration');
-		},
+		registerChannel: () => { throw new Error('Unexpected channel registration'); },
 	});
 	const integrity = services.createInstance(IntegrityService);
 	services.registerInstance(IIntegrityService, integrity);
 	services.registerInstance(INativeHostService, { isAdmin: async () => true } as INativeHostApi);
 	services.registerInstance(INotificationService, notifications);
 	const errors: unknown[][] = [];
-	services.registerInstance(ILogService, {
-		trace() {},
-		debug() {},
-		info() {},
-		warn() {},
-		error: (...args: unknown[]) => {
-			errors.push(args);
-		},
-	});
+	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error: (...args: unknown[]) => { errors.push(args); } });
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IEditorGroupsService, {
-		onDidChangeGroups: Event.None,
-	} as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
+	services.registerInstance(IEditorGroupsService, { onDidChangeGroups: Event.None } as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
 	const properties: ITitleProperties[] = [];
 	let updated!: () => void;
-	services.registerInstance(ITitleService, {
-		updateProperties: (value: ITitleProperties) => {
-			properties.push(value);
-			if ('isPure' in value) {
-				updated();
-			}
-		},
-	} as unknown as import('../../services/title/browser/titleService.js').ITitleService);
+	services.registerInstance(ITitleService, { updateProperties: (value: ITitleProperties) => { properties.push(value); if ('isPure' in value) { updated(); } } } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
 	const ipc = {
 		invoke: async <T>() => undefined as T,
-		subscribe: () => ({ dispose() {} }),
+		subscribe: () => ({ dispose() { } }),
 	};
-	const development = new Promise<void>(resolve => {
-		updated = resolve;
-	});
+	const development = new Promise<void>(resolve => { updated = resolve; });
 	using desktop = services.createInstance(ElectronWindow, ipc);
 	await desktop.initialize();
 	await development;
 	assert.deepEqual({ properties, warnings: notifications.model.getNotifications().length }, { properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 });
 
-	reply = {
-		isBuilt: true,
-		proof: [{ uri: URI.file('/installation/dist/main.js').toJSON(), expected: '0'.repeat(64), actual: null }],
-	};
+	reply = { isBuilt: true, proof: [{ uri: URI.file('/installation/dist/main.js').toJSON(), expected: '0'.repeat(64), actual: null }] };
 	const warning = new Promise<string>(resolve => {
-		const subscription = notifications.model.onDidAdd(item => {
-			subscription.dispose();
-			resolve(item.message);
-		});
+		const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 	});
 	using packaged = services.createInstance(ElectronWindow, ipc);
 	await packaged.initialize();
@@ -116,20 +83,14 @@ test('desktop initialization reads privileges and installation proofs through in
 	initializeTestLocalization('zh-CN');
 	try {
 		const translated = new Promise<string>(resolve => {
-			const subscription = notifications.model.onDidAdd(item => {
-				subscription.dispose();
-				resolve(item.message);
-			});
+			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using chinese = services.createInstance(ElectronWindow, ipc);
 		await chinese.initialize();
 		assert.equal(await translated, 'Ash 的安装文件已被修改或缺失，请重新安装 Ash 以恢复发布时的文件。');
 		reply = { isBuilt: true, proof: [] };
 		const failed = new Promise<string>(resolve => {
-			const subscription = notifications.model.onDidAdd(item => {
-				subscription.dispose();
-				resolve(item.message);
-			});
+			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using invalid = services.createInstance(ElectronWindow, ipc);
 		await invalid.initialize();
@@ -138,10 +99,7 @@ test('desktop initialization reads privileges and installation proofs through in
 	} finally {
 		initializeTestLocalization('en');
 	}
-	for (const malformed of [
-		{ isBuilt: true, proof: [] },
-		{ isBuilt: false, proof: [{ uri: {}, expected: 42 }] },
-	]) {
+	for (const malformed of [{ isBuilt: true, proof: [] }, { isBuilt: false, proof: [{ uri: {}, expected: 42 }] }]) {
 		reply = malformed;
 		await assert.rejects(integrity.isPure(), /checksum/);
 	}
@@ -150,32 +108,15 @@ test('desktop initialization reads privileges and installation proofs through in
 test('desktop disposal prevents pending environment reads from updating titles', async () => {
 	using services = new InstantiationService();
 	let finish!: (value: boolean) => void;
-	services.registerInstance(INativeHostService, {
-		isAdmin: () =>
-			new Promise<boolean>(resolve => {
-				finish = resolve;
-			}),
-	} as INativeHostApi);
-	services.registerInstance(IIntegrityService, {
-		_serviceBrand: undefined,
-		isPure: async () => {
-			assert.fail('Disposed window must not start an installation scan');
-		},
-	});
-	services.registerInstance(ITitleService, {
-		updateProperties: () => assert.fail('Disposed window must not update titles'),
-	} as unknown as import('../../services/title/browser/titleService.js').ITitleService);
+	services.registerInstance(INativeHostService, { isAdmin: () => new Promise<boolean>(resolve => { finish = resolve; }) } as INativeHostApi);
+	services.registerInstance(IIntegrityService, { _serviceBrand: undefined, isPure: async () => { assert.fail('Disposed window must not start an installation scan'); } });
+	services.registerInstance(ITitleService, { updateProperties: () => assert.fail('Disposed window must not update titles') } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
-	services.registerInstance(ILogService, { trace() {}, debug() {}, info() {}, warn() {}, error() {} });
+	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IEditorGroupsService, {
-		onDidChangeGroups: Event.None,
-	} as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
-	using desktop = services.createInstance(ElectronWindow, {
-		invoke: async () => undefined,
-		subscribe: () => ({ dispose() {} }),
-	});
+	services.registerInstance(IEditorGroupsService, { onDidChangeGroups: Event.None } as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
+	using desktop = services.createInstance(ElectronWindow, { invoke: async () => undefined, subscribe: () => ({ dispose() { } }) });
 	await desktop.initialize();
 	desktop.dispose();
 	finish(true);
@@ -190,26 +131,13 @@ test('desktop zoom follows the profile setting and persists a shared window zoom
 	let zoom = 0;
 	let changed: ((level: number) => void) | undefined;
 	let applied!: (level: number) => void;
-	const firstApplied = new Promise<number>(resolve => {
-		applied = resolve;
-	});
+	const firstApplied = new Promise<number>(resolve => { applied = resolve; });
 	const host = {
 		getZoomLevel: async () => zoom,
-		setZoomLevel: async (level: number) => {
-			zoom = level;
-			changed?.(level);
-			applied(level);
-		},
-		onDidChangeAuxiliaryWindowState: () => ({ dispose() {} }),
-		onDidChangeZoomLevel: (listener: (level: number) => void) => {
-			changed = listener;
-			return {
-				dispose: () => {
-					changed = undefined;
-				},
-			};
-		},
-		onDidRequestOpenExternalUri: () => ({ dispose() {} }),
+		setZoomLevel: async (level: number) => { zoom = level; changed?.(level); applied(level); },
+		onDidChangeAuxiliaryWindowState: () => ({ dispose() { } }),
+		onDidChangeZoomLevel: (listener: (level: number) => void) => { changed = listener; return { dispose: () => { changed = undefined; } }; },
+		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 	} as unknown as INativeHostApi;
 	using services = new InstantiationService();
 	using codeEditors = new StandaloneCodeEditorService();
@@ -244,28 +172,17 @@ test('desktop root uses client pixels at the current scale and rejects a stale i
 		let scale = 1.25;
 		Object.defineProperty(dom.window, 'devicePixelRatio', { get: () => scale });
 		let frame: FrameRequestCallback | undefined;
-		dom.window.requestAnimationFrame = callback => {
-			frame = callback;
-			return 1;
-		};
-		dom.window.cancelAnimationFrame = () => {
-			frame = undefined;
-		};
-		const render = (): void => {
-			const callback = frame;
-			frame = undefined;
-			callback?.(0);
-		};
+		dom.window.requestAnimationFrame = callback => { frame = callback; return 1; };
+		dom.window.cancelAnimationFrame = () => { frame = undefined; };
+		const render = (): void => { const callback = frame; frame = undefined; callback?.(0); };
 		using changes = new Emitter<IWindowClientSize | undefined>();
 		let finish!: (size: IWindowClientSize) => void;
-		const initial = new Promise<IWindowClientSize>(resolve => {
-			finish = resolve;
-		});
+		const initial = new Promise<IWindowClientSize>(resolve => { finish = resolve; });
 		const host = {
 			getWindowClientSize: () => initial,
 			onDidChangeWindowClientSize: changes.event,
 			getZoomLevel: async () => 0,
-			setZoomLevel: async () => {},
+			setZoomLevel: async () => { },
 			onDidChangeAuxiliaryWindowState: Event.None,
 			onDidChangeZoomLevel: Event.None,
 			onDidRequestOpenExternalUri: Event.None,
@@ -302,9 +219,7 @@ test('desktop root uses client pixels at the current scale and rejects a stale i
 		assert.equal(changes.hasListeners(), false);
 		assert.equal(root.style.maxHeight, '95%');
 		assert.equal(root.style.maxWidth, '');
-	} finally {
-		dom.window.close();
-	}
+	} finally { dom.window.close(); }
 });
 
 test('native client size IPC accepts physical pixels and rejects malformed dimensions', () => {
@@ -323,11 +238,7 @@ test('window controls follow theme changes and release their theme listener', ()
 		getColorTheme: () => ({ id: 'test', getColorCss: () => color }),
 		onDidColorThemeChange: changes.event,
 	} as unknown as IThemeService;
-	const host = {
-		setWindowTheme: async (theme: unknown) => {
-			themes.push(theme);
-		},
-	} as INativeHostApi;
+	const host = { setWindowTheme: async (theme: unknown) => { themes.push(theme); } } as INativeHostApi;
 	const binding = bindWindowControlTheme(themeService, host);
 	assert.deepEqual(themes, [{ backgroundColor: '#ffffff', symbolColor: '#ffffff', backdropColor: '#ffffff' }]);
 	color = '#000000';

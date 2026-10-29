@@ -21,46 +21,40 @@ export class TerminalAutoRepliesContribution extends Disposable implements IWork
 		for (const instance of terminals.instances) this.observe(instance);
 		this._register(terminals.onDidCreateInstance(instance => this.observe(instance)));
 		this._register(terminals.onDidDisposeInstance(instance => this.instances.deleteAndDispose(instance)));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TerminalAutoRepliesSettingId.AutoReplies)) {
-					for (const instance of terminals.instances) this.update(instance);
-				}
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TerminalAutoRepliesSettingId.AutoReplies)) {
+				for (const instance of terminals.instances) this.update(instance);
+			}
+		}));
 	}
 
 	private observe(instance: ITerminalInstance): void {
-		this.instances.set(
-			instance,
-			instance.onDidChangeState(state => {
-				// Detach revokes backend rules. Reattachment and process reuse must
-				// install the destination window's current configuration again.
-				if (state === 'running') this.update(instance);
-			}),
-		);
+		this.instances.set(instance, instance.onDidChangeState(state => {
+			// Detach revokes backend rules. Reattachment and process reuse must
+			// install the destination window's current configuration again.
+			if (state === 'running') this.update(instance);
+		}));
 		this.update(instance);
 	}
 
 	private update(instance: ITerminalInstance): void {
 		// Preserve configuration-change order even across slow RPCs. Resolve
 		// the current process at dispatch, since reuse may retire a queued PTY.
-		this.updates = this.updates
-			.then(async () => {
-				if (this.isDisposed || !this.instances.has(instance) || instance.state !== 'running') return;
-				await instance.setAutoReplies(getTerminalAutoReplyRules(this.configuration));
-			})
-			.catch(error => {
-				if (!isCancellationError(error)) onUnexpectedError(error);
-			});
+		this.updates = this.updates.then(async () => {
+			if (this.isDisposed || !this.instances.has(instance) || instance.state !== 'running') return;
+			await instance.setAutoReplies(getTerminalAutoReplyRules(this.configuration));
+		}).catch(error => {
+			if (!isCancellationError(error)) onUnexpectedError(error);
+		});
 	}
 
 	protected override disposeCore(): void {
 		for (const instance of this.terminals.instances) {
-			void instance.setAutoReplies([]).catch(() => {});
+			void instance.setAutoReplies([]).catch(() => { });
 		}
 		super.disposeCore();
 	}
 }
 
-registerWorkbenchContribution(TerminalAutoRepliesContribution.ID, WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(TerminalAutoRepliesContribution));
+registerWorkbenchContribution(TerminalAutoRepliesContribution.ID, WorkbenchPhase.AfterRestored,
+	accessor => accessor.get(IInstantiationService).createInstance(TerminalAutoRepliesContribution));

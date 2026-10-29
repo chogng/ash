@@ -24,7 +24,7 @@ function expandRange(model: TextModel, range: Range, syntaxRanges: readonly Rang
 	const lineEnd = new Position(range.endLineNumber, model.getLineContent(range.endLineNumber).length + 1);
 	const lineRange = Range.fromPositions(lineStart, lineEnd);
 	if (!lineRange.equalsRange(range)) return lineRange;
-	return Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(model.lineCount - 1 + 1, model.getLineContent(model.lineCount - 1 + 1).length + 1));
+	return Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((model.lineCount - 1) + 1, (model.getLineContent((model.lineCount - 1) + 1).length) + 1));
 }
 
 function smallestStrictlyContainingRange(model: TextModel, current: Range, ranges: readonly Range[]): Range | undefined {
@@ -42,13 +42,7 @@ function smallestStrictlyContainingRange(model: TextModel, current: Range, range
 }
 
 function findEnclosingPair(model: TextModel, range: Range): Range | undefined {
-	const pairs: readonly [string, string][] = [
-		['(', ')'],
-		['[', ']'],
-		['{', '}'],
-		['"', '"'],
-		["'", "'"],
-	];
+	const pairs: readonly [string, string][] = [['(', ')'], ['[', ']'], ['{', '}'], ['"', '"'], ["'", "'"]];
 	const startOffset = model.offsetAt(range.getStartPosition());
 	const endOffset = model.offsetAt(range.getEndPosition());
 	const text = model.getText();

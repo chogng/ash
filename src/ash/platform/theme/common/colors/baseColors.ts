@@ -14,27 +14,19 @@ export const warningForeground = color('warning.foreground', '#cca700', '#895503
 export const successForeground = color('success.foreground', '#89d185', '#107c10', '#80ff80', '#006b00', 'Foreground for successful states.');
 export const focusBorder = color('focusBorder', '#007fd4', '#0078d4', '#ffffff', '#000000', 'Border for focused controls.');
 export const border = color('border', '#2b2b2b', '#e5e5e5', 'contrastBorder', 'contrastBorder', 'Default separator border.');
-export const contrastBorder = registerColor(
-	'contrastBorder',
-	{
-		dark: null,
-		light: null,
-		hcDark: '#ffffff',
-		hcLight: '#000000',
-	},
-	{ description: 'Extra border separating elements in high contrast themes.', owner },
-);
+export const contrastBorder = registerColor('contrastBorder', {
+	dark: null,
+	light: null,
+	hcDark: '#ffffff',
+	hcLight: '#000000',
+}, { description: 'Extra border separating elements in high contrast themes.', owner });
 export const widgetBorder = color('widget.border', '#454545', '#d4d4d4', contrastBorder, contrastBorder, 'Border around floating widgets.');
-export const widgetShadow = registerColor(
-	'widget.shadow',
-	{
-		dark: transparent('#000000', 0.36),
-		light: transparent('#000000', 0.16),
-		hcDark: null,
-		hcLight: null,
-	},
-	{ description: 'Shadow around floating widgets.', owner },
-);
+export const widgetShadow = registerColor('widget.shadow', {
+	dark: transparent('#000000', 0.36),
+	light: transparent('#000000', 0.16),
+	hcDark: null,
+	hcLight: null,
+}, { description: 'Shadow around floating widgets.', owner });
 export const selectionForeground = color('selection.foreground', '#ffffff', '#000000', '#000000', '#ffffff', 'Selected text foreground.');
 export const selectionBackground = color('selection.background', '#264f78', '#add6ff', '#ffffff', '#000000', 'Selected text background.');
 export const textLinkActiveForeground = color('textLink.activeForeground', '#4e94ce', '#006ab1', accentForeground, accentForeground, 'Foreground for active links and link-like editor actions.');

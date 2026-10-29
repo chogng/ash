@@ -4,14 +4,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IContextKey } from '../../contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
-import {
-	AccessibilityConfiguration,
-	AccessibilitySupport,
-	CONTEXT_ACCESSIBILITY_MODE_ENABLED,
-	IAccessibilityService,
-	type AccessibilityReductionConfiguration,
-	type AccessibilitySupportConfiguration,
-} from '../common/accessibility.js';
+import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from '../common/accessibility.js';
 
 /** Inputs required by the browser-independent accessibility policy. */
 export interface AccessibilityServiceOptions {
@@ -55,12 +48,10 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this.systemTransparencyReduced = false;
 		this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
 		this._register(setARIAContainer(options.root));
-		this._register(
-			toDisposable(() => {
-				this.accessibilityModeEnabledContext.reset();
-				this.root.classList.remove('ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links');
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.accessibilityModeEnabledContext.reset();
+			this.root.classList.remove('ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links');
+		}));
 
 		const ownerWindow = ownerDocument.defaultView;
 		const motionMatcher = createMediaMatcher(ownerWindow, '(prefers-reduced-motion: reduce)');
@@ -68,47 +59,41 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this.systemMotionReduced = motionMatcher?.matches ?? false;
 		this.systemTransparencyReduced = transparencyMatcher?.matches ?? false;
 		if (motionMatcher) {
-			this._register(
-				listenToMediaQuery(motionMatcher, () => {
-					this.systemMotionReduced = motionMatcher.matches;
-					if (this.configMotionReduced === 'auto') this.onDidChangeReducedMotionEmitter.fire();
-					this.updateMotionClasses();
-				}),
-			);
+			this._register(listenToMediaQuery(motionMatcher, () => {
+				this.systemMotionReduced = motionMatcher.matches;
+				if (this.configMotionReduced === 'auto') this.onDidChangeReducedMotionEmitter.fire();
+				this.updateMotionClasses();
+			}));
 		}
 		if (transparencyMatcher) {
-			this._register(
-				listenToMediaQuery(transparencyMatcher, () => {
-					this.systemTransparencyReduced = transparencyMatcher.matches;
-					if (this.configTransparencyReduced === 'auto') this.onDidChangeReducedTransparencyEmitter.fire();
-					this.updateTransparencyClass();
-				}),
-			);
+			this._register(listenToMediaQuery(transparencyMatcher, () => {
+				this.systemTransparencyReduced = transparencyMatcher.matches;
+				if (this.configTransparencyReduced === 'auto') this.onDidChangeReducedTransparencyEmitter.fire();
+				this.updateTransparencyClass();
+			}));
 		}
 
-		this._register(
-			options.configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(AccessibilityConfiguration.editorAccessibilitySupport)) {
-					this.updateAccessibilityModeContext();
-					this.onDidChangeScreenReaderOptimizedEmitter.fire();
-				}
-				if (event.affectsConfiguration(AccessibilityConfiguration.reduceMotion)) {
-					this.configMotionReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceMotion);
-					this.updateMotionClasses();
-					this.onDidChangeReducedMotionEmitter.fire();
-				}
-				if (event.affectsConfiguration(AccessibilityConfiguration.reduceTransparency)) {
-					this.configTransparencyReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceTransparency);
-					this.updateTransparencyClass();
-					this.onDidChangeReducedTransparencyEmitter.fire();
-				}
-				if (event.affectsConfiguration(AccessibilityConfiguration.underlineLinks)) {
-					this.linkUnderlinesEnabled = options.configurationService.getValue<boolean>(AccessibilityConfiguration.underlineLinks);
-					this.updateLinkUnderlineClass();
-					this.onDidChangeLinkUnderlinesEmitter.fire();
-				}
-			}),
-		);
+		this._register(options.configurationService.onDidChangeConfiguration((event) => {
+			if (event.affectsConfiguration(AccessibilityConfiguration.editorAccessibilitySupport)) {
+				this.updateAccessibilityModeContext();
+				this.onDidChangeScreenReaderOptimizedEmitter.fire();
+			}
+			if (event.affectsConfiguration(AccessibilityConfiguration.reduceMotion)) {
+				this.configMotionReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceMotion);
+				this.updateMotionClasses();
+				this.onDidChangeReducedMotionEmitter.fire();
+			}
+			if (event.affectsConfiguration(AccessibilityConfiguration.reduceTransparency)) {
+				this.configTransparencyReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceTransparency);
+				this.updateTransparencyClass();
+				this.onDidChangeReducedTransparencyEmitter.fire();
+			}
+			if (event.affectsConfiguration(AccessibilityConfiguration.underlineLinks)) {
+				this.linkUnderlinesEnabled = options.configurationService.getValue<boolean>(AccessibilityConfiguration.underlineLinks);
+				this.updateLinkUnderlineClass();
+				this.onDidChangeLinkUnderlinesEmitter.fire();
+			}
+		}));
 
 		this.updateAccessibilityModeContext();
 		this.updateMotionClasses();
@@ -181,10 +166,7 @@ function createMediaMatcher(ownerWindow: Window | null, query: string): MediaQue
 
 function listenToMediaQuery(matcher: MediaQueryList, listener: () => void) {
 	const eventListener = () => listener();
-	const legacyMatcher = matcher as MediaQueryList & {
-		addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
-		removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
-	};
+	const legacyMatcher = matcher as MediaQueryList & { addListener?: (listener: (event: MediaQueryListEvent) => void) => void; removeListener?: (listener: (event: MediaQueryListEvent) => void) => void; };
 	if (typeof matcher.addEventListener === 'function') {
 		matcher.addEventListener('change', eventListener);
 		return toDisposable(() => matcher.removeEventListener('change', eventListener));

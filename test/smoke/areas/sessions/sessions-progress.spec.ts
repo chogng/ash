@@ -24,43 +24,30 @@ declare global {
 async function installRequestGate(page: Page): Promise<void> {
 	await page.evaluate(() => {
 		const original = MessagePort.prototype.postMessage;
-		const held: { port: MessagePort; args: [unknown, (StructuredSerializeOptions | Transferable[])?] }[] = [];
-		const receivers: { port: MessagePort; receive: MessagePort['onmessage']; wrapper: MessagePort['onmessage'] }[] = [];
-		const ports = new WeakMap<MessagePort, { requests: Map<number, ProgressRequest>; reads: ProgressRequest[][]; decoder: TextDecoder; text: string }>();
-		const gate: ProgressRequestGate = (globalThis.ashTestProgressRequests = {
-			methods: ['extensions/listInstalled'],
-			requests: [],
+		const held: { port: MessagePort; args: [unknown, (StructuredSerializeOptions | Transferable[])?]; }[] = [];
+		const receivers: { port: MessagePort; receive: MessagePort['onmessage']; wrapper: MessagePort['onmessage']; }[] = [];
+		const ports = new WeakMap<MessagePort, { requests: Map<number, ProgressRequest>; reads: ProgressRequest[][]; decoder: TextDecoder; text: string; }>();
+		const gate: ProgressRequestGate = globalThis.ashTestProgressRequests = {
+			methods: ['extensions/listInstalled'], requests: [],
 			release() {
-				for (const item of held.splice(0)) {
-					Reflect.apply(original, item.port, item.args);
-				}
+				for (const item of held.splice(0)) { Reflect.apply(original, item.port, item.args); }
 			},
 			restore() {
 				this.methods = [];
 				this.release();
 				MessagePort.prototype.postMessage = original;
-				for (const item of receivers) {
-					if (item.port.onmessage === item.wrapper) {
-						item.port.onmessage = item.receive;
-					}
-				}
+				for (const item of receivers) { if (item.port.onmessage === item.wrapper) { item.port.onmessage = item.receive; } }
 			},
-		});
+		};
 		MessagePort.prototype.postMessage = function (this: MessagePort, ...args: [unknown, (StructuredSerializeOptions | Transferable[])?]): void {
-			const message = args[0] as { data?: Uint8Array; ack?: boolean };
+			const message = args[0] as { data?: Uint8Array; ack?: boolean; };
 			let state = ports.get(this);
 			if (message.ack && state) {
-				for (const request of state.reads.shift() ?? []) {
-					request.completed = true;
-				}
+				for (const request of state.reads.shift() ?? []) { request.completed = true; }
 			}
-			let frame: { id: number; method: string; params?: { operationId?: string; request?: { operation?: string } } } | undefined;
+			let frame: { id: number; method: string; params?: { operationId?: string; request?: { operation?: string; }; }; } | undefined;
 			if (message.data instanceof Uint8Array) {
-				try {
-					frame = JSON.parse(new TextDecoder().decode(message.data));
-				} catch {
-					/* Other ports are outside this fixture. */
-				}
+				try { frame = JSON.parse(new TextDecoder().decode(message.data)); } catch { /* Other ports are outside this fixture. */ }
 			}
 			if (frame?.method) {
 				if (!state) {
@@ -77,9 +64,7 @@ async function installRequestGate(page: Page): Promise<void> {
 							for (const line of lines) {
 								const reply = JSON.parse(line);
 								const request = !reply.method && connection.requests.get(reply.id);
-								if (request) {
-									completed.push(request);
-								}
+								if (request) { completed.push(request); }
 							}
 							connection.reads.push(completed);
 						}
@@ -87,19 +72,10 @@ async function installRequestGate(page: Page): Promise<void> {
 					};
 					receivers.push({ port: this, receive, wrapper: this.onmessage });
 				}
-				const request: ProgressRequest = {
-					id: frame.id,
-					method: frame.method,
-					operationId: frame.params?.operationId,
-					operation: frame.params?.request?.operation,
-					completed: false,
-				};
+				const request: ProgressRequest = { id: frame.id, method: frame.method, operationId: frame.params?.operationId, operation: frame.params?.request?.operation, completed: false };
 				gate.requests.push(request);
 				state.requests.set(frame.id, request);
-				if (gate.methods.includes(frame.method)) {
-					held.push({ port: this, args });
-					return;
-				}
+				if (gate.methods.includes(frame.method)) { held.push({ port: this, args }); return; }
 			}
 			Reflect.apply(original, this, args);
 		};
@@ -132,20 +108,14 @@ agentsTest('Agents routes pending view reads and cancellable operations through 
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 		await expect(plugins.locator('progress')).toBeVisible();
-		await page.evaluate(() => {
-			const gate = globalThis.ashTestProgressRequests;
-			gate.methods = [];
-			gate.release();
-		});
+		await page.evaluate(() => { const gate = globalThis.ashTestProgressRequests; gate.methods = []; gate.release(); });
 		await expect(plugins.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false');
 		await expect(plugins.locator('progress')).toBeHidden();
 		await workbench.quickaccess.runCommand('notifications.showList');
 		await expect(page.locator('.ash-notification-message')).toHaveCount(0);
 		await workbench.quickaccess.runCommand('notifications.hideList');
 
-		await page.evaluate(() => {
-			globalThis.ashTestProgressRequests.methods = ['session/runtime/invoke'];
-		});
+		await page.evaluate(() => { globalThis.ashTestProgressRequests.methods = ['session/runtime/invoke']; });
 		await workbench.quickaccess.runCommand('sessions.newDevContainerSession');
 		const notice = page.locator('.ash-notification').filter({ hasText: 'Starting Dev Container...' });
 		await expect(notice.locator('progress')).toBeVisible();
@@ -155,17 +125,14 @@ agentsTest('Agents routes pending view reads and cancellable operations through 
 		await expect.poll(readRuntimeRequests).toEqual([expect.objectContaining({ method: 'session/runtime/invoke', operation: 'probe', completed: false })]);
 		await notice.getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expect(notice).toHaveCount(0);
-		await expect
-			.poll(readRuntimeRequests)
-			.toEqual([expect.objectContaining({ method: 'session/runtime/invoke', operation: 'probe', completed: false }), expect.objectContaining({ method: 'session/runtime/cancel' })]);
+		await expect.poll(readRuntimeRequests).toEqual([
+			expect.objectContaining({ method: 'session/runtime/invoke', operation: 'probe', completed: false }),
+			expect.objectContaining({ method: 'session/runtime/cancel' }),
+		]);
 		const [invoke, cancel] = await readRuntimeRequests();
 		expect(cancel.operationId).toBe(invoke.operationId);
 		// Only the read-only probe reaches the real backend, after cancellation. No container is prepared.
-		await page.evaluate(() => {
-			const gate = globalThis.ashTestProgressRequests;
-			gate.methods = [];
-			gate.release();
-		});
+		await page.evaluate(() => { const gate = globalThis.ashTestProgressRequests; gate.methods = []; gate.release(); });
 		await expect.poll(async () => (await readRuntimeRequests()).every(request => request.completed)).toBe(true);
 		expect((await readRuntimeRequests()).filter(request => request.method === 'session/runtime/invoke').map(request => request.operation)).toEqual(['probe']);
 		await workbench.quickaccess.runCommand('notifications.showList');
@@ -173,9 +140,7 @@ agentsTest('Agents routes pending view reads and cancellable operations through 
 		expect(driver.diagnostics.errors).toEqual([]);
 	} finally {
 		const cancel = page.locator('.ash-notification').filter({ hasText: 'Starting Dev Container...' }).getByRole('button', { name: 'Cancel', exact: true });
-		if (await cancel.isVisible()) {
-			await cancel.click();
-		}
+		if (await cancel.isVisible()) { await cancel.click(); }
 		await page.evaluate(() => globalThis.ashTestProgressRequests.restore());
 	}
 });

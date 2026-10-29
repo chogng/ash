@@ -68,7 +68,7 @@ export interface JsonSchemaSnippet {
 	readonly bodyText?: string;
 }
 
-export interface IJSONSchemaSnippet extends JsonSchemaSnippet {}
+export interface IJSONSchemaSnippet extends JsonSchemaSnippet { }
 
 export interface JsonSchemaIssue {
 	readonly message: string;
@@ -117,13 +117,9 @@ function completionSchema(schema: JsonSchema, node: JsonValueNode | undefined, r
 	}
 	const anyOf = schema.anyOf?.map(alternative => completionSchema(alternative, node, rootSchema));
 	const oneOf = schema.oneOf?.map(alternative => completionSchema(alternative, node, rootSchema));
-	for (const view of [...(anyOf ?? []), ...(oneOf ?? [])]) {
+	for (const view of [...anyOf ?? [], ...oneOf ?? []]) {
 		// Alternative value constraints remain separate so enum suggestions can include every branch.
-		result = mergeCompletionSchemas(result, {
-			properties: view.properties,
-			patternProperties: view.patternProperties,
-			items: view.items,
-		});
+		result = mergeCompletionSchemas(result, { properties: view.properties, patternProperties: view.patternProperties, items: view.items });
 	}
 	return { ...result, anyOf, oneOf };
 }
@@ -132,7 +128,7 @@ function completionSchema(schema: JsonSchema, node: JsonValueNode | undefined, r
 function resolveSchemaReference(reference: string, rootSchema: JsonSchema): JsonSchema {
 	const fragment = reference.indexOf('#/');
 	const documentId = reference.slice(0, fragment);
-	if (fragment < 0 || (documentId && documentId !== rootSchema.id)) {
+	if (fragment < 0 || documentId && documentId !== rootSchema.id) {
 		throw new Error(`JSON schema reference does not belong to this document: ${reference}`);
 	}
 	let target: unknown = rootSchema;
@@ -282,26 +278,15 @@ function nodeMatchesType(node: JsonValueNode, type: JsonSchemaType): boolean {
 
 function nodeValue(node: JsonValueNode): JsonValue {
 	switch (node.type) {
-		case 'string':
-			return node.value;
-		case 'number':
-			return node.value;
-		case 'boolean':
-			return node.value;
-		case 'null':
-			return null;
-		case 'array':
-			return node.items.map(nodeValue);
+		case 'string': return node.value;
+		case 'number': return node.value;
+		case 'boolean': return node.value;
+		case 'null': return null;
+		case 'array': return node.items.map(nodeValue);
 		case 'object': {
 			const value: Record<string, JsonValue> = {};
 			for (const property of node.properties) {
-				if (property.valueNode)
-					Object.defineProperty(value, property.key, {
-						value: nodeValue(property.valueNode),
-						enumerable: true,
-						configurable: true,
-						writable: true,
-					});
+				if (property.valueNode) Object.defineProperty(value, property.key, { value: nodeValue(property.valueNode), enumerable: true, configurable: true, writable: true });
 			}
 			return value;
 		}
@@ -312,6 +297,6 @@ function equalJson(left: JsonValue, right: JsonValue): boolean {
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function issue(message: string, node: { readonly offset: number; readonly length: number }): JsonSchemaIssue {
+function issue(message: string, node: { readonly offset: number; readonly length: number; }): JsonSchemaIssue {
 	return Object.freeze({ message, offset: node.offset, length: Math.max(node.length, 1) });
 }

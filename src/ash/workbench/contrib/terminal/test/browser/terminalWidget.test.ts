@@ -12,7 +12,9 @@ suite('terminal browser component', () => {
 				await page.goto(`/terminal.html?input&groups&clipboard&browser&voice&locale=${locale}`);
 				await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
 				if (placement === 'rows') await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
-				const target = placement === 'title' ? page.locator('.ash-terminal-active-action button') : page.locator('.ash-terminal-tabs [role="tab"]').first();
+				const target = placement === 'title'
+					? page.locator('.ash-terminal-active-action button')
+					: page.locator('.ash-terminal-tabs [role="tab"]').first();
 				await expect(target).toBeVisible();
 				await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
 				const icon = target.locator('.ash-icon-debug-disconnect');
@@ -77,9 +79,7 @@ suite('terminal browser component', () => {
 		const terminal = page.locator('.ash-terminal-instance:not([hidden])').last();
 		await expect(terminal.locator('.xterm-helper-textarea')).toHaveCount(0);
 		// Only the native resize notification reveals the initialized screen here.
-		await page.locator('#terminal').evaluate(host => {
-			host.style.removeProperty('display');
-		});
+		await page.locator('#terminal').evaluate(host => { host.style.removeProperty('display'); });
 		await expect(terminal.locator('.xterm-helper-textarea')).toBeFocused();
 		await expect(terminal.locator('.ash-terminal-command-guide')).toHaveCount(1);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('SAVED_HISTORY');
@@ -91,16 +91,9 @@ suite('terminal browser component', () => {
 
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
-		page.on('console', message => {
-			if (message.type() === 'error') errors.push(message.text());
-		});
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 		await page.goto('/terminal.html?input&groups&clipboard&browser');
-		await expect
-			.poll(async () => ({
-				ready: await page.evaluate(() => Boolean(window.ashTerminalInputIntegration)),
-				errors,
-			}))
-			.toEqual({ ready: true, errors: [] });
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalInputIntegration)), errors })).toEqual({ ready: true, errors: [] });
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('retained-row\r\n'.repeat(120)));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBeGreaterThan(0);
 		await page.evaluate(() => window.ashTerminalInputIntegration.command('workbench.action.terminal.scrollToTop'));
@@ -109,14 +102,10 @@ suite('terminal browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBe(0);
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('fresh-row\r\n'.repeat(120) + 'following-new-output'));
 		await expect(page.locator('.ash-terminal-instance:visible .xterm-rows')).toContainText('following-new-output');
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const { top, bottom } = window.ashTerminalInputIntegration.viewport();
-					return bottom > 0 && top === bottom;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => {
+			const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+			return bottom > 0 && top === bottom;
+		})).toBe(true);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 
@@ -142,23 +131,12 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
 		await page.evaluate(isTrusted => {
 			const feed = window.ashTerminalInputIntegration.feed;
-			feed('', {
-				type: 'processReady',
-				isWindowsPty: false,
-				shellType: 'bash' as import('../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash,
-			});
+			feed('', { type: 'processReady', isWindowsPty: false, shellType: 'bash' as import('../../../../../platform/terminal/common/terminal.js').PosixShellType.Bash });
 			feed('', { type: 'promptStart' });
 			feed('$ ');
 			feed('', { type: 'commandStart' });
 			feed('echo marker\r\n');
-			feed('', {
-				type: 'commandExecuted',
-				commandId: 'menu-command',
-				command: 'echo marker',
-				isTrusted,
-				cwd: '/workspace',
-				timestampMillis: 1,
-			});
+			feed('', { type: 'commandExecuted', commandId: 'menu-command', command: 'echo marker', isTrusted, cwd: '/workspace', timestampMillis: 1 });
 			feed('first line\r\nlast line\r\n');
 			feed('', { type: 'commandFinished', exitCode: 0, durationMillis: 1 });
 			feed('', { type: 'promptStart' });
@@ -221,10 +199,7 @@ suite('terminal browser component', () => {
 		await marker.click();
 		await page.getByRole('menuitem', { name: 'Rerun Command', exact: true }).click();
 		await expect(page.getByRole('dialog')).toBeVisible();
-		await page.evaluate(async () => {
-			await window.ashTerminalClipboardIntegration.switchAway();
-			window.ashTerminalClipboardIntegration.switchBack();
-		});
+		await page.evaluate(async () => { await window.ashTerminalClipboardIntegration.switchAway(); window.ashTerminalClipboardIntegration.switchBack(); });
 		await page.getByRole('button', { name: 'Run', exact: true }).click();
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
@@ -253,27 +228,16 @@ suite('terminal browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/terminal.html?input&find');
-		await expect
-			.poll(async () => ({
-				initialized: await page.evaluate(() => Boolean(window.ashTerminalFindIntegration)),
-				errors,
-			}))
-			.toEqual({ initialized: true, errors: [] });
+		await expect.poll(async () => ({ initialized: await page.evaluate(() => Boolean(window.ashTerminalFindIntegration)), errors })).toEqual({ initialized: true, errors: [] });
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('needle one\r\nNEEDLE two\r\nneedles three\r\nneedle four\r\n'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('needle four');
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
-		expect(await page.evaluate(() => window.ashTerminalFindIntegration.context())).toEqual({
-			terminal: true,
-			find: false,
-		});
+		expect(await page.evaluate(() => window.ashTerminalFindIntegration.context())).toEqual({ terminal: true, find: false });
 		await page.keyboard.press('ControlOrMeta+f');
 		const find = page.getByRole('region', { name: 'Find in terminal' });
 		const input = find.getByRole('textbox', { name: 'Find', exact: true });
 		await expect(input).toBeFocused();
-		expect(await page.evaluate(() => window.ashTerminalFindIntegration.context())).toEqual({
-			terminal: false,
-			find: true,
-		});
+		expect(await page.evaluate(() => window.ashTerminalFindIntegration.context())).toEqual({ terminal: false, find: true });
 		await input.fill('needle');
 		await expect(find.getByRole('status')).toHaveText('1 of 4');
 		await input.press('Enter');
@@ -401,9 +365,7 @@ suite('terminal browser component', () => {
 			const { page } = browserTests;
 
 			let release!: () => void;
-			const gate = new Promise<void>(resolve => {
-				release = resolve;
-			});
+			const gate = new Promise<void>(resolve => { release = resolve; });
 			await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
 				await gate;
 				await route.continue();
@@ -442,25 +404,16 @@ suite('terminal browser component', () => {
 			window.ashTerminalPaneIntegration.workspace();
 			await new Promise(requestAnimationFrame);
 		});
-		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({
-			profiles: 0,
-			creates: 0,
-		});
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
 		expect(requests.filter(url => /\/xterm-[^/]+\.js/u.test(url))).toEqual([]);
 		await page.evaluate(() => {
 			window.ashTerminalPaneIntegration.view(false);
 			window.ashTerminalPaneIntegration.panel(true);
 		});
-		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({
-			profiles: 0,
-			creates: 0,
-		});
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
 		await page.evaluate(() => window.ashTerminalPaneIntegration.view(true));
 		await expect(page.locator('.xterm')).toHaveCount(1);
-		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({
-			profiles: 1,
-			creates: 1,
-		});
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 1 });
 		await page.evaluate(() => {
 			window.ashTerminalPaneIntegration.panel(false);
 			window.ashTerminalPaneIntegration.panel(true);
@@ -484,10 +437,7 @@ suite('terminal browser component', () => {
 				window.ashTerminalPaneIntegration.panel(true);
 				window.ashTerminalPaneIntegration.focus();
 			});
-			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({
-				profiles: 1,
-				creates: 0,
-			});
+			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 0 });
 			if (action === 'hide') await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
 			if (action === 'dispose') await page.evaluate(() => window.ashTerminalIntegration.dispose());
 			await page.locator('#outside').focus();
@@ -574,10 +524,7 @@ suite('terminal browser component', () => {
 			window.ashTerminalPaneIntegration.workspace();
 			await new Promise(requestAnimationFrame);
 		});
-		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({
-			profiles: 0,
-			creates: 0,
-		});
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
 		await page.evaluate(() => window.ashTerminalPaneIntegration.expand(true));
 		await expect(page.locator('.xterm')).toHaveCount(1);
 		await page.evaluate(() => window.ashTerminalIntegration.dispose());
@@ -640,13 +587,8 @@ suite('terminal browser component', () => {
 		const { page } = browserTests;
 
 		let release!: () => void;
-		const gate = new Promise<void>(resolve => {
-			release = resolve;
-		});
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
-			await gate;
-			await route.continue();
-		});
+		const gate = new Promise<void>(resolve => { release = resolve; });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
 		try {
 			await page.goto('/terminal.html?stream');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
@@ -655,12 +597,7 @@ suite('terminal browser component', () => {
 		} finally {
 			release();
 		}
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status())).toMatchObject({
-			reads: [0],
-			events: [],
-			closes: 1,
-			remaining: 0,
-		});
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status())).toMatchObject({ reads: [0], events: [], closes: 1, remaining: 0 });
 		await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
 	});
 
@@ -676,13 +613,11 @@ suite('terminal browser component', () => {
 		}, wrapped);
 		expect(snapshot).toBe(`green\n${wrapped}\nlast`);
 		expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(4))).toBe('[Earlier output omitted]\nlast');
-		expect(
-			await page.evaluate(async () => {
-				const pending = window.ashTerminalIntegration.snapshot(1000);
-				window.ashTerminalIntegration.dispose();
-				return pending;
-			}),
-		).toBeUndefined();
+		expect(await page.evaluate(async () => {
+			const pending = window.ashTerminalIntegration.snapshot(1000);
+			window.ashTerminalIntegration.dispose();
+			return pending;
+		})).toBeUndefined();
 	});
 
 	test('terminal context prefers the user selection over unrelated output', async function () {
@@ -699,7 +634,7 @@ suite('terminal browser component', () => {
 		const screen = await page.locator('.xterm-screen').boundingBox();
 		const columns = await page.evaluate(() => window.ashTerminalIntegration.resizes.at(-1)!.cols);
 		const row = await page.locator('.xterm-rows > div').first().boundingBox();
-		await page.mouse.dblclick(screen!.x + (screen!.width / columns) * 9, row!.y + row!.height / 2);
+		await page.mouse.dblclick(screen!.x + screen!.width / columns * 9, row!.y + row!.height / 2);
 		expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toBe('selected');
 	});
 
@@ -709,12 +644,7 @@ suite('terminal browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/terminal.html?windows');
-		await expect
-			.poll(async () => ({
-				ready: await page.evaluate(() => Boolean(window.ashTerminalWindowsIntegration)),
-				errors,
-			}))
-			.toEqual({ ready: true, errors: [] });
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalWindowsIntegration)), errors })).toEqual({ ready: true, errors: [] });
 		await page.evaluate(() => window.ashTerminalWindowsIntegration.forEach(pane => pane.panel(true)));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalWindowsIntegration.map(pane => pane.counts().creates))).toEqual([1, 1]);
 		const first = page.locator('#window-0');
@@ -749,24 +679,19 @@ suite('terminal browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBeGreaterThan(0);
 			await terminal.locator('.xterm-screen').hover();
 			await page.mouse.wheel(0, -300);
-			await expect
-				.poll(() =>
-					page.evaluate(() => {
-						const { top, bottom } = window.ashTerminalInputIntegration.viewport();
-						return top < bottom;
-					}),
-				)
-				.toBe(true);
+			await expect.poll(() => page.evaluate(() => {
+				const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+				return top < bottom;
+			})).toBe(true);
 			await expect(track).toHaveCSS('opacity', '1');
-			const expectedColor = async (token: string): Promise<string> =>
-				terminal.evaluate((element, token) => {
-					const probe = document.createElement('span');
-					probe.style.backgroundColor = `var(--ash-${token})`;
-					element.append(probe);
-					const color = getComputedStyle(probe).backgroundColor;
-					probe.remove();
-					return color;
-				}, token);
+			const expectedColor = async (token: string): Promise<string> => terminal.evaluate((element, token) => {
+				const probe = document.createElement('span');
+				probe.style.backgroundColor = `var(--ash-${token})`;
+				element.append(probe);
+				const color = getComputedStyle(probe).backgroundColor;
+				probe.remove();
+				return color;
+			}, token);
 			await expect(slider).toHaveCSS('background-color', await expectedColor('scrollbarSlider-background'));
 			await slider.hover();
 			await expect(slider).toHaveCSS('background-color', await expectedColor('scrollbarSlider-hoverBackground'));
@@ -779,14 +704,10 @@ suite('terminal browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
 			await page.mouse.move(thumb.x + thumb.width / 2, bounds.y + bounds.height, { steps: 5 });
 			await page.mouse.up();
-			await expect
-				.poll(() =>
-					page.evaluate(() => {
-						const { top, bottom } = window.ashTerminalInputIntegration.viewport();
-						return top === bottom;
-					}),
-				)
-				.toBe(true);
+			await expect.poll(() => page.evaluate(() => {
+				const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+				return top === bottom;
+			})).toBe(true);
 			await terminal.locator('.xterm-screen').hover();
 			await page.screenshot({ path: testInfo.outputPath(`terminal-scrollbar-${mode}.png`) });
 			await page.evaluate(() => window.ashTerminalInputIntegration.close());
@@ -800,10 +721,7 @@ suite('terminal browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/terminal.html?browser&locale=zh-CN');
-		await page.evaluate(async () => {
-			window.ashTerminalIntegration.start();
-			await window.ashTerminalIntegration.ready();
-		});
+		await page.evaluate(async () => { window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready(); });
 		await page.evaluate(async () => {
 			await window.ashTerminalIntegration.sequence({ type: 'promptStart' });
 			await window.ashTerminalIntegration.sequence({ type: 'commandStart' }, 'prompt> ');
@@ -813,19 +731,7 @@ suite('terminal browser component', () => {
 		await expect(pending.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-decoration-incomplete');
 		await expect(pending).toHaveCSS('width', '16px');
 		await expect(pending.locator('.ash-icon')).toHaveCSS('font-size', '16px');
-		await page.evaluate(() =>
-			window.ashTerminalIntegration.sequence(
-				{
-					type: 'commandExecuted',
-					commandId: 'first',
-					command: 'echo ok',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: Date.now(),
-				},
-				'echo ok',
-			),
-		);
+		await page.evaluate(() => window.ashTerminalIntegration.sequence({ type: 'commandExecuted', commandId: 'first', command: 'echo ok', isTrusted: true, cwd: '/workspace', timestampMillis: Date.now() }, 'echo ok'));
 		await expect(page.getByRole('button', { name: '命令正在运行', exact: true })).toBeVisible();
 		await page.evaluate(async () => {
 			await window.ashTerminalIntegration.sequence({ type: 'commandFinished', exitCode: 0, durationMillis: 1 }, '\r\nok\r\n');
@@ -836,17 +742,7 @@ suite('terminal browser component', () => {
 		await expect(success).toBeVisible();
 		await expect(pending).toBeVisible();
 		await page.evaluate(async () => {
-			await window.ashTerminalIntegration.sequence(
-				{
-					type: 'commandExecuted',
-					commandId: 'second',
-					command: 'false',
-					isTrusted: true,
-					cwd: '/workspace',
-					timestampMillis: Date.now(),
-				},
-				'false',
-			);
+			await window.ashTerminalIntegration.sequence({ type: 'commandExecuted', commandId: 'second', command: 'false', isTrusted: true, cwd: '/workspace', timestampMillis: Date.now() }, 'false');
 			await window.ashTerminalIntegration.sequence({ type: 'commandFinished', exitCode: 7, durationMillis: 1 }, '\r\n');
 		});
 		const failure = page.getByRole('button', { name: '命令失败，退出代码为 7', exact: true });
@@ -867,18 +763,11 @@ suite('terminal browser component', () => {
 			expect(appearance.actual).toBe(appearance.expected);
 		}
 		const defaultFontSize = await page.evaluate(() => window.ashTerminalIntegration.options().fontSize!);
-		for (const [fontSize, lineHeight] of [
-			[defaultFontSize, 1],
-			[6, 1],
-			[18, 1.5],
-		]) {
-			await page.evaluate(
-				async ({ fontSize, lineHeight }) => {
-					await window.ashTerminalIntegration.configure('terminal.integrated.fontSize', fontSize);
-					await window.ashTerminalIntegration.configure('terminal.integrated.lineHeight', lineHeight);
-				},
-				{ fontSize, lineHeight },
-			);
+		for (const [fontSize, lineHeight] of [[defaultFontSize, 1], [6, 1], [18, 1.5]]) {
+			await page.evaluate(async ({ fontSize, lineHeight }) => {
+				await window.ashTerminalIntegration.configure('terminal.integrated.fontSize', fontSize);
+				await window.ashTerminalIntegration.configure('terminal.integrated.lineHeight', lineHeight);
+			}, { fontSize, lineHeight });
 			const scale = Math.min(1, fontSize / defaultFontSize);
 			const icon = (await success.locator('.ash-icon').boundingBox())!;
 			const decoration = (await success.boundingBox())!;
@@ -933,7 +822,7 @@ suite('terminal browser component', () => {
 			await page.evaluate(mode => window.ashTerminalPaneIntegration.theme(mode), mode);
 			await assertGutters();
 		}
-		await page.locator('#terminal').evaluate(element => (element.style.width = '480px'));
+		await page.locator('#terminal').evaluate(element => element.style.width = '480px');
 		await expect.poll(async () => (await page.locator('.ash-terminal-widgets').boundingBox())!.width).toBeLessThan(480);
 		await assertGutters();
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
@@ -962,13 +851,7 @@ suite('terminal browser component', () => {
 				element.append(probe);
 				const expected = getComputedStyle(probe).backgroundColor;
 				probe.remove();
-				return {
-					content: getComputedStyle(element).backgroundColor,
-					instance: getComputedStyle(instance).backgroundColor,
-					canvas: getComputedStyle(instance.querySelector('.xterm-scrollable-element')!).backgroundColor,
-					viewport: getComputedStyle(instance.querySelector('.xterm-viewport')!).backgroundColor,
-					expected,
-				};
+				return { content: getComputedStyle(element).backgroundColor, instance: getComputedStyle(instance).backgroundColor, canvas: getComputedStyle(instance.querySelector('.xterm-scrollable-element')!).backgroundColor, viewport: getComputedStyle(instance.querySelector('.xterm-viewport')!).backgroundColor, expected };
 			});
 			expect(appearance.content).toBe(appearance.expected);
 			expect(appearance.instance).toBe(appearance.expected);
@@ -999,19 +882,10 @@ suite('terminal browser component', () => {
 					const fixture = window.ashTerminalStreamIntegration;
 					const command = upstream ? 'git push' : 'git sttatus';
 					fixture.feedModel(`${command}\r\n`);
-					fixture.environmentFrame({
-						type: 'commandExecuted',
-						commandId: 'quick-fix-failed',
-						command,
-						isTrusted: false,
-						cwd: '/workspace',
-						timestampMillis: 200,
-					});
-					fixture.feedModel(
-						upstream
-							? 'fatal: The current branch topic has no upstream branch.\r\nTo push the current branch and set the remote as upstream, use\r\n\r\n    git push --set-upstream origin topic\r\n'
-							: "git: 'sttatus' is not a git command. See 'git --help'.\r\n\r\nThe most similar command is\r\n\tstatus\r\n",
-					);
+					fixture.environmentFrame({ type: 'commandExecuted', commandId: 'quick-fix-failed', command, isTrusted: false, cwd: '/workspace', timestampMillis: 200 });
+					fixture.feedModel(upstream
+						? 'fatal: The current branch topic has no upstream branch.\r\nTo push the current branch and set the remote as upstream, use\r\n\r\n    git push --set-upstream origin topic\r\n'
+						: "git: 'sttatus' is not a git command. See 'git --help'.\r\n\r\nThe most similar command is\r\n\tstatus\r\n");
 					fixture.environmentFrame({ type: 'commandFinished', exitCode: 1, durationMillis: 1 });
 					fixture.environmentFrame({ type: 'promptStart' });
 					fixture.feedModel('$ ');
@@ -1021,10 +895,7 @@ suite('terminal browser component', () => {
 				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('|');
 				const before = await page.evaluate(() => window.ashTerminalStreamIntegration.quickFix.writes());
 				const command = page.evaluate(() => window.ashTerminalStreamIntegration.quickFix.command());
-				const input = page.getByRole('combobox', {
-					name: locale === 'zh-CN' ? '终端快速修复' : 'Terminal Quick Fixes',
-					exact: true,
-				});
+				const input = page.getByRole('combobox', { name: locale === 'zh-CN' ? '终端快速修复' : 'Terminal Quick Fixes', exact: true });
 				await expect(input).toBeVisible();
 				await expect(input).toHaveAttribute('placeholder', locale === 'zh-CN' ? '选择要插入的修复，不会立即运行' : 'Select a fix to insert without running it');
 				const fixed = upstream ? 'git push --set-upstream origin topic' : 'git status';
@@ -1045,31 +916,13 @@ suite('terminal browser component', () => {
 
 		await page.goto('/terminal.html?pane&browser');
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
-		await page.evaluate(async () => {
-			window.ashTerminalPaneIntegration.panel(true);
-		});
+		await page.evaluate(async () => { window.ashTerminalPaneIntegration.panel(true); });
 		await expect(page.locator('.xterm')).toHaveCount(1);
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 		await expect(tabs.getByRole('tab')).toHaveCount(2);
 		const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
-		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(
-			[
-				'Change Terminal Icon',
-				'Clear Terminal',
-				'Copy',
-				'Paste',
-				'Focus Terminal',
-				'Join or Reorder Terminals...',
-				'Kill Terminal',
-				'Move Terminal into Editor Area',
-				'Relaunch Terminal',
-				'Rename Terminal',
-				'Split Terminal',
-				'Terminal: Attach to Chat',
-				'Unsplit Terminal',
-			].sort(),
-		);
+		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Copy', 'Paste', 'Focus Terminal', 'Join or Reorder Terminals...', 'Kill Terminal', 'Move Terminal into Editor Area', 'Relaunch Terminal', 'Rename Terminal', 'Split Terminal', 'Terminal: Attach to Chat', 'Unsplit Terminal'].sort());
 		await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 		await tabs.getByRole('tab').first().click({ button: 'right' });
 		await expect(page.getByRole('menu')).toBeVisible();
@@ -1101,10 +954,7 @@ suite('terminal browser component', () => {
 		await page.getByRole('menuitem', { name: 'Relaunch Terminal', exact: true }).click();
 		await expect(page.getByRole('menu')).toHaveCount(0);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().relaunched)).toEqual([id]);
-		await page.evaluate(() => {
-			window.ashTerminalPaneIntegration.release();
-			window.ashTerminalPaneIntegration.dispose();
-		});
+		await page.evaluate(() => { window.ashTerminalPaneIntegration.release(); window.ashTerminalPaneIntegration.dispose(); });
 	});
 
 	test('terminal profile commands select, cancel and apply the saved default to the next creation', async function () {
@@ -1116,27 +966,19 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell']);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
 		await expect(picker).toBeFocused();
 		await picker.press('Escape');
 		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell']);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		await expect(picker).toBeFocused();
-		await picker.fill('Bash');
-		await picker.press('Enter');
+		await picker.fill('Bash'); await picker.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash']);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 		const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
 		await expect(defaults).toBeFocused();
-		await defaults.fill('Bash');
-		await defaults.press('Enter');
+		await defaults.fill('Bash'); await defaults.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('bash');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash', 'bash']);
@@ -1157,21 +999,18 @@ suite('terminal browser component', () => {
 				await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 				await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
 				const command = `workbench.action.terminal.${kind}`;
-				const label =
-					kind === 'newWithProfile' ? (locale === 'zh-CN' ? '选择终端配置' : 'Select a terminal profile') : locale === 'zh-CN' ? '选择默认终端配置' : 'Select the default terminal profile';
+				const label = kind === 'newWithProfile'
+					? locale === 'zh-CN' ? '选择终端配置' : 'Select a terminal profile'
+					: locale === 'zh-CN' ? '选择默认终端配置' : 'Select the default terminal profile';
 				const picker = page.getByRole('combobox', { name: label, exact: true });
-				await page.evaluate(id => {
-					void window.ashTerminalPaneIntegration.command(id);
-				}, command);
+				await page.evaluate(id => { void window.ashTerminalPaneIntegration.command(id); }, command);
 				await expect(picker).toBeFocused();
 				await picker.fill('Bash');
 				await page.evaluate(() => window.ashTerminalPaneIntegration.workspace());
 				await expect(picker).toHaveCount(0);
 				expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
 				expect(await page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('shell');
-				await page.evaluate(id => {
-					void window.ashTerminalPaneIntegration.command(id);
-				}, command);
+				await page.evaluate(id => { void window.ashTerminalPaneIntegration.command(id); }, command);
 				await expect(picker).toBeFocused();
 				await picker.fill('Bash');
 				await picker.press('Enter');
@@ -1194,48 +1033,28 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(async () => {
 			await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.linux', {
-				'自定义 Shell': {
-					path: ['/missing/shell', '${env:HOME}/shell'],
-					args: ['${env:PROFILE_ARG}', 'with spaces'],
-					env: { PROFILE: '${workspaceFolder}', REMOVED: null },
-					icon: 'terminal-git-bash',
-					color: 'terminal.ansiGreen',
-				},
+				'自定义 Shell': { path: ['/missing/shell', '${env:HOME}/shell'], args: ['${env:PROFILE_ARG}', 'with spaces'], env: { PROFILE: '${workspaceFolder}', REMOVED: null }, icon: 'terminal-git-bash', color: 'terminal.ansiGreen' },
 			});
 			await window.ashTerminalPaneIntegration.configure('terminal.integrated.cwd', '${workspaceFolder}/subdirectory');
 			window.ashTerminalPaneIntegration.panel(true);
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
 		await expect(picker).toBeFocused();
 		await picker.fill('自定义 Shell');
 		await picker.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))
-			.toEqual({
-				profile: {
-					type: 'custom',
-					name: '自定义 Shell',
-					path: ['/home/test/shell'],
-					args: ['literal;$HOME', 'with spaces'],
-				},
-				env: { PROFILE: '/workspace', REMOVED: null },
-				cwd: '/workspace/subdirectory',
-			});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+			profile: { type: 'custom', name: '自定义 Shell', path: ['/home/test/shell'], args: ['literal;$HOME', 'with spaces'] },
+			env: { PROFILE: '/workspace', REMOVED: null }, cwd: '/workspace/subdirectory',
+		});
 		const tab = page.getByRole('tab', { name: 'shell', exact: true });
 		await expect(tab).toBeVisible();
 		await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
 		expect(await tab.locator('.ash-icon-label-icon').evaluate(element => (element as HTMLElement).style.color)).toBe('var(--ash-terminal-ansiGreen)');
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 		const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
-		await expect(defaults).toBeFocused();
-		await defaults.fill('自定义 Shell');
-		await defaults.press('Enter');
+		await expect(defaults).toBeFocused(); await defaults.fill('自定义 Shell'); await defaults.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('custom:自定义 Shell');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
@@ -1287,47 +1106,39 @@ suite('terminal browser component', () => {
 		['Git Bash', 'C:\\Program Files\\Git\\bin\\bash.exe', ['--login', '-i'], 'terminal-git-bash', 'bash'],
 		['Command Prompt', 'C:\\Windows\\System32\\cmd.exe', [], 'terminal-cmd', 'cmd'],
 		['PowerShell', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', [], 'terminal-powershell', 'pwsh'],
-	] as const)
-		test(`renamed ${kind} profiles keep menu labels and use shell names and icons in terminal tabs`, async function () {
-			const { page } = browserTests;
-			const testInfo = browserTests.info;
+	] as const) test(`renamed ${kind} profiles keep menu labels and use shell names and icons in terminal tabs`, async function () {
+		const { page } = browserTests;
+		const testInfo = browserTests.info;
 
-			const errors: string[] = [];
-			page.on('pageerror', error => errors.push(error.message));
-			await page.goto('/terminal.html?pane&profiles&browser&os=windows');
-			await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
-			await page.evaluate(
-				async ({ path, args }) => {
-					await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-						'Work shell': { path, args },
-					});
-					window.ashTerminalPaneIntegration.panel(true);
-				},
-				{ path, args },
-			);
-			await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
-			for (const name of ['Work shell', 'Renamed shell']) {
-				if (name === 'Renamed shell') {
-					await page.evaluate(
-						({ path, args }) =>
-							window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-								'Renamed shell': { path, args },
-							}),
-						{ path, args: kind === 'WSL' ? '--distribution "Ubuntu-24.04"' : args },
-					);
-				}
-				await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
-				const item = page.getByRole('menuitem', { name, exact: true });
-				await expect(item.locator(`[data-ash-icon-id="${icon}"]`)).toBeVisible();
-				await item.click();
-				const tab = page.getByRole('tab', { name: title, exact: true, selected: true });
-				await expect(tab).toBeVisible();
-				await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', icon);
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/terminal.html?pane&profiles&browser&os=windows');
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(async ({ path, args }) => {
+			await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+				'Work shell': { path, args },
+			});
+			window.ashTerminalPaneIntegration.panel(true);
+		}, { path, args });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+		for (const name of ['Work shell', 'Renamed shell']) {
+			if (name === 'Renamed shell') {
+				await page.evaluate(({ path, args }) => window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+					'Renamed shell': { path, args },
+				}), { path, args: kind === 'WSL' ? '--distribution "Ubuntu-24.04"' : args });
 			}
-			if (kind === 'Git Bash') await page.screenshot({ path: testInfo.outputPath('terminal-bash-name.png') });
-			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
-			expect(errors).toEqual([]);
-		});
+			await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
+			const item = page.getByRole('menuitem', { name, exact: true });
+			await expect(item.locator(`[data-ash-icon-id="${icon}"]`)).toBeVisible();
+			await item.click();
+			const tab = page.getByRole('tab', { name: title, exact: true, selected: true });
+			await expect(tab).toBeVisible();
+			await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', icon);
+		}
+		if (kind === 'Git Bash') await page.screenshot({ path: testInfo.outputPath('terminal-bash-name.png') });
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
 
 	test('Windows raw command line profile reaches the picker, resolver and next default without becoming argv', async function () {
 		const { page } = browserTests;
@@ -1338,37 +1149,21 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(async () => {
 			await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-				原始命令行: {
-					path: 'C:\\Windows\\cmd.exe',
-					args: '/d /s /c "echo ${env:PROFILE_ARG} & echo two words"',
-				},
+				原始命令行: { path: 'C:\\Windows\\cmd.exe', args: '/d /s /c "echo ${env:PROFILE_ARG} & echo two words"' },
 			});
 			window.ashTerminalPaneIntegration.panel(true);
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
 		await expect(picker).toBeFocused();
 		await picker.fill('原始命令行');
 		await picker.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))
-			.toEqual({
-				profile: {
-					type: 'custom',
-					name: '原始命令行',
-					path: ['C:\\Windows\\cmd.exe'],
-					args: '/d /s /c "echo literal;$HOME & echo two words"',
-				},
-				env: {},
-				cwd: undefined,
-			});
-		await expect(page.getByRole('tab', { name: 'cmd', exact: true })).toBeVisible();
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+			profile: { type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' }, env: {}, cwd: undefined,
 		});
+		await expect(page.getByRole('tab', { name: 'cmd', exact: true })).toBeVisible();
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 		const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
 		await expect(defaults).toBeFocused();
 		await defaults.fill('原始命令行');
@@ -1376,12 +1171,7 @@ suite('terminal browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('custom:原始命令行');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
-		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))?.profile).toEqual({
-			type: 'custom',
-			name: '原始命令行',
-			path: ['C:\\Windows\\cmd.exe'],
-			args: '/d /s /c "echo literal;$HOME & echo two words"',
-		});
+		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))?.profile).toEqual({ type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' });
 		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -1395,35 +1185,18 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
-		await expect(picker).toBeFocused();
-		await picker.fill('Extension Shell');
-		await picker.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1)))
-			.toEqual({
-				profile: {
-					type: 'custom',
-					name: 'Extension Shell',
-					path: ['/home/test/extension-shell'],
-					args: ['literal;$HOME'],
-				},
-				env: { EXTENSION: 'value' },
-				cwd: '/workspace',
-			});
+		await expect(picker).toBeFocused(); await picker.fill('Extension Shell'); await picker.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
+			profile: { type: 'custom', name: 'Extension Shell', path: ['/home/test/extension-shell'], args: ['literal;$HOME'] }, env: { EXTENSION: 'value' }, cwd: '/workspace',
+		});
 		const tab = page.getByRole('tab', { name: 'Extension Shell', exact: true });
 		await expect(tab).toBeVisible();
 		await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
-		await page.evaluate(() => {
-			void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile');
-		});
+		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 		const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
-		await expect(defaults).toBeFocused();
-		await defaults.fill('Extension Shell');
-		await defaults.press('Enter');
+		await expect(defaults).toBeFocused(); await defaults.fill('Extension Shell'); await defaults.press('Enter');
 		await expect(defaults).toHaveCount(0);
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'custom:Extension Shell', 'custom:Extension Shell']);
@@ -1435,13 +1208,8 @@ suite('terminal browser component', () => {
 		const { page } = browserTests;
 
 		let release!: () => void;
-		const gate = new Promise<void>(resolve => {
-			release = resolve;
-		});
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
-			await gate;
-			await route.continue();
-		});
+		const gate = new Promise<void>(resolve => { release = resolve; });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
 		try {
 			await page.goto('/terminal.html?stream&cwd&history');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
@@ -1449,28 +1217,11 @@ suite('terminal browser component', () => {
 			expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBeUndefined();
 			expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toBeUndefined();
 			expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual([]);
-		} finally {
-			release();
-		}
+		} finally { release(); }
 		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBe('/workspace/changed; directory');
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toEqual({
-			commandDetection: true,
-			cwdDetection: true,
-			hasRichCommandDetection: true,
-			commandStorageDisabled: false,
-			commands: [
-				{
-					commandId: 'command',
-					status: 'succeeded',
-					exitCode: 0,
-					cwd: '/workspace',
-					command: 'echo 中文; printf \"quoted\"',
-					isTrusted: true,
-				},
-			],
-		});
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toEqual({ commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [{ commandId: 'command', status: 'succeeded', exitCode: 0, cwd: '/workspace', command: 'echo 中文; printf \"quoted\"', isTrusted: true }] });
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual(['succeeded', 'exit']);
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
@@ -1482,12 +1233,7 @@ suite('terminal browser component', () => {
 		const pageErrors: string[] = [];
 		page.on('pageerror', error => pageErrors.push(error.message));
 		await page.goto('/terminal.html?input&sequence');
-		await expect
-			.poll(async () => ({
-				ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)),
-				errors: pageErrors,
-			}))
-			.toEqual({ ready: true, errors: [] });
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)), errors: pageErrors })).toEqual({ ready: true, errors: [] });
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 		await page.locator('.xterm-helper-textarea').focus();
@@ -1505,12 +1251,7 @@ suite('terminal browser component', () => {
 			const pageErrors: string[] = [];
 			page.on('pageerror', error => pageErrors.push(error.message));
 			await page.goto(`/terminal.html?input&sequence&locale=${locale}`);
-			await expect
-				.poll(async () => ({
-					ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)),
-					errors: pageErrors,
-				}))
-				.toEqual({ ready: true, errors: [] });
+			await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalSequenceIntegration)), errors: pageErrors })).toEqual({ ready: true, errors: [] });
 			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 			await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 			const title = locale === 'zh-CN' ? '终端：发送序列' : 'Terminal: Send Sequence';
@@ -1590,18 +1331,12 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalEditorIntegration.confirmClose());
 		await page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await expect(page.getByRole('dialog')).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({
-			instances: 1,
-			editorTabs: 1,
-		});
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
 		const cancelled = page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await expect(page.getByRole('dialog')).toContainText('Terminate the running processes');
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		await cancelled;
-		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({
-			instances: 1,
-			editorTabs: 1,
-		});
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
 		const accepted = page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await page.getByRole('button', { name: 'Terminate', exact: true }).click();
 		await accepted;
@@ -1619,10 +1354,7 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalEditorIntegration.confirmClose());
 		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(true))).toBe(true);
 		await expect(page.getByRole('dialog')).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({
-			instances: 1,
-			editorTabs: 1,
-		});
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
 		const closing = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(false));
 		await page.getByRole('button', { name: 'Terminate', exact: true }).click();
 		expect(await closing).toBe(true);
@@ -1642,74 +1374,57 @@ suite('terminal browser component', () => {
 		await expect(page.getByRole('dialog')).toContainText('Terminate the running processes');
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		expect(await closing).toBe(false);
-		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({
-			instances: 2,
-			editorTabs: 2,
-		});
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 2, editorTabs: 2 });
 	});
 	for (const locale of ['en', 'zh-CN']) {
-		for (const action of ['tab', 'group', 'all', 'sticky'] as const)
-			test(`shared terminal editor ${action} closes only its final host in ${locale}`, async function () {
-				const { page } = browserTests;
+		for (const action of ['tab', 'group', 'all', 'sticky'] as const) test(`shared terminal editor ${action} closes only its final host in ${locale}`, async function () {
+			const { page } = browserTests;
 
-				const errors: string[] = [];
-				page.on('pageerror', error => errors.push(error.message));
-				await page.goto(`/terminal.html?input&groups&editor&clipboard&browser&locale=${locale}`);
-				await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
-				await page.evaluate(async () => {
-					await window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor');
-					await window.ashTerminalEditorIntegration.confirmOnKill();
-				});
-				const firstGroup = (await page.evaluate(() => window.ashTerminalEditorIntegration.groups()))[0]!.id;
-				if (action === 'sticky') await page.evaluate(() => window.ashTerminalEditorIntegration.stick());
-				await page.evaluate(() => window.ashTerminalEditorIntegration.split());
-				await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(2);
-				if (action === 'tab') {
-					// Close the old group's tab through its keyboard-accessible action.
-					const closeButton = page
-						.locator('.ash-editor-group')
-						.first()
-						.getByRole('button', { name: locale === 'zh-CN' ? '关闭 Shell' : 'Close Shell', exact: true });
-					await closeButton.focus();
-					await closeButton.press('Enter');
-				} else if (action === 'group') {
-					expect(await page.evaluate(id => window.ashTerminalEditorIntegration.closeGroup(id), firstGroup)).toBe(true);
-				} else if (action === 'sticky') {
-					expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(true))).toBe(true);
-				}
-				const remaining = action === 'all' ? 2 : 1;
-				await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
-				await expect(page.getByRole('dialog')).toHaveCount(0);
-				expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
-				await page.locator('.ash-terminal-editor .xterm-helper-textarea').last().focus();
-				await page.keyboard.type('still-alive');
-				await expect
-					.poll(() =>
-						page.evaluate(() =>
-							window.ashTerminalGroupsIntegration
-								.writes()
-								.filter(write => write.terminalId === 'input-shell-1')
-								.map(write => write.data)
-								.join(''),
-						),
-					)
-					.toContain('still-alive');
-				const cancel = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
-				const dialog = page.getByRole('dialog');
-				await expect(dialog).toBeVisible();
-				await page.keyboard.press('Escape');
-				expect(await cancel).toBe(false);
-				expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
-				expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
-				const close = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
-				await expect(dialog).toBeVisible();
-				await dialog.getByRole('button', { name: locale === 'zh-CN' ? '终止' : 'Terminate', exact: true }).click();
-				expect(await close).toBe(true);
-				await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(0);
-				expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual(['input-shell-1']);
-				expect(errors).toEqual([]);
-				await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+			const errors: string[] = [];
+			page.on('pageerror', error => errors.push(error.message));
+			await page.goto(`/terminal.html?input&groups&editor&clipboard&browser&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+			await page.evaluate(async () => {
+				await window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor');
+				await window.ashTerminalEditorIntegration.confirmOnKill();
 			});
+			const firstGroup = (await page.evaluate(() => window.ashTerminalEditorIntegration.groups()))[0]!.id;
+			if (action === 'sticky') await page.evaluate(() => window.ashTerminalEditorIntegration.stick());
+			await page.evaluate(() => window.ashTerminalEditorIntegration.split());
+			await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(2);
+			if (action === 'tab') {
+				// Close the old group's tab through its keyboard-accessible action.
+				const closeButton = page.locator('.ash-editor-group').first().getByRole('button', { name: locale === 'zh-CN' ? '关闭 Shell' : 'Close Shell', exact: true });
+				await closeButton.focus();
+				await closeButton.press('Enter');
+			} else if (action === 'group') {
+				expect(await page.evaluate(id => window.ashTerminalEditorIntegration.closeGroup(id), firstGroup)).toBe(true);
+			} else if (action === 'sticky') {
+				expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(true))).toBe(true);
+			}
+			const remaining = action === 'all' ? 2 : 1;
+			await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
+			await page.locator('.ash-terminal-editor .xterm-helper-textarea').last().focus();
+			await page.keyboard.type('still-alive');
+			await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.terminalId === 'input-shell-1').map(write => write.data).join(''))).toContain('still-alive');
+			const cancel = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
+			const dialog = page.getByRole('dialog');
+			await expect(dialog).toBeVisible();
+			await page.keyboard.press('Escape');
+			expect(await cancel).toBe(false);
+			expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
+			expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
+			const close = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
+			await expect(dialog).toBeVisible();
+			await dialog.getByRole('button', { name: locale === 'zh-CN' ? '终止' : 'Terminate', exact: true }).click();
+			expect(await close).toBe(true);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(0);
+			expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual(['input-shell-1']);
+			expect(errors).toEqual([]);
+			await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+		});
 	}
 
 	test('terminal editor restoration displays an unavailable resource without starting a shell', async function () {
@@ -1883,6 +1598,7 @@ suite('terminal browser component', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
+
 		test(`terminal instance hover keeps process errors and secondary warnings visible without details in ${locale}`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -1892,9 +1608,7 @@ suite('terminal browser component', () => {
 			await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 			const failure = await page.evaluate(async () => {
 				try {
-					await window.ashTerminalPaneIntegration.command('workbench.action.terminal.sendSequence', {
-						text: 'hover-input',
-					});
+					await window.ashTerminalPaneIntegration.command('workbench.action.terminal.sendSequence', { text: 'hover-input' });
 					return '';
 				} catch (error) {
 					return (error as Error).message;
@@ -1911,10 +1625,7 @@ suite('terminal browser component', () => {
 			await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
 			await expect(card.locator('[data-severity="warning"]')).toBeVisible();
 			await expect(card.locator('[data-severity="error"]')).toContainText('Synthetic input failure');
-			await page.screenshot({
-				path: testInfo.outputPath(`terminal-hover-warning-${locale}.png`),
-				animations: 'disabled',
-			});
+			await page.screenshot({ path: testInfo.outputPath(`terminal-hover-warning-${locale}.png`), animations: 'disabled' });
 			for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 				await page.evaluate(theme => window.ashTerminalPaneIntegration.theme(theme), theme);
 				const colors = await card.evaluate(element => ({
@@ -1954,12 +1665,7 @@ suite('terminal browser component', () => {
 			await row.focus();
 			await row.press('Alt+ArrowDown');
 			await expect(card).toContainText(locale === 'zh-CN' ? '进程 ID（PID）：1237' : 'Process ID (PID): 1237');
-			await expect(
-				card.getByRole('button', {
-					name: locale === 'zh-CN' ? '重新启动终端' : 'Relaunch Terminal',
-					exact: true,
-				}),
-			).toHaveCount(0);
+			await expect(card.getByRole('button', { name: locale === 'zh-CN' ? '重新启动终端' : 'Relaunch Terminal', exact: true })).toHaveCount(0);
 			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 		});
 	}
@@ -1968,27 +1674,15 @@ suite('terminal browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?input&groups&clipboard&browser&suggest&locale=${locale}`);
-		await expect
-			.poll(async () => ({
-				ready: await page.evaluate(() => Boolean(window.ashTerminalSuggestIntegration && window.ashTerminalInputIntegration)),
-				errors,
-			}))
-			.toEqual({ ready: true, errors: [] });
-		await page.evaluate(
-			({ prefix, shell }) => {
-				const feed = window.ashTerminalInputIntegration.feed;
-				feed('', {
-					type: 'processReady',
-					isWindowsPty: false,
-					shellType: shell as import('../../../../../platform/terminal/common/terminal.js').PosixShellType,
-				});
-				feed('', { type: 'promptStart' });
-				feed('$ ');
-				feed('', { type: 'commandStart' });
-				feed(prefix);
-			},
-			{ prefix, shell },
-		);
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalSuggestIntegration && window.ashTerminalInputIntegration)), errors })).toEqual({ ready: true, errors: [] });
+		await page.evaluate(({ prefix, shell }) => {
+			const feed = window.ashTerminalInputIntegration.feed;
+			feed('', { type: 'processReady', isWindowsPty: false, shellType: shell as import('../../../../../platform/terminal/common/terminal.js').PosixShellType });
+			feed('', { type: 'promptStart' });
+			feed('$ ');
+			feed('', { type: 'commandStart' });
+			feed(prefix);
+		}, { prefix, shell });
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe(`${prefix}|`);
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 	}
@@ -2006,10 +1700,7 @@ suite('terminal browser component', () => {
 				history('echo unsafe\rcommand');
 			});
 			await page.locator('.xterm-helper-textarea').press('Control+Space');
-			const picker = page.getByRole('combobox', {
-				name: locale === 'zh-CN' ? '终端建议' : 'Terminal suggestions',
-				exact: true,
-			});
+			const picker = page.getByRole('combobox', { name: locale === 'zh-CN' ? '终端建议' : 'Terminal suggestions', exact: true });
 			await expect(picker).toBeVisible();
 			await expect(page.getByRole('option')).toHaveCount(1);
 			await expect(page.getByRole('option')).toContainText('echo accepted');
@@ -2059,15 +1750,12 @@ suite('terminal browser component', () => {
 				const { page } = browserTests;
 
 				await seedSuggestPrompt(page, 'cat ./sp', 'en', shell);
-				await page.evaluate(
-					async ({ name, directory }) => {
-						const resources = window.ashTerminalSuggestIntegration;
-						if (directory) await resources.directory(`/workspace/${name}`);
-						else await resources.file(`/workspace/${name}`);
-						void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-					},
-					{ name, directory },
-				);
+				await page.evaluate(async ({ name, directory }) => {
+					const resources = window.ashTerminalSuggestIntegration;
+					if (directory) await resources.directory(`/workspace/${name}`);
+					else await resources.file(`/workspace/${name}`);
+					void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+				}, { name, directory });
 				const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
 				await expect(page.getByRole('option')).toContainText(`./${name}${directory ? '/' : ''}`);
 				expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
@@ -2087,9 +1775,7 @@ suite('terminal browser component', () => {
 
 		await seedSuggestPrompt(page, 'echo ');
 		await page.evaluate(() => window.ashTerminalSuggestIntegration.history('echo history'));
-		await page.evaluate(() => {
-			void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-		});
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest'); });
 		const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
 		await expect(picker).toBeVisible();
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('changed'));
@@ -2097,14 +1783,9 @@ suite('terminal browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('echo changed|');
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('\r\x1b[2K$ echo '));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('echo |');
-		await page.evaluate(() => {
-			void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-		});
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest'); });
 		await expect(picker).toBeVisible();
-		await page.evaluate(async () => {
-			await window.ashTerminalClipboardIntegration.switchAway();
-			window.ashTerminalClipboardIntegration.switchBack();
-		});
+		await page.evaluate(async () => { await window.ashTerminalClipboardIntegration.switchAway(); window.ashTerminalClipboardIntegration.switchBack(); });
 		await expect(picker).toBeHidden();
 		await page.evaluate(async () => {
 			await window.ashTerminalSuggestIntegration.file('/workspace/echo-file');
@@ -2136,9 +1817,7 @@ suite('terminal browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'oject dir/'"]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('\r\x1b[2K$ cat /outside/pr'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('cat /outside/pr|');
-		await page.evaluate(() => {
-			void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
-		});
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest'); });
 		await expect(picker).toBeVisible();
 		await expect(page.locator('.ash-quick-pick')).toHaveAttribute('aria-busy', 'false');
 		await expect(page.getByRole('option')).toHaveCount(0);
@@ -2177,14 +1856,7 @@ suite('terminal browser component', () => {
 			fixture.environmentFrame({ type: 'hasRichCommandDetection', value: true });
 			const command = `echo ${'wrapped-command '.repeat(20)}END`;
 			fixture.feedModel(`${command}\r\n`);
-			fixture.environmentFrame({
-				type: 'commandExecuted',
-				commandId: 'wrapped-command',
-				command,
-				isTrusted: true,
-				cwd: '/workspace',
-				timestampMillis: 1,
-			});
+			fixture.environmentFrame({ type: 'commandExecuted', commandId: 'wrapped-command', command, isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
 			fixture.feedModel(Array.from({ length: 80 }, (_, index) => `wrapped-output-${index}\r\n`).join(''));
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('wrapped-output-79');
@@ -2234,47 +1906,20 @@ suite('terminal browser component', () => {
 
 		await page.goto('/terminal.html?stream&commandModel');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
-		await page.evaluate(() =>
-			window.ashTerminalStreamIntegration.environmentFrame({
-				type: 'environment',
-				values: { CURRENT: 'startup' },
-				isTrusted: true,
-			}),
-		);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'environment', values: { CURRENT: 'startup' }, isTrusted: true }));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'startup' }, isTrusted: true });
 		await page.evaluate(() => {
-			window.ashTerminalStreamIntegration.environmentFrame({
-				type: 'environmentStart',
-				clear: true,
-				isTrusted: true,
-			});
-			window.ashTerminalStreamIntegration.environmentFrame({
-				type: 'environmentEntry',
-				key: 'CURRENT',
-				value: 'pending 中文',
-				isTrusted: true,
-			});
+			window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentStart', clear: true, isTrusted: true });
+			window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEntry', key: 'CURRENT', value: 'pending 中文', isTrusted: true });
 		});
 		// A visible prompt model remains unchanged until the transaction's final boundary is parsed.
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('|');
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({
-			value: { CURRENT: 'startup' },
-			isTrusted: true,
-		});
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'startup' }, isTrusted: true });
 		await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEnd', isTrusted: true }));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'pending 中文' }, isTrusted: true });
 		await page.evaluate(() => {
-			window.ashTerminalStreamIntegration.environmentFrame({
-				type: 'environmentStart',
-				clear: false,
-				isTrusted: true,
-			});
-			window.ashTerminalStreamIntegration.environmentFrame({
-				type: 'environmentEntry',
-				key: 'CURRENT',
-				value: 'forged',
-				isTrusted: false,
-			});
+			window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentStart', clear: false, isTrusted: true });
+			window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEntry', key: 'CURRENT', value: 'forged', isTrusted: false });
 			window.ashTerminalStreamIntegration.environmentFrame({ type: 'environmentEnd', isTrusted: true });
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.environment())).toEqual({ value: { CURRENT: 'forged' }, isTrusted: false });
@@ -2311,10 +1956,7 @@ suite('terminal browser component', () => {
 			const command = (id: string): Promise<unknown> => page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
 			const rename = async (title: string): Promise<void> => {
 				const pending = command('workbench.action.terminal.rename');
-				const dialog = page.getByRole('dialog', {
-					name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal',
-					exact: true,
-				});
+				const dialog = page.getByRole('dialog', { name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal', exact: true });
 				await dialog.getByRole('textbox').fill(title);
 				await dialog.getByRole('textbox').press('Enter');
 				await pending;
@@ -2328,10 +1970,7 @@ suite('terminal browser component', () => {
 			const created = await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created);
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
 			await command('workbench.action.quickOpenTerm');
-			const picker = page.getByRole('combobox', {
-				name: locale === 'zh-CN' ? '输入要打开的终端名称' : 'Type the name of a terminal to open',
-				exact: true,
-			});
+			const picker = page.getByRole('combobox', { name: locale === 'zh-CN' ? '输入要打开的终端名称' : 'Type the name of a terminal to open', exact: true });
 			await picker.fill('term pnlsh');
 			await expect(page.getByRole('option', { name: /Panel shell/ })).toBeVisible();
 			await expect(page.getByRole('option', { name: /Editor shell/ })).toHaveCount(0);
@@ -2353,25 +1992,16 @@ suite('terminal browser component', () => {
 			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([]);
 			await command('workbench.action.quickOpenTerm');
 			await picker.fill('term Panel');
-			const renameButton = page.getByRole('button', {
-				name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal',
-				exact: true,
-			});
+			const renameButton = page.getByRole('button', { name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal', exact: true });
 			await renameButton.focus();
 			await renameButton.press('Enter');
-			const dialog = page.getByRole('dialog', {
-				name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal',
-				exact: true,
-			});
+			const dialog = page.getByRole('dialog', { name: locale === 'zh-CN' ? '重命名终端' : 'Rename Terminal', exact: true });
 			await dialog.getByRole('textbox').fill('Renamed panel');
 			await dialog.getByRole('textbox').press('Enter');
 			await command('workbench.action.quickOpenTerm');
 			await picker.fill('term Renamed');
 			await expect(page.getByRole('option', { name: /Renamed panel/ })).toBeVisible();
-			const closeButton = page.getByRole('button', {
-				name: locale === 'zh-CN' ? '关闭终端' : 'Close Terminal',
-				exact: true,
-			});
+			const closeButton = page.getByRole('button', { name: locale === 'zh-CN' ? '关闭终端' : 'Close Terminal', exact: true });
 			await closeButton.focus();
 			await closeButton.press('Enter');
 			await expect(page.getByRole('option', { name: /Renamed panel/ })).toHaveCount(0);

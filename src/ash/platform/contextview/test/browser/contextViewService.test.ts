@@ -6,7 +6,9 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
 import type { IRectangle } from '../../../../base/common/layout.js';
 
-const environment = new JSDOM('<!doctype html><html><head></head><body><main></main></body></html>');
+const environment = new JSDOM(
+	'<!doctype html><html><head></head><body><main></main></body></html>',
+);
 for (const [name, value] of Object.entries({
 	window: environment.window,
 	document: environment.window.document,
@@ -18,7 +20,11 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { BrowserContextViewService } = await import('../../../../platform/contextview/browser/contextViewService.js');
+const {
+	BrowserContextViewService,
+} = await import(
+	'../../../../platform/contextview/browser/contextViewService.js'
+);
 
 test('context view service hosts overlays inside its Workbench container', () => {
 	const container = environment.window.document.querySelector('main');
@@ -51,7 +57,7 @@ test('point anchors render in the window that owns their viewport coordinates', 
 	assert.ok(container);
 	const service = new BrowserContextViewService(container);
 	const content = h(environment.window.document, 'div');
-	const anchor: IRectangle & { readonly targetWindow: Window } = {
+	const anchor: IRectangle & { readonly targetWindow: Window; } = {
 		left: 24,
 		top: 36,
 		width: 0,

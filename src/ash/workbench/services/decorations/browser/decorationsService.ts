@@ -37,19 +37,14 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 	private readonly style: HTMLStyleElement;
 	private nextStyleId = 0;
 	private readonly pendingChanges = new Map<string, URI>();
-	private readonly changeScheduler = this._register(
-		new RunOnceScheduler(() => {
-			const resources = [...this.pendingChanges.values()];
-			this.pendingChanges.clear();
-			this.fireChange(resources);
-		}, 0),
-	);
+	private readonly changeScheduler = this._register(new RunOnceScheduler(() => {
+		const resources = [...this.pendingChanges.values()];
+		this.pendingChanges.clear();
+		this.fireChange(resources);
+	}, 0));
 	public readonly onDidChangeDecorations = this.changed.event;
 
-	constructor(
-		document: Document,
-		@ILogService private readonly logService: ILogService,
-	) {
+	constructor(document: Document, @ILogService private readonly logService: ILogService) {
 		super();
 		this.style = document.createElement('style');
 		this.style.dataset.ashDecorations = '';
@@ -61,30 +56,24 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 		this.assertNotDisposed();
 		const state: ProviderState = { provider, resources: new DisposableStore(), cache: new Map() };
 		this.providers.add(state);
-		state.resources.add(
-			provider.onDidChange(resources => {
-				const affected: URI[] = [];
-				for (const [key, entry] of state.cache) {
-					if (!resources.length || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(entry.resource, resource))) {
-						entry.cancellation.dispose(true);
-						// A refresh replaces the completed value only when its query finishes; labels
-						// must not lose their color while an asynchronous provider is still working.
-						const refreshed: CachedDecoration = {
-							resource: entry.resource,
-							cancellation: new CancellationTokenSource(),
-							data: entry.data,
-						};
-						state.cache.set(key, refreshed);
-						if (this.query(state, key, refreshed)) {
-							affected.push(entry.resource);
-						}
+		state.resources.add(provider.onDidChange(resources => {
+			const affected: URI[] = [];
+			for (const [key, entry] of state.cache) {
+				if (!resources.length || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(entry.resource, resource))) {
+					entry.cancellation.dispose(true);
+					// A refresh replaces the completed value only when its query finishes; labels
+					// must not lose their color while an asynchronous provider is still working.
+					const refreshed: CachedDecoration = { resource: entry.resource, cancellation: new CancellationTokenSource(), data: entry.data };
+					state.cache.set(key, refreshed);
+					if (this.query(state, key, refreshed)) {
+						affected.push(entry.resource);
 					}
 				}
-				if (affected.length) {
-					this.fireChange(affected);
-				}
-			}),
-		);
+			}
+			if (affected.length) {
+				this.fireChange(affected);
+			}
+		}));
 		this.fireChange();
 		return toDisposable(() => {
 			if (!this.providers.delete(state)) {
@@ -121,10 +110,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 			return undefined;
 		}
 		candidates.sort((left, right) => (right.weight ?? 0) - (left.weight ?? 0));
-		const data: IDecorationData = {
-			color: candidates.find(candidate => candidate.color)?.color,
-			letter: candidates.find(candidate => candidate.letter !== undefined)?.letter,
-		};
+		const data: IDecorationData = { color: candidates.find(candidate => candidate.color)?.color, letter: candidates.find(candidate => candidate.letter !== undefined)?.letter };
 		const signature = JSON.stringify([data.color, data.letter]);
 		let style = this.styles.get(signature);
 		if (!style) {
@@ -141,7 +127,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 			}
 		});
 		return Object.assign(handle, {
-			tooltip: [...new Set(candidates.flatMap(candidate => (candidate.tooltip ? [candidate.tooltip] : [])))].join(' • '),
+			tooltip: [...new Set(candidates.flatMap(candidate => candidate.tooltip ? [candidate.tooltip] : []))].join(' • '),
 			strikethrough: candidates.some(candidate => candidate.strikethrough),
 			labelClassName: data.color ? `${style.className}-color` : '',
 			badgeClassName: typeof data.letter === 'string' ? `${style.className}-badge` : '',
@@ -156,21 +142,18 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 		try {
 			const result = state.provider.provideDecorations(entry.resource, entry.cancellation.token);
 			if (result instanceof Promise) {
-				void result.then(
-					data => {
-						// Invalidated or removed providers must never publish a result from an old query.
-						if (state.cache.get(key) !== entry || this.isDisposed) {
-							return;
-						}
-						const changed = !equals(entry.data, data);
-						entry.data = data;
-						entry.cancellation.dispose();
-						if (changed) {
-							this.scheduleChange(entry.resource);
-						}
-					},
-					error => this.reportError(state, entry, error),
-				);
+				void result.then(data => {
+					// Invalidated or removed providers must never publish a result from an old query.
+					if (state.cache.get(key) !== entry || this.isDisposed) {
+						return;
+					}
+					const changed = !equals(entry.data, data);
+					entry.data = data;
+					entry.cancellation.dispose();
+					if (changed) {
+						this.scheduleChange(entry.resource);
+					}
+				}, error => this.reportError(state, entry, error));
 				return false;
 			} else {
 				const changed = !equals(entry.data, result);
@@ -207,9 +190,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 			this.pendingChanges.clear();
 			this.changeScheduler.cancel();
 		}
-		this.changed.fire({
-			affectsResource: uri => !resources || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(uri, resource) || extUriBiasedIgnorePathCase.isEqualOrParent(resource, uri)),
-		});
+		this.changed.fire({ affectsResource: uri => !resources || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(uri, resource) || extUriBiasedIgnorePathCase.isEqualOrParent(resource, uri)) });
 	}
 
 	private releaseProvider(state: ProviderState): void {
@@ -221,23 +202,19 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 	}
 
 	private updateStyles(): void {
-		this.style.textContent = [...this.styles.values()]
-			.map(({ className, data }) => {
-				const rules: string[] = [];
-				if (data.color) {
-					rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
-				}
-				if (typeof data.letter === 'string') {
-					rules.push(
-						`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-fontSize-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`,
-					);
-				} else if (data.letter) {
-					const color = data.letter.color?.id ?? data.color;
-					rules.push(`.ash-icon-label.${className}-icon { --ash-icon-label-suffix-icon-color: ${color ? `var(${colorCssVariable(color)})` : 'currentColor'}; }`);
-				}
-				return rules.join('\n');
-			})
-			.join('\n');
+		this.style.textContent = [...this.styles.values()].map(({ className, data }) => {
+			const rules: string[] = [];
+			if (data.color) {
+				rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
+			}
+			if (typeof data.letter === 'string') {
+				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-fontSize-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
+			} else if (data.letter) {
+				const color = data.letter.color?.id ?? data.color;
+				rules.push(`.ash-icon-label.${className}-icon { --ash-icon-label-suffix-icon-color: ${color ? `var(${colorCssVariable(color)})` : 'currentColor'}; }`);
+			}
+			return rules.join('\n');
+		}).join('\n');
 	}
 
 	protected override disposeCore(): void {

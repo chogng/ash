@@ -1,12 +1,6 @@
 import { type Position } from '../../../../common/core/position.js';
 import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type LanguageInlineCompletionItem,
-	type LanguageInlineCompletionsProvider,
-	type LanguageInlineCompletionsRequest,
-} from '../../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider, type LanguageInlineCompletionsRequest } from '../../../../common/languages.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { Range } from '../../../../common/core/range.js';
 import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
@@ -32,7 +26,8 @@ export async function provideInlineCompletions(
 		if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 		for (const item of items) {
 			const normalized = normalizeItem(item);
-			const completed = normalized.completeBracketPairs ? await completeBrackets(model, normalized, position, signal, languageConfigurationService) : normalized;
+			const completed = normalized.completeBracketPairs
+				? await completeBrackets(model, normalized, position, signal, languageConfigurationService) : normalized;
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			result.push(completed);
 		}
@@ -55,27 +50,18 @@ function normalizeItem(item: LanguageInlineCompletionItem): LanguageInlineComple
 	});
 }
 
-async function completeBrackets(
-	model: TextModel,
-	item: LanguageInlineCompletionItem,
-	position: Position,
-	signal: AbortSignal,
-	languageConfigurationService: ILanguageConfigurationService,
-): Promise<LanguageInlineCompletionItem> {
+async function completeBrackets(model: TextModel, item: LanguageInlineCompletionItem, position: Position, signal: AbortSignal, languageConfigurationService: ILanguageConfigurationService): Promise<LanguageInlineCompletionItem> {
 	const range = item.range ?? Range.fromPositions(position);
 	const prefix = model.getLineContent(range.startLineNumber).slice(0, range.startColumn - 1);
 	const text = prefix + normalizeTextLineEndings(item.insertText);
 	const lines = await model.tokenization.tokenizeLinesAtAsync(range.startLineNumber, text.split('\n'), signal);
 	if (!lines || signal.aborted) return item;
-	const segments: { text: string; metadata: number }[] = [];
+	const segments: { text: string; metadata: number; }[] = [];
 	for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
 		const line = lines[lineIndex]!;
 		for (let index = 0; index < line.getCount(); index++) {
 			const start = index === 0 ? 0 : line.getEndOffset(index - 1);
-			segments.push({
-				text: line.getLineContent().slice(start, line.getEndOffset(index)),
-				metadata: line.getMetadata(index),
-			});
+			segments.push({ text: line.getLineContent().slice(start, line.getEndOffset(index)), metadata: line.getMetadata(index) });
 		}
 		if (lineIndex < lines.length - 1) segments.push({ text: '\n', metadata: line.getMetadata(line.getCount() - 1) });
 	}

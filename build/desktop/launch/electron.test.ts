@@ -8,21 +8,7 @@ import test from 'node:test';
 import { isProcessRunning, ProcessRun } from '../../processes.ts';
 import { pythonCommand } from '../../python.ts';
 
-const launchSources = [
-	'build/source-layout.json',
-	'build/processes.ts',
-	'build/desktop/launch/electron.ts',
-	'build/desktop/electron.ts',
-	'src/ash/code/common/application.ts',
-	'build/desktop/host.ts',
-	'build/desktop/paths.ts',
-	'build/desktop/appServer.ts',
-	'build/desktop/liveBuild.ts',
-	'build/python.ts',
-	'build/protocol/generate.ts',
-	'build/lib/incrementalOutput.ts',
-	'build/lib/watchNativeFile.ts',
-];
+const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
 for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) {
 	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: process.platform === 'win32' ? 60_000 : 20_000 }, async t => {
@@ -50,23 +36,11 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
 		await symlink(resolve(import.meta.dirname, '../../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 		for (const project of ['main', 'preload']) {
-			await writeFile(
-				join(root, `tsconfig.${project}.json`),
-				JSON.stringify({
-					compilerOptions: {
-						incremental: true,
-						outDir: `.build/desktop/${project}`,
-						tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
-					},
-					files: ['fixture.cjs'],
-				}),
-			);
+			await writeFile(join(root, `tsconfig.${project}.json`), JSON.stringify({ compilerOptions: { incremental: true, outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo` }, files: ['fixture.cjs'] }));
 		}
 		await writeFile(join(desktop, 'package.json'), '{"main":"fixture.cjs","type":"module"}');
 		await writeFile(join(desktop, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
-		await writeFile(
-			join(desktop, 'fixture.cjs'),
-			`
+		await writeFile(join(desktop, 'fixture.cjs'), `
       require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, launchWorker: process.env.ASH_ELECTRON_LAUNCH_WORKER, runDirectory: process.env.ASH_SMOKE_RUN_DIRECTORY, home: process.env.ASH_HOME }) + '\\n');
       if (require('node:fs').existsSync('refuse-startup')) process.exit(0);
       if (require('node:fs').existsSync('busy-startup')) {
@@ -86,11 +60,8 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
         if (command === 'relaunch') process.send('ash:dev:relaunch', () => process.exit(0));
         else process.exit(0);
       }, 50);
-    `,
-		);
-		await writeFile(
-			join(desktop, 'node_modules/@ash/typescript-compiler/bin/tsc'),
-			`
+    `);
+		await writeFile(join(desktop, 'node_modules/@ash/typescript-compiler/bin/tsc'), `
       const fs = require('node:fs');
       const path = require('node:path');
       if (fs.existsSync('compiler-active')) throw new Error('Concurrent Host compilers');
@@ -112,31 +83,18 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
         fs.unlinkSync('compiler-active');
         process.exitCode = phase === 'error' ? 1 : 0;
       }, phase === 'slow' ? 600 : 0);
-    `,
-		);
+    `);
 		await setPhase('initial');
 		const custom = profile === 'custom' || profile === 'separated';
 		const home = join(root, custom ? 'custom-profile' : '.build/desktop/dev/profile');
 		const userData = join(root, custom ? 'custom-user-data' : '.build/desktop/dev/user-data');
 		const userDataArgs = profile === 'separated' ? ['--user-data-dir', userData] : [`--user-data-dir=${userData}`];
 		const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--fixture', ...(custom ? userDataArgs : [])], {
-			cwd: tmpdir(),
-			windowsHide: true,
-			stdio: 'pipe',
-			env: {
-				...process.env,
-				ELECTRON_RUN_AS_NODE: '1',
-				ASH_DESKTOP_UI_ONLY: '1',
-				ASH_HOME: custom ? home : undefined,
-			},
+			cwd: tmpdir(), windowsHide: true, stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_DESKTOP_UI_ONLY: '1', ASH_HOME: custom ? home : undefined },
 		});
 		let output = '';
-		child.stdout.on('data', chunk => {
-			output += chunk;
-		});
-		child.stderr.on('data', chunk => {
-			output += chunk;
-		});
+		child.stdout.on('data', chunk => { output += chunk; });
+		child.stderr.on('data', chunk => { output += chunk; });
 		const closed = new Promise(resolvePromise => child.once('close', resolvePromise));
 		const run = new ProcessRun(root, undefined, 5_000);
 		t.after(async () => {
@@ -251,9 +209,7 @@ test('cancelling startup retires the backend preparation and its compiler descen
 	await symlink(resolve(import.meta.dirname, '../../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	await writeFile(join(root, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
-	await writeFile(
-		join(root, 'build/prepare.py'),
-		`
+	await writeFile(join(root, 'build/prepare.py'), `
 import json, os, signal, subprocess, sys, time
 from pathlib import Path
 signal.signal(signal.SIGTERM, lambda *_: None)
@@ -262,42 +218,20 @@ compiler = int(child.stdout.readline())
 Path('preparation.tmp').write_text(json.dumps({'parent': os.getpid(), 'compiler': compiler}))
 os.replace('preparation.tmp', 'preparation.json')
 time.sleep(300)
-`,
-	);
-	const environment: NodeJS.ProcessEnv = {
-		...process.env,
-		ASH_ELECTRON_LAUNCH_WORKER: '1',
-		PYTHON: pythonCommand([]).command,
-	};
+`);
+	const environment: NodeJS.ProcessEnv = { ...process.env, ASH_ELECTRON_LAUNCH_WORKER: '1', PYTHON: pythonCommand([]).command };
 	delete environment.ASH_DESKTOP_UI_ONLY;
-	const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch'], {
-		cwd: root,
-		env: environment,
-		stdio: 'pipe',
-		detached: process.platform !== 'win32',
-	});
+	const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch'], { cwd: root, env: environment, stdio: 'pipe', detached: process.platform !== 'win32' });
 	let output = '';
-	child.stdout.on('data', chunk => {
-		output += chunk;
-	});
-	child.stderr.on('data', chunk => {
-		output += chunk;
-	});
+	child.stdout.on('data', chunk => { output += chunk; });
+	child.stderr.on('data', chunk => { output += chunk; });
 	const run = new ProcessRun(root, undefined, 100);
-	t.after(async () => {
-		await run.stop('SIGTERM');
-		await rm(root, { recursive: true, force: true });
-	});
+	t.after(async () => { await run.stop('SIGTERM'); await rm(root, { recursive: true, force: true }); });
 	await run.own(child);
-	let preparation: { parent: number; compiler: number } | undefined;
+	let preparation: { parent: number; compiler: number; } | undefined;
 	const deadline = Date.now() + (process.platform === 'win32' ? 45_000 : 15_000);
 	while (!preparation && Date.now() < deadline) {
-		preparation = await readFile(join(root, 'preparation.json'), 'utf8').then(
-			value => JSON.parse(value),
-			error => {
-				if (error.code !== 'ENOENT') throw error;
-			},
-		);
+		preparation = await readFile(join(root, 'preparation.json'), 'utf8').then(value => JSON.parse(value), error => { if (error.code !== 'ENOENT') throw error; });
 		if (!preparation) await delay(50);
 	}
 	assert.ok(preparation, output);
@@ -319,9 +253,7 @@ test('a stale busy retry cannot replace the instance started by a concurrent reb
 	await writeFile(join(root, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
 	await writeFile(join(root, 'package.json'), '{"type":"module","main":"fixture.cjs"}');
 	await writeFile(join(root, 'phase'), 'initial');
-	await writeFile(
-		join(root, 'build/desktop/host.ts'),
-		`
+	await writeFile(join(root, 'build/desktop/host.ts'), `
 import { watchFile, unwatchFile, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 export async function watchHost(onReady) {
@@ -332,11 +264,8 @@ export async function watchHost(onReady) {
   update();
   return { close: async () => { unwatchFile(file); done.resolve(); }, done: done.promise };
 }
-`,
-	);
-	await writeFile(
-		join(root, 'fixture.cjs'),
-		`
+`);
+	await writeFile(join(root, 'fixture.cjs'), `
 const fs = require('node:fs');
 if (!fs.existsSync('launches.log')) {
   fs.writeFileSync('launches.log', process.pid + '\\n');
@@ -346,42 +275,22 @@ if (!fs.existsSync('launches.log')) {
   process.send('ash:dev:ready', () => fs.writeFileSync('ready', ''));
   setInterval(() => {}, 1000);
 }
-`,
-	);
-	const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch'], {
-		cwd: root,
-		stdio: 'pipe',
-		env: { ...process.env, ASH_DESKTOP_UI_ONLY: '1' },
-	});
+`);
+	const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch'], { cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: '1' } });
 	let output = '';
-	child.stdout.on('data', chunk => {
-		output += chunk;
-	});
-	child.stderr.on('data', chunk => {
-		output += chunk;
-	});
+	child.stdout.on('data', chunk => { output += chunk; });
+	child.stderr.on('data', chunk => { output += chunk; });
 	const run = new ProcessRun(root, undefined, 100);
-	t.after(async () => {
-		await run.stop('SIGTERM');
-		await rm(root, { recursive: true, force: true });
-	});
+	t.after(async () => { await run.stop('SIGTERM'); await rm(root, { recursive: true, force: true }); });
 	await run.own(child);
 	async function until(predicate: () => Promise<boolean> | boolean): Promise<void> {
 		const deadline = Date.now() + (process.platform === 'win32' ? 30_000 : 6_000);
-		while (Date.now() < deadline) {
-			if (await predicate()) return;
-			await delay(10);
-		}
+		while (Date.now() < deadline) { if (await predicate()) return; await delay(10); }
 		assert.fail(output);
 	}
 	await until(() => output.includes('Waiting for the previous development instance'));
 	await writeFile(join(root, 'phase'), 'rebuilt');
-	await until(() =>
-		readFile(join(root, 'ready')).then(
-			() => true,
-			() => false,
-		),
-	);
+	await until(() => readFile(join(root, 'ready')).then(() => true, () => false));
 	// Let the original 250 ms retry expire after the rebuild has already started
 	// its replacement. A stale retry used to stop that healthy process again.
 	await delay(1_000);

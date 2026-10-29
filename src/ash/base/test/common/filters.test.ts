@@ -4,15 +4,8 @@ import { matchesContiguousSubString, matchesSubString } from '../../common/filte
 
 suite('Label filters', () => {
 	test('finds case-insensitive subsequences in source order and merges adjacent ranges', () => {
-		assert.deepEqual(matchesSubString('aLpT', 'Alpha Tree'), [
-			{ start: 0, end: 3 },
-			{ start: 6, end: 7 },
-		]);
-		assert.deepEqual(matchesSubString('abc', 'aaabbbccc'), [
-			{ start: 0, end: 1 },
-			{ start: 3, end: 4 },
-			{ start: 6, end: 7 },
-		]);
+		assert.deepEqual(matchesSubString('aLpT', 'Alpha Tree'), [{ start: 0, end: 3 }, { start: 6, end: 7 }]);
+		assert.deepEqual(matchesSubString('abc', 'aaabbbccc'), [{ start: 0, end: 1 }, { start: 3, end: 4 }, { start: 6, end: 7 }]);
 		assert.equal(matchesSubString('ta', 'Alpha Tree'), null);
 		assert.equal(matchesSubString('longer', 'short'), null);
 		assert.deepEqual(matchesSubString('', ''), []);
@@ -20,15 +13,9 @@ suite('Label filters', () => {
 	});
 
 	test('reports UTF-16 offsets for astral characters and text following them', () => {
-		assert.deepEqual(matchesSubString('🌲t', 'a🌲 Trail'), [
-			{ start: 1, end: 3 },
-			{ start: 4, end: 5 },
-		]);
+		assert.deepEqual(matchesSubString('🌲t', 'a🌲 Trail'), [{ start: 1, end: 3 }, { start: 4, end: 5 }]);
 		assert.deepEqual(matchesSubString('🌲🌲', '🌲🌲'), [{ start: 0, end: 4 }]);
-		assert.deepEqual(matchesSubString('中文', '中间文字'), [
-			{ start: 0, end: 1 },
-			{ start: 2, end: 3 },
-		]);
+		assert.deepEqual(matchesSubString('中文', '中间文字'), [{ start: 0, end: 1 }, { start: 2, end: 3 }]);
 	});
 
 	test('keeps contiguous matching distinct from subsequences and handles empty queries', () => {

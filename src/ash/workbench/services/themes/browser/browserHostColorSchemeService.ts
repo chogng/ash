@@ -20,10 +20,6 @@ export class BrowserHostColorSchemeService extends Disposable implements IHostCo
 		}
 	}
 
-	public get dark(): boolean {
-		return this.darkQuery.matches;
-	}
-	public get highContrast(): boolean {
-		return this.contrastQuery.matches;
-	}
+	public get dark(): boolean { return this.darkQuery.matches; }
+	public get highContrast(): boolean { return this.contrastQuery.matches; }
 }

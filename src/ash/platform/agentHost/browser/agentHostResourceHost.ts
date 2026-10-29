@@ -9,33 +9,17 @@ import { APP_SERVER_SERVER_REQUESTS } from '../../../../../.build/protocol/types
 export function registerAgentHostResourceHost(client: AppServerProtocolClient, snapshots: IAgentHostResourceService): IDisposable {
 	const lifetime = new DisposableStore();
 	try {
-		lifetime.add(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['hostResource/read'], (params, context) => {
-				throwIfCancelled(context.signal);
-				const chunk = snapshots.read(params.handle, params.offset, params.maxBytes);
-				return {
-					handle: params.handle,
-					offset: params.offset,
-					dataBase64: encodeBase64(VSBuffer.wrap(Uint8Array.from(chunk.bytes))),
-					decodedLength: chunk.bytes.byteLength,
-					eof: chunk.eof,
-				};
-			}),
-		);
-		lifetime.add(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['hostResource/release'], (params, context) => {
-				throwIfCancelled(context.signal);
-				snapshots.release(params.handle);
-				return null;
-			}),
-		);
-		lifetime.add(
-			client.onStateChange(state => {
-				if (state !== 'ready') {
-					snapshots.connectionClosed();
-				}
-			}),
-		);
+		lifetime.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['hostResource/read'], (params, context) => {
+			throwIfCancelled(context.signal);
+			const chunk = snapshots.read(params.handle, params.offset, params.maxBytes);
+			return { handle: params.handle, offset: params.offset, dataBase64: encodeBase64(VSBuffer.wrap(Uint8Array.from(chunk.bytes))), decodedLength: chunk.bytes.byteLength, eof: chunk.eof };
+		}));
+		lifetime.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['hostResource/release'], (params, context) => {
+			throwIfCancelled(context.signal);
+			snapshots.release(params.handle);
+			return null;
+		}));
+		lifetime.add(client.onStateChange(state => { if (state !== 'ready') { snapshots.connectionClosed(); } }));
 		return lifetime;
 	} catch (error) {
 		lifetime.dispose();

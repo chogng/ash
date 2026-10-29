@@ -12,10 +12,14 @@ const providerIds: (string | null)[] = [null];
 const providerLabels = new Map<string, string>();
 
 class DefaultFoldingRangeProvider extends Disposable {
-	constructor(@ILanguageFeaturesService features: ILanguageFeaturesService, @IExtensionService extensions: IExtensionService) {
+
+	constructor(
+		@ILanguageFeaturesService features: ILanguageFeaturesService,
+		@IExtensionService extensions: IExtensionService,
+	) {
 		super();
 		const updateCandidates = (): void => {
-			const ids = new Set(features.foldingRangeProvider.allNoModel().flatMap(provider => (provider.id ? [provider.id] : [])));
+			const ids = new Set(features.foldingRangeProvider.allNoModel().flatMap(provider => provider.id ? [provider.id] : []));
 			providerLabels.clear();
 			for (const extension of extensions.currentCatalog.extensions) {
 				if (ids.has(extension.id)) providerLabels.set(extension.id, extension.displayName);
@@ -43,21 +47,12 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	schema: {
 		type: ['string', 'null'],
 		default: null,
-		get description() {
-			return localize('folding.defaultProvider.description', 'Select a folding range provider by its identifier. Null uses all active folding range providers.');
-		},
+		get description() { return localize('folding.defaultProvider.description', 'Select a folding range provider by its identifier. Null uses all active folding range providers.'); },
 		// Provider availability changes independently of the saved preference.
-		anyOf: [
-			{
-				get enum() {
-					return providerIds;
-				},
-				get enumDescriptions() {
-					return providerIds.map(id => (id === null ? localize('folding.defaultProvider.all', 'All active folding range providers') : (providerLabels.get(id) ?? id)));
-				},
-			},
-			{ type: 'string', minLength: 1 },
-		],
+		anyOf: [{
+			get enum() { return providerIds; },
+			get enumDescriptions() { return providerIds.map(id => id === null ? localize('folding.defaultProvider.all', 'All active folding range providers') : providerLabels.get(id) ?? id); },
+		}, { type: 'string', minLength: 1 }],
 	},
 });
 

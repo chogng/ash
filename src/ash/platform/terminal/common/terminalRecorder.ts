@@ -8,23 +8,13 @@ export interface IRemoteTerminalProcessReplayEvent {
 
 /** Retains only display replay; process output and command history remain with the PTY owner. */
 export class TerminalRecorder {
-	private readonly segments: {
-		cols: number;
-		rows: number;
-		chunks: { data: string; shellIntegration?: TerminalShellIntegrationEvent }[];
-	}[];
+	private readonly segments: { cols: number; rows: number; chunks: { data: string; shellIntegration?: TerminalShellIntegrationEvent; }[]; }[];
 	private bytes = 0;
 	private chunks = 0;
 	private truncated = false;
-	get isTruncated(): boolean {
-		return this.truncated;
-	}
+	get isTruncated(): boolean { return this.truncated; }
 
-	constructor(
-		cols: number,
-		rows: number,
-		private readonly limits = { maxBytes: 10 * 1024 * 1024, maxChunks: Infinity },
-	) {
+	constructor(cols: number, rows: number, private readonly limits = { maxBytes: 10 * 1024 * 1024, maxChunks: Infinity }) {
 		this.segments = [{ cols, rows, chunks: [] }];
 	}
 
@@ -41,18 +31,11 @@ export class TerminalRecorder {
 	handleData(data: string, shellIntegration?: TerminalShellIntegrationEvent): void {
 		if (!data && !shellIntegration) return;
 		if (shellIntegration?.type === 'commandStorageDisabled' || (shellIntegration?.type === 'commandExecuted' && shellIntegration.commandStorageDisabled)) {
-			for (const segment of this.segments)
-				for (const chunk of segment.chunks) {
-					const previous = chunk.shellIntegration;
-					if (previous?.type === 'commandLine') chunk.shellIntegration = { ...previous, value: '', isTrusted: false };
-					else if (previous?.type === 'commandExecuted')
-						chunk.shellIntegration = {
-							...previous,
-							command: undefined,
-							isTrusted: false,
-							commandStorageDisabled: true,
-						};
-				}
+			for (const segment of this.segments) for (const chunk of segment.chunks) {
+				const previous = chunk.shellIntegration;
+				if (previous?.type === 'commandLine') chunk.shellIntegration = { ...previous, value: '', isTrusted: false };
+				else if (previous?.type === 'commandExecuted') chunk.shellIntegration = { ...previous, command: undefined, isTrusted: false, commandStorageDisabled: true };
+			}
 			this.bytes = this.segments.reduce((sum, segment) => sum + segment.chunks.reduce((count, chunk) => count + chunkBytes(chunk), 0), 0);
 		}
 		let encoded = VSBuffer.fromString(data);
@@ -63,10 +46,7 @@ export class TerminalRecorder {
 			data = encoded.toString();
 			this.truncated = true;
 		}
-		const chunk = {
-			data,
-			...(shellIntegration === undefined ? {} : { shellIntegration: snapshotBoundary(shellIntegration) }),
-		};
+		const chunk = { data, ...(shellIntegration === undefined ? {} : { shellIntegration: snapshotBoundary(shellIntegration) }) };
 		this.segments.at(-1)!.chunks.push(chunk);
 		this.bytes += chunkBytes(chunk);
 		this.chunks++;
@@ -87,16 +67,10 @@ export class TerminalRecorder {
 				for (const chunk of segment.chunks) {
 					const previous = events.at(-1);
 					if (previous && !previous.shellIntegration && !chunk.shellIntegration) previous.data += chunk.data;
-					else
-						events.push({
-							cols: segment.cols,
-							rows: segment.rows,
-							data: chunk.data,
-							...(chunk.shellIntegration ? { shellIntegration: snapshotBoundary(chunk.shellIntegration) } : {}),
-						});
+					else events.push({ cols: segment.cols, rows: segment.rows, data: chunk.data, ...(chunk.shellIntegration ? { shellIntegration: snapshotBoundary(chunk.shellIntegration) } : {}) });
 				}
 				return events.length ? events : [{ cols: segment.cols, rows: segment.rows, data: '' }];
-			}),
+			})
 		};
 	}
 
@@ -105,7 +79,7 @@ export class TerminalRecorder {
 	}
 }
 
-function chunkBytes(chunk: { data: string; shellIntegration?: TerminalShellIntegrationEvent }): number {
+function chunkBytes(chunk: { data: string; shellIntegration?: TerminalShellIntegrationEvent; }): number {
 	return VSBuffer.fromString(chunk.data).byteLength + (chunk.shellIntegration ? VSBuffer.fromString(JSON.stringify(chunk.shellIntegration)).byteLength : 0);
 }
 

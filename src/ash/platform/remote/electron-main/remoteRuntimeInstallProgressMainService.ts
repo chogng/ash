@@ -27,12 +27,10 @@ export class RemoteRuntimeInstallProgressMainService extends Disposable {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.cancel();
-				this.active = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.cancel();
+			this.active = undefined;
+		}));
 	}
 
 	getState(): RemoteRuntimeInstallProgressState | undefined {

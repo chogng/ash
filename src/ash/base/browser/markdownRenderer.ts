@@ -1,6 +1,11 @@
 import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens } from '../common/marked/marked.js';
 import { addDisposableListener, getDocument, reset, h } from './dom.js';
-import { basicMarkupHtmlTags, type DomSanitizerConfig, type SanitizeAttributeRule, sanitizeHtmlToFragment } from './domSanitize.js';
+import {
+	basicMarkupHtmlTags,
+	type DomSanitizerConfig,
+	type SanitizeAttributeRule,
+	sanitizeHtmlToFragment,
+} from './domSanitize.js';
 import { Checkbox } from './ui/toggle/toggle.js';
 import { type IMarkdownString, parseHrefAndDimensions } from '../common/htmlContent.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../common/lifecycle.js';
@@ -39,9 +44,9 @@ export interface MarkdownSanitizerOptions {
 
 export interface MarkdownSanitizerConfig {
 	readonly replaceWithPlaintext?: boolean;
-	readonly allowedTags?: { readonly override: readonly string[] };
-	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule> };
-	readonly allowedLinkSchemes?: { readonly augment: readonly string[] };
+	readonly allowedTags?: { readonly override: readonly string[]; };
+	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
+	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; };
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
 
@@ -77,15 +82,28 @@ export const allowedMarkdownHtmlAttributes = Object.freeze([
 	{ attributeName: 'width', shouldKeep: isImageDimension },
 ] as const);
 
-function isImageDimension(element: Element, data: { readonly attrValue: string }): boolean {
+function isImageDimension(element: Element, data: { readonly attrValue: string; }): boolean {
 	return element.tagName === 'IMG' && /^\d+$/u.test(data.attrValue);
 }
 
-const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
-const RESOURCE_LINK_SCHEMES = [Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource, Schemas.vscodeNotebookCell, Schemas.internal] as const;
-const DEFAULT_LINK_SCHEMES = [Schemas.http, Schemas.https, Schemas.mailto, Schemas.file, Schemas.command, ...RESOURCE_LINK_SCHEMES] as const;
-const DEFAULT_MEDIA_SCHEMES = [Schemas.data, Schemas.http, Schemas.https, Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource] as const;
-const RESOURCE_IMAGE_SCHEMES = [Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource] as const;
+const SAFE_DATA_IMAGE =
+	/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
+const RESOURCE_LINK_SCHEMES = [
+	Schemas.ashRemote,
+	Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
+	Schemas.vscodeNotebookCell, Schemas.internal,
+] as const;
+const DEFAULT_LINK_SCHEMES = [
+	Schemas.http, Schemas.https, Schemas.mailto, Schemas.file, Schemas.command,
+	...RESOURCE_LINK_SCHEMES,
+] as const;
+const DEFAULT_MEDIA_SCHEMES = [
+	Schemas.data, Schemas.http, Schemas.https, Schemas.file, Schemas.ashRemote,
+	Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
+] as const;
+const RESOURCE_IMAGE_SCHEMES = [
+	Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
+] as const;
 const SANITIZER_CONFIG: DomSanitizerConfig = {
 	allowedTags: { override: allowedMarkdownHtmlTags },
 	allowedAttributes: { override: allowedMarkdownHtmlAttributes },
@@ -144,23 +162,23 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		this.imageResourceLoader = options.imageResourceLoader;
 		this.element = target ?? h(this.ownerDocument, 'div');
 		this.element.classList.add('ash-markdown');
-		this._register(
-			addDisposableListener<MouseEvent>(this.element, 'click', event => {
+		this._register(addDisposableListener<MouseEvent>(
+			this.element,
+			'click',
+			(event) => {
 				const anchor = findAnchor(event.target);
 				if (!anchor) return;
 				event.preventDefault();
 				event.stopPropagation();
 				const href = anchor.getAttribute('href');
 				if (href) options.actionHandler?.(href, markdown);
-			}),
-		);
-		this._register(
-			toDisposable(() => {
-				this.active = false;
-				// Supplied output elements belong to the caller and can be rendered into again.
-				if (!target) this.element.remove();
-			}),
-		);
+			},
+		));
+		this._register(toDisposable(() => {
+			this.active = false;
+			// Supplied output elements belong to the caller and can be rendered into again.
+			if (!target) this.element.remove();
+		}));
 		try {
 			this.setMarkdown(markdown);
 		} catch (error) {
@@ -175,15 +193,17 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		const markdownString = typeof markdown === 'string' ? { value: markdown } : markdown;
 		const parser = this.getParser(markdownString);
 		parser.codeBlocks.length = 0;
-		const rawHtml = renderMarkdownWithParser(parser, markdownString, this.markedOptions, this.fillInIncompleteTokens);
-		const fragment = sanitizeMarkdownHtmlToFragment(
-			{
-				ownerDocument: this.ownerDocument,
-				markdown: markdownString,
-				sanitizerConfig: this.sanitizerConfig,
-			},
-			rawHtml,
+		const rawHtml = renderMarkdownWithParser(
+			parser,
+			markdownString,
+			this.markedOptions,
+			this.fillInIncompleteTokens,
 		);
+		const fragment = sanitizeMarkdownHtmlToFragment({
+			ownerDocument: this.ownerDocument,
+			markdown: markdownString,
+			sanitizerConfig: this.sanitizerConfig,
+		}, rawHtml);
 		if (markdownString.supportAlertSyntax) {
 			renderMarkdownAlertIcons(fragment, this.ownerDocument);
 		}
@@ -192,8 +212,12 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		}
 		this.checkboxControls.clear();
 		this.imageResources.clear();
-		upgradeMarkdownCheckboxes(fragment, this.ownerDocument, this.checkboxControls);
-		const workspaceImages: Array<{ readonly image: HTMLImageElement; readonly resource: URI }> = [];
+		upgradeMarkdownCheckboxes(
+			fragment,
+			this.ownerDocument,
+			this.checkboxControls,
+		);
+		const workspaceImages: Array<{ readonly image: HTMLImageElement; readonly resource: URI; }> = [];
 		if (this.imageResourceLoader) {
 			for (const image of fragment.querySelectorAll<HTMLImageElement>('img[src]')) {
 				const resource = URI.parse(image.getAttribute('src')!);
@@ -202,22 +226,21 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 				workspaceImages.push({ image, resource });
 			}
 		}
-		reset(this.element, fragment);
+		reset(
+			this.element,
+			fragment,
+		);
 		const pending: Promise<void>[] = [];
 		if (this.imageResourceLoader) {
 			for (const { image, resource } of workspaceImages) {
-				pending.push(
-					this.imageResourceLoader(resource)
-						.then(blob => {
-							if (!this.active || revision !== this.renderRevision || !this.element.contains(image)) return;
-							const ownerWindow = this.ownerDocument.defaultView;
-							if (!ownerWindow) return;
-							const objectUrl = createObjectUrl(ownerWindow, blob);
-							this.imageResources.add(objectUrl.registration);
-							image.src = objectUrl.url.toString();
-						})
-						.catch(onUnexpectedError),
-				);
+				pending.push(this.imageResourceLoader(resource).then(blob => {
+					if (!this.active || revision !== this.renderRevision || !this.element.contains(image)) return;
+					const ownerWindow = this.ownerDocument.defaultView;
+					if (!ownerWindow) return;
+					const objectUrl = createObjectUrl(ownerWindow, blob);
+					this.imageResources.add(objectUrl.registration);
+					image.src = objectUrl.url.toString();
+				}).catch(onUnexpectedError));
 			}
 		}
 		let codeBlockIndex = 0;
@@ -231,15 +254,11 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 				continue;
 			}
 			if (this.codeBlockRenderer) {
-				pending.push(
-					this.codeBlockRenderer(languageId, value)
-						.then(element => {
-							if (this.active && revision === this.renderRevision && this.element.contains(code)) {
-								code.replaceWith(element);
-							}
-						})
-						.catch(onUnexpectedError),
-				);
+				pending.push(this.codeBlockRenderer(languageId, value).then(element => {
+					if (this.active && revision === this.renderRevision && this.element.contains(code)) {
+						code.replaceWith(element);
+					}
+				}).catch(onUnexpectedError));
 			}
 		}
 		if (pending.length > 0) {
@@ -253,7 +272,13 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		const key = `${markdown.supportHtml === true}:${markdown.supportAlertSyntax === true}`;
 		let parser = this.parsers.get(key);
 		if (!parser) {
-			parser = createMarkdownParser(markdown.supportHtml === true, markdown.supportAlertSyntax === true, this.markedExtensions, this.transformUri, this.sanitizerConfig?.replaceWithPlaintext);
+			parser = createMarkdownParser(
+				markdown.supportHtml === true,
+				markdown.supportAlertSyntax === true,
+				this.markedExtensions,
+				this.transformUri,
+				this.sanitizerConfig?.replaceWithPlaintext,
+			);
 			this.parsers.set(key, parser);
 		}
 		return parser;
@@ -272,7 +297,11 @@ export function renderMarkdown(markdown: IMarkdownString, options: MarkdownRende
 }
 
 /** Parses Workbench Markdown; sanitize the returned HTML before inserting it into the DOM. */
-export function renderWorkbenchMarkdown(markdown: string | IMarkdownString, breaks = false, options: MarkdownRenderOptions = {}): string {
+export function renderWorkbenchMarkdown(
+	markdown: string | IMarkdownString,
+	breaks = false,
+	options: MarkdownRenderOptions = {},
+): string {
 	const markdownString = typeof markdown === 'string' ? { value: markdown } : markdown;
 	return renderMarkdownWithParser(
 		createMarkdownParser(
@@ -370,23 +399,22 @@ function plaintextInline(tokens: readonly Token[], options: PlaintextMarkdownOpt
 function plaintextHtml(source: string): string {
 	const fragment = sanitizeHtmlToFragment(source, { ownerDocument: getDocument() });
 	const read = (node: Node): string => {
-		if (node.nodeType === 3) {
-			return node.textContent ?? '';
-		}
-		const element = node.nodeType === 1 ? (node as Element) : undefined;
-		if (element?.localName === 'img') {
-			return element.getAttribute('alt') ?? '';
-		}
+		if (node.nodeType === 3) { return node.textContent ?? ''; }
+		const element = node.nodeType === 1 ? node as Element : undefined;
+		if (element?.localName === 'img') { return element.getAttribute('alt') ?? ''; }
 		const text = Array.from(node.childNodes, read).join('');
-		if (element?.matches('br,hr,p,div,section,li,tr,summary,h1,h2,h3,h4,h5,h6')) {
-			return text + '\n';
-		}
+		if (element?.matches('br,hr,p,div,section,li,tr,summary,h1,h2,h3,h4,h5,h6')) { return text + '\n'; }
 		return element?.matches('td,th') ? text + '\t' : text;
 	};
 	return read(fragment);
 }
 
-function renderMarkdownWithParser(parserInstance: MarkdownParserInstance, markdown: IMarkdownString, markedOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>, fillIncompleteTokens: boolean): string {
+function renderMarkdownWithParser(
+	parserInstance: MarkdownParserInstance,
+	markdown: IMarkdownString,
+	markedOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>,
+	fillIncompleteTokens: boolean,
+): string {
 	validateMarkdown(markdown.value);
 	const parserOptions = {
 		...markedOptions,
@@ -394,8 +422,12 @@ function renderMarkdownWithParser(parserInstance: MarkdownParserInstance, markdo
 		breaks: markedOptions.breaks ?? false,
 		gfm: markedOptions.gfm ?? true,
 	} as const;
-	const markdownValue = markdown.supportThemeIcons ? markdownEscapeEscapedIcons(markdown.value) : markdown.value;
-	const value = fillIncompleteTokens ? completeIncompleteMarkdown(markdownValue, parserInstance.parser, parserOptions) : markdownValue;
+	const markdownValue = markdown.supportThemeIcons
+		? markdownEscapeEscapedIcons(markdown.value)
+		: markdown.value;
+	const value = fillIncompleteTokens
+		? completeIncompleteMarkdown(markdownValue, parserInstance.parser, parserOptions)
+		: markdownValue;
 	const result = parserInstance.parser.parse(value, parserOptions);
 	if (typeof result !== 'string') {
 		throw new Error('synchronous Markdown rendering returned a promise');
@@ -418,7 +450,7 @@ function createMarkdownParser(
 				codeBlocks.push(token);
 				return false;
 			},
-		},
+		}
 	});
 	if (supportAlerts) parser.use(createAlertExtension());
 	parser.use({
@@ -430,7 +462,7 @@ function createMarkdownParser(
 				const size = dimensions.length ? ` ${dimensions.join(' ')}` : '';
 				return `<img src="${source}" alt="${escapeHtmlAttribute(token.text)}"${title}${size}>`;
 			},
-		},
+		}
 	});
 	if (transformUri) {
 		parser.use({
@@ -440,12 +472,12 @@ function createMarkdownParser(
 					const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : '';
 					return `<a href="${href}"${title}>${this.parser.parseInline(token.tokens)}</a>`;
 				},
-			},
+			}
 		});
 	}
 	parser.use(...markedExtensions);
 	if (!supportHtml) {
-		parser.use({ renderer: { html: ({ text }) => (replaceWithPlaintext ? htmlAttributeEncodeValue(text) : '') } });
+		parser.use({ renderer: { html: ({ text }) => replaceWithPlaintext ? htmlAttributeEncodeValue(text) : '' } });
 	}
 	return { parser, codeBlocks };
 }
@@ -459,7 +491,10 @@ function escapeHtmlAttribute(value: string): string {
 }
 
 /** Sanitizes parser-produced Markdown HTML into a detached DOM fragment. */
-export function sanitizeMarkdownHtmlToFragment(options: MarkdownSanitizerOptions, rawHtml: string): DocumentFragment {
+export function sanitizeMarkdownHtmlToFragment(
+	options: MarkdownSanitizerOptions,
+	rawHtml: string,
+): DocumentFragment {
 	validateRawHtml(rawHtml);
 	return sanitizeHtmlToFragment(rawHtml, {
 		ownerDocument: options.ownerDocument,
@@ -483,7 +518,10 @@ function createMarkdownSanitizerConfig(markdown: IMarkdownString | undefined, co
 }
 
 /** Sanitizes parser-produced Markdown HTML into a serializable HTML string. */
-export function sanitizeMarkdownHtmlToString(options: MarkdownSanitizerOptions, rawHtml: string): string {
+export function sanitizeMarkdownHtmlToString(
+	options: MarkdownSanitizerOptions,
+	rawHtml: string,
+): string {
 	const fragment = sanitizeMarkdownHtmlToFragment(options, rawHtml);
 	const checkboxControls = new DisposableStore();
 	if (options.markdown?.supportAlertSyntax) {
@@ -506,16 +544,20 @@ interface MarkdownCheckboxOwner {
 	add(resource: Checkbox): Checkbox;
 }
 
-function upgradeMarkdownCheckboxes(fragment: DocumentFragment, ownerDocument: Document, owner: MarkdownCheckboxOwner): void {
-	for (const input of fragment.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
+function upgradeMarkdownCheckboxes(
+	fragment: DocumentFragment,
+	ownerDocument: Document,
+	owner: MarkdownCheckboxOwner,
+): void {
+	for (const input of fragment.querySelectorAll<HTMLInputElement>(
+		'input[type="checkbox"]',
+	)) {
 		const detachedHost = h(ownerDocument, 'span');
-		const checkbox = owner.add(
-			new Checkbox(detachedHost, {
-				checked: input.checked,
-				disabled: true,
-				ariaLabel: input.closest('li')?.textContent?.trim() || localize('markdown.task', 'Task'),
-			}),
-		);
+		const checkbox = owner.add(new Checkbox(detachedHost, {
+			checked: input.checked,
+			disabled: true,
+			ariaLabel: input.closest('li')?.textContent?.trim() || localize('markdown.task', 'Task'),
+		}));
 		checkbox.element.classList.add('ash-markdown-checkbox');
 		if (input.checked) checkbox.input.setAttribute('checked', '');
 		input.replaceWith(checkbox.element);
@@ -543,7 +585,10 @@ function applyMarkdownAttributePolicy(element: Element, markdown: IMarkdownStrin
 			}
 		}
 	}
-	if (element.tagName === 'INPUT' && element.getAttribute('type') !== 'checkbox') {
+	if (
+		element.tagName === 'INPUT' &&
+		element.getAttribute('type') !== 'checkbox'
+	) {
 		element.remove();
 	}
 }
@@ -573,12 +618,11 @@ export function resolveMarkdownLinkTarget(href: string, markdown?: IMarkdownStri
 	const command = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?(?:#.*)?$/i.exec(href);
 	if (command) {
 		let commandId: string;
-		try {
-			commandId = decodeURIComponent(command[1]!);
-		} catch {
-			return undefined;
-		}
-		if (!/^[A-Za-z0-9._-]+$/u.test(commandId) || !isTrustedMarkdownCommand(commandId, markdown?.isTrusted) || commandId === MARKDOWN_COMMAND_RESOURCE_ID) return undefined;
+		try { commandId = decodeURIComponent(command[1]!); }
+		catch { return undefined; }
+		if (!/^[A-Za-z0-9._-]+$/u.test(commandId)
+			|| !isTrustedMarkdownCommand(commandId, markdown?.isTrusted)
+			|| commandId === MARKDOWN_COMMAND_RESOURCE_ID) return undefined;
 		return href;
 	}
 	try {
@@ -619,7 +663,9 @@ function isTrustedMarkdownCommand(commandId: string, trust: IMarkdownString['isT
 
 function renderMarkdownAlertIcons(fragment: DocumentFragment, ownerDocument: Document): void {
 	for (const placeholder of fragment.querySelectorAll<HTMLElement>('.ash-markdown-alert-icon')) {
-		const iconId = [...placeholder.classList].find(className => className.startsWith('ash-markdown-alert-icon-'))?.slice('ash-markdown-alert-icon-'.length);
+		const iconId = [...placeholder.classList]
+			.find(className => className.startsWith('ash-markdown-alert-icon-'))
+			?.slice('ash-markdown-alert-icon-'.length);
 		const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
 		if (!icon) {
 			placeholder.remove();
@@ -689,16 +735,11 @@ function createAlertExtension(): MarkedExtension {
 
 function alertHeading(severity: keyof typeof ALERT_ICON_IDS): string {
 	switch (severity) {
-		case 'note':
-			return localize('markdown.alert.note', 'Note');
-		case 'tip':
-			return localize('markdown.alert.tip', 'Tip');
-		case 'important':
-			return localize('markdown.alert.important', 'Important');
-		case 'warning':
-			return localize('markdown.alert.warning', 'Warning');
-		case 'caution':
-			return localize('markdown.alert.caution', 'Caution');
+		case 'note': return localize('markdown.alert.note', 'Note');
+		case 'tip': return localize('markdown.alert.tip', 'Tip');
+		case 'important': return localize('markdown.alert.important', 'Important');
+		case 'warning': return localize('markdown.alert.warning', 'Warning');
+		case 'caution': return localize('markdown.alert.caution', 'Caution');
 	}
 }
 

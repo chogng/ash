@@ -49,10 +49,7 @@ test.describe('Git extension enablement in the full product', () => {
 			await cp(resolve(import.meta.dirname, '../../../fixtures/scm-extension'), join(testWorkspace.directory, 'scm-fixture'), { recursive: true });
 			await appendFile(join(testWorkspace.directory, '.git/info/exclude'), '\n/scm-fixture/\n');
 			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
-			const install = workbench.page.getByRole('dialog', {
-				name: 'Install extension from workspace',
-				exact: true,
-			});
+			const install = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 			await install.getByRole('textbox').fill('scm-fixture');
 			await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('button', { name: 'Install', exact: true }).click());
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
@@ -72,9 +69,8 @@ test.describe('Git extension enablement in the full product', () => {
 			};
 			await writeFile(testWorkspace.file, 'const value = 2;\n');
 			await workbench.git.open();
-			try {
-				await expect(workbench.page.locator('.ash-scm-input')).toBeVisible();
-			} catch (error) {
+			try { await expect(workbench.page.locator('.ash-scm-input')).toBeVisible(); }
+			catch (error) {
 				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 				await workbench.quickaccess.select('ash.git (Extension Host)');
 				const log = await workbench.page.locator('[data-view-id="ash.output"] .view-lines').innerText();
@@ -96,16 +92,10 @@ test.describe('Git extension enablement in the full product', () => {
 			await modified.press('ControlOrMeta+a');
 			await workbench.page.keyboard.insertText('const value = 3;\n');
 			await expect(group.tabs.filter({ hasText: 'Independent comparison' })).toHaveAttribute('aria-label', /unsaved/u);
-			if (canManageGit) {
-				await toggleGit(workbench, 'Enabled');
-			} else {
-				await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details.png'));
-			}
-			if (canManageGit) {
-				await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
-			} else {
-				await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
-			}
+			if (canManageGit) { await toggleGit(workbench, 'Enabled'); }
+			else { await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details.png')); }
+			if (canManageGit) { await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0); }
+			else { await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2); }
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			await expect(changes.locator('.stanza-editor-placeholder-text')).toHaveText('Independent message');
 			await expect(diff).toBeVisible();
@@ -134,9 +124,7 @@ test.describe('Git extension enablement in the full product', () => {
 			await expect(binary.nth(1)).toContainText('00 fe 02');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
 			await group.tabs.filter({ hasText: 'Independent comparison' }).click();
-			await workbench.page.screenshot({
-				path: testInfo.outputPath(canManageGit ? 'git-disabled-independent-scm.png' : 'git-read-only-independent-scm.png'),
-			});
+			await workbench.page.screenshot({ path: testInfo.outputPath(canManageGit ? 'git-disabled-independent-scm.png' : 'git-read-only-independent-scm.png') });
 			await reload();
 			await workbench.git.open();
 			if (canManageGit) {
@@ -147,22 +135,16 @@ test.describe('Git extension enablement in the full product', () => {
 				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
 			}
 			await workbench.quickaccess.runCommand('ash.scm.fixture.activate');
-			if (canManageGit) {
-				await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
-			} else {
-				await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
-			}
+			if (canManageGit) { await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0); }
+			else { await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2); }
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			if (reloadMode === 'renderer reload') {
 				// CDP reload bypasses the Desktop shutdown handshake; exercise editors again in the new realm.
 				await workbench.page.getByRole('button', { name: 'Open independent diff', exact: true }).click();
 				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
 			}
-			if (canManageGit) {
-				await toggleGit(workbench, 'Disabled');
-			} else {
-				await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details-restored.png'));
-			}
+			if (canManageGit) { await toggleGit(workbench, 'Disabled'); }
+			else { await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details-restored.png')); }
 			await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
 			await reload();
 			await workbench.git.open();

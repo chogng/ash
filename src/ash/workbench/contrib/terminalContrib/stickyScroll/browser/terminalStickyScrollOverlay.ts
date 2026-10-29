@@ -74,73 +74,50 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		this._register(toDisposable(() => this.button.remove()));
 		const attachment = xterm.attachWidget(this);
 		if (attachment) this._register(attachment);
-		this.headerHover = this._register(
-			hover.setupHover({
-				target: this.button,
-				content: () => this.button.getAttribute('aria-label') ?? '',
-				setupKeyboardEvents: false,
-			}),
-		);
-		this._register(
-			addDisposableListener(this.button, 'click', () => {
-				const marker = this.target;
-				if (marker && !marker.isDisposed) xterm.raw.scrollToLine(marker.line);
-				xterm.focus();
-			}),
-		);
+		this.headerHover = this._register(hover.setupHover({
+			target: this.button,
+			content: () => this.button.getAttribute('aria-label') ?? '',
+			setupKeyboardEvents: false,
+		}));
+		this._register(addDisposableListener(this.button, 'click', () => {
+			const marker = this.target;
+			if (marker && !marker.isDisposed) xterm.raw.scrollToLine(marker.line);
+			xterm.focus();
+		}));
 		// Handle the focused header before an open hover's window-level Escape listener.
-		this._register(
-			addDisposableListener(
-				this.button.ownerDocument.defaultView!,
-				'keydown',
-				event => {
-					if (event.key !== 'Escape' || this.button.ownerDocument.activeElement !== this.button) return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					this.headerHover.hide();
-					xterm.focus();
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(this.button.ownerDocument.defaultView!, 'keydown', event => {
+			if (event.key !== 'Escape' || this.button.ownerDocument.activeElement !== this.button) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.headerHover.hide();
+			xterm.focus();
+		}, true));
 		// Reuse xterm's viewport so fractional trackpad deltas, sensitivity and mouse protocols
 		// follow the same path as the uncovered screen instead of rounding each packet to a row.
-		this._register(
-			addDisposableListener(
-				this.button,
-				'wheel',
-				event => {
-					const screen = xterm.element.querySelector('.xterm-screen');
-					const window = this.button.ownerDocument.defaultView;
-					if (!screen || !window) return;
-					event.preventDefault();
-					event.stopPropagation();
-					screen.dispatchEvent(new window.WheelEvent(event.type, event));
-				},
-				{ passive: false },
-			),
-		);
+		this._register(addDisposableListener(this.button, 'wheel', event => {
+			const screen = xterm.element.querySelector('.xterm-screen');
+			const window = this.button.ownerDocument.defaultView;
+			if (!screen || !window) return;
+			event.preventDefault();
+			event.stopPropagation();
+			screen.dispatchEvent(new window.WheelEvent(event.type, event));
+		}, { passive: false }));
 		for (const listener of [
 			xterm.raw.onScroll(() => this.render()),
 			xterm.raw.onRender(() => this.render()),
 			xterm.raw.onResize(() => this.render()),
 			xterm.raw.buffer.onBufferChange(() => this.render()),
-		])
-			this._register(toDisposable(() => listener.dispose()));
+		]) this._register(toDisposable(() => listener.dispose()));
 		this._register(observeResize(xterm.element, () => this.render()));
-		this._register(
-			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('terminal.integrated.stickyScroll')) this.render();
-				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateHint();
-			}),
-		);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('terminal.integrated.stickyScroll')) this.render();
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateHint();
+		}));
 		if (instance.capabilities) this._register(instance.capabilities.onDidChangeCapabilities(() => this.bindCapability()));
 		this.bindCapability();
 	}
 
-	public attach(container: HTMLElement): void {
-		container.append(this.button);
-	}
+	public attach(container: HTMLElement): void { container.append(this.button); }
 
 	private bindCapability(): void {
 		const capability = this.instance.capabilities?.get(TerminalCapability.CommandDetection);
@@ -148,14 +125,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 			this.commandListeners.clear();
 			this.capability = capability;
 			if (capability) {
-				for (const event of [
-					capability.onCommandStarted,
-					capability.onCommandExecuted,
-					capability.onCommandFinished,
-					capability.onCommandInvalidated,
-					capability.onCurrentCommandInvalidated,
-					capability.onSetRichCommandDetection,
-				]) {
+				for (const event of [capability.onCommandStarted, capability.onCommandExecuted, capability.onCommandFinished, capability.onCommandInvalidated, capability.onCurrentCommandInvalidated, capability.onSetRichCommandDetection]) {
 					this.commandListeners.add(event(() => this.render()));
 				}
 			}
@@ -251,7 +221,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 				const text = cell.getChars() || ' ';
 				const code = cell.getCode();
 				// Powerline separators and box/block glyphs carry background colors, not text contrast.
-				const adjustContrast = !((code >= 0x2500 && code <= 0x259f) || (code >= 0xe0a4 && code <= 0xe0d6));
+				const adjustContrast = !(code >= 0x2500 && code <= 0x259f || code >= 0xe0a4 && code <= 0xe0d6);
 				const attributes = [
 					cell.getFgColorMode(),
 					cell.getFgColor(),
@@ -287,34 +257,36 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		if (content === this.renderedContent) return true;
 		this.renderedContent = content;
 		const document = this.button.ownerDocument;
-		this.button.replaceChildren(
-			...rows.map(runs => {
-				const row = document.createElement('span');
-				for (const run of runs) {
-					const span = document.createElement('span');
-					span.textContent = run.text;
-					span.style.cssText = run.style;
-					span.style.width = `${run.width * cellWidth}px`;
-					row.append(span);
-				}
-				return row;
-			}),
-		);
+		this.button.replaceChildren(...rows.map(runs => {
+			const row = document.createElement('span');
+			for (const run of runs) {
+				const span = document.createElement('span');
+				span.textContent = run.text;
+				span.style.cssText = run.style;
+				span.style.width = `${run.width * cellWidth}px`;
+				row.append(span);
+			}
+			return row;
+		}));
 		return true;
 	}
 
-	private cellStyle(cell: IBufferCell, options: { adjustContrast: boolean }): string {
+	private cellStyle(cell: IBufferCell, options: { adjustContrast: boolean; }): string {
 		let foreground = this.cellColor(cell, 'foreground');
 		const background = this.cellColor(cell, 'background');
 		// Match the original DOM renderer's contrast input for default inverted text.
-		const contrastForeground = cell.isInverse() && cell.isBgDefault() ? (this.xterm.raw.options.theme?.foreground ?? foreground) : foreground;
+		const contrastForeground = cell.isInverse() && cell.isBgDefault() ? this.xterm.raw.options.theme?.foreground ?? foreground : foreground;
 		const foregroundColor = Color.Format.CSS.parse(contrastForeground);
 		const backgroundColor = Color.Format.CSS.parse(background);
 		if (options.adjustContrast && foregroundColor && backgroundColor) {
 			const ratio = (this.xterm.raw.options.minimumContrastRatio ?? 1) / (cell.isDim() ? 2 : 1);
 			if (backgroundColor.getContrastRatio(foregroundColor) < ratio) foreground = backgroundColor.ensureConstrast(foregroundColor, ratio).toString();
 		}
-		const decorations = [cell.isUnderline() ? 'underline' : '', cell.isStrikethrough() ? 'line-through' : '', cell.isOverline() ? 'overline' : ''].filter(Boolean).join(' ') || 'none';
+		const decorations = [
+			cell.isUnderline() ? 'underline' : '',
+			cell.isStrikethrough() ? 'line-through' : '',
+			cell.isOverline() ? 'overline' : '',
+		].filter(Boolean).join(' ') || 'none';
 		return [
 			`color: ${foreground}`,
 			`background-color: ${background}`,
@@ -332,9 +304,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		let color = sourceForeground ? cell.getFgColor() : cell.getBgColor();
 		if (sourceForeground ? cell.isFgRGB() : cell.isBgRGB()) return `#${color.toString(16).padStart(6, '0')}`;
 		if (!(sourceForeground ? cell.isFgPalette() : cell.isBgPalette())) {
-			return sourceForeground
-				? (this.xterm.raw.options.theme?.foreground ?? 'var(--ash-terminal-foreground)')
-				: (this.xterm.raw.options.theme?.background ?? 'var(--ash-terminal-surface-background)');
+			return sourceForeground ? this.xterm.raw.options.theme?.foreground ?? 'var(--ash-terminal-foreground)' : this.xterm.raw.options.theme?.background ?? 'var(--ash-terminal-surface-background)';
 		}
 		if (foreground && color < 8 && cell.isBold() && this.xterm.raw.options.drawBoldTextInBrightColors) color += 8;
 		const name = ansiColors[color];
@@ -345,7 +315,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 			return `rgb(${gray}, ${gray}, ${gray})`;
 		}
 		const index = color - 16;
-		const channel = (level: number): number => (level === 0 ? 0 : level * 40 + 55);
+		const channel = (level: number): number => level === 0 ? 0 : level * 40 + 55;
 		return `rgb(${channel(Math.floor(index / 36))}, ${channel(Math.floor(index / 6) % 6)}, ${channel(index % 6)})`;
 	}
 }

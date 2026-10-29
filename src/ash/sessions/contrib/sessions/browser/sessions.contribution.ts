@@ -3,4 +3,5 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { AutomationsCustomViewContribution } from './views/automationsView.js';
 import './views/sessionsViewActions.js';
 
-registerWorkbenchContribution(AutomationsCustomViewContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AutomationsCustomViewContribution));
+registerWorkbenchContribution(AutomationsCustomViewContribution.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(AutomationsCustomViewContribution));

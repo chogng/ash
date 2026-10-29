@@ -16,17 +16,8 @@ test('browser socket preserves byte boundaries and closes failed and established
 	const factory = new BrowserSocketFactory({
 		create(endpoint) {
 			url = endpoint;
-			return {
-				onData: data.event,
-				onOpen: opened.event,
-				onClose: closed.event,
-				onError: errors.event,
-				close: () => {
-					closes++;
-				},
-				send: bytes => writes.push(new Uint8Array(bytes as ArrayBuffer)),
-			};
-		},
+			return { onData: data.event, onOpen: opened.event, onClose: closed.event, onError: errors.event, close: () => { closes++; }, send: bytes => writes.push(new Uint8Array(bytes as ArrayBuffer)) };
+		}
 	});
 	const connecting = factory.connect(new WebSocketRemoteConnection('::1', 9000), '/ash/app-server', 'connectionToken=capability', 'test');
 	opened.fire();

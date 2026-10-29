@@ -15,12 +15,9 @@ import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverServic
 import type { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 
 export interface MultiDiffEditorToolbarOptions {
-	readonly container: HTMLElement;
-	readonly input: MultiDiffEditorInput;
-	readonly contextMenuProvider: IContextMenuProvider;
-	readonly editorService?: IEditorService;
-	readonly viewsService?: IViewsService;
-	readonly editor: MultiDiffEditorWidget;
+	readonly container: HTMLElement; readonly input: MultiDiffEditorInput;
+	readonly contextMenuProvider: IContextMenuProvider; readonly editorService?: IEditorService;
+	readonly viewsService?: IViewsService; readonly editor: MultiDiffEditorWidget;
 }
 
 /** Source owners contribute repository actions; the editor owns their accessible presentation. */
@@ -28,133 +25,67 @@ export class MultiDiffEditorToolbar extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly statusDomNode: HTMLDivElement;
 	private busy = false;
-	constructor(
-		private readonly options: MultiDiffEditorToolbarOptions,
+	constructor(private readonly options: MultiDiffEditorToolbarOptions,
 		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
-		@IHoverService hoverService: IHoverService,
-	) {
+		@IHoverService hoverService: IHoverService) {
 		super();
 		const document = options.container.ownerDocument;
-		this.domNode = h(document, 'div');
-		this.domNode.className = 'stanza-multi-diff-editor-toolbar';
-		const left = h(document, 'div');
-		left.className = 'stanza-multi-diff-editor-toolbar-left';
-		const right = h(document, 'div');
-		right.className = 'stanza-multi-diff-editor-toolbar-right';
-		this.statusDomNode = h(document, 'div');
-		this.statusDomNode.className = 'stanza-multi-diff-editor-toolbar-status';
-		this.statusDomNode.setAttribute('role', 'status');
-		this.statusDomNode.setAttribute('aria-live', 'polite');
-		this.domNode.append(left, this.statusDomNode, right);
-		options.container.append(this.domNode);
+		this.domNode = h(document, 'div'); this.domNode.className = 'stanza-multi-diff-editor-toolbar';
+		const left = h(document, 'div'); left.className = 'stanza-multi-diff-editor-toolbar-left';
+		const right = h(document, 'div'); right.className = 'stanza-multi-diff-editor-toolbar-right';
+		this.statusDomNode = h(document, 'div'); this.statusDomNode.className = 'stanza-multi-diff-editor-toolbar-status';
+		this.statusDomNode.setAttribute('role', 'status'); this.statusDomNode.setAttribute('aria-live', 'polite');
+		this.domNode.append(left, this.statusDomNode, right); options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const sourceActions = this.sourceResolvers.sourceActions().map(action => this.wrap(action));
 		if (options.input.source?.kind === 'external' && sourceActions.length) {
-			const primary = new ToolbarAction(
-				'multiDiff.source',
-				options.input.source.label,
-				localize('multiDiff.selectSource', 'Select change source'),
-				undefined,
-				options.editorService !== undefined,
-				() =>
-					this.run(async () => {
-						const resolved = await this.sourceResolvers.resolve(options.input.resource);
-						if (resolved) await options.editorService?.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
-					}),
-			);
-			const dropdown = new ToolbarAction(
-				'multiDiff.source.menu',
-				localize('multiDiff.selectSource', 'Select change source'),
-				localize('multiDiff.selectSource', 'Select change source'),
-				Lxicon.chevronDown,
-				true,
-				() => {},
-			);
-			const toolbar = this._register(
-				new WorkbenchToolBar(left, options.contextMenuProvider, {
-					ariaLabel: localize('multiDiff.changeSource', 'Multi-diff change source'),
-					actionViewItemProvider: action => (action.id === primary.id ? new DropdownWithPrimaryActionViewItem(primary, dropdown, sourceActions, options.contextMenuProvider) : undefined),
-				}),
-			);
-			toolbar.setActions([primary]);
-			toolbar.element.classList.add('stanza-multi-diff-editor-source-toolbar');
+			const primary = new ToolbarAction('multiDiff.source', options.input.source.label, localize('multiDiff.selectSource', 'Select change source'), undefined, options.editorService !== undefined, () => this.run(async () => {
+				const resolved = await this.sourceResolvers.resolve(options.input.resource);
+				if (resolved) await options.editorService?.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
+			}));
+			const dropdown = new ToolbarAction('multiDiff.source.menu', localize('multiDiff.selectSource', 'Select change source'), localize('multiDiff.selectSource', 'Select change source'), Lxicon.chevronDown, true, () => { });
+			const toolbar = this._register(new WorkbenchToolBar(left, options.contextMenuProvider, {
+				ariaLabel: localize('multiDiff.changeSource', 'Multi-diff change source'),
+				actionViewItemProvider: action => action.id === primary.id ? new DropdownWithPrimaryActionViewItem(primary, dropdown, sourceActions, options.contextMenuProvider) : undefined,
+			}));
+			toolbar.setActions([primary]); toolbar.element.classList.add('stanza-multi-diff-editor-source-toolbar');
 		} else {
-			const label = h(document, 'span');
-			label.className = 'ash-multi-diff-editor-source-label';
-			label.textContent = options.input.label;
-			left.append(label);
+			const label = h(document, 'span'); label.className = 'ash-multi-diff-editor-source-label'; label.textContent = options.input.label; left.append(label);
 			this._register(hoverService.setupDelayedHover(label, { content: options.input.label }));
 		}
 		const primary = this.sourceResolvers.primaryRepositoryAction(options.input);
 		const repositoryActions = this.sourceResolvers.repositoryActions?.(options.input).map(action => this.wrap(action)) ?? [];
 		const wrapped = primary ? this.wrap(primary) : undefined;
-		const dropdown = new ToolbarAction(
-			'multiDiff.repository.menu',
-			localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
-			localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
-			Lxicon.chevronDown,
-			true,
-			() => {},
-		);
-		const toolbar = this._register(
-			new WorkbenchToolBar(right, options.contextMenuProvider, {
-				ariaLabel: localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
-				actionViewItemProvider: action =>
-					wrapped && action.id === wrapped.id && repositoryActions.length
-						? new DropdownWithPrimaryActionViewItem(wrapped, dropdown, repositoryActions, options.contextMenuProvider)
-						: undefined,
-			}),
-		);
-		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, options.viewsService !== undefined, () =>
-			options.viewsService?.focusView(VIEW_ID),
-		);
+		const dropdown = new ToolbarAction('multiDiff.repository.menu', localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), Lxicon.chevronDown, true, () => { });
+		const toolbar = this._register(new WorkbenchToolBar(right, options.contextMenuProvider, {
+			ariaLabel: localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
+			actionViewItemProvider: action => wrapped && action.id === wrapped.id && repositoryActions.length ? new DropdownWithPrimaryActionViewItem(wrapped, dropdown, repositoryActions, options.contextMenuProvider) : undefined,
+		}));
+		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, options.viewsService !== undefined, () => options.viewsService?.focusView(VIEW_ID));
 		toolbar.setActions(wrapped ? [wrapped, files] : [files], [
 			{
 				id: 'multiDiff.toggleCollapseAll',
 				label: localize('multiDiff.collapseAll', 'Collapse All'),
-				get tooltip() {
-					return options.editor.allCollapsed ? localize('multiDiff.expandAllTooltip', 'Expand all diffs') : localize('multiDiff.collapseAllTooltip', 'Collapse all diffs');
-				},
+				get tooltip() { return options.editor.allCollapsed ? localize('multiDiff.expandAllTooltip', 'Expand all diffs') : localize('multiDiff.collapseAllTooltip', 'Collapse all diffs'); },
 				icon: Lxicon.fold,
 				enabled: true,
-				get checked() {
-					return options.editor.allCollapsed;
-				},
+				get checked() { return options.editor.allCollapsed; },
 				run: () => options.editor.toggleCollapseAll(),
 			},
 		]);
 		toolbar.element.classList.add('stanza-multi-diff-editor-repository-toolbar');
 	}
-	private wrap(action: IAction): IAction {
-		return new ToolbarAction(action.id, action.label, action.tooltip, action.icon, action.enabled, () => this.run(() => Promise.resolve(action.run())));
-	}
+	private wrap(action: IAction): IAction { return new ToolbarAction(action.id, action.label, action.tooltip, action.icon, action.enabled, () => this.run(() => Promise.resolve(action.run()))); }
 	private async run(operation: () => Promise<unknown>): Promise<void> {
 		if (this.busy || this.isDisposed) return;
-		this.busy = true;
-		this.domNode.classList.add('busy');
-		this.statusDomNode.textContent = localize('multiDiff.working', 'Working…');
-		try {
-			const result = await operation();
-			if (!this.isDisposed) this.statusDomNode.textContent = typeof result === 'string' ? result : '';
-		} catch (error) {
-			if (!this.isDisposed) this.statusDomNode.textContent = error instanceof Error ? error.message : localize('multiDiff.failed', 'The operation failed.');
-		} finally {
-			this.busy = false;
-			this.domNode.classList.remove('busy');
-		}
+		this.busy = true; this.domNode.classList.add('busy'); this.statusDomNode.textContent = localize('multiDiff.working', 'Working…');
+		try { const result = await operation(); if (!this.isDisposed) this.statusDomNode.textContent = typeof result === 'string' ? result : ''; }
+		catch (error) { if (!this.isDisposed) this.statusDomNode.textContent = error instanceof Error ? error.message : localize('multiDiff.failed', 'The operation failed.'); }
+		finally { this.busy = false; this.domNode.classList.remove('busy'); }
 	}
 }
 class ToolbarAction implements IAction {
 	readonly checked = undefined;
-	constructor(
-		readonly id: string,
-		readonly label: string,
-		readonly tooltip: string,
-		readonly icon: IAction['icon'],
-		readonly enabled: boolean,
-		private readonly execute: () => unknown,
-	) {}
-	run(): unknown {
-		return this.execute();
-	}
+	constructor(readonly id: string, readonly label: string, readonly tooltip: string, readonly icon: IAction['icon'], readonly enabled: boolean, private readonly execute: () => unknown) { }
+	run(): unknown { return this.execute(); }
 }

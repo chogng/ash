@@ -17,10 +17,7 @@ test('marker service replaces an owner atomically and reports affected resources
 
 	service.changeAll('language', [createMarker(second, MarkerSeverity.Warning, 'second')]);
 	assert.equal(service.read({ resource: first, owner: 'language' }).length, 0);
-	assert.deepEqual(
-		service.read({ resource: second, owner: 'language' }).map(marker => marker.message),
-		['second'],
-	);
+	assert.deepEqual(service.read({ resource: second, owner: 'language' }).map(marker => marker.message), ['second']);
 	assert.deepEqual(changes, [[first.toString()], [first.toString(), second.toString()]]);
 });
 
@@ -31,10 +28,7 @@ test('marker service keeps owners isolated and supports resource removal', () =>
 	service.changeAll('tasks', [createMarker(resource, MarkerSeverity.Warning, 'task')]);
 
 	service.remove('language', [resource]);
-	assert.deepEqual(
-		service.read().map(marker => marker.message),
-		['task'],
-	);
+	assert.deepEqual(service.read().map(marker => marker.message), ['task']);
 
 	service.changeAll('tasks', []);
 	assert.deepEqual(service.read(), []);
@@ -51,26 +45,14 @@ test('marker service replaces one owner resource without changing its other reso
 	changes.length = 0;
 
 	service.changeOne('host', first, [createMarker(first, MarkerSeverity.Error, 'new').marker]);
-	assert.deepEqual(
-		service.read({ resource: first, owner: 'host' }).map(marker => marker.message),
-		['new'],
-	);
-	assert.deepEqual(
-		service.read({ resource: second, owner: 'host' }).map(marker => marker.message),
-		['keep'],
-	);
-	assert.deepEqual(
-		service.read({ resource: first, owner: 'other' }).map(marker => marker.message),
-		['other'],
-	);
+	assert.deepEqual(service.read({ resource: first, owner: 'host' }).map(marker => marker.message), ['new']);
+	assert.deepEqual(service.read({ resource: second, owner: 'host' }).map(marker => marker.message), ['keep']);
+	assert.deepEqual(service.read({ resource: first, owner: 'other' }).map(marker => marker.message), ['other']);
 	assert.deepEqual(changes, [[first.toString()]]);
 
 	service.changeOne('host', first, []);
 	assert.deepEqual(service.read({ resource: first, owner: 'host' }), []);
-	assert.deepEqual(
-		service.read({ resource: second, owner: 'host' }).map(marker => marker.message),
-		['keep'],
-	);
+	assert.deepEqual(service.read({ resource: second, owner: 'host' }).map(marker => marker.message), ['keep']);
 	assert.deepEqual(changes, [[first.toString()], [first.toString()]]);
 });
 
@@ -80,14 +62,8 @@ test('marker queries combine resource, owner, severity masks and limits', () => 
 	const second = URI.file('/project/second.ts');
 	service.changeAll('language', [createMarker(first, MarkerSeverity.Error, 'error'), createMarker(first, MarkerSeverity.Warning, 'warning'), createMarker(second, MarkerSeverity.Info, 'info')]);
 	service.changeAll('tasks', [createMarker(first, MarkerSeverity.Hint, 'hint')]);
-	assert.deepEqual(
-		service.read({ owner: 'language', resource: first, severities: MarkerSeverity.Error | MarkerSeverity.Warning }).map(marker => marker.message),
-		['error', 'warning'],
-	);
-	assert.deepEqual(
-		service.read({ severities: MarkerSeverity.Warning | MarkerSeverity.Info, take: 1 }).map(marker => marker.message),
-		['warning'],
-	);
+	assert.deepEqual(service.read({ owner: 'language', resource: first, severities: MarkerSeverity.Error | MarkerSeverity.Warning }).map(marker => marker.message), ['error', 'warning']);
+	assert.deepEqual(service.read({ severities: MarkerSeverity.Warning | MarkerSeverity.Info, take: 1 }).map(marker => marker.message), ['warning']);
 	assert.deepEqual(service.read({ owner: 'missing' }), []);
 	assert.deepEqual(service.read({ severities: 0 }), []);
 	assert.equal(service.read({ take: 0 }).length, 4);
@@ -103,17 +79,10 @@ test('marker metadata and coordinates survive storage without aliasing producer 
 	using service = new MarkerService();
 	const resource = URI.file('/project/main.ts');
 	const diagnostic: IMarkerData = {
-		startLineNumber: 2,
-		startColumn: 3,
-		endLineNumber: 4,
-		endColumn: 5,
-		severity: MarkerSeverity.Warning,
-		message: 'unused',
-		source: 'compiler',
+		startLineNumber: 2, startColumn: 3, endLineNumber: 4, endColumn: 5,
+		severity: MarkerSeverity.Warning, message: 'unused', source: 'compiler',
 		code: { value: '0', target: URI.parse('https://example.com/diagnostic/0') },
-		modelVersionId: 42,
-		tags: [MarkerTag.Unnecessary],
-		origin: 'language',
+		modelVersionId: 42, tags: [MarkerTag.Unnecessary], origin: 'language',
 		relatedInformation: [{ resource, message: 'declared here', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 }],
 	};
 	service.changeOne('test', resource, [diagnostic]);
@@ -136,10 +105,7 @@ test('bulk removal reports each affected resource once and ignores absent resour
 	const changes: string[][] = [];
 	service.onMarkerChanged(resources => changes.push(resources.map(resource => resource.toString())));
 	service.remove('test', [first, first, URI.file('/missing')]);
-	assert.deepEqual(
-		service.read().map(marker => marker.message),
-		['third'],
-	);
+	assert.deepEqual(service.read().map(marker => marker.message), ['third']);
 	service.changeAll('test', []);
 	service.changeOne('test', first, []);
 	assert.deepEqual(changes, [[first.toString()], [second.toString()]]);

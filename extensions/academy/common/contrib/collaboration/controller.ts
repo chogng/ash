@@ -42,37 +42,28 @@ export class DocumentCollaborationController extends Disposable {
 	readonly onDidChangeState: Event<DocumentCollaborationStateChange> = this.stateEmitter.event;
 	readonly onDidChangePresence: Event<DocumentCollaborationPresenceChange> = this.presenceEmitter.event;
 
-	constructor(
-		private readonly model: DocumentTextModel,
-		private readonly connection: DocumentCollaborationConnection,
-	) {
+	constructor(private readonly model: DocumentTextModel, private readonly connection: DocumentCollaborationConnection) {
 		super();
-		this.synchronizer = this._register(
-			new DocumentCollaborationSynchronizer({
-				schema: model.schema,
-				document: connection.initialSnapshot.document,
-				clientId: connection.clientId,
-				version: connection.initialSnapshot.version,
-			}),
-		);
+		this.synchronizer = this._register(new DocumentCollaborationSynchronizer({
+			schema: model.schema,
+			document: connection.initialSnapshot.document,
+			clientId: connection.clientId,
+			version: connection.initialSnapshot.version,
+		}));
 		this._presences = connection.currentPresence;
 		this._register(connection);
-		this._register(
-			model.onDidChangeBlocks(change => {
-				if (this.synchronizingModel || (change.origin !== 'user' && change.origin !== 'undo' && change.origin !== 'redo')) return;
-				const envelope = this.synchronizer.dispatchLocal(change.transaction);
-				if (envelope) this.submit(envelope);
-			}),
-		);
+		this._register(model.onDidChangeBlocks(change => {
+			if (this.synchronizingModel || (change.origin !== 'user' && change.origin !== 'undo' && change.origin !== 'redo')) return;
+			const envelope = this.synchronizer.dispatchLocal(change.transaction);
+			if (envelope) this.submit(envelope);
+		}));
 		this._register(model.onDidChangeSelection(selection => this.publishPresence(selection)));
 		this._register(connection.onDidReceiveUpdate(update => this.acceptUpdate(update)));
 		this._register(connection.onDidReceiveSnapshot(snapshot => this.acceptResync(snapshot)));
-		this._register(
-			connection.onDidReceivePresence(presences => {
-				this._presences = presences;
-				this.presenceEmitter.fire(Object.freeze({ presences }));
-			}),
-		);
+		this._register(connection.onDidReceivePresence(presences => {
+			this._presences = presences;
+			this.presenceEmitter.fire(Object.freeze({ presences }));
+		}));
 		this._register(connection.onDidFail(error => this.setState('error', error.message)));
 		this.synchronizeModel();
 		this.setState('connected');
@@ -86,6 +77,8 @@ export class DocumentCollaborationController extends Disposable {
 	get canEdit(): boolean {
 		return this._state === 'connected' && this.connection.canEdit;
 	}
+
+
 
 	/** Preserve the local model while suspending a revoked or changed authorization. */
 	invalidate(message: string): void {
@@ -102,6 +95,10 @@ export class DocumentCollaborationController extends Disposable {
 		return this._presences;
 	}
 
+
+
+
+
 	private _state: DocumentCollaborationState = 'connected';
 
 	private submit(envelope: DocumentCollaborationEnvelope): void {
@@ -112,16 +109,13 @@ export class DocumentCollaborationController extends Disposable {
 			return;
 		}
 		this.submitting = true;
-		void this.connection
-			.submit(envelope, document, new AbortController().signal)
-			.then(
-				outcome => this.acceptSubmitOutcome(outcome),
-				error => this.setState('error', error instanceof Error ? error.message : 'Submitting a collaboration update failed'),
-			)
-			.finally(() => {
-				this.submitting = false;
-				this.submitNext();
-			});
+		void this.connection.submit(envelope, document, new AbortController().signal).then(
+			outcome => this.acceptSubmitOutcome(outcome),
+			error => this.setState('error', error instanceof Error ? error.message : 'Submitting a collaboration update failed'),
+		).finally(() => {
+			this.submitting = false;
+			this.submitNext();
+		});
 	}
 
 	private publishPresence(selection: DocumentTextModel['selection']): void {
@@ -218,9 +212,5 @@ export class DocumentCollaborationController extends Disposable {
 }
 
 function documentTransactionOnly(transaction: DocumentTransaction): DocumentTransaction {
-	return new DocumentTransaction(transaction.steps, {
-		addToHistory: false,
-		label: transaction.label,
-		metadata: transaction.metadata,
-	});
+	return new DocumentTransaction(transaction.steps, { addToHistory: false, label: transaction.label, metadata: transaction.metadata });
 }

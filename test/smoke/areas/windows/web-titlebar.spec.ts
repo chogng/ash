@@ -51,10 +51,7 @@ for (const entry of ['workbench', 'sessions'] as const) {
 		const manifestUrl = await page.locator('link[rel="manifest"]').evaluate(element => (element as HTMLLinkElement).href);
 		const manifestResponse = await page.request.get(manifestUrl);
 		expect(manifestResponse.ok()).toBe(true);
-		expect(await manifestResponse.json()).toMatchObject({
-			display: 'standalone',
-			display_override: ['window-controls-overlay'],
-		});
+		expect(await manifestResponse.json()).toMatchObject({ display: 'standalone', display_override: ['window-controls-overlay'] });
 		if (entry === 'sessions') {
 			await expect(bar).toHaveCSS('height', '48px');
 			await expect(page.locator('.ash-sessions-content-card')).toHaveCSS('top', '48px');
@@ -68,7 +65,7 @@ for (const entry of ['workbench', 'sessions'] as const) {
 			expect(buttons.length).toBeGreaterThan(0);
 			for (const button of buttons) {
 				const bounds = (await button.boundingBox())!;
-				const label = (await button.getAttribute('aria-label')) ?? '';
+				const label = await button.getAttribute('aria-label') ?? '';
 				expect(bounds.x, label).toBeGreaterThanOrEqual(left);
 				expect(bounds.x + bounds.width, label).toBeLessThanOrEqual(right);
 			}

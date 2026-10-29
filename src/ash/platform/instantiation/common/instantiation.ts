@@ -14,6 +14,7 @@ export interface ServiceIdentifier<T> {
 const identifiers = new Map<string, ServiceIdentifier<unknown>>();
 const constructorDependencies = new WeakMap<Function, Map<number, ServiceIdentifier<unknown>>>();
 
+
 /** Creates a stable typed service key. Export and reuse the returned value. */
 export function createServiceIdentifier<T>(id: string): ServiceIdentifier<T> {
 	const existing = identifiers.get(id);
@@ -63,7 +64,7 @@ export interface SingletonRegistrationOptions {
 export type ServiceFactory<T> = (accessor: ServicesAccessor) => T;
 
 export namespace _util {
-	export function getServiceDependencies(constructor: Function): readonly { readonly index: number; readonly id: ServiceIdentifier<unknown> }[] {
+	export function getServiceDependencies(constructor: Function): readonly { readonly index: number; readonly id: ServiceIdentifier<unknown>; }[] {
 		let current: Function | null = constructor;
 		while (current && !constructorDependencies.has(current)) {
 			current = Object.getPrototypeOf(current);

@@ -3,9 +3,15 @@ import { test } from 'mocha';
 import { registerTrustedIpcRoutes, TrustedIpcRouter, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from '../../../../platform/ipc/electron-main/trustedIpcRouter.js';
 
 class FakeIpcMain implements IpcMainLike {
-	readonly handlers = new Map<string, (event: IpcMainInvokeEventLike, params: unknown) => unknown>();
+	readonly handlers = new Map<
+		string,
+		(event: IpcMainInvokeEventLike, params: unknown) => unknown
+	>();
 
-	handle(channel: string, listener: (event: IpcMainInvokeEventLike, params: unknown) => unknown): void {
+	handle(
+		channel: string,
+		listener: (event: IpcMainInvokeEventLike, params: unknown) => unknown,
+	): void {
 		this.handlers.set(channel, listener);
 	}
 
@@ -52,7 +58,14 @@ test('trusted IPC router enforces webContents, main frame, exact URL, and params
 	const invoke = ipcMain.handlers.get('test:invoke')!;
 
 	assert.equal(await invoke(trusted.event, 'valid'), 'ok');
-	assert.throws(() => invoke({ sender: { mainFrame: trusted.mainFrame }, senderFrame: trusted.mainFrame }, 'valid'), /Untrusted renderer/);
+	assert.throws(
+		() =>
+			invoke(
+				{ sender: { mainFrame: trusted.mainFrame }, senderFrame: trusted.mainFrame },
+				'valid',
+			),
+		/Untrusted renderer/,
+	);
 	assert.throws(
 		() =>
 			invoke(
@@ -79,37 +92,30 @@ test('trusted IPC router selects a route per trusted renderer window', async () 
 	const router = new TrustedIpcRouter(ipcMain);
 	const workbench = target('file:///ash-desktop/workbench.html');
 	const sessions = target('file:///ash-desktop/sessions.html');
-	const workbenchRegistration = router.register(
-		{
-			webContents: workbench.webContents,
-			allowedEntryUrls: new Set(['file:///ash-desktop/workbench.html']),
-		},
-		[
-			{
-				channel: 'test:shared',
-				validate: value => value,
-				invoke: () => 'workbench',
-			},
-		],
-	);
-	const sessionsRegistration = router.register(
-		{
-			webContents: sessions.webContents,
-			allowedEntryUrls: new Set(['file:///ash-desktop/sessions.html']),
-		},
-		[
-			{
-				channel: 'test:shared',
-				validate: value => value,
-				invoke: () => 'sessions',
-			},
-		],
-	);
+	const workbenchRegistration = router.register({
+		webContents: workbench.webContents,
+		allowedEntryUrls: new Set(['file:///ash-desktop/workbench.html']),
+	}, [{
+		channel: 'test:shared',
+		validate: (value) => value,
+		invoke: () => 'workbench',
+	}]);
+	const sessionsRegistration = router.register({
+		webContents: sessions.webContents,
+		allowedEntryUrls: new Set(['file:///ash-desktop/sessions.html']),
+	}, [{
+		channel: 'test:shared',
+		validate: (value) => value,
+		invoke: () => 'sessions',
+	}]);
 	const invoke = ipcMain.handlers.get('test:shared')!;
 
 	assert.equal(await invoke(workbench.event, undefined), 'workbench');
 	assert.equal(await invoke(sessions.event, undefined), 'sessions');
-	assert.throws(() => invoke(target().event, undefined), /Untrusted renderer/);
+	assert.throws(
+		() => invoke(target().event, undefined),
+		/Untrusted renderer/,
+	);
 
 	sessionsRegistration.dispose();
 	assert.equal(ipcMain.handlers.has('test:shared'), true);
@@ -124,7 +130,7 @@ test('trusted IPC router rejects duplicate route registrations', () => {
 	const trusted = target();
 	const route: IpcRoute<unknown, unknown> = {
 		channel: 'duplicate',
-		validate: value => value,
+		validate: (value) => value,
 		invoke: () => undefined,
 	};
 

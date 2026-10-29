@@ -47,20 +47,13 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number, clientY: number): Event {
-	const event = new dom.window.MouseEvent(type, {
-		bubbles: true,
-		cancelable: true,
-		button: 0,
-		buttons,
-		clientX,
-		clientY,
-	}) as unknown as Event & { pointerId: number };
+	const event = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons, clientX, clientY }) as unknown as Event & { pointerId: number; };
 	Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
 	return event;
 }
@@ -73,13 +66,9 @@ test('code editor reports vertical scroll changes for linked editor views', () =
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n'));
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
 	editor.layout({ width: 320, height: 80 });
-	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }[] = [];
+	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }[] = [];
 	using listener = editor.onDidScrollChange(event => changes.push(event));
 	editor.setScrollTop(80, ScrollType.Immediate);
 	assert.ok(changes.some(change => change.scrollTopChanged));
@@ -118,21 +107,16 @@ test('textarea system-caret movement returns through TextAreaInput and stops aft
 		data: 'X',
 	});
 	textArea.dispatchEvent(lateInput);
-	assert.deepEqual(
-		{ prevented: lateInput.defaultPrevented, value: model.getValue(), version: model.getVersionId() },
-		{
-			prevented: true,
-			value: 'alpha',
-			version: 1,
-		},
-	);
-	textArea.dispatchEvent(
-		new dom.window.InputEvent('beforeinput', {
-			bubbles: true,
-			inputType: 'insertText',
-			data: 'Y',
-		}),
-	);
+	assert.deepEqual({ prevented: lateInput.defaultPrevented, value: model.getValue(), version: model.getVersionId() }, {
+		prevented: true,
+		value: 'alpha',
+		version: 1,
+	});
+	textArea.dispatchEvent(new dom.window.InputEvent('beforeinput', {
+		bubbles: true,
+		inputType: 'insertText',
+		data: 'Y',
+	}));
 	assert.deepEqual({ value: model.getValue(), version: model.getVersionId() }, { value: 'alpha', version: 1 });
 	dom.window.close();
 });
@@ -178,9 +162,9 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 	let willCopyCount = 0;
 	let cutCount = 0;
 	let pasteCount = 0;
-	using willCopyListener = textAreaInput.onWillCopy(() => (willCopyCount += 1));
-	using cutListener = textAreaInput.onCut(() => (cutCount += 1));
-	using pasteListener = textAreaInput.onPaste(() => (pasteCount += 1));
+	using willCopyListener = textAreaInput.onWillCopy(() => willCopyCount += 1);
+	using cutListener = textAreaInput.onCut(() => cutCount += 1);
+	using pasteListener = textAreaInput.onPaste(() => pasteCount += 1);
 	editor.setSelection(new Selection(1, 1, 1, 6));
 	const copied = new TestClipboardData();
 	const copy = testClipboardEvent(dom.window, 'copy', copied);
@@ -238,17 +222,11 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'xy' }));
 		assert.equal(model.getText(), 'alphaxy');
 		assert.deepEqual(editor.getPosition(), new Position(1, 7));
-		assert.deepEqual(
-			model.getAllDecorations().map(decoration => decoration.options.inlineClassName),
-			['edit-context-composition-primary'],
-		);
+		assert.deepEqual(model.getAllDecorations().map(decoration => decoration.options.inlineClassName), ['edit-context-composition-primary']);
 	} finally {
 		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'xy' }));
 	}
-	assert.equal(
-		model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'),
-		false,
-	);
+	assert.equal(model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'), false);
 	dom.window.close();
 });
 
@@ -264,22 +242,14 @@ test('EditContext routes word deletion through standard WordOperations ranges', 
 	const input = editor.controller.editContext.domNode.domNode;
 	editor.setPosition(new Position(1, 11));
 	input.focus();
-	const backward = new dom.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'deleteWordBackward',
-	});
+	const backward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordBackward' });
 	input.dispatchEvent(backward);
 	assert.equal(backward.defaultPrevented, true);
 	assert.equal(model.getText(), 'alpha ');
 
 	editor.controller.undo();
 	editor.setPosition(new Position(1, 1));
-	const forward = new dom.window.InputEvent('beforeinput', {
-		bubbles: true,
-		cancelable: true,
-		inputType: 'deleteWordForward',
-	});
+	const forward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordForward' });
 	input.dispatchEvent(forward);
 	assert.equal(forward.defaultPrevented, true);
 	assert.equal(model.getText(), ' beta');
@@ -294,7 +264,7 @@ test('setSelection accepts ranges, preserves selection direction, and reports it
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editor = createTestCodeEditor({ container, model });
 	const api: ICodeEditor = editor;
-	const events: { selection: string; source: string }[] = [];
+	const events: { selection: string; source: string; }[] = [];
 	using listener = api.onDidChangeCursorSelection(event => events.push({ selection: event.selection.toString(), source: event.source }));
 	api.setSelections([new Selection(1, 1, 1, 1), new Selection(2, 1, 2, 1)]);
 	events.length = 0;
@@ -306,12 +276,7 @@ test('setSelection accepts ranges, preserves selection direction, and reports it
 	assert.deepEqual(api.getSelection(), new Selection(1, 3, 2, 5));
 	api.setSelection(new Selection(2, 4, 1, 2), 'reverse');
 	assert.deepEqual(api.getSelection(), new Selection(2, 4, 1, 2));
-	api.setSelection({
-		selectionStartLineNumber: 2,
-		selectionStartColumn: 3,
-		positionLineNumber: 1,
-		positionColumn: 1,
-	});
+	api.setSelection({ selectionStartLineNumber: 2, selectionStartColumn: 3, positionLineNumber: 1, positionColumn: 1 });
 	assert.deepEqual(api.getSelection(), new Selection(2, 3, 1, 1));
 	assert.deepEqual(events, [
 		{ selection: '[1,2 -> 1,4]', source: 'find' },
@@ -355,7 +320,9 @@ test('executeEdits applies one editor transaction and its requested cursor state
 	});
 
 	editor.pushUndoStop();
-	assert.equal(editor.executeEdits('test.executeEdits', [{ range: new Range(1, 1, 1, 6), text: 'beta' }], [Selection.fromPositions(new Position(1, 5))]), true);
+	assert.equal(editor.executeEdits('test.executeEdits', [
+		{ range: new Range(1, 1, 1, 6), text: 'beta' },
+	], [Selection.fromPositions(new Position(1, 5))]), true);
 	editor.pushUndoStop();
 	assert.equal(model.getText(), 'beta');
 	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 5)));
@@ -379,27 +346,26 @@ test('CodeEditorWidget publishes canonical cursor position and selection events'
 	using positionListener = editor.onDidChangeCursorPosition(event => positions.push(event));
 	using selectionListener = editor.onDidChangeCursorSelection(event => selections.push(event));
 
-	editor.setSelections([Selection.fromPositions(new Position(1, 3)), Selection.fromPositions(new Position(1, 5))], 'test.cursorEvents');
+	editor.setSelections([
+		Selection.fromPositions(new Position(1, 3)),
+		Selection.fromPositions(new Position(1, 5)),
+	], 'test.cursorEvents');
 
-	assert.deepEqual(positions, [
-		{
-			position: new Position(1, 3),
-			secondaryPositions: [new Position(1, 5)],
-			reason: CursorChangeReason.NotSet,
-			source: 'test.cursorEvents',
-		},
-	]);
-	assert.deepEqual(selections, [
-		{
-			selection: Selection.fromPositions(new Position(1, 3)),
-			secondarySelections: [Selection.fromPositions(new Position(1, 5))],
-			modelVersionId: model.getVersionId(),
-			oldSelections: [Selection.fromPositions(new Position(1, 1))],
-			oldModelVersionId: model.getVersionId(),
-			source: 'test.cursorEvents',
-			reason: CursorChangeReason.NotSet,
-		},
-	]);
+	assert.deepEqual(positions, [{
+		position: new Position(1, 3),
+		secondaryPositions: [new Position(1, 5)],
+		reason: CursorChangeReason.NotSet,
+		source: 'test.cursorEvents',
+	}]);
+	assert.deepEqual(selections, [{
+		selection: Selection.fromPositions(new Position(1, 3)),
+		secondarySelections: [Selection.fromPositions(new Position(1, 5))],
+		modelVersionId: model.getVersionId(),
+		oldSelections: [Selection.fromPositions(new Position(1, 1))],
+		oldModelVersionId: model.getVersionId(),
+		source: 'test.cursorEvents',
+		reason: CursorChangeReason.NotSet,
+	}]);
 	dom.window.close();
 });
 
@@ -459,7 +425,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		public selectionEnd = 0;
 		public selectionBounds: DOMRect | undefined;
 		public controlBounds: DOMRect | undefined;
-		public updateCharacterBounds(): void {}
+		public updateCharacterBounds(): void { }
 		public updateText(start: number, end: number, text: string): void {
 			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
 		}
@@ -493,13 +459,13 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok(editContext.nativeContext.updateSelectionBounds);
 	assert.ok((editContext.nativeContext as TestEditContext).selectionBounds);
 	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
-	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
+	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown; };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editContext.focus();
 	let receivedKeyDown: IKeyboardEvent | undefined;
 	let receivedKeyUp: IKeyboardEvent | undefined;
-	using keyDownListener = editor.onKeyDown(event => (receivedKeyDown = event));
-	using keyUpListener = editor.onKeyUp(event => (receivedKeyUp = event));
+	using keyDownListener = editor.onKeyDown(event => receivedKeyDown = event);
+	using keyUpListener = editor.onKeyUp(event => receivedKeyUp = event);
 	const keyDown = new dom.window.KeyboardEvent('keydown', { bubbles: true, code: 'F2', key: 'F2' });
 	const keyUp = new dom.window.KeyboardEvent('keyup', { bubbles: true, code: 'F2', key: 'F2' });
 	input.dispatchEvent(keyDown);
@@ -541,23 +507,18 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	nativeComposition.dispatchEvent(lateCompositionStart);
 	assert.equal(lateCompositionStart.defaultPrevented, true);
 	assert.equal(editor.inComposition, false);
-	nativeComposition.dispatchEvent(
-		Object.assign(new dom.window.Event('textupdate'), {
-			text: 'late',
-			updateRangeStart: 0,
-			updateRangeEnd: 0,
-			selectionStart: 4,
-			selectionEnd: 4,
-		}),
-	);
-	assert.deepEqual(
-		{ text: model.getText(), version: model.getVersionId(), browserText: nativeComposition.text },
-		{
-			text: 'alpha',
-			version: versionBeforeLateInput,
-			browserText: 'alpha',
-		},
-	);
+	nativeComposition.dispatchEvent(Object.assign(new dom.window.Event('textupdate'), {
+		text: 'late',
+		updateRangeStart: 0,
+		updateRangeEnd: 0,
+		selectionStart: 4,
+		selectionEnd: 4,
+	}));
+	assert.deepEqual({ text: model.getText(), version: model.getVersionId(), browserText: nativeComposition.text }, {
+		text: 'alpha',
+		version: versionBeforeLateInput,
+		browserText: 'alpha',
+	});
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');
 	input.editContext = undefined;
@@ -576,7 +537,11 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using viewport = new TestView({ container, model, lineHeight: 20 });
+	using viewport = new TestView({
+		container,
+		model,
+		lineHeight: 20,
+	});
 	viewport.layout({ width: 320, height: 80 });
 	const element = h(dom.window.document, 'div');
 	container.append(element);
@@ -605,7 +570,10 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	assert.ok(domSelection);
 	domSelection.setBaseAndExtent(textNode, 1, textNode, 3);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 2), new Position(1, 4))]);
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 2), new Position(1, 4))],
+	);
 
 	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: true });
 	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
@@ -620,7 +588,10 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	assert.ok(richTextNode);
 	domSelection.setBaseAndExtent(richTextNode, 0, richTextNode, 2);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 1), new Position(1, 3))]);
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 1), new Position(1, 3))],
+	);
 
 	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: false });
 	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
@@ -638,7 +609,10 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	container.append(outsideText);
 	domSelection.setBaseAndExtent(outsideText, 0, outsideText, 4);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 1), new Position(1, 3))]);
+	assert.deepEqual(
+		viewport.testViewModel.getSelections(),
+		[Selection.fromPositions(new Position(1, 1), new Position(1, 3))],
+	);
 
 	using unrelatedModel = new TextModel('unrelated');
 	using unrelatedViewport = new TestView({
@@ -646,17 +620,17 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 		model: unrelatedModel,
 		lineHeight: 20,
 	});
-	const unrelatedContext = new ViewContext(unrelatedViewport.testConfiguration, darkColorTheme, unrelatedViewport.testViewModel);
-	assert.throws(
-		() =>
-			new ScreenReaderSupport({
-				domNode: new FastDomNode(element),
-				context: unrelatedContext,
-				viewport,
-				viewController: unrelatedViewport.controller,
-			}),
-		/must share one text model/u,
+	const unrelatedContext = new ViewContext(
+		unrelatedViewport.testConfiguration,
+		darkColorTheme,
+		unrelatedViewport.testViewModel,
 	);
+	assert.throws(() => new ScreenReaderSupport({
+		domNode: new FastDomNode(element),
+		context: unrelatedContext,
+		viewport,
+		viewController: unrelatedViewport.controller,
+	}), /must share one text model/u);
 	dom.window.close();
 });
 
@@ -709,25 +683,15 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 		lineHeight: 20,
 	});
 	editor.layout({ width: 240, height: 40 });
-	editor.getDomNode().getBoundingClientRect = () => ({
-		x: 0,
-		y: 0,
-		left: 0,
-		top: 0,
-		right: 240,
-		bottom: 40,
-		width: 240,
-		height: 40,
-		toJSON: () => ({}),
-	});
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
 	let received: Parameters<Parameters<typeof editor.onMouseMove>[0]>[0] | undefined;
 	let releasedKey: string | undefined;
 	let dropped = false;
 	let dropPosition: Position | undefined;
-	using listener = editor.onMouseMove(event => (received = event));
-	using keyListener = editor.onKeyUp(event => (releasedKey = event.key));
-	using dropListener = editor.onMouseDrop(event => (dropped = event.target !== null));
-	using dropIntoEditorListener = editor.onDropIntoEditor(event => (dropPosition = Position.lift(event.position)));
+	using listener = editor.onMouseMove(event => received = event);
+	using keyListener = editor.onKeyUp(event => releasedKey = event.key);
+	using dropListener = editor.onMouseDrop(event => dropped = event.target !== null);
+	using dropIntoEditorListener = editor.onDropIntoEditor(event => dropPosition = Position.lift(event.position));
 	const browserEvent = new dom.window.MouseEvent('mousemove', {
 		bubbles: true,
 		clientX: editor.getLayoutInfo().contentLeft + 2,
@@ -766,45 +730,26 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 		lineHeight: 20,
 	});
 	editor.layout({ width: 240, height: 60 });
-	editor.getDomNode().getBoundingClientRect = () => ({
-		x: 0,
-		y: 0,
-		left: 0,
-		top: 0,
-		right: 240,
-		bottom: 60,
-		width: 240,
-		height: 60,
-		toJSON: () => ({}),
-	});
-	editor.getDomNode().dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', {
-			bubbles: true,
-			cancelable: true,
-			button: 0,
-			clientX: 80,
-			clientY: 25,
-		}),
-	);
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 60, width: 240, height: 60, toJSON: () => ({}) });
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 80, clientY: 25 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
 	assert.equal(editor.getPosition()?.lineNumber, 2);
 
-	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) =>
-		editor.controller.dispatchMouse({
-			position,
-			mouseColumn: position.column,
-			revealType: NavigationCommandRevealType.None,
-			startedOnLineNumbers: options.lineNumbers ?? false,
-			inSelectionMode: options.selecting ?? false,
-			mouseDownCount: options.count ?? 1,
-			altKey: options.altKey ?? false,
-			ctrlKey: false,
-			metaKey: false,
-			shiftKey: false,
-			leftButton: true,
-			middleButton: false,
-			onInjectedText: false,
-		});
+	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean; } = {}) => editor.controller.dispatchMouse({
+		position,
+		mouseColumn: position.column,
+		revealType: NavigationCommandRevealType.None,
+		startedOnLineNumbers: options.lineNumbers ?? false,
+		inSelectionMode: options.selecting ?? false,
+		mouseDownCount: options.count ?? 1,
+		altKey: options.altKey ?? false,
+		ctrlKey: false,
+		metaKey: false,
+		shiftKey: false,
+		leftButton: true,
+		middleButton: false,
+		onInjectedText: false,
+	});
 
 	dispatch(new Position(1, 2));
 	dispatch(new Position(2, 4), { selecting: true });
@@ -818,7 +763,10 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 
 	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
 	dispatch(new Position(3, 2), { altKey: true });
-	assert.deepEqual(editor.getSelections(), [Selection.fromPositions(new Position(3, 2)), Selection.fromPositions(new Position(1, 1))]);
+	assert.deepEqual(editor.getSelections(), [
+		Selection.fromPositions(new Position(3, 2)),
+		Selection.fromPositions(new Position(1, 1)),
+	]);
 	dom.window.close();
 });
 
@@ -832,21 +780,9 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 		lineHeight: 20,
 	});
 	editor.layout({ width: 120, height: 60 });
-	editor.getDomNode().getBoundingClientRect = () => ({
-		x: 0,
-		y: 0,
-		left: 0,
-		top: 0,
-		right: 120,
-		bottom: 60,
-		width: 120,
-		height: 60,
-		toJSON: () => ({}),
-	});
+	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 120, bottom: 60, width: 120, height: 60, toJSON: () => ({}) });
 	let mouseUpEvents = 0;
-	using mouseUpListener = editor.onMouseUp(() => {
-		mouseUpEvents += 1;
-	});
+	using mouseUpListener = editor.onMouseUp(() => { mouseUpEvents += 1; });
 
 	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, editor.getLayoutInfo().contentLeft + 8, 120));
@@ -864,14 +800,7 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	await delay(dom.window, 35);
 	assert.deepEqual({ left: editor.getScrollLeft(), top: editor.getScrollTop() }, releasedScroll);
 	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 18, 1, editor.getLayoutInfo().contentLeft + 8, 10));
-	editor.getDomNode().dispatchEvent(
-		new dom.window.MouseEvent('mouseup', {
-			bubbles: true,
-			button: 0,
-			clientX: editor.getLayoutInfo().contentLeft + 8,
-			clientY: 10,
-		}),
-	);
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, button: 0, clientX: editor.getLayoutInfo().contentLeft + 8, clientY: 10 }));
 	assert.equal(mouseUpEvents, 2);
 	dom.window.close();
 });
@@ -919,7 +848,11 @@ test('CodeEditorWidget offers keys to input consumers before cursor navigation',
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('first\nsecond');
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+	});
 	editor.setPosition(new Position(1, 3));
 	const order: string[] = [];
 	using inputConsumer = editor.controller.onWillKeydown(event => {
@@ -934,18 +867,15 @@ test('CodeEditorWidget offers keys to input consumers before cursor navigation',
 	const down = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' });
 	input.dispatchEvent(down);
 
-	assert.deepEqual(
-		{
-			position: editor.getPosition(),
-			prevented: down.defaultPrevented,
-			order,
-		},
-		{
-			position: new Position(1, 3),
-			prevented: true,
-			order: ['consumer', 'public:handled'],
-		},
-	);
+	assert.deepEqual({
+		position: editor.getPosition(),
+		prevented: down.defaultPrevented,
+		order,
+	}, {
+		position: new Position(1, 3),
+		prevented: true,
+		order: ['consumer', 'public:handled'],
+	});
 	dom.window.close();
 });
 
@@ -962,15 +892,11 @@ class TestClipboardData {
 	readonly files: readonly File[] = [];
 	private readonly values = new Map<string, string>();
 
-	get types(): string[] {
-		return [...this.values.keys()];
-	}
+	get types(): string[] { return [...this.values.keys()]; }
 	getData(type: string): string {
 		return this.values.get(type) ?? '';
 	}
-	setData(type: string, value: string): void {
-		this.values.set(type, value);
-	}
+	setData(type: string, value: string): void { this.values.set(type, value); }
 }
 
 function testClipboardEvent(targetWindow: typeof browserEnvironment.window, type: 'copy' | 'cut' | 'paste', clipboardData: TestClipboardData): ClipboardEvent {
@@ -990,7 +916,9 @@ for (const edit of ['type', 'paste', 'executeEdits'] as const) {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using model = new TextModel('ab');
-		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'), model,
+		});
 		const before = new Selection(1, 1, 1, 2);
 		editor.setSelection(before);
 		const oldVersion = model.version;
@@ -1003,28 +931,15 @@ for (const edit of ['type', 'paste', 'executeEdits'] as const) {
 		}
 		editor.setPosition(new Position(1, 1));
 		assert.equal(model.getValue(), 'xyb');
-		assert.deepEqual(
-			events.map(event => ({
-				old: event.oldSelections?.map(selection => selection.toString()),
-				current: event.selection.toString(),
-				oldVersion: event.oldModelVersionId,
-				version: event.modelVersionId,
-			})),
-			[
-				{
-					old: [before.toString()],
-					current: new Selection(1, 3, 1, 3).toString(),
-					oldVersion,
-					version: oldVersion + 1,
-				},
-				{
-					old: [new Selection(1, 3, 1, 3).toString()],
-					current: new Selection(1, 1, 1, 1).toString(),
-					oldVersion: oldVersion + 1,
-					version: oldVersion + 1,
-				},
-			],
-		);
+		assert.deepEqual(events.map(event => ({
+			old: event.oldSelections?.map(selection => selection.toString()),
+			current: event.selection.toString(),
+			oldVersion: event.oldModelVersionId,
+			version: event.modelVersionId,
+		})), [
+			{ old: [before.toString()], current: new Selection(1, 3, 1, 3).toString(), oldVersion, version: oldVersion + 1 },
+			{ old: [new Selection(1, 3, 1, 3).toString()], current: new Selection(1, 1, 1, 1).toString(), oldVersion: oldVersion + 1, version: oldVersion + 1 },
+		]);
 		dom.window.close();
 	});
 }
@@ -1066,73 +981,22 @@ test('paste interception precedes the edit and the public paste event follows it
 		assert.deepEqual({ value: model.getValue(), order }, { value: 'XYalpha', order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null'] });
 		using intercept = editor.onWillPaste(event => event.setHandled());
 		editor.controller.editContext.domNode.domNode.dispatchEvent(testClipboardEvent(dom.window, 'paste', data));
-		assert.deepEqual(
-			{ value: model.getValue(), order },
-			{
-				value: 'XYalpha',
-				order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null', 'will:XYalpha'],
-			},
-		);
+		assert.deepEqual({ value: model.getValue(), order }, {
+			value: 'XYalpha',
+			order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null', 'will:XYalpha'],
+		});
 	} finally {
 		dom.window.close();
 	}
 });
 
 for (const scenario of [
-	{
-		name: 'replacement before the caret',
-		original: 'hello world',
-		before: [5, 5],
-		range: [0, 5],
-		text: 'hi',
-		after: [2, 2],
-		expected: 'hi world',
-	},
-	{
-		name: 'replacement inside a selection',
-		original: 'abcdef',
-		before: [0, 6],
-		range: [1, 4],
-		text: 'X',
-		after: [1, 2],
-		expected: 'aXef',
-	},
-	{
-		name: 'deletion away from the caret',
-		original: 'hello world',
-		before: [11, 11],
-		range: [0, 6],
-		text: '',
-		after: [0, 0],
-		expected: 'world',
-	},
-	{
-		name: 'cross-line replacement',
-		original: 'first\nsecond\nlast',
-		before: [5, 5],
-		range: [3, 9],
-		text: 'X\nY',
-		after: [5, 6],
-		expected: 'firX\nYond\nlast',
-	},
-	{
-		name: 'replacement with a backward final selection',
-		original: 'abcdef',
-		before: [3, 3],
-		range: [3, 3],
-		text: 'XYZ',
-		after: [6, 4],
-		expected: 'abcXYZdef',
-	},
-	{
-		name: 'replacement of a surrogate pair',
-		original: '😀 cat',
-		before: [2, 2],
-		range: [0, 2],
-		text: '🙂🙂',
-		after: [4, 4],
-		expected: '🙂🙂 cat',
-	},
+	{ name: 'replacement before the caret', original: 'hello world', before: [5, 5], range: [0, 5], text: 'hi', after: [2, 2], expected: 'hi world' },
+	{ name: 'replacement inside a selection', original: 'abcdef', before: [0, 6], range: [1, 4], text: 'X', after: [1, 2], expected: 'aXef' },
+	{ name: 'deletion away from the caret', original: 'hello world', before: [11, 11], range: [0, 6], text: '', after: [0, 0], expected: 'world' },
+	{ name: 'cross-line replacement', original: 'first\nsecond\nlast', before: [5, 5], range: [3, 9], text: 'X\nY', after: [5, 6], expected: 'firX\nYond\nlast' },
+	{ name: 'replacement with a backward final selection', original: 'abcdef', before: [3, 3], range: [3, 3], text: 'XYZ', after: [6, 4], expected: 'abcXYZdef' },
+	{ name: 'replacement of a surrogate pair', original: '😀 cat', before: [2, 2], range: [0, 2], text: '🙂🙂', after: [4, 4], expected: '🙂🙂 cat' },
 ] as const) {
 	test(`browser text update commits ${scenario.name} and restores both selections through history`, () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -1144,12 +1008,9 @@ for (const scenario of [
 			editor.setSelection(before);
 			editor.controller.applyTextUpdate({
 				text: scenario.text,
-				updateRangeStart: scenario.range[0],
-				updateRangeEnd: scenario.range[1],
-				previousSelectionStart: scenario.before[0],
-				previousSelectionEnd: scenario.before[1],
-				selectionStart: scenario.after[0],
-				selectionEnd: scenario.after[1],
+				updateRangeStart: scenario.range[0], updateRangeEnd: scenario.range[1],
+				previousSelectionStart: scenario.before[0], previousSelectionEnd: scenario.before[1],
+				selectionStart: scenario.after[0], selectionEnd: scenario.after[1],
 				inputType: scenario.text ? 'insertReplacementText' : 'deleteContentForward',
 			});
 			const after = Selection.fromPositions(model.getPositionAt(scenario.after[0]), model.getPositionAt(scenario.after[1]));
@@ -1182,19 +1043,10 @@ for (const source of ['keyboard', 'mouse', 'api'] as const) {
 			editor.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }));
 		} else if (source === 'mouse') {
 			editor.controller.dispatchMouse({
-				position: new Position(1, 1),
-				mouseColumn: 1,
-				revealType: NavigationCommandRevealType.None,
-				startedOnLineNumbers: false,
-				inSelectionMode: false,
-				mouseDownCount: 1,
-				altKey: false,
-				ctrlKey: false,
-				metaKey: false,
-				shiftKey: false,
-				leftButton: true,
-				middleButton: false,
-				onInjectedText: false,
+				position: new Position(1, 1), mouseColumn: 1, revealType: NavigationCommandRevealType.None,
+				startedOnLineNumbers: false, inSelectionMode: false, mouseDownCount: 1,
+				altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+				leftButton: true, middleButton: false, onInjectedText: false,
 			});
 		} else {
 			editor.setPosition(new Position(1, 1));
@@ -1203,24 +1055,16 @@ for (const source of ['keyboard', 'mouse', 'api'] as const) {
 		editor.trigger('keyboard', 'type', { text: 'X' });
 		assert.equal(model.getText(), 'Xbaseabc');
 		editor.controller.undo();
-		assert.deepEqual(
-			{ text: model.getText(), selection: editor.getSelection() },
-			{
-				text: 'baseabc',
-				selection: new Selection(1, 1, 1, 1),
-			},
-		);
+		assert.deepEqual({ text: model.getText(), selection: editor.getSelection() }, {
+			text: 'baseabc', selection: new Selection(1, 1, 1, 1),
+		});
 		editor.controller.undo();
 		assert.equal(model.getText(), 'base');
 		editor.controller.redo();
 		editor.controller.redo();
-		assert.deepEqual(
-			{ text: model.getText(), selection: editor.getSelection() },
-			{
-				text: 'Xbaseabc',
-				selection: new Selection(1, 2, 1, 2),
-			},
-		);
+		assert.deepEqual({ text: model.getText(), selection: editor.getSelection() }, {
+			text: 'Xbaseabc', selection: new Selection(1, 2, 1, 2),
+		});
 	});
 }
 

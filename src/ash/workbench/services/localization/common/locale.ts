@@ -26,17 +26,10 @@ export const LocalizationConfiguration = Object.freeze({
 		scope: ConfigurationScope.APPLICATION,
 		setting: {
 			valueType: 'select',
-			get title() {
-				return localize({ bundle: 'ash.settings', key: 'displayLanguage.select' }, 'Interface language');
-			},
-			get description() {
-				return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.');
-			},
+			get title() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.select' }, 'Interface language'); },
+			get description() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'); },
 			keywords: ['language', 'locale', 'display language', '语言'],
-			options: productLanguages.map(language => ({
-				value: language.locale,
-				label: language.localizedLanguageName,
-			})),
+			options: productLanguages.map(language => ({ value: language.locale, label: language.localizedLanguageName })),
 		},
 		parse(value: unknown): LocaleId {
 			if (typeof value !== 'string') throw new TypeError('workbench.locale must be a string');

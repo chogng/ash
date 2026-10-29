@@ -62,45 +62,20 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 	]);
 
 	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
-	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
-	const registry = new ConfigurationRegistry();
-	for (const [key, readOnly] of [
-		['sessions.editable', false],
-		['sessions.fixed', true],
-		['sessions.language', false],
-	] as const) {
-		registry.registerConfiguration({
-			key,
-			defaultValue: true,
-			agentsWindow: { default: false, readOnly },
-			scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
-			parse: value => value as boolean,
-		});
+	const ConfigurationService = testConfigurationService(SessionsConfigurationService); const registry = new ConfigurationRegistry();
+	for (const [key, readOnly] of [['sessions.editable', false], ['sessions.fixed', true], ['sessions.language', false]] as const) {
+		registry.registerConfiguration({ key, defaultValue: true, agentsWindow: { default: false, readOnly }, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, parse: value => value as boolean });
 	}
 	using configuration = new ConfigurationService({ registry });
 	using tree = new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
-	tree.setChildren(
-		[...registry.getConfigurations()].map(id => ({
-			element: { kind: 'item', id, title: id, description: '', value: id },
-		})),
-	);
+	tree.setChildren([...registry.getConfigurations()].map(id => ({ element: { kind: 'item', id, title: id, description: '', value: id } })));
 	tree.setQuery('@modified');
 	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
-	assert.deepEqual(
-		tree.visibleItems.map(item => item.id),
-		[],
-	);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
 	await configuration.write('{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }');
-	assert.deepEqual(
-		tree.visibleItems.map(item => item.id),
-		['sessions.editable'],
-		'an explicit Sessions default counts, while fixed Workbench and language values do not',
-	);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['sessions.editable'], 'an explicit Sessions default counts, while fixed Workbench and language values do not');
 	await configuration.updateValue('sessions.editable', undefined);
-	assert.deepEqual(
-		tree.visibleItems.map(item => item.id),
-		[],
-	);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
 });
 
 test('Sessions preferences reuses Workbench owners and preserves navigation, search, models and localization', async () => {
@@ -110,27 +85,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const { window } = browser;
-	for (const [name, value] of Object.entries({
-		window,
-		document: window.document,
-		Node: window.Node,
-		Element: window.Element,
-		HTMLElement: window.HTMLElement,
-		Event: window.Event,
-		MouseEvent: window.MouseEvent,
-	})) {
+	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
-	window.HTMLElement.prototype.scrollTo = function () {};
+	window.HTMLElement.prototype.scrollTo = function () { };
 	// JSDOM has no layout; shared keyboard navigation still checks rendered visibility.
 	Object.defineProperty(window.Element.prototype, 'getClientRects', {
-		value: function (this: Element) {
-			return this.isConnected && !this.closest('[hidden], [inert]') ? [{}] : [];
-		},
+		value: function (this: Element) { return this.isConnected && !this.closest('[hidden], [inert]') ? [{}] : []; },
 	});
-	window.HTMLDialogElement.prototype.showModal = function () {
-		this.setAttribute('open', '');
-	};
+	window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
 	window.HTMLDialogElement.prototype.close = function () {
 		this.removeAttribute('open');
 		this.dispatchEvent(new window.Event('close'));
@@ -144,8 +107,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	]);
 
 	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
-	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
-	const model = { provider: 'openai', model: 'gpt-test' };
+	const ConfigurationService = testConfigurationService(SessionsConfigurationService); const model = { provider: 'openai', model: 'gpt-test' };
 	const otherModel = { provider: 'anthropic', model: 'claude-test' };
 	const changed = new Emitter<void>();
 	let visible = true;
@@ -153,57 +115,23 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const savedKeys: string[] = [];
 	const removedKeys: string[] = [];
 	const advisorModel = { provider: 'openai', model: 'gpt-6.1-sol' };
-	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = {
-		model: advisorModel,
-		enabled: true,
-		maxCalls: 5,
-		maxOutputTokens: 4096,
-		reasoningEffort: 'high',
-	};
+	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
 	const advisorWrites: (typeof advisor | null)[] = [];
 	const chat = {
 		onDidChangeModels: changed.event,
-		listAdvisorModels: async () => [
-			{ model: advisorModel, displayName: 'GPT-6.1 Sol' },
-			{ model: otherModel, displayName: 'Claude Test' },
-		],
+		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherModel, displayName: 'Claude Test' }],
 		readAdvisorDefault: async () => advisor,
-		saveAdvisorDefault: async (next: typeof advisor) => {
-			advisor = next;
-			advisorWrites.push(next);
-		},
-		listModelCatalog: async () => [
-			{ model, displayName: 'GPT Test' },
-			{ model: otherModel, displayName: 'Claude Test' },
-		],
-		setModelPreferences: async () => {},
+		saveAdvisorDefault: async (next: typeof advisor) => { advisor = next; advisorWrites.push(next); },
+		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
-		listModelProviders: async () => [
-			{
-				connection: 'openai',
-				provider: 'openai',
-				displayName: 'OpenAI API',
-				access: 'apiKey',
-				active: true,
-				configured: true,
-				ready: false,
-				apiKeyPolicy: 'required',
-				apiKeyConfigured: savedKeys.length > 0,
-			},
-		],
+		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: () => visible,
-		setModelProviderApiKey: async (_connection: string, key: string) => {
-			savedKeys.push(key);
-		},
-		removeModelProviderApiKey: async (connection: string) => {
-			removedKeys.push(connection);
-		},
-		refreshModels: async () => [
-			{ model, displayName: 'GPT Test' },
-			{ model: otherModel, displayName: 'Claude Test' },
-		],
+		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
+		removeModelProviderApiKey: async (connection: string) => { removedKeys.push(connection); },
+		refreshModels: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
 		setModelVisible: async (_model: typeof model, next: boolean) => {
 			writes.push(next);
 			visible = next;
@@ -223,19 +151,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
-	services.registerInstance(ISecretStorageStatusService, {
-		readState: async () => ({ status: 'available' }),
-		authorizeAccess: async () => ({ status: 'available' }),
-		setStorageMode: async mode => ({ status: 'available', mode }),
-	});
-	services.registerInstance(IAgentExecutionSettingsService, {
-		onDidChange: Event.None,
-		read: async () => ({
-			revision: 1,
-			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
-		}),
-		configure: async () => {},
-	});
+	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
+	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionModelService, transcription);
 	services.registerInstance(ILocalTranscriptionService, transcription);
@@ -265,79 +182,40 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(ClipboardService, {
 		triggerPaste: () => undefined,
 		read: async () => [],
-		readText: async () => '',
-		writeText: async text => {
-			copied.push(text);
-		},
-		readFindText: async () => '',
-		writeFindText: async () => {},
+		readText: async () => '', writeText: async text => { copied.push(text); }, readFindText: async () => '',
+		writeFindText: async () => { },
 		readImage: async () => new Uint8Array(),
-		readResources: async () => ({ resources: [], operation: 'copy' }),
-		writeResources: async () => {},
-		hasResources: async () => false,
+		readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 	} satisfies IClipboardService);
 	services.registerInstance(IKeybindingService, {
-		inChordMode: false,
-		onDidUpdateKeybindings: Event.None,
-		getKeybindings: () => [],
+		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		registerSchemaContribution: () => Disposable.None,
-		resolveKeybinding: () => {
-			throw new Error('Explicit keybinding resolution is not used by this fixture');
-		},
-		resolveUserBinding: () => undefined,
-		lookupKeybindings: () => [],
-		lookupKeybinding: () => undefined,
+		resolveKeybinding: () => { throw new Error('Explicit keybinding resolution is not used by this fixture'); },
+		resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 	});
 	using windowContextView = new BrowserContextViewService(window.document.body);
 	services.registerInstance(IContextViewService, windowContextView);
 	services.registerSingleton(ContextMenus, () => services.createInstance(BrowserContextMenuService));
 	services.registerInstance(AccessibleView, accessibleView);
-	services.registerInstance(IAppServerSkillApi, {
-		onDidChangeSkills: Event.None,
-		readTextResource: async () => {
-			throw new Error('No Skill body in this test fixture');
-		},
-		list: async () => ({ generation: 0, skills: [] }),
-		read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }),
-		registerSource: async () => {
-			throw new Error('Unexpected skill source registration');
-		},
-		setEnabled: async () => {},
-	});
-	services.registerInstance(IExtensionManagementService, {
-		onDidChangeInstalled: Event.None,
-		listInstalled: async () => [],
-		listEditorExtensions: async () => ({ extensions: [] }),
-	} as unknown as IExtensionManagementService);
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
+	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [], listEditorExtensions: async () => ({ extensions: [] }) } as unknown as IExtensionManagementService);
 	// Search renders Customize as well as Models; its required services belong to this dialog fixture.
-	const unsupportedExtensionAction = async (): Promise<never> => {
-		throw new Error('Extension mutation is outside this Preferences test');
-	};
+	const unsupportedExtensionAction = async (): Promise<never> => { throw new Error('Extension mutation is outside this Preferences test'); };
 	services.registerInstance(IQuickInputService, {
 		...quickInputServiceTestControls,
 
-		createQuickPick: () => {
-			throw new Error('Extension filter selection is outside this Preferences test');
-		},
+		createQuickPick: () => { throw new Error('Extension filter selection is outside this Preferences test'); },
 		input: unsupportedExtensionAction,
 	});
 	services.registerInstance(IGlobalExtensionEnablementService, {
-		onDidChangeEnablement: Event.None,
-		getDisabledExtensions: () => [],
-		enableExtension: unsupportedExtensionAction,
-		disableExtension: unsupportedExtensionAction,
+		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [],
+		enableExtension: unsupportedExtensionAction, disableExtension: unsupportedExtensionAction,
 	});
 	services.registerInstance(IPluginManagementService, {
-		onDidChange: Event.None,
-		list: async () => ({ revision: 0, activationGeneration: 0, packages: [] }),
-		installLocal: unsupportedExtensionAction,
-		installFromGit: unsupportedExtensionAction,
-		enable: unsupportedExtensionAction,
-		disable: unsupportedExtensionAction,
-		grant: unsupportedExtensionAction,
-		revokeGrant: unsupportedExtensionAction,
-		uninstall: unsupportedExtensionAction,
+		onDidChange: Event.None, list: async () => ({ revision: 0, activationGeneration: 0, packages: [] }),
+		installLocal: unsupportedExtensionAction, installFromGit: unsupportedExtensionAction, enable: unsupportedExtensionAction, disable: unsupportedExtensionAction,
+		grant: unsupportedExtensionAction, revokeGrant: unsupportedExtensionAction, uninstall: unsupportedExtensionAction,
 	});
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
@@ -346,55 +224,24 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => [] });
 	using workspace = new TestWorkspaceService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IAppServerRemoteAgentService, {
-		connectionState: 'connected',
-		connection: { kind: 'local', generation: 1 },
-		onDidChangeConnectionState: Event.None,
-		onDidChangeConnection: Event.None,
-		reconnect: async () => ({ kind: 'alreadyConnected' }),
-		rollbackRuntime: async () => ({ kind: 'cancelled' }),
-	});
-	services.registerInstance(ITraceSettingsService, {
-		onDidChange: Event.None,
-		read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }),
-		configure: async () => {},
-	});
+	services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
 	services.registerInstance(IFileDialogService, {
-		pickFolderAndOpen: async () => {
-			throw new Error('Unexpected folder open');
-		},
-		pickWorkspaceAndOpen: async () => {
-			throw new Error('Unexpected workspace open');
-		},
-		showOpenDialog: async () => undefined,
-		showSaveDialog: async () => undefined,
-		pickFileToSave: async () => undefined,
-		showSaveConfirm: async () => 2,
+		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
-	services.registerInstance(IChatSessionNavigationService, {
-		revision: 0,
-		getActiveConversation: () => undefined,
-		getConversations: () => [],
-		captureActiveDraft: async () => undefined,
-		openConversation: async () => {},
-		startVoiceConversation: async () => {
-			throw new Error('Unexpected voice start');
-		},
-		appendToActiveDraft: () => {},
-	});
-	const editorOpens: { resource: string; target: unknown }[] = [];
+	services.registerInstance(IChatSessionNavigationService, { revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
+	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
 			assert.equal(window.document.querySelector('dialog[open]'), null, 'the modal is closed before editor ownership changes');
 			editorOpens.push({ resource: input.resource.toString(), target });
 			return undefined;
-		},
+		}
 	} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
-	services.registerInstance(ILocalizationService, {
-		whenReady: Promise.resolve(),
-		translate: (_bundle, _key, fallback) => fallback,
-	});
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	const preferenceOpens: unknown[] = [];
 	let rejectShortcut = false;
@@ -412,82 +259,20 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 			preferenceOpens.push({ keybindings: textual });
 		},
 	});
-	services.registerInstance(IAccountService, {
-		onDidChangeAccounts: Event.None,
-		onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [] }),
-		startLogin: async () => {
-			throw new Error('Not used');
-		},
-		cancelLogin: async () => {},
-		logout: async () => {},
-	});
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
-	services.registerInstance(IAccountPolicyService, {
-		state: { phase: 'idle' },
-		onDidChangeState: Event.None,
-		refresh: async () => {},
-	});
-	services.registerInstance(IGitHubConnectionService, {
-		isConnecting: false,
-		connect: async () => {},
-		cancel: async () => {},
-	});
+	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAgentCapabilitiesService, {
-		isAvailable: true,
-		onDidChange: Event.None,
-		read: async () => ({
-			localProcessSandboxConfigured: false,
-			sandboxBackends: [],
-			directoryGrantsReadable: false,
-			sandboxDiagnostics: [],
-		}),
-	});
-	services.registerSingleton(ILanguageModelToolsService, () =>
-		createTestLanguageModelToolsService({
-			isAvailable: true,
-			read: async () => ({
-				sourceGroups: [],
-				tools: [
-					{
-						name: 'read_file',
-						description: 'Read authorized files',
-						source: 'local',
-						sourceDetails: ['Ash'],
-						exposure: 'direct',
-						authority: 'directoryRead',
-					},
-				],
-			}),
-		}),
-	);
-	services.registerInstance(IWorkspaceTrustApi, {
-		onDidChangeTrust: Event.None,
-	} as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, onDidChange: Event.None, read: async () => ({ localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ sourceGroups: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
+	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	const baseHost = createDisconnectedRendererApi();
-	const settingsHost = {
-		...baseHost,
-		executionSettings: services.get(IAgentExecutionSettingsService),
-		workspaceTrust: services.get(IWorkspaceTrustApi),
-		agentCapabilities: services.get(IAgentCapabilitiesService),
-		appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready' as const },
-	};
-	const settingsScope: ISessionProviderScope = {
-		providerId: 'primary',
-		services: { host: settingsHost } as SessionProviderServices,
-		thread: settingsHost.thread,
-		identity: value => value,
-		backendIdentity: value => value,
-		assertCurrent: () => {},
-	};
-	services.registerInstance(ISessionProviderScopeService, {
-		getScope: () => settingsScope,
-		onDidChange: Event.None,
-		onDidChangeScopes: Event.None,
-	} as unknown as ISessionProviderScopeService);
+	const settingsHost = { ...baseHost, executionSettings: services.get(IAgentExecutionSettingsService), workspaceTrust: services.get(IWorkspaceTrustApi), agentCapabilities: services.get(IAgentCapabilitiesService), appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready' as const } };
+	const settingsScope: ISessionProviderScope = { providerId: 'primary', services: { host: settingsHost } as SessionProviderServices, thread: settingsHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
+	services.registerInstance(ISessionProviderScopeService, { getScope: () => settingsScope, onDidChange: Event.None, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService);
 	let editorReveals = 0;
 	let editorRevealing = false;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, async () => {
@@ -585,10 +370,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	cancelledMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
-	assert.equal(
-		[...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'),
-		false,
-	);
+	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();
@@ -597,9 +379,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(pointerSwitch.getAttribute('aria-label'), 'Use pointer cursor on the canvas');
 	assert.equal(pointerSwitch.checked, true);
 	let resolveSaved!: () => void;
-	const pointerSaved = new Promise<void>(resolve => {
-		resolveSaved = resolve;
-	});
+	const pointerSaved = new Promise<void>(resolve => { resolveSaved = resolve; });
 	using savedListener = configuration.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration('sessions.design.usePointerCursor')) resolveSaved();
 	});
@@ -684,10 +464,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(rows.length, 2);
 	modelSearch.value = 'anthropic/claude';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	assert.deepEqual(
-		rows.map(row => row.isConnected),
-		[false, true],
-	);
+	assert.deepEqual(rows.map(row => row.isConnected), [false, true]);
 	modelSearch.value = 'missing';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
@@ -700,10 +477,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(window.document.querySelector('.ash-models-settings-api-row'));
 	modelSearch.value = 'GPT';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	assert.deepEqual(
-		rows.map(row => row.isConnected),
-		[true, false],
-	);
+	assert.deepEqual(rows.map(row => row.isConnected), [true, false]);
 	const switchInput = window.document.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
 	assert.ok(switchInput);
 	assert.equal(switchInput.getAttribute('aria-label'), 'Show GPT Test in model picker');
@@ -802,16 +576,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openCategoryAction('tab', 'Open Tab settings');
 	await openCategoryAction('code-intelligence', 'Language servers');
 	await openCategoryAction('environment', 'Open Environment settings');
-	assert.deepEqual(
-		editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })),
-		[
-			{ section: null, target: 'modalGroup' },
-			{ section: 'browser', target: 'modalGroup' },
-			{ section: 'editor-opening', target: 'modalGroup' },
-			{ section: 'editor-language', target: 'modalGroup' },
-			{ section: 'terminal', target: 'modalGroup' },
-		],
-	);
+	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
+		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
+		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
+	]);
 	assert.equal(editorReveals, 2);
 	let accountOpens = 0;
 	using manageAccounts = CommandsRegistry.register('workbench.action.manageAccounts', () => {
@@ -842,18 +610,14 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await explicitUI;
 	await configuration.updateValue('workbench.settings.editor', 'ui');
 	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false });
-	assert.deepEqual(preferenceOpens.at(-1), {
-		user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false },
-	});
+	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
 	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');
 	assert.equal(editorReveals, 4);
 	await preferences.open({ groupId: 7, query: '@id:editor.fontSize', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { groupId: 7, query: '@id:editor.fontSize', jsonEditor: false } });
 	assert.equal(editorReveals, 5, 'explicit group requests reveal the document host');
 	await preferences.open({ openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false });
-	assert.deepEqual(preferenceOpens.at(-1), {
-		user: { openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false },
-	});
+	assert.deepEqual(preferenceOpens.at(-1), { user: { openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false } });
 	assert.equal(editorReveals, 6);
 	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
 	const callsBeforeCancel = preferenceOpens.length;
@@ -867,13 +631,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(editorReveals, 6, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
-	pendingShortcut = new Promise<void>((_resolve, reject) => {
-		rejectLateOpen = reject;
-	});
+	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	preferences.dispose();
 	rejectLateOpen(new Error('window closed while opening shortcuts'));
-	await pendingShortcut.catch(() => {});
+	await pendingShortcut.catch(() => { });
 	await Promise.resolve();
 	assert.equal(notifications.model.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
 	assert.equal(editorReveals, 6);

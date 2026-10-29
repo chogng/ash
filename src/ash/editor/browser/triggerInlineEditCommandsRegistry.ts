@@ -2,7 +2,7 @@ import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 
 /** Registry for editor commands that retrigger inline completions after execution. */
 export abstract class TriggerInlineEditCommandsRegistry {
-	private static readonly commands = new Map<string, { permanent: boolean; leases: number }>();
+	private static readonly commands = new Map<string, { permanent: boolean; leases: number; }>();
 
 	public static getRegisteredCommands(): readonly string[] {
 		return [...this.commands.keys()];
@@ -22,7 +22,7 @@ export abstract class TriggerInlineEditCommandsRegistry {
 		});
 	}
 
-	private static entry(commandId: string): { permanent: boolean; leases: number } {
+	private static entry(commandId: string): { permanent: boolean; leases: number; } {
 		if (typeof commandId !== 'string' || !commandId.trim()) throw new TypeError('Inline edit trigger command ID must be a non-empty string');
 		let entry = this.commands.get(commandId);
 		if (!entry) {

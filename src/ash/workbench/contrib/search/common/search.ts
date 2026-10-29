@@ -15,27 +15,20 @@ export const SearchStateKey = new RawContextKey<SearchUIState>('searchState', Se
 
 /** The Search view owns results; consumers may capture a completed, retained result. */
 export interface ISearchView extends IView {
-	getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number } | undefined;
+	getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number; } | undefined;
 }
 
-export async function getWorkspaceSymbols(
-	providers: readonly LanguageWorkspaceSymbolProvider[],
-	query: string,
-	signal: AbortSignal = new AbortController().signal,
-	onDidUpdate?: (symbols: readonly LanguageWorkspaceSymbol[]) => void,
-): Promise<readonly LanguageWorkspaceSymbol[]> {
+export async function getWorkspaceSymbols(providers: readonly LanguageWorkspaceSymbolProvider[], query: string, signal: AbortSignal = new AbortController().signal, onDidUpdate?: (symbols: readonly LanguageWorkspaceSymbol[]) => void): Promise<readonly LanguageWorkspaceSymbol[]> {
 	const completed = new Array<readonly LanguageWorkspaceSymbol[] | undefined>(providers.length);
-	await Promise.all(
-		providers.map(async (provider, index) => {
-			try {
-				const symbols = await provider.provideWorkspaceSymbols(query, signal);
-				completed[index] = Object.freeze(symbols.map(normalizeWorkspaceSymbol));
-			} catch {
-				completed[index] = Object.freeze([]);
-			}
-			if (!signal.aborted) onDidUpdate?.(mergeWorkspaceSymbols(completed));
-		}),
-	);
+	await Promise.all(providers.map(async (provider, index) => {
+		try {
+			const symbols = await provider.provideWorkspaceSymbols(query, signal);
+			completed[index] = Object.freeze(symbols.map(normalizeWorkspaceSymbol));
+		} catch {
+			completed[index] = Object.freeze([]);
+		}
+		if (!signal.aborted) onDidUpdate?.(mergeWorkspaceSymbols(completed));
+	}));
 	return signal.aborted ? Object.freeze([]) : mergeWorkspaceSymbols(completed);
 }
 
@@ -54,8 +47,7 @@ function mergeWorkspaceSymbols(providerResults: readonly (readonly LanguageWorks
 }
 
 function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWorkspaceSymbol {
-	if (!symbol || typeof symbol !== 'object' || typeof symbol.name !== 'string' || symbol.name.trim().length === 0 || !symbol.resource)
-		throw new TypeError('Workspace symbol requires a name and resource');
+	if (!symbol || typeof symbol !== 'object' || typeof symbol.name !== 'string' || symbol.name.trim().length === 0 || !symbol.resource) throw new TypeError('Workspace symbol requires a name and resource');
 	return Object.freeze({
 		name: symbol.name,
 		kind: symbol.kind,
@@ -69,10 +61,7 @@ function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWork
 /** Captures symbol text only while its local index revision still matches the source. */
 export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
 	const revision = getWorkspaceSymbolRevision(symbol);
-	const contents = workingCopies
-		.get(symbol.resource)
-		.filter(workingCopy => workingCopy.backupKind === 'text')
-		.map(workingCopy => workingCopy.backup());
+	const contents = workingCopies.get(symbol.resource).filter(workingCopy => workingCopy.backupKind === 'text').map(workingCopy => workingCopy.backup());
 	if (contents.length > 0) {
 		const content = contents[0] as string;
 		if (contents.some(candidate => candidate !== content)) return undefined;
@@ -86,6 +75,6 @@ export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol,
 
 export function getWorkspaceSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
 	if (!symbol.data || typeof symbol.data !== 'object') return undefined;
-	const data = symbol.data as { source?: unknown; sourceRevision?: unknown };
+	const data = symbol.data as { source?: unknown; sourceRevision?: unknown; };
 	return data.source === 'codebaseSymbols' && typeof data.sourceRevision === 'string' && data.sourceRevision.startsWith('sha256:') ? data.sourceRevision : undefined;
 }

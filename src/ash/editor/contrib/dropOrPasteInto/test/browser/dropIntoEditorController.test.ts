@@ -38,11 +38,7 @@ test('DropIntoEditorController inserts plain text at the hit position', async ()
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const drop = textDropEvent(dom.window, ' dropped', 80, 10);
@@ -50,14 +46,11 @@ test('DropIntoEditorController inserts plain text at the hit position', async ()
 	editor.getDomNode().dispatchEvent(drop);
 	await waitFor(() => model.getText() === 'alpha dropped');
 
-	assert.deepEqual(
-		{ handled: drop.defaultPrevented, value: model.getText(), position: editor.getPosition() },
-		{
-			handled: true,
-			value: 'alpha dropped',
-			position: new Position(1, 14),
-		},
-	);
+	assert.deepEqual({ handled: drop.defaultPrevented, value: model.getText(), position: editor.getPosition() }, {
+		handled: true,
+		value: 'alpha dropped',
+		position: new Position(1, 14),
+	});
 });
 
 test('Disabled drop-into-editor leaves text drops to the host', () => {
@@ -80,14 +73,11 @@ test('Disabled drop-into-editor leaves text drops to the host', () => {
 	editor.getDomNode().dispatchEvent(dragOver);
 	editor.getDomNode().dispatchEvent(drop);
 
-	assert.deepEqual(
-		{ dragOverHandled: dragOver.defaultPrevented, dropHandled: drop.defaultPrevented, value: model.getText() },
-		{
-			dragOverHandled: false,
-			dropHandled: false,
-			value: 'alpha',
-		},
-	);
+	assert.deepEqual({ dragOverHandled: dragOver.defaultPrevented, dropHandled: drop.defaultPrevented, value: model.getText() }, {
+		dragOverHandled: false,
+		dropHandled: false,
+		value: 'alpha',
+	});
 });
 
 test('Read-only editors leave text drops to the host', () => {
@@ -115,11 +105,7 @@ test('File and HTML-only drops remain available to the host', () => {
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	let fileReads = 0;
@@ -138,29 +124,26 @@ test('File and HTML-only drops remain available to the host', () => {
 	const htmlDrop = transferDropEvent(dom.window, {
 		types: ['text/html'],
 		files: [],
-		getData: type => (type === 'text/html' ? '<div>ignored</div>' : ''),
+		getData: type => type === 'text/html' ? '<div>ignored</div>' : '',
 	});
 
 	editor.getDomNode().dispatchEvent(fileDragOver);
 	editor.getDomNode().dispatchEvent(fileDrop);
 	editor.getDomNode().dispatchEvent(htmlDrop);
 
-	assert.deepEqual(
-		{
-			fileDragOverHandled: fileDragOver.defaultPrevented,
-			fileDropHandled: fileDrop.defaultPrevented,
-			htmlDropHandled: htmlDrop.defaultPrevented,
-			value: model.getText(),
-			fileReads,
-		},
-		{
-			fileDragOverHandled: false,
-			fileDropHandled: false,
-			htmlDropHandled: false,
-			value: 'alpha',
-			fileReads: 0,
-		},
-	);
+	assert.deepEqual({
+		fileDragOverHandled: fileDragOver.defaultPrevented,
+		fileDropHandled: fileDrop.defaultPrevented,
+		htmlDropHandled: htmlDrop.defaultPrevented,
+		value: model.getText(),
+		fileReads,
+	}, {
+		fileDragOverHandled: false,
+		fileDropHandled: false,
+		htmlDropHandled: false,
+		value: 'alpha',
+		fileReads: 0,
+	});
 });
 
 test('URI-list drop inserts file paths and external URIs before duplicate plain text', async () => {
@@ -168,17 +151,15 @@ test('URI-list drop inserts file paths and external URIs before duplicate plain 
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const dataTransfer = {
 		types: ['text/uri-list', 'text/plain'],
 		files: [],
-		getData: (type: string) => (type === 'text/uri-list' ? '# resources\nfile:///workspace/one.rs\nhttps://example.test/two' : 'duplicate'),
+		getData: (type: string) => type === 'text/uri-list'
+			? '# resources\nfile:///workspace/one.rs\nhttps://example.test/two'
+			: 'duplicate',
 	};
 	const drop = transferDropEvent(dom.window, dataTransfer);
 
@@ -186,13 +167,10 @@ test('URI-list drop inserts file paths and external URIs before duplicate plain 
 	const expected = `alpha${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`;
 	await waitFor(() => model.getText() === expected);
 
-	assert.deepEqual(
-		{ handled: drop.defaultPrevented, value: model.getText() },
-		{
-			handled: true,
-			value: expected,
-		},
-	);
+	assert.deepEqual({ handled: drop.defaultPrevented, value: model.getText() }, {
+		handled: true,
+		value: expected,
+	});
 });
 
 test('A language drop provider participates in sorting and the post-drop selector', async () => {
@@ -207,24 +185,14 @@ test('A language drop provider participates in sorting and the post-drop selecto
 		dropMimeTypes: ['text/plain'],
 		providedDropEditKinds: [kind],
 		provideDocumentDropEdits() {
-			return {
-				edits: [{ title: 'Insert Custom Drop', kind, insertText: 'pending', yieldTo: [{ mimeType: 'text/plain' }] }],
-				dispose() {
-					disposedSessions += 1;
-				},
-			};
+			return { edits: [{ title: 'Insert Custom Drop', kind, insertText: 'pending', yieldTo: [{ mimeType: 'text/plain' }] }], dispose() { disposedSessions += 1; } };
 		},
 		async resolveDocumentDropEdit(edit) {
 			return { ...edit, insertText: 'CUSTOM' };
 		},
 	};
 	using registration = features.documentDropEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		languageFeaturesService: features,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, languageFeaturesService: features, lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const drop = textDropEvent(dom.window, 'raw', 80, 10);
@@ -253,22 +221,13 @@ test('A dropped snippet selects its placeholder and Tab reaches its final stop',
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.snippet');
 	const provider: DocumentDropEditProvider = {
-		dropMimeTypes: ['text/plain'],
-		providedDropEditKinds: [kind],
+		dropMimeTypes: ['text/plain'], providedDropEditKinds: [kind],
 		provideDocumentDropEdits() {
-			return {
-				edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '(${1:name})$0' } }],
-				dispose() {},
-			};
+			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '(${1:name})$0' } }], dispose() { } };
 		},
 	};
 	using registration = features.documentDropEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'),
-		model,
-		languageFeaturesService: features,
-		lineHeight: 20,
-	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, languageFeaturesService: features, lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	editor.getDomNode().dispatchEvent(textDropEvent(dom.window, 'raw', 80, 10));
@@ -281,16 +240,11 @@ test('A dropped snippet selects its placeholder and Tab reaches its final stop',
 });
 
 function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string, clientX = 0, clientY = 0): DragEvent {
-	return transferDropEvent(
-		targetWindow,
-		{
-			types: ['text/plain'],
-			files: [],
-			getData: type => (type === 'text/plain' ? text : ''),
-		},
-		clientX,
-		clientY,
-	);
+	return transferDropEvent(targetWindow, {
+		types: ['text/plain'],
+		files: [],
+		getData: type => type === 'text/plain' ? text : '',
+	}, clientX, clientY);
 }
 
 interface TestDataTransfer {
@@ -301,18 +255,16 @@ interface TestDataTransfer {
 
 function transferDropEvent(targetWindow: typeof browserEnvironment.window, dataTransfer: TestDataTransfer, clientX = 80, clientY = 10, type = 'drop'): DragEvent {
 	const items = [
-		...dataTransfer.types
-			.filter(mimeType => mimeType !== 'Files')
-			.map(mimeType => ({
-				kind: 'string',
-				type: mimeType,
-				getAsString: (callback: (value: string) => void) => callback(dataTransfer.getData(mimeType)),
-				getAsFile: () => null,
-			})),
+		...dataTransfer.types.filter(mimeType => mimeType !== 'Files').map(mimeType => ({
+			kind: 'string',
+			type: mimeType,
+			getAsString: (callback: (value: string) => void) => callback(dataTransfer.getData(mimeType)),
+			getAsFile: () => null,
+		})),
 		...dataTransfer.files.map(file => ({
 			kind: 'file',
 			type: file.type,
-			getAsString: (_callback: (value: string) => void) => {},
+			getAsString: (_callback: (value: string) => void) => { },
 			getAsFile: () => file,
 		})),
 	];

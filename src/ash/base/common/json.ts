@@ -18,7 +18,7 @@ export const JsonTokenKind = {
 	Unknown: 'unknown',
 } as const;
 
-export type JsonTokenKind = (typeof JsonTokenKind)[keyof typeof JsonTokenKind];
+export type JsonTokenKind = typeof JsonTokenKind[keyof typeof JsonTokenKind];
 
 export interface JsonToken {
 	readonly kind: JsonTokenKind;
@@ -146,12 +146,7 @@ export function scanJson(source: string, options: JsonParseOptions = {}): Scanne
 		if (character === '"') {
 			offset = scanString(source, start, errors);
 			const raw = source.slice(start, offset);
-			tokens.push({
-				kind: JsonTokenKind.String,
-				offset: start,
-				length: offset - start,
-				value: decodeStringToken(raw),
-			});
+			tokens.push({ kind: JsonTokenKind.String, offset: start, length: offset - start, value: decodeStringToken(raw) });
 			continue;
 		}
 		const number = numberPattern.exec(source.slice(offset))?.[0];
@@ -313,20 +308,13 @@ export function editJsonObjectProperty(source: string, key: string, value: unkno
 
 function punctuationKind(character: string): JsonTokenKind | undefined {
 	switch (character) {
-		case '{':
-			return JsonTokenKind.OpenBrace;
-		case '}':
-			return JsonTokenKind.CloseBrace;
-		case '[':
-			return JsonTokenKind.OpenBracket;
-		case ']':
-			return JsonTokenKind.CloseBracket;
-		case ',':
-			return JsonTokenKind.Comma;
-		case ':':
-			return JsonTokenKind.Colon;
-		default:
-			return undefined;
+		case '{': return JsonTokenKind.OpenBrace;
+		case '}': return JsonTokenKind.CloseBrace;
+		case '[': return JsonTokenKind.OpenBracket;
+		case ']': return JsonTokenKind.CloseBracket;
+		case ',': return JsonTokenKind.Comma;
+		case ':': return JsonTokenKind.Colon;
+		default: return undefined;
 	}
 }
 
@@ -379,12 +367,8 @@ function decodeStringToken(raw: string): string {
 	}
 }
 
-function keywordKind(source: string, offset: number): { readonly kind: JsonTokenKind; readonly length: number } | undefined {
-	for (const [word, kind] of [
-		['true', JsonTokenKind.True],
-		['false', JsonTokenKind.False],
-		['null', JsonTokenKind.Null],
-	] as const) {
+function keywordKind(source: string, offset: number): { readonly kind: JsonTokenKind; readonly length: number; } | undefined {
+	for (const [word, kind] of [['true', JsonTokenKind.True], ['false', JsonTokenKind.False], ['null', JsonTokenKind.Null]] as const) {
 		if (source.startsWith(word, offset) && isTokenBoundary(source[offset + word.length] ?? '')) return { kind, length: word.length };
 	}
 	return undefined;
@@ -405,7 +389,12 @@ class JsonParser {
 	private readonly errors: JsonParseError[];
 	private index = 0;
 
-	constructor(source: string, tokens: readonly JsonToken[], scanErrors: readonly JsonParseError[], options: JsonParseOptions) {
+	constructor(
+		source: string,
+		tokens: readonly JsonToken[],
+		scanErrors: readonly JsonParseError[],
+		options: JsonParseOptions,
+	) {
 		this.source = source;
 		this.options = options;
 		this.significantTokens = tokens.filter(candidate => !isTrivia(candidate.kind));
@@ -428,35 +417,18 @@ class JsonParser {
 		const current = this.current();
 		if (!current) return undefined;
 		switch (current.kind) {
-			case JsonTokenKind.OpenBrace:
-				return this.parseObject();
-			case JsonTokenKind.OpenBracket:
-				return this.parseArray();
+			case JsonTokenKind.OpenBrace: return this.parseObject();
+			case JsonTokenKind.OpenBracket: return this.parseArray();
 			case JsonTokenKind.String:
 				this.index += 1;
-				return Object.freeze({
-					type: 'string',
-					value: current.value ?? '',
-					offset: current.offset,
-					length: current.length,
-				});
+				return Object.freeze({ type: 'string', value: current.value ?? '', offset: current.offset, length: current.length });
 			case JsonTokenKind.Number:
 				this.index += 1;
-				return Object.freeze({
-					type: 'number',
-					value: Number(current.value),
-					offset: current.offset,
-					length: current.length,
-				});
+				return Object.freeze({ type: 'number', value: Number(current.value), offset: current.offset, length: current.length });
 			case JsonTokenKind.True:
 			case JsonTokenKind.False:
 				this.index += 1;
-				return Object.freeze({
-					type: 'boolean',
-					value: current.kind === JsonTokenKind.True,
-					offset: current.offset,
-					length: current.length,
-				});
+				return Object.freeze({ type: 'boolean', value: current.kind === JsonTokenKind.True, offset: current.offset, length: current.length });
 			case JsonTokenKind.Null:
 				this.index += 1;
 				return Object.freeze({ type: 'null', value: null, offset: current.offset, length: current.length });
@@ -479,28 +451,14 @@ class JsonParser {
 				break;
 			}
 			this.index += 1;
-			const keyNode = Object.freeze<JsonStringNode>({
-				type: 'string',
-				value: key.value ?? '',
-				offset: key.offset,
-				length: key.length,
-			});
+			const keyNode = Object.freeze<JsonStringNode>({ type: 'string', value: key.value ?? '', offset: key.offset, length: key.length });
 			if (!this.consume(JsonTokenKind.Colon)) {
 				const current = this.current();
 				this.errors.push(parseError("Expected ':' after the property name", current?.offset ?? key.offset + key.length, current?.length ?? 1));
 			}
 			const valueNode = this.parseValue();
 			const end = valueNode ? valueNode.offset + valueNode.length : key.offset + key.length;
-			properties.push(
-				Object.freeze({
-					type: 'property',
-					key: keyNode.value,
-					keyNode,
-					valueNode,
-					offset: key.offset,
-					length: end - key.offset,
-				}),
-			);
+			properties.push(Object.freeze({ type: 'property', key: keyNode.value, keyNode, valueNode, offset: key.offset, length: end - key.offset }));
 			const comma = this.consume(JsonTokenKind.Comma);
 			if (comma) {
 				if (this.current()?.kind === JsonTokenKind.CloseBrace && !this.options.allowTrailingComma) {
@@ -518,12 +476,7 @@ class JsonParser {
 		const close = this.consume(JsonTokenKind.CloseBrace);
 		if (!close) this.errors.push(parseError("Expected '}'", this.source.length, 1));
 		const end = close ? close.offset + close.length : this.source.length;
-		return Object.freeze({
-			type: 'object',
-			properties: Object.freeze(properties),
-			offset: open.offset,
-			length: end - open.offset,
-		});
+		return Object.freeze({ type: 'object', properties: Object.freeze(properties), offset: open.offset, length: end - open.offset });
 	}
 
 	private parseArray(): JsonArrayNode {
@@ -551,12 +504,7 @@ class JsonParser {
 		const close = this.consume(JsonTokenKind.CloseBracket);
 		if (!close) this.errors.push(parseError("Expected ']'", this.source.length, 1));
 		const end = close ? close.offset + close.length : this.source.length;
-		return Object.freeze({
-			type: 'array',
-			items: Object.freeze(items),
-			offset: open.offset,
-			length: end - open.offset,
-		});
+		return Object.freeze({ type: 'array', items: Object.freeze(items), offset: open.offset, length: end - open.offset });
 	}
 
 	private current(): JsonToken | undefined {
@@ -590,31 +538,20 @@ function isTrivia(kind: JsonTokenKind): boolean {
 }
 
 function isMatchingClose(open: JsonTokenKind, close: JsonTokenKind): boolean {
-	return (open === JsonTokenKind.OpenBrace && close === JsonTokenKind.CloseBrace) || (open === JsonTokenKind.OpenBracket && close === JsonTokenKind.CloseBracket);
+	return open === JsonTokenKind.OpenBrace && close === JsonTokenKind.CloseBrace || open === JsonTokenKind.OpenBracket && close === JsonTokenKind.CloseBracket;
 }
 
 function propertyValue(node: JsonValueNode): JsonValue {
 	switch (node.type) {
-		case 'string':
-			return node.value;
-		case 'number':
-			return node.value;
-		case 'boolean':
-			return node.value;
-		case 'null':
-			return null;
-		case 'array':
-			return node.items.map(propertyValue);
+		case 'string': return node.value;
+		case 'number': return node.value;
+		case 'boolean': return node.value;
+		case 'null': return null;
+		case 'array': return node.items.map(propertyValue);
 		case 'object': {
 			const result: Record<string, JsonValue> = {};
 			for (const property of node.properties) {
-				if (property.valueNode)
-					Object.defineProperty(result, property.key, {
-						value: propertyValue(property.valueNode),
-						enumerable: true,
-						configurable: true,
-						writable: true,
-					});
+				if (property.valueNode) Object.defineProperty(result, property.key, { value: propertyValue(property.valueNode), enumerable: true, configurable: true, writable: true });
 			}
 			return result;
 		}
@@ -632,7 +569,9 @@ function detectFormatting(source: string, root: JsonObjectNode): JsonFormatting 
 	const rootIndent = indentationAt(source, root.offset);
 	const firstProperty = root.properties[0];
 	const propertyIndent = firstProperty ? indentationAt(source, firstProperty.offset) : '';
-	const indent = propertyIndent.startsWith(rootIndent) && propertyIndent.length > rootIndent.length ? propertyIndent.slice(rootIndent.length) : '\t';
+	const indent = propertyIndent.startsWith(rootIndent) && propertyIndent.length > rootIndent.length
+		? propertyIndent.slice(rootIndent.length)
+		: '\t';
 	return { eol, indent, rootIndent };
 }
 
@@ -648,10 +587,7 @@ function indentationAt(source: string, offset: number): string {
 }
 
 function indentMultiline(value: string, propertyIndent: string, eol: string): string {
-	return value
-		.split(eol)
-		.map((line, index) => (index === 0 ? line : `${propertyIndent}${line}`))
-		.join(eol);
+	return value.split(eol).map((line, index) => index === 0 ? line : `${propertyIndent}${line}`).join(eol);
 }
 
 function insertObjectProperty(source: string, document: JsonDocument, key: string, serialized: string, formatting: JsonFormatting): string {
@@ -689,9 +625,7 @@ function removeObjectProperty(source: string, document: JsonDocument, property: 
 	}
 	const previous = root.properties[index - 1];
 	if (!previous) return replaceSource(source, property.offset, property.length, '');
-	const separator = [...document.tokens]
-		.reverse()
-		.find(candidate => candidate.kind === JsonTokenKind.Comma && candidate.offset >= previous.offset + previous.length && candidate.offset < property.offset);
+	const separator = [...document.tokens].reverse().find(candidate => candidate.kind === JsonTokenKind.Comma && candidate.offset >= previous.offset + previous.length && candidate.offset < property.offset);
 	const withoutProperty = replaceSource(source, property.offset, property.length, '');
 	return separator ? replaceSource(withoutProperty, separator.offset, separator.length, '') : withoutProperty;
 }
@@ -714,7 +648,7 @@ export const ScanError = {
 	InvalidCharacter: 6,
 } as const;
 
-export type ScanError = (typeof ScanError)[keyof typeof ScanError];
+export type ScanError = typeof ScanError[keyof typeof ScanError];
 
 export const SyntaxKind = {
 	OpenBraceToken: 1,
@@ -736,7 +670,7 @@ export const SyntaxKind = {
 	EOF: 17,
 } as const;
 
-export type SyntaxKind = (typeof SyntaxKind)[keyof typeof SyntaxKind];
+export type SyntaxKind = typeof SyntaxKind[keyof typeof SyntaxKind];
 
 export interface JSONScanner {
 	setPosition(position: number): void;
@@ -774,7 +708,7 @@ export const ParseErrorCode = {
 	InvalidCharacter: 16,
 } as const;
 
-export type ParseErrorCode = (typeof ParseErrorCode)[keyof typeof ParseErrorCode];
+export type ParseErrorCode = typeof ParseErrorCode[keyof typeof ParseErrorCode];
 
 export type NodeType = 'object' | 'array' | 'property' | 'string' | 'number' | 'boolean' | 'null';
 
@@ -906,38 +840,21 @@ export function createScanner(text: string, ignoreTrivia = false): JSONScanner {
 				const escaped = text.charCodeAt(position);
 				position += 1;
 				switch (escaped) {
-					case 0x22:
-						result += '"';
-						break;
-					case 0x5c:
-						result += '\\';
-						break;
-					case 0x2f:
-						result += '/';
-						break;
-					case 0x62:
-						result += '\b';
-						break;
-					case 0x66:
-						result += '\f';
-						break;
-					case 0x6e:
-						result += '\n';
-						break;
-					case 0x72:
-						result += '\r';
-						break;
-					case 0x74:
-						result += '\t';
-						break;
+					case 0x22: result += '"'; break;
+					case 0x5c: result += '\\'; break;
+					case 0x2f: result += '/'; break;
+					case 0x62: result += '\b'; break;
+					case 0x66: result += '\f'; break;
+					case 0x6e: result += '\n'; break;
+					case 0x72: result += '\r'; break;
+					case 0x74: result += '\t'; break;
 					case 0x75: {
 						const codePoint = scanHexDigits(4);
 						if (codePoint < 0) scanError = ScanError.InvalidUnicode;
 						else result += String.fromCharCode(codePoint);
 						break;
 					}
-					default:
-						scanError = ScanError.InvalidEscapeCharacter;
+					default: scanError = ScanError.InvalidEscapeCharacter;
 				}
 				start = position;
 				continue;
@@ -983,24 +900,12 @@ export function createScanner(text: string, ignoreTrivia = false): JSONScanner {
 			return (token = SyntaxKind.LineBreakTrivia);
 		}
 		switch (code) {
-			case 0x7b:
-				position += 1;
-				return (token = SyntaxKind.OpenBraceToken);
-			case 0x7d:
-				position += 1;
-				return (token = SyntaxKind.CloseBraceToken);
-			case 0x5b:
-				position += 1;
-				return (token = SyntaxKind.OpenBracketToken);
-			case 0x5d:
-				position += 1;
-				return (token = SyntaxKind.CloseBracketToken);
-			case 0x3a:
-				position += 1;
-				return (token = SyntaxKind.ColonToken);
-			case 0x2c:
-				position += 1;
-				return (token = SyntaxKind.CommaToken);
+			case 0x7b: position += 1; return (token = SyntaxKind.OpenBraceToken);
+			case 0x7d: position += 1; return (token = SyntaxKind.CloseBraceToken);
+			case 0x5b: position += 1; return (token = SyntaxKind.OpenBracketToken);
+			case 0x5d: position += 1; return (token = SyntaxKind.CloseBracketToken);
+			case 0x3a: position += 1; return (token = SyntaxKind.ColonToken);
+			case 0x2c: position += 1; return (token = SyntaxKind.CommaToken);
 			case 0x22:
 				position += 1;
 				tokenValue = scanString();
@@ -1050,14 +955,10 @@ export function createScanner(text: string, ignoreTrivia = false): JSONScanner {
 				if (position !== tokenOffset) {
 					tokenValue = text.slice(tokenOffset, position);
 					switch (tokenValue) {
-						case 'true':
-							return (token = SyntaxKind.TrueKeyword);
-						case 'false':
-							return (token = SyntaxKind.FalseKeyword);
-						case 'null':
-							return (token = SyntaxKind.NullKeyword);
-						default:
-							return (token = SyntaxKind.Unknown);
+						case 'true': return (token = SyntaxKind.TrueKeyword);
+						case 'false': return (token = SyntaxKind.FalseKeyword);
+						case 'null': return (token = SyntaxKind.NullKeyword);
+						default: return (token = SyntaxKind.Unknown);
 					}
 				}
 				position += 1;
@@ -1098,12 +999,8 @@ export function parse(text: string, errors: ParseError[] = [], options: ParseOpt
 			currentParent = object;
 			currentProperty = null;
 		},
-		onObjectProperty: name => {
-			currentProperty = name;
-		},
-		onObjectEnd: () => {
-			currentParent = previousParents.pop() ?? [];
-		},
+		onObjectProperty: name => { currentProperty = name; },
+		onObjectEnd: () => { currentParent = previousParents.pop() ?? []; },
 		onArrayBegin: () => {
 			const array: unknown[] = [];
 			onValue(array);
@@ -1111,9 +1008,7 @@ export function parse(text: string, errors: ParseError[] = [], options: ParseOpt
 			currentParent = array;
 			currentProperty = null;
 		},
-		onArrayEnd: () => {
-			currentParent = previousParents.pop() ?? [];
-		},
+		onArrayEnd: () => { currentParent = previousParents.pop() ?? []; },
 		onLiteralValue: onValue,
 		onError: (error, offset, length) => errors.push({ error, offset, length }),
 	};
@@ -1145,9 +1040,7 @@ export function parseTree(text: string, errors: ParseError[] = [], options: Pars
 			currentParent = currentParent.parent ?? currentParent;
 			completeProperty(offset + length);
 		},
-		onArrayBegin: offset => {
-			currentParent = append({ type: 'array', offset, length: -1, parent: currentParent, children: [] });
-		},
+		onArrayBegin: offset => { currentParent = append({ type: 'array', offset, length: -1, parent: currentParent, children: [] }); },
 		onArrayEnd: (offset, length) => {
 			currentParent.length = offset + length - currentParent.offset;
 			currentParent = currentParent.parent ?? currentParent;
@@ -1222,37 +1115,21 @@ export function visit(text: string, visitor: JSONVisitor, options: ParseOptions 
 		const offset = scanner.getTokenOffset();
 		const length = scanner.getTokenLength();
 		switch (error) {
-			case ScanError.UnexpectedEndOfComment:
-				report(ParseErrorCode.UnexpectedEndOfComment, offset, length);
-				break;
-			case ScanError.UnexpectedEndOfString:
-				report(ParseErrorCode.UnexpectedEndOfString, offset, length);
-				break;
-			case ScanError.UnexpectedEndOfNumber:
-				report(ParseErrorCode.UnexpectedEndOfNumber, offset, length);
-				break;
-			case ScanError.InvalidUnicode:
-				report(ParseErrorCode.InvalidUnicode, offset, length);
-				break;
-			case ScanError.InvalidEscapeCharacter:
-				report(ParseErrorCode.InvalidEscapeCharacter, offset, length);
-				break;
-			case ScanError.InvalidCharacter:
-				report(ParseErrorCode.InvalidCharacter, offset, length);
-				break;
+			case ScanError.UnexpectedEndOfComment: report(ParseErrorCode.UnexpectedEndOfComment, offset, length); break;
+			case ScanError.UnexpectedEndOfString: report(ParseErrorCode.UnexpectedEndOfString, offset, length); break;
+			case ScanError.UnexpectedEndOfNumber: report(ParseErrorCode.UnexpectedEndOfNumber, offset, length); break;
+			case ScanError.InvalidUnicode: report(ParseErrorCode.InvalidUnicode, offset, length); break;
+			case ScanError.InvalidEscapeCharacter: report(ParseErrorCode.InvalidEscapeCharacter, offset, length); break;
+			case ScanError.InvalidCharacter: report(ParseErrorCode.InvalidCharacter, offset, length); break;
 		}
 	}
 
 	function parseValue(): boolean {
 		switch (current) {
-			case SyntaxKind.OpenBracketToken:
-				return parseArray();
-			case SyntaxKind.OpenBraceToken:
-				return parseObject();
-			case SyntaxKind.StringLiteral:
-				return parseString(true);
-			default:
-				return parseLiteral();
+			case SyntaxKind.OpenBracketToken: return parseArray();
+			case SyntaxKind.OpenBraceToken: return parseObject();
+			case SyntaxKind.StringLiteral: return parseString(true);
+			default: return parseLiteral();
 		}
 	}
 
@@ -1276,17 +1153,10 @@ export function visit(text: string, visitor: JSONVisitor, options: ParseOptions 
 					value = 0;
 				}
 				break;
-			case SyntaxKind.NullKeyword:
-				value = null;
-				break;
-			case SyntaxKind.TrueKeyword:
-				value = true;
-				break;
-			case SyntaxKind.FalseKeyword:
-				value = false;
-				break;
-			default:
-				return false;
+			case SyntaxKind.NullKeyword: value = null; break;
+			case SyntaxKind.TrueKeyword: value = true; break;
+			case SyntaxKind.FalseKeyword: value = false; break;
+			default: return false;
 		}
 		visitor.onLiteralValue?.(value, scanner.getTokenOffset(), scanner.getTokenLength());
 		current = scanNext();
@@ -1419,7 +1289,7 @@ export function getNodeValue(node: Node | undefined): unknown {
 }
 
 export function contains(node: Node, offset: number, includeRightBound = false): boolean {
-	return offset >= node.offset && (offset < node.offset + node.length || (includeRightBound && offset === node.offset + node.length));
+	return offset >= node.offset && (offset < node.offset + node.length || includeRightBound && offset === node.offset + node.length);
 }
 
 export function findNodeAtOffset(node: Node | undefined, offset: number, includeRightBound = false): Node | undefined {
@@ -1451,7 +1321,7 @@ function matchesPath(path: JSONPath, patterns: JSONPath): boolean {
 	const match = (pathIndex: number, patternIndex: number): boolean => {
 		if (patternIndex === patterns.length) return pathIndex === path.length;
 		const pattern = patterns[patternIndex];
-		if (pattern === '**') return match(pathIndex, patternIndex + 1) || (pathIndex < path.length && match(pathIndex + 1, patternIndex));
+		if (pattern === '**') return match(pathIndex, patternIndex + 1) || pathIndex < path.length && match(pathIndex + 1, patternIndex);
 		return pathIndex < path.length && (pattern === '*' || pattern === path[pathIndex]) && match(pathIndex + 1, patternIndex + 1);
 	};
 	return match(0, 0);
@@ -1461,14 +1331,10 @@ function getNodeType(value: unknown): NodeType {
 	if (value === null) return 'null';
 	if (Array.isArray(value)) return 'array';
 	switch (typeof value) {
-		case 'boolean':
-			return 'boolean';
-		case 'number':
-			return 'number';
-		case 'string':
-			return 'string';
-		default:
-			return 'null';
+		case 'boolean': return 'boolean';
+		case 'number': return 'number';
+		case 'string': return 'string';
+		default: return 'null';
 	}
 }
 

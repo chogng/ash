@@ -34,12 +34,9 @@ import '../../common/externalUriOpener.contribution.js';
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly T[] = [];
-	focus(): void {}
-	toggle(): void {}
-	accept(inBackground = false): void {
-		this.selectedItems = this.activeItems;
-		this.accepted.fire({ inBackground });
-	}
+	focus(): void { }
+	toggle(): void { }
+	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
 
 	canSelectMany = false;
 	selectedItems: readonly T[] = [];
@@ -58,17 +55,12 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	public value = '';
 	public valueSelection = { start: 0, end: 0 };
 	public filterValue = (value: string): string => value;
-	public show(): void {}
-	public hide(): void {
-		this.hidden.fire();
-	}
-	public chooseItem(index: number): void {
-		this.selectedItems = [this.items[index]!];
-		this.accepted.fire({ inBackground: false });
-	}
+	public show(): void { }
+	public hide(): void { this.hidden.fire(); }
+	public chooseItem(index: number): void { this.selectedItems = [this.items[index]!]; this.accepted.fire({ inBackground: false }); }
 }
 
-type TestPicker = IQuickPick<IQuickPickItem> & { chooseItem(index: number): void; readonly isDisposed: boolean };
+type TestPicker = IQuickPick<IQuickPickItem> & { chooseItem(index: number): void; readonly isDisposed: boolean; };
 
 class Fixture extends Disposable {
 	public readonly configuration: InMemoryConfigurationService;
@@ -91,19 +83,11 @@ class Fixture extends Disposable {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IExternalUriOpenerService)!;
 		this.services = this._register(new InstantiationService(new ServiceCollection(descriptor)));
 		this.services.registerInstance(IConfigurationService, this.configuration);
-		this.services.registerInstance(ICodeEditorService, {
-			getFocusedCodeEditor: () => null,
-			openCodeEditor: async () => null,
-		} as unknown as ICodeEditorService);
+		this.services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
 		this.services.registerSingleton(ICommandService, () => this.services.createInstance(StandaloneCommandService));
 		this.opener = this._register(this.services.createInstance(OpenerService));
 		this.services.registerInstance(IOpenerService, this.opener);
-		this.opener.setDefaultExternalOpener({
-			openExternal: async href => {
-				this.hostOpened.push(href);
-				return true;
-			},
-		});
+		this.opener.setDefaultExternalOpener({ openExternal: async href => { this.hostOpened.push(href); return true; } });
 		this.services.registerInstance(IQuickInputService, {
 			...quickInputServiceTestControls,
 
@@ -115,63 +99,29 @@ class Fixture extends Disposable {
 			},
 			input: async () => undefined,
 		});
-		this.services.registerInstance(IPreferencesService, {
-			openSettings: async () => {},
-			openGlobalKeybindingSettings: async () => {},
-			openUserSettings: async options => {
-				this.settings.push(options!);
-			},
-		});
+		this.services.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async options => { this.settings.push(options!); } });
 		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.logs.push(entry) }] })));
-		const host = this._register(
-			WorkbenchContributionsRegistry.createHost(
-				this.services,
-				error => {
-					throw error;
-				},
-				['workbench.contrib.externalUriOpener'],
-			),
-		);
+		const host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, ['workbench.contrib.externalUriOpener']));
 		host.advance(WorkbenchPhase.BlockRestore);
 		this.external = this.services.get(IExternalUriOpenerService) as ExternalUriOpenerService;
 	}
 
 	public waitForPicker(): Promise<TestPicker> {
-		if (this.picker) {
-			return Promise.resolve(this.picker);
-		}
+		if (this.picker) { return Promise.resolve(this.picker); }
 		return new Promise(resolve => {
-			const listener = this._register(
-				this.pickerShown.event(picker => {
-					listener.dispose();
-					resolve(picker);
-				}),
-			);
+			const listener = this._register(this.pickerShown.event(picker => { listener.dispose(); resolve(picker); }));
 		});
 	}
 
 	public register(...openers: IExternalUriOpener[]): void {
-		this._register(
-			this.external.registerExternalOpenerProvider({
-				async *getOpeners() {
-					yield* openers;
-				},
-			}),
-		);
+		this._register(this.external.registerExternalOpenerProvider({ async *getOpeners() { yield* openers; } }));
 	}
 
 	public handler(id: string, priority = ExternalUriOpenerPriority.Default): IExternalUriOpener {
 		return {
-			id,
-			label: id,
-			canOpen: async uri => {
-				this.probed.push(`${id}:${uri.toString()}`);
-				return priority;
-			},
-			openExternalUri: async uri => {
-				this.contributedOpened.push(`${id}:${uri.toString()}`);
-				return true;
-			},
+			id, label: id,
+			canOpen: async uri => { this.probed.push(`${id}:${uri.toString()}`); return priority; },
+			openExternalUri: async uri => { this.contributedOpened.push(`${id}:${uri.toString()}`); return true; },
 		};
 	}
 }
@@ -207,16 +157,9 @@ suite('External URI opener production routing', () => {
 	test('rules are evaluated in insertion order and unknown IDs do not hide a later available rule', async () => {
 		using fixture = new Fixture();
 		fixture.register(fixture.handler('viewer', ExternalUriOpenerPriority.None));
-		await fixture.configuration.updateValue(externalUriOpenersSettingId, {
-			'example.test/docs': 'missing',
-			'*.example.test': 'viewer',
-			'*': 'default',
-		});
+		await fixture.configuration.updateValue(externalUriOpenersSettingId, { 'example.test/docs': 'missing', '*.example.test': 'viewer', '*': 'default' });
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		await fixture.configuration.updateValue(externalUriOpenersSettingId, {
-			'*': 'default',
-			'example.test/docs': 'viewer',
-		});
+		await fixture.configuration.updateValue(externalUriOpenersSettingId, { '*': 'default', 'example.test/docs': 'viewer' });
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
 		assert.deepEqual([fixture.probed, fixture.contributedOpened, fixture.hostOpened], [[], [`viewer:${destination.toString()}`], [destination.toString()]]);
 	});
@@ -233,27 +176,12 @@ suite('External URI opener production routing', () => {
 	test('preferred handlers open directly and capability checks use the original URI', async () => {
 		using fixture = new Fixture();
 		const calls: string[] = [];
-		fixture.register(
-			{
-				id: 'preferred',
-				label: 'Preferred',
-				canOpen: async uri => {
-					calls.push(`probe:${uri.toString()}`);
-					return ExternalUriOpenerPriority.Preferred;
-				},
-				openExternalUri: async (uri, ctx) => {
-					calls.push(`open:${uri.toString()}:${ctx.sourceUri.toString()}`);
-					return true;
-				},
-			},
-			fixture.handler('other'),
-		);
-		using resolution = fixture.opener.registerExternalUriResolver({
-			resolveExternalUri: async () => ({
-				resolved: URI.parse('https://proxy.test/docs'),
-				...toDisposable(() => calls.push('released')),
-			}),
-		});
+		fixture.register({
+			id: 'preferred', label: 'Preferred',
+			canOpen: async uri => { calls.push(`probe:${uri.toString()}`); return ExternalUriOpenerPriority.Preferred; },
+			openExternalUri: async (uri, ctx) => { calls.push(`open:${uri.toString()}:${ctx.sourceUri.toString()}`); return true; },
+		}, fixture.handler('other'));
+		using resolution = fixture.opener.registerExternalUriResolver({ resolveExternalUri: async () => ({ resolved: URI.parse('https://proxy.test/docs'), ...toDisposable(() => calls.push('released')) }) });
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
 		assert.deepEqual(calls, [`probe:${destination.toString()}`, `open:https://proxy.test/docs:${destination.toString()}`, 'released']);
 		assert.equal(fixture.picker, undefined);
@@ -261,49 +189,25 @@ suite('External URI opener production routing', () => {
 
 	test('provider enumeration and capability failures are logged without blocking another provider', async () => {
 		using fixture = new Fixture();
-		using broken = fixture.external.registerExternalOpenerProvider({
-			async *getOpeners() {
-				throw new Error('enumeration failed');
-			},
-		});
-		fixture.register(
-			{
-				...fixture.handler('broken'),
-				canOpen: async () => {
-					throw new Error('probe failed');
-				},
-			},
-			fixture.handler('viewer'),
-		);
+		using broken = fixture.external.registerExternalOpenerProvider({ async *getOpeners() { throw new Error('enumeration failed'); } });
+		fixture.register({ ...fixture.handler('broken'), canOpen: async () => { throw new Error('probe failed'); } }, fixture.handler('viewer'));
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
 		assert.deepEqual([fixture.logs.map(entry => (entry.error as Error).message), fixture.contributedOpened], [['enumeration failed', 'probe failed'], [`viewer:${destination.toString()}`]]);
 	});
 
-	for (const [choice, expected] of [
-		[0, 'first'],
-		[2, 'default'],
-		[3, 'configure'],
-		[undefined, 'cancel'],
-	] as const) {
+	for (const [choice, expected] of [[0, 'first'], [2, 'default'], [3, 'configure'], [undefined, 'cancel']] as const) {
 		test(`ambiguous opening handles ${expected} and releases the picker`, async () => {
 			using fixture = new Fixture();
 			fixture.register(fixture.handler('first'), fixture.handler('second'));
 			const result = fixture.opener.open(destination, { allowContributedOpeners: true });
 			const picker = await fixture.waitForPicker();
-			if (choice === undefined) {
-				picker.hide();
-			} else {
-				picker.chooseItem(choice);
-			}
+			if (choice === undefined) { picker.hide(); } else { picker.chooseItem(choice); }
 			assert.equal(await result, true);
-			assert.deepEqual(
-				[fixture.contributedOpened, fixture.hostOpened, fixture.settings],
-				[
-					choice === 0 ? [`first:${destination.toString()}`] : [],
-					choice === 2 ? [destination.toString()] : [],
-					choice === 3 ? [{ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } }] : [],
-				],
-			);
+			assert.deepEqual([fixture.contributedOpened, fixture.hostOpened, fixture.settings], [
+				choice === 0 ? [`first:${destination.toString()}`] : [],
+				choice === 2 ? [destination.toString()] : [],
+				choice === 3 ? [{ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } }] : [],
+			]);
 			assert.equal(picker.isDisposed, true);
 		});
 	}
@@ -327,14 +231,7 @@ suite('External URI opener production routing', () => {
 
 	test('non-web schemes and cancelled discovery never reach a provider', async () => {
 		using fixture = new Fixture();
-		fixture.register({
-			async canOpen() {
-				assert.fail('No probe expected');
-			},
-			id: 'unused',
-			label: 'Unused',
-			openExternalUri: async () => true,
-		});
+		fixture.register({ async canOpen() { assert.fail('No probe expected'); }, id: 'unused', label: 'Unused', openExternalUri: async () => true });
 		assert.equal(await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.Cancelled), undefined);
 		assert.equal(await fixture.external.openExternal('mailto:user@example.test', { sourceUri: URI.parse('mailto:user@example.test') }, CancellationToken.None), false);
 	});
@@ -348,8 +245,6 @@ suite('External URI opener production routing', () => {
 		setNlsMessages(catalog.locale, catalog.bundles);
 		try {
 			assert.match(externalUriOpenersConfigurationNode.schema!.description!, /HTTP.*HTTPS.*模式/u);
-		} finally {
-			resetNlsResolver();
-		}
+		} finally { resetNlsResolver(); }
 	});
 });

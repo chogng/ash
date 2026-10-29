@@ -26,7 +26,7 @@ export function readBrowserPartsSplash(ownerWindow: Window): IPartsSplash {
 	}
 	const dark = ownerWindow.matchMedia('(prefers-color-scheme: dark)').matches;
 	const contrast = ownerWindow.matchMedia('(forced-colors: active)').matches;
-	const scheme = contrast ? (dark ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight) : dark ? ColorScheme.Dark : ColorScheme.Light;
+	const scheme = contrast ? (dark ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight) : (dark ? ColorScheme.Dark : ColorScheme.Light);
 	const colors = Colors.resolve(scheme);
 	return {
 		baseTheme: scheme,
@@ -48,10 +48,7 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 	element.setAttribute('aria-hidden', 'true');
 	element.inert = true;
 	Object.assign(element.style, {
-		position: 'fixed',
-		inset: '0',
-		pointerEvents: 'none',
-		zIndex: '10000',
+		position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '10000',
 		forcedColorAdjust: splash.baseTheme === ColorScheme.HighContrastDark || splash.baseTheme === ColorScheme.HighContrastLight ? 'none' : 'auto',
 		backgroundColor: splash.colorInfo.background,
 	});
@@ -62,12 +59,8 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 		for (const part of layout.partBounds) {
 			const region = ownerDocument.createElement('div');
 			Object.assign(region.style, {
-				position: 'absolute',
-				left: `${part.left}px`,
-				top: `${part.top}px`,
-				width: `${part.width}px`,
-				height: `${part.height}px`,
-				boxSizing: 'border-box',
+				position: 'absolute', left: `${part.left}px`, top: `${part.top}px`,
+				width: `${part.width}px`, height: `${part.height}px`, boxSizing: 'border-box',
 				backgroundColor: part.background,
 			});
 			if (part.backgroundGradient) {

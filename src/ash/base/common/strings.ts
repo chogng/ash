@@ -9,16 +9,11 @@ export function removeAnsiEscapeCodes(value: string): string {
 export function htmlAttributeEncodeValue(value: string): string {
 	return value.replace(/[<>"'&]/g, ch => {
 		switch (ch) {
-			case '<':
-				return '&lt;';
-			case '>':
-				return '&gt;';
-			case '"':
-				return '&quot;';
-			case "'":
-				return '&apos;';
-			case '&':
-				return '&amp;';
+			case '<': return '&lt;';
+			case '>': return '&gt;';
+			case '"': return '&quot;';
+			case "'": return '&apos;';
+			case '&': return '&amp;';
 		}
 		return ch;
 	});
@@ -28,7 +23,9 @@ export function htmlAttributeEncodeValue(value: string): string {
 export function singleLetterHash(n: number): string {
 	const letterCount = CharCode.Z - CharCode.A + 1;
 	n %= 2 * letterCount;
-	return n < letterCount ? String.fromCharCode(CharCode.a + n) : String.fromCharCode(CharCode.A + n - letterCount);
+	return n < letterCount
+		? String.fromCharCode(CharCode.a + n)
+		: String.fromCharCode(CharCode.A + n - letterCount);
 }
 
 /** Escapes every regular-expression metacharacter in a literal string. */
@@ -75,22 +72,25 @@ export function commonPrefixLength(left: string, right: string): number {
 export function commonSuffixLength(left: string, right: string): number {
 	const limit = Math.min(left.length, right.length);
 	let length = 0;
-	while (length < limit && left.charCodeAt(left.length - length - 1) === right.charCodeAt(right.length - length - 1)) {
+	while (
+		length < limit &&
+		left.charCodeAt(left.length - length - 1) === right.charCodeAt(right.length - length - 1)
+	) {
 		length += 1;
 	}
 	return length;
 }
 
 export function isHighSurrogate(charCode: number): boolean {
-	return charCode >= 0xd800 && charCode <= 0xdbff;
+	return charCode >= 0xD800 && charCode <= 0xDBFF;
 }
 
 export function isLowSurrogate(charCode: number): boolean {
-	return charCode >= 0xdc00 && charCode <= 0xdfff;
+	return charCode >= 0xDC00 && charCode <= 0xDFFF;
 }
 
 export function computeCodePoint(highSurrogate: number, lowSurrogate: number): number {
-	return ((highSurrogate - 0xd800) << 10) + (lowSurrogate - 0xdc00) + 0x10000;
+	return ((highSurrogate - 0xD800) << 10) + (lowSurrogate - 0xDC00) + 0x10000;
 }
 
 export function getNextCodePoint(value: string, length: number, offset: number): number {
@@ -114,19 +114,12 @@ function getPrevCodePoint(value: string, offset: number): number {
 export class CodePointIterator {
 	private offsetValue: number;
 
-	constructor(
-		private readonly value: string,
-		offset = 0,
-	) {
+	constructor(private readonly value: string, offset = 0) {
 		this.offsetValue = offset;
 	}
 
-	get offset(): number {
-		return this.offsetValue;
-	}
-	setOffset(offset: number): void {
-		this.offsetValue = offset;
-	}
+	get offset(): number { return this.offsetValue; }
+	setOffset(offset: number): void { this.offsetValue = offset; }
 	prevCodePoint(): number {
 		const codePoint = getPrevCodePoint(this.value, this.offsetValue);
 		this.offsetValue -= codePoint >= 0x10000 ? 2 : 1;
@@ -137,31 +130,22 @@ export class CodePointIterator {
 		this.offsetValue += codePoint >= 0x10000 ? 2 : 1;
 		return codePoint;
 	}
-	eol(): boolean {
-		return this.offsetValue >= this.value.length;
-	}
+	eol(): boolean { return this.offsetValue >= this.value.length; }
 }
 
 export function isFullWidthCharacter(charCode: number): boolean {
-	return (charCode >= 0x2e80 && charCode <= 0xd7af) || (charCode >= 0xf900 && charCode <= 0xfaff) || (charCode >= 0xff01 && charCode <= 0xff5e) || (charCode >= 0xffe0 && charCode <= 0xffe6);
+	return (charCode >= 0x2E80 && charCode <= 0xD7AF)
+		|| (charCode >= 0xF900 && charCode <= 0xFAFF)
+		|| (charCode >= 0xFF01 && charCode <= 0xFF5E)
+		|| (charCode >= 0xFFE0 && charCode <= 0xFFE6);
 }
 
 export function isEmojiImprecise(value: number): boolean {
-	return (
-		(value >= 0x1f1e6 && value <= 0x1f1ff) ||
-		value === 8986 ||
-		value === 8987 ||
-		value === 9200 ||
-		value === 9203 ||
-		(value >= 9728 && value <= 10175) ||
-		value === 11088 ||
-		value === 11093 ||
-		(value >= 127744 && value <= 128591) ||
-		(value >= 128640 && value <= 128764) ||
-		(value >= 128992 && value <= 129008) ||
-		(value >= 129280 && value <= 129535) ||
-		(value >= 129648 && value <= 129782)
-	);
+	return (value >= 0x1F1E6 && value <= 0x1F1FF) || value === 8986 || value === 8987 || value === 9200
+		|| value === 9203 || (value >= 9728 && value <= 10175) || value === 11088 || value === 11093
+		|| (value >= 127744 && value <= 128591) || (value >= 128640 && value <= 128764)
+		|| (value >= 128992 && value <= 129008) || (value >= 129280 && value <= 129535)
+		|| (value >= 129648 && value <= 129782);
 }
 
 export function containsRTL(value: string): boolean {

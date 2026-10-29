@@ -6,9 +6,7 @@ import { listProcesses } from '../../node/ps.js';
 
 suite('Process snapshots', () => {
 	test('includes a running child and reports resident bytes for the requested root', async () => {
-		const child = spawn(process.execPath, ['-e', 'process.stdout.write("ready"); setInterval(() => {}, 1000);'], {
-			stdio: ['ignore', 'pipe', 'pipe'],
-		});
+		const child = spawn(process.execPath, ['-e', 'process.stdout.write("ready"); setInterval(() => {}, 1000);'], { stdio: ['ignore', 'pipe', 'pipe'] });
 		try {
 			await once(child.stdout, 'data');
 			const root = await listProcesses(process.pid);

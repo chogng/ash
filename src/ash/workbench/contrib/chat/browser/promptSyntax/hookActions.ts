@@ -31,14 +31,10 @@ export interface IHookQuickPickOptions {
 }
 
 export function getHookConfigurationResource(accessor: ServicesAccessor, source: HookConfigurationTarget): URI | undefined {
-	if (source.namespace === 'user') {
-		return undefined;
-	}
+	if (source.namespace === 'user') { return undefined; }
 	const connection = accessor.get(IAppServerRemoteAgentService).connection;
-	return connection?.kind === 'ssh'
-		? createSshRemoteWorkspaceUri(connection.host, source.configPath)
-		: connection?.kind === 'remote'
-			? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path: source.configPath })
+	return connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, source.configPath)
+		: connection?.kind === 'remote' ? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path: source.configPath })
 			: URI.file(source.configPath);
 }
 
@@ -73,11 +69,8 @@ export async function openHookConfiguration(accessor: ServicesAccessor, source: 
 	checkContext();
 	await files.createFile(resource, 'ignore');
 	checkContext();
-	if (options?.openEditor) {
-		await options.openEditor(resource);
-	} else {
-		await editors.openEditor({ resource, languageId: 'toml' }, { pinned: true });
-	}
+	if (options?.openEditor) { await options.openEditor(resource); }
+	else { await editors.openEditor({ resource, languageId: 'toml' }, { pinned: true }); }
 }
 
 /** Selects a lifecycle event, then opens an existing Hook or its configuration scope. */
@@ -90,45 +83,26 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 	const notifications = accessor.get(INotificationService);
 	using lifetime = new DisposableStore();
 	const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem>());
-	let items: readonly IQuickPickItem[] = HookEvents.map(event => ({
-		label: event[0].toUpperCase() + event.slice(1),
-	}));
+	let items: readonly IQuickPickItem[] = HookEvents.map(event => ({ label: event[0].toUpperCase() + event.slice(1) }));
 	picker.items = items;
 	picker.ariaLabel = picker.placeholder = localize('hooks.selectEvent', 'Select a lifecycle event');
 	let cancelled = false;
 	let opening = false;
-	let accept: (item: IQuickPickItem | undefined) => void = () => {};
-	lifetime.add(
-		picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			return accept(item);
-		}),
-	);
+	let accept: (item: IQuickPickItem | undefined) => void = () => { };
+	lifetime.add(picker.onDidAccept(() => {
+		const item = picker.selectedItems[0];
+		if (!item) return;
+		return accept(item);
+	}));
 	const dismissed = new Promise<undefined>(resolve => {
-		lifetime.add(
-			picker.onDidHide(() => {
-				cancelled = true;
-				accept(undefined);
-				resolve(undefined);
-			}),
-		);
+		lifetime.add(picker.onDidHide(() => { cancelled = true; accept(undefined); resolve(undefined); }));
 	});
-	lifetime.add(
-		picker.onDidChangeValue(value => {
-			picker.items = filterQuickPickItems(items, value);
-		}),
-	);
-	const next = (): Promise<IQuickPickItem | undefined> =>
-		new Promise(resolve => {
-			accept = resolve;
-		});
+	lifetime.add(picker.onDidChangeValue(value => { picker.items = filterQuickPickItems(items, value); }));
+	const next = (): Promise<IQuickPickItem | undefined> => new Promise(resolve => { accept = resolve; });
 	const eventChoice = next();
 	picker.show();
 	const selectedEvent = await eventChoice;
-	if (!selectedEvent || cancelled) {
-		return;
-	}
+	if (!selectedEvent || cancelled) { return; }
 	const event = HookEvents[items.indexOf(selectedEvent)];
 	const connection = remote.connection;
 	const sessionId = chats.getActiveConversation()?.sessionId;
@@ -139,21 +113,13 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 	try {
 		// Backend reads cannot be cancelled. Release the picker immediately on dismissal and ignore late results.
 		const sources = await Promise.race([prompts.getHooks(CancellationToken.None, sessionId), dismissed]);
-		if (!sources || cancelled || !current()) {
-			return;
-		}
+		if (!sources || cancelled || !current()) { return; }
 		const targets = new Map<IQuickPickItem, HookConfigurationTarget>();
 		const entries: IQuickPickItem[] = [];
 		for (const source of sources) {
-			if (!instantiation.invokeFunction(canEditHookConfiguration, source)) {
-				continue;
-			}
+			if (!instantiation.invokeFunction(canEditHookConfiguration, source)) { continue; }
 			for (const hook of source.hooks.filter(hook => hook.event === event)) {
-				const item = {
-					label: hook.id,
-					description: hook.enabled ? localize({ bundle: 'ash.settings', key: 'hooks.enabled' }, 'Enabled') : localize({ bundle: 'ash.settings', key: 'hooks.disabled' }, 'Disabled'),
-					detail: `${hook.program} ${JSON.stringify(hook.args)} · ${source.configPath}`,
-				};
+				const item = { label: hook.id, description: hook.enabled ? localize({ bundle: 'ash.settings', key: 'hooks.enabled' }, 'Enabled') : localize({ bundle: 'ash.settings', key: 'hooks.disabled' }, 'Disabled'), detail: `${hook.program} ${JSON.stringify(hook.args)} · ${source.configPath}` };
 				entries.push(item);
 				targets.set(item, source);
 			}
@@ -162,22 +128,10 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 		for (const folder of workspace.getWorkspace().folders) {
 			const resource = URI.joinPath(folder.uri, '.ash', 'config.toml');
 			const discovered = sources.find(source => extUri.isEqual(instantiation.invokeFunction(getHookConfigurationResource, source), resource));
-			scopes.push(
-				discovered ?? {
-					configPath: resource.scheme === Schemas.file ? resource.fsPath : resource.path,
-					namespace: undefined,
-				},
-			);
+			scopes.push(discovered ?? { configPath: resource.scheme === Schemas.file ? resource.fsPath : resource.path, namespace: undefined });
 		}
 		for (const source of scopes) {
-			const item = {
-				label: localize(
-					'hooks.configureScope',
-					'Configure in {0}',
-					source.namespace === 'user' ? localize({ bundle: 'ash.settings', key: 'hooks.user' }, 'User configuration') : source.configPath,
-				),
-				detail: localize('hooks.configureScopeDetail', 'Open TOML for {0}. Save your changes, then refresh Hooks.', selectedEvent.label),
-			};
+			const item = { label: localize('hooks.configureScope', 'Configure in {0}', source.namespace === 'user' ? localize({ bundle: 'ash.settings', key: 'hooks.user' }, 'User configuration') : source.configPath), detail: localize('hooks.configureScopeDetail', 'Open TOML for {0}. Save your changes, then refresh Hooks.', selectedEvent.label) };
 			entries.push(item);
 			targets.set(item, source);
 		}
@@ -188,34 +142,20 @@ export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, op
 		picker.items = items;
 		picker.busy = false;
 		const chosen = await choice;
-		if (!chosen || cancelled || !current()) {
-			return;
-		}
+		if (!chosen || cancelled || !current()) { return; }
 		opening = true;
 		picker.hide();
 		await instantiation.invokeFunction(openHookConfiguration, targets.get(chosen)!, options);
 	} catch (error) {
-		if ((!cancelled || opening) && !isCancellationError(error)) {
-			notifications.error(localize({ bundle: 'ash.settings', key: 'hooks.actionFailed' }, 'Could not configure Hooks: {0}', error instanceof Error ? error.message : String(error)));
-		}
+		if ((!cancelled || opening) && !isCancellationError(error)) { notifications.error(localize({ bundle: 'ash.settings', key: 'hooks.actionFailed' }, 'Could not configure Hooks: {0}', error instanceof Error ? error.message : String(error))); }
 	} finally {
 		picker.hide();
 	}
 }
 
 export function registerHookActions(): void {
-	registerAction2(
-		class ManageHooksAction extends Action2 {
-			constructor() {
-				super({
-					id: 'workbench.action.chat.configure.hooks',
-					title: localize2('hooks.configure', 'Chat: Configure Hooks…'),
-					f1: true,
-				});
-			}
-			public override run(accessor: ServicesAccessor): Promise<void> {
-				return showConfigureHooksQuickPick(accessor);
-			}
-		},
-	);
+	registerAction2(class ManageHooksAction extends Action2 {
+		constructor() { super({ id: 'workbench.action.chat.configure.hooks', title: localize2('hooks.configure', 'Chat: Configure Hooks…'), f1: true }); }
+		public override run(accessor: ServicesAccessor): Promise<void> { return showConfigureHooksQuickPick(accessor); }
+	});
 }

@@ -42,11 +42,9 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.catalog = Object.freeze({ revision: this.catalog.revision, themes: Object.freeze([]) });
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.catalog = Object.freeze({ revision: this.catalog.revision, themes: Object.freeze([]) });
+		}));
 	}
 
 	get currentCatalog(): ExtensionThemeCatalog {
@@ -66,6 +64,7 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 		this.catalog = Object.freeze({ revision: this.catalog.revision + 1, themes: Object.freeze(normalized) });
 		this.changeEmitter.fire(this.catalog);
 	}
+
 }
 
 /** Parses the declarative subset of a VS Code color-theme document. */
@@ -90,7 +89,12 @@ function themeFromDocument(document: ColorThemeDocument, id: string, extensionId
 }
 
 /** Reads one manifest theme and its package-relative resources through the caller's extension resource owner. */
-export async function loadExtensionTheme(read: (path: string) => Promise<Uint8Array>, extensionId: string, contribution: ExtensionThemeContribution, index: number): Promise<ExtensionThemeDefinition> {
+export async function loadExtensionTheme(
+	read: (path: string) => Promise<Uint8Array>,
+	extensionId: string,
+	contribution: ExtensionThemeContribution,
+	index: number,
+): Promise<ExtensionThemeDefinition> {
 	const document = await loadColorThemeDocument(contribution.path, async resource => {
 		const bytes = await read(resource);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -99,22 +103,13 @@ export async function loadExtensionTheme(read: (path: string) => Promise<Uint8Ar
 	// Includes can compose individually valid documents beyond the single-theme
 	// budget. Check that aggregate bound without reparsing its validated fields.
 	if (JSON.stringify(document).length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
-	return themeFromDocument(
-		document,
-		extensionWorkbenchThemeId(extensionId, contribution.id, index),
-		extensionId,
-		contribution.label,
-		contribution.uiTheme,
-		`Extension '${extensionId}' theme '${contribution.path}'`,
-	);
+	return themeFromDocument(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
 }
 
 /** Ignore publisher metadata before the resource owner validates the external document.
  * Includes are each validated there; the merged typed document needs no second schema pass. */
 function extensionThemeDocument(value: unknown): unknown {
-	if (!isRecord(value)) {
-		throw new TypeError('Invalid color theme: expected an object');
-	}
+	if (!isRecord(value)) { throw new TypeError('Invalid color theme: expected an object'); }
 	if (Object.hasOwn(value, 'tokenColors')) return value;
 	const document = Object.fromEntries(Object.entries(value).filter(([key]) => Object.hasOwn(colorThemeSchema.properties!, key)));
 	return document;
@@ -131,16 +126,11 @@ export function extensionWorkbenchThemeId(extensionId: string, contributionId: s
 
 /** Compiles supported VS Code color keys over Ash's complete theme defaults. */
 export function createExtensionWorkbenchColorTheme(theme: ExtensionThemeDefinition): IColorTheme {
-	return createDocumentColorTheme(
-		{
-			colors: theme.colors,
-			semanticHighlighting: theme.semanticHighlighting,
-			semanticTokenColors: theme.semanticTokenColors,
-		},
-		theme.id,
-		theme.label,
-		extensionColorScheme(theme.uiTheme),
-	);
+	return createDocumentColorTheme({
+		colors: theme.colors,
+		semanticHighlighting: theme.semanticHighlighting,
+		semanticTokenColors: theme.semanticTokenColors,
+	}, theme.id, theme.label, extensionColorScheme(theme.uiTheme));
 }
 
 function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefinition {
@@ -161,7 +151,9 @@ function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefiniti
 function normalizeSemanticTokenColors(value: NonNullable<ExtensionThemeDefinition['semanticTokenColors']>): NonNullable<ExtensionThemeDefinition['semanticTokenColors']> {
 	parseColorThemeDocument({ semanticTokenColors: value });
 	parseSemanticTokenRules(value);
-	return Object.freeze(Object.fromEntries(Object.entries(value).map(([selector, style]) => [selector, typeof style === 'string' ? style : Object.freeze({ ...style })])));
+	return Object.freeze(Object.fromEntries(Object.entries(value).map(([selector, style]) => [
+		selector, typeof style === 'string' ? style : Object.freeze({ ...style }),
+	])));
 }
 
 function parseColors(value: unknown, owner: string): Readonly<Record<string, string>> {
@@ -171,7 +163,10 @@ function parseColors(value: unknown, owner: string): Readonly<Record<string, str
 
 function normalizeColors(value: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
 	const colors = record(value, 'Extension theme colors');
-	return Object.freeze(Object.fromEntries(Object.entries(colors).map(([key, color]) => [boundedText(key, 'Extension theme color key', 256), colorValue(color, `Extension theme color '${key}'`)])));
+	return Object.freeze(Object.fromEntries(Object.entries(colors).map(([key, color]) => [
+		boundedText(key, 'Extension theme color key', 256),
+		colorValue(color, `Extension theme color '${key}'`),
+	])));
 }
 
 function colorValue(value: unknown, owner: string): string {
@@ -188,24 +183,16 @@ function boundedText(value: unknown, owner: string, maximum: number): string {
 
 function extensionColorScheme(uiTheme: string | undefined): ColorScheme {
 	switch (uiTheme) {
-		case 'vs':
-			return ColorScheme.Light;
-		case 'vs-dark':
-			return ColorScheme.Dark;
-		case 'hc-black':
-			return ColorScheme.HighContrastDark;
-		case 'hc-light':
-			return ColorScheme.HighContrastLight;
-		default:
-			throw new TypeError('Selectable extension themes must declare a supported uiTheme');
+		case 'vs': return ColorScheme.Light;
+		case 'vs-dark': return ColorScheme.Dark;
+		case 'hc-black': return ColorScheme.HighContrastDark;
+		case 'hc-light': return ColorScheme.HighContrastLight;
+		default: throw new TypeError('Selectable extension themes must declare a supported uiTheme');
 	}
 }
 
 function themeIdSegment(value: string, owner: string): string {
-	const normalized = boundedText(value, owner, 256)
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/gu, '-')
-		.replace(/^-+|-+$/gu, '');
+	const normalized = boundedText(value, owner, 256).toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
 	if (normalized.length === 0) throw new TypeError(`${owner} cannot produce a stable theme ID`);
 	return normalized;
 }

@@ -55,10 +55,12 @@ test('LabelService normalizes absolute Windows drive labels while retaining work
 		getWorkspaceFolder: () => folder,
 	};
 	using labels = createTestLabelService(workspace, OperatingSystem.Windows);
-	assert.deepEqual(
-		[labels.getUriLabel(resource), labels.getUriLabel(resource, { separator: '/' }), labels.getUriLabel(resource, { relative: true }), resource.path],
-		['E:\\workspace\\src\\main.ts', 'E:/workspace/src/main.ts', 'src\\main.ts', '/e:/workspace/src/main.ts'],
-	);
+	assert.deepEqual([
+		labels.getUriLabel(resource),
+		labels.getUriLabel(resource, { separator: '/' }),
+		labels.getUriLabel(resource, { relative: true }),
+		resource.path,
+	], ['E:\\workspace\\src\\main.ts', 'E:/workspace/src/main.ts', 'src\\main.ts', '/e:/workspace/src/main.ts']);
 });
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
@@ -73,27 +75,18 @@ test('LabelService reads connection home for each label and invalidates labels o
 	let os: OperatingSystem | undefined = OperatingSystem.Linux;
 	let home: string | undefined = '/home/remote';
 	const host = {
-		...api,
-		hasAppServer: true,
-		appServer: {
+		...api, hasAppServer: true, appServer: {
 			...api.appServer,
-			get operatingSystem() {
-				return os;
-			},
-			get userHome() {
-				return home;
-			},
+			get operatingSystem() { return os; }, get userHome() { return home; },
 			onConnectionState: changes.event,
-		},
+		}
 	};
 	const workspace = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
-		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: 'label-home', folders: [] }),
-		getWorkbenchState: () => WorkbenchState.EMPTY,
-		getWorkspaceFolder: () => null,
+		onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'label-home', folders: [] }),
+		getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null
 	};
 	using labels = new LabelService(workspace, new BrowserPathService(host, workspace), host);
 	const resource = URI.parse('file:///home/remote/notes.txt');
@@ -112,13 +105,7 @@ test('LabelService reads connection home for each label and invalidates labels o
 	os = undefined;
 	changes.fire('stopped');
 	values.push(labels.getUriLabel(resource));
-	assert.deepEqual(
-		{ values, invalidations },
-		{
-			values: ['~/notes.txt', '/home/remote/notes.txt', 'C:\\Users\\remote\\notes.txt', '/home/remote/notes.txt'],
-			invalidations: 3,
-		},
-	);
+	assert.deepEqual({ values, invalidations }, { values: ['~/notes.txt', '/home/remote/notes.txt', 'C:\\Users\\remote\\notes.txt', '/home/remote/notes.txt'], invalidations: 3 });
 	labels.dispose();
 	assert.equal(changes.hasListeners(), false);
 });
@@ -126,23 +113,17 @@ test('LabelService reads connection home for each label and invalidates labels o
 test('LabelService formats remote drive and UNC paths independently of the App Server OS', () => {
 	const root = URI.parse('ash-remote://ssh+build/C%3A/work');
 	const workspace = {
-		onDidChangeWorkspace: Event.None,
-		onDidChangeWorkspaceFolders: Event.None,
-		onDidChangeWorkbenchState: Event.None,
-		onDidChangeWorkspaceName: Event.None,
+		onDidChangeWorkspace: Event.None, onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None, onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: 'remote-labels', folders: [{ id: 'root', uri: root, name: 'work', index: 0 }] }),
-		getWorkbenchState: () => WorkbenchState.FOLDER,
-		getWorkspaceFolder: () => null,
+		getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null,
 	};
 	using labels = createTestLabelService(workspace, OperatingSystem.Macintosh);
 	assert.equal(labels.getUriLabel(root, { noPrefix: true }), 'C:\\work');
 	assert.equal(labels.getSeparator(root.scheme, root.authority), '\\');
 	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+build//server/share/file.ts')), '\\\\server\\share\\file.ts');
 	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+posix/work/part%5Cname.ts%20')), '/work/part\\name.ts ');
-	using formatter = labels.registerFormatter({
-		scheme: 'virtual',
-		formatting: { label: '${path}/END', separator: '\\', normalizeDriveLetter: true },
-	});
+	using formatter = labels.registerFormatter({ scheme: 'virtual', formatting: { label: '${path}/END', separator: '\\', normalizeDriveLetter: true } });
 	const virtual = URI.parse('virtual:/c:/code/main.ts');
 	assert.equal(labels.getUriLabel(virtual), 'C:\\code\\main.ts\\END');
 	assert.equal(labels.getUriBasenameLabel(virtual), 'END');

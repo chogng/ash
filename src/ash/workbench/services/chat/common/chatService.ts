@@ -1,17 +1,4 @@
-import type {
-	AgentInteractionOffer,
-	ChatHookRun,
-	SessionMode,
-	Turn,
-	Thread,
-	ThreadGoalUpdate,
-	AgentResponse,
-	ThreadUpdateEnvelope,
-	ThreadTranscriptUpdateEnvelope,
-	ThreadRead,
-	ThreadSubscription,
-	ThreadSnapshotHistory,
-} from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -143,7 +130,7 @@ export interface IChatHookPart {
 /** Captured origin, cancellation and idempotency of one composer submission. */
 export interface ChatSubmissionOptions {
 	readonly signal?: AbortSignal;
-	readonly source?: { readonly sessionId: SessionId; readonly threadId: ThreadId };
+	readonly source?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
 	readonly commandId?: string;
 }
 
@@ -164,43 +151,12 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 }
 
 export type ChatMode = SessionMode;
-export interface ConfigureAdvisorOptions {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly expectedSequence: number;
-	readonly selection: AdvisorSelection;
-}
-export interface ConsultAdvisorOptions {
-	readonly isNewSession?: boolean;
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly expectedSequence: number;
-	readonly question: string;
-}
-export interface CompactContextOptions {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly expectedSequence: number;
-	readonly retentionPrompt?: string;
-}
-export interface SteerTurnOptions extends ChatSubmissionOptions {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly turnId: string;
-	readonly expectedSequence: number;
-	readonly text: string;
-	readonly contexts?: readonly ResolvedChatContext[];
-}
-export interface InterruptTurnOptions {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-	readonly turnId: string;
-	readonly expectedSequence: number;
-}
-export interface ResolveInteractionOptions extends InterruptTurnOptions {
-	readonly requestId: string;
-	readonly response: AgentResponse;
-}
+export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
+export interface ConsultAdvisorOptions { readonly isNewSession?: boolean; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
+export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
+export interface SteerTurnOptions extends ChatSubmissionOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
+export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
+export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
 
 export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
 export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';
@@ -213,7 +169,7 @@ export interface TurnChangeSetSummary {
 	readonly turnId: string;
 	readonly repositoryId: string;
 	readonly targetBranch?: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
 	readonly captureState: TurnChangeCaptureState;
 	readonly messageState: TurnChangeMessageState;
 	readonly commitState: TurnChangeCommitState;
@@ -251,7 +207,7 @@ export interface ThreadChangesSummary {
 	readonly sequence: number;
 	readonly revision: string;
 	readonly statistics: TurnChangeSetSummary['statistics'];
-	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[] }[];
+	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
 	readonly warnings: readonly string[];
 }
 
@@ -310,7 +266,7 @@ export interface RewriteChatRequestOptions {
 
 export interface IChatService {
 	/** Rewrites an initial user message while retaining its accepted context and attachments. */
-	rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
+	rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;
 	renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void>;
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
 	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;
@@ -318,12 +274,12 @@ export interface IChatService {
 	getInteractionOffer(sessionId: SessionId, threadId: ThreadId): AgentInteractionOffer | undefined;
 	readonly onDidChangeInteractionOffer: Event<ChatInteractionOfferChange>;
 	readHistoryState(sessionId: SessionId, threadId: ThreadId): Promise<AgentThreadHistoryState>;
-	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo' }): Promise<void>;
+	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void>;
 	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;
 	/** Creates an independent Thread and directory from the backend's immutable checkpoint. */
-	restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
+	restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;
 	/** Session invalidation also discovers Threads that have not yet been subscribed. */
-	readonly onDidChangeSession: Event<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean }>;
+	readonly onDidChangeSession: Event<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>;
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readonly onDidUpdateGoal: Event<ThreadGoalUpdate>;

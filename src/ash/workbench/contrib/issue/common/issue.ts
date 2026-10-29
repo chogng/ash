@@ -2,11 +2,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { CreatedIssue, IssueReporterContext, ISimilarIssue } from '../../../../platform/issue/common/issue.js';
 
-export enum IssueType {
-	Bug,
-	PerformanceIssue,
-	FeatureRequest,
-}
+export enum IssueType { Bug, PerformanceIssue, FeatureRequest }
 
 export interface IssueReporterData {
 	readonly issueType?: IssueType;

@@ -14,12 +14,15 @@ export interface AppServerDaemonPackageLocation {
 interface AshPackageMetadata {
 	readonly buildId?: unknown;
 	readonly components?: {
-		readonly appServerDaemon?: { readonly binarySha256?: unknown };
-		readonly appServer?: { readonly binarySha256?: unknown };
+		readonly appServerDaemon?: { readonly binarySha256?: unknown; };
+		readonly appServer?: { readonly binarySha256?: unknown; };
 	};
 	readonly entrypoint?: unknown;
 	readonly layoutVersion?: unknown;
-	readonly protocol?: { readonly major?: unknown; readonly schemaHash?: unknown };
+	readonly protocol?: {
+		readonly major?: unknown;
+		readonly schemaHash?: unknown;
+	};
 	readonly version?: unknown;
 }
 
@@ -44,17 +47,9 @@ function packagedComponentSha256(location: AppServerDaemonPackageLocation, compo
 	const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as AshPackageMetadata;
 	const expectedEntrypoint = `bin/${location.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'}`;
 	const digest = metadata.components?.[component]?.binarySha256;
-	const protocolMatchesDesktop = metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR && metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
-	if (
-		metadata.layoutVersion !== 2 ||
-		metadata.entrypoint !== expectedEntrypoint ||
-		(location.expectedVersion !== undefined && metadata.version !== location.expectedVersion) ||
-		!protocolMatchesDesktop ||
-		typeof metadata.buildId !== 'string' ||
-		!/^sha256:[a-f0-9]{64}$/.test(metadata.buildId) ||
-		typeof digest !== 'string' ||
-		!/^[a-f0-9]{64}$/.test(digest)
-	) {
+	const protocolMatchesDesktop = metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR
+		&& metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
+	if (metadata.layoutVersion !== 2 || metadata.entrypoint !== expectedEntrypoint || (location.expectedVersion !== undefined && metadata.version !== location.expectedVersion) || !protocolMatchesDesktop || typeof metadata.buildId !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(metadata.buildId) || typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) {
 		throw new Error(`Invalid Ash package metadata: ${metadataPath}`);
 	}
 	return digest;
@@ -66,7 +61,9 @@ export function appServerDaemonExecutablePath(location: AppServerDaemonPackageLo
 }
 
 function appServerPackageRoot(location: AppServerDaemonPackageLocation): string {
-	const packageRoot = location.isPackaged ? location.resourcesPath : developmentAshPackagePath(location.appPath);
+	const packageRoot = location.isPackaged
+		? location.resourcesPath
+		: developmentAshPackagePath(location.appPath);
 	return packageRoot;
 }
 

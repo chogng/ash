@@ -42,44 +42,40 @@ const themeActions = [
 ] as const;
 
 for (const [index, themeAction] of themeActions.entries()) {
-	registerAction2(
-		class SelectThemeAction extends Action2 {
-			constructor() {
-				super({ id: themeAction.id, title: themeAction.title, f1: true });
-			}
+	registerAction2(class SelectThemeAction extends Action2 {
+		constructor() {
+			super({ id: themeAction.id, title: themeAction.title, f1: true });
+		}
 
-			public override run(accessor: ServicesAccessor): void {
-				const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(themeAction.setting)?.setting;
-				if (setting?.valueType !== 'select') throw new Error(`Theme setting '${themeAction.setting}' has no choices`);
-				const items = setting.options.map(option => {
-					if (typeof option.value !== 'string') throw new TypeError(`Theme choice for '${themeAction.setting}' must be a string`);
-					return { label: option.label, value: option.value };
-				});
-				const configuration = accessor.get(IConfigurationService);
-				const picker = accessor.get(IQuickInputService).createQuickPick<ThemeQuickPickItem>();
-				const disposables = new DisposableStore();
-				disposables.add(picker);
-				picker.placeholder = commandActionLabel(themeAction.title);
-				picker.ariaLabel = picker.placeholder;
-				picker.items = items;
-				disposables.add(
-					picker.onDidAccept(() => {
-						const item = picker.selectedItems[0];
-						if (!item) return;
+		public override run(accessor: ServicesAccessor): void {
+			const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(themeAction.setting)?.setting;
+			if (setting?.valueType !== 'select') throw new Error(`Theme setting '${themeAction.setting}' has no choices`);
+			const items = setting.options.map(option => {
+				if (typeof option.value !== 'string') throw new TypeError(`Theme choice for '${themeAction.setting}' must be a string`);
+				return { label: option.label, value: option.value };
+			});
+			const configuration = accessor.get(IConfigurationService);
+			const picker = accessor.get(IQuickInputService).createQuickPick<ThemeQuickPickItem>();
+			const disposables = new DisposableStore();
+			disposables.add(picker);
+			picker.placeholder = commandActionLabel(themeAction.title);
+			picker.ariaLabel = picker.placeholder;
+			picker.items = items;
+			disposables.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
 
-						picker.hide();
-						const update =
-							themeAction.setting === WorkbenchConfiguration.colorTheme
-								? accessor.get(IWorkbenchThemeService).setColorTheme(item.value, 'themePicker')
-								: configuration.updateValue(themeAction.setting, item.value);
-						void update.catch(onUnexpectedError);
-					}),
-				);
-				disposables.add(picker.onDidHide(() => disposables.dispose()));
-				picker.show();
-			}
-		},
-	);
+				picker.hide();
+				const update = themeAction.setting === WorkbenchConfiguration.colorTheme
+					? accessor.get(IWorkbenchThemeService).setColorTheme(item.value, 'themePicker')
+					: configuration.updateValue(themeAction.setting, item.value);
+				void update.catch(onUnexpectedError);
+
+			}));
+			disposables.add(picker.onDidHide(() => disposables.dispose()));
+			picker.show();
+		}
+	});
 	MenusRegistry.appendMenuItem(themesMenu, {
 		command: { id: themeAction.id, title: themeAction.title },
 		order: index + 1,

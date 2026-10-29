@@ -16,17 +16,14 @@ const known = { colors: ['--ash-foreground'], others: ['--component-width'], siz
 test('CSS variable checks find unknown names in nested fallbacks without treating examples as references', () => {
 	const validate = getVariableNameValidator(known);
 	const errors: string[] = [];
-	validate(
-		`
+	validate(`
 /* var(--comment-example) */
 .a { content: "var(--string-example)"; background-image: url(data:var(--url-example));
   color: var( --ash-foreground, var(--misspelled-color));
   width: var(--component-width); padding: var(--ash-spacing-size80);
   height: var(/* documented */--missing-size, var(--another-missing));
   content: custom-var(--not-a-css-variable-function);
-}`,
-		name => errors.push(name),
-	);
+}`, name => errors.push(name));
 	assert.deepEqual(errors, ['--misspelled-color', '--missing-size', '--another-missing']);
 	const second: string[] = [];
 	validate('width: var(--component-width);', name => second.push(name));
@@ -98,18 +95,13 @@ test('CLI reports file and location, fails on misspellings, and never updates th
 	}
 });
 
+
 test('hygiene stops before registry verification on CSS errors and preserves the verifier exit code', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-hygiene-'));
 	const source = join(directory, 'src/example.css');
 	const manager = join(directory, 'manager.cjs');
 	try {
-		for (const name of [
-			'build/hygiene.ts',
-			'build/stylelint.ts',
-			'build/lib/stylelint/validateVariableNames.ts',
-			'build/lib/stylelint/validateHasSelectors.ts',
-			'build/lib/stylelint/validateDesignTokens.ts',
-		]) {
+		for (const name of ['build/hygiene.ts', 'build/stylelint.ts', 'build/lib/stylelint/validateVariableNames.ts', 'build/lib/stylelint/validateHasSelectors.ts', 'build/lib/stylelint/validateDesignTokens.ts']) {
 			mkdirSync(join(directory, name, '..'), { recursive: true });
 			copyFileSync(join(root, name), join(directory, name));
 		}
@@ -124,7 +116,9 @@ test('hygiene stops before registry verification on CSS errors and preserves the
 		writeFileSync(source, '.a { color: var(--ash-foreground); }');
 		const verification = spawnSync(process.execPath, ['build/hygiene.ts'], options);
 		assert.equal(verification.status, 23, verification.stderr);
-		assert.deepEqual(JSON.parse(readFileSync(join(directory, 'called.json'), 'utf8')), ['--dir', '.', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts']);
+		assert.deepEqual(JSON.parse(readFileSync(join(directory, 'called.json'), 'utf8')), [
+			'--dir', '.', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts',
+		]);
 	} finally {
 		rmSync(directory, { recursive: true });
 	}
@@ -190,7 +184,10 @@ test('CSS layer checks keep Agent Window selectors and tokens in Sessions', () =
 		const layers = ['base', 'platform', 'editor', 'workbench', 'sessions'];
 		const files = layers.map(layer => join(directory, `src/ash/${layer}/browser/component.css`));
 		for (const file of files) mkdirSync(join(file, '..'), { recursive: true });
-		for (const source of ['.ash-sessions-window .component { color: var(--ash-foreground); }', '.component { --sessions-accent: var(--ash-foreground); }']) {
+		for (const source of [
+			'.ash-sessions-window .component { color: var(--ash-foreground); }',
+			'.component { --sessions-accent: var(--ash-foreground); }',
+		]) {
 			for (const file of files) writeFileSync(file, source);
 			const errors = checkStyles(files, getVariableNameValidator(known), directory);
 			assert.equal(errors.length, 4);
@@ -215,10 +212,7 @@ test('design suggestions respect roles, on-scale spacing, computed geometry, and
 .c { width: 5px; border-radius: 50%; margin: -3px; font-size: var(--ash-fontSize-label1); font-weight: inherit; }
 `;
 	const suggestions = validateDesignTokens(css);
-	assert.deepEqual(
-		suggestions.map(({ category }) => category),
-		['spacing', 'weight', 'font-size', 'radius', 'stroke', 'icon', 'icon', 'icon'],
-	);
+	assert.deepEqual(suggestions.map(({ category }) => category), ['spacing', 'weight', 'font-size', 'radius', 'stroke', 'icon', 'icon', 'icon']);
 	assert.match(suggestions[1]!.message, /fontWeight-semiBold/);
 	assert.match(suggestions[3]!.message, /circle token for pills/);
 	assert.match(suggestions[5]!.message, /var\(--ash-lxiconFontSize\)/);

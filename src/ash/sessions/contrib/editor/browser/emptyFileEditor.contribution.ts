@@ -10,7 +10,7 @@ import { localize } from '../../../../nls.js';
 registerEditorPane({
 	id: 'ash.sessions.emptyFileEditor',
 	name: 'Files',
-	canOpen: input => (input.resource.scheme === 'ash-sessions-files' ? EditorPaneMatch.Default : EditorPaneMatch.None),
+	canOpen: input => input.resource.scheme === 'ash-sessions-files' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(EmptyFileEditor),
 });
 
@@ -27,11 +27,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() =>
-				localize(
-					'sessions.files.landingHelp',
-					'Files tab\nChoose a file in Details to open it in the editor. Use the Files command to focus the file tree. Toggle details shows or hides the tree. Hide editor keeps the shared Changes and Files tabs above Details; Show editor restores the open files. The Files landing tab has no document to save.',
-				),
+			() => localize('sessions.files.landingHelp', 'Files tab\nChoose a file in Details to open it in the editor. Use the Files command to focus the file tree. Toggle details shows or hides the tree. Hide editor keeps the shared Changes and Files tabs above Details; Show editor restores the open files. The Files landing tab has no document to save.'),
 			() => pane.focus(),
 			AccessibilityVerbositySettingId.Explorer,
 		);

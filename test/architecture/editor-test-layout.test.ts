@@ -7,12 +7,11 @@ const desktopRoot = findDesktopRoot(import.meta.dirname);
 
 test('browser integration entrypoints narrow file filters within their suite', () => {
 	function list(editorOnly: boolean, file: string) {
-		const result = spawnSync(process.execPath, ['test/integration/browser/run.ts', ...(editorOnly ? ['--editor'] : []), file, '--project=chromium', '--list'], {
-			cwd: desktopRoot,
-			encoding: 'utf8',
-			timeout: 30_000,
-			windowsHide: true,
-		});
+		const result = spawnSync(process.execPath, [
+			'test/integration/browser/run.ts',
+			...(editorOnly ? ['--editor'] : []),
+			file, '--project=chromium', '--list',
+		], { cwd: desktopRoot, encoding: 'utf8', timeout: 30_000, windowsHide: true });
 		if (result.error) throw result.error;
 		return { status: result.status, output: result.stdout + result.stderr };
 	}

@@ -9,19 +9,13 @@ const metadata = { description: 'Test token.', owner: 'test' };
 test('brightness transforms preserve hue and alpha when resolving theme defaults', () => {
 	using registry = new ColorRegistry();
 	const base = '#20406080';
-	for (const [id, value] of [
-		['test.lighter', lighten(base, 0.5)],
-		['test.darker', darken(base, 0.5)],
-	] as const) {
+	for (const [id, value] of [['test.lighter', lighten(base, 0.5)], ['test.darker', darken(base, 0.5)]] as const) {
 		registry.registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, metadata);
 	}
-	assert.deepEqual(
-		registry.resolve(ColorScheme.Dark).map(({ id, value }) => [id, value?.toString()]),
-		[
-			['test.lighter', 'rgba(48, 96, 144, 0.5)'],
-			['test.darker', 'rgba(16, 32, 48, 0.5)'],
-		],
-	);
+	assert.deepEqual(registry.resolve(ColorScheme.Dark).map(({ id, value }) => [id, value?.toString()]), [
+		['test.lighter', 'rgba(48, 96, 144, 0.5)'],
+		['test.darker', 'rgba(16, 32, 48, 0.5)'],
+	]);
 });
 
 test('color CSS names preserve identifier casing and replace every dot', () => {
@@ -39,31 +33,19 @@ test('color defaults resolve each theme type and preserve high contrast override
 	using registry = new ColorRegistry();
 	registry.registerColor('test.scheme', { dark: '#112233', light: '#445566', hcDark: '#778899', hcLight: '#aabbcc' }, metadata);
 	const schemes = [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight];
-	assert.deepEqual(
-		schemes.map(scheme => ({ type: scheme, color: registry.resolve(scheme)[0]?.value?.toString() })),
-		[
-			{ type: 'dark', color: '#112233' },
-			{ type: 'light', color: '#445566' },
-			{ type: 'hcDark', color: '#778899' },
-			{ type: 'hcLight', color: '#aabbcc' },
-		],
-	);
+	assert.deepEqual(schemes.map(scheme => ({ type: scheme, color: registry.resolve(scheme)[0]?.value?.toString() })), [
+		{ type: 'dark', color: '#112233' },
+		{ type: 'light', color: '#445566' },
+		{ type: 'hcDark', color: '#778899' },
+		{ type: 'hcLight', color: '#aabbcc' },
+	]);
 	assert.equal(registry.resolve(ColorScheme.HighContrastLight, { 'test.scheme': '#abcdef' })[0]?.value?.toString(), '#abcdef');
 });
 
 test('ColorRegistry resolves aliases and transforms deterministically', () => {
 	using registry = new ColorRegistry();
 	registry.registerColor('surface.background', { dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' }, metadata);
-	registry.registerColor(
-		'surface.overlay',
-		{
-			dark: transparent('surface.background', 0.5),
-			light: transparent('surface.background', 0.25),
-			hcDark: null,
-			hcLight: null,
-		},
-		{ ...metadata, needsTransparency: true },
-	);
+	registry.registerColor('surface.overlay', { dark: transparent('surface.background', 0.5), light: transparent('surface.background', 0.25), hcDark: null, hcLight: null }, { ...metadata, needsTransparency: true });
 
 	const dark = registry.resolve(ColorScheme.Dark);
 	assert.equal(dark[0]?.value?.toString(), '#000000');
@@ -94,14 +76,9 @@ test('color contributions publish a new catalog without changing earlier snapsho
 	const changes: string[][] = [];
 	using listener = colors.onDidChange(() => changes.push(colors.getColors().map(entry => entry.id)));
 	colors.registerColor('late.color', { dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' }, metadata);
-	assert.deepEqual(
-		{ before, changes, resolved: colors.resolve(ColorScheme.Light)[0]?.value?.toString() },
-		{
-			before: [],
-			changes: [['late.color']],
-			resolved: '#ffffff',
-		},
-	);
+	assert.deepEqual({ before, changes, resolved: colors.resolve(ColorScheme.Light)[0]?.value?.toString() }, {
+		before: [], changes: [['late.color']], resolved: '#ffffff',
+	});
 	assert.equal(colors.getColors(), colors.getColors());
 	assert.throws(() => colors.registerColor('late.color', { dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' }, metadata), /already registered/);
 	assert.equal(changes.length, 1);

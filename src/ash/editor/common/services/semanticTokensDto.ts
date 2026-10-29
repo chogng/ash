@@ -50,8 +50,7 @@ function normalizeLanguageTokenResultDelta(delta: LanguageTokenResultDelta, toke
 		assertSafeInteger(splice.lineDeltaBefore, 'Language token delta preceding line shift');
 		assertSafeInteger(splice.lineDeltaAfter, 'Language token delta following line shift');
 		if (splice.baseStartItemIndex < previousBaseEnd || splice.resultStartItemIndex < previousResultEnd) throw new RangeError('Language token delta splices must be ordered and non-overlapping');
-		if (splice.baseStartItemIndex - previousBaseEnd !== splice.resultStartItemIndex - previousResultEnd)
-			throw new RangeError('Language token delta unchanged item spans must preserve their length');
+		if (splice.baseStartItemIndex - previousBaseEnd !== splice.resultStartItemIndex - previousResultEnd) throw new RangeError('Language token delta unchanged item spans must preserve their length');
 		if (splice.lineDeltaBefore !== previousLineDelta) throw new RangeError('Language token delta line shifts must form one continuous mapping');
 		if (splice.resultStartItemIndex + splice.resultInsertItemCount > tokenCount) throw new RangeError('Language token delta inserted items exceed the normalized result');
 		previousBaseEnd = splice.baseStartItemIndex + splice.baseDeleteItemCount;
@@ -81,7 +80,7 @@ function assertSafeInteger(value: unknown, owner: string): asserts value is numb
 /** Only accepted syntax results may become the next incremental result baseline. */
 function createSyntaxResultStore(): WorkerTextModelResultStore<languages.SyntaxLane, languages.SyntaxResult> {
 	const confirmed = new Map<languages.SyntaxLane, WorkerTextModelResult<languages.SyntaxResult>>();
-	const staged = new Map<number, { lane: languages.SyntaxLane; state: WorkerTextModelResult<languages.SyntaxResult> }>();
+	const staged = new Map<number, { lane: languages.SyntaxLane; state: WorkerTextModelResult<languages.SyntaxResult>; }>();
 	return {
 		get: lane => confirmed.get(lane),
 		stage: (lane, state) => {
@@ -111,15 +110,9 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 		languages.assertSyntaxRequest(request);
 		assertTokenizationLane(lane, request);
 		return Object.freeze({
-			languageId: request.languageId,
-			...(request.tokenize === undefined
-				? {}
-				: {
-						tokenize: Object.freeze({
-							lineNumber: request.tokenize.lineNumber,
-							lines: Object.freeze([...request.tokenize.lines]),
-						}),
-					}),
+			languageId: request.languageId, ...(request.tokenize === undefined ? {} : {
+				tokenize: Object.freeze({ lineNumber: request.tokenize.lineNumber, lines: Object.freeze([...request.tokenize.lines]) }),
+			})
 		});
 	},
 	decodePayload(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot) {
@@ -130,15 +123,9 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 			if (!Array.isArray(value.tokenize.lines)) throw new TypeError('Syntax wire tokenization requires lines');
 			const lineNumber = decodePositiveSafeInteger(value.tokenize.lineNumber, 'Syntax wire tokenization start line');
 			if (lineNumber > snapshot.lineCount) throw new RangeError('Syntax wire tokenization start line is outside the document');
-			tokenize = Object.freeze({
-				lineNumber,
-				lines: Object.freeze(value.tokenize.lines.map(line => decodeString(line, 'Syntax wire tokenization line'))),
-			});
+			tokenize = Object.freeze({ lineNumber, lines: Object.freeze(value.tokenize.lines.map(line => decodeString(line, 'Syntax wire tokenization line'))) });
 		}
-		const request = Object.freeze({
-			languageId: decodeString(value.languageId, 'Syntax wire language ID'),
-			...(tokenize === undefined ? {} : { tokenize }),
-		});
+		const request = Object.freeze({ languageId: decodeString(value.languageId, 'Syntax wire language ID'), ...(tokenize === undefined ? {} : { tokenize }) });
 		languages.assertSyntaxRequest(request);
 		assertTokenizationLane(lane, request);
 		return request;
@@ -150,11 +137,11 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.SyntaxResult, snapshot: TextSnapshot, base: WorkerTextModelResult<languages.SyntaxResult> | undefined): unknown {
 	assertResultLane(lane, result);
 	if (result.lane === languages.SYNTAX_TOKENIZE_LANE) {
-		return Object.freeze({
-			tokens: result.value === null ? null : Object.freeze(result.value.tokens.map(token => syntaxEncodeItem(languages.SYNTAX_TOKEN_LANE, token))),
-		});
+		return Object.freeze({ tokens: result.value === null ? null : Object.freeze(result.value.tokens.map(token => syntaxEncodeItem(languages.SYNTAX_TOKEN_LANE, token))) });
 	}
-	const items = lane === languages.SYNTAX_TOKEN_LANE ? (result.value as LanguageTokenResult).tokens : (result.value as languages.LanguageDiagnosticResult).diagnostics;
+	const items = lane === languages.SYNTAX_TOKEN_LANE
+		? (result.value as LanguageTokenResult).tokens
+		: (result.value as languages.LanguageDiagnosticResult).diagnostics;
 	const baseItems = readBaseItems(lane, base);
 	if (!base || !baseItems) return encodeFull(lane, items);
 	const splices = createSyntaxItemSplices(lane, baseItems, items, base.snapshot, snapshot);
@@ -163,16 +150,12 @@ function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.Sy
 	return Object.freeze({
 		kind: 'delta',
 		baseRequestId: base.requestId,
-		splices: Object.freeze(
-			splices.map(splice =>
-				Object.freeze({
-					startItemIndex: splice.startItemIndex,
-					deleteItemCount: splice.deleteItemCount,
-					lineDelta: splice.lineDeltaAfter,
-					items: Object.freeze(splice.items.map(item => syntaxEncodeItem(lane, item))),
-				}),
-			),
-		),
+		splices: Object.freeze(splices.map(splice => Object.freeze({
+			startItemIndex: splice.startItemIndex,
+			deleteItemCount: splice.deleteItemCount,
+			lineDelta: splice.lineDeltaAfter,
+			items: Object.freeze(splice.items.map(item => syntaxEncodeItem(lane, item))),
+		}))),
 	});
 }
 
@@ -181,20 +164,11 @@ function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snap
 	if (lane === languages.SYNTAX_TOKENIZE_LANE) {
 		if (value.tokens === null) return Object.freeze({ lane, value: null });
 		if (!Array.isArray(value.tokens)) throw new TypeError('Syntax tokenization result requires tokens or null');
-		return Object.freeze({
-			lane,
-			value: {
-				tokens: value.tokens.map(token => syntaxDecodeItem(languages.SYNTAX_TOKEN_LANE, token) as LanguageToken),
-			},
-		});
+		return Object.freeze({ lane, value: { tokens: value.tokens.map(token => syntaxDecodeItem(languages.SYNTAX_TOKEN_LANE, token) as LanguageToken) } });
 	}
 	if (value.kind === 'full') {
 		if (!Array.isArray(value.items)) throw new TypeError('Full syntax wire result must contain items');
-		return resultFromItems(
-			lane,
-			value.items.map(item => syntaxDecodeItem(lane, item)),
-			snapshot,
-		);
+		return resultFromItems(lane, value.items.map(item => syntaxDecodeItem(lane, item)), snapshot);
 	}
 	if (value.kind !== 'delta') {
 		throw new TypeError(`Unknown syntax wire result kind '${String(value.kind)}'`);
@@ -229,16 +203,14 @@ function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snap
 		const resultStartItemIndex = items.length;
 		pushMany(items, inserted);
 		const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, 'Syntax delta line shift');
-		tokenSplices.push(
-			Object.freeze({
-				baseStartItemIndex: startItemIndex,
-				baseDeleteItemCount: deleteItemCount,
-				resultStartItemIndex,
-				resultInsertItemCount: inserted.length,
-				lineDeltaBefore: lineDelta,
-				lineDeltaAfter: nextLineDelta,
-			}),
-		);
+		tokenSplices.push(Object.freeze({
+			baseStartItemIndex: startItemIndex,
+			baseDeleteItemCount: deleteItemCount,
+			resultStartItemIndex,
+			resultInsertItemCount: inserted.length,
+			lineDeltaBefore: lineDelta,
+			lineDeltaAfter: nextLineDelta,
+		}));
 		baseItemIndex = startItemIndex + deleteItemCount;
 		lineDelta = nextLineDelta;
 	}
@@ -265,21 +237,21 @@ function encodeFull(lane: languages.SyntaxLane, items: readonly SyntaxItem[]): u
 
 function readBaseItems(lane: languages.SyntaxLane, base: WorkerTextModelResult<languages.SyntaxResult> | undefined): readonly SyntaxItem[] | undefined {
 	if (!base || base.result.lane !== lane) return undefined;
-	return lane === languages.SYNTAX_TOKEN_LANE ? (base.result.value as LanguageTokenResult).tokens : (base.result.value as languages.LanguageDiagnosticResult).diagnostics;
+	return lane === languages.SYNTAX_TOKEN_LANE
+		? (base.result.value as LanguageTokenResult).tokens
+		: (base.result.value as languages.LanguageDiagnosticResult).diagnostics;
 }
 
 function resultFromItems(lane: languages.SyntaxLane, items: readonly SyntaxItem[], snapshot: TextSnapshot): languages.SyntaxResult {
 	return lane === languages.SYNTAX_TOKEN_LANE
 		? Object.freeze({
-				lane: languages.SYNTAX_TOKEN_LANE,
-				value: createLanguageTokenSnapshotNormalizer(snapshot)({ tokens: items as readonly LanguageToken[] }),
-			})
+			lane: languages.SYNTAX_TOKEN_LANE,
+			value: createLanguageTokenSnapshotNormalizer(snapshot)({ tokens: items as readonly LanguageToken[] }),
+		})
 		: Object.freeze({
-				lane: languages.SYNTAX_DIAGNOSTIC_LANE,
-				value: languages.createLanguageDiagnosticSnapshotNormalizer(snapshot)({
-					diagnostics: items as readonly languages.LanguageDiagnostic[],
-				}),
-			});
+			lane: languages.SYNTAX_DIAGNOSTIC_LANE,
+			value: languages.createLanguageDiagnosticSnapshotNormalizer(snapshot)({ diagnostics: items as readonly languages.LanguageDiagnostic[] }),
+		});
 }
 
 function syntaxEncodeItem(lane: languages.SyntaxLane, item: SyntaxItem): unknown {
@@ -340,18 +312,18 @@ function decodePresentation(value: unknown): NonNullable<LanguageToken['presenta
 	const foreground = value.foreground === undefined ? undefined : decodeString(value.foreground, 'Language token wire foreground');
 	const background = value.background === undefined ? undefined : decodeString(value.background, 'Language token wire background');
 	if (value.fontStyle !== undefined && !Array.isArray(value.fontStyle)) throw new TypeError('Language token wire font style must be an array');
-	const fontStyle =
-		value.fontStyle === undefined ? undefined : (value.fontStyle.map(style => decodeString(style, 'Language token wire font style')) as NonNullable<LanguageToken['presentation']>['fontStyle']);
-	return {
-		...(foreground === undefined ? {} : { foreground }),
-		...(background === undefined ? {} : { background }),
-		...(fontStyle === undefined ? {} : { fontStyle }),
-	};
+	const fontStyle = value.fontStyle === undefined ? undefined : value.fontStyle.map(style => decodeString(style, 'Language token wire font style')) as NonNullable<LanguageToken['presentation']>['fontStyle'];
+	return { ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) };
 }
 
 function shiftItem(lane: languages.SyntaxLane, item: SyntaxItem, lineDelta: number): SyntaxItem {
-	const range = Range.fromPositions(new Position(item.range.startLineNumber + lineDelta, item.range.startColumn), new Position(item.range.endLineNumber + lineDelta, item.range.endColumn));
-	return lane === languages.SYNTAX_TOKEN_LANE ? { ...(item as LanguageToken), range } : { ...(item as languages.LanguageDiagnostic), range };
+	const range = Range.fromPositions(
+		new Position(item.range.startLineNumber + lineDelta, item.range.startColumn),
+		new Position(item.range.endLineNumber + lineDelta, item.range.endColumn),
+	);
+	return lane === languages.SYNTAX_TOKEN_LANE
+		? { ...(item as LanguageToken), range }
+		: { ...(item as languages.LanguageDiagnostic), range };
 }
 
 function syntaxEncodeRange(range: Range, owner: string): unknown {
@@ -369,7 +341,7 @@ function syntaxDecodeRange(value: unknown, owner: string): Range {
 
 function syntaxDecodePosition(value: unknown, owner: string): Position {
 	assertRecord(value, owner);
-	return new Position(decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`) + 1, decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`) + 1);
+	return new Position((decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`)) + 1, (decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`)) + 1);
 }
 
 function decodeDiagnosticCode(value: unknown): languages.LanguageDiagnosticCode | undefined {
@@ -418,13 +390,7 @@ interface SyntaxLineRun extends SyntaxLinePair {
 	readonly lineCount: number;
 }
 
-function createSyntaxItemSplices(
-	lane: languages.SyntaxLane,
-	previous: readonly SyntaxItem[],
-	current: readonly SyntaxItem[],
-	previousSnapshot: TextSnapshot,
-	currentSnapshot: TextSnapshot,
-): readonly SyntaxItemSplice[] {
+function createSyntaxItemSplices(lane: languages.SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], previousSnapshot: TextSnapshot, currentSnapshot: TextSnapshot): readonly SyntaxItemSplice[] {
 	const previousLines = previousSnapshot.getText().split('\n');
 	const currentLines = currentSnapshot.getText().split('\n');
 	const previousBounds = createLineItemBounds(previous, previousLines.length);
@@ -455,41 +421,27 @@ function syntaxItemsEqual(lane: languages.SyntaxLane, current: SyntaxItem, previ
 	if (lane === languages.SYNTAX_TOKEN_LANE) {
 		const currentToken = current as LanguageToken;
 		const previousToken = previous as LanguageToken;
-		return (
-			currentToken.tokenType === previousToken.tokenType &&
+		return currentToken.tokenType === previousToken.tokenType &&
 			arraysEqual(currentToken.modifiers, previousToken.modifiers) &&
 			currentToken.languageId === previousToken.languageId &&
 			currentToken.balancedBrackets === previousToken.balancedBrackets &&
-			tokenPresentationsEqual(currentToken.presentation, previousToken.presentation)
-		);
+			tokenPresentationsEqual(currentToken.presentation, previousToken.presentation);
 	}
 	const currentDiagnostic = current as languages.LanguageDiagnostic;
 	const previousDiagnostic = previous as languages.LanguageDiagnostic;
-	return (
-		currentDiagnostic.severity === previousDiagnostic.severity &&
+	return currentDiagnostic.severity === previousDiagnostic.severity &&
 		currentDiagnostic.message === previousDiagnostic.message &&
 		currentDiagnostic.code === previousDiagnostic.code &&
-		currentDiagnostic.source === previousDiagnostic.source
-	);
+		currentDiagnostic.source === previousDiagnostic.source;
 }
 
-function createStableLineRuns(
-	lane: languages.SyntaxLane,
-	previousItems: readonly SyntaxItem[],
-	currentItems: readonly SyntaxItem[],
-	previousLines: readonly string[],
-	currentLines: readonly string[],
-	previousBounds: readonly number[],
-	currentBounds: readonly number[],
-): readonly SyntaxLineRun[] {
-	const pairs = createStableLinePairs(previousLines, currentLines).filter(pair =>
-		lineItemsEqual(
-			lane,
-			previousItems.slice(previousBounds[pair.previousLineIndex], previousBounds[pair.previousLineIndex + 1]),
-			currentItems.slice(currentBounds[pair.currentLineIndex], currentBounds[pair.currentLineIndex + 1]),
-			pair.currentLineIndex - pair.previousLineIndex,
-		),
-	);
+function createStableLineRuns(lane: languages.SyntaxLane, previousItems: readonly SyntaxItem[], currentItems: readonly SyntaxItem[], previousLines: readonly string[], currentLines: readonly string[], previousBounds: readonly number[], currentBounds: readonly number[]): readonly SyntaxLineRun[] {
+	const pairs = createStableLinePairs(previousLines, currentLines).filter(pair => lineItemsEqual(
+		lane,
+		previousItems.slice(previousBounds[pair.previousLineIndex], previousBounds[pair.previousLineIndex + 1]),
+		currentItems.slice(currentBounds[pair.currentLineIndex], currentBounds[pair.currentLineIndex + 1]),
+		pair.currentLineIndex - pair.previousLineIndex,
+	));
 	const runs: SyntaxLineRun[] = [];
 	for (const pair of pairs) {
 		const previous = runs.at(-1);
@@ -521,14 +473,10 @@ function createStableLinePairs(previous: readonly string[], current: readonly st
 		addPair(pairs, previousInteriorEnd + offset, currentInteriorEnd + offset);
 	}
 	const anchors = [...pairs.values()].sort(comparePairs);
-	const sentinels = [
-		{ previousLineIndex: -1, currentLineIndex: -1 },
-		...anchors,
-		{
-			previousLineIndex: previous.length,
-			currentLineIndex: current.length,
-		},
-	];
+	const sentinels = [{ previousLineIndex: -1, currentLineIndex: -1 }, ...anchors, {
+		previousLineIndex: previous.length,
+		currentLineIndex: current.length,
+	}];
 	for (let index = 1; index < sentinels.length; index += 1) {
 		const left = sentinels[index - 1]!;
 		const right = sentinels[index]!;
@@ -546,26 +494,15 @@ function createStableLinePairs(previous: readonly string[], current: readonly st
 	return Object.freeze([...pairs.values()].sort(comparePairs));
 }
 
-function appendSplice(
-	splices: SyntaxItemSplice[],
-	current: readonly SyntaxItem[],
-	previousStart: number,
-	previousEnd: number,
-	currentStart: number,
-	currentEnd: number,
-	lineDeltaBefore: number,
-	lineDeltaAfter: number,
-): void {
+function appendSplice(splices: SyntaxItemSplice[], current: readonly SyntaxItem[], previousStart: number, previousEnd: number, currentStart: number, currentEnd: number, lineDeltaBefore: number, lineDeltaAfter: number): void {
 	if (previousStart === previousEnd && currentStart === currentEnd && lineDeltaBefore === lineDeltaAfter) return;
-	splices.push(
-		Object.freeze({
-			startItemIndex: previousStart,
-			deleteItemCount: previousEnd - previousStart,
-			items: Object.freeze(current.slice(currentStart, currentEnd)),
-			lineDeltaBefore,
-			lineDeltaAfter,
-		}),
-	);
+	splices.push(Object.freeze({
+		startItemIndex: previousStart,
+		deleteItemCount: previousEnd - previousStart,
+		items: Object.freeze(current.slice(currentStart, currentEnd)),
+		lineDeltaBefore,
+		lineDeltaAfter,
+	}));
 }
 
 function createSingleSplice(lane: languages.SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], lineDelta: number): SyntaxItemSplice {
@@ -645,12 +582,10 @@ function comparePairs(left: SyntaxLinePair, right: SyntaxLinePair): number {
 }
 
 function syntaxRangesEqual(current: Range, previous: Range, lineDelta: number): boolean {
-	return (
-		current.getStartPosition().lineNumber === previous.getStartPosition().lineNumber + lineDelta &&
+	return current.getStartPosition().lineNumber === previous.getStartPosition().lineNumber + lineDelta &&
 		current.getStartPosition().column === previous.getStartPosition().column &&
 		current.getEndPosition().lineNumber === previous.getEndPosition().lineNumber + lineDelta &&
-		current.getEndPosition().column === previous.getEndPosition().column
-	);
+		current.getEndPosition().column === previous.getEndPosition().column;
 }
 
 function tokenPresentationsEqual(current: LanguageToken['presentation'], previous: LanguageToken['presentation']): boolean {
@@ -660,11 +595,10 @@ function tokenPresentationsEqual(current: LanguageToken['presentation'], previou
 	if (!current || !previous) {
 		return false;
 	}
-	return (
-		current.foreground === previous.foreground &&
+	return current.foreground === previous.foreground &&
 		current.background === previous.background &&
-		(current.fontStyle === previous.fontStyle || (current.fontStyle !== undefined && previous.fontStyle !== undefined && arraysEqual(current.fontStyle, previous.fontStyle)))
-	);
+		(current.fontStyle === previous.fontStyle ||
+			(current.fontStyle !== undefined && previous.fontStyle !== undefined && arraysEqual(current.fontStyle, previous.fontStyle)));
 }
 
 function assertRecord(value: unknown, owner: string): asserts value is Record<string, unknown> {

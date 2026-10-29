@@ -34,9 +34,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	let supportsDetails = true;
 	const context: IDesktopLayoutContext = {
 		isSessionContent: true,
-		get isDocumentContent() {
-			return documentContent.get();
-		},
+		get isDocumentContent() { return documentContent.get(); },
 		documentContent,
 		isChangingContent: false,
 		runOperation(operation) {
@@ -45,31 +43,17 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 		},
 	};
 	const controller = {
-		get supportsDetails() {
-			return supportsDetails;
-		},
+		get supportsDetails() { return supportsDetails; },
 		async openFiles() {
 			await started.complete();
 			await pending.p;
 			effects.push('files');
 		},
-		async openChanges() {
-			effects.push('changes');
-		},
-		async hideEditor() {
-			parts.editor = false;
-			parts.auxiliarybar = true;
-		},
-		async showEditor() {
-			parts.editor = true;
-		},
-		async toggleDetails() {
-			parts.auxiliarybar = !parts.auxiliarybar;
-		},
-		async toggleSidePane() {
-			parts.editor = false;
-			parts.auxiliarybar = false;
-		},
+		async openChanges() { effects.push('changes'); },
+		async hideEditor() { parts.editor = false; parts.auxiliarybar = true; },
+		async showEditor() { parts.editor = true; },
+		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
+		async toggleSidePane() { parts.editor = false; parts.auxiliarybar = false; },
 	} as unknown as DesktopLayoutController;
 	services.registerInstance(ILayoutService, {
 		isPartVisible: (part: keyof typeof parts) => parts[part],
@@ -81,54 +65,29 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	using title = menus.createMenu(MenuId.EditorTitle);
 	using addTab = menus.createMenu(Menus.CodeAddTab);
 	using palette = menus.createMenu(MenuId.CommandPalette);
-	const paletteIds = () =>
-		palette
-			.getActions()
-			.flatMap(([, actions]) => actions)
-			.map(action => action.id)
-			.sort();
+	const paletteIds = () => palette.getActions().flatMap(([, actions]) => actions).map(action => action.id).sort();
 	// Shared editor imports may already contribute commands to the same registry.
 	const existingPaletteIds = paletteIds();
 	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
-	const titleState = () =>
-		title
-			.getActions()
-			.flatMap(([, actions]) => actions)
-			.map(action => [action.label, action.enabled, action.checked]);
-	assert.deepEqual(titleState(), [
-		['Add tab', true, undefined],
-		['Toggle details', true, true],
-		['Show editor', true, undefined],
-	]);
-	assert.deepEqual(
-		addTab
-			.getActions()
-			.flatMap(([, actions]) => actions)
-			.map(action => action.id),
-		[NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges'],
-	);
-	assert.deepEqual(
-		paletteIds(),
-		[...existingPaletteIds, NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges', 'ash.sessions.toggleSidePane', 'ash.sessions.toggleDetails', 'ash.sessions.showEditor'].sort(),
-	);
+	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
+	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
+	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges']);
+	assert.deepEqual(paletteIds(), [
+		...existingPaletteIds,
+		NEW_FILE_TAB_COMMAND_ID,
+		'workbench.agentSessions.action.viewChanges',
+		'ash.sessions.toggleSidePane',
+		'ash.sessions.toggleDetails',
+		'ash.sessions.showEditor',
+	].sort());
 
 	await commands.executeCommand('ash.sessions.showEditor');
-	assert.deepEqual(titleState(), [
-		['Add tab', true, undefined],
-		['Toggle details', true, true],
-		['Hide editor', true, undefined],
-	]);
+	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Hide editor', true, undefined]]);
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	supportsDetails = false;
 	editorChanged.fire();
-	assert.equal(
-		title
-			.getActions()
-			.flatMap(([, actions]) => actions)
-			.find(action => action.id === 'ash.sessions.toggleDetails')?.enabled,
-		false,
-	);
+	assert.equal(title.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleDetails')?.enabled, false);
 	parts.editor = false;
 	layoutChanged.fire();
 	assert.equal(contextKeys.getValue('sessions.editorContentVisible'), false);
@@ -165,17 +124,8 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
-		assert.deepEqual(
-			titleState().map(([label]) => label),
-			['添加标签', '切换详情', '显示编辑器'],
-		);
-		assert.deepEqual(
-			addTab
-				.getActions()
-				.flatMap(([, actions]) => actions)
-				.map(action => action.label),
-			['打开文件标签', '打开更改标签'],
-		);
+		assert.deepEqual(titleState().map(([label]) => label), ['添加标签', '切换详情', '显示编辑器']);
+		assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.label), ['打开文件标签', '打开更改标签']);
 	} finally {
 		resetNlsResolver();
 	}

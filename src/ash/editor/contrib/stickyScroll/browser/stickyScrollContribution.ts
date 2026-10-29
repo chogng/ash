@@ -13,13 +13,12 @@ onActivate(() => registerAction2(GoToStickyScrollLine));
 onActivate(() => registerAction2(SelectEditor));
 
 registerEditorContribution({
-	id: StickyScrollController.ID,
-	install: context => {
+	id: StickyScrollController.ID, install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) {
 			return;
 		}
 		const controller = context.instantiationService.createInstance(StickyScrollController, context.editor, context.view, context.getService(TextEditorCapability.folding), context.onLanguageError);
 		void controller.stickyScrollCandidateProvider.update();
 		return controller;
-	},
+	}
 });

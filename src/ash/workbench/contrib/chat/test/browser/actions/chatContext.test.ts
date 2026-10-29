@@ -1,7 +1,12 @@
 import { CancellationTokenSource } from '../../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
-import { picksWithPromiseFn, type ChatContextPick, type IChatContextPickerItem, type IChatContextPickerPickItem } from '../../../browser/attachments/chatContextPickService.js';
+import {
+	picksWithPromiseFn,
+	type ChatContextPick,
+	type IChatContextPickerItem,
+	type IChatContextPickerPickItem,
+} from '../../../browser/attachments/chatContextPickService.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -57,15 +62,7 @@ test('Escape cancels an unresolved context catalog and ignores its late result',
 	const quickInput = pickerHost(resources);
 	const result = new DeferredPromise<readonly IQuickPickItem[]>();
 	let token: CancellationToken | undefined;
-	const selection = pickChatContextItem(
-		quickInput,
-		'Search context',
-		(_query, cancellation) => {
-			token = cancellation;
-			return result.p;
-		},
-		new AbortController().signal,
-	);
+	const selection = pickChatContextItem(quickInput, 'Search context', (_query, cancellation) => { token = cancellation; return result.p; }, new AbortController().signal);
 	document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(await selection, undefined);
 	assert.equal(token?.isCancellationRequested, true);
@@ -73,19 +70,12 @@ test('Escape cancels an unresolved context catalog and ignores its late result',
 	assert.equal(quickInput.currentQuickInput, undefined);
 });
 
+
 suite('Registered attachment source contracts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	function item(name: string): IChatContextPickerPickItem {
-		return {
-			label: name,
-			asAttachment: () => ({
-				id: name,
-				kind: 'source',
-				name,
-				resolve: async () => ({ name, content: `Captured ${name}` }),
-			}),
-		};
+		return { label: name, asAttachment: () => ({ id: name, kind: 'source', name, resolve: async () => ({ name, content: `Captured ${name}` }) }) };
 	}
 
 	async function ready(condition: () => boolean): Promise<void> {
@@ -117,10 +107,7 @@ suite('Registered attachment source contracts', () => {
 		await ready(() => !state.get().busy);
 		await stale.error(new Error('Retired query failed'));
 		await Promise.resolve();
-		assert.deepEqual(
-			state.get().picks.map(pick => pick.label),
-			['Latest choice'],
-		);
+		assert.deepEqual(state.get().picks.map(pick => pick.label), ['Latest choice']);
 		assert.equal(state.get().error, undefined);
 	});
 
@@ -129,10 +116,7 @@ suite('Registered attachment source contracts', () => {
 		using cancel = toDisposable(() => lifetime.cancel());
 		const query = observableValue('query', '1234567890abcdef');
 		const picks = [item('Z newest'), item('A oldest')];
-		const state = picksWithPromiseFn(async value => {
-			assert.equal(value, query.get());
-			return picks;
-		})(query, lifetime.token);
+		const state = picksWithPromiseFn(async value => { assert.equal(value, query.get()); return picks; })(query, lifetime.token);
 		await ready(() => !state.get().busy);
 		assert.deepEqual(state.get().picks, picks);
 	});
@@ -153,10 +137,7 @@ suite('Registered attachment source contracts', () => {
 		using lifetime = new CancellationTokenSource();
 		const result = new DeferredPromise<ChatContextPick[]>();
 		let token: CancellationToken | undefined;
-		const state = picksWithPromiseFn(async (_value, current) => {
-			token = current;
-			return result.p;
-		})(observableValue('query', ''), lifetime.token);
+		const state = picksWithPromiseFn(async (_value, current) => { token = current; return result.p; })(observableValue('query', ''), lifetime.token);
 		await ready(() => token !== undefined);
 		lifetime.cancel();
 		assert.equal(token!.isCancellationRequested, true);
@@ -168,17 +149,10 @@ suite('Registered attachment source contracts', () => {
 		using resources = new DisposableStore();
 		const service = new ChatContextPickService();
 		const create = (label: string, ordinal = 0): IChatContextPickerItem => ({
-			type: 'pickerPick',
-			label,
-			ordinal,
-			icon: Lxicon.file,
-			asPicker: () => {
-				assert.fail('Registration must not instantiate picker UI');
-			},
+			type: 'pickerPick', label, ordinal, icon: Lxicon.file,
+			asPicker: () => { assert.fail('Registration must not instantiate picker UI'); },
 		});
-		const z = create('Z'),
-			a = create('A'),
-			priority = create('Priority', 10);
+		const z = create('Z'), a = create('A'), priority = create('Priority', 10);
 		resources.add(service.registerChatContextItem(z));
 		const registration = resources.add(service.registerChatContextItem(a));
 		resources.add(service.registerChatContextItem(priority));

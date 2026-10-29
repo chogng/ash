@@ -2,21 +2,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	FileRevisionConflictError,
-	FileSystemProviderCapabilities,
-	FileSystemProviderError,
-	FileSystemProviderErrorCode,
-	type FileDeleteMode,
-	type FileExistingTargetBehavior,
-	type FileMissingTargetBehavior,
-	type IFileChangeEvent,
-	type IFileStat,
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-} from './files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, FileSystemProviderCapabilities, FileSystemProviderError, FileSystemProviderErrorCode, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileChangeEvent, type IFileStat, type IFileSystemProvider, type IFileWriteOptions } from './files.js';
 
 interface MemoryEntry {
 	readonly resource: URI;
@@ -35,14 +21,9 @@ export class InMemoryFileSystemProvider extends Disposable implements IFileSyste
 	private readonly entries = new Map<string, MemoryEntry>();
 	private revision = 0;
 
-	watch(resource: URI): IDisposable {
-		this.key(resource);
-		return Disposable.None;
-	}
+	watch(resource: URI): IDisposable { this.key(resource); return Disposable.None; }
 
-	async stat(resource: URI): Promise<IFileStat> {
-		return this.metadata(this.get(resource));
-	}
+	async stat(resource: URI): Promise<IFileStat> { return this.metadata(this.get(resource)); }
 
 	async readDirectory(resource: URI) {
 		this.requireKind(this.get(resource), FileKind.Directory);
@@ -94,12 +75,8 @@ export class InMemoryFileSystemProvider extends Disposable implements IFileSyste
 		return this.metadata(entry);
 	}
 
-	async copy(source: URI, target: URI): Promise<void> {
-		this.transfer(source, target, 'error', false);
-	}
-	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		this.transfer(source, target, existing, true);
-	}
+	async copy(source: URI, target: URI): Promise<void> { this.transfer(source, target, 'error', false); }
+	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> { this.transfer(source, target, existing, true); }
 
 	async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
 		if (!this.entries.has(this.key(resource))) {
@@ -151,13 +128,7 @@ export class InMemoryFileSystemProvider extends Disposable implements IFileSyste
 
 	private put(resource: URI, kind: FileKind, bytes: Uint8Array): MemoryEntry {
 		const key = this.key(resource);
-		const entry = {
-			resource: URI.parse(key),
-			kind,
-			bytes: bytes.slice(),
-			revision: String(++this.revision),
-			modifiedAtMillis: Date.now(),
-		};
+		const entry = { resource: URI.parse(key), kind, bytes: bytes.slice(), revision: String(++this.revision), modifiedAtMillis: Date.now() };
 		this.entries.set(key, entry);
 		return entry;
 	}
@@ -167,26 +138,14 @@ export class InMemoryFileSystemProvider extends Disposable implements IFileSyste
 	}
 
 	private metadata(entry: MemoryEntry): IFileStat {
-		return {
-			resource: entry.resource,
-			kind: entry.kind,
-			sizeBytes: entry.bytes.byteLength,
-			readonly: false,
-			modifiedAtMillis: entry.modifiedAtMillis,
-		};
+		return { resource: entry.resource, kind: entry.kind, sizeBytes: entry.bytes.byteLength, readonly: false, modifiedAtMillis: entry.modifiedAtMillis };
 	}
 
 	private requireKind(entry: MemoryEntry, kind: FileKind): void {
-		if (entry.kind !== kind)
-			throw new FileSystemProviderError(
-				`Unexpected resource kind: ${entry.resource.toString()}`,
-				kind === FileKind.File ? FileSystemProviderErrorCode.FileIsADirectory : FileSystemProviderErrorCode.FileNotADirectory,
-			);
+		if (entry.kind !== kind) throw new FileSystemProviderError(`Unexpected resource kind: ${entry.resource.toString()}`, kind === FileKind.File ? FileSystemProviderErrorCode.FileIsADirectory : FileSystemProviderErrorCode.FileNotADirectory);
 	}
 
-	private exists(resource: URI): never {
-		throw new FileSystemProviderError(`Resource exists: ${resource.toString()}`, FileSystemProviderErrorCode.FileExists);
-	}
+	private exists(resource: URI): never { throw new FileSystemProviderError(`Resource exists: ${resource.toString()}`, FileSystemProviderErrorCode.FileExists); }
 
 	protected override disposeCore(): void {
 		this.entries.clear();

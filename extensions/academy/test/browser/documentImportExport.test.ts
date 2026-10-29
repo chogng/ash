@@ -23,39 +23,22 @@ test('Academy imports local image assets through host IO once and retains remote
 	});
 	const images = document.content[0]!.content.filter(node => node.type === 'image');
 	assert.deepEqual(reads, ['file:///notes/figure.png']);
-	assert.deepEqual(
-		images.map(node => node.attrs.src),
-		['data:image/png;base64,AH//', 'data:image/png;base64,AH//', 'https://example.com/figure.png'],
-	);
+	assert.deepEqual(images.map(node => node.attrs.src), ['data:image/png;base64,AH//', 'data:image/png;base64,AH//', 'https://example.com/figure.png']);
 	profile.codec.validate(document);
-	await assert.rejects(
-		async () =>
-			profile.importText('![Unsupported](figure.svg)', 'markdown', environment.window.document, source, async () => {
-				throw new Error('Unsupported images must be rejected before IO');
-			}),
-		error => error instanceof DocumentConversionError && error.feature === 'image resource',
-	);
+	await assert.rejects(async () => profile.importText('![Unsupported](figure.svg)', 'markdown', environment.window.document, source, async () => {
+		throw new Error('Unsupported images must be rejected before IO');
+	}), error => error instanceof DocumentConversionError && error.feature === 'image resource');
 });
 
 function semantics(node: DocumentNode): unknown {
-	return {
-		type: node.type,
-		attrs: node.attrs,
-		marks: node.marks,
-		...(node.text === undefined ? {} : { text: node.text }),
-		content: node.content.map(semantics),
-	};
+	return { type: node.type, attrs: node.attrs, marks: node.marks, ...(node.text === undefined ? {} : { text: node.text }), content: node.content.map(semantics) };
 }
 
 test('Markdown conversion preserves supported block and inline semantics through export and reimport', () => {
 	const schema = createDefaultDocumentSchema();
-	const input =
-		'# Heading\n\nA **bold** and *italic* [link](<https://example.com/a%20b>) and `code`.\n\n> Quote\n\n3. One\n4. Two\n\n- First\n- Second\n\n```ts\nconst n = 1;\n```\n\n---\n\n| A | B |\n| --- | --- |\n| x | y |\n';
+	const input = '# Heading\n\nA **bold** and *italic* [link](<https://example.com/a%20b>) and `code`.\n\n> Quote\n\n3. One\n4. Two\n\n- First\n- Second\n\n```ts\nconst n = 1;\n```\n\n---\n\n| A | B |\n| --- | --- |\n| x | y |\n';
 	const document = importDocumentText(input, 'markdown', schema, environment.window.document, source);
-	assert.deepEqual(
-		document.content.map(node => node.type),
-		['heading', 'paragraph', 'blockquote', 'orderedList', 'bulletList', 'codeBlock', 'horizontalRule', 'table'],
-	);
+	assert.deepEqual(document.content.map(node => node.type), ['heading', 'paragraph', 'blockquote', 'orderedList', 'bulletList', 'codeBlock', 'horizontalRule', 'table']);
 	const output = exportDocumentText(document, schema, 'markdown');
 	assert.deepEqual(semantics(importDocumentText(output, 'markdown', schema, environment.window.document, source)), semantics(document));
 	assert.ok(output.includes('https://example.com/a%20b'));
@@ -65,10 +48,7 @@ test('Markdown imports resolve image identity against the source and decode text
 	const schema = createDefaultDocumentSchema();
 	const document = importDocumentText('A &amp; B &copy; ![Figure](images/one%20two.png)', 'markdown', schema, environment.window.document, source);
 	assert.equal(document.content[0]!.content[0]!.text, 'A & B © ');
-	assert.deepEqual(document.content[0]!.content[1]!.attrs, {
-		src: 'file:///notes/images/one%20two.png',
-		alt: 'Figure',
-	});
+	assert.deepEqual(document.content[0]!.content[1]!.attrs, { src: 'file:///notes/images/one%20two.png', alt: 'Figure' });
 	assert.equal(documentToPlainText(document), 'A & B © Figure');
 });
 
@@ -94,15 +74,9 @@ for (const [feature, cell] of [
 test('Markdown import rejects unsupported content and identifies a source location', () => {
 	const schema = createDefaultDocumentSchema();
 	for (const input of ['First\n\n<div>HTML</div>', '- [x] task', '~~deleted~~', '[label](https://example.com "title")', '![Figure](blob:temporary)']) {
-		assert.throws(
-			() => importDocumentText(input, 'markdown', schema, environment.window.document, source),
-			error => error instanceof DocumentConversionError && /^\d+:\d+$/.test(error.location),
-		);
+		assert.throws(() => importDocumentText(input, 'markdown', schema, environment.window.document, source), error => error instanceof DocumentConversionError && /^\d+:\d+$/.test(error.location));
 	}
-	assert.throws(
-		() => importDocumentText('First\n\n<div>HTML</div>', 'markdown', schema, environment.window.document, source),
-		error => error instanceof DocumentConversionError && error.location === '3:1',
-	);
+	assert.throws(() => importDocumentText('First\n\n<div>HTML</div>', 'markdown', schema, environment.window.document, source), error => error instanceof DocumentConversionError && error.location === '3:1');
 });
 
 test('explicit text conversion preserves Markdown punctuation as text and exports it safely', () => {
@@ -115,37 +89,18 @@ test('explicit text conversion preserves Markdown punctuation as text and export
 
 test('Markdown export reports unsupported formatting by node identity', () => {
 	const schema = createDefaultDocumentSchema();
-	const document = schema.createDocument([
-		schema.createNode('paragraph', {
-			content: [
-				schema.createText('Styled', {
-					id: 'styled-node',
-					marks: [{ type: 'textStyle', attrs: { fontFamily: 'serif' } }],
-				}),
-			],
-		}),
-	]);
-	assert.throws(
-		() => exportDocumentText(document, schema, 'markdown'),
-		error => error instanceof DocumentConversionError && error.location === 'styled-node',
-	);
+	const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Styled', { id: 'styled-node', marks: [{ type: 'textStyle', attrs: { fontFamily: 'serif' } }] })] })]);
+	assert.throws(() => exportDocumentText(document, schema, 'markdown'), error => error instanceof DocumentConversionError && error.location === 'styled-node');
 	assert.equal(exportDocumentText(document, schema, 'text'), 'Styled');
 });
 
 test('Markdown round trips adjacent styled runs and literal syntax characters', () => {
 	const schema = createDefaultDocumentSchema();
 	const mark = { type: 'strong', attrs: {} };
-	const document = schema.createDocument([
-		schema.createNode('paragraph', {
-			content: [schema.createText('One', { marks: [mark] }), schema.createText('Two', { marks: [mark] })],
-		}),
-	]);
+	const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('One', { marks: [mark] }), schema.createText('Two', { marks: [mark] })] })]);
 	const restored = importDocumentText(exportDocumentText(document, schema, 'markdown'), 'markdown', schema, environment.window.document, source);
 	assert.equal(documentToPlainText(restored), 'OneTwo');
-	assert.deepEqual(
-		restored.content[0]!.content.map(node => node.marks),
-		[[mark]],
-	);
+	assert.deepEqual(restored.content[0]!.content.map(node => node.marks), [[mark]]);
 	const literal = importDocumentText('1. literal\n- not a list\n+ plus\n    indented\nVisit https://example.com user@example.com', 'text', schema, environment.window.document, source);
 	assert.deepEqual(semantics(importDocumentText(exportDocumentText(literal, schema, 'markdown'), 'markdown', schema, environment.window.document, source)), semantics(literal));
 	const spaced = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText(' bold ', { marks: [mark] })] })]);
@@ -158,7 +113,5 @@ test('unsupported conversion errors use the active language and retain the sourc
 		assert.throws(() => importDocumentText('- [x] task', 'markdown', createDefaultDocumentSchema(), environment.window.document, source), {
 			message: '无法保留 1:1 处的 任务列表。',
 		});
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });

@@ -11,25 +11,7 @@ import { type TextSnapshot } from '../../../editor/common/core/textChange.js';
 import type { LanguageProviderBatch } from '../../../editor/common/services/languageFeatures.js';
 import type { ExtensionHostLanguageRegistration, JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 
-export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze([
-	'diagnostics',
-	'selectionRanges',
-	'documentHighlights',
-	'workspaceSymbols',
-	'completion',
-	'hover',
-	'formatting',
-	'inlayHints',
-	'linkedEditing',
-	'parameterHints',
-	'definition',
-	'references',
-	'rename',
-	'documentSymbols',
-	'foldingRanges',
-	'documentLinks',
-	'codeAction',
-] as const);
+export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(['diagnostics', 'selectionRanges', 'documentHighlights', 'workspaceSymbols', 'completion', 'hover', 'formatting', 'inlayHints', 'linkedEditing', 'parameterHints', 'definition', 'references', 'rename', 'documentSymbols', 'foldingRanges', 'documentLinks', 'codeAction'] as const);
 
 export type ExtensionHostProviderInvoker = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
 
@@ -43,7 +25,9 @@ export function createExtensionHostLanguageProviderBatch(
 	const operations = new Set(registration.operations);
 	const languageIds = registration.languageIds;
 	return Object.freeze({
-		documentHighlights: operations.has('documentHighlights') ? [{ selector: languageIds, provider: documentHighlightsProvider(invoke) }] : [],
+		documentHighlights: operations.has('documentHighlights')
+			? [{ selector: languageIds, provider: documentHighlightsProvider(invoke) }]
+			: [],
 		syntax: operations.has('diagnostics') ? [syntaxProvider(providerId, languageIds, extensionId, invoke)] : [],
 		workspaceSymbols: operations.has('workspaceSymbols') ? [{ selector: languageIds, provider: workspaceSymbolsProvider(invoke) }] : [],
 		selectionRanges: operations.has('selectionRanges') ? [{ selector: languageIds, provider: selectionRangesProvider(invoke) }] : [],
@@ -54,23 +38,34 @@ export function createExtensionHostLanguageProviderBatch(
 		foldingRanges: operations.has('foldingRanges') ? [{ selector: languageIds, provider: foldingRangesProvider(invoke) }] : [],
 		documentLinks: operations.has('documentLinks') ? [{ selector: languageIds, provider: documentLinksProvider(invoke) }] : [],
 		codeActions: operations.has('codeAction') ? [{ selector: languageIds, provider: codeActionsProvider(invoke) }] : [],
-		completions: Object.freeze(operations.has('completion') ? [completionProvider(providerId, languageIds, registration.completionTriggerCharacters ?? [], invoke)] : []),
+		completions: Object.freeze(
+			operations.has('completion')
+				? [completionProvider(providerId, languageIds, registration.completionTriggerCharacters ?? [], invoke)]
+				: [],
+		),
 		hovers: Object.freeze(operations.has('hover') ? [Object.freeze({ selector: languageIds, provider: hoverProvider(invoke) })] : []),
 		formatting: Object.freeze(
 			operations.has('formatting')
 				? [
-						Object.freeze({
-							selector: languageIds,
-							provider: formattingProvider(new ExtensionIdentifier(extensionId), invoke),
-						}),
-					]
+					Object.freeze({
+						selector: languageIds,
+						provider: formattingProvider(new ExtensionIdentifier(extensionId), invoke),
+					}),
+				]
 				: [],
 		),
-		inlayHints: Object.freeze(operations.has('inlayHints') ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : []),
-		linkedEditing: Object.freeze(operations.has('linkedEditing') ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : []),
-		parameterHints: Object.freeze(operations.has('parameterHints') ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : []),
+		inlayHints: Object.freeze(
+			operations.has('inlayHints') ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : [],
+		),
+		linkedEditing: Object.freeze(
+			operations.has('linkedEditing') ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : [],
+		),
+		parameterHints: Object.freeze(
+			operations.has('parameterHints') ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : [],
+		),
 	});
 }
+
 
 export function unsupportedExtensionHostLanguageOperations(registration: ExtensionHostLanguageRegistration): readonly string[] {
 	const supported = new Set<string>(SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS);
@@ -85,7 +80,9 @@ function documentHighlightsProvider(invoke: ExtensionHostProviderInvoker): langu
 	return {
 		provideDocumentHighlights: async (model, position, token) => {
 			const request = modelRequest(model);
-			const value = await withAbortSignal(token, signal => invoke('documentHighlights', featurePayload(request, { position: positionValue(position) }), signal));
+			const value = await withAbortSignal(token, signal =>
+				invoke('documentHighlights', featurePayload(request, { position: positionValue(position) }), signal),
+			);
 			return boundedArray(value, 'Extension highlights', 8192).map(value => {
 				const highlight = exactObject(value, 'Extension highlight', ['range', 'kind']);
 				const kind = nonNegativeInteger(highlight.kind, 'Extension highlight kind');
@@ -99,20 +96,36 @@ function documentHighlightsProvider(invoke: ExtensionHostProviderInvoker): langu
 	};
 }
 
-function syntaxProvider(providerId: string, languageIds: readonly string[], extensionId: string, invoke: ExtensionHostProviderInvoker): languages.SyntaxProvider {
+function syntaxProvider(
+	providerId: string,
+	languageIds: readonly string[],
+	extensionId: string,
+	invoke: ExtensionHostProviderInvoker,
+): languages.SyntaxProvider {
 	return {
 		id: providerId,
 		languageIds,
 		diagnosticPriority: 10,
 		provideDiagnostics: async (request, signal) => {
-			const value = exactObject(await invoke('diagnostics', featurePayload(request, {}), signal), 'Extension diagnostics', ['diagnostics']);
+			const value = exactObject(await invoke('diagnostics', featurePayload(request, {}), signal), 'Extension diagnostics', [
+				'diagnostics',
+			]);
 			return {
 				diagnostics: boundedArray(value.diagnostics, 'Extension diagnostics', 8192).map(value => {
 					const diagnostic = object(value, 'Extension diagnostic');
-					assertAllowedKeys(diagnostic, 'Extension diagnostic', ['range', 'severity', 'message', 'code'], ['range', 'severity', 'message']);
+					assertAllowedKeys(
+						diagnostic,
+						'Extension diagnostic',
+						['range', 'severity', 'message', 'code'],
+						['range', 'severity', 'message'],
+					);
 					return {
 						range: normalizeRange(diagnostic.range, request.snapshot, 'Extension diagnostic range'),
-						severity: textEnum(diagnostic.severity, 'Extension diagnostic severity', Object.values(languages.LanguageDiagnosticSeverity)),
+						severity: textEnum(
+							diagnostic.severity,
+							'Extension diagnostic severity',
+							Object.values(languages.LanguageDiagnosticSeverity),
+						),
 						message: boundedString(diagnostic.message, 'Extension diagnostic message', 16384, false),
 						...optionalString(diagnostic.code, 'Extension diagnostic code', 256, 'code'),
 						source: extensionId,
@@ -157,7 +170,8 @@ function selectionRangesProvider(invoke: ExtensionHostProviderInvoker): language
 
 function definitionsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageDefinitionProvider {
 	return {
-		provideDefinition: async (request, signal) => normalizeLocations(await invoke('definition', featurePayload(request, { position: positionValue(request.position) }), signal)),
+		provideDefinition: async (request, signal) =>
+			normalizeLocations(await invoke('definition', featurePayload(request, { position: positionValue(request.position) }), signal)),
 	};
 }
 
@@ -212,7 +226,8 @@ function renamesProvider(invoke: ExtensionHostProviderInvoker): languages.Langua
 
 function documentSymbolsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageDocumentSymbolProvider {
 	return {
-		provideDocumentSymbols: async (request, signal) => normalizeSymbols(await invoke('documentSymbols', featurePayload(request, {}), signal), request.snapshot),
+		provideDocumentSymbols: async (request, signal) =>
+			normalizeSymbols(await invoke('documentSymbols', featurePayload(request, {}), signal), request.snapshot),
 	};
 }
 
@@ -224,15 +239,16 @@ function foldingRangesProvider(invoke: ExtensionHostProviderInvoker): languages.
 				assertAllowedKeys(fold, 'Extension fold', ['startLineIndex', 'endLineIndex', 'kind'], ['startLineIndex', 'endLineIndex']);
 				const startLineIndex = nonNegativeInteger(fold.startLineIndex, 'Extension fold start');
 				const endLineIndex = nonNegativeInteger(fold.endLineIndex, 'Extension fold end');
-				if (endLineIndex < startLineIndex || endLineIndex >= request.snapshot.lineCount) throw new RangeError('Extension fold is outside the document');
+				if (endLineIndex < startLineIndex || endLineIndex >= request.snapshot.lineCount)
+					throw new RangeError('Extension fold is outside the document');
 				return {
 					startLineIndex,
 					endLineIndex,
 					...(fold.kind === undefined
 						? {}
 						: {
-								kind: textEnum(fold.kind, 'Extension fold kind', ['comment', 'imports', 'region'] as const),
-							}),
+							kind: textEnum(fold.kind, 'Extension fold kind', ['comment', 'imports', 'region'] as const),
+						}),
 				};
 			}),
 	};
@@ -283,15 +299,13 @@ function completionProvider(id: string, languageIds: readonly string[], triggerC
 		id,
 		languageIds,
 		triggerCharacters,
-		provideCompletions: async (request: languages.LanguageCompletionProviderRequest, signal: AbortSignal): Promise<languages.LanguageCompletionProviderResult> =>
-			normalizeCompletionResult(await invoke('completion', completionPayload(request), signal), request.snapshot),
+		provideCompletions: async (request: languages.LanguageCompletionProviderRequest, signal: AbortSignal): Promise<languages.LanguageCompletionProviderResult> => normalizeCompletionResult(await invoke('completion', completionPayload(request), signal), request.snapshot),
 	});
 }
 
 function hoverProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageHoverProvider {
 	return Object.freeze({
-		provideHover: async (request: languages.LanguageHoverRequest, signal: AbortSignal): Promise<languages.LanguageHover | undefined> =>
-			normalizeHoverResult(await invoke('hover', featurePayload(request, { position: positionValue(request.position) }), signal), request.snapshot),
+		provideHover: async (request: languages.LanguageHoverRequest, signal: AbortSignal): Promise<languages.LanguageHover | undefined> => normalizeHoverResult(await invoke('hover', featurePayload(request, { position: positionValue(request.position) }), signal), request.snapshot),
 	});
 }
 
@@ -305,17 +319,7 @@ function formattingProvider(extensionId: ExtensionIdentifier, invoke: ExtensionH
 		},
 		provideDocumentRangeFormattingEdits: async (model: ITextModel, range: Range, options: languages.LanguageFormattingOptions, token: CancellationToken): Promise<languages.TextEdit[]> => {
 			const request = modelRequest(model);
-			const value = await withAbortSignal(token, signal =>
-				invoke(
-					'formatting',
-					featurePayload(request, {
-						kind: 'range',
-						range: rangeValue(range),
-						options: formattingOptionsValue(options),
-					}),
-					signal,
-				),
-			);
+			const value = await withAbortSignal(token, signal => invoke('formatting', featurePayload(request, { kind: 'range', range: rangeValue(range), options: formattingOptionsValue(options) }), signal));
 			return [...normalizeFormattingResult(value, request.snapshot)];
 		},
 	});
@@ -323,8 +327,7 @@ function formattingProvider(extensionId: ExtensionIdentifier, invoke: ExtensionH
 
 function inlayHintsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageInlayHintsProvider {
 	return Object.freeze({
-		provideInlayHints: async (request: languages.LanguageInlayHintsRequest, signal: AbortSignal): Promise<readonly languages.LanguageInlayHint[]> =>
-			normalizeInlayHintsResult(await invoke('inlayHints', featurePayload(request, { range: rangeValue(request.range) }), signal), request.snapshot),
+		provideInlayHints: async (request: languages.LanguageInlayHintsRequest, signal: AbortSignal): Promise<readonly languages.LanguageInlayHint[]> => normalizeInlayHintsResult(await invoke('inlayHints', featurePayload(request, { range: rangeValue(request.range) }), signal), request.snapshot),
 	});
 }
 
@@ -341,17 +344,7 @@ function linkedEditingProvider(invoke: ExtensionHostProviderInvoker): languages.
 function parameterHintsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageParameterHintsProvider {
 	return Object.freeze({
 		signatureHelpTriggerCharacters: Object.freeze(['(', ',']),
-		provideParameterHints: async (request: languages.LanguageParameterHintsRequest, signal: AbortSignal): Promise<languages.LanguageParameterHints | undefined> =>
-			normalizeParameterHintsResult(
-				await invoke(
-					'parameterHints',
-					featurePayload(request, {
-						position: positionValue(request.position),
-						context: parameterHintsContextValue(request),
-					}),
-					signal,
-				),
-			),
+		provideParameterHints: async (request: languages.LanguageParameterHintsRequest, signal: AbortSignal): Promise<languages.LanguageParameterHints | undefined> => normalizeParameterHintsResult(await invoke('parameterHints', featurePayload(request, { position: positionValue(request.position), context: parameterHintsContextValue(request) }), signal)),
 	});
 }
 
@@ -362,22 +355,20 @@ function parameterHintsContextValue(request: languages.LanguageParameterHintsReq
 		kind: context.kind,
 		...(context.kind === 'triggerCharacter' ? { triggerCharacter: context.triggerCharacter } : {}),
 		isRetrigger: context.isRetrigger === true,
-		...(hints
-			? {
-					activeSignatureHelp: {
-						...(hints.activeSignature !== undefined ? { activeSignature: hints.activeSignature } : {}),
-						signatures: hints.signatures.map(signature => ({
-							label: signature.label,
-							...(signature.documentation !== undefined ? { documentation: signature.documentation } : {}),
-							...(signature.activeParameter !== undefined ? { activeParameter: signature.activeParameter } : {}),
-							parameters: signature.parameters.map(parameter => ({
-								label: parameter.label,
-								...(parameter.documentation !== undefined ? { documentation: parameter.documentation } : {}),
-							})),
-						})),
-					},
-				}
-			: {}),
+		...(hints ? {
+			activeSignatureHelp: {
+				...(hints.activeSignature !== undefined ? { activeSignature: hints.activeSignature } : {}),
+				signatures: hints.signatures.map(signature => ({
+					label: signature.label,
+					...(signature.documentation !== undefined ? { documentation: signature.documentation } : {}),
+					...(signature.activeParameter !== undefined ? { activeParameter: signature.activeParameter } : {}),
+					parameters: signature.parameters.map(parameter => ({
+						label: parameter.label,
+						...(parameter.documentation !== undefined ? { documentation: parameter.documentation } : {}),
+					})),
+				})),
+			}
+		} : {}),
 	};
 }
 
@@ -389,15 +380,7 @@ function completionPayload(request: languages.LanguageCompletionProviderRequest)
 	});
 }
 
-function featurePayload(
-	request: {
-		readonly languageId: string;
-		readonly resource?: { toString(): string };
-		readonly snapshot: TextSnapshot;
-		readonly model?: { readonly uri: URI };
-	},
-	fields: Record<string, JsonValue>,
-): JsonValue {
+function featurePayload(request: { readonly languageId: string; readonly resource?: { toString(): string; }; readonly snapshot: TextSnapshot; readonly model?: { readonly uri: URI; }; }, fields: Record<string, JsonValue>): JsonValue {
 	return Object.freeze({
 		languageId: request.languageId,
 		version: request.snapshot.version,
@@ -408,11 +391,7 @@ function featurePayload(
 }
 
 function formattingOptionsValue(options: languages.LanguageFormattingOptions): JsonValue {
-	return Object.freeze({
-		tabSize: options.tabSize,
-		insertSpaces: options.insertSpaces,
-		...(options.trimTrailingWhitespace === undefined ? {} : { trimTrailingWhitespace: options.trimTrailingWhitespace }),
-	});
+	return Object.freeze({ tabSize: options.tabSize, insertSpaces: options.insertSpaces, ...(options.trimTrailingWhitespace === undefined ? {} : { trimTrailingWhitespace: options.trimTrailingWhitespace }) });
 }
 
 function positionValue(position: Position): JsonValue {
@@ -420,10 +399,7 @@ function positionValue(position: Position): JsonValue {
 }
 
 function rangeValue(range: Range): JsonValue {
-	return Object.freeze({
-		start: positionValue(range.getStartPosition()),
-		end: positionValue(range.getEndPosition()),
-	});
+	return Object.freeze({ start: positionValue(range.getStartPosition()), end: positionValue(range.getEndPosition()) });
 }
 
 function normalizeCompletionResult(value: JsonValue, snapshot: TextSnapshot): languages.LanguageCompletionProviderResult {
@@ -438,22 +414,9 @@ function normalizeCompletionItem(value: JsonValue, snapshot: TextSnapshot, index
 	const allowed = ['additionalTextEdits', 'commitCharacters', 'detail', 'documentation', 'filterText', 'id', 'insertText', 'insertTextFormat', 'kind', 'label', 'preselect', 'range', 'sortText'];
 	assertAllowedKeys(item, `Extension completion item ${index}`, allowed, ['id', 'insertText', 'kind', 'label', 'range']);
 	const kind = textEnum(item.kind, `Extension completion item ${index} kind`, Object.values(languages.LanguageCompletionItemKind));
-	const insertTextFormat =
-		item.insertTextFormat === undefined
-			? undefined
-			: textEnum(item.insertTextFormat, `Extension completion item ${index} insertTextFormat`, Object.values(languages.LanguageCompletionInsertTextFormat));
-	const commitCharacters =
-		item.commitCharacters === undefined
-			? undefined
-			: boundedArray(item.commitCharacters, `Extension completion item ${index} commit characters`, 64).map((character, characterIndex) =>
-					oneCodePoint(character, `Extension completion item ${index} commit character ${characterIndex}`),
-				);
-	const additionalTextEdits =
-		item.additionalTextEdits === undefined
-			? undefined
-			: boundedArray(item.additionalTextEdits, `Extension completion item ${index} additional edits`, 1024).map((edit, editIndex) =>
-					normalizeTextEdit(edit, snapshot, `Extension completion item ${index} additional edit ${editIndex}`),
-				);
+	const insertTextFormat = item.insertTextFormat === undefined ? undefined : textEnum(item.insertTextFormat, `Extension completion item ${index} insertTextFormat`, Object.values(languages.LanguageCompletionInsertTextFormat));
+	const commitCharacters = item.commitCharacters === undefined ? undefined : boundedArray(item.commitCharacters, `Extension completion item ${index} commit characters`, 64).map((character, characterIndex) => oneCodePoint(character, `Extension completion item ${index} commit character ${characterIndex}`));
+	const additionalTextEdits = item.additionalTextEdits === undefined ? undefined : boundedArray(item.additionalTextEdits, `Extension completion item ${index} additional edits`, 1024).map((edit, editIndex) => normalizeTextEdit(edit, snapshot, `Extension completion item ${index} additional edit ${editIndex}`));
 	return Object.freeze({
 		id: identifier(item.id, `Extension completion item ${index} ID`),
 		label: boundedString(item.label, `Extension completion item ${index} label`, 4096, false),
@@ -478,20 +441,10 @@ function normalizeHoverResult(value: JsonValue, snapshot: TextSnapshot): languag
 	const contents = boundedArray(result.contents, 'Extension hover contents', 256).map((content, index): languages.LanguageHoverContent => {
 		if (typeof content === 'string') return boundedString(content, `Extension hover content ${index}`, 262_144, true);
 		const marked = exactObject(content, `Extension hover content ${index}`, content && typeof content === 'object' && 'language' in content ? ['language', 'value'] : ['value']);
-		return Object.freeze({
-			value: boundedString(marked.value, `Extension hover content ${index} value`, 262_144, true),
-			...(marked.language === undefined
-				? {}
-				: {
-						language: boundedString(marked.language, `Extension hover content ${index} language`, 256, false),
-					}),
-		});
+		return Object.freeze({ value: boundedString(marked.value, `Extension hover content ${index} value`, 262_144, true), ...(marked.language === undefined ? {} : { language: boundedString(marked.language, `Extension hover content ${index} language`, 256, false) }) });
 	});
 	if (contents.length === 0) throw new TypeError('Extension hover contents must not be empty');
-	return Object.freeze({
-		...(result.range === undefined ? {} : { range: normalizeRange(result.range, snapshot, 'Extension hover range') }),
-		contents: Object.freeze(contents),
-	});
+	return Object.freeze({ ...(result.range === undefined ? {} : { range: normalizeRange(result.range, snapshot, 'Extension hover range') }), contents: Object.freeze(contents) });
 }
 
 function normalizeFormattingResult(value: JsonValue, snapshot: TextSnapshot): readonly languages.TextEdit[] {
@@ -502,10 +455,7 @@ function normalizeFormattingResult(value: JsonValue, snapshot: TextSnapshot): re
 
 function normalizeTextEdit(value: JsonValue, snapshot: TextSnapshot, owner: string) {
 	const edit = exactObject(value, owner, ['range', 'text']);
-	return Object.freeze({
-		range: normalizeRange(edit.range, snapshot, `${owner} range`),
-		text: boundedString(edit.text, `${owner} text`, 1_048_576, true),
-	});
+	return Object.freeze({ range: normalizeRange(edit.range, snapshot, `${owner} range`), text: boundedString(edit.text, `${owner} text`, 1_048_576, true) });
 }
 
 function normalizeInlayHintsResult(value: JsonValue, snapshot: TextSnapshot): readonly languages.LanguageInlayHint[] {
@@ -534,14 +484,7 @@ function normalizeInlayLabel(value: JsonValue | undefined, snapshot: TextSnapsho
 	const parts = boundedArray(value, `Extension Inlay Hint ${index} label parts`, 256).map((part, partIndex) => {
 		const input = object(part, `Extension Inlay Hint ${index} label part ${partIndex}`);
 		assertAllowedKeys(input, `Extension Inlay Hint ${index} label part ${partIndex}`, ['location', 'value'], ['value']);
-		return Object.freeze({
-			value: boundedString(input.value, `Extension Inlay Hint ${index} label part ${partIndex} value`, 4096, false),
-			...(input.location === undefined
-				? {}
-				: {
-						location: normalizeRange(input.location, snapshot, `Extension Inlay Hint ${index} label part ${partIndex} location`),
-					}),
-		});
+		return Object.freeze({ value: boundedString(input.value, `Extension Inlay Hint ${index} label part ${partIndex} value`, 4096, false), ...(input.location === undefined ? {} : { location: normalizeRange(input.location, snapshot, `Extension Inlay Hint ${index} label part ${partIndex} location`) }) });
 	});
 	if (parts.length === 0) throw new TypeError(`Extension Inlay Hint ${index} label parts must not be empty`);
 	return Object.freeze(parts);
@@ -555,11 +498,7 @@ function normalizeLinkedEditingResult(value: JsonValue, snapshot: TextSnapshot):
 	return Object.freeze({ ranges });
 }
 
-function modelRequest(model: ITextModel): {
-	readonly languageId: string;
-	readonly resource: { toString(): string };
-	readonly snapshot: TextSnapshot;
-} {
+function modelRequest(model: ITextModel): { readonly languageId: string; readonly resource: { toString(): string; }; readonly snapshot: TextSnapshot; } {
 	const text = model.getValue();
 	const snapshot: TextSnapshot = Object.freeze({
 		version: model.getVersionId(),
@@ -592,25 +531,13 @@ function normalizeParameterHintsResult(value: JsonValue): languages.LanguagePara
 		const parameters = boundedArray(input.parameters, `Extension Parameter Hints signature ${signatureIndex} parameters`, 256).map((parameter, parameterIndex) => {
 			const value = object(parameter, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex}`);
 			assertAllowedKeys(value, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex}`, ['documentation', 'label'], ['label']);
-			return Object.freeze({
-				label: boundedString(value.label, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex} label`, 4096, false),
-				...optionalString(value.documentation, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex} documentation`, 262_144, 'documentation'),
-			});
+			return Object.freeze({ label: boundedString(value.label, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex} label`, 4096, false), ...optionalString(value.documentation, `Extension Parameter Hints parameter ${signatureIndex}/${parameterIndex} documentation`, 262_144, 'documentation') });
 		});
-		const activeParameter =
-			input.activeParameter === undefined ? undefined : boundedIndex(input.activeParameter, parameters.length, `Extension Parameter Hints signature ${signatureIndex} active parameter`);
-		return Object.freeze({
-			label: boundedString(input.label, `Extension Parameter Hints signature ${signatureIndex} label`, 16_384, false),
-			...optionalString(input.documentation, `Extension Parameter Hints signature ${signatureIndex} documentation`, 262_144, 'documentation'),
-			parameters: Object.freeze(parameters),
-			...(activeParameter === undefined ? {} : { activeParameter }),
-		});
+		const activeParameter = input.activeParameter === undefined ? undefined : boundedIndex(input.activeParameter, parameters.length, `Extension Parameter Hints signature ${signatureIndex} active parameter`);
+		return Object.freeze({ label: boundedString(input.label, `Extension Parameter Hints signature ${signatureIndex} label`, 16_384, false), ...optionalString(input.documentation, `Extension Parameter Hints signature ${signatureIndex} documentation`, 262_144, 'documentation'), parameters: Object.freeze(parameters), ...(activeParameter === undefined ? {} : { activeParameter }) });
 	});
 	const activeSignature = result.activeSignature === undefined ? undefined : boundedIndex(result.activeSignature, signatures.length, 'Extension Parameter Hints active signature');
-	return Object.freeze({
-		signatures: Object.freeze(signatures),
-		...(activeSignature === undefined ? {} : { activeSignature }),
-	});
+	return Object.freeze({ signatures: Object.freeze(signatures), ...(activeSignature === undefined ? {} : { activeSignature }) });
 }
 
 // Snapshots are immutable. Keep only derived line lengths, and let the request
@@ -627,7 +554,7 @@ function normalizePosition(value: JsonValue | undefined, snapshot: TextSnapshot,
 		snapshotLineLengths.set(snapshot, lengths);
 	}
 	if (lineIndex >= lengths.length || columnIndex > lengths[lineIndex]!) throw new RangeError(`${owner} is outside the document snapshot`);
-	return new Position(lineIndex + 1, columnIndex + 1);
+	return new Position((lineIndex) + 1, (columnIndex) + 1);
 }
 
 function normalizeRange(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): Range {
@@ -720,27 +647,36 @@ function normalizeExternalRange(value: JsonValue | undefined): Range {
 function normalizeLocations(value: JsonValue): readonly languages.LanguageLocation[] {
 	return boundedArray(value, 'Extension locations', 8192).map(value => {
 		const location = exactObject(value, 'Extension location', ['resource', 'range']);
-		return {
-			resource: URI.parse(boundedString(location.resource, 'Extension location resource', 8192, false)),
-			range: normalizeExternalRange(location.range),
-		};
+		return { resource: URI.parse(boundedString(location.resource, 'Extension location resource', 8192, false)), range: normalizeExternalRange(location.range) };
 	});
 }
 
-function normalizeSymbols(value: JsonValue, snapshot: TextSnapshot, depth = 0, budget = { remaining: 50_000 }): readonly languages.LanguageDocumentSymbol[] {
+function normalizeSymbols(
+	value: JsonValue,
+	snapshot: TextSnapshot,
+	depth = 0,
+	budget = { remaining: 50_000 },
+): readonly languages.LanguageDocumentSymbol[] {
 	if (depth > 32) throw new RangeError('Extension symbol hierarchy is too deep');
 	const symbols = boundedArray(value, 'Extension symbols', budget.remaining);
 	// Reserve sibling slots before descending so all scopes share one document limit.
 	budget.remaining -= symbols.length;
-	return symbols.map(value => {
+	return symbols.map((value) => {
 		const symbol = object(value, 'Extension symbol');
-		assertAllowedKeys(symbol, 'Extension symbol', ['name', 'kind', 'range', 'selectionRange', 'children'], ['name', 'kind', 'range', 'selectionRange']);
+		assertAllowedKeys(
+			symbol,
+			'Extension symbol',
+			['name', 'kind', 'range', 'selectionRange', 'children'],
+			['name', 'kind', 'range', 'selectionRange'],
+		);
 		return {
 			name: boundedString(symbol.name, 'Extension symbol name', 4096, false),
 			kind: nonNegativeInteger(symbol.kind, 'Extension symbol kind'),
 			range: normalizeRange(symbol.range, snapshot, 'Extension symbol range'),
 			selectionRange: normalizeRange(symbol.selectionRange, snapshot, 'Extension symbol selection'),
-			...(symbol.children === undefined ? {} : { children: normalizeSymbols(symbol.children, snapshot, depth + 1, budget) }),
+			...(symbol.children === undefined
+				? {}
+				: { children: normalizeSymbols(symbol.children, snapshot, depth + 1, budget) }),
 		};
 	});
 }
@@ -748,7 +684,7 @@ function normalizeSymbols(value: JsonValue, snapshot: TextSnapshot, depth = 0, b
 function normalizeWorkspaceEdit(value: JsonValue): languages.LanguageWorkspaceEdit {
 	const result = exactObject(value, 'Extension workspace edit', ['entries']);
 	return languages.normalizeLanguageWorkspaceEdit({
-		entries: boundedArray(result.entries, 'Extension edit documents', 8192).map(value => {
+		entries: boundedArray(result.entries, 'Extension edit documents', 8192).map((value) => {
 			const entry = object(value, 'Extension edit document');
 			if (entry.kind === 'rename') {
 				assertAllowedKeys(entry, 'Extension file rename', ['kind', 'source', 'target', 'existing'], ['kind', 'source', 'target', 'existing']);
@@ -760,7 +696,12 @@ function normalizeWorkspaceEdit(value: JsonValue): languages.LanguageWorkspaceEd
 				};
 			}
 			if (entry.kind !== 'textDocument') throw new TypeError('Unsupported extension workspace edit kind');
-			assertAllowedKeys(entry, 'Extension edit document', ['kind', 'resource', 'version', 'expectedText', 'edits'], ['kind', 'resource', 'expectedText', 'edits']);
+			assertAllowedKeys(
+				entry,
+				'Extension edit document',
+				['kind', 'resource', 'version', 'expectedText', 'edits'],
+				['kind', 'resource', 'expectedText', 'edits'],
+			);
 			const expectedText = boundedString(entry.expectedText, 'Extension edit baseline', 1_048_576, true);
 			const snapshot: TextSnapshot = {
 				version: 1,
@@ -773,8 +714,10 @@ function normalizeWorkspaceEdit(value: JsonValue): languages.LanguageWorkspaceEd
 				kind: 'textDocument',
 				resource: URI.parse(boundedString(entry.resource, 'Extension edit resource', 8192, false)),
 				expectedText,
-				...(entry.version === undefined ? {} : { version: nonNegativeInteger(entry.version, 'Extension edit version') }),
-				edits: boundedArray(entry.edits, 'Extension text edits', 8192).map(value => {
+				...(entry.version === undefined
+					? {}
+					: { version: nonNegativeInteger(entry.version, 'Extension edit version') }),
+				edits: boundedArray(entry.edits, 'Extension text edits', 8192).map((value) => {
 					const edit = exactObject(value, 'Extension text edit', ['range', 'text']);
 					return {
 						range: normalizeRange(edit.range, snapshot, 'Extension edit range'),

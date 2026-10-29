@@ -61,9 +61,7 @@ test('Content search Settings saves the backend engine and restores it after rel
 	await expect(engine).toHaveText('ripgrep');
 	if (target.kind === 'electron') {
 		const profile = await (application as ElectronApplication).evaluate(() => process.env.ASH_HOME);
-		if (!profile) {
-			throw new Error('The test application has no isolated profile');
-		}
+		if (!profile) { throw new Error('The test application has no isolated profile'); }
 		expect(await readFile(join(profile, 'config.toml'), 'utf8')).toMatch(/\[grep\]\s*backend = "ripgrep"/);
 	}
 	await page.locator('.ash-modal-editor-close').click();

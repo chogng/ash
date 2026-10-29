@@ -16,9 +16,7 @@ export class ModelsManagementEditorInput extends EditorInput {
 	public readonly showBreadcrumbs = false;
 	public readonly capabilities = EditorInputCapabilities.Singleton;
 
-	public getIcon(): ThemeIcon {
-		return Lxicon.settings;
-	}
+	public getIcon(): ThemeIcon { return Lxicon.settings; }
 
 	public getName(): string {
 		return localize('modelsManagementEditorInputName', 'Language Models');

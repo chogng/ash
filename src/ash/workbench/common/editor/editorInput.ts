@@ -26,6 +26,7 @@ export abstract class EditorInput extends Disposable implements IResourceEditorI
 	}
 
 	public matches(other: IResourceEditorInput, resourceIdentity: IExtUri = extUri): boolean {
-		return this.editorId === other.editorId && resourceIdentity.isEqual(this.resource, other.resource) && (!(other instanceof EditorInput) || this.typeId === other.typeId);
+		return this.editorId === other.editorId && resourceIdentity.isEqual(this.resource, other.resource) &&
+			(!(other instanceof EditorInput) || this.typeId === other.typeId);
 	}
 }

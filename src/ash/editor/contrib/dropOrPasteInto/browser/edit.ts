@@ -6,29 +6,28 @@ import { parseSnippet } from '../../snippet/common/snippetParser.js';
 
 /** Collects the primary insertions and the provider's other resource edits in one transaction. */
 export function createCombinedWorkspaceEdit(uri: URI, ranges: readonly Range[], edit: DocumentPasteEdit | DocumentDropEdit): WorkspaceEdit {
-	const text = typeof edit.insertText === 'string' ? edit.insertText : parseSnippet(edit.insertText.snippet, { allowUnresolvedVariables: true }).text;
+	const text = typeof edit.insertText === 'string'
+		? edit.insertText
+		: parseSnippet(edit.insertText.snippet, { allowUnresolvedVariables: true }).text;
 	return {
 		edits: [
-			...ranges
-				.filter(() => text.length > 0)
-				.map(range => ({
-					resource: uri,
-					textEdit: { range, text },
-				})),
+			...ranges.filter(() => text.length > 0).map(range => ({
+				resource: uri,
+				textEdit: { range, text },
+			})),
 			...(edit.additionalEdit?.edits ?? []),
 		],
 	};
 }
 
 /** Preserves provider order except where one edit explicitly yields to another. */
-export function sortEditsByYieldTo<
-	T extends {
-		readonly kind: HierarchicalKind | undefined;
-		readonly handledMimeType?: string;
-		readonly yieldTo?: readonly DropYieldTo[];
-	},
->(edits: readonly T[]): T[] {
-	const dependencies = edits.map(edit => edits.flatMap((other, index) => (other !== edit && edit.yieldTo?.some(target => matchesYieldTarget(target, other)) ? [index] : [])));
+export function sortEditsByYieldTo<T extends {
+	readonly kind: HierarchicalKind | undefined;
+	readonly handledMimeType?: string;
+	readonly yieldTo?: readonly DropYieldTo[];
+}>(edits: readonly T[]): T[] {
+	const dependencies = edits.map(edit => edits.flatMap((other, index) =>
+		other !== edit && edit.yieldTo?.some(target => matchesYieldTarget(target, other)) ? [index] : []));
 	const indices = new Int32Array(edits.length).fill(-1);
 	const lowLinks = new Int32Array(edits.length);
 	const onStack = new Set<number>();
@@ -51,7 +50,7 @@ export function sortEditsByYieldTo<
 		}
 		if (lowLinks[index] !== indices[index]) return;
 		const component: number[] = [];
-		for (;;) {
+		for (; ;) {
 			const member = stack.pop()!;
 			onStack.delete(member);
 			componentOf[member] = components.length;
@@ -80,6 +79,8 @@ export function sortEditsByYieldTo<
 	return result;
 }
 
-function matchesYieldTarget(target: DropYieldTo, edit: { readonly kind: HierarchicalKind | undefined; readonly handledMimeType?: string }): boolean {
-	return 'mimeType' in target ? target.mimeType === edit.handledMimeType : edit.kind !== undefined && target.kind.contains(edit.kind);
+function matchesYieldTarget(target: DropYieldTo, edit: { readonly kind: HierarchicalKind | undefined; readonly handledMimeType?: string; }): boolean {
+	return 'mimeType' in target
+		? target.mimeType === edit.handledMimeType
+		: edit.kind !== undefined && target.kind.contains(edit.kind);
 }

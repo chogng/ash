@@ -1,5 +1,6 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
+
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { name: '00000416', id: '', text: 'Portuguese (Brazilian ABNT)' },
 	secondaryLayouts: [],
@@ -159,6 +160,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 
 		BrowserStop: [],
 		BrowserRefresh: [],
-		BrowserFavorites: [],
-	},
+		BrowserFavorites: []
+	}
 });

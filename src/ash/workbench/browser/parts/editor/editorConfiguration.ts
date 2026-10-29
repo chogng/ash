@@ -7,31 +7,18 @@ import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { EditorPanes, type IEditorPaneRegistry } from '../../editor.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-const binaryEditorOptions: { value: string; label: string }[] = [
-	{
-		value: '',
-		get label() {
-			return localize('workbench.editor.defaultBinaryEditor.default', 'Default');
-		},
-	},
-];
+const binaryEditorOptions: { value: string; label: string; }[] = [{ value: '', get label() { return localize('workbench.editor.defaultBinaryEditor.default', 'Default'); } }];
 
 export const EditorEnablePreviewConfiguration = configurationRegistry.registerConfiguration<boolean>({
-	key: 'workbench.editor.enablePreview',
-	scope: ConfigurationScope.WINDOW,
-	schema: { type: 'boolean' },
-	defaultValue: true,
+	key: 'workbench.editor.enablePreview', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' }, defaultValue: true,
 	parse(value): boolean {
 		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.enablePreview.invalid', 'Enable Preview must be true or false.'));
 		return value;
 	},
 	setting: {
-		get title() {
-			return localize('workbench.editor.enablePreview.title', 'Workbench › Editor: Enable Preview');
-		},
-		get description() {
-			return localize('workbench.editor.enablePreview.description', 'Open files in a reusable preview tab. Editing a file or choosing Keep Open keeps its tab open.');
-		},
+		get title() { return localize('workbench.editor.enablePreview.title', 'Workbench › Editor: Enable Preview'); },
+		get description() { return localize('workbench.editor.enablePreview.description', 'Open files in a reusable preview tab. Editing a file or choosing Keep Open keeps its tab open.'); },
 		valueType: 'boolean',
 	},
 });
@@ -44,15 +31,8 @@ export const EditorOpenErrorDialogConfiguration = configurationRegistry.register
 		return value;
 	},
 	setting: {
-		get title() {
-			return localize('workbench.editor.openErrorDialog.title', 'File Open Error Dialog');
-		},
-		get description() {
-			return localize(
-				'workbench.editor.openErrorDialog.description',
-				'Show a dialog for opening errors that support one when you open a file. Errors also appear in the editor. Files restored automatically do not show error dialogs.',
-			);
-		},
+		get title() { return localize('workbench.editor.openErrorDialog.title', 'File Open Error Dialog'); },
+		get description() { return localize('workbench.editor.openErrorDialog.description', 'Show a dialog for opening errors that support one when you open a file. Errors also appear in the editor. Files restored automatically do not show error dialogs.'); },
 		valueType: 'boolean',
 		keywords: ['file', 'open', 'error', 'dialog'],
 	},
@@ -61,17 +41,10 @@ export const EditorOpenErrorDialogConfiguration = configurationRegistry.register
 export const DefaultBinaryEditorConfiguration = configurationRegistry.registerConfiguration<string>({
 	key: 'workbench.editor.defaultBinaryEditor',
 	defaultValue: '',
-	parse: value => (typeof value === 'string' ? value : ''),
+	parse: value => typeof value === 'string' ? value : '',
 	setting: {
-		get title() {
-			return localize('workbench.editor.defaultBinaryEditor.title', 'Default Binary Editor');
-		},
-		get description() {
-			return localize(
-				'workbench.editor.defaultBinaryEditor.description',
-				'Choose the editor offered when a file cannot be displayed as text because it contains binary content or uses an unsupported encoding.',
-			);
-		},
+		get title() { return localize('workbench.editor.defaultBinaryEditor.title', 'Default Binary Editor'); },
+		get description() { return localize('workbench.editor.defaultBinaryEditor.description', 'Choose the editor offered when a file cannot be displayed as text because it contains binary content or uses an unsupported encoding.'); },
 		keywords: ['file', 'open', 'binary', 'encoding'],
 		valueType: 'select',
 		options: binaryEditorOptions,
@@ -116,12 +89,8 @@ export const EditorLargeFileConfirmationConfiguration = configurationRegistry.re
 		return value;
 	},
 	setting: {
-		get title() {
-			return localize('workbench.editorLargeFileConfirmation.title', 'Large File Confirmation (MiB)');
-		},
-		get description() {
-			return localize('workbench.editorLargeFileConfirmation.description', 'Ask before opening a file at or above this size in MiB.');
-		},
+		get title() { return localize('workbench.editorLargeFileConfirmation.title', 'Large File Confirmation (MiB)'); },
+		get description() { return localize('workbench.editorLargeFileConfirmation.description', 'Ask before opening a file at or above this size in MiB.'); },
 		keywords: ['file', 'open', 'large', 'size'],
 		valueType: 'number',
 		minimum: 1,
@@ -150,14 +119,10 @@ export class DynamicEditorConfigurations extends Disposable implements IWorkbenc
 	}
 
 	private update(registry: IEditorPaneRegistry): void {
-		binaryEditorOptions.splice(
-			1,
-			binaryEditorOptions.length - 1,
-			...registry.getEditorPanes().map(descriptor => ({
-				value: descriptor.id,
-				label: descriptor.name,
-			})),
-		);
+		binaryEditorOptions.splice(1, binaryEditorOptions.length - 1, ...registry.getEditorPanes().map(descriptor => ({
+			value: descriptor.id,
+			label: descriptor.name,
+		})));
 	}
 }
 

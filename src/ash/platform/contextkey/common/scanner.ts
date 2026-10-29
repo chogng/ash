@@ -28,9 +28,9 @@ type TextTokenType = TokenType.Str | TokenType.QuotedStr | TokenType.RegexStr | 
 type EqualityTokenType = TokenType.Eq | TokenType.NotEq;
 
 export type Token =
-	| { readonly type: TextTokenType; readonly offset: number; readonly lexeme: string }
-	| { readonly type: EqualityTokenType; readonly offset: number; readonly isTripleEq: boolean }
-	| { readonly type: Exclude<TokenType, TextTokenType | EqualityTokenType>; readonly offset: number };
+	| { readonly type: TextTokenType; readonly offset: number; readonly lexeme: string; }
+	| { readonly type: EqualityTokenType; readonly offset: number; readonly isTripleEq: boolean; }
+	| { readonly type: Exclude<TokenType, TextTokenType | EqualityTokenType>; readonly offset: number; };
 
 export interface LexingError {
 	readonly offset: number;
@@ -66,9 +66,7 @@ export class Scanner {
 	private source = '';
 	private diagnostics: LexingError[] = [];
 
-	public get errors(): Readonly<LexingError[]> {
-		return this.diagnostics;
-	}
+	public get errors(): Readonly<LexingError[]> { return this.diagnostics; }
 
 	public reset(value: string): this {
 		this.source = value;
@@ -92,11 +90,9 @@ export class Scanner {
 			const operator = operatorPattern.exec(this.source)?.[0];
 			if (operator) {
 				const type = operators.get(operator)!;
-				tokens.push(
-					type === TokenType.Eq || type === TokenType.NotEq
-						? { type, offset, isTripleEq: operator.length === 3 }
-						: { type: type as Exclude<TokenType, TextTokenType | EqualityTokenType>, offset },
-				);
+				tokens.push(type === TokenType.Eq || type === TokenType.NotEq
+					? { type, offset, isTripleEq: operator.length === 3 }
+					: { type: type as Exclude<TokenType, TextTokenType | EqualityTokenType>, offset });
 				offset += operator.length;
 				continue;
 			}
@@ -143,14 +139,8 @@ export class Scanner {
 			}
 			const lexeme = this.source.slice(start, offset);
 			const keyword = keywords.get(lexeme);
-			tokens.push(
-				keyword === undefined
-					? { type: TokenType.Str, offset: start, lexeme }
-					: {
-							type: keyword as TokenType.True | TokenType.False | TokenType.In | TokenType.Not,
-							offset: start,
-						},
-			);
+			tokens.push(keyword === undefined ? { type: TokenType.Str, offset: start, lexeme }
+				: { type: keyword as TokenType.True | TokenType.False | TokenType.In | TokenType.Not, offset: start });
 		}
 		tokens.push({ type: TokenType.EOF, offset: this.source.length });
 		return tokens;

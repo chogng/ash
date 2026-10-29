@@ -16,9 +16,7 @@ export async function migrateLegacyBrowserSettings(factory: IDBFactory, files: I
 			resolve(undefined);
 		};
 		request.onsuccess = () => resolve(request.result);
-		request.onerror = () => {
-			if (!absent) reject(request.error);
-		};
+		request.onerror = () => { if (!absent) reject(request.error); };
 		request.onblocked = () => reject(new Error('Legacy settings migration is blocked'));
 	});
 	if (!database) return;
@@ -34,31 +32,21 @@ export async function migrateLegacyBrowserSettings(factory: IDBFactory, files: I
 		if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) throw new TypeError('Invalid legacy settings record');
 		const record = legacy as Record<string, unknown>;
 		const document = record.document as Record<string, unknown> | undefined;
-		if (
-			Object.keys(record).sort().join(',') !== 'document,key,revision' ||
-			record.key !== 'settings.json' ||
-			!Number.isSafeInteger(record.revision) ||
-			(record.revision as number) < 0 ||
-			!document ||
-			Object.keys(document).sort().join(',') !== 'source,version' ||
-			document.version !== 1 ||
-			typeof document.source !== 'string'
-		) {
+		if (Object.keys(record).sort().join(',') !== 'document,key,revision' || record.key !== 'settings.json' || !Number.isSafeInteger(record.revision) || (record.revision as number) < 0 ||
+			!document || Object.keys(document).sort().join(',') !== 'source,version' || document.version !== 1 || typeof document.source !== 'string') {
 			throw new TypeError('Invalid legacy settings record');
 		}
 		const source = document.source;
 		const previous = settingsValue(source);
 		let current: string | undefined;
-		try {
-			current = new TextDecoder('utf-8', { fatal: true }).decode((await files.readFile(resource)).bytes);
-		} catch (error) {
+		try { current = new TextDecoder('utf-8', { fatal: true }).decode((await files.readFile(resource)).bytes); }
+		catch (error) {
 			if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
 		}
 		if (current === undefined) {
 			await files.createDirectory(dirname(resource));
-			try {
-				await files.writeFile(resource, new TextEncoder().encode(source), { create: true, overwrite: false });
-			} catch (error) {
+			try { await files.writeFile(resource, new TextEncoder().encode(source), { create: true, overwrite: false }); }
+			catch (error) {
 				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
 			}
 			current = new TextDecoder('utf-8', { fatal: true }).decode((await files.readFile(resource)).bytes);
@@ -70,10 +58,7 @@ export async function migrateLegacyBrowserSettings(factory: IDBFactory, files: I
 			const read = store.get('settings.json');
 			read.onsuccess = () => {
 				if (read.result === undefined) return;
-				if (!equals(read.result, legacy)) {
-					transaction.abort();
-					return;
-				}
+				if (!equals(read.result, legacy)) { transaction.abort(); return; }
 				store.delete('settings.json');
 			};
 			transaction.oncomplete = () => resolve();

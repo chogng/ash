@@ -24,11 +24,9 @@ export class ChatWidgetService extends Disposable implements IChatWidgetService 
 		this.widgets.set(widget, lifetime);
 		lifetime.add(widget.onDidChangeVisibility(() => this.changed.fire()));
 		lifetime.add(widget.onDidChangeViewModel(() => this.changed.fire()));
-		lifetime.add(
-			addDisposableListener(widget.domNode, 'focusin', () => {
-				if (widget.visible) this.focused = widget;
-			}),
-		);
+		lifetime.add(addDisposableListener(widget.domNode, 'focusin', () => {
+			if (widget.visible) this.focused = widget;
+		}));
 		if (widget.visible && widget.domNode.contains(widget.domNode.ownerDocument.activeElement)) this.focused = widget;
 		this.changed.fire();
 		return toDisposable(() => {

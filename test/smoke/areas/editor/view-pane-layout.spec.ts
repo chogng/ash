@@ -8,9 +8,7 @@ test('Activity Bar unpins the active view, switches to another view and retains 
 	let page = workbench.page;
 	const rail = () => page.locator('[data-part="activitybar"]');
 	const openMenu = () => rail().getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
-	await rail()
-		.getByRole('tab', { name: /^Source Control(?:,|$)/u })
-		.click();
+	await rail().getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	await expect(rail().getByRole('tab', { name: /^Source Control(?:,|$)/u })).toHaveAttribute('aria-selected', 'true');
 	await workbench.menus.select(application, openMenu, ['Source Control']);
 	await expect(rail().getByRole('tab', { name: /^Source Control(?:,|$)/u })).toHaveCount(0);
@@ -21,12 +19,10 @@ test('Activity Bar unpins the active view, switches to another view and retains 
 	await expect.poll(() => page.locator('[data-part="sidebar"]').evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
 	const expected = ['Explorer', 'Search', 'Source Control'].map(label => expect.objectContaining({ label, checked: label === 'Search' }));
 	expect(await workbench.menus.inspect(application, openMenu)).toEqual(expect.arrayContaining(expected));
-	await expect
-		.poll(async () => {
-			const entries = await readStorageEntries(application, page, { scope: StorageScope.PROFILE, id: 'default' });
-			return JSON.parse(entries['workbench.activityBar.hiddenViewContainers']?.value ?? '[]').sort();
-		})
-		.toEqual(['ash.git', 'ash.sidebar']);
+	await expect.poll(async () => {
+		const entries = await readStorageEntries(application, page, { scope: StorageScope.PROFILE, id: 'default' });
+		return JSON.parse(entries['workbench.activityBar.hiddenViewContainers']?.value ?? '[]').sort();
+	}).toEqual(['ash.git', 'ash.sidebar']);
 	({ application, workbench } = await reloadWorkbench());
 	page = workbench.page;
 	await expect(rail().getByRole('tab', { name: 'Explorer', exact: true })).toHaveCount(0);
@@ -38,90 +34,81 @@ test('Activity Bar unpins the active view, switches to another view and retains 
 	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 for (const locale of ['en', 'zh-CN']) {
-	test(
-		`panel labels stay separated and expose selection and overflow in ${locale}`,
-		{ tag: ['@browser-app-server', '@electron-app-server'] },
-		async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
-			if (locale === 'zh-CN') {
-				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
-				await picker.getByRole('combobox').fill('简体中文');
-				await picker.getByRole('combobox').press('Enter');
-				({ workbench, application } = await restartWorkbench());
-			}
-			const page = workbench.page;
-			const panel = page.locator('[data-part="panel"]');
-			const output = panel.getByRole('tab', { name: locale === 'en' ? 'Output' : '输出', exact: true });
-			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
-			await workbench.quickaccess.runCommand('workbench.action.output.show');
-			await expect(panel.getByRole('tab', { name: locale === 'en' ? 'Refactor Preview' : '重构预览', exact: true })).toHaveCount(0);
-			for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-				await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-				const picker = page.locator('.ash-quick-pick');
-				await picker.getByRole('combobox').fill(theme);
-				await picker.getByRole('combobox').press('Enter');
-				await expect(picker).toHaveCount(0);
-				await output.focus();
-				await expect(output).toHaveAttribute('aria-selected', 'true');
-				await expect(output).toHaveCSS('outline-style', 'none');
-				const keyboardBackground = await output.evaluate(element => getComputedStyle(element).backgroundColor);
-				await output.click();
-				await expect(output).toHaveCSS('outline-style', 'none');
-				await expect.poll(() => output.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(keyboardBackground);
-				const appearance = await panel.locator('.ash-composite-bar-destination').evaluateAll(tabs =>
-					tabs.map(tab => {
-						const action = tab.querySelector('.ash-composite-bar-action')!;
-						const label = tab.querySelector('.ash-icon-label-text')!;
-						const style = getComputedStyle(action);
-						const bounds = tab.getBoundingClientRect();
-						const text = label.getBoundingClientRect();
-						return {
-							selected: tab.classList.contains('checked'),
-							fontSize: style.fontSize,
-							fontWeight: style.fontWeight,
-							opacity: style.opacity,
-							leftInset: text.left - bounds.left,
-							rightInset: bounds.right - text.right,
-							background: getComputedStyle(tab).backgroundColor,
-							border: style.borderBottomWidth,
-						};
-					}),
-				);
-				expect(appearance.length).toBeGreaterThan(3);
-				for (const tab of appearance) {
-					expect(tab).toMatchObject({ fontSize: '13px', fontWeight: '400', opacity: '1', border: '0px' });
-					expect(tab.leftInset).toBeGreaterThanOrEqual(10);
-					expect(tab.rightInset).toBeGreaterThanOrEqual(10);
-					if (tab.selected) {
-						expect(tab.background).not.toBe('rgba(0, 0, 0, 0)');
-					} else {
-						expect(tab.background).toBe('rgba(0, 0, 0, 0)');
-					}
-				}
-				await panel.locator('.ash-panel-title-control').screenshot({ path: testInfo.outputPath(`panel-${locale}-${theme.replaceAll(' ', '-')}.png`) });
-			}
-			await runningApplication.driver.setWindowSize({ width: 600, height: 900 });
-			const overflow = panel.locator('.ash-composite-bar-overflow');
-			await expect(overflow).toBeVisible();
-			await expect(output).toBeVisible();
-			// The transient preview no longer takes tab space; Ports can fit in Chinese.
-			await workbench.menus.select(application, () => overflow.click(), ['Memories']);
-			const memories = panel.getByRole('tab', { name: 'Memories', exact: true });
-			await expect(memories).toBeVisible();
-			await expect(memories).toHaveAttribute('aria-selected', 'true');
-			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
-			await expect(overflow).toHaveCount(0);
+	test(`panel labels stay separated and expose selection and overflow in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		const panel = page.locator('[data-part="panel"]');
+		const output = panel.getByRole('tab', { name: locale === 'en' ? 'Output' : '输出', exact: true });
+		await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+		await workbench.quickaccess.runCommand('workbench.action.output.show');
+		await expect(panel.getByRole('tab', { name: locale === 'en' ? 'Refactor Preview' : '重构预览', exact: true })).toHaveCount(0);
+		for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			const picker = page.locator('.ash-quick-pick');
+			await picker.getByRole('combobox').fill(theme);
+			await picker.getByRole('combobox').press('Enter');
+			await expect(picker).toHaveCount(0);
 			await output.focus();
-			await output.press('ArrowRight');
-			const next = panel.locator('[role=tab]:focus');
-			await expect(next).toBeFocused();
-			await expect(next).toHaveCSS('outline-style', 'none');
-			expect(await next.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
-			const name = await next.getAttribute('aria-label');
-			await next.press('Enter');
-			await expect(panel.getByRole('tab', { name: name!, exact: true })).toHaveAttribute('aria-selected', 'true');
-		},
-	);
+			await expect(output).toHaveAttribute('aria-selected', 'true');
+			await expect(output).toHaveCSS('outline-style', 'none');
+			const keyboardBackground = await output.evaluate(element => getComputedStyle(element).backgroundColor);
+			await output.click();
+			await expect(output).toHaveCSS('outline-style', 'none');
+			await expect.poll(() => output.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(keyboardBackground);
+			const appearance = await panel.locator('.ash-composite-bar-destination').evaluateAll(tabs => tabs.map(tab => {
+				const action = tab.querySelector('.ash-composite-bar-action')!;
+				const label = tab.querySelector('.ash-icon-label-text')!;
+				const style = getComputedStyle(action);
+				const bounds = tab.getBoundingClientRect();
+				const text = label.getBoundingClientRect();
+				return {
+					selected: tab.classList.contains('checked'),
+					fontSize: style.fontSize, fontWeight: style.fontWeight, opacity: style.opacity,
+					leftInset: text.left - bounds.left, rightInset: bounds.right - text.right,
+					background: getComputedStyle(tab).backgroundColor,
+					border: style.borderBottomWidth,
+				};
+			}));
+			expect(appearance.length).toBeGreaterThan(3);
+			for (const tab of appearance) {
+				expect(tab).toMatchObject({ fontSize: '13px', fontWeight: '400', opacity: '1', border: '0px' });
+				expect(tab.leftInset).toBeGreaterThanOrEqual(10);
+				expect(tab.rightInset).toBeGreaterThanOrEqual(10);
+				if (tab.selected) {
+					expect(tab.background).not.toBe('rgba(0, 0, 0, 0)');
+				} else {
+					expect(tab.background).toBe('rgba(0, 0, 0, 0)');
+				}
+			}
+			await panel.locator('.ash-panel-title-control').screenshot({ path: testInfo.outputPath(`panel-${locale}-${theme.replaceAll(' ', '-')}.png`) });
+		}
+		await runningApplication.driver.setWindowSize({ width: 600, height: 900 });
+		const overflow = panel.locator('.ash-composite-bar-overflow');
+		await expect(overflow).toBeVisible();
+		await expect(output).toBeVisible();
+		// The transient preview no longer takes tab space; Ports can fit in Chinese.
+		await workbench.menus.select(application, () => overflow.click(), ['Memories']);
+		const memories = panel.getByRole('tab', { name: 'Memories', exact: true });
+		await expect(memories).toBeVisible();
+		await expect(memories).toHaveAttribute('aria-selected', 'true');
+		await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+		await expect(overflow).toHaveCount(0);
+		await output.focus();
+		await output.press('ArrowRight');
+		const next = panel.locator('[role=tab]:focus');
+		await expect(next).toBeFocused();
+		await expect(next).toHaveCSS('outline-style', 'none');
+		expect(await next.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		const name = await next.getAttribute('aria-label');
+		await next.press('Enter');
+		await expect(panel.getByRole('tab', { name: name!, exact: true })).toHaveAttribute('aria-selected', 'true');
+	});
 }
 test('region navigation visits editor splits, skips hidden parts and follows sidebar placement', async ({ workbench, application }) => {
 	const page = workbench.page;
@@ -159,9 +146,7 @@ test('region navigation visits editor splits, skips hidden parts and follows sid
 	await expect(second).toBeFocused();
 
 	await workbench.quickaccess.runCommand('workbench.files.action.focusOpenEditorsView');
-	await workbench.menus.select(application, () => page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' }), [
-		'Move Primary Side Bar Right',
-	]);
+	await workbench.menus.select(application, () => page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' }), ['Move Primary Side Bar Right']);
 	await expect(page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
 	await second.focus();
 	await workbench.quickaccess.runCommand('workbench.action.navigateRight');
@@ -208,22 +193,18 @@ test('panel commands focus the retained view and restore editor geometry after m
 			const tab = panel.getByRole('tab', { name: 'Output', exact: true });
 			await tab.focus();
 			await expect(tab).toBeFocused();
-			await expect
-				.poll(() =>
-					panel.evaluate(element => {
-						const title = element.querySelector<HTMLElement>('.ash-panel-title-control')!;
-						const bar = title.querySelector<HTMLElement>('.ash-composite-bar')!;
-						const actions = title.querySelector<HTMLElement>('.ash-pane-composite-title-actions')!;
-						const style = getComputedStyle(title);
-						return {
-							display: style.display,
-							border: style.borderBottomStyle,
-							fits: bar.getBoundingClientRect().right <= actions.getBoundingClientRect().left + 1,
-							height: bar.getBoundingClientRect().height > 0,
-						};
-					}),
-				)
-				.toEqual({ display: 'flex', border: 'solid', fits: true, height: true });
+			await expect.poll(() => panel.evaluate(element => {
+				const title = element.querySelector<HTMLElement>('.ash-panel-title-control')!;
+				const bar = title.querySelector<HTMLElement>('.ash-composite-bar')!;
+				const actions = title.querySelector<HTMLElement>('.ash-pane-composite-title-actions')!;
+				const style = getComputedStyle(title);
+				return {
+					display: style.display,
+					border: style.borderBottomStyle,
+					fits: bar.getBoundingClientRect().right <= actions.getBoundingClientRect().left + 1,
+					height: bar.getBoundingClientRect().height > 0,
+				};
+			})).toEqual({ display: 'flex', border: 'solid', fits: true, height: true });
 		}
 	} finally {
 		await retained?.dispose();
@@ -296,9 +277,7 @@ test.describe('SCM pane layout with a provider', () => {
 		let resizedHeight = await height(graph);
 		expect(resizedHeight).toBeGreaterThan(originalHeight + 40);
 		await expect.poll(() => height(review)).toBe(28);
-		const total = await container.evaluate(
-			element => [...element.querySelectorAll('.ash-view-pane')].reduce((sum, pane) => sum + pane.getBoundingClientRect().height, 0) - element.getBoundingClientRect().height,
-		);
+		const total = await container.evaluate(element => [...element.querySelectorAll('.ash-view-pane')].reduce((sum, pane) => sum + pane.getBoundingClientRect().height, 0) - element.getBoundingClientRect().height);
 		expect(Math.abs(total)).toBeLessThan(1);
 		await sash.dblclick();
 		await expect.poll(async () => (await height(changes)) - (await height(graph))).toBeCloseTo(0, 0);
@@ -362,15 +341,11 @@ test.describe('SCM pane layout with a provider', () => {
 		await expect.poll(() => review.evaluate(element => element.getBoundingClientRect().height)).toBe(148);
 		const findIssues = review.getByRole('button', { name: 'Find Issues', exact: true });
 		await expect(findIssues).toBeVisible();
-		await expect
-			.poll(() =>
-				findIssues.evaluate(element => {
-					const button = element.getBoundingClientRect();
-					const body = element.closest('.ash-pane-view-content')!.getBoundingClientRect();
-					return button.top >= body.top && button.bottom <= body.bottom;
-				}),
-			)
-			.toBe(true);
+		await expect.poll(() => findIssues.evaluate(element => {
+			const button = element.getBoundingClientRect();
+			const body = element.closest('.ash-pane-view-content')!.getBoundingClientRect();
+			return button.top >= body.top && button.bottom <= body.bottom;
+		})).toBe(true);
 		await review.locator('.ash-pane-view-header-button').focus();
 		await page.keyboard.press('Tab');
 		await expect(findIssues).toBeFocused();
@@ -387,6 +362,7 @@ test.describe('SCM pane layout with a provider', () => {
 		await expect(graphHeader).toBeInViewport();
 		await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 	});
+
 });
 
 test.describe('Pane motion', { tag: ['@browser-app-server', '@electron-app-server'] }, () => {
@@ -407,9 +383,9 @@ test.describe('Pane motion', { tag: ['@browser-app-server', '@electron-app-serve
 			const sashes = [...split.querySelectorAll('.ash-sash')];
 			(element.querySelector('.ash-pane-view-header-button') as HTMLButtonElement).click();
 			const target = Number.parseFloat(wrapper.style.height);
-			const animations = split
-				.getAnimations({ subtree: true })
-				.filter(animation => animation.effect instanceof KeyframeEffect && animation.effect.getKeyframes().some(frame => frame.height !== undefined || frame.top !== undefined));
+			const animations = split.getAnimations({ subtree: true }).filter(animation =>
+				animation.effect instanceof KeyframeEffect && animation.effect.getKeyframes().some(frame => frame.height !== undefined || frame.top !== undefined),
+			);
 			for (const animation of animations) {
 				animation.pause();
 				animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2;
@@ -419,15 +395,7 @@ test.describe('Pane motion', { tag: ['@browser-app-server', '@electron-app-serve
 			const sash = split.querySelector<HTMLElement>('.ash-sash:last-child')!;
 			const boundaryError = Math.abs(sash.getBoundingClientRect().top + sash.getBoundingClientRect().height / 2 - wrapper.getBoundingClientRect().top);
 			for (const animation of animations) animation.finish();
-			return {
-				before,
-				target,
-				midway,
-				contentHeight,
-				boundaryError,
-				animationCount: animations.length,
-				stableSashes: sashes.every(sash => sash.isConnected),
-			};
+			return { before, target, midway, contentHeight, boundaryError, animationCount: animations.length, stableSashes: sashes.every(sash => sash.isConnected) };
 		});
 		expect(opening.animationCount).toBeGreaterThan(0);
 		expect(opening.midway).toBeGreaterThan(opening.before);
@@ -478,25 +446,12 @@ test.describe('Pane motion', { tag: ['@browser-app-server', '@electron-app-serve
 			const expanded = wrapper.getBoundingClientRect().height;
 			const target = Number.parseFloat(wrapper.style.height);
 			header.click();
-			return {
-				expanded,
-				target,
-				collapsed: wrapper.getBoundingClientRect().height,
-				hidden: body.hidden,
-				inert: body.inert,
-				animations: wrapper.getAnimations().length,
-			};
+			return { expanded, target, collapsed: wrapper.getBoundingClientRect().height, hidden: body.hidden, inert: body.inert, animations: wrapper.getAnimations().length };
 		});
-		expect(state).toEqual({
-			expanded: state.target,
-			target: state.target,
-			collapsed: 28,
-			hidden: true,
-			inert: true,
-			animations: 0,
-		});
+		expect(state).toEqual({ expanded: state.target, target: state.target, collapsed: 28, hidden: true, inert: true, animations: 0 });
 	});
 });
+
 
 test('sidebar overflow registers view visibility and layout commands', async ({ workbench, application }) => {
 	const page = workbench.page;
@@ -508,14 +463,12 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 	const items = () => workbench.menus.inspect(application, open);
 	expect(await workbench.menus.inspect(application, openViews)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Open Editors', checked: false, enabled: true })]));
 	const initial = await items();
-	expect(initial).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({ label: 'Move Primary Side Bar Right', enabled: true }),
-			expect.objectContaining({ label: 'Activity Bar Position', enabled: true }),
-			expect.objectContaining({ label: 'Activity Bar Size', enabled: true }),
-			expect.objectContaining({ label: 'Hide Primary Side Bar', enabled: true }),
-		]),
-	);
+	expect(initial).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: 'Move Primary Side Bar Right', enabled: true }),
+		expect.objectContaining({ label: 'Activity Bar Position', enabled: true }),
+		expect.objectContaining({ label: 'Activity Bar Size', enabled: true }),
+		expect.objectContaining({ label: 'Hide Primary Side Bar', enabled: true }),
+	]));
 	await workbench.menus.select(application, openViews, ['Open Editors']);
 	const editors = sidebar.locator('[data-view-id="workbench.explorer.openEditorsView"]');
 	await expect(editors).toBeVisible();
@@ -553,6 +506,7 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 	await expect(sidebar).toBeVisible();
 });
 
+
 test.describe('Git sidebar visibility menus', () => {
 	test.use({ openWorkspace: true, gitRepository: true });
 	test('Git sidebar overflow toggles panes and protects the last visible view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application }) => {
@@ -560,10 +514,7 @@ test.describe('Git sidebar visibility menus', () => {
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const open = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
-		for (const [label, id] of [
-			['Graph', 'ash.gitGraph'],
-			['Agent Review', 'ash.gitAgentReview'],
-		] as const) {
+		for (const [label, id] of [['Graph', 'ash.gitGraph'], ['Agent Review', 'ash.gitAgentReview']] as const) {
 			const pane = sidebar.locator(`[data-view-id="${id}"]`);
 			await expect(pane).toBeVisible();
 			await workbench.menus.select(application, open, [label]);

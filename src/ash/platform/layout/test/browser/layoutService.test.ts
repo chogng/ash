@@ -28,11 +28,11 @@ test('BrowserLayoutService publishes root geometry and container offsets', () =>
 		assert.deepEqual(dimension, new Dimension(800, 600));
 		layoutEvents.push('container');
 	});
-	service.onDidLayoutMainContainer(dimension => {
+	service.onDidLayoutMainContainer((dimension) => {
 		assert.deepEqual(dimension, new Dimension(800, 600));
 		layoutEvents.push('main');
 	});
-	service.onDidLayoutActiveContainer(dimension => {
+	service.onDidLayoutActiveContainer((dimension) => {
 		assert.deepEqual(dimension, new Dimension(800, 600));
 		layoutEvents.push('active');
 	});

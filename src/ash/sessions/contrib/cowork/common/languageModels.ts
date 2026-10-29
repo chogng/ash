@@ -14,22 +14,14 @@ export const CoworkModelPreferences = Object.freeze({
 		key: 'cowork.defaultmodel',
 		defaultValue: '',
 		parse(value: unknown): string {
-			if (typeof value !== 'string') {
-				throw new TypeError(localize('cowork.defaultmodel.invalid', 'Default Cowork model must be a string.'));
-			}
+			if (typeof value !== 'string') { throw new TypeError(localize('cowork.defaultmodel.invalid', 'Default Cowork model must be a string.')); }
 			return value.trim();
 		},
 		setting: {
-			get title() {
-				return localize('cowork.defaultmodel.title', 'Default Cowork model');
-			},
-			get description() {
-				return localize('cowork.defaultmodel.description', 'The model for new Cowork conversations. Enter auto or a provider/model ID.');
-			},
+			get title() { return localize('cowork.defaultmodel.title', 'Default Cowork model'); },
+			get description() { return localize('cowork.defaultmodel.description', 'The model for new Cowork conversations. Enter auto or a provider/model ID.'); },
 			valueType: 'text',
-			get placeholder() {
-				return localize('cowork.defaultmodel.placeholder', 'auto or provider/model');
-			},
+			get placeholder() { return localize('cowork.defaultmodel.placeholder', 'auto or provider/model'); },
 		},
 	}),
 	selectedModelStorageKey: 'cowork.currentLanguageModel',

@@ -17,14 +17,14 @@ import type { ServicesAccessor } from '../../platform/instantiation/common/insta
 import { IViewDescriptorService, ViewContainerLocation, type IViewDescriptor } from '../common/views.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 
-type ViewDropTarget = { readonly element: HTMLElement; readonly containerId: string } | { readonly element: HTMLElement; readonly location: ViewContainerLocation };
+type ViewDropTarget = { readonly element: HTMLElement; readonly containerId: string; } | { readonly element: HTMLElement; readonly location: ViewContainerLocation; };
 
 /** Writes source identities for native resource drops; captured Chat content stays with its draft. */
-export function fillEditorsDragData(accessor: ServicesAccessor, resources: URI[] | IResourceStat[], event: DragEvent, options?: { disableStandardTransfer: boolean }): void {
+export function fillEditorsDragData(accessor: ServicesAccessor, resources: URI[] | IResourceStat[], event: DragEvent, options?: { disableStandardTransfer: boolean; }): void {
 	const transfer = event.dataTransfer;
 	if (!transfer || !resources.length) return;
-	const entries = resources.map((entry): IResourceStat => (URI.isUri(entry) ? { resource: entry } : entry));
-	const uris = entries.map(entry => (entry.selection ? withSelection(entry.resource, entry.selection) : entry.resource));
+	const entries = resources.map((entry): IResourceStat => URI.isUri(entry) ? { resource: entry } : entry);
+	const uris = entries.map(entry => entry.selection ? withSelection(entry.resource, entry.selection) : entry.resource);
 	const values = uris.map(resource => resource.toString());
 	transfer.setData(DataTransfers.RESOURCES, JSON.stringify(values));
 	transfer.setData(Mimes.uriList, values.join('\r\n'));
@@ -52,57 +52,39 @@ export class ViewDragAndDropController extends Disposable {
 	) {
 		super();
 		this._register(addDisposableListener(root, 'dragstart', event => this.start(event)));
-		this._register(
-			addDisposableListener(
-				root,
-				'dragover',
-				event => {
-					const target = this.target(event.target);
-					this.setTarget(target);
-					if (!target) return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-				},
-				true,
-			),
-		);
-		this._register(
-			addDisposableListener(
-				root,
-				'drop',
-				event => {
-					const target = this.target(event.target);
-					if (!target) return;
-					event.preventDefault();
-					event.stopImmediatePropagation();
-					const dragged = this.draggedViews;
-					const sourceContainerId = this.draggedContainerId;
-					this.clear();
-					if ('containerId' in target) {
-						this.descriptors.moveViewsToContainer(dragged, this.descriptors.getViewContainerById(target.containerId)!);
-					} else if (sourceContainerId) {
-						this.descriptors.moveViewContainerToLocation(this.descriptors.getViewContainerById(sourceContainerId)!, target.location);
-					} else {
-						for (const view of dragged) this.descriptors.moveViewToLocation(view, target.location);
-					}
-					void this.views.openView(dragged[0].id, true).catch(onUnexpectedError);
-				},
-				true,
-			),
-		);
+		this._register(addDisposableListener(root, 'dragover', event => {
+			const target = this.target(event.target);
+			this.setTarget(target);
+			if (!target) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		}, true));
+		this._register(addDisposableListener(root, 'drop', event => {
+			const target = this.target(event.target);
+			if (!target) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			const dragged = this.draggedViews;
+			const sourceContainerId = this.draggedContainerId;
+			this.clear();
+			if ('containerId' in target) {
+				this.descriptors.moveViewsToContainer(dragged, this.descriptors.getViewContainerById(target.containerId)!);
+			} else if (sourceContainerId) {
+				this.descriptors.moveViewContainerToLocation(this.descriptors.getViewContainerById(sourceContainerId)!, target.location);
+			} else {
+				for (const view of dragged) this.descriptors.moveViewToLocation(view, target.location);
+			}
+			void this.views.openView(dragged[0].id, true).catch(onUnexpectedError);
+		}, true));
 		this._register(addDisposableListener(root.ownerDocument, 'dragend', () => this.clear(), true));
-		this._register(
-			addDisposableListener(root, 'dragleave', event => {
-				if (!event.relatedTarget || !root.contains(event.relatedTarget as Node)) this.setTarget(undefined);
-			}),
-		);
+		this._register(addDisposableListener(root, 'dragleave', event => {
+			if (!event.relatedTarget || !root.contains(event.relatedTarget as Node)) this.setTarget(undefined);
+		}));
 		this._register(addDisposableListener(root, 'contextmenu', event => this.showMenu(event)));
-		this._register(
-			addDisposableListener(root, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showMenu(event);
-			}),
-		);
+		this._register(addDisposableListener(root, 'keydown', event => {
+			if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) this.showMenu(event);
+		}));
 	}
 
 	private start(event: DragEvent): void {
@@ -175,22 +157,10 @@ export class ViewDragAndDropController extends Disposable {
 		const moveLabel = localize('views.moveView', 'Move View...');
 		const resetLabel = localize('views.resetLocation', 'Reset Location');
 		this.contextMenus.showContextMenu({
-			getAnchor: () => ('clientX' in event ? { x: event.clientX, y: event.clientY } : header!),
+			getAnchor: () => 'clientX' in event ? { x: event.clientX, y: event.clientY } : header!,
 			getActions: () => [
-				{
-					id: 'workbench.action.moveFocusedView',
-					label: moveLabel,
-					tooltip: moveLabel,
-					enabled: true,
-					run: () => this.commands.executeCommand('workbench.action.moveFocusedView', id),
-				},
-				{
-					id: 'workbench.action.resetFocusedViewLocation',
-					label: resetLabel,
-					tooltip: resetLabel,
-					enabled: true,
-					run: () => this.commands.executeCommand('workbench.action.resetFocusedViewLocation', id),
-				},
+				{ id: 'workbench.action.moveFocusedView', label: moveLabel, tooltip: moveLabel, enabled: true, run: () => this.commands.executeCommand('workbench.action.moveFocusedView', id) },
+				{ id: 'workbench.action.resetFocusedViewLocation', label: resetLabel, tooltip: resetLabel, enabled: true, run: () => this.commands.executeCommand('workbench.action.resetFocusedViewLocation', id) },
 			],
 		});
 	}

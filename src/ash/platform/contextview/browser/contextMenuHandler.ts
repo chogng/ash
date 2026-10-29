@@ -1,7 +1,17 @@
-import { defaultMenuStyles, defaultButtonStyles, defaultKeybindingLabelStyles } from '../../theme/browser/defaultStyles.js';
-import { type ContextMenuAnchor, type IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
+import {
+	defaultMenuStyles,
+	defaultButtonStyles,
+	defaultKeybindingLabelStyles,
+} from '../../theme/browser/defaultStyles.js';
+import {
+	type ContextMenuAnchor,
+	type IContextMenuDelegate,
+} from '../../../base/browser/contextmenu.js';
 import { isNode } from '../../../base/browser/dom.js';
-import { AnchorPosition, ContextViewFocusRestore } from '../../../base/browser/ui/contextview/contextview.js';
+import {
+	AnchorPosition,
+	ContextViewFocusRestore,
+} from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { ActionRunner, type IAction } from '../../../base/common/actions.js';
 import { toErrorMessage } from '../../../base/common/errorMessage.js';
@@ -13,7 +23,7 @@ import type { IContextViewService } from './contextView.js';
 
 /** Owns browser menu rendering and action lifecycle for one context-view host. */
 export class ContextMenuHandler extends Disposable {
-	private activeMenu: { hide(): void } | undefined;
+	private activeMenu: { hide(): void; } | undefined;
 	private readonly menus = this._register(new DisposableMap<object, DisposableStore>());
 	private readonly executions = this._register(new DisposableMap<DisposableStore, DisposableStore>());
 
@@ -25,7 +35,10 @@ export class ContextMenuHandler extends Disposable {
 		super();
 	}
 
-	showContextMenu(delegate: IContextMenuDelegate, onDidShow?: () => void): boolean {
+	showContextMenu(
+		delegate: IContextMenuDelegate,
+		onDidShow?: () => void,
+	): boolean {
 		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) {
 			delegate.onHide?.(true);
 			return false;
@@ -52,106 +65,70 @@ export class ContextMenuHandler extends Disposable {
 		let mounting = false;
 		let pendingHideCallback = false;
 		const notifyHide = (): void => {
-			if (this.activeMenu === request) {
-				this.activeMenu = undefined;
-			}
+			if (this.activeMenu === request) { this.activeMenu = undefined; }
 			delegate.onHide?.(!executingAction);
 		};
 		const finish = (): void => {
-			if (didHide) {
-				return;
-			}
+			if (didHide) { return; }
 			didHide = true;
 			try {
-				if (!executingAction) {
-					this.executions.deleteAndDispose(executionDisposables);
-				}
+				if (!executingAction) { this.executions.deleteAndDispose(executionDisposables); }
 				this.menus.deleteAndDispose(request);
 			} finally {
 				// A successor must mount after the current host's synchronous show frame returns,
 				// even when a custom view item's resource disposal fails.
-				if (mounting) {
-					pendingHideCallback = true;
-				} else {
-					notifyHide();
-				}
+				if (mounting) { pendingHideCallback = true; }
+				else { notifyHide(); }
 			}
 		};
 		const request = {
 			hide: (): void => {
-				if (this.activeMenu !== request || didHide) {
-					return;
-				}
-				if (shown) {
-					this.contextViewService.hide();
-				} else {
-					finish();
-				}
+				if (this.activeMenu !== request || didHide) { return; }
+				if (shown) { this.contextViewService.hide(); }
+				else { finish(); }
 			},
 		};
 		this.activeMenu = request;
 		this.menus.set(request, disposables);
-		if (delegate.cancellationToken) {
-			disposables.add(delegate.cancellationToken.onCancellationRequested(() => request.hide()));
-		}
-		executionDisposables.add(
-			actionRunner.onWillRun(event => {
-				if (this.activeMenu !== request || executingAction) {
-					return;
-				}
-				executingAction = event.action;
-				request.hide();
-			}),
-		);
-		executionDisposables.add(
-			actionRunner.onDidRun(event => {
-				if (event.action !== executingAction) {
-					return;
-				}
-				if (!this.isDisposed && event.error !== undefined) {
-					this.notificationService.error(toErrorMessage(event.error));
-				}
-				this.executions.deleteAndDispose(executionDisposables);
-			}),
-		);
+		if (delegate.cancellationToken) { disposables.add(delegate.cancellationToken.onCancellationRequested(() => request.hide())); }
+		executionDisposables.add(actionRunner.onWillRun(event => {
+			if (this.activeMenu !== request || executingAction) { return; }
+			executingAction = event.action;
+			request.hide();
+		}));
+		executionDisposables.add(actionRunner.onDidRun((event) => {
+			if (event.action !== executingAction) { return; }
+			if (!this.isDisposed && event.error !== undefined) {
+				this.notificationService.error(toErrorMessage(event.error));
+			}
+			this.executions.deleteAndDispose(executionDisposables);
+		}));
 
 		const actionContext = delegate.getActionsContext?.();
-		if (didHide) {
-			return false;
-		}
+		if (didHide) { return false; }
 		const anchor = toContextViewAnchor(delegate.getAnchor());
-		if (didHide) {
-			return false;
-		}
-		const menu = new Menu(
-			this.contextViewService.container,
-			{
-				buttonStyles: defaultButtonStyles,
-				keybindingLabelStyles: defaultKeybindingLabelStyles,
-				actions,
-				openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
-				contextViewContainer: this.contextViewService.container,
-				layer: delegate.layer ?? 10,
-				className: delegate.getMenuClassName?.(),
-				actionViewItemProvider: delegate.getActionViewItem,
-				getCheckedActionsRepresentation: delegate.getCheckedActionsRepresentation,
-				actionRunner,
-				actionContext,
-				getKeybinding: delegate.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)),
-				onDidRequestClose: () => request.hide(),
-			},
-			defaultMenuStyles,
-		);
-		if (didHide) {
-			menu.dispose();
-			return false;
-		}
+		if (didHide) { return false; }
+		const menu = new Menu(this.contextViewService.container, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
+			actions,
+			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
+			contextViewContainer: this.contextViewService.container,
+			layer: delegate.layer ?? 10,
+			className: delegate.getMenuClassName?.(),
+			actionViewItemProvider: delegate.getActionViewItem,
+			getCheckedActionsRepresentation: delegate.getCheckedActionsRepresentation,
+			actionRunner,
+			actionContext,
+			getKeybinding: delegate.getKeyBinding ?? ((action) =>
+				this.keybindingService.lookupKeybinding(action.id)),
+			onDidRequestClose: () => request.hide(),
+		}, defaultMenuStyles);
+		if (didHide) { menu.dispose(); return false; }
 		disposables.add(menu);
 		// Replacement callbacks can cancel this request or open a successor before it mounts.
 		this.contextViewService.hide();
-		if (didHide) {
-			return false;
-		}
+		if (didHide) { return false; }
 		// Mounting owns the host before synchronous layout callbacks can cancel this request.
 		shown = true;
 		mounting = true;
@@ -166,7 +143,7 @@ export class ContextMenuHandler extends Disposable {
 				presentation: 'menu',
 				focusRestore: ContextViewFocusRestore.Previous,
 				layer: delegate.layer ?? 10,
-				isTargetWithin: target => menu.contains(target),
+				isTargetWithin: (target) => menu.contains(target),
 				onHide: finish,
 			});
 		} catch (error) {
@@ -174,22 +151,16 @@ export class ContextMenuHandler extends Disposable {
 			throw error;
 		} finally {
 			mounting = false;
-			if (pendingHideCallback) {
-				notifyHide();
-			}
+			if (pendingHideCallback) { notifyHide(); }
 		}
 		if (!shown) {
 			finish();
 			return false;
 		}
-		if (didHide || this.activeMenu !== request) {
-			return false;
-		}
+		if (didHide || this.activeMenu !== request) { return false; }
 
 		onDidShow?.();
-		if (didHide || this.activeMenu !== request) {
-			return false;
-		}
+		if (didHide || this.activeMenu !== request) { return false; }
 		menu.focus(delegate.autoSelectFirstItem === true);
 		return true;
 	}
@@ -204,7 +175,9 @@ export class ContextMenuHandler extends Disposable {
 	}
 }
 
-function toContextViewAnchor(anchor: ContextMenuAnchor): Element | (IRectangle & { readonly targetWindow?: Window }) {
+function toContextViewAnchor(
+	anchor: ContextMenuAnchor,
+): Element | (IRectangle & { readonly targetWindow?: Window; }) {
 	if (isNode(anchor)) return anchor;
 	return {
 		left: anchor.x,

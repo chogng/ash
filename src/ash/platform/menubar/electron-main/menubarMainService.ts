@@ -1,5 +1,7 @@
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type {
+	IpcRoute,
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	type INativeMenubarData,
 	NATIVE_MENUBAR_SELECT_CHANNEL,
@@ -11,13 +13,17 @@ import {
 
 export interface INativeMenubarMainHost {
 	readonly applicationName: string;
-	setApplicationMenu(template: readonly INativeMenubarMainMenuItem[] | undefined): void;
+	setApplicationMenu(
+		template: readonly INativeMenubarMainMenuItem[] | undefined,
+	): void;
 	setWindowTouchBar(window: INativeMenubarMainWindow, items: readonly INativeTouchBarItem[], select: (id: string) => void): void;
 }
 
 export interface INativeMenubarMainWindow {
 	readonly id: number;
-	readonly webContents: { send(channel: string, value: unknown): void };
+	readonly webContents: {
+		send(channel: string, value: unknown): void;
+	};
 	isDestroyed(): boolean;
 	isFocused(): boolean;
 	on(event: 'focus', listener: () => void): unknown;
@@ -31,7 +37,11 @@ export interface INativeMenubarMainMenuItem {
 	readonly enabled?: boolean;
 	readonly checked?: boolean;
 	readonly submenu?: readonly INativeMenubarMainMenuItem[];
-	readonly click?: (menuItem: unknown, window: unknown, event: { readonly altKey: boolean }) => void;
+	readonly click?: (
+		menuItem: unknown,
+		window: unknown,
+		event: { readonly altKey: boolean; },
+	) => void;
 }
 
 interface IWindowMenubarState {
@@ -63,7 +73,7 @@ export class NativeMenubarMainService extends Disposable {
 		if (window.isFocused()) this.activateWindow(window.id);
 
 		return toDisposable(() => {
-			if (!window.isDestroyed()) this.host.setWindowTouchBar(window, [], () => {});
+			if (!window.isDestroyed()) this.host.setWindowTouchBar(window, [], () => { });
 			window.removeListener('focus', handleFocus);
 			this.windows.delete(window.id);
 			const activationIndex = this.activationOrder.indexOf(window.id);
@@ -114,7 +124,7 @@ export class NativeMenubarMainService extends Disposable {
 			applicationMenu(this.host.applicationName),
 			...(data?.menus ?? []).map(({ label, items }) => ({
 				label,
-				submenu: toTemplate(items, id => {
+				submenu: toTemplate(items, (id) => {
 					if (state && data) this.select(state.window, data.revision, id);
 				}),
 			})),
@@ -132,17 +142,21 @@ export class NativeMenubarMainService extends Disposable {
 	}
 }
 
-export function nativeMenubarIpcRoutes(service: NativeMenubarMainService, window: INativeMenubarMainWindow): readonly IpcRoute<unknown, unknown>[] {
-	return [
-		{
-			channel: NATIVE_MENUBAR_UPDATE_CHANNEL,
-			validate: validateNativeMenubarData,
-			invoke: data => service.update(window, data as INativeMenubarData),
-		},
-	];
+export function nativeMenubarIpcRoutes(
+	service: NativeMenubarMainService,
+	window: INativeMenubarMainWindow,
+): readonly IpcRoute<unknown, unknown>[] {
+	return [{
+		channel: NATIVE_MENUBAR_UPDATE_CHANNEL,
+		validate: validateNativeMenubarData,
+		invoke: (data) => service.update(window, data as INativeMenubarData),
+	}];
 }
 
-function toTemplate(items: readonly NativeMenubarItem[], select: (id: string) => void): INativeMenubarMainMenuItem[] {
+function toTemplate(
+	items: readonly NativeMenubarItem[],
+	select: (id: string) => void,
+): INativeMenubarMainMenuItem[] {
 	return items.map((item): INativeMenubarMainMenuItem => {
 		switch (item.type) {
 			case 'separator':
@@ -160,7 +174,9 @@ function toTemplate(items: readonly NativeMenubarItem[], select: (id: string) =>
 					label: item.label,
 					enabled: item.enabled,
 					checked: item.checked,
-					click: (_menuItem, _window, event) => select(event.altKey && item.altId ? item.altId : item.id),
+					click: (_menuItem, _window, event) => select(
+						event.altKey && item.altId ? item.altId : item.id,
+					),
 				};
 		}
 	});
@@ -186,6 +202,11 @@ function applicationMenu(applicationName: string): INativeMenubarMainMenuItem {
 function windowMenu(): INativeMenubarMainMenuItem {
 	return {
 		role: 'windowMenu',
-		submenu: [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }],
+		submenu: [
+			{ role: 'minimize' },
+			{ role: 'zoom' },
+			{ type: 'separator' },
+			{ role: 'front' },
+		],
 	};
 }

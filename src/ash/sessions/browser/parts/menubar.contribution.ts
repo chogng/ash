@@ -14,12 +14,10 @@ const sections = [
 	[localize2({ bundle: 'ash.menu', key: 'help' }, 'Help'), MenuId.MenubarHelpMenu, 8],
 ] as const;
 
-MenusRegistry.appendMenuItems(
-	sections.map(([title, submenu, order]) => ({
-		id: Menus.MenubarMainMenu,
-		item: { title, submenu, group: 'navigation', order },
-	})),
-);
+MenusRegistry.appendMenuItems(sections.map(([title, submenu, order]) => ({
+	id: Menus.MenubarMainMenu,
+	item: { title, submenu, group: 'navigation', order },
+})));
 
 // Common sections are explicitly shared; window-specific commands belong to the Sessions File menu.
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {

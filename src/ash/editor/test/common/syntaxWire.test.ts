@@ -23,62 +23,48 @@ test('Token and diagnostic lanes share one structured-clone incremental document
 	using remoteRegistry = new SyntaxProviderRegistry();
 	using registration = remoteRegistry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(remoteRegistry));
+	using server = new WorkerTextModelSyncServer(
+		serverPort,
+		syntaxWireCodec,
+		new SyntaxProviderWorker(remoteRegistry),
+	);
 	using coordinator = new LanguageRequestCoordinator(model, () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec));
-	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
-	const requestTokens = () =>
-		coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, result => {
-			if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error('Wrong lane');
-			tokens = result.value;
-		});
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE; }> | undefined;
+	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, result => {
+		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error('Wrong lane');
+		tokens = result.value;
+	});
 
 	const [tokenOutcome, diagnosticOutcome] = await Promise.all([requestTokens(), coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: 'typescript' }, () => undefined)]);
 
 	assert.equal(tokenOutcome.status, LanguageRequestStatus.Applied);
 	assert.equal(diagnosticOutcome.status, LanguageRequestStatus.Applied);
-	assert.deepEqual(
-		tokens!.value.tokens.map(token => token.tokenType),
-		['const', 'value', '=', '1;'],
-	);
+	assert.deepEqual(tokens!.value.tokens.map(token => token.tokenType), ['const', 'value', '=', '1;']);
 	assert.equal(tokens!.value.tokens[0]!.range instanceof Range, true);
 	const initialMessages = clientPort.sentMessages as WireMessage[];
-	assert.deepEqual(
-		initialMessages.map(message => message.kind),
-		['request', 'request'],
-	);
+	assert.deepEqual(initialMessages.map(message => message.kind), ['request', 'request']);
 	assert.equal(initialMessages[0]!.lane, 'tokens');
 	assert.equal(initialMessages[0]!.snapshot?.kind, 'full');
 	assert.equal(initialMessages[1]!.lane, 'diagnostics');
 	assert.equal(initialMessages[1]!.snapshot?.kind, 'reference');
 
-	model.applyEdits([
-		{
-			range: Range.fromPositions(new Position(0 + 1, model.getText().length + 1)),
-			text: '\nreturn value;',
-		},
-	]);
+	model.applyEdits([{
+		range: Range.fromPositions(new Position((0) + 1, (model.getText().length) + 1)),
+		text: '\nreturn value;',
+	}]);
 	assert.equal((await requestTokens()).status, LanguageRequestStatus.Applied);
 
 	const messages = clientPort.sentMessages as WireMessage[];
-	assert.deepEqual(
-		messages.map(message => message.kind),
-		['request', 'request', 'sync', 'request'],
-	);
+	assert.deepEqual(messages.map(message => message.kind), ['request', 'request', 'sync', 'request']);
 	assert.equal(messages[2]!.previousVersion, 1);
 	assert.equal(messages[3]!.snapshot?.kind, 'reference');
 	assert.equal(messages[3]!.resultBaseRequestId, 1);
-	assert.deepEqual(
-		tokens!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType),
-		['return', 'value;'],
-	);
+	assert.deepEqual(tokens!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ['return', 'value;']);
 	const incrementalResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
 	assert.equal(incrementalResponse?.result?.kind, 'delta');
 	assert.equal(incrementalResponse?.result?.baseRequestId, 1);
 	assert.equal(incrementalResponse?.result?.splices?.at(-1)?.lineDelta, 1);
-	assert.equal(
-		incrementalResponse?.result?.splices?.reduce((count, splice) => count + splice.items.length, 0),
-		2,
-	);
+	assert.equal(incrementalResponse?.result?.splices?.reduce((count, splice) => count + splice.items.length, 0), 2);
 });
 
 test('Syntax wire rejects malformed lane DTOs in the client realm', async () => {
@@ -86,15 +72,12 @@ test('Syntax wire rejects malformed lane DTOs in the client realm', async () => 
 	const [clientPort, serverPort] = createPortPair();
 	using serverEndpoint = serverPort;
 	using client = new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
-	const pending = client.run(
-		{
-			requestId: 1,
-			lane: SYNTAX_TOKEN_LANE,
-			snapshot: model.createVersionedSnapshot(),
-			payload: { languageId: 'typescript' },
-		},
-		new AbortController().signal,
-	);
+	const pending = client.run({
+		requestId: 1,
+		lane: SYNTAX_TOKEN_LANE,
+		snapshot: model.createVersionedSnapshot(),
+		payload: { languageId: 'typescript' },
+	}, new AbortController().signal);
 	await turn();
 	serverPort.send({
 		protocol: 'ash.text-model',
@@ -103,24 +86,21 @@ test('Syntax wire rejects malformed lane DTOs in the client realm', async () => 
 		requestId: 1,
 		result: {
 			kind: 'full',
-			items: [
-				{
-					range: {
-						start: { lineIndex: 0, columnIndex: 0 },
-						end: { lineIndex: 0, columnIndex: 4 },
-					},
-					tokenType: 'variable',
-					modifiers: [],
+			items: [{
+				range: {
+					start: { lineIndex: 0, columnIndex: 0 },
+					end: { lineIndex: 0, columnIndex: 4 },
 				},
-				{
-					range: {
-						start: { lineIndex: 0, columnIndex: 3 },
-						end: { lineIndex: 0, columnIndex: 5 },
-					},
-					tokenType: 'variable',
-					modifiers: [],
+				tokenType: 'variable',
+				modifiers: [],
+			}, {
+				range: {
+					start: { lineIndex: 0, columnIndex: 3 },
+					end: { lineIndex: 0, columnIndex: 5 },
 				},
-			],
+				tokenType: 'variable',
+				modifiers: [],
+			}],
 		},
 	});
 
@@ -137,16 +117,17 @@ test('Syntax service replaces a failed wire Worker on the next request', async (
 	using coordinator = new LanguageRequestCoordinator(model, () => {
 		workerCount += 1;
 		const [clientPort, serverPort] = createPortPair();
-		const worker: SyntaxWorker = workerCount === 1 ? new FailingSyntaxWorker() : new SyntaxProviderWorker(remoteRegistry);
+		const worker: SyntaxWorker = workerCount === 1
+			? new FailingSyntaxWorker()
+			: new SyntaxProviderWorker(remoteRegistry);
 		workerResources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, worker));
 		return new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	});
-	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
-	const requestTokens = () =>
-		coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, result => {
-			if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error('Wrong lane');
-			tokens = result.value;
-		});
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE; }> | undefined;
+	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, result => {
+		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error('Wrong lane');
+		tokens = result.value;
+	});
 
 	await assert.rejects(requestTokens(), /syntax worker failed/);
 	const outcome = await requestTokens();
@@ -210,12 +191,9 @@ test('Syntax wire does not confirm a result rejected by renderer application', a
 	using coordinator = new LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>(model, () => client);
 	const applicationFailure = new Error('renderer rejected result');
 
-	await assert.rejects(
-		coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, () => {
-			throw applicationFailure;
-		}),
-		applicationFailure,
-	);
+	await assert.rejects(coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, () => {
+		throw applicationFailure;
+	}), applicationFailure);
 	assert.equal((await coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, () => undefined)).status, LanguageRequestStatus.Applied);
 
 	const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.kind === 'request');
@@ -231,11 +209,16 @@ interface WireMessage {
 	readonly previousVersion?: number;
 	readonly requestId?: number;
 	readonly resultBaseRequestId?: number;
-	readonly snapshot?: { readonly kind?: string };
+	readonly snapshot?: {
+		readonly kind?: string;
+	};
 	readonly result?: {
 		readonly kind?: string;
 		readonly baseRequestId?: number;
-		readonly splices?: readonly { readonly lineDelta?: number; readonly items: readonly unknown[] }[];
+		readonly splices?: readonly {
+			readonly lineDelta?: number;
+			readonly items: readonly unknown[];
+		}[];
 	};
 }
 
@@ -258,11 +241,9 @@ class MemorySyntaxPort extends Disposable implements WebWorkerClientPort {
 
 	constructor() {
 		super();
-		this._register(
-			toDisposable(() => {
-				this.peer = undefined;
-			}),
-		);
+		this._register(toDisposable(() => {
+			this.peer = undefined;
+		}));
 	}
 
 	connect(peer: MemorySyntaxPort): void {
@@ -292,40 +273,27 @@ function turn(): Promise<void> {
 	return new Promise(resolve => setImmediate(resolve));
 }
 
+
 test('hypothetical syntax travels across the wire without changing the shared snapshot or delta baseline', async () => {
 	using registry = new SyntaxProviderRegistry();
 	const observed: string[] = [];
 	using registration = registry.register({
-		id: 'test.preview',
-		languageIds: ['demo'],
-		provideTokens: request => {
-			observed.push(request.snapshot.getText());
-			return { tokens: [] };
-		},
-		provideTokensForLines: request => ({
-			tokens: request.tokenize.lines.map((line, index) => ({
-				range: new Range(index + 1, 1, index + 1, line.length + 1),
-				tokenType: 'string',
-				modifiers: [],
-			})),
-		}),
+		id: 'test.preview', languageIds: ['demo'],
+		provideTokens: request => { observed.push(request.snapshot.getText()); return { tokens: [] }; },
+		provideTokensForLines: request => ({ tokens: request.tokenize.lines.map((line, index) => ({ range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [] })) }),
 	});
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
 	using model = new TextModel('x', {
-		languageId: 'demo',
-		tokenization: {
+		languageId: 'demo', tokenization: {
 			syntaxService: {
 				workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
-			},
-		},
+			}
+		}
 	});
 	const signal = new AbortController().signal;
 	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['longer than x', 'second line'], signal);
-	assert.deepEqual(
-		tokens!.map(line => line.getLineContent()),
-		['longer than x', 'second line'],
-	);
+	assert.deepEqual(tokens!.map(line => line.getLineContent()), ['longer than x', 'second line']);
 	await model.tokenization.tokenizeLinesAtAsync(1, ['another'], signal);
 	assert.ok(observed.length >= 2);
 	assert.ok(observed.every(text => text === 'x'));
@@ -339,11 +307,7 @@ test('hypothetical syntax travels across the wire without changing the shared sn
 test('hypothetical syntax wire rejects wrong lanes, line endings and out of document starting lines', () => {
 	using model = new TextModel('x');
 	const snapshot = model.createVersionedSnapshot();
-	for (const tokenize of [
-		{ lineNumber: 2, lines: ['x'] },
-		{ lineNumber: 1, lines: ['a\nb'] },
-		{ lineNumber: 1, lines: [] },
-	]) {
+	for (const tokenize of [{ lineNumber: 2, lines: ['x'] }, { lineNumber: 1, lines: ['a\nb'] }, { lineNumber: 1, lines: [] }]) {
 		assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo', tokenize }, snapshot));
 	}
 	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKEN_LANE, { languageId: 'demo', tokenize: { lineNumber: 1, lines: ['x'] } }, snapshot), /lane/);

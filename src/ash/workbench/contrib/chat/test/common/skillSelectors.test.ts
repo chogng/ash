@@ -21,10 +21,7 @@ test('Skill selector matches `$` names and returns exact references in prompt or
 	};
 	catalog.setSkills([commit, review]);
 
-	assert.deepEqual(
-		catalog.matching('com').map(skill => skill.name),
-		['commit'],
-	);
+	assert.deepEqual(catalog.matching('com').map(skill => skill.name), ['commit']);
 	assert.deepEqual(catalog.referencesIn('$review this, then $commit changes and reuse $review'), [review.skill, commit.skill]);
 });
 

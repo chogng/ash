@@ -20,12 +20,10 @@ export class LocalTerminalBackend extends BaseTerminalBackend {
 	) {
 		super(processes);
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceRevision++));
-		this._register(
-			toDisposable(() => {
-				for (const pty of this.handles.values()) pty.shutdown(false);
-				this.handles.clear();
-			}),
-		);
+		this._register(toDisposable(() => {
+			for (const pty of this.handles.values()) pty.shutdown(false);
+			this.handles.clear();
+		}));
 	}
 
 	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<LocalPty> {
@@ -33,25 +31,14 @@ export class LocalTerminalBackend extends BaseTerminalBackend {
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		if (scope.remoteAuthority !== undefined) throw new CancellationError();
 		const workspaceRevision = this.workspaceRevision;
-		const creation = attached ?? (await this.processes.create(options));
+		const creation = attached ?? await this.processes.create(options);
 		if (this.isDisposed || this.workspaceRevision !== workspaceRevision || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspace.getWorkspace()))) {
-			if (ownership?.canTerminate !== false)
-				await this.processes.close({
-					terminalId: creation.terminalId,
-					...(options.dirId === undefined ? {} : { dirId: options.dirId }),
-				});
+			if (ownership?.canTerminate !== false) await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();
 		}
-		const pty = this.instantiation.createInstance(
-			LocalPty,
-			id,
-			creation,
-			options.dirId,
-			() => {
-				if (this.handles.get(id) === pty) this.handles.delete(id);
-			},
-			ownership,
-		);
+		const pty = this.instantiation.createInstance(LocalPty, id, creation, options.dirId, () => {
+			if (this.handles.get(id) === pty) this.handles.delete(id);
+		}, ownership);
 		this.handles.set(id, pty);
 		return pty;
 	}

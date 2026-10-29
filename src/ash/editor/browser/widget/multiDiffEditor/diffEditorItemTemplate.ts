@@ -165,10 +165,7 @@ export class DiffEditorItemTemplate extends Disposable {
 
 	public unmount(): void {
 		const editor = this.editor;
-		if (!editor) {
-			this.modelRetention.clear();
-			return;
-		}
+		if (!editor) { this.modelRetention.clear(); return; }
 		this.originalState = editor.originalEditor.saveViewState();
 		this.modifiedState = editor.modifiedEditor.saveViewState();
 		this.editorListeners.clear();
@@ -223,13 +220,14 @@ export class DiffEditorItemTemplate extends Disposable {
 			this.incompleteStatusDomNode.textContent = localize('diffEditor.computing', 'Computing differences');
 			return;
 		}
-		this.incompleteStatusDomNode.textContent = model?.state.kind === 'ready' && model.state.quitEarly ? localize('diffEditor.incompleteShort', 'Diff may be incomplete') : '';
+		this.incompleteStatusDomNode.textContent = model?.state.kind === 'ready' && model.state.quitEarly
+			? localize('diffEditor.incompleteShort', 'Diff may be incomplete')
+			: '';
 	}
 
 	private updateToggleLabel(collapsed: boolean): void {
-		this.toggleDomNode.setAttribute(
-			'aria-label',
-			formatNlsMessage(collapsed ? localize('multiDiffEditor.expandItem', 'Expand {0}') : localize('multiDiffEditor.collapseItem', 'Collapse {0}'), { 0: this.item.label }),
-		);
+		this.toggleDomNode.setAttribute('aria-label', formatNlsMessage(collapsed
+			? localize('multiDiffEditor.expandItem', 'Expand {0}')
+			: localize('multiDiffEditor.collapseItem', 'Collapse {0}'), { 0: this.item.label }));
 	}
 }

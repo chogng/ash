@@ -18,12 +18,7 @@ test.describe('built-in Rust testing', () => {
 		const tree = pane.getByRole('tree', { name: 'Tests' });
 		await expect(tree).toContainText('checks::passes');
 		await expect(tree).toContainText('checks::fails');
-		const select = async (name: string) => {
-			await tree
-				.getByRole('treeitem')
-				.filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: name }) })
-				.click();
-		};
+		const select = async (name: string) => { await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: name }) }).click(); };
 		await select('checks::passes');
 		await pane.getByRole('button', { name: 'Run Selected', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('1 passed');
@@ -52,13 +47,10 @@ test.describe('built-in Rust testing', () => {
 	});
 	test('Rust test debugging hits a real breakpoint and macro and documentation tests execute', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		test.setTimeout(120_000);
-		const debugSource = source.replace(
-			'assert_eq!(2 + 2, 4);',
-			'let answer = 42;\n        println!("ASH_RUST_SELFHOST_STDOUT");\n        eprintln!("ASH_RUST_SELFHOST_STDERR");\n        assert_eq!(answer, 42);',
-		);
+		const debugSource = source.replace('assert_eq!(2 + 2, 4);', 'let answer = 42;\n        println!("ASH_RUST_SELFHOST_STDOUT");\n        eprintln!("ASH_RUST_SELFHOST_STDERR");\n        assert_eq!(answer, 42);');
 		await writeFile(testWorkspace.rustFile, debugSource + '\nmacro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }\n#[cfg(test)] generated!();\n');
 		const manifest = join(testWorkspace.directory, 'Cargo.toml');
-		await writeFile(manifest, (await readFile(manifest, 'utf8')) + '\n[lib]\npath = "lib.rs"\n');
+		await writeFile(manifest, await readFile(manifest, 'utf8') + '\n[lib]\npath = "lib.rs"\n');
 		await writeFile(join(testWorkspace.directory, 'lib.rs'), '/// ```\n/// assert_eq!(2 + 2, 4);\n/// ```\npub fn docs() {}\n');
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('workbench.action.testing.refresh');
@@ -67,16 +59,10 @@ test.describe('built-in Rust testing', () => {
 		const tree = pane.getByRole('tree', { name: 'Tests' });
 		await expect(tree).toContainText('generated_case');
 		await expect(tree).toContainText('Documentation Tests');
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'generated_case' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'generated_case' }) }).click();
 		await pane.getByRole('button', { name: 'Run Selected', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('1 passed');
-		await tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'lib.rs - docs' }) })
-			.click();
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'lib.rs - docs' }) }).click();
 		await expect(pane.getByRole('button', { name: 'Debug Selected Test', exact: true })).toBeDisabled();
 		await pane.getByRole('button', { name: 'Run Selected', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('2 passed');
@@ -119,6 +105,7 @@ test.describe('built-in Rust testing', () => {
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});
+
 });
 
 test.describe('testing without a backend', () => {

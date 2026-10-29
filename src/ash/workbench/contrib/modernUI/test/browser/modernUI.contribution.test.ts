@@ -26,46 +26,26 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	public readonly styles: WorkbenchLayoutStyle[] = [];
 	public readonly onDidChangePartVisibility = Event.None;
 	readonly onDidChangePanelPosition = Event.None;
-	getSideBarPosition(): PanelPosition {
-		return Position.LEFT;
-	}
-	getPanelPosition(): PanelPosition {
-		return Position.BOTTOM;
-	}
-	setPanelPosition(): void {}
+	getSideBarPosition(): PanelPosition { return Position.LEFT; }
+	getPanelPosition(): PanelPosition { return Position.BOTTOM; }
+	setPanelPosition(): void { }
 
-	constructor(container: HTMLElement) {
-		super({ root: container });
-	}
-	isPartVisible(): boolean {
-		return false;
-	}
-	hasFocus(): boolean {
-		return false;
-	}
-	getVisibleNeighborPart(): undefined {
-		return undefined;
-	}
+	constructor(container: HTMLElement) { super({ root: container }); }
+	isPartVisible(): boolean { return false; }
+	hasFocus(): boolean { return false; }
+	getVisibleNeighborPart(): undefined { return undefined; }
 	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
-	isAuxiliaryBarMaximized(): boolean {
-		return false;
-	}
-	toggleMaximizedAuxiliaryBar(): void {}
-	setAuxiliaryBarMaximized(): boolean {
-		return false;
-	}
-	isPanelMaximized(): boolean {
-		return false;
-	}
-	toggleMaximizedPanel(): void {}
-	showPart(): void {}
-	showParts(): void {}
-	hidePart(): void {}
-	hideParts(): void {}
-	getPartSize() {
-		return { width: 0, height: 0 };
-	}
-	resizePart(): void {}
+	isAuxiliaryBarMaximized(): boolean { return false; }
+	toggleMaximizedAuxiliaryBar(): void { }
+	setAuxiliaryBarMaximized(): boolean { return false; }
+	isPanelMaximized(): boolean { return false; }
+	toggleMaximizedPanel(): void { }
+	showPart(): void { }
+	showParts(): void { }
+	hidePart(): void { }
+	hideParts(): void { }
+	getPartSize() { return { width: 0, height: 0 }; }
+	resizePart(): void { }
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);
@@ -109,13 +89,9 @@ test('Modern UI contribution starts at restore and owns live window layout style
 		onDidLayout: Event.None,
 		onBeforeUnload: Event.None,
 		onDidClose: closeEmitter.event,
-		layout(): void {},
-		dispose(): void {
-			closeEmitter.fire();
-		},
-		[Symbol.dispose](): void {
-			closeEmitter.fire();
-		},
+		layout(): void { },
+		dispose(): void { closeEmitter.fire(); },
+		[Symbol.dispose](): void { closeEmitter.fire(); },
 	} as unknown as IAuxiliaryWindow;
 
 	using host = WorkbenchContributionsRegistry.createHost(services);

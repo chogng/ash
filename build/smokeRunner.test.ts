@@ -13,21 +13,10 @@ test('pnpm file and title filters survive both supported argument forms', async 
 	assert.ok(packageManager, 'Run through pnpm run test:smoke:runner.');
 	const isScript = /\.[cm]?js$/u.test(packageManager);
 	for (const separator of [[], ['--']]) {
-		const result = await execute(
-			isScript ? process.execPath : packageManager,
-			[
-				...(isScript ? [packageManager] : []),
-				'run',
-				'smoketest-no-compile',
-				...separator,
-				'test/smoke/areas/windows/remote-extension.spec.ts',
-				'--grep',
-				'product SSH resolver',
-				'--max-failures=1',
-				'--list',
-			],
-			{ cwd: repository, timeout: 30_000 },
-		);
+		const result = await execute(isScript ? process.execPath : packageManager, [
+			...(isScript ? [packageManager] : []), 'run', 'smoketest-no-compile', ...separator,
+			'test/smoke/areas/windows/remote-extension.spec.ts', '--grep', 'product SSH resolver', '--max-failures=1', '--list',
+		], { cwd: repository, timeout: 30_000 });
 		assert.match(result.stdout, /Total: 1 test in 1 file/u);
 		assert.match(result.stdout, /remote-extension\.spec\.ts.*product SSH resolver/u);
 	}
@@ -41,14 +30,10 @@ test('selected', async () => { await writeFile(process.env.ASH_RUNNER_MARKER, 'r
 `);
 	t.after(() => rm(fixture.directory, { recursive: true, force: true }));
 	for (const args of [
-		['--grep='],
-		['--grep', ''],
-		['--grep', '--list'],
-		['--grepp', 'selected'],
-		['--grep', '['],
+		['--grep='], ['--grep', ''], ['--grep', '--list'],
+		['--grepp', 'selected'], ['--grep', '['],
 		['selected.spec.ts', '--', '--grep', 'selected'],
-		['--grep', 'does-not-exist'],
-		['absent-file.spec.ts'],
+		['--grep', 'does-not-exist'], ['absent-file.spec.ts'],
 		['--pass-with-no-tests', '--grep', 'absent'],
 		['--ui'],
 	]) {
@@ -97,15 +82,12 @@ test('other OS', { tag: ${JSON.stringify(process.platform === 'darwin' ? '@win32
 });
 `);
 	t.after(() => rm(fixture.directory, { recursive: true, force: true }));
-	await writeFile(
-		join(fixture.directory, 'playwright.config.ts'),
-		`
+	await writeFile(join(fixture.directory, 'playwright.config.ts'), `
 import { testTargetExclusions } from ${JSON.stringify(join(repository, 'test/automation/testTarget.ts'))};
 export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringify(join(fixture.directory, 'results'))}, workers: 1, reporter: 'list', projects: [
   { name: 'electron-ui', grepInvert: testTargetExclusions('electron-ui', process.platform) }
 ] };
-`,
-	);
+`);
 	const selection = await invoke(fixture, ['--list']);
 	assert.equal(selection.code, 0, selection.output);
 	assert.match(selection.output, /Total: 1 test in 1 file/u);
@@ -120,13 +102,9 @@ export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringi
 	assert.equal(await readFile(fixture.marker, 'utf8'), 'launched\nsupported\n');
 });
 
-for (const [signal, exitCode] of [
-	['SIGINT', 130],
-	['SIGTERM', 143],
-] as const) {
+for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 	test(`${signal} stops the runner and detached resource descendants without stopping unrelated processes`, { skip: process.platform === 'win32', timeout: 75_000 }, async t => {
-		const fixture = await createFixture(
-			`
+		const fixture = await createFixture(`
 import { test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
@@ -147,21 +125,14 @@ test('running', async () => {
   await writeFile(process.env.ASH_RUNNER_MARKER, JSON.stringify(pids));
   await new Promise(() => {});
 });
-`,
-			120_000,
-		);
+`, 120_000);
 		const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
 		const child = start(fixture, []);
 		const result = completion(child);
-		let pids: { parent: number; child: number } | undefined;
+		let pids: { parent: number; child: number; } | undefined;
 		t.after(async () => {
 			for (const pid of [child.pid, sentinel.pid, pids?.parent, pids?.child]) {
-				if (pid)
-					try {
-						process.kill(pid, 'SIGKILL');
-					} catch (error) {
-						if (error.code !== 'ESRCH') throw error;
-					}
+				if (pid) try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
 			}
 			await result;
 			await rm(fixture.directory, { recursive: true, force: true });
@@ -176,8 +147,7 @@ test('running', async () => {
 }
 
 test('interrupting again stops a Playwright teardown that refuses to finish', { skip: process.platform === 'win32', timeout: 75_000 }, async t => {
-	const fixture = await createFixture(
-		`
+	const fixture = await createFixture(`
 import { test } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 test.afterAll(async () => {
@@ -188,14 +158,12 @@ test('running', async () => {
   await writeFile(process.env.ASH_RUNNER_MARKER, JSON.stringify([process.pid, process.ppid]));
   await new Promise(() => {});
 });
-`,
-		120_000,
-	);
+`, 120_000);
 	const child = start(fixture, []);
 	const result = completion(child);
 	let pids: number[] = [];
 	t.after(async () => {
-		for (const pid of [child.pid, ...pids]) if (pid && (await alive(pid))) process.kill(pid, 'SIGKILL');
+		for (const pid of [child.pid, ...pids]) if (pid && await alive(pid)) process.kill(pid, 'SIGKILL');
 		await result;
 		await rm(fixture.directory, { recursive: true, force: true });
 	});
@@ -209,17 +177,12 @@ test('running', async () => {
 });
 
 for (const surface of ['Electron', 'Web']) {
-	test(
-		`stopping a runner closes ${surface} and its managed backend after the worker exits`,
-		{
-			skip: !process.env.ASH_SMOKE_RUNNER_PRODUCT_TESTS || process.platform === 'win32',
-			timeout: 90_000,
-		},
-		async t => {
-			// The worker intentionally dies without closing its launcher. This covers the
-			// registry fallback instead of merely checking a normal fixture teardown.
-			const fixture = await createFixture(
-				directory => `
+	test(`stopping a runner closes ${surface} and its managed backend after the worker exits`, {
+		skip: !process.env.ASH_SMOKE_RUNNER_PRODUCT_TESTS || process.platform === 'win32', timeout: 90_000,
+	}, async t => {
+		// The worker intentionally dies without closing its launcher. This covers the
+		// registry fallback instead of merely checking a normal fixture teardown.
+		const fixture = await createFixture(directory => `
 import { test } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
@@ -242,72 +205,51 @@ test('running product', async () => {
   await writeFile(process.env.ASH_RUNNER_MARKER, JSON.stringify({ pids: [...pids], daemon }));
   await new Promise(() => {});
 });
-`,
-			);
-			const child = start(fixture, []);
-			const result = completion(child);
-			let state: { pids: number[]; daemon: { executable: string; profile: string } } | undefined;
-			t.after(async () => {
-				if (child.pid && (await alive(child.pid))) child.kill('SIGKILL');
-				if (state) {
-					await execute(state.daemon.executable, ['stop'], {
-						env: { ...process.env, ASH_HOME: state.daemon.profile },
-						timeout: 30_000,
-					});
-					for (const pid of state.pids) if (await alive(pid)) process.kill(pid, 'SIGKILL');
-				}
-				await result;
-				await rm(fixture.directory, { recursive: true, force: true });
-			});
-			try {
-				state = JSON.parse(await waitForFile(fixture.marker));
-			} catch (error) {
-				child.kill('SIGINT');
-				throw new Error((await result).output, { cause: error });
+`);
+		const child = start(fixture, []);
+		const result = completion(child);
+		let state: { pids: number[]; daemon: { executable: string; profile: string; }; } | undefined;
+		t.after(async () => {
+			if (child.pid && await alive(child.pid)) child.kill('SIGKILL');
+			if (state) {
+				await execute(state.daemon.executable, ['stop'], { env: { ...process.env, ASH_HOME: state.daemon.profile }, timeout: 30_000 });
+				for (const pid of state.pids) if (await alive(pid)) process.kill(pid, 'SIGKILL');
 			}
-			child.kill('SIGINT');
-			const stopped = await result;
-			assert.equal(stopped.code, 130, stopped.output);
-			for (const pid of state!.pids) assert.equal(await alive(pid), false, `Leaked product PID ${pid}`);
-		},
-	);
+			await result;
+			await rm(fixture.directory, { recursive: true, force: true });
+		});
+		try { state = JSON.parse(await waitForFile(fixture.marker)); }
+		catch (error) { child.kill('SIGINT'); throw new Error((await result).output, { cause: error }); }
+		child.kill('SIGINT');
+		const stopped = await result;
+		assert.equal(stopped.code, 130, stopped.output);
+		for (const pid of state!.pids) assert.equal(await alive(pid), false, `Leaked product PID ${pid}`);
+	});
 }
 
-interface Fixture {
-	directory: string;
-	marker: string;
-}
+interface Fixture { directory: string; marker: string; }
 
 async function createFixture(source: string | ((directory: string) => string), timeout = 10_000): Promise<Fixture> {
 	const directory = await mkdtemp(join(repository, 'test/.smoke-runner-'));
-	await writeFile(
-		join(directory, 'playwright.config.ts'),
-		`export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringify(join(directory, 'results'))}, timeout: ${timeout}, workers: 1, reporter: 'list', projects: [{ name: 'electron-ui' }] };`,
-	);
+	await writeFile(join(directory, 'playwright.config.ts'), `export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringify(join(directory, 'results'))}, timeout: ${timeout}, workers: 1, reporter: 'list', projects: [{ name: 'electron-ui' }] };`);
 	await writeFile(join(directory, 'selected.spec.ts'), typeof source === 'function' ? source(directory) : source);
 	return { directory, marker: join(directory, 'marker') };
 }
 
 function start(fixture: Fixture, args: string[]): ChildProcess {
 	return spawn(process.execPath, ['test/smoke/run.ts', 'electron-ui', '--config', join(fixture.directory, 'playwright.config.ts'), ...args], {
-		cwd: repository,
-		env: { ...process.env, ASH_RUNNER_MARKER: fixture.marker },
-		stdio: ['ignore', 'pipe', 'pipe'],
+		cwd: repository, env: { ...process.env, ASH_RUNNER_MARKER: fixture.marker }, stdio: ['ignore', 'pipe', 'pipe'],
 	});
 }
 
-async function invoke(fixture: Fixture, args: string[]): Promise<{ code: number | null; output: string }> {
+async function invoke(fixture: Fixture, args: string[]): Promise<{ code: number | null; output: string; }> {
 	return completion(start(fixture, args));
 }
 
-function completion(child: ChildProcess): Promise<{ code: number | null; output: string }> {
+function completion(child: ChildProcess): Promise<{ code: number | null; output: string; }> {
 	let output = '';
-	child.stdout!.on('data', data => {
-		output += data.toString();
-	});
-	child.stderr!.on('data', data => {
-		output += data.toString();
-	});
+	child.stdout!.on('data', data => { output += data.toString(); });
+	child.stderr!.on('data', data => { output += data.toString(); });
 	return new Promise((resolveExit, reject) => {
 		child.once('error', reject);
 		child.once('close', code => resolveExit({ code, output }));
@@ -323,9 +265,8 @@ async function waitForFile(path: string): Promise<string> {
 			const value = await readFile(path, 'utf8');
 			if (value) return value;
 			if (Date.now() >= deadline) throw new Error(`Marker remained empty: ${path}`);
-		} catch (error) {
-			if (error.code !== 'ENOENT' || Date.now() >= deadline) throw error;
 		}
+		catch (error) { if (error.code !== 'ENOENT' || Date.now() >= deadline) throw error; }
 		await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
 	}
 }
@@ -334,8 +275,5 @@ async function alive(pid: number): Promise<boolean> {
 	try {
 		const result = await execute('ps', ['-o', 'stat=', '-p', String(pid)]);
 		return !!result.stdout.trim() && !result.stdout.trim().startsWith('Z');
-	} catch (error) {
-		if (error.code === 1) return false;
-		throw error;
-	}
+	} catch (error) { if (error.code === 1) return false; throw error; }
 }

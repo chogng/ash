@@ -54,10 +54,7 @@ export async function prepareHostOutput(): Promise<void> {
 	await mkdir(outputRoot, { recursive: true });
 	const metadata = '{\n  "private": true,\n  "type": "module"\n}\n';
 	const packageFile = join(outputRoot, 'package.json');
-	const previous = await readFile(packageFile, 'utf8').catch(error => {
-		if (error.code !== 'ENOENT') throw error;
-		return undefined;
-	});
+	const previous = await readFile(packageFile, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; });
 	// Generated source imports use this package scope; touching unchanged metadata invalidates their compiler cache.
 	if (previous !== metadata) await writeFile(packageFile, metadata);
 	const link = join(outputRoot, 'node_modules');
@@ -66,7 +63,7 @@ export async function prepareHostOutput(): Promise<void> {
 		const metadata = await lstat(link);
 		if (!metadata.isSymbolicLink()) throw new Error(`Build dependency path is not a directory link: ${link}`);
 		try {
-			if ((await realpath(link)) === dependencies) return;
+			if (await realpath(link) === dependencies) return;
 		} catch (error) {
 			if (error?.code !== 'ENOENT') throw error;
 		}
@@ -81,9 +78,7 @@ export async function buildHost(): Promise<void> {
 	await prepareHostBuild();
 	await new Promise<void>((done, fail) => {
 		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false'], {
-			cwd: sourceRoot,
-			stdio: 'inherit',
-			windowsHide: true,
+			cwd: sourceRoot, stdio: 'inherit', windowsHide: true,
 		});
 		child.once('error', fail);
 		child.once('close', (code, signal) => {
@@ -95,7 +90,7 @@ export async function buildHost(): Promise<void> {
 }
 
 /** Successful readiness includes the output content digest used to decide whether Electron needs restarting. */
-export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void> }> {
+export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void>; }> {
 	await prepareHostBuild();
 	const completion = Promise.withResolvers<void>();
 	let compilerRun: ProcessRun | undefined;
@@ -112,7 +107,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
 	const observedFiles = new Map<string, string>();
-	const builtInputs = new Map<string, { mtime: number; content: string }>();
+	const builtInputs = new Map<string, { mtime: number; content: string; }>();
 	const changedInputs = new Set<string>();
 	const watchStarted = Date.now();
 	try {
@@ -122,9 +117,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			const watcher = watch(root, { recursive: true }, (event, file) => {
 				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
 			});
-			watcher.on('error', error => {
-				if (!closing) fail(error);
-			});
+			watcher.on('error', error => { if (!closing) fail(error); });
 			nativeDirectories.push(watcher);
 		}
 		updateFileWatches();
@@ -151,35 +144,22 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		}
 		for (const root of roots) visit(root);
 		for (const [path, watcher] of directories) {
-			if (!paths.has(path)) {
-				watcher.close();
-				directories.delete(path);
-			}
+			if (!paths.has(path)) { watcher.close(); directories.delete(path); }
 		}
 		for (const path of paths) {
 			if (directories.has(path)) continue;
 			// Poll directory timestamps for membership changes; native recursive
 			// events can miss a newly created subtree or replay initial entries.
-			directories.set(
-				path,
-				ts.sys.watchFile!(
-					path,
-					() => {
-						if (closing) return;
-						clearTimeout(structureTimer);
-						structureTimer = setTimeout(() => {
-							structureTimer = undefined;
-							try {
-								if (updateFileWatches()) requestBuild(path);
-							} catch (error) {
-								fail(error);
-							}
-						}, 100);
-					},
-					500,
-					{ watchFile: ts.WatchFileKind.DynamicPriorityPolling },
-				),
-			);
+			directories.set(path, ts.sys.watchFile!(path, () => {
+				if (closing) return;
+				clearTimeout(structureTimer);
+				structureTimer = setTimeout(() => {
+					structureTimer = undefined;
+					try {
+						if (updateFileWatches()) requestBuild(path);
+					} catch (error) { fail(error); }
+				}, 100);
+			}, 500, { watchFile: ts.WatchFileKind.DynamicPriorityPolling }));
 		}
 		return inputs;
 	}
@@ -189,10 +169,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		// roots, so a save during the first build cannot escape the pending batch.
 		const paths = updateDirectoryWatches();
 		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) paths.add(resolve(sourceRoot, path));
-		const readConfig = (path: string): string | undefined => {
-			paths.add(resolve(path));
-			return ts.sys.readFile(path);
-		};
+		const readConfig = (path: string): string | undefined => { paths.add(resolve(path)); return ts.sys.readFile(path); };
 		for (const project of projects) {
 			const path = resolve(sourceRoot, project);
 			const config = ts.readJsonConfigFile(path, readConfig);
@@ -201,21 +178,14 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		}
 		const changed = paths.size !== files.size || [...paths].some(path => !files.has(path));
 		for (const [path, watcher] of files) {
-			if (!paths.has(path)) {
-				watcher.close();
-				files.delete(path);
-			}
+			if (!paths.has(path)) { watcher.close(); files.delete(path); }
 		}
 		for (const path of paths) {
 			if (process.platform === 'win32' && !builtInputs.has(path)) {
 				const input = readInput(path);
 				if (input) builtInputs.set(path, input);
 			}
-			if (!files.has(path))
-				files.set(
-					path,
-					ts.sys.watchFile!(path, () => requestBuild(path, 'change'), 250),
-				);
+			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path, 'change'), 250));
 		}
 		return changed;
 	}
@@ -243,20 +213,15 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		pending = true;
 		console.log(`[host] Input changed: ${relative(sourceRoot, path)}`);
 		clearTimeout(timer);
-		timer = setTimeout(() => {
-			timer = undefined;
-			startBuild();
-		}, 100);
+		timer = setTimeout(() => { timer = undefined; startBuild(); }, 100);
 	}
 
 	function startBuild(): void {
 		if (closing || building) return;
-		building = build()
-			.catch(fail)
-			.finally(() => {
-				building = undefined;
-				if (!closing && pending && timer === undefined) startBuild();
-			});
+		building = build().catch(fail).finally(() => {
+			building = undefined;
+			if (!closing && pending && timer === undefined) startBuild();
+		});
 	}
 
 	async function build(): Promise<void> {
@@ -264,7 +229,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		// Check settled timestamps after debouncing: a Windows write can report a
 		// transient truncation. Compare with the last compiled snapshot, not that
 		// notification, before bypassing TS7's mtime-based incremental gate.
-		const inputs = new Map<string, { mtime: number; content: string }>();
+		const inputs = new Map<string, { mtime: number; content: string; }>();
 		for (const path of changedInputs) {
 			const input = readInput(path);
 			if (input) inputs.set(path, input);
@@ -280,10 +245,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
 		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], {
-			cwd: sourceRoot,
-			stdio: ['ignore', 'pipe', 'pipe'],
-			windowsHide: true,
-			detached: process.platform !== 'win32',
+			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
 		});
 		const stdout = createInterface({ input: child.stdout });
 		const stderr = createInterface({ input: child.stderr });
@@ -291,20 +253,11 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		stderr.on('line', line => console.error(`[host] ${line}`));
 		const result = new Promise<boolean>((done, reject) => {
 			child.once('error', reject);
-			child.once('close', code => {
-				stdout.close();
-				stderr.close();
-				done(code === 0);
-			});
+			child.once('close', code => { stdout.close(); stderr.close(); done(code === 0); });
 		});
 		let succeeded: boolean;
-		try {
-			await run.own(child);
-			succeeded = await result;
-		} finally {
-			await run.close();
-			compilerRun = undefined;
-		}
+		try { await run.own(child); succeeded = await result; }
+		finally { await run.close(); compilerRun = undefined; }
 		if (closing) return;
 		updateFileWatches();
 		if (succeeded && current === revision) {
@@ -314,15 +267,9 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		else if (current === revision) onReady(false);
 	}
 
-	function readInput(path: string): { mtime: number; content: string } | undefined {
-		try {
-			return {
-				mtime: statSync(path).mtime.getTime(),
-				content: createHash('sha256').update(readFileSync(path)).digest('hex'),
-			};
-		} catch {
-			return undefined;
-		}
+	function readInput(path: string): { mtime: number; content: string; } | undefined {
+		try { return { mtime: statSync(path).mtime.getTime(), content: createHash('sha256').update(readFileSync(path)).digest('hex') }; }
+		catch { return undefined; }
 	}
 
 	async function validate(current: number): Promise<void> {
@@ -337,16 +284,13 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 				entries.sort((left, right) => left.name.localeCompare(right.name));
 				for (const entry of entries) {
 					const path = join(directory, entry.name);
-					if (entry.isDirectory()) {
-						await collect(path);
-					} else if (entry.isFile()) {
+					if (entry.isDirectory()) { await collect(path); }
+					else if (entry.isFile()) {
 						hash.update(JSON.stringify([path, await readFile(path, 'utf8')]));
 					}
 				}
 			}
-			for (const project of ['main', 'preload']) {
-				await collect(join(outputRoot, project));
-			}
+			for (const project of ['main', 'preload']) { await collect(join(outputRoot, project)); }
 			const output = hash.digest('hex');
 			if (!closing && current === revision) onReady(true, output);
 		} catch (error) {
@@ -365,10 +309,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		clearTimeout(timer);
 		clearTimeout(structureTimer);
 		for (const watcher of [...nativeDirectories, ...directories.values(), ...files.values()]) watcher.close();
-		closing = Promise.resolve(compilerRun?.stop('SIGTERM')).then(async () => {
-			await building;
-			completion.resolve();
-		});
+		closing = Promise.resolve(compilerRun?.stop('SIGTERM')).then(async () => { await building; completion.resolve(); });
 		return closing;
 	}
 
@@ -383,9 +324,7 @@ async function prepareHostBuild(): Promise<void> {
 async function verifyPreload(): Promise<void> {
 	for (const path of [preload, join(outputRoot, 'preload/src/ash/platform/browserView/electron-browser/preload-browserView.js')]) {
 		const source = await readFile(path, 'utf8');
-		if (path.endsWith('preload-browserView.js') && /(^|\n)\s*(export|import)\s/.test(source)) {
-			throw new Error('Browser preload must be a standalone script');
-		}
+		if (path.endsWith('preload-browserView.js') && /(^|\n)\s*(export|import)\s/.test(source)) { throw new Error('Browser preload must be a standalone script'); }
 		const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(match => match.groups?.module);
 		if ([...source.matchAll(/\brequire\s*\(/g)].length !== imports.length) {
 			throw new Error('Sandbox preload contains a non-literal runtime import');

@@ -21,6 +21,7 @@ interface RemoteAgentHostConnectionOptions {
 
 /** Owns one extension-resolved remote endpoint, independently of the local carrier. */
 export class RemoteAgentHostService extends Disposable {
+
 	private readonly reconnected = this._register(new Emitter<void>());
 	public readonly onDidReconnect = this.reconnected.event;
 	public readonly client: AppServerProtocolClient;
@@ -38,22 +39,18 @@ export class RemoteAgentHostService extends Disposable {
 		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, options));
 		this.client = new AppServerProtocolClient(transport, options.protocol, createAppServerFrameDecoder(workers));
 		this._register(toDisposable(() => this.client.dispose()));
-		this.recovery = this._register(
-			new AppServerConnectionRecovery(
-				this.client,
-				() => this.open(),
-				(message, error) => this.logService.error('app-server', message, error),
-			),
-		);
-		this._register(
-			options.onDidReconnectLocal(() => {
-				if (this.isDisposed) return;
-				this.localConnectionEpoch++;
-				// Authority resolution and extension initialization belong to this local incarnation.
-				this.client.disconnect();
-				void this.connect().catch(() => {});
-			}),
-		);
+		this.recovery = this._register(new AppServerConnectionRecovery(
+			this.client,
+			() => this.open(),
+			(message, error) => this.logService.error('app-server', message, error),
+		));
+		this._register(options.onDidReconnectLocal(() => {
+			if (this.isDisposed) return;
+			this.localConnectionEpoch++;
+			// Authority resolution and extension initialization belong to this local incarnation.
+			this.client.disconnect();
+			void this.connect().catch(() => { });
+		}));
 	}
 
 	public connect(): Promise<void> {
@@ -66,7 +63,7 @@ export class RemoteAgentHostService extends Disposable {
 	}
 
 	private async open(): Promise<void> {
-		for (;;) {
+		for (; ;) {
 			this.assertNotDisposed();
 			const localConnectionEpoch = this.localConnectionEpoch;
 			this.client.disconnect();
@@ -85,9 +82,7 @@ export class RemoteAgentHostService extends Disposable {
 				this.assertNotDisposed();
 				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
 				this.logService.debug('app-server', 'Remote App Server connection initialized');
-				if (this.hasInitialized) {
-					this.reconnected.fire();
-				}
+				if (this.hasInitialized) { this.reconnected.fire(); }
 				this.hasInitialized = true;
 				return;
 			} catch (error) {

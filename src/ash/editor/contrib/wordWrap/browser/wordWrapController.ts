@@ -19,13 +19,11 @@ export class WordWrapController extends Disposable {
 	) {
 		super();
 		this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event)));
-		this._register(
-			this.codeEditorService.onDidChangeTransientModelProperty(model => {
-				if (model === this.viewport.textModel) {
-					this.applyTransientState();
-				}
-			}),
-		);
+		this._register(this.codeEditorService.onDidChangeTransientModelProperty(model => {
+			if (model === this.viewport.textModel) {
+				this.applyTransientState();
+			}
+		}));
 		this.applyTransientState();
 	}
 
@@ -38,7 +36,9 @@ export class WordWrapController extends Disposable {
 		}
 		this.codeEditorService.setTransientModelProperty(model, transientWordWrapState, next);
 		const enabled = this.viewport.lineWrapping === EditorLineWrapping.On;
-		this.viewport.announceAccessibilityStatus(enabled ? localize('wordWrap.enabled', 'Word wrap on') : localize('wordWrap.disabled', 'Word wrap off'));
+		this.viewport.announceAccessibilityStatus(enabled
+			? localize('wordWrap.enabled', 'Word wrap on')
+			: localize('wordWrap.disabled', 'Word wrap off'));
 	}
 
 	private applyTransientState(): void {
@@ -55,9 +55,8 @@ export class WordWrapController extends Disposable {
 }
 
 registerEditorContribution({
-	id: 'editor.contrib.wordWrap',
-	install: context => {
+	id: 'editor.contrib.wordWrap', install: context => {
 		if (context.kind !== 'text') return;
 		return context.instantiationService.createInstance(WordWrapController, context.controller.element, context.view, context.editor);
-	},
+	}
 });

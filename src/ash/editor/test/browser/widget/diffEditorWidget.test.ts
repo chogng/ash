@@ -34,11 +34,13 @@ import { installEditorTestDom } from '../editorTestGlobals.js';
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
-const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'], { ResizeObserver: TestResizeObserver });
+const installedGlobals = installEditorTestDom(browserEnvironment, [
+	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
+], { ResizeObserver: TestResizeObserver });
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 
 await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
@@ -49,11 +51,7 @@ suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
 });
-const diffOptions: IDocumentDiffProviderOptions = {
-	ignoreTrimWhitespace: false,
-	maxComputationTimeMs: 0,
-	computeMoves: false,
-};
+const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 const enabledAccessibilityService: IAccessibilityService = {
 	onDidChangeScreenReaderOptimized: Event.None,
@@ -65,9 +63,9 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 test('DiffEditorWidget colors inline removed lines and refreshes their tokens without replacing the accessible zone', async () => {
@@ -79,10 +77,7 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 		languageIds: ['diff-colors'],
 		provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType, modifiers: [] }] }),
 	});
-	using original = new TextModel('before', {
-		languageId: 'diff-colors',
-		tokenization: { syntaxProviderRegistry: providers },
-	});
+	using original = new TextModel('before', { languageId: 'diff-colors', tokenization: { syntaxProviderRegistry: providers } });
 	using modified = new TextModel('after');
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
@@ -99,22 +94,12 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 
 	const unchangedToken = removedLine.firstElementChild;
-	original.deltaDecorations(
-		[],
-		[
-			{
-				range: new Range(1, 1, 1, 7),
-				options: { description: 'unrelated margin', linesDecorationsClassName: 'unrelated-margin' },
-			},
-		],
-	);
+	original.deltaDecorations([], [{ range: new Range(1, 1, 1, 7), options: { description: 'unrelated margin', linesDecorationsClassName: 'unrelated-margin' } }]);
 	assert.strictEqual(removedLine.firstElementChild, unchangedToken);
 
 	let decorationQueries = 0;
 	let decorationChanges = 0;
-	using decorationListener = editor.originalEditor.onDidChangeModelDecorations(() => {
-		decorationChanges += 1;
-	});
+	using decorationListener = editor.originalEditor.onDidChangeModelDecorations(() => { decorationChanges += 1; });
 	const getLineDecorations = editor.originalEditor.getLineDecorations.bind(editor.originalEditor);
 	editor.originalEditor.getLineDecorations = lineNumber => {
 		decorationQueries += 1;
@@ -129,15 +114,7 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	// Resetting tokenization may also refresh bracket decorations; only those
 	// owner notifications should query this row's decorations again.
 	assert.equal(decorationQueries, decorationChanges);
-	const [decorationId] = original.deltaDecorations(
-		[],
-		[
-			{
-				range: new Range(1, 1, 1, 2),
-				options: { description: 'inline change', inlineClassName: 'changed-inline-decoration' },
-			},
-		],
-	);
+	const [decorationId] = original.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'inline change', inlineClassName: 'changed-inline-decoration' } }]);
 	assert.ok(decorationQueries > 0);
 	assert.equal(removedLine.querySelector('.changed-inline-decoration')?.textContent, 'b');
 	original.deltaDecorations([decorationId], []);
@@ -149,23 +126,14 @@ test('inline token batches refresh only deleted rows in the changed range', asyn
 	const state: IState = { clone: () => state, equals: other => other === state };
 	using registration = TokenizationRegistry.register('diff-ranges', {
 		getInitialState: () => state,
-		tokenize: (_line, _hasEOL, state) => ({
-			tokens: [{ offset: 0, type: 'keyword', language: 'diff-ranges' }],
-			endState: state,
-		}),
+		tokenize: (_line, _hasEOL, state) => ({ tokens: [{ offset: 0, type: 'keyword', language: 'diff-ranges' }], endState: state }),
 	});
-	using original = new TextModel(Array.from({ length: 200 }, (_, index) => `before ${index}`).join('\n'), {
-		languageId: 'diff-ranges',
-	});
+	using original = new TextModel(Array.from({ length: 200 }, (_, index) => `before ${index}`).join('\n'), { languageId: 'diff-ranges' });
 	using modified = new TextModel(Array.from({ length: 200 }, (_, index) => `after ${index}`).join('\n'));
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using editor = services.createInstance(DiffEditorWidget, {
-		container: browserEnvironment.window.document.createElement('main'),
-		model,
-		renderSideBySide: false,
-	});
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model, renderSideBySide: false });
 	editor.layout({ width: 400, height: 80 });
 	const lines = editor.element.querySelectorAll('.stanza-diff-inline-original-line');
 	assert.equal(lines.length, 200);
@@ -192,53 +160,21 @@ test('inline token batches refresh only deleted rows in the changed range', asyn
 test('inline removed lines follow semantic theme styles and coloring settings while retaining their difference marks', async () => {
 	using services = createServices();
 	using providers = new SyntaxProviderRegistry();
-	using syntax = providers.register({
-		id: 'test.diff-theme',
-		languageIds: ['diff-theme'],
-		provideTokens: () => ({
-			tokens: [
-				{
-					range: new Range(1, 1, 1, 7),
-					tokenType: 'keyword',
-					modifiers: [],
-					presentation: { foreground: '#0000ff' },
-				},
-			],
-		}),
-	});
+	using syntax = providers.register({ id: 'test.diff-theme', languageIds: ['diff-theme'], provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'keyword', modifiers: [], presentation: { foreground: '#0000ff' } }] }) });
 	const features = services.get(ILanguageFeaturesService);
 	let semanticType = 'variable';
-	using semantic = features.documentSemanticTokensProvider.register('diff-theme', {
-		provideSemanticTokens: () => ({
-			tokens: [{ range: new Range(1, 1, 1, 7), tokenType: semanticType, modifiers: [] }],
-		}),
-	});
-	using original = new TextModel('before', {
-		languageId: 'diff-theme',
-		tokenization: {
-			syntaxProviderRegistry: providers,
-			documentSemanticTokensProvider: features.documentSemanticTokensProvider,
-		},
-	});
+	using semantic = features.documentSemanticTokensProvider.register('diff-theme', { provideSemanticTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: semanticType, modifiers: [] }] }) });
+	using original = new TextModel('before', { languageId: 'diff-theme', tokenization: { syntaxProviderRegistry: providers, documentSemanticTokensProvider: features.documentSemanticTokensProvider } });
 	using modified = new TextModel('after');
 	await original.tokenization.whenReady(new AbortController().signal);
 	await original.tokenization.semanticTokens!.requestTokens('diff-theme');
 	const themes = services.get(IThemeService) as TestThemeService;
-	const theme = {
-		...darkColorTheme,
-		semanticHighlighting: true,
-		tokenColorMap: ['', '#ff0000'],
-		getTokenStyleMetadata: () => ({ foreground: 1, bold: true }),
-	};
+	const theme = { ...darkColorTheme, semanticHighlighting: true, tokenColorMap: ['', '#ff0000'], getTokenStyleMetadata: () => ({ foreground: 1, bold: true }) };
 	themes.setColorTheme(theme);
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using editor = services.createInstance(DiffEditorWidget, {
-		container: browserEnvironment.window.document.createElement('main'),
-		model,
-		renderSideBySide: false,
-	});
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model, renderSideBySide: false });
 	editor.layout({ width: 400, height: 80 });
 	const removedLine = editor.element.querySelector('.stanza-diff-inline-original-line')!;
 	const style = () => {
@@ -280,24 +216,15 @@ test('DiffEditorWidget owns two editors, keeps source models caller-owned, and r
 	assert.equal(editor.modifiedEditor.getOption(EditorOption.readOnly), false);
 	assert.equal(editor.originalEditor.getOption(EditorOption.scrollBeyondLastLine), true);
 	assert.equal(editor.element.querySelectorAll('.stanza-editor').length, 2);
-	assert.equal(
-		original.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-removed'),
-		true,
-	);
-	assert.equal(
-		modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-inline-added'),
-		true,
-	);
+	assert.equal(original.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-removed'), true);
+	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-inline-added'), true);
 	assert.equal(editor.nextChange(), 1);
 	assert.match(editor.element.querySelector('.stanza-diff-editor-accessibility-status')?.textContent ?? '', /Change 1 of 1/);
 
 	modified.applyEdits([{ range: new Range(2, 1, 2, 10), text: 'old value' }]);
 	await waitForReady(model);
 	assert.equal(editor.diff?.hunks.length, 0);
-	assert.equal(
-		modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-added'),
-		false,
-	);
+	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-added'), false);
 	editor.dispose();
 	assert.deepEqual(lifecycle, ['add', 'remove']);
 	assert.deepEqual(codeEditorService.listDiffEditors(), []);
@@ -314,10 +241,7 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 	await waitForReady(model);
 	const container = browserEnvironment.window.document.createElement('main');
 	using editor = services.createInstance(DiffEditorWidget, {
-		container,
-		model,
-		splitViewDefaultRatio: 0.3,
-		enableSplitViewResizing: false,
+		container, model, splitViewDefaultRatio: 0.3, enableSplitViewResizing: false,
 	});
 	editor.layout({ width: 530, height: 80 });
 	assert.equal(editor.element.style.getPropertyValue('--ash-diff-center-width'), '35px');
@@ -403,11 +327,8 @@ test('inline diff aligns both number columns through deletions, additions and la
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
 	using editor = services.createInstance(DiffEditorWidget, {
-		container: browserEnvironment.window.document.createElement('main'),
-		model,
-		renderSideBySide: false,
-		lineHeight: 20,
-		scrollBeyondLastLine: false,
+		container: browserEnvironment.window.document.createElement('main'), model,
+		renderSideBySide: false, lineHeight: 20, scrollBeyondLastLine: false,
 	});
 	editor.layout({ width: 500, height: 40 });
 	assert.equal(editor.originalEditor.getTopForLineNumber(3), editor.modifiedEditor.getTopForLineNumber(2));
@@ -473,28 +394,19 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 	editor.layout({ width: 800, height: 600 });
 
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
-	assert.equal(
-		editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber),
-		false,
-	);
+	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
 	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
 	(editor.element.querySelector('.ash-diff-hidden-region-above') as HTMLButtonElement).click();
 	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '32 hidden lines');
 	(editor.element.querySelector('.ash-diff-hidden-region-disclosure button') as HTMLButtonElement).click();
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 0);
-	assert.equal(
-		editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber),
-		true,
-	);
+	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), true);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-fold-unchanged').length, 2);
 	(editor.modifiedEditor.getDomNode().querySelector('.ash-diff-fold-unchanged button') as HTMLButtonElement).click();
 	assert.equal(editor.element.querySelectorAll('.ash-diff-fold-unchanged').length, 0);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
 	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
-	assert.equal(
-		editor.modifiedEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber),
-		false,
-	);
+	assert.equal(editor.modifiedEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
 	assert.equal(original.getValue(), lines.join('\n'));
 });
 
@@ -516,10 +428,7 @@ for (const [originalText, modifiedText] of [
 		using computation = new WidgetTestDiffComputationService();
 		using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 		await waitForReady(model);
-		using editor = services.createInstance(DiffEditorWidget, {
-			container: browserEnvironment.window.document.createElement('main'),
-			model,
-		});
+		using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
 		editor.revert(model.diff!.changes[0]!);
 		await waitForReady(model);
 		assert.equal(modified.getValue(), originalText);
@@ -535,10 +444,7 @@ test('DiffEditorWidget rejects stale hunk and character edits while recomputing 
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using editor = services.createInstance(DiffEditorWidget, {
-		container: browserEnvironment.window.document.createElement('main'),
-		model,
-	});
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
 	const stale = model.diff!.changes[0]!;
 	model.refresh();
 	editor.revert(stale);
@@ -560,10 +466,7 @@ test('DiffEditorWidget uses registered presentation defaults and preserves expli
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	using editor = services.createInstance(DiffEditorWidget, {
-		container: browserEnvironment.window.document.createElement('main'),
-		model,
-	});
+	using editor = services.createInstance(DiffEditorWidget, { container: browserEnvironment.window.document.createElement('main'), model });
 	const configuration = services.get(IConfigurationService);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
 	await configuration.updateValue('diffEditor.renderMarginRevertIcon', false);
@@ -624,15 +527,10 @@ class WidgetTestDiffComputationService implements IDocumentDiffProvider {
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
 		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
-		return {
-			identical: original.getValue() === modified.getValue(),
-			quitEarly: result.hitTimeout,
-			changes: result.changes,
-			moves: result.moves,
-		};
+		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

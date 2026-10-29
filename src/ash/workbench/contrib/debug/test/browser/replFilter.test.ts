@@ -66,18 +66,5 @@ suite('Debug Console filtering', () => {
 });
 
 function entry(output: string, kind: DebugConsoleEntry['kind'] = 'output'): DebugConsoleEntry {
-	return {
-		id: 1,
-		sessionId: 'session',
-		kind,
-		output,
-		category: 'console',
-		parentId: null,
-		collapsed: false,
-		variablesReference: null,
-		source: null,
-		line: null,
-		column: null,
-		data: null,
-	};
+	return { id: 1, sessionId: 'session', kind, output, category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null };
 }

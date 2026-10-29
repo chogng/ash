@@ -12,15 +12,15 @@ import { type TextMeasurer } from '../../../../common/viewModel.js';
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 
 test('OverviewRuler projects standard zones through its canvas and layout API', () => {
-	const paint: { readonly fill: string; readonly top: number; readonly height: number }[] = [];
+	const paint: { readonly fill: string; readonly top: number; readonly height: number; }[] = [];
 	browserEnvironment.window.HTMLCanvasElement.prototype.getContext = function () {
 		const context = {
 			fillStyle: '',
-			clearRect(): void {},
-			beginPath(): void {},
-			moveTo(): void {},
-			lineTo(): void {},
-			stroke(): void {},
+			clearRect(): void { },
+			beginPath(): void { },
+			moveTo(): void { },
+			lineTo(): void { },
+			stroke(): void { },
 			fillRect(_left: number, top: number, _width: number, height: number): void {
 				paint.push({ fill: String(context.fillStyle), top, height });
 			},
@@ -35,7 +35,10 @@ test('OverviewRuler projects standard zones through its canvas and layout API', 
 	using ruler = view.createOverviewRuler('test-overview-ruler');
 	container.append(ruler.getDomNode());
 	ruler.setLayout({ top: 2, right: 3, width: 12, height: 80 });
-	ruler.setZones([new OverviewRulerZone(2, 2, 0, '#cca700'), new OverviewRulerZone(4, 4, 0, '#f48771')]);
+	ruler.setZones([
+		new OverviewRulerZone(2, 2, 0, '#cca700'),
+		new OverviewRulerZone(4, 4, 0, '#f48771'),
+	]);
 
 	const canvas = ruler.getDomNode() as HTMLCanvasElement;
 	assert.equal(canvas.className, 'test-overview-ruler');
@@ -44,22 +47,15 @@ test('OverviewRuler projects standard zones through its canvas and layout API', 
 	assert.equal(canvas.style.width, '12px');
 	assert.equal(canvas.style.height, '80px');
 	assert.deepEqual(paint.map(entry => entry.fill).slice(-2), ['#cca700', '#f48771']);
-	assert.equal(
-		paint.slice(-2).every(entry => entry.height >= 4),
-		true,
-	);
+	assert.equal(paint.slice(-2).every(entry => entry.height >= 4), true);
 	dom.window.close();
 });
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;
-	refresh(): boolean {
-		return false;
-	}
-	measureLineWidth(text: string): number {
-		return [...text].length * 10;
-	}
+	refresh(): boolean { return false; }
+	measureLineWidth(text: string): number { return [...text].length * 10; }
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

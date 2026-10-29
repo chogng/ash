@@ -88,14 +88,15 @@ class FakeElement extends FakeNode {
 
 	contains(candidate: Node | null): boolean {
 		const element = candidate as unknown as FakeElement | null;
-		return element === this || this.children.includes(element as FakeElement);
+		return element === this ||
+			this.children.includes(element as FakeElement);
 	}
 
 	focus(): void {
 		this.ownerDocument.activeElement = this;
 	}
 
-	scrollTo(): void {}
+	scrollTo(): void { }
 }
 
 Object.defineProperty(globalThis, 'Node', {
@@ -110,7 +111,12 @@ Object.defineProperty(globalThis, 'window', {
 	value: fakeWindow,
 });
 
-const { FocusNavigationBoundary, FocusNavigationDirection, getTabbableElements, moveFocus } = await import('../../browser/focus.js');
+const {
+	FocusNavigationBoundary,
+	FocusNavigationDirection,
+	getTabbableElements,
+	moveFocus,
+} = await import('../../browser/focus.js');
 
 test('tabbable elements follow positive tabindex then DOM order', () => {
 	const normal = new FakeElement(fakeDocument, 'BUTTON', 0);
@@ -121,7 +127,10 @@ test('tabbable elements follow positive tabindex then DOM order', () => {
 	const container = new FakeElement(fakeDocument, 'DIV', -1);
 	container.setChildren([normal, second, first, disabled, hidden]);
 
-	assert.deepEqual(getTabbableElements(container as unknown as ParentNode), [first, second, normal]);
+	assert.deepEqual(
+		getTabbableElements(container as unknown as ParentNode),
+		[first, second, normal],
+	);
 });
 
 test('moveFocus wraps explicitly at the container boundary', () => {
@@ -132,7 +141,11 @@ test('moveFocus wraps explicitly at the container boundary', () => {
 	container.setChildren([normal, second, first]);
 	normal.focus();
 
-	const focused = moveFocus(container as unknown as ParentNode, FocusNavigationDirection.Forward, FocusNavigationBoundary.Wrap);
+	const focused = moveFocus(
+		container as unknown as ParentNode,
+		FocusNavigationDirection.Forward,
+		FocusNavigationBoundary.Wrap,
+	);
 
 	assert.equal(focused, first);
 	assert.equal(fakeDocument.activeElement, first);

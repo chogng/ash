@@ -2,6 +2,7 @@ import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
 import { expect } from '@playwright/test';
 
+
 test('decoration icons follow font product themes while retaining the label and icon', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -47,21 +48,20 @@ test('decoration icons follow font product themes while retaining the label and 
 	expect(errors).toEqual([]);
 });
 
-for (const backend of ['rust', 'offline'])
-	test(`Tree-sitter applies current theme rules after edits and in a new document (${backend})`, async ({ page }) => {
-		const errors: string[] = [];
-		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/themes.html?backend=${backend}`);
-		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		expect(await page.evaluate(() => window.tokenizeWithSyntax())).toEqual([
-			{ type: 'keyword', modifiers: [] },
-			{ type: 'keyword', modifiers: [], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
-			{ type: 'keyword', modifiers: [], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
-			{ type: 'string', modifiers: [] },
-			{ type: 'string', modifiers: [] },
-		]);
-		expect(errors).toEqual([]);
-	});
+for (const backend of ['rust', 'offline']) test(`Tree-sitter applies current theme rules after edits and in a new document (${backend})`, async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto(`/themes.html?backend=${backend}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	expect(await page.evaluate(() => window.tokenizeWithSyntax())).toEqual([
+		{ type: 'keyword', modifiers: [] },
+		{ type: 'keyword', modifiers: [], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
+		{ type: 'keyword', modifiers: [], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
+		{ type: 'string', modifiers: [] },
+		{ type: 'string', modifiers: [] },
+	]);
+	expect(errors).toEqual([]);
+});
 
 test('extension file icons load a real font and update existing labels on theme changes', async ({ page }) => {
 	const errors: string[] = [];
@@ -81,13 +81,12 @@ test('extension file icons load a real font and update existing labels on theme 
 		element.textContent = 'File';
 		root.append(element);
 	});
-	const suggestionStyle = async () =>
-		suggestionIcon.evaluate(element => ({
-			labelSize: getComputedStyle(element).fontSize,
-			iconContent: getComputedStyle(element, '::before').content,
-			iconColor: getComputedStyle(element, '::before').color,
-			iconFont: getComputedStyle(element, '::before').fontFamily,
-		}));
+	const suggestionStyle = async () => suggestionIcon.evaluate(element => ({
+		labelSize: getComputedStyle(element).fontSize,
+		iconContent: getComputedStyle(element, '::before').content,
+		iconColor: getComputedStyle(element, '::before').color,
+		iconFont: getComputedStyle(element, '::before').fontFamily,
+	}));
 	const darkSuggestion = await suggestionStyle();
 	expect(darkSuggestion.labelSize).toBe('0px');
 	expect(darkSuggestion.iconContent).not.toBe('none');
@@ -176,17 +175,13 @@ test('Font icon select box filters, navigates, selects, and follows product icon
 	expect(errors).toEqual([]);
 });
 
+
 test('Tree-sitter tokenizes hypothetical lines in context without changing the document', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.previewWithRustSyntax())).toEqual({
-		hasString: true,
-		hasKeyword: true,
-		unchanged: true,
-		text: 'const text = `start\nend`;\nif (true) {}',
-	});
+	expect(await page.evaluate(() => window.previewWithRustSyntax())).toEqual({ hasString: true, hasKeyword: true, unchanged: true, text: 'const text = `start\nend`;\nif (true) {}' });
 	expect(errors).toEqual([]);
 });
 

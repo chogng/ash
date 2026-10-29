@@ -6,14 +6,7 @@ import type { ExtensionThemeSource } from './extensionTheme.js';
 import type { ExtensionDebugAdapterSource } from './extensionDebugAdapter.js';
 import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } from './extensionFileTemplate.js';
 import type { IExtensionPointUser } from './extensionsRegistry.js';
-export type {
-	ExtensionDebugAdapterContribution,
-	ExtensionGrammarContribution,
-	ExtensionLanguageContribution,
-	ExtensionManifest,
-	ExtensionSnippetContribution,
-	ExtensionThemeContribution,
-} from './extensionManifest.js';
+export type { ExtensionDebugAdapterContribution, ExtensionGrammarContribution, ExtensionLanguageContribution, ExtensionManifest, ExtensionSnippetContribution, ExtensionThemeContribution } from './extensionManifest.js';
 export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from './extensionDebugAdapter.js';
 export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource } from './extensionTheme.js';
 export { parseExtensionTheme } from './extensionTheme.js';
@@ -36,7 +29,7 @@ export interface ExtensionDescriptor {
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
 	/** Backend-attested Plugin executable identity; packageSha256 keeps its catalog domain. */
-	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string };
+	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string; };
 }
 
 export interface ExtensionDiagnostic {

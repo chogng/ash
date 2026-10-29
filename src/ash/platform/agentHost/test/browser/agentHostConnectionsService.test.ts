@@ -30,19 +30,10 @@ test('host registry projects the selected ambient host and independent same-serv
 		{ id: 'nested', connection: nested, host: undefined, state: 'initializing' },
 	];
 	const renderer = {
-		...api,
-		appServer: { ...api.appServer, getConnectionState: () => initialState.p, onConnectionState: state.event },
-		agentHosts: {
-			get connections() {
-				return entries;
-			},
-			onDidChangeConnections: changed.event,
-			connect: async () => host,
-			disconnect: () => {
-				throw new Error('Read-only registry must not retire endpoints');
-			},
-			reconnect: async () => {},
-		},
+		...api, appServer: { ...api.appServer, getConnectionState: () => initialState.p, onConnectionState: state.event }, agentHosts: {
+			get connections() { return entries; }, onDidChangeConnections: changed.event,
+			connect: async () => host, disconnect: () => { throw new Error('Read-only registry must not retire endpoints'); }, reconnect: async () => { },
+		}
 	};
 	const service = lifetime.add(new AgentHostConnectionsService(renderer));
 	let updates = 0;
@@ -75,7 +66,5 @@ test('ambient host labels follow the Chinese catalog', () => {
 	try {
 		using service = new AgentHostConnectionsService(createDisconnectedRendererApi());
 		assert.equal(service.connections[0]!.name, '当前窗口');
-	} finally {
-		resetNlsResolver();
-	}
+	} finally { resetNlsResolver(); }
 });

@@ -8,13 +8,9 @@ import type { LanguagePackIndexEntry } from '../common/languagePackContract.js';
 export class BrowserLanguagePackStore implements ILanguagePackStore {
 	public async read(locale: string): Promise<LanguagePackCatalog | undefined> {
 		const value = await this.transact('readonly', store => store.get(locale));
-		if (value === undefined) {
-			return undefined;
-		}
+		if (value === undefined) { return undefined; }
 		const catalog = isRecord(value) && 'catalog' in value ? parseLanguagePackIndexEntry(value)?.catalog : parseLanguagePackCatalog(value);
-		if (!catalog || catalog.locale !== locale) {
-			throw new Error(`Invalid display language resource: ${locale}`);
-		}
+		if (!catalog || catalog.locale !== locale) { throw new Error(`Invalid display language resource: ${locale}`); }
 		return catalog;
 	}
 
@@ -30,16 +26,14 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 	}
 
 	public async readIndex(): Promise<readonly LanguagePackIndexEntry[]> {
-		const values = (await this.transact('readonly', store => store.getAll())) as unknown[];
+		const values = await this.transact('readonly', store => store.getAll()) as unknown[];
 		return values.map(parseLanguagePackIndexEntry).filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
 	}
 
 	public async replace(entries: readonly LanguagePackIndexEntry[]): Promise<void> {
 		await this.transact('readwrite', store => {
 			const cleared = store.clear();
-			for (const entry of entries) {
-				store.put(entry);
-			}
+			for (const entry of entries) { store.put(entry); }
 			return cleared;
 		});
 	}
@@ -59,8 +53,6 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 				transaction.onerror = () => reject(transaction.error);
 				transaction.onabort = () => reject(transaction.error);
 			});
-		} finally {
-			database.close();
-		}
+		} finally { database.close(); }
 	}
 }

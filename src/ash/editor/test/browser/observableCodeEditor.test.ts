@@ -13,16 +13,13 @@ const { observableCodeEditor } = await import('../../browser/observableCodeEdito
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 
+
 test('observable content notifications expose the updated cursor and view', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('long content '.repeat(40));
-	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!,
-		model,
-		lineWrapping: EditorLineWrapping.On,
-	});
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineWrapping: EditorLineWrapping.On });
 	editor.layout({ width: 180, height: 100 });
 	editor.setPosition(model.positionAt(model.length));
 	using observableEditor = observableCodeEditor(editor);
@@ -57,7 +54,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.value.get(), 'beta');
 	assert.equal(observableEditor.valueIsEmpty.get(), false);
 
-	editor.setSelection(Selection.fromPositions(new Position(0 + 1, 2 + 1)));
+	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (2) + 1)));
 	assert.equal(observableEditor.cursorPosition.get()?.column, 3);
 
 	observableEditor.value.set('');
@@ -123,10 +120,7 @@ test('observable code editor owns reactive decorations and follows editor dispos
 	const source = observableValue('decorations', [{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } }]);
 	using decorationOwner = observableEditor.setDecorations(source);
 
-	assert.deepEqual(
-		model.getAllDecorations().map(decoration => decoration.range),
-		[new Range(1, 1, 1, 3)],
-	);
+	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.range), [new Range(1, 1, 1, 3)]);
 	source.set([]);
 	assert.equal(model.getAllDecorations().length, 0);
 
@@ -157,14 +151,7 @@ test('observable code editor follows model attachment changes without retaining 
 	assert.equal(values.at(-1), `${second.uri}:current`);
 
 	editor.setModel(null);
-	assert.deepEqual(
-		{
-			model: observableEditor.model.get(),
-			value: observableEditor.value.get(),
-			selection: observableEditor.cursorSelection.get(),
-		},
-		{ model: null, value: '', selection: null },
-	);
+	assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get(), selection: observableEditor.cursorSelection.get() }, { model: null, value: '', selection: null });
 	editor.setModel(first);
 	assert.strictEqual(observableEditor.model.get(), first);
 	assert.equal(observableEditor.value.get(), 'stale');
@@ -187,16 +174,10 @@ test('observable decorations follow the attached model and release old ranges', 
 	assert.equal(first.getAllDecorations().length, 0);
 	assert.equal(second.getAllDecorations().length, 1);
 	source.set([{ range: new Range(1, 2, 1, 3), options: { description: 'moved' } }]);
-	assert.deepEqual(
-		second.getAllDecorations().map(decoration => decoration.range),
-		[new Range(1, 2, 1, 3)],
-	);
+	assert.deepEqual(second.getAllDecorations().map(decoration => decoration.range), [new Range(1, 2, 1, 3)]);
 	editor.setModel(null);
 	assert.equal(second.getAllDecorations().length, 0);
 	editor.setModel(first);
-	assert.deepEqual(
-		first.getAllDecorations().map(decoration => decoration.range),
-		[new Range(1, 2, 1, 3)],
-	);
+	assert.deepEqual(first.getAllDecorations().map(decoration => decoration.range), [new Range(1, 2, 1, 3)]);
 	dom.window.close();
 });

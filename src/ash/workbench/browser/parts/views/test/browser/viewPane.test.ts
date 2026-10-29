@@ -12,9 +12,7 @@ test('ViewPane progress follows delay, body visibility, completion and disposal'
 	try {
 		const { ViewPane } = await import('../../viewPane.js');
 		class ProgressPane extends ViewPane {
-			constructor() {
-				super(dom.window.document.body, { id: 'progress', title: 'Search' });
-			}
+			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
 		}
 		using pane = new ProgressPane();
 		pane.setVisible(true);
@@ -65,9 +63,7 @@ test('ViewPane keeps progress until all overlapping promises settle, including f
 	try {
 		const { ViewPane } = await import('../../viewPane.js');
 		class ProgressPane extends ViewPane {
-			constructor() {
-				super(dom.window.document.body, { id: 'progress', title: 'Search' });
-			}
+			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
 		}
 		using pane = new ProgressPane();
 		pane.setVisible(true);
@@ -191,13 +187,11 @@ test('PaneView reallocates sibling space when a pane content minimum changes', a
 		assert.equal(view.getPaneSize(changes), 28);
 		changes.setCollapsed(false);
 		assert.ok(view.getPaneSize(changes) >= 228);
-		assert.throws(() => (changes.minimumBodySize = Number.NaN), RangeError);
-		assert.throws(() => (changes.minimumBodySize = 501), RangeError);
+		assert.throws(() => changes.minimumBodySize = Number.NaN, RangeError);
+		assert.throws(() => changes.minimumBodySize = 501, RangeError);
 		assert.equal(changes.minimumBodySize, 200);
 	} finally {
-		for (const name of installedGlobals) {
-			Reflect.deleteProperty(globalThis, name);
-		}
+		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
 		dom.window.close();
 	}
 });
@@ -216,40 +210,25 @@ test('View welcome content follows context, preserves focus, runs commands and r
 		const { CommandService } = await import('../../../../../../workbench/services/commands/common/commandService.js');
 		class WelcomePane extends ViewPane {
 			public empty = true;
-			constructor(container: HTMLElement) {
-				super(container, { id: 'welcome.test', title: 'Welcome' });
-			}
-			public override shouldShowWelcome(): boolean {
-				return this.empty;
-			}
-			public changeEmpty(empty: boolean): void {
-				this.empty = empty;
-				this.viewWelcomeState.fire();
-			}
-			public get body(): HTMLElement {
-				return this.contentElement;
-			}
+			constructor(container: HTMLElement) { super(container, { id: 'welcome.test', title: 'Welcome' }); }
+			public override shouldShowWelcome(): boolean { return this.empty; }
+			public changeEmpty(empty: boolean): void { this.empty = empty; this.viewWelcomeState.fire(); }
+			public get body(): HTMLElement { return this.contentElement; }
 		}
 		using services = new InstantiationService();
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
 		const commands = new CommandRegistry();
 		const calls: unknown[][] = [];
-		using command = commands.register('welcome.start', (_accessor, ...args) => {
-			calls.push([...args]);
-		});
+		using command = commands.register('welcome.start', (_accessor, ...args) => { calls.push([...args]); });
 		using commandService = new CommandService(services, commands);
 		services.registerInstance(ICommandService, commandService);
 		registerCodeEditorServices(services);
 		const registry = new WorkbenchViewRegistry();
-		using fallback = registry.registerViewWelcomeContent('welcome.test', {
-			content: 'No provider',
-			when: 'default',
-		});
+		using fallback = registry.registerViewWelcomeContent('welcome.test', { content: 'No provider', when: 'default' });
 		using content = registry.registerViewWelcomeContent('welcome.test', {
 			content: 'Start source control\n[Start](command:welcome.start?%5B%22folder%22%5D)',
-			when: ContextKeyExpr.has('hasFolder'),
-			precondition: ContextKeyExpr.has('ready'),
+			when: ContextKeyExpr.has('hasFolder'), precondition: ContextKeyExpr.has('ready'),
 		});
 		using pane = new WelcomePane(dom.window.document.body);
 		pane.setVisible(true);

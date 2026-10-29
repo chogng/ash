@@ -51,10 +51,10 @@ export const win32: IPath = {
 };
 
 /** Root parsing is lexical: it neither probes a filesystem nor selects its casing policy. */
-function pathRoot(path: string, windows: boolean): { device: string; root: string; tail: string } {
+function pathRoot(path: string, windows: boolean): { device: string; root: string; tail: string; } {
 	const value = windows ? path.replaceAll('\\', '/') : path;
 	const unc = windows ? /^\/\/([^/]+)\/([^/]+)(?:\/|$)/.exec(value) : null;
-	const drive = windows ? (/^[a-z]:/i.exec(value)?.[0] ?? '') : '';
+	const drive = windows ? /^[a-z]:/i.exec(value)?.[0] ?? '' : '';
 	const device = unc ? `//${unc[1]}/${unc[2]}` : drive;
 	const absolute = unc !== null || value.slice(device.length).startsWith('/');
 	const root = device + (absolute ? '/' : '');
@@ -89,7 +89,7 @@ function relativeSegments(from: string, to: string, windows: boolean): string {
 	const target = resolveSegments([to], windows);
 	const left = pathRoot(source, windows);
 	const right = pathRoot(target, windows);
-	const equal = (a: string, b: string): boolean => (windows ? a.toLowerCase() === b.toLowerCase() : a === b);
+	const equal = (a: string, b: string): boolean => windows ? a.toLowerCase() === b.toLowerCase() : a === b;
 	if (!equal(left.device, right.device)) return target;
 	const a = left.tail.split('/').filter(Boolean);
 	const b = right.tail.split('/').filter(Boolean);

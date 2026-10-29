@@ -81,12 +81,8 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 
-	async reconnect() {
-		return { kind: 'reconnected' } as const;
-	}
-	async rollbackRuntime() {
-		return { kind: 'rolledBack' } as const;
-	}
+	async reconnect() { return { kind: 'reconnected' } as const; }
+	async rollbackRuntime() { return { kind: 'rolledBack' } as const; }
 
 	emit(connection: RemoteAgentConnection): void {
 		this.connection = connection;
@@ -105,5 +101,5 @@ const TestRemoteConnectionApi: IRemoteConnectionApi = {
 	save: async connection => connection,
 	update: async (_originalName, connection) => connection,
 	remove: async () => undefined,
-	connect: async () => {},
+	connect: async () => { },
 };

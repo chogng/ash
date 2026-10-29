@@ -8,9 +8,7 @@ import { BaseStringEdit, StringEdit, StringReplacement } from './stringEdit.js';
 
 /** A text-coordinate replacement using one-based editor positions. */
 export class TextReplacement {
-	static delete(range: Range): TextReplacement {
-		return new TextReplacement(range, '');
-	}
+	static delete(range: Range): TextReplacement { return new TextReplacement(range, ''); }
 	static joinReplacements(replacements: TextReplacement[], initialValue: AbstractText): TextReplacement {
 		if (replacements.length === 0) throw new RangeError('Cannot join an empty replacement list');
 		if (replacements.length === 1) return replacements[0]!;
@@ -25,30 +23,15 @@ export class TextReplacement {
 		}
 		return new TextReplacement(Range.fromPositions(start, end), text);
 	}
-	static fromStringReplacement(replacement: StringReplacement, initialState: AbstractText): TextReplacement {
-		return new TextReplacement(initialState.getTransformer().getRange(replacement.replaceRange), replacement.newText);
-	}
-	static equals(first: TextReplacement, second: TextReplacement) {
-		return first.range.equalsRange(second.range) && first.text === second.text;
-	}
+	static fromStringReplacement(replacement: StringReplacement, initialState: AbstractText): TextReplacement { return new TextReplacement(initialState.getTransformer().getRange(replacement.replaceRange), replacement.newText); }
+	static equals(first: TextReplacement, second: TextReplacement) { return first.range.equalsRange(second.range) && first.text === second.text; }
 
-	constructor(
-		readonly range: Range,
-		readonly text: string,
-	) {}
+	constructor(readonly range: Range, readonly text: string) { }
 
-	get isEmpty(): boolean {
-		return this.range.isEmpty() && this.text.length === 0;
-	}
-	equals(other: TextReplacement): boolean {
-		return TextReplacement.equals(this, other);
-	}
-	toSingleEditOperation(): ISingleEditOperation {
-		return { range: this.range, text: this.text };
-	}
-	toEdit(): TextEdit {
-		return new TextEdit([this]);
-	}
+	get isEmpty(): boolean { return this.range.isEmpty() && this.text.length === 0; }
+	equals(other: TextReplacement): boolean { return TextReplacement.equals(this, other); }
+	toSingleEditOperation(): ISingleEditOperation { return { range: this.range, text: this.text }; }
+	toEdit(): TextEdit { return new TextEdit([this]); }
 
 	extendToCoverRange(range: Range, initialValue: AbstractText): TextReplacement {
 		if (this.range.containsRange(range)) return this;
@@ -63,9 +46,7 @@ export class TextReplacement {
 		return this.extendToCoverRange(new Range(this.range.startLineNumber, 1, endLine, initialValue.getLineLength(endLine) + 1), initialValue);
 	}
 
-	removeCommonPrefixAndSuffix(text: AbstractText): TextReplacement {
-		return this.removeCommonPrefix(text).removeCommonSuffix(text);
-	}
+	removeCommonPrefixAndSuffix(text: AbstractText): TextReplacement { return this.removeCommonPrefix(text).removeCommonSuffix(text); }
 	removeCommonPrefix(text: AbstractText): TextReplacement {
 		const oldText = text.getValueOfRange(this.range);
 		let prefixLength = commonPrefixLength(oldText, this.text);
@@ -88,28 +69,16 @@ export class TextReplacement {
 		const suffixLength = commonSuffixLength(oldRemaining, newRemaining);
 		return newRemaining.slice(0, newRemaining.length - suffixLength).length === 0;
 	}
-	toString(): string {
-		return `${this.range.toString()} -> ${JSON.stringify(this.text)}`;
-	}
+	toString(): string { return `${this.range.toString()} -> ${JSON.stringify(this.text)}`; }
 }
 
 /** A sorted, disjoint set of text-coordinate replacements. */
 export class TextEdit {
-	static replace(range: Range, text: string): TextEdit {
-		return new TextEdit([new TextReplacement(range, text)]);
-	}
-	static delete(range: Range): TextEdit {
-		return TextEdit.replace(range, '');
-	}
-	static insert(position: Position, text: string): TextEdit {
-		return TextEdit.replace(Range.fromPositions(position), text);
-	}
-	static fromStringEdit(edit: BaseStringEdit, initialState: AbstractText): TextEdit {
-		return new TextEdit(edit.replacements.map(replacement => TextReplacement.fromStringReplacement(replacement, initialState)));
-	}
-	static fromParallelReplacementsUnsorted(replacements: readonly TextReplacement[]): TextEdit {
-		return new TextEdit([...replacements].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition())));
-	}
+	static replace(range: Range, text: string): TextEdit { return new TextEdit([new TextReplacement(range, text)]); }
+	static delete(range: Range): TextEdit { return TextEdit.replace(range, ''); }
+	static insert(position: Position, text: string): TextEdit { return TextEdit.replace(Range.fromPositions(position), text); }
+	static fromStringEdit(edit: BaseStringEdit, initialState: AbstractText): TextEdit { return new TextEdit(edit.replacements.map(replacement => TextReplacement.fromStringReplacement(replacement, initialState))); }
+	static fromParallelReplacementsUnsorted(replacements: readonly TextReplacement[]): TextEdit { return new TextEdit([...replacements].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()))); }
 
 	constructor(readonly replacements: readonly TextReplacement[]) {
 		for (let index = 1; index < replacements.length; index += 1) {
@@ -121,8 +90,7 @@ export class TextEdit {
 		const normalized: TextReplacement[] = [];
 		for (const replacement of this.replacements) {
 			const previous = normalized.at(-1);
-			if (previous && previous.range.getEndPosition().equals(replacement.range.getStartPosition()))
-				normalized[normalized.length - 1] = new TextReplacement(previous.range.plusRange(replacement.range), previous.text + replacement.text);
+			if (previous && previous.range.getEndPosition().equals(replacement.range.getStartPosition())) normalized[normalized.length - 1] = new TextReplacement(previous.range.plusRange(replacement.range), previous.text + replacement.text);
 			else if (!replacement.isEmpty) normalized.push(replacement);
 		}
 		return new TextEdit(normalized);
@@ -134,25 +102,19 @@ export class TextEdit {
 		return stringEdit.apply(text.getValue());
 	}
 
-	applyToString(value: string): string {
-		return this.apply(new StringText(value));
-	}
-	inverse(document: AbstractText): TextEdit {
-		const newRanges = this.getNewRanges();
-		return new TextEdit(this.replacements.map((replacement, index) => new TextReplacement(newRanges[index]!, document.getValueOfRange(replacement.range))));
-	}
-	inverseMapPosition(positionAfterEdit: Position, document: AbstractText): Position | Range {
-		return this.inverse(document).mapPosition(positionAfterEdit);
-	}
-	inverseMapRange(range: Range, document: AbstractText): Range {
-		return this.inverse(document).mapRange(range);
-	}
+	applyToString(value: string): string { return this.apply(new StringText(value)); }
+	inverse(document: AbstractText): TextEdit { const newRanges = this.getNewRanges(); return new TextEdit(this.replacements.map((replacement, index) => new TextReplacement(newRanges[index]!, document.getValueOfRange(replacement.range)))); }
+	inverseMapPosition(positionAfterEdit: Position, document: AbstractText): Position | Range { return this.inverse(document).mapPosition(positionAfterEdit); }
+	inverseMapRange(range: Range, document: AbstractText): Range { return this.inverse(document).mapRange(range); }
 
 	mapPosition(position: Position): Position | Range {
 		let lineDelta = 0;
 		let columnDeltaLineNumber = 0;
 		let columnDelta = 0;
-		const mapProcessedPosition = (value: Position): Position => new Position(value.lineNumber + lineDelta, value.column + (value.lineNumber === columnDeltaLineNumber ? columnDelta : 0));
+		const mapProcessedPosition = (value: Position): Position => new Position(
+			value.lineNumber + lineDelta,
+			value.column + (value.lineNumber === columnDeltaLineNumber ? columnDelta : 0),
+		);
 		for (const replacement of this.replacements) {
 			const start = replacement.range.getStartPosition();
 			if (position.isBeforeOrEqual(start)) break;
@@ -191,8 +153,7 @@ export class TextEdit {
 		for (let index = 0; index < this.replacements.length; index += 1) {
 			const replacement = this.replacements[index]!;
 			text += replacement.text;
-			if (index + 1 < this.replacements.length)
-				text += initialValue.getValueOfRange(Range.fromPositions(replacement.range.getEndPosition(), this.replacements[index + 1]!.range.getStartPosition()));
+			if (index + 1 < this.replacements.length) text += initialValue.getValueOfRange(Range.fromPositions(replacement.range.getEndPosition(), this.replacements[index + 1]!.range.getStartPosition()));
 		}
 		return new TextReplacement(Range.fromPositions(start, end), text);
 	}
@@ -206,18 +167,14 @@ export class TextEdit {
 		return TextEdit.fromStringEdit(first.compose(second), source);
 	}
 
-	equals(other: TextEdit): boolean {
-		return this.replacements.length === other.replacements.length && this.replacements.every((replacement, index) => replacement.equals(other.replacements[index]!));
-	}
+	equals(other: TextEdit): boolean { return this.replacements.length === other.replacements.length && this.replacements.every((replacement, index) => replacement.equals(other.replacements[index]!)); }
 	toString(initialValue: AbstractText | string | undefined): string {
 		if (initialValue === undefined) return this.replacements.map(replacement => replacement.toString()).join('\n');
 		const text = typeof initialValue === 'string' ? new StringText(initialValue) : initialValue;
-		return this.replacements
-			.map(replacement => {
-				const oldText = text.getValueOfRange(replacement.range);
-				return `${replacement.range.toString()} ${JSON.stringify(oldText)} -> ${JSON.stringify(replacement.text)}`;
-			})
-			.join('\n');
+		return this.replacements.map(replacement => {
+			const oldText = text.getValueOfRange(replacement.range);
+			return `${replacement.range.toString()} ${JSON.stringify(oldText)} -> ${JSON.stringify(replacement.text)}`;
+		}).join('\n');
 	}
 }
 
@@ -240,8 +197,4 @@ function createSyntheticSource(first: TextEdit, second: TextEdit): string {
 	return Array.from({ length: lineCount }, () => 'x'.repeat(lineLength)).join('\n');
 }
 
-function countNewlines(value: string): number {
-	let count = 0;
-	for (const character of value) if (character === '\n') count += 1;
-	return count;
-}
+function countNewlines(value: string): number { let count = 0; for (const character of value) if (character === '\n') count += 1; return count; }

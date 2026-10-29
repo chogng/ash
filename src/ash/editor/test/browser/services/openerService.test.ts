@@ -31,10 +31,7 @@ test('opener service resolves and delegates external resources explicitly', asyn
 	using service = services.createInstance(OpenerService);
 	const opened: string[] = [];
 	using resolver = service.registerExternalUriResolver({
-		resolveExternalUri: async resource => ({
-			resolved: URI.parse(`https://proxy.invalid/?target=${encodeURIComponent(resource.toString())}`),
-			...noneDisposable,
-		}),
+		resolveExternalUri: async resource => ({ resolved: URI.parse(`https://proxy.invalid/?target=${encodeURIComponent(resource.toString())}`), ...noneDisposable }),
 	});
 	service.setDefaultExternalOpener({
 		openExternal: async href => {
@@ -65,23 +62,9 @@ test('explicit default selection bypasses all contributed handlers and releases 
 	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	const calls: string[] = [];
-	using registered = opener.registerExternalOpener({
-		openExternal: async () => {
-			assert.fail('Default selection must bypass contributed handlers');
-		},
-	});
-	using resolver = opener.registerExternalUriResolver({
-		resolveExternalUri: async () => ({
-			resolved: URI.parse('https://proxy.test/'),
-			...toDisposable(() => calls.push('release')),
-		}),
-	});
-	opener.setDefaultExternalOpener({
-		openExternal: async href => {
-			calls.push(href);
-			throw new Error('host failed');
-		},
-	});
+	using registered = opener.registerExternalOpener({ openExternal: async () => { assert.fail('Default selection must bypass contributed handlers'); } });
+	using resolver = opener.registerExternalUriResolver({ resolveExternalUri: async () => ({ resolved: URI.parse('https://proxy.test/'), ...toDisposable(() => calls.push('release')) }) });
+	opener.setDefaultExternalOpener({ openExternal: async href => { calls.push(href); throw new Error('host failed'); } });
 	await assert.rejects(opener.open('https://example.test/', { allowContributedOpeners: defaultExternalUriOpenerId }), /host failed/u);
 	assert.deepEqual(calls, ['https://proxy.test/', 'release']);
 });
@@ -90,23 +73,14 @@ test('opener passes a file URI and decoded selection to its code editor service'
 	using services = new InstantiationService();
 	const editors = editorService();
 	const opened: unknown[] = [];
-	editors.openCodeEditor = async input => {
-		opened.push(input);
-		return null;
-	};
+	editors.openCodeEditor = async input => { opened.push(input); return null; };
 	services.registerInstance(ICodeEditorService, editors);
 	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	await opener.open('file:///workspace/file.ts#12,7');
-	assert.deepEqual(opened, [
-		{
-			resource: URI.file('/workspace/file.ts'),
-			options: {
-				selection: { startLineNumber: 12, startColumn: 7, endLineNumber: undefined, endColumn: undefined },
-			},
-		},
-	]);
+	assert.deepEqual(opened, [{ resource: URI.file('/workspace/file.ts'), options: { selection: { startLineNumber: 12, startColumn: 7, endLineNumber: undefined, endColumn: undefined } } }]);
 });
+
 
 test('command links execute decoded object, positional, scalar and empty arguments through the command service', async () => {
 	using services = new InstantiationService();
@@ -116,12 +90,7 @@ test('command links execute decoded object, positional, scalar and empty argumen
 	const calls: unknown[][] = [];
 	using command = CommandsRegistry.register('test.opener.command', (_accessor, ...args) => calls.push([...args]));
 	for (const value of [{ commands: ['first', 'second'], text: '%20 中文' }, ['one', 2], null, false, 0]) {
-		assert.equal(
-			await opener.open(`command:test.opener.command?${encodeURIComponent(JSON.stringify(value))}`, {
-				allowCommands: true,
-			}),
-			true,
-		);
+		assert.equal(await opener.open(`command:test.opener.command?${encodeURIComponent(JSON.stringify(value))}`, { allowCommands: true }), true);
 	}
 	await opener.open('command:///test.opener.command', { allowCommands: ['test.opener.command'] });
 	assert.deepEqual(calls, [[{ commands: ['first', 'second'], text: '%20 中文' }], ['one', 2], [null], [false], [0], []]);
@@ -131,19 +100,10 @@ test('command links execute decoded object, positional, scalar and empty argumen
 
 test('command link permissions and validators prevent command, editor and external side effects', async () => {
 	using services = new InstantiationService();
-	services.registerInstance(ICodeEditorService, {
-		...editorService(),
-		openCodeEditor: async () => {
-			assert.fail('Commands must not open an editor');
-		},
-	});
+	services.registerInstance(ICodeEditorService, { ...editorService(), openCodeEditor: async () => { assert.fail('Commands must not open an editor'); } });
 	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
-	opener.setDefaultExternalOpener({
-		openExternal: async () => {
-			assert.fail('Commands must not open externally');
-		},
-	});
+	opener.setDefaultExternalOpener({ openExternal: async () => { assert.fail('Commands must not open externally'); } });
 	let calls = 0;
 	using command = CommandsRegistry.register('test.opener.permissions', () => calls++);
 	const target = 'command:test.opener.permissions';
@@ -172,7 +132,7 @@ test('allowed command links revive nested resources before the command handler u
 	const resource = URI.parse('ash-remote://ssh+build/workspace/a%2Fb.ts?name=a%26b&literal=%2520#L3');
 	const opened: string[] = [];
 	using command = CommandsRegistry.register('test.opener.resource', (_accessor, value) => {
-		const revived = (value as { nested: { resource: URI } }).nested.resource;
+		const revived = (value as { nested: { resource: URI; }; }).nested.resource;
 		assert.ok(revived instanceof URI);
 		opened.push(revived.with({ fragment: 'L4' }).toString());
 	});

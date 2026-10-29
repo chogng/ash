@@ -11,7 +11,7 @@ for (const scenario of ['absent', 'legacy', 'equal', 'conflict', 'invalid', 'int
 			return;
 		}
 		expect(result.records).toContainEqual({ key: 'unrelated', value: 'keep' });
-		const retained = result.records!.some(record => (record as { key: string }).key === 'settings.json');
+		const retained = result.records!.some(record => (record as { key: string; }).key === 'settings.json');
 		if (scenario === 'conflict' || scenario === 'invalid') {
 			expect(retained).toBe(true);
 			expect(result.error).toMatch(scenario === 'conflict' ? /conflict/ : /JSON|property|parse|Invalid/i);
@@ -29,22 +29,12 @@ test('cancelled replacement settles its browser disk write before rollback resto
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
-	expect(await page.evaluate(() => window.ashFilesIntegration.cancelBrowserReplacement())).toEqual({
-		settledBeforeRelease: false,
-		cancelled: true,
-		disk: 'original',
-	});
+	expect(await page.evaluate(() => window.ashFilesIntegration.cancelBrowserReplacement())).toEqual({ settledBeforeRelease: false, cancelled: true, disk: 'original' });
 });
 
 test('closing browser storage aborts pending writes and rejects new transactions', async ({ page }) => {
 	await page.goto('/files.html');
-	expect(await page.evaluate(() => window.ashFilesIntegration.abortDatabaseWrite())).toEqual({
-		pendingBefore: true,
-		pendingAfter: false,
-		rejected: true,
-		persisted: false,
-		closed: true,
-	});
+	expect(await page.evaluate(() => window.ashFilesIntegration.abortDatabaseWrite())).toEqual({ pendingBefore: true, pendingAfter: false, rejected: true, persisted: false, closed: true });
 });
 
 test('browser files notify another window through storage events when BroadcastChannel is unavailable', async ({ page, context }) => {
@@ -61,9 +51,7 @@ test('browser files notify another window through storage events when BroadcastC
 		await page.evaluate(() => window.ashFilesIntegration.write('second notification'));
 		await expect.poll(() => other.evaluate(() => window.ashFilesIntegration.changes)).toBeGreaterThan(first);
 		expect((await other.evaluate(() => window.ashFilesIntegration.read())).content).toBe('second notification');
-	} finally {
-		await other.close();
-	}
+	} finally { await other.close(); }
 });
 
 test('picked-folder foreground fallback revalidates after external create, update and delete and stops with the watch', async ({ page }) => {
@@ -145,9 +133,7 @@ test('picked-folder shallow watches ignore descendants and suspend invalidations
 			document.dispatchEvent(new Event('visibilitychange'));
 		});
 		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
-	} finally {
-		await other.close();
-	}
+	} finally { await other.close(); }
 });
 
 test('picked-folder permission revocation stops observation without prompting and resumes after permission is restored', async ({ page }) => {
@@ -176,16 +162,14 @@ test('picked-folder watches receive real browser filesystem observation events',
 		const context = await browser.newContext({ baseURL });
 		const page = await context.newPage();
 		await page.goto('/files.html');
-		expect(await page.evaluate(() => typeof (window as Window & { FileSystemObserver?: unknown }).FileSystemObserver)).toBe('function');
+		expect(await page.evaluate(() => typeof (window as Window & { FileSystemObserver?: unknown; }).FileSystemObserver)).toBe('function');
 		const root = await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('real'));
 		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
 		await page.evaluate(() => window.ashFilesIntegration.changeBrowserFile('observed.txt', 'outside provider'));
 		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents.flat())).toContain(`${root}/observed.txt`);
 		expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserFile('observed.txt'))).toBe('outside provider');
 		await context.close();
-	} finally {
-		await browser.close();
-	}
+	} finally { await browser.close(); }
 });
 
 test('browser files persist through reload and reject competing saves from two windows', async ({ page, context }) => {
@@ -209,10 +193,9 @@ test('browser files persist through reload and reject competing saves from two w
 		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 		expect((await page.evaluate(() => window.ashFilesIntegration.read())).content).toBe(result.content);
 		expect(await page.evaluate(() => window.ashFilesIntegration.copyAndRename())).toEqual([result.content, result.content]);
-	} finally {
-		await other.close();
-	}
+	} finally { await other.close(); }
 });
+
 
 test('binary imports retain exact bytes after reload and never replace an existing empty file', async ({ page }) => {
 	await page.goto('/files.html');
@@ -241,22 +224,12 @@ test('binary comparison reloads both byte previews and resolves their file paths
 		await expect(sides.last().locator('.ash-binary-editor-content')).toContainText('48 69 00 ff');
 		await expect(sides.last().getByRole('region')).toBeFocused();
 		// This page imports the pane directly; its styles must not depend on product contributions.
-		expect(
-			await sides
-				.last()
-				.getByRole('region')
-				.evaluate(element => ({
-					display: getComputedStyle(element).display,
-					direction: getComputedStyle(element).flexDirection,
-					font: getComputedStyle(element.querySelector('.ash-binary-editor-content')!).fontFamily,
-				})),
-		).toEqual({ display: 'flex', direction: 'column', font: 'monospace' });
-		const boxes = await sides.evaluateAll(elements =>
-			elements.map(element => ({
-				left: element.getBoundingClientRect().left,
-				right: element.getBoundingClientRect().right,
-			})),
-		);
+		expect(await sides.last().getByRole('region').evaluate(element => ({
+			display: getComputedStyle(element).display,
+			direction: getComputedStyle(element).flexDirection,
+			font: getComputedStyle(element.querySelector('.ash-binary-editor-content')!).fontFamily,
+		}))).toEqual({ display: 'flex', direction: 'column', font: 'monospace' });
+		const boxes = await sides.evaluateAll(elements => elements.map(element => ({ left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right })));
 		expect(boxes[1]!.left).toBeGreaterThanOrEqual(boxes[0]!.right);
 	}
 });

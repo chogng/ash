@@ -31,7 +31,7 @@ export interface IActionListItem<T> {
 	readonly item?: T;
 	readonly label: string;
 	readonly disabled?: boolean;
-	readonly group?: { readonly title: string; readonly icon?: Icon };
+	readonly group?: { readonly title: string; readonly icon?: Icon; };
 	readonly checked?: boolean;
 	readonly canPreview?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
@@ -87,7 +87,7 @@ class ActionListHeader extends ActionViewItem {
 		container.append(label);
 	}
 
-	public override setTabbable(_tabbable: boolean): void {}
+	public override setTabbable(_tabbable: boolean): void { }
 }
 
 /** Owns typed action dispatch and its pending state; Menu owns row focus and navigation. */
@@ -128,42 +128,38 @@ export class ActionList<T> extends Disposable {
 			this.domNode.setAttribute('aria-description', ariaHint);
 		}
 		if (options.showFilter) {
-			const filterHost = (this.filterHost = h(container.ownerDocument, 'div'));
+			const filterHost = this.filterHost = h(container.ownerDocument, 'div');
 			filterHost.className = 'ash-action-widget-filter';
 			filterHost.hidden = options.filterVisible === false;
 			this.domNode.append(filterHost);
-			this.filter = this._register(
-				new InputBox(filterHost, {
-					inputBoxStyles: defaultInputBoxStyles,
-					type: 'search',
-					presentation: 'compact',
-					ariaLabel: options.ariaLabel ?? localize('actionWidget.filter', 'Filter actions'),
-					placeholder: options.filterPlaceholder ?? localize('actionWidget.filter', 'Filter actions'),
-					role: options.filterAsCombobox ? 'combobox' : undefined,
-					ariaAutoComplete: options.filterAsCombobox ? 'list' : undefined,
-					ariaExpanded: options.filterAsCombobox ? true : undefined,
-				}),
-			);
+			this.filter = this._register(new InputBox(filterHost, {
+				inputBoxStyles: defaultInputBoxStyles,
+				type: 'search',
+				presentation: 'compact',
+				ariaLabel: options.ariaLabel ?? localize('actionWidget.filter', 'Filter actions'),
+				placeholder: options.filterPlaceholder ?? localize('actionWidget.filter', 'Filter actions'),
+				role: options.filterAsCombobox ? 'combobox' : undefined,
+				ariaAutoComplete: options.filterAsCombobox ? 'list' : undefined,
+				ariaExpanded: options.filterAsCombobox ? true : undefined,
+			}));
 			if (options.filterAsCombobox) {
 				this.domNode.id = `${user}.popup`;
 				this.filter.inputElement.setAttribute('aria-haspopup', 'dialog');
 				this.filter.inputElement.setAttribute('aria-controls', this.domNode.id);
 			}
 			this._register(this.filter.onDidChange(() => this.renderItems()));
-			this._register(
-				this.filter.onKeyDown(event => {
-					if (event.isComposing) {
-						return;
-					}
-					if (event.key === 'Enter' && this.focusedEntry) {
-						stopEvent(event);
-						void this.select(this.focusedEntry);
-					} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-						stopEvent(event);
-						this.focus();
-					}
-				}),
-			);
+			this._register(this.filter.onKeyDown(event => {
+				if (event.isComposing) {
+					return;
+				}
+				if (event.key === 'Enter' && this.focusedEntry) {
+					stopEvent(event);
+					void this.select(this.focusedEntry);
+				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					stopEvent(event);
+					this.focus();
+				}
+			}));
 		}
 		if (options.header) {
 			this.domNode.append(options.header);
@@ -184,74 +180,63 @@ export class ActionList<T> extends Disposable {
 			const previewHost = h(container.ownerDocument, 'div');
 			previewHost.className = 'ash-action-widget-preview';
 			this.domNode.append(previewHost);
-			this.preview = this._register(
-				new Button(previewHost, {
-					...defaultButtonStyles,
-					label: localize('actionWidget.preview', 'Preview'),
-					enabled: false,
-					onClick: () => {
-						if (this.focusedEntry) {
-							void this.select(this.focusedEntry, true);
-						}
-					},
-				}),
-			);
+			this.preview = this._register(new Button(previewHost, {
+				...defaultButtonStyles,
+				label: localize('actionWidget.preview', 'Preview'),
+				enabled: false,
+				onClick: () => {
+					if (this.focusedEntry) {
+						void this.select(this.focusedEntry, true);
+					}
+				},
+			}));
 		}
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.renderItems();
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => event.stopPropagation()));
-		this._register(
-			addDisposableListener(
-				this.domNode,
-				'keydown',
-				event => {
-					if (event.isComposing) {
-						return;
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.isComposing) {
+				return;
+			}
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && this.filter) {
+				stopEvent(event);
+				this.focusFilter();
+				return;
+			}
+			if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && this.supportsPreview) {
+				stopEvent(event);
+				if (this.focusedEntry) {
+					void this.select(this.focusedEntry, true);
+				}
+				return;
+			}
+			if (event.altKey && event.key === 'F1') {
+				stopEvent(event);
+				if (this.options.accessibilityHelp) {
+					this.options.accessibilityHelp();
+					return;
+				}
+				const lifetime = new DisposableStore();
+				const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
+				const dialog = lifetime.add(new Dialog(container, localize('actionWidget.helpTitle', 'Action menu accessibility help'), [], {
+					buttonStyles: defaultButtonStyles,
+					dialogStyles: defaultDialogStyles,
+					checkboxStyles: defaultCheckboxStyles,
+					inputBoxStyles: defaultInputBoxStyles,
+					disableDefaultAction: true,
+					detail: provider.provideContent(),
+				}));
+				this.help.value = lifetime;
+				void dialog.show().finally(() => {
+					if (this.help.value === lifetime) {
+						this.help.clear();
 					}
-					if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && this.filter) {
-						stopEvent(event);
-						this.focusFilter();
-						return;
-					}
-					if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && this.supportsPreview) {
-						stopEvent(event);
-						if (this.focusedEntry) {
-							void this.select(this.focusedEntry, true);
-						}
-						return;
-					}
-					if (event.altKey && event.key === 'F1') {
-						stopEvent(event);
-						if (this.options.accessibilityHelp) {
-							this.options.accessibilityHelp();
-							return;
-						}
-						const lifetime = new DisposableStore();
-						const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
-						const dialog = lifetime.add(
-							new Dialog(container, localize('actionWidget.helpTitle', 'Action menu accessibility help'), [], {
-								buttonStyles: defaultButtonStyles,
-								dialogStyles: defaultDialogStyles,
-								checkboxStyles: defaultCheckboxStyles,
-								inputBoxStyles: defaultInputBoxStyles,
-								disableDefaultAction: true,
-								detail: provider.provideContent(),
-							}),
-						);
-						this.help.value = lifetime;
-						void dialog.show().finally(() => {
-							if (this.help.value === lifetime) {
-								this.help.clear();
-							}
-						});
-						return;
-					}
-				},
-				true,
-			),
-		);
+				});
+				return;
+			}
+		}, true));
 	}
 
 	private renderItems(): void {
@@ -283,9 +268,7 @@ export class ActionList<T> extends Disposable {
 			const id = `${this.user}.${index}`;
 			entries.set(id, entry);
 			return {
-				id,
-				label: entry.label,
-				tooltip: entry.label,
+				id, label: entry.label, tooltip: entry.label,
 				enabled: entry.kind === ActionListItemKind.Action && !entry.disabled,
 				icon: entry.group?.icon,
 				checked: entry.checked,
@@ -295,52 +278,41 @@ export class ActionList<T> extends Disposable {
 		});
 		this.menuResources.clear();
 		this.visibleItems = visible;
-		const menu = (this.menu = this.menuResources.add(
-			new Menu(
-				this.itemsDomNode,
-				{
-					buttonStyles: defaultButtonStyles,
-					keybindingLabelStyles: defaultKeybindingLabelStyles,
-					actions,
-					className: 'ash-action-widget-menu',
-					getCheckedActionsRepresentation: () => 'radio',
-					getKeybinding: action => entries.get(action.id)?.keybinding,
-					getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
-					actionViewItemProvider: action => (entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined),
-				},
-				defaultMenuStyles,
-			),
-		));
+		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
+			actions,
+			className: 'ash-action-widget-menu',
+			getCheckedActionsRepresentation: () => 'radio',
+			getKeybinding: action => entries.get(action.id)?.keybinding,
+			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
+			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
+		}, defaultMenuStyles));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
 		const hint = this.domNode.getAttribute('aria-description');
 		if (hint) {
 			menu.element.setAttribute('aria-description', hint);
 		}
-		this.menuResources.add(
-			addDisposableListener(menu.element, 'focusin', event => {
-				const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
-				this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
-				if (this.focusedEntry && row) {
-					this.delegate.onFocus?.(this.focusedEntry.item!, row);
-				}
-				this.updatePreview();
-			}),
-		);
-		this.menuResources.add(
-			addDisposableListener(menu.element, 'mousemove', event => {
-				const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
-				const entry = row ? entries.get(row.dataset.actionId!) : undefined;
-				if (entry?.kind === ActionListItemKind.Action && !entry.disabled && row) {
-					this.delegate.onHover?.(entry.item!, row);
-				}
-			}),
-		);
+		this.menuResources.add(addDisposableListener(menu.element, 'focusin', event => {
+			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
+			this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
+			if (this.focusedEntry && row) {
+				this.delegate.onFocus?.(this.focusedEntry.item!, row);
+			}
+			this.updatePreview();
+		}));
+		this.menuResources.add(addDisposableListener(menu.element, 'mousemove', event => {
+			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
+			const entry = row ? entries.get(row.dataset.actionId!) : undefined;
+			if (entry?.kind === ActionListItemKind.Action && !entry.disabled && row) {
+				this.delegate.onHover?.(entry.item!, row);
+			}
+		}));
 		const retained = previous && visible.find(entry => entry === previous || (entry.id !== undefined && entry.id === previous.id));
-		this.focusedEntry =
-			retained && !retained.disabled
-				? retained
-				: (visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked) ??
-					visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled));
+		this.focusedEntry = retained && !retained.disabled
+			? retained
+			: visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked)
+			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
 		this.updatePreview();
 		if (this.focusedEntry && previous) {
 			const row = menu.element.children[visible.indexOf(this.focusedEntry)] as HTMLElement;
@@ -429,11 +401,7 @@ function createHelpProvider(source: Element | null): AccessibleContentProvider {
 	return new AccessibleContentProvider(
 		AccessibleViewProviderId.ActionWidget,
 		{ type: AccessibleViewType.Help },
-		() =>
-			localize(
-				'actionWidget.help',
-				'Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.',
-			),
+		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
 		() => {
 			if (isHTMLElement(source) && source.isConnected) {
 				source.focus({ preventScroll: true });
